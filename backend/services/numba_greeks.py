@@ -10,19 +10,51 @@ Key design decisions:
   - No scipy dependency: norm_pdf and norm_cdf are implemented manually using
     math.erf (supported by numba) since scipy is not numba-compatible.
   - Edge cases (S<=0, K<=0, T<=0, sigma<=0) return 0.0 for affected elements.
-  - All functions are pure numpy-vectorized with numba for maximum throughput.
-  - A convenience wrapper compute_all_greeks() computes the full Greek surface
-    in one call given spot and arrays of strikes, expiries, IVs, and option types.
+  - NaN input guard (I-8): if any input element is NaN the function returns 0.0
+    for that element, preventing silent propagation of invalid values.
+  - Parallel prange loops (parallel=True) on hot-path kernels for multi-core speedup.
+  - AOT compilation fallback: if the AOT-compiled shared object
+    ``numba_greeks_compiled.so`` exists (compiled via ``scripts/compile_greeks.py``),
+    the AOT versions are used for zero cold-start latency.
 
 Usage:
     from services.numba_greeks import compute_all_greeks
     greeks = compute_all_greeks(spot, strikes, expiries, ivs, types)
 """
 
+from __future__ import annotations
+
 import math
+import logging
 
 import numba
 import numpy as np
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# AOT import-fallback — try compiled module first, then JIT
+# ---------------------------------------------------------------------------
+_AOT_AVAILABLE = False
+
+try:
+    from numba_greeks_compiled import (       # type: ignore[import-untyped]
+        bs_gamma_vec_aot,
+        bs_delta_vec_aot,
+        bs_vega_vec_aot,
+        bs_vanna_vec_aot,
+        bs_charm_vec_aot,
+        bs_vomma_vec_aot,
+        bs_zomma_vec_aot,
+        bs_theta_vec_aot,
+        bs_call_price_vec_aot,
+        bs_put_price_vec_aot,
+    )
+    _AOT_AVAILABLE = True
+    logger.info("numba_greeks: using AOT-compiled kernels")
+except (ImportError, SystemError):
+    logger.info("numba_greeks: AOT module not found, using JIT kernels")
+
 
 # ---------------------------------------------------------------------------
 # Manual normal distribution helpers (scipy not numba-compatible)
@@ -84,11 +116,29 @@ def _d1d2(S: float, K: float, T: float, sigma: float, r: float, q: float):
 
 
 # ---------------------------------------------------------------------------
-# Vectorized Greek functions
+# JIT fallback kernel implementations
 # ---------------------------------------------------------------------------
 
 
 @numba.njit
+def _jit_invalid(S, k, t, sigma) -> bool:
+    """Check if any input is invalid (<=0 or NaN).
+
+    Per I-8: ``math.isnan`` guards on all scalar inputs before computation.
+    """
+    return (
+        S <= 0.0
+        or k <= 0.0
+        or t <= 0.0
+        or sigma <= 0.0
+        or math.isnan(S)
+        or math.isnan(k)
+        or math.isnan(t)
+        or math.isnan(sigma)
+    )
+
+
+@numba.njit(parallel=True)
 def bs_gamma_vec(
     S: float,
     K: np.ndarray,
@@ -102,6 +152,9 @@ def bs_gamma_vec(
     Gamma measures the rate of change of delta with respect to the underlying price.
     It is the same for calls and puts.
 
+    Uses ``parallel=True`` with ``prange`` for multi-core execution and NaN
+    input guarding per I-8.
+
     Args:
         S: Spot price (scalar).
         K: Array of strike prices.
@@ -111,13 +164,12 @@ def bs_gamma_vec(
         r: Risk-free rate (default 0.05).
 
     Returns:
-        Array of gamma values. Elements where S<=0, K<=0, T<=0, or sigma<=0
-        are set to 0.0.
+        Array of gamma values. Invalid elements (NaN, <=0) are set to 0.0.
     """
     n = K.shape[0]
     out = np.empty(n, dtype=np.float64)
-    for i in range(n):
-        if S <= 0.0 or K[i] <= 0.0 or T[i] <= 0.0 or sigma[i] <= 0.0:
+    for i in numba.prange(n):
+        if _jit_invalid(S, K[i], T[i], sigma[i]):
             out[i] = 0.0
             continue
         d1, _d2 = _d1d2(S, K[i], T[i], sigma[i], r, q)
@@ -125,7 +177,7 @@ def bs_gamma_vec(
     return out
 
 
-@numba.njit
+@numba.njit(parallel=True)
 def bs_delta_vec(
     S: float,
     K: np.ndarray,
@@ -139,6 +191,9 @@ def bs_delta_vec(
     Delta measures the rate of change of option price with respect to the
     underlying price. Call delta is positive; put delta is negative.
 
+    Uses ``parallel=True`` with ``prange`` for multi-core execution and NaN
+    input guarding per I-8.
+
     Args:
         S: Spot price (scalar).
         K: Array of strike prices.
@@ -148,13 +203,12 @@ def bs_delta_vec(
         kind: 0 for call, 1 for put (default 0).
 
     Returns:
-        Array of delta values. Elements where S<=0, K<=0, T<=0, or sigma<=0
-        are set to 0.0.
+        Array of delta values. Invalid elements (NaN, <=0) are set to 0.0.
     """
     n = K.shape[0]
     out = np.empty(n, dtype=np.float64)
-    for i in range(n):
-        if S <= 0.0 or K[i] <= 0.0 or T[i] <= 0.0 or sigma[i] <= 0.0:
+    for i in numba.prange(n):
+        if _jit_invalid(S, K[i], T[i], sigma[i]):
             out[i] = 0.0
             continue
         d1, _d2 = _d1d2(S, K[i], T[i], sigma[i], 0.0, q)
@@ -165,7 +219,7 @@ def bs_delta_vec(
     return out
 
 
-@numba.njit
+@numba.njit(parallel=True)
 def bs_vega_vec(
     S: float,
     K: np.ndarray,
@@ -180,6 +234,9 @@ def bs_vega_vec(
     It is the same for calls and puts. The raw value is divided by 100 to
     represent the change per 1 vol point.
 
+    Uses ``parallel=True`` with ``prange`` for multi-core execution and NaN
+    input guarding per I-8.
+
     Args:
         S: Spot price (scalar).
         K: Array of strike prices.
@@ -189,13 +246,12 @@ def bs_vega_vec(
         r: Risk-free rate (default 0.05).
 
     Returns:
-        Array of vega values (per 1 vol point). Elements where S<=0, K<=0,
-        T<=0, or sigma<=0 are set to 0.0.
+        Array of vega values (per 1 vol point). Invalid elements are 0.0.
     """
     n = K.shape[0]
     out = np.empty(n, dtype=np.float64)
-    for i in range(n):
-        if S <= 0.0 or K[i] <= 0.0 or T[i] <= 0.0 or sigma[i] <= 0.0:
+    for i in numba.prange(n):
+        if _jit_invalid(S, K[i], T[i], sigma[i]):
             out[i] = 0.0
             continue
         d1, _d2 = _d1d2(S, K[i], T[i], sigma[i], r, q)
@@ -203,7 +259,7 @@ def bs_vega_vec(
     return out
 
 
-@numba.njit
+@numba.njit(parallel=True)
 def bs_vanna_vec(
     S: float,
     K: np.ndarray,
@@ -218,6 +274,9 @@ def bs_vanna_vec(
     equivalently, the sensitivity of vega to changes in the underlying price).
     It is the same for calls and puts.
 
+    Uses ``parallel=True`` with ``prange`` for multi-core execution and NaN
+    input guarding per I-8.
+
     Args:
         S: Spot price (scalar).
         K: Array of strike prices.
@@ -227,13 +286,12 @@ def bs_vanna_vec(
         r: Risk-free rate (default 0.05).
 
     Returns:
-        Array of vanna values. Elements where S<=0, K<=0, T<=0, or sigma<=0
-        are set to 0.0.
+        Array of vanna values. Invalid elements are 0.0.
     """
     n = K.shape[0]
     out = np.empty(n, dtype=np.float64)
-    for i in range(n):
-        if S <= 0.0 or K[i] <= 0.0 or T[i] <= 0.0 or sigma[i] <= 0.0:
+    for i in numba.prange(n):
+        if _jit_invalid(S, K[i], T[i], sigma[i]):
             out[i] = 0.0
             continue
         d1, d2 = _d1d2(S, K[i], T[i], sigma[i], r, q)
@@ -241,7 +299,7 @@ def bs_vanna_vec(
     return out
 
 
-@numba.njit
+@numba.njit(parallel=True)
 def bs_charm_vec(
     S: float,
     K: np.ndarray,
@@ -255,6 +313,9 @@ def bs_charm_vec(
     Charm measures the rate of change of delta with respect to time. It is
     also known as delta decay.
 
+    Uses ``parallel=True`` with ``prange`` for multi-core execution and NaN
+    input guarding per I-8.
+
     Args:
         S: Spot price (scalar).
         K: Array of strike prices.
@@ -264,20 +325,20 @@ def bs_charm_vec(
         kind: 0 for call, 1 for put (default 0).
 
     Returns:
-        Array of charm values (per day). Elements where S<=0, K<=0, T<=0,
-        or sigma<=0 are set to 0.0.
+        Array of charm values (per day). Invalid elements are 0.0.
     """
     n = K.shape[0]
     out = np.empty(n, dtype=np.float64)
-    for i in range(n):
-        if S <= 0.0 or K[i] <= 0.0 or T[i] <= 0.0 or sigma[i] <= 0.0:
+    for i in numba.prange(n):
+        if _jit_invalid(S, K[i], T[i], sigma[i]):
             out[i] = 0.0
             continue
         d1, d2 = _d1d2(S, K[i], T[i], sigma[i], 0.0, q)
+        sqrtT = math.sqrt(T[i])
         term1 = q * math.exp(-q * T[i]) * _norm_cdf(d1)
         term2_val = -math.exp(-q * T[i]) * _norm_pdf(d1) * (
-            2.0 * (0.0 - q) * T[i] - d2 * sigma[i] * math.sqrt(T[i])
-        ) / (2.0 * T[i] * sigma[i] * math.sqrt(T[i]))
+            2.0 * (0.0 - q) * T[i] - d2 * sigma[i] * sqrtT
+        ) / (2.0 * T[i] * sigma[i] * sqrtT)
         if kind == 0:
             out[i] = (term1 - term2_val) / 365.0
         else:
@@ -285,7 +346,7 @@ def bs_charm_vec(
     return out
 
 
-@numba.njit
+@numba.njit(parallel=True)
 def bs_vomma_vec(
     S: float,
     K: np.ndarray,
@@ -300,6 +361,9 @@ def bs_vomma_vec(
     (the derivative of vega with respect to volatility). It is the same for
     calls and puts.
 
+    Uses ``parallel=True`` with ``prange`` for multi-core execution and NaN
+    input guarding per I-8.
+
     Args:
         S: Spot price (scalar).
         K: Array of strike prices.
@@ -309,13 +373,12 @@ def bs_vomma_vec(
         r: Risk-free rate (default 0.05).
 
     Returns:
-        Array of vomma values. Elements where S<=0, K<=0, T<=0, or sigma<=0
-        are set to 0.0.
+        Array of vomma values. Invalid elements are 0.0.
     """
     n = K.shape[0]
     out = np.empty(n, dtype=np.float64)
-    for i in range(n):
-        if S <= 0.0 or K[i] <= 0.0 or T[i] <= 0.0 or sigma[i] <= 0.0:
+    for i in numba.prange(n):
+        if _jit_invalid(S, K[i], T[i], sigma[i]):
             out[i] = 0.0
             continue
         d1, d2 = _d1d2(S, K[i], T[i], sigma[i], r, q)
@@ -324,7 +387,7 @@ def bs_vomma_vec(
     return out
 
 
-@numba.njit
+@numba.njit(parallel=True)
 def bs_zomma_vec(
     S: float,
     K: np.ndarray,
@@ -338,6 +401,9 @@ def bs_zomma_vec(
     Zomma measures the rate of change of gamma with respect to volatility.
     It is the same for calls and puts.
 
+    Uses ``parallel=True`` with ``prange`` for multi-core execution and NaN
+    input guarding per I-8.
+
     Args:
         S: Spot price (scalar).
         K: Array of strike prices.
@@ -347,13 +413,12 @@ def bs_zomma_vec(
         r: Risk-free rate (default 0.05).
 
     Returns:
-        Array of zomma values. Elements where S<=0, K<=0, T<=0, or sigma<=0
-        are set to 0.0.
+        Array of zomma values. Invalid elements are 0.0.
     """
     n = K.shape[0]
     out = np.empty(n, dtype=np.float64)
-    for i in range(n):
-        if S <= 0.0 or K[i] <= 0.0 or T[i] <= 0.0 or sigma[i] <= 0.0:
+    for i in numba.prange(n):
+        if _jit_invalid(S, K[i], T[i], sigma[i]):
             out[i] = 0.0
             continue
         d1, d2 = _d1d2(S, K[i], T[i], sigma[i], r, q)
@@ -364,7 +429,7 @@ def bs_zomma_vec(
     return out
 
 
-@numba.njit
+@numba.njit(parallel=True)
 def bs_call_price_vec(
     S: float,
     K: np.ndarray,
@@ -375,6 +440,9 @@ def bs_call_price_vec(
 ) -> np.ndarray:
     """Vectorized Black-Scholes call option price for an array of options.
 
+    Uses ``parallel=True`` with ``prange`` for multi-core execution and NaN
+    input guarding per I-8.
+
     Args:
         S: Spot price (scalar).
         K: Array of strike prices.
@@ -384,13 +452,12 @@ def bs_call_price_vec(
         q: Continuous dividend yield (default 0.0).
 
     Returns:
-        Array of call option prices. Elements where S<=0, K<=0, T<=0, or
-        sigma<=0 are set to 0.0.
+        Array of call option prices. Invalid elements are 0.0.
     """
     n = K.shape[0]
     out = np.empty(n, dtype=np.float64)
-    for i in range(n):
-        if S <= 0.0 or K[i] <= 0.0 or T[i] <= 0.0 or sigma[i] <= 0.0:
+    for i in numba.prange(n):
+        if _jit_invalid(S, K[i], T[i], sigma[i]):
             out[i] = 0.0
             continue
         d1, d2 = _d1d2(S, K[i], T[i], sigma[i], r, q)
@@ -401,7 +468,7 @@ def bs_call_price_vec(
     return out
 
 
-@numba.njit
+@numba.njit(parallel=True)
 def bs_put_price_vec(
     S: float,
     K: np.ndarray,
@@ -412,6 +479,9 @@ def bs_put_price_vec(
 ) -> np.ndarray:
     """Vectorized Black-Scholes put option price for an array of options.
 
+    Uses ``parallel=True`` with ``prange`` for multi-core execution and NaN
+    input guarding per I-8.
+
     Args:
         S: Spot price (scalar).
         K: Array of strike prices.
@@ -421,13 +491,12 @@ def bs_put_price_vec(
         q: Continuous dividend yield (default 0.0).
 
     Returns:
-        Array of put option prices. Elements where S<=0, K<=0, T<=0, or
-        sigma<=0 are set to 0.0.
+        Array of put option prices. Invalid elements are 0.0.
     """
     n = K.shape[0]
     out = np.empty(n, dtype=np.float64)
-    for i in range(n):
-        if S <= 0.0 or K[i] <= 0.0 or T[i] <= 0.0 or sigma[i] <= 0.0:
+    for i in numba.prange(n):
+        if _jit_invalid(S, K[i], T[i], sigma[i]):
             out[i] = 0.0
             continue
         d1, d2 = _d1d2(S, K[i], T[i], sigma[i], r, q)
@@ -443,7 +512,7 @@ def bs_put_price_vec(
 # ---------------------------------------------------------------------------
 
 
-@numba.njit
+@numba.njit(parallel=True)
 def _bs_theta_vec(
     S: float,
     K: np.ndarray,
@@ -458,6 +527,9 @@ def _bs_theta_vec(
     Theta measures the rate of change of option price with respect to time
     (time decay). Returns theta per calendar day.
 
+    Uses ``parallel=True`` with ``prange`` for multi-core execution and NaN
+    input guarding per I-8.
+
     Args:
         S: Spot price (scalar).
         K: Array of strike prices.
@@ -468,13 +540,12 @@ def _bs_theta_vec(
         kind: Array of option types (0=call, 1=put).
 
     Returns:
-        Array of theta values per day. Elements where S<=0, K<=0, T<=0, or
-        sigma<=0 are set to 0.0.
+        Array of theta values per day. Invalid elements are 0.0.
     """
     n = K.shape[0]
     out = np.empty(n, dtype=np.float64)
-    for i in range(n):
-        if S <= 0.0 or K[i] <= 0.0 or T[i] <= 0.0 or sigma[i] <= 0.0:
+    for i in numba.prange(n):
+        if _jit_invalid(S, K[i], T[i], sigma[i]):
             out[i] = 0.0
             continue
         d1, d2 = _d1d2(S, K[i], T[i], sigma[i], r, q)
@@ -516,9 +587,10 @@ def compute_all_greeks(
 ) -> dict:
     """Compute the full Black-Scholes Greek surface for an option chain.
 
-    This is a convenience wrapper that calls all individual @numba.njit Greek
-    functions and returns them in a dictionary. It handles the theta computation
-    separately since it requires per-element option type dispatch.
+    This is a convenience wrapper that calls all individual Greek functions
+    and returns them in a dictionary. When AOT-compiled kernels are available
+    (``numba_greeks_compiled.so``), they are used for zero cold-start latency.
+    Otherwise, the ``@numba.njit`` JIT-compiled versions are used.
 
     Args:
         spot: Current underlying price (scalar float).
@@ -551,6 +623,23 @@ def compute_all_greeks(
     IV = np.ascontiguousarray(ivs, dtype=np.float64)
     kind = np.ascontiguousarray(types, dtype=np.int32)
 
+    # ── Dispatch: AOT or JIT ──────────────────────────────────────────
+    if _AOT_AVAILABLE:
+        return _compute_all_greeks_aot(spot, K, T, IV, kind, r, q)
+    else:
+        return _compute_all_greeks_jit(spot, K, T, IV, kind, r, q)
+
+
+def _compute_all_greeks_jit(
+    spot: float,
+    K: np.ndarray,
+    T: np.ndarray,
+    IV: np.ndarray,
+    kind: np.ndarray,
+    r: float = 0.045,
+    q: float = 0.0,
+) -> dict:
+    """JIT-compiled Greek surface computation (fallback path)."""
     # Delta (per-element kind)
     delta = np.empty_like(K)
     call_mask = kind == 0
@@ -593,6 +682,52 @@ def compute_all_greeks(
 
     # Theta (per-element kind, uses internal helper)
     theta = _bs_theta_vec(spot, K, T, IV, r, q, kind)
+
+    return {
+        "delta": delta,
+        "gamma": gamma,
+        "theta": theta,
+        "vega": vega,
+        "vanna": vanna,
+        "charm": charm,
+        "vomma": vomma,
+        "zomma": zomma,
+    }
+
+
+def _compute_all_greeks_aot(
+    spot: float,
+    K: np.ndarray,
+    T: np.ndarray,
+    IV: np.ndarray,
+    kind: np.ndarray,
+    r: float = 0.045,
+    q: float = 0.0,
+) -> dict:
+    """AOT-compiled Greek surface computation (zero cold-start latency)."""
+    # Delta (per-element kind via AOT's per-element array dispatch)
+    delta = bs_delta_vec_aot(spot, K, T, IV, q, kind)              # type: ignore[name-defined]
+
+    # Gamma (same for calls and puts)
+    gamma = bs_gamma_vec_aot(spot, K, T, IV, q, r)                 # type: ignore[name-defined]
+
+    # Vega (same for calls and puts)
+    vega = bs_vega_vec_aot(spot, K, T, IV, q, r)                   # type: ignore[name-defined]
+
+    # Vanna (same for calls and puts)
+    vanna = bs_vanna_vec_aot(spot, K, T, IV, q, r)                 # type: ignore[name-defined]
+
+    # Charm (per-element kind via AOT's array dispatch)
+    charm = bs_charm_vec_aot(spot, K, T, IV, q, kind)              # type: ignore[name-defined]
+
+    # Vomma (same for calls and puts)
+    vomma = bs_vomma_vec_aot(spot, K, T, IV, q, r)                # type: ignore[name-defined]
+
+    # Zomma (same for calls and puts)
+    zomma = bs_zomma_vec_aot(spot, K, T, IV, q, r)                # type: ignore[name-defined]
+
+    # Theta (per-element kind array)
+    theta = bs_theta_vec_aot(spot, K, T, IV, r, q, kind)           # type: ignore[name-defined]
 
     return {
         "delta": delta,
