@@ -92,6 +92,10 @@ class BacktestResult:
             m["total_slippage"] = 0.0
             m["final_equity"] = self.initial_capital
             m["net_return_pct"] = 0.0
+            m["sortino"] = 0.0
+            m["calmar"] = 0.0
+            m["sterling"] = 0.0
+            m["downside_std"] = 0.0
             self.metrics = m
             return m
 
@@ -154,9 +158,77 @@ class BacktestResult:
             m["max_drawdown"] = 0.0
             m["max_drawdown_pct"] = 0.0
 
+        # Sortino ratio: annualized return / downside deviation
+        if self.bar_returns:
+            rets = np.array(self.bar_returns)
+            neg_rets = rets[rets < 0]
+            downside_std = np.std(neg_rets) if len(neg_rets) > 1 else 0.0
+            if downside_std > 0:
+                m["sortino"] = float(np.mean(rets) / downside_std * math.sqrt(252))
+            else:
+                m["sortino"] = 0.0
+        else:
+            m["sortino"] = 0.0
+
+        # Calmar ratio: annualized return / max drawdown (absolute value)
+        ann_return = m["net_return_pct"] / 100.0  # Convert % to decimal
+        max_dd_abs = abs(m["max_drawdown_pct"]) / 100.0 if self.total_bars > 0 else 0.0
+        if max_dd_abs > 0:
+            m["calmar"] = float(ann_return / max_dd_abs)
+        else:
+            m["calmar"] = 0.0
+
+        # Sterling ratio: annualized return / avg annual drawdown
+        if self.drawdown_curve and len(self.drawdown_curve) > 1:
+            dd = np.array(self.drawdown_curve)
+            avg_dd = float(np.mean(np.abs(dd[dd < 0]))) if np.any(dd < 0) else 0.0
+            peak_eq = max(self.equity_curve) if self.equity_curve else self.initial_capital
+            avg_dd_pct = avg_dd / peak_eq if peak_eq > 0 else 0.0
+            if avg_dd_pct > 0:
+                m["sterling"] = float(ann_return / avg_dd_pct)
+            else:
+                m["sterling"] = 0.0
+        else:
+            m["sterling"] = 0.0        # Sortino ratio: annualized return / downside deviation
+        rets = np.array(self.bar_returns) if self.bar_returns else np.array([])
+        if len(rets) > 1:
+            neg_rets = rets[rets < 0]
+            downside_std_arr = float(np.std(neg_rets)) if len(neg_rets) > 1 else 0.0
+            if downside_std_arr > 0:
+                m["sortino"] = float(np.mean(rets) / downside_std_arr * math.sqrt(252))
+            else:
+                m["sortino"] = 0.0
+            m["downside_std"] = downside_std_arr
+        else:
+            m["sortino"] = 0.0
+            m["downside_std"] = 0.0
+
+        # Calmar ratio: annualized return / max drawdown (absolute value)
+        ann_return = m["net_return_pct"] / 100.0
+        max_dd_abs = abs(m["max_drawdown_pct"]) / 100.0 if self.total_bars > 0 else 0.0
+        if max_dd_abs > 0:
+            m["calmar"] = float(ann_return / max_dd_abs)
+        else:
+            m["calmar"] = 0.0
+
+        # Sterling ratio: annualized return / avg annual drawdown
+        if self.drawdown_curve and len(self.drawdown_curve) > 1:
+            dd_arr = np.array(self.drawdown_curve)
+            avg_dd = float(np.mean(np.abs(dd_arr[dd_arr < 0]))) if np.any(dd_arr < 0) else 0.0
+            peak_eq = max(self.equity_curve) if self.equity_curve else self.initial_capital
+            avg_dd_pct = avg_dd / peak_eq if peak_eq > 0 else 0.0
+            if avg_dd_pct > 0:
+                m["sterling"] = float(ann_return / avg_dd_pct)
+            else:
+                m["sterling"] = 0.0
+        else:
+            m["sterling"] = 0.0
+
         self.metrics = m
         log.info(
-            f"Metrics: sharpe={m['sharpe']:.3f} max_dd={m['max_drawdown_pct']:.2f}% "
+            f"Metrics: sharpe={m['sharpe']:.3f} sortino={m['sortino']:.3f} "
+            f"calmar={m['calmar']:.3f} sterling={m['sterling']:.3f} "
+            f"max_dd={m['max_drawdown_pct']:.2f}% "
             f"hit_rate={m['hit_rate']:.3f} pf={m['profit_factor']:.3f} "
             f"wl={m['win_loss_ratio']:.3f} n_trades={n_trades}"
         )

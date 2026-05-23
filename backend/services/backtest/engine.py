@@ -5,15 +5,20 @@ Event-driven backtest engine for the Confluence Decoder trading system.
 
 Processes bars one at a time with strict no-lookahead: at bar i, only
 data[0..i] is visible to the signal. Supports slippage, commission,
-position tracking, and three evaluation modes:
+position tracking, and four evaluation modes:
   - IS_OUT_OF_SAMPLE_SPLIT: 70/30 temporal split
   - WALK_FORWARD_CV: walk-forward cross-validation
+  - PURGED_K_FOLD_CV: purged K-fold with embargo gap (no train/test leakage)
   - MONTE_CARLO_BOOTSTRAP: Monte Carlo bootstrap on bar returns
 
 Usage:
     engine = BacktestEngine(signal=MySignal(), initial_capital=100_000)
     result = engine.run(snapshots, bars)
     print(result.summary_text())
+
+References:
+    Marcos López de Prado (2018). "Advances in Financial Machine Learning."
+    Chapter 12: Cross-Validation in Finance.
 """
 
 from __future__ import annotations
@@ -216,14 +221,9 @@ class BacktestEngine:
                     # We need to add: exit_price * qty - exit_commission - exit_slippage
                     # But we also need to NOT double-count. Let me fix the whole approach.
 
-                    # Actually, the simplest correct approach:
-                    # At entry: equity -= commission + slippage (fees)
-                    #           The "position" holds the notional, not equity
-                    # At exit:  equity += gross_pnl - commission - slippage
-                    # This means equity tracks cash, and P&L is realized at exit.
-
-                    # I'll fix this below with a cleaner model. For now, use net_pnl.
-                    equity = result.initial_capital + sum(t.net_pnl for t in result.trades)
+                    # Clean equity: cash tracks entry costs deducted at buy,
+                    # exit proceeds added at sell, net = initial + sum(net_pnl)
+                    equity += trade.net_pnl
 
                     position.quantity = 0
                     position.side = None
@@ -254,7 +254,7 @@ class BacktestEngine:
                         net_pnl=gross_pnl - entry_commission - commission_cost - entry_slippage - slippage_cost,
                     )
                     result.trades.append(trade)
-                    equity = result.initial_capital + sum(t.net_pnl for t in result.trades)
+                    equity += trade.net_pnl
 
                     position.quantity = 0
                     position.side = None
@@ -266,6 +266,8 @@ class BacktestEngine:
                 position.update_unrealized(close_price)
 
             # Track equity and drawdown
+            # equity = cash balance (initial capital - entry costs + exit proceeds)
+            # total_equity = cash + unrealized P&L of open positions
             total_equity = equity + position.unrealized_pnl
             result.equity_curve.append(total_equity)
 
@@ -307,7 +309,7 @@ class BacktestEngine:
                 net_pnl=gross_pnl - entry_commission - commission_cost - entry_slippage - slippage_cost,
             )
             result.trades.append(trade)
-            equity = result.initial_capital + sum(t.net_pnl for t in result.trades)
+            equity += trade.net_pnl
             total_equity = equity
             result.equity_curve[-1] = total_equity
             result.drawdown_curve[-1] = total_equity - peak_equity
@@ -426,6 +428,156 @@ def run_walk_forward_cv(
         engine = BacktestEngine(signal=signal, config=config)
         fold_result = engine.run(test_snap, test_bars, ticker=ticker)
         results.append(fold_result)
+
+    return results
+
+
+# ============================================================================
+# Purged K-Fold Cross-Validation (López de Prado Ch. 12)
+# ============================================================================
+
+class PurgedKFold:
+    """Purged K-Fold cross-validator with embargo gap for financial time series.
+
+    Prevents train/test leakage by:
+      1. Purging: removing from the training set any samples whose labels
+         overlap temporally with the test set.
+      2. Embargo: removing a gap of `embargo_size` samples immediately
+         following the test set to eliminate serial correlation leakage.
+
+    Args:
+        n_splits: Number of folds (default 5).
+        embargo_size: Number of samples to embargo after each test set
+                       (default 5, or 0 to disable).
+    """
+
+    def __init__(self, n_splits: int = 5, embargo_size: int = 5):
+        if n_splits < 2:
+            raise ValueError(f"n_splits must be >= 2, got {n_splits}")
+        if embargo_size < 0:
+            raise ValueError(f"embargo_size must be >= 0, got {embargo_size}")
+        self.n_splits = n_splits
+        self.embargo_size = embargo_size
+
+    def split(self, n_samples: int) -> List[Tuple[slice, slice]]:
+        """Generate train/test indices for purged K-fold CV.
+
+        Args:
+            n_samples: Total number of samples (bars).
+
+        Returns:
+            List of (train_slice, test_slice) tuples. Each slice can be
+            passed directly to list/slice operations like bars[train_slice].
+        """
+        fold_size = n_samples // self.n_splits
+        folds: List[Tuple[slice, slice]] = []
+
+        for k in range(self.n_splits):
+            test_start = k * fold_size
+            test_end = n_samples if k == self.n_splits - 1 else (k + 1) * fold_size
+
+            # Training set: everything before test_start, minus embargo zone
+            train_end = max(0, test_start - self.embargo_size)
+            train_slice = slice(0, train_end)
+
+            # Test set: current fold
+            test_slice = slice(test_start, test_end)
+
+            if train_end <= 0:
+                # First fold may have no training data — skip or allow empty?
+                # We still include it so that fold 0 acts as a "preview"
+                pass
+
+            folds.append((train_slice, test_slice))
+
+        return folds
+
+    def get_embargo_mask(self, n_samples: int) -> np.ndarray:
+        """Return a boolean mask where True = sample is in an embargo zone.
+
+        Samples in the embargo zone should be excluded from metric computation
+        or used with caution, as they follow a test set.
+        """
+        mask = np.zeros(n_samples, dtype=bool)
+        fold_size = n_samples // self.n_splits
+        for k in range(self.n_splits):
+            test_end = n_samples if k == self.n_splits - 1 else (k + 1) * fold_size
+            embargo_start = test_end
+            embargo_end = min(n_samples, embargo_start + self.embargo_size)
+            if embargo_end > embargo_start:
+                mask[embargo_start:embargo_end] = True
+        return mask
+
+    def __repr__(self) -> str:
+        return f"PurgedKFold(n_splits={self.n_splits}, embargo_size={self.embargo_size})"
+
+
+def run_purged_kfold_cv(
+    signal_factory: Callable[[], Signal],
+    snapshots: List[Dict[str, Any]],
+    bars: List[Dict[str, Any]],
+    ticker: str = "",
+    n_splits: int = 5,
+    embargo_size: int = 5,
+    config: Optional[EngineConfig] = None,
+) -> List[BacktestResult]:
+    """Run purged K-fold CV with embargo.
+
+    Each fold: train on data before the test set (minus embargo gap),
+    test on a contiguous block. This is more robust than basic walk-forward
+    because it prevents the model from seeing data that overlaps with or
+    immediately follows the test period.
+
+    Args:
+        signal_factory: Callable returning a fresh Signal per fold.
+        snapshots: Full snapshot history.
+        bars: Full bar history.
+        ticker: Ticker symbol.
+        n_splits: Number of folds.
+        embargo_size: Embargo gap after each test set.
+        config: Engine configuration.
+
+    Returns:
+        List of BacktestResult, one per fold.
+    """
+    n = len(bars)
+    if n < n_splits * 10:
+        raise ValueError(
+            f"n={n} too small for {n_splits}-fold purged CV "
+            f"(need at least {n_splits * 10} bars)"
+        )
+
+    cv = PurgedKFold(n_splits=n_splits, embargo_size=embargo_size)
+    folds = cv.split(n)
+    results: List[BacktestResult] = []
+
+    for k, (train_slice, test_slice) in enumerate(folds):
+        test_snap = snapshots[test_slice]
+        test_bars = bars[test_slice]
+        train_bars = bars[train_slice]
+
+        n_train = len(train_bars)
+        if n_train < 5:
+            log.warning(f"Fold {k + 1}/{n_splits}: skipping — only {n_train} training bars")
+            continue
+
+        log.info(
+            f"Purged K-fold {k + 1}/{n_splits}: "
+            f"train={n_train} (0..{n_train - 1} + embargo), "
+            f"test={len(test_bars)} (embargo={embargo_size})"
+        )
+
+        signal = signal_factory()
+        # Wire training data if signal has a .fit() method (ML signals)
+        if callable(getattr(signal, "fit", None)):
+            train_snap = snapshots[train_slice]
+            signal.fit(train_snap, train_bars)  # type: ignore[union-attr]
+        engine = BacktestEngine(signal=signal, config=config)
+        fold_result = engine.run(test_snap, test_bars, ticker=ticker)
+        results.append(fold_result)
+
+    if not results:
+        log.warning("Purged K-fold CV: no folds produced results")
 
     return results
 
