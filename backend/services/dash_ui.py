@@ -405,6 +405,166 @@ def _fmt_money(n):
         return f"${n/1e3:.1f}K"
     return f"${n:.0f}"
 
+
+def _build_heatseeker_right_sidebar(spot, contracts):
+    """Right sidebar: 9 analytics panels for the Heatseeker tab."""
+    regime, dot_color, ratio = _compute_gamma_regime(contracts)
+    klv = _compute_key_levels(spot, contracts)
+    risk = _compute_risk_levels(spot, contracts)
+    zones = _compute_flip_zones(spot, contracts)
+    stacked = _compute_stacked_nodes(contracts)
+    pos_gex, neg_gex = _compute_tug_of_war(contracts)
+
+    def panel(title, children):
+        return html.Div([
+            html.Div(title, style={"color": ACCENT, "fontSize": "10px",
+                                    "fontWeight": "bold", "letterSpacing": "1px",
+                                    "marginBottom": "4px"}),
+            html.Div(children, style={"fontSize": "11px", "color": TEXT}),
+        ], style={"background": BG_CARD, "padding": "8px 10px",
+                 "marginBottom": "6px", "borderRadius": "4px",
+                 "border": f"1px solid {BG_PLOT}"})
+
+    def kv(label, value):
+        return html.Div([
+            html.Span(label, style={"color": "#888", "fontSize": "10px"}),
+            html.Span(str(value) if value is not None else "—",
+                     style={"color": TEXT, "float": "right",
+                            "fontFamily": "monospace"}),
+        ], style={"marginBottom": "2px"})
+
+    briefing = panel("MORNING BRIEFING", html.Div([
+        html.Span("●", style={"color": dot_color, "marginRight": "6px",
+                               "fontSize": "14px"}),
+        html.Span(regime, style={"fontWeight": "bold"}),
+        html.Div(f"Net/|Σ| GEX: {ratio:+.1%}" if ratio else "",
+                 style={"color": "#888", "fontSize": "9px", "marginTop": "2px"}),
+    ]))
+
+    key_levels = panel("KEY LEVELS", html.Div([
+        kv("Gamma Flip", klv["gamma_flip"]),
+        kv("Call Wall",  klv["call_wall"]),
+        kv("Put Wall",   klv["put_wall"]),
+        kv("Max Pain",   klv["max_pain"]),
+        kv("Spot",       spot),
+    ]))
+
+    strategy = panel("STRATEGY", html.Div("—", style={"color": "#666"}))
+
+    sizing = panel("POSITION SIZING", html.Div([
+        html.Div("Kelly: —", style={"color": "#888", "fontSize": "10px"}),
+    ]))
+
+    risk_panel = panel("RISK LEVELS", html.Table([
+        html.Tr([
+            html.Td(f"R1 {risk['R1'] or '—'}", style={"padding": "2px 6px",
+                                                      "color": DANGER}),
+            html.Td(f"R2 {risk['R2'] or '—'}", style={"padding": "2px 6px",
+                                                      "color": DANGER}),
+        ]),
+        html.Tr([
+            html.Td(f"S1 {risk['S1'] or '—'}", style={"padding": "2px 6px",
+                                                      "color": ACCENT}),
+            html.Td(f"S2 {risk['S2'] or '—'}", style={"padding": "2px 6px",
+                                                      "color": ACCENT}),
+        ]),
+    ], style={"width": "100%", "fontFamily": "monospace", "fontSize": "10px"}))
+
+    checklist = panel("PRE-MARKET CHECKLIST", dcc.Checklist(
+        id="heatseeker-checklist",
+        options=[
+            {"label": " GEX regime identified",     "value": "regime"},
+            {"label": " Gamma flip noted",          "value": "flip"},
+            {"label": " Call/Put walls confirmed",  "value": "walls"},
+            {"label": " Max pain identified",       "value": "pain"},
+            {"label": " Strategy selected",         "value": "strategy"},
+            {"label": " Position size calculated",  "value": "size"},
+            {"label": " Stop loss set",             "value": "stop"},
+            {"label": " Risk/reward ≥ 1:2",         "value": "rr"},
+        ],
+        value=[], persistence=True, persistence_type="local",
+        style={"color": TEXT, "fontSize": "10px"},
+    ))
+
+    flip_panel = panel("FLIP ZONES",
+        html.Div([
+            html.Div([
+                html.Span("● ", style={"color": ACCENT if pct < 0 else DANGER}),
+                html.Span(f"{label}: ", style={"color": "#888"}),
+                html.Span(f"{val:.1f} ({pct:+.2f}%)",
+                         style={"color": TEXT, "fontFamily": "monospace"}),
+            ], style={"marginBottom": "2px", "fontSize": "10px"})
+            for label, val, pct in zones
+        ]) if zones else html.Div("—", style={"color": "#666"}))
+
+    def node_row(n):
+        return html.Div([
+            html.Span(f"{int(n['strike'])} ", style={"color": TEXT,
+                      "fontFamily": "monospace", "fontSize": "10px"}),
+            html.Div([
+                html.Div(style={"width": f"{n['call_pct']:.0f}%",
+                               "background": ACCENT, "height": "6px",
+                               "display": "inline-block"}),
+                html.Div(style={"width": f"{n['put_pct']:.0f}%",
+                               "background": "#9933ff", "height": "6px",
+                               "display": "inline-block"}),
+            ], style={"width": "60%", "display": "inline-block",
+                     "marginLeft": "4px"}),
+            html.Span(f" {n['call_pct']:.0f}/{n['put_pct']:.0f}",
+                     style={"color": "#888", "fontSize": "9px",
+                            "marginLeft": "4px"}),
+        ], style={"marginBottom": "3px"})
+
+    stacked_panel = panel("STACKED NODES",
+        html.Div([node_row(n) for n in stacked])
+        if stacked else html.Div("—", style={"color": "#666"}))
+
+    total_for_bar = abs(pos_gex) + abs(neg_gex)
+    pos_pct = (pos_gex / total_for_bar * 100) if total_for_bar > 0 else 50
+    tug_panel = panel("TUG-OF-WAR", html.Div([
+        html.Div([
+            html.Div(style={"width": f"{pos_pct:.0f}%", "background": ACCENT,
+                           "height": "10px", "display": "inline-block"}),
+            html.Div(style={"width": f"{100-pos_pct:.0f}%", "background": DANGER,
+                           "height": "10px", "display": "inline-block"}),
+        ], style={"width": "100%"}),
+        html.Div([
+            html.Span(f"+{_fmt_money(pos_gex)}",
+                     style={"color": ACCENT, "fontSize": "10px"}),
+            html.Span(f" {_fmt_money(neg_gex)}",
+                     style={"color": DANGER, "fontSize": "10px", "float": "right"}),
+        ], style={"marginTop": "2px"}),
+    ]))
+
+    return html.Div([briefing, key_levels, strategy, sizing, risk_panel,
+                    checklist, flip_panel, stacked_panel, tug_panel],
+                   style={"width": "280px", "padding": "8px",
+                          "overflowY": "auto",
+                          "maxHeight": "calc(100vh - 100px)"})
+
+
+def _build_heatseeker_header(spot, contracts, ticker):
+    """Header strip: ticker | price | regime badge | LIVE indicator."""
+    regime, _, _ = _compute_gamma_regime(contracts)
+    badge_text = {"BULLISH": "POSITIVE Γ", "BEARISH": "NEGATIVE Γ",
+                 "NEUTRAL": "NEUTRAL Γ"}.get(regime, "UNKNOWN Γ")
+    badge_bg = {"BULLISH": ACCENT, "BEARISH": DANGER,
+               "NEUTRAL": WARN}.get(regime, "#666")
+    return html.Div([
+        html.Span(ticker.upper(), style={"fontSize": "20px",
+                  "fontWeight": "bold", "color": TEXT, "marginRight": "12px"}),
+        html.Span(f"${spot:.2f}" if spot else "—", style={"fontSize": "16px",
+                  "color": TEXT, "fontFamily": "monospace", "marginRight": "12px"}),
+        html.Span(badge_text, style={"background": badge_bg, "color": BG_DARK,
+                  "padding": "2px 8px", "borderRadius": "10px",
+                  "fontSize": "10px", "fontWeight": "bold",
+                  "marginRight": "12px"}),
+        html.Span("● LIVE", style={"color": ACCENT, "fontSize": "10px",
+                  "float": "right"}),
+    ], style={"padding": "8px 12px", "background": BG_CARD,
+             "borderBottom": f"1px solid {BG_PLOT}", "marginBottom": "8px"})
+
+
 @functools.lru_cache(maxsize=32)
 def _cached_build_heatmap(
     view: str,
@@ -1474,6 +1634,7 @@ T: Toggle theme  M: Mute alerts  ?: Show this help
             if tab == "heatseeker":
                 spot = chain_data.get("spot", 0) if isinstance(chain_data, dict) else 0
                 contracts = chain_data.get("contracts", []) if isinstance(chain_data, dict) else []
+                ticker = chain_data.get("ticker", "SPY") if isinstance(chain_data, dict) else "SPY"
 
                 # Read toggle state from store (with I-8 NaN guard)
                 toggle_state = _sanitize_state_dict({})  # default; actual state read via callback
@@ -1489,7 +1650,9 @@ T: Toggle theme  M: Mute alerts  ?: Show this help
                             expiry_dates.append(exp)
                     expiry_dates.sort()
 
-                sidebar = _build_heatseeker_toggles(expiry_dates=expiry_dates)
+                left_sidebar  = _build_heatseeker_toggles(expiry_dates=expiry_dates)
+                right_sidebar = _build_heatseeker_right_sidebar(spot, contracts)
+                header        = _build_heatseeker_header(spot, contracts, ticker)
                 fig = _build_gex_heatmap(spot=spot, contracts=contracts, dark=dark)
                 graph = dcc.Graph(
                     id="heatseeker-graph",
@@ -1498,10 +1661,13 @@ T: Toggle theme  M: Mute alerts  ?: Show this help
                     config={"responsive": True},
                 )
                 return html.Div([
+                    header,
                     html.Div([
-                        sidebar,
-                        html.Div(graph, style={"flex": 1}),
-                    ], style={"display": "flex", "flexDirection": "row"}),
+                        left_sidebar,
+                        html.Div(graph, style={"flex": 1, "minWidth": "0"}),
+                        right_sidebar,
+                    ], style={"display": "flex", "flexDirection": "row",
+                             "alignItems": "flex-start"}),
                 ])
 
             elif tab == "flowseeker":
