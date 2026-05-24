@@ -187,42 +187,8 @@ class BacktestEngine:
                         net_pnl=gross_pnl - entry_commission - commission_cost - entry_slippage - slippage_cost,
                     )
                     result.trades.append(trade)
-                    equity += exit_price * position.quantity + trade.net_pnl
-                    # Simplified: equity already had entry cost subtracted, add exit proceeds
-                    equity += exit_price * position.quantity
-                    # Correct: equity was reduced by entry_cost, now add exit_value
-                    # Actually let's be precise:
-                    # At entry: equity -= entry_price * qty + comm + slip
-                    # At exit:  equity += exit_price * qty - comm - slip
-                    # The net_pnl already accounts for everything, so:
-                    equity = equity - exit_price * position.quantity + trade.net_pnl + exit_price * position.quantity
-                    # Simplify: just add net_pnl to equity (entry cost already deducted)
-                    # Let me redo this cleanly:
-                    # equity after entry = initial - entry_cost
-                    # equity after exit  = equity_after_entry + exit_proceeds - exit_costs
-                    # = initial - entry_cost + exit_value - exit_comm - exit_slip
-                    # = initial + (exit_value - entry_cost) - exit_comm - exit_slip
-                    # = initial + net_pnl
-                    # So: equity += exit_price * qty - exit_comm - exit_slip
-                    # But we already subtracted entry. Let me just track properly.
-
-                    # Reset: track equity as cash. Entry: cash -= entry_price*qty + fees
-                    # Exit: cash += exit_price*qty - fees
-                    # net_pnl = (exit-entry)*qty - all_fees
-                    # So cash = initial + net_pnl
-                    # We already subtracted entry at buy time. Now add exit proceeds.
-                    # equity was: initial - entry_price*qty - entry_fees
-                    # Now: equity += exit_price*qty - exit_fees
-                    # = initial - entry_price*qty - entry_fees + exit_price*qty - exit_fees
-                    # = initial + (exit_price - entry_price)*qty - all_fees
-                    # = initial + net_pnl  ✓
-
-                    # The current equity already has entry subtracted.
-                    # We need to add: exit_price * qty - exit_commission - exit_slippage
-                    # But we also need to NOT double-count. Let me fix the whole approach.
-
-                    # Clean equity: cash tracks entry costs deducted at buy,
-                    # exit proceeds added at sell, net = initial + sum(net_pnl)
+                    # Clean equity: cash tracks entry cost (deducted at buy),
+                    # exit proceeds added at sell, net = initial + net_pnl
                     equity += trade.net_pnl
 
                     position.quantity = 0
