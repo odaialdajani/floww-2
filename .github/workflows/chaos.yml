@@ -1,0 +1,14 @@
+name: chaos-weekly
+on:
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+jobs:
+  chaos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: placeholder
+        run: |
+          echo "Round 6 Agent 8 deliverable parked."
+          echo "TODO: integrate toxiproxy/pumba once VPIN_HFT strategy is stable."
