@@ -225,9 +225,185 @@ def _build_heatseeker_toggles(expiry_dates: Optional[List[str]] = None) -> html.
     })
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# FIGURE GENERATION WITH LRU CACHE (memoization for <300ms callback target)
-# ═══════════════════════════════════════════════════════════════════════════════
+# ── Right-sidebar compute helpers (I-5/I-8 NaN-safe) ─────────────
+def _compute_gamma_regime(contracts):
+    """Return (label, dot_color, signed_ratio)."""
+    if not contracts:
+        return ("UNKNOWN", "#666666", 0.0)
+    valid = [c.get("gex", 0) for c in contracts
+             if isinstance(c.get("gex"), (int, float)) and math.isfinite(c.get("gex"))]
+    net = sum(valid)
+    total_abs = sum(abs(v) for v in valid)
+    if total_abs <= 0:
+        return ("UNKNOWN", "#666666", 0.0)
+    ratio = net / total_abs
+    if ratio > 0.10:
+        return ("BULLISH", "#00ff88", ratio)
+    if ratio < -0.10:
+        return ("BEARISH", "#ff4444", ratio)
+    return ("NEUTRAL", "#ffaa00", ratio)
+
+
+def _compute_key_levels(spot, contracts):
+    """Return {gamma_flip, call_wall, put_wall, max_pain, spot}."""
+    out = {"gamma_flip": None, "call_wall": None, "put_wall": None,
+           "max_pain": None, "spot": spot}
+    if not contracts:
+        return out
+    by_strike = {}
+    for c in contracts:
+        s = c.get("strike")
+        if not isinstance(s, (int, float)) or not math.isfinite(s):
+            continue
+        d = by_strike.setdefault(s, {"gex": 0.0, "call_oi": 0, "put_oi": 0})
+        g = c.get("gex", 0)
+        if isinstance(g, (int, float)) and math.isfinite(g):
+            d["gex"] += g
+        oi = c.get("oi", 0) or 0
+        if c.get("type") == "call":
+            d["call_oi"] += oi
+        else:
+            d["put_oi"] += oi
+    strikes_sorted = sorted(by_strike.keys())
+    # Gamma flip: where cumulative GEX crosses zero
+    cum, prev_s = 0.0, None
+    for s in strikes_sorted:
+        cum_new = cum + by_strike[s]["gex"]
+        if prev_s is not None and cum * cum_new < 0:
+            out["gamma_flip"] = round((prev_s + s) / 2, 2)
+            break
+        cum, prev_s = cum_new, s
+    # Walls
+    calls_above = [(s, by_strike[s]["call_oi"]) for s in strikes_sorted if s > spot]
+    if calls_above:
+        out["call_wall"] = max(calls_above, key=lambda x: x[1])[0]
+    puts_below = [(s, by_strike[s]["put_oi"]) for s in strikes_sorted if s < spot]
+    if puts_below:
+        out["put_wall"] = max(puts_below, key=lambda x: x[1])[0]
+    # Max pain
+    def pain_at(K):
+        p = 0.0
+        for s in strikes_sorted:
+            if s >= K:
+                p += by_strike[s]["call_oi"] * (s - K) * 100
+            if s <= K:
+                p += by_strike[s]["put_oi"] * (K - s) * 100
+        return p
+    if strikes_sorted:
+        out["max_pain"] = min(strikes_sorted, key=pain_at)
+    return out
+
+
+def _compute_risk_levels(spot, contracts):
+    """Return {R1, R2, S1, S2}. TODO: derive from ATR or IV instead of ±0.5%/1.0%."""
+    if not spot or not math.isfinite(spot):
+        return {"R1": None, "R2": None, "S1": None, "S2": None}
+    return {
+        "R1": round(spot * 1.005, 2),
+        "R2": round(spot * 1.010, 2),
+        "S1": round(spot * 0.995, 2),
+        "S2": round(spot * 0.990, 2),
+    }
+
+
+def _compute_flip_zones(spot, contracts):
+    """Return [(label, strike, pct_distance), ...]."""
+    if not contracts or not spot:
+        return []
+    klv = _compute_key_levels(spot, contracts)
+    zones = []
+    for label, val in [("GEX Flip", klv["gamma_flip"]),
+                       ("Max Pain", klv["max_pain"])]:
+        if val is not None and math.isfinite(val):
+            zones.append((label, val, (val - spot) / spot * 100))
+    return zones
+
+
+def _compute_stacked_nodes(contracts, top_n=4):
+    """Return top N strikes by combined OI with call/put share."""
+    if not contracts:
+        return []
+    by_strike = {}
+    for c in contracts:
+        s = c.get("strike")
+        if not isinstance(s, (int, float)) or not math.isfinite(s):
+            continue
+        d = by_strike.setdefault(s, {"call_oi": 0, "put_oi": 0})
+        oi = c.get("oi", 0) or 0
+        if c.get("type") == "call":
+            d["call_oi"] += oi
+        else:
+            d["put_oi"] += oi
+    nodes = []
+    for s, d in by_strike.items():
+        total = d["call_oi"] + d["put_oi"]
+        if total > 0:
+            nodes.append({
+                "strike": s,
+                "call_pct": d["call_oi"] / total * 100,
+                "put_pct":  d["put_oi"]  / total * 100,
+                "total_oi": total,
+            })
+    nodes.sort(key=lambda n: n["total_oi"], reverse=True)
+    return nodes[:top_n]
+
+
+def _compute_tug_of_war(contracts):
+    """Return (positive_gex_total, negative_gex_total) in dollars."""
+    if not contracts:
+        return (0.0, 0.0)
+    valid = [c.get("gex", 0) for c in contracts
+             if isinstance(c.get("gex"), (int, float)) and math.isfinite(c.get("gex"))]
+    return (sum(v for v in valid if v > 0), sum(v for v in valid if v < 0))
+
+
+def _compute_cell_tags(spot, contracts):
+    """Return {strike: [tag_labels]} for KING/FLOOR/CEIL/GATE/AIR."""
+    if not contracts:
+        return {}
+    by_strike = {}
+    for c in contracts:
+        s = c.get("strike")
+        if not isinstance(s, (int, float)) or not math.isfinite(s):
+            continue
+        g = c.get("gex", 0)
+        if isinstance(g, (int, float)) and math.isfinite(g):
+            by_strike.setdefault(s, 0.0)
+            by_strike[s] += g
+    if not by_strike:
+        return {}
+    total_abs = sum(abs(g) for g in by_strike.values())
+    if total_abs <= 0:
+        return {}
+    tags = {s: [] for s in by_strike}
+    king = max(by_strike, key=lambda s: abs(by_strike[s]))
+    tags[king].append("KING")
+    for s in sorted([k for k in by_strike if by_strike[k] > 0 and k <= spot],
+                    key=lambda s: by_strike[s], reverse=True)[:3]:
+        tags[s].append("FLOOR")
+    for s in sorted([k for k in by_strike if by_strike[k] < 0 and k >= spot],
+                    key=lambda s: by_strike[s])[:3]:
+        tags[s].append("CEIL")
+    for s, g in by_strike.items():
+        if abs(g) / total_abs > 0.10 and "KING" not in tags[s]:
+            tags[s].append("GATE")
+    for s, g in by_strike.items():
+        if abs(g) / total_abs < 0.01:
+            tags[s].append("AIR")
+    return {s: t for s, t in tags.items() if t}
+
+
+def _fmt_money(n):
+    """Format dollar amounts: $1.50B, $473.2M, $52.3K, or '—'."""
+    if not isinstance(n, (int, float)) or not math.isfinite(n):
+        return "—"
+    if abs(n) >= 1e9:
+        return f"${n/1e9:.2f}B"
+    if abs(n) >= 1e6:
+        return f"${n/1e6:.1f}M"
+    if abs(n) >= 1e3:
+        return f"${n/1e3:.1f}K"
+    return f"${n:.0f}"
 
 @functools.lru_cache(maxsize=32)
 def _cached_build_heatmap(
