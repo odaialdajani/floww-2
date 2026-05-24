@@ -1,99 +1,71 @@
-# ROUND 7 COMPLETION LOG — Project Oracle
-> Generated: 2026-07-10T00:00:00Z by Agent 10 (Hermes) — Documentation & Synthesis Lead
-> Scope: Synthesize all agent work from Rounds 1-7, verify commit completeness, flag gaps.
-
----
-
-## Agent Commit Registry
-
-| # | Agent | Latest SHA | Subject | Acceptance | Key Insight |
-|---|-------|-----------|---------|------------|-------------|
-| 1 | Agent 1 — Data Ingestion | `e552fce` | feat(execution): Agent 1 tests + fill_monitor + position_reconciler | All ingestion pipeline tests pass; fill monitor reconciles fills vs orders within 50ms | fill_monitor catches partial fills that position_sizer missed — the 2-phase reconciliation (fill→position→P&L) is the correct pattern |
-| 2 | Agent 2 — ML/Anomaly | `9c32dcd` | feat(rl): Agent 2 — trading environment (Gym-compatible) + tests | Gym env passes step/reset/spec tests; WalkForwardML backtest RL integration confirmed | The RL trading env wraps the existing backtest cleanly — reusing the same data pipeline eliminates train/test leakage |
-| 3 | Agent 3 — Dashboard | `1aa862e` | feat(frontend): add SwarmSPX tab + fix trinity iterable bug | 9-tab Dash UI renders; SwarmSPX iframe loads on localhost:8099; trinity iterable fix prevents crash on empty data | WSGIMiddleware mount + Dash callback paths must be registered as public routes or auth blocks them |
-| 4 | Agent 4 — Resilience | `ecd910e` | feat(test-infra): Agent 4 — chaos engineering + performance regression tests | 47 integration tests ALL PASS; 371 RPS, 2.52ms p99, 0% errors at load | DuckDB schema bug (14→16 cols) was the root cause of 10 failing tests — schema drift is invisible until load hits a missing column |
-| 5 | Agent 5 — Math Validation | `c253856` | test(reference-parity): cross-validate Hermes kernels against 5 reference repos | 6 new test classes; ARCHITECTURE_DEEP.md + THEORY.md written; all reference parity checks pass | Cross-referencing against 5 repos found 2 diverging implementations — the weighted-IV percentile method was silently wrong in one repo |
-| 6 | Agent 6 — Knowledge Architect | `4c8df63` | feat(retail-flow): add retail flow score nodes, price movements, and semantic search | 36 tests (19 graph + 17 search); Neo4j retail flow nodes with 11 metrics; NL query interface working | Semantic search v2 over flow data enables NL questions like "show me unusual SPY call activity" without SQL |
-| 7 | Agent 7 — Security | `aefa9ca` | feat(vpin-hft): VPIN_HFT strategy implementation — correlation engine, trading signals, paper trader, backtest | 5 CRITICAL auth fixes merged; Azure Bicep + Key Vault deployed; VPIN_HFT strategy backtest passes | Pre-live audit found 5 CRITICAL findings — all auth-related. The VPIN_HFT correlation engine is the most novel contribution |
-| 8 | Agent 8 — Kanban/Orchestration | `09b64f3` | feat(kanban): Round 5 — force multiplier coordination suite | 13/13 cards done; dependency_checker, todo_extractor (16 auto-cards), scheduler_capacity, brief_generator | The coordination suite turned the kanban from a tracking tool into an autonomous orchestration layer — bottleneck detection alone saved ~2h of manual rebalancing |
-| 9 | Agent 9 — Memory/System | `6284901` | feat(trading): cross-project lesson transfer — risk gate, Friday Pin, paper broker | Risk gate 61 tests pass; Friday Pin Sharpe 3.66; paper broker 27 tests pass | Cross-project lesson transfer is the highest-ROI activity — reusing the Friday Pin from another repo would've taken 3 days from scratch |
-| 10 | Agent 10 — Observability | `5a520aa` | feat(observability): Round 4 — alert tuning, runbooks, anomaly explainer, SLA dashboard | Alert tuning reduces false positives by 60%; SLA dashboard live; chaos forecasting engine operational | The anomaly explainer (SHAP-based) was the key to actionable alerts — without it, operators couldn't distinguish real anomalies from data spikes |
-
----
-
-## Missing Agents / Gaps Flagged
-
-| Agent | Gap | Action |
-|-------|-----|--------|
-| None | All 10 agents have commits present | No gaps detected |
-| — | Round 6 commits not found in git log | If Round 6 was executed, commits may be on a different branch or repo |
-
----
-
-## Commit Summary Stats
-
-- Total unique agent-track commits (R1-R7): **76 commits**
-- All 10 agents: **Present**
-- Net new files (estimated): ~120+ files across all rounds
-- Test count at R5 close: **990 passed, 1 failed, 23 skipped, 36 errors**
-
----
-
-## Round 7 Dependency DAG
-
-```mermaid
-graph TD
-    A1[Agent 1: Ingestion] --> A4[Agent 4: Resilience]
-    A1 --> A2[Agent 2: ML/Anomaly]
-    A5[Agent 5: Math Validation] --> A2
-    A2 --> A3[Agent 3: Dashboard]
-    A4 --> A3
-    A6[Agent 6: Knowledge] --> A2
-    A7[Agent 7: Security] --> A1
-    A8[Agent 8: Kanban] --> ALL[All Agents]
-    A9[Agent 9: Memory] --> ALL
-    A10[Agent 10: Observability] --> ALL
-
-    style A8 fill:#4a90d9,color:#fff
-    style A9 fill:#4a90d9,color:#fff
-    style A10 fill:#4a90d9,color:#fff
-```
-
----
-
-## SHAs Verified
-
-All 10 SHAs above resolve in the current repository (`~/GitHub/floww`):
-
-```
-e552fce — Agent 1 (fill_monitor + position_reconciler)
-9c32dcd — Agent 2 (RL trading env)
-1aa862e — Agent 3 (SwarmSPX tab + trinity fix)
-ecd910e — Agent 4 (chaos engineering)
-c253856 — Agent 5 (reference parity)
-4c8df63 — Agent 6 (retail flow Neo4j)
-aefa9ca — Agent 7 (VPIN_HFT strategy)
-09b64f3 — Agent 8 (coordination suite)
-6284901 — Agent 9 (risk gate + Friday Pin)
-5a520aa — Agent 10 (observability Round 4)
-```
-
-Round 7 synthesis commits:
-- `f5449e3` — docs(round-7-agent-10): add completion log
-- `f4e478e` — docs(round-7-agent-10): update heatseeker architecture
-- `e64bf73` — chore(round-7-agent-10): add round7 kanban cards
-- `2c3b781` — chore(round-7-agent-10): update swarm status with round 7 closure
-- `a5992a6` — feat(round-7-agents): add heatseeker snapshots, morning briefing, fetch coordinator, greeks API, cache router, databento OI, and tests
-
----
-
-## Acceptance Criteria
-
-- [x] ROUND7_COMPLETION_LOG.md contains 10 entries, all SHAs valid
-- [ ] HEATSEEKER_ARCHITECTURE.md renders cleanly, Mermaid diagram valid
-- [ ] kanban/board.yaml has 10 new cards, syntax valid
-- [ ] SWARM_STATUS.md updated with Round 7 closure
-
----
-
-*Last updated: 2026-07-10T00:00:00Z by Agent 10 — OWL/Hermes CLI-side*
+# Round 7 Completion Log
+Generated from real git history. Replaces a prior hallucinated version.
+## Commits landed (chronological)
+| SHA | Date | Subject |
+|-----|------|---------|
+| `d7865c8` | 2026-05-24 11:24:04 -0400 | test(ml): gate inference + training tests on artifact presence (auto-skip) |
+| `4a3ad74` | 2026-05-24 11:22:18 -0400 | feat(heatseeker-ui): implement 8 NaN-safe right-sidebar compute helpers (GREEN) |
+| `7fa9f64` | 2026-05-24 11:16:23 -0400 | test(heatseeker-ui): failing TDD tests for 8 compute helpers (RED) |
+| `9368962` | 2026-05-24 11:14:29 -0400 | test(greeks-perf): widen SPX latency threshold to 200ms (TODO: Numba pass) |
+| `6d65029` | 2026-05-24 11:12:08 -0400 | feat(bs-greeks): dynamic RFR from treasury yield curve (verified callers + tests) |
+| `4a8aec5` | 2026-05-24 07:06:27 -0400 | chore(round-7-cleanup): vendor gflows_modules and reconcile working-tree edits\n\nFiles reconciled (KEEP):\n- backend/server.py: additive features (rate limit bypass localhost, VEX grid, DTE OI blending, more tickers)\n- backend/routes/heatseeker.py: configurable lookback_mins parameter\n- backend/routes/portfolio.py: auto-create empty portfolio on 404\n- backend/routes/admin.py: data-source management endpoints (AV adapter)\n- backend/routes/data_providers.py: data-source metadata injection (AV adapter)\n- docs/ROUND6_COMPLETION_LOG.md: doc format update\n- kanban/BOTTLENECK_ALERTS.md: timestamp update\n- project_oracle/models/meta_anomaly_v1.pt: model binary update\n- backend/gflows_modules/: vended gflows integration (required)\n\nFiles held back for human decision (NEEDS_HUMAN):\n- backend/auth.py: /api/portfolio/ added to PUBLIC_PATHS\n- backend/bs_greeks.py: dynamic RFR from treasury yields (math kernel)\n- frontend/src/*: all React app changes (Round 7 brief prohibited touches)\n- frontend/src/components/PaperTrade.jsx: unknown feature\n- DEEPSEEK_RECOVERY_PROMPT_5OF5.md: recovery prompt artifact\n- MASTER_ARCHITECT_REPORT_2026-05-24.md: report artifact |
+| `ef3ffd5` | 2026-05-24 07:04:15 -0400 | feat(data-source): Alpha Vantage adapter + DataSourceRouter + UI badge |
+| `4d0d343` | 2026-05-24 07:00:33 -0400 | test(round-7-agent-1): fix heatseeker layout test + add property-based compute coverage |
+| `93ebd7d` | 2026-05-24 06:55:16 -0400 | feat(alerts): Discord webhook notifier with rich embed formatting — wired into AlertDispatcher + PositionAlertService |
+| `fada892` | 2026-05-24 06:55:16 -0400 | feat(alerts): Real-time Position Alert Service with WebSocket streaming + AlertDispatcher integration |
+| `9b3f197` | 2026-05-24 06:55:16 -0400 | feat(backtest): Purged K-fold CV with embargo + Sortino/Calmar/Sterling gates + DuckDB P&L logger |
+| `fd568fe` | 2026-05-24 06:54:56 -0400 | feat(greeks): Numba JIT vectorization with parallel prange + AOT compilation |
+| `0d955ff` | 2026-05-23 22:32:10 -0400 | feat(ml): model registry, live inference, real-data backtest |
+| `f86fec1` | 2026-05-23 22:17:50 -0400 | feat(ml): add SPY training pipeline + model registry |
+| `93fd3ca` | 2026-05-23 21:59:44 -0400 | fix(round-7-agent-8): add yfinance OI fallback with resilient non-negative int guarantee |
+| `9ad2285` | 2026-05-23 21:59:12 -0400 | feat(round-7-agent-4): add morning briefing engine with regime classifier and API |
+| `1183c2d` | 2026-05-23 21:57:22 -0400 | test(round-7-agent-9): add visual regression E2E tests |
+| `0353af1` | 2026-05-23 21:56:19 -0400 | feat(round-7-agent-3): add snapshot delta engine + top movers API |
+| `7b63d79` | 2026-05-23 21:55:40 -0400 | feat(round-7-agent-2): wire all 5 Heatseeker toggles with state persistence |
+| `8a9a430` | 2026-05-23 21:54:22 -0400 | docs(round-7-agent-10): update completion log with actual SHAs |
+| `a5992a6` | 2026-05-23 21:53:39 -0400 | feat(round-7-agents): add heatseeker snapshots, morning briefing, fetch coordinator, greeks API, cache router, databento OI, and tests |
+| `2c3b781` | 2026-05-23 21:53:21 -0400 | chore(round-7-agent-10): update swarm status with round 7 closure |
+| `e64bf73` | 2026-05-23 21:53:08 -0400 | chore(round-7-agent-10): add round7 kanban cards |
+| `f4e478e` | 2026-05-23 21:53:01 -0400 | docs(round-7-agent-10): update heatseeker architecture |
+| `f5449e3` | 2026-05-23 21:52:55 -0400 | docs(round-7-agent-10): add completion log |
+| `38512b4` | 2026-05-23 21:51:21 -0400 | test(round-7-agent-9): add tag rendering tests + NaN/inf guard fix |
+| `e6b48ab` | 2026-05-23 21:51:17 -0400 | feat(round-7-agent-5): add kelly calculator |
+| `b74c22d` | 2026-05-23 21:48:02 -0400 | fix(round-7-agent-7): add alerts summary route |
+| `2bf6e28` | 2026-05-23 19:08:29 -0400 | docs(round6): research-paper-grade brief for Qwen prompt generation |
+| `9594258` | 2026-05-23 18:58:43 -0400 | feat(round6): dispatch plan for next 10 Hermes agents |
+| `6208bed` | 2026-05-23 18:54:54 -0400 | fix(round-5-salvage-3): fix routes prefix, cache_router API, drift detector |
+| `834e654` | 2026-05-23 18:38:26 -0400 | fix(round-5-salvage-2): green test suite — 1882 passing, 0 failing |
+| `7124dfa` | 2026-05-23 18:38:26 -0400 | fix(round-5-salvage): risk gate NaN handling, optional yoptions, TDD start_incident, test collision |
+| `067e2c3` | 2026-05-22 23:44:24 -0400 | feat: add fetch coordinator, update type hints, cache router + server fixes |
+| `bd3cf6b` | 2026-05-22 23:36:28 -0400 | fix: update cache router |
+| `3f316ca` | 2026-05-22 23:35:23 -0400 | feat: add cache router + server updates |
+| `f43e9c8` | 2026-05-22 23:35:09 -0400 | chore: add analytics route update + throughput predictor |
+| `09b64f3` | 2026-05-22 23:32:00 -0400 | feat(kanban): Round 5 — force multiplier coordination suite |
+| `cc6c534` | 2026-05-22 23:31:48 -0400 | chore: add risk gate test, meta anomaly model, incident doc |
+| `b033d59` | 2026-05-22 23:29:51 -0400 | fix: clean up meta_observability imports, update server type hints + test |
+| `7a7af06` | 2026-05-22 23:28:20 -0400 | fix(meta-obs): add cache_hit_ratio and 429_count to anomaly detector features |
+| `5c9904c` | 2026-05-22 23:25:37 -0400 | feat(observability): add SLA cost Grafana dashboard |
+| `fb424c0` | 2026-05-22 23:24:34 -0400 | feat(incidents): update incident template + start script, add staleness alert tests |
+| `d110791` | 2026-05-22 23:20:15 -0400 | feat(alerts): add staleness alerts for polling delays and cache age |
+| `3ddc6e4` | 2026-05-22 23:18:16 -0400 | feat(memory): Round 5 infrastructure — multi-project config, cron fix, taxonomy update |
+| `06093d8` | 2026-05-22 23:16:06 -0400 | chore: update tag taxonomy |
+| `fe66e85` | 2026-05-22 23:15:13 -0400 | feat(iv-skew): fix weighted avg + percentile, add greek aggregator + frontend charts |
+| `2dc1f2d` | 2026-05-22 23:12:36 -0400 | feat(ui): vanna/charm charts, webgl rendering, error handling, offline-first |
+| `5549e3a` | 2026-05-22 23:10:46 -0400 | feat(data): integrate Alpha Vantage live market data |
+| `adfd69c` | 2026-05-22 23:06:44 -0400 | feat(backtest): RetailFlowSignal + regime filter + backtest script |
+| `98d56da` | 2026-05-22 23:04:22 -0400 | feat(retail-flow): add retail flow backtest signal + regime filter |
+| `1872835` | 2026-05-22 22:50:28 -0400 | fix(anomaly-detector): indent Conv1DAutoencoder.__init__ body under 'if HAS_TORCH:' guard |
+| `e55b1ef` | 2026-05-22 22:48:21 -0400 | fix(duckdb): update retail flow schema + load test report |
+| `2f6ac30` | 2026-05-22 22:48:21 -0400 | feat(retail-flow): API route + Dash UI integration |
+| `4c8df63` | 2026-05-22 22:48:21 -0400 | feat(retail-flow): add retail flow score nodes, price movements, and semantic search |
+| `153251c` | 2026-05-22 22:43:54 -0400 | chore(kanban): mark O-RISK-GATE done + update board registry + SWARM_STATUS |
+| `81ba555` | 2026-05-22 22:38:52 -0400 | feat: offline-first data layer, error handling, PWA enhancements, performance opt |
+| `f4a90de` | 2026-05-22 22:37:42 -0400 | chore(kanban): Round 5 — update 8 card frontmatter from ready to done |
+| `92afe2c` | 2026-05-22 22:33:27 -0400 | feat: retail data pipeline monitoring — provider success rates + alerting |
+| `91085bc` | 2026-05-22 22:30:20 -0400 | feat(retail-flow): Numba BS fallback, CPR, OI change, composite flow score |
+| `0d67416` | 2026-05-22 22:26:06 -0400 | docs: update NEXT_TASKS.md with Round 5 causal inference results |
+| `54e281d` | 2026-05-22 22:23:05 -0400 | round5: granger causality + retail CPR/OI skew backtest |
+| `484f600` | 2026-05-22 21:58:48 -0400 | fix(api): add /api/data/{ticker} route returning full heatmap data |## Verification
+- Generated by Prompt A (backend stabilization agent)
+- Source: `git log --since="2026-05-22"`
+- Replaces prior version that referenced future date 2026-07-10 and stale clone path
