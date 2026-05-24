@@ -54,17 +54,17 @@ async def _fetch_chain(ticker: str, expiries: int) -> Dict[str, Any]:
     return raw
 
 
-async def _fetch_history(ticker: str) -> List[Dict[str, Any]]:
+async def _fetch_history(ticker: str, lookback_mins: int = 60) -> List[Dict[str, Any]]:
     """
-    Fetch the last 24h of spot snapshots for ``ticker`` from the snapshots
-    collection. Wave 1 returns an empty list if Mongo isn't available — the
-    pure function treats this as "all nodes fresh".
+    Fetch the last ``lookback_mins`` minutes of spot snapshots for ``ticker``
+    from the snapshots collection. Wave 1 returns an empty list if Mongo isn't
+    available — the pure function treats this as "all nodes fresh".
     """
     try:
         from server import db
         from datetime import datetime, timedelta, timezone
 
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=lookback_mins)
         cursor = db.snapshots.find(
             {"ticker": ticker.upper(), "ts": {"$gte": cutoff}},
             {"spot": 1, "ts": 1, "_id": 0},
@@ -89,7 +89,6 @@ async def _fetch_history(ticker: str) -> List[Dict[str, Any]]:
 async def flip_zones_route(
     ticker: str = "SPY",
     window_pct: float = Query(default=0.05, ge=0.01, le=0.50, description="Window size as fraction of spot"),
-    min_gap_pct: float = Query(default=0.02, ge=0.005, le=0.20, description="Minimum gap between flip zones"),
     expiries: int = Query(default=4, ge=1, le=12),
 ):
     """All cumulative-GEX sign changes within +/-window_pct of spot."""
@@ -99,7 +98,7 @@ async def flip_zones_route(
     contracts = raw.get("contracts") or []
     if not spot or not contracts:
         raise HTTPException(404, "No options data for " + ticker)
-    result = calc_flip_zones(spot, contracts, window_pct=window_pct, min_gap_pct=min_gap_pct)
+    result = calc_flip_zones(spot, contracts, window_pct=window_pct)
     return _sanitize({"ticker": ticker.upper(), "spot": spot, **result})
 
 

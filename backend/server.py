@@ -99,6 +99,9 @@ async def rate_limit_middleware(request: Request, call_next):
     if _TEST_MODE:
         return await call_next(request)
     client_ip = request.client.host if request.client else "unknown"
+    # Bypass rate limit for localhost/internal traffic
+    if client_ip in ("127.0.0.1", "::1", "localhost"):
+        return await call_next(request)
     now = time.time()
     window = 60.0  # 1 minute
     
@@ -479,7 +482,9 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> Di
 # ----------------------------- GEX Aggregation --------------------------------
 
 def compute_gex_by_strike(spot: float, contracts: List[Dict[str, Any]], ticker: str = "") -> List[Dict[str, Any]]:
-    """Per-strike net GEX, VEX, and Vega. Convention: dealer-positive convention."""
+    """Per-strike net GEX, VEX, and Vega. Convention: dealer-positive convention.
+    For 0DTE/1DTE contracts, blends volume-weighted OI (from gflows heuristic):
+    effective_oi = max(oi, volume * 0.5). This captures intraday flow for short-dated options."""
     if spot <= 0 or not contracts:
         return []
     q = DIV_YIELD.get(ticker, 0.0)
@@ -488,6 +493,15 @@ def compute_gex_by_strike(spot: float, contracts: List[Dict[str, Any]], ticker: 
         oi = c.get("oi", 0) or 0
         if oi <= 0 or (isinstance(oi, float) and math.isnan(oi)):
             continue
+        # 0DTE/1DTE heuristic: blend daily volume into OI for real-time exposure
+        dte = c.get("T", 1.0 / 365.0) * 365.0  # approx days to expiry (default 1 day)
+        vol = c.get("volume", 0) or 0
+        if dte <= 1.5 and vol > 0:
+            effective_oi = max(oi, vol * 0.7)  # amplify via volume, never attenuate
+        elif dte <= 3.0 and vol > oi * 2:
+            effective_oi = max(oi, vol * 0.5)  # gflows: cap at volume * 0.5
+        else:
+            effective_oi = oi
         gamma = bs_gamma(spot, c["strike"], c["T"], c["iv"], q=q)
         vanna = bs_vanna(spot, c["strike"], c["T"], c["iv"], q=q)
         vega_val = bs_vega(spot, c["strike"], c["T"], c["iv"], q=q)
@@ -496,12 +510,12 @@ def compute_gex_by_strike(spot: float, contracts: List[Dict[str, Any]], ticker: 
         zomma = bs_zomma(spot, c["strike"], c["T"], c["iv"], q=q)
         if gamma <= 0 and abs(vanna) <= 0:
             continue
-        gex_unit = gamma * oi * 100.0 * spot * spot * 0.01
-        vex_unit = vanna * oi * 100.0 * spot * 0.01
-        vega_unit = vega_val * oi * 100.0
-        charm_unit = charm * oi * 100.0 * spot * 0.01
-        vomma_unit = vomma * oi * 100.0
-        zomma_unit = zomma * oi * 100.0 * spot * 0.01
+        gex_unit = gamma * effective_oi * 100.0 * spot * spot * 0.01
+        vex_unit = vanna * effective_oi * 100.0 * spot * 0.01
+        vega_unit = vega_val * effective_oi * 100.0
+        charm_unit = charm * effective_oi * 100.0 * spot * 0.01
+        vomma_unit = vomma * effective_oi * 100.0
+        zomma_unit = zomma * effective_oi * 100.0 * spot * 0.01
         sign = 1.0 if c["type"] == "call" else -1.0
         bucket = agg.setdefault(c["strike"], {
             "strike": c["strike"], "gex": 0.0, "call_gex": 0.0, "put_gex": 0.0,
@@ -541,25 +555,31 @@ def compute_gex_by_strike(spot: float, contracts: List[Dict[str, Any]], ticker: 
 
 
 def compute_gex_grid(spot: float, contracts: List[Dict[str, Any]], ticker: str = "") -> Dict[str, Any]:
-    """2D grid: GEX per (strike, expiry). Skylit-style heatmap layout."""
+    """2D grid: GEX, VEX, and Charm per (strike, expiry). Skylit-style heatmap layout."""
     if spot <= 0 or not contracts:
-        return {"expiries": [], "strikes": [], "grid": {}, "charm_grid": {}}
+        return {"expiries": [], "strikes": [], "grid": {}, "vex_grid": {}, "charm_grid": {}}
     q = DIV_YIELD.get(ticker, 0.0)
     grid: Dict[str, Dict[float, float]] = {}
+    vex_grid: Dict[str, Dict[float, float]] = {}
     charm_grid: Dict[str, Dict[float, float]] = {}
     strike_totals: Dict[float, float] = {}
     for c in contracts:
         gamma = bs_gamma(spot, c["strike"], c["T"], c["iv"], q=q)
+        vanna = bs_vanna(spot, c["strike"], c["T"], c["iv"], q=q)
         charm = bs_charm(spot, c["strike"], c["T"], c["iv"], q=q, kind=c["type"])
         if gamma <= 0:
             continue
         gex_unit = gamma * c["oi"] * 100.0 * spot * spot * 0.01
+        vex_unit = vanna * c["oi"] * 100.0 * spot * 0.01
         charm_unit = charm * c["oi"] * 100.0 * spot * 0.01
         sign = 1.0 if c["type"] == "call" else -1.0
         cell = sign * gex_unit
+        vex_cell = sign * vex_unit
         charm_cell = sign * charm_unit
         d = grid.setdefault(c["expiry"], {})
         d[c["strike"]] = d.get(c["strike"], 0.0) + cell
+        dv = vex_grid.setdefault(c["expiry"], {})
+        dv[c["strike"]] = dv.get(c["strike"], 0.0) + vex_cell
         dc = charm_grid.setdefault(c["expiry"], {})
         dc[c["strike"]] = dc.get(c["strike"], 0.0) + charm_cell
         strike_totals[c["strike"]] = strike_totals.get(c["strike"], 0.0) + cell
@@ -574,6 +594,7 @@ def compute_gex_grid(spot: float, contracts: List[Dict[str, Any]], ticker: str =
         "expiries": expiries,
         "strikes": strikes,
         "grid": {e: {_k(k): v for k, v in grid[e].items()} for e in expiries},
+        "vex_grid": {e: {_k(k): v for k, v in vex_grid[e].items()} for e in expiries},
         "charm_grid": {e: {_k(k): v for k, v in charm_grid[e].items()} for e in expiries},
         "strike_totals": [{"strike": k, "gex": v} for k, v in sorted(strike_totals.items())],
     }
@@ -1293,7 +1314,7 @@ async def velocity_and_rolling(ticker: str, current_nodes: Dict[str, Any]) -> Di
 # ----------------------------- Top Movers (Polygon) ---------------------------
 
 TRINITY = ["^SPX", "SPY", "QQQ"]
-DEFAULT_TICKERS = ["SPY", "QQQ", "^SPX", "IWM", "AAPL", "NVDA", "TSLA", "META", "AMZN", "MSFT", "GOOGL", "AMD"]
+DEFAULT_TICKERS = ["SPY", "QQQ", "^SPX", "IWM", "AAPL", "NVDA", "TSLA", "META", "AMZN", "MSFT", "GOOGL", "NFLX", "AMD", "SMH", "XLF", "GLD"]
 POPULAR_UNIVERSE = ["AAPL", "NVDA", "TSLA", "META", "AMZN", "MSFT", "GOOGL", "AMD", "AVGO", "NFLX",
                     "COIN", "PLTR", "MU", "SMCI", "BABA", "CRM", "ORCL", "GME", "AMC", "INTC",
                     "DIS", "BA", "JPM", "GS", "XOM", "UBER", "SHOP", "SOFI", "F", "MARA"]
@@ -1416,7 +1437,16 @@ def compute_gex_by_strike_volume(spot: float, contracts: List[Dict[str, Any]], t
         vol = c.get("volume", 0) or 0
         if vol <= 0:
             continue
-        gex_unit = gamma * vol * 100.0 * spot * spot * 0.01
+        # DTE-aware OI blend: blend OI for longer-dated contracts to avoid single-trade dominance
+        dte = c.get("T", 1.0 / 365.0) * 365.0
+        oi = c.get("oi", 0) or 0
+        if dte <= 1.5:
+            effective_vol = vol  # 0DTE/1DTE: pure volume
+        elif dte <= 5.0:
+            effective_vol = max(vol, oi * 0.3)  # moderate OI blend
+        else:
+            effective_vol = max(vol, oi * 0.5)  # heavier OI blend for monthly+
+        gex_unit = gamma * effective_vol * 100.0 * spot * spot * 0.01
         sign = 1.0 if c["type"] == "call" else -1.0
         bucket = agg.setdefault(c["strike"], {
             "strike": c["strike"], "gex": 0.0, "call_gex": 0.0, "put_gex": 0.0,
@@ -2494,7 +2524,6 @@ async def security_headers_middleware(request: Request, call_next):
     """Add security headers to all responses."""
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"

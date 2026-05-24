@@ -8,6 +8,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/data", tags=["data"])
 
+# Data source metadata attached to responses
+from services.data_source_router import get_active_source_info
+
 
 @router.get("/{ticker}")
 async def get_ticker_data(
@@ -18,12 +21,25 @@ async def get_ticker_data(
     dte: Optional[int] = Query(None, ge=0, le=30),
     scalp: bool = Query(False),
 ):
-    """Get full heatmap data for a ticker (compatible with frontend data fetch)."""
+    """Get full heatmap data for a ticker (compatible with frontend data fetch).
+
+    Attaches ``data_source`` and ``delay_seconds`` metadata from the
+    ``DataSourceRouter`` so the frontend ``DataSourceBadge`` always knows
+    the active data source and its delay.
+    """
     from server import build_heatmap
     t = ticker.strip().upper()
     if t == "SPX":
         t = "^SPX"
-    return await build_heatmap(t, expiries, taps, mode, dte, scalp)
+    result = await build_heatmap(t, expiries, taps, mode, dte, scalp)
+
+    # Attach data source metadata if not already present
+    if isinstance(result, dict) and "data_source" not in result:
+        src_info = get_active_source_info()
+        result["data_source"] = src_info["active"]
+        result["delay_seconds"] = src_info["delay_seconds"]
+
+    return result
 
 
 @router.get("/quote/{ticker}")

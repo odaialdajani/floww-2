@@ -8,7 +8,60 @@ from __future__ import annotations
 from fastapi import APIRouter
 from typing import Optional
 
+from services.data_source_router import get_active_source_info, set_data_source, VALID_SOURCES
+
 router = APIRouter()
+
+
+@router.get("/api/admin/data-source")
+async def data_source_info():
+    """Return active data source metadata.
+
+    Used by the frontend ``useDataSource`` hook to show the current
+    data source and delay in the UI badge.
+
+    Returns:
+        {
+            "active": "alpha_vantage",
+            "delay_seconds": 900,
+            "configured": "auto",
+            "key_present": True,
+            "asof": "2024-01-15T...",
+        }
+    """
+    return get_active_source_info()
+
+
+@router.post("/api/admin/data-source")
+async def data_source_set(request: dict):
+    """Set the active data source at runtime.
+
+    Request body:
+        {"source": "alpha_vantage" | "databento" | "schwab" | "auto"}
+
+    Returns the updated source info on success, or an error if the
+    source name is invalid.
+
+    Note: This overrides the ``FLOWW_DATA_SOURCE`` env var for the
+    lifetime of the process. A server restart reverts to the env value.
+    """
+    source = (request.get("source") or "").strip().lower()
+
+    if not source:
+        return {"success": False, "error": "Missing 'source' field"}
+
+    ok = set_data_source(source)
+    if not ok:
+        return {
+            "success": False,
+            "error": f"Invalid source '{source}'. Valid options: {', '.join(sorted(VALID_SOURCES))}",
+        }
+
+    return {
+        "success": True,
+        "message": f"Data source switched to {source}",
+        "info": get_active_source_info(),
+    }
 
 
 @router.get("/api/errors/summary")

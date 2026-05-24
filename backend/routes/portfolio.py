@@ -56,7 +56,9 @@ async def scenario(name: str, spot: float = Query(0), iv: float = Query(0.15)):
     from server import db, calc_portfolio_scenario
     portfolio = await db.portfolios.find_one({"name": name})
     if not portfolio:
-        raise HTTPException(404, f"Portfolio '{name}' not found")
+        # Auto-create empty portfolio so scenario analysis works without pre-saved positions
+        portfolio = {"name": name, "positions": []}
+        await db.portfolios.insert_one(portfolio)
     result = await calc_portfolio_scenario(portfolio, spot, iv)
     return result
 
@@ -66,7 +68,9 @@ async def hedge(name: str, hedge_request: dict):
     from server import db, calc_hedge_recommendation
     portfolio = await db.portfolios.find_one({"name": name})
     if not portfolio:
-        raise HTTPException(404, f"Portfolio '{name}' not found")
+        # Auto-create empty portfolio so hedge calc works without pre-saved positions
+        portfolio = {"name": name, "positions": []}
+        await db.portfolios.insert_one(portfolio)
     result = await calc_hedge_recommendation(portfolio, hedge_request)
     return result
 
