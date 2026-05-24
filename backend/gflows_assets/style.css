@@ -1,0 +1,178 @@
+#monthly-options {
+    height: 100%;
+    text-align: center;
+}
+
+#monthly-options .Select .Select-control {
+    border: none !important;
+    border-radius: 0;
+    box-shadow: none;
+    background: var(--bs-btn-color) !important;
+    border-top-left-radius: 0.125rem;
+    border-bottom-left-radius: 0.125rem;
+}
+
+#monthly-options .Select {
+    border-top-left-radius: 0.25rem;
+    border-bottom-left-radius: 0.25rem;
+}
+
+#monthly-options .Select-value-label {
+    color: var(--bs-btn-active-color) !important;
+}
+
+#monthly-options .is-open .Select-arrow {
+    border-color: transparent transparent #e0e0e0;
+}
+
+#monthly-options .Select-arrow {
+    border-color: #e0e0e0 transparent transparent;
+}
+
+#monthly-options .is-open .Select-arrow:hover {
+    border-color: transparent transparent #e0e0e0;
+}
+#monthly-options .Select-arrow:hover {
+    border-color: #c7c7c7 transparent transparent;
+}
+
+#monthly-options .Select-menu-outer {
+    border: 1px solid var(--bs-btn-color) !important;
+}
+
+#monthly-options .Select-placeholder {
+    background: var(--bs-body-bg);
+    color: var(--bs-btn-color);
+    border-top-left-radius: 0.1875rem;
+    border-bottom-left-radius: 0.1875rem;
+}
+
+.accordion {
+    --bs-accordion-border-color: rgba(100,100,100,.4);
+}
+
+.Select-menu-outer {
+    background-color: var(--bs-body-bg);
+    border: 1px solid rgba(100,100,100,.4) !important;
+}
+
+.Select-control {
+    background-color: var(--bs-body-bg) !important;
+    border: 1px solid rgba(100,100,100,.4) !important;
+}
+
+.Select-value-label {
+    color: var(--bs-body-color) !important;
+}
+
+.VirtualizedSelectOption {
+    display: flex;
+    justify-content: center;
+    color: var(--bs-body-color);
+}
+
+.VirtualizedSelectFocusedOption {
+    background-color: rgba(0, 126, 255, 0.25) !important;
+}
+
+.line-1-horizontal {
+    --size: 1rem;
+    --stroke-width: calc(var(--size) / 6);
+    --color: currentColor;
+    --animation-timing-function: cubic-bezier(0.85, 0, 0.15, 1);
+    --animation-duration: 2s;
+    width: var(--size);
+    height: var(--stroke-width);
+    background-color: var(--color);
+    transform: scaleX(0);
+    transform-origin: center left;
+    animation: var(--animation-timing-function) var(--animation-duration) infinite line-1-horizontal-animation;
+    display: block !important;
+  }
+  
+  @keyframes line-1-horizontal-animation {
+    0% {
+      transform: scaleX(0);
+      transform-origin: center left;
+    }
+  
+    50% {
+      transform: scaleX(1);
+      transform-origin: center left;
+    }
+  
+    51% {
+      transform: scaleX(1);
+      transform-origin: center right;
+    }
+  
+    100% {
+      transform: scaleX(0);
+      transform-origin: center right;
+    }
+  }
+
+.Select-value {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.align-super {
+    position: relative;
+    bottom: 0.2em;
+    font-size: 0.7rem;
+}
+
+._dash-loading {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 0;
+    color: transparent;
+    margin: auto;
+    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+  
+._dash-loading::after {
+    font-size: 1rem;
+    content: '';
+    width: 85px;
+    height: 50px;
+    color: var(--bs-primary);
+    background-repeat: no-repeat;
+    background-image: linear-gradient(var(--bs-primary) 50px, transparent 0),
+                      linear-gradient(var(--bs-primary) 50px, transparent 0),
+                      linear-gradient(var(--bs-primary) 50px, transparent 0),
+                      linear-gradient(var(--bs-primary) 50px, transparent 0),
+                      linear-gradient(var(--bs-primary) 50px, transparent 0),
+                      linear-gradient(var(--bs-primary) 50px, transparent 0);
+    background-position: 0px center, 15px center, 30px center, 45px center, 60px center, 75px center, 90px center;
+    animation: rikSpikeRoll 0.65s linear infinite alternate;
+}
+      
+@keyframes rikSpikeRoll {
+    0% { background-size: 10px 3px;}
+    16% { background-size: 10px 50px, 10px 3px, 10px 3px, 10px 3px, 10px 3px, 10px 3px}
+    33% { background-size: 10px 30px, 10px 50px, 10px 3px, 10px 3px, 10px 3px, 10px 3px}
+    50% { background-size: 10px 10px, 10px 30px, 10px 50px, 10px 3px, 10px 3px, 10px 3px}
+    66% { background-size: 10px 3px, 10px 10px, 10px 30px, 10px 50px, 10px 3px, 10px 3px}
+    83% { background-size: 10px 3px, 10px 3px,  10px 10px, 10px 30px, 10px 50px, 10px 3px}
+    100% { background-size: 10px 3px, 10px 3px, 10px 3px,  10px 10px, 10px 30px, 10px 50px}
+}
+
+.dash-graph--pending .plotly .main-svg:first-child {
+    background: var(--bs-body-bg) !important;
+}
+
+.dash-graph--pending .plotly .crisp {
+    stroke: none !important;
+}
+
+.dash-graph--pending .plotly .modebar-group {
+    background-color: transparent !important;
+}

@@ -1,4 +1,5 @@
 """
+<<<<<<< HEAD
 backend/tests/services/test_dash_ui_heatseeker.py
 
 Tests for Round 7 toggle wiring: state persistence, I-8 NaN guards,
@@ -608,3 +609,202 @@ class TestCachedViewVariants:
 def _default_toggle_state():
     """Re-export for use in this module."""
     return M._default_toggle_state()
+=======
+TDD-style test for the Heatseeker tab upgrade.
+
+Asserts that _build_gex_heatmap(sample_payload) returns a dbc.Row
+whose three children have widths 2, 7, and 3.
+"""
+from __future__ import annotations
+
+import math
+import sys
+from typing import Any, Dict, List, Optional
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+# ── Fixture: mock chain payload (realistic /api/chain/SPY snapshot) ──────────
+
+
+@pytest.fixture
+def sample_chain_payload() -> Dict[str, Any]:
+    """Realistic snapshot of /api/chain/SPY response."""
+    spot = 745.64
+    strikes = list(range(700, 790, 5))
+    expiries = ["2026-05-26", "2026-05-29", "2026-06-05", "2026-06-12"]
+
+    def _gex_for_strike(s: float) -> float:
+        """Synthetic GEX: peaks near spot, negative below ~730, positive above."""
+        dist = (s - spot) / spot * 100  # % distance from spot
+        peak = 500_000_000 * math.exp(-0.5 * (dist / 1.5) ** 2)
+        return peak * (-1 if s < 730 else 1 if s > 760 else 0.3)
+
+    contracts = []
+    for s in strikes:
+        gex = _gex_for_strike(s)
+        contracts.append({
+            "strike": s,
+            "expiry": expiries[0],
+            "type": "call",
+            "gex": gex * 0.6,
+            "vex": gex * 0.3,
+            "charm": gex * 0.1,
+            "gamma": 0.02,
+            "oi": 10_000 + int(abs(gex) / 50_000),
+            "volume": 2_000 + int(abs(gex) / 100_000),
+        })
+        contracts.append({
+            "strike": s,
+            "expiry": expiries[0],
+            "type": "put",
+            "gex": gex * 0.4,
+            "vex": gex * 0.2,
+            "charm": gex * 0.08,
+            "gamma": 0.015,
+            "oi": 8_000 + int(abs(gex) / 60_000),
+            "volume": 1_500 + int(abs(gex) / 120_000),
+        })
+
+    return {
+        "spot": spot,
+        "contracts": contracts,
+        "ts": "2026-05-26T09:31:15.123456",
+        "expiries": expiries,
+        "ohlc": [],
+    }
+
+
+# ── Mock dbc classes for testing ─────────────────────────────────────────────
+
+
+class _MockDbcRow:
+    def __init__(self, children=None, **kwargs):
+        self.children = children if isinstance(children, (list, tuple)) else ([children] if children else [])
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+
+class _MockDbcCol:
+    def __init__(self, children=None, width=None, **kwargs):
+        self.children = children
+        self.width = width
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+
+class _MockDbcCard:
+    def __init__(self, children=None, **kwargs):
+        self.children = children
+
+
+class _MockDbcCardHeader:
+    def __init__(self, children=None, **kwargs):
+        self.children = children
+
+
+class _MockDbcCardBody:
+    def __init__(self, children=None, **kwargs):
+        self.children = children
+
+
+class _MockDbcButton:
+    def __init__(self, children=None, **kwargs):
+        self.children = children
+
+
+class _MockDbcButtonGroup:
+    def __init__(self, children=None, **kwargs):
+        self.children = children
+
+
+class _MockDbcBadge:
+    def __init__(self, children=None, **kwargs):
+        self.children = children
+
+
+class _MockDbcChecklist:
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+
+class _MockDbcProgress:
+    def __init__(self, children=None, **kwargs):
+        self.children = children
+
+
+class _MockDbcAccordion:
+    def __init__(self, children=None, **kwargs):
+        self.children = children
+
+
+class _MockDbcAccordionItem:
+    def __init__(self, children=None, title=None, **kwargs):
+        self.children = children
+        self.title = title
+
+
+# ── Test: three-column layout structure ──────────────────────────────────────
+
+
+class TestHeatseekerThreeColumnLayout:
+    """TDD: _build_gex_heatmap returns dbc.Row with widths 2, 7, 3."""
+
+    def test_returns_dbc_row(self, sample_chain_payload, monkeypatch):
+        """Assert _build_gex_heatmap returns a dbc.Row with three cols widths 2, 7, 3."""
+        # Import the module first (real imports)
+        from services import dash_ui
+
+        # Mock _build_gex_heatmap_figure to avoid plotly dependency
+        mock_fig = MagicMock(name="mock_figure")
+        monkeypatch.setattr(dash_ui, "_build_gex_heatmap_figure", lambda *a, **kw: mock_fig)
+
+        # Mock html module-level reference on dash_ui
+        mock_html = MagicMock()
+        monkeypatch.setattr(dash_ui, "html", mock_html)
+
+        # Mock dcc module-level reference on dash_ui
+        mock_dcc = MagicMock()
+        monkeypatch.setattr(dash_ui, "dcc", mock_dcc)
+
+        # Mock dbc module-level reference on dash_ui
+        mock_dbc = MagicMock()
+        mock_dbc.Row = _MockDbcRow
+        mock_dbc.Col = _MockDbcCol
+        mock_dbc.Card = _MockDbcCard
+        mock_dbc.CardHeader = _MockDbcCardHeader
+        mock_dbc.CardBody = _MockDbcCardBody
+        mock_dbc.Button = _MockDbcButton
+        mock_dbc.ButtonGroup = _MockDbcButtonGroup
+        mock_dbc.Badge = _MockDbcBadge
+        mock_dbc.Checklist = _MockDbcChecklist
+        mock_dbc.Progress = _MockDbcProgress
+        mock_dbc.Accordion = _MockDbcAccordion
+        mock_dbc.AccordionItem = _MockDbcAccordionItem
+        monkeypatch.setattr(dash_ui, "dbc", mock_dbc)
+
+        payload = sample_chain_payload
+        result = dash_ui._build_gex_heatmap(
+            spot=payload["spot"],
+            contracts=payload["contracts"],
+            gex_surface=None,
+            strikes=None,
+            expiries=None,
+            king_nodes=None,
+            air_pockets=None,
+            zero_gamma=None,
+            dark=True,
+        )
+
+        # Must be a dbc.Row
+        assert isinstance(result, _MockDbcRow), f"Expected dbc.Row, got {type(result)}"
+
+        # Must have exactly three children
+        children = result.children
+        assert len(children) == 3, f"Expected 3 children, got {len(children)}"
+
+        # Each child must be a dbc.Col with correct width
+        widths = [child.width for child in children]
+        assert widths == [2, 7, 3], f"Expected widths [2, 7, 3], got {widths}"
+>>>>>>> 919ff66 (test(round-7-agent-1): fix heatseeker layout test + add property-based compute coverage)
