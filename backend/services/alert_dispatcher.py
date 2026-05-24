@@ -65,6 +65,14 @@ class AlertDispatcher:
         self._dedup_cache: Dict[str, float] = {}  # alert_id -> last_sent_timestamp
         self._twilio_available = False
 
+        # Discord notifier (optional — no env var required to init)
+        try:
+            from services.discord_notifier import DiscordNotifier
+            self._discord = DiscordNotifier()
+        except Exception as e:
+            log.debug("DiscordNotifier init skipped: %s", e)
+            self._discord = None
+
         if self._account_sid and self._auth_token:
             try:
                 from twilio.rest import Client
@@ -120,7 +128,10 @@ class AlertDispatcher:
             log.info(f"[ALERT QUIET] {alert_id}: suppressed (quiet hours)")
             return {"sent": False, "channel": "suppressed", "reason": "Quiet hours (22:00–06:00 ET)"}
 
-        # Determine channel
+        # Always send to Discord if available (independent of quiet hours)
+        discord_sent = await self._send_discord(severity, title, message, category)
+
+        # Determine phone channels (subject to quiet hours)
         if severity == SEVERITY_CRITICAL:
             channels = ["sms", "voice"]
         elif severity == SEVERITY_MEDIUM:
@@ -129,9 +140,18 @@ class AlertDispatcher:
             channels = []
 
         if not channels:
-            return {"sent": False, "channel": "dashboard", "reason": f"Unknown severity: {severity}"}
+            channel_parts = []
+            if discord_sent:
+                channel_parts.append("discord")
+            if not channel_parts:
+                channel_parts.append("dashboard")
+            return {
+                "sent": discord_sent,
+                "channel": "+".join(channel_parts),
+                "reason": f"Discord only — severity={severity}" if discord_sent else f"Unknown severity: {severity}",
+            }
 
-        # Send
+        # Send phone channels
         sent_any = False
         for channel in channels:
             try:
@@ -144,13 +164,47 @@ class AlertDispatcher:
             except Exception as e:
                 log.error(f"[ALERT SEND FAIL] {alert_id} ({channel}): {e}")
 
-        if sent_any:
+        if sent_any or discord_sent:
             self._dedup_cache[alert_id] = time.time()
-            channel_str = "+".join(channels)
+            channel_parts = list(channels)
+            if discord_sent:
+                channel_parts.append("discord")
+            channel_str = "+".join(channel_parts)
             log.info(f"[ALERT SENT] {alert_id}: {title} via {channel_str}")
             return {"sent": True, "channel": channel_str, "reason": f"Severity={severity}"}
 
         return {"sent": False, "channel": "none", "reason": "All channels failed"}
+
+    # ------------------------------------------------------------------
+    # Discord send method
+    # ------------------------------------------------------------------
+
+    async def _send_discord(self, severity: str, title: str, message: str, category: str) -> bool:
+        """Send alert to Discord if webhook is configured. Returns whether sent."""
+        if not self._discord or not self._discord.available:
+            return False
+
+        try:
+            if category == "PositionAlert":
+                # Position alerts use rich position formatting
+                return await self._discord.send_alert(
+                    title=title,
+                    message=message[:2048],
+                    severity=severity,
+                    fields=[
+                        {"name": "Category", "value": category, "inline": True},
+                        {"name": "Alert ID", "value": f"`{message.split(':')[0].strip() if ':' in message else message[:40]}`", "inline": True},
+                    ],
+                )
+            else:
+                return await self._discord.send_alert(
+                    title=title,
+                    message=message[:2048],
+                    severity=severity,
+                )
+        except Exception as e:
+            log.warning("Discord send failed: %s", e)
+            return False
 
     # ------------------------------------------------------------------
     # Twilio send methods

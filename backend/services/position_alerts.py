@@ -627,7 +627,8 @@ class PositionAlertService:
             self._ws_clients.remove(ws)
 
     async def _dispatch_critical(self, event: PositionAlertEvent) -> None:
-        """Dispatch CRITICAL position alerts through the AlertDispatcher."""
+        """Dispatch CRITICAL position alerts through AlertDispatcher and Discord."""
+        # Send to AlertDispatcher (Twilio SMS/Voice via system alerting)
         try:
             from services.alert_dispatcher import dispatcher
             await dispatcher.dispatch(
@@ -642,6 +643,25 @@ class PositionAlertService:
             )
         except Exception as e:
             log.warning("AlertDispatcher dispatch failed: %s", e)
+
+        # Also send directly to Discord with rich position formatting
+        try:
+            from services.discord_notifier import discord_notifier
+            await discord_notifier.send_position_alert(
+                alert_type=event.alert_type.value,
+                symbol=event.symbol,
+                side=event.side,
+                quantity=event.quantity,
+                entry_price=event.entry_price,
+                current_price=event.current_price,
+                unrealized_pnl=event.unrealized_pnl,
+                unrealized_pnl_pct=event.unrealized_pnl_pct,
+                message=event.message,
+                severity=event.severity.value,
+                details=event.details,
+            )
+        except Exception as e:
+            log.warning("Discord position alert send failed: %s", e)
 
     # ------------------------------------------------------------------
     # Portfolio helpers
