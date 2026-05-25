@@ -233,7 +233,7 @@ class TestWalkForwardSplits:
 
     def test_expanding_window(self):
         n = 1000
-        splits = walk_forward_splits(n, n_splits=3, min_train_size=100, test_size=50, step=50)
+        splits = walk_forward_splits(n, n_splits=3, min_train_size=100)
         # Each fold's training window should be larger than the previous
         train_sizes = [len(train) for train, _ in splits]
         assert all(train_sizes[i] < train_sizes[i + 1] for i in range(len(train_sizes) - 1))

@@ -47,7 +47,7 @@ class TestFallbackResponses:
         assert r.status_code in (200, 404)
 
     def test_movers_error_returns_200_with_empty_results(self, client):
-        with patch("routes.analytics._fetch_movers_sync", side_effect=Exception("fail")):
+        with patch("server._fetch_movers_sync", side_effect=Exception("fail")):
             r = client.get("/api/analytics/movers")
         assert r.status_code == 200
         d = r.json()
@@ -55,7 +55,7 @@ class TestFallbackResponses:
         assert d["status"] == "degraded"
 
     def test_history_error_returns_200_with_empty_snapshots(self, client):
-        with patch("routes.analytics.mongo_db") as mock_db:
+        with patch("server.db") as mock_db:
             mock_db.snapshots.find.side_effect = Exception("mongo down")
             r = client.get("/api/analytics/history/SPY")
         assert r.status_code == 200

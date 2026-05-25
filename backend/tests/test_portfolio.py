@@ -135,8 +135,8 @@ async def test_schwab_auth_url_no_credentials(aclient):
 async def test_history_endpoint(aclient):
     """Get snapshot history."""
     # First trigger a snapshot by hitting heatmap
-    await aclient.get("/api/heatmap/SPY?expiries=2")
-    r = await aclient.get("/api/history/SPY?limit=5")
+    await aclient.get("/api/analytics/heatmap/SPY?expiries=2")
+    r = await aclient.get("/api/analytics/history/SPY?limit=5")
     assert r.status_code == 200, r.text
     d = r.json()
     assert "snapshots" in d
@@ -147,7 +147,7 @@ async def test_history_endpoint(aclient):
 
 async def test_patterns_glossary(aclient):
     """Get patterns glossary."""
-    r = await aclient.get("/api/patterns/glossary")
+    r = await aclient.get("/api/analytics/patterns/glossary")
     assert r.status_code == 200, r.text
     d = r.json()
     assert "King Node" in d or "king" in str(d).lower()

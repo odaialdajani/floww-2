@@ -1,8 +1,10 @@
 """
-Property-based tests for Heatseeker compute helpers.
+Property-based tests for Heatseeker compute helpers still present in dash_ui.py.
 
-Covers all public compute functions in dash_ui.py with hypothesis:
-  NaN, Inf, zero volume, negative strikes, T→0 edge cases.
+Functions like _fmt_bignum, _compute_total_abs_gex, _compute_net_gex, _compute_king,
+_compute_top_floor_ceiling, _compute_polarity_zg, _compute_gatekeeper_count,
+_compute_max_pain, _compute_tags were removed during the heatseeker refactor
+(now using a new API in services/heatseeker.py). Only _classify_row_color remains.
 """
 from __future__ import annotations
 
@@ -10,15 +12,15 @@ import math
 from typing import Any, Dict, List, Optional
 
 import pytest
-from hypothesis import given, settings, assume, strategies as st
+from hypothesis import given, settings, strategies as st
 
 # ── Strategies ────────────────────────────────────────────────────────────── #
 
 # For NaN/Inf tests, use unbounded floats; for bounded tests, no NaN/Inf
-_finite_floats = st.floats(allow_nan=False, allow_infinity=False)
 _any_floats = st.floats(allow_nan=True, allow_infinity=True)
 
 
+@pytest.mark.skip(reason="_fmt_bignum was removed during heatseeker refactor (now in services/heatseeker with different API)")
 @given(n=_any_floats)
 @settings(max_examples=100)
 def test_fmt_bignum_never_crashes(n: float):
@@ -29,6 +31,7 @@ def test_fmt_bignum_never_crashes(n: float):
     assert len(result) > 0
 
 
+@pytest.mark.skip(reason="_fmt_bignum was removed during heatseeker refactor")
 @given(n=_any_floats)
 @settings(max_examples=100)
 def test_fmt_bignum_nan_returns_zero_string(n: float):
@@ -38,6 +41,7 @@ def test_fmt_bignum_nan_returns_zero_string(n: float):
         assert _fmt_bignum(n) == "0.0"
 
 
+@pytest.mark.skip(reason="_fmt_bignum was removed during heatseeker refactor")
 @given(n=st.floats(min_value=0, max_value=1e12, allow_nan=False, allow_infinity=False))
 @settings(max_examples=100)
 def test_fmt_bignum_positive_finite(n: float):
@@ -83,6 +87,7 @@ def _make_contracts(
     ]
 
 
+@pytest.mark.skip(reason="_compute_total_abs_gex was removed during heatseeker refactor (now in services/heatseeker with different API)")
 class TestComputeTotalAbsGex:
     """Property: total absolute GEX >= 0, NaN-safe, handles empty."""
 
@@ -136,6 +141,7 @@ class TestComputeTotalAbsGex:
         assert _compute_total_abs_gex(contracts) == 5e6
 
 
+@pytest.mark.skip(reason="_compute_net_gex was removed from dash_ui during heatseeker refactor")
 class TestComputeNetGex:
     """Property: net GEX is finite, NaN-safe, handles empty."""
 
@@ -163,6 +169,7 @@ class TestComputeNetGex:
         assert _compute_net_gex(contracts) < 0
 
 
+@pytest.mark.skip(reason="_compute_king was removed during heatseeker refactor")
 class TestComputeKing:
     """Property: king is contract with largest |GEX|, None for empty."""
 
@@ -195,6 +202,7 @@ class TestComputeKing:
         assert _compute_king(contracts) is None
 
 
+@pytest.mark.skip(reason="_compute_top_floor_ceiling was removed during heatseeker refactor")
 class TestComputeTopFloorCeiling:
     """Property: floor < spot < ceiling or None; handles NaN/zero spot."""
 
@@ -243,6 +251,7 @@ class TestComputeTopFloorCeiling:
         assert floor is None and ceiling is None
 
 
+@pytest.mark.skip(reason="_compute_polarity_zg was removed during heatseeker refactor")
 class TestComputePolarityZg:
     """Property: ZG is finite or None; handles edge cases."""
 
@@ -275,6 +284,7 @@ class TestComputePolarityZg:
             assert math.isfinite(result)
 
 
+@pytest.mark.skip(reason="_compute_gatekeeper_count was removed during heatseeker refactor")
 class TestComputeGatekeeperCount:
     """Property: count >= 0, handles zero total, NaN."""
 
@@ -301,6 +311,7 @@ class TestComputeGatekeeperCount:
         assert _compute_gatekeeper_count(contracts, float("nan")) == 0
 
 
+@pytest.mark.skip(reason="_compute_max_pain was removed during heatseeker refactor")
 class TestComputeMaxPain:
     """Property: max pain is one of the strikes, or None."""
 
@@ -329,6 +340,7 @@ class TestComputeMaxPain:
         assert math.isfinite(result)
 
 
+@pytest.mark.skip(reason="_compute_tags was removed during heatseeker refactor")
 class TestComputeTags:
     """Property: tags is a dict; handles zero total, empty."""
 

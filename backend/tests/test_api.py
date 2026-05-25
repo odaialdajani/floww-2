@@ -234,7 +234,7 @@ def test_chain_filter_expiry(client, patched_chain):
 
 
 def test_advanced_spy(client, patched_chain):
-    r = client.get("/api/advanced/SPY?expiries=4")
+    r = client.get("/api/analytics/advanced/SPY?expiries=4")
     assert r.status_code == 200
     d = r.json()
     assert "implied_pdf" in d
@@ -245,9 +245,9 @@ def test_advanced_spy(client, patched_chain):
 
 
 def test_regime_spy(client, patched_chain):
-    r = client.get("/api/regime/SPY")
+    r = client.get("/api/analytics/regime/SPY")
     if r.status_code == 404:
-        r = client.get("/api/advanced/SPY?expiries=4")
+        r = client.get("/api/analytics/advanced/SPY?expiries=4")
         d = r.json()
         assert "regime" in d
     else:
@@ -258,9 +258,9 @@ def test_regime_spy(client, patched_chain):
 
 
 def test_implied_pdf_spy(client, patched_chain):
-    r = client.get("/api/implied-pdf/SPY")
+    r = client.get("/api/analytics/implied-pdf/SPY")
     if r.status_code == 404:
-        r = client.get("/api/advanced/SPY?expiries=4")
+        r = client.get("/api/analytics/advanced/SPY?expiries=4")
         d = r.json()
         assert "implied_pdf" in d
     else:
@@ -271,9 +271,9 @@ def test_implied_pdf_spy(client, patched_chain):
 
 
 def test_hedge_impulse_spy(client, patched_chain):
-    r = client.get("/api/hedge-impulse/SPY")
+    r = client.get("/api/analytics/hedge-impulse/SPY")
     if r.status_code == 404:
-        r = client.get("/api/advanced/SPY?expiries=4")
+        r = client.get("/api/analytics/advanced/SPY?expiries=4")
         d = r.json()
         assert "hedge_impulse" in d
     else:
@@ -284,9 +284,9 @@ def test_hedge_impulse_spy(client, patched_chain):
 
 
 def test_pressure_cloud_spy(client, patched_chain):
-    r = client.get("/api/pressure-cloud/SPY")
+    r = client.get("/api/analytics/pressure-cloud/SPY")
     if r.status_code == 404:
-        r = client.get("/api/advanced/SPY?expiries=4")
+        r = client.get("/api/analytics/advanced/SPY?expiries=4")
         d = r.json()
         assert "pressure_cloud" in d
     else:
@@ -296,9 +296,9 @@ def test_pressure_cloud_spy(client, patched_chain):
 
 
 def test_charm_integral_spy(client, patched_chain):
-    r = client.get("/api/charm-integral/SPY")
+    r = client.get("/api/analytics/charm-integral/SPY")
     if r.status_code == 404:
-        r = client.get("/api/advanced/SPY?expiries=4")
+        r = client.get("/api/analytics/advanced/SPY?expiries=4")
         d = r.json()
         assert "charm_integral" in d
     else:
@@ -331,7 +331,7 @@ def test_uoa_spy(client, patched_chain):
 
 
 def test_gamma_flip_endpoint(client, patched_chain):
-    r = client.get("/api/gamma-flip/SPY?expiries=2")
+    r = client.get("/api/analytics/gamma-flip/SPY?expiries=2")
     assert r.status_code == 200
     d = r.json()
     assert "gamma_flip" in d

@@ -34,14 +34,14 @@ def _fake_movers():
 
 
 def test_movers_route_is_reachable_at_api_movers(client):
-    """GET /api/movers must return 200 (the prior bug returned 404)."""
+    """GET /api/analytics/movers must return 200 (moved under analytics prefix)."""
     with patch("server._fetch_movers_sync", side_effect=_fake_movers):
         # bypass the 60s in-memory cache by stamping it stale
         import server as srv
         srv._movers_cache["ts"] = 0
         srv._movers_cache["data"] = []
 
-        r = client.get("/api/movers?limit=3")
+        r = client.get("/api/analytics/movers?limit=3")
 
     assert r.status_code == 200, f"expected 200, got {r.status_code}: {r.text[:200]}"
     body = r.json()

@@ -60,7 +60,7 @@ def test_tickers_list(client):
 # --------- Glossary (static) ---------
 
 def test_glossary(client):
-    r = client.get("/api/patterns/glossary")
+    r = client.get("/api/analytics/patterns/glossary")
     assert r.status_code == 200
     d = r.json()
     for k in ("Rug", "Reverse Rug", "Pika Cloud", "Beach Ball", "Whipsaw",
@@ -73,7 +73,7 @@ def test_glossary(client):
 
 def test_history_spy(client):
     """
-    /history/{ticker} streams snapshots from Mongo. Replace ``db.snapshots``
+    /analytics/history/{ticker} streams snapshots from Mongo. Replace ``db.snapshots``
     with a stub whose ``find`` returns an async cursor over a single doc.
     """
     from unittest.mock import patch
@@ -110,7 +110,7 @@ def test_history_spy(client):
         snapshots = _Snapshots()
 
     with patch.object(srv, "db", _DB()):
-        r = client.get("/api/history/SPY")
+        r = client.get("/api/analytics/history/SPY")
 
     assert r.status_code == 200
     d = r.json()

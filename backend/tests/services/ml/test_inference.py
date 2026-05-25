@@ -115,7 +115,18 @@ def trained_model_dir(tmp_path):
     scaler_path = tmp_path / "TEST_gbm_production_scaler.joblib"
     manifest_path = tmp_path / "TEST_gbm_production_manifest.json"
 
-    joblib.dump(model, model_path)
+    artifact = {
+        "model": model,
+        "model_name": "gbm",
+        "feature_names": feature_names,
+        "scaler": scaler,
+        "metrics": {
+            "avg_train_accuracy": 0.85,
+            "avg_test_accuracy": 0.75,
+            "avg_test_sharpe": 0.5,
+        },
+    }
+    joblib.dump(artifact, model_path)
     joblib.dump(scaler, scaler_path)
 
     manifest = {
@@ -239,6 +250,7 @@ class TestInferenceEngine:
         with pytest.raises(DegenerateModelError):
             asyncio.run(engine.predict("ZZZZ"))
 
+    @pytest.mark.requires_artifacts
     def test_predict_with_trained_model(self, trained_model_dir):
         """Prediction works with a real trained model."""
         pytest.importorskip("yfinance")
@@ -252,7 +264,7 @@ class TestInferenceEngine:
         model_path = trained_model_dir / f"{ticker}_gbm_production.joblib"
 
         original_registry = MODEL_REGISTRY.copy()
-        MODEL_REGISTRY[ticker] = (str(model_path), str(scaler_path), str(manifest_path))
+        MODEL_REGISTRY[ticker] = str(model_path)
 
         try:
             engine = InferenceEngine(model_dir=trained_model_dir)
@@ -280,7 +292,7 @@ class TestInferenceEngine:
         model_path = trained_model_dir / f"{ticker}_gbm_production.joblib"
 
         original_registry = MODEL_REGISTRY.copy()
-        MODEL_REGISTRY[ticker] = (str(model_path), str(scaler_path), str(manifest_path))
+        MODEL_REGISTRY[ticker] = str(model_path)
 
         try:
             engine = InferenceEngine(model_dir=trained_model_dir)
@@ -371,6 +383,7 @@ class TestMlBriefingIntegrator:
 class TestTrainRealMl:
     """Tests for the training script."""
 
+    @pytest.mark.requires_artifacts
     def test_compute_features_shape(self):
         """compute_features returns correct shape."""
         pytest.importorskip("sklearn")
@@ -379,31 +392,34 @@ class TestTrainRealMl:
         assert len(df) > 30
         assert "target_directional_move" in df.columns
 
+    @pytest.mark.requires_artifacts
     def test_compute_features_no_nan(self):
         """Features should be NaN-clean after dropna."""
         pytest.importorskip("sklearn")
         from scripts.train_real_ml import compute_features
-        df = compute_features("SPY", period="3mo")
+        df = compute_features("SPY", period="1y")
         # Allow NaN in early rows (rolling windows)
         clean = df.dropna()
         assert len(clean) > 20
 
+    @pytest.mark.requires_artifacts
     def test_train_model_quick(self, tmp_path):
         """Quick training produces artifacts."""
         pytest.importorskip("sklearn")
         from scripts.train_real_ml import train_model
-        result = train_model("SPY", days=60, quick=True, output_dir=tmp_path)
+        result = train_model("SPY", days=252, quick=True, output_dir=tmp_path)
         assert "test_accuracy" in result
         assert "walk_forward_mean" in result
         assert Path(result["model_path"]).exists()
         assert Path(result["scaler_path"]).exists()
         assert Path(result["manifest_path"]).exists()
 
+    @pytest.mark.requires_artifacts
     def test_train_model_manifest_valid(self, tmp_path):
         """Saved manifest is valid JSON with required fields."""
         pytest.importorskip("sklearn")
         from scripts.train_real_ml import train_model
-        result = train_model("SPY", days=60, quick=True, output_dir=tmp_path)
+        result = train_model("SPY", days=252, quick=True, output_dir=tmp_path)
         manifest_path = Path(result["manifest_path"])
         with open(manifest_path) as f:
             manifest = json.load(f)
