@@ -19,6 +19,7 @@ import asyncio
 import logging
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +146,11 @@ def degraded_response(error_type: str, detail: str) -> Dict[str, Any]:
         "degraded": True,
         "error_type": error_type,
         "detail": detail,
+        "status": "degraded",
+        "reason": detail,
+        "stale": True,
+        "retry_after": 30,
+        "asof": datetime.now(timezone.utc).isoformat(),
         "spot": None,
         "contracts": [],
     }

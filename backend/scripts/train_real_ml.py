@@ -214,8 +214,8 @@ def compute_features(ticker: str, period: str = "2y") -> pd.DataFrame:
 
     # Calendar features
     dates = pd.to_datetime(df.index)
-    features["is_month_end"] = dates.is_month_end.astype(float).values
-    features["is_month_start"] = dates.is_month_start.astype(float).values
+    features["is_month_end"] = pd.Series(dates.is_month_end, index=df.index).astype(float).values
+    features["is_month_start"] = pd.Series(dates.is_month_start, index=df.index).astype(float).values
 
     # Target: next-day directional move (>0.5% abs return)
     target = np.zeros(n)
