@@ -25,6 +25,8 @@ import AlertsPanel from "./components/AlertsPanel";
 import UOAPanel from "./components/UOAPanel";
 import { useWebSocketGex } from "./hooks/useWebSocketGex";
 import { useDebounce } from "./hooks/useDebounce";
+import { useDataSource } from "./hooks/useDataSource";
+import { DataSourceBadge } from "./components/DataSourceBadge";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { ShortcutsModal } from "./components/ShortcutsModal";
 import { MorningBriefing } from "./components/MorningBriefing";
@@ -36,6 +38,7 @@ import { TradeAnalytics } from "./components/TradeAnalytics";
 import { SocialFlowPanel } from "./components/SocialFlowPanel";
 import HeatseekerDashboard from "./components/heatseeker/HeatseekerDashboard";
 import AlertOverlay from "./components/AlertOverlay";
+import PaperTrade from "./components/PaperTrade";
 import PWAInstallBanner from "./components/PWAInstallBanner";
 import { useTheme } from "./context/ThemeContext";
 import { autoDecimate } from "./utils/dataDecimator";
@@ -305,6 +308,7 @@ export default function App() {
   const wsGex = useWebSocketGex(page === "heatseeker" ? ticker : null);
   const { theme, toggleTheme } = useTheme();
   const [ensembleData, setEnsembleData] = useState(null);
+  const dataSource = useDataSource({ pollIntervalMs: 30000 });
 
   // Debounced filter values to prevent API spam
   const debouncedMode = useDebounce(mode, 300);
@@ -428,6 +432,8 @@ export default function App() {
         case "2": setPage("heatseeker"); break;
         case "3": setPage("portfolio"); break;
         case "4": setPage("journal"); break;
+        case "5": setPage("dashboard"); break;
+        case "6": setPage("papertrade"); break;
         case "g": setView("grid"); break;
         case "b": setView("bar"); break;
         case "c": setView("chain"); break;
@@ -500,6 +506,8 @@ export default function App() {
           <button onClick={() => setPage("portfolio")} className={`btn ${page === "portfolio" ? "active" : ""}`}>Portfolio</button>
           <button onClick={() => setPage("journal")} className={`btn ${page === "journal" ? "active" : ""}`}>Journal</button>
           <button onClick={() => setPage("swarmspx")} className={`btn ${page === "swarmspx" ? "active" : ""}`}>SwarmSPX</button>
+          <button onClick={() => setPage("dashboard")} className={`btn ${page === "dashboard" ? "active" : ""}`}>Dashboard</button>
+          <button onClick={() => setPage("papertrade")} className={`btn ${page === "papertrade" ? "active" : ""}`}>PaperTrade</button>
         </div>
         <div className="header-right">
           {tickers && (
@@ -509,9 +517,20 @@ export default function App() {
               onChange={setTicker}
             />
           )}
-          <div className="text-[10px] text-slate-500 hidden-mobile">
-            {data?.data_source && <span>{data.data_source}</span>}
-            {data?.asof && <span className="ml-2">· {new Date(data.asof).toLocaleTimeString()}</span>}
+          <div className="hidden-mobile">
+            <DataSourceBadge
+              source={dataSource.source || data?.data_source || null}
+              delaySeconds={dataSource.delaySeconds ?? data?.delay_seconds ?? null}
+              badgeStatus={
+                data?.data_fallback === true
+                  ? "cached"
+                  : dataSource.badgeStatus === "offline" && data?.data_source
+                  ? data?.data_source === "alphavantage"
+                    ? "delayed"
+                    : "live"
+                  : dataSource.badgeStatus
+              }
+            />
           </div>
           {/* Theme Toggle */}
           <button
@@ -797,6 +816,23 @@ export default function App() {
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
           />
         </div>
+      )}
+
+      {/* Dashboard (Agent Hub + Vol Surface + Toxicity + more) */}
+      {page === "dashboard" && (
+        <div className="flex-1 overflow-hidden" style={{ display: "flex", flexDirection: "column" }}>
+          <iframe
+            src="http://localhost:8000/dashboard/"
+            style={{ flex: 1, border: "none", width: "100%", height: "100%" }}
+            title="Confluence Decoder Dashboard"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+          />
+        </div>
+      )}
+
+      {/* Paper Trading Agent */}
+      {page === "papertrade" && (
+        <PaperTrade ticker={ticker} spot={livespot?.spot ?? data?.spot} />
       )}
 
       {/* Drilldown Modal */}

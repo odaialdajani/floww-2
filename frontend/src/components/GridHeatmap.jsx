@@ -8,14 +8,14 @@ export default function GridHeatmap({ data, filters, onCellClick, viewMode = "ge
   }, [data?.ticker, data?.mode]);
 
   if (!data?.grid) return <div className="text-slate-500 text-xs p-4">No grid data</div>;
-  const { spot, grid, charm_grid, nodes } = data;
+  const { spot, grid, vex_grid, charm_grid, nodes } = data;
   const expiries = grid.expiries || [];
   let strikes = (grid.strikes || []).slice().sort((a, b) => b - a);
   if (filters?.side === "above") strikes = strikes.filter(s => s > spot);
   if (filters?.side === "below") strikes = strikes.filter(s => s < spot);
 
   const cellOf = (e, s) => {
-    const g = (viewMode === "charm" ? charm_grid : grid.grid) || {};
+    const g = (viewMode === "charm" ? charm_grid : viewMode === "vex" ? vex_grid : grid.grid) || {};
     const ge = g[e];
     if (!ge) return 0;
     return ge[String(Number.isInteger(s) ? s : s)] ?? ge[String(s)] ?? ge[String(s.toFixed(1))] ?? ge[String(parseInt(s))] ?? 0;
@@ -76,7 +76,7 @@ export default function GridHeatmap({ data, filters, onCellClick, viewMode = "ge
                     const isKingCell = isKing && Math.abs(v) > 0.6 * maxAbs;
                     const col = cellColor(v, maxAbs, isKingCell, viewMode);
                     return (
-                      <td key={e} className="px-1 py-1 text-center cursor-pointer hover:outline hover:outline-1 hover:outline-teal-400" style={{ background: col.bg, color: col.text, minWidth: 60 }} onClick={() => onCellClick && onCellClick(s, e, v)} title={`strike ${s} · exp ${e} · ${viewMode === "charm" ? "charm" : "gex"} ${fmtCell(v)}`}>
+                      <td key={e} className="px-1 py-1 text-center cursor-pointer hover:outline hover:outline-1 hover:outline-teal-400" style={{ background: col.bg, color: col.text, minWidth: 60 }} onClick={() => onCellClick && onCellClick(s, e, v)} title={`strike ${s} · exp ${e} · ${viewMode === "charm" ? "charm" : viewMode === "vex" ? "vex" : "gex"} ${fmtCell(v)}`}>
                         {fmtCell(v)}
                       </td>
                     );

@@ -368,6 +368,10 @@ body, .panel, .panel-2, .glass, aside, main, header, footer {
   }
 
   .heatseeker-sidebar-left {
+    position: static !important;
+  }
+}
+
 /* ===== PWA STANDALONE ===== */
 @media (display-mode: standalone) {
   .app-header {

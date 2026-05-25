@@ -57,5 +57,5 @@ export function cellColor(v, maxAbs, isKing = false, mode = "gex") {
 
 // ============ Constants ============
 export const TRINITY = ["^SPX", "SPY", "QQQ"];
-export const DEFAULT_TICKERS = ["SPY", "QQQ", "^SPX", "IWM", "AAPL", "NVDA", "TSLA", "META", "AMZN", "MSFT"];
+export const DEFAULT_TICKERS = ["SPY", "QQQ", "^SPX", "IWM", "AAPL", "NVDA", "TSLA", "META", "AMZN", "MSFT", "GOOGL", "NFLX", "AMD", "SMH", "XLF", "GLD"];
 export const REFRESH_MS = 30000;

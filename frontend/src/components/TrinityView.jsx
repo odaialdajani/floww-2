@@ -129,12 +129,12 @@ function TrinityCard({ ticker, data, onFocus }) {
   const patterns = (data.patterns || []).slice(0, 3);
 
   return (
-    <div className="panel p-3 flex flex-col" style={{ minHeight: 0 }}>
-      <div className="flex justify-between items-baseline mb-1">
+    <div className="panel p-3 flex flex-col" style={{ minHeight: 0, maxHeight: "50vh" }}>
+      <div className="flex justify-between items-baseline mb-1 flex-shrink-0">
         <div className="font-bold text-xs">{ticker.replace("^", "")}</div>
         <div className="text-[9px] mono text-slate-400">spot {fmt(spot, 1)} · <span className={regimeColor}>{regime}γ</span></div>
       </div>
-      <div className="mb-1 flex-1 overflow-hidden" style={{ maxHeight: 200 }}>
+      <div className="mb-1 overflow-auto" style={{ flex: 1, minHeight: 0 }} id={`trinity-bar-${ticker.replace("^", "")}`}>
         <BarHeatmap data={data} filters={{}} compact />
       </div>
       <div className="flex flex-wrap gap-0.5 mt-1">

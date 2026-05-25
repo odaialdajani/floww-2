@@ -13,9 +13,9 @@
 
 import React, { useMemo, memo } from "react";
 import Plot from "react-plotly.js";
-import { useMarketData } from "../../hooks/useMarketData";
-import { autoDecimate, isWebGLAvailable } from "../../utils/dataDecimator";
-import { ErrorState } from "../RetryButton";
+import { useMarketData } from "../hooks/useMarketData";
+import { autoDecimate, isWebGLAvailable } from "../utils/dataDecimator";
+import { ErrorState } from "./RetryButton";
 
 const CharmChart = memo(function CharmChart({ ticker = "SPY", spot = null }) {
   const { data, loading, error, showBadge, refresh } = useMarketData(

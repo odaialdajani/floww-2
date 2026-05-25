@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { fmt, pctClass, tagFor } from "../lib/helpers";
 
 export default function BarHeatmap({ data, filters, compact = true, viewMode = "gex" }) {
   if (!data?.strikes) return null;
   const { spot, strikes, nodes } = data;
+  const spotRef = useRef(null);
   const key = viewMode === "vex" ? "vex" : viewMode === "charm" ? "charm" : "gex";
   const filtered = strikes.filter((s) => {
     const val = s[key] || s.gex || 0;
@@ -19,11 +20,19 @@ export default function BarHeatmap({ data, filters, compact = true, viewMode = "
   const king = nodes?.king?.strike;
   const fSet = new Set((nodes?.floors || []).map(f => f.strike));
   const cSet = new Set((nodes?.ceilings || []).map(f => f.strike));
-  const rowH = compact ? 14 : 18;
+  const rowH = compact ? 16 : 20;
   const barColorPos = viewMode === "vex" ? "rgba(245, 158, 11, 0.7)" : viewMode === "charm" ? "rgba(34, 211, 238, 0.7)" : "rgba(45, 212, 191, 0.7)";
   const barColorNeg = viewMode === "vex" ? "rgba(219, 39, 119, 0.7)" : viewMode === "charm" ? "rgba(168, 85, 247, 0.7)" : "rgba(168, 85, 247, 0.7)";
   const kingColorPos = viewMode === "vex" ? "rgba(251, 191, 36, 0.9)" : viewMode === "charm" ? "rgba(34, 211, 238, 0.9)" : "rgba(190, 242, 100, 0.9)";
   const kingColorNeg = viewMode === "vex" ? "rgba(219, 39, 119, 0.85)" : viewMode === "charm" ? "rgba(168, 85, 247, 0.85)" : "rgba(232, 121, 249, 0.85)";
+
+  // auto-scroll to spot line on mount only
+  useEffect(() => {
+    if (spotRef.current) {
+      spotRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="relative" style={{ paddingTop: 4, paddingBottom: 4 }}>
@@ -39,10 +48,10 @@ export default function BarHeatmap({ data, filters, compact = true, viewMode = "
         return (
           <React.Fragment key={s.strike}>
             {showSpot && (
-              <div className="flex items-center my-1 px-2">
-                <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(94,234,212,0.85), transparent)" }} />
-                <div className="px-1 text-[9px] tracking-widest text-teal-300">{fmt(spot, 1)}</div>
-                <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(94,234,212,0.85), transparent)" }} />
+              <div ref={spotRef} className="flex items-center my-1 px-0" style={{ height: compact ? 22 : 26 }}>
+                <div className="flex-1" style={{ height: 2, background: "linear-gradient(90deg, transparent, rgba(94,234,212,0.95) 20%, rgba(94,234,212,1) 50%, rgba(94,234,212,0.95) 80%, transparent)", boxShadow: "0 0 8px rgba(94,234,212,0.7), 0 0 20px rgba(94,234,212,0.3)" }} />
+                <div className="px-2 text-[10px] font-bold tracking-widest text-teal-300 whitespace-nowrap" style={{ textShadow: "0 0 10px rgba(94,234,212,0.7), 0 0 20px rgba(94,234,212,0.4)" }}>◆ SPOT {fmt(spot, 1)}</div>
+                <div className="flex-1" style={{ height: 2, background: "linear-gradient(90deg, rgba(94,234,212,1) 20%, rgba(94,234,212,1) 50%, rgba(94,234,212,0.95) 80%, transparent)", boxShadow: "0 0 8px rgba(94,234,212,0.7), 0 0 20px rgba(94,234,212,0.3)" }} />
               </div>
             )}
             <div className="bar-row flex items-center text-[10px] mono px-1" style={{ height: rowH }}>
