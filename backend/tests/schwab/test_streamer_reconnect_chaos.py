@@ -1,7 +1,8 @@
 """Chaos test: streamer survives connection drops with bounded reconnect."""
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
 
 

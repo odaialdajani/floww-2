@@ -7,22 +7,23 @@ Uses synthetic data — no MongoDB required.
 Tests the complete flow: data → features → training → prediction → audit.
 """
 
-import pytest
-import numpy as np
-import pandas as pd
 import sys
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import pytest
 
 # Add repo root to path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.train_spy_v2 import (
-    walk_forward_splits,
+    build_feature_matrix,
     compute_baselines,
     compute_trading_sharpe,
-    build_feature_matrix,
     train_model,
+    walk_forward_splits,
 )
 
 

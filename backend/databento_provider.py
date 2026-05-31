@@ -4,12 +4,14 @@ Uses tight pre-market window (10:00-13:30 UTC) where EOD OI is published — ~$0
 Heavy Mongo caching: 1 fetch per ticker per US trading date.
 """
 from __future__ import annotations
-import os
-import re
+
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone, date as date_cls
-from typing import Dict, Optional, Any
+import os
+import re
+from datetime import date as date_cls
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional
 
 import databento as db
 

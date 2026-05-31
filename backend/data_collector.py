@@ -2,10 +2,10 @@ async def store_snapshot(snapshot: dict) -> bool:
     """Store a snapshot in MongoDB."""
     if not snapshot:
         return False
-    
+
     client = AsyncIOMotorClient(os.environ.get("MONGO_URL", ""))
     db = client[os.environ.get("DB_NAME", "confluence_decoder")]
-    
+
     try:
         await db.snapshots.insert_one(snapshot)
         logger.info(f"Stored snapshot: {snapshot['ticker']} @ {snapshot['spot']:.2f} ({snapshot['regime']})")
@@ -24,10 +24,11 @@ Runs as a cron job to continuously collect data.
 """
 
 import logging
-from datetime import datetime, timezone
-from motor.motor_asyncio import AsyncIOMotorClient
 import os
+from datetime import datetime, timezone
+
 from dotenv import load_dotenv
+from motor.motor_asyncio import AsyncIOMotorClient
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -35,23 +36,23 @@ logger = logging.getLogger(__name__)
 
 async def collect_snapshot(ticker: str = "SPY") -> dict:
     """Collect a single GEX snapshot."""
-    from server import fetch_spot_and_chains_merged, compute_gex_by_strike, classify_nodes
-    
+    from server import classify_nodes, compute_gex_by_strike, fetch_spot_and_chains_merged
+
     t = ticker.strip().upper()
     if t == "SPX":
         t = "^SPX"
-    
+
     raw = await fetch_spot_and_chains_merged(t, 4)
     spot = raw.get("spot", 0)
     if not spot or not raw.get("contracts"):
         return {}
-    
+
     strikes = compute_gex_by_strike(spot, raw["contracts"], t)
     total_gex = sum(s["gex"] for s in strikes)
     positive = sorted([s for s in strikes if s["gex"] > 0], key=lambda x: x["gex"], reverse=True)
     negative = sorted([s for s in strikes if s["gex"] < 0], key=lambda x: x["gex"])
     nodes = classify_nodes(strikes, spot)
-    
+
     snapshot = {
         "ticker": ticker.upper(),
         "ts": datetime.now(timezone.utc).isoformat(),
@@ -68,7 +69,7 @@ async def collect_snapshot(ticker: str = "SPY") -> dict:
             for s in strikes[:20]  # Top 20 strikes
         ],
     }
-    
+
     return snapshot
 
 
@@ -76,12 +77,12 @@ async def collect_multiple_tickers(tickers: list = None) -> list:
     """Collect snapshots for multiple tickers."""
     if tickers is None:
         tickers = ["SPY", "QQQ", "IWM", "DIA"]
-    
+
     results = []
     for ticker in tickers:
         result = await collect_and_store(ticker)
         results.append(result)
-    
+
     return results
 
 

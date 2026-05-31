@@ -17,8 +17,8 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 import numpy as np
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 

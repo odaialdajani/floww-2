@@ -2,10 +2,10 @@
 backend/services/logging_config.py
 Structured JSON logging with correlation IDs for request tracing.
 """
-import logging
-import json
-import uuid
 import contextvars
+import json
+import logging
+import uuid
 from datetime import datetime, timezone
 
 correlation_id_var = contextvars.ContextVar('correlation_id', default=None)

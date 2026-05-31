@@ -21,8 +21,8 @@ import asyncio
 import json
 import os
 import sys
-from pathlib import Path
 from datetime import datetime, timezone
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -31,10 +31,11 @@ from dotenv import load_dotenv
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-from motor.motor_asyncio import AsyncIOMotorClient
-from services.ml.registry import ModelRegistry
-
 import logging
+
+from motor.motor_asyncio import AsyncIOMotorClient
+
+from services.ml.registry import ModelRegistry
 
 logger = logging.getLogger(__name__)
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -190,7 +191,7 @@ async def run_backtest(tickers=None):
                 target_col = t
                 break
         if not target_col:
-            logger.info(f"  SKIP: No target column found")
+            logger.info("  SKIP: No target column found")
             continue
 
         # Drop rows with missing target
@@ -217,7 +218,7 @@ async def run_backtest(tickers=None):
                                     n_splits=8, train_size=200, test_size=100, embargo=5)
 
         if not bt['fold_metrics']:
-            logger.info(f"  SKIP: No valid folds")
+            logger.info("  SKIP: No valid folds")
             continue
 
         # Aggregate results
@@ -273,14 +274,14 @@ async def run_backtest(tickers=None):
 
     # Generate report
     report_lines = [
-        f"# ML Backtest Report — Real Data",
+        "# ML Backtest Report — Real Data",
         f"**Date:** {datetime.now(timezone.utc).isoformat()}",
         f"**Samples:** {sum(r['n_samples'] for r in results.values())} total",
-        f"",
-        f"## Results Summary",
-        f"",
-        f"| Ticker | Model | Accuracy | Sharpe | Maj. Baseline | Pers. Baseline | Beats Baseline |",
-        f"|--------|-------|----------|--------|---------------|----------------|----------------|",
+        "",
+        "## Results Summary",
+        "",
+        "| Ticker | Model | Accuracy | Sharpe | Maj. Baseline | Pers. Baseline | Beats Baseline |",
+        "|--------|-------|----------|--------|---------------|----------------|----------------|",
     ]
     for ticker, r in sorted(results.items()):
         report_lines.append(
@@ -289,16 +290,16 @@ async def run_backtest(tickers=None):
         )
 
     report_lines.extend([
-        f"",
-        f"## Per-Fold Details",
-        f"",
+        "",
+        "## Per-Fold Details",
+        "",
     ])
     for ticker, r in sorted(results.items()):
         report_lines.extend([
             f"### {ticker} ({r['model_id']})",
-            f"",
-            f"| Fold | Train | Test | Accuracy | Sharpe | Pos Rate |",
-            f"|------|-------|------|----------|--------|----------|",
+            "",
+            "| Fold | Train | Test | Accuracy | Sharpe | Pos Rate |",
+            "|------|-------|------|----------|--------|----------|",
         ])
         for f in r['fold_metrics']:
             report_lines.append(

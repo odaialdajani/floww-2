@@ -3,8 +3,9 @@ Property-based math invariants for microstructure kernels.
 Uses hypothesis to generate random inputs and verify mathematical properties.
 """
 import math
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 import numpy as np
@@ -12,11 +13,11 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from services.vpin_engine import VpinEngine
 from services.gex_aggregator import GexAggregator
-from services.stochastic_vol import SABRModel
 from services.hawkes_process import HawkesProcess
 from services.liquidity_metrics import KyleLambda
+from services.stochastic_vol import SABRModel
+from services.vpin_engine import VpinEngine
 
 
 class TestVpinProperties:

@@ -14,8 +14,8 @@ Computes and formats:
 
 from __future__ import annotations
 
-import math
 import logging
+import math
 from dataclasses import dataclass, field
 from typing import Dict, List
 
@@ -169,18 +169,18 @@ class BacktestResult:
             f"=== Backtest Report: {self.ticker} ===",
             f"Period: {self.start_date} -> {self.end_date}",
             f"Bars: {self.total_bars}  Trades: {int(m.get('n_trades', 0))}",
-            f"",
-            f"--- Performance ---",
+            "",
+            "--- Performance ---",
             f"Initial Capital:  ${self.initial_capital:,.2f}",
             f"Final Equity:     ${m.get('final_equity', 0):,.2f}",
             f"Net Return:       {m.get('net_return_pct', 0):.2f}%",
             f"Total P&L:        ${m.get('total_pnl', 0):,.2f}",
-            f"",
-            f"--- Risk ---",
+            "",
+            "--- Risk ---",
             f"Sharpe (ann.):    {m.get('sharpe', 0):.3f}",
             f"Max Drawdown:     ${m.get('max_drawdown', 0):,.2f} ({m.get('max_drawdown_pct', 0):.2f}%)",
-            f"",
-            f"--- Trade Stats ---",
+            "",
+            "--- Trade Stats ---",
             f"Hit Rate:         {m.get('hit_rate', 0):.3f}",
             f"Profit Factor:    {m.get('profit_factor', 0):.3f}",
             f"Win/Loss Ratio:   {m.get('win_loss_ratio', 0):.3f}",
@@ -188,8 +188,8 @@ class BacktestResult:
             f"Avg Win:          ${m.get('avg_win', 0):,.2f}",
             f"Avg Loss:         ${m.get('avg_loss', 0):,.2f}",
             f"Wins:             {int(m.get('n_wins', 0))}  Losses: {int(m.get('n_losses', 0))}",
-            f"",
-            f"--- Costs ---",
+            "",
+            "--- Costs ---",
             f"Commission:       ${m.get('total_commission', 0):,.2f}",
             f"Slippage:         ${m.get('total_slippage', 0):,.2f}",
         ]

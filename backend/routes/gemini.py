@@ -1,7 +1,8 @@
 """API routes for Gemini AI analysis."""
 
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter
 
 logger = logging.getLogger(__name__)

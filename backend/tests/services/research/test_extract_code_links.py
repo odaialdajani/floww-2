@@ -11,7 +11,6 @@ import json
 import sys
 from pathlib import Path
 
-
 # Add repo root so scripts.extract_code_links is importable.
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
@@ -22,7 +21,6 @@ from scripts.extract_code_links import (  # noqa: E402
     find_discovery_files,
     load_discoveries,
 )
-
 
 # ────────────────────────────────────────────────────────────────────────────
 # CODE_URL_RE / extract_code_urls

@@ -27,7 +27,6 @@ from services.anomaly_detector import (
 pytest.importorskip("torch")
 from services.anomaly_detector import Conv1DAutoencoder
 
-
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
 @pytest.fixture
@@ -274,8 +273,9 @@ class TestThreshold:
 class TestInferenceLatency:
     def test_inference_under_5ms(self, trained_model_path):
         """Inference must be <5ms per sample on CPU."""
-        import torch
         import time
+
+        import torch
 
         checkpoint = torch.load(trained_model_path, map_location="cpu")
         model = Conv1DAutoencoder(input_channels=2, seq_len=50, latent_dim=8)

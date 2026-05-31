@@ -24,8 +24,8 @@ sys.path.insert(0, str(REPO_BACKEND))
 from services.retail_flow_score import (
     RetailFlowScore,
     compute_cpr_subscore,
-    compute_oi_subscore,
     compute_iv_skew_subscore,
+    compute_oi_subscore,
 )
 
 

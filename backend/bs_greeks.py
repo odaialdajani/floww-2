@@ -4,6 +4,7 @@ Shared between server.py and portfolio.py to avoid circular imports.
 """
 
 import math
+
 from scipy.stats import norm
 
 RISK_FREE_RATE = 0.05

@@ -29,7 +29,6 @@ from dataclasses import dataclass
 
 import numpy as np
 
-
 # Component weights (must sum to 1.0)
 WEIGHT_CPR = 0.40
 WEIGHT_OI = 0.30

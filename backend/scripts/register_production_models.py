@@ -14,12 +14,14 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
+
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-from motor.motor_asyncio import AsyncIOMotorClient
-from services.ml.registry import ModelRegistry
-
 import logging
+
+from motor.motor_asyncio import AsyncIOMotorClient
+
+from services.ml.registry import ModelRegistry
 
 logger = logging.getLogger(__name__)
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -119,12 +121,12 @@ async def register_all(dry_run: bool = True, promote: list = None):
         logger.info(f"  Beats baselines: {metrics['beats_baselines']}")
 
         if not os.path.exists(spec["artifact_path"]):
-            logger.info(f"  SKIP: Artifact not found")
+            logger.info("  SKIP: Artifact not found")
             results.append((ticker, "skip", "artifact missing"))
             continue
 
         if dry_run:
-            logger.info(f"  DRY RUN — would register as shadow")
+            logger.info("  DRY RUN — would register as shadow")
             results.append((ticker, "dry_run", "ok"))
             continue
 
@@ -145,7 +147,7 @@ async def register_all(dry_run: bool = True, promote: list = None):
             logger.info(f"  Promote: {result}")
             results.append((ticker, "promoted" if result["success"] else "promote_failed", result.get("reason", "")))
         elif ticker in promote:
-            logger.info(f"  PROMOTE SKIP: beats_baselines=False")
+            logger.info("  PROMOTE SKIP: beats_baselines=False")
             results.append((ticker, "promote_skip", "beats_baselines=False"))
 
     logger.info(f"\n{'='*60}")

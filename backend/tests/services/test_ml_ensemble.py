@@ -6,8 +6,8 @@ Tests for the toxicity ensemble inference module.
 """
 from __future__ import annotations
 
-import sys
 import json
+import sys
 from pathlib import Path
 
 import numpy as np

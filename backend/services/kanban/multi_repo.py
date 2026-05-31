@@ -9,9 +9,9 @@ Cross-repo SWARM_STATUS.md aggregates state from all.
 """
 
 import logging
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from collections import defaultdict
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 KANBAN_DIR = REPO_ROOT / "kanban"
@@ -110,7 +110,7 @@ if __name__ == "__main__":
 
 def get_cross_repo_status(cards: list[dict]) -> dict:
     """Get cross-repo status for all cards."""
-    status = {
+    _status = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "repos": {},
         "cross_repo_cards": [],

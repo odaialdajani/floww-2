@@ -12,10 +12,10 @@ Reference: SEC Rule 15c3-5 (Risk Management Controls for Brokers)
 
 from __future__ import annotations
 
+import hmac
 import logging
 import os
-import hmac
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import IntEnum
 from typing import Any, Dict, List, Optional, Tuple
 

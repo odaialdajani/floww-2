@@ -20,10 +20,10 @@ Run:
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
 import sys
 import time
-import signal
 from pathlib import Path
 
 import pytest
@@ -79,8 +79,8 @@ def _compare_screenshots(
     Compare two screenshots using pixelmatch.
     Returns (passed, diff_ratio).
     """
-    from PIL import Image
     import pixelmatch
+    from PIL import Image
 
     baseline = Image.open(baseline_path).convert("RGBA")
     actual = Image.open(actual_path).convert("RGBA")

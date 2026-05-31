@@ -13,10 +13,10 @@ leakage, ...) the save is refused and DegenerateModelError propagates up.
 """
 
 import asyncio
-import sys
-import os
 import json
 import logging
+import os
+import sys
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -86,15 +86,16 @@ def _save_with_gates(
         DegenerateModelError: If any gate fails. The save is refused.
     """
     import joblib
+
+    from services.ml import DegenerateModelError
     from services.ml.quality import (
         assert_class_balance,
         assert_feature_variance,
+        assert_no_future_leakage,
         assert_prediction_distribution,
         assert_temporal_ordering,
-        assert_no_future_leakage,
         assert_train_test_temporal_split,
     )
-    from services.ml import DegenerateModelError
 
     gate_results: Dict[str, bool] = {}
 
@@ -156,8 +157,9 @@ async def _build_dataset_from_snapshots(ticker: str, min_samples: int):
     When the dataset is unusable, status_dict is non-None and the other
     return values are None. Otherwise status_dict is None.
     """
-    from motor.motor_asyncio import AsyncIOMotorClient
     from dotenv import load_dotenv
+    from motor.motor_asyncio import AsyncIOMotorClient
+
     from ml_price_prediction import extract_features
 
     load_dotenv()

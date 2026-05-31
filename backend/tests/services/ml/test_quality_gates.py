@@ -5,17 +5,18 @@ assert_prediction_distribution, and the full run_all_gates pipeline.
 """
 import numpy as np
 import pytest
+
+from services.ml import DegenerateModelError
 from services.ml.quality import (
     assert_class_balance,
     assert_feature_variance,
+    assert_holdout_untouched,
+    assert_no_future_leakage,
     assert_prediction_distribution,
     assert_temporal_ordering,
-    assert_no_future_leakage,
     assert_train_test_temporal_split,
-    assert_holdout_untouched,
     run_all_gates,
 )
-from services.ml import DegenerateModelError
 
 
 class TestAssertClassBalance:

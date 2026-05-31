@@ -20,6 +20,12 @@ import pytest
 # backend/ is two levels up from this file
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from services.atlas_overlays import (
+    compute_air_pockets as overlay_air_pockets,
+)
+from services.atlas_overlays import (
+    compute_king_nodes as overlay_king_nodes,
+)
 from services.heatseeker import (
     _gex_per_strike,
     _king_node_strike,
@@ -28,11 +34,6 @@ from services.heatseeker import (
     calc_node_lifecycle,
     detect_beach_ball,
 )
-from services.atlas_overlays import (
-    compute_air_pockets as overlay_air_pockets,
-    compute_king_nodes as overlay_king_nodes,
-)
-
 
 # ---------------------------------------------------------------------------
 # Fixture helpers

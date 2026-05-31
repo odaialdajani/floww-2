@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import logging
+
 logger = logging.getLogger(__name__)
 
 """
@@ -33,10 +34,12 @@ BACKEND_DIR = SCRIPT_DIR.parent
 sys.path.insert(0, str(BACKEND_DIR))
 
 from scripts.train_spy_ml import (
-    fetch_spot_history,
     build_dataset,
+    fetch_spot_history,
 )
 from scripts.train_with_baselines import compute_trading_sharpe
+
+
 def _sharpe(predictions, actuals):
     """Compute annualized trading Sharpe."""
     rets = []

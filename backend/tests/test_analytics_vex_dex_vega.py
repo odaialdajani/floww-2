@@ -5,16 +5,16 @@ Unit tests for calc_vex, calc_dex, calc_vega_total.
 Uses hand-calculated examples and the FlashAlpha sample chain fixture.
 """
 
-import pytest
 import math
-import sys
 import os
+import sys
+
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from advanced_analytics import calc_vex, calc_dex, calc_vega_total
-from bs_greeks import bs_vanna, bs_delta, bs_vega
-
+from advanced_analytics import calc_dex, calc_vega_total, calc_vex
+from bs_greeks import bs_delta, bs_vanna, bs_vega
 
 # ============================================================================
 # Test fixtures

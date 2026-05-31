@@ -8,15 +8,21 @@ instrumental variables, do-calculus, and causal effect estimation.
 
 from __future__ import annotations
 
+import os
+import sys
+
 import numpy as np
 import pandas as pd
 import pytest
 
-import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from services.causal_inference import (
-    CausalGraph, BackdoorCriterion, InstrumentalVariables, DoCalculus, CausalEffectEstimator
+    BackdoorCriterion,
+    CausalEffectEstimator,
+    CausalGraph,
+    DoCalculus,
+    InstrumentalVariables,
 )
 
 

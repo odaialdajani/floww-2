@@ -11,16 +11,15 @@ Environment:
     MEM0_API_KEY — mem0 Platform API key (or reads from ~/.mem0/config.json)
 """
 
-import os
-import sys
-import json
-import re
-import time
 import argparse
-from pathlib import Path
-from datetime import datetime
-
+import json
 import logging
+import os
+import re
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 # ── Paths ──────────────────────────────────────────────────────────────────
@@ -78,7 +77,7 @@ class Mem0Migrator:
         try:
             from mem0 import MemoryClient
             self.client = MemoryClient(api_key=self.api_key)
-            logger.info(f"mem0 client initialized (Platform mode)")
+            logger.info("mem0 client initialized (Platform mode)")
         except Exception as e:
             logger.warning(f"ERROR initializing mem0 client: {e}")
             sys.exit(1)
@@ -196,7 +195,7 @@ def migrate_claude_memory(migrator: Mem0Migrator, dry_run=False) -> dict:
         if result.get("status") in ("success", "dry_run"):
             stats["added"] += 1
             stats["files"].append({"file": md_file.name, "status": "added"})
-            logger.info(f"  OK")
+            logger.info("  OK")
         else:
             stats["errors"] += 1
             stats["files"].append({"file": md_file.name, "status": "error", "error": result.get("error", "")})
@@ -302,7 +301,7 @@ def main():
         claude_stats = migrate_claude_memory(migrator, args.dry_run)
         logger.info(f"\nClaude Code: {claude_stats['total']} files, {claude_stats['added']} added, "
               f"{claude_stats['skipped']} skipped, {claude_stats['errors']} errors")
-        log_lines.append(f"\n## Claude Code Memory\n")
+        log_lines.append("\n## Claude Code Memory\n")
         log_lines.append(f"- Total files: {claude_stats['total']}")
         log_lines.append(f"- Added: {claude_stats['added']}")
         log_lines.append(f"- Skipped: {claude_stats['skipped']}")
@@ -316,7 +315,7 @@ def main():
         logger.info(f"\nPLUR: {plur_stats['total']} engrams, {plur_stats['added']} added, "
               f"{plur_stats['duplicates']} duplicates, {plur_stats['skipped']} skipped, "
               f"{plur_stats['errors']} errors")
-        log_lines.append(f"\n## PLUR Engrams\n")
+        log_lines.append("\n## PLUR Engrams\n")
         log_lines.append(f"- Total: {plur_stats['total']}")
         log_lines.append(f"- Added: {plur_stats['added']}")
         log_lines.append(f"- Duplicates: {plur_stats['duplicates']}")
@@ -325,7 +324,7 @@ def main():
 
     end_count = migrator.count_memories()
     logger.info(f"\nEnding mem0 count: {end_count}")
-    log_lines.append(f"\n## Summary\n")
+    log_lines.append("\n## Summary\n")
     log_lines.append(f"- Starting count: {start_count}")
     log_lines.append(f"- Ending count: {end_count}")
 

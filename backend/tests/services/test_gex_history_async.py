@@ -1,6 +1,7 @@
 """Regression test: gex_history iterates Motor cursors with async for."""
 import inspect
 import re
+
 import pytest
 
 

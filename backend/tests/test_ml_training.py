@@ -3,9 +3,10 @@ tests/test_ml_training.py
 
 Tests for the ML training pipeline (walk-forward CV, baselines, SHIP gate).
 """
-import numpy as np
 import sys
 from pathlib import Path
+
+import numpy as np
 
 # Add scripts directory to path
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent / "scripts"
@@ -111,12 +112,12 @@ class TestBaselineComputation:
     def test_majority_baseline(self):
         """Majority baseline should predict the most common class."""
         from train_spy_v3 import compute_baselines_on_splits
-        
+
         y = np.array([0] * 60 + [1] * 40)
         X = np.random.randn(len(y), 5)
         splits = [(np.arange(0, 80), np.arange(80, 100))]
         baselines = compute_baselines_on_splits(X, y, splits)
-        
+
         assert "majority" in baselines
         assert "persistence" in baselines
         assert "logistic" in baselines
@@ -124,13 +125,13 @@ class TestBaselineComputation:
     def test_persistence_baseline(self):
         """Persistence baseline should predict the last seen value."""
         from train_spy_v3 import compute_baselines_on_splits
-        
+
         # First 80 are class 0, so persistence predicts 0
         y = np.array([0] * 80 + [1] * 20)
         X = np.random.randn(len(y), 5)
         splits = [(np.arange(0, 80), np.arange(80, 100))]
         baselines = compute_baselines_on_splits(X, y, splits)
-        
+
         # Last value of train set (index 79) is 0
         assert baselines["persistence"][0] == 0
 

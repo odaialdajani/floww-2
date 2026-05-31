@@ -27,19 +27,18 @@ REPO_BACKEND = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_BACKEND))
 
 from scripts.train_with_baselines import (
+    EMBARGO_DAYS,
+    MAX_PLAUSIBLE_DAILY_SHARPE,
+    REQUIRED_BASELINES,
+    audit_meta_json,
     compute_all_baselines,
+    compute_logistic_baseline,
     compute_majority_baseline,
     compute_persistence_baseline,
-    compute_logistic_baseline,
     compute_trading_sharpe,
     time_ordered_split,
     walk_forward_splits,
-    audit_meta_json,
-    MAX_PLAUSIBLE_DAILY_SHARPE,
-    EMBARGO_DAYS,
-    REQUIRED_BASELINES,
 )
-
 
 # ---------------------------------------------------------------------------
 # Baseline computation
@@ -263,13 +262,13 @@ class TestQualityGates:
         assert_class_balance(y)  # Should not raise
 
     def test_imbalanced_classes_fail(self):
-        from services.ml.quality import assert_class_balance, DegenerateModelError
+        from services.ml.quality import DegenerateModelError, assert_class_balance
         y = np.array([0, 0, 0, 0, 0, 0, 0, 1])
         with pytest.raises(DegenerateModelError):
             assert_class_balance(y, min_ratio=0.2)
 
     def test_single_class_fail(self):
-        from services.ml.quality import assert_class_balance, DegenerateModelError
+        from services.ml.quality import DegenerateModelError, assert_class_balance
         y = np.array([1, 1, 1, 1])
         with pytest.raises(DegenerateModelError):
             assert_class_balance(y)
@@ -280,7 +279,7 @@ class TestQualityGates:
         assert_feature_variance(X)  # Should not raise
 
     def test_constant_feature_fail(self):
-        from services.ml.quality import assert_feature_variance, DegenerateModelError
+        from services.ml.quality import DegenerateModelError, assert_feature_variance
         X = np.ones((100, 5))
         X[:, 0] = np.random.randn(100)  # Only one varying feature
         with pytest.raises(DegenerateModelError):
@@ -292,7 +291,7 @@ class TestQualityGates:
         assert_prediction_distribution(proba)  # Should not raise
 
     def test_constant_prediction_fail(self):
-        from services.ml.quality import assert_prediction_distribution, DegenerateModelError
+        from services.ml.quality import DegenerateModelError, assert_prediction_distribution
         proba = np.full(100, 0.5)
         with pytest.raises(DegenerateModelError):
             assert_prediction_distribution(proba)
@@ -444,7 +443,7 @@ class TestEndToEndTraining:
 
     def _train_and_evaluate(self, X_train, y_train, X_test, y_test, model_type):
         """Helper to train a model and return (model, scaler)."""
-        from scripts.train_with_baselines import train_model, evaluate_model
+        from scripts.train_with_baselines import evaluate_model, train_model
         model, scaler = train_model(X_train, y_train, model_type)
         metrics = evaluate_model(model, scaler, X_test, y_test)
         assert "accuracy" in metrics

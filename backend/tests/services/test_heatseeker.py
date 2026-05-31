@@ -21,8 +21,8 @@ from services.heatseeker import (  # noqa: E402
     calc_flip_zones,
     calc_node_lifecycle,
     calc_rolling_floors_ceilings,
-    calc_tug_of_war_zones,
     calc_trinity_confluence,
+    calc_tug_of_war_zones,
     calc_velocity_mode,
     classify_nodes,
     detect_beach_ball,
@@ -30,7 +30,6 @@ from services.heatseeker import (  # noqa: E402
     detect_reverse_rug,
     detect_stacked_nodes,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixture helpers

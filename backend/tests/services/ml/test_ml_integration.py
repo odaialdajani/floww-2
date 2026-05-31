@@ -144,7 +144,7 @@ def test_strong_confidence_threshold():
 
 
 def test_map_binary_to_3way_strong_bullish():
-    from services.ml.inference import _map_binary_to_3way, UP
+    from services.ml.inference import UP, _map_binary_to_3way
     pred, probs = _map_binary_to_3way(1, [0.2, 0.8])
     assert pred == UP
     assert abs(probs[2] - 0.8) < 0.01
@@ -152,7 +152,7 @@ def test_map_binary_to_3way_strong_bullish():
 
 
 def test_map_binary_to_3way_strong_bearish():
-    from services.ml.inference import _map_binary_to_3way, DOWN
+    from services.ml.inference import DOWN, _map_binary_to_3way
     pred, probs = _map_binary_to_3way(0, [0.9, 0.1])
     assert pred == DOWN
     assert abs(probs[0] - 0.9) < 0.01
@@ -160,7 +160,7 @@ def test_map_binary_to_3way_strong_bearish():
 
 
 def test_map_binary_to_3way_hold_zone():
-    from services.ml.inference import _map_binary_to_3way, HOLD
+    from services.ml.inference import HOLD, _map_binary_to_3way
     pred, probs = _map_binary_to_3way(1, [0.45, 0.55])
     assert probs[1] >= 0.0
     assert abs(sum(probs) - 1.0) < 0.01

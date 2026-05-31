@@ -255,8 +255,9 @@ def main():
     # Log to MongoDB
     try:
         import asyncio
-        from motor.motor_asyncio import AsyncIOMotorClient
+
         from dotenv import load_dotenv
+        from motor.motor_asyncio import AsyncIOMotorClient
 
         load_dotenv(SCRIPT_DIR.parent / ".env")
         uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")

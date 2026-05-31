@@ -3,14 +3,15 @@ tests/services/test_alerts.py
 
 Tests for the alert engine.
 """
-import pytest
-from unittest.mock import MagicMock, patch
-
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from services.alerts.engine import AlertEngine, AlertDefinition
+from services.alerts.engine import AlertDefinition, AlertEngine
 
 
 class TestAlertDefinition:

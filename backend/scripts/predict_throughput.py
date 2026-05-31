@@ -20,14 +20,13 @@ Also provides:
 
 from __future__ import annotations
 
-import pickle
 import json
-import math
 import logging
-from pathlib import Path
-from typing import Optional, Dict, List, Any
+import math
+import pickle
 from datetime import datetime
-
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 PRIORITY_MAP = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 
@@ -51,15 +50,15 @@ def parse_card(card_file: Path) -> Optional[Dict[str, Any]]:
         content = Path(card_file).read_text()
         if not content.startswith("---"):
             return None
-        
+
         # Extract YAML frontmatter
         end = content.find("---", 3)
         if end == -1:
             return None
-        
+
         yaml_block = content[3:end].strip()
         card = {"_file": str(card_file)}
-        
+
         for line in yaml_block.splitlines():
             line = line.strip()
             if ":" not in line:
@@ -67,13 +66,13 @@ def parse_card(card_file: Path) -> Optional[Dict[str, Any]]:
             key, _, value = line.partition(":")
             key = key.strip()
             value = value.strip()
-            
+
             # Strip quotes
             if value.startswith('"') and value.endswith('"'):
                 value = value[1:-1]
             elif value.startswith("'") and value.endswith("'"):
                 value = value[1:-1]
-            
+
             # Parse lists
             if value.startswith("[") and value.endswith("]"):
                 inner = value[1:-1].strip()
@@ -81,9 +80,9 @@ def parse_card(card_file: Path) -> Optional[Dict[str, Any]]:
                     value = [v.strip().strip('"').strip("'") for v in inner.split(",")]
                 else:
                     value = []  # type: ignore[assignment]
-            
+
             card[key] = value
-        
+
         return card
     except Exception as e:
         logger.warning(f"Failed to parse card {card_file}: {e}")
@@ -96,27 +95,27 @@ def extract_features(parsed: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Extract ML features from a parsed kanban card. Only for done cards."""
     if parsed.get("status") != "done":
         return None
-    
+
     assignee = parsed.get("assignee", "unknown")
-    
+
     # Parse estimate
     try:
         estimate = float(parsed.get("estimate_hours", 0))
     except (ValueError, TypeError):
         estimate = 0.0
-    
+
     # Parse priority
     priority_map = {"low": 0, "medium": 1, "high": 2, "critical": 3}
     priority = priority_map.get(str(parsed.get("priority", "medium")).lower(), 1)
-    
+
     # Commits
     commits = parsed.get("commits", [])
     n_commits = len(commits) if isinstance(commits, list) else 0
-    
+
     # Blockers
     blockers = parsed.get("blockers", [])
     n_blockers = len(blockers) if isinstance(blockers, list) else 0
-    
+
     # Completion time from timestamps
     completion_hours = 0.0
     created_at = parsed.get("created_at", "")
@@ -128,7 +127,7 @@ def extract_features(parsed: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             completion_hours = (t1 - t0).total_seconds() / 3600.0
         except Exception:
             completion_hours = estimate  # fallback
-    
+
     # Time features
     try:
         created_dt = datetime.fromisoformat(created_at.replace("Z", "+00:00")) if created_at else datetime.utcnow()
@@ -137,7 +136,7 @@ def extract_features(parsed: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     except Exception:
         hour = 12
         day_of_week = 0
-    
+
     return {
         "agent": assignee,
         "estimate_hours": estimate,
@@ -156,7 +155,7 @@ def load_history(history_dir: Optional[Path] = None) -> List[Dict[str, Any]]:
     """Load historical card completion data."""
     if history_dir is None:
         history_dir = Path(__file__).resolve().parent.parent / "data" / "kanban_history"
-    
+
     history = []
     if history_dir.exists():
         for f in history_dir.glob("*.json"):
@@ -168,7 +167,7 @@ def load_history(history_dir: Optional[Path] = None) -> List[Dict[str, Any]]:
                     history.append(data)
             except Exception:
                 pass
-    
+
     return history
 
 
@@ -176,7 +175,7 @@ def load_history(history_dir: Optional[Path] = None) -> List[Dict[str, Any]]:
 
 class EnsembleRegressor:
     """Ensemble of Poisson, Exponential, Gamma + linear regression."""
-    
+
     def __init__(self):
         self.trained = False
         self.global_mean: float = 4.0
@@ -193,22 +192,22 @@ class EnsembleRegressor:
         self.bias: float = 0.8
         self.train_mape: float = 0.0
         self.train_accuracy_20pct: float = 0.0
-    
+
     def train(self, data: List[Dict[str, Any]], epochs: int = 20) -> None:
         """Train the ensemble on historical completion data."""
         if not data:
             self.global_mean = 4.0
             self.trained = False
             return
-        
+
         # Compute global mean
         completions = [d["completion_hours"] for d in data if d.get("completion_hours", 0) > 0]
         if not completions:
             self.trained = False
             return
-        
+
         self.global_mean = sum(completions) / len(completions)
-        
+
         # Compute per-agent means
         agent_data: Dict[str, List[float]] = {}
         for d in data:
@@ -216,12 +215,12 @@ class EnsembleRegressor:
             hours = d.get("completion_hours", 0)
             if hours > 0:
                 agent_data.setdefault(agent, []).append(hours)
-        
+
         self.agent_means = {
             agent: sum(hours_list) / len(hours_list)
             for agent, hours_list in agent_data.items()
         }
-        
+
         # Simple gradient descent on feature weights.
         lr = 0.01
         for _ in range(epochs):
@@ -238,13 +237,13 @@ class EnsembleRegressor:
                 actual = d.get("completion_hours", self.global_mean)
                 predicted = self._linear_predict(features)
                 error = predicted - actual
-                
+
                 # SGD-style per-sample update (no /N) — converges faster on
                 # small datasets without sacrificing stability since lr is tiny.
                 for key in self.feature_weights:
                     self.feature_weights[key] -= lr * error * features.get(key, 0)
                 self.bias -= lr * error
-        
+
         # Compute training MAPE
         errors = []
         correct_20pct = 0
@@ -264,37 +263,37 @@ class EnsembleRegressor:
                 errors.append(abs(predicted - actual) / actual)
                 if abs(predicted - actual) / actual <= 0.20:
                     correct_20pct += 1
-        
+
         self.train_mape = sum(errors) / len(errors) if errors else 0.0
         self.train_accuracy_20pct = correct_20pct / len(data) if data else 0.0
         self.trained = True
-    
+
     def _linear_predict(self, features: Dict[str, float]) -> float:
         """Linear regression prediction."""
         pred = self.bias
         for key, weight in self.feature_weights.items():
             pred += weight * features.get(key, 0)
         return max(0.1, pred)
-    
+
     def _poisson_predict(self, agent: str) -> float:
         """Poisson model: lambda = agent mean completion rate."""
         return self.agent_means.get(agent, self.global_mean)
-    
+
     def _exponential_predict(self, agent: str) -> float:
         """Exponential model: mean = 1/lambda."""
         return self.agent_means.get(agent, self.global_mean)
-    
+
     def _gamma_predict(self, agent: str) -> float:
         """Gamma model: shape=2, scale=mean/2."""
         mean = self.agent_means.get(agent, self.global_mean)
         return max(0.1, mean)
-    
+
     def predict(self, features: Dict[str, Any]) -> Dict[str, Any]:
         """Predict completion time with confidence intervals."""
         agent = features.get("agent", "unknown")
-        
+
         agent_mean = self.agent_means.get(agent, self.global_mean)
-        
+
         linear_pred = self._linear_predict({
             "agent_mean": agent_mean,
             "estimate": float(features.get("estimate_hours", 0)),
@@ -304,27 +303,27 @@ class EnsembleRegressor:
             "hour": float(features.get("hour", 12)),
             "dow": float(features.get("day_of_week", 0)),
         })
-        
+
         # Sub-model predictions
         poisson_pred = self._poisson_predict(agent)
         exponential_pred = self._exponential_predict(agent)
         gamma_pred = self._gamma_predict(agent)
-        
+
         sub_models = {
             "poisson": poisson_pred,
             "exponential": exponential_pred,
             "gamma": gamma_pred,
         }
-        
+
         # Ensemble average
         predicted_hours = (linear_pred + poisson_pred + exponential_pred + gamma_pred) / 4.0
         predicted_hours = max(0.1, predicted_hours)
-        
+
         # Confidence intervals (wider as time increases)
         std = predicted_hours * 0.3
         confidence_low = max(0.1, predicted_hours - std)
         confidence_high = predicted_hours + std
-        
+
         # Probability within thresholds (exponential CDF approximation)
         def prob_within(hours: float) -> float:
             if predicted_hours <= 0:
@@ -341,12 +340,12 @@ class EnsembleRegressor:
             "prob_within_24h": round(prob_within(24), 4),
             "sub_model_predictions": {k: round(v, 2) for k, v in sub_models.items()},
         }
-    
+
     def get_agent_stats(self, history_dir: Optional[Path] = None) -> Dict[str, Dict[str, Any]]:
         """Get per-agent completion statistics."""
         data = load_history(history_dir)
         stats: Dict[str, Dict[str, Any]] = {}
-        
+
         for d in data:
             agent = d.get("agent", "unknown")
             hours = d.get("completion_hours", 0)
@@ -354,11 +353,11 @@ class EnsembleRegressor:
                 stats[agent] = {"cards_completed": 0, "total_hours": 0.0}
             stats[agent]["cards_completed"] += 1
             stats[agent]["total_hours"] += hours
-        
+
         for agent in stats:
             n = stats[agent]["cards_completed"]
             stats[agent]["mean_hours"] = round(stats[agent]["total_hours"] / n, 2) if n > 0 else 0.0
-        
+
         return stats
 
 
@@ -386,7 +385,7 @@ def check_drift(model: EnsembleRegressor, threshold_mape: float = 0.20,
         actual = d.get("completion_hours", 0)
         if actual > 0 and expected > 0:
             errors.append(abs(expected - actual) / actual)
-    
+
     current_mape = sum(errors) / len(errors) if errors else 0.0
 
     # Drift is a *relative* deviation from training MAPE. A model trained to

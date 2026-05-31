@@ -7,7 +7,7 @@ Run from repo root:
 """
 
 import sys
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -18,16 +18,15 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from kanban.watcher import (
-    parse_card,
-    write_card,
     all_cards,
+    auto_archive,
     cards_by_status,
     check_blocker,
     enforce_wip_limit,
-    auto_archive,
     now_iso,
+    parse_card,
+    write_card,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

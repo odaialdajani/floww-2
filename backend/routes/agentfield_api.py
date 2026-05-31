@@ -12,8 +12,9 @@ Mounted at /api/agentfield/v1/* via server.py
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, HTTPException
 from typing import Any, Dict
+
+from fastapi import APIRouter, HTTPException, Query
 
 router = APIRouter()
 

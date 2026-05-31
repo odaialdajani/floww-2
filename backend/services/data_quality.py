@@ -8,8 +8,8 @@ compare, log warnings if rel-err > 5%, escalate if > 20%.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
 from datetime import datetime, timezone
+from typing import Any, Dict, List
 
 import numpy as np
 

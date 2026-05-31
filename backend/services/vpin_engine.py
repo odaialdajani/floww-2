@@ -40,9 +40,9 @@ from typing import Any, Dict, Optional, Tuple
 import numpy as np
 
 import services.observability as obs_metrics
-from services.volume_clock import VolumeClock, VolumeBucket
-from services.vpin_cdf import VpinCdfCalculator
 from services.quote_imbalance import QuoteImbalanceTracker
+from services.volume_clock import VolumeBucket, VolumeClock
+from services.vpin_cdf import VpinCdfCalculator
 
 
 class VpinEngine:

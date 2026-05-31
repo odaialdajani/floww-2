@@ -7,8 +7,8 @@ and model training on real data from MongoDB.
 
 from __future__ import annotations
 
-import sys
 import math
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -18,11 +18,10 @@ sys.path.insert(0, str(REPO_BACKEND))
 
 from scripts.train_spy_model import (
     compute_sharpe,
-    walk_forward_cv,
     gate_evaluate,
     prepare_data,
+    walk_forward_cv,
 )
-
 
 # ── Sharpe calculation tests ───────────────────────────────────────────────
 

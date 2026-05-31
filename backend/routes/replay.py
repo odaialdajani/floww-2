@@ -50,8 +50,8 @@ async def start_replay(
     except ValueError:
         raise HTTPException(400, "Invalid datetime format (use ISO 8601)")
 
-    from services.replay_engine import ReplayEngine
     from services.duckdb_engine import db as duckdb_engine
+    from services.replay_engine import ReplayEngine
 
     engine = ReplayEngine(db=duckdb_engine, start=start_dt, end=end_dt, speed=speed)
 

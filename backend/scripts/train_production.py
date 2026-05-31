@@ -14,12 +14,12 @@ Usage:
     cd backend && ./venv/bin/python scripts/train_production.py --tickers SPY --walk-forward-only
 """
 
-import sys
 import json
-import time
 import logging
-from pathlib import Path
+import sys
+import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 import numpy as np
 
@@ -33,7 +33,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("train_production")
 
-from train_real_ml import compute_features, FEATURE_NAMES
+from train_real_ml import FEATURE_NAMES, compute_features
 from train_with_baselines import compute_trading_sharpe
 
 MODEL_DIR = Path(__file__).resolve().parents[1] / "models"
@@ -77,8 +77,8 @@ def main():
 def train_production_model(ticker: str, period: str = "2y") -> dict:
     """Train a production model with walk-forward validation and quality gates."""
     from sklearn.ensemble import RandomForestClassifier
-    from sklearn.preprocessing import StandardScaler
     from sklearn.metrics import accuracy_score
+    from sklearn.preprocessing import StandardScaler
 
     log.info(f"[{ticker}] Computing features ({period})...")
     features_df = compute_features(ticker, period=period)
@@ -153,7 +153,7 @@ def train_production_model(ticker: str, period: str = "2y") -> dict:
             "fold": fold,
             "train_size": len(X_train),
             "test_size": len(X_test),
-            "accuracy": float(accuracy_score(y_test, preds)),
+            "accuracy": float(acc),
             "train_acc": float(accuracy_score(y_train, model.predict(X_train_s))),
         })
 

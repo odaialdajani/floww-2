@@ -18,6 +18,7 @@ os.environ["API_SECRET_KEY"] = "test-secret-key"
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from fastapi.testclient import TestClient
+
 from server import app
 
 

@@ -54,8 +54,8 @@ class ChartEmbeddingIndex:
 
     def embed_text(self, text: str) -> np.ndarray:
         """Embed a text query."""
-        import torch
         import clip
+        import torch
         tokens = clip.tokenize([text])
         with torch.no_grad():
             features = self.model.encode_text(tokens)

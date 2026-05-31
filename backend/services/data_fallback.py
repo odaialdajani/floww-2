@@ -159,7 +159,7 @@ class DataFallbackHandler:
         # Determine which source to try first based on state
         source_order = self._get_source_order()
 
-        successful_source = None
+        _successful_source = None
 
         for source in source_order:
             if source == DataSource.CACHE:
@@ -185,7 +185,7 @@ class DataFallbackHandler:
                 if data is not None:
                     status.record_update(data)
                     status.latency_ms = latency_ms
-                    successful_source = source
+                    _successful_source = source
 
                     # Transition logic based on which source succeeded
                     if source == DataSource.SCHWAB:

@@ -63,7 +63,7 @@ def _get_vol_constructor():
 
 def _get_liquidity(ticker: str):
     if ticker not in _liquidity_metrics:
-        from services.liquidity_metrics import KyleLambda, AmihudIlliquidity
+        from services.liquidity_metrics import AmihudIlliquidity, KyleLambda
         _liquidity_metrics[ticker] = {
             "kyle": KyleLambda(),
             "amihud": AmihudIlliquidity(),

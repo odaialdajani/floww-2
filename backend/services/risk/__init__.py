@@ -11,10 +11,6 @@ Exports:
 """
 
 from .gate import (
-    PreTradeRiskGate,
-    RiskDecision,
-    RiskGate,
-    RiskResult,
     DEFAULT_DAILY_LOSS_PCT,
     DEFAULT_DATA_STALENESS_SEC,
     DEFAULT_IDEMPOTENCY_WINDOW_SEC,
@@ -24,6 +20,10 @@ from .gate import (
     DEFAULT_MIN_ACCOUNT_EQUITY,
     DEFAULT_MIN_CONVICTION,
     DEFAULT_MIN_SENTIMENT_Z,
+    PreTradeRiskGate,
+    RiskDecision,
+    RiskGate,
+    RiskResult,
 )
 from .killswitch import KillSwitch
 from .sizer import KellySizer

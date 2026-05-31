@@ -18,12 +18,11 @@ import logging
 import os
 from typing import Any, Dict, Optional
 
+import aiohttp
 from fastapi import APIRouter, HTTPException, Query
 
-import aiohttp
-
+from services.alpha_vantage_client import CircuitBreakerOpenError, circuit
 from services.rate_limit_tracker import av_rate_tracker
-from services.alpha_vantage_client import circuit, CircuitBreakerOpenError
 
 logger = logging.getLogger(__name__)
 

@@ -33,7 +33,6 @@ from services.data_fallback import (
     SourceStatus,
 )
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────
 
 

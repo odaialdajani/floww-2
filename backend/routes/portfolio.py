@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.get("/portfolio/{name}")
 async def get_portfolio(name: str, spot: float = Query(0), iv: float = Query(0.15)):
-    from server import db, calc_portfolio_summary
+    from server import calc_portfolio_summary, db
     portfolio = await db.portfolios.find_one({"name": name}, {"_id": 0})
     if not portfolio:
         raise HTTPException(404, f"Portfolio '{name}' not found")
@@ -24,8 +24,9 @@ async def get_portfolio(name: str, spot: float = Query(0), iv: float = Query(0.1
 
 @router.post("/portfolio/{name}/position")
 async def add_position(name: str, position: dict):
-    from server import db
     from datetime import datetime, timezone
+
+    from server import db
     position["added_at"] = datetime.now(timezone.utc).isoformat()
     result = await db.portfolios.update_one(
         {"name": name},
@@ -53,7 +54,7 @@ async def remove_position(name: str, index: int = Path(..., ge=0)):
 
 @router.get("/portfolio/{name}/scenario")
 async def scenario(name: str, spot: float = Query(0), iv: float = Query(0.15)):
-    from server import db, calc_portfolio_scenario
+    from server import calc_portfolio_scenario, db
     portfolio = await db.portfolios.find_one({"name": name})
     if not portfolio:
         raise HTTPException(404, f"Portfolio '{name}' not found")
@@ -63,7 +64,7 @@ async def scenario(name: str, spot: float = Query(0), iv: float = Query(0.15)):
 
 @router.post("/portfolio/{name}/hedge")
 async def hedge(name: str, hedge_request: dict):
-    from server import db, calc_hedge_recommendation
+    from server import calc_hedge_recommendation, db
     portfolio = await db.portfolios.find_one({"name": name})
     if not portfolio:
         raise HTTPException(404, f"Portfolio '{name}' not found")

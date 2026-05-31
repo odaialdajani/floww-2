@@ -16,7 +16,6 @@ Coverage:
 import sys
 from pathlib import Path
 
-
 # Ensure backend/ is on path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -25,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 # Test 1: ingestion_messages_total increments
 # ---------------------------------------------------------------------------
 def test_ingestion_counter_increments():
-    from services.observability import ingestion_messages_total, get_metrics_bytes
+    from services.observability import get_metrics_bytes, ingestion_messages_total
     ingestion_messages_total.labels(symbol="SPY", kind="tick").inc()
     ingestion_messages_total.labels(symbol="SPY", kind="tick").inc()
     ingestion_messages_total.labels(symbol="QQQ", kind="tick").inc()
@@ -38,7 +37,7 @@ def test_ingestion_counter_increments():
 # Test 2: vpin_current gauge sets per ticker
 # ---------------------------------------------------------------------------
 def test_vpin_gauge_sets():
-    from services.observability import vpin_current, get_metrics_bytes
+    from services.observability import get_metrics_bytes, vpin_current
     vpin_current.labels(ticker="SPY").set(0.72)
     vpin_current.labels(ticker="QQQ").set(0.35)
     output = get_metrics_bytes().decode()
@@ -50,7 +49,7 @@ def test_vpin_gauge_sets():
 # Test 3: qi_zscore_current gauge sets
 # ---------------------------------------------------------------------------
 def test_qi_zscore_gauge_sets():
-    from services.observability import qi_zscore_current, get_metrics_bytes
+    from services.observability import get_metrics_bytes, qi_zscore_current
     qi_zscore_current.labels(ticker="SPY").set(1.85)
     output = get_metrics_bytes().decode()
     assert 'floww_qi_zscore_current{ticker="SPY"} 1.85' in output
@@ -60,7 +59,7 @@ def test_qi_zscore_gauge_sets():
 # Test 4: trinity_score gauge sets
 # ---------------------------------------------------------------------------
 def test_trinity_score_gauge_sets():
-    from services.observability import trinity_score, get_metrics_bytes
+    from services.observability import get_metrics_bytes, trinity_score
     trinity_score.set(67.5)
     output = get_metrics_bytes().decode()
     assert "floww_trinity_score 67.5" in output
@@ -70,7 +69,7 @@ def test_trinity_score_gauge_sets():
 # Test 5: anomaly_score gauge and anomaly_detected_total counter
 # ---------------------------------------------------------------------------
 def test_anomaly_metrics():
-    from services.observability import anomaly_score, anomaly_detected_total, get_metrics_bytes
+    from services.observability import anomaly_detected_total, anomaly_score, get_metrics_bytes
     anomaly_score.labels(ticker="SPY").set(0.0042)
     anomaly_detected_total.inc()
     anomaly_detected_total.inc()
@@ -101,7 +100,7 @@ def test_api_duration_histogram():
 # Test 7: websocket_connections gauge inc/dec
 # ---------------------------------------------------------------------------
 def test_websocket_gauge():
-    from services.observability import websocket_connections, get_metrics_bytes
+    from services.observability import get_metrics_bytes, websocket_connections
     websocket_connections.labels(topic="ticks").inc()
     websocket_connections.labels(topic="ticks").inc()
     websocket_connections.labels(topic="flow").inc()
@@ -127,8 +126,9 @@ def test_duckdb_queue_depth():
 # Test 9: duckdb_batch_size histogram
 # ---------------------------------------------------------------------------
 def test_duckdb_batch_size_histogram():
-    from services.observability import duckdb_batch_size, get_metrics_bytes
     import re
+
+    from services.observability import duckdb_batch_size, get_metrics_bytes
     # Snapshot count BEFORE observing — Prometheus REGISTRY is shared
     # across tests, so we can't assume a clean starting state.
     output_before = get_metrics_bytes().decode()
@@ -149,7 +149,7 @@ def test_duckdb_batch_size_histogram():
 # Test 10: schwab_token_expires_in_seconds gauge
 # ---------------------------------------------------------------------------
 def test_schwab_token_ttl_gauge():
-    from services.observability import schwab_token_expires_in_seconds, get_metrics_bytes
+    from services.observability import get_metrics_bytes, schwab_token_expires_in_seconds
     schwab_token_expires_in_seconds.set(900)
     output = get_metrics_bytes().decode()
     assert "floww_schwab_token_expires_in_seconds 900" in output
@@ -162,7 +162,7 @@ def test_schwab_token_ttl_gauge():
 # Test 11: /metrics endpoint returns valid Prometheus format
 # ---------------------------------------------------------------------------
 def test_metrics_endpoint_returns_prometheus_format():
-    from services.observability import vpin_current, get_metrics_bytes, get_metrics_content_type
+    from services.observability import get_metrics_bytes, get_metrics_content_type, vpin_current
     vpin_current.labels(ticker="SPY").set(0.5)
     data = get_metrics_bytes()
     text = data.decode()
@@ -179,8 +179,8 @@ def test_metrics_endpoint_returns_prometheus_format():
 # Test 12: VPIN engine emits metrics on bucket finalize
 # ---------------------------------------------------------------------------
 def test_vpin_engine_emits_metrics():
-    from services.vpin_engine import VpinEngine
     from services.observability import get_metrics_bytes
+    from services.vpin_engine import VpinEngine
 
     engine = VpinEngine(bucket_size=100.0, window=10, ticker="SPY")
     # Feed enough volume to trigger bucket finalize

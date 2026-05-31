@@ -14,8 +14,8 @@ import signal
 from datetime import datetime, timezone
 from typing import Optional
 
-from services.yoptions_fetcher import fetch_all_chains
 from services.yfinance_fetcher import fetch_and_store, get_duckdb_conn
+from services.yoptions_fetcher import fetch_all_chains
 
 logger = logging.getLogger(__name__)
 

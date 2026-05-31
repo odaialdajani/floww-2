@@ -23,12 +23,11 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict
 
+import joblib
 import numpy as np
 import pandas as pd
-import yfinance as yf
-import joblib
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parent))
@@ -63,18 +62,14 @@ def compute_features(ticker: str, period: str = "2y") -> pd.DataFrame:
     """Compute technical features from yfinance OHLCV + 3-class target."""
     # Import compute_features from train_real_data_ml
     # Reuse the existing feature computation
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("train_real_data_ml", SCRIPT_DIR / "train_real_data_ml.py")
-    mod = importlib.util.load_from_spec = spec
-    # Actually, let's just import it properly
     from scripts.train_real_data_ml import compute_features as _orig_compute
     return _orig_compute(ticker, period=period)
 
 
 def walk_forward_cv(model, X, y, n_splits=5, embargo=5):
     """Walk-forward CV with embargo. Returns dict of metrics."""
-    from sklearn.metrics import accuracy_score
     from sklearn.base import clone
+    from sklearn.metrics import accuracy_score
 
     fold_size = len(X) // (n_splits + 1)
     scores, train_scores, sharpe_scores = [], [], []
@@ -118,8 +113,8 @@ def train_ticker(ticker: str, output_dir: Path, quick: bool = False) -> Dict:
     """Train balanced models for a ticker. Returns results dict."""
     from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
     from sklearn.linear_model import LogisticRegression
-    from sklearn.preprocessing import StandardScaler
     from sklearn.metrics import accuracy_score
+    from sklearn.preprocessing import StandardScaler
 
     log.info("=" * 60)
     log.info("Training %s (balanced, quick=%s)...", ticker, quick)
@@ -168,7 +163,7 @@ def train_ticker(ticker: str, output_dir: Path, quick: bool = False) -> Dict:
             random_state=42, n_jobs=-1,
         ),
         "logistic_balanced": LogisticRegression(
-            C=0.1, max_iter=1000, 
+            C=0.1, max_iter=1000,
             class_weight="balanced", random_state=42,
         ),
     }

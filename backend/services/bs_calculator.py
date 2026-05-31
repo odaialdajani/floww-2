@@ -23,15 +23,13 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Dict
 
 import numpy as np
 
 from services.numba_greeks import compute_all_greeks
-
-
-import logging
 
 logger = logging.getLogger(__name__)
 class BSCalculator:

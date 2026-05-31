@@ -31,11 +31,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 os.environ.setdefault("TESTING", "1")
 
+from services.data_fallback import DataFallbackHandler, DataSource, FallbackConfig
 from services.duckdb_engine import DuckDBEngine
 from services.mock_schwab_feed import MockSchwabFeed
 from services.schwab_streamer import SchwabStreamer
-from services.data_fallback import DataFallbackHandler, DataSource, FallbackConfig
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
 

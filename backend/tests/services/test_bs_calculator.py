@@ -21,7 +21,6 @@ sys.path.insert(0, str(REPO_BACKEND))
 
 from services.bs_calculator import BSCalculator
 
-
 # ── Reference values (from AmirDehkordi/OptionGreeks / standard BS tables) ──
 # S=100, K=100, T=0.25, sigma=0.20, r=0.05, q=0.0
 # Call: delta~0.5775, gamma~0.0394, theta~-0.0231/day, vega~0.1974

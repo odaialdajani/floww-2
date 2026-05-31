@@ -9,7 +9,7 @@ Provides persistent memory for:
 """
 
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ def remember_trade(ticker: str, trade_data: Dict[str, Any]) -> Optional[str]:
     client = get_memory_client()
     if not client:
         return None
-    
+
     try:
         message = f"Trade: {ticker} {trade_data.get('type', 'unknown')} at {trade_data.get('entry_price', 0)}"
         result = client.add(
@@ -46,7 +46,7 @@ def remember_gex_observation(ticker: str, observation: str, metadata: Optional[D
     client = get_memory_client()
     if not client:
         return None
-    
+
     try:
         result = client.add(
             observation,
@@ -65,7 +65,7 @@ def recall_trading_context(ticker: str, query: str = "") -> List[Dict[str, Any]]
     client = get_memory_client()
     if not client:
         return []
-    
+
     try:
         search_query = f"{ticker} {query}" if query else ticker
         results = client.search(search_query, user_id="nav", limit=10)
@@ -80,9 +80,9 @@ def get_trading_summary(ticker: str) -> str:
     memories = recall_trading_context(ticker)
     if not memories:
         return f"No previous memories for {ticker}."
-    
+
     summary = f"## Trading Memory for {ticker}\n\n"
     for i, mem in enumerate(memories[:5], 1):
         summary += f"{i}. {mem.get('memory', 'N/A')}\n"
-    
+
     return summary

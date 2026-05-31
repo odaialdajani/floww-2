@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import logging
+
 logger = logging.getLogger(__name__)
 
 """
@@ -9,8 +10,8 @@ Usage: python cron_runner.py <job_name>
 """
 
 import asyncio
-import sys
 import os
+import sys
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -21,9 +22,9 @@ async def main():
         logger.info("Usage: python cron_runner.py <job_name>")
         logger.info("Available jobs: data-collection, morning-briefing, retrain-models, health-check")
         sys.exit(1)
-    
+
     job_name = sys.argv[1]
-    
+
     if job_name == "data-collection":
         from cron_config import collect_data_job
         await collect_data_job()

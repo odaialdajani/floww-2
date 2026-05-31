@@ -6,17 +6,18 @@ Tests for the live-trading state machine with circuit breakers.
 """
 
 import os
+from datetime import datetime, timedelta, timezone
+
 import pytest
-from datetime import datetime, timezone, timedelta
 
 # Set dev mode for testing
 os.environ.setdefault("TRADING_TOTP_SECRET", "")
 os.environ.setdefault("TRADING_EMAIL_CODE", "")
 
 from services.live_trading_switch import (
+    CircuitBreakerReason,
     LiveTradingSwitch,
     TradingState,
-    CircuitBreakerReason,
 )
 
 

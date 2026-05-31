@@ -47,7 +47,7 @@ async def record_prediction(
     Fetches current features, runs inference, stores prediction in MongoDB.
     The outcome will be filled in later when next-day return is known.
     """
-    from services.ml.inference import inference_engine, CLASS_LABELS
+    from services.ml.inference import CLASS_LABELS, inference_engine
 
     ticker = ticker.upper()
 

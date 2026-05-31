@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import logging
+
 logger = logging.getLogger(__name__)
 
 """
@@ -222,7 +223,7 @@ if __name__ == "__main__":
 
 def format_rebalance_proposal(recommendations: list[dict], bottleneck: dict) -> str:
     """Format rebalance proposal for Nav."""
-    lines = [
+    _lines = [
         f"# Rebalance Proposal — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
         "",
         f"**Bottleneck:** {bottleneck['agent']}",

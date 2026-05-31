@@ -8,11 +8,11 @@ Sets up scheduled tasks:
 4. Health check every hour
 """
 
+# Add project root to path
+import logging
 import os
 import sys
 
-# Add project root to path
-import logging
 logger = logging.getLogger(__name__)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -20,39 +20,42 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 async def collect_data_job():
     """Collect GEX data for all tickers."""
-    from data_collector import collect_multiple_tickers
     from dotenv import load_dotenv
+
+    from data_collector import collect_multiple_tickers
     load_dotenv()
-    
+
     tickers = os.environ.get("COLLECT_TICKERS", "SPY,QQQ,IWM,DIA").split(",")
     results = await collect_multiple_tickers(tickers)
-    
+
     success = sum(1 for r in results if r.get("status") == "stored")
     logger.info(f"Data collection: {success}/{len(tickers)} tickers stored")
 
 
 async def morning_briefing_job():
     """Send morning briefing email."""
-    from morning_briefing import send_briefing_email
     from dotenv import load_dotenv
+
+    from morning_briefing import send_briefing_email
     load_dotenv()
-    
+
     to_email = os.environ.get("BRIEFING_EMAIL", "")
     if not to_email:
         logger.info("No briefing email configured")
         return
-    
+
     result = await send_briefing_email(to_email, "SPY")
     logger.info(f"Morning briefing: {result.get('status', 'unknown')}")
 
 
 async def retrain_models_job():
     """Retrain ML models on latest data."""
-    from ml_price_prediction import train_price_direction_model
     from dotenv import load_dotenv
 
+    from ml_price_prediction import train_price_direction_model
+
     load_dotenv()
-    
+
     tickers = os.environ.get("ML_TICKERS", "SPY,QQQ").split(",")
     for ticker in tickers:
         result = await train_price_direction_model(ticker)

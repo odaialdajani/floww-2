@@ -25,11 +25,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
-from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
+from motor.motor_asyncio import AsyncIOMotorClient
 
+from services.ml.inference import MODEL_REGISTRY, InferenceEngine
 from services.ml.registry import ModelRegistry
-from services.ml.inference import InferenceEngine, MODEL_REGISTRY
 
 log = logging.getLogger("ml.dashboard")
 

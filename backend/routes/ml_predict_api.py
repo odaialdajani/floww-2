@@ -188,8 +188,8 @@ async def ensemble_prediction(
         "computed_at": "2026-05-24T..."
     }
     """
-    from services.ml.inference import inference_engine, MODEL_REGISTRY
     from services.ml import DegenerateModelError
+    from services.ml.inference import MODEL_REGISTRY, inference_engine
 
     ticker_list = [t.strip().upper() for t in tickers.split(",")]
     results = {}
@@ -264,7 +264,7 @@ async def trigger_training(
     job_id = str(uuid.uuid4())[:8]
 
     # Run training in background (deferred import to avoid circular dep)
-    from server import _logged_task, _background_tasks
+    from server import _background_tasks, _logged_task
     _t = asyncio.create_task(
         _logged_task(
             _run_training_job(job_id, ticker, days, n_splits),
@@ -287,11 +287,15 @@ async def _run_training_job(job_id: str, ticker: str, days: int, n_splits: int):
     """Background training job."""
     logger.info(f"Training job {job_id}: starting for {ticker}")
     try:
-        from scripts.train_spy_ml import (
-            fetch_spot_history, fetch_options_chain_on_date,
-            build_dataset, train_walk_forward, save_model,
-        )
         from datetime import datetime
+
+        from scripts.train_spy_ml import (
+            build_dataset,
+            fetch_options_chain_on_date,
+            fetch_spot_history,
+            save_model,
+            train_walk_forward,
+        )
 
         price_df = fetch_spot_history(ticker, days)
         live_chain = None

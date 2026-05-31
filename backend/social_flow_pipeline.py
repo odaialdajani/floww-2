@@ -13,11 +13,10 @@ Also handles X/Twitter data collection via xurl (when authenticated).
 """
 
 import json
-import time
 import logging
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, field, asdict
-
+import time
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,7 @@ class TwitterCollector:
     Collects tweets using xurl CLI.
     Requires xurl to be authenticated (user must set up X API credentials).
     """
-    
+
     def __init__(self):
         self.options_accounts = [
             "unusual_whales", "OptionsFlow", "squeezetrade",
@@ -47,7 +46,7 @@ class TwitterCollector:
             "0DTE options",
             "gamma squeeze",
         ]
-    
+
     def _run_xurl(self, args: List[str]) -> Optional[str]:
         """Run xurl command and return output."""
         import subprocess
@@ -66,20 +65,20 @@ class TwitterCollector:
         except subprocess.TimeoutExpired:
             logger.warning("xurl command timed out")
             return None
-    
+
     def is_authenticated(self) -> bool:
         """Check if xurl is authenticated."""
         output = self._run_xurl(["auth", "status"])
         if output and "oauth2" in output.lower():
             return True
         return False
-    
+
     def search_tweets(self, query: str, count: int = 20) -> List[Dict]:
         """Search for tweets using xurl."""
         output = self._run_xurl(["search", query, "-n", str(count)])
         if not output:
             return []
-        
+
         try:
             data = json.loads(output)
             tweets = []
@@ -97,13 +96,13 @@ class TwitterCollector:
         except json.JSONDecodeError:
             logger.warning(f"Failed to parse xurl search output: {output[:200]}")
             return []
-    
+
     def get_user_timeline(self, username: str, count: int = 20) -> List[Dict]:
         """Get user timeline using xurl."""
         output = self._run_xurl(["timeline", "--of", username, "-n", str(count)])
         if not output:
             return []
-        
+
         try:
             data = json.loads(output)
             tweets = []
@@ -120,11 +119,11 @@ class TwitterCollector:
             return tweets
         except json.JSONDecodeError:
             return []
-    
+
     def collect_options_sentiment(self, ticker: str = "SPY") -> List[Dict]:
         """Collect options-related tweets for a ticker."""
         all_tweets = []
-        
+
         # Search for ticker + options
         queries = [
             f"${ticker} options",
@@ -132,12 +131,12 @@ class TwitterCollector:
             f"{ticker} unusual options",
             f"{ticker} options flow",
         ]
-        
+
         for q in queries:
             tweets = self.search_tweets(q, count=10)
             all_tweets.extend(tweets)
             time.sleep(1)  # Rate limit
-        
+
         return all_tweets
 
 
@@ -204,7 +203,7 @@ def save_report(report: SocialFlowReport, path: str):
         data["sentiment"] = asdict(report.sentiment)
     if data.get("flow_signals"):
         data["flow_signals"] = [asdict(s) for s in report.flow_signals]
-    
+
     with open(path, "w") as f:
         json.dump(data, f, indent=2, default=str)
     logger.info(f"Report saved to {path}")

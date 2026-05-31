@@ -27,9 +27,9 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -395,7 +395,7 @@ class ExecutionEngine:
         kyle_impact_per_share = self.kyle_lambda.estimate_impact(1.0)
 
         slices = []
-        cumulative_cost = 0.0
+        _cumulative_cost = 0.0
         for i, shares in enumerate(trajectory):
             if shares < 0.5:
                 continue

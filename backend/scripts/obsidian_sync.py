@@ -18,17 +18,16 @@ Environment:
     MEM0_API_KEY — optional, for mem0 cross-referencing
 """
 
-import os
-import json
-import hashlib
-import time
 import argparse
 import difflib
-import re
+import hashlib
+import json
 import logging
-from pathlib import Path
+import os
+import re
+import time
 from datetime import datetime
-
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 # ── Configuration ──────────────────────────────────────────────────────────
@@ -345,8 +344,8 @@ def main():
 def watch_loop(sync: ObsidianSync, interval=30):
     """Run sync in a watch loop."""
     try:
-        from watchdog.observers import Observer
         from watchdog.events import FileSystemEventHandler
+        from watchdog.observers import Observer
 
         class SyncHandler(FileSystemEventHandler):
             def __init__(self, sync):

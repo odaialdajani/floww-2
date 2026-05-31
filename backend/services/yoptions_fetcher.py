@@ -25,11 +25,11 @@ except ImportError:
     HAS_YOPTIONS = False
 
 from tenacity import (
+    before_sleep_log,
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
-    before_sleep_log,
 )
 
 logger = logging.getLogger(__name__)
@@ -228,5 +228,5 @@ if __name__ == "__main__":
     if not df.empty:
         logger.info(df.head())
         logger.info(f"\nColumns: {list(df.columns)}")
-        logger.info(f"\nSample Greeks:")
+        logger.info("\nSample Greeks:")
         logger.info(df[["strike", "delta", "gamma", "theta", "vega"]].head(10))

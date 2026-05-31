@@ -9,12 +9,12 @@ Features:
 - Sentry integration (optional)
 """
 
-import os
 import logging
+import os
 import uuid
-from typing import Optional, Dict, Any
-from datetime import datetime, timezone
 from contextvars import ContextVar
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
 # Context variable for request tracking
 request_id_var: ContextVar[str] = ContextVar("request_id", default="")
@@ -28,27 +28,27 @@ MAX_ERROR_LOG = 1000
 def setup_logging(level: str = "INFO") -> None:
     """Set up structured logging for the application."""
     log_level = getattr(logging, level.upper(), logging.INFO)
-    
+
     # Console handler with structured format
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(StructuredFormatter())
-    
+
     # File handler for persistent logs
     log_dir = os.path.join(os.path.dirname(__file__), "..", "logs")
     os.makedirs(log_dir, exist_ok=True)
-    
+
     file_handler = logging.FileHandler(
         os.path.join(log_dir, "app.log"),
         encoding="utf-8",
     )
     file_handler.setFormatter(StructuredFormatter())
-    
+
     # Configure root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
     root_logger.addHandler(console_handler)
     root_logger.addHandler(file_handler)
-    
+
     # Reduce noise from third-party libraries
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -70,9 +70,9 @@ def get_request_id() -> str:
 def log_error(error_type: str, message: str, data: Optional[Dict[str, Any]] = None) -> None:
     """Log an error and track it in the aggregation."""
     global _error_counts, _error_log
-    
+
     _error_counts[error_type] = _error_counts.get(error_type, 0) + 1
-    
+
     error_entry = {
         "type": error_type,
         "message": message,
@@ -81,13 +81,13 @@ def log_error(error_type: str, message: str, data: Optional[Dict[str, Any]] = No
         "request_id": get_request_id(),
         "count": _error_counts[error_type],
     }
-    
+
     _error_log.append(error_entry)
-    
+
     # Trim log if too large
     if len(_error_log) > MAX_ERROR_LOG:
         _error_log = _error_log[-MAX_ERROR_LOG:]
-    
+
     # Log to standard logger
     logger = logging.getLogger("error_tracker")
     logger.error(f"[{error_type}] {message}", extra={"extra_data": data})

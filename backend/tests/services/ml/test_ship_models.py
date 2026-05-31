@@ -2,10 +2,11 @@
 Integration tests: load SHIP-trained models, verify predictions are sane.
 """
 import json
-import pytest
+from pathlib import Path
+
 import joblib
 import numpy as np
-from pathlib import Path
+import pytest
 
 MODEL_DIR = Path(__file__).resolve().parents[3] / "models"
 

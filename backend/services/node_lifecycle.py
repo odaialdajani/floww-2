@@ -17,11 +17,10 @@ modeling the idea that repeated tests of a gamma level weaken it.
 from __future__ import annotations
 
 import math
+from collections import deque
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
-from datetime import datetime, timezone
-from collections import deque
-
 
 
 class NodeState(Enum):
@@ -122,7 +121,7 @@ class NodeLifecycleTracker:
 
         Returns dict with active nodes, new taps, expired nodes, summary.
         """
-        current_strikes = {strike for strike, _ in king_nodes}
+        _current_strikes = {strike for strike, _ in king_nodes}
 
         # Create new nodes for newly detected king nodes
         for strike, gex_value in king_nodes:

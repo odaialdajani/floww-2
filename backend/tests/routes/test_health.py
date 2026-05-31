@@ -107,6 +107,7 @@ def test_ws_manager_check():
 
 def test_timeout_handling():
     import asyncio
+
     import routes.health as health_mod
 
     async def _slow():

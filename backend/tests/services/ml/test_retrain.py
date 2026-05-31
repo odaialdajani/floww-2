@@ -3,9 +3,10 @@ tests/services/ml/test_retrain.py
 
 Tests for the auto-retrain orchestrator.
 """
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from services.ml.retrain import RetrainOrchestrator
 

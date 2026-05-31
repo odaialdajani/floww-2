@@ -5,8 +5,9 @@ Tests for the Dash UI components.
 Each tab renders without crashing on empty/malformed data.
 Color coding logic is deterministic.
 """
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 

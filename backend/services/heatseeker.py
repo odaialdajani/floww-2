@@ -26,7 +26,6 @@ from datetime import datetime
 from statistics import median
 from typing import Any, Dict, List, Optional
 
-
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------

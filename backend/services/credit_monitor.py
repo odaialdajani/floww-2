@@ -20,6 +20,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
+
 @dataclass
 class CreditConfig:
     """Configuration for credit monitoring."""
@@ -114,7 +115,7 @@ class CreditMonitor:
     def check_alerts(self) -> List[Dict[str, Any]]:
         """Check all alert conditions. Returns list of new alerts."""
         alerts = []
-        now = time.time()
+        _now = time.time()
 
         # Credit burn alerts
         burn_pct = self.state.burn_pct

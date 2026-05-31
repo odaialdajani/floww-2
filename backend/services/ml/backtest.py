@@ -25,6 +25,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 
+from services.ml import DegenerateModelError
 from services.ml.inference import (
     DOWN,
     HOLD,
@@ -32,7 +33,6 @@ from services.ml.inference import (
     InferenceEngine,
     compute_live_features,
 )
-from services.ml import DegenerateModelError
 
 log = logging.getLogger("ml.backtest")
 
@@ -86,18 +86,18 @@ class BacktestReport:
         lines = [
             f"=== Backtest Report: {self.ticker} ===",
             f"Model: {self.model_type} | Period: {self.period} | Days: {self.n_days}",
-            f"",
-            f"Accuracy:",
+            "",
+            "Accuracy:",
             f"  Overall:        {self.overall_accuracy:.1%}",
             f"  UP signals:     {self.up_accuracy:.1%}",
             f"  DOWN signals:   {self.down_accuracy:.1%}",
             f"  HOLD fraction:  {self.hold_fraction:.1%}",
-            f"",
-            f"Confidence Calibration:",
+            "",
+            "Confidence Calibration:",
             f"  High conf (>.65): {self.high_conf_accuracy:.1%} ({self.high_conf_fraction:.1%} of signals)",
             f"  Low conf  (<=.55): {self.low_conf_accuracy:.1%}",
-            f"",
-            f"Strategy (go long/short on non-HOLD signals):",
+            "",
+            "Strategy (go long/short on non-HOLD signals):",
             f"  Sharpe:         {self.strategy_sharpe:.2f}",
             f"  Total return:   {self.strategy_total_return:.1%}",
             f"  Max drawdown:   {self.strategy_max_drawdown:.1%}",

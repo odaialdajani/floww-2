@@ -12,8 +12,8 @@ Coverage:
     - Step timeout handling
 """
 
-import sys
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -67,7 +67,7 @@ async def test_executor_missing_runbook():
 
 @pytest.mark.asyncio
 async def test_executor_kill_switch():
-    from services.runbook_executor import RunbookExecutor, KILL_SWITCH_PATH
+    from services.runbook_executor import KILL_SWITCH_PATH, RunbookExecutor
     executor = RunbookExecutor()
     # Create kill switch
     with open(KILL_SWITCH_PATH, "w") as f:
@@ -82,7 +82,7 @@ async def test_executor_kill_switch():
 
 @pytest.mark.asyncio
 async def test_executor_circuit_breaker():
-    from services.runbook_executor import RunbookExecutor, MAX_FAILURES
+    from services.runbook_executor import MAX_FAILURES, RunbookExecutor
     executor = RunbookExecutor()
     # Manually set failure count
     executor._registry._failure_counts["high_latency"] = MAX_FAILURES
@@ -93,7 +93,7 @@ async def test_executor_circuit_breaker():
 
 @pytest.mark.asyncio
 async def test_executor_reset_circuit_breaker():
-    from services.runbook_executor import RunbookExecutor, MAX_FAILURES
+    from services.runbook_executor import MAX_FAILURES, RunbookExecutor
     executor = RunbookExecutor()
     executor._registry._failure_counts["high_latency"] = MAX_FAILURES
     executor.reset_circuit_breaker("high_latency")

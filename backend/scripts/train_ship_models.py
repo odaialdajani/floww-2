@@ -16,15 +16,21 @@ Usage:
     cd backend && python3 scripts/train_ship_models.py --ticker all --save --output-dir models/
 """
 from __future__ import annotations
-import argparse, json, logging, warnings
+
+import argparse
+import json
+import logging
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 
-import joblib, numpy as np, pandas as pd
+import joblib
+import numpy as np
+import pandas as pd
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score
+from sklearn.preprocessing import StandardScaler
 
 warnings.filterwarnings("ignore")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

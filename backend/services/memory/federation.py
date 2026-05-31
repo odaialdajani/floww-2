@@ -10,12 +10,12 @@ For production with multiple machines, replace the file-based queue
 with Upstash Redis pub-sub (channel: "mem0_writes").
 """
 
-import json
-import os
-import time
 import hashlib
+import json
 import logging
+import os
 import threading
+import time
 from pathlib import Path
 
 try:

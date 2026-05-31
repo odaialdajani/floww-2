@@ -77,6 +77,7 @@ def test_history_spy(client):
     with a stub whose ``find`` returns an async cursor over a single doc.
     """
     from unittest.mock import patch
+
     import server as srv
 
     class _AsyncCursor:

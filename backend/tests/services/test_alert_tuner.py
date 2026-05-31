@@ -15,12 +15,11 @@ Coverage:
 import sys
 from pathlib import Path
 
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 
 def test_tuner_auto_label():
-    from services.alert_tuner import AlertTuner, AlertRecord
+    from services.alert_tuner import AlertRecord, AlertTuner
     alerts = [
         AlertRecord("test", 1700000000.0, "queue", 9000.0, 9500.0),
         AlertRecord("test", 1700000300.0, "queue", 9000.0, 1000.0),
@@ -32,7 +31,7 @@ def test_tuner_auto_label():
 
 
 def test_tuner_no_ground_truth():
-    from services.alert_tuner import AlertTuner, AlertRecord
+    from services.alert_tuner import AlertRecord, AlertTuner
     alerts = [AlertRecord("test", 1700000000.0, "queue", 9000.0, 9500.0)]
     tuner = AlertTuner(alerts)
     result = tuner.analyze_precision("test")
@@ -40,7 +39,7 @@ def test_tuner_no_ground_truth():
 
 
 def test_tuner_analyze_precision():
-    from services.alert_tuner import AlertTuner, AlertRecord
+    from services.alert_tuner import AlertRecord, AlertTuner
     alerts = [
         AlertRecord("test", 1700000000.0 + i * 300, "queue", 9000.0, v)
         for i, (v, tp) in enumerate([
@@ -80,7 +79,7 @@ def test_tuner_fp_reduction():
 
 
 def test_tuner_not_enough_data():
-    from services.alert_tuner import AlertTuner, AlertRecord
+    from services.alert_tuner import AlertRecord, AlertTuner
     alerts = [AlertRecord("test", 1700000000.0 + i * 300, "queue", 9000.0, 9500.0, True) for i in range(3)]
     gt = {1700000000.0 + i * 300: True for i in range(3)}
     tuner = AlertTuner(alerts, gt)

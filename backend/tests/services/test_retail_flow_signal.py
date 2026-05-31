@@ -20,8 +20,8 @@ REPO_BACKEND = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_BACKEND))
 
 from services.backtest.retail_flow_signal import (
-    RetailFlowSignal,
     RegimeFilter,
+    RetailFlowSignal,
 )
 from services.backtest.signals import Action, Position
 

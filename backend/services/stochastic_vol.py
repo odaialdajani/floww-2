@@ -48,8 +48,8 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-from scipy.optimize import minimize
 from scipy.interpolate import RectBivariateSpline
+from scipy.optimize import minimize
 
 logger = logging.getLogger(__name__)
 

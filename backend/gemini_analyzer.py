@@ -10,9 +10,9 @@ Uses Google Gemini API for:
 Free tier: Gemini 1.5 Flash via GitHub Student Pack
 """
 
-import os
 import logging
-from typing import Optional, Dict, Any, List
+import os
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +21,11 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 class GeminiAnalyzer:
     """AI-powered trade and market analysis using Gemini."""
-    
+
     def __init__(self):
         self.enabled = bool(GEMINI_API_KEY)
         self._client = None
-    
+
     def _get_client(self):
         """Lazy-initialize Gemini client."""
         if self._client is None and self.enabled:
@@ -36,7 +36,7 @@ class GeminiAnalyzer:
                 logger.warning("google-genai not installed. Run: pip install google-genai")
                 self.enabled = False
         return self._client
-    
+
     async def analyze_trade(self, trade: Dict[str, Any], market_context: Optional[Dict[str, Any]] = None) -> Optional[str]:
         """
         Analyze a trade from the journal.
@@ -45,7 +45,7 @@ class GeminiAnalyzer:
         client = self._get_client()
         if not client:
             return None
-        
+
         prompt = f"""You are an expert options trading analyst. Analyze this trade:
 
 Trade Details:
@@ -70,14 +70,14 @@ Trade Details:
 - Call Wall: {market_context.get('call_wall', 'N/A')}
 - Put Wall: {market_context.get('put_wall', 'N/A')}
 """
-        
+
         prompt += """
 Provide a concise analysis (2-3 sentences):
 1. Was the trade aligned with the GEX regime?
 2. What could have been done better?
 3. Key takeaway for future trades.
 """
-        
+
         try:
             response = client.models.generate_content(
                 model='gemini-1.5-flash',
@@ -89,7 +89,7 @@ Provide a concise analysis (2-3 sentences):
         except Exception as e:
             logger.warning(f"Gemini API error: {e}")
             return None
-    
+
     async def analyze_regime(self, regime_data: Dict[str, Any]) -> Optional[str]:
         """
         Generate a natural language summary of the current market regime.
@@ -97,7 +97,7 @@ Provide a concise analysis (2-3 sentences):
         client = self._get_client()
         if not client:
             return None
-        
+
         prompt = f"""You are an expert options market analyst. Summarize the current market regime:
 
 - GEX Regime: {regime_data.get('gex_regime', 'Unknown')}
@@ -112,7 +112,7 @@ Provide a concise analysis (2-3 sentences):
 
 Provide a concise 2-3 sentence market summary and 1-2 trade ideas appropriate for this regime.
 """
-        
+
         try:
             response = client.models.generate_content(
                 model='gemini-1.5-flash',
@@ -124,7 +124,7 @@ Provide a concise 2-3 sentence market summary and 1-2 trade ideas appropriate fo
         except Exception as e:
             logger.warning(f"Gemini API error: {e}")
             return None
-    
+
     async def summarize_day(self, trades: List[Dict], pnl: float, regime: str) -> Optional[str]:
         """
         Generate an end-of-day trading summary.
@@ -132,7 +132,7 @@ Provide a concise 2-3 sentence market summary and 1-2 trade ideas appropriate fo
         client = self._get_client()
         if not client:
             return None
-        
+
         trade_summaries = []
         for t in trades[:10]:  # Max 10 trades
             pnl_str = ""
@@ -144,7 +144,7 @@ Provide a concise 2-3 sentence market summary and 1-2 trade ideas appropriate fo
                 trade_pnl = (exit_p - entry) * qty * 100 * mult
                 pnl_str = f" (${trade_pnl:+.0f})"
             trade_summaries.append(f"- {t.get('action', '')} {t.get('type', '')} {t.get('ticker', '')} {t.get('strike', '')}{pnl_str}")
-        
+
         prompt = f"""You are an expert trading coach. Here's today's trading summary:
 
 Regime: {regime}
@@ -158,7 +158,7 @@ Provide a brief 2-3 sentence coaching summary:
 2. What to improve tomorrow?
 3. Regime watch for tomorrow.
 """
-        
+
         try:
             response = client.models.generate_content(
                 model='gemini-1.5-flash',
@@ -170,7 +170,7 @@ Provide a brief 2-3 sentence coaching summary:
         except Exception as e:
             logger.warning(f"Gemini API error: {e}")
             return None
-    
+
     async def explain_flow_signal(self, signal: Dict[str, Any]) -> Optional[str]:
         """
         Explain an options flow signal in plain English.
@@ -178,7 +178,7 @@ Provide a brief 2-3 sentence coaching summary:
         client = self._get_client()
         if not client:
             return None
-        
+
         prompt = f"""You are an options flow analyst. Explain this signal:
 
 - Ticker: {signal.get('ticker', 'Unknown')}
@@ -194,7 +194,7 @@ Provide a brief 2-3 sentence coaching summary:
 
 In 1-2 sentences, explain what this signal might indicate and whether it's bullish or bearish.
 """
-        
+
         try:
             response = client.models.generate_content(
                 model='gemini-1.5-flash',

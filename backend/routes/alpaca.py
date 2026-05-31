@@ -1,6 +1,7 @@
 """API routes for Alpaca paper trading."""
 
 import logging
+
 from fastapi import APIRouter
 
 logger = logging.getLogger(__name__)

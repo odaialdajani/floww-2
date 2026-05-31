@@ -19,7 +19,6 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-
 # ── Constants ──────────────────────────────────────────────────────────────
 
 MAX_RISK_PCT = 0.25        # hard cap: never allocate > 25% of account

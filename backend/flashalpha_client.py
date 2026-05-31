@@ -17,10 +17,10 @@ API docs: https://lab.flashalpha.com/swagger
 Sign up: https://flashalpha.com
 """
 
-import os
 import logging
-from typing import Dict, Optional, Any
+import os
 from datetime import datetime
+from typing import Any, Dict, Optional
 
 import aiohttp
 
@@ -32,19 +32,19 @@ FLASHALPHA_BASE_URL = "https://lab.flashalpha.com"
 
 class FlashAlphaClient:
     """Client for the FlashAlpha options analytics API."""
-    
+
     def __init__(self):
         self.base_url = FLASHALPHA_BASE_URL
-    
+
     @property
     def enabled(self):
         return bool(os.environ.get("FLASHALPHA_API_KEY", ""))
-    
+
     @property
     def _headers(self):
         key = os.environ.get("FLASHALPHA_API_KEY", "")
         return {"X-Api-Key": key, "Content-Type": "application/json"} if key else {}
-    
+
     async def _get(self, path: str, params: dict = None) -> Optional[dict]:
         if not self.enabled:
             return None
@@ -71,45 +71,45 @@ class FlashAlphaClient:
         except Exception as e:
             logger.warning(f"FlashAlpha error: {e}")
             return None
-    
+
     # ── Exposure ─────────────────────────────────────────────────
-    
+
     async def get_exposure_summary(self, symbol: str) -> Optional[dict]:
         """Get exposure summary (GEX + DEX + VEX + CHEX combined)."""
         return await self._get(f"/v1/exposure/summary/{symbol}")
-    
+
     async def get_exposure_narrative(self, symbol: str) -> Optional[dict]:
         """Get AI-generated narrative summary of exposure."""
         return await self._get(f"/v1/exposure/narrative/{symbol}")
-    
+
     async def get_flow_live(self, symbol: str) -> Optional[dict]:
         """Get live options flow."""
         return await self._get(f"/v1/flow/live/{symbol}")
-    
+
     async def get_flow_summary(self, symbol: str) -> Optional[dict]:
         """Get flow summary."""
         return await self._get(f"/v1/flow/summary/{symbol}")
-    
+
     async def get_options_flow_recent(self, symbol: str) -> Optional[dict]:
         """Get recent options flow."""
         return await self._get(f"/v1/flow/options/{symbol}/recent")
-    
+
     async def get_options_flow_summary(self, symbol: str) -> Optional[dict]:
         """Get options flow summary."""
         return await self._get(f"/v1/flow/options/{symbol}/summary")
-    
+
     async def get_options_flow_blocks(self, symbol: str) -> Optional[dict]:
         """Get options flow blocks (large trades)."""
         return await self._get(f"/v1/flow/options/{symbol}/blocks")
-    
+
     async def get_options_flow_history(self, symbol: str) -> Optional[dict]:
         """Get historical options flow."""
         return await self._get(f"/v1/flow/options/{symbol}/history")
-    
+
     async def get_options_flow_outliers(self) -> Optional[dict]:
         """Get options flow outliers across all tickers."""
         return await self._get("/v1/flow/options/outliers")
-    
+
     async def get_full_dashboard(self, symbol: str) -> Dict[str, Any]:
         """
         Get a full dashboard of data for a ticker.
@@ -124,20 +124,20 @@ class FlashAlphaClient:
             "max_pain": None,
             "volatility": None,
         }
-        
+
         # Exposure summary (includes GEX, DEX, VEX, CHEX)
         result["exposure"] = await self.get_exposure_summary(symbol)
-        
+
         # Flow summary
         result["flow"] = await self.get_flow_summary(symbol)
-        
+
         # Earnings VRP
         result["earnings"] = await self.get_earnings_vrp(symbol)
-        
+
         # Max pain
         result["max_pain"] = await self.get_max_pain(symbol)
-        
+
         # Volatility
         result["volatility"] = await self.get_volatility(symbol)
-        
+
         return result

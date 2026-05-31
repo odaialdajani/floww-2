@@ -16,14 +16,15 @@ order-submission code in this module — live wiring is gated behind
 land in a future PR after the SPY v1.0 audit clears.
 """
 
-import os
-import logging
 import hashlib
 import json
-from typing import Dict, Any, List, Optional, Union, Tuple
+import logging
+import os
 from datetime import datetime, timezone
-from pydantic import BaseModel
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 from dotenv import load_dotenv
+from pydantic import BaseModel
 
 load_dotenv()
 
@@ -141,7 +142,7 @@ def build_order_from_signal(
 ) -> Optional[Dict[str, Any]]:
     """Build an Alpaca order from a trading signal."""
     signal_type = signal.get("type", "")
-    
+
     if signal_type == "GAMMA_FLIP":
         # Negative gamma → expect amplified moves
         # Sell iron condor to collect premium
@@ -151,7 +152,7 @@ def build_order_from_signal(
             "spot": spot_price,
             "message": f"Gamma flip detected: {signal.get('message', '')}",
         }
-    
+
     elif signal_type == "GAMMA_SQUEEZE":
         # Gamma squeeze forming → directional play
         direction = signal.get("data", {}).get("direction", "neutral")
@@ -169,7 +170,7 @@ def build_order_from_signal(
                 "spot": spot_price,
                 "message": f"Gamma squeeze (bearish): {signal.get('message', '')}",
             }
-    
+
     elif signal_type == "WALL_BREACH":
         # Spot broke through wall → momentum play
         direction = signal.get("data", {}).get("direction", "")
@@ -187,7 +188,7 @@ def build_order_from_signal(
                 "spot": spot_price,
                 "message": f"Wall breach (bearish): {signal.get('message', '')}",
             }
-    
+
     return None
 
 
@@ -199,16 +200,16 @@ async def execute_paper_trade(
     client = get_alpaca_client()
     if not client:
         return {"status": "error", "message": "Alpaca client not available"}
-    
+
     try:
         strategy = order.get("strategy", "")
         ticker = order.get("ticker", "")
-        
+
         # Get options chain for the ticker
         chain = await client.get_options_chain(ticker)
         if not chain:
             return {"status": "error", "message": f"No options chain for {ticker}"}
-        
+
         # Build the order based on strategy
         if strategy == "iron_condor":
             result = await client.place_iron_condor(ticker, chain, qty)
@@ -218,7 +219,7 @@ async def execute_paper_trade(
             result = await client.place_put_spread(ticker, chain, qty)
         else:
             return {"status": "error", "message": f"Unknown strategy: {strategy}"}
-        
+
         logger.info(f"Paper trade executed: {strategy} {ticker} x{qty}")
         return {
             "status": "executed",
@@ -228,7 +229,7 @@ async def execute_paper_trade(
             "result": result,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
-    
+
     except Exception as e:
         logger.error(f"Paper trade failed: {e}")
         return {"status": "error", "message": str(e)}

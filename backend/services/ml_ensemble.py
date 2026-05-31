@@ -12,13 +12,12 @@ Output: P(toxic flow in next N minutes), N ∈ {1, 5, 15, 60}
 """
 from __future__ import annotations
 
+import importlib.util
 import logging
-from typing import Any, Dict
 from collections import deque
+from typing import Any, Dict
 
 import numpy as np
-
-import importlib.util
 
 logger = logging.getLogger(__name__)
 

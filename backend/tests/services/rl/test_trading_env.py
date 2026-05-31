@@ -106,7 +106,7 @@ class TestTradingEnv:
         assert env.position >= 0
 
     def test_position_never_exceeds_max(self):
-        from services.rl.trading_env import TradingEnv, MAX_POSITION
+        from services.rl.trading_env import MAX_POSITION, TradingEnv
         env = TradingEnv()
         env.reset()
         for _ in range(50):
@@ -114,7 +114,7 @@ class TestTradingEnv:
         assert env.position <= MAX_POSITION
 
     def test_episode_terminates(self):
-        from services.rl.trading_env import TradingEnv, MAX_STEPS_PER_EPISODE
+        from services.rl.trading_env import MAX_STEPS_PER_EPISODE, TradingEnv
         env = TradingEnv()
         env.reset()
         done = False
@@ -126,7 +126,7 @@ class TestTradingEnv:
         assert env.step_count >= MAX_STEPS_PER_EPISODE
 
     def test_done_step_returns_zero_reward(self):
-        from services.rl.trading_env import TradingEnv, MAX_STEPS_PER_EPISODE
+        from services.rl.trading_env import MAX_STEPS_PER_EPISODE, TradingEnv
         env = TradingEnv()
         env.reset()
         # Run to end

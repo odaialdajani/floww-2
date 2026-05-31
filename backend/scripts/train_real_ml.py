@@ -250,9 +250,9 @@ def train_model(
         Dict with training metrics and artifact paths
     """
     from sklearn.ensemble import GradientBoostingClassifier
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.model_selection import TimeSeriesSplit
     from sklearn.metrics import accuracy_score
+    from sklearn.model_selection import TimeSeriesSplit
+    from sklearn.preprocessing import StandardScaler
 
     period = f"{max(days // 21, 12)}mo"  # At least 12mo for rolling windows
     features_df = compute_features(ticker, period=period)

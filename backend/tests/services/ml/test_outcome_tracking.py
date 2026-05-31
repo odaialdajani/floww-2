@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """tests/services/ml/test_outcome_tracking.py — ML outcome tracking tests."""
 
-import pytest
 from datetime import datetime, timedelta, timezone
+
+import pytest
 
 
 @pytest.mark.asyncio

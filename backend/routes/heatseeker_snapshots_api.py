@@ -71,8 +71,9 @@ async def get_top_movers(
         ]
     }
     """
-    from services.heatseeker_snapshots import get_top_movers_from_db
     from datetime import datetime, timezone
+
+    from services.heatseeker_snapshots import get_top_movers_from_db
 
     conn = _get_duckdb_conn()
     movers = get_top_movers_from_db(conn, ticker, top_n=top_n)

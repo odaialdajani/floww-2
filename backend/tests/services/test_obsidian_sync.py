@@ -18,14 +18,13 @@ from obsidian_sync import (
     ObsidianSync,
     SyncState,
     compute_diff,
+    extract_body,
     file_hash,
     file_mtime,
-    parse_frontmatter,
-    extract_body,
     make_claude_file,
     make_obsidian_file,
+    parse_frontmatter,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
 

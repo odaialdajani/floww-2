@@ -67,8 +67,9 @@ class TestModelArtifacts:
         assert len(meta["feature_names"]) == meta["n_features"]
 
     def test_model_predicts_valid_output(self):
-        import joblib
         import json
+
+        import joblib
         model_path = Path(__file__).resolve().parent.parent.parent.parent / "models" / "SPY_direction_v2.0-regime.joblib"
         scaler_path = Path(__file__).resolve().parent.parent.parent.parent / "models" / "SPY_scaler_v2.0-regime.joblib"
         meta_path = Path(__file__).resolve().parent.parent.parent.parent / "models" / "SPY_meta_v2.0-regime.json"
@@ -139,7 +140,7 @@ class TestFeatureComputation:
     """Test ML feature computation pipeline."""
 
     def test_get_feature_cols_excludes_targets(self):
-        from services.ml.features import compute_technical_features, compute_returns, compute_realized_vol
+        from services.ml.features import compute_realized_vol, compute_returns, compute_technical_features
         # Just verify the functions exist and are callable
         assert callable(compute_technical_features)
         assert callable(compute_returns)

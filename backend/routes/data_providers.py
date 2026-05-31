@@ -1,8 +1,9 @@
 """API routes for free data providers."""
 
 import logging
-from fastapi import APIRouter, Query
 from typing import Optional
+
+from fastapi import APIRouter, Query
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ router = APIRouter(prefix="/api/data", tags=["data"])
 async def get_data_status():
     """Get status of all data providers."""
     try:
-        from data_providers import DataAggregator, FINNHUB_API_KEY, ALPHA_VANTAGE_KEY, POLYGON_API_KEY
+        from data_providers import ALPHA_VANTAGE_KEY, FINNHUB_API_KEY, POLYGON_API_KEY, DataAggregator
         agg = DataAggregator()
         status = agg.get_status()
         return {
@@ -86,12 +87,12 @@ async def get_full_data(
         from data_providers import DataAggregator
         agg = DataAggregator()
         result = await agg.get_full_quote(ticker.upper())
-        
+
         if not include_news:
             result["news"] = []
         if not include_technicals:
             result["technicals"] = {}
-        
+
         return result
     except Exception as e:
         return {"ticker": ticker.upper(), "error": str(e)}

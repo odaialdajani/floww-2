@@ -6,13 +6,14 @@ Edge case tests for advanced_analytics.py — VEX, DEX, Vega-Total.
 Uses hand-calculated values and boundary conditions.
 """
 
-import pytest
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from advanced_analytics import calc_vex, calc_dex, calc_vega_total
+from advanced_analytics import calc_dex, calc_vega_total, calc_vex
 
 
 class TestVEXEdgeCases:

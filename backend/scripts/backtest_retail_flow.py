@@ -14,18 +14,18 @@ Usage:
 
 from __future__ import annotations
 
-import sys
 import os
+import sys
+
 import numpy as np
 
 # Add backend to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from services.backtest.engine import BacktestEngine, EngineConfig
-from services.backtest.retail_flow_signal import RetailFlowSignal, RegimeFilter
-
-
 import logging
+
+from services.backtest.engine import BacktestEngine, EngineConfig
+from services.backtest.retail_flow_signal import RegimeFilter, RetailFlowSignal
 
 logger = logging.getLogger(__name__)
 def run_backtest(snapshots, bars, ticker, label, **signal_kwargs):

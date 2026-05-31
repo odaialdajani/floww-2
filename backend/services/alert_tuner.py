@@ -242,7 +242,7 @@ class AlertTuner:
             f"Generated: {datetime.now(timezone.utc).isoformat()}",
             "",
             "## Summary",
-            f"| Alert ID | Metric | Old Threshold | New Threshold | Old Precision | New Precision | FP Reduction |",
+            "| Alert ID | Metric | Old Threshold | New Threshold | Old Precision | New Precision | FP Reduction |",
             "|----------|--------|---------------|---------------|---------------|---------------|--------------|",
         ]
 

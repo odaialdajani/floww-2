@@ -238,8 +238,8 @@ class TestInferenceEngine:
 
     def test_load_model_missing(self):
         """Loading a non-existent ticker raises DegenerateModelError."""
-        from services.ml.inference import InferenceEngine
         from services.ml import DegenerateModelError
+        from services.ml.inference import InferenceEngine
         engine = InferenceEngine()
         with pytest.raises(DegenerateModelError):
             engine._load_model("INVALID")
@@ -254,8 +254,8 @@ class TestInferenceEngine:
 
     def test_predict_missing_model(self):
         """Predicting with a missing model raises DegenerateModelError."""
-        from services.ml.inference import InferenceEngine
         from services.ml import DegenerateModelError
+        from services.ml.inference import InferenceEngine
         engine = InferenceEngine()
         with pytest.raises(DegenerateModelError):
             asyncio.run(engine.predict("ZZZZ"))
@@ -264,8 +264,8 @@ class TestInferenceEngine:
     async def test_predict_with_trained_model(self, trained_model_dir):
         """Prediction works with a real trained model."""
         pytest.importorskip("yfinance")
-        from services.ml.inference import InferenceEngine, MODEL_REGISTRY
         from services.ml import DegenerateModelError
+        from services.ml.inference import MODEL_REGISTRY, InferenceEngine
 
         # Temporarily register the test model
         ticker = "TEST"
@@ -275,8 +275,8 @@ class TestInferenceEngine:
     async def test_predict_with_trained_model(self, trained_model_dir):
         """Prediction works with a real trained model artifact (dict format)."""
         pytest.importorskip("yfinance")
-        from services.ml.inference import InferenceEngine, MODEL_REGISTRY
         from services.ml import DegenerateModelError
+        from services.ml.inference import MODEL_REGISTRY, InferenceEngine
 
         ticker = "TEST"
         model_path = trained_model_dir / f"{ticker}_gbm_production.joblib"
@@ -299,7 +299,7 @@ class TestInferenceEngine:
 
     def test_model_info(self, trained_model_dir):
         """get_model_info returns correct metadata."""
-        from services.ml.inference import InferenceEngine, MODEL_REGISTRY
+        from services.ml.inference import MODEL_REGISTRY, InferenceEngine
 
         ticker = "TEST"
         model_path = trained_model_dir / f"{ticker}_gbm_production.joblib"

@@ -16,23 +16,23 @@ from __future__ import annotations
 
 import os
 import sys
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-import pytest
-import pandas as pd
 import duckdb
+import pandas as pd
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 os.environ.setdefault("TESTING", "1")
 
 from services.yfinance_fetcher import (
-    fetch_underlying_ohlcv,
-    store_ticks,
-    fetch_and_store,
-    get_latest_ticks,
-    get_duckdb_conn,
     TICKERS,
+    fetch_and_store,
+    fetch_underlying_ohlcv,
+    get_duckdb_conn,
+    get_latest_ticks,
+    store_ticks,
 )
 
 

@@ -287,8 +287,9 @@ class TestSnapshotTableSchema:
     def test_bulk_insert_performance(self):
         """Bulk insert of 500 rows completes in < 100ms."""
         svc = self._make_service()
-        import duckdb
         import time
+
+        import duckdb
         conn = duckdb.connect(":memory:")
         svc.create_snapshot_table(conn)
 

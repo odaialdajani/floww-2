@@ -18,9 +18,9 @@ Based on research from:
 """
 
 import logging
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +34,11 @@ class Alert:
     message: str
     data: Dict[str, Any] = field(default_factory=dict)
     timestamp: str = ""
-    
+
     def __post_init__(self):
         if not self.timestamp:
             self.timestamp = datetime.now(timezone.utc).isoformat()
-    
+
     def to_dict(self) -> dict:
         return {
             "type": self.type,
@@ -70,7 +70,7 @@ class GEXSnapshot:
     # liquidity changes rather than GEX magnitude proxies.
     volume_by_strike: Dict[float, int] = field(default_factory=dict)
     timestamp: str = ""
-    
+
     def __post_init__(self):
         if not self.timestamp:
             self.timestamp = datetime.now(timezone.utc).isoformat()
@@ -81,7 +81,7 @@ class AlertEngine:
     Detects trading alerts by comparing GEX snapshots over time.
     Based on the signal detection algorithm from neeleshroy2023/gex-alerts.
     """
-    
+
     # Configurable thresholds
     GAMMA_SQUEEZE_PROXIMITY_PCT = 0.5   # Spot within 0.5% of flip
     WALL_BREACH_PROXIMITY_PCT = 0.1     # 0.1% beyond wall = breach
@@ -94,17 +94,17 @@ class AlertEngine:
     REAL_VOLUME_SPIKE_BAND_PCT = 0.02   # within +/- 2% of spot
     MOMENTUM_EXTREME_HIGH = 80          # Score > 80 = extreme bullish
     MOMENTUM_EXTREME_LOW = 20           # Score < 20 = extreme bearish
-    
+
     def __init__(self):
         self._snapshots: Dict[str, List[GEXSnapshot]] = {}
-    
+
     def add_snapshot(self, snapshot: GEXSnapshot):
         """Store a new snapshot for comparison."""
         ticker = snapshot.ticker
         if ticker not in self._snapshots:
             self._snapshots[ticker] = []
         self._snapshots[ticker].append(snapshot)
-        
+
         # Keep only last 100 snapshots per ticker
         if len(self._snapshots[ticker]) > 100:
             self._snapshots[ticker] = self._snapshots[ticker][-100:]
@@ -126,13 +126,13 @@ class AlertEngine:
         """
         current = self.get_latest(ticker)
         previous = self.get_previous(ticker)
-        
+
         if not current:
             return []
-        
+
         alerts: List[Alert] = []
         spot = current.spot_price
-        
+
         # 1. GAMMA FLIP (HIGH) — regime changed sign
         if previous and previous.regime != current.regime:
             direction = "SHORT gamma — expect amplified moves" if current.regime == "NEGATIVE" else "LONG gamma — expect mean reversion"
@@ -148,7 +148,7 @@ class AlertEngine:
                     "net_gex": current.net_gex,
                 }
             ))
-        
+
         # 2. GAMMA SQUEEZE (HIGH) — negative gamma + spot near flip + volume spike
         if current.regime == "NEGATIVE" and previous:
             flip_dist_pct = abs(spot - current.gamma_flip) / spot * 100 if spot > 0 else 999
@@ -166,7 +166,7 @@ class AlertEngine:
                             "regime": current.regime,
                         }
                     ))
-        
+
         # 3. MOMENTUM EXTREME (HIGH)
         if momentum_score > self.MOMENTUM_EXTREME_HIGH:
             alerts.append(Alert(
@@ -184,7 +184,7 @@ class AlertEngine:
                 message=f"📉 Strong BEARISH momentum — score {momentum_score}/100",
                 data={"momentum_score": momentum_score, "direction": "BEARISH"}
             ))
-        
+
         # 4. WALL BREACH (MEDIUM) — only fire on crossing, not while beyond
         if current.call_wall > 0 and previous:
             # Bullish: spot was at or below call wall, now above it
@@ -197,7 +197,7 @@ class AlertEngine:
                     message=f"🚀 BULLISH breakout — spot {spot:.0f} crossed above call wall at {current.call_wall:.0f} (+{breach_pct:.2f}%)",
                     data={"wall": current.call_wall, "direction": "BULLISH", "breach_pct": round(breach_pct, 2)}
                 ))
-        
+
         if current.put_wall > 0 and previous:
             # Bearish: spot was at or above put wall, now below it
             if previous.spot_price >= current.put_wall and spot < current.put_wall:
@@ -209,7 +209,7 @@ class AlertEngine:
                     message=f"🔻 BEARISH breakdown — spot {spot:.0f} crossed below put wall at {current.put_wall:.0f} (-{breach_pct:.2f}%)",
                     data={"wall": current.put_wall, "direction": "BEARISH", "breach_pct": round(breach_pct, 2)}
                 ))
-        
+
         # 5. GEX MAGNITUDE SHIFT (MEDIUM) — total GEX changed > 40%
         if previous and previous.total_gex != 0:
             gex_change_pct = abs(current.total_gex - previous.total_gex) / abs(previous.total_gex) * 100
@@ -225,7 +225,7 @@ class AlertEngine:
                         "new_gex": current.total_gex,
                     }
                 ))
-        
+
         # 6. GAMMA FLIP PROXIMITY (MEDIUM) — spot within 0.3% of flip
         flip_proximity = abs(spot - current.gamma_flip) / spot * 100 if spot > 0 else 999
         if flip_proximity < self.GAMMA_FLIP_PROXIMITY_PCT:
@@ -237,7 +237,7 @@ class AlertEngine:
                     message=f"🔄 Spot {spot:.0f} within {flip_proximity:.2f}% of gamma flip at {current.gamma_flip:.0f} — inflection zone",
                     data={"gamma_flip": current.gamma_flip, "distance_pct": round(flip_proximity, 2)}
                 ))
-        
+
         # 7. PIN RISK (LOW) — spot near max gamma strike
         pin_proximity = abs(spot - current.max_gamma_strike) / spot * 100 if spot > 0 else 999
         if pin_proximity < self.PIN_RISK_PROXIMITY_PCT:
@@ -286,21 +286,21 @@ class AlertEngine:
         # Sort by priority
         priority_order = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
         alerts.sort(key=lambda a: priority_order.get(a.priority, 9))
-        
+
         return alerts
-    
+
     def _detect_gex_magnitude_spike(self, current: GEXSnapshot, previous: GEXSnapshot) -> bool:
         """Check if any near-ATM strike has a GEX magnitude spike vs previous cycle.
         Note: misnamed as _detect_volume_spike in original code — actually reads GEX magnitude."""
         if not previous.gex_by_strike or not current.gex_by_strike:
             return False
-        
+
         spot = current.spot_price
         near_strikes = [
             s for s in current.gex_by_strike
             if abs(s - spot) / spot < 0.02  # within 2% of spot
         ]
-        
+
         for strike in near_strikes:
             cur_gex = abs(current.gex_by_strike.get(strike, 0))
             prev_gex = abs(previous.gex_by_strike.get(strike, 0))
@@ -432,9 +432,9 @@ class AlertEngine:
         latest = self.get_latest(ticker)
         if not latest:
             return {"ticker": ticker, "status": "no_data"}
-        
+
         alerts = self.detect_alerts(ticker)
-        
+
         return {
             "ticker": ticker,
             "spot": latest.spot_price,

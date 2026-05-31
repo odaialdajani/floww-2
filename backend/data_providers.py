@@ -10,12 +10,12 @@ Aggregates data from multiple free APIs:
 Falls back gracefully when rate limits hit.
 """
 
-import os
-import time
 import asyncio
 import logging
-from typing import List, Optional
+import os
+import time
 from datetime import datetime, timedelta
+from typing import List, Optional
 
 import aiohttp
 
@@ -52,7 +52,7 @@ class RateLimiter:
         self.interval = 60.0 / calls_per_minute
         self.last_call = 0
         self._lock = asyncio.Lock()
-    
+
     async def wait(self):
         async with self._lock:
             now = time.time()
@@ -64,12 +64,12 @@ class RateLimiter:
 
 class FreeDataProvider:
     """Base class for free data providers."""
-    
+
     def __init__(self, name: str, rate_limit: int = 60):
         self.name = name
         self.rate_limiter = RateLimiter(rate_limit)
         self.enabled = False
-    
+
     async def _get(self, url: str, params: dict = None, headers: dict = None) -> Optional[dict]:
         await self.rate_limiter.wait()
         try:
@@ -100,17 +100,17 @@ class FreeDataProvider:
 
 class FinnhubProvider(FreeDataProvider):
     """Finnhub free tier: 60 calls/min."""
-    
+
     def __init__(self):
         super().__init__("Finnhub", rate_limit=60)
         self.enabled = bool(FINNHUB_API_KEY)
         self.base = "https://finnhub.io/api/v1"
         self._headers = {"X-Finnhub-Token": FINNHUB_API_KEY} if FINNHUB_API_KEY else {}
-    
+
     async def _finnhub_get(self, path: str, params: dict = None) -> Optional[dict]:
         """Make a Finnhub API call with token in header."""
         return await self._get(f"{self.base}{path}", params=params, headers=self._headers)
-    
+
     async def get_quote(self, ticker: str) -> Optional[dict]:
         """Get real-time quote."""
         if not self.enabled:
@@ -131,12 +131,12 @@ class FinnhubProvider(FreeDataProvider):
                 "source": "finnhub",
             }
         return None
-    
+
     async def get_news(self, ticker: Optional[str] = None, count: int = 10) -> List[dict]:
         """Get market news or company news."""
         if not self.enabled:
             return []
-        
+
         if ticker:
             data = await self._finnhub_get("/company-news", {
                 "symbol": ticker,
@@ -145,7 +145,7 @@ class FinnhubProvider(FreeDataProvider):
             })
         else:
             data = await self._finnhub_get("/news", {"category": "general"})
-        
+
         if data and isinstance(data, list):
             return [{
                 "headline": item.get("headline", ""),
@@ -156,7 +156,7 @@ class FinnhubProvider(FreeDataProvider):
                 "ticker": ticker or "",
             } for item in data[:count]]
         return []
-    
+
     async def get_earnings(self, ticker: str) -> List[dict]:
         """Get earnings calendar."""
         if not self.enabled:
@@ -188,7 +188,7 @@ class FinnhubProvider(FreeDataProvider):
                 "source": "finnhub",
             }
         return None
-    
+
     async def get_options_flow(self, ticker: str) -> Optional[dict]:
         """Get options flow data (if available on free tier)."""
         if not self.enabled:
@@ -204,13 +204,13 @@ class FinnhubProvider(FreeDataProvider):
 
 class PolygonProvider(FreeDataProvider):
     """Polygon.io free tier: 5 calls/min."""
-    
+
     def __init__(self):
         super().__init__("Polygon", rate_limit=5)
         self.enabled = bool(POLYGON_API_KEY)
         self.base = "https://api.polygon.io"
         self._headers = {"Authorization": f"Bearer {POLYGON_API_KEY}"} if POLYGON_API_KEY else {}
-    
+
     async def get_ticker_details(self, ticker: str) -> Optional[dict]:
         """Get ticker details."""
         if not self.enabled:
@@ -226,7 +226,7 @@ class PolygonProvider(FreeDataProvider):
                 "source": "polygon",
             }
         return None
-    
+
     async def get_options_contracts(self, ticker: str, limit: int = 20) -> List[dict]:
         """Get options contracts for a ticker."""
         if not self.enabled:
@@ -241,7 +241,7 @@ class PolygonProvider(FreeDataProvider):
                 "exercise": c.get("exercise_style", ""),
             } for c in data["results"]]
         return []
-    
+
     async def get_last_trade(self, ticker: str) -> Optional[dict]:
         """Get last trade."""
         if not self.enabled:
@@ -263,19 +263,19 @@ class DataAggregator:
     Aggregates data from all free providers with fallback.
     Priority: Finnhub -> Polygon -> Alpha Vantage -> yfinance
     """
-    
+
     def __init__(self):
         self.finnhub = FinnhubProvider()
         self.polygon = PolygonProvider()
         self.alphavantage = AlphaVantageProvider()
-    
+
     async def get_spot_price(self, ticker: str) -> Optional[dict]:
         """Get spot price from best available source."""
         # Try Finnhub first (fastest, highest rate limit)
         quote = await self.finnhub.get_quote(ticker)
         if quote:
             return quote
-        
+
         # Try Polygon
         trade = await self.polygon.get_last_trade(ticker)
         if trade:
@@ -283,12 +283,12 @@ class DataAggregator:
                 "price": trade["price"],
                 "source": "polygon",
             }
-        
+
         # Try Alpha Vantage
         av_quote = await self.alphavantage.get_quote(ticker)
         if av_quote:
             return av_quote
-        
+
         # Fallback to yfinance
         try:
             import yfinance as yf
@@ -315,7 +315,7 @@ class DataAggregator:
                 except Exception:
                     pass
                 return None
-        except Exception as e:
+        except Exception:
             _record_provider_call("yfinance", False)
             try:
                 from services.observability import yfinance_calls_total
@@ -323,7 +323,7 @@ class DataAggregator:
             except Exception:
                 pass
             return None
-    
+
     async def get_full_quote(self, ticker: str) -> dict:
         """Get comprehensive quote data from all sources."""
         result = {
@@ -336,29 +336,29 @@ class DataAggregator:
             "technicals": {},
             "options_contracts": [],
         }
-        
+
         # Spot price
         result["spot"] = await self.get_spot_price(ticker)
-        
+
         # News (Finnhub)
         result["news"] = await self.finnhub.get_news(ticker, count=5)
-        
+
         # Earnings
         result["earnings"] = await self.finnhub.get_earnings(ticker)
-        
+
         # Analyst recommendation
         result["recommendation"] = await self.finnhub.get_recommendation(ticker)
-        
+
         # Technical indicators (Alpha Vantage - rate limited)
         rsi = await self.alphavantage.get_technical_indicator(ticker, "RSI")
         if rsi:
             result["technicals"]["rsi"] = rsi
-        
+
         # Options contracts (Polygon)
         result["options_contracts"] = await self.polygon.get_options_contracts(ticker, limit=10)
-        
+
         return result
-    
+
     def get_status(self) -> dict:
         """Get status of all data providers."""
         return {
@@ -382,7 +382,7 @@ class AlphaVantageProvider(FreeDataProvider):
         if not self.enabled:
             return None
         try:
-            from services.alpha_vantage_client import circuit, CircuitBreakerOpenError
+            from services.alpha_vantage_client import CircuitBreakerOpenError, circuit
             data = await circuit.call(self._get, self.base, {
                 "function": "GLOBAL_QUOTE",
                 "symbol": ticker,
@@ -439,7 +439,7 @@ class AlphaVantageProvider(FreeDataProvider):
         }
 
         try:
-            from services.alpha_vantage_client import circuit, CircuitBreakerOpenError
+            from services.alpha_vantage_client import CircuitBreakerOpenError, circuit
             data = await circuit.call(self._get, self.base, params)
         except CircuitBreakerOpenError:
             logger.warning("AlphaVantage circuit OPEN — skipping get_technical_indicator(%s, %s)", ticker, indicator)
@@ -463,7 +463,7 @@ class AlphaVantageProvider(FreeDataProvider):
         if not self.enabled:
             return None
         try:
-            from services.alpha_vantage_client import circuit, CircuitBreakerOpenError
+            from services.alpha_vantage_client import CircuitBreakerOpenError, circuit
             data = await circuit.call(self._get, self.base, {
                 "function": "CURRENCY_EXCHANGE_RATE",
                 "from_currency": from_cur,

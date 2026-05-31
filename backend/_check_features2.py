@@ -1,9 +1,12 @@
 import sys
+
 sys.path.insert(0, 'backend')
+
+import warnings
 
 from scripts.train_real_ml import FEATURE_NAMES
 from services.ml.inference import compute_live_features
-import warnings
+
 warnings.filterwarnings('ignore')
 
 # Actually compute features on real SPY data

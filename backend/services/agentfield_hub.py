@@ -142,7 +142,7 @@ class AgentFieldHub:
         @self.router.reasoner(path="/risk/portfolio-greeks", tags=["risk", "greeks"])
         async def portfolio_greeks(name: str = "main", spot: float = 0.0, iv: float = 0.15) -> Dict[str, Any]:
             """Aggregate Greeks across a named portfolio."""
-            from server import db, calc_portfolio_summary  # type: ignore
+            from server import calc_portfolio_summary, db  # type: ignore
 
             portfolio = await db.portfolios.find_one({"name": name}, {"_id": 0})
             if not portfolio:
@@ -160,7 +160,7 @@ class AgentFieldHub:
             time_decay_days: int = 1,
         ) -> Dict[str, Any]:
             """What-if scenario analysis for a portfolio."""
-            from server import db, calc_portfolio_scenario  # type: ignore
+            from server import calc_portfolio_scenario, db  # type: ignore
 
             portfolio = await db.portfolios.find_one({"name": name}, {"_id": 0})
             if not portfolio:

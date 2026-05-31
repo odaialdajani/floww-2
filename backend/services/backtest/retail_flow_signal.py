@@ -28,8 +28,9 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from .signals import Action, Position, Signal
 from services.retail_flow_score import RetailFlowScore
+
+from .signals import Action, Position, Signal
 
 log = logging.getLogger("backtest.retail_flow_signal")
 
@@ -129,7 +130,7 @@ class RetailFlowSignal(Signal):
             return Action.HOLD
 
         snap = snapshot_history[-1]
-        bar = bar_history[-1]
+        _bar = bar_history[-1]
 
         # Extract flow metrics from snapshot
         cpr = _safe_float(snap.get("cpr"), 1.0)

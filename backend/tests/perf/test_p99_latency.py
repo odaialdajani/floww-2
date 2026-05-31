@@ -59,7 +59,7 @@ class TestLatencyBudgets:
 
     def test_signal_translator_latency(self):
         """Signal translation should be < 1ms p99."""
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import SignalInput, translate_signal
 
         inp = SignalInput(
             anomaly_score=0.95,
@@ -92,7 +92,7 @@ class TestLatencyBudgets:
 
     def test_execution_doctrine_latency(self):
         """Execution doctrine apply should be < 1ms p99."""
-        from services.execution_doctrine import ExecutionDoctrine, NODE_STATE_FRESH
+        from services.execution_doctrine import NODE_STATE_FRESH, ExecutionDoctrine
         doctrine = ExecutionDoctrine()
         intent = {
             "ticker": "SPY",

@@ -187,7 +187,7 @@ class TestOrderRouter:
             router._build_order_payload(intent)
 
     def test_get_state(self):
-        from services.order_router import OrderRouter, ALLOW_MARKET_ORDERS
+        from services.order_router import ALLOW_MARKET_ORDERS, OrderRouter
         mock_tokens = MagicMock()
         router = OrderRouter("acc-123", token_manager=mock_tokens)
         state = router.get_state()

@@ -6,9 +6,9 @@ Verifies Platt scaler shape, monotonicity, and ensemble output contract.
 """
 from __future__ import annotations
 
+import importlib.util
 import sys
 import types
-import importlib.util
 from pathlib import Path
 
 import numpy as np
@@ -53,7 +53,6 @@ if importlib.util.find_spec("scipy") is None:  # stub only when truly absent
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from services.ml_ensemble import PlattScaler, ToxicityEnsemble
-
 
 # ── PlattScaler tests ───────────────────────────────────────────────────
 

@@ -3,9 +3,9 @@ API routes for Social Sentiment & Options Flow data.
 Mount these in server.py.
 """
 
-import os
 import json
 import logging
+import os
 from datetime import datetime
 
 from fastapi import APIRouter
@@ -23,12 +23,12 @@ os.makedirs(DATA_DIR, exist_ok=True)
 async def get_sentiment(ticker: str):
     """Get social sentiment for a ticker."""
     report_path = os.path.join(DATA_DIR, f"{ticker.upper()}_sentiment.json")
-    
+
     if os.path.exists(report_path):
         with open(report_path) as f:
             data = json.load(f)
         return {"ticker": ticker.upper(), "cached": True, **data}
-    
+
     return {
         "ticker": ticker.upper(),
         "cached": False,
@@ -41,12 +41,12 @@ async def get_sentiment(ticker: str):
 async def get_flow(ticker: str, min_premium: float = 50000):
     """Get options flow signals for a ticker."""
     report_path = os.path.join(DATA_DIR, f"{ticker.upper()}_flow.json")
-    
+
     if os.path.exists(report_path):
         with open(report_path) as f:
             data = json.load(f)
         return {"ticker": ticker.upper(), "cached": True, **data}
-    
+
     return {
         "ticker": ticker.upper(),
         "cached": False,
@@ -59,12 +59,12 @@ async def get_flow(ticker: str, min_premium: float = 50000):
 async def get_full_report(ticker: str):
     """Get combined social + flow + GEX report for a ticker."""
     report_path = os.path.join(DATA_DIR, f"{ticker.upper()}_report.json")
-    
+
     if os.path.exists(report_path):
         with open(report_path) as f:
             data = json.load(f)
         return {"ticker": ticker.upper(), "cached": True, **data}
-    
+
     return {
         "ticker": ticker.upper(),
         "cached": False,
@@ -77,10 +77,10 @@ async def get_full_report(ticker: str):
 async def get_pipeline_status():
     """Get status of the social flow pipeline."""
     from social_flow_pipeline import TwitterCollector
-    
+
     collector = TwitterCollector()
     xurl_auth = collector.is_authenticated()
-    
+
     # Check for cached reports
     reports = []
     if os.path.exists(DATA_DIR):
@@ -88,7 +88,7 @@ async def get_pipeline_status():
             if f.endswith("_report.json"):
                 ticker = f.replace("_report.json", "")
                 reports.append(ticker)
-    
+
     return {
         "xurl_authenticated": xurl_auth,
         "cached_reports": reports,

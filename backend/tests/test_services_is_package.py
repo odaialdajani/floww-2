@@ -37,7 +37,7 @@ def test_services_ml_init_file_on_disk():
 
 def test_inference_exports_class_labels():
     """The 3-class prediction system must be exported."""
-    from services.ml.inference import CLASS_LABELS, UP, DOWN, HOLD
+    from services.ml.inference import CLASS_LABELS, DOWN, HOLD, UP
     assert CLASS_LABELS[UP] == "UP"
     assert CLASS_LABELS[DOWN] == "DOWN"
     assert CLASS_LABELS[HOLD] == "HOLD"

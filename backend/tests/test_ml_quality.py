@@ -5,17 +5,18 @@ Comprehensive tests for ML quality gates.
 """
 import numpy as np
 import pytest
+
+from services.ml import DegenerateModelError
 from services.ml.quality import (
     assert_class_balance,
     assert_feature_variance,
+    assert_holdout_untouched,
+    assert_no_future_leakage,
     assert_prediction_distribution,
     assert_temporal_ordering,
-    assert_no_future_leakage,
-    assert_holdout_untouched,
     assert_train_test_temporal_split,
     run_all_gates,
 )
-from services.ml import DegenerateModelError
 
 
 class TestAssertClassBalance:
@@ -266,7 +267,7 @@ class TestRunAllGates:
         # Feature dates must be before target dates (no leakage)
         feat_dates = [f"2024-01-{i:02d}" for i in range(1, 32)] + [f"2024-02-{i:02d}" for i in range(1, 70)]
         tgt_dates = [f"2024-03-{i:02d}" for i in range(1, 32)] + [f"2024-04-{i:02d}" for i in range(1, 70)]
-        
+
         results = run_all_gates(
             X, y, probas,
             feature_dates=feat_dates,
@@ -281,6 +282,6 @@ class TestRunAllGates:
         X = np.random.randn(100, 5)
         y = np.array([0] * 99 + [1])
         probas = np.random.uniform(0.3, 0.7, 100)
-        
+
         with pytest.raises(DegenerateModelError):
             run_all_gates(X, y, probas)

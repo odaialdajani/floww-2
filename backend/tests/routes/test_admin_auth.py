@@ -16,7 +16,6 @@ os.environ["API_SECRET_KEY"] = "test-secret-key"
 
 from server import app
 
-
 client = TestClient(app)
 
 ROUTES_GET = [

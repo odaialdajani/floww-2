@@ -9,8 +9,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from scripts.predict_throughput import (
     EnsembleRegressor,
-    extract_features,
     check_drift,
+    extract_features,
 )
 
 

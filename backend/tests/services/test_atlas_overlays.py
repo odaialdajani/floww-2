@@ -4,16 +4,16 @@ backend/tests/services/test_atlas_overlays.py
 Tests for atlas_overlays.py — overlay computation for the Atlas tab.
 """
 import pytest
+
 from services.atlas_overlays import (
-    compute_king_nodes,
-    compute_zero_gamma,
+    _compute_alignment_score,
+    build_all_overlays,
     compute_air_pockets,
     compute_anomaly_markers,
+    compute_king_nodes,
     compute_trinity_sparkline,
-    build_all_overlays,
-    _compute_alignment_score,
+    compute_zero_gamma,
 )
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 

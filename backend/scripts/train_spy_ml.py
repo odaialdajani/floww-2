@@ -198,8 +198,8 @@ def compute_gex_features(chain: Dict[str, Any]) -> Dict[str, float]:
     if not contracts or spot <= 0:
         return _empty_gex_features()
 
-    calls = [c for c in contracts if c["type"] in ("C", "CALL")]
-    puts = [c for c in contracts if c["type"] in ("P", "PUT")]
+    _calls = [c for c in contracts if c["type"] in ("C", "CALL")]
+    _puts = [c for c in contracts if c["type"] in ("P", "PUT")]
 
     # Per-strike GEX
     gex_by_strike: Dict[float, float] = {}
@@ -582,10 +582,10 @@ def _synthesize_gex_features(
     close = float(price_df.iloc[idx]["Close"])
     if idx >= 20:
         ma20 = price_df["Close"].iloc[idx - 20:idx].mean()
-        ma50 = price_df["Close"].iloc[max(0, idx - 50):idx].mean() if idx >= 50 else close
+        _ma50 = price_df["Close"].iloc[max(0, idx - 50):idx].mean() if idx >= 50 else close
     else:
         ma20 = close
-        ma50 = close
+        _ma50 = close
 
     trend = (close - ma20) / (ma20 + 1e-8)
     return {
@@ -656,14 +656,18 @@ def train_walk_forward(
     and evaluates out-of-sample performance.
     """
     from sklearn.ensemble import GradientBoostingClassifier
-    from sklearn.preprocessing import StandardScaler
     from sklearn.metrics import accuracy_score, precision_score, recall_score
+    from sklearn.preprocessing import StandardScaler
+
     from services.ml.gate import (
-        compute_trading_sharpe, evaluate_ship_verdict,
-        DEFAULT_MAX_SHARPE, DEFAULT_REQUIRED_BASELINES,
+        DEFAULT_MAX_SHARPE,
+        DEFAULT_REQUIRED_BASELINES,
+        compute_trading_sharpe,
+        evaluate_ship_verdict,
     )
     from services.ml.quality import (
-        assert_class_balance, assert_prediction_distribution,
+        assert_class_balance,
+        assert_prediction_distribution,
     )
 
     n = len(X)
@@ -770,7 +774,7 @@ def train_walk_forward(
         from sklearn.linear_model import LogisticRegression
         lr = LogisticRegression(max_iter=1000, random_state=42)
         lr_s = StandardScaler()
-        X_all_s = lr_s.fit_transform(X)
+        _X_all_s = lr_s.fit_transform(X)
         lr_preds = []
         # Use last fold's split for fair comparison
         for fold in range(n_splits):

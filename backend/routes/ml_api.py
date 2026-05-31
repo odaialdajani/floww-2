@@ -22,11 +22,11 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
+from services.ml import DegenerateModelError
+from services.ml import outcomes as outcomes_service
 from services.ml.inference import inference_engine
 from services.ml.registry import ModelRegistry
-from services.ml import DegenerateModelError
 from services.ml.retrain import RetrainOrchestrator
-from services.ml import outcomes as outcomes_service
 
 logger = logging.getLogger(__name__)
 
@@ -336,8 +336,9 @@ async def get_ensemble(ticker: str, horizon_minutes: int = 15) -> Dict[str, Any]
 
     Returns: P(toxic flow), per-component scores, final verdict
     """
-    from services.anomaly_detector import FlowAnomalyDetector
     import numpy as np
+
+    from services.anomaly_detector import FlowAnomalyDetector
 
     registry = await _get_registry()
     try:
@@ -428,8 +429,9 @@ async def ml_dashboard() -> Dict[str, Any]:
 async def get_features(ticker: str) -> Dict[str, Any]:
     """Get latest computed features for a ticker."""
     try:
-        from services.ml.inference import compute_live_features
         import asyncio
+
+        from services.ml.inference import compute_live_features
         features_df = await asyncio.to_thread(compute_live_features, ticker)
 
         # Return the latest row as a dict
@@ -723,8 +725,8 @@ async def get_calibration(ticker: str, window: int = Query(default=30, ge=7, le=
 async def ml_health_check(ticker: str) -> Dict[str, Any]:
     """Get ML model health assessment for a ticker."""
     try:
-        from services.ml.health_monitor import assess_model_health
         from server import db
+        from services.ml.health_monitor import assess_model_health
         result = await assess_model_health(db, ticker.upper())
         return result
     except Exception as e:
@@ -753,9 +755,11 @@ async def ml_compare(
     Query params:
         tickers: Comma-separated list (default: SPY,QQQ,DIA,IWM,TLT)
     """
-    from server import db
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
+
     import numpy as np
+
+    from server import db
 
     DEFAULT_TICKERS = ["SPY", "QQQ", "DIA", "IWM", "TLT"]
 
@@ -875,8 +879,8 @@ async def ml_compare(
 async def ml_health_all() -> Dict[str, Any]:
     """Get health assessment for all active ML models."""
     try:
-        from services.ml.health_monitor import get_all_models_health
         from server import db
+        from services.ml.health_monitor import get_all_models_health
         result = await get_all_models_health(db)
         return result
     except Exception as e:

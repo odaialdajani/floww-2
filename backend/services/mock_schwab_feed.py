@@ -13,8 +13,8 @@ import asyncio
 import logging
 import math
 import time
-from typing import Any, Callable, Dict, List, Optional
 from datetime import datetime, timezone
+from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 

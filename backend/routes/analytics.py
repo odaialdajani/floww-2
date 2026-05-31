@@ -16,7 +16,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from services.fetch_coordinator import CacheRouter, FetchCoordinator, degraded_response
 
@@ -49,8 +49,8 @@ async def implied_pdf(
     max_age_seconds: int = Query(default=300, ge=0, le=3600, description="Max cache age in seconds"),
 ):
     try:
-        from server import _sanitize
         from advanced_analytics import calc_implied_pdf
+        from server import _sanitize
         raw = await _cache.get_chain(ticker, expiries, max_age_seconds, _coordinator)
         _check_chain(raw, ticker)
         return _sanitize(calc_implied_pdf(raw["spot"], raw["contracts"]))
@@ -68,8 +68,8 @@ async def regime(
     max_age_seconds: int = Query(default=300, ge=0, le=3600),
 ):
     try:
-        from server import _sanitize
         from advanced_analytics import calc_market_regime
+        from server import _sanitize
         raw = await _cache.get_chain(ticker, expiries, max_age_seconds, _coordinator)
         _check_chain(raw, ticker)
         return _sanitize(calc_market_regime(raw["spot"], raw["contracts"]))
@@ -87,8 +87,8 @@ async def hedge_impulse(
     max_age_seconds: int = Query(default=300, ge=0, le=3600),
 ):
     try:
-        from server import _sanitize
         from advanced_analytics import calc_hedge_impulse_curve
+        from server import _sanitize
         raw = await _cache.get_chain(ticker, expiries, max_age_seconds, _coordinator)
         _check_chain(raw, ticker)
         return _sanitize(calc_hedge_impulse_curve(raw["spot"], raw["contracts"], ticker.strip().upper()))
@@ -106,8 +106,8 @@ async def pressure_cloud(
     max_age_seconds: int = Query(default=300, ge=0, le=3600),
 ):
     try:
-        from server import _sanitize
         from advanced_analytics import calc_pressure_cloud
+        from server import _sanitize
         raw = await _cache.get_chain(ticker, expiries, max_age_seconds, _coordinator)
         _check_chain(raw, ticker)
         return _sanitize(calc_pressure_cloud(raw["spot"], raw["contracts"], ticker.strip().upper()))
@@ -125,8 +125,8 @@ async def charm_integral_endpoint(
     max_age_seconds: int = Query(default=300, ge=0, le=3600),
 ):
     try:
-        from server import _sanitize
         from advanced_analytics import calc_charm_integral
+        from server import _sanitize
         raw = await _cache.get_chain(ticker, expiries, max_age_seconds, _coordinator)
         _check_chain(raw, ticker)
         return _sanitize(calc_charm_integral(raw["spot"], raw["contracts"], ticker.strip().upper()))
@@ -153,9 +153,10 @@ async def vanna_exposure_endpoint(
     max_age_seconds: int = Query(default=300, ge=0, le=3600),
 ):
     try:
+        import numpy as np
+
         from server import _sanitize
         from services.numba_greeks import bs_vanna_vec
-        import numpy as np
 
         raw = await _cache.get_chain(ticker, expiries, max_age_seconds, _coordinator)
         _check_chain(raw, ticker)
@@ -211,11 +212,14 @@ async def advanced_analytics(
     max_age_seconds: int = Query(default=300, ge=0, le=3600),
 ):
     try:
-        from server import _sanitize
         from advanced_analytics import (
-            calc_implied_pdf, calc_market_regime, calc_hedge_impulse_curve,
-            calc_pressure_cloud, calc_charm_integral,
+            calc_charm_integral,
+            calc_hedge_impulse_curve,
+            calc_implied_pdf,
+            calc_market_regime,
+            calc_pressure_cloud,
         )
+        from server import _sanitize
         raw = await _cache.get_chain(ticker, expiries, max_age_seconds, _coordinator)
         _check_chain(raw, ticker)
         spot = raw["spot"]
@@ -246,8 +250,8 @@ async def gamma_flip(
     max_age_seconds: int = Query(default=300, ge=0, le=3600),
 ):
     try:
-        from server import _sanitize
         from advanced_analytics import calc_gamma_flip_levels
+        from server import _sanitize
         raw = await _cache.get_chain(ticker, expiries, max_age_seconds, _coordinator)
         spot = raw.get("spot")
         if not spot or spot != spot or not raw.get("contracts"):
@@ -267,8 +271,8 @@ async def daily_checklist(
     max_age_seconds: int = Query(default=300, ge=0, le=3600),
 ):
     try:
-        from server import _sanitize
         from advanced_analytics import calc_gamma_flip_levels, calc_market_regime
+        from server import _sanitize
         from vol_analytics import calc_iv_surface_data, calc_skew_metrics
         raw = await _cache.get_chain(ticker, expiries, max_age_seconds, _coordinator)
         spot = raw.get("spot")
@@ -317,8 +321,9 @@ async def history(
     days: int = Query(default=30, ge=1, le=365, description="Lookback window in days"),
 ):
     try:
-        from server import db as mongo_db
         from datetime import timedelta
+
+        from server import db as mongo_db
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         cursor = mongo_db.snapshots.find(
             {"ticker": ticker.upper(), "ts": {"$gte": cutoff}},
@@ -386,8 +391,9 @@ async def flow(
     days: int = Query(default=7, ge=1, le=30),
 ):
     try:
-        from server import db as mongo_db
         from datetime import timedelta
+
+        from server import db as mongo_db
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         cursor = mongo_db.flow.find(
             {"ticker": ticker.upper(), "ts": {"$gte": cutoff}},
@@ -406,7 +412,7 @@ async def surface(
     max_age_seconds: int = Query(default=300, ge=0, le=3600),
 ):
     try:
-        from server import calc_iv_surface_data, _sanitize
+        from server import _sanitize, calc_iv_surface_data
         raw = await _cache.get_chain(ticker, expiries, max_age_seconds, _coordinator)
         _check_chain(raw, ticker)
         return _sanitize(calc_iv_surface_data(raw["spot"], raw["contracts"]))
@@ -423,8 +429,9 @@ async def regime_stats(
     days: int = Query(default=30, ge=1, le=365),
 ):
     try:
-        from server import db as mongo_db
         from datetime import timedelta
+
+        from server import db as mongo_db
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         cursor = mongo_db.snapshots.find(
             {"ticker": ticker.upper(), "ts": {"$gte": cutoff}},
@@ -441,7 +448,7 @@ async def regime_stats(
 async def compare(
     tickers: str = Query(..., description="Comma-separated ticker symbols"),
 ):
-    from server import calc_market_regime, _sanitize
+    from server import _sanitize, calc_market_regime
     syms = [t.strip().upper() for t in tickers.split(",") if t.strip()]
     out = {}
     for sym in syms:
@@ -462,9 +469,11 @@ async def correlation(
     days: int = Query(default=30, ge=1, le=365),
 ):
     try:
-        from server import db as mongo_db
         from datetime import timedelta
+
         import pandas as pd
+
+        from server import db as mongo_db
         syms = [t.strip().upper() for t in tickers.split(",") if t.strip()]
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 

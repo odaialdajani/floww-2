@@ -25,7 +25,6 @@ sys.path.insert(0, str(REPO_BACKEND))
 
 from services.iv_skew_analyzer import IvSkewAnalyzer
 
-
 # ==================================================================
 # Fixtures
 # ==================================================================

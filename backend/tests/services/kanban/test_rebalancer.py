@@ -7,10 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent.parent))
 
-from services.kanban.rebalancer import (
-    extract_skills_from_text, compute_tfidf_similarity,
-    recommend_reassignment
-)
+from services.kanban.rebalancer import compute_tfidf_similarity, extract_skills_from_text, recommend_reassignment
 
 
 class TestExtractSkills:

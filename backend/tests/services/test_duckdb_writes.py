@@ -3,10 +3,12 @@ backend/tests/services/test_duckdb_retry.py
 Tests for the retry_on_failure decorator in duckdb_engine.py.
 """
 import asyncio
-import pytest
-from unittest.mock import AsyncMock, patch
 import logging
-import sys, types
+import sys
+import types
+from unittest.mock import AsyncMock, patch
+
+import pytest
 
 # Stub services.observability so importing duckdb_engine doesn't pull in the
 # real prometheus-backed module. setdefault only — NEVER replace

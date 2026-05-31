@@ -24,7 +24,6 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-
 log = logging.getLogger(__name__)
 
 

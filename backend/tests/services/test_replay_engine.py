@@ -6,12 +6,12 @@ Tests for the historical replay engine.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone, timedelta
+import sys
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
-import sys
-from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from services.duckdb_engine import DuckDBEngine

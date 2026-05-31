@@ -35,12 +35,12 @@ MODEL_BASE_PATH = Path(__file__).resolve().parents[2] / "project_oracle" / "mode
 def _get_detector(ticker: str, seq_len: int = 50, latent_dim: int = 8, device: str = "cpu"):
     """Get or create an anomaly detector for the given ticker."""
     if ticker not in _detectors:
-        from services.anomaly_detector import FlowAnomalyDetector, HAS_TORCH
+        from services.anomaly_detector import HAS_TORCH, FlowAnomalyDetector
         _detectors[ticker] = FlowAnomalyDetector(
             seq_len=seq_len, latent_dim=latent_dim, ticker=ticker, device=device
         )
         # Auto-load trained checkpoint if available
-        ckpt_path = MODEL_BASE_PATH / f"anomaly_detector_v1.pt"
+        ckpt_path = MODEL_BASE_PATH / "anomaly_detector_v1.pt"
         if ckpt_path.exists() and HAS_TORCH:
             try:
                 import torch

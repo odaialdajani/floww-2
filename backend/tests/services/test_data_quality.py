@@ -5,11 +5,11 @@ Tests for cross-source GEX consistency checking.
 """
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 
 import pytest
 
-import sys
-from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from services.data_quality import DataQualityChecker

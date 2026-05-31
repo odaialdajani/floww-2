@@ -10,13 +10,13 @@ Implements institutional-grade analytics from the floe library:
 - Enhanced opportunity detection
 """
 
-from typing import List, Dict, Any
-from collections import defaultdict
 import math
+from collections import defaultdict
+from typing import Any, Dict, List
+
 import numpy as np
 
-from bs_greeks import bs_gamma, bs_vanna, bs_charm, bs_call_price
-
+from bs_greeks import bs_call_price, bs_charm, bs_gamma, bs_vanna
 
 # ============================================================================
 # Implied PDF (Breeden-Litzenberger)

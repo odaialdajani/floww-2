@@ -18,34 +18,33 @@ from __future__ import annotations
 import math
 import sys
 from datetime import date
-from typing import Any, Dict, Iterable, List
-
-import pandas as pd
-import pytest
-from scipy.stats import norm
 
 # Make ``services`` and ``services.ml`` importable when pytest is launched
 # from anywhere in the repo. We need ``backend/`` on sys.path so that
 # ``services.gex_history`` resolves; from this file that is parent.parent.parent
 # (services -> tests -> backend).
 from pathlib import Path  # noqa: E402
+from typing import Any, Dict, Iterable, List
+
+import pandas as pd
+import pytest
+from scipy.stats import norm
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from services.gex_history import (  # noqa: E402
-    build_gex_history,
-    compute_gex_total_for_chain,
     _IV_FALLBACK,
-    _RISK_FREE,
+    _MIN_T_YEARS,
     _OPTION_MULTIPLIER,
     _PCT_MOVE,
-    _MIN_T_YEARS,
+    _RISK_FREE,
+    build_gex_history,
+    compute_gex_total_for_chain,
 )
 from services.ml.features import (  # noqa: E402
     add_gex_features,
     fetch_gex_history_from_mongo,
 )
-
 
 # ────────────────────────────────────────────────────────────────────────────
 # Helpers — fake Mongo + math reference

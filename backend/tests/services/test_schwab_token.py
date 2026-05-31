@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,7 +15,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from schwab import SchwabTokenManager

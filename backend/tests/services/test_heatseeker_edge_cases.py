@@ -1,6 +1,7 @@
 """Edge cases for heatseeker calc functions."""
 import pytest
-from services.heatseeker import calc_flip_zones, calc_node_lifecycle, calc_air_pockets
+
+from services.heatseeker import calc_air_pockets, calc_flip_zones, calc_node_lifecycle
 
 
 def test_flip_zones_empty_chain_returns_empty_zones():

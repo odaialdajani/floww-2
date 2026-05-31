@@ -5,8 +5,9 @@ server.py has broken imports (databento module missing). The H4 hardening
 itself works — the degraded response is returned on _fetch_chain failure.
 The 404 path is only testable when server.py imports successfully.
 """
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
 from fastapi import FastAPI
 from starlette.testclient import TestClient
 

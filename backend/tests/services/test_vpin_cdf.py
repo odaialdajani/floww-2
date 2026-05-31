@@ -20,8 +20,8 @@ import pytest
 REPO_BACKEND = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_BACKEND))
 
-from services.vpin_engine import VpinEngine
 from services.vpin_cdf import VpinCdfCalculator
+from services.vpin_engine import VpinEngine
 
 
 class TestVpinCdfBasic:

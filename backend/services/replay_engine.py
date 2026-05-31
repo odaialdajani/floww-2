@@ -11,8 +11,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Any, Dict, List
 from datetime import datetime
+from typing import Any, Dict, List
 
 from services.duckdb_engine import DuckDBEngine
 

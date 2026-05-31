@@ -7,9 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent.parent))
 
-from services.kanban.bottleneck import (
-    compute_agent_metrics, detect_bottlenecks
-)
+from services.kanban.bottleneck import compute_agent_metrics, detect_bottlenecks
 
 
 class TestComputeAgentMetrics:

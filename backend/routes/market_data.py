@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 router = APIRouter()
 
@@ -82,7 +82,7 @@ async def tick_cache(ticker: str):
 
 @router.get("/tickers")
 async def list_tickers():
-    from server import TRINITY, DEFAULT_TICKERS, POPULAR_UNIVERSE
+    from server import DEFAULT_TICKERS, POPULAR_UNIVERSE, TRINITY
     return {
         "trinity": TRINITY,
         "default": DEFAULT_TICKERS,
@@ -112,7 +112,7 @@ async def trinity(
     mode: str = Query("day", pattern="^(day|swing)$"),
     dte: Optional[int] = Query(None, ge=0, le=30),
 ):
-    from server import build_heatmap, TRINITY
+    from server import TRINITY, build_heatmap
     if tickers is None:
         tickers = ",".join(TRINITY)
     syms = [t.strip() for t in tickers.split(",") if t.strip()]
@@ -158,8 +158,9 @@ async def trinity(
 
 @router.get("/spot/{ticker}")
 async def spot(ticker: str):
-    from server import fetch_spot_and_chains_merged
     from datetime import datetime, timezone
+
+    from server import fetch_spot_and_chains_merged
     t = ticker.strip().upper()
     if t == "SPX":
         t = "^SPX"
@@ -182,8 +183,8 @@ async def chain(
     expiry: Optional[str] = None,
     dte_max: Optional[int] = Query(None, ge=0, le=365),
 ):
-    from server import fetch_spot_and_chains_merged, _sanitize, DIV_YIELD
-    from bs_greeks import bs_vanna, bs_charm
+    from bs_greeks import bs_charm, bs_vanna
+    from server import DIV_YIELD, _sanitize, fetch_spot_and_chains_merged
     t = ticker.strip().upper()
     if t == "SPX":
         t = "^SPX"
@@ -247,7 +248,7 @@ async def gex_timeframes(
     ticker: str,
     expiries: int = Query(4, ge=1, le=12),
 ):
-    from server import fetch_spot_and_chains_merged, _sanitize
+    from server import _sanitize, fetch_spot_and_chains_merged
     from services.gex_history import calc_gex_timeframes
     t = ticker.strip().upper()
     if t == "SPX":
@@ -266,7 +267,7 @@ async def uoa(
     min_premium: float = Query(100000, ge=0),
     limit: int = Query(20, ge=1, le=100),
 ):
-    from server import fetch_spot_and_chains_merged, _sanitize
+    from server import _sanitize, fetch_spot_and_chains_merged
     from services.uoa import calc_uoa
     t = ticker.strip().upper()
     if t == "SPX":

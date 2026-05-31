@@ -7,7 +7,9 @@ import pytest
 
 pytestmark = pytest.mark.skip(reason="Async timing issues with mock db in stateful test")
 
-import sys, os
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 import asyncio
@@ -15,13 +17,16 @@ import concurrent.futures
 
 import pytest
 from hypothesis import settings
-from hypothesis.stateful import (
-    RuleBasedStateMachine, rule, invariant, initialize, precondition,
-)
 from hypothesis import strategies as st
+from hypothesis.stateful import (
+    RuleBasedStateMachine,
+    initialize,
+    invariant,
+    precondition,
+    rule,
+)
 
 from services.ingestion_pipeline import IngestionPipeline
-
 
 VALID_TICKERS = ["SPY", "QQQ", "IWM", "DIA", "TLT"]
 

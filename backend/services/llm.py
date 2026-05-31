@@ -13,9 +13,10 @@ Used for:
 - Market commentary
 """
 
-import os
 import logging
-from typing import Dict, Any
+import os
+from typing import Any, Dict
+
 from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
@@ -54,12 +55,12 @@ async def analyze_trade_with_llm(
 ) -> Dict[str, Any]:
     """Analyze a trade opportunity using LLM."""
     llm = get_llm_service()
-    
+
     system_prompt = """You are an expert options trading analyst. 
 Analyze the trading setup and provide a concise, actionable assessment.
 Focus on: regime context, GEX implications, risk/reward, and suggested strategy.
 Keep responses under 200 words."""
-    
+
     prompt = f"""Ticker: {ticker}
 Spot: ${spot:.2f}
 Current Regime: {regime}

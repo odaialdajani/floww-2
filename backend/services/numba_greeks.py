@@ -19,12 +19,11 @@ Usage:
     greeks = compute_all_greeks(spot, strikes, expiries, ivs, types)
 """
 
+import logging
 import math
 
 import numba
 import numpy as np
-
-import logging
 
 logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------

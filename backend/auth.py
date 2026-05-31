@@ -5,9 +5,10 @@ Usage: Add X-API-Key header to requests.
 The API key is stored in the .env file as API_SECRET_KEY.
 """
 
-import os
 import logging
-from fastapi import Request, HTTPException, WebSocket
+import os
+
+from fastapi import HTTPException, Request, WebSocket
 
 logger = logging.getLogger(__name__)
 
@@ -64,11 +65,11 @@ async def verify_api_key(request: Request):
     # Only protect mutating methods
     if request.method not in PROTECTED_METHODS:
         return True
-    
+
     # Public paths don't need auth
     if is_public_path(request.url.path):
         return True
-    
+
     # Check for API key in header
     api_key = request.headers.get("X-API-Key", "")
     expected_key = get_api_key()

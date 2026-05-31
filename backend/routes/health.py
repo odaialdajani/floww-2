@@ -12,9 +12,9 @@ import httpx
 from fastapi import APIRouter
 
 from config.secrets import get_alpha_vantage_key
+from services.alpha_vantage_client import circuit as av_circuit
 from services.duckdb_engine import db as duckdb_engine
 from services.websocket_streamer import manager as ws_manager
-from services.alpha_vantage_client import circuit as av_circuit
 
 logger = logging.getLogger(__name__)
 

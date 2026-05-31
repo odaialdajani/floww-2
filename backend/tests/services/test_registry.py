@@ -13,8 +13,8 @@ Tests cover:
 
 from __future__ import annotations
 
-import sys
 import os
+import sys
 from datetime import datetime, timezone
 from typing import Dict
 from unittest.mock import AsyncMock, MagicMock
@@ -25,12 +25,11 @@ import pytest
 # Add backend/ to path so services.ml is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from services.ml import DegenerateModelError
 from services.ml.registry import (
     ModelRegistry,
     compute_psi,
 )
-from services.ml import DegenerateModelError
-
 
 # ────────────────────────────────────────────────────────────────────────────
 # Fixtures

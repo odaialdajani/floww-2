@@ -26,14 +26,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 os.environ.setdefault("TESTING", "1")
 
+from services.circuit_breaker import BreakerThresholds, CircuitBreaker, CircuitState
 from services.data_fallback import (
     DataFallbackHandler,
     DataSource,
     FallbackConfig,
     FallbackState,
 )
-from services.circuit_breaker import CircuitBreaker, BreakerThresholds, CircuitState
-
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 

@@ -266,7 +266,7 @@ def calc_gex_timeframes(
                 call_gex += gex
             else:
                 put_gex += gex
-        net_gex = call_gex + put_gex  # put_gex is already negative from formula above
+        _net_gex = call_gex + put_gex  # put_gex is already negative from formula above
         # Actually put_gex should be negative: sign = -1 for puts
         # Let me recompute properly
         call_gex2 = 0.0

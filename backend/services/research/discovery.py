@@ -26,10 +26,9 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
-
 
 # ────────────────────────────────────────────────────────────────────────────
 # Normalized record
@@ -646,7 +645,7 @@ class QuantocracySource(DiscoverySource):
             return results
 
         # RSS 2.0 namespace
-        ns = {"rss": "http://purl.org/rss/1.0/"}
+        _ns = {"rss": "http://purl.org/rss/1.0/"}
         channel = root.find("channel")
         if channel is None:
             channel = root  # try without channel wrapper

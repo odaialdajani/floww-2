@@ -8,17 +8,16 @@ reconnect logic, and token refresh.
 from __future__ import annotations
 
 import asyncio
+import sys
+from pathlib import Path
 
 import pytest
 
-import sys
-from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from services.duckdb_engine import DuckDBEngine
 from services.ingestion_pipeline import IngestionPipeline
 from services.mock_schwab_feed import MockSchwabFeed
-
 
 # =============================================================================
 # Fixtures

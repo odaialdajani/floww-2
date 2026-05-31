@@ -13,7 +13,6 @@ import os
 import tempfile
 import time
 
-
 from services.risk.gate import (
     DEFAULT_DAILY_LOSS_PCT,
     DEFAULT_DATA_STALENESS_SEC,
@@ -27,7 +26,6 @@ from services.risk.gate import (
     PreTradeRiskGate,
     RiskDecision,
 )
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

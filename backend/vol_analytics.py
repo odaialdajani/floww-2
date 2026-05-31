@@ -9,9 +9,9 @@ Functions:
 - calc_iv_rank_percentile: IV rank and percentile for options valuation
 """
 
-from typing import List, Dict, Any, Optional
-from datetime import datetime, timezone
 from collections import defaultdict
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import yfinance as yf

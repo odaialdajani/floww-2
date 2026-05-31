@@ -50,14 +50,14 @@ import pytest
 REPO_BACKEND = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_BACKEND))
 
-from services.vpin_engine import VpinEngine  # noqa: E402
-from services.hawkes_process import HawkesProcess  # noqa: E402
-from services.stochastic_vol import SABRModel, VolSurfaceConstructor  # noqa: E402
-from services.liquidity_metrics import KyleLambda, AmihudIlliquidity, MarketFragilityIndex  # noqa: E402
+from services.anomaly_detector import HAS_TORCH, FlowAnomalyDetector, StatisticalAnomalyDetector  # noqa: E402
 from services.gex_aggregator import GexAggregator  # noqa: E402
+from services.hawkes_process import HawkesProcess  # noqa: E402
+from services.liquidity_metrics import AmihudIlliquidity, KyleLambda, MarketFragilityIndex  # noqa: E402
+from services.node_lifecycle import Node, NodeLifecycleTracker, NodeState  # noqa: E402
+from services.stochastic_vol import SABRModel, VolSurfaceConstructor  # noqa: E402
 from services.trinity_alignment import TrinityAlignmentIndex  # noqa: E402
-from services.node_lifecycle import NodeLifecycleTracker, Node, NodeState  # noqa: E402
-from services.anomaly_detector import FlowAnomalyDetector, StatisticalAnomalyDetector, HAS_TORCH  # noqa: E402
+from services.vpin_engine import VpinEngine  # noqa: E402
 
 
 # =============================================================================

@@ -4,25 +4,26 @@ backend/tests/services/ml/test_quality.py
 Unit tests for ML quality gates. Each gate has positive (pass) and negative (fail) tests.
 """
 
-import pytest
-import numpy as np
-import sys
 import os
+import sys
+
+import numpy as np
+import pytest
 
 # Add backend/ to path so services.ml is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from services.ml import DegenerateModelError
 from services.ml.quality import (
     assert_class_balance,
     assert_feature_variance,
+    assert_holdout_untouched,
+    assert_no_future_leakage,
     assert_prediction_distribution,
     assert_temporal_ordering,
-    assert_no_future_leakage,
-    assert_holdout_untouched,
     assert_train_test_temporal_split,
     run_all_gates,
 )
-from services.ml import DegenerateModelError
 
 
 class TestAssertClassBalance:

@@ -25,7 +25,7 @@ Coverage:
 import sys
 import time
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -264,7 +264,7 @@ def test_monitor_multiple_providers(monitor):
 # ---------------------------------------------------------------------------
 
 def test_provider_calls_counter():
-    from services.observability import provider_calls_total, get_metrics_bytes
+    from services.observability import get_metrics_bytes, provider_calls_total
     provider_calls_total.labels(provider="finnhub", status="success").inc()
     provider_calls_total.labels(provider="finnhub", status="success").inc()
     provider_calls_total.labels(provider="finnhub", status="failure").inc()
@@ -274,28 +274,28 @@ def test_provider_calls_counter():
 
 
 def test_provider_success_rate_gauge():
-    from services.observability import provider_success_rate, get_metrics_bytes
+    from services.observability import get_metrics_bytes, provider_success_rate
     provider_success_rate.labels(provider="yfinance").set(0.85)
     output = get_metrics_bytes().decode()
     assert 'floww_provider_success_rate{provider="yfinance"} 0.85' in output
 
 
 def test_provider_last_success_gauge():
-    from services.observability import provider_last_success_seconds_ago, get_metrics_bytes
+    from services.observability import get_metrics_bytes, provider_last_success_seconds_ago
     provider_last_success_seconds_ago.labels(provider="finnhub").set(45.2)
     output = get_metrics_bytes().decode()
     assert 'floww_provider_last_success_seconds_ago{provider="finnhub"} 45.2' in output
 
 
 def test_provider_alerts_fired_counter():
-    from services.observability import provider_alerts_fired_total, get_metrics_bytes
+    from services.observability import get_metrics_bytes, provider_alerts_fired_total
     provider_alerts_fired_total.labels(provider="yfinance", alert_type="low_success_rate").inc()
     output = get_metrics_bytes().decode()
     assert 'floww_provider_alerts_fired_total{alert_type="low_success_rate",provider="yfinance"} 1' in output
 
 
 def test_yfinance_calls_counter():
-    from services.observability import yfinance_calls_total, get_metrics_bytes
+    from services.observability import get_metrics_bytes, yfinance_calls_total
     yfinance_calls_total.labels(endpoint="get_spot_price", status="success").inc()
     yfinance_calls_total.labels(endpoint="get_spot_price", status="success").inc()
     yfinance_calls_total.labels(endpoint="get_spot_price", status="failure").inc()
@@ -305,7 +305,7 @@ def test_yfinance_calls_counter():
 
 
 def test_yfinance_success_rate_gauge():
-    from services.observability import yfinance_success_rate, get_metrics_bytes
+    from services.observability import get_metrics_bytes, yfinance_success_rate
     yfinance_success_rate.set(0.92)
     output = get_metrics_bytes().decode()
     assert "floww_yfinance_success_rate 0.92" in output
@@ -330,6 +330,7 @@ def test_record_provider_call_failure():
 def test_record_provider_call_safe_when_imports_fail():
     """_record_provider_call should be completely safe even if imports fail."""
     import importlib
+
     import data_providers
     # Force reimport to get a fresh copy
     importlib.reload(data_providers)

@@ -22,12 +22,11 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Callable
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
@@ -437,8 +436,8 @@ class DataProviderMonitor:
         """Update Prometheus gauges from current stats."""
         try:
             from services.observability import (
-                provider_success_rate,
                 provider_last_success_seconds_ago,
+                provider_success_rate,
             )
             for name, stats in self._providers.items():
                 # Set success rate gauge

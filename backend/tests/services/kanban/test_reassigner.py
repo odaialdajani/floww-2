@@ -7,9 +7,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from kanban.reassigner import (
-    extract_skills,
-    cosine_similarity,
     compute_agent_load,
+    cosine_similarity,
+    extract_skills,
     find_reassignments,
     format_proposal,
     run_check,

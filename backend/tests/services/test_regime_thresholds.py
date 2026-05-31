@@ -13,7 +13,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from services.anomaly_detector import RegimeAwareThreshold, FlowAnomalyDetector
+from services.anomaly_detector import FlowAnomalyDetector, RegimeAwareThreshold
 
 
 class TestRegimeAwareThreshold:

@@ -27,8 +27,8 @@ Example use cases in trading:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Set, Tuple
 from collections import defaultdict
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 import pandas as pd
@@ -270,7 +270,7 @@ class BackdoorCriterion:
         descendants = self.graph.get_descendants(x)
         candidates = [n for n in self.graph.get_nodes()
                       if n not in {x, y} and n not in descendants]
-        
+
         valid_sets = []
         # Try all subsets of candidates (limit to reasonable size)
         from itertools import combinations

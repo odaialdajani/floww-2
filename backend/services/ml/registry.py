@@ -14,8 +14,8 @@ Manages the full model lifecycle (shadow -> active -> retired) with:
 from __future__ import annotations
 
 import logging
-import os
 import math
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -23,8 +23,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import joblib
 import numpy as np
 import pandas as pd
-from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
+from motor.motor_asyncio import AsyncIOMotorClient
 
 from . import DegenerateModelError
 
@@ -330,7 +330,7 @@ class ModelRegistry:
 
         artifact_path = model_doc.get("artifact_path", "")
         scaler_path = artifact_path.replace(".joblib", "_scaler.joblib")
-        meta_path = artifact_path.replace(".joblib", "_meta.json")
+        _meta_path = artifact_path.replace(".joblib", "_meta.json")
 
         if not os.path.exists(artifact_path):
             raise DegenerateModelError(

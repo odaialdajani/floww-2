@@ -25,7 +25,6 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
-
 # Anomaly thresholds
 CPR_BULLISH_THRESHOLD = 2.0
 CPR_BEARISH_THRESHOLD = 0.5

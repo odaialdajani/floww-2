@@ -26,9 +26,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from .signals import Action, Position, Signal
 from .report import BacktestResult, TradeRecord
-
+from .signals import Action, Position, Signal
 
 logger = logging.getLogger(__name__)
 log = logging.getLogger("backtest.engine")
@@ -348,8 +347,7 @@ def run_is_oos_split(
     split_idx = int(n * train_ratio)
     if split_idx < 2 or split_idx > n - 2:
         raise ValueError(f"split_idx={split_idx} with n={n} leaves too few bars for one set")
-
-    train_snap = snapshots[:split_idx]
+    _train_snap = snapshots[:split_idx]
     train_bars = bars[:split_idx]
     test_snap = snapshots[split_idx:]
     test_bars = bars[split_idx:]
@@ -410,7 +408,7 @@ def run_walk_forward_cv(
         if test_end <= train_end:
             continue
 
-        train_snap = snapshots[:train_end]
+        _train_snap = snapshots[:train_end]
         train_bars = bars[:train_end]
         test_snap = snapshots[train_end:test_end]
         test_bars = bars[train_end:test_end]

@@ -5,10 +5,10 @@ Tests the production reconnect logic in services/schwab_streamer.py.
 """
 import asyncio
 import json
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Async websocket mocks

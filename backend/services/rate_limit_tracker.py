@@ -1,9 +1,10 @@
 """backend/services/rate_limit_tracker.py"""
 
 from __future__ import annotations
-from collections import deque
+
 import logging
 import time
+from collections import deque
 
 logger = logging.getLogger(__name__)
 

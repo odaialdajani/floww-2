@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio

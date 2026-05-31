@@ -1,5 +1,6 @@
 """Test that DuckDBEngine.stop() awaits the flush loop task."""
 import asyncio
+
 import pytest
 
 

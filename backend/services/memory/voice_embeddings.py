@@ -8,8 +8,8 @@ Inserts transcript into mem0 with tags [source:voice_memo, audio].
 """
 
 import logging
-from pathlib import Path
 import os
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 

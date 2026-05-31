@@ -18,7 +18,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from services.cache_router import CacheRouter, degraded_response, _make_key  # noqa: F401
+from services.cache_router import CacheRouter, _make_key, degraded_response  # noqa: F401
 
 
 @pytest.fixture
@@ -53,8 +53,9 @@ class TestCacheRouterFresh:
     async def test_memory_cache_hit(self, router, sample_data, coordinator):
         # Pre-populate memory
         key = _make_key("SPY", 4)
-        from services.cache_router import CacheEntry
         import time
+
+        from services.cache_router import CacheEntry
         entry = CacheEntry(
             ticker="SPY", expiries=4, data=sample_data,
             cached_at=time.monotonic(), raw_contracts=sample_data["contracts"],
@@ -83,6 +84,7 @@ class TestCacheRouterStale:
     @pytest.mark.asyncio
     async def test_stale_cache_returns_with_stale_flag(self, router, coordinator):
         import time
+
         from services.cache_router import CacheEntry
 
         key = _make_key("SPY", 4)
@@ -125,8 +127,9 @@ class TestCacheRouterLRU:
 
     def test_eviction_on_overflow(self):
         router = CacheRouter(max_memory_entries=2)
-        from services.cache_router import CacheEntry
         import time
+
+        from services.cache_router import CacheEntry
 
         for i in range(3):
             entry = CacheEntry(

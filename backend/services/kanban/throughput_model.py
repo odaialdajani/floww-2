@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import logging
+
 logger = logging.getLogger(__name__)
 
 """
@@ -15,9 +16,9 @@ Reference: Hyndman, Athanasopoulos (2018) Forecasting: Principles and Practice Â
 
 import json
 import math
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from collections import defaultdict
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 KANBAN_DIR = REPO_ROOT / "kanban"

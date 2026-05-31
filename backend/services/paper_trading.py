@@ -19,12 +19,10 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
-from services.execution_engine import (
-    ExecutionEngine, ExecutionResult, MarketState, Order
-)
+from services.execution_engine import ExecutionEngine, ExecutionResult, MarketState, Order
 
 logger = logging.getLogger(__name__)
 

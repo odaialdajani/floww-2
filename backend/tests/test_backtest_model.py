@@ -6,11 +6,12 @@ Unit tests for the backtest script.
 Uses synthetic data — no MongoDB required.
 """
 
-import pytest
-import numpy as np
-import pandas as pd
 import sys
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import pytest
 
 # Add repo root to path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -18,8 +19,8 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.backtest_model import (
     build_backtest_features,
-    run_backtest,
     load_model_and_scaler,
+    run_backtest,
 )
 
 

@@ -6,20 +6,21 @@ Unit tests for the paper-trade dry-run script.
 Uses mocks — no MongoDB or Alpaca required.
 """
 
-import pytest
-import numpy as np
 import sys
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import numpy as np
+import pytest
 
 # Add repo root to path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.paper_trade_dry_run import (
-    load_active_model,
     compute_features,
     daily_paper_trade_dry_run,
+    load_active_model,
 )
 
 # The exact 23 features that compute_features returns

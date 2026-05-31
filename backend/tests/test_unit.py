@@ -2,8 +2,9 @@
 Unit tests for Black-Scholes math, GEX calculations, and alert engine.
 These tests don't require the server to be running.
 """
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
@@ -205,7 +206,7 @@ def test_detect_alerts_with_snapshots():
     """Test alert detection with mock snapshots."""
     from alert_engine import AlertEngine, GEXSnapshot
     engine = AlertEngine()
-    
+
     # Add two snapshots with regime change
     snap1 = GEXSnapshot(
         ticker="SPY", spot_price=450, gamma_flip=445,
@@ -219,10 +220,10 @@ def test_detect_alerts_with_snapshots():
         max_gamma_strike=450, total_gex=-1e9, net_gex=-5e8,
         regime="NEGATIVE", timestamp="2025-01-02T00:00:00"
     )
-    
+
     engine._snapshots["SPY"] = [snap1, snap2]
     alerts = engine.detect_alerts("SPY")
-    
+
     # Should detect GAMMA_FLIP
     assert len(alerts) > 0
     assert any(a.type == "GAMMA_FLIP" for a in alerts)
@@ -232,7 +233,7 @@ def test_all_alert_types_registered():
     """Test that all 11 alert types are detectable."""
     from alert_engine import AlertEngine, GEXSnapshot
     engine = AlertEngine()
-    
+
     # Create snapshots that trigger each alert type
     snap_positive = GEXSnapshot(
         ticker="TEST", spot_price=100, gamma_flip=100.1,
@@ -248,10 +249,10 @@ def test_all_alert_types_registered():
         regime="NEGATIVE", gex_by_strike={100: -5e8, 105: -2e8, 95: 1e8},
         timestamp="2025-01-02T00:00:00"
     )
-    
+
     engine._snapshots["TEST"] = [snap_positive, snap_negative]
     alerts = engine.detect_alerts("TEST", momentum_score=85)
-    
+
     alert_types = {a.type for a in alerts}
     # Should have multiple alert types
     assert len(alert_types) >= 3
@@ -283,7 +284,7 @@ def test_sanitize_csv_field():
         if s and s[0] in "=+-@":
             return "'" + s
         return s
-    
+
     assert sanitize("=SUM(A1:A10)") == "'=SUM(A1:A10)"
     assert sanitize("+cmd") == "'+cmd"
     assert sanitize("-cmd") == "'-cmd"

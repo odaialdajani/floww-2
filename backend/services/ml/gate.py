@@ -28,7 +28,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-
 DEFAULT_MAX_SHARPE: float = 10.0
 """Above this Sharpe, daily-direction predictions are presumed in-sample fit.
 

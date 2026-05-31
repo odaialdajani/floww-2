@@ -7,15 +7,16 @@ Tests for the circuit breaker pattern.
 
 import os
 import time
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 os.environ.setdefault("API_SECRET_KEY", "test-secret-key")
 
 from services.circuit_breaker import (
+    BreakerThresholds,
     CircuitBreaker,
     CircuitState,
-    BreakerThresholds,
 )
 
 

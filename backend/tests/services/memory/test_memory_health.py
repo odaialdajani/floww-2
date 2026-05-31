@@ -5,23 +5,24 @@ backend/tests/services/memory/test_memory_health.py — Tests for memory health 
 Run: pytest backend/tests/services/memory/test_memory_health.py -v
 """
 
-import pytest
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from services.memory.health import (
+    _metrics,
     get_health_status,
     get_prometheus_metrics,
-    record_query,
     record_cache_hit,
     record_cache_miss,
-    record_federation_sync,
     record_consolidation,
+    record_federation_sync,
     record_pruning,
-    _metrics,
+    record_query,
 )
 
 

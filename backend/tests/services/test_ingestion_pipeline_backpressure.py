@@ -1,7 +1,8 @@
 """When the ingestion queue fills, pipeline must apply backpressure, not crash or hang."""
 import asyncio
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 
 @pytest.mark.asyncio

@@ -15,9 +15,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException
-
 import numpy as np
+from fastapi import APIRouter, HTTPException
 
 logger = logging.getLogger(__name__)
 

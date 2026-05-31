@@ -12,8 +12,8 @@ Design (see `docs/adr/0003-research-discovery.md` when written):
 """
 
 from services.research.discovery import (
-    Discovery,
     ArxivSource,
+    Discovery,
     DiscoverySource,
     discover_all,
 )

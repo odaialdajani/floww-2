@@ -8,9 +8,10 @@ model.predict. No model that fails any gate is allowed to be saved.
 
 from __future__ import annotations
 
-import numpy as np
 import logging
 from typing import Any, Dict, List, Optional, Sequence
+
+import numpy as np
 
 from . import DegenerateModelError
 

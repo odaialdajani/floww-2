@@ -16,9 +16,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Dict, List, Optional
-from datetime import datetime, timezone
 
 import duckdb
 import numpy as np

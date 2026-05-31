@@ -5,11 +5,11 @@ Admin/utility routes: errors, performance, databento usage.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional
 
-from auth import get_api_key
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from auth import get_api_key
 from services.rate_limit_tracker import av_rate_tracker
 
 
@@ -49,8 +49,9 @@ async def performance_stats(_: bool = Depends(_require_admin_auth)):
 
 @router.post("/errors/clear")
 async def errors_clear():
+    from datetime import datetime, timedelta, timezone
+
     from server import db
-    from datetime import datetime, timezone, timedelta
     cutoff = datetime.now(timezone.utc) - timedelta(days=7)
     # Motor's delete_many is async — must await before reading result.deleted_count.
     # Without await this returned a coroutine and .deleted_count raised AttributeError.
@@ -60,8 +61,9 @@ async def errors_clear():
 
 @router.get("/databento/usage")
 async def databento_usage(_: bool = Depends(_require_admin_auth)):
-    from server import db, PAID_TICKERS, LIVE_WINDOW, _live_tape_session
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
+
+    from server import LIVE_WINDOW, PAID_TICKERS, _live_tape_session, db
     cutoff = datetime.now(timezone.utc) - timedelta(days=30)
     usage = db.databento_usage.find({"ts": {"$gte": cutoff}}, {"_id": 0}).sort("ts", -1).limit(100)
     usage_list = await usage.to_list(length=100)
@@ -173,8 +175,8 @@ async def schwab_health(_: bool = Depends(_require_admin_auth)):
 @router.get("/admin/trading/status")
 async def trading_status(_: bool = Depends(_require_admin_auth)):
     """Return current trading state, circuit breaker status, and SLO summary."""
-    from services.live_trading_switch import switch
     from services.circuit_breaker import main_breaker
+    from services.live_trading_switch import switch
     from services.slo_tracker import tracker
 
     return {
@@ -190,7 +192,7 @@ async def trading_transition(request: dict, _: bool = Depends(_require_admin_aut
     Request a trading state transition.
     Requires 2FA: totp_code + email_code in request body.
     """
-    from services.live_trading_switch import switch, TradingState
+    from services.live_trading_switch import TradingState, switch
 
     target_str = request.get("target_state", "")
     totp_code = request.get("totp_code", "")

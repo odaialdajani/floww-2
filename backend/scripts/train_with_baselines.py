@@ -323,7 +323,7 @@ def evaluate_model(
 
     X_scaled = scaler.transform(X_test)
     y_pred = model.predict(X_scaled)
-    y_proba = model.predict_proba(X_scaled)[:, 1] if hasattr(model, "predict_proba") else y_pred.astype(float)
+    _y_proba = model.predict_proba(X_scaled)[:, 1] if hasattr(model, "predict_proba") else y_pred.astype(float)
 
     metrics = {
         "accuracy": float(accuracy_score(y_test, y_pred)),
@@ -348,12 +348,12 @@ def run_quality_gates(
     y_test: Optional[np.ndarray] = None,
 ) -> Dict[str, bool]:
     """Run pre-save quality gates. Raises on failure."""
+    from services.ml import DegenerateModelError
     from services.ml.quality import (
         assert_class_balance,
         assert_feature_variance,
         assert_prediction_distribution,
     )
-    from services.ml import DegenerateModelError
 
     results = {}
     try:
@@ -457,7 +457,7 @@ async def train_one_ticker(
         return {"status": "insufficient_data", "ticker": ticker, "message": msg}
 
     X, y, feature_names = prepare_feature_matrix(df)
-    dates = df["date"].tolist() if "date" in df.columns else [str(i) for i in range(len(df))]
+    _dates = df["date"].tolist() if "date" in df.columns else [str(i) for i in range(len(df))]
 
     log.info(f"Feature matrix: {X.shape[0]} samples, {X.shape[1]} features")
     log.info(f"Target balance: {np.mean(y):.3f} positive rate")
@@ -473,9 +473,9 @@ async def train_one_ticker(
 
     # 3. Train each model type
     all_results: Dict[str, Any] = {}
-    best_model = None
+    _best_model = None
     best_sharpe = -np.inf
-    best_model_type = None
+    _best_model_type = None
 
     for model_type in model_types:
         log.info(f"\n--- Training {model_type} ---")

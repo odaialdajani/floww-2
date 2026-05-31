@@ -5,19 +5,19 @@ backend/tests/services/memory/test_federation.py — Tests for federated mem0 sy
 Run: pytest backend/tests/services/memory/test_federation.py -v
 """
 
+import sys
 import time
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from services.memory.federation import (
+    FederatedMemorySync,
     FederationEvent,
     FileBasedFederationQueue,
-    FederatedMemorySync,
 )
 
 

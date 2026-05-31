@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 class TestConvictionCalculation:
     def test_basic_conviction(self):
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.95,
             trinity_score=95.0,
@@ -39,7 +39,7 @@ class TestConvictionCalculation:
         assert result.conviction == pytest.approx(0.812, abs=0.01)
 
     def test_high_conviction(self):
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.95,
             trinity_score=95.0,
@@ -54,7 +54,7 @@ class TestConvictionCalculation:
         assert result.conviction > 0.8
 
     def test_zero_anomaly_gives_zero_conviction(self):
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.0,
             trinity_score=100.0,
@@ -68,7 +68,7 @@ class TestConvictionCalculation:
         assert result is None  # conviction = 0 < 0.7
 
     def test_max_vpin_reduces_conviction(self):
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.9,
             trinity_score=90.0,
@@ -81,8 +81,7 @@ class TestConvictionCalculation:
         # conviction = 0.9 * 0.9 * 0 = 0
 
     def test_boundary_conviction(self):
-        from services.signal_translator import MIN_CONVICTION
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import MIN_CONVICTION, SignalInput, translate_signal
         # Find inputs that give exactly MIN_CONVICTION
         inp = SignalInput(
             anomaly_score=MIN_CONVICTION,
@@ -99,7 +98,7 @@ class TestConvictionCalculation:
 
 class TestRiskGates:
     def test_conviction_too_low(self):
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.5,
             trinity_score=80.0,
@@ -112,7 +111,7 @@ class TestRiskGates:
         assert result is None
 
     def test_equity_too_low(self):
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.95,
             trinity_score=95.0,
@@ -125,7 +124,7 @@ class TestRiskGates:
         assert result is None
 
     def test_sentiment_too_negative(self):
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.95,
             trinity_score=95.0,
@@ -139,7 +138,7 @@ class TestRiskGates:
         assert result is None
 
     def test_too_many_open_positions(self):
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.95,
             trinity_score=95.0,
@@ -153,7 +152,7 @@ class TestRiskGates:
         assert result is None
 
     def test_illiquid_market(self):
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.95,
             trinity_score=95.0,
@@ -167,8 +166,7 @@ class TestRiskGates:
         assert result is None
 
     def test_exact_equity_boundary(self):
-        from services.signal_translator import MIN_ACCOUNT_EQUITY
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import MIN_ACCOUNT_EQUITY, SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.95,
             trinity_score=95.0,
@@ -183,7 +181,7 @@ class TestRiskGates:
 
 class TestTradeIntentOutput:
     def test_has_signal_id(self):
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.95,
             trinity_score=95.0,
@@ -198,7 +196,7 @@ class TestTradeIntentOutput:
         assert all(c in "0123456789abcdef" for c in result.signal_id)
 
     def test_side_positive_gex(self):
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.95,
             trinity_score=95.0,
@@ -213,7 +211,7 @@ class TestTradeIntentOutput:
         assert result.side == "buy"
 
     def test_side_negative_gex(self):
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.95,
             trinity_score=95.0,
@@ -228,7 +226,7 @@ class TestTradeIntentOutput:
         assert result.side == "sell"
 
     def test_side_neutral_defaults_buy(self):
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.95,
             trinity_score=95.0,
@@ -243,7 +241,7 @@ class TestTradeIntentOutput:
         assert result.side == "buy"
 
     def test_stop_loss_is_2pct_below(self):
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.95,
             trinity_score=95.0,
@@ -258,7 +256,7 @@ class TestTradeIntentOutput:
         assert result.stop_loss == expected_stop
 
     def test_take_profit_is_6pct_above(self):
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.95,
             trinity_score=95.0,
@@ -273,7 +271,7 @@ class TestTradeIntentOutput:
         assert result.take_profit == expected_tp
 
     def test_rr_is_3_to_1(self):
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.95,
             trinity_score=95.0,
@@ -290,7 +288,7 @@ class TestTradeIntentOutput:
         assert rr == pytest.approx(3.0, abs=0.1)
 
     def test_rationale_contains_conviction(self):
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.95,
             trinity_score=95.0,
@@ -306,8 +304,7 @@ class TestTradeIntentOutput:
         assert "trinity=" in result.rationale
 
     def test_position_sizing_1pct_equity(self):
-        from services.signal_translator import MAX_POSITION_PCT
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import MAX_POSITION_PCT, SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.95,
             trinity_score=95.0,
@@ -322,7 +319,7 @@ class TestTradeIntentOutput:
         assert result.qty <= max_qty + 1
 
     def test_ticker_preserved(self):
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.95,
             trinity_score=95.0,
@@ -336,7 +333,7 @@ class TestTradeIntentOutput:
         assert result.ticker == "QQQ"
 
     def test_limit_price_equals_spot(self):
-        from services.signal_translator import translate_signal, SignalInput
+        from services.signal_translator import SignalInput, translate_signal
         inp = SignalInput(
             anomaly_score=0.95,
             trinity_score=95.0,
@@ -352,7 +349,7 @@ class TestTradeIntentOutput:
 
 class TestCheckGatesDirectly:
     def test_all_gates_pass(self):
-        from services.signal_translator import _check_gates, SignalInput
+        from services.signal_translator import SignalInput, _check_gates
         inp = SignalInput(
             anomaly_score=0.95,
             trinity_score=95.0,
@@ -369,7 +366,7 @@ class TestCheckGatesDirectly:
         assert result["approved"] is True
 
     def test_conviction_gate_fails(self):
-        from services.signal_translator import _check_gates, SignalInput
+        from services.signal_translator import SignalInput, _check_gates
         inp = SignalInput(
             account_equity=10000.0,
             flashalpha_sentiment_z=0.0,
@@ -381,7 +378,7 @@ class TestCheckGatesDirectly:
         assert "conviction" in result["reason"]
 
     def test_equity_gate_fails(self):
-        from services.signal_translator import _check_gates, SignalInput
+        from services.signal_translator import SignalInput, _check_gates
         inp = SignalInput(
             account_equity=100.0,
             flashalpha_sentiment_z=0.0,

@@ -3,12 +3,12 @@ backend/tests/services/test_agent_hub.py
 
 Tests for Agent Hub — archetype loading, trigger evaluation, runtime.
 """
-import pytest
-import yaml
 from pathlib import Path
 
-from services.agent_hub import AgentArchetype, AgentHubRuntime
+import pytest
+import yaml
 
+from services.agent_hub import AgentArchetype, AgentHubRuntime
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 

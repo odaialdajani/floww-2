@@ -33,9 +33,9 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parent))
 
 from services.heatseeker_snapshots import (
+    bulk_insert,
     contracts_to_recordbatch,
     create_snapshot_table,
-    bulk_insert,
 )
 
 logging.basicConfig(

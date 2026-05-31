@@ -3,15 +3,16 @@ tests/services/ml/test_outcomes.py
 
 Tests for the realized outcome attachment service.
 """
-import pytest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, timezone, timedelta
+
+import pytest
 
 from services.ml.outcomes import (
+    _try_underlying_bars,
     attach_realized_outcomes,
     compute_rolling_accuracy,
     fetch_next_day_outcome,
-    _try_underlying_bars,
 )
 
 

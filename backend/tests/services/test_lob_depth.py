@@ -7,11 +7,11 @@ and pipeline insertion.
 from __future__ import annotations
 
 import asyncio
+import sys
+from pathlib import Path
 
 import pytest
 
-import sys
-from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from services.duckdb_engine import DuckDBEngine

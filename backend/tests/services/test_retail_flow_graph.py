@@ -7,14 +7,15 @@ Tests for retail flow score nodes and price movement nodes in the knowledge grap
 from __future__ import annotations
 
 import os
+
+# Ensure backend is on sys.path
+import sys
 import tempfile
 import uuid
 from pathlib import Path
 
 import pytest
 
-# Ensure backend is on sys.path
-import sys
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 

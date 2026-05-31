@@ -28,7 +28,6 @@ from services.position_sizing import (
     size_position,
 )
 
-
 # ── 1. Formula correctness ────────────────────────────────────────────────
 
 class TestKellyFormula:
@@ -180,9 +179,10 @@ class TestPositionSizingAPI:
 
     @pytest.fixture
     def client(self):
-        from fastapi.testclient import TestClient
-        from routes.position_sizing_api import router
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from routes.position_sizing_api import router
         app = FastAPI()
         app.include_router(router)
         return TestClient(app)

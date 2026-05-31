@@ -24,16 +24,16 @@ import os
 import sys
 from pathlib import Path
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-from motor.motor_asyncio import AsyncIOMotorClient
-
 import logging
+
+from motor.motor_asyncio import AsyncIOMotorClient
 
 logger = logging.getLogger(__name__)
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent

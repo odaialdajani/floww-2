@@ -264,9 +264,6 @@ def generate_mock_data() -> pa.Table:
                 iv = base_iv + 0.05 * (1.0 - moneyness)  # simple skew
 
                 for opt_type in ("call", "put"):
-                    # Charm sign depends on type
-                    charm_sign = 1.0 if opt_type == "call" else -1.0
-
                     delta = _bs_delta(spot, strike, T, iv, opt_type)
                     gamma = _bs_gamma(spot, strike, T, iv)
                     vanna = _bs_vanna(spot, strike, T, iv)

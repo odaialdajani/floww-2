@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import logging
+
 logger = logging.getLogger(__name__)
 
 """
@@ -11,9 +12,9 @@ Identify bottlenecks: any agent with cards_in_flight > 3× median OR blocker_rat
 Surface to ARCHITECT_BRIEF.md.
 """
 
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from collections import defaultdict
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 KANBAN_DIR = REPO_ROOT / "kanban"
