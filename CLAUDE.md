@@ -163,8 +163,25 @@ lsof -ti :8000 | xargs kill -9
   - `docs/ROUND10_A9_DELETION_VERIFICATION.md` — 433-name per-name audit
   - `docs/ROUND10_CONFTEST_WAIVER_TRIAGE.md` — pytest collection error analysis
   - `docs/ROUND10_LEAK_PREVENTION.md` — 3-pattern playbook
-- **Kanban:** `kanban/cards/*.md` (per-agent pulses), `kanban/board.yaml`
-- **Round 9 v2 launch pack:** `round9_followup_v2/` (10-agent prompts + preamble + launcher)
+  - **Kanban:** `kanban/cards/*.md` (per-agent pulses), `kanban/board.yaml`
+  - **Round 9 v2 launch pack:** `round9_followup_v2/` (10-agent prompts + preamble + launcher)
+
+---
+
+## Memory Mesh (Claude ↔ Hermes ↔ Obsidian)
+
+A bidirectional mesh is wired. Invoke it with slash command `/mesh-sync` or manually:
+
+\```bash
+/Users/nav/.hermes/cron/memory_sync.sh --dry-run   # preview
+/Users/nav/.hermes/cron/memory_sync.sh             # sync
+\```
+
+**Trigger rules:**
+1. Run `/mesh-sync --dry-run` at the start of any session in this repo.
+2. Run `/mesh-sync` after any meaningful memory update, bug fix, or new plan.
+3. When you add entry to project `MEMORY.md`, include a short durable fact string prefixed with `type: mesh_persistent_fact` in your tool notes so Hermes picks it up.
+4. Do not edit files under `00-system/Sources of Truth` manually — use the sync script only.
 
 ---
 

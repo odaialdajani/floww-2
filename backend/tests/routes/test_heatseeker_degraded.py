@@ -27,7 +27,7 @@ def test_flip_zones_returns_degraded_on_chain_failure():
         assert r.status_code == 200, f"expected 200 degraded, got {r.status_code}: {r.text}"
         body = r.json()
         assert body.get("status") == "degraded", body
-        assert body.get("zones") == [], body
+        assert body.get("flip_zones") == [], body
 
 
 def test_node_lifecycle_returns_degraded_on_failure():
