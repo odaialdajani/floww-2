@@ -50,7 +50,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 import numpy as np
-from scipy.optimize import minimize
+from scipy.optimize import minimize  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +159,7 @@ class HawkesProcess:
         else:  # power_law
             excitation = self.alpha * np.sum(1.0 / (dt + self._pl_c) ** (1.0 + self._pl_gamma))
 
-        return self.mu + excitation
+        return float(self.mu + excitation)
 
     def _intensity_vectorized(self, t_array: np.ndarray, event_times: np.ndarray) -> np.ndarray:
         """Vectorized intensity computation for an array of time points."""
@@ -438,7 +438,7 @@ class HawkesProcess:
         t_now = event_times[-1]
         lam = self.intensity(t_now, event_times)
 
-        return 1.0 / max(lam, 1e-300)
+        return float(1.0 / max(lam, 1e-300))
 
     def get_cluster_probability(
         self, event_times: np.ndarray, window: float = 1.0
