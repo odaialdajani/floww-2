@@ -1,15 +1,25 @@
 {
   "ticker": "SPY",
   "model_type": "rf",
-  "n_samples": 1255,
-  "n_train": 1004,
-  "n_test": 251,
-  "n_features": 20,
+  "model_id": "SPY_rf_5y_v1",
+  "feature_version": "v2.0",
+  "target": "target_directional_move",
+  "n_samples": 1256,
+  "n_features": 42,
   "feature_names": [
+    "ret_1d",
+    "ret_3d",
+    "ret_5d",
     "ret_10d",
     "ret_21d",
+    "log_ret_1d",
+    "overnight_gap",
     "sma_5",
+    "price_vs_sma_5",
+    "sma_10",
+    "price_vs_sma_10",
     "sma_21",
+    "price_vs_sma_21",
     "sma_50",
     "price_vs_sma_50",
     "atr_14",
@@ -21,36 +31,141 @@
     "realized_vol_21d",
     "realized_vol_60d",
     "rsi_14",
+    "rsi_overbought",
+    "rsi_oversold",
+    "macd",
+    "macd_signal",
     "macd_hist",
     "bb_position",
+    "vol_ratio_5_21",
     "vol_ratio_5_60",
     "sma_5_21_diff",
-    "vol_spike"
+    "sma_5_21_cross",
+    "sma_10_50_diff",
+    "ret_momentum",
+    "ret_accel",
+    "vol_spike",
+    "gap_abs",
+    "gap_large",
+    "is_month_end",
+    "is_month_start"
   ],
-  "train_accuracy": 0.5448207171314741,
-  "test_accuracy": 0.4342629482071713,
-  "overfit_gap": 0.11055776892430275,
-  "oos_accuracy": 0.4342629482071713,
-  "oos_n": 251,
-  "walk_forward_mean": 0.4134438440192786,
-  "walk_forward_std": 0.04477740855396924,
-  "directional_sharpe": 3.2884,
-  "n_folds": 5,
-  "fold_scores": [
-    0.3532934131736527,
-    0.41916167664670656,
-    0.39520958083832336,
-    0.49101796407185627,
-    0.40853658536585363
-  ],
-  "data": "5y",
-  "period": "5y",
-  "target": "target_3class_0.3pct",
-  "target_thresholds": {
-    "up": 0.003,
-    "down": -0.003
+  "model_params": {
+    "n_estimators": 300,
+    "max_depth": 5,
+    "min_samples_leaf": 20,
+    "max_features": "sqrt",
+    "random_state": 42
   },
-  "test_acc_down": 0.047619047619047616,
-  "test_acc_hold": 0.4659090909090909,
-  "test_acc_up": 0.65
+  "metrics": {
+    "overall_accuracy": 0.7,
+    "avg_fold_accuracy": 0.7,
+    "std_fold_accuracy": 0.12426655572095133,
+    "avg_fold_train_accuracy": 0.7439500118535944,
+    "overfit_gap": 0.043950011853594484,
+    "overall_sharpe": 7.03433554728909,
+    "train_time_sec": 0.3139019012451172
+  },
+  "fold_metrics": [
+    {
+      "fold": 0,
+      "train_size": 252,
+      "test_size": 21,
+      "accuracy": 0.5714285714285714,
+      "train_acc": 0.753968253968254
+    },
+    {
+      "fold": 1,
+      "train_size": 273,
+      "test_size": 21,
+      "accuracy": 0.8095238095238095,
+      "train_acc": 0.7362637362637363
+    },
+    {
+      "fold": 2,
+      "train_size": 294,
+      "test_size": 21,
+      "accuracy": 0.7142857142857143,
+      "train_acc": 0.7414965986394558
+    },
+    {
+      "fold": 3,
+      "train_size": 315,
+      "test_size": 21,
+      "accuracy": 0.8095238095238095,
+      "train_acc": 0.7365079365079366
+    },
+    {
+      "fold": 4,
+      "train_size": 336,
+      "test_size": 21,
+      "accuracy": 0.9523809523809523,
+      "train_acc": 0.75
+    },
+    {
+      "fold": 5,
+      "train_size": 357,
+      "test_size": 21,
+      "accuracy": 0.5714285714285714,
+      "train_acc": 0.7507002801120448
+    },
+    {
+      "fold": 6,
+      "train_size": 378,
+      "test_size": 21,
+      "accuracy": 0.7142857142857143,
+      "train_acc": 0.746031746031746
+    },
+    {
+      "fold": 7,
+      "train_size": 399,
+      "test_size": 21,
+      "accuracy": 0.6666666666666666,
+      "train_acc": 0.7468671679197995
+    },
+    {
+      "fold": 8,
+      "train_size": 420,
+      "test_size": 21,
+      "accuracy": 0.5238095238095238,
+      "train_acc": 0.7452380952380953
+    },
+    {
+      "fold": 9,
+      "train_size": 441,
+      "test_size": 21,
+      "accuracy": 0.6666666666666666,
+      "train_acc": 0.7324263038548753
+    }
+  ],
+  "top_features": {
+    "bb_position": 0.08773592212433441,
+    "macd": 0.05911050482580126,
+    "realized_vol_10d": 0.04599030883447783,
+    "realized_vol_21d": 0.04291986495073952,
+    "price_vs_sma_50": 0.041789738954172095,
+    "price_vs_sma_21": 0.0368854351316062,
+    "price_vs_sma_10": 0.03621363240053605,
+    "rsi_14": 0.034888568012005274,
+    "price_vs_sma_5": 0.034845880303662424,
+    "volume_sma_5": 0.03464613622349298,
+    "sma_5_21_diff": 0.031802854995839,
+    "realized_vol_60d": 0.03171048232508913,
+    "ret_10d": 0.029884695062482088,
+    "realized_vol_5d": 0.028802286314158026,
+    "macd_signal": 0.027907014368372056
+  },
+  "gate_results": {
+    "class_balance": true,
+    "sufficient_data": true,
+    "wf_positive": true,
+    "no_overfit": true,
+    "sharpe_positive": true,
+    "fold_consistency": false
+  },
+  "verdict": "HOLD",
+  "created_at": "2026-06-14T12:46:00.501542+00:00",
+  "model_path": "/Users/nav/Documents/GitHub/floww/backend/models/SPY_rf_5y_production.joblib",
+  "scaler_path": "/Users/nav/Documents/GitHub/floww/backend/models/SPY_rf_5y_production_scaler.joblib",
+  "period": "5y"
 }

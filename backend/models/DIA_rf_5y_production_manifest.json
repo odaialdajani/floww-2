@@ -1,15 +1,26 @@
 {
   "ticker": "DIA",
   "model_type": "rf",
-  "n_samples": 1255,
-  "n_train": 1004,
-  "n_test": 251,
-  "n_features": 20,
+  "model_id": "DIA_rf_5y_v1",
+  "feature_version": "v2.0",
+  "target": "target_directional_move",
+  "n_samples": 1256,
+  "n_features": 42,
   "feature_names": [
+    "ret_1d",
+    "ret_3d",
+    "ret_5d",
     "ret_10d",
     "ret_21d",
+    "log_ret_1d",
+    "overnight_gap",
     "sma_5",
+    "price_vs_sma_5",
+    "sma_10",
+    "price_vs_sma_10",
     "sma_21",
+    "price_vs_sma_21",
+    "sma_50",
     "price_vs_sma_50",
     "atr_14",
     "volume_sma_5",
@@ -20,37 +31,141 @@
     "realized_vol_21d",
     "realized_vol_60d",
     "rsi_14",
+    "rsi_overbought",
+    "rsi_oversold",
+    "macd",
+    "macd_signal",
     "macd_hist",
     "bb_position",
     "vol_ratio_5_21",
     "vol_ratio_5_60",
     "sma_5_21_diff",
-    "vol_spike"
+    "sma_5_21_cross",
+    "sma_10_50_diff",
+    "ret_momentum",
+    "ret_accel",
+    "vol_spike",
+    "gap_abs",
+    "gap_large",
+    "is_month_end",
+    "is_month_start"
   ],
-  "train_accuracy": 0.5378486055776892,
-  "test_accuracy": 0.32270916334661354,
-  "overfit_gap": 0.21513944223107567,
-  "oos_accuracy": 0.32270916334661354,
-  "oos_n": 251,
-  "walk_forward_mean": 0.3654739301884037,
-  "walk_forward_std": 0.03251107409431641,
-  "directional_sharpe": -0.6466,
-  "n_folds": 5,
-  "fold_scores": [
-    0.31137724550898205,
-    0.3772455089820359,
-    0.3473053892215569,
-    0.40119760479041916,
-    0.3902439024390244
-  ],
-  "data": "5y",
-  "period": "5y",
-  "target": "target_3class_0.3pct",
-  "target_thresholds": {
-    "up": 0.003,
-    "down": -0.003
+  "model_params": {
+    "n_estimators": 300,
+    "max_depth": 5,
+    "min_samples_leaf": 20,
+    "max_features": "sqrt",
+    "random_state": 42
   },
-  "test_acc_down": 0.0945945945945946,
-  "test_acc_hold": 0.6049382716049383,
-  "test_acc_up": 0.2604166666666667
+  "metrics": {
+    "overall_accuracy": 0.5904761904761905,
+    "avg_fold_accuracy": 0.5904761904761904,
+    "std_fold_accuracy": 0.05714285714285713,
+    "avg_fold_train_accuracy": 0.6992208430830722,
+    "overfit_gap": 0.10874465260688182,
+    "overall_sharpe": 3.7485089514817522,
+    "train_time_sec": 0.40817880630493164
+  },
+  "fold_metrics": [
+    {
+      "fold": 0,
+      "train_size": 252,
+      "test_size": 21,
+      "accuracy": 0.5714285714285714,
+      "train_acc": 0.7103174603174603
+    },
+    {
+      "fold": 1,
+      "train_size": 273,
+      "test_size": 21,
+      "accuracy": 0.5238095238095238,
+      "train_acc": 0.6959706959706959
+    },
+    {
+      "fold": 2,
+      "train_size": 294,
+      "test_size": 21,
+      "accuracy": 0.6666666666666666,
+      "train_acc": 0.6904761904761905
+    },
+    {
+      "fold": 3,
+      "train_size": 315,
+      "test_size": 21,
+      "accuracy": 0.6190476190476191,
+      "train_acc": 0.692063492063492
+    },
+    {
+      "fold": 4,
+      "train_size": 336,
+      "test_size": 21,
+      "accuracy": 0.5238095238095238,
+      "train_acc": 0.6845238095238095
+    },
+    {
+      "fold": 5,
+      "train_size": 357,
+      "test_size": 21,
+      "accuracy": 0.5238095238095238,
+      "train_acc": 0.7030812324929971
+    },
+    {
+      "fold": 6,
+      "train_size": 378,
+      "test_size": 21,
+      "accuracy": 0.5714285714285714,
+      "train_acc": 0.7037037037037037
+    },
+    {
+      "fold": 7,
+      "train_size": 399,
+      "test_size": 21,
+      "accuracy": 0.6666666666666666,
+      "train_acc": 0.7017543859649122
+    },
+    {
+      "fold": 8,
+      "train_size": 420,
+      "test_size": 21,
+      "accuracy": 0.5714285714285714,
+      "train_acc": 0.7119047619047619
+    },
+    {
+      "fold": 9,
+      "train_size": 441,
+      "test_size": 21,
+      "accuracy": 0.6666666666666666,
+      "train_acc": 0.6984126984126984
+    }
+  ],
+  "top_features": {
+    "ret_10d": 0.06569507550710289,
+    "bb_position": 0.05844460796124214,
+    "atr_14": 0.04704322681733615,
+    "price_vs_sma_50": 0.038992022917942924,
+    "realized_vol_60d": 0.03380066024612506,
+    "rsi_14": 0.03375577649525658,
+    "ret_3d": 0.03374082498470526,
+    "price_vs_sma_21": 0.03338590601831484,
+    "price_vs_sma_10": 0.031941674329275686,
+    "price_vs_sma_5": 0.03144568554477873,
+    "realized_vol_21d": 0.030452470331426867,
+    "overnight_gap": 0.030049936837449723,
+    "macd": 0.029729349211202002,
+    "macd_signal": 0.02712289823715225,
+    "sma_10_50_diff": 0.026706649136653667
+  },
+  "gate_results": {
+    "class_balance": true,
+    "sufficient_data": true,
+    "wf_positive": true,
+    "no_overfit": true,
+    "sharpe_positive": true,
+    "fold_consistency": true
+  },
+  "verdict": "SHIP",
+  "created_at": "2026-06-14T12:46:09.303642+00:00",
+  "model_path": "/Users/nav/Documents/GitHub/floww/backend/models/DIA_rf_5y_production.joblib",
+  "scaler_path": "/Users/nav/Documents/GitHub/floww/backend/models/DIA_rf_5y_production_scaler.joblib",
+  "period": "5y"
 }

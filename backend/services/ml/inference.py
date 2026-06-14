@@ -44,34 +44,38 @@ log = logging.getLogger("ml.inference")
 
 MODEL_DIR = Path(__file__).resolve().parents[2] / "models"
 
-# Real-data 3-class models from scripts/train_real_data_ml.py (2026-05-30)
-# Walk-forward CV + feature selection, 500 samples, rf/logistic
+# 2-class UP/DOWN models from scripts/train_2class_direction.py (2026-06-14)
+# Full 44 features, walk-forward CV, trading Sharpe selection
+# SPY/QQQ: lr (test=0.61/0.59, sharpe=2.55/2.46)
+# DIA: lr (test=0.53, sharpe=0.69)
+# IWM: lr (test=0.46, sharpe=-1.91 — negative, keep old)
+# TLT: rf (test=0.52, sharpe=0.96)
 # Tuple format: (model_path, scaler_path, manifest_path)
 MODEL_REGISTRY: Dict[str, Tuple[str, ...]] = {
     "DIA": (
-        str(MODEL_DIR / "DIA_rf_production.joblib"),
-        str(MODEL_DIR / "DIA_rf_production_scaler.joblib"),
-        str(MODEL_DIR / "DIA_rf_production_manifest.json"),
+        str(MODEL_DIR / "DIA_lr_2class_20260614_124836.joblib"),
+        str(MODEL_DIR / "DIA_lr_2class_20260614_124836_scaler.joblib"),
+        str(MODEL_DIR / "DIA_lr_2class_20260614_124836_manifest.json"),
     ),
     "IWM": (
-        str(MODEL_DIR / "IWM_rf_production.joblib"),
-        str(MODEL_DIR / "IWM_rf_production_scaler.joblib"),
-        str(MODEL_DIR / "IWM_rf_production_manifest.json"),
+        str(MODEL_DIR / "IWM_rf_5y_production.joblib"),
+        str(MODEL_DIR / "IWM_rf_5y_production_scaler.joblib"),
+        str(MODEL_DIR / "IWM_rf_5y_production_manifest.json"),
     ),
     "QQQ": (
-        str(MODEL_DIR / "QQQ_rf_production.joblib"),
-        str(MODEL_DIR / "QQQ_rf_production_scaler.joblib"),
-        str(MODEL_DIR / "QQQ_rf_production_manifest.json"),
+        str(MODEL_DIR / "QQQ_lr_2class_20260614_124832.joblib"),
+        str(MODEL_DIR / "QQQ_lr_2class_20260614_124832_scaler.joblib"),
+        str(MODEL_DIR / "QQQ_lr_2class_20260614_124832_manifest.json"),
     ),
     "SPY": (
-        str(MODEL_DIR / "SPY_rf_production.joblib"),
-        str(MODEL_DIR / "SPY_rf_production_scaler.joblib"),
-        str(MODEL_DIR / "SPY_rf_production_manifest.json"),
+        str(MODEL_DIR / "SPY_lr_2class_20260614_124828.joblib"),
+        str(MODEL_DIR / "SPY_lr_2class_20260614_124828_scaler.joblib"),
+        str(MODEL_DIR / "SPY_lr_2class_20260614_124828_manifest.json"),
     ),
     "TLT": (
-        str(MODEL_DIR / "TLT_rf_production.joblib"),
-        str(MODEL_DIR / "TLT_rf_production_scaler.joblib"),
-        str(MODEL_DIR / "TLT_rf_production_manifest.json"),
+        str(MODEL_DIR / "TLT_rf_2class_20260614_124844.joblib"),
+        str(MODEL_DIR / "TLT_rf_2class_20260614_124844_scaler.joblib"),
+        str(MODEL_DIR / "TLT_rf_2class_20260614_124844_manifest.json"),
     ),
 }
 # Prediction classes

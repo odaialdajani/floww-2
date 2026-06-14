@@ -1,15 +1,25 @@
 {
   "ticker": "QQQ",
   "model_type": "rf",
-  "n_samples": 1255,
-  "n_train": 1004,
-  "n_test": 251,
-  "n_features": 20,
+  "model_id": "QQQ_rf_5y_v1",
+  "feature_version": "v2.0",
+  "target": "target_directional_move",
+  "n_samples": 1256,
+  "n_features": 42,
   "feature_names": [
+    "ret_1d",
     "ret_3d",
+    "ret_5d",
     "ret_10d",
     "ret_21d",
+    "log_ret_1d",
+    "overnight_gap",
     "sma_5",
+    "price_vs_sma_5",
+    "sma_10",
+    "price_vs_sma_10",
+    "sma_21",
+    "price_vs_sma_21",
     "sma_50",
     "price_vs_sma_50",
     "atr_14",
@@ -21,36 +31,141 @@
     "realized_vol_21d",
     "realized_vol_60d",
     "rsi_14",
+    "rsi_overbought",
+    "rsi_oversold",
+    "macd",
+    "macd_signal",
     "macd_hist",
+    "bb_position",
     "vol_ratio_5_21",
     "vol_ratio_5_60",
     "sma_5_21_diff",
-    "vol_spike"
+    "sma_5_21_cross",
+    "sma_10_50_diff",
+    "ret_momentum",
+    "ret_accel",
+    "vol_spike",
+    "gap_abs",
+    "gap_large",
+    "is_month_end",
+    "is_month_start"
   ],
-  "train_accuracy": 0.5627490039840638,
-  "test_accuracy": 0.4342629482071713,
-  "overfit_gap": 0.12848605577689248,
-  "oos_accuracy": 0.4342629482071713,
-  "oos_n": 251,
-  "walk_forward_mean": 0.38825032861107056,
-  "walk_forward_std": 0.029733688674523525,
-  "directional_sharpe": 3.4531,
-  "n_folds": 5,
-  "fold_scores": [
-    0.3712574850299401,
-    0.437125748502994,
-    0.38922155688622756,
-    0.3473053892215569,
-    0.39634146341463417
-  ],
-  "data": "5y",
-  "period": "5y",
-  "target": "target_3class_0.3pct",
-  "target_thresholds": {
-    "up": 0.003,
-    "down": -0.003
+  "model_params": {
+    "n_estimators": 300,
+    "max_depth": 5,
+    "min_samples_leaf": 20,
+    "max_features": "sqrt",
+    "random_state": 42
   },
-  "test_acc_down": 0.17105263157894737,
-  "test_acc_hold": 0.13333333333333333,
-  "test_acc_up": 0.7652173913043478
+  "metrics": {
+    "overall_accuracy": 0.7952380952380952,
+    "avg_fold_accuracy": 0.7952380952380952,
+    "std_fold_accuracy": 0.07392464141076201,
+    "avg_fold_train_accuracy": 0.7838313163772032,
+    "overfit_gap": -0.01140677886089203,
+    "overall_sharpe": 11.614472529906815,
+    "train_time_sec": 0.290294885635376
+  },
+  "fold_metrics": [
+    {
+      "fold": 0,
+      "train_size": 252,
+      "test_size": 21,
+      "accuracy": 0.7142857142857143,
+      "train_acc": 0.7777777777777778
+    },
+    {
+      "fold": 1,
+      "train_size": 273,
+      "test_size": 21,
+      "accuracy": 0.8095238095238095,
+      "train_acc": 0.7802197802197802
+    },
+    {
+      "fold": 2,
+      "train_size": 294,
+      "test_size": 21,
+      "accuracy": 0.7619047619047619,
+      "train_acc": 0.7789115646258503
+    },
+    {
+      "fold": 3,
+      "train_size": 315,
+      "test_size": 21,
+      "accuracy": 0.8095238095238095,
+      "train_acc": 0.7746031746031746
+    },
+    {
+      "fold": 4,
+      "train_size": 336,
+      "test_size": 21,
+      "accuracy": 0.9523809523809523,
+      "train_acc": 0.7827380952380952
+    },
+    {
+      "fold": 5,
+      "train_size": 357,
+      "test_size": 21,
+      "accuracy": 0.7619047619047619,
+      "train_acc": 0.7871148459383753
+    },
+    {
+      "fold": 6,
+      "train_size": 378,
+      "test_size": 21,
+      "accuracy": 0.8095238095238095,
+      "train_acc": 0.7883597883597884
+    },
+    {
+      "fold": 7,
+      "train_size": 399,
+      "test_size": 21,
+      "accuracy": 0.8571428571428571,
+      "train_acc": 0.7844611528822055
+    },
+    {
+      "fold": 8,
+      "train_size": 420,
+      "test_size": 21,
+      "accuracy": 0.8095238095238095,
+      "train_acc": 0.7904761904761904
+    },
+    {
+      "fold": 9,
+      "train_size": 441,
+      "test_size": 21,
+      "accuracy": 0.6666666666666666,
+      "train_acc": 0.7936507936507936
+    }
+  ],
+  "top_features": {
+    "bb_position": 0.06567296445517105,
+    "rsi_14": 0.0414326912324301,
+    "price_vs_sma_5": 0.03994589483314447,
+    "sma_5": 0.03782621660055583,
+    "sma_10": 0.0376001877055177,
+    "ret_1d": 0.03614028817306476,
+    "macd": 0.0342126612551236,
+    "price_vs_sma_21": 0.03418625748168667,
+    "price_vs_sma_50": 0.03201061853003116,
+    "volume_sma_5": 0.031863634195723495,
+    "realized_vol_60d": 0.031770912720397455,
+    "realized_vol_21d": 0.031637327233743365,
+    "ret_3d": 0.031600464618700495,
+    "realized_vol_10d": 0.03145996008815092,
+    "sma_5_21_diff": 0.02981279573913093
+  },
+  "gate_results": {
+    "class_balance": true,
+    "sufficient_data": true,
+    "wf_positive": true,
+    "no_overfit": true,
+    "sharpe_positive": true,
+    "fold_consistency": true
+  },
+  "verdict": "SHIP",
+  "created_at": "2026-06-14T12:46:04.332064+00:00",
+  "model_path": "/Users/nav/Documents/GitHub/floww/backend/models/QQQ_rf_5y_production.joblib",
+  "scaler_path": "/Users/nav/Documents/GitHub/floww/backend/models/QQQ_rf_5y_production_scaler.joblib",
+  "period": "5y"
 }
