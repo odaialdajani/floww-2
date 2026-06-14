@@ -75,6 +75,7 @@ FEATURE_NAMES = [
 def compute_features(ticker: str, period: str = "2y") -> pd.DataFrame:
     """Compute technical features from yfinance OHLCV + 3-class target.
 
+    Fully vectorized — replaces O(n*k) Python loops with pandas ops.
     Target mapping:
         next_day_ret > +0.3%  → 2 (UP)
         next_day_ret < -0.3%  → 0 (DOWN)
@@ -93,151 +94,118 @@ def compute_features(ticker: str, period: str = "2y") -> pd.DataFrame:
     if len(df) < 60:
         raise ValueError(f"Insufficient data for {ticker}: {len(df)} rows (need 60+)")
 
-    close = df["Close"].values.astype(float)
-    high = df["High"].values.astype(float) if "High" in df.columns else close
-    low = df["Low"].values.astype(float) if "Low" in df.columns else close
-    volume = df["Volume"].values.astype(float) if "Volume" in df.columns else np.ones(len(close))
-    open_price = df["Open"].values.astype(float) if "Open" in df.columns else close
-    n = len(close)
+    # Use pandas Series throughout for vectorized ops
+    close = df["Close"].astype(float)
+    high = df["High"].astype(float) if "High" in df.columns else close
+    low = df["Low"].astype(float) if "Low" in df.columns else close
+    volume = df["Volume"].astype(float) if "Volume" in df.columns else pd.Series(1.0, index=df.index)
+    open_price = df["Open"].astype(float) if "Open" in df.columns else close
 
     features = pd.DataFrame(index=df.index)
 
-    # Returns
+    # Returns (vectorized pct_change)
     for horizon, name in [(1, "ret_1d"), (3, "ret_3d"), (5, "ret_5d"),
                            (10, "ret_10d"), (21, "ret_21d")]:
-        ret = np.zeros(n)
-        for i in range(horizon, n):
-            if close[i - horizon] > 0:
-                ret[i] = (close[i] - close[i - horizon]) / close[i - horizon]
-        features[name] = ret
+        features[name] = close.pct_change(horizon)
 
     # Log returns
-    log_ret = np.zeros(n)
-    for i in range(1, n):
-        if close[i - 1] > 0 and close[i] > 0:
-            log_ret[i] = np.log(close[i] / close[i - 1])
-    features["log_ret_1d"] = log_ret
+    features["log_ret_1d"] = np.log(close / close.shift(1))
 
     # Overnight gap
-    overnight_gap = np.zeros(n)
-    for i in range(1, n):
-        if close[i - 1] > 0:
-            overnight_gap[i] = (open_price[i] - close[i - 1]) / close[i - 1]
-    features["overnight_gap"] = overnight_gap
+    features["overnight_gap"] = open_price / close.shift(1) - 1.0
 
     # SMAs and price-relative
-    for window, name in [(5, "sma_5"), (10, "sma_10"), (21, "sma_21"), (50, "sma_50")]:
-        sma = pd.Series(close).rolling(window=window, min_periods=window).mean().values
-        features[name] = sma
-        rel = np.zeros(n)
-        for i in range(n):
-            if sma[i] > 0:
-                rel[i] = close[i] / sma[i] - 1.0
-        features[f"price_vs_sma_{window}"] = rel
+    for window in [5, 10, 21, 50]:
+        sma = close.rolling(window=window, min_periods=window).mean()
+        features[f"sma_{window}"] = sma
+        features[f"price_vs_sma_{window}"] = close / sma - 1.0
 
-    # ATR
-    tr = np.zeros(n)
-    for i in range(1, n):
-        tr[i] = max(
-            high[i] - low[i],
-            abs(high[i] - close[i - 1]),
-            abs(low[i] - close[i - 1]),
-        )
-    features["atr_14"] = pd.Series(tr).rolling(window=14, min_periods=1).mean().values
+    # ATR (vectorized)
+    tr1 = high - low
+    tr2 = (high - close.shift(1)).abs()
+    tr3 = (low - close.shift(1)).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    features["atr_14"] = tr.rolling(window=14, min_periods=14).mean()
 
     # Volume features
-    vol_sma_5 = pd.Series(volume).rolling(window=5, min_periods=1).mean().values
-    vol_sma_21 = pd.Series(volume).rolling(window=21, min_periods=1).mean().values
+    vol_sma_5 = volume.rolling(window=5, min_periods=5).mean()
+    vol_sma_21 = volume.rolling(window=21, min_periods=21).mean()
     features["volume_sma_5"] = vol_sma_5
     features["volume_sma_21"] = vol_sma_21
-    rel_vol = np.zeros(n)
-    for i in range(n):
-        if vol_sma_21[i] > 0:
-            rel_vol[i] = volume[i] / vol_sma_21[i]
-    features["relative_volume"] = rel_vol
+    features["relative_volume"] = volume / vol_sma_21
 
     # Realized volatility (annualized)
-    for window, name in [(5, "realized_vol_5d"), (10, "realized_vol_10d"),
-                          (21, "realized_vol_21d"), (60, "realized_vol_60d")]:
-        vol = (pd.Series(log_ret).rolling(window=window, min_periods=window).std().values
-               * np.sqrt(252))
-        features[name] = vol
+    log_ret = features["log_ret_1d"]
+    for window in [5, 10, 21, 60]:
+        features[f"realized_vol_{window}d"] = (
+            log_ret.rolling(window=window, min_periods=window).std() * np.sqrt(252)
+        )
 
     # RSI
-    delta = pd.Series(close).diff()
-    gain = delta.where(delta > 0, 0).rolling(window=14, min_periods=1).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14, min_periods=1).mean()
+    delta = close.diff()
+    gain = delta.where(delta > 0, 0.0).rolling(window=14, min_periods=14).mean()
+    loss = (-delta.where(delta < 0, 0.0)).rolling(window=14, min_periods=14).mean()
     rs = gain / (loss + 1e-10)
-    rsi = (100 - (100 / (1 + rs))).values
-    features["rsi_14"] = rsi
-    features["rsi_overbought"] = (rsi > 70).astype(float)
-    features["rsi_oversold"] = (rsi < 30).astype(float)
+    features["rsi_14"] = 100 - (100 / (1 + rs))
+    features["rsi_overbought"] = (features["rsi_14"] > 70).astype(float)
+    features["rsi_oversold"] = (features["rsi_14"] < 30).astype(float)
 
     # MACD
-    ema_12 = pd.Series(close).ewm(span=12, adjust=False).mean()
-    ema_26 = pd.Series(close).ewm(span=26, adjust=False).mean()
+    ema_12 = close.ewm(span=12, adjust=False).mean()
+    ema_26 = close.ewm(span=26, adjust=False).mean()
     macd = ema_12 - ema_26
     macd_signal = macd.ewm(span=9, adjust=False).mean()
-    features["macd"] = macd.values
-    features["macd_signal"] = macd_signal.values
-    features["macd_hist"] = (macd - macd_signal).values
+    features["macd"] = macd
+    features["macd_signal"] = macd_signal
+    features["macd_hist"] = macd - macd_signal
 
     # Bollinger Bands
-    sma_20 = pd.Series(close).rolling(window=20, min_periods=1).mean()
-    std_20 = pd.Series(close).rolling(window=20, min_periods=1).std()
-    bb_upper = (sma_20 + 2 * std_20).values
-    bb_lower = (sma_20 - 2 * std_20).values
-    bb_position = np.zeros(n)
-    for i in range(n):
-        band_width = bb_upper[i] - bb_lower[i]
-        if band_width > 0:
-            bb_position[i] = (close[i] - bb_lower[i]) / band_width
-    features["bb_position"] = bb_position
+    sma_20 = close.rolling(window=20, min_periods=20).mean()
+    std_20 = close.rolling(window=20, min_periods=20).std()
+    bb_upper = sma_20 + 2 * std_20
+    bb_lower = sma_20 - 2 * std_20
+    features["bb_upper"] = bb_upper
+    features["bb_lower"] = bb_lower
+    features["bb_position"] = (close - bb_lower) / (bb_upper - bb_lower + 1e-10)
 
     # Volume ratios
-    vol_sma_60 = pd.Series(volume).rolling(window=60, min_periods=1).mean().values
+    vol_sma_60 = volume.rolling(window=60, min_periods=60).mean()
     features["vol_ratio_5_21"] = vol_sma_5 / (vol_sma_21 + 1e-10)
     features["vol_ratio_5_60"] = vol_sma_5 / (vol_sma_60 + 1e-10)
 
     # SMA crossovers
-    sma_5 = pd.Series(close).rolling(window=5, min_periods=1).mean().values
-    sma_21 = pd.Series(close).rolling(window=21, min_periods=1).mean().values
-    sma_10 = pd.Series(close).rolling(window=10, min_periods=1).mean().values
-    sma_50 = pd.Series(close).rolling(window=50, min_periods=1).mean().values
+    sma_5 = close.rolling(window=5, min_periods=5).mean()
+    sma_21 = close.rolling(window=21, min_periods=21).mean()
+    sma_10 = close.rolling(window=10, min_periods=10).mean()
+    sma_50 = close.rolling(window=50, min_periods=50).mean()
     features["sma_5_21_diff"] = sma_5 - sma_21
-    features["sma_5_21_cross"] = np.sign(features["sma_5_21_diff"].values)
+    features["sma_5_21_cross"] = np.sign(features["sma_5_21_diff"])
     features["sma_10_50_diff"] = sma_10 - sma_50
 
     # Momentum / acceleration
-    features["ret_momentum"] = pd.Series(close).pct_change(5).values
-    features["ret_accel"] = pd.Series(close).pct_change(5).diff().values
+    features["ret_momentum"] = close.pct_change(5)
+    features["ret_accel"] = close.pct_change(5).diff()
 
     # Vol spike
     features["vol_spike"] = (
-        pd.Series(log_ret).rolling(window=5, min_periods=1).std().values /
-        (pd.Series(log_ret).rolling(window=21, min_periods=1).std().values + 1e-10)
+        log_ret.rolling(window=5, min_periods=5).std() /
+        (log_ret.rolling(window=21, min_periods=21).std() + 1e-10)
     )
 
     # Gap features
-    features["gap_abs"] = np.abs(overnight_gap)
-    features["gap_large"] = (np.abs(overnight_gap) > 0.003).astype(float)
+    features["gap_abs"] = features["overnight_gap"].abs()
+    features["gap_large"] = (features["gap_abs"] > 0.003).astype(float)
 
     # Calendar features
-    dates = pd.to_datetime(df.index)
-    features["is_month_end"] = pd.Series(dates.is_month_end, index=df.index).astype(float).values
-    features["is_month_start"] = pd.Series(dates.is_month_start, index=df.index).astype(float).values
+    dates = pd.to_datetime(features.index)
+    features["is_month_end"] = dates.is_month_end.astype(float)
+    features["is_month_start"] = dates.is_month_start.astype(float)
 
-    # ── 3-class target ──────────────────────────────────────────────────
-    # next_day_ret > +0.3% → UP(2), < -0.3% → DOWN(0), else HOLD(1)
-    target = np.ones(n, dtype=int)  # default HOLD
-    for i in range(n - 1):
-        if close[i] > 0:
-            next_ret = (close[i + 1] - close[i]) / close[i]
-            if next_ret > UP_THRESHOLD:
-                target[i] = 2  # UP
-            elif next_ret < DOWN_THRESHOLD:
-                target[i] = 0  # DOWN
-            # else stays HOLD (1)
+    # ── 3-class target (vectorized) ─────────────────────────────────────
+    next_day_ret = close.pct_change(1).shift(-1)
+    target = pd.Series(1, index=df.index, dtype=int)  # default HOLD
+    target = target.where(~next_day_ret.gt(UP_THRESHOLD), 2)   # UP
+    target = target.where(~next_day_ret.lt(DOWN_THRESHOLD), 0)  # DOWN
     features["target_3class"] = target
 
     # Clean up
