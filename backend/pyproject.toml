@@ -51,3 +51,33 @@ exclude_lines = [
     "pass",
 ]
 
+[tool.mypy]
+python_version = "3.12"
+
+[[tool.mypy.overrides]]
+module = "services.rate_limit_tracker"
+strict = true
+
+[[tool.mypy.overrides]]
+module = "services.oi_change_detector"
+strict = true
+
+[[tool.mypy.overrides]]
+module = "services.iv_skew_analyzer"
+strict = true
+
+[[tool.mypy.overrides]]
+module = "services.greek_aggregator"
+strict = true
+
+[[tool.mypy.overrides]]
+module = "services.vpin_engine"
+strict = true
+
+[[tool.mypy.overrides]]
+module = "services.hawkes_process"
+strict = true
+
+[[tool.mypy.overrides]]
+module = "services.stochastic_vol"
+strict = true

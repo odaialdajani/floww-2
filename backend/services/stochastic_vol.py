@@ -45,11 +45,11 @@ References:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
-from scipy.interpolate import RectBivariateSpline
-from scipy.optimize import minimize
+from scipy.interpolate import RectBivariateSpline  # type: ignore[import-untyped]
+from scipy.optimize import minimize  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ class SABRModel:
         beta: float = 0.5,
         rho: float = -0.3,
         nu: float = 0.4,
-    ):
+    ) -> None:
         """
         Initialize SABR model parameters.
 
@@ -116,7 +116,7 @@ class SABRModel:
                 + (2 - 3 * rho ** 2) * nu ** 2 / 24
             ) * T
             sigma_n = term1 * (1 + term2)
-            return max(sigma_n, 1e-8)
+            return float(max(sigma_n, 1e-8))
 
         z = (nu / alpha) * (F * K) ** ((1 - beta) / 2) * np.log(F / K)
         x_z = np.log((np.sqrt(1 - 2 * rho * z + z ** 2) + z - rho) / (1 - rho))
@@ -134,7 +134,7 @@ class SABRModel:
         ) * T
 
         sigma_n = term1 * term2 * (1 + term3)
-        return max(sigma_n, 1e-8)
+        return float(max(sigma_n, 1e-8))
 
     def hagan_lognormal_vol(self, F: float, K: float, T: float) -> float:
         """
@@ -169,7 +169,7 @@ class SABRModel:
                 + (2 - 3 * rho ** 2) * nu ** 2 / 24
             ) * T
             sigma_b = term1 * (1 + term2)
-            return max(sigma_b, 1e-8)
+            return float(max(sigma_b, 1e-8))
 
         logFK = np.log(F / K)
         z = (nu / alpha) * (F * K) ** ((1 - beta) / 2) * logFK
@@ -187,7 +187,7 @@ class SABRModel:
         ) * T
 
         sigma_b = term1 * term2 * (1 + term3)
-        return max(sigma_b, 1e-8)
+        return float(max(sigma_b, 1e-8))
 
     def fit(
         self,
@@ -248,7 +248,7 @@ class SABRModel:
                 )
                 if not np.all(np.isfinite(model_vols)):
                     return 1e10
-                return np.sum((model_vols - market_vols) ** 2)
+                return float(np.sum((model_vols - market_vols) ** 2))
             except (ValueError, ZeroDivisionError, OverflowError):
                 return 1e10
 
@@ -322,7 +322,7 @@ class SVIProfile:
         rho: float = -0.7,
         m: float = 0.0,
         sigma: float = 0.1,
-    ):
+    ) -> None:
         """
         Initialize SVI parameters.
 
@@ -372,7 +372,7 @@ class SVIProfile:
         w = self.total_variance(k)
         # Ensure non-negative before sqrt
         w = np.maximum(w, 0.0)
-        return np.sqrt(w / T)
+        return cast(np.ndarray, np.sqrt(w / T))
 
     def fit(
         self,
@@ -436,7 +436,7 @@ class SVIProfile:
             w = a + b * (rho * dm + np.sqrt(dm ** 2 + sigma ** 2))
             if np.any(w < 0):
                 return 1e10
-            return np.sum((w - market_total_var) ** 2)
+            return float(np.sum((w - market_total_var) ** 2))
 
         # Bounds: a >= 0, b >= 0, rho in (-1,1), m unbounded, sigma > 0
         bounds = [
@@ -503,7 +503,7 @@ class VolSurfaceConstructor:
     - 25-delta butterfly term structure
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the VolSurfaceConstructor."""
         self.sabr_model = SABRModel()
         self.svi_profiles: dict[float, SVIProfile] = {}
@@ -559,7 +559,7 @@ class VolSurfaceConstructor:
             return self._empty_surface()
 
         # Group by expiry
-        expiries_map: dict[float, list[dict]] = {}
+        expiries_map: dict[float, list[dict[str, Any]]] = {}
         for c in valid_contracts:
             T = c["expiry"]
             if T not in expiries_map:
@@ -666,8 +666,8 @@ class VolSurfaceConstructor:
         self,
         spot: float,
         expiries: list[float],
-        expiries_map: dict[float, list[dict]],
-        svi_params_by_expiry: dict[float, dict],
+        expiries_map: dict[float, list[dict[str, Any]]],
+        svi_params_by_expiry: dict[float, dict[str, float]],
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Build a 2D IV grid from per-expiry SVI fits.
@@ -794,7 +794,7 @@ class VolSurfaceConstructor:
             )
             result = spline(target_strikes, target_expiries)
             result = np.maximum(result, 0.0)  # IVs must be non-negative
-            return result
+            return cast(np.ndarray, result)
 
         except Exception as e:
             logger.error("2D interpolation failed: %s, using nearest fallback", e)
@@ -805,7 +805,7 @@ class VolSurfaceConstructor:
                 for j, T in enumerate(target_expiries):
                     ti = np.argmin(np.abs(grid_expiries - T))
                     result[i, j] = iv_grid[ki, ti]
-            return result
+            return cast(np.ndarray, result)
 
     def _empty_surface(self) -> dict[str, Any]:
         """Return an empty surface dict for error cases."""
