@@ -46,7 +46,7 @@ import PWAInstallBanner from "./components/PWAInstallBanner";
 import AppShell from "./shell/AppShell";
 import { useTheme } from "./context/ThemeContext";
 import { autoDecimate } from "./utils/dataDecimator";
-import { PAGE_NAMES } from "./shell/navConfig";
+import { PAGE_NAMES, NAV_ITEMS } from "./shell/navConfig";
 
 import ToxicityGauge from "./components/ToxicityGauge";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -60,6 +60,12 @@ import TickerAnalysisPage from "./pages/TickerAnalysisPage";
 import EarningsPage from "./pages/EarningsPage";
 import HeatmapsPage from "./pages/HeatmapsPage";
 import { SignalsPage, TradeLogPage, PerformancePage, KeyLevelsPage, SpxAlertsPage } from "./pages/PlaceholderPages";
+import AlphaPodCapturePage from "./pages/AlphaPodCapturePage";
+
+// Pre-build the aphub route map (id → src path) from navConfig
+const APHUB_PAGES = Object.fromEntries(
+  NAV_ITEMS.filter(i => i.aphub).map(i => [i.id, i.aphub])
+);
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -779,6 +785,14 @@ export default function App() {
 
         {/* SPX Alerts */}
         {page === "spx-alerts" && <SpxAlertsPage />}
+
+        {/* ===== ALPHAPOD LIVE — captured pages from alphapod-hub (localhost:3456) ===== */}
+        {APHUB_PAGES[page] && (
+          <AlphaPodCapturePage
+            src={APHUB_PAGES[page]}
+            label={PAGE_NAMES[page] || page}
+          />
+        )}
 
         {/* ===== LEGACY PAGES (preserved as-is) ===== */}
 

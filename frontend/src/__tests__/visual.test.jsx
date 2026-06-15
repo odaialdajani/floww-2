@@ -10,17 +10,49 @@ import axios from "axios";
 // ── Mock axios (must be configured before any component imports it) ──
 jest.mock("axios", () => {
   const mockAxios = {
-    get: jest.fn(() => Promise.resolve({ data: [] })),
-    post: jest.fn(() => Promise.resolve({ data: {} })),
-    put: jest.fn(() => Promise.resolve({ data: {} })),
-    delete: jest.fn(() => Promise.resolve({ data: {} })),
-    patch: jest.fn(() => Promise.resolve({ data: {} })),
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    delete: jest.fn(),
+    patch: jest.fn(),
     create: jest.fn(() => mockAxios),
     interceptors: { request: { use: jest.fn() }, response: { use: jest.fn() } },
     defaults: { headers: { common: {} } },
   };
   return { __esModule: true, default: mockAxios };
 });
+
+// CRA's Jest preset sets `resetMocks: true`, which clears every jest.fn()
+// implementation (back to returning `undefined`) before each test. App.js calls
+// `axios.get(...).then(...)` synchronously inside a mount useEffect, so the mock
+// must resolve to a Promise or the render throws. Re-install resolved defaults
+// here so the implementations survive the per-test reset.
+beforeEach(() => {
+  axios.get.mockResolvedValue({ data: [] });
+  axios.post.mockResolvedValue({ data: {} });
+  axios.put.mockResolvedValue({ data: {} });
+  axios.delete.mockResolvedValue({ data: {} });
+  axios.patch.mockResolvedValue({ data: {} });
+  axios.create.mockReturnValue(axios);
+});
+
+// ── Mock auth so App renders its authenticated AppShell-wrapped chrome ──
+// App.js short-circuits to a login screen when `!isAuthenticated`; the rail +
+// header (.ap-header) only mount past that gate. Mock an authenticated session
+// so the smoke test exercises the real app shell, not the login page.
+jest.mock("../context/AuthContext", () => ({
+  __esModule: true,
+  useAuth: () => ({
+    token: "test-token",
+    user: { email: "test@example.com", tier: "pro" },
+    tier: "pro",
+    isAuthenticated: true,
+    login: jest.fn(),
+    logout: jest.fn(),
+  }),
+  AuthProvider: ({ children }) => children,
+  authHeaders: () => ({}),
+}));
 
 // ── Mock shell components (new Foundation lane) ─────────────────────
 jest.mock("../shell/AppShell", () => ({ __esModule: true, default: ({ children }) => children }));
@@ -84,7 +116,10 @@ describe("Visual Smoke Test — Tab Render", () => {
 
   test("App renders with AppShell wrapper (rail owns nav now)", () => {
     const { container } = render(<App />);
-    expect(container.querySelector(".App")).toBeTruthy();
+    // The Foundation-lane refactor dropped the legacy `.App` root class; the
+    // persistent app chrome is now <header class="ap-header">, rendered
+    // unconditionally inside the AppShell wrapper. Assert that mounts.
+    expect(container.querySelector(".ap-header")).toBeTruthy();
   });
 
   test("App renders root element", () => {

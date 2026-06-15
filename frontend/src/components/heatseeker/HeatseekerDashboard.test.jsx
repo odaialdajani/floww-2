@@ -10,11 +10,22 @@ jest.mock("../../hooks/useHeatseeker", () => ({
   useHeatseeker: jest.fn(),
 }));
 
+// Row 6 lazy-loads these Plotly charts (React.lazy). Stub them so the suite
+// doesn't drag react-plotly.js into jsdom; they aren't among the 12 panels
+// under test.
+jest.mock("../VannaChart", () => ({ __esModule: true, default: () => null }));
+jest.mock("../CharmChart", () => ({ __esModule: true, default: () => null }));
+
 import { useHeatseeker } from "../../hooks/useHeatseeker";
 
 const IDLE = { data: null, loading: false, error: null, refresh: () => {} };
 
 describe("HeatseekerDashboard", () => {
+  // NB: jsdom has no IntersectionObserver; setupTests.js installs a global
+  // polyfill that reports elements as immediately intersecting, so the
+  // dashboard's <LazyRow> mounts rows 4-6 synchronously. That's what lets the
+  // 4 lazy-row panels (rolling floors/ceilings, tug-of-war, node
+  // classification, stacked nodes) appear among the 12 asserted below.
   beforeEach(() => {
     useHeatseeker.mockReturnValue(IDLE);
   });

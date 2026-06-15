@@ -15,9 +15,11 @@
 set -e
 
 REPO_ROOT="$HOME/Documents/GitHub/floww"
+APHUB_ROOT="$HOME/Documents/GitHub/alphapod-hub"
 PWA_PATH="$HOME/Applications/Chrome Apps.localized/Confluence Decoder.app"
 BACKEND_PORT=8000
 REACT_PORT=3000
+APHUB_PORT=3456
 RESTART=${1:-}
 
 if [[ ! -d "$REPO_ROOT" ]]; then
@@ -111,8 +113,28 @@ else
   port_listening $REACT_PORT && echo "  started ✓" || { echo "  FAILED — see /tmp/react_decoder.log"; exit 1; }
 fi
 
-# ── 3. Launch the PWA (NOT a Chrome tab) ─────────────────────────────────────
-echo "[3/3] PWA"
+# ── 3. AlphaPod Hub (port 3456) ──────────────────────────────────────────────
+echo "[3/4] AlphaPod Hub (port $APHUB_PORT)"
+if [[ "$RESTART" == "--restart" ]] && port_listening $APHUB_PORT; then
+  kill_port $APHUB_PORT
+fi
+if port_listening $APHUB_PORT; then
+  echo "  already running ✓"
+elif [[ ! -d "$APHUB_ROOT" ]]; then
+  echo "  ⚠ alphapod-hub not found at $APHUB_ROOT — skipping (AlphaPod Live pages won't load)"
+else
+  echo "  starting alphapod-hub python server..."
+  cd "$APHUB_ROOT"
+  nohup python3 server.py > /tmp/aphub_decoder.log 2>&1 &
+  cd "$REPO_ROOT"
+  for i in {1..10}; do
+    sleep 1; port_listening $APHUB_PORT && break
+  done
+  port_listening $APHUB_PORT && echo "  started ✓" || echo "  ⚠ FAILED — see /tmp/aphub_decoder.log (AlphaPod Live pages will show offline warning)"
+fi
+
+# ── 4. Launch the PWA (NOT a Chrome tab) ─────────────────────────────────────
+echo "[4/4] PWA"
 # `open -a` launches the .app bundle — Chrome's PWA wrapper opens a borderless
 # window pointed at the URL baked into the bundle (http://localhost:3000/).
 # Using `open URL` here instead would route through the default URL handler
@@ -124,6 +146,7 @@ echo ""
 echo "──── DECODER READY ────"
 echo "Backend:  http://localhost:$BACKEND_PORT  (lsof PID: $(lsof -i :$BACKEND_PORT -P -n 2>/dev/null | grep LISTEN | awk '{print $2}' | head -1))"
 echo "React:    http://localhost:$REACT_PORT   (lsof PID: $(lsof -i :$REACT_PORT -P -n 2>/dev/null | grep LISTEN | awk '{print $2}' | head -1))"
+echo "AlphaPod: http://localhost:$APHUB_PORT  (lsof PID: $(lsof -i :$APHUB_PORT -P -n 2>/dev/null | grep LISTEN | awk '{print $2}' | head -1))"
 echo "PWA:      $PWA_PATH"
-echo "Logs:     /tmp/uvicorn_decoder.log + /tmp/react_decoder.log"
+echo "Logs:     /tmp/uvicorn_decoder.log + /tmp/react_decoder.log + /tmp/aphub_decoder.log"
 echo "────────────────────────"

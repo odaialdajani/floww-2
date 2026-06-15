@@ -31,6 +31,28 @@
 
 ---
 
+## AlphaPod Live (captured-pages integration)
+
+The PWA's **AlphaPod Live** sidebar group (13 pages, ids `ap-*`) iframes static
+captures served by a SEPARATE sibling repo:
+- **Repo:** `~/Documents/GitHub/alphapod-hub` — its own git, NOT part of floww.
+- **Server:** `python3 server.py` → `localhost:3456` (proxies `/api/*` to the live
+  AlphaPod backend with a dev JWT; injects a fetch-rewrite script into served HTML).
+- **Launcher:** `decoder` now runs 4 steps — Backend → React → AlphaPod Hub → PWA.
+  Step 3 is non-fatal: if 3456 is down, AlphaPod Live pages show an "offline" card;
+  everything else still works.
+- **Wiring:** `navConfig.js` items carry `aphub:"/captured/<x>.html"`; `App.js` builds
+  `APHUB_PAGES` from them and renders `AlphaPodCapturePage`. New page = one navConfig
+  line, no App.js change.
+
+**CORS gotcha (do NOT regress):** alphapod-hub sends `Access-Control-Allow-Origin`
+only on its JSON/API responses, never on static files. The liveness probe in
+`AlphaPodCapturePage.jsx` therefore MUST stay `fetch(..., {mode:"no-cors"})`. A
+plain cors-mode fetch is browser-blocked and falsely reports "offline" even when
+3456 is up. (Bug found + fixed + browser-verified 2026-06-12.)
+
+---
+
 ## Forbidden files (architect-frozen)
 
 - `backend/services/ml/inference.py` — frozen except surgical bug fixes you must justify in commit body (A2's HOLD-zone fix is the canonical example, accepted at `888abd4`)
@@ -96,6 +118,7 @@ Subject line: `<type>(<scope>): <one-line>`. Types: `feat`, `fix`, `docs`, `test
   - P0.1: conftest waiver + apply (drops 23 collection errors → 0)
   - P0.2: restore `fetch_spot_and_chains` (heatseeker flip-zones returns degraded)
   - P0.3: A9 STALE_IMPORT cleanup
+- **AlphaPod Live integration (uncommitted, 2026-06-12):** `AlphaPodCapturePage.jsx` + navConfig/App.js/launch_decoder.sh. Health-probe CORS false-negative fixed.
 - **Active backlog summary:** `docs/ROUND10_PLAN.md` is the source of truth. `docs/ROUND9_FINAL_CLOSURE.md` for retrospective.
 
 ---
@@ -111,6 +134,7 @@ Subject line: `<type>(<scope>): <one-line>`. Types: `feat`, `fix`, `docs`, `test
 | Frontend | React 18 · create-react-app · craco · Jest | `frontend/src/` → `npm start` |
 | Embedded UI | Dash | `backend/services/dash_ui.py` (frozen) — embedded in React at `/dashboard/` |
 | Streamer | Schwab WebSocket | `backend/services/schwab_streamer.py` |
+| AlphaPod Live | static captures + py http.server | `~/Documents/GitHub/alphapod-hub/server.py` → :3456 (separate repo) |
 | Lint | ruff (F + E722) | `cd backend && .venv/bin/ruff check .` |
 | Tests | pytest (asyncio auto mode) | `cd backend && .venv/bin/python3 -m pytest -q` |
 | Frontend tests | jest | `cd frontend && npx jest` |

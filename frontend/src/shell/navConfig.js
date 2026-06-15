@@ -26,6 +26,21 @@ export const NAV_ITEMS = [
   { id: "key-levels", label: "Key Levels", group: "SPX", icon: "layers" },
   { id: "spx-alerts", label: "SPX Alerts", group: "SPX", icon: "alert-triangle" },
 
+  // AlphaPod Live — captured pages served from alphapod-hub (localhost:3456)
+  { id: "ap-flow-alerts",  label: "Flow Alerts",   group: "AlphaPod Live", icon: "bell",         badge: "LIVE", liveDot: true, aphub: "/captured/flow-alerts-live.html" },
+  { id: "ap-spx-gex",      label: "SPX GEX",       group: "AlphaPod Live", icon: "bar-chart",    aphub: "/captured/spx-gex-live.html" },
+  { id: "ap-alpha-flow",   label: "Alpha Flow",    group: "AlphaPod Live", icon: "sparkles",     aphub: "/captured/alpha-flow-live.html" },
+  { id: "ap-daily-report", label: "Daily Report",  group: "AlphaPod Live", icon: "file-text",    aphub: "/captured/daily-report-live.html" },
+  { id: "ap-heatmaps",     label: "Heatmaps",      group: "AlphaPod Live", icon: "grid",         aphub: "/captured/heatmaps-live.html" },
+  { id: "ap-signals",      label: "Signals",       group: "AlphaPod Live", icon: "activity",     aphub: "/captured/signals-live.html" },
+  { id: "ap-trade-log",    label: "Trade Log",     group: "AlphaPod Live", icon: "list",         aphub: "/captured/trade-log-live.html" },
+  { id: "ap-performance",  label: "Performance",   group: "AlphaPod Live", icon: "trending-up",  aphub: "/captured/performance-live.html" },
+  { id: "ap-key-levels",   label: "Key Levels",    group: "AlphaPod Live", icon: "layers",       aphub: "/captured/key-levels-live.html" },
+  { id: "ap-earnings",     label: "Earnings",      group: "AlphaPod Live", icon: "calendar",     aphub: "/captured/earnings-live.html" },
+  { id: "ap-spx-alerts",   label: "SPX Alerts",    group: "AlphaPod Live", icon: "alert-triangle", aphub: "/captured/spx-alerts.html" },
+  { id: "ap-ticker-nvda",  label: "NVDA Deep Dive",group: "AlphaPod Live", icon: "search",       aphub: "/captured/ticker-analysis-live.html" },
+  { id: "ap-dashboard",    label: "Dashboard",     group: "AlphaPod Live", icon: "layout-dashboard", aphub: "/captured/dashboard-live.html" },
+
   // Legacy — kept as-is
   { id: "trinity",    label: "Trinity",    group: "Legacy", legacy: true },
   { id: "heatseeker", label: "Heatseeker", group: "Legacy", legacy: true },
