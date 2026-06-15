@@ -225,7 +225,7 @@ class GreekAggregator:
         T: np.ndarray,
         IV: np.ndarray,
         kind: np.ndarray,
-    ) -> tuple:
+    ) -> tuple[Dict[str, np.ndarray], int]:
         """Fill NaN values in upstream Greeks via BS fallback.
 
         Returns:
@@ -260,9 +260,9 @@ class GreekAggregator:
         greeks: Dict[str, np.ndarray],
         OI: np.ndarray,
         kind: np.ndarray,
-    ) -> List[Dict]:
+    ) -> List[Dict[str, float]]:
         """Build contract dicts for GexAggregator."""
-        contracts: List[Dict] = []
+        contracts: List[Dict[str, float]] = []
         for i in range(len(K)):
             contracts.append({
                 "strike": float(K[i]),
@@ -283,7 +283,8 @@ class GreekAggregator:
         Represents the dollar impact of a 1 vol point change on delta
         positioning across all open contracts.
         """
-        return vanna * oi * 0.01
+        exposure: np.ndarray = vanna * oi * 0.01
+        return exposure
 
     @staticmethod
     def _compute_charm_exposure(
@@ -293,4 +294,5 @@ class GreekAggregator:
 
         Represents the daily delta decay across all open contracts.
         """
-        return charm * oi * 0.01
+        exposure: np.ndarray = charm * oi * 0.01
+        return exposure

@@ -2,7 +2,8 @@
 backend/tests/test_bs_greeks_canonical.py
 
 Canonical Black-Scholes tests against Hull 10e textbook examples.
-All values computed independently; rel-err tolerance 1e-6.
+All values computed independently; per-test relative tolerance varies
+(1e-4 for prices/delta, 1e-3 for gamma/vega) -- see individual asserts.
 
 Reference: Hull, J.C. "Options, Futures, and Other Derivatives", 10th Ed.
   - Table 15.1 (p. 358): ATM 30-day call

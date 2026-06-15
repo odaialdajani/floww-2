@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -149,7 +149,7 @@ class OiChangeDetector:
 # Internal helpers
 # ------------------------------------------------------------------
 
-def _safe_float(v) -> float:
+def _safe_float(v: Any) -> float:
     try:
         if v is None:
             return 0.0

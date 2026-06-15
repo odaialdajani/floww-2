@@ -15,6 +15,16 @@ Where:
     - 100: shares per contract multiplier
     - spot^2 * 0.01: scaling to dollar gamma per 1% move in spot
 
+    SCALE CONVENTION (S^2 -- DISPLAY). This module uses the spot^2 (dollar-GEX)
+    scale: the human-facing magnitude shown in the heatmap/UI. It is DISTINCT
+    from the S^1 (single spot factor) scale in ``services/gex_history.py`` and
+    ``scripts/compute_gex_features.py``, which is the FROZEN ML-feature
+    convention. The two differ by EXACTLY a factor of ``spot`` and are NOT
+    interchangeable -- do not feed a display-scale value where a feature-scale
+    value is expected. The relationship is pinned by
+    ``tests/services/test_gex_aggregator_oracle.py``. Audit:
+    ``docs/superpowers/specs/2026-06-13-gex-gamma-correctness-audit-design.md``.
+
 Dealer Positioning Convention
 -----------------------------
     Calls (+): Customers are long calls → dealers are short calls → dealers

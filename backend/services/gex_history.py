@@ -18,6 +18,17 @@ Black-Scholes gamma at ``(spot, strike_i, T_i, iv=0.20, r=0.045, q=0)``.
 This mirrors the canonical formula used in ``scripts/compute_gex_features.py``
 and is the same convention the rest of the platform expects for ``gex_total``.
 
+SCALE CONVENTION (S^1 -- ML FEATURE, MODEL-LOCKED). This single-spot-factor
+scale, with fixed ``iv=0.20`` (``_IV_FALLBACK``) and ``r=0.045`` (``_RISK_FREE``),
+is a frozen model-input contract: ``gex_total`` here -> the ``gex_history``
+collection -> ``ml.features.add_gex_features`` -> the trained GBM models.
+Changing the scale or those constants silently shifts every training feature and
+breaks inference at the trained scale. It is DISTINCT from the S^2 dollar-GEX
+(display) scale in ``services/gex_aggregator.py``; the two differ by a factor of
+``spot`` and are NOT interchangeable. Both scales and their ratio are pinned by
+``tests/services/test_gex_aggregator_oracle.py``. Audit:
+``docs/superpowers/specs/2026-06-13-gex-gamma-correctness-audit-design.md``.
+
 No synthetic data: the functions here only aggregate real fields from
 ``databento_eod_chains`` documents. Days without a chain or without an
 underlying bar are skipped (not interpolated). The Mongo handle is passed

@@ -19,3 +19,25 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["F401", "F403", "F811"]
+
+[tool.mypy]
+python_version = "3.13"
+
+# numba ships no type stubs / py.typed marker — silence import-untyped everywhere
+[[tool.mypy.overrides]]
+module = ["numba", "numba.*"]
+ignore_missing_imports = true
+
+# Round 10 P1.5 — strict type-checking, scoped per-module to fully-annotated services
+[[tool.mypy.overrides]]
+module = [
+    "services.greek_aggregator",
+    "services.iv_skew_analyzer",
+    "services.oi_change_detector",
+    "services.rate_limit_tracker",
+]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_any_generics = true
+warn_return_any = true
+no_implicit_optional = true

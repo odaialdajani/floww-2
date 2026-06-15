@@ -25,13 +25,11 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-
-
-import logging
 
 logger = logging.getLogger(__name__)
 @dataclass
@@ -313,7 +311,7 @@ class IvSkewAnalyzer:
 # Module-level helpers
 # ------------------------------------------------------------------
 
-def _is_float(v) -> bool:
+def _is_float(v: Any) -> bool:
     try:
         float(v)
         return True
