@@ -6,6 +6,24 @@
 
 ---
 
+## ✅ Status update — 2026-06-13 (verified against current tree)
+
+The Draft below is stale. Verified completion status (commands re-run live):
+
+| Ticket | Status | Evidence |
+|---|---|---|
+| **P0.1** conftest collection | ✅ done | `pytest --collect-only` → 2703 collected, **0 errors** (was ~23) |
+| **P0.2** `fetch_spot_and_chains` | ✅ done | defined at `server.py:720`; no `not defined` error |
+| **P0.3** F401 cleanup | ✅ done | PR floww#2 — `ruff --select F401` = 0; 33 service tests pass |
+| **P1.2** Schwab chaos coverage | ✅ done | 13 mocked chaos tests pass incl `test_token_refresh_when_expired` + `test_resubscribe_after_reconnect` (acceptance was ≥5) |
+| **P1.3a** `/api/ml/calibration` | ✅ done | live `200` (`routes/ml_api.py::get_calibration_default`) |
+| **P1.3b** `/api/ml/compare` | ✅ done | live `200` (`routes/ml_api.py::ml_compare`) |
+| **P1.3c** `/chain` route | ✅ resolved (documented) | Canonical route is **`/api/chain`** (live `200`, `routes/chain.py`). The T7 smoke test used the wrong path `/chain` (404). **No bare alias added** — the whole API uses `APIRouter(prefix="/api")`, so an unprefixed `/chain` would be an inconsistent outlier with zero callers. Smoke tests should target `/api/chain`. |
+
+**Still open:** P1.1 (AlphaVantageProvider), P1.4 (frontend jest config — likely moot; `craco test` is 133/133 green), P1.5 (type hints), P2.x.
+
+---
+
 ## Top Priorities (P0 — Week 1)
 
 ### P0.1 — Conftest.py Freeze Waiver + Apply (30 min)
