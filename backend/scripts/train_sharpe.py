@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Train models optimized for directional Sharpe, not accuracy.
 Uses custom Sharpe-based selection and more features."""
-import sys, json, time, numpy as np, pandas as pd, yfinance as yf
+import sys, time, numpy as np
 from pathlib import Path
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression

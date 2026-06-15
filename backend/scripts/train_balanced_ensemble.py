@@ -23,11 +23,10 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict
 
 import numpy as np
 import pandas as pd
-import yfinance as yf
 import joblib
 
 SCRIPT_DIR = Path(__file__).resolve().parent

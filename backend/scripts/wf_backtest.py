@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Comprehensive walk-forward backtest for all production models."""
-import sys, json, numpy as np, pandas as pd, yfinance as yf, joblib
+import sys, json, numpy as np, pandas as pd, joblib
 from pathlib import Path
 from sklearn.metrics import accuracy_score
 

@@ -260,7 +260,7 @@ def calc_gex_timeframes(
         if spot <= 0 or strike <= 0 or T <= 0 or iv <= 0:
             return 0.0
         try:
-            from math import log, sqrt, exp
+            from math import log, sqrt
             from scipy.stats import norm as _norm
             d1 = (log(spot / strike) + (_RISK_FREE + 0.5 * iv * iv) * T) / (iv * sqrt(T))
             return float(_norm.pdf(d1)) / (spot * iv * sqrt(T))

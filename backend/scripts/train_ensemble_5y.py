@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Retrain all 5 tickers with 5y data + ensemble. Quick pipeline."""
-import sys, json, time, numpy as np, pandas as pd, yfinance as yf
+import sys, json, time, numpy as np
 from pathlib import Path
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
