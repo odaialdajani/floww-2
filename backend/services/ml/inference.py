@@ -44,14 +44,15 @@ log = logging.getLogger("ml.inference")
 
 MODEL_DIR = Path(__file__).resolve().parents[2] / "models"
 
-# Real-data 3-class models from scripts/train_real_data_ml.py (2026-05-30)
-# Walk-forward CV + feature selection, 500 samples, rf/logistic
+# Production 3-class models (2026-06-14)
+# Mix of train_rf_5y.py (SPY/QQQ/DIA) and train_real_data_ml.py (IWM/TLT)
+# All use walk-forward CV, feature selection, 3-class output (DOWN/HOLD/UP)
 # Tuple format: (model_path, scaler_path, manifest_path)
 MODEL_REGISTRY: Dict[str, Tuple[str, ...]] = {
     "DIA": (
-        str(MODEL_DIR / "DIA_rf_production.joblib"),
-        str(MODEL_DIR / "DIA_rf_production_scaler.joblib"),
-        str(MODEL_DIR / "DIA_rf_production_manifest.json"),
+        str(MODEL_DIR / "DIA_rf_5y_production.joblib"),
+        str(MODEL_DIR / "DIA_rf_5y_production_scaler.joblib"),
+        str(MODEL_DIR / "DIA_rf_5y_production_manifest.json"),
     ),
     "IWM": (
         str(MODEL_DIR / "IWM_rf_production.joblib"),
@@ -59,19 +60,19 @@ MODEL_REGISTRY: Dict[str, Tuple[str, ...]] = {
         str(MODEL_DIR / "IWM_rf_production_manifest.json"),
     ),
     "QQQ": (
-        str(MODEL_DIR / "QQQ_rf_production.joblib"),
-        str(MODEL_DIR / "QQQ_rf_production_scaler.joblib"),
-        str(MODEL_DIR / "QQQ_rf_production_manifest.json"),
+        str(MODEL_DIR / "QQQ_rf_5y_production.joblib"),
+        str(MODEL_DIR / "QQQ_rf_5y_production_scaler.joblib"),
+        str(MODEL_DIR / "QQQ_rf_5y_production_manifest.json"),
     ),
     "SPY": (
-        str(MODEL_DIR / "SPY_rf_production.joblib"),
-        str(MODEL_DIR / "SPY_rf_production_scaler.joblib"),
-        str(MODEL_DIR / "SPY_rf_production_manifest.json"),
+        str(MODEL_DIR / "SPY_rf_5y_production.joblib"),
+        str(MODEL_DIR / "SPY_rf_5y_production_scaler.joblib"),
+        str(MODEL_DIR / "SPY_rf_5y_production_manifest.json"),
     ),
     "TLT": (
-        str(MODEL_DIR / "TLT_rf_production.joblib"),
-        str(MODEL_DIR / "TLT_rf_production_scaler.joblib"),
-        str(MODEL_DIR / "TLT_rf_production_manifest.json"),
+        str(MODEL_DIR / "TLT_logistic_production.joblib"),
+        str(MODEL_DIR / "TLT_logistic_production_scaler.joblib"),
+        str(MODEL_DIR / "TLT_logistic_production_manifest.json"),
     ),
 }
 # Prediction classes
