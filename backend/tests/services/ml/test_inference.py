@@ -289,7 +289,7 @@ class TestInferenceEngine:
             try:
                 result = await engine.predict(ticker)
                 assert result.ticker == ticker
-                assert result.prediction in [0, 1]
+                assert result.prediction in [0, 1, 2]
                 assert 0 <= result.confidence <= 1
             except DegenerateModelError:
                 pass  # Expected if yfinance data download fails in test env

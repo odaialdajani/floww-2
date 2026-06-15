@@ -45,7 +45,7 @@ log = logging.getLogger("ml.inference")
 MODEL_DIR = Path(__file__).resolve().parents[2] / "models"
 
 # Production 3-class models (2026-06-14)
-# Mix of train_rf_5y.py (SPY/QQQ/DIA) and train_real_data_ml.py (IWM/TLT)
+# All 5 tickers: train_rf_5y.py (2026-06-14)
 # All use walk-forward CV, feature selection, 3-class output (DOWN/HOLD/UP)
 # Tuple format: (model_path, scaler_path, manifest_path)
 MODEL_REGISTRY: Dict[str, Tuple[str, ...]] = {
@@ -55,9 +55,9 @@ MODEL_REGISTRY: Dict[str, Tuple[str, ...]] = {
         str(MODEL_DIR / "DIA_rf_5y_production_manifest.json"),
     ),
     "IWM": (
-        str(MODEL_DIR / "IWM_rf_production.joblib"),
-        str(MODEL_DIR / "IWM_rf_production_scaler.joblib"),
-        str(MODEL_DIR / "IWM_rf_production_manifest.json"),
+        str(MODEL_DIR / "IWM_rf_5y_production.joblib"),
+        str(MODEL_DIR / "IWM_rf_5y_production_scaler.joblib"),
+        str(MODEL_DIR / "IWM_rf_5y_production_manifest.json"),
     ),
     "QQQ": (
         str(MODEL_DIR / "QQQ_rf_5y_production.joblib"),
@@ -70,9 +70,9 @@ MODEL_REGISTRY: Dict[str, Tuple[str, ...]] = {
         str(MODEL_DIR / "SPY_rf_5y_production_manifest.json"),
     ),
     "TLT": (
-        str(MODEL_DIR / "TLT_logistic_production.joblib"),
-        str(MODEL_DIR / "TLT_logistic_production_scaler.joblib"),
-        str(MODEL_DIR / "TLT_logistic_production_manifest.json"),
+        str(MODEL_DIR / "TLT_rf_5y_production.joblib"),
+        str(MODEL_DIR / "TLT_rf_5y_production_scaler.joblib"),
+        str(MODEL_DIR / "TLT_rf_5y_production_manifest.json"),
     ),
 }
 # Prediction classes
@@ -416,11 +416,9 @@ class InferenceEngine:
 
         if isinstance(entry, tuple):
             model_path = entry[0]
-            scaler_path = entry[1] if len(entry) > 1 else None
             m_path = entry[2] if len(entry) > 2 else None
         else:
             model_path = entry
-            scaler_path = None
             m_path = None
 
         if not os.path.exists(model_path):
