@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-import pandas as pd
+import pandas as pd  # type: ignore[import-untyped]
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
@@ -37,13 +37,13 @@ load_dotenv(Path(__file__).resolve().parent.parent / "backend" / ".env")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
-from services.ml import DegenerateModelError
-from services.ml.quality import (
+from services.ml import DegenerateModelError  # type: ignore[import-not-found]
+from services.ml.quality import (  # type: ignore[import-not-found]
     assert_class_balance,
     assert_feature_variance,
     assert_prediction_distribution,
 )
-from services.ml.gate import (
+from services.ml.gate import (  # type: ignore[import-not-found]
     DEFAULT_MAX_SHARPE as MAX_PLAUSIBLE_DAILY_SHARPE,
     compute_trading_sharpe,
     evaluate_baselines,
@@ -60,9 +60,9 @@ MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
 FEATURE_VERSION = "v1.0"
 
 
-def load_features(ticker: str, version: str = None) -> pd.DataFrame:
+def load_features(ticker: str, version: Optional[str] = None) -> pd.DataFrame:
     """Load feature matrix from MongoDB."""
-    client = MongoClient(MONGO_URL)
+    client: Any = MongoClient(MONGO_URL)
     db = client[DB_NAME]
     query = {"ticker": ticker}
     if version:
@@ -134,7 +134,7 @@ def compute_baselines(
     X: np.ndarray, y: np.ndarray, splits: List[Tuple[np.ndarray, np.ndarray]]
 ) -> Dict[str, List[float]]:
     """Compute baseline predictions."""
-    baselines = {
+    baselines: dict[str, list[Any]] = {
         "majority": [],
         "persistence": [],
         "logistic": [],
@@ -156,8 +156,8 @@ def compute_baselines(
 
         # Logistic regression baseline
         try:
-            from sklearn.linear_model import LogisticRegression
-            from sklearn.preprocessing import StandardScaler
+            from sklearn.linear_model import LogisticRegression  # type: ignore[import-untyped]
+            from sklearn.preprocessing import StandardScaler  # type: ignore[import-untyped]
 
             # Scale features
             scaler = StandardScaler()
@@ -225,7 +225,7 @@ def train_model(
         try:
             if model_type == "xgboost":
                 try:
-                    from xgboost import XGBClassifier
+                    from xgboost import XGBClassifier  # type: ignore[import-not-found]
                     model = XGBClassifier(
                         n_estimators=100, max_depth=4, learning_rate=0.1,
                         subsample=0.8, colsample_bytree=0.8, random_state=42,
@@ -233,14 +233,14 @@ def train_model(
                     )
                 except (ImportError, OSError):
                     log.warning("XGBoost not available (needs OpenMP), falling back to sklearn GBM")
-                    from sklearn.ensemble import GradientBoostingClassifier
+                    from sklearn.ensemble import GradientBoostingClassifier  # type: ignore[import-untyped]
                     model = GradientBoostingClassifier(
                         n_estimators=100, max_depth=4, learning_rate=0.1,
                         subsample=0.8, random_state=42,
                     )
             elif model_type == "lightgbm":
                 try:
-                    from lightgbm import LGBMClassifier
+                    from lightgbm import LGBMClassifier  # type: ignore[import-not-found]
                     model = LGBMClassifier(
                         n_estimators=100, max_depth=4, learning_rate=0.1,
                         subsample=0.8, colsample_bytree=0.8, random_state=42,
@@ -444,7 +444,7 @@ def run_training(ticker: str, dry_run: bool = False) -> Dict[str, Any]:
             best_model = model_type
 
     # Generate report
-    report = {
+    report: dict[str, Any] = {
         "ticker": ticker,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "data": {
@@ -476,7 +476,7 @@ def run_training(ticker: str, dry_run: bool = False) -> Dict[str, Any]:
         # Save the best model trained on all available data
         from sklearn.preprocessing import StandardScaler
         from sklearn.ensemble import GradientBoostingClassifier
-        import joblib
+        import joblib  # type: ignore[import-untyped]
 
         # Remove constant features
         feature_stds = np.std(X, axis=0)
@@ -539,7 +539,7 @@ def run_training(ticker: str, dry_run: bool = False) -> Dict[str, Any]:
     return report
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Train SPY direction model")
     parser.add_argument("--ticker", default="SPY")
     parser.add_argument("--dry-run", action="store_true")

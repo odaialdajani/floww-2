@@ -21,13 +21,14 @@ import sys
 import warnings
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
-import joblib
+import joblib  # type: ignore[import-untyped]
 import numpy as np
-import pandas as pd
-from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import pandas as pd  # type: ignore[import-untyped]
+from sklearn.ensemble import GradientBoostingClassifier  # type: ignore[import-untyped]
+from sklearn.preprocessing import StandardScaler  # type: ignore[import-untyped]
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score  # type: ignore[import-untyped]
 
 warnings.filterwarnings("ignore")
 
@@ -36,7 +37,7 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 BACKEND_ROOT = PROJECT_ROOT / "backend"
 sys.path.insert(0, str(BACKEND_ROOT))
 
-from services.ml.quality import (
+from services.ml.quality import (  # type: ignore[import-not-found]
     assert_class_balance, assert_feature_variance,
     assert_prediction_distribution, DegenerateModelError,
 )
@@ -78,7 +79,7 @@ STEP_SIZE = 63
 EMBARGO = 5
 
 
-def load_and_prepare(ticker):
+def load_and_prepare(ticker: str) -> Tuple[Any, Any, List[str], List[Any], Any]:
     path = TICKER_FILES.get(ticker)
     if path is None or not path.exists():
         raise FileNotFoundError(f"No cached data for {ticker}: {path}")
@@ -93,7 +94,7 @@ def load_and_prepare(ticker):
     return X, y, feature_names, dates, df
 
 
-def walk_forward_evaluate(X, y, feature_names, dates):
+def walk_forward_evaluate(X: Any, y: Any, feature_names: List[str], dates: List[Any]) -> Optional[Dict[str, Any]]:
     """Walk-forward evaluation with expanding window."""
     n = len(y)
     if n < MIN_TRAIN + STEP_SIZE:
@@ -203,11 +204,11 @@ def walk_forward_evaluate(X, y, feature_names, dates):
     }
 
 
-def save_model(ticker, result, dry_run=False):
+def save_model(ticker: str, result: Dict[str, Any], dry_run: bool = False) -> Optional[Dict[str, Any]]:
     """Save model artifact and manifest."""
     if dry_run:
         logger.info(f"[DRY RUN] Would save model for {ticker}: acc={result['overall_accuracy']}")
-        return
+        return None
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     model_id = f"{ticker}_gbm_wf_{ts}"
@@ -249,7 +250,7 @@ def save_model(ticker, result, dry_run=False):
     return manifest
 
 
-def retrain_ticker(ticker, dry_run=False):
+def retrain_ticker(ticker: str, dry_run: bool = False) -> Optional[Dict[str, Any]]:
     """Retrain a single ticker."""
     logger.info(f"=== Retraining {ticker} ===")
     try:
@@ -282,7 +283,7 @@ def retrain_ticker(ticker, dry_run=False):
     return manifest
 
 
-def main():
+def main() -> Dict[str, Any]:
     parser = argparse.ArgumentParser(description="Daily ML retraining pipeline")
     parser.add_argument("--ticker", type=str, help="Retrain specific ticker")
     parser.add_argument("--dry-run", action="store_true", help="Evaluate only, don't save")

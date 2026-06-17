@@ -17,8 +17,9 @@ import sys
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 KANBAN_DIR = REPO_ROOT / "kanban"
@@ -28,7 +29,7 @@ REPORT_FILE = KANBAN_DIR / "CAPACITY_REPORT.md"
 HISTORY_FILE = KANBAN_DIR / "throughput_history.json"
 
 
-def load_all_cards() -> list[dict]:
+def load_all_cards() -> List[Dict[str, Any]]:
     cards = []
     for f in sorted(CARDS_DIR.glob("*.md")):
         if f.name.startswith("tagging_") or f.name.startswith("folder_") or f.name.startswith("agent9_"):
@@ -65,7 +66,7 @@ def load_all_cards() -> list[dict]:
     return cards
 
 
-def get_week_bounds(week_str: str = None) -> tuple[datetime, datetime]:
+def get_week_bounds(week_str: Optional[str] = None) -> Tuple[datetime, datetime]:
     """Return (start, end) for the given ISO week or current week."""
     if week_str:
         # Parse YYYY-WNN
@@ -82,7 +83,7 @@ def get_week_bounds(week_str: str = None) -> tuple[datetime, datetime]:
     return start, end
 
 
-def filter_cards_by_week(cards: list[dict], start: datetime, end: datetime) -> list[dict]:
+def filter_cards_by_week(cards: List[Dict[str, Any]], start: datetime, end: datetime) -> List[Dict[str, Any]]:
     """Filter cards updated within the week window."""
     result = []
     for card in cards:
@@ -97,7 +98,7 @@ def filter_cards_by_week(cards: list[dict], start: datetime, end: datetime) -> l
     return result
 
 
-def compute_weekly_stats(cards: list[dict]) -> dict:
+def compute_weekly_stats(cards: List[Dict[str, Any]]) -> Dict[str, Any]:
     stats = {
         "total_cards": len(cards),
         "done": 0,
@@ -112,11 +113,11 @@ def compute_weekly_stats(cards: list[dict]) -> dict:
         status = card.get("status", "unknown")
         agent = card.get("assignee", "unknown")
 
-        stats["by_agent"][agent]["total"] += 1
+        stats["by_agent"][agent]["total"] += 1  # type: ignore[index]
 
         if status == "done":
-            stats["done"] += 1
-            stats["by_agent"][agent]["done"] += 1
+            stats["done"] += 1  # type: ignore[operator]
+            stats["by_agent"][agent]["done"] += 1  # type: ignore[index]
             # Compute completion time
             created = card.get("created_at", "")
             updated = card.get("last_update", "")
@@ -125,21 +126,21 @@ def compute_weekly_stats(cards: list[dict]) -> dict:
                     t0 = datetime.fromisoformat(created.replace("Z", "+00:00"))
                     t1 = datetime.fromisoformat(updated.replace("Z", "+00:00"))
                     hours = (t1 - t0).total_seconds() / 3600
-                    stats["completion_times"].append(hours)
+                    stats["completion_times"].append(hours)  # type: ignore[attr-defined]
                 except (ValueError, TypeError):
                     pass
         elif status == "in_progress":
-            stats["in_progress"] += 1
-            stats["by_agent"][agent]["in_progress"] += 1
+            stats["in_progress"] += 1  # type: ignore[operator]
+            stats["by_agent"][agent]["in_progress"] += 1  # type: ignore[index]
         elif status == "ready":
-            stats["ready"] += 1
+            stats["ready"] += 1  # type: ignore[operator]
         elif status == "blocked":
-            stats["blocked"] += 1
+            stats["blocked"] += 1  # type: ignore[operator]
 
     return stats
 
 
-def generate_report(week_str: str = None) -> str:
+def generate_report(week_str: Optional[str] = None) -> str:
     start, end = get_week_bounds(week_str)
     week_label = start.strftime("%Y-W%W")
 
@@ -281,7 +282,7 @@ def generate_report(week_str: str = None) -> str:
     return "\n".join(lines)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Weekly capacity report")
     parser.add_argument("--week", type=str, default=None, help="ISO week (e.g. 2026-W21)")
     args = parser.parse_args()

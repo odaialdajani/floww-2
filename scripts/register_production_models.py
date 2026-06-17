@@ -16,6 +16,7 @@ import os
 import sys
 from pathlib import Path
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "backend"))
 
@@ -23,14 +24,14 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parent / "backend" / ".env")
 
 from motor.motor_asyncio import AsyncIOMotorClient
-from services.ml.registry import ModelRegistry
+from services.ml.registry import ModelRegistry  # type: ignore[import-not-found]
 
 REPO_ROOT = Path(__file__).resolve().parent
 MODELS_DIR = REPO_ROOT / "models"
 REPORTS_DIR = REPO_ROOT / "reports"
 
 # Map of ticker -> manifest file + model artifact paths
-MODEL_SPECS = {
+MODEL_SPECS: Dict[str, Dict[str, Any]] = {
     "IWM": {
         "manifest": MODELS_DIR / "IWM_gbm_production_manifest.json",
         "model_id": "IWM_direction_v1.0_gbm",
@@ -58,14 +59,14 @@ MODEL_SPECS = {
 }
 
 
-def load_manifest(path: Path) -> dict:
+def load_manifest(path: Optional[Path]) -> Dict[str, Any]:
     if path and path.exists():
         with open(path) as f:
-            return json.load(f)
+            return json.load(f)  # type: ignore[no-any-return]
     return {}
 
 
-def build_metrics_summary(ticker: str, manifest: dict) -> dict:
+def build_metrics_summary(ticker: str, manifest: Dict[str, Any]) -> Dict[str, Any]:
     """Build metrics_summary for the registry from manifest + known results."""
     # Known results from ML_RESULTS_SUMMARY.md
     known = {
@@ -119,7 +120,7 @@ def build_metrics_summary(ticker: str, manifest: dict) -> dict:
     return base
 
 
-async def register_all(dry_run: bool = True, promote: list = None):
+async def register_all(dry_run: bool = True, promote: Optional[List[str]] = None) -> None:
     mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
     db_name = os.environ.get("DB_NAME", "confluence_decoder")
     client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
