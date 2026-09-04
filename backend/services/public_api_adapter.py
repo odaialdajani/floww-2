@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
@@ -251,13 +252,20 @@ async def fetch_spot_from_public_api(
 
 
 def _as_float(value: Any) -> float | None:
-    """Coerce a raw bar field to float; None when absent or unparseable."""
+    """Coerce a raw bar field to float; None when absent, unparseable or non-finite.
+
+    NaN and Infinity are rejected on purpose. ``float("NaN")`` and
+    ``float("Infinity")`` both parse happily, and a non-finite value anywhere in
+    the vendor payload makes the whole response unserialisable — the endpoint
+    turns into an opaque HTTP 500 instead of degrading to "no data".
+    """
     if value is None:
         return None
     try:
-        return float(value)
+        out = float(value)
     except (TypeError, ValueError):
         return None
+    return out if math.isfinite(out) else None
 
 
 def _as_int(value: Any) -> int:
@@ -286,7 +294,14 @@ def _session_label(bucket_key: str | None) -> str:
         return "pre"
     if "after" in key or "post" in key or "extended" in key:
         return "after"
-    return "regular"
+    # An UNRECOGNISED bucket must NOT default to "regular". Doing so would let a
+    # bucket this code has never seen (say an overnight session the vendor adds
+    # later) be served as regular-session data — silently defeating the whole
+    # point of the regular-only default. Label it "unknown": it is then excluded
+    # from the default view and only surfaces under sessions="all", where the
+    # caller can see what it actually is.
+    log.warning("Public API returned an unrecognised session bucket: %r", bucket_key)
+    return "unknown"
 
 
 def _normalize_bars(payload: Any, limit: int, sessions: str = "regular") -> list[dict[str, Any]]:
@@ -334,12 +349,26 @@ def _normalize_bars(payload: Any, limit: int, sessions: str = "regular") -> list
             if stamp is None:
                 continue
             stamp = str(stamp)
+            o = _as_float(raw.get("open"))
+            h = _as_float(raw.get("high"))
+            low = _as_float(raw.get("low"))
+            c = _as_float(raw.get("close"))
+            # Drop the row rather than ship a bar with a missing price. A None
+            # close becomes $0.00 two hops downstream (chart axis, RV window,
+            # backtest fill) and reads as a real print of zero. A bar we cannot
+            # price is not a bar.
+            if None in (o, h, low, c):
+                log.warning(
+                    "Public API bar dropped — incomplete OHLC at %s (%s session)",
+                    stamp, session,
+                )
+                continue
             merged[(session, stamp)] = {
                 "date": stamp,
-                "open": _as_float(raw.get("open")),
-                "high": _as_float(raw.get("high")),
-                "low": _as_float(raw.get("low")),
-                "close": _as_float(raw.get("close")),
+                "open": o,
+                "high": h,
+                "low": low,
+                "close": c,
                 "volume": _as_int(raw.get("volume")),
                 "session": session,
             }

@@ -102,13 +102,17 @@ async def get_public_quotes(ticker: str):
     are additive.
     """
     quotes = await fetch_quotes_from_public_api(ticker)
+    # Look the symbol up by name and NOTHING else. There used to be a
+    # "if only one quote came back, use it" fallback here — it meant that when
+    # the vendor answered with a different symbol than the one requested, the
+    # route returned THAT symbol's price under the requested ticker. A trader
+    # asking for SPY could be shown QQQ's price labelled SPY. A missing symbol
+    # is an error, never a substitution.
     quote = (quotes or {}).get(_normalize_symbol(ticker))
-    if quote is None and quotes and len(quotes) == 1:
-        quote = next(iter(quotes.values()))
     if quote is None:
         raise HTTPException(
             status_code=502,
-            detail=f"Public API unavailable for {ticker}",
+            detail=f"Public API returned no quote for {ticker.upper()}",
         )
     return {
         "ok": True,

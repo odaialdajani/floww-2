@@ -125,6 +125,91 @@ async def test_quotes_do_not_record_failure_for_a_bad_ticker() -> None:
     rec.assert_not_called()
 
 
+# ---------------------------------------------------------------------------
+# Data-integrity guards — a bar we cannot price is not a bar, and an unknown
+# session must never be served as regular-session data.
+# ---------------------------------------------------------------------------
+
+
+def test_unrecognised_session_bucket_is_not_labelled_regular() -> None:
+    """A bucket this code has never seen must NOT default into the regular view."""
+    from services.public_api_adapter import _session_label
+
+    assert _session_label("regularMarket") == "regular"
+    assert _session_label("preMarket") == "pre"
+    assert _session_label("afterHours") == "after"
+    # The dangerous case: a session the vendor adds later.
+    assert _session_label("overnightMarket") == "unknown"
+    assert _session_label("someFutureSession") == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_unknown_session_bars_are_excluded_from_the_default_view() -> None:
+    from services.public_api_adapter import fetch_bars_from_public_api
+
+    payload = {
+        "overnightMarket": {"bars": [
+            {"timestamp": "2026-09-03T04:00:00Z", "open": 1.0, "high": 2.0,
+             "low": 0.5, "close": 1.5, "volume": 10},
+        ]},
+    }
+    broker = _broker_with_bars(payload)
+    with patch("services.public_api_adapter._get_broker", new=AsyncMock(return_value=broker)):
+        default_view = await fetch_bars_from_public_api("SPY", timeframe="5Min", limit=50)
+        all_view = await fetch_bars_from_public_api("SPY", timeframe="5Min", limit=50, sessions="all")
+
+    assert default_view is None, "unknown-session bars must not appear in the regular view"
+    assert all_view is not None
+    assert [b["session"] for b in all_view] == ["unknown"]
+
+
+@pytest.mark.asyncio
+async def test_bar_with_incomplete_ohlc_is_dropped_not_zero_priced() -> None:
+    """A missing close becomes $0.00 downstream — drop the row instead."""
+    from services.public_api_adapter import fetch_bars_from_public_api
+
+    payload = {"regularMarket": {"bars": [
+        {"timestamp": "2026-09-03T20:00:00Z", "open": 500.0, "high": 505.0,
+         "low": 499.0, "close": None, "volume": 1000},
+        {"timestamp": "2026-09-04T20:00:00Z", "open": 501.0, "high": 506.0,
+         "low": 500.0, "close": 505.0, "volume": 1100},
+    ]}}
+    broker = _broker_with_bars(payload)
+    with patch("services.public_api_adapter._get_broker", new=AsyncMock(return_value=broker)):
+        bars = await fetch_bars_from_public_api("SPY", timeframe="1Day", limit=50)
+
+    assert bars is not None
+    assert [b["date"] for b in bars] == ["2026-09-04T20:00:00Z"]
+    assert all(b["close"] is not None for b in bars)
+
+
+@pytest.mark.asyncio
+async def test_non_finite_prices_never_reach_the_response() -> None:
+    """NaN/Infinity parse fine but make the JSON response unserialisable."""
+    from services.public_api_adapter import fetch_bars_from_public_api
+
+    payload = {"regularMarket": {"bars": [
+        {"timestamp": "2026-09-03T20:00:00Z", "open": "NaN", "high": "Infinity",
+         "low": 499.0, "close": 503.0, "volume": 1000},
+        {"timestamp": "2026-09-04T20:00:00Z", "open": 501.0, "high": 506.0,
+         "low": 500.0, "close": 505.0, "volume": 1100},
+    ]}}
+    broker = _broker_with_bars(payload)
+    with patch("services.public_api_adapter._get_broker", new=AsyncMock(return_value=broker)):
+        bars = await fetch_bars_from_public_api("SPY", timeframe="1Day", limit=50)
+
+    import json
+    import math as _math
+
+    assert bars is not None
+    # The NaN/Infinity row is dropped (incomplete after coercion), not shipped.
+    assert [b["date"] for b in bars] == ["2026-09-04T20:00:00Z"]
+    for b in bars:
+        for key in ("open", "high", "low", "close"):
+            assert _math.isfinite(b[key]), f"{key} is non-finite"
+    json.dumps(bars, allow_nan=False)  # would raise if any NaN/inf survived
+
+
 def _quote(symbol="SPY", bid=499.0, ask=501.0, last=500.5):
     """A stand-in for services.public_api.Quote with a real mid_price."""
     q = MagicMock()
