@@ -179,12 +179,16 @@ async def quant_signal_catalog(
         if state:
             current = state.get("current", {})
             bucket_id = current.get("bucket_id", state.get("current_bucket", 0))
+            # Bind fill_ratio out of the f-string: nesting the same quote character
+            # inside an f-string expression is PEP 701 syntax (Python 3.12+), and this
+            # service ships on python:3.11-slim (Dockerfile.backend) / CI python 3.11.
+            fill_ratio = current.get("fill_ratio", 0)
             signals.append({
                 "name": "volume_clock_bucket",
                 "source": "volume_clock",
                 "value": f"bucket_{bucket_id}",
                 "unit": "label",
-                "description": f"Current volume-clock bucket (fill_ratio={current.get("fill_ratio", 0):.2f})",
+                "description": f"Current volume-clock bucket (fill_ratio={fill_ratio:.2f})",
             })
     except Exception as e:
         logger.debug(f"volume_clock unavailable for {t}: {e}")
