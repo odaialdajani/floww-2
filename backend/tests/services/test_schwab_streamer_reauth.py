@@ -16,9 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from .test_schwab_streamer_reconnect import _FakeWS, _FakeConnect, _connect_side_effect
-
-
+from .test_schwab_streamer_reconnect import _connect_side_effect, _FakeConnect, _FakeWS
 
 # ---------------------------------------------------------------------------
 # Test 9: Token expiry mid-stream triggers re-auth on reconnect

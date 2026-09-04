@@ -88,12 +88,12 @@ async def quant_full(
 
 async def _catalog_signals(ticker: str) -> list[dict[str, Any]]:
     """Return the 6-signal catalog (same logic as /api/quant/signals)."""
-    from vol_analytics import calc_iv_rank_percentile, calc_realized_volatility
-    from services.volume_clock import VolumeClock
-    from services.vpin_toxicity import VPINToxicity
     from services.composite_flow_score import CompositeFlowScore
     from services.hmm_regime import GaussianHMMRegime
-    from services.signal_translator import translate_signal, SignalInput
+    from services.signal_translator import SignalInput, translate_signal
+    from services.volume_clock import VolumeClock
+    from services.vpin_toxicity import VPINToxicity
+    from vol_analytics import calc_iv_rank_percentile, calc_realized_volatility
 
     signals: list[dict[str, Any]] = []
     t = ticker

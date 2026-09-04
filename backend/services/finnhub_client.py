@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import finnhub
 
@@ -40,7 +40,7 @@ class FinnhubClient:
     All methods return dicts (parsed JSON) or None on failure.
     """
 
-    def __init__(self, api_key: Optional[str] = None) -> None:
+    def __init__(self, api_key: str | None = None) -> None:
         key = api_key or FINNHUB_API_KEY
         if not key:
             log.warning("Finnhub API key not set — methods will return None")
@@ -50,7 +50,7 @@ class FinnhubClient:
     # Quote
     # ------------------------------------------------------------------
 
-    def quote(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def quote(self, symbol: str) -> dict[str, Any] | None:
         """Latest quote for a symbol.
 
         Returns dict with keys: c (current), o (open), h (high), l (low),
@@ -69,7 +69,7 @@ class FinnhubClient:
     # Options chain
     # ------------------------------------------------------------------
 
-    def options_chain(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def options_chain(self, symbol: str) -> dict[str, Any] | None:
         """Options chain for a symbol.
 
         Returns dict with 'expirations' list; each expiry has 'strikes'
@@ -85,7 +85,7 @@ class FinnhubClient:
 
     def options_chain_for_expiry(
         self, symbol: str, expiry: str
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Options chain filtered to a specific expiry date (YYYY-MM-DD).
 
         Wraps options_chain and filters to the matching expiry.
@@ -102,7 +102,7 @@ class FinnhubClient:
     # Company profile
     # ------------------------------------------------------------------
 
-    def company_profile(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def company_profile(self, symbol: str) -> dict[str, Any] | None:
         """Company profile: name, ticker, exchange, industry, sector,
         description, logo, website, employees, etc."""
         if not self._client:
@@ -117,7 +117,7 @@ class FinnhubClient:
     # Fundamentals
     # ------------------------------------------------------------------
 
-    def fundamentals(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def fundamentals(self, symbol: str) -> dict[str, Any] | None:
         """Fundamental ratios for a symbol.
 
         Returns dict of ratio categories (e.g. 'rating', 'financials',
@@ -136,8 +136,8 @@ class FinnhubClient:
     # ------------------------------------------------------------------
 
     def news_for_symbol(
-        self, symbol: str, _from: Optional[str] = None, to: Optional[str] = None
-    ) -> Optional[List[Dict[str, Any]]]:
+        self, symbol: str, _from: str | None = None, to: str | None = None
+    ) -> list[dict[str, Any]] | None:
         """News articles mentioning a symbol.
 
         _from / to: ISO date strings (YYYY-MM-DD). If omitted, defaults
@@ -153,7 +153,7 @@ class FinnhubClient:
             log.error("Finnhub news failed for %s: %s", symbol, e)
             return None
 
-    def top_news(self, category: str = "general") -> Optional[List[Dict[str, Any]]]:
+    def top_news(self, category: str = "general") -> list[dict[str, Any]] | None:
         """Top market news for a category.
 
         Categories: 'general', 'crypto', 'forex', 'merger', 'economy'.
@@ -175,9 +175,9 @@ class FinnhubClient:
         symbol: str,
         timeframe: str = "D",
         tech: str = "rsi",
-        _from: Optional[int] = None,
-        to: Optional[int] = None,
-    ) -> Optional[List[Dict[str, Any]]]:
+        _from: int | None = None,
+        to: int | None = None,
+    ) -> list[dict[str, Any]] | None:
         """Technical indicator values for a symbol.
 
         timeframe: 'D' (daily), 'W' (weekly), 'M' (monthly), 'm' (min),
@@ -202,17 +202,17 @@ class FinnhubClient:
     # Bulk helpers
     # ------------------------------------------------------------------
 
-    def quote_bulk(self, symbols: List[str]) -> Dict[str, Optional[Dict[str, Any]]]:
+    def quote_bulk(self, symbols: list[str]) -> dict[str, dict[str, Any] | None]:
         """Fetch quotes for multiple symbols.
 
         Returns dict mapping symbol -> quote dict or None.
         """
-        results: Dict[str, Optional[Dict[str, Any]]] = {}
+        results: dict[str, dict[str, Any] | None] = {}
         for sym in symbols:
             results[sym] = self.quote(sym)
         return results
 
-    def all_symbols(self) -> Optional[List[Dict[str, Any]]]:
+    def all_symbols(self) -> list[dict[str, Any]] | None:
         """List of all symbols available via Finnhub."""
         if not self._client:
             return None

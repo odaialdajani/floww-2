@@ -40,7 +40,7 @@ async def quant_signal_catalog(
 
     signals: list[dict[str, Any]] = []    # --- GEX regime signals (from signal_translator / GEX core) ---
     try:
-        from signal_translator import translate_signal, SignalInput
+        from signal_translator import SignalInput, translate_signal
 
         regime_result = translate_signal(SignalInput(
             ticker=t,
@@ -193,23 +193,14 @@ async def quant_signal_catalog(
     except Exception as e:
         logger.debug(f"volume_clock unavailable for {t}: {e}")
 
-    # --- IV surface metrics ---
-    try:
-        from vol_analytics import calc_skew_metrics
+    # --- IV surface metrics: NOT emitted here ---
+    # calc_skew_metrics(vol_analytics) needs spot + the option chain, which this
+    # catalog endpoint does not fetch. iv_skew comes from /api/quant/full instead.
+    # (Was a try/except that only imported the symbol and never called it.)
 
-        # calc_skew_metrics requires spot + contracts; we don't have those here
-        # so skip for now — iv_skew is best fetched from /api/quant/full
-    except Exception as e:
-        logger.debug(f"iv_skew unavailable for {t}: {e}")
-
-    # --- Charm estimate (delta decay proxy) ---
-    try:
-        from advanced_analytics import calc_charm_integral
-
-        # calc_charm_integral requires ticker + contracts; needs option chain data
-        # so skip for now — charm is best fetched from /api/quant/full
-    except Exception as e:
-        logger.debug(f"charm unavailable for {t}: {e}")
+    # --- Charm estimate: NOT emitted here ---
+    # calc_charm_integral(advanced_analytics) needs ticker + the option chain,
+    # same reason. charm comes from /api/quant/full instead.
 
     return {
         "ticker": t,

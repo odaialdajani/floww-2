@@ -13,7 +13,6 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
 
 import pytest
 
@@ -28,10 +27,10 @@ class _FakeResult:
     ticker: str
     prediction: int
     confidence: float
-    probabilities: List[float]
+    probabilities: list[float]
     model_id: str = "SPY_test_v1"
     data_age_sec: float = 1.0
-    features_used: List[str] = field(default_factory=list)
+    features_used: list[str] = field(default_factory=list)
 
 
 class _FakeEngine:

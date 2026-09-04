@@ -5,9 +5,10 @@ without each test file having its own sys.path.insert hack.
 """
 
 import sys
-import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 _backend_dir = Path(__file__).resolve().parent.parent  # backend/
 if str(_backend_dir) not in sys.path:

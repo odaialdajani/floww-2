@@ -18,14 +18,14 @@ This module also works standalone for testing without a running server.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from services.finnhub_client import FinnhubClient
 
 log = logging.getLogger(__name__)
 
 # Module-level client singleton — keyed off FINNHUB_API_KEY env var.
-_client: Optional[FinnhubClient] = None
+_client: FinnhubClient | None = None
 
 
 def _get_client() -> FinnhubClient:
@@ -39,7 +39,7 @@ def _get_client() -> FinnhubClient:
 # Quote
 # ------------------------------------------------------------------
 
-def quote(ticker: str) -> Dict[str, Any]:
+def quote(ticker: str) -> dict[str, Any]:
     """GET /api/finnhub/quote?ticker=SPY"""
     c = _get_client()
     q = c.quote(ticker)
@@ -48,7 +48,7 @@ def quote(ticker: str) -> Dict[str, Any]:
     return {"ticker": ticker, "quote": q}
 
 
-def quote_bulk(tickers: str) -> Dict[str, Any]:
+def quote_bulk(tickers: str) -> dict[str, Any]:
     """GET /api/finnhub/quote-bulk?tickers=SPY,QQQ,IWM
 
     tickers: comma-separated string.
@@ -71,7 +71,7 @@ def quote_bulk(tickers: str) -> Dict[str, Any]:
 # Options
 # ------------------------------------------------------------------
 
-def options_chain(ticker: str) -> Dict[str, Any]:
+def options_chain(ticker: str) -> dict[str, Any]:
     """GET /api/finnhub/options-chain?ticker=SPY"""
     c = _get_client()
     chain = c.options_chain(ticker)
@@ -82,7 +82,7 @@ def options_chain(ticker: str) -> Dict[str, Any]:
 
 def options_chain_for_expiry(
     ticker: str, expiry: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """GET /api/finnhub/options-chain/expiry?ticker=SPY&expiry=2026-09-18"""
     c = _get_client()
     chain = c.options_chain_for_expiry(ticker, expiry)
@@ -95,7 +95,7 @@ def options_chain_for_expiry(
 # Company / Fundamentals
 # ------------------------------------------------------------------
 
-def company_profile(ticker: str) -> Dict[str, Any]:
+def company_profile(ticker: str) -> dict[str, Any]:
     """GET /api/finnhub/company-profile?ticker=SPY"""
     c = _get_client()
     profile = c.company_profile(ticker)
@@ -104,7 +104,7 @@ def company_profile(ticker: str) -> Dict[str, Any]:
     return {"ticker": ticker, "profile": profile}
 
 
-def fundamentals(ticker: str) -> Dict[str, Any]:
+def fundamentals(ticker: str) -> dict[str, Any]:
     """GET /api/finnhub/fundamentals?ticker=SPY"""
     c = _get_client()
     fund = c.fundamentals(ticker)
@@ -119,9 +119,9 @@ def fundamentals(ticker: str) -> Dict[str, Any]:
 
 def news_for_symbol(
     ticker: str,
-    _from: Optional[str] = None,
-    to: Optional[str] = None,
-) -> Dict[str, Any]:
+    _from: str | None = None,
+    to: str | None = None,
+) -> dict[str, Any]:
     """GET /api/finnhub/news?ticker=SPY[&from=2026-07-01][&to=2026-08-01]"""
     c = _get_client()
     news = c.news_for_symbol(ticker, _from=_from, to=to)
@@ -130,7 +130,7 @@ def news_for_symbol(
     return {"ticker": ticker, "news": news}
 
 
-def top_news(category: str = "general") -> Dict[str, Any]:
+def top_news(category: str = "general") -> dict[str, Any]:
     """GET /api/finnhub/top-news?category=general"""
     c = _get_client()
     news = c.top_news(category)
@@ -147,9 +147,9 @@ def technicals(
     ticker: str,
     timeframe: str = "D",
     tech: str = "rsi",
-    _from: Optional[int] = None,
-    to: Optional[int] = None,
-) -> Dict[str, Any]:
+    _from: int | None = None,
+    to: int | None = None,
+) -> dict[str, Any]:
     """GET /api/finnhub/technicals?ticker=SPY[&timeframe=D][&tech=rsi]"""
     c = _get_client()
     vals = c.technicals(ticker, timeframe, tech, _from=_from, to=to)
@@ -167,7 +167,7 @@ def technicals(
 # List
 # ------------------------------------------------------------------
 
-def all_symbols() -> Dict[str, Any]:
+def all_symbols() -> dict[str, Any]:
     """GET /api/finnhub/symbols"""
     c = _get_client()
     syms = c.all_symbols()
