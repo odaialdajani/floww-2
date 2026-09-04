@@ -46,6 +46,85 @@ def _broker_with_bars(payload):
     return broker
 
 
+def _broker_raising(exc, *, on="bars"):
+    """A broker whose bars/quotes call raises ``exc``."""
+    broker = MagicMock()
+    broker.get_trading_account.return_value = MagicMock(account_id="acct")
+    broker.get_bars = AsyncMock(side_effect=exc if on == "bars" else None)
+    broker.get_quotes = AsyncMock(side_effect=exc if on == "quotes" else None)
+    return broker
+
+
+# ---------------------------------------------------------------------------
+# Provider telemetry: ONLY a real transport failure may be recorded as a
+# provider failure. These endpoints are unauthenticated, and the "public_api"
+# health counter they write to is shared with the PRIMARY options-chain path —
+# so a bad ticker must not be able to trip provider-down alerts.
+#
+# Regression guard: this branch originally caught the builtin TimeoutError.
+# httpx.TimeoutException is NOT a subclass of it and PublicBroker awaits httpx
+# directly, so the branch was unreachable and NO failure could ever be recorded.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("exc", [
+    __import__("httpx").ReadTimeout("timed out"),
+    __import__("httpx").ConnectTimeout("timed out"),
+    __import__("httpx").ConnectError("refused"),
+])
+@pytest.mark.asyncio
+async def test_bars_record_provider_failure_on_transport_error(exc) -> None:
+    from services.public_api_adapter import fetch_bars_from_public_api
+
+    broker = _broker_raising(exc, on="bars")
+    with patch("services.public_api_adapter._get_broker", new=AsyncMock(return_value=broker)), \
+         patch("services.public_api_adapter._record_call") as rec:
+        result = await fetch_bars_from_public_api("SPY", timeframe="1Day", limit=10)
+
+    assert result is None
+    rec.assert_called_once_with(False)
+
+
+@pytest.mark.asyncio
+async def test_bars_do_not_record_failure_for_a_bad_ticker() -> None:
+    """An unknown symbol is a data condition, not a provider outage."""
+    from services.public_api_adapter import fetch_bars_from_public_api
+
+    broker = _broker_raising(RuntimeError("404 Not Found for BADTICKER"), on="bars")
+    with patch("services.public_api_adapter._get_broker", new=AsyncMock(return_value=broker)), \
+         patch("services.public_api_adapter._record_call") as rec:
+        result = await fetch_bars_from_public_api("BADTICKER", timeframe="1Day", limit=10)
+
+    assert result is None
+    rec.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_quotes_record_provider_failure_on_transport_error() -> None:
+    from services.public_api_adapter import fetch_quotes_from_public_api
+
+    broker = _broker_raising(__import__("httpx").ReadTimeout("timed out"), on="quotes")
+    with patch("services.public_api_adapter._get_broker", new=AsyncMock(return_value=broker)), \
+         patch("services.public_api_adapter._record_call") as rec:
+        result = await fetch_quotes_from_public_api(["SPY"])
+
+    assert result is None
+    rec.assert_called_once_with(False)
+
+
+@pytest.mark.asyncio
+async def test_quotes_do_not_record_failure_for_a_bad_ticker() -> None:
+    from services.public_api_adapter import fetch_quotes_from_public_api
+
+    broker = _broker_raising(RuntimeError("404 Not Found"), on="quotes")
+    with patch("services.public_api_adapter._get_broker", new=AsyncMock(return_value=broker)), \
+         patch("services.public_api_adapter._record_call") as rec:
+        result = await fetch_quotes_from_public_api(["BADTICKER"])
+
+    assert result is None
+    rec.assert_not_called()
+
+
 def _quote(symbol="SPY", bid=499.0, ask=501.0, last=500.5):
     """A stand-in for services.public_api.Quote with a real mid_price."""
     q = MagicMock()

@@ -31,6 +31,8 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
+import httpx
+
 from services.public_api import PublicBroker
 
 log = logging.getLogger(__name__)
@@ -56,6 +58,18 @@ _BARS_TIMEFRAME_LOOKUP: dict[str, tuple[str, str]] = {
     key.lower(): value for key, value in _BARS_TIMEFRAMES.items()
 }
 PUBLIC_BARS_TIMEFRAMES: tuple[str, ...] = tuple(_BARS_TIMEFRAMES)
+
+# Exceptions that mean "the provider is genuinely unreachable", as opposed to
+# "the caller asked for something that does not exist". Only these are recorded
+# as provider failures — see the telemetry note on fetch_bars_from_public_api.
+#
+# httpx.TimeoutException is NOT a subclass of the builtin TimeoutError, and
+# PublicBroker awaits httpx directly with no asyncio.wait_for wrapper. Catching
+# only the builtin here made this branch unreachable, so the provider could never
+# record a failure at all. httpx.TransportError covers connect/read/write/pool
+# timeouts plus connection and protocol errors. The builtin stays in the tuple in
+# case a caller ever wraps these coroutines in asyncio.wait_for.
+_TRANSPORT_ERRORS = (httpx.TransportError, TimeoutError)
 
 
 def _record_call(success: bool) -> None:
@@ -378,9 +392,9 @@ async def fetch_bars_from_public_api(
     symbol = _normalize_symbol(ticker)
     try:
         payload = await pb.get_bars(symbol, period, aggregation=aggregation)
-    except TimeoutError as e:
+    except _TRANSPORT_ERRORS as e:
         # Transport-level failure — this one really is the provider being down.
-        log.warning("Public API bars timeout for %s %s: %s", ticker, timeframe, e)
+        log.warning("Public API bars transport failure for %s %s: %s", ticker, timeframe, e)
         _record_call(False)
         return None
     except Exception as e:
@@ -431,9 +445,9 @@ async def fetch_quotes_from_public_api(
 
     try:
         quotes = await pb.get_quotes(symbols, trading.account_id)
-    except TimeoutError as e:
+    except _TRANSPORT_ERRORS as e:
         # Transport-level failure — this one really is the provider being down.
-        log.warning("Public API quotes timeout for %s: %s", ",".join(symbols), e)
+        log.warning("Public API quotes transport failure for %s: %s", ",".join(symbols), e)
         _record_call(False)
         return None
     except Exception as e:
