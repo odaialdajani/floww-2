@@ -15,11 +15,19 @@ Routing priority (in fetch_spot_and_chains_merged):
     1. Public API (this adapter)  — PRIMARY
     2. cvserver_client.py         — fallback
     3. yfinance + Databento        — last resort
+
+Stocks side (fetch_bars_from_public_api / fetch_quotes_from_public_api) normalises
+Public.com equity data to the shapes floww already speaks, so Public.com is a
+drop-in source rather than a new dialect.
+
+DATA ONLY. This adapter deliberately exposes no order/trading method — the
+PublicBroker order path targets the LIVE Public.com trading gateway.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -29,6 +37,37 @@ log = logging.getLogger(__name__)
 
 BROKER: PublicBroker | None = None
 _BROKER_LOCK = asyncio.Lock()
+
+# Bar timeframes floww exposes, mapped to Public.com's (period, aggregation).
+# Keys use the same vocabulary as routes/alpaca.py's ``timeframe`` query param
+# so callers can swap providers without relearning the tokens. Values are the
+# legal period/aggregation enums documented on PublicBroker.get_bars().
+_BARS_TIMEFRAMES: dict[str, tuple[str, str]] = {
+    "1Min": ("DAY", "ONE_MINUTE"),
+    "5Min": ("DAY", "FIVE_MINUTES"),
+    "15Min": ("DAY", "FIFTEEN_MINUTES"),
+    "30Min": ("WEEK", "THIRTY_MINUTES"),
+    "1Hour": ("MONTH", "ONE_HOUR"),
+    "1Day": ("YEAR", "ONE_DAY"),
+    "1Week": ("FIVE_YEARS", "ONE_WEEK"),
+    "1Month": ("TEN_YEARS", "ONE_MONTH"),
+}
+_BARS_TIMEFRAME_LOOKUP: dict[str, tuple[str, str]] = {
+    key.lower(): value for key, value in _BARS_TIMEFRAMES.items()
+}
+PUBLIC_BARS_TIMEFRAMES: tuple[str, ...] = tuple(_BARS_TIMEFRAMES)
+
+
+def _record_call(success: bool) -> None:
+    """Record a Public API provider call, mirroring server.py's telemetry hook."""
+    try:
+        from data_providers import _record_provider_call
+        _record_provider_call("public_api", success)
+    except Exception:
+        # silent by design: telemetry only — a monitor import/registry error must
+        # never discard a payload we already fetched, nor mask the upstream
+        # failure the caller is about to handle. The outcome is logged above.
+        pass
 
 
 async def close_broker() -> None:
@@ -195,3 +234,244 @@ async def fetch_spot_from_public_api(
         log.warning("Public API spot fail for %s: %s", ticker, e)
         return None
     return None
+
+
+def _as_float(value: Any) -> float | None:
+    """Coerce a raw bar field to float; None when absent or unparseable."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_int(value: Any) -> int:
+    """Coerce a raw volume field to int; 0 when absent or unparseable."""
+    if value is None:
+        return 0
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _session_label(bucket_key: str | None) -> str:
+    """Map a Public.com session bucket key to a stable floww session label.
+
+    Public.com buckets look like ``regularMarket`` / ``preMarket`` / ``afterHours``.
+    An un-bucketed payload (a bare ``bars`` list) is treated as regular session,
+    because that is what every existing floww bars consumer means by "a bar".
+    """
+    if not bucket_key:
+        return "regular"
+    key = bucket_key.lower()
+    if "regular" in key:
+        return "regular"
+    if "pre" in key:
+        return "pre"
+    if "after" in key or "post" in key or "extended" in key:
+        return "after"
+    return "regular"
+
+
+def _normalize_bars(payload: Any, limit: int, sessions: str = "regular") -> list[dict[str, Any]]:
+    """Flatten a Public.com historicdata payload into floww's canonical bars.
+
+    Public.com nests bars per trading session, e.g.
+        {"regularMarket": {"bars": [{"timestamp", "open", ..., "volume"}]}, ...}
+
+    ``sessions`` selects which buckets contribute:
+        "regular" (default) — regular-session bars ONLY.
+        "all"               — every bucket, each row tagged with its session.
+
+    The default is deliberately NOT a merge of every bucket. Merging silently
+    mixes pre/after-hours prints into what every other floww bars consumer
+    (routes/backtest.py, the ``underlying_bars`` store) treats as a
+    regular-session series — an intraday request near the close could otherwise
+    come back as 100% extended-hours bars that look exactly like regular ones.
+    Every row carries a ``session`` field so a caller can always tell.
+
+    Rows are de-duplicated by (session, timestamp), sorted by timestamp
+    ascending, then trimmed to the most recent ``limit`` entries.
+    """
+    want_all = str(sessions).strip().lower() == "all"
+    buckets: list[tuple[str, list[Any]]] = []
+    if isinstance(payload, dict):
+        top = payload.get("bars")
+        if isinstance(top, list):
+            buckets.append(("regular", top))
+        for key, value in payload.items():
+            if key == "bars":
+                continue
+            if isinstance(value, dict) and isinstance(value.get("bars"), list):
+                buckets.append((_session_label(key), value["bars"]))
+    elif isinstance(payload, list):
+        buckets.append(("regular", payload))
+
+    merged: dict[tuple[str, str], dict[str, Any]] = {}
+    for session, raw_bars in buckets:
+        if not want_all and session != "regular":
+            continue
+        for raw in raw_bars:
+            if not isinstance(raw, dict):
+                continue
+            stamp = raw.get("timestamp") or raw.get("date") or raw.get("time")
+            if stamp is None:
+                continue
+            stamp = str(stamp)
+            merged[(session, stamp)] = {
+                "date": stamp,
+                "open": _as_float(raw.get("open")),
+                "high": _as_float(raw.get("high")),
+                "low": _as_float(raw.get("low")),
+                "close": _as_float(raw.get("close")),
+                "volume": _as_int(raw.get("volume")),
+                "session": session,
+            }
+
+    bars = [merged[key] for key in sorted(merged, key=lambda k: (k[1], k[0]))]
+    if limit > 0:
+        bars = bars[-limit:]
+    return bars
+
+
+async def fetch_bars_from_public_api(
+    ticker: str,
+    timeframe: str = "1Day",
+    limit: int = 100,
+    sessions: str = "regular",
+) -> list[dict[str, Any]] | None:
+    """Fetch OHLCV bars for an equity from Public API.
+
+    Returns floww's canonical bar rows (most recent last):
+        [{"date": str, "open": float|None, "high": float|None,
+          "low": float|None, "close": float|None, "volume": int,
+          "session": "regular"|"pre"|"after"}, ...]
+
+    ``timeframe`` is one of PUBLIC_BARS_TIMEFRAMES. ``limit`` caps the number of
+    most-recent bars returned (Public.com has no server-side limit parameter).
+    ``sessions`` is "regular" (default, regular-session bars only) or "all".
+
+    Returns None if the timeframe is unsupported, the Public API key is missing,
+    the call fails, or the response carries no bars.
+
+    Provider telemetry note: only a genuine transport failure (TimeoutError) is
+    recorded against the shared "public_api" provider. An unknown ticker or an
+    empty result is a data condition, not a provider outage — recording those
+    would let an unauthenticated request trip the provider-down alerts that the
+    primary options-chain path depends on.
+    """
+    spec = _BARS_TIMEFRAME_LOOKUP.get(str(timeframe).strip().lower())
+    if spec is None:
+        log.warning(
+            "Public API unsupported bars timeframe %r for %s (supported: %s)",
+            timeframe, ticker, ", ".join(PUBLIC_BARS_TIMEFRAMES),
+        )
+        return None
+    period, aggregation = spec
+
+    pb = await _get_broker()
+    if pb is None:
+        return None
+
+    symbol = _normalize_symbol(ticker)
+    try:
+        payload = await pb.get_bars(symbol, period, aggregation=aggregation)
+    except TimeoutError as e:
+        # Transport-level failure — this one really is the provider being down.
+        log.warning("Public API bars timeout for %s %s: %s", ticker, timeframe, e)
+        _record_call(False)
+        return None
+    except Exception as e:
+        log.warning("Public API bars fail for %s %s: %s", ticker, timeframe, e)
+        return None
+
+    bars = _normalize_bars(payload, limit, sessions=sessions)
+    if not bars:
+        log.warning("Public API returned 0 bars for %s %s", ticker, timeframe)
+        return None
+
+    _record_call(True)
+    return bars
+
+
+async def fetch_quotes_from_public_api(
+    tickers: Sequence[str] | str,
+) -> dict[str, dict[str, Any]] | None:
+    """Fetch live equity quotes from Public API, keyed by normalised symbol.
+
+    Accepts a single ticker or a batch — Public.com quotes many symbols in one
+    round-trip, so a batch costs one call.
+
+    Each value carries the same ``spot`` the chain path uses (mid price, falling
+    back to last) plus the richer top-of-book fields Public.com returns:
+        {"ticker", "spot", "last", "bid", "ask", "bid_size", "ask_size",
+         "volume", "previous_close", "change", "percent_change", "timestamp",
+         "data_source"}
+
+    Returns None if no symbols were given, the Public API key is missing, the
+    call fails, or the response carries no quotes.
+    """
+    if isinstance(tickers, str):
+        tickers = [tickers]
+    symbols = [_normalize_symbol(t) for t in tickers if t]
+    if not symbols:
+        log.warning("Public API quotes called with no symbols")
+        return None
+
+    pb = await _get_broker()
+    if pb is None:
+        return None
+
+    trading = pb.get_trading_account()
+    if trading is None:
+        log.warning("No trading account for Public API")
+        return None
+
+    try:
+        quotes = await pb.get_quotes(symbols, trading.account_id)
+    except TimeoutError as e:
+        # Transport-level failure — this one really is the provider being down.
+        log.warning("Public API quotes timeout for %s: %s", ",".join(symbols), e)
+        _record_call(False)
+        return None
+    except Exception as e:
+        # Unknown symbol / rejected request is a data condition, not an outage.
+        # Recording it would let an unauthenticated request trip the
+        # provider-down alerts the primary options-chain path depends on.
+        log.warning("Public API quotes fail for %s: %s", ",".join(symbols), e)
+        return None
+
+    out: dict[str, dict[str, Any]] = {}
+    for q in quotes or []:
+        symbol = _normalize_symbol(str(getattr(q, "symbol", "") or ""))
+        if not symbol:
+            continue
+        mid = q.mid_price
+        # 0.0 is a real mid price — only a missing mid falls back to last.
+        spot = mid if mid is not None else (q.last or 0.0)
+        out[symbol] = {
+            "ticker": symbol,
+            "spot": float(spot),
+            "last": q.last,
+            "bid": q.bid,
+            "ask": q.ask,
+            "bid_size": q.bid_size,
+            "ask_size": q.ask_size,
+            "volume": q.volume,
+            "previous_close": q.previous_close,
+            "change": q.change,
+            "percent_change": q.percent_change,
+            "timestamp": q.timestamp,
+            "data_source": "public_api",
+        }
+
+    if not out:
+        # Empty result set is a data condition, not a provider outage — see the
+        # telemetry note in fetch_bars_from_public_api.
+        log.warning("Public API returned 0 quotes for %s", ",".join(symbols))
+        return None
+
+    _record_call(True)
+    return out
