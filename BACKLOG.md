@@ -165,17 +165,14 @@ Everything below is either stranded work or a feature that was removed on purpos
 **All of it is wanted — none of it is discarded.** Artifacts and restore
 instructions: `docs/salvage/README.md`.
 
-**K1 — Stranded perf fixes (patch held at `docs/salvage/`)**
-- [ ] `routes/ml_predict_api.py` — mtime-keyed model/scaler cache + per-`model_type`
-      prediction cache. Today every `/api/predict/{ticker}` re-reads both joblib
-      artifacts from disk.
-- [ ] `routes/heatseeker_snapshots_api.py` — wrap 3 DuckDB calls in
-      `asyncio.to_thread`; they block the event loop during pandas materialization.
-- [ ] `services/replay_engine.py` — 2× `self.db.query()` → `await
-      self.db.query_async()`. `query_async` already exists (`duckdb_engine.py:500`) —
-      nearly free.
-- [ ] Land `test_ml_predict_cache.py` + `test_ml_ensemble_labels.py` with the above
-      so the fixes ship with proof.
+**K1 — Stranded perf fixes ✅ LANDED (`a2f0532`, 2026-09-04)**
+- [x] `routes/ml_predict_api.py` — mtime-keyed model/scaler cache + per-`model_type`
+      prediction cache + legacy-binary ensemble branch + `n_hold` in the response
+- [x] `routes/heatseeker_snapshots_api.py` — 3 DuckDB calls moved to `asyncio.to_thread`
+- [x] `services/replay_engine.py` — 2× `self.db.query()` → `await self.db.query_async()`
+- [x] `test_ml_predict_cache.py` + `test_ml_ensemble_labels.py` landed in
+      `backend/tests/routes/` — 3 failed before the fix, 7 pass after; 104 passed
+      across every test file referencing the three changed modules
 
 **K2 — Removed UI we still want (all recoverable from this repo's git history)**
 - [ ] Alpha Flow feed page (`3f339d5`) — backend `/api/alpha-flow` + `/api/alpha-flow/dates` are LIVE with no UI
