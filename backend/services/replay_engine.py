@@ -92,7 +92,7 @@ class ReplayEngine:
 
     async def _replay_ticks(self):
         """Replay tick data from DuckDB."""
-        rows = self.db.query(
+        rows = await self.db.query_async(
             """
             SELECT * FROM ticks
             WHERE timestamp >= ? AND timestamp <= ?
@@ -142,7 +142,7 @@ class ReplayEngine:
 
     async def _replay_chains(self):
         """Replay chain data from DuckDB (stored in ticks table with chain fields)."""
-        rows = self.db.query(
+        rows = await self.db.query_async(
             """
             SELECT * FROM ticks
             WHERE timestamp >= ? AND timestamp <= ?

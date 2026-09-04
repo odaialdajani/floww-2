@@ -57,6 +57,21 @@ def _set_cached_prediction(ticker: str, data: dict):
     _pred_cache[ticker.upper()] = {"ts": time.time(), "data": data}
 
 
+# ── Model artifact cache (keyed by file mtime so a retrain invalidates) ──
+_model_cache: dict[str, tuple] = {}
+
+
+def _load_model_cached(path: str):
+    """joblib.load with an mtime-keyed cache: reload only when the file changes."""
+    import joblib
+    mtime = os.path.getmtime(path)
+    entry = _model_cache.get(path)
+    if entry and entry[0] == mtime:
+        return entry[1]
+    artifact = joblib.load(path)
+    _model_cache[path] = (mtime, artifact)
+    return artifact
+
 
 @router.get("/predict/{ticker}")
 async def predict_direction(
@@ -90,6 +105,12 @@ async def predict_direction(
     """
     ticker = ticker.upper()
 
+    # 0. Serve from cache within TTL (keyed per model_type so gbm/logistic don't collide)
+    cache_key = f"{ticker}:{model_type}"
+    cached = _get_cached_prediction(cache_key)
+    if cached is not None:
+        return cached
+
     # 1. Compute features from live data
     from services.ml_realtime_features import compute_features_async
     feature_data = await compute_features_async(ticker)
@@ -105,12 +126,11 @@ async def predict_direction(
     scaler_path = os.path.join(model_dir, f"price_scaler_{ticker}.joblib")
     meta_path = os.path.join(model_dir, f"meta_{ticker}.json")
 
-    import joblib
     if not os.path.exists(model_path):
         raise HTTPException(404, f"No trained model for {ticker}. Run training first.")
 
-    model = joblib.load(model_path)
-    scaler = joblib.load(scaler_path) if os.path.exists(scaler_path) else None
+    model = _load_model_cached(model_path)
+    scaler = _load_model_cached(scaler_path) if os.path.exists(scaler_path) else None
 
     # 3. Build feature vector in model-expected order
     # Load meta to get the exact feature names the model was trained with
@@ -154,6 +174,7 @@ async def predict_direction(
         f"chain={'yes' if feature_data['chain_available'] else 'no'})"
     )
 
+    _set_cached_prediction(cache_key, result)
     return result
 
 
@@ -205,14 +226,27 @@ async def ensemble_prediction(
             continue
         try:
             pred = await inference_engine.predict(ticker)
+            probs = list(pred.probabilities or [])
+            if len(probs) != 2:
+                # Engine 3-class contract: 0=DOWN, 1=HOLD, 2=UP; probs=[down, hold, up]
+                label = _PRED_LABELS.get(pred.prediction, "HOLD")
+                proba_out = {
+                    "down": round(probs[0], 4) if len(probs) > 0 else 0.33,
+                    "hold": round(probs[1], 4) if len(probs) > 1 else 0.34,
+                    "up": round(probs[2], 4) if len(probs) > 2 else 0.33,
+                }
+            else:
+                # Legacy binary contract: 1=UP, 0=DOWN; probs=[down, up].
+                # Without this branch a binary model's UP(1) is mislabeled HOLD.
+                label = "UP" if pred.prediction == 1 else "DOWN"
+                proba_out = {
+                    "down": round(probs[0], 4),
+                    "up": round(probs[1], 4),
+                }
             results[ticker] = {
-                "prediction": _PRED_LABELS.get(pred.prediction, "HOLD"),
+                "prediction": label,
                 "confidence": round(pred.confidence, 4),
-                "probabilities": {
-                    "down": round(pred.probabilities[0], 4) if len(pred.probabilities) > 0 else 0.33,
-                    "hold": round(pred.probabilities[1], 4) if len(pred.probabilities) > 1 else 0.34,
-                    "up": round(pred.probabilities[2], 4) if len(pred.probabilities) > 2 else 0.33,
-                },
+                "probabilities": proba_out,
                 "model_id": pred.model_id,
                 "data_age_sec": round(pred.data_age_sec, 1),
             }
@@ -227,6 +261,7 @@ async def ensemble_prediction(
     n_bearish = sum(1 for r in results.values() if r["prediction"] == "DOWN")
     # HOLD predictions are neither bullish nor bearish (was: n_models - n_bullish,
     # which wrongly counted every HOLD as bearish).
+    n_hold = n_models - n_bullish - n_bearish
 
     if n_models == 0:
         ensemble_signal = "NO_DATA"
@@ -251,6 +286,7 @@ async def ensemble_prediction(
         "n_models": n_models,
         "n_bullish": n_bullish,
         "n_bearish": n_bearish,
+        "n_hold": n_hold,
         "tickers": results,
         "errors": errors if errors else None,
         "computed_at": datetime.now(UTC).isoformat(),
@@ -334,7 +370,6 @@ async def model_info(ticker: str):
     model_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models")
     meta_path = os.path.join(model_dir, f"meta_{ticker}.json")
 
-    import joblib
     model_path = os.path.join(model_dir, f"price_model_{ticker}.joblib")
 
     if not os.path.exists(meta_path):
@@ -343,7 +378,7 @@ async def model_info(ticker: str):
     with open(meta_path) as f:
         meta = json.load(f)
 
-    model = joblib.load(model_path)
+    model = _load_model_cached(model_path)
 
     return {
         "ticker": ticker,

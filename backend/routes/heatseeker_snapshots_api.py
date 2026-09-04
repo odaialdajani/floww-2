@@ -16,6 +16,7 @@ Endpoints:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC
 
@@ -77,7 +78,8 @@ async def get_top_movers(
     from services.heatseeker_snapshots import get_top_movers_from_db
 
     conn = _get_duckdb_conn()
-    movers = get_top_movers_from_db(conn, ticker, top_n=top_n)
+    # DuckDB fetch runs pandas materialization — keep it off the event loop
+    movers = await asyncio.to_thread(get_top_movers_from_db, conn, ticker, top_n=top_n)
 
     return {
         "ticker": ticker.upper(),
@@ -124,7 +126,9 @@ async def get_history(
     from services.heatseeker_snapshots import get_history
 
     conn = _get_duckdb_conn()
-    history = get_history(conn, ticker, expiry, strike, type.upper(), limit=limit)
+    history = await asyncio.to_thread(
+        get_history, conn, ticker, expiry, strike, type.upper(), limit=limit
+    )
 
     return {
         "ticker": ticker.upper(),
@@ -156,7 +160,7 @@ async def get_latest(
     from services.heatseeker_snapshots import get_latest_snapshot
 
     conn = _get_duckdb_conn()
-    contracts = get_latest_snapshot(conn, ticker)
+    contracts = await asyncio.to_thread(get_latest_snapshot, conn, ticker)
 
     return {
         "ticker": ticker.upper(),
