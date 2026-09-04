@@ -156,6 +156,64 @@ additional metric types, not the endpoint itself.
 - [ ] Automated conventional commit enforcement (currently manual)
 - [ ] Pre-commit hooks (ruff, mypy on non-frozen files)
 
+### K — Wanted, not discarded (from the 2026-09-04 old-clone comparison)
+
+The retired clone at `Desktop/floww` was compared against this repo. **No backend
+function, class, or method was lost** and only one endpoint changed
+(`/api/llm/generate-briefing` → `/api/llm/generate`, clean rename, test updated).
+Everything below is either stranded work or a feature that was removed on purpose.
+**All of it is wanted — none of it is discarded.** Artifacts and restore
+instructions: `docs/salvage/README.md`.
+
+**K1 — Stranded perf fixes (patch held at `docs/salvage/`)**
+- [ ] `routes/ml_predict_api.py` — mtime-keyed model/scaler cache + per-`model_type`
+      prediction cache. Today every `/api/predict/{ticker}` re-reads both joblib
+      artifacts from disk.
+- [ ] `routes/heatseeker_snapshots_api.py` — wrap 3 DuckDB calls in
+      `asyncio.to_thread`; they block the event loop during pandas materialization.
+- [ ] `services/replay_engine.py` — 2× `self.db.query()` → `await
+      self.db.query_async()`. `query_async` already exists (`duckdb_engine.py:500`) —
+      nearly free.
+- [ ] Land `test_ml_predict_cache.py` + `test_ml_ensemble_labels.py` with the above
+      so the fixes ship with proof.
+
+**K2 — Removed UI we still want (all recoverable from this repo's git history)**
+- [ ] Alpha Flow feed page (`3f339d5`) — backend `/api/alpha-flow` + `/api/alpha-flow/dates` are LIVE with no UI
+- [ ] Daily Report page (`3f339d5`) — backend `/api/flow-digest` is LIVE with no UI
+- [ ] Earnings page (`3f339d5`) — backend `/api/earnings`, `/api/earnings/week`, `/api/earnings/ticker/{t}/detail` are LIVE with no UI
+- [ ] Ticker Analysis / deep-dive page (`3f339d5`) — backend `/api/deep-dive/{ticker}` is LIVE with no UI
+- [ ] SPX GEX page (`3f339d5`) — backend `/api/gex/spx` is LIVE with no UI
+- [ ] PaperTrade panel (`04615cc`) — `paper_trading.py` engine still live in backend
+- [ ] MLPredictionsPanel + `hooks/useMLPredictions.js` (`04615cc`)
+- [ ] RateLimitDashboard (`04615cc`)
+- [ ] DTEFilter / ExpiryFilter (`04615cc`) — partly superseded by the Tidehunter DTE chips (`fe0e9ef`); reconcile before rebuilding
+- [ ] VelocityGauge, NodesTable, FlowCarousel (`04615cc`) — VelocityGauge and NodesTable were re-inlined into App.js; FlowCarousel is not
+- [ ] SwarmFrame + TurboQuantPanel (`489593b`) — TurboQuant backend routes are LIVE (`/api/turboquant/*`)
+- [ ] `services/graph_updater.py`, `services/position_reconciler.py` (`6f83026`)
+
+**K3 — Built but unreachable in the current UI**
+- [ ] Steal Three preview — component imported and rendered on `page === "steal-three"`,
+      but there is no nav entry and the `?page=` whitelist in `App.js` (~line 506)
+      excludes it. Backend routes are live.
+- [ ] `ticker-analysis` and `flow-alerts` view code in `App.js` — same problem, no route in.
+
+**K4 — Regressions to decide on**
+- [ ] Sign-in gate removed with the AlphaPod teardown (`3f339d5`). `isAuthenticated`
+      is destructured in `App.js:502` and never used, yet the header still renders
+      email, tier badge and sign-out. Either restore the gate or strip the chrome.
+      Backend still key-protects mutating methods (`server.py:2322`); reads are open.
+- [ ] Frontend tests are `continue-on-error: true` in `.github/workflows/ci.yml`.
+      The stated reason (12–18 failing visual tests) is stale — 280/280 pass as of
+      2026-09-04. Re-arm the gate.
+- [ ] Backend CI runs `-m "not flaky_env"`, excluding 10 tests (health, LLM
+      endpoints, flow alerts, flow desk, heatseeker v2). Fix or re-include.
+- [ ] 48 unused npm dependencies still in `frontend/package.json` (full Radix set,
+      lucide-react, react-hook-form, zod, date-fns, cmdk, embla, vaul, sonner…).
+      Main chunk is 1.38 MB gzipped. **`package.json` is architect-frozen — needs Nav's approval.**
+- [ ] `models/SPY_meta_v2.0-regime.json` stays quarantined by the truth audit
+      (feature/sample ratio); `test_ml_pipeline.py::test_meta_file_exists` skips on it.
+      Copy kept at `docs/salvage/` for the record.
+
 ## Done
 
 - [x] Initial project setup

@@ -1,0 +1,214 @@
+diff --git a/backend/routes/heatseeker_snapshots_api.py b/backend/routes/heatseeker_snapshots_api.py
+index b24dded..66ca374 100644
+--- a/backend/routes/heatseeker_snapshots_api.py
++++ b/backend/routes/heatseeker_snapshots_api.py
+@@ -16,6 +16,7 @@ Endpoints:
+ 
+ from __future__ import annotations
+ 
++import asyncio
+ import logging
+ 
+ from fastapi import APIRouter, Query
+@@ -75,7 +76,8 @@ async def get_top_movers(
+     from datetime import datetime, timezone
+ 
+     conn = _get_duckdb_conn()
+-    movers = get_top_movers_from_db(conn, ticker, top_n=top_n)
++    # DuckDB fetch runs pandas materialization — keep it off the event loop
++    movers = await asyncio.to_thread(get_top_movers_from_db, conn, ticker, top_n=top_n)
+ 
+     return {
+         "ticker": ticker.upper(),
+@@ -122,7 +124,9 @@ async def get_history(
+     from services.heatseeker_snapshots import get_history
+ 
+     conn = _get_duckdb_conn()
+-    history = get_history(conn, ticker, expiry, strike, type.upper(), limit=limit)
++    history = await asyncio.to_thread(
++        get_history, conn, ticker, expiry, strike, type.upper(), limit=limit
++    )
+ 
+     return {
+         "ticker": ticker.upper(),
+@@ -154,7 +158,7 @@ async def get_latest(
+     from services.heatseeker_snapshots import get_latest_snapshot
+ 
+     conn = _get_duckdb_conn()
+-    contracts = get_latest_snapshot(conn, ticker)
++    contracts = await asyncio.to_thread(get_latest_snapshot, conn, ticker)
+ 
+     return {
+         "ticker": ticker.upper(),
+diff --git a/backend/routes/ml_predict_api.py b/backend/routes/ml_predict_api.py
+index 3e98ea7..653e550 100644
+--- a/backend/routes/ml_predict_api.py
++++ b/backend/routes/ml_predict_api.py
+@@ -53,6 +53,22 @@ def _set_cached_prediction(ticker: str, data: Dict):
+     _pred_cache[ticker.upper()] = {"ts": time.time(), "data": data}
+ 
+ 
++# ── Model artifact cache (keyed by file mtime so a retrain invalidates) ──
++_model_cache: Dict[str, tuple] = {}
++
++
++def _load_model_cached(path: str):
++    """joblib.load with an mtime-keyed cache: reload only when the file changes."""
++    import joblib
++    mtime = os.path.getmtime(path)
++    entry = _model_cache.get(path)
++    if entry and entry[0] == mtime:
++        return entry[1]
++    artifact = joblib.load(path)
++    _model_cache[path] = (mtime, artifact)
++    return artifact
++
++
+ 
+ @router.get("/predict/{ticker}")
+ async def predict_direction(
+@@ -86,6 +102,12 @@ async def predict_direction(
+     """
+     ticker = ticker.upper()
+ 
++    # 0. Serve from cache within TTL (keyed per model_type so gbm/logistic don't collide)
++    cache_key = f"{ticker}:{model_type}"
++    cached = _get_cached_prediction(cache_key)
++    if cached is not None:
++        return cached
++
+     # 1. Compute features from live data
+     from services.ml_realtime_features import compute_features_async
+     feature_data = await compute_features_async(ticker)
+@@ -101,12 +123,11 @@ async def predict_direction(
+     scaler_path = os.path.join(model_dir, f"price_scaler_{ticker}.joblib")
+     meta_path = os.path.join(model_dir, f"meta_{ticker}.json")
+ 
+-    import joblib
+     if not os.path.exists(model_path):
+         raise HTTPException(404, f"No trained model for {ticker}. Run training first.")
+ 
+-    model = joblib.load(model_path)
+-    scaler = joblib.load(scaler_path) if os.path.exists(scaler_path) else None
++    model = _load_model_cached(model_path)
++    scaler = _load_model_cached(scaler_path) if os.path.exists(scaler_path) else None
+ 
+     # 3. Build feature vector in model-expected order
+     # Load meta to get the exact feature names the model was trained with
+@@ -150,6 +171,7 @@ async def predict_direction(
+         f"chain={'yes' if feature_data['chain_available'] else 'no'})"
+     )
+ 
++    _set_cached_prediction(cache_key, result)
+     return result
+ 
+ 
+@@ -178,11 +200,12 @@ async def ensemble_prediction(
+         "ensemble_signal": "BULLISH" | "BEARISH" | "MIXED",
+         "ensemble_confidence": 0.72,
+         "n_models": 4,
+-        "n_bullish": 3,
++        "n_bullish": 2,
+         "n_bearish": 1,
++        "n_hold": 1,
+         "tickers": {
+-            "SPY": {"prediction": "UP", "confidence": 0.68, "probabilities": {...}},
+-            "QQQ": {"prediction": "UP", "confidence": 0.71, "probabilities": {...}},
++            "SPY": {"prediction": "UP" | "HOLD" | "DOWN", "confidence": 0.68,
++                    "probabilities": {"down": ..., "hold": ..., "up": ...}},
+             ...
+         },
+         "computed_at": "2026-05-24T..."
+@@ -201,13 +224,26 @@ async def ensemble_prediction(
+             continue
+         try:
+             pred = await inference_engine.predict(ticker)
++            probs = list(pred.probabilities or [])
++            if len(probs) == 3:
++                # Engine 3-class contract: 0=DOWN, 1=HOLD, 2=UP; probs=[down, hold, up]
++                label = {0: "DOWN", 1: "HOLD", 2: "UP"}.get(pred.prediction, "HOLD")
++                proba_out = {
++                    "down": round(probs[0], 4),
++                    "hold": round(probs[1], 4),
++                    "up": round(probs[2], 4),
++                }
++            else:
++                # Legacy binary contract: 1=UP, 0=DOWN; probs=[down, up]
++                label = "UP" if pred.prediction == 1 else "DOWN"
++                proba_out = {
++                    "down": round(probs[0], 4) if probs else 0.5,
++                    "up": round(probs[1], 4) if len(probs) > 1 else 0.5,
++                }
+             results[ticker] = {
+-                "prediction": "UP" if pred.prediction == 1 else "DOWN",
++                "prediction": label,
+                 "confidence": round(pred.confidence, 4),
+-                "probabilities": {
+-                    "down": round(pred.probabilities[0], 4),
+-                    "up": round(pred.probabilities[1], 4),
+-                },
++                "probabilities": proba_out,
+                 "model_id": pred.model_id,
+                 "data_age_sec": round(pred.data_age_sec, 1),
+             }
+@@ -216,10 +252,11 @@ async def ensemble_prediction(
+         except Exception as e:
+             errors.append(f"{ticker}: {type(e).__name__}: {e}")
+ 
+-    # Compute ensemble signal
++    # Compute ensemble signal (HOLD counts toward neither side)
+     n_models = len(results)
+     n_bullish = sum(1 for r in results.values() if r["prediction"] == "UP")
+-    n_bearish = n_models - n_bullish
++    n_bearish = sum(1 for r in results.values() if r["prediction"] == "DOWN")
++    n_hold = n_models - n_bullish - n_bearish
+ 
+     if n_models == 0:
+         ensemble_signal = "NO_DATA"
+@@ -244,6 +281,7 @@ async def ensemble_prediction(
+         "n_models": n_models,
+         "n_bullish": n_bullish,
+         "n_bearish": n_bearish,
++        "n_hold": n_hold,
+         "tickers": results,
+         "errors": errors if errors else None,
+         "computed_at": datetime.now(timezone.utc).isoformat(),
+@@ -323,7 +361,6 @@ async def model_info(ticker: str):
+     model_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models")
+     meta_path = os.path.join(model_dir, f"meta_{ticker}.json")
+ 
+-    import joblib
+     model_path = os.path.join(model_dir, f"price_model_{ticker}.joblib")
+ 
+     if not os.path.exists(meta_path):
+@@ -332,7 +369,7 @@ async def model_info(ticker: str):
+     with open(meta_path) as f:
+         meta = json.load(f)
+ 
+-    model = joblib.load(model_path)
++    model = _load_model_cached(model_path)
+ 
+     return {
+         "ticker": ticker,
+diff --git a/backend/services/replay_engine.py b/backend/services/replay_engine.py
+index 8643131..a072c01 100644
+--- a/backend/services/replay_engine.py
++++ b/backend/services/replay_engine.py
+@@ -92,7 +92,7 @@ class ReplayEngine:
+ 
+     async def _replay_ticks(self):
+         """Replay tick data from DuckDB."""
+-        rows = self.db.query(
++        rows = await self.db.query_async(
+             """
+             SELECT * FROM ticks
+             WHERE timestamp >= ? AND timestamp <= ?
+@@ -142,7 +142,7 @@ class ReplayEngine:
+ 
+     async def _replay_chains(self):
+         """Replay chain data from DuckDB (stored in ticks table with chain fields)."""
+-        rows = self.db.query(
++        rows = await self.db.query_async(
+             """
+             SELECT * FROM ticks
+             WHERE timestamp >= ? AND timestamp <= ?
