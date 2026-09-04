@@ -151,9 +151,15 @@ class VPINToxicity:
             vpin = 0.0
         elif vpin > 1.0:
             vpin = 1.0
+        # Classify the SAME value we report. Classifying the raw mean while
+        # reporting round(mean, 4) let the two disagree at a band edge: ten
+        # buckets of OF=0.3 sum to 0.2999999999999999 on some numpy builds and
+        # to 0.3 on others, so the payload read {"vpin": 0.3, "label": "LOW"}
+        # on one machine and {"vpin": 0.3, "label": "MODERATE"} on another.
+        vpin = float(round(vpin, 4))
         label = _classify_vpin(vpin)
         return {
-            "vpin": float(round(vpin, 4)),
+            "vpin": vpin,
             "label": label,
             "label_color": LABEL_COLORS[label],
             "n_buckets": int(len(recent)),
