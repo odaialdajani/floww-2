@@ -5,7 +5,7 @@
 ## Languages
 
 **Primary:**
-- Python 3.12 (`backend/.venv` venv, `requires-python = ">=3.12"` in `backend/pyproject.toml`; confirmed 3.12.13 in the local venv) — all backend application code (`backend/server.py`, `backend/routes/*`, `backend/services/*`)
+- Python 3.11 is the SHIPPED runtime (`requires-python = ">=3.11"` in `backend/pyproject.toml`; `Dockerfile.backend` line 1 is `FROM python:3.11-slim`; CI pins 3.11) — all backend application code (`backend/server.py`, `backend/routes/*`, `backend/services/*`) must compile on 3.11. Local dev venvs: `backend/.venv` = 3.11.15 (syntax oracle), `backend/.venv313` = 3.13.15 (the venv that actually has pytest/ruff)
 - JavaScript/JSX — frontend application code (`frontend/src/`)
 - Rust (edition 2021) — performance-critical math kernel (`rust/decoder-core`, crate `decoder-core`: Black-Scholes Greeks, GEX aggregation, chain normalization)
 
@@ -16,7 +16,7 @@
 ## Runtime
 
 **Environment:**
-- Python 3.12.x virtualenv at `backend/.venv`
+- Python 3.11.x virtualenv at `backend/.venv` (bare — no pytest/ruff; use it as the 3.11 syntax oracle); Python 3.13.x virtualenv at `backend/.venv313` (the working dev/test interpreter)
 - Node.js 20+ for the frontend build (local dev box runs v24; no `engines` pin in `frontend/package.json`)
 - Rust toolchain (cargo) to compile `rust/decoder-core` as a PyO3 extension module
 - MongoDB 7 server (via `mongo:7` Docker image in `docker-compose.yml`)
@@ -29,7 +29,7 @@
 ## Frameworks
 
 **Core:**
-- FastAPI 0.110.1 + Uvicorn 0.25.0 — HTTP/WebSocket API server, entry point `backend/server.py` (`uvicorn server:app --port 8000` per `Dockerfile.backend`)
+- FastAPI 0.136.3 + Starlette 1.3.1 + Uvicorn 0.25.0 — HTTP/WebSocket API server, entry point `backend/server.py` (`uvicorn server:app --port 8000` per `Dockerfile.backend`). Starlette is pinned explicitly in `backend/requirements.txt` (CVE reasons documented there); do NOT raise fastapi past 0.136.x without first rewriting the `app.routes` introspection tests — 0.137.0 stopped flattening `include_router()` results into `app.routes`
 - React 19 (`react`/`react-dom` ^19.0.0) on Create React App 5 (`react-scripts` 5.0.1) customized via craco 7.1 (`frontend/craco.config.js` — `@` alias to `src/`, TS/ESLint plugins stripped)
 - Dash ≥2.17 + Plotly ≥5.22 — embedded analytics UI mounted by FastAPI at `/dashboard/` (`backend/services/dash_ui.py`, mounted at end of `backend/server.py`)
 
@@ -46,8 +46,8 @@
 ## Key Dependencies
 
 **Critical (Python, from `backend/requirements.txt`):**
-- fastapi 0.110.1 / uvicorn 0.25.0 — API framework and ASGI server
-- motor 3.3.1 / pymongo 4.5.0 — async MongoDB access (`AsyncIOMotorClient` in `backend/server.py`, `backend/deps.py`)
+- fastapi 0.136.3 / starlette 1.3.1 / uvicorn 0.25.0 — API framework, ASGI toolkit (serves every HTTP request), ASGI server
+- motor 3.3.1 / pymongo 4.6.3 — async MongoDB access (`AsyncIOMotorClient` in `backend/server.py`, `backend/deps.py`)
 - duckdb ≥1.0.0 — embedded analytics store (`backend/services/duckdb_engine.py`)
 - databento ≥0.34.0 — market data ingestion (`backend/databento_provider.py`, `backend/services/databento_oi.py`)
 - yfinance 1.3.0 — fallback options/underlying data (`backend/server.py`)
@@ -83,7 +83,7 @@
 ## Platform Requirements
 
 **Development:**
-- macOS or Linux with Python 3.12, Node 20+, Rust toolchain, and a local MongoDB (or `docker-compose up mongo`)
+- macOS, Linux or Windows with Python 3.11+ (code must stay 3.11-compatible — that is what ships), Node 20+, Rust toolchain, and a local MongoDB (or `docker-compose up mongo`)
 - `backend/.env` populated from `backend/.env.example`
 
 **Production:**
@@ -93,4 +93,5 @@
 
 ---
 *Stack analysis: 2026-08-24*
+*Dependency versions re-verified line-by-line against `backend/requirements.txt` on 2026-09-04 (fastapi 0.110.1 -> 0.136.3 + explicit starlette 1.3.1 for 7 CVEs; pymongo 4.5.0 -> 4.6.3; Python runtime corrected 3.12 -> 3.11).*
 *Update after major dependency changes*
