@@ -8,7 +8,13 @@ export const NAV_ITEMS = [
   { id: "heatseeker", label: "Solstice", group: "Decoder", icon: "grid", legacy: true },
   { id: "trinity",    label: "Triad",    group: "Decoder", icon: "layers", legacy: true },
   { id: "skylit",     label: "Zenith",     group: "Decoder", icon: "bar-chart", legacy: true },
-  { id: "flowseeker-pro", label: "Tidehunter Pro", group: "Decoder", icon: "zap", legacy: true },
+  // icon must be a key of ICONS in Sidebar.jsx — "zap" was not, so this item
+  // silently rendered the default glyph.
+  { id: "flowseeker-pro", label: "Tidehunter Pro", group: "Decoder", icon: "activity", legacy: true },
+  // Steal Three was built (backend routes live, StealThreePreview rendered in
+  // App.js) but had no nav entry and was excluded from the ?page= whitelist,
+  // so it was unreachable.
+  { id: "steal-three", label: "Steal Three", group: "Decoder", icon: "sparkles", legacy: true },
 
   // Trading
   { id: "portfolio",  label: "Portfolio",  group: "Trading", icon: "trending-up" },

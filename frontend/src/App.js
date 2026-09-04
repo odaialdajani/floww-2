@@ -503,7 +503,7 @@ export default function App() {
   const [page, setPage] = useState(() => {
     try {
       const q = new URLSearchParams(window.location.search).get("page");
-      if (q && ["heatseeker", "trinity", "skylit", "flowseeker-pro", "journal", "portfolio"].includes(q)) return q;
+      if (q && ["heatseeker", "trinity", "skylit", "flowseeker-pro", "steal-three", "journal", "portfolio"].includes(q)) return q;
     } catch {}
     return "heatseeker";
   });
