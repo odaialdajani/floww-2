@@ -22,14 +22,22 @@
 
 ## Canonical paths (BURN THESE IN)
 
-- **THE ONLY clone (production-tracked):** `/Users/nav/Documents/GitHub/floww`
-- The old stale clone `/Users/nav/GitHub/floww` (cause of 3+ incidents) was **DELETED 2026-05-29**. Do not re-clone floww there. `/Users/nav/GitHub/agentfield` (the AgentField SDK source) is unrelated and stays.
-- If `pwd` doesn't end in `Documents/GitHub/floww` → STOP and re-cd.
-- **The terminal = the "Confluence Decoder" Chrome PWA** (`~/Applications/Chrome Apps.localized/Confluence Decoder.app`). It is a window onto React :3000 (→ backend :8000); there is no separate terminal codebase — edits to `frontend/`+`backend/` here ARE the terminal. Launch with `decoder` (→ `scripts/launch_decoder.sh`), which `open -a`'s the .app. NEVER `open <URL>` (that's a tab).
+- **THE ONLY clone (production-tracked):** `C:/Users/DARK HERO/Desktop/FLOWW2.0` — Windows 11.
+  Remote is `origin` → `https://github.com/odaialdajani/floww-2.git`.
+- If `pwd` doesn't end in `Desktop/FLOWW2.0` → STOP and re-cd. Never work out of a copy or a second
+  clone — stale-clone confusion is what caused 3+ historical incidents.
+- **The macOS-era paths are DEAD on this machine** and must never be `cd`'d into or re-created:
+  `/Users/nav/Documents/GitHub/floww`, `/Users/nav/GitHub/floww`, `/Users/nav/floww`. Any doc,
+  script, or agent prompt still naming them is stale — correct it or ignore it, do not obey it.
+- **The UI is React on :3000** (→ backend :8000). There is no separate terminal codebase — edits to
+  `frontend/` + `backend/` here ARE the terminal. Open `http://localhost:3000` after starting both
+  servers (see "Common command snippets").
 
-**PWA launch:** `open -a "$HOME/Applications/Chrome Apps.localized/Confluence Decoder.app"` (alias `decoder` in `~/.zshrc`). **Never** `open <URL>` — that spawns a Chrome tab, not the PWA. The PWA expects React on :3000 + backend on :8000 already running.
-
-**Auto-startup (2026-06-27):** LaunchAgent `~/Library/LaunchAgents/com.confluence-decoder.plist` starts MongoDB → FastAPI :8000 → React :3000 → PWA on login. Script: `~/.hermes/scripts/confluence-decoder-start.sh`. Manual: `decoder` (alias). Stop: `scripts/stop_decoder.sh`.
+**macOS launch machinery does NOT work here.** `scripts/launch_decoder.sh` and
+`scripts/stop_decoder.sh` still exist in the repo but hardcode `$HOME/Documents/GitHub/floww` and
+`open -a`; the `decoder` zsh alias, the `Chrome Apps.localized/Confluence Decoder.app` PWA, and the
+`~/Library/LaunchAgents/com.confluence-decoder.plist` auto-start are all macOS-only leftovers.
+There is no auto-startup on this box — start MongoDB, backend, and frontend yourself.
 
 ---
 
@@ -43,6 +51,47 @@
 - `frontend/src/App.js` — heavy concurrent WIP, surgical edits only with explicit approval
 
 If a task requires touching a forbidden file, STOP and ask Nav first.
+
+---
+
+## Money path (the live-execution gate)
+
+There are **three** code paths that can place a broker order. Know all three before touching anything
+near execution — an earlier version of this section claimed there was only one, and that was wrong.
+
+**1. Alpaca — MOUNTED and REACHABLE, and it is the safe one.**
+`backend/routes/alpaca.py` `POST /order` → `AlpacaClient.place_stock_order`. The router IS included in
+`server.py`. It is safe *by construction*, not by a gate: `backend/alpaca_client.py` hardcodes
+`ALPACA_BASE_URL = "https://paper-api.alpaca.markets"` — Alpaca's paper endpoint. No live money can
+leave through it. **Changing that constant to a live host is forbidden without Nav's approval.**
+
+**2. `OrderRouter` — GATED, fail-closed, but currently guards nothing reachable.**
+`backend/services/order_router.py` → `OrderRouter.submit_order()` runs
+`if os.getenv("FLOWW_ENABLE_LIVE_SCHWAB") != "1":` before any outbound Schwab order POST and returns
+`{"status": "error", "reason": "live order submission requires FLOWW_ENABLE_LIVE_SCHWAB=1 ..."}`.
+Env unset = **refuse**. Pinned by `backend/tests/services/test_order_router_gate.py` — **13 collected
+tests** (6 test functions, one parametrized over 6 env values).
+**`OrderRouter` has no callers outside its own module and its tests**, so today this gate protects a
+path nothing can reach. Do not read "the gate exists" as "the app is gated".
+Note: `backend/routes/live_trading.py` is **not** this route surface — its handlers call
+`get_live_policy` / `update_live_policy` / `stop_live_tape` in `server.py` and never touch
+`OrderRouter`.
+
+**3. `PublicBroker.place_order` — UNGATED, points at a LIVE gateway, currently unreachable.**
+`backend/services/public_api.py` → `PublicBroker.place_order` POSTs to
+`BASE_URL = "https://api.public.com"` — the real Public.com trading gateway, no sandbox host, **no
+gate of any kind**. It is referenced by nothing outside `public_api.py`'s own
+`place_limit_order` / `place_stop_order` helpers, so it is dead code right now. That is the only thing
+keeping it safe.
+**Wiring it — or any of its helpers — to a route, service, or agent without first putting a
+fail-closed gate in front of it is FORBIDDEN without Nav's explicit approval.** The Public.com data
+adapter (`services/public_api_adapter.py`) is deliberately data-only and must stay that way; two tests
+enforce that it never references an order method.
+
+**FORBIDDEN without Nav's explicit approval, on all three paths:** removing a check, inverting it,
+defaulting it on, short-circuiting around it, repointing a paper host at a live one, or adding any new
+code path that reaches a real broker order. This is not a refactor you get to make on your own
+judgment — STOP and ask.
 
 ---
 
@@ -72,7 +121,7 @@ Brief explanation of what + why.
 Verification:
 $ curl -s 'http://localhost:8000/api/heatseeker/flip-zones?ticker=SPY' | python3 -c "..."
 OK
-$ cd backend && .venv/bin/python3 -m pytest tests/services/test_fetch_spot_and_chains_present.py -v 2>&1 | tail -1
+$ cd backend && ./.venv313/Scripts/python.exe -m pytest tests/services/test_fetch_spot_and_chains_present.py -v 2>&1 | tail -1
 2 passed
 EOF
 )"
@@ -89,17 +138,62 @@ Subject line: `<type>(<scope>): <one-line>`. Types: `feat`, `fix`, `docs`, `test
 - A test you write yourself MUST fail before your fix and pass after
 - Round 7's fabricated completion log is the negative-example floor — never do that
 
+**The CI gate set (`.github/workflows/ci.yml`) — green locally ≠ green in CI.**
+These steps are HARD (no `|| true`, no `continue-on-error`) and will fail the build:
+
+1. `bash qc/audit/truth_audit.sh` — runs first, before Python is even installed.
+2. `ruff check . --output-format=github` with `pip install "ruff==0.15.22"`.
+3. `bandit -r . --severity-level medium -q --exclude ./.venv,./tests --skip B101,B108,B301,B310,B313,B314,B324,B604,B608,B614,B615` — a single medium+ finding fails the build.
+4. `python -m pytest tests/ -v --tb=short --cov=. -m "not flaky_env"` — `--cov=.` makes
+   `[tool.coverage.report] fail_under = 60` in `backend/pyproject.toml` binding. Drop total coverage
+   under 60% and CI fails even with every test passing.
+5. `npm test -- --watchAll=false` in `frontend-build`, plus `npm run build`.
+
+Only the mypy step is masked (`|| true`) — it is advisory.
+
+**Version skew trap:** CI installs its own Python; local is 3.13.15. Never assume they match —
+read the live pin before using new syntax:
+`grep -n "python-version" .github/workflows/ci.yml`
+
 ---
 
-## Current state (as of 2026-08-24)
+## Current state (as of 2026-09-04)
 
-- **Deploy-ready:** full Oracle Always Free runbook at `deploy/free/README.md` +
-  [[Confluence Decoder Oracle Deploy]] in Obsidian. Bootstrap via
+- **Phase tracking is NOT duplicated here — on purpose.** `.planning/STATE.md` (current phase +
+  log) and `.planning/ROADMAP.md` (phase and ticket list) are authoritative. Read both at session
+  start. Copying phase details into this file is exactly what made it go stale before.
+- **Deploy-ready:** full Oracle Always Free runbook at `deploy/free/README.md`. Bootstrap via
   `deploy/free/oracle-setup.sh` + read-only deploy key `oracle-vm-deploy`.
-  Awaiting Nav's VM provisioning.
-- **Test suite:** backend ~4546 passed (full suite completes in ~6.5 min);
-  frontend 277 passed via `npx craco test --watchAll=false`. pytest.ini uses
-  `[pytest]` header with asyncio_mode=auto; flaky_env marker registered.
+  Awaiting Nav's VM provisioning. (The old Obsidian cross-link is dropped — no Obsidian vault
+  exists on this machine.)
+- **Test suite — reproduce, don't trust a remembered number:**
+  - Backend: **4640 tests collect, 0 collection errors** —
+    `cd backend && ./.venv313/Scripts/python.exe -m pytest --collect-only -q`
+    A *pass* count is deliberately not asserted here — see the MongoDB note below.
+  - Frontend: **280 passed / 280 total across 44 suites** —
+    `cd frontend && CI=true npx craco test --watchAll=false`
+  - pytest config: **`backend/pytest.ini` is the single source of truth** (`asyncio_mode = auto`,
+    `flaky_env` marker registered). pytest reports `configfile: pytest.ini`. A duplicate
+    `[tool.pytest.ini_options]` block used to sit in `backend/pyproject.toml`; pytest **ignored it**
+    and warned about it, so it was deleted. Do not re-add pytest settings to `pyproject.toml` —
+    they will silently do nothing.
+- **MongoDB is a prerequisite for a real pass count, not for the suite to start.**
+  `backend/tests/conftest.py` builds a Motor client against `MONGO_URL`
+  (default `mongodb://localhost:27017`) per test. Client construction is **lazy and does not raise**,
+  so with Mongo down the suite still collects and most tests still pass — what you actually get is a
+  ~2 s server-selection timeout on each DB-touching test (a slow run) plus failures confined to the
+  DB-dependent tests. It does **not** error out at startup. Start `mongod`, then:
+  `cd backend && ./.venv313/Scripts/python.exe -m pytest -q --tb=no`
+- **The backend SHIPS ON PYTHON 3.11 — local dev is 3.13. All backend code must compile on 3.11.**
+  `Dockerfile.backend` is `python:3.11-slim`; `.github/workflows/ci.yml` and `deploy.yml` pin 3.11.
+  A 3.12-only nested-quote f-string in `routes/quant.py` once made the shipped image fail at
+  `import server`. Syntax oracle before you commit new backend code:
+  `cd backend && ./.venv/Scripts/python.exe -c "import py_compile;py_compile.compile('<file>',doraise=True)"`
+  (`backend/.venv` is a bare Python 3.11.15 kept for exactly this check — it has no pytest.)
+- **Architecture decisions are binding:** `docs/adr/` holds 6 **Accepted** ADRs (model promotion
+  policy, data-source policy, backtest equity, deploy CORS, test discipline, coupling). Read the
+  relevant one before touching ML promotion, data-source routing, or test assertions — ADR-0005 in
+  particular makes the broad `data_source` taxonomy assertion in the heatmap tests deliberate.
 - **Codebase intel:** `.planning/codebase/` — 7 GSD map documents
   (STACK/INTEGRATIONS/ARCHITECTURE/STRUCTURE/CONVENTIONS/TESTING/CONCERNS).
 - **Learnings:** `.planning/LEARNINGS.md` — decisions/lessons/patterns/surprises
@@ -127,61 +221,99 @@ Subject line: `<type>(<scope>): <one-line>`. Types: `feat`, `fix`, `docs`, `test
 
 | Layer | Tech | Entry point |
 |---|---|---|
-| Backend | FastAPI · Python 3.12 | `backend/server.py` → `uvicorn server:app --port 8000` |
+| Backend | FastAPI · Python 3.13.15 local (CI pin: see `ci.yml`) | `backend/server.py` → `./.venv313/Scripts/python.exe -m uvicorn server:app --port 8000` |
 | Async DB | Motor (MongoDB) | `from server import db` |
 | Tick DB | DuckDB | `backend/services/duckdb_engine.py` |
 | ML | sklearn gbm + walk-forward CV | `backend/services/ml/inference.py` (frozen), `health_monitor.py`, `backtest.py` |
 | Frontend | React 18 · create-react-app · craco · Jest | `frontend/src/` → `npm start` |
 | Embedded UI | Dash | `backend/services/dash_ui.py` (frozen) — embedded in React at `/dashboard/` |
 | Streamer | Schwab WebSocket | `backend/services/schwab_streamer.py` |
-| Lint | ruff (E, E722, F, W, I; ignore E501) | `cd backend && .venv/bin/ruff check .` |
-| Tests | pytest (asyncio auto mode) | `cd backend && .venv/bin/python3 -m pytest -q` |
-| Frontend tests | jest | `cd frontend && npx jest` |
+| Lint | ruff — config in `backend/pyproject.toml` | `cd backend && ./.venv313/Scripts/python.exe -m ruff check .` |
+| Tests | pytest (asyncio auto mode) | `cd backend && ./.venv313/Scripts/python.exe -m pytest -q` |
+| Frontend tests | jest via craco | `cd frontend && npx craco test --watchAll=false` |
 | Deploy | Caddy + docker-compose (free-tier ARM) | `deploy/free/README.md` |
-| CI | GitHub Actions | `.github/workflows/lint.yml` |
+| CI | GitHub Actions | `.github/workflows/ci.yml` (also `lint.yml`, `deploy.yml`) |
 
-**Venv:** `backend/.venv/bin/python3` (Python 3.12). Always use this — never the system Python.
+**Venv:** `backend/.venv313/Scripts/python.exe` (Python 3.13.15). Always use this — never the system
+Python, and **never `backend/.venv`**: that is a bare Python 3.11.15 with no pytest and no ruff, and
+it fails with `No module named pytest`. There is no `backend/.venv/bin/python3` on this machine —
+that is a POSIX path on a Windows box.
+
+**Ruff rules (real config, `backend/pyproject.toml`):** `select = ["E","F","W","I","B","UP","SIM"]`,
+`ignore = ["E501","SIM102","SIM108","SIM117"]`, `line-length = 120`, `target-version = "py313"`,
+`extend-exclude = [".venv","services/ml/inference.py","services/dash_ui.py","tests/conftest.py"]`,
+plus per-file-ignores. Note `E722` is NOT in `select` — it comes in via the `E` family.
+**ruff is not installed locally.** Install it at CI's exact pin before you lint:
+`cd backend && ./.venv313/Scripts/python.exe -m pip install "ruff==0.15.22"`.
 
 ---
 
 ## Common command snippets
 
+Windows 11. PowerShell is the primary shell; Git Bash is available for POSIX scripts. These are
+verified to run on this machine — the macOS forms (`lsof`, `nohup`, `open -a`) are not.
+
+```powershell
+# Launch backend (background, detached) — verified: HTTP 200 on /api/health ~6s after start
+Start-Process -FilePath "C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\.venv313\Scripts\python.exe" `
+  -ArgumentList "-m","uvicorn","server:app","--port","8000" `
+  -WorkingDirectory "C:\Users\DARK HERO\Desktop\FLOWW2.0\backend" `
+  -WindowStyle Hidden -RedirectStandardError "$env:TEMP\floww-uvicorn.err"
+Start-Sleep -Seconds 8
+Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/health" -UseBasicParsing | Select-Object StatusCode
+
+# Free port 8000 (if backend stuck) — the lsof/xargs equivalent
+Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue |
+  ForEach-Object { taskkill /PID $_.OwningProcess /F }
+
+# See what's holding a port
+netstat -ano | Select-String ":8000\s.*LISTENING"
+```
+
 ```bash
-# Launch backend (background)
-lsof -ti :8000 | xargs kill -9 2>/dev/null
-cd backend && nohup .venv/bin/python3 -m uvicorn server:app --port 8000 > /tmp/uvicorn.log 2>&1 &
-sleep 5
-curl -s http://localhost:8000/ -o /dev/null -w "HTTP %{http_code}\n"
+# Launch frontend (Git Bash) — verified: "Compiled successfully!" + HTTP 200 on :3000
+cd frontend && BROWSER=none npm start
+# then open http://localhost:3000 in a browser (no PWA on this machine)
+# stop it: Get-NetTCPConnection -LocalPort 3000 -State Listen | ForEach-Object { taskkill /PID $_.OwningProcess /F /T }
 
-# Launch PWA
-open -a "$HOME/Applications/Chrome Apps.localized/Confluence Decoder.app"
+# Pytest sweeps  (a PASS run needs MongoDB on localhost:27017; collection does not)
+cd backend && ./.venv313/Scripts/python.exe -m pytest --collect-only -q 2>&1 | tail -3   # collection
+cd backend && ./.venv313/Scripts/python.exe -m pytest -q --tb=no 2>&1 | tail -5          # pass count
+cd backend && ./.venv313/Scripts/python.exe -m pytest tests/services/ -k <kw> -v         # targeted
 
-# Pytest sweeps
-cd backend && .venv/bin/python3 -m pytest --collect-only -q 2>&1 | tail -3   # collection
-cd backend && .venv/bin/python3 -m pytest -q --tb=no 2>&1 | tail -5          # pass count
-cd backend && .venv/bin/python3 -m pytest tests/services/ -k <kw> -v          # targeted
+# Frontend tests
+cd frontend && CI=true npx craco test --watchAll=false
 
-# Lint (rules: E, E722, F, W, I — ignore E501)
-cd backend && .venv/bin/ruff check .
-cd backend && .venv/bin/ruff check --select E722 .          # bare excepts only
-cd backend && .venv/bin/ruff check --fix .                  # auto-fix safe issues
+# Lint — ruff is NOT installed locally; install CI's exact pin first
+cd backend && ./.venv313/Scripts/python.exe -m pip install "ruff==0.15.22"
+cd backend && ./.venv313/Scripts/python.exe -m ruff check .                  # rules from pyproject.toml
+cd backend && ./.venv313/Scripts/python.exe -m ruff check --select E722 .    # bare excepts only
+cd backend && ./.venv313/Scripts/python.exe -m ruff check --fix .            # auto-fix safe issues
 
 # Origin verify (anti-skip gate)
 git fetch origin && git log origin/main --oneline -1 | grep '<commit subject>'
-
-# Free port 8000 (if backend stuck)
-lsof -ti :8000 | xargs kill -9
 ```
+
+**MongoDB prerequisite:** `mongod` is not on PATH and no MongoDB service is registered on this box.
+Confirm it's up before a full backend run — `netstat -ano | Select-String ":27017\s.*LISTENING"`.
+Empty output means the pytest suite will error out on the Motor fixture in `tests/conftest.py`.
 
 ---
 
 ## Where the durable knowledge lives
 
-- **Project memory index:** `~/.claude/projects/-Users-nav-Documents-GitHub-floww/memory/MEMORY.md`
-- **Recent session memories (most-recent first):**
-  - `session_2026-05-27_round9_v2_completion.md` — 10-agent run + A9 incident postmortem
-  - `session_2026-05-25_round9_plan.md` — three-resource triage
-  - `session_2026-05-24_round8_plan.md` — React UI restoration
+- **Project memory:** `~/.claude/projects/C--Users-DARK-HERO-Desktop-FLOWW2-0/memory/` — the
+  Windows-side memory directory for this repo. It is currently **empty**; there is no `MEMORY.md`
+  and none of the `session_2026-05-*_round9/round8` notes exist here. The macOS index
+  `~/.claude/projects/-Users-nav-Documents-GitHub-floww/` does **not** exist on this machine — treat
+  the repo's own `docs/` + `.planning/` as the durable record instead.
+- **Architecture decisions:** `docs/adr/` — 6 ADRs, all **Accepted**, index at `docs/adr/README.md`.
+  They bind future work: 0001 model promotion policy (4 gates), 0002 data-source policy & priority
+  chain, 0003 backtest equity model, 0004 deploy CORS headers, 0005 test discipline &
+  data-source assertion policy, 0006 Black Friday / Ferrari coupling boundary. Read the relevant
+  one BEFORE changing anything in its area; supersede, never rewrite.
+- **GSD phase tracking:** `.planning/STATE.md` (current phase) + `.planning/ROADMAP.md` (tickets) —
+  authoritative, checked in, and the only place phase status should be read from.
 - **Active plans in repo:**
   - `docs/ROUND10_PLAN.md` — current backlog (P0/P1/P2)
   - `docs/ROUND9_FINAL_CLOSURE.md` — retrospective
@@ -277,14 +409,25 @@ This is what catches Round 7's fake-completion pattern in real time.
 
 - PyCharm, DataGrip, WebStorm — Nav's IDE work
 - Anything that involves clicking a button in an IDE
-- Final visual review of frontend changes (Nav uses the decoder PWA)
+- Final visual review of frontend changes (Nav looks at React on `http://localhost:3000`)
 - Decisions about scope/priority/architecture direction
 
 What Claude drives: shell, git, pytest, ruff, npm, file edits, docs, agent prompt authoring.
 
 ---
 
-## Dev Environment (2026-07-28)
+## Dev Environment
+
+**This machine (Windows 11, verified 2026-09-04):**
+- Python **3.13.15** at `backend/.venv313/Scripts/python.exe` (pytest 9.1.1, uvicorn 0.52.4)
+- Node **v24.11.1** / npm **11.12.1**; `frontend/node_modules` installed
+- cargo **1.94.1** (`rust/decoder-core` is a real crate)
+- git **2.49.0.windows.1**; shells: PowerShell 7 (primary) + Git Bash
+- **NOT present / NOT on PATH:** `ruff`, `mongod`, `docker`, `brew`, `lsof`. MongoDB is not
+  listening on 27017 by default — start it before any backend pytest run.
+
+<details>
+<summary>Historical: retired macOS box (2026-07-28) — none of this applies on Windows</summary>
 
 **Homebrew:** 296 formulae, 13 casks. Key tools available globally:
 - **Runtimes:** Python 3.12+3.14, Node 26, Go 1.26.4, Rust 1.96
@@ -302,6 +445,7 @@ What Claude drives: shell, git, pytest, ruff, npm, file edits, docs, agent promp
 - **Network:** doggo, mitmproxy, socat, netcat, nmap
 
 **Services running:** redis, postgresql@16 (via brew services). Start with `brew services start redis postgresql@16` if needed.
+</details>
 
 ---
 
@@ -311,7 +455,7 @@ The floww backend depends on a small number of external services. Most are polit
 
 ### Databento Historical API — `auth_account_locked`
 
-**Symptom in `/tmp/floww-backend.log`:** repeated WARN lines of the form
+**Symptom in the backend log** (wherever you redirected uvicorn's output): repeated WARN lines of the form
 
 ```
 WARNING databento: databento OI fetch fail <PARENT> <DAY>:
@@ -330,7 +474,7 @@ where `<PARENT>` ∈ `{SPY.OPT, QQQ.OPT, IWM.OPT, DIA.OPT, TLT.OPT, SPXW.OPT, AA
 
 **Correct action (in order):**
 
-1. File a vendor support ticket. A paste-ready draft lives at `/tmp/databento-support-ticket.md` — it asks databento for cause + recovery ETA + time-of-incident alignment.
+1. File a vendor support ticket asking databento for cause + recovery ETA + time-of-incident alignment. (A paste-ready draft used to live at `/tmp/databento-support-ticket.md` on the old macOS box; that file does not exist here — re-draft it.)
 2. Leave `DISABLE_DATABENTO` UNSET in `backend/.env` while waiting. The conviction tier strip is **cvserver-driven** — databento OI is non-critical and the per-parent circuit breaker absorbs the WARN log noise in the meantime.
 3. Wait for vendor unlock. **Do NOT rotate the API key** — won't help, the lock is account-level not key-level.
 
@@ -338,11 +482,12 @@ where `<PARENT>` ∈ `{SPY.OPT, QQQ.OPT, IWM.OPT, DIA.OPT, TLT.OPT, SPXW.OPT, AA
 
 **Cross-references:**
 
-- Obsidian postmortem: `Documents/Obsidian Vault/2026-07-07.md` ("Update 2026-07-21" section)
-- Vendor-ticket draft: `/tmp/databento-support-ticket.md`
-- Defense-in-depth code: `backend/databento_provider.py` (per-parent `_circuit` + `is_circuit_open`)
+- Defense-in-depth code: `backend/databento_provider.py` (per-parent `_circuit` + `is_circuit_open`) — verified present in this repo.
+- The macOS-era pointers for this incident (`Documents/Obsidian Vault/2026-07-07.md`,
+  `/tmp/databento-support-ticket.md`, `/tmp/floww-backend.log`) do **not** exist on this machine.
+  Re-derive the log path from however you launched uvicorn; re-draft the ticket if you need it.
 
-**Resolution status:** `_unresolved_ — vendor support ticket filed; awaiting cause + ETA` (update this line once databento replies; also update the Obsidian note entry to RESOLVED with the cause + unlock timestamp).
+**Resolution status:** `_unresolved_ — vendor support ticket filed; awaiting cause + ETA`. Update this line once databento replies, with the cause + unlock timestamp. (There is no Obsidian vault on this machine — this line is the record.)
 
 ---
 

@@ -2,7 +2,15 @@
 
 **Synthesized from:** Round 9 carry-forward tickets (T2, T3, T5, T7, T8, T9, T10 outputs)  
 **Generated:** 2026-05-27 by DS Pro  
-**Status:** Draft — ready for architect review
+**Status:** CLOSED / HISTORICAL — the P0 block shipped in August 2026 (`.planning/ROADMAP.md`
+Phase 2: 2.1/2.2/2.3 all checked). P0.1 verified 2026-09-04 — collection errors = 0
+(`cd backend && ./.venv313/Scripts/python.exe -m pytest --collect-only -q`; the collected
+total moves as work lands — 4581 then 4608 in the same session — so only "0 errors" is
+pinned here). P0.2 verified — `fetch_spot_and_chains()` is defined again in
+`backend/server.py` (cited by symbol, not line: server.py line numbers drift).
+Keep this document for the Round 9 → 10 rationale; **current work is tracked in
+`.planning/ROADMAP.md`** (state in `.planning/STATE.md`). Any P1/P2 item below that is
+still wanted must be re-promoted into a ROADMAP phase — this file is no longer a queue.
 
 ---
 
