@@ -226,30 +226,38 @@ instructions: `docs/salvage/README.md`.
       `<FlowAlertsPage />`; the only other reference is a source-grep assertion in
       `App.egress-invariant.test.js`). Dead component, not a routing gap.
 
-**K5 — Found while clearing K1/K4 (2026-09-04)**
-- [ ] `services/vpin_toxicity.py` — the label at the exact 0.30 boundary is
-      numpy-version dependent. Same input (10 buckets of 130/70) returns
-      LOW_TOXICITY on numpy 2.4.6 and MODERATE_TOXICITY on 2.5.2, with both
-      reporting vpin == 0.3. The `flaky_env` marker on
-      `test_label_thresholds_match_specification` is therefore **correct** — do
-      not remove it (tried and reverted). Real fix: compare with a tolerance
-      instead of a bare `>=` at each threshold.
-- [ ] `server.py` — 4 unused imports (`provider_last_success_seconds_ago`,
-      `provider_calls_total`, `get_metrics_bytes` at 1988-1990) + 1 unsorted
-      import block at 2660. These are the only ruff findings left; the CI ruff
-      gate cannot pass until they clear. Left alone — file is open in a
-      concurrent session.
+**K5 — Found and fixed 2026-09-04**
+- [x] `services/vpin_toxicity.py` — band label was numpy-version dependent
+      (0.3 → LOW on numpy 2.4.6, MODERATE on 2.5.2, both reporting vpin 0.3).
+      Root cause: classified the raw mean, reported `round(mean, 4)`. Now
+      classifies the rounded value; `flaky_env` marker removed and the test
+      gates (`553de07` + `ca9ee0e`).
+- [x] `services/finnhub_api.py` + `finnhub_client.py` deleted (399 lines) —
+      `ModuleNotFoundError: No module named 'finnhub'`, imported by nothing,
+      superseded by the SDK-free `FinnhubProvider` in `data_providers.py:106`.
+- [x] `server.py` ruff findings cleared; `ruff check .` is now clean repo-wide.
+- [x] Steal Three reachable + Tidehunter Pro nav icon fixed (`0ca3e45`).
+- [x] `package-lock.json` was missing `@tanstack/react-query` while
+      `package.json` declares it and 3 files import it — `npm ci` would have
+      aborted at install (`0884480`).
+
+**K5b — Still open**
+- [ ] **GitHub Actions has never run on this repo — 0 runs, ever.** It is a
+      fork, and GitHub keeps workflows disabled on forks until enabled once in
+      the Actions tab. Every gate here is inert until Nav clicks it. (Tried via
+      the API; the write was blocked. Needs the UI click.)
 - [ ] `backend/.venv313` has drifted to fastapi 0.137.2 vs the pinned 0.110.1.
       `app.routes` returns `_IncludedRouter` wrappers there, which makes
       `test_steal_three_routes.py` report 4 false failures. Verify against
       `backend/.venv` (Python 3.11.15 + fastapi 0.110.1), which matches
       `requirements.txt` and `python:3.11-slim`. Consider deleting `.venv313`.
-- [ ] `services/finnhub_api.py` + `finnhub_client.py` — both fail to import:
-      `ModuleNotFoundError: No module named 'finnhub'`. The package is not in
-      `requirements.txt`. Either add it or delete the two modules.
-- [ ] **GitHub Actions has never run on this repo — 0 runs, ever.** It is a
-      fork, and GitHub keeps workflows disabled on forks until enabled once in
-      the Actions tab. Every gate discussed here is inert until Nav clicks it.
+- [ ] Sign-in gate (see K4) — genuinely a product call, not a defect. Left alone.
+- [ ] The 48 unused npm packages (see K4) do **not** bloat the bundle. Verified
+      against `build/static/js/`: the 1.38 MB chunk is plotly + d3, both in real
+      use across 7 files; radix, lucide, recharts and framer appear nowhere in
+      the built output because webpack already drops them. Removing them buys
+      install time and audit surface only — not bundle size. Low priority, and
+      `package.json` is architect-frozen.
 
 **K4 — Regressions to decide on**
 - [ ] Sign-in gate removed with the AlphaPod teardown (`3f339d5`). `isAuthenticated`
