@@ -94,7 +94,7 @@
 ## 📊 API KEYS STATUS
 
 ### Working
-- [x] Finnhub: d84ic5pr01qutij93me0d84ic5pr01qutij93meg
+- [x] Finnhub: <REDACTED — see backend/.env; rotate this key, it was committed>
 - [x] Alpha Vantage: 5RZUH1L9369493X8
 - [x] Polygon.io: LYlNC8d907kAZEpNrIIZK48s1GmBYP2B
 - [x] FlashAlpha: wq0ZTRntxMsWwlL1O1XXcFT4YSjBFDvciQYLHnHy

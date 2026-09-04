@@ -8,7 +8,7 @@
 
 - Schwab: **DELIBERATELY OUT.** Not using it, not building around it. Mock feed only for tests.
 - Zenith: **UI tab only**, not a data service. API calls do not route to Zenith.
-- **Public API (public.com):** **PRIMARY for everything.** Building all data flow around it. Key confirmed: `d84ic5pr01qutij93me0d84ic5pr01qutij93meg`.
+- **Public API (public.com):** **PRIMARY for everything.** Building all data flow around it. Key confirmed: `<REDACTED — see backend/.env; rotate this key, it was committed>`.
 - **Tidehunter Pro:** **fallback** for heatmap ONLY when Public API is limited — see Phase 4 (built only if needed).
 - PublicBroker implementation: already exists at `/Users/nav/backend/services/public_api.py` (1050 lines, tested with 547-line test suite). Copy into floww backend + wire as primary. See `.planning/PHASE3_PUBLIC_API_PLAN.md`.
 
@@ -20,7 +20,7 @@
 
 | Priority | Source | When |
 |---|---|---|
-| 1 | **Public API** (`PublicBroker` in `backend/services/public_api.py`) | Default — always try first. Key: `d84ic5pr01qutij93me0d84ic5pr01qutij93meg` |
+| 1 | **Public API** (`PublicBroker` in `backend/services/public_api.py`) | Default — always try first. Key: `<REDACTED — see backend/.env; rotate this key, it was committed>` |
 | 2 | **cvserver** (CVForge/MCP, `cvserver_client.py`) | Public API rate-limited/down |
 | 3 | **yfinance** + **Databento** OI overlay | Both Public API + cvserver unavailable |
 | 4 | **Tidehunter Pro** | Only if Public API + cvserver + yfinance ALL fail on chain data (Phase 4, built only if needed) |
@@ -56,7 +56,7 @@ The local proxy (`cv-bootstrap.js`) adds auth server-side. The page never handle
 
 | Key | Value | Source | Status |
 |---|---|---|---|
-| **Public API** | `d84ic5pr01qutij93me0d84ic5pr01qutij93meg` | User-provided (paste 2026-08-30) | **ACTIVE KEY** — this is the Public.com brokerage API key to use for everything. The `/Users/nav/backend/` service layer already has `PublicBroker` in `public_api.py`. |
+| **Public API** | `<REDACTED — see backend/.env; rotate this key, it was committed>` | User-provided (paste 2026-08-30) | **ACTIVE KEY** — this is the Public.com brokerage API key to use for everything. The `/Users/nav/backend/` service layer already has `PublicBroker` in `public_api.py`. |
 | Public API (env.example) | `PkdDGcMzqMie0f6I823q6nHtmkGJyRsu` | `/Users/nav/backend/.env.example` | **STALE?** — existing env.example key. The user-provided key `d84ic...` supersedes this. Confirm which to use. |
 | CVSERVER | `cv_liv...U6dY` | `backend/.env` (floww) | Local MCP proxy auth — existing floww capability |
 | Databento | `db-PBR...GFrN` | `backend/.env` (floww) | OPRA OI cache — data moat |
@@ -85,7 +85,7 @@ The local proxy (`cv-bootstrap.js`) adds auth server-side. The page never handle
 **Test coverage:** `/Users/nav/backend/tests/services/test_public_api.py` (547 lines) — all network calls mocked, covers error paths (no key, API returning None, bulk quote mixed success/failure).
 
 **Gaps to fill for Phase 3:**
-1. ✅ Confirm which key is active — DONE. Key: `d84ic5pr01qutij93me0d84ic5pr01qutij93meg` (user-provided). Old env.example key `PkdDGcMzqMie0f6I823q6nHtmkGJyRsu` should be overwritten.
+1. ✅ Confirm which key is active — DONE. Key: `<REDACTED — see backend/.env; rotate this key, it was committed>` (user-provided). Old env.example key `PkdDGcMzqMie0f6I823q6nHtmkGJyRsu` should be overwritten.
 2. ✅ Decide connection model — DONE. Option A: Copy PublicBroker into floww backend's `services/`. See PHASE3_PUBLIC_API_PLAN.md §3.3.
 3. Wire PublicBroker into floww backend — modify `fetch_spot_and_chains_merged()` to try Public API first, then cvserver, then yfinance+Databento
 4. Add `/api/public/chain/{ticker}` + `/api/public/quotes/{ticker}` endpoints

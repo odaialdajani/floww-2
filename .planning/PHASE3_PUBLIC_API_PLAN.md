@@ -132,7 +132,7 @@ The two backends are completely independent. The standalone `/Users/nav/backend/
 **Mission:** Wire PublicBroker into floww backend
 **Deliverables:**
 - Copy `/Users/nav/backend/services/public_api.py` → `backend/services/public_api.py`
-- Add `PUBLIC_API_KEY` to `backend/.env.example` (key value provided by Nav: `d84ic5pr01qutij93me0d84ic5pr01qutij93meg`)
+- Add `PUBLIC_API_KEY` to `backend/.env.example` (key value provided by Nav: `<REDACTED — see backend/.env; rotate this key, it was committed>`)
 - Add new route: `GET /api/public/chain/{ticker}?expiration=YYYY-MM-DD&expirations=N` → returns PublicBroker chain
 - Add new route: `GET /api/public/quotes/{ticker}` → returns PublicBroker quote
 - Modify `fetch_spot_and_chains_merged()` to try Public API first, then cvserver, then yfinance
@@ -183,7 +183,7 @@ The two backends are completely independent. The standalone `/Users/nav/backend/
 ```
 NEED: Options chain / OI / Greeks (for Solstice heatmap)
   → Try Public API first (PublicBroker.get_option_chain_parsed + get_option_greeks)
-    - Key: d84ic5pr01qutij93me0d84ic5pr01qutij93meg (provided by Nav)
+    - Key: <REDACTED — see backend/.env; rotate this key, it was committed> (provided by Nav)
     - Env var: PUBLIC_API_KEY (add to floww backend/.env + .env.example)
     - Data shape: OptionContract dataclass (strike, expiration, OI, IV, delta, gamma, theta, vega, bid, ask)
   → If Public API rate-limited/down → cvserver fallback (fetch_spot_and_chains_merged, current priority #2)
@@ -210,7 +210,7 @@ NEED: Portfolio (paper trading)
 ## 5. Phase 3 Detailed Ticket Breakdown (Updated from ROADMAP.md)
 
 ### 3.1 Confirm key + source model — DONE
-- Public API key: `d84ic5pr01qutij93me0d84ic5pr01qutij93meg` (provided by Nav, 2026-08-30)
+- Public API key: `<REDACTED — see backend/.env; rotate this key, it was committed>` (provided by Nav, 2026-08-30)
 - Standalone backend at `/Users/nav/backend/` already has full PublicBroker implementation
 - `.env.example` in standalone backend has `PUBLIC_API_KEY=PkdDGcMzqMie0f6I823q6nHtmkGJyRsu` (stale default — Nav's key supersedes)
 - **Connection model:** Copy PublicBroker into floww backend (NOT import across repos — they're separate, not in same Python path)
@@ -222,7 +222,7 @@ NEED: Portfolio (paper trading)
 - Also copy: test file `tests/services/test_public_api.py` (547 lines)
 
 ### 3.3 Add PUBLIC_API_KEY to floww .env — Agent 2
-- Add `PUBLIC_API_KEY=d84ic5pr01qutij93me0d84ic5pr01qutij93meg` to `backend/.env`
+- Add `PUBLIC_API_KEY=<REDACTED — see backend/.env; rotate this key, it was committed>` to `backend/.env`
 - Add `PUBLIC_API_KEY=your_public_api_key_here` to `backend/.env.example`
 - Verify .env is gitignored (it is — confirmed)
 

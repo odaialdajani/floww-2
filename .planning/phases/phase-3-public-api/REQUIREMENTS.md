@@ -1,7 +1,7 @@
 # Phase 3 — Public API Data Layer: Requirements
 
 ## R-3.1: Public API Key
-- **Source:** User-provided `d84ic5pr01qutij93me0d84ic5pr01qutij93meg`
+- **Source:** User-provided `<REDACTED — see backend/.env; rotate this key, it was committed>`
 - **Location:** Standalone backend `.env.example` + needs to be in floww backend `.env`
 - **Status:** DONE — key confirmed
 
@@ -13,7 +13,7 @@
 - **Action:** Copy to `backend/services/public_api.py`
 
 ## R-3.3: Environment Configuration
-- **Add to floww `backend/.env`:** `PUBLIC_API_KEY=d84ic5pr01qutij93me0d84ic5pr01qutij93meg` (gitignored)
+- **Add to floww `backend/.env`:** `PUBLIC_API_KEY=<REDACTED — see backend/.env; rotate this key, it was committed>` (gitignored)
 - **Add to floww `backend/.env.example`:** `PUBLIC_API_KEY=your_public_api_key_here`
 - **Env var name:** `PUBLIC_API_KEY` (confirmed from existing implementation)
 
