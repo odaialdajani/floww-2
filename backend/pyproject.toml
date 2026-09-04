@@ -1,11 +1,21 @@
 [project]
 name = "floww-backend"
 version = "0.1.0"
-requires-python = ">=3.12"
+# 3.11 is the runtime this project actually ships and tests on:
+#   Dockerfile.backend:1              FROM python:3.11-slim AS production
+#   .github/workflows/deploy.yml:25   python-version: "3.11"
+#   .github/workflows/ci.yml          python-version: "3.11"
+# The previous ">=3.12" floor did not match any of those.
+requires-python = ">=3.11"
 
 [tool.ruff]
 line-length = 120
-target-version = "py313"
+# MUST track requires-python. With target-version above the real runtime, the
+# UP rules propose syntax the shipped interpreter cannot parse, and ruff stops
+# reporting genuine 3.12+-only syntax as invalid. Setting py311 immediately
+# surfaced one such site: routes/quant.py:187 (PEP 701 f-string reusing the
+# outer quote, 3.12+ only) is a SyntaxError under python:3.11-slim.
+target-version = "py311"
 extend-exclude = [
     ".venv",
     "services/ml/inference.py",
@@ -31,13 +41,15 @@ ignore = ["E501", "SIM102", "SIM108", "SIM117"]
 "services/hawkes_process.py" = ["E402"]
 "services/agentfield_hub.py" = ["E402"]
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-# pytest-asyncio: auto mode. This file wins over pytest.ini's [tool:pytest]
-# section (which pytest 9 ignores when pyproject has ini_options), so async
-# tests without an explicit marker still run.
-asyncio_mode = "auto"
-
+# NOTE: there is deliberately NO [tool.pytest.ini_options] block here.
+# backend/pytest.ini exists, and pytest ranks pytest.ini ABOVE pyproject.toml,
+# so any pytest block written here is dead config. While one existed, pytest
+# said so on every run:
+#   configfile: pytest.ini (WARNING: ignoring pytest config in pyproject.toml!)
+# The block that used to sit here declared only testpaths + asyncio_mode, both
+# of which already live in pytest.ini with the same values, so deleting it
+# changed nothing (4581 tests collected before and after).
+# Put pytest settings in backend/pytest.ini.
 
 [tool.coverage.run]
 source = ["."]
@@ -60,7 +72,9 @@ exclude_lines = [
 ]
 
 [tool.mypy]
-python_version = "3.12"
+# Match the shipped runtime (see requires-python above), not a version this
+# project never runs on.
+python_version = "3.11"
 
 [[tool.mypy.overrides]]
 module = "services.rate_limit_tracker"

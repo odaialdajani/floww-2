@@ -574,6 +574,9 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
                     from data_providers import _record_provider_call
                     _record_provider_call("public_api", True)
                 except Exception:
+                    # silent by design: Public API success telemetry only — a
+                    # monitor import/registry error must never discard a chain
+                    # payload we have already fetched successfully.
                     pass
                 return pub_data
         except TimeoutError:
@@ -582,6 +585,9 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
                 from data_providers import _record_provider_call
                 _record_provider_call("public_api", False)
             except Exception:
+                # silent by design: timeout telemetry only — the timeout is
+                # already logged above and recording it must not stop the
+                # cvserver fallback below from running.
                 pass
         except Exception as e:
             log.info(f"Public API fetch failed for {ticker}: {e}")
@@ -589,6 +595,9 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
                 from data_providers import _record_provider_call
                 _record_provider_call("public_api", False)
             except Exception:
+                # silent by design: failure telemetry only — the underlying
+                # Public API error is already logged above; losing the counter
+                # must not abort the cvserver fallback below.
                 pass
 
     # ── 1. Try cvserver first (with timeout) ──
@@ -605,6 +614,9 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
                 from data_providers import _record_provider_call
                 _record_provider_call("cvserver", True)
             except Exception:
+                # silent by design: cvserver success telemetry only — must never
+                # discard the fully-populated cvserver chain we are about to
+                # return to the caller.
                 pass
             return cv_data
     except TimeoutError:
@@ -613,6 +625,9 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
             from data_providers import _record_provider_call
             _record_provider_call("cvserver", False)
         except Exception:
+            # silent by design: cvserver timeout telemetry only — the timeout is
+            # already logged above and must not block the yfinance + Databento
+            # fallback that produces the actual chain.
             pass
     except Exception as e:
         log.warning(f"cvserver fetch failed for {ticker}: {e}")
@@ -620,6 +635,9 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
             from data_providers import _record_provider_call
             _record_provider_call("cvserver", False)
         except Exception:
+            # silent by design: cvserver failure telemetry only — the real error
+            # is already logged above; a bookkeeping error must not stop the
+            # yfinance + Databento fallback from serving the chain.
             pass
 
     # ── 2. Fallback: yfinance + Databento ──
@@ -636,12 +654,17 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
             from data_providers import _record_provider_call
             _record_provider_call("yfinance", True)
         except Exception:
+            # silent by design: yfinance success telemetry only — must never
+            # break the Databento OI overlay that runs on this data below.
             pass
     else:
         try:
             from data_providers import _record_provider_call
             _record_provider_call("yfinance", False)
         except Exception:
+            # silent by design: yfinance failure telemetry only — yf_success is
+            # already False, and the degraded empty-chain path below must still
+            # return a well-formed payload to the caller.
             pass
     yf_data["spot"]
 
@@ -664,6 +687,9 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
         from data_providers import _record_provider_call
         _record_provider_call("databento", dbn_success)
     except Exception:
+        # silent by design: Databento telemetry only — the OI-overlay decision
+        # below branches on dbn_oi, not on this counter, so a bookkeeping error
+        # must never downgrade a chain that already has Databento OI.
         pass
 
     if not dbn_oi:
@@ -1780,6 +1806,9 @@ async def _scheduler_loop():
                 from services.meta_observability import provider_monitor
                 provider_monitor.update_prometheus()
             except Exception:
+                # silent by design: refreshing the provider health gauges is
+                # best-effort observability — a registry/scrape error must never
+                # kill this background loop, which also drives the prefetch.
                 pass
 
             try:
@@ -1956,15 +1985,15 @@ async def provider_health():
         try:
             from services.observability import (
                 provider_success_rate,
-                provider_last_success_seconds_ago,
-                provider_calls_total,
-                get_metrics_bytes,
             )
             for name, stats in health["providers"].items():
                 stats["prometheus_success_rate"] = round(
                     provider_success_rate.labels(provider=name)._value.get() or 0.0, 4
                 )
         except Exception:
+            # silent by design: the Prometheus gauge values are convenience
+            # enrichment on top of the monitor payload — if the metrics import
+            # or a label lookup fails, still return the real provider health.
             pass
         return health
     except Exception as e:
@@ -2626,6 +2655,7 @@ from routes.heatseeker_snapshots_api import router as heatseeker_snapshots_route
 app.include_router(heatseeker_snapshots_router, prefix="/api/heatseeker", tags=["heatseeker-snapshots"])
 
 from routes.public_api import router as public_api_router
+
 app.include_router(public_api_router, tags=["public_api"])
 
 from routes.ml_predict_api import router as ml_predict_router

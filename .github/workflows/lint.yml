@@ -13,7 +13,13 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
-          python-version: '3.13'
+          # 3.11 = the shipped runtime (Dockerfile.backend:1 python:3.11-slim,
+          # deploy.yml:25 python-version "3.11"). ruff itself is a standalone
+          # binary and reads its target-version from backend/pyproject.toml, so
+          # this pin does not affect lint results — but the silent-except gate
+          # below is a Python script, and it should run on the version that
+          # ships.
+          python-version: '3.11'
       - name: Install ruff
         run: pip install "ruff==0.15.22"
       - name: Check F841 (unused variables)
@@ -23,21 +29,30 @@ jobs:
         working-directory: backend
         run: ruff check .
       - name: Gate — no NEW silent except-pass without justification (GSD #11)
-        working-directory: backend
-        run: |
-          # Silent `except Exception: pass` must carry an inline justification:
-          # either "# silent by design: <reason>" or a pre-existing explanatory
-          # comment on the same line. Tests are exempt.
-          offenders=$(grep -rn --include='*.py' -A1 'except Exception' services routes server.py \
-            | grep -E '^[^:]+:[0-9]+-\s*pass\s*$' \
-            | cut -d- -f1 | cut -d: -f1,2 || true)
-          bad=0
-          for site in $offenders; do
-            f=${site%%:*}; l=$((${site##*:} + 1))
-            line=$(sed -n "${l}p" "$f")
-            case "$line" in
-              *"silent by design"*|*"#"*) ;;  # justified
-              *) echo "SILENT EXCEPT (unjustified): $f:$l -> $line"; bad=1 ;;
-            esac
-          done
-          exit $bad
+        # A silent handler — `except:` / `except Exception:` / `except
+        # BaseException:` whose whole body is `pass` or `...` — must carry a
+        # "# silent by design: <reason>" comment at the site. Tests are exempt.
+        #
+        # This used to be an inline grep/sed pipeline that NEVER fired: GNU grep
+        # writes -A1 context lines as `file-LINENO-content` (dash), while the
+        # filter matched `file:LINENO:content` (colon), so the offender list was
+        # always empty and the step always exited 0. It also read the line AFTER
+        # the `pass`. Replaced by a real ast/tokenize parser.
+        #
+        # The parser has its own pytest suite —
+        # backend/tests/test_check_silent_excepts.py — which covers the positive
+        # cases, the justification marker, BaseException, `...` bodies, the
+        # string-literal-is-not-a-comment case, and the grandfather-list
+        # ratchet. It builds every fixture with tmp_path, so it does not depend
+        # on live backend source. That suite runs in the backend-tests job of
+        # ci.yml, not here.
+        #
+        # KNOWN RED on 3.11: the gate parses every in-scope file and fails
+        # closed on one it cannot parse. backend/routes/quant.py:187 uses a
+        # PEP 701 f-string (3.12+ only), so on the shipped 3.11 runtime this
+        # step prints
+        #   backend/routes/quant.py:187: SyntaxError - cannot audit (...)
+        # and exits 1. That is a true report of a real defect — the same file
+        # cannot be imported inside python:3.11-slim either. Fix quant.py:187;
+        # do not raise the python-version pin above to hide it.
+        run: python3 qc/audit/check_silent_excepts.py
