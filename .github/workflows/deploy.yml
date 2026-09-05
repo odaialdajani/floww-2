@@ -1,20 +1,47 @@
 # Azure App Service Deployment Configuration
-# Deploys Confluence Decoder to Azure using the free/cheap tier
-
+# Deploys Confluence Decoder to Azure using the free/cheap tier.
+#
+# DISARMED 2026-09-05 — MANUAL TRIGGER ONLY. Read before re-arming.
+#
+# floww is not hosted anywhere. It runs locally: backend on :8000, React on
+# :3000. This workflow used to fire automatically after every green CI/CD run
+# and FAILED every single time, because the repository has zero Actions secrets
+# configured:
+#     $ gh api repos/odaialdajani/floww-2/actions/secrets --jq '.total_count'
+#     0
+# so AZURE_WEBAPP_PUBLISH_PROFILE, AZURE_STATIC_WEB_APPS_API_TOKEN and
+# REACT_APP_BACKEND_URL all resolve to empty strings and azure/webapps-deploy
+# aborts. Nothing has ever been deployed by this file. Run 33943345612 (failure,
+# 2m35s) is the most recent example. A job that is red on every green build
+# teaches you to ignore red, which is worse than having no deploy at all.
+#
+# Also note the repo documents a DIFFERENT intended target: CLAUDE.md and
+# deploy/free/README.md describe an Oracle Always Free VM running
+# docker-compose behind Caddy. infra/ carries all three (azure/, caddy/,
+# terraform/). Azure is the one nothing points at.
+#
+# To re-arm: add the three secrets above, then uncomment the workflow_run
+# trigger. The `if:` on deploy-backend already handles both trigger shapes.
 name: Deploy to Azure
 
 on:
-  workflow_run:
-    workflows: ["CI/CD"]
-    types: [completed]
-    branches: [main]
+  workflow_dispatch:
+  # workflow_run:
+  #   workflows: ["CI/CD"]
+  #   types: [completed]
+  #   branches: [main]
 
 permissions:
   contents: read
 
 jobs:
   deploy-backend:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Under workflow_dispatch there is no github.event.workflow_run, so the
+    # original condition alone would silently skip a hand-started run and
+    # report success having done nothing. Both trigger shapes are covered.
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+          github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
