@@ -1,0 +1,1553 @@
+ ▐▛███▛█   Claude Code v2.1.252
+▝▜██████▀  Opus 5 · Claude Max
+  ▝▝ ▝▝    ~\Desktop\FLOWW2.0
+
+  ⎿  SessionStart:startup says: # claude-mem status
+
+     This project has no memory yet. The current session will seed it; 
+     subsequent sessions will receive auto-injected context for relevant past 
+     work.
+
+     Memory injection starts on your second session in a project.
+
+     `/learn-codebase` is available if the user wants to front-load the entire 
+     repo into memory in a single pass (~5 minutes on a typical repo, optional).
+     Otherwise memory builds passively as work happens.
+
+     Live activity: http://localhost:37777
+     ✨ Get up to 100% more usage from your plan — memory runs off-plan, free 
+     for 30 days https://cmem.ai/pro?from=welcome-hint&trial=30
+     How it works: `/how-it-works`
+
+     This message disappears once the first observation lands.
+
+     View Observations Live @ http://localhost:37777
+     ✨ Get up to 100% more usage from your plan — memory runs off-plan, free 
+     for 30 days https://cmem.ai/pro?from=session-start&trial=30
+
+❯ i want you to compare it to this "C:\Users\DARK HERO\Desktop\floww"           
+
+  Listed 1 directory, ran 25 shell commands (ctrl+o to expand)
+
+● They're the same project. The one on your Desktop called floww is an old,
+  frozen copy; FLOWW2.0 is the live one. They split apart on June 14 from a
+  shared point, and FLOWW2.0 has moved 1,015 commits past it since. Last
+  activity: old one July 20, FLOWW2.0 August 31. They even point at different
+  GitHub accounts — the old one at mrbeast1179-sketch, the new one at your own
+  odaialdajani account.
+
+  How much bigger FLOWW2.0 is:
+  - Backend grew from about 409 files / 98,000 lines to 590 files / 165,000
+    lines
+  - Backend test files went 169 → 280; frontend code 18,400 → 31,300 lines
+  - 47 new backend engines the old copy never had — order-flow toxicity, Kyle's
+    lambda, Amihud illiquidity, max pain and max-pain drift, risk-neutral
+    density, hidden-Markov regime detection, realized volatility, stress
+    testing, strategy builder, consensus pricing, news and sentiment feeds
+  - 8 new API endpoints, plus a Rust core module, an AgentField integration, 85
+    generated reports, planning docs, a Makefile, pre-commit hooks and a
+    changelog
+
+  What FLOWW2.0 dropped on purpose — nothing was lost by accident. Every removal
+  has an explicit commit saying so: the whole AlphaPod look-alike interface
+  (Alpha Flow, Daily Report, Earnings, Ticker Analysis, SPX GEX pages) was torn
+  out and replaced by the Trinity/Heatseeker decoder, and a batch of unused
+  panels went with it (paper trading, ML predictions, rate-limit dashboard,
+  swarm frame, velocity gauge, an unused component library) plus three orphaned
+  backend files. The menu was rebranded too: the old Dashboard / Alpha Flow /
+  Kairos Algo names are now Solstice / Triad / Zenith / Tidehunter Pro.
+
+  The one thing worth your attention: the old folder has
+  finished-but-never-saved work that never reached FLOWW2.0. Three speed fixes
+  and two tests are sitting there loose:
+  - Model files are reloaded from disk on every prediction request in FLOWW2.0.
+    The old folder has a fix that keeps them in memory and only reloads after a
+    retrain, plus per-model result caching.
+  - Three heatseeker snapshot calls in FLOWW2.0 block the server's main loop
+    while the database works. The old folder moves them off it.
+  - The replay engine in FLOWW2.0 still uses the blocking database call, even
+    though the newer non-blocking version already exists in FLOWW2.0's own
+    database layer — so this one is a two-line fix regardless.
+
+  Next steps, ranked:
+  1. Salvage those three fixes into FLOWW2.0 — real latency wins, low risk, and
+     the third is nearly free.
+  2. Pull over the two unsaved test files (prediction caching and ensemble
+     labels) so the fixes land with proof.
+  3. Then archive or delete the old folder — it's 293 MB of stale duplicate that
+     will keep causing "which copy am I in" confusion, exactly the incident
+     type your own project notes warn about.
+
+  Radar: the old copy also has a modified trained model file sitting unsaved. If
+  that retrain was real, it's the only copy — check it before you delete
+  anything.
+
+✻ Cogitated for 6m 2s · done Thursday 11:50 PM
+
+❯ see if anything broke or lost functionality or regressed in any way shape or  
+  form                                                                          
+
+  Searched for 3 patterns, listed 1 directory, ran 61 shell commands (ctrl+o to expand)
+● Background command "Production build of 2.0 frontend" completed (exit code 0)
+● Nothing is broken. FLOWW2.0 builds clean, all 280 frontend tests pass, the
+  backend starts and registers 327 endpoints, every source file compiles, and
+  not a single backend function, class, or method from the old version was lost.
+  Only one endpoint disappeared and it was a clean rename with its test
+  updated. The gamma-exposure invariants and locked model constants are
+  byte-identical. Backend safety checks in the automated pipeline actually got
+  stricter — a security scanner, an unused-variable gate, and a new rule against
+  silently swallowed errors.
+
+  But six things did regress, and two of them matter now:
+
+  The login screen is gone. The old version showed a sign-in page to anyone not
+  logged in. FLOWW2.0 renders the whole app regardless — the "are they signed
+  in" value is still read in the code and then never used. The header still
+  shows the email, the tier badge, and a sign-out button, so it's a
+  half-finished state, not a decision. It went out as collateral when the
+  AlphaPod copy was ripped out. The backend still requires a key for anything
+  that writes; all the read data is open.
+
+  Frontend tests no longer block the pipeline. Someone set them to "report but
+  never fail," with a note saying 12 to 18 visual tests were failing. All 280
+  pass today, so the excuse is stale — and right now a genuine break would sail
+  straight through. Separately, 10 backend tests are excluded from every
+  automated run under a "flaky environment" tag: health check, the
+  language-model endpoints, flow alerts, flow desk, and heatseeker.
+
+  The rest are lost reach, not lost code:
+  - Steal Three has no door. The screen is built, the backend serves it, but
+    there's no menu entry and the address-bar whitelist won't allow it. Same for
+    the ticker-analysis and flow-alerts views — code present, unreachable.
+  - Five working backend feeds have no screen at all: alpha flow, per-ticker
+    deep dive, earnings, daily flow digest, and SPX gamma. They answer if you
+    call them directly; nothing in the interface does.
+  - Three trained models are missing from FLOWW2.0 on this machine — the folder
+    is deliberately kept out of version control, so the only copies sit in the
+    old folder. The anomaly detector notices they're absent and quietly starts
+    from scratch instead of failing loudly.
+  - 48 npm packages are dead weight — the whole Radix set, the icon library,
+    form and date libraries. The code that used them was deleted; the packages
+    stayed. Your main bundle is 1.38 MB compressed. Changing that file needs
+    your say-so since it's on the frozen list.
+
+  Next steps, ranked:
+  1. Decide the login question — either restore the gate or strip the leftover
+     email, tier, and sign-out chrome. Right now it reads as an accident.
+  2. Turn the frontend test gate back on and drop the stale excuse note. It
+     costs nothing today and it's your only automatic catch.
+  3. Add menu entries for Steal Three and the five orphaned feeds, or delete
+     them. Built-and-unreachable is the worst of both.
+
+  Radar: I could not run the backend test suite here — neither Python
+  environment in FLOWW2.0 has the test runner installed. The claim of about
+  4,546 passing tests is unverified on this machine. Say the word and I'll
+  install the test dependencies and get you a real number.
+
+● Ran 3 stop hooks (ctrl+o to expand)
+  ⎿  Stop hook error: OUTPUT FORMAT BROKEN — rewrite the reply before
+  delivering it.
+    - Long reply (16 lines, 487 words). This is a summarize pass, not a
+  length cap: re-judge every line and keep ONLY what changes the owner's
+  next move — every finding, number, risk, decision, Next step and
+  Radar line stays; narration, evidence trails and detail he didn't ask
+  for go. If after that every remaining line is genuinely important, the
+  length is fine.
+  Keep every finding, number, risk, decision, Radar line and Next step —
+  only fix the formatting. Do not explain this correction.
+
+● Nothing is broken: FLOWW2.0 builds clean, 280 frontend tests pass, backend
+  starts with 327 endpoints, every source file compiles, zero backend functions
+  or classes lost. Six things regressed.
+
+  - Login screen gone. The old app blocked unsigned users; 2.0 renders
+    everything. The "signed in" value is read then never used, while the header
+    still shows email, tier and sign-out — a half-finished state, collateral
+    from ripping out the AlphaPod copy. Backend still requires a key for writes;
+    reads are open.
+  - Frontend tests no longer block the pipeline — set to "report but never fail"
+    over 12-18 failing visual tests that all pass today. A real break would
+    ship silently. Plus 10 backend tests excluded from every run under a
+    flaky-environment tag: health, language-model endpoints, flow alerts, flow
+    desk, heatseeker.
+  - Steal Three has no door — built, backend serves it, but no menu entry and
+    the address-bar whitelist blocks it. Same for ticker-analysis and
+    flow-alerts.
+  - Five backend feeds have no screen: alpha flow, deep dive, earnings, flow
+    digest, SPX gamma.
+  - Three trained models missing on this machine — kept out of version control,
+    only copies sit in the old folder. The anomaly detector quietly restarts
+    from scratch instead of failing loudly.
+  - 48 dead npm packages (Radix set, icons, form and date libraries); main
+    bundle 1.38 MB compressed. That file is frozen — needs your say-so.
+
+  Next steps:
+  1. Decide the login question — restore the gate or strip the leftover chrome.
+  2. Turn the frontend test gate back on, drop the stale excuse note.
+  3. Add menu entries for Steal Three and the five orphaned feeds, or delete 
+     them.
+
+  Radar: I could not run the backend suite — neither Python environment has the
+  test runner installed, so the ~4,546-passing claim is unverified here. Say the
+  word and I'll install and get a real number.
+
+✻ Sautéed for 13m 3s · done 12:03 AM
+
+❯ the old folder is dead i just want to compare this and the old one to see if  
+  there is anything that regressed or got lost etc                              
+                                                                                
+  second based on previous analysis if any of these were pending features and   
+  compeltely removed make sure that you flag that we want all these features    
+  and we can implement them when we get the chance rather than completely       
+  discarding them                                                               
+                                                                                
+  1. Salvage those three fixes into FLOWW2.0 — real latency wins, low risk, and 
+  the third is nearly free.                                                     
+  2. Pull over the two unsaved test files (prediction caching and ensemble      
+  labels) so the fixes land with proof.                                         
+     What FLOWW2.0 dropped on purpose — nothing was lost by accident. Every     
+  removal has an explicit commit saying so: the whole AlphaPod look-alike       
+  interface (Alpha Flow, Daily Report, Earnings, Ticker Analysis, SPX GEX       
+  pages) was torn out and replaced by the Trinity/Heatseeker decoder, and a     
+  batch of unused panels went with it (paper trading, ML predictions,           
+  rate-limit dashboard, swarm frame, velocity gauge, an unused component        
+  library) plus three orphaned backend files.                                   
+
+  Read 1 file, ran 2 shell commands (ctrl+o to expand)
+
+● Write(docs\salvage\README.md)
+  ⎿  Wrote 59 lines to docs\salvage\README.md
+      1 # Salvage — retired `Desktop/floww` clone (2026-09-04)
+      3 The old clone at `C:\Users\DARK HERO\Desktop\floww` is **retired*
+        *. It shared history
+      4 with this repo up to `ca25557` (2026-06-14) and then diverged; th
+      5 commits ahead. Before that folder is deleted, everything in it th
+        at existed
+      7 
+      8 Nothing in this folder is wired into the app. It is a holding pen
+         so the work is
+         → "Phase K".
+     … +83 lines (ctrl+o to expand)
+
+● Update(BACKLOG.md)
+  ⎿  Added 58 lines
+      156  - [ ] Automated conventional commit enforcement (currently man
+           ual)
+      157  - [ ] Pre-commit hooks (ruff, mypy on non-frozen files)
+      158  
+      159 +### K — Wanted, not discarded (from the 2026-09-04 old-clone c
+          +omparison)                                                    
+      160 +                                                              
+      161 +The retired clone at `Desktop/floww` was compared against this
+          + repo. **No backend                                           
+      162 +function, class, or method was lost** and only one endpoint ch
+          +anged                                                         
+      163 +(`/api/llm/generate-briefing` → `/api/llm/generate`, clean ren
+          +ame, test updated).                                           
+      164 +Everything below is either stranded work or a feature that was
+          + removed on purpose.                                          
+      165 +**All of it is wanted — none of it is discarded.** Artifacts a
+          +nd restore                                                    
+      166 +instructions: `docs/salvage/README.md`.                       
+      167 +                                                              
+      168 +**K1 — Stranded perf fixes (patch held at `docs/salvage/`)**  
+      169 +- [ ] `routes/ml_predict_api.py` — mtime-keyed model/scaler ca
+          +che + per-`model_type`                                        
+      170 +      prediction cache. Today every `/api/predict/{ticker}` re
+          +-reads both joblib                                            
+      171 +      artifacts from disk.                                    
+      172 +- [ ] `routes/heatseeker_snapshots_api.py` — wrap 3 DuckDB cal
+          +ls in                                                         
+      173 +      `asyncio.to_thread`; they block the event loop during pa
+          +ndas materialization.                                         
+      174 +- [ ] `services/replay_engine.py` — 2× `self.db.query()` → `aw
+          +ait                                                           
+      175 +      self.db.query_async()`. `query_async` already exists (`d
+          +uckdb_engine.py:500`) —                                       
+      176 +      nearly free.                                            
+      177 +- [ ] Land `test_ml_predict_cache.py` + `test_ml_ensemble_labe
+          +ls.py` with the above                                         
+      178 +      so the fixes ship with proof.                           
+      179 +                                                              
+      180 +**K2 — Removed UI we still want (all recoverable from this rep
+          +o's git history)**                                            
+      181 +- [ ] Alpha Flow feed page (`3f339d5`) — backend `/api/alpha-f
+          +low` + `/api/alpha-flow/dates` are LIVE with no UI            
+      182 +- [ ] Daily Report page (`3f339d5`) — backend `/api/flow-diges
+          +t` is LIVE with no UI                                         
+      183 +- [ ] Earnings page (`3f339d5`) — backend `/api/earnings`, `/a
+          +pi/earnings/week`, `/api/earnings/ticker/{t}/detail` are LIVE 
+          +with no UI                                                    
+      184 +- [ ] Ticker Analysis / deep-dive page (`3f339d5`) — backend `
+          +/api/deep-dive/{ticker}` is LIVE with no UI                   
+      185 +- [ ] SPX GEX page (`3f339d5`) — backend `/api/gex/spx` is LIV
+          +E with no UI                                                  
+      186 +- [ ] PaperTrade panel (`04615cc`) — `paper_trading.py` engine
+          + still live in backend                                        
+      187 +- [ ] MLPredictionsPanel + `hooks/useMLPredictions.js` (`04615
+          +cc`)                                                          
+      188 +- [ ] RateLimitDashboard (`04615cc`)                          
+      189 +- [ ] DTEFilter / ExpiryFilter (`04615cc`) — partly superseded
+          + by the Tidehunter DTE chips (`fe0e9ef`); reconcile before reb
+          +uilding                                                       
+      190 +- [ ] VelocityGauge, NodesTable, FlowCarousel (`04615cc`) — Ve
+          +locityGauge and NodesTable were re-inlined into App.js; FlowCa
+          +rousel is not                                                 
+      191 +- [ ] SwarmFrame + TurboQuantPanel (`489593b`) — TurboQuant ba
+          +ckend routes are LIVE (`/api/turboquant/*`)                   
+      192 +- [ ] `services/graph_updater.py`, `services/position_reconcil
+          +er.py` (`6f83026`)                                            
+      193 +                                                              
+      194 +**K3 — Built but unreachable in the current UI**              
+      195 +- [ ] Steal Three preview — component imported and rendered on
+          + `page === "steal-three"`,                                    
+      196 +      but there is no nav entry and the `?page=` whitelist in 
+          +`App.js` (~line 506)                                          
+      197 +      excludes it. Backend routes are live.                   
+      198 +- [ ] `ticker-analysis` and `flow-alerts` view code in `App.js
+          +` — same problem, no route in.                                
+      199 +                                                              
+      200 +**K4 — Regressions to decide on**                             
+      201 +- [ ] Sign-in gate removed with the AlphaPod teardown (`3f339d
+          +5`). `isAuthenticated`                                        
+      202 +      is destructured in `App.js:502` and never used, yet the 
+          +header still renders                                          
+      203 +      email, tier badge and sign-out. Either restore the gate 
+          +or strip the chrome.                                          
+      204 +      Backend still key-protects mutating methods (`server.py:
+          +2322`); reads are open.                                       
+      205 +- [ ] Frontend tests are `continue-on-error: true` in `.github
+          +/workflows/ci.yml`.                                           
+      206 +      The stated reason (12–18 failing visual tests) is stale 
+          +— 280/280 pass as of                                          
+      207 +      2026-09-04. Re-arm the gate.                            
+      208 +- [ ] Backend CI runs `-m "not flaky_env"`, excluding 10 tests
+          + (health, LLM                                                 
+      209 +      endpoints, flow alerts, flow desk, heatseeker v2). Fix o
+          +r re-include.                                                 
+      210 +- [ ] 48 unused npm dependencies still in `frontend/package.js
+          +on` (full Radix set,                                          
+      211 +      lucide-react, react-hook-form, zod, date-fns, cmdk, embl
+          +a, vaul, sonner…).                                            
+      212 +      Main chunk is 1.38 MB gzipped. **`package.json` is archi
+          +tect-frozen — needs Nav's approval.**                         
+      213 +- [ ] `models/SPY_meta_v2.0-regime.json` stays quarantined by 
+          +the truth audit                                               
+      214 +      (feature/sample ratio); `test_ml_pipeline.py::test_meta_
+          +file_exists` skips on it.                                     
+      215 +      Copy kept at `docs/salvage/` for the record.            
+      216 +                                                              
+      217  ## Done
+      218  
+      219  - [x] Initial project setup
+
+  Committed 22d3868, ran 2 shell commands (ctrl+o to expand)
+
+● Comparison verdict: nothing was lost by accident. Zero backend classes or
+  methods disappeared, exactly one endpoint changed (a clean rename with its
+  test updated), and every deliberately-removed feature is still recoverable
+  from FLOWW2.0's own history — I checked each one resolves. So the old folder
+  can go.
+
+  But six things existed only in that dead folder and would have died with it. I
+  rescued all of them into FLOWW2.0 before you delete it: the three unsaved
+  speed fixes as a ready-to-apply patch, the two unsaved test files, the July
+  repo audit, the quarantined SPY regime file, and three trained model files —
+  including the retrained anomaly model, which git is set to ignore, so the dead
+  folder held the only copy on Earth. That one is now in place, which also
+  fixes the cold-start problem I flagged earlier.
+
+  Everything removed on purpose is now logged in the project backlog as wanted, 
+  not discarded, with the exact commit to recover each from. Five of them matter
+  more than they look: Alpha Flow, Daily Report, Earnings, Ticker Analysis and
+  SPX GEX all still have working, live backend endpoints sitting there with no
+  screen to reach them — rebuilding those pages is UI work only, the data side
+  is already done. Also logged: Steal Three being unreachable, the sign-in gate
+  question, the disabled test gate, the 10 excluded backend tests, and the 48
+  dead packages.
+
+  Committed locally, not pushed — say the word and I'll push it.
+
+  Next steps:
+  1. Delete the old folder — everything perishable is now in this repo.
+  2. Land the three speed fixes with their two tests — the third is a two-line
+     change.
+  3. Re-arm the frontend test gate — its stated excuse is stale, 280 of 280
+     pass.
+
+  Radar: the rescued models are still git-ignored, so they live on this machine
+  only. One disk failure and the retrained anomaly model is gone for good —
+  worth a backup or moving that folder to large-file storage.
+
+● Ran 3 stop hooks (ctrl+o to expand)
+  ⎿  Stop hook error: OUTPUT FORMAT BROKEN — rewrite the reply before
+  delivering it.
+    - Long reply (12 lines, 308 words). This is a summarize pass, not a
+  length cap: re-judge every line and keep ONLY what changes the owner's
+  next move — every finding, number, risk, decision, Next step and
+  Radar line stays; narration, evidence trails and detail he didn't ask
+  for go. If after that every remaining line is genuinely important, the
+  length is fine.
+  Keep every finding, number, risk, decision, Radar line and Next step —
+  only fix the formatting. Do not explain this correction.
+
+● Nothing was lost by accident. Zero backend classes or methods gone, one
+  endpoint cleanly renamed, and every removed feature is recoverable from
+  FLOWW2.0's own history — verified. The old folder can go.
+
+  Six things existed only in that dead folder; I rescued them all: the three
+  unsaved speed fixes as a patch, two unsaved test files, the July repo audit,
+  the quarantined SPY regime file, and three trained models — including the
+  retrained anomaly model, which git ignores, so that folder held the only copy.
+  That also fixes the cold-start problem I flagged.
+
+  Everything removed on purpose is logged in the backlog as wanted, not 
+  discarded, with the commit to recover each. Five matter more than they look:
+  Alpha Flow, Daily Report, Earnings, Ticker Analysis and SPX GEX all have live
+  backend endpoints with no screen — rebuilding them is UI work only. Also
+  logged: Steal Three unreachable, the sign-in gate, the disabled test gate, the
+  10 excluded backend tests, the 48 dead packages.
+
+  Committed locally, not pushed — say the word.
+
+  1. Delete the old folder — everything perishable is now here.
+  2. Land the three speed fixes with their two tests — the third is two lines.
+  3. Re-arm the frontend test gate — its excuse is stale, 280 of 280 pass.
+
+  Radar: the rescued models are git-ignored, so they live on this machine only.
+  One disk failure and the retrained anomaly model is gone — worth a backup or
+  large-file storage.
+
+✻ Sautéed for 2m 44s · done 12:08 AM
+
+※ recap: Compared the retired floww folder against FLOWW2.0: nothing lost by accident, and I rescued the six items that existed only there. Next action is yours: delete the old folder, or tell me to push the salvage commit. (disable recaps in /config)
+
+❯ apply all the fixes make sure nothing is lost                                 
+   Land the three speed fixes with their two tests — the third is two lines.    
+
+  Read 2 files, ran 11 shell commands (ctrl+o to expand)
+● Update(backend\routes\ml_predict_api.py)
+  ⎿  Added 15 lines
+      57      _pred_cache[ticker.upper()] = {"ts": time.time(), "data": d
+          ata}
+      58  
+      59  
+      60 +# ── Model artifact cache (keyed by file mtime so a retrain inv
+         +alidates) ──                                                   
+      61 +_model_cache: dict[str, tuple] = {}                            
+      62  
+      63 +                                                               
+      64 +def _load_model_cached(path: str):                             
+      65 +    """joblib.load with an mtime-keyed cache: reload only when 
+         +the file changes."""                                           
+      66 +    import joblib                                              
+      67 +    mtime = os.path.getmtime(path)                             
+      68 +    entry = _model_cache.get(path)                             
+      69 +    if entry and entry[0] == mtime:                            
+      70 +        return entry[1]                                        
+      71 +    artifact = joblib.load(path)                               
+      72 +    _model_cache[path] = (mtime, artifact)                     
+      73 +    return artifact                                            
+      74 +                                                               
+      75 +                                                               
+      76  @router.get("/predict/{ticker}")
+      77  async def predict_direction(
+      78      ticker: str,
+
+● Update(backend\routes\ml_predict_api.py)
+  ⎿  Added 6 lines
+      105      """
+      106      ticker = ticker.upper()
+      107  
+      108 +    # 0. Serve from cache within TTL (keyed per model_type so 
+          +gbm/logistic don't collide)                                   
+      109 +    cache_key = f"{ticker}:{model_type}"                      
+      110 +    cached = _get_cached_prediction(cache_key)                
+      111 +    if cached is not None:                                    
+      112 +        return cached                                         
+      113 +                                                              
+      114      # 1. Compute features from live data
+      115      from services.ml_realtime_features import compute_features
+           _async
+      116      feature_data = await compute_features_async(ticker)
+
+● Update(backend\routes\ml_predict_api.py)
+  ⎿  Added 2 lines, removed 3 lines
+      126      scaler_path = os.path.join(model_dir, f"price_scaler_{tick
+           er}.joblib")
+      127      meta_path = os.path.join(model_dir, f"meta_{ticker}.json")
+      128  
+      129 -    import joblib                                             
+      129      if not os.path.exists(model_path):
+      130          raise HTTPException(404, f"No trained model for {ticke
+           r}. Run training first.")
+      131  
+      133 -    model = joblib.load(model_path)                           
+      134 -    scaler = joblib.load(scaler_path) if os.path.exists(scaler
+          -_path) else None                                              
+      132 +    model = _load_model_cached(model_path)                    
+      133 +    scaler = _load_model_cached(scaler_path) if os.path.exists
+          +(scaler_path) else None                                       
+      134  
+      135      # 3. Build feature vector in model-expected order
+      136      # Load meta to get the exact feature names the model was t
+           rained with
+
+● Update(backend\routes\ml_predict_api.py)
+  ⎿  Added 1 line
+      174          f"chain={'yes' if feature_data['chain_available'] else
+            'no'})"
+      175      )
+      176  
+      177 +    _set_cached_prediction(cache_key, result)                 
+      178      return result
+      179  
+      180  
+
+● Update(backend\routes\ml_predict_api.py)
+  ⎿  Added 19 lines, removed 6 lines
+      226              continue
+      227          try:
+      228              pred = await inference_engine.predict(ticker)
+      229 +            probs = list(pred.probabilities or [])            
+      230 +            if len(probs) != 2:                               
+      231 +                # Engine 3-class contract: 0=DOWN, 1=HOLD, 2=U
+          +P; probs=[down, hold, up]                                     
+      232 +                label = _PRED_LABELS.get(pred.prediction, "HOL
+          +D")                                                           
+      233 +                proba_out = {                                 
+      234 +                    "down": round(probs[0], 4) if len(probs) >
+          + 0 else 0.33,                                                 
+      235 +                    "hold": round(probs[1], 4) if len(probs) >
+          + 1 else 0.34,                                                 
+      236 +                    "up": round(probs[2], 4) if len(probs) > 2
+          + else 0.33,                                                   
+      237 +                }                                             
+      238 +            else:                                             
+      239 +                # Legacy binary contract: 1=UP, 0=DOWN; probs=
+          +[down, up].                                                   
+      240 +                # Without this branch a binary model's UP(1) i
+          +s mislabeled HOLD.                                            
+      241 +                label = "UP" if pred.prediction == 1 else "DOW
+          +N"                                                            
+      242 +                proba_out = {                                 
+      243 +                    "down": round(probs[0], 4),               
+      244 +                    "up": round(probs[1], 4),                 
+      245 +                }                                             
+      246              results[ticker] = {
+      230 -                "prediction": _PRED_LABELS.get(pred.prediction
+          -, "HOLD"),                                                    
+      247 +                "prediction": label,                          
+      248                  "confidence": round(pred.confidence, 4),
+      232 -                "probabilities": {                            
+      233 -                    "down": round(pred.probabilities[0], 4) if
+          - len(pred.probabilities) > 0 else 0.33,                       
+      234 -                    "hold": round(pred.probabilities[1], 4) if
+          - len(pred.probabilities) > 1 else 0.34,                       
+      235 -                    "up": round(pred.probabilities[2], 4) if l
+          -en(pred.probabilities) > 2 else 0.33,                         
+      236 -                },                                            
+      249 +                "probabilities": proba_out,                   
+      250                  "model_id": pred.model_id,
+      251                  "data_age_sec": round(pred.data_age_sec, 1),
+      252              }
+
+● Update(backend\routes\ml_predict_api.py)
+  ⎿  Added 1 line
+      261      n_bearish = sum(1 for r in results.values() if r["predicti
+           on"] == "DOWN")
+      262      # HOLD predictions are neither bullish nor bearish (was: n
+           _models - n_bullish,
+      263      # which wrongly counted every HOLD as bearish).
+      264 +    n_hold = n_models - n_bullish - n_bearish                 
+      265  
+      266      if n_models == 0:
+      267          ensemble_signal = "NO_DATA"
+
+● Update(backend\routes\ml_predict_api.py)
+  ⎿  Added 1 line
+      286          "n_models": n_models,
+      287          "n_bullish": n_bullish,
+      288          "n_bearish": n_bearish,
+      289 +        "n_hold": n_hold,                                     
+      290          "tickers": results,
+      291          "errors": errors if errors else None,
+      292          "computed_at": datetime.now(UTC).isoformat(),
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Update(backend\routes\ml_predict_api.py)
+  ⎿  Added 1 line, removed 2 lines
+      370      model_dir = os.path.join(os.path.dirname(os.path.dirname(o
+           s.path.abspath(__file__))), "models")
+      371      meta_path = os.path.join(model_dir, f"meta_{ticker}.json")
+      372  
+      373 -    import joblib                                             
+      373      model_path = os.path.join(model_dir, f"price_model_{ticker
+           }.joblib")
+      374  
+      375      if not os.path.exists(meta_path):
+     ...
+      378      with open(meta_path) as f:
+      379          meta = json.load(f)
+      380  
+      382 -    model = joblib.load(model_path)                           
+      381 +    model = _load_model_cached(model_path)                    
+      382  
+      383      return {
+      384          "ticker": ticker,
+
+  Ran 4 shell commands (ctrl+o to expand)
+
+● Now applying fixes 2 and 3.
+
+● Update(backend\routes\heatseeker_snapshots_api.py)
+  ⎿  Added 1 line
+      16  
+      17  from __future__ import annotations
+      18  
+      19 +import asyncio                                                 
+      20  import logging
+      21  from datetime import UTC
+      22  
+
+● Update(backend\routes\heatseeker_snapshots_api.py)
+  ⎿  Added 2 lines, removed 1 line
+      78      from services.heatseeker_snapshots import get_top_movers_fr
+          om_db
+      79  
+      80      conn = _get_duckdb_conn()
+      81 -    movers = get_top_movers_from_db(conn, ticker, top_n=top_n) 
+      81 +    # DuckDB fetch runs pandas materialization — keep it off th
+         +e event loop                                                   
+      82 +    movers = await asyncio.to_thread(get_top_movers_from_db, co
+         +nn, ticker, top_n=top_n)                                       
+      83  
+      84      return {
+      85          "ticker": ticker.upper(),
+
+● Update(backend\routes\heatseeker_snapshots_api.py)
+  ⎿  Added 3 lines, removed 1 line
+      126      from services.heatseeker_snapshots import get_history
+      127  
+      128      conn = _get_duckdb_conn()
+      129 -    history = get_history(conn, ticker, expiry, strike, type.u
+          -pper(), limit=limit)                                          
+      129 +    history = await asyncio.to_thread(                        
+      130 +        get_history, conn, ticker, expiry, strike, type.upper(
+          +), limit=limit                                                
+      131 +    )                                                         
+      132  
+      133      return {
+      134          "ticker": ticker.upper(),
+
+● Update(backend\routes\heatseeker_snapshots_api.py)
+  ⎿  Added 1 line, removed 1 line
+      160      from services.heatseeker_snapshots import get_latest_snaps
+           hot
+      161  
+      162      conn = _get_duckdb_conn()
+      163 -    contracts = get_latest_snapshot(conn, ticker)             
+      163 +    contracts = await asyncio.to_thread(get_latest_snapshot, c
+          +onn, ticker)                                                  
+      164  
+      165      return {
+      166          "ticker": ticker.upper(),
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Update(backend\services\replay_engine.py)
+  ⎿  Added 1 line, removed 1 line
+      92  
+      93      async def _replay_ticks(self):
+      94          """Replay tick data from DuckDB."""
+      95 -        rows = self.db.query(                                  
+      95 +        rows = await self.db.query_async(                      
+      96              """
+      97              SELECT * FROM ticks
+      98              WHERE timestamp >= ? AND timestamp <= ?
+
+● Update(backend\services\replay_engine.py)
+  ⎿  Added 1 line, removed 1 line
+      142  
+      143      async def _replay_chains(self):
+      144          """Replay chain data from DuckDB (stored in ticks tabl
+           e with chain fields)."""
+      145 -        rows = self.db.query(                                 
+      145 +        rows = await self.db.query_async(                     
+      146              """
+      147              SELECT * FROM ticks
+      148              WHERE timestamp >= ? AND timestamp <= ?
+
+  Ran 13 shell commands (ctrl+o to expand)
+● Stop Task
+  ⎿  cd "/c/Users/DARK HERO/Desktop/FLOWW2.0/backend" &&
+     ./.venv313/Scripts/python.exe -m pytest -q --tb=no -p no:warnings >
+     "/c/Users/DARK HERO/Desktop/pytest_after… · stopped
+
+  Committed a2f0532, ran 3 shell commands (ctrl+o to expand)
+
+● Update(BACKLOG.md)
+  ⎿  Added 8 lines, removed 11 lines
+      165  **All of it is wanted — none of it is discarded.** Artifacts a
+           nd restore
+      166  instructions: `docs/salvage/README.md`.
+      167  
+      168 -**K1 — Stranded perf fixes (patch held at `docs/salvage/`)**  
+      169 -- [ ] `routes/ml_predict_api.py` — mtime-keyed model/scaler ca
+          -che + per-`model_type`                                        
+      170 -      prediction cache. Today every `/api/predict/{ticker}` re
+          --reads both joblib                                            
+      171 -      artifacts from disk.                                    
+      172 -- [ ] `routes/heatseeker_snapshots_api.py` — wrap 3 DuckDB cal
+          -ls in                                                         
+      173 -      `asyncio.to_thread`; they block the event loop during pa
+          -ndas materialization.                                         
+      174 -- [ ] `services/replay_engine.py` — 2× `self.db.query()` → `aw
+          -ait                                                           
+      175 -      self.db.query_async()`. `query_async` already exists (`d
+          -uckdb_engine.py:500`) —                                       
+      176 -      nearly free.                                            
+      177 -- [ ] Land `test_ml_predict_cache.py` + `test_ml_ensemble_labe
+          -ls.py` with the above                                         
+      178 -      so the fixes ship with proof.                           
+      168 +**K1 — Stranded perf fixes ✅ LANDED (`a2f0532`, 2026-09-04)**
+      169 +- [x] `routes/ml_predict_api.py` — mtime-keyed model/scaler ca
+          +che + per-`model_type`                                        
+      170 +      prediction cache + legacy-binary ensemble branch + `n_ho
+          +ld` in the response                                           
+      171 +- [x] `routes/heatseeker_snapshots_api.py` — 3 DuckDB calls mo
+          +ved to `asyncio.to_thread`                                    
+      172 +- [x] `services/replay_engine.py` — 2× `self.db.query()` → `aw
+          +ait self.db.query_async()`                                    
+      173 +- [x] `test_ml_predict_cache.py` + `test_ml_ensemble_labels.py
+          +` landed in                                                   
+      174 +      `backend/tests/routes/` — 3 failed before the fix, 7 pas
+          +s after; 104 passed                                           
+      175 +      across every test file referencing the three changed mod
+          +ules                                                          
+      176  
+      177  **K2 — Removed UI we still want (all recoverable from this rep
+           o's git history)**
+      178  - [ ] Alpha Flow feed page (`3f339d5`) — backend `/api/alpha-f
+           low` + `/api/alpha-flow/dates` are LIVE with no UI
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● All three fixes are in, with the two tests proving them. Before the change 3
+  of the 7 rescued tests failed; after, all 7 pass, and 104 tests pass across
+  every file in the suite that touches the three changed modules. The app still
+  starts with the same 338 endpoints.
+
+  What each fix does: the prediction endpoint was re-reading the model and
+  scaler files from disk on every single request — now they're held in memory
+  and reload only when a retrain changes the file. The prediction cache had been
+  written but never actually switched on; it's now wired, keyed so the two
+  model types can't contaminate each other. Three heatseeker database calls were
+  freezing the whole server while they crunched data — they now run to the
+  side. And the replay engine's two blocking calls became the non-blocking
+  version that already existed.
+
+  I also found and fixed a labelling bug while in there: a two-outcome model
+  predicting UP was being reported as HOLD. I made that narrower than the
+  salvaged version so only the genuine two-outcome case changes behaviour —
+  nothing else moves.
+
+  Nothing was lost: I checked the salvaged patch line by line against what's
+  already in FLOWW2.0 and carried over every piece that was missing, including a
+  counter the ensemble response was lacking. Three commits, all local, not
+  pushed.
+
+  1. Say the word and I'll push these three commits.
+  2. Re-arm the frontend test gate — still the cheapest safety win left.
+  3. Decide the login question — restore the gate or remove the leftover
+     sign-out chrome.
+
+  Radar: six tests fail on this machine because your local database isn't
+  running — I confirmed they fail identically without my changes, so they're
+  environmental, not a break. That's also why the automated pipeline skips ten
+  tests. Starting MongoDB locally would let you run the real full suite.
+
+✻ Crunched for 38m 2s · done 12:54 AM
+
+※ recap: Compared the dead floww folder against FLOWW2.0, rescued everything that only existed there, and landed the three stranded speed fixes with their two tests, all verified and committed locally. Next: say the word and I'll push the three commits. (disable recaps in /config)
+
+❯ what woudl i benefit if i do this                                             
+   Re-arm the frontend test gate — still the cheapest safety win left.          
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Right now a broken interface can deploy itself. Your automated pipeline marks
+  the frontend test step as "report but never fail," and the deploy job fires
+  whenever that pipeline reports success — straight to Azure, both the interface
+  and the backend. So today, 280 tests run, all 280 pass, and not one of them
+  can stop a bad change from reaching production.
+
+  Re-arming buys you exactly one thing: the 44 test suites become a stop sign
+  instead of a comment. That covers the sidebar and navigation shell, the
+  heatseeker dashboards, Tidehunter, the options chain table, the wheel income
+  screener, the error boundary, and the visual smoke checks.
+
+  Worth being precise about what it does and doesn't catch. Anything that won't
+  compile is already caught — the deploy job builds the interface and dies on a
+  syntax error. What slips through today is the nastier kind: code that compiles
+  fine but behaves wrong. A panel that silently renders empty, a number
+  formatted wrong, a click handler wired to nothing. Those ship green right now.
+
+  Cost is 18 seconds of pipeline time. The only real downside is a genuinely
+  flaky test turning the pipeline red for no reason — which is why it was
+  switched off in the first place. That excuse is dead: I ran all 280 today and
+  every one passed.
+
+  1. Re-arm it — delete the one line that disables it, keep the note as history.
+  2. Fix or re-include the 10 skipped backend tests — same disease, backend
+     side.
+  3. Start MongoDB locally so you can run the true full backend suite before
+     pushing.
+
+  Radar: the interface lint step is also set to never fail, and there's no lint
+  command defined for it to run — that step has been doing nothing at all, in
+  both the old and new versions. Either wire it up or delete it, because right
+  now it's a checkmark that means nothing.
+
+● Ran 3 stop hooks (ctrl+o to expand)
+  ⎿  Stop hook error: OUTPUT FORMAT BROKEN — rewrite the reply before
+  delivering it.
+    - Long reply (8 lines, 308 words). This is a summarize pass, not a
+  length cap: re-judge every line and keep ONLY what changes the owner's
+  next move — every finding, number, risk, decision, Next step and
+  Radar line stays; narration, evidence trails and detail he didn't ask
+  for go. If after that every remaining line is genuinely important, the
+  length is fine.
+  Keep every finding, number, risk, decision, Radar line and Next step —
+  only fix the formatting. Do not explain this correction.
+
+● Right now a broken interface can deploy itself. The frontend test step is set
+  to "report but never fail," and the deploy job fires whenever the pipeline
+  reports success — straight to Azure, both interface and backend. So 280 tests
+  run, all pass, and none can stop a bad change reaching production.
+
+  Re-arming turns those 44 suites into a stop sign instead of a comment: sidebar
+  and navigation shell, heatseeker dashboards, Tidehunter, options chain table,
+  wheel income screener, error boundary, visual smoke checks.
+
+  What it does and doesn't catch: anything that won't compile is already caught,
+  because the deploy job builds and dies on a syntax error. What slips through
+  today is code that compiles fine but behaves wrong — a panel rendering empty,
+  a number formatted wrong, a click handler wired to nothing.
+
+  Cost is 18 seconds. Only downside is a flaky test turning the pipeline red for
+  nothing, which is why it was switched off — that excuse is dead, all 280
+  passed today.
+
+  1. Re-arm it — delete the one line that disables it.
+  2. Fix or re-include the 10 skipped backend tests — same disease, backend
+     side.
+  3. Start MongoDB locally so you can run the true full backend suite before
+     pushing.
+
+  Radar: the interface lint step is also set to never fail and has no lint
+  command defined to run — it has been doing nothing in both versions. Wire it
+  up or delete it; right now it's a checkmark that means nothing.
+
+✻ Cogitated for 38s · done 2:49 AM
+
+❯ okay proceed                                                                  
+
+  Ran 8 shell commands (ctrl+o to expand)
+
+  Ran 8 shell commands (ctrl+o to expand)
+● Stop — the gate is already re-armed, but not by me. Another Claude session is
+  running in this same folder right now (floww2-0-a9, busy), and it has 19 files
+  modified and uncommitted, including exactly the change you asked for: the
+  frontend test mask is gone and the dead lint step is deleted. I re-ran the
+  suite to confirm the gate will hold — 280 of 280 still pass.
+
+  That session also found something far bigger, and I verified it myself: on 
+  main today, your backend cannot start in production. A line in the quant
+  routes file uses quote-inside-quote text formatting that only Python 3.12 and
+  up can read. Your shipped container is Python 3.11, your deploy pipeline is
+  Python 3.11, and the main server file imports that quant file with no
+  protection. I compiled the committed version under real Python 3.11 and it
+  dies with a syntax error. The two-line fix is sitting in the working tree,
+  uncommitted.
+
+  I committed nothing. Two reasons: it's their in-flight work, and committing
+  the pipeline file alone would pin your automated checks to Python 3.11 without
+  the quant fix — deliberately turning the pipeline red.
+
+  Also worth knowing: the type-check step has always been unable to fail the
+  build, so a green run has never said anything about type correctness. That
+  session labelled it honestly rather than pretending.
+
+  1. Let the other session finish and commit its batch — don't have me
+     cross-commit into it.
+  2. Make sure the quant fix lands — that one is production-down, not cosmetic.
+  3. Ping me after they commit and I'll verify the whole tree end to end.
+
+  Radar: six sessions are live on this machine, two of them in this project. If
+  they're all editing the same files you'll get lost work, not merge conflicts —
+  git only protects committed work, and almost none of this is committed yet.
+
+● Ran 3 stop hooks (ctrl+o to expand)
+  ⎿  Stop hook error: OUTPUT FORMAT BROKEN — rewrite the reply before
+  delivering it.
+    - Long reply (8 lines, 248 words). This is a summarize pass, not a
+  length cap: re-judge every line and keep ONLY what changes the owner's
+  next move — every finding, number, risk, decision, Next step and
+  Radar line stays; narration, evidence trails and detail he didn't ask
+  for go. If after that every remaining line is genuinely important, the
+  length is fine.
+  Keep every finding, number, risk, decision, Radar line and Next step —
+  only fix the formatting. Do not explain this correction.
+
+● Stop — the gate is already re-armed, but not by me. Another Claude session is
+  live in this same folder (floww2-0-a9, busy) with 19 files modified and
+  uncommitted, including exactly your ask: the frontend test mask is gone and
+  the dead lint step deleted. I re-ran the suite — 280 of 280 pass, so the gate
+  will hold.
+
+  That session also caught something far bigger, and I verified it: on main 
+  today your backend cannot start in production. A line in the quant routes uses
+  quote-inside-quote formatting only Python 3.12+ can read. Your container is
+  Python 3.11, your deploy is Python 3.11, and the main server file imports it
+  unguarded. I compiled the committed version under real 3.11 — syntax error.
+  The two-line fix sits uncommitted in the tree.
+
+  I committed nothing: it's their in-flight work, and committing the pipeline
+  file alone would pin checks to 3.11 without the quant fix, turning the
+  pipeline red on purpose.
+
+  Also: the type-check step has never been able to fail the build, so a green
+  run has never said anything about type correctness.
+
+  1. Let the other session finish and commit its batch — no cross-committing.
+  2. Make sure the quant fix lands — production-down, not cosmetic.
+  3. Ping me after they commit and I'll verify the tree end to end.
+
+  Radar: six sessions are live on this machine, two in this project. If they
+  edit the same files you get lost work, not merge conflicts — git only protects
+  what's committed, and almost none of this is.
+
+✻ Crunched for 3m 9s · done 2:54 AM
+
+※ recap: I compared FLOWW2.0 against the retired old clone, rescued everything perishable, and landed three speed fixes with tests. The frontend test gate you asked for is already re-armed by another live session's uncommitted work, so let that session commit first. (disable recaps in /config)
+
+❯ what is this and why hasnt it been fixed?                                     
+  2. Make sure the quant fix lands — production-down, not cosmetic.             
+
+  Ran 8 shell commands (ctrl+o to expand)
+
+● One line of code, and it has never been checked by anything.
+
+  The bug: in the quant routes file, a piece of text is built using double
+  quotes nested inside double quotes. Python 3.12 and newer accept that; Python
+  3.11 rejects it outright. Your container image is Python 3.11 and your deploy
+  step is Python 3.11. The main server file loads that quant file with no
+  protection, so on 3.11 the server refuses to even start. I proved it by
+  compiling the committed version under real 3.11 — hard syntax error.
+
+  Why it wasn't caught: your automated checks have never run. Not once. Zero
+  runs, ever. Three workflows are registered and look active, but the repository
+  is a fork, and GitHub refuses to run checks on a fork until you click enable
+  one time in the Actions tab. Nobody has. So the bad line landed on the main
+  branch on August 31 and has sat there four days with nothing watching.
+
+  One correction to what I said earlier: since the deploy has also never run,
+  nothing of yours is actually live right now. So this isn't "production is
+  down" — it's "the first deploy you attempt will fail to start." Same fix, less
+  panic.
+
+  The two-line fix is already written and sitting uncommitted in your working
+  tree from the other session.
+
+  1. Click enable in the Actions tab — one click, and every gate we've discussed
+     becomes real instead of decorative.
+  2. Commit and push the quant fix — it's written, it just needs to land.
+  3. Push my three commits too — the salvage, the speed fixes, and the backlog
+     are all still local only.
+
+  Radar: with checks never having run, treat every "green" claim in your notes
+  as unverified. The only test results you actually have are the ones I ran on
+  this machine today.
+
+● Ran 3 stop hooks (ctrl+o to expand)
+  ⎿  Stop hook error: OUTPUT FORMAT BROKEN — rewrite the reply before
+  delivering it.
+    - Long reply (8 lines, 255 words). This is a summarize pass, not a
+  length cap: re-judge every line and keep ONLY what changes the owner's
+  next move — every finding, number, risk, decision, Next step and
+  Radar line stays; narration, evidence trails and detail he didn't ask
+  for go. If after that every remaining line is genuinely important, the
+  length is fine.
+  Keep every finding, number, risk, decision, Radar line and Next step —
+  only fix the formatting. Do not explain this correction.
+
+● One line of code, never checked by anything.
+
+  The bug: in the quant routes file, text is built with double quotes nested
+  inside double quotes. Python 3.12+ accepts that; 3.11 rejects it. Your
+  container and your deploy step are both 3.11, and the main server file loads
+  that quant file unguarded — so on 3.11 the server won't start. I compiled the
+  committed version under real 3.11: hard syntax error.
+
+  Why it wasn't caught: your automated checks have never run. Not once. Three
+  workflows look registered and active, but the repository is a fork, and GitHub
+  won't run checks on a fork until you click enable once in the Actions tab.
+  Nobody has. The bad line landed on main August 31 and sat four days unwatched.
+
+  Correction to what I said earlier: the deploy has also never run, so nothing
+  of yours is live. This is not "production is down" — it's "your first deploy
+  will fail to start." Same fix, less panic.
+
+  The two-line fix is already written, uncommitted, in your working tree from
+  the other session.
+
+  1. Click enable in the Actions tab — one click makes every gate we've
+     discussed real instead of decorative.
+  2. Commit and push the quant fix — written, just needs to land.
+  3. Push my three commits — salvage, speed fixes, backlog are all local only.
+
+  Radar: with checks never having run, treat every "green" claim in your notes
+  as unverified. The only real test results you have are the ones I ran here
+  today.
+
+✻ Crunched for 1m 58s · done 3:05 AM
+
+※ recap: You wanted the old floww folder compared against FLOWW2.0 for anything lost or broken; nothing was lost, and I landed the three salvaged speed fixes with their tests. Next: click enable in the GitHub Actions tab, since your checks have never run.
+
+❯ fix all issues if not already                                                 
+
+  Committed d29ae3f, ran 9 shell commands (ctrl+o to expand)
+● Update(backend\tests\test_vpin_toxicity.py)
+  ⎿  Removed 1 line
+      134  # Label thresholds (boundary cases)
+      135  # ────────────────────────────────────────────────────────────
+           ─────────
+      136  
+      137 -@pytest.mark.flaky_env                                        
+      137  def test_label_thresholds_match_specification():
+      138      """Sweep meaningful boundary values: 0.30, 0.50, 0.70."""
+      139      # vpin = 0.30 — boundary; per spec < 0.30 is LOW, so 0.30 
+           itself ought
+
+  Ran 4 shell commands (ctrl+o to expand)
+
+● Update(backend\tests\test_vpin_toxicity.py)
+  ⎿  Removed 2 lines
+      21  import sys
+      22  from pathlib import Path
+      23  
+      24 -import pytest                                                  
+      25 -                                                               
+      24  BACKEND_ROOT = Path(__file__).resolve().parents[1]
+      25  sys.path.insert(0, str(BACKEND_ROOT))
+      26  
+
+  Ran 11 shell commands (ctrl+o to expand)
+
+● Update(backend\routes\quant.py)
+  ⎿  Added 7 lines, removed 16 lines
+      193      except Exception as e:
+      194          logger.debug(f"volume_clock unavailable for {t}: {e}")
+      195  
+      196 -    # --- IV surface metrics ---                              
+      197 -    try:                                                      
+      198 -        pass                                                  
+      196 +    # --- IV surface metrics: NOT emitted here ---            
+      197 +    # calc_skew_metrics(vol_analytics) needs spot + the option
+          + chain, which this                                            
+      198 +    # catalog endpoint does not fetch. iv_skew comes from /api
+          +/quant/full instead.                                          
+      199 +    # (Was a try/except that only imported the symbol and neve
+          +r called it.)                                                 
+      200  
+      200 -        # calc_skew_metrics requires spot + contracts; we don'
+          -t have those here                                             
+      201 -        # so skip for now — iv_skew is best fetched from /api/
+          -quant/full                                                    
+      202 -    except Exception as e:                                    
+      203 -        logger.debug(f"iv_skew unavailable for {t}: {e}")     
+      201 +    # --- Charm estimate: NOT emitted here ---                
+      202 +    # calc_charm_integral(advanced_analytics) needs ticker + t
+          +he option chain,                                              
+      203 +    # same reason. charm comes from /api/quant/full instead.  
+      204  
+      205 -    # --- Charm estimate (delta decay proxy) ---              
+      206 -    try:                                                      
+      207 -        pass                                                  
+      208 -                                                              
+      209 -        # calc_charm_integral requires ticker + contracts; nee
+          -ds option chain data                                          
+      210 -        # so skip for now — charm is best fetched from /api/qu
+          -ant/full                                                      
+      211 -    except Exception as e:                                    
+      212 -        logger.debug(f"charm unavailable for {t}: {e}")       
+      213 -                                                              
+      205      return {
+      206          "ticker": t,
+      207          "signals": signals,
+
+  Committed 22f4d5f, ran 21 shell commands (ctrl+o to expand)
+  ⎿  1 skill available
+
+● Update(BACKLOG.md)
+  ⎿  Added 25 lines
+      226        `<FlowAlertsPage />`; the only other reference is a sour
+           ce-grep assertion in
+      227        `App.egress-invariant.test.js`). Dead component, not a r
+           outing gap.
+      228  
+      229 +**K5 — Found while clearing K1/K4 (2026-09-04)**              
+      230 +- [ ] `services/vpin_toxicity.py` — the label at the exact 0.3
+          +0 boundary is                                                 
+      231 +      numpy-version dependent. Same input (10 buckets of 130/7
+          +0) returns                                                    
+      232 +      LOW_TOXICITY on numpy 2.4.6 and MODERATE_TOXICITY on 2.5
+          +.2, with both                                                 
+      233 +      reporting vpin == 0.3. The `flaky_env` marker on        
+      234 +      `test_label_thresholds_match_specification` is therefore
+          + **correct** — do                                             
+      235 +      not remove it (tried and reverted). Real fix: compare wi
+          +th a tolerance                                                
+      236 +      instead of a bare `>=` at each threshold.               
+      237 +- [ ] `server.py` — 4 unused imports (`provider_last_success_s
+          +econds_ago`,                                                  
+      238 +      `provider_calls_total`, `get_metrics_bytes` at 1988-1990
+          +) + 1 unsorted                                                
+      239 +      import block at 2660. These are the only ruff findings l
+          +eft; the CI ruff                                              
+      240 +      gate cannot pass until they clear. Left alone — file is 
+          +open in a                                                     
+      241 +      concurrent session.                                     
+      242 +- [ ] `backend/.venv313` has drifted to fastapi 0.137.2 vs the
+          + pinned 0.110.1.                                              
+      243 +      `app.routes` returns `_IncludedRouter` wrappers there, w
+          +hich makes                                                    
+      244 +      `test_steal_three_routes.py` report 4 false failures. Ve
+          +rify against                                                  
+      245 +      `backend/.venv` (Python 3.11.15 + fastapi 0.110.1), whic
+          +h matches                                                     
+      246 +      `requirements.txt` and `python:3.11-slim`. Consider dele
+          +ting `.venv313`.                                              
+      247 +- [ ] `services/finnhub_api.py` + `finnhub_client.py` — both f
+          +ail to import:                                                
+      248 +      `ModuleNotFoundError: No module named 'finnhub'`. The pa
+          +ckage is not in                                               
+      249 +      `requirements.txt`. Either add it or delete the two modu
+          +les.                                                          
+      250 +- [ ] **GitHub Actions has never run on this repo — 0 runs, ev
+          +er.** It is a                                                 
+      251 +      fork, and GitHub keeps workflows disabled on forks until
+          + enabled once in                                              
+      252 +      the Actions tab. Every gate discussed here is inert unti
+          +l Nav clicks it.                                              
+      253 +                                                              
+      254  **K4 — Regressions to decide on**
+      255  - [ ] Sign-in gate removed with the AlphaPod teardown (`3f339d
+           5`). `isAuthenticated`
+      256        is destructured in `App.js:502` and never used, yet the 
+           header still renders
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Fixed and committed — six commits, all local. The big one: your server can now
+  actually start on the runtime it ships on. I proved the old code was a hard
+  syntax error under real Python 3.11 and the fix compiles; all 595 backend
+  files now pass on 3.11.
+
+  Also landed: the frontend test gate is armed (280 of 280 pass), the fake lint
+  step is gone, and 65 of 70 code-quality violations are cleared — that gate
+  would have failed on its very first run otherwise. Two of those "fixes" the
+  tool made were nonsense — it turned two import checks into empty do-nothing
+  blocks — so I finished those by hand.
+
+  Three things I want you to know because they change what you trust:
+
+  I made one mistake and caught it. I removed a "skip this test" tag thinking it
+  was unjustified. On your real runtime it fails: the toxicity label at the
+  0.30 boundary comes out LOW on one numeric-library version and MODERATE on
+  another, from identical input. The tag was right; I put it back and logged the
+  underlying bug — that threshold needs a tolerance, not an exact comparison.
+
+  Your two Python environments disagree. One has drifted well off the version
+  you actually ship, and it produces four fake test failures. I re-verified
+  everything on the correct one: 179 route tests pass, plus the 104 from
+  earlier.
+
+  Two modules can't load at all — the finnhub ones. The library they need isn't
+  in your dependency list. Either add it or delete them.
+
+  1. Click enable in the Actions tab — everything above is still theatre until
+     you do.
+  2. Ask the other session to clear five leftovers in the main server file —
+     they're the last thing blocking the quality gate, and I left that file
+     alone because it's open there.
+  3. Say push and I'll send all six commits up.
+
+  Radar: that other session has now also modified your project instructions
+  file, the roadmap, and two more backend files, still uncommitted. If it's
+  interrupted, that work vanishes.
+
+● Ran 3 stop hooks (ctrl+o to expand)
+  ⎿  Stop hook error: OUTPUT FORMAT BROKEN — rewrite the reply before
+  delivering it.
+    - Long reply (9 lines, 253 words). This is a summarize pass, not a
+  length cap: re-judge every line and keep ONLY what changes the owner's
+  next move — every finding, number, risk, decision, Next step and
+  Radar line stays; narration, evidence trails and detail he didn't ask
+  for go. If after that every remaining line is genuinely important, the
+  length is fine.
+  Keep every finding, number, risk, decision, Radar line and Next step —
+  only fix the formatting. Do not explain this correction.
+● Fixed and committed — six commits, all local. The big one: your server can now
+  start on the runtime it ships on. The old code was a hard syntax error under
+  real Python 3.11; the fix compiles, and all 595 backend files now pass on
+  3.11.
+
+  Also landed: frontend test gate armed (280 of 280 pass), fake lint step gone,
+  and 65 of 70 code-quality violations cleared — that gate would have failed on
+  its first run otherwise. Two auto-fixes were nonsense (turned import checks
+  into empty do-nothing blocks); I finished those by hand.
+
+  Three things that change what you trust:
+
+  I made one mistake and caught it — removed a "skip this test" tag I thought
+  was unjustified. On your real runtime it fails: the toxicity label at the 0.30
+  boundary comes out LOW on one numeric-library version and MODERATE on
+  another, from identical input. Tag restored, underlying bug logged — that
+  threshold needs a tolerance, not an exact comparison.
+
+  Your two Python environments disagree; one has drifted well off the version
+  you ship and produces four fake test failures. I re-verified on the correct
+  one: 179 route tests pass, plus the 104 from earlier.
+
+  Two modules can't load at all — the finnhub ones. Their library isn't in your
+  dependency list. Add it or delete them.
+
+  1. Click enable in the Actions tab — everything above is theatre until you do.
+  2. Ask the other session to clear five leftovers in the main server file —
+     last thing blocking the quality gate; I left that file alone because it's
+     open there.
+  3. Say push and I'll send all six commits up.
+
+  Radar: that session has now also modified your project instructions, the
+  roadmap, and two more backend files, still uncommitted. If it's interrupted,
+  that work vanishes.
+
+✻ Cogitated for 27m 47s · done 3:47 AM
+
+※ recap: We were comparing your two floww copies for anything lost, then fixing what we found; six commits are in locally, including the syntax error that stopped your server from starting. Next: say push and I'll send them up.
+
+❯ fix and sort everythi9ng you have full persmision                             
+  ⎿  1 skill available
+
+  Ran 4 shell commands (ctrl+o to expand)
+
+● Update(backend\services\vpin_toxicity.py)
+  ⎿  Added 7 lines, removed 1 line
+      151              vpin = 0.0
+      152          elif vpin > 1.0:
+      153              vpin = 1.0
+      154 +        # Classify the SAME value we report. Classifying the r
+          +aw mean while                                                 
+      155 +        # reporting round(mean, 4) let the two disagree at a b
+          +and edge: ten                                                 
+      156 +        # buckets of OF=0.3 sum to 0.2999999999999999 on some 
+          +numpy builds and                                              
+      157 +        # to 0.3 on others, so the payload read {"vpin": 0.3, 
+          +"label": "LOW"}                                               
+      158 +        # on one machine and {"vpin": 0.3, "label": "MODERATE"
+          +} on another.                                                 
+      159 +        vpin = float(round(vpin, 4))                          
+      160          label = _classify_vpin(vpin)
+      161          return {
+      156 -            "vpin": float(round(vpin, 4)),                    
+      162 +            "vpin": vpin,                                     
+      163              "label": label,
+      164              "label_color": LABEL_COLORS[label],
+      165              "n_buckets": int(len(recent)),
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Update(backend\tests\test_vpin_toxicity.py)
+  ⎿  Removed 1 line
+      134  # Label thresholds (boundary cases)
+      135  # ────────────────────────────────────────────────────────────
+           ─────────
+      136  
+      137 -@pytest.mark.flaky_env                                        
+      137  def test_label_thresholds_match_specification():
+      138      """Sweep meaningful boundary values: 0.30, 0.50, 0.70."""
+      139      # vpin = 0.30 — boundary; per spec < 0.30 is LOW, so 0.30 
+           itself ought
+
+● Update(backend\tests\test_vpin_toxicity.py)
+  ⎿  Removed 2 lines
+      21  import sys
+      22  from pathlib import Path
+      23  
+      24 -import pytest                                                  
+      25 -                                                               
+      24  BACKEND_ROOT = Path(__file__).resolve().parents[1]
+      25  sys.path.insert(0, str(BACKEND_ROOT))
+      26  
+
+  Committed ca9ee0e, searched for 2 patterns, ran 18 shell commands (ctrl+o to expand)
+
+● Now making Steal Three reachable and fixing the broken nav icon.
+
+● Update(frontend\src\shell\navConfig.js)
+  ⎿  Added 7 lines, removed 1 line
+       8    { id: "heatseeker", label: "Solstice", group: "Decoder", icon
+          : "grid", legacy: true },
+       9    { id: "trinity",    label: "Triad",    group: "Decoder", icon
+          : "layers", legacy: true },
+      10    { id: "skylit",     label: "Zenith",     group: "Decoder", ic
+          on: "bar-chart", legacy: true },
+      11 -  { id: "flowseeker-pro", label: "Tidehunter Pro", group: "Deco
+         -der", icon: "zap", legacy: true },                             
+      11 +  // icon must be a key of ICONS in Sidebar.jsx — "zap" was not
+         +, so this item                                                 
+      12 +  // silently rendered the default glyph.                      
+      13 +  { id: "flowseeker-pro", label: "Tidehunter Pro", group: "Deco
+         +der", icon: "activity", legacy: true },                        
+      14 +  // Steal Three was built (backend routes live, StealThreePrev
+         +iew rendered in                                                
+      15 +  // App.js) but had no nav entry and was excluded from the ?pa
+         +ge= whitelist,                                                 
+      16 +  // so it was unreachable.                                    
+      17 +  { id: "steal-three", label: "Steal Three", group: "Decoder", 
+         +icon: "sparkles", legacy: true },                              
+      18  
+      19    // Trading
+      20    { id: "portfolio",  label: "Portfolio",  group: "Trading", ic
+          on: "trending-up" },
+
+● Update(frontend\src\App.js)  ⎿  Added 1 line, removed 1 line
+      503    const [page, setPage] = useState(() => {
+      504      try {
+      505        const q = new URLSearchParams(window.location.search).ge
+           t("page");
+      506 -      if (q && ["heatseeker", "trinity", "skylit", "flowseeker
+          --pro", "journal", "portfolio"].includes(q)) return q;         
+      506 +      if (q && ["heatseeker", "trinity", "skylit", "flowseeker
+          +-pro", "steal-three", "journal", "portfolio"].includes(q)) ret
+          +urn q;                                                        
+      507      } catch {}
+      508      return "heatseeker";
+      509    });
+
+  Read 1 file, ran 2 shell commands (ctrl+o to expand)
+
+● Update(frontend\src\shell\Sidebar.test.jsx)
+  ⎿  Added 3 lines, removed 1 line
+       4  import { render, screen, fireEvent } from "@testing-library/rea
+          ct";
+       5  import "@testing-library/jest-dom";
+       6  import Sidebar from "./Sidebar";
+       7 -import { SIDEBAR_KEY } from "./navConfig";                     
+       7 +import { SIDEBAR_KEY, NAV_ITEMS } from "./navConfig";          
+       8 +import fs from "fs";                                           
+       9 +import path from "path";                                       
+      10  
+      11  beforeEach(() => localStorage.clear());
+      12  
+
+● Update(frontend\src\shell\Sidebar.test.jsx)
+  ⎿  Added 28 lines
+      30    fireEvent.click(screen.getByRole("button", { name: /collapse 
+          sidebar/i }));
+      31    expect(localStorage.getItem(SIDEBAR_KEY)).toBe("true");
+      32  });
+      33 +                                                               
+      34 +// Steal Three shipped with backend routes and a rendered compo
+         +nent but no nav                                                
+      35 +// entry and no ?page= whitelist slot, so it was unreachable in
+         + the UI.                                                       
+      36 +test("Steal Three is reachable from the sidebar", () => {      
+      37 +  const onNavigate = jest.fn();                                
+      38 +  render(<Sidebar page="trinity" onNavigate={onNavigate} />);  
+      39 +  fireEvent.click(screen.getByRole("button", { name: /Steal Thr
+         +ee/ }));                                                       
+      40 +  expect(onNavigate).toHaveBeenCalledWith("steal-three");      
+      41 +});                                                            
+      42 +                                                               
+      43 +// "zap" was set on Tidehunter Pro but is not a key of ICONS, s
+         +o that item                                                    
+      44 +// silently fell back to the default glyph. Pin every icon to a
+         + real key.                                                     
+      45 +test("every nav icon exists in the Sidebar ICONS map", () => { 
+      46 +  const src = fs.readFileSync(path.join(__dirname, "Sidebar.jsx
+         +"), "utf8");                                                   
+      47 +  const block = src.slice(src.indexOf("const ICONS"), src.index
+         +Of("function getIcon"));                                       
+      48 +  const known = new Set([...block.matchAll(/^\s{2}"?([a-z0-9-]+
+         +)"?:/gm)].map((m) => m[1]));                                   
+      49 +  const missing = NAV_ITEMS.filter((i) => !known.has(i.icon)).m
+         +ap((i) => `${i.label} -> ${i.icon}`);                          
+      50 +  expect(missing).toEqual([]);                                 
+      51 +});                                                            
+      52 +                                                               
+      53 +// Anything the sidebar can navigate to must survive a page rel
+         +oad via ?page=.                                                
+      54 +test("every nav id is accepted by the App.js ?page= whitelist",
+         + () => {                                                       
+      55 +  const app = fs.readFileSync(path.join(__dirname, "..", "App.j
+         +s"), "utf8");                                                  
+      56 +  const line = app.split("\n").find((l) => l.includes("includes
+         +(q)"));                                                        
+      57 +  const allowed = new Set([...line.matchAll(/"([a-z0-9-]+)"/g)]
+         +.map((m) => m[1]));                                            
+      58 +  const missing = NAV_ITEMS.filter((i) => !allowed.has(i.id)).m
+         +ap((i) => i.id);                                               
+      59 +  expect(missing).toEqual([]);                                 
+      60 +});                                                            
+
+  Committed 0ca3e45, 0884480, ran 7 shell commands (ctrl+o to expand)
+
+● Update(BACKLOG.md)
+  ⎿  Added 27 lines, removed 19 lines
+      226        `<FlowAlertsPage />`; the only other reference is a sour
+           ce-grep assertion in
+      227        `App.egress-invariant.test.js`). Dead component, not a r
+           outing gap.
+      228  
+      229 -**K5 — Found while clearing K1/K4 (2026-09-04)**              
+      230 -- [ ] `services/vpin_toxicity.py` — the label at the exact 0.3
+          -0 boundary is                                                 
+      231 -      numpy-version dependent. Same input (10 buckets of 130/7
+          -0) returns                                                    
+      232 -      LOW_TOXICITY on numpy 2.4.6 and MODERATE_TOXICITY on 2.5
+          -.2, with both                                                 
+      233 -      reporting vpin == 0.3. The `flaky_env` marker on        
+      234 -      `test_label_thresholds_match_specification` is therefore
+          - **correct** — do                                             
+      235 -      not remove it (tried and reverted). Real fix: compare wi
+          -th a tolerance                                                
+      236 -      instead of a bare `>=` at each threshold.               
+      237 -- [ ] `server.py` — 4 unused imports (`provider_last_success_s
+          -econds_ago`,                                                  
+      238 -      `provider_calls_total`, `get_metrics_bytes` at 1988-1990
+          -) + 1 unsorted                                                
+      239 -      import block at 2660. These are the only ruff findings l
+          -eft; the CI ruff                                              
+      240 -      gate cannot pass until they clear. Left alone — file is 
+          -open in a                                                     
+      241 -      concurrent session.                                     
+      229 +**K5 — Found and fixed 2026-09-04**                           
+      230 +- [x] `services/vpin_toxicity.py` — band label was numpy-versi
+          +on dependent                                                  
+      231 +      (0.3 → LOW on numpy 2.4.6, MODERATE on 2.5.2, both repor
+          +ting vpin 0.3).                                               
+      232 +      Root cause: classified the raw mean, reported `round(mea
+          +n, 4)`. Now                                                   
+      233 +      classifies the rounded value; `flaky_env` marker removed
+          + and the test                                                 
+      234 +      gates (`553de07` + `ca9ee0e`).                          
+      235 +- [x] `services/finnhub_api.py` + `finnhub_client.py` deleted 
+          +(399 lines) —                                                 
+      236 +      `ModuleNotFoundError: No module named 'finnhub'`, import
+          +ed by nothing,                                                
+      237 +      superseded by the SDK-free `FinnhubProvider` in `data_pr
+          +oviders.py:106`.                                              
+      238 +- [x] `server.py` ruff findings cleared; `ruff check .` is now
+          + clean repo-wide.                                             
+      239 +- [x] Steal Three reachable + Tidehunter Pro nav icon fixed (`
+          +0ca3e45`).                                                    
+      240 +- [x] `package-lock.json` was missing `@tanstack/react-query` 
+          +while                                                         
+      241 +      `package.json` declares it and 3 files import it — `npm 
+          +ci` would have                                                
+      242 +      aborted at install (`0884480`).                         
+      243 +                                                              
+      244 +**K5b — Still open**                                          
+      245 +- [ ] **GitHub Actions has never run on this repo — 0 runs, ev
+          +er.** It is a                                                 
+      246 +      fork, and GitHub keeps workflows disabled on forks until
+          + enabled once in                                              
+      247 +      the Actions tab. Every gate here is inert until Nav clic
+          +ks it. (Tried via                                             
+      248 +      the API; the write was blocked. Needs the UI click.)    
+      249  - [ ] `backend/.venv313` has drifted to fastapi 0.137.2 vs the
+            pinned 0.110.1.
+      250        `app.routes` returns `_IncludedRouter` wrappers there, w
+           hich makes
+      251        `test_steal_three_routes.py` report 4 false failures. Ve
+           rify against
+      252        `backend/.venv` (Python 3.11.15 + fastapi 0.110.1), whic
+           h matches
+      253        `requirements.txt` and `python:3.11-slim`. Consider dele
+           ting `.venv313`.
+      247 -- [ ] `services/finnhub_api.py` + `finnhub_client.py` — both f
+          -ail to import:                                                
+      248 -      `ModuleNotFoundError: No module named 'finnhub'`. The pa
+          -ckage is not in                                               
+      249 -      `requirements.txt`. Either add it or delete the two modu
+          -les.                                                          
+      250 -- [ ] **GitHub Actions has never run on this repo — 0 runs, ev
+          -er.** It is a                                                 
+      251 -      fork, and GitHub keeps workflows disabled on forks until
+          - enabled once in                                              
+      252 -      the Actions tab. Every gate discussed here is inert unti
+          -l Nav clicks it.                                              
+      254 +- [ ] Sign-in gate (see K4) — genuinely a product call, not a 
+          +defect. Left alone.                                           
+      255 +- [ ] The 48 unused npm packages (see K4) do **not** bloat the
+          + bundle. Verified                                             
+      256 +      against `build/static/js/`: the 1.38 MB chunk is plotly 
+          ++ d3, both in real                                            
+      257 +      use across 7 files; radix, lucide, recharts and framer a
+          +ppear nowhere in                                              
+      258 +      the built output because webpack already drops them. Rem
+          +oving them buys                                               
+      259 +      install time and audit surface only — not bundle size. L
+          +ow priority, and                                              
+      260 +      `package.json` is architect-frozen.                     
+      261  
+      262  **K4 — Regressions to decide on**
+      263  - [ ] Sign-in gate removed with the AlphaPod teardown (`3f339d
+           5`). `isAuthenticated`
+
+  Pushed to main, ran 3 shell commands (ctrl+o to expand)
+
+● Everything I could fix is fixed and pushed — 17 commits now on your main
+  branch.
+
+  Fixed this pass: the server-won't-start syntax error (all 593 backend files
+  now compile on the Python version you ship); code-quality checks clean across
+  the whole backend; a second hidden blocker — your dependency lock file was 
+  missing an entry your code imports, so the automated install would have died 
+  before tests even ran; Steal Three is now reachable from the sidebar;
+  Tidehunter Pro's menu icon was silently broken and now renders; two dead
+  modules deleted that could never load; and the toxicity-label bug is properly
+  fixed at the root.
+
+  That last one is worth a word: the label at the 0.30 boundary was being
+  decided on the raw number while a rounded number was shown to you — so the
+  same input read "0.3 LOW" on one machine and "0.3 MODERATE" on another. Both
+  now agree. Earlier I wrongly removed its skip tag, reverted, then fixed the
+  actual cause — so the tag is legitimately gone and that test guards you now.
+
+  Correction: those 48 unused packages do not bloat your bundle. I checked the
+  built output — the 1.38 MB is plotly and d3, both genuinely used. The unused
+  ones never make it into the build. Not worth touching a frozen file for.
+
+  Frontend is 283 tests passing, up from 280 — I added three that would have
+  caught the unreachable-page and broken-icon bugs.
+
+  1. Click enable in the Actions tab — I pushed and confirmed zero runs still
+     fired. Nothing checks your code until you do this. I tried the API; the
+     write was blocked.
+  2. Delete the stale Python environment (backend/.venv313) — it drifted off
+     your pinned versions and invents four fake test failures.
+  3. Decide the sign-in question — genuinely your call, not a defect; I left it
+     alone.
+
+  Radar: two sessions were editing the same files and we independently wrote the
+  identical toxicity fix seconds apart. Nothing was lost this time. Consider
+  running one session per project.
+
+✻ Churned for 15m 8s · done 5:29 AM
+
+※ recap: You asked me to compare the old floww folder against FLOWW2.0, then fix everything found. All 17 fixes are done and pushed. Next: click enable in your GitHub Actions tab, since checks have never run on this fork.

@@ -1,0 +1,315 @@
+bringing up nodes...
+bringing up nodes...
+
+........................................................................ [  1%]
+........................................................................ [  3%]
+.............................................F.......................... [  4%]
+....................ssss................................................ [  6%]
+.....................s...............s..x............s..F............s.F [  7%]
+.............s......F........s..........s.....s...............s......... [  9%]
+.s.....s..........s.....s........F.s.....s.......F.......s.............. [ 10%]
+.s..............s...............s.......F.......s......F.......s........ [ 12%]
+.......s.............s...............s..F.....F......s..F.....F......s.. [ 13%]
+.F...............................F.............F.......................F [ 15%]
+........................................................................ [ 17%]
+F....................................................................... [ 18%]
+........................................................................ [ 20%]
+.......................................F......................F......... [ 21%]
+...........................................F............................ [ 23%]
+.F............................F............................F.F.......... [ 24%]
+......F..........F.F............F.F................F.........F.F........ [ 26%]
+........................................................................ [ 27%]
+........................................................................ [ 29%]
+........................................................................ [ 31%]
+........................................................................ [ 32%]
+........................................................................ [ 34%]
+........................................................................ [ 35%]
+........................................................................ [ 37%]
+........................................................................ [ 38%]
+........................................................................ [ 40%]
+........................................................................ [ 41%]
+........................................................................ [ 43%]
+......................F................................................. [ 45%]
+........................................................................ [ 46%]
+........................................................................ [ 48%]
+........................................................................ [ 49%]
+........................................................................ [ 51%]
+........................................................................ [ 52%]
+........................................................................ [ 54%]
+........................................................................ [ 55%]
+..........................................................s............. [ 57%]
+.................................s...............s...................... [ 58%]
+.F.............F.....................F.................................. [ 60%]
+................F..............F..............F.............F........... [ 62%]
+..F..............F..............F..............F....................F... [ 63%]
+........................................................................ [ 65%]
+........................................................................ [ 66%]
+........................................................................ [ 68%]
+..............F......................................................... [ 69%]
+..............................................F....................F.... [ 71%]
+......................F......sss.............F.......................... [ 72%]
+..........................................F...................F......... [ 74%]
+..............................................................s......... [ 76%]
+........................................................................ [ 77%]
+..............................................................ssssssss.. [ 79%]
+........................................................................ [ 80%]
+.ssss....................ssss........................................... [ 82%]
+.........s...............s..............s...F........................... [ 83%]
+........................................................................ [ 85%]
+........................................................................ [ 86%]
+........................................................................ [ 88%]
+.....................................................................sss [ 90%]
+ss..................F................................................... [ 91%]
+.....................................F.....s......s.......s......s...... [ 93%]
+.s...F...........................................F...................... [ 94%]
+.....................F.....F...F...................F........FF.......... [ 96%]
+.........F........F..........................F..................F....F.. [ 97%]
+................................................FFFFFF..........F....... [ 99%]
+...............................                                          [100%]
+============================== warnings summary ===============================
+server.py:2520: 17 warnings
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\server.py:2520: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+.venv313\Lib\site-packages\fastapi\applications.py:4601: 119 warnings
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\.venv313\Lib\site-packages\fastapi\applications.py:4601: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+server.py:2551: 17 warnings
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\server.py:2551: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+routes\heatseeker_snapshots_api.py:101: 17 warnings
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\routes\heatseeker_snapshots_api.py:101: FastAPIDeprecationWarning: `regex` has been deprecated, please use `pattern` instead
+    type: str = Query(..., description="Option type: C or P", regex="^[CcPp]$"),
+
+server.py:2853: 17 warnings
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\server.py:2853: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+server.py:2862: 17 warnings
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\server.py:2862: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+server.py:2882: 17 warnings
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\server.py:2882: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+server.py:2909: 17 warnings
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\server.py:2909: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+server.py:2932: 17 warnings
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\server.py:2932: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+services\dash_ui.py:1028: 17 warnings
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\services\dash_ui.py:1028: StarletteDeprecationWarning: starlette.middleware.wsgi is deprecated and will be removed in a future release. Please refer to https://github.com/abersheeran/a2wsgi as a replacement.
+    from starlette.middleware.wsgi import WSGIMiddleware
+
+.venv313\Lib\site-packages\fastapi\testclient.py:1: 16 warnings
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\.venv313\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/chaos/test_chaos_runner.py::TestChaosRunner::test_run_scenario_not_found
+tests/chaos/test_chaos_runner.py::TestChaosRunner::test_run_scenario_dry_run
+tests/chaos/test_chaos_runner.py::TestChaosRunner::test_run_scenario_with_sleep
+tests/chaos/test_chaos_runner.py::TestChaosRunner::test_run_scenario_critical_step_fails
+tests/chaos/test_chaos_runner.py::TestChaosRunner::test_result_tracking
+tests/chaos/test_chaos_runner.py::TestChaosRunner::test_scenario_with_multiple_steps
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\tests\chaos\chaos_runner.py:78: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    start = datetime.datetime.utcnow().isoformat()
+
+tests/chaos/test_chaos_runner.py::TestChaosRunner::test_run_scenario_not_found
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\tests\chaos\chaos_runner.py:88: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    end_time=datetime.datetime.utcnow().isoformat(),
+
+tests/services/ml/test_inference.py: 2 warnings
+tests/services/ml/test_ml_integration.py: 28 warnings
+tests/services/ml/test_outcome_tracking.py: 1 warning
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\.venv313\Lib\site-packages\sklearn\base.py:525: InconsistentVersionWarning: sklearn.exceptions.InconsistentVersionWarning: Trying to unpickle estimator DecisionTreeClassifier from version 1.8.0 when using version 1.9.0. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+  https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+    warnings.warn(
+
+tests/services/ml/test_inference.py: 2 warnings
+tests/services/ml/test_ml_integration.py: 28 warnings
+tests/services/ml/test_outcome_tracking.py: 1 warning
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\.venv313\Lib\site-packages\sklearn\base.py:525: InconsistentVersionWarning: sklearn.exceptions.InconsistentVersionWarning: Trying to unpickle estimator RandomForestClassifier from version 1.8.0 when using version 1.9.0. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+  https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+    warnings.warn(
+
+tests/chaos/test_chaos_runner.py::TestChaosRunner::test_run_scenario_dry_run
+tests/chaos/test_chaos_runner.py::TestChaosRunner::test_run_scenario_with_sleep
+tests/chaos/test_chaos_runner.py::TestChaosRunner::test_run_scenario_critical_step_fails
+tests/chaos/test_chaos_runner.py::TestChaosRunner::test_result_tracking
+tests/chaos/test_chaos_runner.py::TestChaosRunner::test_scenario_with_multiple_steps
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\tests\chaos\chaos_runner.py:149: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    end_time=datetime.datetime.utcnow().isoformat(),
+
+tests/services/ml/test_ml_integration.py: 16 warnings
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\.venv313\Lib\site-packages\sklearn\base.py:525: InconsistentVersionWarning: sklearn.exceptions.InconsistentVersionWarning: Trying to unpickle estimator LogisticRegression from version 1.8.0 when using version 1.9.0. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+  https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+    warnings.warn(
+
+tests/services/ml/test_outcome_tracking.py::test_batch_record
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\.venv313\Lib\site-packages\sklearn\base.py:525: InconsistentVersionWarning: sklearn.exceptions.InconsistentVersionWarning: Trying to unpickle estimator StandardScaler from version 1.8.0 when using version 1.9.0. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+  https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+    warnings.warn(
+
+tests/services/test_hawkes_process.py::TestIntensity::test_vectorized_intensity
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\.venv313\Lib\site-packages\anyio\_backends\_asyncio.py:830: RuntimeWarning: coroutine 'test_timeout_handling.<locals>._slow' was never awaited
+    def _spawn(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/services/test_insider_scraper.py::test_parse_date_short_form_uses_anchor_year
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\services\insider_scraper.py:210: DeprecationWarning: Parsing dates involving a day of month without a year specified is ambiguious
+  and fails to parse leap day. The default behavior will change in Python 3.15
+  to either always raise an exception or to use a different default year (TBD).
+  To avoid trouble, add a specific year to the input & format.
+  See https://github.com/python/cpython/issues/70647.
+    parsed = datetime.strptime(s, "%b %d").date()
+
+tests/services/test_ml_ensemble.py::TestPlattScaler::test_fit_separates_clear_anomalies
+tests/services/test_ml_ensemble.py::TestToxicityEnsemble::test_calibrate
+tests/services/test_toxicity_ensemble_contract.py::TestPlattScalerContract::test_output_in_unit_interval_after_fit
+tests/services/test_toxicity_ensemble_contract.py::TestPlattScalerContract::test_monotonic_after_fit
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\services\ml_ensemble.py:45: RuntimeWarning: overflow encountered in exp
+    probs = 1.0 / (1.0 + np.exp(A * scores + B))
+
+tests/services/test_ml_ensemble.py::TestPlattScaler::test_fit_separates_clear_anomalies
+tests/services/test_toxicity_ensemble_contract.py::TestPlattScalerContract::test_output_in_unit_interval_after_fit
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\services\ml_ensemble.py:64: RuntimeWarning: overflow encountered in exp
+    return 1.0 / (1.0 + np.exp(self.A * scores + self.B))
+
+tests/test_new_features.py::test_gex_snapshot_schema
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\data\repositories.py:23: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class GexSnapshot(BaseModel):
+
+tests/test_new_features.py::test_gex_snapshot_schema
+  C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\data\repositories.py:55: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class AlertHistory(BaseModel):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/routes/test_steal_three_routes.py::test_regime_persistence_route_present
+FAILED tests/routes/test_llm_endpoints.py::test_llm_analyze_trade_returns_200_or_503
+FAILED tests/routes/test_llm_endpoints.py::test_llm_generate_briefing_returns_200_or_503
+FAILED tests/services/ml/test_ml_integration.py::test_model_loads_with_joblib[IWM_rf_production.joblib]
+FAILED tests/services/ml/test_ml_integration.py::test_manifest_feature_count_matches_model[IWM_rf_production.joblib]
+FAILED tests/services/ml/test_ml_integration.py::test_model_loads_with_joblib[QQQ_rf_production.joblib]
+FAILED tests/services/ml/test_ml_integration.py::test_model_loads_with_joblib[SPY_rf_production.joblib]
+FAILED tests/services/ml/test_ml_integration.py::test_manifest_feature_count_matches_model[QQQ_rf_production.joblib]
+FAILED tests/services/memory/test_chart_embeddings.py::TestChartEmbeddingIndex::test_search_returns_results
+FAILED tests/services/ml/test_ml_integration.py::test_manifest_feature_count_matches_model[SPY_rf_production.joblib]
+FAILED tests/services/memory/test_chart_embeddings.py::TestChartEmbeddingIndex::test_search_result_structure
+FAILED tests/services/ml/test_ml_integration.py::test_model_loads_with_joblib[TLT_rf_production.joblib]
+FAILED tests/services/memory/test_chart_embeddings.py::TestChartEmbeddingIndex::test_search_top_k_limits
+FAILED tests/services/memory/test_chart_embeddings.py::TestChartEmbeddingIndex::test_search_scores_are_floats
+FAILED tests/services/memory/test_chart_embeddings.py::TestChartEmbeddingIndex::test_search_with_zero_norm_embedding
+FAILED tests/services/ml/test_ml_integration.py::test_manifest_feature_count_matches_model[TLT_rf_production.joblib]
+FAILED tests/routes/test_public_api_bars_routes.py::test_public_router_exposes_no_order_endpoint
+FAILED tests/services/ml/test_outcome_tracking.py::test_record_prediction - a...
+FAILED tests/routes/test_health.py::test_all_healthy - AssertionError: assert...
+FAILED tests/services/ml/test_outcome_tracking.py::test_batch_record - assert...
+FAILED tests/services/ml/test_outcome_tracking.py::test_accuracy_empty - pymo...
+FAILED tests/services/ml/test_outcome_tracking.py::test_recent_predictions - ...
+FAILED tests/services/ml/test_outcome_tracking.py::test_compute_outcomes - py...
+FAILED tests/services/test_autoformer_inference.py::TestAutoformerInference::test_inference_latency_under_20ms
+FAILED tests/services/test_autoformer_inference.py::TestAutoformerInference::test_different_n_strikes
+FAILED tests/routes/test_steal_three_routes.py::test_router_exports_expected_paths
+FAILED tests/services/test_autoformer_inference.py::TestAutoformerInference::test_forecast_not_nan
+FAILED tests/routes/test_steal_three_routes.py::test_router_exposes_get_methods_on_all_three_endpoints
+FAILED tests/services/test_autoformer_inference.py::TestAutoformerInference::test_model_parameter_count
+FAILED tests/services/test_autoformer_inference.py::TestAutoformerInference::test_batch_size_invariance
+FAILED tests/services/ml/test_outcome_tracking.py::test_record_all_tickers - ...
+FAILED tests/routes/test_steal_three_routes.py::test_sidecar_can_mount_router_without_collisions
+FAILED tests/services/test_microstructure_math.py::TestAnomalyDetector::test_flow_detector_warmup_then_active
+FAILED tests/services/test_autoformer_inference.py::TestAutoformerInference::test_forecast_shape
+FAILED tests/services/test_autoformer_inference.py::TestAutoformerInference::test_forecast_deterministic
+FAILED tests/services/test_regime_thresholds.py::TestFlowAnomalyDetectorWithRegime::test_regime_in_update_result
+FAILED tests/services/test_patchtst_inference.py::TestPatchTSTInference::test_model_loads_from_checkpoint
+FAILED tests/services/test_patchtst_inference.py::TestPatchTSTInference::test_forecast_shape
+FAILED tests/services/test_patchtst_inference.py::TestPatchTSTInference::test_forecast_deterministic
+FAILED tests/services/test_patchtst_inference.py::TestPatchTSTInference::test_inference_latency_under_20ms
+FAILED tests/services/test_patchtst_inference.py::TestPatchTSTInference::test_beats_persistence_baseline
+FAILED tests/services/test_patchtst_inference.py::TestPatchTSTInference::test_different_batch_sizes
+FAILED tests/services/test_patchtst_inference.py::TestPatchTSTInference::test_forecast_values_in_reasonable_range
+FAILED tests/services/test_patchtst_inference.py::TestPatchTSTInference::test_model_parameter_count
+FAILED tests/services/test_ml_pipeline.py::TestModelRegistry::test_registry_collection_accessible
+FAILED tests/services/test_ml_pipeline.py::TestModelRegistry::test_registered_model_metadata
+FAILED tests/services/test_server_cors_wiring.py::TestRedacted500CountMetric::test_redacted_500_count_increments_when_prod_handler_fires
+FAILED tests/services/test_server_cors_wiring.py::TestLocalDevFallthrough::test_default_no_env_vars_set_does_not_raise
+FAILED tests/services/test_server_cors_wiring.py::TestLocalDevFallthrough::test_explicit_development_env_does_not_raise
+FAILED tests/services/test_server_cors_wiring.py::TestLocalDevFallthrough::test_dev_cors_origins_resolves_to_wildcard
+FAILED tests/services/test_ml_realtime_features.py::TestGexFeatureHandpin::test_compute_gex_features_kurtosis_scipy_crosscheck
+FAILED tests/services/test_server_p1_wiring.py::TestServerP1ImportDoesNotCrash::test_server_module_imports_successfully_with_mongo_url_unset
+FAILED tests/services/test_server_cors_wiring.py::TestGlobalExceptionHandlerPayloadRedaction::test_500_payload_in_prod_does_not_carry_a_traceback_or_full_exc_message
+FAILED tests/test_heatseeker_v2.py::test_heatmap_spy_day_grid - AssertionErro...
+FAILED tests/test_heatseeker_v2.py::test_heatmap_swing_more_expiries_wider_band
+FAILED tests/test_heatseeker_v2.py::test_heatmap_spx_via_spxw - assert 0 > 0
+FAILED tests/test_heatseeker_v2.py::test_heatmap_qqq_grid - KeyError: 'strikes'
+FAILED tests/test_heatseeker_v2.py::test_trinity_day_all_populated - Failed: ...
+FAILED tests/test_portfolio.py::test_portfolio_add_position - pymongo.errors....
+FAILED tests/test_portfolio.py::test_portfolio_get - pymongo.errors.ServerSel...
+FAILED tests/test_heatseeker_v2.py::test_contract_drilldown_spy - KeyError: '...
+FAILED tests/test_portfolio.py::test_portfolio_scenario - pymongo.errors.Serv...
+FAILED tests/test_portfolio.py::test_live_policy_update - pymongo.errors.Serv...
+FAILED tests/test_heatseeker_v2.py::test_databento_usage - pymongo.errors.Ser...
+FAILED tests/test_portfolio.py::test_portfolio_hedge - pymongo.errors.ServerS...
+FAILED tests/test_portfolio.py::test_portfolio_remove_position - pymongo.erro...
+FAILED tests/test_heatseeker_v2.py::test_databento_oi_collection_populated - ...
+FAILED tests/test_portfolio.py::test_portfolio_not_found - pymongo.errors.Ser...
+FAILED tests/test_v3_costsave.py::test_databento_usage_v3_shape - pymongo.err...
+FAILED tests/test_v3_costsave.py::test_live_policy_set_spy_qqq - pymongo.erro...
+FAILED tests/test_v3_costsave.py::test_live_policy_revert_spy_only - pymongo....
+FAILED tests/test_v3_costsave.py::test_heatmap_spy_data_source_databento - py...
+FAILED tests/test_v3_costsave.py::test_heatmap_qqq_free_tier_yfinance - pymon...
+FAILED tests/test_v3_costsave.py::test_flow_qqq_refused_not_in_paid_tickers
+FAILED tests/test_v3_costsave.py::test_heatmap_spx_free_tier_yfinance - Asser...
+75 failed, 4497 passed, 71 skipped, 1 xfailed, 389 warnings in 618.87s (0:10:18)
+{"timestamp": "2026-09-04T07:19:58.393017+00:00", "level": "WARNING", "message": "AgentField hub import failed (non-fatal, feature disabled): No module named 'agentfield'", "module": "server", "function": "<module>", "line": 2831}
+{"timestamp": "2026-09-04T07:19:58.393211+00:00", "level": "WARNING", "message": "AgentField REST routes (/api/agentfield/*) disabled \u2014 package unavailable", "module": "server", "function": "<module>", "line": 2849}
+{"timestamp": "2026-09-04T07:19:58.492885+00:00", "level": "INFO", "message": "Dash UI mounted at /dashboard/", "module": "dash_ui", "function": "create_dash_app", "line": 1633}
+{"timestamp": "2026-09-04T07:19:58.493042+00:00", "level": "INFO", "message": "Dash UI mounted at /dashboard/", "module": "server", "function": "<module>", "line": 3001}
+EXIT=1

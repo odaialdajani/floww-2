@@ -1,0 +1,263 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: Δ
+      - generic [ref=e8]: MERIDIAN
+      - button "Collapse sidebar" [expanded] [ref=e9] [cursor=pointer]
+    - navigation [ref=e12]:
+      - generic [ref=e13]:
+        - button "Decoder" [ref=e14]
+        - button "Solstice" [ref=e15] [cursor=pointer]
+        - button "Triad" [ref=e23] [cursor=pointer]
+        - button "Zenith" [ref=e30] [cursor=pointer]
+        - button "Tidehunter Pro" [ref=e35] [cursor=pointer]
+      - generic [ref=e40]:
+        - button "Trading" [ref=e41]
+        - button "Portfolio" [ref=e42] [cursor=pointer]
+        - button "Journal" [ref=e48] [cursor=pointer]
+  - main [ref=e52]:
+    - generic [ref=e53]:
+      - generic [ref=e55]:
+        - generic [ref=e56]:
+          - generic [ref=e57]: Decoder
+          - generic [ref=e60]: Solstice
+        - generic [ref=e61]:
+          - generic "Live" [ref=e62]
+          - button "Sign out" [ref=e65] [cursor=pointer]
+      - generic [ref=e69]:
+        - complementary [ref=e70]:
+          - generic [ref=e71]:
+            - generic [ref=e72]:
+              - generic [ref=e73]:
+                - generic [ref=e74]: SPY
+                - generic [ref=e75]: — γ
+              - generic [ref=e76]: $—
+              - generic [ref=e79]:
+                - generic [ref=e80]:
+                  - generic [ref=e81]: King
+                  - generic [ref=e82]: —
+                - generic [ref=e83]:
+                  - generic [ref=e84]: "|GEX|"
+                  - generic [ref=e85]: —
+                - generic [ref=e86]:
+                  - generic [ref=e87]: Top Floor
+                  - generic [ref=e88]: —
+                - generic [ref=e89]:
+                  - generic [ref=e90]: Top Ceiling
+                  - generic [ref=e91]: —
+                - generic [ref=e92]:
+                  - generic [ref=e93]: Polarity
+                  - generic [ref=e94]: —
+                - generic [ref=e95]:
+                  - generic [ref=e96]: Gatekeepers
+                  - generic [ref=e97]: "0"
+              - generic [ref=e99]: ○ Disconnected
+            - generic [ref=e101]:
+              - generic [ref=e102]: View
+              - generic [ref=e103]:
+                - button "2D Grid" [ref=e104] [cursor=pointer]
+                - button "Bars" [ref=e105] [cursor=pointer]
+                - button "Chain" [ref=e106] [cursor=pointer]
+              - generic [ref=e107]:
+                - button "Multi" [ref=e108] [cursor=pointer]
+                - button "Profile" [ref=e109] [cursor=pointer]
+              - generic [ref=e110]: Mode
+              - generic [ref=e111]:
+                - button "DAY" [ref=e112] [cursor=pointer]
+                - button "SWING" [ref=e113] [cursor=pointer]
+                - button "SCALP" [ref=e114] [cursor=pointer]
+              - generic [ref=e115]:
+                - button "GEX" [ref=e116] [cursor=pointer]
+                - button "VEX" [ref=e117] [cursor=pointer]
+                - button "CHARM" [ref=e118] [cursor=pointer]
+              - generic [ref=e119]: DTE
+              - generic [ref=e120]:
+                - button "0DTE" [ref=e121] [cursor=pointer]
+                - button "1DTE" [ref=e122] [cursor=pointer]
+                - button "Week" [ref=e123] [cursor=pointer]
+                - button "All" [ref=e124] [cursor=pointer]
+              - generic [ref=e125]: Expiries
+              - generic [ref=e126]:
+                - button "2" [ref=e127] [cursor=pointer]
+                - button "4" [ref=e128] [cursor=pointer]
+                - button "6" [ref=e129] [cursor=pointer]
+                - button "8" [ref=e130] [cursor=pointer]
+                - button "12" [ref=e131] [cursor=pointer]
+            - generic [ref=e132]:
+              - generic [ref=e133]: Top Movers (prev session %)
+              - generic [ref=e134]: …
+            - button "History ▸" [ref=e137] [cursor=pointer]:
+              - generic [ref=e138]: History
+              - generic [ref=e139]: ▸
+            - button "Settings ▸" [ref=e141] [cursor=pointer]:
+              - generic [ref=e142]: Settings
+              - generic [ref=e143]: ▸
+        - main [ref=e144]:
+          - generic [ref=e145]:
+            - generic [ref=e148]:
+              - generic [ref=e149]: All Tickers 703
+              - generic [ref=e150]: "|"
+              - button "SPY" [ref=e151] [cursor=pointer]
+              - button "QQQ" [ref=e152] [cursor=pointer]
+              - button "IWM" [ref=e153] [cursor=pointer]
+              - button "DIA" [ref=e154] [cursor=pointer]
+              - button "AAPL" [ref=e155] [cursor=pointer]
+              - button "NVDA" [ref=e156] [cursor=pointer]
+              - button "TSLA" [ref=e157] [cursor=pointer]
+              - button "META" [ref=e158] [cursor=pointer]
+              - button "AMZN" [ref=e159] [cursor=pointer]
+              - button "MSFT" [ref=e160] [cursor=pointer]
+              - button "AMD" [ref=e161] [cursor=pointer]
+              - button "GOOGL" [ref=e162] [cursor=pointer]
+              - button "RIVN" [ref=e163] [cursor=pointer]
+              - button "RBLX" [ref=e164] [cursor=pointer]
+              - button "HIMS" [ref=e165] [cursor=pointer]
+              - button "IREN" [ref=e166] [cursor=pointer]
+              - button "MU" [ref=e167] [cursor=pointer]
+              - button "NOW" [ref=e168] [cursor=pointer]
+              - button "OSCR" [ref=e169] [cursor=pointer]
+              - button "PATH" [ref=e170] [cursor=pointer]
+              - button "UPS" [ref=e171] [cursor=pointer]
+              - button "ZETA" [ref=e172] [cursor=pointer]
+              - button "SPXW" [ref=e173] [cursor=pointer]
+            - generic [ref=e174]:
+              - generic [ref=e175]:
+                - button "GEX" [ref=e176] [cursor=pointer]
+                - button "VEX" [ref=e179] [cursor=pointer]
+                - button "Info" [ref=e182] [cursor=pointer]
+              - generic [ref=e185]:
+                - button "Previous ticker" [ref=e186] [cursor=pointer]
+                - generic [ref=e189]: SPY
+                - generic [ref=e191]: $—
+                - button "Next ticker" [ref=e193] [cursor=pointer]
+                - combobox [ref=e198] [cursor=pointer]:
+                  - option "Scalp · 1m"
+                  - option "Day · 5m" [selected]
+                  - option "Swing · 1h"
+                - combobox [ref=e200] [cursor=pointer]:
+                  - option "2 Exp"
+                  - option "4 Exp" [selected]
+                  - option "6 Exp"
+                  - option "8 Exp"
+                  - option "12 Exp"
+              - generic [ref=e201]:
+                - generic [ref=e202]: 22:28:31
+                - button "Refresh" [ref=e203] [cursor=pointer]
+                - button "Playback" [ref=e207] [cursor=pointer]
+                - button "View options" [ref=e210] [cursor=pointer]
+                - button "Share" [ref=e216] [cursor=pointer]
+            - button "Trade" [ref=e224] [cursor=pointer]
+            - generic [ref=e229]:
+              - generic [ref=e230]: No heatmap data available
+              - generic [ref=e234]:
+                - generic [ref=e235]: Neutral γ
+                - generic [ref=e238]:
+                  - generic [ref=e239]: Key Levels
+                  - generic [ref=e240]:
+                    - generic [ref=e241]: KING
+                    - generic [ref=e242]: —
+                  - generic [ref=e243]:
+                    - generic [ref=e244]: "|GEX|"
+                    - generic [ref=e245]: —
+                  - generic [ref=e246]:
+                    - generic [ref=e247]: Net GEX
+                    - generic [ref=e248]: —
+                  - generic [ref=e249]:
+                    - generic [ref=e250]: TOP FLOOR
+                    - generic [ref=e251]: —
+                  - generic [ref=e252]:
+                    - generic [ref=e253]: TOP CEILING
+                    - generic [ref=e254]: —
+                  - generic [ref=e255]:
+                    - generic [ref=e256]: Flip Point
+                    - generic [ref=e257]: —
+                - generic [ref=e258]:
+                  - generic [ref=e259]: Structure
+                  - generic [ref=e260]:
+                    - generic [ref=e261]: Polarity
+                    - generic [ref=e262]: —
+                  - generic [ref=e263]:
+                    - generic [ref=e264]: Gatekeepers
+                    - generic [ref=e265]: "0"
+                  - generic [ref=e266]:
+                    - generic [ref=e267]: Floors
+                    - generic [ref=e268]: "0"
+                  - generic [ref=e269]:
+                    - generic [ref=e270]: Ceilings
+                    - generic [ref=e271]: "0"
+            - generic [ref=e272]:
+              - generic [ref=e273]: "◆ Meridian & Velocity · #1 Dual-GEX · #5 IV-Mid · #3 Wheel income"
+              - generic [ref=e274]:
+                - generic [ref=e276]:
+                  - generic [ref=e277]: Dual-GEX · SPY
+                  - generic [ref=e278]: fetching…
+                - generic [ref=e280]:
+                  - generic [ref=e281]: IV-Mid · SPY
+                  - generic [ref=e282]: solving…
+                - generic [ref=e284]:
+                  - generic [ref=e285]: Max-Pain · SPY
+                  - generic [ref=e286]: computing…
+              - generic [ref=e287]:
+                - generic [ref=e288]:
+                  - generic [ref=e289]:
+                    - generic [ref=e290]: Wheel · SPY · Premium Income
+                    - generic [ref=e293]:
+                      - button "CSP" [ref=e294] [cursor=pointer]
+                      - button "CC" [ref=e295] [cursor=pointer]
+                  - generic [ref=e296]:
+                    - generic [ref=e297]:
+                      - generic [ref=e298]: Min IV
+                      - spinbutton "Min IV" [ref=e299]: "0"
+                    - generic [ref=e300]:
+                      - generic [ref=e301]: Min Vol
+                      - spinbutton "Min Vol" [ref=e302]: "10"
+                    - generic [ref=e303]:
+                      - generic [ref=e304]: Min DTE
+                      - spinbutton "Min DTE" [ref=e305]: "7"
+                    - generic [ref=e306]:
+                      - generic [ref=e307]: Max DTE
+                      - spinbutton "Max DTE" [ref=e308]: "45"
+                    - generic [ref=e309]:
+                      - generic [ref=e310]: Top N
+                      - spinbutton "Top N" [ref=e311]: "25"
+                  - table [ref=e313]:
+                    - rowgroup [ref=e314]:
+                      - row [ref=e315]:
+                        - columnheader "Strike" [ref=e316]
+                        - columnheader "DTE" [ref=e317]
+                        - columnheader "Mid" [ref=e318]
+                        - columnheader "IV" [ref=e319]
+                        - columnheader "Vol" [ref=e320]
+                        - columnheader "BE ↓%" [ref=e321]
+                        - columnheader "ARR %" [ref=e322]
+                    - rowgroup [ref=e323]:
+                      - row [ref=e324]:
+                        - cell "fetching…" [ref=e325]
+                - generic [ref=e327]:
+                  - generic [ref=e328]: Strike Cone · SPY
+                  - generic [ref=e329]: solving…
+                - generic [ref=e331]:
+                  - generic [ref=e332]: Opportunity · SPY
+                  - generic [ref=e333]: scoring…
+              - generic [ref=e335]:
+                - generic [ref=e336]:
+                  - generic [ref=e337]:
+                    - heading "Max-Pain Drift · Per-Expiry" [level=4] [ref=e339]
+                    - generic [ref=e340]: 30d window
+                  - generic [ref=e341]: SPY
+                - generic [ref=e342]: Loading per-expiry history…
+              - generic [ref=e343]: Catalyst Pulse · SPY
+              - generic [ref=e353]:
+                - generic [ref=e354]: Rnd Density · SPY
+                - generic [ref=e355]: solving Breeden-Litzenberger…
+            - generic [ref=e356]:
+              - generic [ref=e357]:
+                - generic [ref=e358]: SPY
+                - generic [ref=e359]: $—
+              - generic [ref=e360]:
+                - button "GEX" [ref=e361] [cursor=pointer]
+                - button "VEX" [ref=e364] [cursor=pointer]
+      - generic [ref=e367]:
+        - generic [ref=e368]: "Data: CVForge cvserver · Databento OPRA · yfinance · Polygon · GEX via Black-Scholes γ"
+        - generic [ref=e369]: "Keys: 1/2/3 pages · G/B/C views · D/S/X modes · E/V/H overlays · ↑↓ tickers · ? shortcuts"
+        - generic [ref=e370]: Meridian · Institutional Grade · 2026
