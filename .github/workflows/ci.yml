@@ -18,6 +18,13 @@ permissions:
 jobs:
   backend-tests:
     runs-on: ubuntu-latest
+    # Hard ceiling so this job can never again eat GitHub's default 6-hour limit.
+    # On 2026-09-04 the first run ever to execute did exactly that and was killed,
+    # taking docker-build and the deploy gate down with it (both "skipped"), so a
+    # whole day produced no backend signal at all. Failing at 45 minutes tells us
+    # something is wrong in 45 minutes. pytest-timeout (see backend/pytest.ini)
+    # should fire first and name the offending test; this is the backstop.
+    timeout-minutes: 45
     services:
       mongo:
         image: mongo:7
@@ -66,7 +73,9 @@ jobs:
           source .venv/bin/activate
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio httpx pytest-cov bandit
+          # pytest-timeout is not optional here — it is what turns a hung test
+          # into a named failure instead of a 6-hour stall (see backend/pytest.ini).
+          pip install pytest pytest-asyncio httpx pytest-cov bandit pytest-timeout
 
       - name: Lint with ruff
         working-directory: ./backend

@@ -42,6 +42,9 @@ pyjwt>=2.10.1
 tzdata>=2024.2
 motor==3.3.1
 pytest>=8.0.0
+# Enforces the per-test ceiling in pytest.ini. Without it pytest silently ignores
+# the `timeout` setting, and a hung test stalls the whole run instead of failing.
+pytest-timeout>=2.3.1
 black>=24.1.1
 isort>=5.13.2
 flake8>=7.0.0

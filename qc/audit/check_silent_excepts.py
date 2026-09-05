@@ -219,14 +219,24 @@ def main() -> int:
         return 1
 
     offenders: list[tuple[str, int, str, str]] = []
+    unparseable: list[str] = []
     for path in targets:
         rel = path.relative_to(REPO_ROOT).as_posix()
         try:
             for line_no, src, reason in check_file(path, rel):
                 offenders.append((rel, line_no, src, reason))
         except SyntaxError as exc:
-            print(f"{rel}:{exc.lineno}: SyntaxError - cannot audit ({exc.msg})")
-            return 1
+            # Record and KEEP GOING. Returning here abandoned every file later in
+            # scan order, so a single unparseable module could hide any number of
+            # real offenders behind it while the gate still reported a reason to
+            # fail — the wrong one. Collect them all, report both lists, fail once.
+            unparseable.append(f"{rel}:{exc.lineno}: SyntaxError - cannot audit ({exc.msg})")
+
+    if unparseable:
+        print("UNPARSEABLE - these files could not be audited at all:")
+        for line in unparseable:
+            print(f"  {line}")
+        print()
 
     if offenders:
         print("SILENT EXCEPT (unjustified) - add a `# silent by design: <reason>` comment:")
@@ -235,6 +245,15 @@ def main() -> int:
         print(
             f"\n{len(offenders)} unjustified silent handler site(s) "
             f"across {len(targets)} scanned file(s)."
+        )
+        return 1
+
+    if unparseable:
+        # Nothing unjustified was FOUND, but coverage was incomplete — that is not
+        # a pass. A file we could not read cannot be vouched for.
+        print(
+            f"INCOMPLETE - {len(unparseable)} of {len(targets)} file(s) could not be "
+            f"parsed, so this run does NOT clear them. Fix the syntax and re-run."
         )
         return 1
 

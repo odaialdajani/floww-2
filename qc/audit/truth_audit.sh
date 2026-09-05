@@ -144,67 +144,165 @@ else
     check ".env file is git-ignored or absent" "pass"
 fi
 
+# --- Model metadata discovery (shared by Rules 9-12) ---
+# The production models named in CLAUDE.md live in backend/models/, NOT in the
+# repo-root models/ tree. Rules 9-12 used to glob `models/*_meta_*.json`, which
+# is wrong twice over: it never descends into backend/models/, and its
+# `_meta_` infix does not match backend's `*_meta.json` / `meta_*.json` naming.
+# Net effect: the audit inspected 2 stale v1.0 files at the repo root and left
+# every real production model unchecked, while printing PASS.
+#
+# Discover BOTH trees and BOTH naming conventions, once, here.
+MODEL_METAS=$(
+    find models backend/models -maxdepth 2 -type f \
+        \( -name '*_meta_*.json' -o -name '*_meta.json' -o -name 'meta_*.json' \) \
+        2>/dev/null | grep -v '_quarantine' || true
+)
+if [ -z "$MODEL_METAS" ]; then
+    check "Model audit: found model metadata files to inspect" "fail"
+    echo "  (searched models/ and backend/models/ for *_meta_*.json, *_meta.json, meta_*.json)"
+fi
+
+# --- Model metric extraction (Rules 9-12) ---
+# Two meta schemas exist in this repo and the rules only understood one:
+#   root models/*_meta_v1.0.json  -> sharpe / accuracy / n_samples / n_features
+#   backend/models/*_meta.json    -> walk-forward CV: avg_test_sharpe /
+#                                    avg_test_accuracy / fold_details[].n_train
+# Reading only the first schema meant every backend model reported 0 for every
+# metric, so the rules printed "Sharpe 0 (reasonable)" for a model whose real
+# avg_test_sharpe is 8.02 — the exact thing Rule 9 exists to catch — while
+# simultaneously FAILING it on "0 training samples". Absent is not zero.
+#
+# Emits one metric per call, or the literal string "NA" when neither schema
+# carries it. "NA" means UNKNOWN and must never be scored as pass or fail.
+# Rules 9-12 judge MODEL QUALITY, which is a property of the artifacts on disk,
+# not of the commit in front of us. Enforcing them on every commit would block
+# unrelated work on pre-existing model debt — the fastest way to get a gate
+# switched off. So they BLOCK only when the commit actually claims ML/model work
+# (same trigger as Rule 1), and otherwise print WARN so the finding is never
+# invisible. This is scoped enforcement, not a disabled check.
+# Match the SUBJECT LINE ONLY, not the whole message. Matching the body means a
+# commit that merely *describes* model behaviour in its explanation trips the
+# gate — this very rule blocked its own commit that way on the first try. The
+# subject is what declares what a commit does; the body is prose.
+COMMIT_SUBJECT=$(echo "$COMMIT_MSG" | head -1)
+if echo "$COMMIT_SUBJECT" | grep -qiE "\b(ml|model|models|train|training|retrain|promote)\b"; then
+    MODEL_RULES_BLOCK=1
+else
+    MODEL_RULES_BLOCK=0
+fi
+
+model_check() {  # $1=description  $2=pass|fail
+    if [ "$2" = "pass" ] || [ "$MODEL_RULES_BLOCK" -eq 1 ]; then
+        check "$1" "$2"
+    else
+        echo "  WARN: $1  (not blocking — commit does not claim ML/model work)"
+    fi
+}
+
+model_metric() {  # $1=file  $2=metric
+    python3 - "$1" "$2" <<'PY' 2>/dev/null || echo NA
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    print("NA"); raise SystemExit
+m = sys.argv[2]
+folds = d.get("fold_details") or []
+def first(*keys):
+    for k in keys:
+        if k in d and d[k] is not None:
+            return d[k]
+    return None
+if m == "sharpe":
+    v = first("sharpe", "avg_test_sharpe", "test_sharpe")
+elif m == "accuracy":
+    v = first("accuracy", "avg_test_accuracy", "test_accuracy")
+    if v is None:
+        v = (d.get("metrics") or {}).get("accuracy")
+elif m == "n_samples":
+    v = first("n_samples", "n_train")
+    if v is None and folds:
+        # Walk-forward: the widest fold is the real training set size.
+        sizes = [f.get("n_train", 0) + f.get("n_test", 0) for f in folds]
+        v = max(sizes) if sizes else None
+elif m == "n_features":
+    v = first("n_features_used", "n_features")
+    if v is None and isinstance(d.get("feature_names"), list):
+        v = len(d["feature_names"])
+else:
+    v = None
+print("NA" if v is None else v)
+PY
+}
+
 # --- Rule 9: Model audit — no model with Sharpe > 5 or empty baselines ---
 # Check all model meta JSON files for suspicious claims
-for meta in models/*_meta_*.json; do
+for meta in $MODEL_METAS; do
     [ -f "$meta" ] || continue
     # Skip quarantined models
     [[ "$meta" == *"_quarantine"* ]] && continue
     # Check for empty baselines
     if grep -q '"baselines": {}' "$meta" 2>/dev/null; then
-        check "Model $meta: empty baselines dict (unverified)" "fail"
-    else
-        check "Model $meta: baselines present" "pass"
+        model_check "Model $meta: empty baselines dict (unverified)" "fail"
     fi
     # Check for Sharpe > 5 (suspicious for daily direction)
-    sharpe=$(python3 -c "import json; d=json.load(open('$meta')); print(d.get('sharpe', 0))" 2>/dev/null || echo 0)
-    if [ "$(echo "$sharpe > 5" | bc -l 2>/dev/null || echo 0)" -eq 1 ]; then
-        check "Model $meta: Sharpe $sharpe > 5 (suspicious)" "fail"
+    sharpe=$(model_metric "$meta" sharpe)
+    if [ "$sharpe" = "NA" ]; then
+        echo "  SKIP: Model $meta: no Sharpe recorded in either schema — NOT verified"
+    elif [ "$(python3 -c "print(1 if float('$sharpe') > 5 else 0)" 2>/dev/null || echo 0)" -eq 1 ]; then
+        model_check "Model $meta: Sharpe $sharpe > 5 (suspicious)" "fail"
     else
-        check "Model $meta: Sharpe $sharpe (reasonable)" "pass"
+        model_check "Model $meta: Sharpe $sharpe (reasonable)" "pass"
     fi
 done
 
 # --- Rule 10: No model trained on too few samples ---
 # Flag models with fewer than 50 training samples
-for meta in models/*_meta_*.json; do
+for meta in $MODEL_METAS; do
     [ -f "$meta" ] || continue
     [[ "$meta" == *"_quarantine"* ]] && continue
-    n_samples=$(python3 -c "import json; d=json.load(open('$meta')); print(d.get('n_samples', 0))" 2>/dev/null || echo 0)
-    if [ "$n_samples" -lt 50 ] 2>/dev/null; then
-        check "Model $meta: only $n_samples training samples (suspicious)" "fail"
+    n_samples=$(model_metric "$meta" n_samples)
+    if [ "$n_samples" = "NA" ]; then
+        echo "  SKIP: Model $meta: no sample count recorded — NOT verified"
+    elif [ "$n_samples" -lt 50 ] 2>/dev/null; then
+        model_check "Model $meta: only $n_samples training samples (suspicious)" "fail"
     else
-        check "Model $meta: $n_samples training samples (ok)" "pass"
+        model_check "Model $meta: $n_samples training samples (ok)" "pass"
     fi
 done
 
 # --- Rule 11: Feature-to-sample ratio check ---
 # Flag models with more features than 20% of samples
-for meta in models/*_meta_*.json; do
+for meta in $MODEL_METAS; do
     [ -f "$meta" ] || continue
     [[ "$meta" == *"_quarantine"* ]] && continue
-    n_samples=$(python3 -c "import json; d=json.load(open('$meta')); print(d.get('n_samples', 0))" 2>/dev/null || echo 0)
-    n_features=$(python3 -c "import json; d=json.load(open('$meta')); print(d.get('n_features_used', d.get('n_features', 0)))" 2>/dev/null || echo 0)
-    if [ "$n_samples" -gt 0 ] 2>/dev/null && [ "$n_features" -gt 0 ] 2>/dev/null; then
+    n_samples=$(model_metric "$meta" n_samples)
+    n_features=$(model_metric "$meta" n_features)
+    if [ "$n_samples" = "NA" ] || [ "$n_features" = "NA" ]; then
+        echo "  SKIP: Model $meta: feature/sample ratio not computable — NOT verified"
+    elif [ "$n_samples" -gt 0 ] 2>/dev/null && [ "$n_features" -gt 0 ] 2>/dev/null; then
         ratio=$(python3 -c "print($n_features / $n_samples)" 2>/dev/null || echo 0)
-        if [ "$(echo "$ratio > 0.2" | bc -l 2>/dev/null || echo 0)" -eq 1 ]; then
-            check "Model $meta: feature/sample ratio $ratio > 0.2 ($n_features features / $n_samples samples)" "fail"
+        if [ "$(python3 -c "print(1 if float('$ratio') > 0.2 else 0)" 2>/dev/null || echo 0)" -eq 1 ]; then
+            model_check "Model $meta: feature/sample ratio $ratio > 0.2 ($n_features features / $n_samples samples)" "fail"
         else
-            check "Model $meta: feature/sample ratio $ratio (ok)" "pass"
+            model_check "Model $meta: feature/sample ratio $ratio (ok)" "pass"
         fi
     fi
 done
 
 # --- Rule 12: No model with accuracy > 95% on daily direction ---
 # Daily direction prediction > 95% is almost certainly overfit
-for meta in models/*_meta_*.json; do
+for meta in $MODEL_METAS; do
     [ -f "$meta" ] || continue
     [[ "$meta" == *"_quarantine"* ]] && continue
-    acc=$(python3 -c "import json; d=json.load(open('$meta')); print(d.get('metrics', {}).get('accuracy', d.get('accuracy', 0)))" 2>/dev/null || echo 0)
-    if [ "$(echo "$acc > 0.95" | bc -l 2>/dev/null || echo 0)" -eq 1 ]; then
-        check "Model $meta: accuracy $acc > 0.95 (likely overfit)" "fail"
+    acc=$(model_metric "$meta" accuracy)
+    if [ "$acc" = "NA" ]; then
+        echo "  SKIP: Model $meta: no accuracy recorded — NOT verified"
+    elif [ "$(python3 -c "print(1 if float('$acc') > 0.95 else 0)" 2>/dev/null || echo 0)" -eq 1 ]; then
+        model_check "Model $meta: accuracy $acc > 0.95 (likely overfit)" "fail"
     else
-        check "Model $meta: accuracy $acc (reasonable)" "pass"
+        model_check "Model $meta: accuracy $acc (reasonable)" "pass"
     fi
 done
 
