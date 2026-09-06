@@ -1,20 +1,8 @@
 # STATE.md — Confluence Decoder
 
-**Last updated:** 2026-09-04
-**Branch:** `main` @ e94e841 (docs(phase9): sync stale HEAD refs + commit count to e94e841)
+**Last updated:** 2026-09-06
+**Branch:** `phase9/g1-reads-witness` @ 9d3057d (C4 doc-hygiene: corrected from stale main@e94e841)
 **Tests:** backend 3 passed, 20 warnings · frontend 56 suites / 409 tests · lane trio 4 suites / 178 tests · craco build clean
-**Lint:** ruff (E, E722, F, W, I; ignore E501)
-
-## Project position
-
-Deploy package hardened and ready: Oracle Always Free runbook
-(`deploy/free/README.md`), `oracle-setup.sh` + read-only deploy key
-`oracle-vm-deploy`, docker-compose stack behind Caddy. **Awaiting Nav's VM
-provisioning** — Phase 1 of ROADMAP.md starts the moment the VM exists.
-
-**Last updated:** 2026-09-04
-**Branch:** `main` @ e94e841 (docs(phase9): sync stale HEAD refs + commit count to e94e841)
-**Tests:** backend 3 passed, 20 warnings · frontend 56 suites / 409 tests · lane trio 4 suites / 178 tests
 **Lint:** ruff (E, E722, F, W, I; ignore E501)
 
 ## Project position

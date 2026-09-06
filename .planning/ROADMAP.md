@@ -141,7 +141,7 @@ add alert quality dashboard endpoint.
       `alerts/definitions/gex_alerts.yaml` (zero references repo-wide);
       there is no loader to validate against
 
-### 6.4 — Quant signal exposure [COMPLETE 2026-08-31]
+### 6.4 — Quant signal exposure [OPEN — boxes unchecked as of 2026-09-06; was marked COMPLETE]
 
 **Goal:** Expose available quant signals through a catalog endpoint. Much of the
 infrastructure exists (`signal_translator`, `flow_alerts`, `trading_signals`,
@@ -397,6 +397,7 @@ new `SkylitControlBar.test.jsx` (4) + `SkylitTickerBar.test.jsx` (3).
   CacheRouter (budget-refused + stale entry → stale with reason) + live
   429 sightings from the adapter. Status at `/api/data/health`
   → `public_budget`. Implements Agent 3's apply-blind packet verbatim.
+  Status note (2026-09-06): `backend/services/public_budget.py` is landed and wired (FetchCoordinator/CacheRouter) — "ENFORCED" above is the current state; the line-306 "proposal" wording is stale audit language.
 - 2026-09-04: Agent 2 active after relaunch (spread unify + drawer mount
   + ledger). scanLogic.js shared-hotspot warning issued (Agent 2 + 3).
 
