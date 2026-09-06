@@ -1,0 +1,40 @@
+{
+  "package_files_validated": 12,
+  "unique_task_packets": 24,
+  "source_paths": 248,
+  "unfinished_markers": 743,
+  "worktrees": [
+    {
+      "lane": "platform",
+      "clean": true,
+      "base_matches": true,
+      "upstream_unset": true,
+      "checkpoint_exists": true
+    },
+    {
+      "lane": "data",
+      "clean": true,
+      "base_matches": true,
+      "upstream_unset": true,
+      "checkpoint_exists": true
+    },
+    {
+      "lane": "experience",
+      "clean": true,
+      "base_matches": true,
+      "upstream_unset": true,
+      "checkpoint_exists": true
+    },
+    {
+      "lane": "proof",
+      "clean": true,
+      "base_matches": true,
+      "upstream_unset": true,
+      "checkpoint_exists": true
+    }
+  ],
+  "application_tests_run": false,
+  "services_started": false,
+  "scheduler_started": false,
+  "external_publications": false
+}

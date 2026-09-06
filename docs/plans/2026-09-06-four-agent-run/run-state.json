@@ -1,0 +1,83 @@
+{
+  "schema": "floww-four-agent-run/v1",
+  "status": "prepared_not_started",
+  "prepared_base_sha": "5b9d9a96a29951e548e883d108a806b93c2d11a9",
+  "duration_minutes_per_lane": 240,
+  "started_at_utc": null,
+  "deadline_utc": null,
+  "native_scheduler": "not_available_not_started",
+  "writer": "coordinator_only",
+  "live_provider_probe_lease": null,
+  "runtime_owner": null,
+  "external_checkpoint_root": "/Users/nav/Documents/GitHub/floww-run-state/2026-09-06",
+  "lanes": {
+    "platform": {
+      "state": "preflight_pending",
+      "task": null,
+      "allowed_files": [],
+      "incumbent_release": null,
+      "head_sha": "5b9d9a96a29951e548e883d108a806b93c2d11a9",
+      "dependencies_installed": false,
+      "baseline_tested": false,
+      "started_at_utc": null,
+      "deadline_utc": null,
+      "duration_minutes": 240
+    },
+    "data": {
+      "state": "preflight_pending",
+      "task": null,
+      "allowed_files": [],
+      "incumbent_release": null,
+      "head_sha": "5b9d9a96a29951e548e883d108a806b93c2d11a9",
+      "dependencies_installed": false,
+      "baseline_tested": false,
+      "started_at_utc": null,
+      "deadline_utc": null,
+      "duration_minutes": 240
+    },
+    "experience": {
+      "state": "preflight_pending",
+      "task": null,
+      "allowed_files": [],
+      "incumbent_release": null,
+      "head_sha": "5b9d9a96a29951e548e883d108a806b93c2d11a9",
+      "dependencies_installed": false,
+      "baseline_tested": false,
+      "started_at_utc": null,
+      "deadline_utc": null,
+      "duration_minutes": 240
+    },
+    "proof": {
+      "state": "preflight_pending",
+      "task": null,
+      "allowed_files": [],
+      "incumbent_release": null,
+      "head_sha": "5b9d9a96a29951e548e883d108a806b93c2d11a9",
+      "dependencies_installed": false,
+      "baseline_tested": false,
+      "started_at_utc": null,
+      "deadline_utc": null,
+      "duration_minutes": 240
+    }
+  },
+  "tasks": {},
+  "blockers": [
+    "Incumbent ownership reconciliation before overlapping product edits",
+    "Private dependency setup and baseline checks before build admission",
+    "No native recurring-task tool exposed; persistent supervisor required for continuation"
+  ],
+  "external_gates": [
+    "B0 brief/mockups",
+    "Nav visual sign-off",
+    "Phase4 Public limits decision",
+    "Oracle VM",
+    "Discord guild/channel/help witness",
+    "Genuine human paper approval/fill/close",
+    "Frozen-file scope",
+    "Credential rotation if needed"
+  ],
+  "prs_created": [],
+  "merges_performed": [],
+  "provider_calls_performed": 0,
+  "timestamp_policy": "Per-lane start/deadline govern work; root timestamps summarize supervision and may span more than four hours."
+}
