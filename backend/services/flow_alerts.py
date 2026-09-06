@@ -328,8 +328,64 @@ _W_CONFLUENCE = 25  # GEX/CW/cluster/sigma/regime confluences
 _W_TAIL = 10        # whale premium / score90 tail events
 
 
+# ── Exposure-alert → conviction wiring (A3) ──────────────────────────
+#
+# Exposure alerts (services/exposure_alerts.py: vex_wall_formed/broken,
+# charm_pin_formed/shifted) are evaluated beside the heatmap in
+# routes/data_providers.py but never fed into any conviction scorer
+# (A34 verdict: files coexist, no scorer consumes them). This mapper
+# closes that gap additively: callers pass live exposure events for the
+# row's ticker through exposure_adjustment_for_events() and hand the
+# result to score_conviction(exposure_adjustment=...). Default 0 keeps
+# every existing caller byte-identical; the ±5 clamp keeps a structural
+# overlay from ever overriding the tape read.
+
+_EXPOSURE_KIND_WEIGHTS: dict[str, int] = {
+    "vex_wall_formed": -2,    # vol suppression defended — fade directional prints
+    "vex_wall_broken": 3,     # suppression released — regime may shift, tradable
+    "charm_pin_formed": 2,    # hedging concentration into expiry — follow-through
+    "charm_pin_shifted": 1,   # magnet moved strikes — weak continuation
+}
+
+_EXPOSURE_ADJUST_MIN = -5
+_EXPOSURE_ADJUST_MAX = 5
+
+
+def _exposure_kind_of(item: dict) -> str:
+    """Extract the exposure kind from an event dict or an alert dict.
+
+    Events (evaluate_exposure_events) carry ``kind`` directly; alert
+    dicts (events_to_alerts) embed it in ``key`` as
+    ``exposure:<kind>:<ticker>:<expiry>:<strike>``.
+    """
+    kind = str(item.get("kind") or "").strip()
+    if kind:
+        return kind
+    key = str(item.get("key") or "")
+    if key.startswith("exposure:"):
+        parts = key.split(":")
+        if len(parts) >= 2 and parts[1]:
+            return parts[1]
+    return ""
+
+
+def exposure_adjustment_for_events(events: list[dict] | None) -> int:
+    """Map exposure events/alerts to a bounded conviction adjustment.
+
+    Sums per-kind weights (unknown kinds contribute 0) and clamps the
+    total to [-5, +5]. Empty/None input → 0.
+    """
+    total = 0
+    for item in events or []:
+        if not isinstance(item, dict):
+            continue
+        total += _EXPOSURE_KIND_WEIGHTS.get(_exposure_kind_of(item), 0)
+    return max(_EXPOSURE_ADJUST_MIN, min(_EXPOSURE_ADJUST_MAX, total))
+
+
 def score_conviction(r: dict, factors: dict | None = None,
-                     regime: str | None = None) -> int:
+                     regime: str | None = None,
+                     exposure_adjustment: float = 0) -> int:
     """Weighted 0-100 conviction for one normalized row.
 
     Flow dimension reuses the parity scan_score components (they're the
@@ -339,6 +395,12 @@ def score_conviction(r: dict, factors: dict | None = None,
     context signal); tail catches the 1-in-a-hundred prints; evidence
     rewards paid-feed truth (arrival velocity + NBBO-known initiation),
     absent on print-less rows by design.
+
+    ``exposure_adjustment`` is an additive structural overlay from
+    exposure_adjustment_for_events() (VEX walls / charm pins for the
+    row's ticker). It defaults to 0 (existing callers unchanged), is
+    defensively clamped to [-5, +5], and applies inside the 0..100
+    clamp so it can nudge but never override the tape read.
     """
     f = factors or {}
     vol_oi = r.get("vol_oi") or 0.0
@@ -387,7 +449,13 @@ def score_conviction(r: dict, factors: dict | None = None,
     else:
         know_bonus = 2 if r.get("nbbo_side") in ("ASK", "BID") else 0
 
-    return max(0, min(100, round(flow + structure + confluence + tail + bump + vel_bonus + know_bonus)))
+    try:
+        _adj = float(exposure_adjustment or 0.0)
+    except (TypeError, ValueError):
+        _adj = 0.0
+    _adj = max(_EXPOSURE_ADJUST_MIN, min(_EXPOSURE_ADJUST_MAX, _adj))
+
+    return max(0, min(100, round(flow + structure + confluence + tail + bump + vel_bonus + know_bonus + _adj)))
 
 
 # ── Blademap alert contract: key levels + context ───────────────────
