@@ -54,6 +54,7 @@ import AppShell from "./shell/AppShell";
 import { useTheme } from "./context/ThemeContext";
 import { autoDecimate } from "./utils/dataDecimator";
 import { PAGE_NAMES } from "./shell/navConfig";
+import { buildTickerUniverse, normalizeTicker } from "./components/heatseeker/tickerUniverse";
 
 import ToxicityGauge from "./components/ToxicityGauge";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -521,8 +522,44 @@ export default function App() {
   const debouncedExpiries = useDebounce(expiries, 300);
   const debouncedDte = useDebounce(dte, 300);
 
-  // Fetch tickers
-  useEffect(() => { axios.get(`${API}/tickers`).then(r => setTickers(r.data)).catch(() => {}); }, []);
+  // Fetch tickers — trinity + default + popular, plus the full exchange-listed
+  // universe from /api/tickers/all so the ticker bar exposes every tradable name
+  // (not just the ~80 featured ones). No separate "universe" model — the same
+  // trinity/default/popular shape is retained; popular is expanded to the full
+  // Finnhub US equities list (11,220 symbols, capped at 5000 for render perf).
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const [basicRes, allRes] = await Promise.all([
+          axios.get(`${API}/tickers`),
+          axios.get(`${API}/tickers/all?limit=5000`),
+        ]);
+        if (!mounted) return;
+        const allSyms = (allRes.data && allRes.data.tickers) || [];
+
+        // Expand "popular" to the full Finnhub US equities list (capped at 5000
+        // for render perf). trinity + default stay as the featured sets; no
+        // separate "universe" concept is introduced — the same shape is retained.
+        const popularExpanded = allSyms.slice(0, 5000);
+        const combined = {
+          trinity: basicRes.data?.trinity || [],
+          default: basicRes.data?.default || [],
+          popular: Array.isArray(popularExpanded)
+            ? [...new Set([...popularExpanded])]
+            : basicRes.data?.popular || [],
+        };
+        setTickers(combined);
+      } catch (e) {
+        console.warn("[App] ticker fetch failed:", e);
+      } finally {
+        /* no-op */
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const [loading, setLoading] = useState(false);
 
   // Flowseeker signal cards dispatch this to focus the desk ticker.
   useEffect(() => {
@@ -531,9 +568,6 @@ export default function App() {
     return () => window.removeEventListener("floww:focus-ticker", onFocusTicker);
   }, []);
 
-  const [loading, setLoading] = useState(false);
-
-  // Fetch heatmap data
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -664,20 +698,29 @@ export default function App() {
         case "ArrowUp":
           e.preventDefault();
           if (tickers) {
-            const all = [...(tickers.trinity || []), ...(tickers.default || []), ...(tickers.popular || [])];
-            const idx = all.indexOf(ticker);
-            if (idx > 0) setTicker(all[idx - 1]);
+            // T1 (2026-09-07): deduped universe shared with the ticker bar —
+            // duplicate concatenation used to trap arrows in a two-symbol loop.
+            const all = buildTickerUniverse(tickers);
+            if (all.length > 0) {
+              setTicker(prev => {
+                const idx = all.indexOf(normalizeTicker(prev));
+                return idx > 0 ? all[idx - 1] : all[all.length - 1];
+              });
+            }
           }
           break;
         case "ArrowDown":
           e.preventDefault();
           if (tickers) {
-            const all = [...(tickers.trinity || []), ...(tickers.default || []), ...(tickers.popular || [])];
-            const idx = all.indexOf(ticker);
-            if (idx < all.length - 1) setTicker(all[idx + 1]);
+            const all = buildTickerUniverse(tickers);
+            if (all.length > 0) {
+              setTicker(prev => {
+                const idx = all.indexOf(normalizeTicker(prev));
+                return idx < all.length - 1 ? all[idx + 1] : all[0];
+              });
+            }
           }
           break;
-        default: break;
       }
     };
     window.addEventListener("keydown", handler);
@@ -789,7 +832,10 @@ export default function App() {
                       method: "POST",
                     });
                     const result = await resp.json();
-                    if (!resp.ok) throw new Error(result.detail?.message || result.message || resp.statusText);
+                    // Alpaca route returns HTTP 200 with an error body on
+                    // validation/transport failure — resp.ok alone fakes success
+                    // and orphans the local journal row (issue #23).
+                    if (!resp.ok || result?.error || result?.detail) throw new Error(result.detail?.message || result.message || result.error || resp.statusText);
                     console.log("[Triad] Order placed:", result);
                   } catch (err) {
                     console.error("[Triad] Order failed:", err);
@@ -941,6 +987,7 @@ export default function App() {
                   change={livespot?.change ?? data?.change}
                   changePct={livespot?.change_pct ?? data?.change_pct}
                   data={displayData}
+                  tickers={tickers}
                   dte={dte}
                   viewMode={viewMode}
                   onViewModeChange={setViewMode}
@@ -1002,6 +1049,7 @@ export default function App() {
                   change={livespot?.change ?? data?.change}
                   changePct={livespot?.change_pct ?? data?.change_pct}
                   data={displayData}
+                  tickers={tickers}
                   dte={dte}
                   viewMode={viewMode}
                   onViewModeChange={setViewMode}
@@ -1188,7 +1236,8 @@ export default function App() {
                       method: "POST",
                     });
                     const result = await resp.json();
-                    if (!resp.ok) throw new Error(result.detail?.message || result.message || resp.statusText);
+                    // Same HTTP200-with-error guard as the Triad handler above.
+                    if (!resp.ok || result?.error || result?.detail) throw new Error(result.detail?.message || result.message || result.error || resp.statusText);
                     console.log("[Solstice] Order placed:", result);
                   } catch (err) {
                     console.error("[Solstice] Order failed:", err);
