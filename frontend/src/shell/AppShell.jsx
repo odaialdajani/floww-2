@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import Sidebar from "./Sidebar";
+import AgentProvider from "../agent/AgentProvider";
+import AgentPanel from "../agent/AgentPanel";
+import AgentCommandBar from "../agent/AgentCommandBar";
 
 function useSidebarCollapsed() {
   const [collapsed, setCollapsed] = useState(
@@ -22,6 +25,7 @@ function useSidebarCollapsed() {
 export default function AppShell({ page, onNavigate, children, userEmail, userTier }) {
   const collapsed = useSidebarCollapsed();
   return (
+    <AgentProvider>
     <div className="min-h-screen" style={{ background: "var(--bg-page)" }}>
       <Sidebar page={page} onNavigate={onNavigate} userEmail={userEmail} userTier={userTier} />
       <main
@@ -36,6 +40,9 @@ export default function AppShell({ page, onNavigate, children, userEmail, userTi
       >
         {children}
       </main>
+      <AgentPanel />
+      <AgentCommandBar />
     </div>
+    </AgentProvider>
   );
 }

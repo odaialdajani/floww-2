@@ -1,0 +1,18 @@
+{
+  "version": "v1",
+  "note": "Deterministic confluence base weights. Changed only by W5b proposals Nav reviews. Stamped into every ledger and claim.",
+  "dimensions": {
+    "flow": 0.25,
+    "structure": 0.25,
+    "microstructure": 0.15,
+    "ml": 0.10,
+    "vol": 0.10,
+    "time_delta": 0.15
+  },
+  "regimes": {
+    "positive_gamma_calm": "base",
+    "positive_gamma_stressed": "base",
+    "negative_gamma_calm": "base",
+    "negative_gamma_stressed": "base"
+  }
+}

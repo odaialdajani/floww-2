@@ -11,6 +11,8 @@ consequences. Numbered sequentially; never rewritten — supersede instead.
 | [0004](0004-deploy-cors-headers.md) | Deploy CORS headers & exception handler origin echo | Accepted | 2026-08 |
 | [0005](0005-test-discipline.md) | Test discipline & data-source assertion policy | Accepted | 2026-08 |
 | [0006](0006-black-friday-coupling.md) | Black Friday / Ferrari coupling boundary | Accepted | 2026-08 |
+| [0007](0007-alert-persistence.md) | Alert persistence policy (MongoDB-backed rules + history) | Accepted | 2026-09 |
+| [0008](0008-agent-tool-boundary.md) | Lodestar agent tool boundary (read-only research) | Accepted | 2026-09 |
 
 ## Conventions
 

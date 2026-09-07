@@ -145,6 +145,7 @@ async def rate_limit_middleware(request: Request, call_next):
     if request.method == "GET" and request.url.path.startswith((
         "/api/heatseeker", "/api/analytics", "/api/flowseeker", "/api/heatmap",
         "/api/spot", "/api/data", "/api/tickers", "/api/portfolio", "/api/alerts",
+        "/api/agent/",
     )):
         return await call_next(request)
     client_ip = request.client.host if request.client else "unknown"
@@ -868,6 +869,44 @@ def _fetch_movers_sync() -> list[dict[str, Any]]:
     return out
 
 
+def _attach_strike_volumes(
+    strikes: list[dict[str, Any]], contracts: list[dict[str, Any]]
+) -> None:
+    """Roll per-strike traded volume onto heatmap strike rows (in place).
+
+    Engine-agnostic: sums raw contract ``volume``/``vol`` per strike into
+    ``total_volume`` (+ ``call_volume``/``put_volume``) so the Profile view
+    can render a real volume profile regardless of the Rust-vs-python GEX
+    path. Contracts without usable strike/volume are skipped.
+    """
+    vol_by_strike: dict[float, float] = {}
+    call_vol: dict[float, float] = {}
+    put_vol: dict[float, float] = {}
+    for c in contracts or []:
+        try:
+            k = float(c.get("strike") or 0)
+            v = float(c.get("volume") or c.get("vol") or 0)
+        except (TypeError, ValueError):
+            continue
+        if k <= 0 or v <= 0:
+            continue
+        vol_by_strike[k] = vol_by_strike.get(k, 0.0) + v
+        if str(c.get("type", "")).lower() == "call":
+            call_vol[k] = call_vol.get(k, 0.0) + v
+        else:
+            put_vol[k] = put_vol.get(k, 0.0) + v
+    for s in strikes or []:
+        # Coerce the strike-row key the same way the contract side does, so a
+        # string strike from one engine path still matches a float key.
+        try:
+            sk = float(s.get("strike"))
+        except (TypeError, ValueError):
+            s["total_volume"] = s["call_volume"] = s["put_volume"] = 0.0
+            continue
+        s["total_volume"] = vol_by_strike.get(sk, 0.0)
+        s["call_volume"] = call_vol.get(sk, 0.0)
+        s["put_volume"] = put_vol.get(sk, 0.0)
+
 
 # ----------------------------- Heatmap Core -----------------------------------
 
@@ -1099,6 +1138,11 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             else:
                 s["lifecycle"] = "decaying"
             s["tap_prob"] = [0.80, 0.66, 0.33, 0.10][min(tc, 3)]
+
+    # Per-strike traded volume for the Profile view's volume column. Runs on
+    # the raw contracts, so it is independent of which GEX engine produced
+    # `strikes`.
+    _attach_strike_volumes(strikes, (raw or {}).get("contracts", []))
 
     nodes = classify_nodes(strikes, spot)
     patterns = detect_patterns(strikes, nodes, spot)
@@ -2815,6 +2859,16 @@ app.include_router(position_sizing_router, tags=["position-sizing"])
 from routes.alphapod_compat import router as alphapod_compat_router
 
 app.include_router(alphapod_compat_router, tags=["alphapod-compat"])
+
+# ============ Lodestar Agent (plan v3 L8) ============
+# Research-only transport. The actions prefix /api/agent-actions/ does not
+# exist in W1/W2 and is never added to PUBLIC_PATHS or the rate exemption.
+try:
+    from routes.agent import router as agent_router
+
+    app.include_router(agent_router, tags=["agent"])
+except Exception as _agent_import_err:  # noqa: BLE001 - non-fatal; feature degrades
+    log.warning(f"Lodestar agent routes disabled (non-fatal): {_agent_import_err}")
 
 # ============ AgentField Hub Initialization ============
 # NOTE: the import itself must be non-fatal. If the optional `agentfield`

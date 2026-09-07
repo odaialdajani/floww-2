@@ -1,0 +1,1 @@
+{"coverage_baseline": "recorded at W1 close", "question": "SPY 0DTE read?", "ticker": "SPY", "horizon": "0dte", "expected_tools": ["gex_profile", "flip_zones", "flow_regime", "alerts_feed", "time_delta"], "required_sections": ["Structure", "Flow", "Confluence", "Verdict", "Invalidation"]}

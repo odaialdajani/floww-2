@@ -43,6 +43,16 @@ PUBLIC_PATHS = {
     "/dashboard/_dash-layout",
     "/dashboard/_dash-dependencies",
     "/favicon.ico",
+    # Lodestar agent reads — key-free on the local app for asking (ADR-0008).
+    # Never a bare "/api/agent/" prefix: the actions router lives at
+    # "/api/agent-actions/" and must stay key-protected.
+    "/api/agent/ask",
+    "/api/agent/stream/",
+    "/api/agent/turn/",
+    "/api/agent/cancel/",
+    "/api/agent/budget",
+    "/api/agent/claims",
+    "/api/agent/prefs",
 }
 
 
