@@ -20,6 +20,8 @@ export default function ExposureStrip({ ticker }) {
     if (!ticker) return undefined;
     let cancelled = false;
     const ctrl = new AbortController();
+    setBadges([]); // drop the previous ticker's badges immediately; the
+    // fetch below either replaces them or leaves the strip empty
     axios
       .get(
         `${BACKEND_API}/flowseeker/alerts/feed?ticker=${encodeURIComponent(ticker)}&days=2`,
@@ -36,7 +38,9 @@ export default function ExposureStrip({ ticker }) {
         setBadges([...seen.values()]);
       })
       .catch(() => {
-        /* fail-open: strip stays hidden */
+        // fail-open AND stale-free: a failed fetch must not leave the
+        // previous ticker's badges on screen under the new ticker
+        if (!cancelled) setBadges([]);
       });
     return () => {
       cancelled = true;
