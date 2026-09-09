@@ -63,9 +63,16 @@ describe("exposureBadgeFor", () => {
     expect(exposureBadgeFor("gamma_flip")).not.toBeNull();
   });
 
-  test("EXPOSURE_RULES lists exactly the five wired rules", () => {
+  test("EXPOSURE_RULES lists exactly the wired feed rules (5 exposure + CLUSTER)", () => {
     expect([...EXPOSURE_RULES].sort()).toEqual(
-      ["CHARM_PIN", "GAMMA_FLIP", "LIQUIDITY_STRESS", "TOXIC_FLOW", "VEX_WALL"].sort()
+      ["CHARM_PIN", "CLUSTER", "GAMMA_FLIP", "LIQUIDITY_STRESS", "TOXIC_FLOW", "VEX_WALL"].sort()
     );
+  });
+
+  test("CLUSTER (flow_alerts pipeline, same feed rule column) renders", () => {
+    const b = exposureBadgeFor("CLUSTER");
+    expect(b).not.toBeNull();
+    expect(b.rule).toBe("CLUSTER");
+    expect(b.title.toLowerCase()).toContain("heuristic");
   });
 });
