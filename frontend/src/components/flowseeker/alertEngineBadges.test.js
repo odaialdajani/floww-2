@@ -64,4 +64,18 @@ describe("alertEngineBadges (RED: module does not exist yet)", () => {
     expect(alertEngineBadgeFor("GAMMA_FLIP")).toBeNull();
     expect(alertEngineBadgeFor("PIN_RISK").rule).toBe("PIN_RISK");
   });
+
+  test("E4-49 FLAG 1: MOMENTUM_EXTREME names momentum score, not conviction", () => {
+    const t = alertEngineBadgeFor("MOMENTUM_EXTREME").title.toLowerCase();
+    expect(t).toContain("momentum score");
+    expect(t).not.toContain("conviction");
+    expect(t).not.toContain("tape");
+  });
+
+  test("E4-49 FLAG 2: GAMMA_SQUEEZE names volume spike, no invented flow", () => {
+    const t = alertEngineBadgeFor("GAMMA_SQUEEZE").title.toLowerCase();
+    expect(t).toContain("volume spik");
+    expect(t).not.toContain("chasing price");
+    expect(t).not.toContain("dealer");
+  });
 });

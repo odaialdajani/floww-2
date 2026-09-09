@@ -23,14 +23,14 @@ const BADGES = {
     label: "GAMMA SQUEEZE",
     priority: "HIGH",
     title:
-      "Gamma squeeze — negative gamma with spot near the flip, dealers chasing price (heuristic, not a direction call)",
+      "Gamma squeeze — negative gamma with spot near the flip and volume spiking (heuristic, not a direction call)",
   },
   MOMENTUM_EXTREME: {
     rule: "MOMENTUM_EXTREME",
     label: "MOMENTUM EXTREME",
     priority: "HIGH",
     title:
-      "Momentum extreme — conviction score at an extreme, crowded tape (heuristic, not a direction call)",
+      "Momentum extreme — momentum score at an extreme high or low (heuristic, not a direction call)",
   },
   WALL_BREACH: {
     rule: "WALL_BREACH",
