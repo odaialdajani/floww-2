@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import Sidebar from "./Sidebar";
-<import AgentProvider from "../agent/AgentProvider";
+import AgentProvider from "../agent/AgentProvider";
 import AgentPanel from "../agent/AgentPanel";
 import AgentCommandBar from "../agent/AgentCommandBar";
 import { SIDEBAR_KEY } from "./navConfig";
