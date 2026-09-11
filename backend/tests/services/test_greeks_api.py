@@ -30,33 +30,33 @@ os.environ.setdefault("TESTING", "1")
 os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
 os.environ.setdefault("DB_NAME", "test_greeks_api")
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 
 
 @pytest.fixture(scope="module")
-def client():
+def client(tmp_path_factory):
     """Create a TestClient with seeded DuckDB gflows data."""
     # Seed the gflows DuckDB before importing the app
-    import tempfile
-
     from scripts.setup_gflows_data import seed_database
 
     # Use a temp DB for testing
-    tmp_dir = Path(tempfile.mkdtemp())
+    tmp_dir = tmp_path_factory.mktemp("greeks")
     db_path = tmp_dir / "test_gflows.duckdb"
     ok = seed_database(db_path)
     assert ok, "Failed to seed test database"
 
     # Set env var so the route picks up this DB
-    os.environ["GFLOWS_DUCKDB_PATH"] = str(db_path)
+    from routes.greeks import router
 
-    # Now import the app (after env is set)
-    from server import app
-
-    with TestClient(app) as tc:
-        yield tc
+    app = FastAPI()
+    app.include_router(router, prefix="/api/greeks")
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("GFLOWS_DUCKDB_PATH", str(db_path))
+        with TestClient(app) as tc:
+            yield tc
 
 
 # ======================================================================

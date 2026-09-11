@@ -126,13 +126,15 @@ class GroundedModel:
             "tools": [ANSWER_TOOL] + ([INSPECT_TOOL] if allow_inspect else []),
             "tool_choice": "required",
             "max_tokens": MAX_OUTPUT,
-            "reasoning": {"enabled": False},
             "provider": {
                 "require_parameters": True,
                 "allow_fallbacks": False,
                 "max_price": {"prompt": 6, "completion": 15},
             },
         }
+        require_reasoning = self.model == "anthropic/claude-sonnet-4"
+        if require_reasoning:
+            payload["reasoning"] = {"enabled": False}
         body_bytes = len(canonical(payload).encode("utf-8"))
         if body_bytes > MAX_BODY_BYTES:
             return {"status": "unavailable", "reason": "Evidence exceeds the bounded model input"}
@@ -144,7 +146,9 @@ class GroundedModel:
                 metadata = await client.get(f"https://openrouter.ai/api/v1/models/{self.model}/endpoints")
                 metadata.raise_for_status()
                 candidates = metadata.json()["data"]["endpoints"]
-                candidates = [e for e in candidates if self._compatible(e, body_bytes)]
+                candidates = [
+                    e for e in candidates if self._compatible(e, body_bytes, require_reasoning=require_reasoning)
+                ]
                 if not candidates:
                     return {"status": "unavailable", "reason": "No provider meets the capability and price limits"}
                 selected = candidates[0]
@@ -230,13 +234,14 @@ class GroundedModel:
                 return {"status": "invalid", "reason": "Model response failed the checked format", **info}
 
     @staticmethod
-    def _compatible(endpoint, input_bytes):
+    def _compatible(endpoint, input_bytes, *, require_reasoning=True):
         try:
             supported = set(endpoint["supported_parameters"])
             pricing = endpoint["pricing"]
             return (
                 bool(endpoint.get("tag"))
-                and {"tools", "tool_choice", "max_tokens", "reasoning"} <= supported
+                and {"tools", "tool_choice", "max_tokens"} <= supported
+                and (not require_reasoning or "reasoning" in supported)
                 and endpoint.get("supports_tool_choice", {}).get("required") is True
                 and 0 <= Decimal(pricing["prompt"]) <= INPUT_CEILING
                 and 0 <= Decimal(pricing["completion"]) <= OUTPUT_CEILING

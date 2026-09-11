@@ -6,8 +6,11 @@ import httpx
 import pytest
 
 
-@pytest.fixture(autouse=True)
-def deny_external_network(monkeypatch):
+@pytest.fixture(scope="session", autouse=True)
+def deny_external_network():
+    # Install before module-scoped TestClient startup, and retain protection
+    # between individual tests while application background tasks are alive.
+    monkeypatch = pytest.MonkeyPatch()
     attempts = []
     original_connect = socket.socket.connect
     original_connect_ex = socket.socket.connect_ex
@@ -34,5 +37,8 @@ def deny_external_network(monkeypatch):
     monkeypatch.setattr(socket.socket, "connect_ex", local_connect_ex)
     monkeypatch.setattr(httpx.HTTPTransport, "handle_request", refuse)
     monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", refuse_async)
-    yield
+    try:
+        yield
+    finally:
+        monkeypatch.undo()
     assert not attempts, "Provider mock was missed; external requests were blocked"

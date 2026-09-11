@@ -53,6 +53,62 @@ ENDPOINT = {
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("model_id,allowed", [("openai/gpt-4.1-mini", True), ("anthropic/claude-sonnet-4", False)])
+async def test_only_nonreasoning_model_omits_unsupported_reasoning_control(model_id, allowed):
+    spend = SpendLedger(AsyncMongoMockClient().test.budget)
+    await spend.initialize()
+    endpoint = {**ENDPOINT, "tag": "openai", "supported_parameters": ["tools", "tool_choice", "max_tokens"]}
+    calls = []
+
+    def send(request):
+        calls.append(request.method)
+        if request.method == "GET":
+            return httpx.Response(200, json={"data": {"endpoints": [endpoint]}})
+        payload = json.loads(request.content)
+        assert "reasoning" not in payload
+        assert payload["provider"]["only"] == ["openai"]
+        assert payload["provider"]["require_parameters"] is True
+        return httpx.Response(
+            200,
+            json={
+                "id": "nonreasoning-test",
+                "usage": {"cost": 0.002},
+                "choices": [
+                    {
+                        "message": {
+                            "tool_calls": [
+                                {
+                                    "function": {
+                                        "name": "research_answer",
+                                        "arguments": json.dumps(
+                                            {
+                                                "sections": [
+                                                    {
+                                                        "name": "Market",
+                                                        "fact_ids": ["spot"],
+                                                        "interpretation": "descriptive",
+                                                    }
+                                                ]
+                                            }
+                                        ),
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+            },
+        )
+
+    result = await GroundedModel(spend, model=model_id, api_key="fixture", transport=httpx.MockTransport(send)).once(
+        "Explain", [{"id": "spot", "value": 100}], "turn"
+    )
+    assert result["status"] == ("ok" if allowed else "unavailable")
+    assert calls == (["GET", "POST"] if allowed else ["GET"])
+    assert (await spend.state())["spent_units"] == (2000 if allowed else 0)
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("response", [[], {"id": "bad-usage", "usage": [1]}, {"choices": [{"message": []}]}])
 async def test_malformed_provider_reply_keeps_reserved_cost_without_raising(response):
     spend = SpendLedger(AsyncMongoMockClient().test.budget)
