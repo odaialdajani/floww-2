@@ -14,6 +14,7 @@ receipt on consolidation).
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -28,20 +29,40 @@ def _pair(ticker: str):
     if entry is None:
         from services.amihud_illiquidity import AmihudIlliquidity
         from services.kyle_lambda import KylesLambda
-        entry = {"kyle": KylesLambda(), "amihud": AmihudIlliquidity()}
+        entry = {"kyle": KylesLambda(), "amihud": AmihudIlliquidity(),
+                 "last": None}
         _regime[ticker] = entry
     return entry
 
 
 def feed(ticker: str, call_vol: float, put_vol: float, spot: float) -> None:
-    """Record one chain snapshot for a ticker. Never raises."""
+    """Record one chain snapshot for a ticker. Never raises.
+
+    Chain volumes are cumulative day totals, but the estimators consume
+    per-interval flow. Differencing happens here: the first snapshot per
+    ticker seeds the baseline (no push — there is no interval yet), later
+    snapshots push max(0, cur - last). Resets (new day) clamp to zero and
+    the estimators' own guards skip zero-volume pushes.
+    """
     try:
         sym = (ticker or "").strip().upper()
         if not sym:
             return
+        try:
+            cur = (float(call_vol or 0.0), float(put_vol or 0.0))
+        except (TypeError, ValueError):
+            return
+        if not all(math.isfinite(v) and v >= 0.0 for v in cur):
+            return
         pair = _pair(sym)
-        pair["kyle"].push_snapshot(call_vol, put_vol, spot)
-        pair["amihud"].push_snapshot(call_vol, put_vol, spot)
+        last = pair.get("last")
+        pair["last"] = cur
+        if last is None:
+            return
+        dcall = max(0.0, cur[0] - last[0])
+        dput = max(0.0, cur[1] - last[1])
+        pair["kyle"].push_snapshot(dcall, dput, spot)
+        pair["amihud"].push_snapshot(dcall, dput, spot)
     except Exception as e:
         logger.debug("liquidity feed skipped for %s: %s", ticker, e)
 
