@@ -20,7 +20,7 @@ class ResearchReads:
         self._peek_map = peek_map
         self._read_alerts = read_alerts
 
-    async def snapshot(self, ticker, horizon, *, selected_expiry=None, now=None, screen=None):
+    async def snapshot(self, ticker, horizon, *, selected_expiry=None, now=None, screen=None, price_only=False):
         now = now or datetime.now(UTC)
         gaps = []
         try:
@@ -30,14 +30,18 @@ class ResearchReads:
             gaps.append("Chain cache could not be read")
         try:
             dealer = (
-                copy.deepcopy(self._peek_map(ticker, screen["mapQuery"])) if screen and screen.get("mapQuery") else None
+                copy.deepcopy(self._peek_map(ticker, screen["mapQuery"]))
+                if not price_only and screen and screen.get("mapQuery")
+                else None
             )
         except Exception:
             dealer = None
             gaps.append("Dealer cache could not be read")
         try:
-            alerts = await asyncio.wait_for(asyncio.to_thread(self._read_alerts, ticker), timeout=5)
-            alerts_status = "ok"
+            alerts = (
+                [] if price_only else await asyncio.wait_for(asyncio.to_thread(self._read_alerts, ticker), timeout=5)
+            )
+            alerts_status = "not_requested" if price_only else "ok"
         except Exception:
             alerts, alerts_status = [], "error"
             gaps.append("Alert storage could not be read")
@@ -46,7 +50,7 @@ class ResearchReads:
             raw = {}
             gaps.append("No cached option chain; research did not start a paid refresh")
         contracts = slice_expiries(raw.get("contracts") or [], horizon, now=now, selected_expiry=selected_expiry)
-        if not contracts:
+        if not contracts and not price_only:
             gaps.append("No contracts in the requested expiry range")
         source_time = instant(raw.get("event_time") or raw.get("observed_at"))
         quality = "degraded" if source_time is None else "ok"
@@ -60,6 +64,7 @@ class ResearchReads:
             gaps.append("The cached chain is out of date")
         body = dict(
             ticker=ticker,
+            price_only=price_only,
             horizon=horizon,
             window=window,
             source_time=source_time,
@@ -107,12 +112,14 @@ class ResearchReads:
         spot = raw.get("spot")
         if finite(spot) and spot > 0:
             add("Underlying price", spot, "USD")
-        add("Available contracts", len(contracts), "contracts")
-        add("Available expiry dates", sorted({str(contract["expiry"]) for contract in contracts}), "dates")
+        if not price_only:
+            add("Available contracts", len(contracts), "contracts")
+            add("Available expiry dates", sorted({str(contract["expiry"]) for contract in contracts}), "dates")
         valid = [
             c
             for c in contracts
-            if finite(c.get("gamma"))
+            if not price_only
+            and finite(c.get("gamma"))
             and c["gamma"] >= 0
             and finite(c.get("open_interest", c.get("oi")))
             and c.get("open_interest", c.get("oi")) >= 0
@@ -136,7 +143,7 @@ class ResearchReads:
             levels = [v for v in levels if finite(v)]
             if levels:
                 add("Estimated flip levels", levels, "USD")
-        else:
+        elif not price_only:
             gaps.append("Exposure inputs are unavailable")
         flow = []
         flow_times = []
@@ -171,7 +178,7 @@ class ResearchReads:
                     reason=None if coherent else "Combines recent alerts with different observation times",
                 )
             )
-        else:
+        elif not price_only:
             gaps.append("No eligible fresh directional alerts" if alerts_status == "ok" else "Flow reading unavailable")
         if source_time is None:
             gaps.append("Chain observation time is unknown")
@@ -194,7 +201,7 @@ class ResearchReads:
                     parents=[flow_fact["id"]],
                 )
             )
-        map_facts, map_gaps = display_facts(dealer, screen or {}, ticker, now)
+        map_facts, map_gaps = ([], []) if price_only else display_facts(dealer, screen or {}, ticker, now)
         facts.extend(map_facts)
         gaps.extend(map_gaps)
         return dict(

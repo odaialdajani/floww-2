@@ -44,13 +44,23 @@ def deterministic_answer(snapshots, spec):
         summary = limits
     elif re.search(r"\bputs?\b", spec.get("question", ""), re.IGNORECASE):
         summary = "Put contract type alone does not establish trade direction; buyer versus seller activity and the wider position matter."
+    if spec.get("price_only"):
+        price = next((f for f in facts if f["metric"] == "Underlying price"), None)
+        summary = (
+            f"{price['ticker']} cached underlying price: {price['value']:,.6g} USD "
+            f"({price['status']}; observed {price['event_time'] or 'time unknown'})."
+            if price
+            else "The cached underlying price is unavailable; no paid refresh was started."
+        )
     return dict(
         summary=summary,
         sections=sections,
         facts=facts,
         gaps=gaps,
         mode="deterministic",
-        model_status="Not requested: paid model policy is not yet verified",
+        model_status="Not requested: factual lookup"
+        if spec.get("price_only")
+        else "Not requested: paid model policy is not yet verified",
         claim_status="non-gradeable",
         claim_reason="Descriptive research has no testable prediction",
         snapshots=snapshots,
@@ -106,11 +116,16 @@ class ResearchService:
                         )
                         snapshots.append(
                             await self.reads.snapshot(
-                                ticker, spec["horizon"], selected_expiry=selected_expiry, screen=screen
+                                ticker,
+                                spec["horizon"],
+                                selected_expiry=selected_expiry,
+                                screen=screen,
+                                **({"price_only": True} if spec.get("price_only") else {}),
                             )
                         )
-                        await self.repository.save_anchor(owner, snapshots[-1])
-                        await self.repository.watch_observations(owner, ticker, spec["horizon"], selected_expiry)
+                        if not spec.get("price_only"):
+                            await self.repository.save_anchor(owner, snapshots[-1])
+                            await self.repository.watch_observations(owner, ticker, spec["horizon"], selected_expiry)
                     answer = deterministic_answer(snapshots, spec)
                     if re.search(
                         r"\b(?:changed?|since|previous|prior|yesterday|closing|last close)\b",
@@ -146,7 +161,11 @@ class ResearchService:
                                     "fact_ids": [item["id"] for item in more],
                                 }
                             )
-                    if self.model is not None and any(f["metric"] == "Underlying price" for f in answer["facts"]):
+                    if (
+                        not spec.get("price_only")
+                        and self.model is not None
+                        and any(f["metric"] == "Underlying price" for f in answer["facts"])
+                    ):
                         try:
                             await self._interpret(owner, turn_id, spec, answer, snapshots)
                         except Exception:

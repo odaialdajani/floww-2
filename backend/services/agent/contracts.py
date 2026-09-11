@@ -83,6 +83,21 @@ def fact(
     return result
 
 
+def is_price_lookup(question, tickers):
+    """Optimize only an explicit spot/underlying lookup; ambiguous prices stay research."""
+    if len(tickers) != 1:
+        return False
+    text = re.sub(r"\$?\b" + re.escape(tickers[0]) + r"\b(?:['’]s)?", "", question, flags=re.IGNORECASE)
+    text = " ".join(text.lower().strip(" ?.!").split())
+    text = re.sub(r" (?:of|for)$", "", text)
+    return bool(
+        re.fullmatch(
+            r"(?:(?:what is|what's|show|show me) )?(?:the )?(?:(?:current|cached|latest) )?(?:spot|underlying) price",
+            text,
+        )
+    )
+
+
 def request_spec(body):
     question = body.get("question")
     if not isinstance(question, str) or not question.strip() or len(question) > 2000:
@@ -154,6 +169,7 @@ def request_spec(body):
         screen=screen,
         context_conflict=bool(screen.get("ticker") and screen["ticker"] not in tickers),
         question_scope=question_scope,
+        price_only=is_price_lookup(question, tickers),
     )
 
 
