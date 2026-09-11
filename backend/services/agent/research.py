@@ -105,7 +105,9 @@ class ResearchService:
                             else screen.get("selectedExpiry")
                         )
                         snapshots.append(
-                            await self.reads.snapshot(ticker, spec["horizon"], selected_expiry=selected_expiry)
+                            await self.reads.snapshot(
+                                ticker, spec["horizon"], selected_expiry=selected_expiry, screen=screen
+                            )
                         )
                         await self.repository.save_anchor(owner, snapshots[-1])
                         await self.repository.watch_observations(owner, ticker, spec["horizon"], selected_expiry)

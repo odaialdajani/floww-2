@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from services.agent.access.horizon import horizon_window, slice_expiries
 from services.agent.confluence import score
 from services.agent.contracts import canonical, fact, finite, instant
+from services.agent.display_map import display_facts
 from services.heatseeker import _gex_per_strike, calc_flip_zones
 
 
@@ -19,7 +20,7 @@ class ResearchReads:
         self._peek_map = peek_map
         self._read_alerts = read_alerts
 
-    async def snapshot(self, ticker, horizon, *, selected_expiry=None, now=None):
+    async def snapshot(self, ticker, horizon, *, selected_expiry=None, now=None, screen=None):
         now = now or datetime.now(UTC)
         gaps = []
         try:
@@ -28,7 +29,9 @@ class ResearchReads:
             raw = None
             gaps.append("Chain cache could not be read")
         try:
-            dealer = copy.deepcopy(self._peek_map(ticker))
+            dealer = (
+                copy.deepcopy(self._peek_map(ticker, screen["mapQuery"])) if screen and screen.get("mapQuery") else None
+            )
         except Exception:
             dealer = None
             gaps.append("Dealer cache could not be read")
@@ -63,6 +66,20 @@ class ResearchReads:
             contracts=contracts,
             spot=raw.get("spot"),
             dealer=dealer,
+            display_selection={
+                key: (screen or {}).get(key)
+                for key in (
+                    "ticker",
+                    "page",
+                    "mapQuery",
+                    "mapVersion",
+                    "mapStrikes",
+                    "mapExpiries",
+                    "selectedStrike",
+                    "selectedExpiry",
+                    "metric",
+                )
+            },
             alerts=alerts[:200],
         )
         # Sources may contain datetime values; convert timestamps explicitly at seam.
@@ -91,7 +108,7 @@ class ResearchReads:
         if finite(spot) and spot > 0:
             add("Underlying price", spot, "USD")
         add("Available contracts", len(contracts), "contracts")
-        add("Available expiry dates", sorted({str(contract['expiry']) for contract in contracts}), "dates")
+        add("Available expiry dates", sorted({str(contract["expiry"]) for contract in contracts}), "dates")
         valid = [
             c
             for c in contracts
@@ -177,6 +194,9 @@ class ResearchReads:
                     parents=[flow_fact["id"]],
                 )
             )
+        map_facts, map_gaps = display_facts(dealer, screen or {}, ticker, now)
+        facts.extend(map_facts)
+        gaps.extend(map_gaps)
         return dict(
             snapshot_id=snapshot_id,
             ticker=ticker,

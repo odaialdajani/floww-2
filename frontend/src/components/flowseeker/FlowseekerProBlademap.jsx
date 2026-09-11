@@ -836,7 +836,7 @@ export default function FlowseekerProBlademap({ active = true }) {
 
   const dealersFacts = useMemo(() => {
     const reg = dealers.regime || {};
-    const flip = finite(reg.gamma_flip);
+    const flip = finite(dealers.heat?.gamma_flip?.gamma_flip);
     const spot = finite(dealers.heat?.spot);
     const dist = spot != null && flip != null && flip > 0 ? (spot - flip) / flip * 100 : null;
     const total = reg.total_gex;
@@ -1055,7 +1055,7 @@ export default function FlowseekerProBlademap({ active = true }) {
   const dealerData = useMemo(() => dealerSeries(dealers.heat, dealersFacts.flip), [dealers.heat, dealersFacts.flip]);
   const sourceTime = dealers.heat?.event_time || dealers.heat?.observed_at;
   const sourceMs = sourceTime ? Date.parse(sourceTime) : NaN;
-  const dealerStale = !!dealers.heat?.stale || !Number.isFinite(sourceMs) || Date.now() - sourceMs > 120000;
+  const dealerStale = !!dealers.heat?.stale || !Number.isFinite(sourceMs) || Date.now() - sourceMs > 120000 || sourceMs-Date.now()>30000;
   const lattice = useMemo(() => {
     const h = dealers.heat || {};
     const cellValues = dealerData.strikes.flatMap(s => dealerData.expiries.map(e => dealerData.valueAt(s,e))).filter(v=>v!=null);
@@ -1077,6 +1077,8 @@ export default function FlowseekerProBlademap({ active = true }) {
       selectedContract:selectedRow?.osi || selectedRow?.ckey || null,
       selectedExpiry:selectedRow?.exp || selectedRow?.expiration || null,selectedStrike:selectedRow?.strike ?? null,
       expiryRange:[knobDteMin,knobDteMax],expiries:dealerData.expiries,
+      metric:"gex",mapQuery:dealers.heat?.map_query || null,
+      mapVersion:dealers.heat?.asof || null,mapStrikes:dealerData.strikes,mapExpiries:dealerData.expiries,
       observedAt:sourceTime || null});
   },[active,focusTicker,mode,selectedRow,knobDteMin,knobDteMax,dealerData,dealers.heat]);
 

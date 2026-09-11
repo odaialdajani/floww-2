@@ -41,6 +41,21 @@ def explain_snapshot(snapshot):
     if expiry:
         explanations.append("Available expiries: " + (", ".join(expiry["value"]) or "none") + ".")
     spot, flips = facts.get("Underlying price"), facts.get("Estimated flip levels")
+    map_spot, map_flip = facts.get("Cached map price"), facts.get("Displayed flip")
+    if map_spot and map_flip:
+        if map_spot["status"] == map_flip["status"] == "ok" and map_spot["snapshot_id"] == map_flip["snapshot_id"]:
+            relation = (
+                "above"
+                if map_spot["value"] > map_flip["value"]
+                else "below"
+                if map_spot["value"] < map_flip["value"]
+                else "at"
+            )
+            explanations.append(
+                f"The cached map price is {relation} its flip of {map_flip['value']:,.4g} USD. This is a map-level estimate, not recomputed for visible rows or the question's expiry filter; a separate live quote may differ."
+            )
+        else:
+            explanations.append("The displayed map's age prevents a current price-versus-flip conclusion.")
     if spot and flips and spot["status"] == flips["status"] == "ok" and spot["event_time"] == flips["event_time"]:
         levels = [value for value in flips["value"] if finite(value)]
         if finite(spot["value"]) and levels:

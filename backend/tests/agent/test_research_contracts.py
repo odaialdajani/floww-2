@@ -85,6 +85,8 @@ def test_observation_date_does_not_change_expiry_and_same_ticker_keeps_range():
     assert spec["horizon"] == "month" and spec["question_scope"] is None
     spec = request_spec({"question": "Explain DIA", "screen": {"ticker": "DIA", "expiryRange": [3, 12]}})
     assert spec["horizon"] == "range:3:12"
+    spec = request_spec({"question": "Show DIA earnings next month", "screen": {"ticker": "DIA", "horizon": "all"}})
+    assert spec["horizon"] == "all" and spec["question_scope"] is None
 
 
 @pytest.mark.parametrize("text", ["The price is 999", "Price is above flip", "This is guaranteed bullish"])

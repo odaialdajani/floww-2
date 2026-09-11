@@ -1002,6 +1002,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     log.info(f"build_heatmap: {ticker} expiries={max_expiries} mode={mode} max_strikes={max_strikes}")
     # Check cache first
     cache_key = f"{ticker}:{max_expiries}:{mode}:{dte}:{scalp}:{with_taps}:{max_strikes}"
+    requested_map_query = {"expiries": max_expiries, "mode": mode, "dte": dte, "scalp": scalp, "withTaps": with_taps, "maxStrikes": max_strikes}
     cached = _BUILD_HEATMAP_CACHE.get(cache_key)
     if cached and (time.time() - cached["ts"]) < _BUILD_HEATMAP_CACHE_TTL:
         # Poison-entry guard: a cached payload from a degraded upstream window
@@ -1296,7 +1297,11 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         "gex_regime": nodes.get("regime"),
         "data_source": raw.get("data_source", "yfinance"),
         "mode": mode,
+        "map_query": requested_map_query,
         "asof": datetime.now(UTC).isoformat(),
+        # Build time identifies the displayed version; only producer times establish freshness.
+        "event_time": raw.get("event_time") or raw.get("observed_at"),
+        "fetched_at": raw.get("fetched_at"),
         # New analytics
         "implied_move": implied_move,
         "prob_distribution": prob_distribution,
@@ -3047,8 +3052,9 @@ try:
         from services.agent.repository import AgentRepository
         from services.agent.research import ResearchService
 
-        def peek_map(ticker):
-            entry = _BUILD_HEATMAP_CACHE.get(f"{ticker}:6:day:None:False:True:200")
+        def peek_map(ticker, query):
+            from services.agent.display_map import map_cache_key
+            entry = _BUILD_HEATMAP_CACHE.get(map_cache_key(ticker, query))
             return copy.deepcopy(entry["data"]) if entry else None
 
         def read_alerts(ticker):

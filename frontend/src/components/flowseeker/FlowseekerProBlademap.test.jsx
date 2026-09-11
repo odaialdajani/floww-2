@@ -300,6 +300,7 @@ function mockBackend() {
     } else if (u.includes("/api/heatmap/")) {
       body = {
         spot: 642, max_pain: 642,
+        gamma_flip: {gamma_flip: 641},
         grid: { grid: { "2026-09-12": { 640: -1000, 650: 2000 } }, expiries: ["2026-09-12"], strikes: [640, 650] },
         nodes: { ceilings: [{ strike: 650 }], floors: [{ strike: 630 }] },
       };
@@ -327,6 +328,13 @@ beforeEach(() => {
 });
 
 describe("Tidehunter Pro v3 — one page, zero page tabs", () => {
+  it("draws the flip from the same map response instead of a separate regime reading",async()=>{
+    mockBackend();
+    render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(within(screen.getByTestId("dealer-drilldown")).getByText("641")).toBeInTheDocument());
+    const flipBox=within(screen.getByTestId("dealer-drilldown")).getByText("Gamma flip").parentElement;
+    expect(within(flipBox).queryByText("640")).toBeNull();
+  });
   it("renders the four answer cells and in-page anchor sidebar, no tab switcher", async () => {
     mockBackend();
     const { container } = render(<FlowseekerProBlademap active />);

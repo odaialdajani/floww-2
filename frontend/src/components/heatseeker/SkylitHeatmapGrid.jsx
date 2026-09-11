@@ -1,4 +1,5 @@
 import React, { memo, useEffect, useMemo, useRef, useState } from "react";
+import { shownMapStrikes } from "./shownMapStrikes";
 
 /**
  * SkylitHeatmapGrid — Zenith heatseeker matrix
@@ -176,14 +177,7 @@ function SkylitHeatmapGrid({
 
   // Windowing (2026-09-03): slice the RENDERED rows only — King, spot,
   // and the viridis scale above always use the full matrix.
-  let shownStrikes = strikes;
-  if (windowRows != null && strikes.length > windowRows) {
-    let center = strikes.indexOf(spotStrike);
-    if (center === -1) center = Math.floor(strikes.length / 2);
-    const half = Math.floor(windowRows / 2);
-    let start = Math.max(0, Math.min(center - half, strikes.length - windowRows));
-    shownStrikes = strikes.slice(start, start + windowRows);
-  }
+  const shownStrikes = shownMapStrikes(data, spot, windowRows);
 
   return (
     <div className="skylit-heatmap-wrapper">

@@ -63,6 +63,35 @@ jest.mock("./RndDensityPanel",              () => () => <div data-testid="hs-rnd
 
 // Import AFTER mocks are set up.
 import SkylitDashboard from "./SkylitDashboard";
+import useScreenContext from "../../agent/useScreenContext";
+
+function ResearchSelection(){const [context]=useScreenContext();return <output data-testid="research-selection">{JSON.stringify(context)}</output>;}
+
+test("research follows the rendered wide map and never carries it into another ticker",async()=>{
+ const stamp="2026-09-11T18:00:00Z";
+ const query={expiries:4,mode:"day",dte:null,scalp:false,withTaps:true,maxStrikes:80};
+ const base={ticker:"SPY",asof:stamp,mode:"day",map_query:query,strikes:[{strike:500}],grid:{strikes:[500],expiries:["2026-09-18"]}};
+ let resolveWide;
+ axios.get.mockImplementation(()=>new Promise(resolve=>{resolveWide=resolve;}));
+ const mounted=render(<><SkylitDashboard ticker="SPY" data={base} spot={500}/><ResearchSelection/></>);
+ const current=()=>JSON.parse(screen.getByTestId("research-selection").textContent);
+ expect(current().mapQuery.expiries).toBe(4);
+ expect(current().mapStrikes).toEqual([500]);
+ mounted.rerender(<><SkylitDashboard ticker="SPY" data={base} spot={500} expiries={8} dte={7}/><ResearchSelection/></>);
+ expect(current().mapQuery).toEqual(query);
+ fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+ expect(current().selectedStrike).toBe(650);
+ fireEvent.click(screen.getByTestId("skylit-expand-btn"));
+ expect(current().selectedStrike).toBeNull();
+ await act(async()=>{resolveWide({data:{...base,mode:"swing",map_query:{...query,expiries:8,mode:"swing"},asof:"2026-09-11T18:01:00Z",grid:{strikes:[490,500,510],expiries:["2026-09-18"]}}});});
+ expect(current().mapQuery).toMatchObject({expiries:8,mode:"swing",dte:null});
+ expect(current().mapStrikes).toEqual([510,500,490]);
+ expect(current().mapVersion).toBe("2026-09-11T18:01:00Z");
+ mounted.rerender(<><SkylitDashboard ticker="QQQ" data={base} spot={600}/><ResearchSelection/></>);
+ expect(current().ticker).toBe("QQQ");
+ expect(current().mapVersion).toBeNull();
+ expect(current().mapStrikes).toEqual([]);
+});
 
 beforeEach(() => {
   axios.get.mockImplementation(async () => ({ data: { strikes: [] } }));

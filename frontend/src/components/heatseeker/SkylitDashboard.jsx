@@ -8,6 +8,7 @@ import SkylitMetricsSidebar from "./SkylitMetricsSidebar";
 import ExposureStrip from "./ExposureStrip";
 import { publishScreenContext } from "../../agent/useScreenContext";
 import AlertEngineStrip from "../flowseeker/AlertEngineStrip";
+import { shownMapStrikes } from "./shownMapStrikes";
 
 /**
  * SkylitDashboard — Full Zenith-style trading dashboard
@@ -51,12 +52,6 @@ function SkylitDashboard({
 }) {
   const [tradeMode, setTradeMode] = useState(false);
   const [selectedCell, setSelectedCell] = useState(null);
-  useEffect(()=>{setSelectedCell(null);},[ticker]);
-  useEffect(()=>{
-    publishScreenContext({page:"heatseeker",ticker,dte:dte==null?"all":dte===0?"0dte":`days:${dte}`,metric:viewMode,mode:timeframe,
-      expiries,selectedStrike:selectedCell?.strike ?? null,selectedExpiry:selectedCell?.colKey ?? null,
-      observedAt:data?.event_time || data?.observed_at || null});
-  },[ticker,dte,viewMode,timeframe,expiries,selectedCell,data?.event_time,data?.observed_at]);
   // Grid zoom, in-frame only (2026-09-04): the expanded overlay keeps its
   // designed full density instead of compounding scale on scale.
   const [gridZoom, setGridZoom] = useState(1);
@@ -106,22 +101,34 @@ function SkylitDashboard({
     if (!expanded) return undefined;
     let cancelled = false;
     const ctrl = new AbortController();
+    setExpData(null);
     setExpLoading(true);
     axios
       .get(`${BACKEND_API}/heatmap/${encodeURIComponent(ticker)}?mode=swing&expiries=8`, {
         timeout: 45000,
         signal: ctrl.signal,
       })
-      .then((r) => { if (!cancelled && r?.data?.strikes?.length) setExpData(r.data); })
+      .then((r) => { if (!cancelled && r?.data?.strikes?.length && (!r.data.ticker || r.data.ticker === ticker)) setExpData({...r.data,ticker}); })
       .catch(() => { /* fallback to in-frame data below */ })
       .finally(() => { if (!cancelled) setExpLoading(false); });
     return () => { cancelled = true; ctrl.abort(); };
   }, [expanded, ticker]);
-  const overlayData = expData || data;
+  const baseData = data && (!data.ticker || data.ticker === ticker) ? data : null;
+  const wideData = expData?.ticker === ticker ? expData : null;
+  const overlayData = wideData || baseData;
+  const visibleData = expanded ? overlayData : baseData;
+  useEffect(()=>{setSelectedCell(null);},[ticker,viewMode,expanded,visibleData?.asof]);
+  useEffect(()=>{
+    publishScreenContext({page:"heatseeker",ticker,dte:dte==null?"all":dte===0?"0dte":`days:${dte}`,metric:viewMode,mode:timeframe,
+      expiries,selectedStrike:selectedCell?.strike ?? null,selectedExpiry:selectedCell?.colKey ?? null,
+      mapQuery:visibleData?.map_query || null,
+      mapVersion:visibleData?.asof || null,mapStrikes:shownMapStrikes(visibleData,spot,expanded?null:fitRows),
+      mapExpiries:visibleData?.grid?.expiries || [],observedAt:visibleData?.event_time || visibleData?.observed_at || null});
+  },[ticker,dte,viewMode,timeframe,expiries,selectedCell,visibleData,wideData,expanded,spot,fitRows]);
   const overlayNote = (() => {
     const n = overlayData?.strikes?.length || 0;
     if (!n) return "";
-    if (expData) return `±25% band · ${n} strikes · 8 expiries`;
+    if (wideData) return `±25% band · ${n} strikes · 8 expiries`;
     return expLoading ? "widening band…" : `${n} strikes`;
   })();
 
@@ -267,7 +274,7 @@ function SkylitDashboard({
             </div>
           )}
           <SkylitHeatmapGrid
-            data={data}
+            data={baseData}
             spot={spot}
             ticker={ticker}
             viewMode={viewMode}
@@ -280,7 +287,7 @@ function SkylitDashboard({
         {/* Metrics Sidebar */}
         <div className="skylit-sidebar-area">
           <SkylitMetricsSidebar
-            data={data}
+            data={baseData}
             spot={spot}
             viewMode={viewMode}
             regime={regime}

@@ -115,6 +115,10 @@ def request_spec(body):
         )
         if re.search(pattern, question, re.IGNORECASE)
     ]
+    if re.search(r"\b(?:earnings|dividend|news|economic release)\b", question, re.IGNORECASE) and not re.search(
+        r"\b(?:expir\w*|0dte|1dte)\b", question, re.IGNORECASE
+    ):
+        named_scopes = []
     expiry_dates = list(
         dict.fromkeys(
             re.findall(

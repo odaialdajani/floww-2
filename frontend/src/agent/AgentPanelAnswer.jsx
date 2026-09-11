@@ -2,8 +2,10 @@ import Evidence from "./Evidence";
 export default function AgentPanelAnswer({turn}){
  if(!turn)return null;
  const answer=turn.answer;
+ const window=answer?.snapshots?.find(s=>s.ticker===turn.ticker)?.window;
+ const scope=window?.start && window?.end ? window.start===window.end ? window.start : `${window.start} to ${window.end}` : turn.horizon || "all";
  return <article className="lodestar-answer" aria-label={`Research answer for ${turn.ticker}`}>
-  <h3>{turn.ticker} · {turn.horizon || "all"}</h3>
+  <h3>{turn.ticker} · {scope}</h3>
   <small>{turn.saved === false ? "Not saved" : turn.status==="completed" ? "Saved answer" : turn.status}</small>
   <p>{answer?.summary || turn.text || "No answer available"}</p>
   {answer?.model_status && <small>{answer.model_status}</small>}

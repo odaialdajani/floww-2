@@ -56,13 +56,20 @@ def chain(ticker="SPY", *args):
     }
 
 
-def heat(ticker="SPY"):
+def heat(ticker="SPY", *args):
     strikes = [485, 490, 495, 500, 505, 510, 515]
     return {
         "ticker": ticker,
         "spot": 500,
         "event_time": STAMP,
         "source": "OFFLINE BROWSER FIXTURE",
+        "asof": STAMP,
+        "mode": "day",
+        "map_query": args[0]
+        if args
+        else {"expiries": 6, "mode": "day", "dte": None, "scalp": False, "withTaps": True, "maxStrikes": 80},
+        "strikes": [{"strike": s} for s in strikes],
+        "gamma_flip": {"gamma_flip": 498},
         "grid": {
             "expiries": [EXPIRY],
             "strikes": strikes,
@@ -79,8 +86,12 @@ async def startup():
 
 
 @app.get("/api/heatmap/{ticker}")
-async def map_data(ticker):
-    return heat(ticker)
+async def map_data(ticker, expiries: int = 4, mode: str = "day", dte: int | None = None):
+    result = heat(
+        ticker, {"expiries": expiries, "mode": mode, "dte": dte, "scalp": False, "withTaps": True, "maxStrikes": 80}
+    )
+    result["mode"] = mode
+    return result
 
 
 @app.get("/api/flowseeker/regime/{ticker}")
