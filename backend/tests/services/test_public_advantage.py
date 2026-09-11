@@ -795,15 +795,18 @@ def test_extras_carry_rel_spread():
     assert xtras["SNDK|call|55|2026-09-18"]["rel_spread"] is None
 
 
-def test_alert_carries_rel_spread_when_measured():
+def test_alert_carries_rel_spread_when_measured(monkeypatch):
     from services.flow_alerts import apply_quote_truth, eval_institutional, norm_rows
 
-    rows = norm_rows([["SNDK", "O:S", "call", 50.0, "2026-09-18", 3000, 500, 0.5, 0.4, 49.0]])
-    apply_quote_truth(rows, {"SNDK|call|50|2026-09-18": {
+    # This tests spread propagation, not a changing option-price eligibility cutoff.
+    monkeypatch.setattr("services.flow_alerts.est_entry", lambda row: 2.0)
+    exp = _future_exp(10)
+    rows = norm_rows([["SNDK", "O:S", "call", 50.0, exp, 3000, 500, 0.5, 0.4, 49.0]])
+    apply_quote_truth(rows, {f"SNDK|call|50|{exp}": {
         "premium_true": 600000.0, "rel_spread": 0.04}})
     alerts = eval_institutional(rows)
     assert alerts and alerts[0]["rel_spread"] == 0.04
-    rows2 = norm_rows([["SNDK", "O:S", "call", 50.0, "2026-09-18", 3000, 500, 0.5, 0.4, 49.0]])
+    rows2 = norm_rows([["SNDK", "O:S", "call", 50.0, exp, 3000, 500, 0.5, 0.4, 49.0]])
     assert eval_institutional(rows2)[0]["rel_spread"] is None
 
 
@@ -970,3 +973,4 @@ def test_scan_payload_truncated_and_coverage():
         assert full["coverage"] == {"tickers": 2, "limit": 2}
         room = fs._scan_payload(rows, False, "asof", ["c"], limit=500)
         assert room["truncated"] is False
+        assert room["cache_age_seconds"] == 0

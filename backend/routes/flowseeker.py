@@ -1159,7 +1159,7 @@ def _scan_payload(rows: list, stale: bool, asof: str, columns: list, cache_age: 
     return {
         "columns": columns, "rows": rows, "count": len(rows),
         "source": source, "stale": stale, "asof": asof,
-        "cache_age_seconds": round(cache_age) if cache_age else None,
+        "cache_age_seconds": round(cache_age) if cache_age is not None else None,
         "retry_after_seconds": round(retry_after) if retry_after else None,
         "scan_ttl": int(_SCAN_TTL),
         "budget": _budget_state(),

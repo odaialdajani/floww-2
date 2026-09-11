@@ -2,7 +2,7 @@
 import {
   parseAlert, parseFeedAlerts, isContextual, isDirectional, stageOf,
   formatMovePct, targetTravelPct, directionOf, tradeNowOf, feedBodyOf,
-  verdictWithheld, oiHeldLabel, moneynessPct, applyScreenToScans,
+  verdictWithheld, scanFreshness, oiHeldLabel, moneynessPct, applyScreenToScans,
   applyScreenToAlerts, testCondition, matchCustomScan, BUILTIN_SCREENS,
   TRADE_NOW_FLOOR, SCAN_FACTS,
 } from "./tideFeed";
@@ -209,6 +209,22 @@ describe("rule builder over the 17 facts + 4 ticker facts", () => {
 
 
 describe("shared screen safety",()=>{
+ it("uses entered percent values for open-interest rules without changing stored fractions",()=>{
+  const row=scanRow({oiChgPct:0.2});
+  expect(testCondition(row,{fact:"oiChgPct",op:"≥",value:"20"})).toBe(true);
+  expect(testCondition(row,{fact:"oiChgPct",op:"≥",value:"21"})).toBe(false);
+  expect(testCondition(row,{fact:"oiChgPct",op:"between",value:"19,21"})).toBe(true);
+  expect(row.oiChgPct).toBe(0.2);
+  expect(testCondition(scanRow({oiChgPct:0.29}),{fact:"oiChgPct",op:"≥",value:"29"})).toBe(true);
+  expect(testCondition(scanRow({oiChgPct:-0.12}),{fact:"oiChgPct",op:"between",value:"-20,-5"})).toBe(true);
+  expect(testCondition(row,{fact:"oiChgPct",op:"≥",value:""})).toBe(false);
+ });
+ it("ages unchanged scans even when the server stale flag is false",()=>{
+  const received=100000;
+  expect(scanFreshness({mode:"market",age:5,received,ttl:60},received+116000).status).toBe("STALE");
+  expect(scanFreshness({mode:"market",age:5,received,ttl:60},received+110000).status).toBe("AVAILABLE");
+  expect(scanFreshness({mode:"market",age:null,received},received).status).toBe("AGE UNKNOWN");
+ });
  it("withholds old and incomplete trade-now candidates",()=>{
   expect(tradeNowOf([dirAlert({asof_ts:"2020-01-01T00:00:00Z"})])).toBeNull();
   expect(tradeNowOf([dirAlert({bias:"UNKNOWN"})])).toBeNull();

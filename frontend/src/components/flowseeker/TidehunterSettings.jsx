@@ -4,7 +4,7 @@
 // no new props. Syncs across mounts via a `storage` event. Private-mode safe.
 
 import React, { useState, useEffect } from "react";
-import { PULSE_DEFAULT_COLS } from "./tideFeed";
+import { PULSE_DEFAULT_COLS, migrateScreenUnits } from "./tideFeed";
 
 export const SETTINGS_KEY = "floww_settings";
 export const DEFAULT_MODE = "trade";
@@ -35,7 +35,7 @@ export function loadTide() {
   try {
     const all = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {};
     const t = all.tidehunter || {};
-    return { ...defaultTide(), ...t };
+    return { ...defaultTide(), ...t, screens:(t.screens || []).map(migrateScreenUnits) };
   } catch {
     return defaultTide();
   }
@@ -45,7 +45,8 @@ export function loadTide() {
 export function saveSettings(patch) {
   try {
     const all = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {};
-    const next = { ...all, tidehunter: { ...((all || {}).tidehunter || {}), ...patch } };
+    const merged={...((all || {}).tidehunter || {}),...patch};
+    const next = { ...all, tidehunter: {...merged,screens:(merged.screens || []).map(migrateScreenUnits)} };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
     window.dispatchEvent(new Event("floww-settings-changed"));
     return true;

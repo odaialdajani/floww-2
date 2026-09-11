@@ -30,6 +30,7 @@ import {
   BUILTIN_SCREENS, PULSE_COLUMNS, PULSE_DEFAULT_COLS,
   parseFeedAlerts, isContextual, stageOf, formatMovePct, targetTravelPct,
   directionOf, ageOf, tradeNowOf, feedBodyOf, oiHeldLabel,
+  scanFreshness,
   moneynessPct, applyScreenToScans, applyScreenToAlerts,
   SCAN_FACTS, SCAN_FACT_LABELS, TICKER_FACTS, TICKER_FACT_LABELS, RULE_LIST,
 } from "./tideFeed";
@@ -43,6 +44,7 @@ import { dealerSeries, finite } from "./dealerSeries";
 const API = `${BACKEND_URL}/api/flowseeker`;
 const NOISE_FLOOR = 5;
 const ACK_KEY = "th-acked-v1";
+const CLEARED_FEED_KEY = "th-cleared-feed-v1";
 const PREFS_KEY = "th-prefs-v1";
 const FIRSTSEEN_KEY = "th-firstseen-v1";
 const ALERTSEEN_KEY = "th-alertseen-v1";
@@ -159,6 +161,13 @@ function loadAcked() {
   } catch {
     return {};
   }
+}
+function loadClearedFeed() {
+  try {
+    const saved=JSON.parse(localStorage.getItem(CLEARED_FEED_KEY)) || {};
+    const cutoff=Date.now()-FEED_DAYS*86400000;
+    return Object.fromEntries(Object.entries(saved).filter(([,stamp])=>Number.isFinite(stamp) && stamp>=cutoff));
+  }catch{return {};}
 }
 function dteDays(exp) {
   if (!exp) return null;
@@ -421,8 +430,9 @@ export default function FlowseekerProBlademap({ active = true }) {
           const meta = {
             mode: "market", stale: !!d.stale, symbols: nSyms,
             source: d.source || d.data_source || "Source not supplied",
-            received: Date.now(), age: d.cache_age_seconds ?? 0, retry: d.retry_after_seconds ?? null,
+            received: Date.now(), age: Number.isFinite(d.cache_age_seconds) ? d.cache_age_seconds : null, retry: d.retry_after_seconds ?? null,
             ttl: d.scan_ttl ?? 60, budget: d.budget ?? null,
+            truncated: !!d.truncated,coverage:d.coverage || null,
           };
           if (feedHoverRef.current || feedFocusRef.current || kbActiveRef.current) setPendingScan({ rows, meta });
           else { setScan(rows); setPendingScan(null); setScanMeta(meta); setScanAt(new Date().toLocaleTimeString()); }
@@ -666,6 +676,7 @@ export default function FlowseekerProBlademap({ active = true }) {
     setHiddenRules((h) => (h.includes(rule) ? h.filter((r) => r !== rule) : [...h, rule]));
   }, []);
   const [acked, setAcked] = useState(loadAcked);
+  const [clearedFeed,setClearedFeed]=useState(loadClearedFeed);
   const [planned, setPlanned] = useState({});
   const [forcing, setForcing] = useState(false);
   const [kbIdx, setKbIdx] = useState(-1);
@@ -759,32 +770,37 @@ export default function FlowseekerProBlademap({ active = true }) {
     }),
     [feed, screen, universe, scan, tickerFacts, universeOnly, knobType, knobQ, knobMinVol, knobMinScore, knobDteMin, knobDteMax],
   );
-  const visibleFeed = useMemo(() => {
+  const scopedFeed = useMemo(() => {
     const scope = alertUnivOnly ? screenedFeed.filter((a) => universe.includes(a.under || a.ticker)) : screenedFeed;
     const ruleOk = (a) => !hiddenRules.includes(String(a.rule || "").toUpperCase());
-    const live = (showHistory ? scope : scope.filter((a) => !acked[a.key])).filter(ruleOk);
-    if (feedOrder === "new") {
-      return [...live].sort((a, b) => Date.parse(b.asof_ts || 0) - Date.parse(a.asof_ts || 0));
+    const live = scope.filter(ruleOk).filter(a=>clearedFeed[a.key] == null || Date.parse(a.asof_ts || "") > clearedFeed[a.key]);
+    if (feedOrder === "new" || feedOrder === "old") {
+      const direction=feedOrder==="new"?-1:1;
+      return [...live].sort((a,b)=>direction*((Date.parse(a.asof_ts || "") || 0)-(Date.parse(b.asof_ts || "") || 0)));
     }
-    return live;
-  }, [screenedFeed, alertUnivOnly, universe, showHistory, acked, feedOrder, hiddenRules]);
+    return [...live].sort((a,b)=>(b.conviction ?? 0)-(a.conviction ?? 0));
+  }, [screenedFeed, alertUnivOnly, universe, feedOrder, hiddenRules,clearedFeed]);
+  const unackedFeed=useMemo(()=>scopedFeed.filter(a=>!acked[a.key]),[scopedFeed,acked]);
+  const visibleFeed=showHistory?scopedFeed:unackedFeed;
 
-  const elapsedScanAge = (scanMeta.age || 0) + (scanMeta.received ? (Date.now() - scanMeta.received) / 1000 : 0);
+  const scanState=scanFreshness(scanMeta);
+  const elapsedScanAge=scanState.age,scanStale=scanState.stale;
+  const limitedScan=scanMeta.truncated?`Limited sample · ${scan.length} contracts returned`:null;
   const withheld = feedErr || !feedReceived || Date.now() - feedReceived > 120000 ? "Alert feed is unavailable or out of date" : null;
   // Per-rule counts for the Vector header (the old tape's session summary).
   const ruleCounts = useMemo(() => {
     const c = {};
-    for (const a of screenedFeed) {
+    for (const a of visibleFeed) {
       const r = String(a.rule || "").toUpperCase();
       if (r) c[r] = (c[r] || 0) + 1;
     }
     return c;
-  }, [screenedFeed]);
+  }, [visibleFeed]);
   const bestFeed = useMemo(
-    () => [...visibleFeed].sort((a, b) => (b.conviction ?? 0) - (a.conviction ?? 0))[0] || null,
-    [visibleFeed],
+    () => [...unackedFeed].sort((a, b) => (b.conviction ?? 0) - (a.conviction ?? 0))[0] || null,
+    [unackedFeed],
   );
-  const tradeNow = withheld ? null : tradeNowOf(visibleFeed, TRADE_NOW_FLOOR);
+  const tradeNow = withheld ? null : tradeNowOf(unackedFeed, TRADE_NOW_FLOOR);
   useEffect(() => {
     const top = tradeNow;
     if (!top) return;
@@ -804,17 +820,18 @@ export default function FlowseekerProBlademap({ active = true }) {
 
   const heartbeat = useMemo(() => {
     const hb = pulseState({
-      mode: scanMeta.mode, stale: !!scanMeta.stale,
+      mode: scanMeta.mode, stale: scanStale,
       age: elapsedScanAge, retry: scanMeta.retry,
       hasData: scan.length > 0, hasError: !!scanMeta.err,
       ttl: scanMeta.ttl || 60,
     });
     const b = scanMeta.budget;
-    if (hb.label === "LIVE") hb.label = "AVAILABLE";
-    const next = scanMeta.ttl ? Math.max(0, scanMeta.ttl - elapsedScanAge) : null;
+    hb.label=hb.label.replace(/^LIVE/,"AVAILABLE");
+    if(scanState.status==="AGE UNKNOWN"){hb.label="AGE UNKNOWN";hb.dot="y";hb.hint="Scan cache age was not supplied";}
+    const next = scanMeta.ttl && elapsedScanAge != null ? Math.max(0, scanMeta.ttl - elapsedScanAge) : null;
     hb.hint = `${hb.hint}${next != null ? ` · next scan ~${elapsedClock(next)}` : ""}${b ? ` · ${b.used}/${b.hourly_cap} calls this hour` : ""}`;
     return hb;
-  }, [scanMeta, scan.length, elapsedScanAge]);
+  }, [scanMeta, scan.length, elapsedScanAge,scanStale,scanState.status]);
 
   // ---- answer cells ----
   const moneyFacts = useMemo(() => {
@@ -822,17 +839,19 @@ export default function FlowseekerProBlademap({ active = true }) {
     const top = roll.slice(0, 3);
     const sigmas = {};
     for (const a of screenedFeed) {
-      if (String(a.rule || "").toUpperCase() === "SIGMA" && a.sigma != null) sigmas[a.under] = a.sigma;
+      const observed=Date.parse(a.asof_ts || "");
+      if (String(a.rule || "").toUpperCase() === "SIGMA" && Number.isFinite(a.sigma) &&
+          Number.isFinite(observed) && Date.now()-observed>=0 && Date.now()-observed<=900000) sigmas[a.under || a.ticker] = a.sigma;
     }
     return { roll, top, sigmas };
-  }, [screenedScans, screenedFeed]);
+  }, [screenedScans, screenedFeed,clock]);
 
   const changedFacts = useMemo(() => {
     const keys=new Set(screenedScans.map(r=>`${r.under}|${r.type}|${r.strike}|${r.exp}`));
     const local=alertLog.filter(a=>a.t>visitBaseline && keys.has(`${a.under}|${a.type}|${a.strike}|${a.exp}`) && !hiddenRules.includes(String(a.rule || "").toUpperCase()));
-    const changed=visibleFeed.filter(a=>Date.parse(a.asof_ts || "")>visitBaseline);
+    const changed=unackedFeed.filter(a=>Date.parse(a.asof_ts || "")>visitBaseline);
     return {n:local.length+changed.length,scope:local.length,feedNew:changed.length};
-  },[alertLog,screenedScans,visibleFeed,hiddenRules,visitBaseline]);
+  },[alertLog,screenedScans,unackedFeed,hiddenRules,visitBaseline]);
 
   const dealersFacts = useMemo(() => {
     const reg = dealers.regime || {};
@@ -859,11 +878,12 @@ export default function FlowseekerProBlademap({ active = true }) {
 
   const degradedLine = useMemo(() => {
     if (scanMeta.err) return "feed unreachable · retrying";
-    if (scanMeta.stale) return `stale · next slot in ${elapsedClock(scanMeta.retry ?? scanMeta.ttl ?? 60)}`;
+    if (scanStale) return "Stale scan · cached readings are not a current market update";
     if (scanMeta.mode === "fallback" || !scanMeta.mode) return "waiting on market-wide scan";
+    if(elapsedScanAge == null)return "Scan cache age was not supplied";
     if ((scanMeta.budget?.used ?? 0) >= (scanMeta.budget?.hourly_cap ?? Infinity)) return "hourly budget spent · serving cache";
     return null;
-  }, [scanMeta]);
+  }, [scanMeta,scanStale,elapsedScanAge]);
 
   // ---- actions ----
   const doDrill = useCallback((row) => {
@@ -961,6 +981,12 @@ export default function FlowseekerProBlademap({ active = true }) {
       /* noop */
     }
   }, []);
+  const clearFeed=useCallback(()=>{
+    const next={...clearedFeed};
+    for(const alert of visibleFeed)next[alert.key]=Date.parse(alert.asof_ts || "") || Date.now();
+    setClearedFeed(next);
+    try{localStorage.setItem(CLEARED_FEED_KEY,JSON.stringify(next));}catch{/* Display clear still works for this visit. */}
+  },[clearedFeed,visibleFeed]);
 
   // ---- screen CRUD (built-ins are editable copies) ----
   const saveCustomScreen = useCallback((s) => {
@@ -1003,7 +1029,8 @@ export default function FlowseekerProBlademap({ active = true }) {
       }
       if (e.key === "/") {
         e.preventDefault();
-        knobQRef.current?.focus();
+        setShowFilters(true);setShowMore(false);setEditingScreen(null);
+        setTimeout(()=>knobQRef.current?.focus(),0);
         return;
       }
       if (e.key === "r" || e.key === "R") {
@@ -1105,11 +1132,12 @@ export default function FlowseekerProBlademap({ active = true }) {
   }), [drillRows, drillFilter, drillDte]);
 
   const activeChips = [];
-  if (knobType !== "all") activeChips.push(["Type", knobType]);
-  if (knobMinScore > 0) activeChips.push(["Score", `≥${knobMinScore}`]);
-  if (knobMinVol > 0) activeChips.push(["Vol", `≥${fmtK(knobMinVol)}`]);
-  if (knobDteMin != null || knobDteMax != null) activeChips.push(["DTE", `${knobDteMin ?? 0}–${knobDteMax ?? "∞"}`]);
-  if (universeOnly) activeChips.push(["Universe", `${universe.length} names`]);
+  if (knobType !== "all") activeChips.push(["Type", knobType,()=>setKnobType("all")]);
+  if (knobQ.trim()) activeChips.push(["Ticker", knobQ,()=>setKnobQ("")]);
+  if (knobMinScore > 0) activeChips.push(["Score", `≥${knobMinScore}`,()=>setKnobMinScore(0)]);
+  if (knobMinVol > 0) activeChips.push(["Vol", `≥${fmtK(knobMinVol)}`,()=>setKnobMinVol(0)]);
+  if (knobDteMin != null || knobDteMax != null) activeChips.push(["DTE", `${knobDteMin ?? 0}–${knobDteMax ?? "∞"}`,()=>{setKnobDteMin(null);setKnobDteMax(null);}]);
+  if (universeOnly) activeChips.push(["Universe", `${universe.length} names`,()=>setUniverseOnly(false)]);
 
   const sectionOrder = tide.sectionOrder || ["board", "vector", "pulse", "lattice", "trust"];
   const pulseRowCap = mode === "trade" ? 8 : mode === "monitor" ? 14 : 30;
@@ -1267,7 +1295,7 @@ export default function FlowseekerProBlademap({ active = true }) {
           <button type="button" className="th-nav" onClick={() => scrollTo("settings")}>Settings</button>
           <span className="th-sp" />
           <div className="th-st">
-            <span><b>{scanMeta.err ? "UNAVAILABLE" : !scanMeta.mode ? "LOADING" : scanMeta.stale ? "STALE" : "AVAILABLE"}</b> <span className={`dot ${heartbeat.dot}`} />{scanMeta.source || "Source not supplied"} · {scanMeta.symbols || "—"} symbols</span>
+            <span><b>{scanState.status}</b> <span className={`dot ${heartbeat.dot}`} />{scanMeta.source || "Source not supplied"} · {scanMeta.symbols || "—"} symbols</span>
             <span>{scanMeta.budget ? `${scanMeta.budget.used}/${scanMeta.budget.hourly_cap} calls this hour` : "budget n/a"}{scanMeta.ttl ? ` · next scan ~${elapsedClock(Math.max(0, scanMeta.ttl - elapsedScanAge))}` : ""}</span>
             <span>Order-flow imbalance, price impact: no feed</span>
           </div>
@@ -1311,9 +1339,10 @@ export default function FlowseekerProBlademap({ active = true }) {
                 <div>
                   <h1>Board</h1>
                   <div className="th-meta">
-                    <b>{scanMeta.err ? "UNAVAILABLE" : !scanMeta.mode ? "LOADING" : scanMeta.stale ? "STALE" : "AVAILABLE"}</b>
+                    <b>{scanState.status}</b>
                     <span className="k">Last updated</span><span>{scanAt || feedAt || "—"}</span>
                     <span className="k">Showing</span><span>{screenedScans.length} contracts · {visibleFeed.length} signals · {screen.label}</span>
+                    {limitedScan && <span>{limitedScan}</span>}
                     <span className="k">{clock}</span>
                   </div>
                 </div>
@@ -1350,12 +1379,13 @@ export default function FlowseekerProBlademap({ active = true }) {
                       <span className="v">
                         {visibleFeed.length && bestFeed
                           ? `No eligible trade · highest reading ${bestFeed.conviction} ${bestFeed.under || bestFeed.ticker || ""}`
-                          : "Server feed empty — ranking client-side"}
+                          : "No unacknowledged signals in this screen"}
                       </span>
                       <span className="f">{feedErr || `${scan.length} contracts screened · needs a fresh, complete contract and ${TRADE_NOW_FLOOR}+ conviction`}</span>
                     </>
                   )}
                   {degradedLine && <span className="f warn">{degradedLine}</span>}
+                  {limitedScan && <span className="f warn">{limitedScan}</span>}
                 </button>
 
                 <button type="button" className="th-ans" data-testid="cell-money" onClick={() => scrollTo("pulse")}>
@@ -1399,13 +1429,15 @@ export default function FlowseekerProBlademap({ active = true }) {
                   ) : (
                     <><span className="v">No concentration read yet</span><span className="f">waiting on the market-wide scan</span></>
                   )}
-                  {degradedLine && <span className="f warn">{degradedLine}{scanMeta.stale ? " · σ/ΔOI unavailable while stale" : ""}</span>}
+                  {degradedLine && <span className="f warn">{degradedLine}</span>}
+                  {limitedScan && <span className="f warn">{limitedScan}</span>}
                 </button>
 
                 <button type="button" className="th-ans" data-testid="cell-changed" onClick={() => scrollTo("vector")}>
                   <span className="q"><span className="lbl">Changed since you looked</span><span className="tag">{screen.label}</span></span>
                   <span className="v">{changedFacts.n ? `${changedFacts.n} new readings` : "Nothing new"} since {fmtClock(visitBaseline)}</span>
                   <span className="s">{changedFacts.feedNew} alerts · {changedFacts.scope} new screened contracts</span>
+                  {limitedScan && <span className="f warn">{limitedScan}</span>}
                   <span className="f">Current screen only · re-arms on return</span>
                   {degradedLine && <span className="f warn">{degradedLine}</span>}
                 </button>
@@ -1444,7 +1476,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                 {scanMeta.budget ? ` · ${scanMeta.budget.used}/${scanMeta.budget.hourly_cap} calls this hour` : ""}
                 {scanMeta.ttl ? ` · next ~${elapsedClock(Math.max(0, scanMeta.ttl - elapsedScanAge))}` : ""}
               </span>
-              <span>Updated <b>{scanMeta.stale ? `STALE · ${scanAt || "—"}` : scanAt || "—"}</b>
+              <span>Updated <b>{scanStale ? `STALE · ${scanAt || "—"}` : scanAt || "—"}</b>
                 {elapsedScanAge >= 5 ? ` · cached ${elapsedClock(elapsedScanAge)} ago` : ""}
               </span>
               <span>Source <b>{scanMeta.source || "—"}</b></span>
@@ -1471,7 +1503,7 @@ export default function FlowseekerProBlademap({ active = true }) {
               <button type="button" className="th-chipb" onClick={() => { setShowFilters((v) => !v); setShowMore(false); setEditingScreen(null); }}>
                 Filters{activeChips.length ? ` · ${activeChips.length}` : ""}
               </button>
-              {activeChips.map(([k, v]) => <span key={k} className="th-fchip">{k} <b>{v}</b></span>)}
+              {activeChips.map(([k, v,remove]) => <button type="button" key={k} className="th-fchip" aria-label={`Remove ${k.toLowerCase()} filter`} onClick={remove}>{k} <b>{v}</b> ×</button>)}
               <button type="button" className="th-chipb" onClick={() => { setShowMore((v) => !v); setShowFilters(false); setEditingScreen(null); }}>⋯</button>
 
               {showFilters && (
@@ -1537,11 +1569,12 @@ export default function FlowseekerProBlademap({ active = true }) {
                       </button>
                     ))}
                   </span>
-                  <button type="button" className="th-chipb" onClick={() => setFeedOrder((o) => (o === "conviction" ? "new" : "conviction"))}>
-                    Feed · {feedOrder === "conviction" ? "conviction rank" : "newest first"}
+                  <button type="button" className="th-chipb" onClick={() => setFeedOrder((o) => (o === "conviction" ? "new" : o === "new" ? "old" : "conviction"))}>
+                    Feed · {feedOrder === "conviction" ? "conviction rank" : feedOrder === "new" ? "newest first" : "oldest first"}
                   </button>
                   <button type="button" className="th-chipb" onClick={copyFeed}>⧉ Copy feed</button>
-                  <button type="button" className="th-chipb" onClick={clearDismissed}>Clear dismissed</button>
+                  <button type="button" className="th-chipb" onClick={clearFeed}>Clear feed</button>
+                  <button type="button" className="th-chipb" onClick={clearDismissed}>Restore dismissed</button>
                   <button type="button" className="th-chipb" onClick={() => setShowHistory((v) => !v)}>Show history · {Object.keys(acked).length}</button>
                 </div>
               )}
@@ -1561,7 +1594,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                   <div className="th-sec" id="vector" key="vector">
                     <div className="th-sh">
                       <h2>Vector</h2>
-                      <span className="th-meta"><b>{scanMeta.err ? "UNAVAILABLE" : !scanMeta.mode ? "LOADING" : scanMeta.stale ? "STALE" : "AVAILABLE"}</b> direction board · ranked by conviction · {visibleFeed.length} in screen · {screen.label}</span>
+                      <span className="th-meta"><b>{feedErr ? "UNAVAILABLE" : !feedReceived ? "LOADING" : withheld ? "STALE" : "AVAILABLE"}</b> direction board · {feedOrder === "new" ? "newest first" : feedOrder === "old" ? "oldest first" : "ranked by conviction"} · {visibleFeed.length} in screen · {screen.label}</span>
                       <span className="th-sp" />
                       <span className="th-rulecounts" title="Signals per rule in this screen">
                         {Object.entries(ruleCounts).map(([k, v]) => <span key={k} className="th-fchip">{k} <b>{v}</b></span>)}
@@ -1610,7 +1643,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                   <div className="th-sec" id="pulse" key="pulse">
                     <div className="th-sh">
                       <h2>Pulse</h2>
-                      <span className="th-meta"><b>{scanMeta.err ? "UNAVAILABLE" : !scanMeta.mode ? "LOADING" : scanMeta.stale ? "STALE" : "AVAILABLE"}</b> screened contracts · {screenedScans.length} of {scan.length} · {screen.label}</span>
+                      <span className="th-meta"><b>{scanState.status}</b> screened contracts · {screenedScans.length} of {scan.length} · {screen.label}{limitedScan && ` · ${limitedScan}`}</span>
                       <span className="th-sp" />
                       {(pendingFeed || pendingScan) && <button type="button" className="th-chipb on" onClick={applyPendingReadings}>Apply new readings</button>}
                       <button type="button" className="th-chipb" aria-pressed={showCols} onClick={() => setShowCols((v) => !v)}>
@@ -1941,7 +1974,7 @@ function ScreenBuilder({ initial, onSave, onDelete, onCancel }) {
   const [conditions,setConditions]=useState(initial.conditions || []);
   const validList=rows=>rows.every(c=>Array.isArray(c.conditions) ? c.conditions.length>0 && validList(c.conditions) : c.fact && c.op && String(c.value ?? "").trim()!=="");
   const valid=label.trim() && validList(conditions);
-  const save=duplicate=>onSave({...initial,id:duplicate?undefined:initial.id,label:label.trim()+(duplicate?" copy":""),rule,conditions,custom:true,saved:true});
+  const save=duplicate=>onSave({...initial,id:duplicate?undefined:initial.id,label:label.trim()+(duplicate?" copy":""),rule,conditions,ruleUnitsVersion:2,custom:true,saved:true});
   return <div className="th-rb" data-testid="rule-builder">
     <label>Screen name <input value={label} onChange={e=>setLabel(e.target.value)} aria-label="Screen name"/></label>
     <p>Match all conditions and groups below. Missing readings do not match.</p>

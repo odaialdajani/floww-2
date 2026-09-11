@@ -173,6 +173,15 @@ export function verdictWithheld(scanMeta) {
   return age > 2 * ttl;
 }
 
+export function scanFreshness(meta, now = Date.now()) {
+  const age = Number.isFinite(meta?.age) && meta.age >= 0 && Number.isFinite(meta?.received)
+    ? meta.age + Math.max(0, now - meta.received) / 1000 : null;
+  const ttl = Number.isFinite(meta?.ttl) && meta.ttl > 0 ? meta.ttl : 60;
+  const stale = !!meta?.stale || (age != null && age > 2 * ttl);
+  const status = meta?.err ? "UNAVAILABLE" : !meta?.mode ? "LOADING" : stale ? "STALE" : age == null ? "AGE UNKNOWN" : "AVAILABLE";
+  return {age, stale, status};
+}
+
 // ΔOI read: held = positioning stuck, faded = intraday churn.
 export function oiHeldLabel(oiChgPct) {
   if (oiChgPct == null) return "— no prior day";
@@ -252,6 +261,25 @@ export function factValueOf(r, fact, tickerCtx) {
   if (TICKER_FACTS.includes(fact)) return tickerCtx?.[fact] ?? null;
   return r[fact] ?? null;
 }
+function conditionRange(value) {
+  const range=/^\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)\s*(?:,|–|-)\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)\s*$/i.exec(String(value ?? ""));
+  return range ? range.slice(1).map(Number) : null;
+}
+export function migrateScreenUnits(screen) {
+  if(!screen || screen.ruleUnitsVersion===2)return screen;
+  const percent=value=>String(Number((Number(value)*100).toPrecision(15)));
+  const migrate=condition=>{
+    if(Array.isArray(condition?.conditions))return {...condition,conditions:condition.conditions.map(migrate)};
+    if(condition?.fact!=="oiChgPct")return condition;
+    if(condition.op==="between") {
+      const range=conditionRange(condition.value);
+      return range?.every(Number.isFinite)?{...condition,value:range.map(percent).join(",")}:condition;
+    }
+    return String(condition.value ?? "").trim() && Number.isFinite(Number(condition.value))
+      ? {...condition,value:percent(condition.value)}:condition;
+  };
+  return {...screen,ruleUnitsVersion:2,conditions:(screen.conditions || []).map(migrate)};
+}
 export function testCondition(r, cond, tickerCtx) {
   if (Array.isArray(cond.conditions)) {
     if (!cond.conditions.length) return false;
@@ -259,21 +287,25 @@ export function testCondition(r, cond, tickerCtx) {
   }
   const v = factValueOf(r, cond.fact, tickerCtx);
   if (v == null) return false;
-  const num = Number(cond.value);
+  const scale=cond.fact === "oiChgPct" ? 100 : 1;
+  const num = String(cond.value ?? "").trim() ? Number(cond.value) / scale : NaN;
   const str = String(cond.value ?? "").toUpperCase();
   switch (cond.op) {
     case "≥":
-      if (typeof v === "string") return false;
+      if (typeof v === "string" || !Number.isFinite(num)) return false;
       return Number(v) >= num;
     case "≤":
-      if (typeof v === "string") return false;
+      if (typeof v === "string" || !Number.isFinite(num)) return false;
       return Number(v) <= num;
     case "between": {
-      const [lo, hi] = String(cond.value ?? "").split(/[,–-]/).map(Number);
+      const range=conditionRange(cond.value);
+      if(!range)return false;
+      const [lo, hi] = range.map(value=>value/scale);
       if (!Number.isFinite(lo) || !Number.isFinite(hi)) return false;
       return Number(v) >= Math.min(lo, hi) && Number(v) <= Math.max(lo, hi);
     }
     case "is":
+      if(scale!==1)return Number.isFinite(num) && typeof v === "number" && v===num;
       return String(v).toUpperCase() === str;
     default:
       return false;

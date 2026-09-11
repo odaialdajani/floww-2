@@ -277,13 +277,13 @@ const SCAN_ROWS = [
   ["AMD", "OCC3", "call", 168, "2026-09-26", 142000, 90000, 0.45, null, 164.2],
 ];
 
-function mockBackend() {
+function mockBackend({alerts=FEED_ALERTS,scanOverrides={}}={}) {
   const urls = [];
   global.fetch = jest.fn((url) => {
     urls.push(String(url));
     const u = String(url);
     let body = {};
-    if (u.includes("/alerts/feed")) body = { alerts: FEED_ALERTS, count: 3, days: 7 };
+    if (u.includes("/alerts/feed")) body = { alerts, count: alerts.length, days: 7 };
     else if (u.includes("/scan/history")) body = { tickers: {}, days: 14 };
     else if (u.includes("/scan/refresh")) body = { ok: true };
     else if (u.includes("/scan")) {
@@ -291,6 +291,7 @@ function mockBackend() {
         rows: SCAN_ROWS, regimes: {}, prev_oi: { OCC1: 70000, OCC2: 160000 },
         baselines: {}, stale: false, cache_age_seconds: 5,
         retry_after_seconds: null, scan_ttl: 60, budget: { used: 6, hourly_cap: 20 },
+        ...scanOverrides,
       };
     } else if (u.includes("/regime/")) {
       body = {
@@ -328,6 +329,86 @@ beforeEach(() => {
 });
 
 describe("Tidehunter Pro v3 — one page, zero page tabs", () => {
+  it("showing acknowledged history does not revive Trade now",async()=>{
+    mockBackend();render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("trade-now-row")).toBeInTheDocument());
+    fireEvent.click(within(screen.getByTestId("trade-now-row")).getByText("Ack"));
+    expect(screen.queryByTestId("trade-now-row")).toBeNull();
+    fireEvent.click(screen.getByText("⋯"));
+    fireEvent.click(screen.getByText(/Show history/));
+    expect(screen.queryByTestId("trade-now-row")).toBeNull();
+    expect(within(screen.getByTestId("vector-feed")).getByText("OI +41% held overnight")).toBeInTheDocument();
+  });
+  it("each filter chip removes only its own filter including ticker search",async()=>{
+    mockBackend();render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("trade-now-row")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Filters"));
+    fireEvent.change(screen.getByPlaceholderText(/Ticker.*\//),{target:{value:"NVDA"}});
+    fireEvent.change(screen.getByPlaceholderText("Min vol"),{target:{value:"10000"}});
+    fireEvent.click(screen.getByRole("button",{name:"Remove ticker filter"}));
+    expect(screen.getByPlaceholderText(/Ticker.*\//).value).toBe("");
+    expect(screen.getByPlaceholderText("Min vol").value).toBe("10000");
+    fireEvent.click(screen.getByRole("button",{name:"Remove vol filter"}));
+    expect(screen.getByPlaceholderText("Min vol").value).toBe("");
+  });
+  it("shows stale scan wording from age without withholding a separate fresh alert feed",async()=>{
+    mockBackend({scanOverrides:{cache_age_seconds:121,stale:false}});
+    render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("trade-now-row")).toBeInTheDocument());
+    expect(screen.getByTestId("market-tape").textContent).toMatch(/STALE/);
+    expect(screen.getByTestId("cell-money").textContent).toMatch(/stale/i);
+  });
+  it("keeps limited scan coverage visible on the board and sample-based sections",async()=>{
+    mockBackend({scanOverrides:{truncated:true,coverage:{limit:3,tickers:3}}});
+    render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("trade-now-row")).toBeInTheDocument());
+    expect(document.getElementById("board").textContent).toMatch(/Limited sample/);
+    expect(screen.getByTestId("cell-money").textContent).toMatch(/Limited sample/);
+    expect(document.getElementById("pulse").textContent).toMatch(/Limited sample/);
+  });
+  it("does not call an old SIGMA alert current evidence for Money building",async()=>{
+    const alerts=FEED_ALERTS.map(a=>a.rule==="SIGMA"?{...a,asof_ts:new Date(Date.now()-901000).toISOString()}:a);
+    mockBackend({alerts});render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("trade-now-row")).toBeInTheDocument());
+    expect(screen.getByTestId("cell-money").textContent).not.toMatch(/4.6σ server-confirmed/);
+  });
+  it("slash opens the filter controls and focuses ticker search",async()=>{
+    mockBackend();render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("trade-now-row")).toBeInTheDocument());
+    expect(screen.queryByTestId("filters-panel")).toBeNull();
+    fireEvent.keyDown(window,{key:"/"});
+    await waitFor(()=>expect(screen.getByPlaceholderText(/Ticker.*\//)).toHaveFocus());
+  });
+  it("clears the displayed feed without resetting acknowledged history or firing old rows on reload",async()=>{
+    mockBackend();const view=render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("trade-now-row")).toBeInTheDocument());
+    fireEvent.click(within(screen.getByTestId("trade-now-row")).getByText("Ack"));
+    fireEvent.click(screen.getByText("⋯"));
+    fireEvent.click(screen.getByRole("button",{name:"Clear feed"}));
+    expect(screen.getByTestId("vector-feed").textContent).toMatch(/No signals/);
+    expect(screen.getByTestId("cell-trade").textContent).toContain("No unacknowledged signals in this screen");
+    expect(screen.getByTitle("Signals per rule in this screen").textContent).toBe("");
+    const ack=localStorage.getItem("th-acked-v1");
+    expect(Object.keys(JSON.parse(ack))).toHaveLength(1);
+    view.unmount();render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("vector-feed").textContent).toMatch(/No signals/));
+    expect(screen.queryByTestId("trade-now-row")).toBeNull();
+    expect(localStorage.getItem("th-acked-v1")).toBe(ack);
+  });
+  it("keeps the pinned trade once while sorting the remaining feed oldest-first",async()=>{
+    const alerts=FEED_ALERTS.map((a,i)=>({...a,asof_ts:new Date(Date.now()-(i+1)*60000).toISOString()}));
+    mockBackend({alerts});render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("trade-now-row")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("⋯"));
+    fireEvent.click(screen.getByRole("button",{name:"Feed · conviction rank"}));
+    fireEvent.click(screen.getByRole("button",{name:"Feed · newest first"}));
+    expect(screen.getByRole("button",{name:"Feed · oldest first"})).toBeInTheDocument();
+    const rows=within(screen.getByTestId("vector-feed")).getAllByRole("row");
+    expect(rows[1]).toHaveAttribute("data-testid","trade-now-row");
+    expect(rows[2].textContent).toMatch(/score 88/);
+    expect(rows[3].textContent).toMatch(/volume 4.6σ/);
+    expect(JSON.parse(localStorage.getItem("th-prefs-v1")).feedOrder).toBe("old");
+  });
   it("draws the flip from the same map response instead of a separate regime reading",async()=>{
     mockBackend();
     render(<FlowseekerProBlademap active />);
