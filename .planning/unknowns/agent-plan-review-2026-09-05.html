@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Review — Agentic layer plan (Solstice + Tidehunter Pro)</title>
+<style>
+  :root{
+    --bg:#16181c; --bg2:#1a1d22; --card:#1c1f24; --card2:#20242a;
+    --line:#282d34; --line2:#333942;
+    --tx:#a4a8ae; --tx-dim:#767c85; --tx-hi:#c2c7cd;
+    --red:#b5615c; --amber:#b39055; --green:#5f9b7c; --blue:#5f87ab; --violet:#8a7fb8;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--tx)}
+  body{font:15px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:44px 28px 100px}
+
+  h1{font-size:23px;font-weight:600;color:var(--tx-hi);margin:0 0 6px;letter-spacing:-.2px}
+  .sub{color:var(--tx-dim);font-size:13px;margin:0 0 30px}
+  h2{font-size:12px;font-weight:600;letter-spacing:.11em;text-transform:uppercase;
+     color:var(--tx-dim);margin:44px 0 16px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+  h3{font-size:15px;font-weight:600;color:var(--tx-hi);margin:0 0 8px}
+  p{margin:0 0 11px}
+  code{font-family:var(--mono);font-size:12.5px;color:var(--tx-hi);
+       background:#22262c;padding:1.5px 5px;border-radius:3px;border:1px solid var(--line)}
+  a{color:var(--blue)}
+
+  .verdict{background:var(--card);border:1px solid var(--line2);border-radius:8px;
+           padding:22px 24px;margin-bottom:26px;border-left:3px solid var(--amber)}
+  .verdict .big{font-size:17px;color:var(--tx-hi);font-weight:600;margin:0 0 10px;line-height:1.45}
+
+  .score{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:22px 0 8px}
+  .s{background:var(--card);border:1px solid var(--line);border-radius:7px;padding:14px 16px}
+  .s .n{font-family:var(--mono);font-size:24px;color:var(--tx-hi);line-height:1;font-weight:600}
+  .s .l{font-size:11.5px;color:var(--tx-dim);margin-top:6px;letter-spacing:.02em}
+  .s.ok .n{color:var(--green)} .s.bad .n{color:var(--red)} .s.warn .n{color:var(--amber)}
+
+  .f{background:var(--card);border:1px solid var(--line);border-radius:7px;
+     padding:18px 20px;margin-bottom:12px}
+  .f.crit{border-left:3px solid var(--red)}
+  .f.warn{border-left:3px solid var(--amber)}
+  .f.info{border-left:3px solid var(--blue)}
+  .f.good{border-left:3px solid var(--green)}
+  .f .hd{display:flex;align-items:baseline;gap:11px;margin-bottom:9px;flex-wrap:wrap}
+  .chip{font-family:var(--mono);font-size:10px;letter-spacing:.09em;text-transform:uppercase;
+        padding:3px 8px;border-radius:3px;border:1px solid var(--line2);color:var(--tx-dim);
+        white-space:nowrap;flex:none}
+  .chip.r{color:var(--red);border-color:#4a2f2e;background:#241a19}
+  .chip.a{color:var(--amber);border-color:#413521;background:#221e16}
+  .chip.b{color:var(--blue);border-color:#2a3a49;background:#181f26}
+  .chip.g{color:var(--green);border-color:#2b4238;background:#171f1b}
+  .f h3{margin:0;flex:1;min-width:220px}
+  .lab{color:var(--tx-dim);font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;
+       margin:13px 0 4px;font-weight:600}
+  .ev{font-family:var(--mono);font-size:12px;color:var(--tx-dim);background:var(--bg2);
+      border:1px solid var(--line);border-radius:5px;padding:10px 12px;margin-top:11px;
+      white-space:pre-wrap;line-height:1.55;overflow-x:auto}
+  ul{margin:6px 0 0;padding-left:19px} li{margin-bottom:5px}
+  .note{color:var(--tx-dim);font-size:13px;font-style:italic}
+  .foot{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);
+        color:var(--tx-dim);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Review — agentic layer for Solstice + Tidehunter Pro</h1>
+<p class="sub">Verification pass on the approved plan · 2026-09-05 · working tree <code>4d9715b</code>, clean</p>
+
+<div class="verdict">
+  <p class="big">The shape is right and worth building. Four things in it would have failed on day one: the main endpoint can't be reached from the browser, the data layer can't be called the way the plan assumes, the number-checking gate would have been switched off within a week, and the assistant could starve the trading desk of its own data budget.</p>
+  <p style="margin:0;color:var(--tx-dim);font-size:13.5px">No redesign needed — nine blocking corrections, nine gaps, three claims I overstated, and three live bugs that exist whether or not this gets built. Two of those bugs mean the "track record" machinery I said to reuse is not built; it is built wrong.</p>
+</div>
+
+<div class="score">
+  <div class="s ok"><div class="n">26</div><div class="l">claims checked against code</div></div>
+  <div class="s bad"><div class="n">3</div><div class="l">claims wrong or overstated</div></div>
+  <div class="s bad"><div class="n">9</div><div class="l">blocking corrections</div></div>
+  <div class="s warn"><div class="n">9</div><div class="l">gaps the plan missed</div></div>
+  <div class="s bad"><div class="n">3</div><div class="l">live bugs found</div></div>
+</div>
+
+<h2>Blocking corrections — fix in the plan before stage A</h2>
+
+<div class="f crit">
+  <div class="hd"><span class="chip r">P0</span><h3>"Call service functions directly" is true for 7 endpoints, partly true for 7, and false for 5</h3></div>
+  <p>The plan treats every data source as a clean importable function. Reality splits three ways, and the split has to be declared per tool rather than assumed.</p>
+  <p><strong>Genuinely direct:</strong> <code>/air-pockets</code>, <code>/beach-ball</code>, <code>/reverse-rug</code>, <code>/rainbow-road</code>, <code>/live</code>, <code>/drilldown</code>, and the three snapshot reads. Plus <code>/api/heatmap/{ticker}</code> via <code>server.build_heatmap</code>.</p>
+  <p><strong>Callable, but the chain has to be fetched and gamma-enriched first:</strong> <code>/flip-zones</code>, <code>/node-lifecycle</code>, <code>/velocity-mode</code>, <code>/stacked-nodes</code>, <code>/tug-of-war</code>, <code>/alerts/feed</code>, <code>/alerts/quality</code>.</p>
+  <p><strong>Logic lives in the route handler, not a service:</strong> <code>/scan</code>, <code>/regime/{t}</code>, <code>/trinity-confluence</code>, <code>/node-classification</code>, <code>/rolling-floors-ceilings</code>. There is no importable equivalent to call.</p>
+  <p><code>/scan</code> is the hard one. It owns an hourly spend budget against a metered third-party feed, with single-flight locking, 429 backoff and two fire-and-forget writes that keep the alerts table alive. Re-implementing that burns the cap.</p>
+  <div class="lab">Fix</div>
+  <p>The registry declares a call style per tool: <em>direct</em> (import the service function), <em>enriched</em> (fetch via the route module's cached chain helper first), or <em>internal-http</em> (loopback call — reserved for <code>/scan</code>, which must not be duplicated). Three styles, stated up front, instead of one assumption that breaks on a third of the surface.</p>
+  <div class="ev">services/flowseeker.py is 436 lines and exposes 4 functions.
+routes/flowseeker.py is 1,879 lines and carries 22 module-level helpers,
+a rate-limit budget state machine and the whole alert pipeline.
+That asymmetry is the finding.</div>
+</div>
+
+<div class="f crit">
+  <div class="hd"><span class="chip r">P0</span><h3>The failure mode is an empty answer with a 200, not an error</h3></div>
+  <p>Two things compound. The shared chain fetch can return contracts with no gamma on its deepest fallback path, and every gamma-based aggregator skips contracts where gamma is zero or missing. So a tool that fetches the chain the obvious way and then asks for flip zones gets <code>{"flip_zones": [], "count": 0}</code> — no exception, no error field. On top of that, every one of these handlers catches its own exceptions and returns HTTP 200 with <code>status: "degraded"</code>.</p>
+  <p>An agent reading that will confidently tell you there are no flip zones. The truth is that it never had the data.</p>
+  <div class="lab">Fix</div>
+  <ul>
+    <li>Enriched-style tools fetch through the route module's chain helper, which applies the gamma backfill and a 30-second cache. Never through the raw merged fetch.</li>
+    <li>The evidence ledger records, per tool: which upstream actually served the data, the degraded flag, and the contract count.</li>
+    <li>Hard rule in the prompt and in code: an empty result is never narrated as a finding. It is reported as missing data, with the source named.</li>
+  </ul>
+  <div class="ev">routes/heatseeker.py:38 — _ensure_gamma docstring, verbatim:
+  "fetch_spot_and_chains_merged returns contracts with only
+   strike/T/type/oi/iv/volume — no gamma. Every GEX-based Heatseeker panel
+   aggregates via _gex_per_strike, which skips contracts with gamma &lt;= 0;
+   that left the entire Skylit GEX surface empty."
+
+services/heatseeker.py:83 and :922 — "if gamma &lt;= 0: continue"</div>
+</div>
+
+<div class="f crit">
+  <div class="hd"><span class="chip r">P0</span><h3>Latency is worse than the plan implied, and the caches are easy to miss</h3></div>
+  <p>The chain fetch is a three-tier cascade with a 30-second timeout on each of the first two tiers before the third even starts. Worst case for one cold ticker is around a minute. There are four independent caches in front of this, none of them in the service layer, with no shared invalidation — so calling the "obvious" underlying function bypasses most of them.</p>
+  <p>There is also an exact-argument trap. The flow regime endpoint deliberately calls the heatmap builder with the same argument tuple the front end uses, so it lands on the same cache key. A tool that calls it with different arguments silently doubles the upstream load instead of sharing the cache.</p>
+  <div class="lab">Fix</div>
+  <ul>
+    <li>Prefetch goes through the cached entry points only, with the front end's exact argument tuple.</li>
+    <li>Every tool carries a deadline well under the cascade's worst case, and serves stale-from-cache rather than blocking the answer.</li>
+    <li>Keep the Alpha Vantage tools out of the parallel bundle entirely — that provider is rate-limited to five calls a minute.</li>
+  </ul>
+</div>
+
+<div class="f crit">
+  <div class="hd"><span class="chip r">P0</span><h3>The screen context cannot come from where the plan puts it</h3></div>
+  <p>The plan mounts the panel in the app shell and has it read what you are looking at. The shell only receives the page name, the navigation callback, and two user fields. Ticker, timeframe, metric, expiry count and selection all live one level up, in the frozen file.</p>
+  <div class="lab">Fix — and it needs zero edits to the frozen file</div>
+  <p>Put the conversation state in a provider at the shell, and mount a small reporter inside each of the two tab components. Both of those already receive everything needed — the Solstice grid is handed ticker, spot, data, timeframe and the DTE selection as props today, and the Tidehunter tab owns its own state. Neither file is frozen.</p>
+  <p class="note">Also: the shell's outer container has no positioning context, so the panel must be fixed-position rather than absolute.</p>
+</div>
+
+<div class="f crit">
+  <div class="hd"><span class="chip r">P0</span><h3>The core data functions live in the server module, not the service layer</h3></div>
+  <p>Both the heatmap builder and the shared chain fetch are defined in the main server file. A service-layer registry that imports them at module load will deadlock the import graph.</p>
+  <div class="lab">Fix</div>
+  <p>Import them lazily, inside the tool function, at call time. This is already the house pattern — an existing service does exactly this today, and dozens of route modules do it. Consequence worth stating: the registry has to run in the same process as the API. It cannot be a standalone worker.</p>
+  <p class="note">This is not a hack. The accepted coupling ADR names the heatmap builder as part of the analytics layer by design.</p>
+</div>
+
+<h2>Claims in the plan that were wrong</h2>
+
+<div class="f warn">
+  <div class="hd"><span class="chip a">correction</span><h3>The frontend package file is frozen — no new libraries at all</h3></div>
+  <p>The plan assumed it could avoid adding a markdown renderer. The real constraint is stronger: <em>nothing</em> can be added. That turns out to be fine, and better than expected.</p>
+  <p>Already installed and currently unused by a single line of code: a command-palette library, a drawer/sheet library, and a toast library — precisely the three the panel and pop-up bar need. The data-fetching library is installed and its provider is already mounted at the app root. Twenty-eight accessible UI primitives are there too.</p>
+  <p>Two real consequences: there is no markdown renderer and no HTML sanitiser available, so the answer must render as structured sections rather than model-authored markup — which the plan already wanted for other reasons. And the front end is on React 19, not 18 as the project doc says.</p>
+</div>
+
+<div class="f warn">
+  <div class="hd"><span class="chip a">correction</span><h3>The "leaked API key" is a truncated prefix, not a usable key</h3></div>
+  <p>The tracked audit report lists value <em>prefixes</em> only; every entry is cut off. No full key string is in version control. The audit still graded it critical and the underlying key in the untracked environment file is presumably the same one, so rotating is still right — but this is a housekeeping item, not a blocker on this work.</p>
+</div>
+
+<div class="f warn">
+  <div class="hd"><span class="chip a">correction</span><h3>"Every read request is unauthenticated" — true by default, not universally</h3></div>
+  <p>Reads skip the key check by default, but a route can opt in to requiring it, and three broker routes already do. One admin surface is gated for all methods. The plan's endpoint shape still works exactly as designed: the ask is a write and needs the key, the stream is a read and does not. One detail to handle — when the server key is unset, writes fail with the same status code the language-model layer uses for "no provider configured", so the two are indistinguishable to the caller. Use a distinct error body.</p>
+</div>
+
+<h2>Constraints the plan missed</h2>
+
+<div class="f info">
+  <div class="hd"><span class="chip b">new</span><h3>An accepted architecture decision governs where this can sit</h3></div>
+  <p>There is a binding one-directional rule: the policy and execution layer may read the analytics layer, never the reverse. The agent is a third consumer sitting above both. It must be written so it never becomes a back-channel that lets analytics see execution state. Worth recording as the next numbered decision record — the read-only tool boundary is exactly the kind of thing that file exists for.</p>
+</div>
+
+<div class="f info">
+  <div class="hd"><span class="chip b">new</span><h3>A scheduler already exists — and the one that looks obvious is dead</h3></div>
+  <p>There is a live in-process daily scheduler in the server that already fires a warm-up pass and refreshes policy on a timer. The separate cron configuration file looks like the right place but writes to a system crontab that does not exist on this machine, is never called by the server, and has stub jobs. The background watcher and daily brief hook the live loop, not that file.</p>
+</div>
+
+<div class="f info">
+  <div class="hd"><span class="chip b">new</span><h3>Ticker coverage is far narrower than the inspiration implies</h3></div>
+  <p>The screenshot that started this does full end-to-end research on a single small-cap name. This platform's spine is built for a handful of index products: machine-learning models exist on disk for exactly five tickers, the live tape gates to six, and the flow watchlist is ten names. Structure and flow will work for arbitrary tickers through the chain, but the model leg and the paid tape simply will not be there.</p>
+  <p><strong>Fix:</strong> each tool declares its coverage, and the answer states which legs are missing rather than quietly producing a thinner read. Otherwise the agent looks confident and is actually half-blind on anything outside the core names.</p>
+</div>
+
+<div class="f info">
+  <div class="hd"><span class="chip b">new</span><h3>Three smaller things that will bite on day one</h3></div>
+  <ul>
+    <li>Every tool result must pass through the existing sanitiser before it reaches the model. It converts not-a-number and infinity to null and numpy types to native ones. Skip it and either the payload fails to serialise or the string "NaN" lands in the context and gets read as a value.</li>
+    <li>The historical snapshot store is capped at fifty records per ticker, which is the real ceiling on how far back the "cumulative" read can look.</li>
+    <li>The stream framing convention is hand-rolled and exact — copy it verbatim from the existing flow stream rather than reaching for a library, since none can be added anyway.</li>
+  </ul>
+</div>
+
+<h2>Live bug found — unrelated to this build</h2>
+
+<div class="f crit">
+  <div class="hd"><span class="chip r">bug</span><h3>Three shipped panels return empty results on the fallback data path</h3></div>
+  <p>Rolling floors and ceilings, stacked nodes, and tug-of-war each fetch the chain directly instead of through the helper that backfills gamma. Their maths then discards every contract. On the primary data source gamma is present and they work; when the feed falls through to the last-resort provider, they go quiet — empty arrays, status 200, no error. In other words they fail exactly when everything else is already degraded, and nothing in the UI says so.</p>
+  <p>Rolling floors and ceilings has a second, unconditional defect. It needs a series of daily snapshots to detect a trend; the handler builds a list containing one live snapshot. A one-element series has no trend, so the reading is always flat and the signal always neutral, and the lookback parameter it accepts does nothing at all.</p>
+  <div class="lab">Fix</div>
+  <p>Point all three at the enriching helper — a one-line change each, and it also gets them the shared cache they currently bypass. Rolling floors and ceilings needs the real snapshot history wired in, which already exists in two stores.</p>
+  <div class="ev">routes/heatseeker.py:535, :620, :646 — raw merged fetch, no enrichment
+routes/heatseeker.py:98   — the enrichment the other nine endpoints get
+routes/heatseeker.py:541  — "Build synthetic daily snapshots from available data"
+                             snapshots = [{"spot": spot, "contracts": contracts}]</div>
+</div>
+
+<div class="f crit">
+  <div class="hd"><span class="chip r">bug</span><h3>Your published alert hit-rate is measuring the wrong thing</h3></div>
+  <p>Every scan rewrites the recorded move on every open alert for that underlying to "price at alert versus price right now", with no age filter and no horizon. The same bullish alert scores as a win at eleven and a loss at three-thirty. Whatever the last scan saw is what the quality panel reports. The pass/fail threshold is a flat half a percent for every ticker and every timeframe.</p>
+  <p>This matters beyond the agent: the tier locks and the conviction calibration you already look at are built on this number.</p>
+</div>
+
+<div class="f crit">
+  <div class="hd"><span class="chip r">bug</span><h3>The analytics database is in memory — its history dies on every restart</h3></div>
+  <p>The engine is created with no file path, so it defaults to memory-only. Alert history, tier locks and the calibration curve are all wiped whenever the backend restarts. Anything that wants a track record has to go in the durable store instead.</p>
+</div>
+
+<h2>What held up under checking</h2>
+
+<div class="f good">
+  <div class="hd"><span class="chip g">verified</span><h3>Fourteen claims confirmed against the code</h3></div>
+  <ul>
+    <li>The broker order path is genuinely ungated and points at a live gateway. The plan's read-only-by-construction requirement is necessary, not defensive. The separate gated path has thirteen tests holding it closed — reproduced.</li>
+    <li>The language-model service is synchronous and awaited from async routes. It will block the whole server. Fixing it in stage A is correct.</li>
+    <li>Six libraries are imported by live code and missing from the requirements file, including the one behind an entire agent surface — which is why that surface silently returns not-found today. The plan is right not to build on it.</li>
+    <li>The web-framework pins are load-bearing with a documented ceiling; the coverage floor, the Python version target, the read/write auth split, the stream framing, the existing conviction score, the shell being an unfrozen mount point, and the two-hundred-or-clean-error test contract all check out.</li>
+    <li>Backend collection reproduced at 4,650 tests, zero errors — the project docs say 4,640, which is normal drift.</li>
+  </ul>
+</div>
+
+<h2>Second pass — design holes (all verified against the tree)</h2>
+
+<div class="f crit">
+  <div class="hd"><span class="chip r">P0</span><h3>The main endpoint cannot be called from the browser at all</h3></div>
+  <p>The plan makes the "ask" a write so it can carry a body, and the stream a read so it needs no key. But the front end has never sent an API key anywhere — searching the entire source for it returns nothing. So the flagship endpoint answers "unauthorised" from the first click, or "unavailable" if the server key is unset.</p>
+  <p>Second half of the same problem: reads are exempt from the sixty-per-minute limit only for a fixed list of path prefixes. The agent's path is not on it, so stream reconnects get throttled.</p>
+  <div class="lab">Fix</div>
+  <p>Add the agent path to the public list with an explicit comment saying why, and to the rate-limit exemption list. Decide this now — it is two lines and it is the difference between working and not.</p>
+</div>
+
+<div class="f crit">
+  <div class="hd"><span class="chip r">P0</span><h3>The assistant can starve the desk of its own data</h3></div>
+  <p>The flow desk rations its upstream vendor to twenty calls an hour, of which fourteen are reserved for the scanner and one is held back — leaving five chain calls an hour for everything else, globally. The shared chain fetch used by the heatmap does not consult that budget at all; it is separate accounting. So the agent's prefetch, watcher and daily brief would spend the same vendor quota invisibly. When the vendor pushes back, the client pauses itself for ten minutes app-wide and all of Solstice drops to the weakest data source.</p>
+  <div class="lab">Fix — architectural, not a tuning knob</div>
+  <p>The assistant reads the desk's warm cache and never initiates an upstream fetch. If data is cold it says so, with a staleness stamp, instead of going and getting it. Give it a hard small slice of the hourly budget from one shared ledger.</p>
+</div>
+
+<div class="f crit">
+  <div class="hd"><span class="chip r">P0</span><h3>The track-record wheel is not already built — it is built wrong</h3></div>
+  <p>My plan said to model the feedback loop on the two existing outcome systems. Both are broken, and copying either would produce a calibration curve made of noise.</p>
+  <p>The alerts one rewrites every open alert's move to "price at alert versus right now" on every single scan, with no age or horizon filter and a flat half-percent threshold for every ticker. A bullish call is a win at eleven and a loss at three-thirty; the published hit rate is whatever the last scan happened to see.</p>
+  <p>The model-outcome one is worse: it compares a five-day average daily return against a one-day prediction, with the comment "approximate" left in the code.</p>
+  <p>And the store underneath is in-memory by default — the analytics database is created with no file path, so the existing hit rates, tier locks and calibration all evaporate on every restart. That is a live problem today, not just for this build.</p>
+  <div class="lab">Fix</div>
+  <p>Design resolution once, properly, and put it in the durable store rather than the volatile one. A claim like "bearish into the 86 zone" is a race between two price levels, not a return threshold — grade direction, level-touched-before-invalidation, and invalidation separately, with buckets for "neither" and "couldn't resolve". Anchor to the horizon and never rewrite a resolved row. Stamp the resolver version, or retuning later makes the whole history uncomparable — which is exactly how the existing one broke.</p>
+  <p class="note">Scheduling constraint that has to be designed in: minute bars from the primary provider only go back one day, so a same-session claim must resolve the same session or the path data is gone.</p>
+</div>
+
+<div class="f crit">
+  <div class="hd"><span class="chip r">P0</span><h3>The number-checking gate as I specified it will be switched off within a week</h3></div>
+  <p>"Extract every number and match it against the evidence" false-flags constantly: money formatted to one decimal, billions written short, ratios the model computes itself from two stored values, time deltas, dates, and accidental collisions where a percentage matches a strike price. On a seven-section answer with around twenty-five numerals, expect eight to fifteen flags. It gets ignored, and then the stricter version makes the product unusable.</p>
+  <div class="lab">Fix — make the model cite instead of type</div>
+  <p>Every stored value gets an id. The model writes a reference, and the server substitutes the formatted number at render time. A bare numeral in a factual slot is then a flat protocol violation rather than a fuzzy match with a tolerance to tune. Derived quantities get a small server-evaluated form for ratios and time-deltas — which is exactly what the "cumulatively" ask needs, and it moves the arithmetic off the model. Keep a numeric scan only as a lint on what is left over.</p>
+  <p class="note">Two free wins: hover-to-source in the panel, and the test harness compares ids instead of prose.</p>
+</div>
+
+<div class="f warn">
+  <div class="hd"><span class="chip a">P1</span><h3>Confidently wrong input is more dangerous than failure</h3></div>
+  <p>When the database is unavailable, the node-history fetch returns an empty list, and the maths downstream treats that as "every node is fresh" — the docstring says so in as many words. So the assistant would report a pristine, untested structure when the truth is that nothing could be read. The proposed evidence record has no field that can express this.</p>
+  <p>Related, and it is the whole value proposition: when the chain comes from the weakest provider, gamma is back-computed from a textbook formula rather than supplied. The resulting surface is model-derived, not dealer-derived. The answer has to say which one it is.</p>
+  <div class="lab">Fix</div>
+  <p>Each evidence entry carries a status, a source and a staleness. Failed entries are barred from the answer; stale ones must be narrated as stale.</p>
+</div>
+
+<div class="f warn">
+  <div class="hd"><span class="chip a">P1</span><h3>The horizon is a day-one schema decision, not a later feature</h3></div>
+  <p>No engine endpoint accepts a time horizon. They all take a count of nearest expiries. So "zero-day" today means "the one nearest expiry", which on a Thursday is Friday's chain — one day, not zero. Making the horizon real means slicing by expiry in the tool layer, which is fine, but it has to be in every tool signature and every cache key from the first commit. Add it later and every signature changes, the cache key changes, and every recorded test fixture is invalidated.</p>
+</div>
+
+<div class="f warn">
+  <div class="hd"><span class="chip a">P1</span><h3>Four conviction scores already exist, two of them only in the browser</h3></div>
+  <p>There is a three-way index confluence score, a row conviction score in the flow tab, a scan score beside it, and a fourth weighted conviction on the server. My plan said to rebuild the browser one in Python — which means two copies of the same number, drifting. There is already a comment in this codebase telling a future reader to keep a constant identical across the two languages, so the tax is known.</p>
+  <p><strong>Fix:</strong> use the server-side one, which is already Python, already stored and already calibrated. Do not create a fifth. Weights live in one versioned config stamped into every record, so changing them is a gradeable event. And the model must be allowed to disagree with the score in a separate line — a narrator that can only agree produces reasoning you cannot grade, which defeats the point.</p>
+</div>
+
+<div class="f warn">
+  <div class="hd"><span class="chip a">P1</span><h3>Cost: two of the proposed tools can blow a whole turn on their own</h3></div>
+  <p>Most tools return small summaries and fifteen of them is a manageable input. But the raw chain and the full grid are enormous — a full chain is over thirteen thousand contracts, and the grid is thousands of cells. One careless tool call dwarfs everything else.</p>
+  <p>Realistic per-question cost on a strong model is ten to twenty-five cents. Thirty questions a day plus a ten-name morning brief plus a watcher firing the full research bundle on every high-conviction alert lands somewhere between five and twenty-five dollars a day, for one user. As written the watcher is an unbounded spend loop attached to an alert feed.</p>
+  <p><strong>Missing controls:</strong> a hard daily budget that degrades to the cheap model and then to the existing deterministic template; prompt caching on the stable instruction prefix, which is the single biggest cost lever and I never mentioned it; watcher coalescing to one bundle per ticker per quarter-hour; and per-tool output caps that mark truncation explicitly rather than silently. Raw chain should be an internal fetch, not an offered tool.</p>
+  <p class="note">Also: escalating to the strong model "on estimated tool count" is unimplementable — you cannot count the tools before running them. Escalate on question class instead.</p>
+</div>
+
+<div class="f warn">
+  <div class="hd"><span class="chip a">P1</span><h3>Read-only by construction needs to be structural, not a list</h3></div>
+  <p>My proposed test only checks the function each tool registers directly. A tool that reaches an order path three calls deep passes it. Given that one order path is ungated and points at a live gateway, make it structural: a test that loads the agent package in a fresh interpreter and asserts the order modules were never imported at all; a lint rule forbidding those imports from the agent package, which rides the existing lint gate for free; and a source scan for order-shaped method names. About a day's work.</p>
+</div>
+
+<div class="f info">
+  <div class="hd"><span class="chip b">P2</span><h3>Conversation memory was never designed, and it decides the backend shape</h3></div>
+  <p>The plan has three endpoints keyed on a turn and never says where a turn lives. Unanswered and blocking: where turns are stored and whether replay survives a restart; whether a follow-up question re-runs the whole data gather; what happens when two questions run at once on the same ticker; how a turn expires; and what happens when someone refreshes the page mid-answer, which currently would double the spend with no way to cancel. Every existing stream in this codebase caps its duration; this one has no cap and no cancel.</p>
+</div>
+
+<div class="f info">
+  <div class="hd"><span class="chip b">P2</span><h3>The cheap-model tier has no job in version one, and its libraries are not installed</h3></div>
+  <p>Neither of the two non-primary model libraries is in the dependency list, so that path fails on import before it even reaches its outdated model name. And the jobs the cheap tier was meant to do are the morning brief — which an existing deterministic generator already produces — and a one-line answer. Cut the router from the first stage, hardcode one model, and add routing when a month of real cost data shows where the money goes.</p>
+</div>
+
+<h2>Revised read on effort</h2>
+
+<div class="f">
+  <p><strong>Roughly thirty to forty-five days of build as written.</strong> The rescoping below brings the first two stages to about twelve to seventeen, which is the honest version one.</p>
+  <p><strong>Move into stage one:</strong> the horizon in every tool signature and cache key; status, source and staleness on every evidence entry; the cite-don't-type protocol, because it shapes both the instructions and the test harness; the shared upstream budget accounting; and <em>writing</em> claim rows — not resolving them. Claims are cheap to emit and impossible to backfill, so if stage two doesn't write them, the track record has no history to point at later.</p>
+  <p><strong>Move out of stage one:</strong> the model router, and about twenty-eight of the thirty-eight tools. Ship the eight to ten the standard bundle actually uses. Every extra tool costs instruction tokens and a recorded test fixture. Note two of the proposed tools aren't functions yet — the alert feed and quality logic sit inside the web handler and need extracting first.</p>
+  <p><strong>Collapse stage three.</strong> With the horizon moved up, what remains is the time-delta read — and that is the single highest-value piece for the "cumulatively" ask. A static-frame read is what the panels already show; the agent adds nothing there. Pull it into stage two.</p>
+  <p><strong>What gets abandoned half-built, bluntly:</strong> the track-record stage almost certainly — longest, least visible, payoff two months out, and at a handful of verdicts a day the three-hundred-claim gate is sixty trading days. The background watcher probably: it will produce noise before value and get muted inside a fortnight. And the confluence weights will ship as somebody's guess and never be revisited unless the disagreement line forces the question.</p>
+  <p><strong>Stages one and two are the honest version one.</strong> That was buried at the bottom of the plan as a risk; it belongs in the build order.</p>
+  <p class="note">Minor: the plan's verification section calls the bare interpreter a "3.11 syntax oracle". It catches syntax, not standard-library drift — which is the actual risk of developing on one version and shipping on another. Run the suite under the shipping version in the pipeline instead; the image already exists.</p>
+</div>
+
+<div class="foot">
+  Every finding above was read directly from the working tree at commit <code>4d9715b</code>. Line references are from that commit and will drift.
+</div>
+
+</div>
+</body>
+</html>

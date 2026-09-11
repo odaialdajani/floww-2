@@ -204,7 +204,10 @@ async def register_model(body: dict[str, Any]) -> dict[str, Any]:
     ticker = body.get("ticker", "").upper()
     artifact_path = body.get("artifact_path", "")
     feature_version = body.get("feature_version", "v1.0")
-    metrics_summary = body.get("metrics_summary", {})
+    # `or {}` not a two-arg default: a caller posting an explicit
+    # "metrics_summary": null would otherwise store null, and the ensemble
+    # route then read feature_names off None.
+    metrics_summary = body.get("metrics_summary") or {}
     training_window = body.get("training_window", "unknown")
     status = body.get("status", "shadow")
 
@@ -285,7 +288,7 @@ async def get_regime(ticker: str) -> dict[str, Any]:
     is_anomaly = False
     anomaly_score = 0.0
     try:
-        feature_names = model_doc.get("metrics_summary", {}).get("feature_names", list(features_df.columns))
+        feature_names = (model_doc.get("metrics_summary") or {}).get("feature_names", list(features_df.columns))
         present = [f for f in feature_names if f in features_df.columns]
         if feature_names and len(present) >= 10:
             # Reindex to the EXACT trained feature order (missing cols → 0.0) so the
@@ -358,7 +361,7 @@ async def get_ensemble(ticker: str, horizon_minutes: int = 15) -> dict[str, Any]
 
     # ML model score
     ml_score = 0.5
-    feature_names = model_doc.get("metrics_summary", {}).get("feature_names", list(features_df.columns))
+    feature_names = (model_doc.get("metrics_summary") or {}).get("feature_names", list(features_df.columns))
     available = [f for f in feature_names if f in features_df.columns]
     if available and len(available) >= 10:
         X = features_df[available].iloc[-1:].values.astype(float)

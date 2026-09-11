@@ -1,0 +1,8 @@
+[
+  { "name": "both_zero", "row": { "volume": 0, "oi": 0 }, "expected": { "sizeGtOI": false, "volGtOI": false } },
+  { "name": "oi_zero_vol_positive", "row": { "volume": 100, "oi": 0 }, "expected": { "sizeGtOI": true, "volGtOI": true } },
+  { "name": "size_gt_oi", "row": { "volume": 5000, "oi": 1000 }, "expected": { "sizeGtOI": true, "volGtOI": true } },
+  { "name": "size_lt_oi", "row": { "volume": 100, "oi": 1000 }, "expected": { "sizeGtOI": false, "volGtOI": false } },
+  { "name": "size_eq_oi", "row": { "volume": 1000, "oi": 1000 }, "expected": { "sizeGtOI": false, "volGtOI": false } },
+  { "name": "oi_zero_via_openInterest_alias", "row": { "volume": 50, "openInterest": 0 }, "expected": { "sizeGtOI": true, "volGtOI": true } }
+]

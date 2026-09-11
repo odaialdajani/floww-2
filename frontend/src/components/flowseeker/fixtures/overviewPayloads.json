@@ -1,0 +1,67 @@
+[
+  {
+    "name": "bullish",
+    "description": "FIR 0.50 >=0.3 net>0 => Bullish",
+    "rows": [
+      { "ticker": "AAPL", "under": "AAPL", "type": "call", "premium": 80000 },
+      { "ticker": "TSLA", "under": "TSLA", "type": "call", "premium": 40000 },
+      { "ticker": "SPY", "under": "SPY", "type": "put", "premium": 30000 },
+      { "ticker": "NVDA", "under": "NVDA", "type": "put", "premium": 10000 }
+    ],
+    "expected": {
+      "callPrem": 120000,
+      "putPrem": 40000,
+      "netPremium": 80000,
+      "fir": 0.5,
+      "pcRatio": 0.3333333333333333,
+      "sessionLabel": "Bullish"
+    }
+  },
+  {
+    "name": "bearish",
+    "description": "FIR 0.50 >=0.3 net<0 => Bearish",
+    "rows": [
+      { "ticker": "AAPL", "under": "AAPL", "type": "call", "premium": 20000 },
+      { "ticker": "TSLA", "under": "TSLA", "type": "call", "premium": 10000 },
+      { "ticker": "SPY", "under": "SPY", "type": "put", "premium": 70000 },
+      { "ticker": "NVDA", "under": "NVDA", "type": "put", "premium": 20000 }
+    ],
+    "expected": {
+      "callPrem": 30000,
+      "putPrem": 90000,
+      "netPremium": -60000,
+      "fir": 0.5,
+      "pcRatio": 3.0,
+      "sessionLabel": "Bearish"
+    }
+  },
+  {
+    "name": "neutral",
+    "description": "FIR ~0.053 <0.3 => Neutral despite small net>0",
+    "rows": [
+      { "ticker": "AAPL", "under": "AAPL", "type": "call", "premium": 50000 },
+      { "ticker": "SPY", "under": "SPY", "type": "put", "premium": 45000 }
+    ],
+    "expected": {
+      "callPrem": 50000,
+      "putPrem": 45000,
+      "netPremium": 5000,
+      "fir": 0.05263157894736842,
+      "pcRatio": 0.9,
+      "sessionLabel": "Neutral"
+    }
+  },
+  {
+    "name": "empty",
+    "description": "No premium => fir null, pcRatio null, Neutral",
+    "rows": [],
+    "expected": {
+      "callPrem": 0,
+      "putPrem": 0,
+      "netPremium": 0,
+      "fir": null,
+      "pcRatio": null,
+      "sessionLabel": "Neutral"
+    }
+  }
+]

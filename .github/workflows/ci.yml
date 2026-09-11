@@ -147,6 +147,29 @@ jobs:
       # The step that used to live here ran `npm run lint || true`, which could
       # only ever fail-and-be-masked. Backend lint still gates (ruff, above).
 
+      # Deterministic, cheap gate: catch untracked frontend source files (e.g. a
+      # dangling panel JSX + shared CSS dropped into the worktree by another
+      # agent's checkout). Those build locally and vanish on a clean clone, so
+      # the failure only ever shows up after merge. Fails closed. Note the path
+      # is `src/` not `frontend/src/` — this step already runs with
+      # working-directory ./frontend, and the longer form silently resolves to
+      # frontend/frontend/src/ and matches nothing.
+      - name: Frontend filesystem integrity
+        working-directory: ./frontend
+        run: |
+          set -euo pipefail
+          echo "Checking for untracked frontend source files..."
+          RAW=$(git ls-files --others --exclude-standard src/)
+          UNTRACKED=$(echo "$RAW" | grep -E '\.(jsx|js|css|ts|tsx)$' || true)
+          if [ -z "$UNTRACKED" ]; then
+            echo "OK: no untracked frontend source files."
+            exit 0
+          fi
+          echo "::error::Untracked frontend source files detected:"
+          echo "$UNTRACKED"
+          echo "Commit or remove them before merge. Run: git add <files> or rm <files>"
+          exit 1
+
       - name: Tests
         working-directory: ./frontend
         # This suite is green and MUST gate: 280 passed / 280 total across 44

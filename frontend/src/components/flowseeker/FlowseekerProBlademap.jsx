@@ -1,69 +1,115 @@
 /**
- * FlowseekerProBlademap.jsx — Blademap.ai-style Tidehunter Pro, wired to REAL
- * market data. Phase 5.3 (2026-08-31): live flow feed now tries Public API
- * (/api/public/chain) first, falls back to cvserver (/api/flowseeker/chain).
- *   /api/flowseeker/live  /ofi/{t}  /regime/{t}  /vpin/{t}  /lambda/{t}
- *   /api/heatmap/{t} (real GEX grid)  /api/public/chain/{t} (Phase 5.3)
- * Vol surface stays synthetic (no IV-surface backend) and is labelled SIM.
+ * FlowseekerProBlademap.jsx — Tidehunter Pro v3: Blademap-matched insight pipeline.
  *
- * Self-contained: scoped CSS (.fsb-root, fsb-* classes), Plotly via CDN.
- * The agent's FlowseekerProTab.jsx is left untouched.
+ * ONE page, zero page tabs: Board header → four answer cells → screen tabs →
+ * Vector (direction board = verdict feed) → Pulse (screened contracts) →
+ * Lattice (dealer gamma heatmap for the focused ticker) → trust row → settings.
+ * Left sidebar items are in-page anchors.
+ *
+ * Data — real endpoints only, no demo path:
+ *   verdict feed  GET /api/flowseeker/alerts/feed?sort_by=conviction (+ SSE /alerts/stream)
+ *   pulse         GET /api/flowseeker/scan (+ /scan/history)
+ *   lattice       GET /api/heatmap/{t} (display-scale S²) + GET /api/flowseeker/regime/{t}
+ *   vpin stub     GET /api/vpin/{t} or "no feed"  (no /ofi, /lambda, /flowseeker/vpin calls)
+ *   trust         GET /api/flowseeker/alerts/quality + GET /api/flowseeker/journal/stats?days=90
+ *   drill flow    GET /api/public/chain/{t} → GET /api/flowseeker/chain/{t} fallback
+ *
+ * Nothing here calls /auto-trade/*, any order route, or any broker path.
+ * Plan trade writes client-side floww_trades_v2 only.
  */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { BACKEND_URL } from "../../config/api";
-import { mkScanRow, evalAlerts, evalTickerAlerts, streakOf, cleanHistory, tickerRollup, volSigma, annotateFirstSeen, sessionDay, fmtClock, fmtAge, awaySummary, scanRowsToCSV, oiChange, fmtUSD, fmtK, fmtIV, scoreGradeOf, pulseState, elapsedClock, formatFOLLOWStrip, tierOf, selectFires, pickBanner } from "./scanLogic";
+import { getSettings } from "../SettingsPanel";
+import {
+  mkScanRow, streakOf, cleanHistory, tickerRollup, annotateFirstSeen,
+  sessionDay, fmtClock, fmtAge, awaySummary, scanRowsToCSV, oiChange,
+  fmtUSD, fmtK, fmtIV, scoreGradeOf, pulseState, elapsedClock,
+} from "./scanLogic";
+import {
+  FEED_DAYS, FEED_MIN_CONVICTION, TRADE_NOW_FLOOR, LEVELS_LABEL,
+  BUILTIN_SCREENS, PULSE_COLUMNS, PULSE_DEFAULT_COLS,
+  parseFeedAlerts, isContextual, stageOf, formatMovePct, targetTravelPct,
+  directionOf, ageOf, tradeNowOf, feedBodyOf, verdictWithheld, oiHeldLabel,
+  moneynessPct, applyScreenToScans, applyScreenToAlerts,
+  SCAN_FACTS, SCAN_FACT_LABELS, TICKER_FACTS, TICKER_FACT_LABELS, RULE_LIST,
+} from "./tideFeed";
+import { persistJournalSeeds } from "./autoTrade";
+import TidehunterSettings, { loadTide, saveSettings as saveTide } from "./TidehunterSettings";
 import "./FlowseekerProBlademap.css";
 
 const API = `${BACKEND_URL}/api/flowseeker`;
-const WATCH = ["SPY", "QQQ", "IWM", "NVDA", "TSLA", "AAPL", "MSFT", "AMZN", "META", "GOOGL"];
-const NOISE_FLOOR = 5; // ignore day-volume deltas below this many contracts
+const NOISE_FLOOR = 5;
+const ACK_KEY = "th-acked-v1";
+const PREFS_KEY = "th-prefs-v1";
+const FIRSTSEEN_KEY = "th-firstseen-v1";
+const ALERTSEEN_KEY = "th-alertseen-v1";
+const OPS = ["≥", "≤", "between", "is"];
 
-const PL = {
-  paper: "rgba(0,0,0,0)", plot: "rgba(0,0,0,0)", grid: "#1c2230", axis: "#3a4358",
-  text: "#b3b8c5", muted: "#6c7382", font: "11px ui-monospace, Menlo, monospace",
-  green: "#19d27c", red: "#ff4d5e", blue: "#29c5e0", purple: "#a267ff", amber: "#f5b042",
-};
+function loadFirstSeen() {
+  try {
+    const s = JSON.parse(localStorage.getItem(FIRSTSEEN_KEY));
+    if (s && s.day === sessionDay() && s.map) return s;
+  } catch {
+    /* private mode — fresh baseline */
+  }
+  return { day: sessionDay(), map: {} };
+}
+// Alert dedup lives apart from any display list so clearing a view can never
+// re-fire a still-true condition. Pruned to 24h on load.
+function loadAlertSeen() {
+  try {
+    const m = JSON.parse(localStorage.getItem(ALERTSEEN_KEY)) || {};
+    const cut = Date.now() - 24 * 3600e3;
+    const out = {};
+    for (const [k, t] of Object.entries(m)) if (t >= cut) out[k] = t;
+    return out;
+  } catch {
+    return {};
+  }
+}
 
-// ---------- helpers ----------
+// ---------- small helpers ----------
 const fmtMoney = (v) => {
   const n = Math.abs(Number(v) || 0);
   if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
   if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}k`;
   return `$${n.toFixed(0)}`;
 };
-const fmtTime = (ts) => { try { return new Date(ts).toLocaleTimeString(); } catch { return String(ts || ""); } };
-const dteOf = (exp) => { try { const d = Math.round((new Date(exp) - Date.now()) / 86400000); return d >= 0 ? d : 0; } catch { return 0; } };
+const dteOf = (exp) => {
+  try {
+    const d = Math.round((new Date(exp) - Date.now()) / 86400000);
+    return d >= 0 ? d : 0;
+  } catch {
+    return 0;
+  }
+};
 async function getJSON(url, signal) {
   const r = await fetch(url, { signal });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
-// Rough ATM premium estimate when cvserver isn't quoting bid/ask (per-contract $).
 function estPrice(strike, iv, expiry) {
   const dte = Math.max(1, dteOf(expiry));
-  const ivv = iv > 1 ? iv / 100 : (iv || 0.2);
+  const ivv = iv > 1 ? iv / 100 : iv || 0.2;
   return Math.max(0.05, strike * ivv * Math.sqrt(dte / 365) * 0.4);
 }
 
-// Conviction from the row's own attributes — log-scaled so big premium / vol-oi
-// SPREAD across the range instead of all saturating at the same total. Returns
-// the 0-100 score plus the 4 components (used by the gauge + radar so they agree).
+// Conviction for drill-flow rows (client-side; the verdict feed uses the
+// server's conviction — never mixed).
 function rowConviction(p) {
   const cls = String(p.classification || "regular").toLowerCase();
-  const pat = cls === "sweep" ? 24 : cls === "unusual" ? 18 : cls === "block" ? 14 : 8;     // 8-24 pattern
+  const pat = cls === "sweep" ? 24 : cls === "unusual" ? 18 : cls === "block" ? 14 : 8;
   const prem = Number(p.premium) || 0;
-  const size = Math.min(30, Math.log10(Math.max(1e4, prem) / 1e4) * 9);                      // 0-30 size (log)
+  const size = Math.min(30, Math.log10(Math.max(1e4, prem) / 1e4) * 9);
   const voi = Number(p.vol_oi_ratio) || 0;
-  const stat = Math.min(26, Math.log10(Math.max(1, voi) + 1) * 14);                          // 0-26 unusualness (log)
+  const stat = Math.min(26, Math.log10(Math.max(1, voi) + 1) * 14);
   const dte = Number(dteOf(p.expiration)) || 0;
-  const urg = dte <= 1 ? 14 : dte <= 7 ? 9 : dte <= 30 ? 5 : 2;                              // 2-14 urgency
+  const urg = dte <= 1 ? 14 : dte <= 7 ? 9 : dte <= 30 ? 5 : 2;
   const conv = Math.round(Math.max(20, Math.min(99, pat + size + stat + urg)));
   return { pat: +pat.toFixed(1), size: +size.toFixed(1), stat: +stat.toFixed(1), urg: +urg.toFixed(1), conv };
 }
 
-// Map Public API flat contract list to flow-feed row shape.
-// Filters: vol >= 100, vol/oi >= 0.4. Sorts by vol_oi_ratio desc, caps at 100.
-// Exported for Jest tests (Phase 5.3).
+// Map Public API flat contract list to flow-feed row shape. Exported for Jest.
 export function mapPublicChainToRows(contracts, spot, ticker) {
   const rows = [];
   for (const c of contracts) {
@@ -76,7 +122,7 @@ export function mapPublicChainToRows(contracts, spot, ticker) {
     const bid = Number(c.bid) || 0;
     const ask = Number(c.ask) || 0;
     const last = Number(c.last) || 0;
-    const mid = last || ((bid + ask) / 2) || estPrice(Number(c.strike), iv, c.expiry);
+    const mid = last || (bid + ask) / 2 || estPrice(Number(c.strike), iv, c.expiry);
     const premium = Math.round(vol * mid * 100);
     const dte = dteOf(c.expiry);
     const cls = premium >= 5e7 ? "block" : dte <= 2 ? "sweep" : "unusual";
@@ -94,353 +140,418 @@ export function mapPublicChainToRows(contracts, spot, ticker) {
   return rows.slice(0, 100);
 }
 
-// ---------- cross-symbol scanner (scenner34 BladeMap grid) ----------
-// A broader universe than the flow watchlist so the scan surfaces hot names
-// (ENPH, AMD, PLTR…) the way a market-wide screen does. Used only as the
-// fallback path — when the efficient backend /scan endpoint is deployed the
-// component prefers that (one call, the whole market).
-const SCAN_UNIVERSE = ["SPY", "QQQ", "IWM", "NVDA", "TSLA", "AAPL", "MSFT", "AMZN", "META", "GOOGL", "AMD", "PLTR", "ENPH", "NFLX", "AVGO", "MU", "COIN", "SMCI"];
-// (scanner math — bizDTE/scanTypeOf/scanScoreOf/estimateDelta/approxSpot/mkScanRow
-// and the fmt* helpers — lives in ./scanLogic.js, tested in scanLogic.test.js)
-
-const PREFS_KEY = "fsb-scan-prefs-v1";
-const ALERTS_KEY = "fsb-scan-alerts-v1";
-const ALERTSEEN_KEY = "fsb-scan-alertseen-v1";
-// Rule defaults are MERGED over stored prefs — a pref blob saved before a new
-// rule existed must not silently disable it. Order = tape-summary display order.
-const DEFAULT_RULES = { oiconf: true, follow: true, sigma: true, score: true, whale: true, zerodte: true };
-const RULES_ORDER = ["OICONF", "FOLLOW", "SIGMA", "SCORE", "WHALE", "0DTE", "SOURCE"];
-const FIRSTSEEN_KEY = "fsb-scan-firstseen-v1";
-const LASTSEEN_KEY = "fsb-scan-lastseen-v1";
-function loadScanPrefs() {
-  try { return JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; } catch { return {}; }
-}
-// The tape keeps today + yesterday — a 12-hour Dow night shift must not erase
-// the session before Nav ever sees it. Older days drop on load.
-function loadAlertLog() {
+function loadPrefs() {
   try {
-    const all = JSON.parse(localStorage.getItem(ALERTS_KEY)) || [];
-    const keep = new Set([sessionDay(), sessionDay(Date.now() - 86400e3)]);
-    return all.filter((a) => !a.day || keep.has(a.day));
-  } catch { return []; }
-}
-function loadFirstSeen() {
-  try {
-    const s = JSON.parse(localStorage.getItem(FIRSTSEEN_KEY));
-    return s && s.day === sessionDay() ? s : { day: sessionDay(), map: {} };
-  } catch { return { day: sessionDay(), map: {} }; }
-}
-// Alert dedup timestamps live SEPARATELY from the display tape: the tape is
-// capped at 100 and user-clearable, and if it doubled as the dedup store,
-// eviction or Clear would re-fire every still-true long-ttl alert (OI change
-// is static all day; σ only grows) in a notification loop. {key: lastFiredMs},
-// pruned to 24h on load — the longest rule ttl is 20h.
-function loadAlertSeen() {
-  try {
-    const m = JSON.parse(localStorage.getItem(ALERTSEEN_KEY)) || {};
-    const cut = Date.now() - 24 * 3600e3;
-    const out = {};
-    for (const [k, t] of Object.entries(m)) if (t >= cut) out[k] = t;
-    return out;
-  } catch { return {}; }
-}
-// Snapshot the previous visit's last-seen stamp ONCE per page load. Mount
-// effects overwrite the key immediately, and StrictMode's dev double-mount
-// (or any page-switch remount) would otherwise read its own stamp and always
-// see a zero gap — killing the away digest.
-const AWAY_FROM = (() => { try { return Number(localStorage.getItem(LASTSEEN_KEY)) || null; } catch { return null; } })();
-let awayShownThisLoad = false;   // one digest per page load, not per remount
-
-// Mark rows unseen in the previous refresh (drives the NEW flash + alerts).
-// Baseline is per-source-mode: an A<->B path flip resets the baseline instead
-// of mass-flagging the other universe's rows as NEW (alert/notification flood).
-function markNew(rows, prevKeysRef, mode) {
-  const keyOf = (r) => `${r.under}|${r.type}|${r.strike}|${r.exp}`;
-  const keys = new Set(rows.map(keyOf));
-  const prev = prevKeysRef.current;
-  if (prev && prev.mode === mode) {
-    for (const r of rows) r._new = !prev.keys.has(keyOf(r));
+    return JSON.parse(localStorage.getItem(PREFS_KEY)) || {};
+  } catch {
+    return {};
   }
-  prevKeysRef.current = { mode, keys };
-  return rows;
 }
-
-// Days to expiry for an ISO date string; null when unparseable.
+function loadAcked() {
+  try {
+    return JSON.parse(localStorage.getItem(ACK_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
 function dteDays(exp) {
   if (!exp) return null;
   const t = Date.parse(String(exp).length === 10 ? `${exp}T00:00:00` : exp);
   if (Number.isNaN(t)) return null;
   return Math.max(0, Math.round((t - Date.now()) / 86400000));
 }
+const STRIPE_SORT_LABEL = {
+  all: "Top score", whale: "Big money", oiconf: "ΔOI build", zerodte: "Top score",
+  hedge: "Top score", fresh: "Vol/OI", mine: "Top score",
+};
+const scrollTo = (id) => {
+  try {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch {
+    /* noop */
+  }
+};
 
 // ---------- component ----------
 export default function FlowseekerProBlademap({ active = true }) {
-  const [tab, setTab] = useState("scanner");   // land on the cross-symbol scanner (the hero view)
-  const [ticker, setTicker] = useState("SPY");
-  const [signals, setSignals] = useState([]);     // merged feed, newest first
-  const [selected, setSelected] = useState(null);
-  const [filter, setFilter] = useState("all");
-  // Flow feed time-frame preset: All / 0DTE / 1-7D / Weekly / Monthly / Qtrly / LEAPS
-  const [dteFilter, setDteFilter] = useState("all");
-  const [subtab, setSubtab] = useState("ofi");
-  const [regime, setRegime] = useState({ label: "—", cls: "chop" });
-  const [clock, setClock] = useState("");
-  const [plotlyReady, setPlotlyReady] = useState(!!window.Plotly);
-  const [volTicker, setVolTicker] = useState("SPY");
-  // cross-symbol scanner state (Scanner tab) — filters/sort/universe persist in localStorage
-  const prefs = useMemo(loadScanPrefs, []);
-  const [scan, setScan] = useState([]);
-  const [scanAt, setScanAt] = useState("");
-  const [scanSort, setScanSort] = useState(prefs.scanSort || { key: "score", dir: "desc" });
-  const [scanTypeF, setScanTypeF] = useState(prefs.scanTypeF || "all");
-  const [scanMinVol, setScanMinVol] = useState(prefs.scanMinVol || 0);
-  const [scanMinScore, setScanMinScore] = useState(prefs.scanMinScore || 0);
-  const [scanQ, setScanQ] = useState("");
-  const [scanMeta, setScanMeta] = useState({ mode: null, stale: false, symbols: 0 });
-  const [baselines, setBaselines] = useState({});   // {ticker: {avg, std, days}} from /scan
-  const [universe, setUniverse] = useState(prefs.universe || SCAN_UNIVERSE);
-  const [universeOnly, setUniverseOnly] = useState(!!prefs.universeOnly);
-  const [alertScore, setAlertScore] = useState(prefs.alertScore ?? 85);
-  const [alertRules, setAlertRules] = useState({ ...DEFAULT_RULES, ...(prefs.alertRules || {}) });
-  const [history, setHistory] = useState({});   // {ticker: [{date, total_vol, call_vol, put_vol}]} from /scan/history
-  const [alertLog, setAlertLog] = useState(loadAlertLog);
-  // Simple mode (default): institutional alerts + a best-only table, no knobs.
-  // ⚙ Advanced reveals the full filter/preset/universe/rule-chip toolkit.
-  const [advanced, setAdvanced] = useState(!!prefs.advanced);
-  const [alertsOpen, setAlertsOpen] = useState(true);   // the feed IS the product — open by default
-  const [alertOrder, setAlertOrder] = useState("new");   // tape order: newest | oldest first
-  const [alertUnivOnly, setAlertUnivOnly] = useState(prefs.alertUnivOnly ?? true);   // scope alerts to My Universe
-  const [away, setAway] = useState(null);                 // "while you were away" digest, null = hidden
-  const [notify, setNotify] = useState(!!prefs.notify);
-  const [forcing, setForcing] = useState(false);
-  const [refreshTick, setRefreshTick] = useState(0);
-  // ── Keyboard navigation: j/k cursor, Enter focus, / search, r refresh ──
-  const [kbIdx, setKbIdx] = useState(-1);
-  const scanQRef = useRef(null);
-  // ── Blademap v3: conviction-ranked feed + calibration + journal stats ──
-  const [convFeed, setConvFeed] = useState([]);
-  const [calibBands, setCalibBands] = useState([]);
-  const [setupStats, setSetupStats] = useState(null);
-  // ── Zenith-style control cluster state (settings + quick filters) ──
-  const [showSettings, setShowSettings] = useState(false);
-  const [showQuickFilters, setShowQuickFilters] = useState(false);
-  const [pollMs, setPollMs] = useState(() => {
-    try { return Number(localStorage.getItem("fsb.pollMs")) || 60000; } catch { return 60000; }
-  });
-  useEffect(() => { try { localStorage.setItem("fsb.pollMs", String(pollMs)); } catch { /* */ } }, [pollMs]);
-  const [minScoreQF, setMinScoreQF] = useState(0);
-  const [dteRange, setDteRange] = useState([null, null]);
-  const prevKeysRef = useRef(null);
-  const firstSeenRef = useRef(loadFirstSeen());   // { day, map:{contractKey: firstSeenMs} }
-  const notifyRef = useRef(false);
-  useEffect(() => { notifyRef.current = notify; }, [notify]);
-  const hadDataRef = useRef(false);
-  useEffect(() => { hadDataRef.current = scan.length > 0; }, [scan]);
-
-  // Multi-day persistence per ticker (from /scan/history) — the "what are they
-  // following" read: n = consecutive elevated-volume days. Refs mirror state so
-  // the poll-driven alert ingest sees current values without re-arming.
-  const streaks = useMemo(() => {
-    const out = {};
-    for (const [t, days] of Object.entries(history)) {
-      const st = streakOf(days);
-      if (st && st.n >= 2) out[t] = st;
-    }
-    return out;
-  }, [history]);
-  const streaksRef = useRef({});
-  useEffect(() => { streaksRef.current = streaks; }, [streaks]);
-  const baselinesRef = useRef({});
-  useEffect(() => { baselinesRef.current = baselines; }, [baselines]);
-
-  // Log (and optionally notify) when the scan source flips market↔fallback —
-  // a coverage change from 700+ symbols to 18 is something a desk wants to know.
-  const lastModeRef = useRef(null);
-  const noteSourceFlip = useCallback((mode, symbols) => {
-    const prev = lastModeRef.current;
-    lastModeRef.current = mode;
-    if (prev == null || prev === mode) return;
-    const entry = {
-      key: `src|${mode}`, rule: "SOURCE",
-      under: mode === "market" ? "LIVE" : "FALLBACK",
-      type: "", strike: "", exp: "", score: null, premium: null, dte: null,
-      label: mode === "market"
-        ? `Recovered to market-wide coverage (${symbols} symbols)`
-        : `Degraded to ${symbols}-symbol fallback scan`,
-      src: mode, day: sessionDay(),
-      t: Date.now(), time: fmtClock(Date.now(), true),
-    };
-    setAlertLog((prevLog) => {
-      const next = [entry, ...prevLog].slice(0, 100);
-      try { localStorage.setItem(ALERTS_KEY, JSON.stringify(next)); } catch { /* private mode */ }
-      return next;
-    });
-    if (notifyRef.current && document.hidden && "Notification" in window && Notification.permission === "granted") {
-      try { new Notification("Scanner source changed", { body: entry.label }); } catch { /* platform quirk */ }
-    }
-  }, []);
-  // Poll effect reads alert config via ref so rule tweaks don't re-arm the interval.
-  const alertCfgRef = useRef({});
-  useEffect(() => {
-    alertCfgRef.current = { minScore: alertScore, enabled: alertRules, allow: alertUnivOnly ? universe : null };
-  }, [alertScore, alertRules, alertUnivOnly, universe]);
-
-  useEffect(() => {
+  const prefs = useMemo(loadPrefs, []);
+  const appSettings = useMemo(() => {
     try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify({ scanTypeF, scanMinVol, scanMinScore, scanSort, universe, universeOnly, alertScore, alertRules, notify, alertUnivOnly, advanced }));
-    } catch { /* private mode — prefs just don't persist */ }
-  }, [scanTypeF, scanMinVol, scanMinScore, scanSort, universe, universeOnly, alertScore, alertRules, notify, alertUnivOnly, advanced]);
-
-  // "While you were away" — keep the last-seen stamp current while visible
-  // (the previous visit's value was snapshotted at module load, see AWAY_FROM).
-  useEffect(() => {
-    const stamp = () => { try { localStorage.setItem(LASTSEEN_KEY, String(Date.now())); } catch { /* private mode */ } };
-    stamp();
-    const id = setInterval(() => { if (!document.hidden) stamp(); }, 60e3);
-    document.addEventListener("visibilitychange", stamp);
-    window.addEventListener("beforeunload", stamp);
-    return () => { clearInterval(id); document.removeEventListener("visibilitychange", stamp); window.removeEventListener("beforeunload", stamp); };
-  }, []);
-  // Build the digest once, when the first scan of this page load lands.
-  useEffect(() => {
-    if (!scan.length || awayShownThisLoad) return;
-    awayShownThisLoad = true;
-    setAway(awaySummary(alertLog, scan, AWAY_FROM));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scan]);
-
-  // CSV of the CURRENT filtered/sorted view — lands scanner rows in the DVT journal.
-  const exportCSV = useCallback((rows) => {
-    const blob = new Blob([scanRowsToCSV(rows)], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `flowseeker-scan-${sessionDay()}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }, []);
-
-  // Force refresh via the backend's debounced /scan/refresh, then re-poll.
-  const forceRefresh = useCallback(async () => {
-    setForcing(true);
-    try { await fetch(`${API}/scan/refresh?limit=300`, { method: "POST" }); } catch { /* GET below will serve cache */ }
-    setForcing(false);
-    setRefreshTick((t) => t + 1);
-  }, []);
-
-  // Browser notifications — opt-in, permission-gated.
-  const toggleNotify = useCallback(async () => {
-    if (!notify) {
-      if (!("Notification" in window)) return;
-      let perm = Notification.permission;
-      if (perm === "default") perm = await Notification.requestPermission();
-      if (perm !== "granted") return;
+      return getSettings();
+    } catch {
+      return { defaultTicker: "SPY", colorBlindMode: false };
     }
-    setNotify((n) => !n);
-  }, [notify]);
-
-  // Append newly triggered alerts to the persistent log. Dedupe is per-key
-  // with a per-rule ttl (contract rules 30min default; ΔOI-confirm and
-  // ticker-level SIGMA/FOLLOW carry hours-long ttls from the engine) against
-  // the standalone alertSeen store — NOT the display tape — so tape eviction
-  // or Clear can't re-fire still-true alerts; tape display caps at 100.
-  const alertSeenRef = useRef(loadAlertSeen());
-  const ingestAlerts = useCallback((rows, mode) => {
-    const cfg = alertCfgRef.current;
-    const hits = [
-      ...evalAlerts(rows, cfg),
-      // Rollup over EVERY ticker in the scan (not the display top-N) — a
-      // cheap-option name can be 6σ by volume while ranking low by premium.
-      // SIGMA compares today's coverage against baselines recorded from the
-      // market-wide path, so it only runs on market-mode scans.
-      ...evalTickerAlerts(tickerRollup(rows, 1e9), baselinesRef.current, streaksRef.current,
-        { enabled: { ...cfg.enabled, sigma: !!cfg.enabled.sigma && mode === "market" }, allow: cfg.allow }),
-    ];
-    if (!hits.length) return;
-    setAlertLog((prev) => {
-      const now = Date.now();
-      const seen = alertSeenRef.current;
-      const fresh = hits.filter((h) => (seen[h.key] ?? 0) < now - (h.ttl || 30 * 60e3))
-        .map((h) => ({ ...h, t: now, time: fmtClock(now, true), src: mode, day: sessionDay(),
-          firstSeen: rows.find((r) => `${r.under}|${r.type}|${r.strike}|${r.exp}` === (h.ckey || h.key))?.firstSeen }));
-      if (!fresh.length) return prev;
-      for (const h of fresh) seen[h.key] = now;
-      try { localStorage.setItem(ALERTSEEN_KEY, JSON.stringify(seen)); } catch { /* private mode */ }
-      if (notifyRef.current && document.hidden && "Notification" in window && Notification.permission === "granted") {
-        try {
-          new Notification(`⚡ ${fresh.length} flow alert${fresh.length > 1 ? "s" : ""}`, {
-            body: fresh.slice(0, 3).map((h) => h.label
-              ? `${h.rule}: ${h.label}`
-              : `${h.rule} ${h.under} ${h.type === "call" ? "C" : "P"}${h.strike}${h.why ? ` — ${h.why}` : ""}`).join("\n"),
-          });
-        } catch { /* notification constructor can throw on some platforms */ }
-      }
-      const next = [...fresh, ...prev].slice(0, 100);
-      try { localStorage.setItem(ALERTS_KEY, JSON.stringify(next)); } catch { /* private mode */ }
-      return next;
-    });
   }, []);
-
-  const microRef = useRef({});            // { vpin, regimeConf, lambdaR2 } for selected ticker
-  const gaugeRef = useRef(null), radarRef = useRef(null), ofiRef = useRef(null);
-  const gexRef = useRef(null), volRef = useRef(null), gammaBarRef = useRef(null), gammaCurveRef = useRef(null);
-  const ofiDataRef = useRef(null), gexDataRef = useRef(null);
-
-  // Plotly CDN
+  const [tide, setTide] = useState(loadTide);
   useEffect(() => {
-    if (window.Plotly) { setPlotlyReady(true); return; }
-    const s = document.createElement("script");
-    s.src = "https://cdn.plot.ly/plotly-2.35.2.min.js";
-    s.onload = () => setPlotlyReady(true);
-    document.head.appendChild(s);
+    const onStorage = (e) => {
+      if (e.key === "floww_settings") {
+        setTide(loadTide());
+        try {
+          setCbMode(!!getSettings().colorBlindMode);
+        } catch {
+          /* noop */
+        }
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
+  const mode = tide.mode || "trade";
+  const setMode = (m) => {
+    saveTide({ mode: m });
+    setTide((t) => ({ ...t, mode: m }));
+  };
+  const [cbMode, setCbMode] = useState(!!appSettings.colorBlindMode);
 
-  // clock
+  // focus ticker defaults to floww_settings.defaultTicker, printed on Dealers cell
+  const [focusTicker, setFocusTicker] = useState(appSettings.defaultTicker || "SPY");
+  const [clock, setClock] = useState("");
   useEffect(() => {
     const id = setInterval(() => setClock(new Date().toLocaleTimeString()), 1000);
     return () => clearInterval(id);
   }, []);
 
-  // ---- live flow feed: Public API (primary) -> cvserver (fallback) ----
-  // Phase 5.3: tries /api/public/chain first (Public.com real-time option data);
-  // falls back to /api/flowseeker/chain (cvserver day-aggregated) when unavailable.
+  // ---- verdict feed (poll + SSE share FEED_DAYS / FEED_MIN_CONVICTION) ----
+  const [feed, setFeed] = useState([]);
+  const [feedAt, setFeedAt] = useState("");
+  const [feedErr, setFeedErr] = useState(null);
+  const [pendingFeed, setPendingFeed] = useState(null);
+  const feedHoverRef = useRef(false);
+  const notifyRef = useRef(false);
+  const prevTopKeyRef = useRef(null);
+  const kbActiveRef = useRef(false);
+  const applyFeed = useCallback((alerts) => {
+    const parsed = parseFeedAlerts(alerts);
+    if (feedHoverRef.current || kbActiveRef.current) {
+      setPendingFeed(parsed); // order freezes while hovering or keyboard-navigating
+    } else {
+      setFeed(parsed);
+      setPendingFeed(null);
+      setFeedAt(new Date().toLocaleTimeString());
+    }
+    // Browser notification when the board changes while the tab is hidden.
+    try {
+      const top = tradeNowOf(parsed, TRADE_NOW_FLOOR);
+      if (top && prevTopKeyRef.current && top.key !== prevTopKeyRef.current
+        && notifyRef.current && document.hidden
+        && "Notification" in window && Notification.permission === "granted") {
+        const dir = directionOf(top);
+        new Notification(`Trade now: ${top.under} ${top.strike}${String(top.type || "").toUpperCase()[0] || ""}`, {
+          body: `${dir.arrow} ${dir.word} · ${top.conviction} conviction · ${top.why || top.rule}`,
+        });
+      }
+      if (top) prevTopKeyRef.current = top.key;
+    } catch {
+      /* notification constructor can throw on some platforms */
+    }
+  }, []);
   useEffect(() => {
-    // Feeds the Smart Order Flow tab only — pausing it on the Scanner tab keeps
-    // the browser's 6-per-host connection budget free for /scan (chain calls
-    // run seconds-slow off-hours and starve the scanner's fetch queue).
-    if (!active || tab === "scanner") return;
+    if (!active) return;
+    let cancelled = false;
+    const ctrl = new AbortController();
+    const qs = new URLSearchParams({ sort_by: "conviction", days: String(FEED_DAYS) });
+    if (FEED_MIN_CONVICTION != null) qs.set("min_conviction", String(FEED_MIN_CONVICTION));
+    const poll = async () => {
+      try {
+        const d = await getJSON(`${API}/alerts/feed?${qs}`, ctrl.signal);
+        if (!cancelled && d) {
+          applyFeed(d.alerts || []);
+          setFeedErr(null);
+        }
+      } catch (e) {
+        if (!cancelled && e?.name !== "AbortError") setFeedErr("verdict feed unreachable");
+      }
+    };
+    poll();
+    const id = setInterval(poll, 60000);
+    // SSE pushes re-rank through the same parser; EventSource guarded for jsdom.
+    let es = null;
+    try {
+      if (typeof EventSource !== "undefined") {
+        es = new EventSource(`${API}/alerts/stream?days=${FEED_DAYS}`);
+        es.addEventListener("alerts", (ev) => {
+          try {
+            const d = JSON.parse(ev.data);
+            if (!cancelled && d?.alerts) applyFeed(d.alerts);
+          } catch {
+            /* malformed push — poll covers */
+          }
+        });
+      }
+    } catch {
+      /* SSE unavailable — poll covers */
+    }
+    return () => {
+      cancelled = true;
+      ctrl.abort();
+      clearInterval(id);
+      try {
+        es?.close();
+      } catch {
+        /* noop */
+      }
+    };
+  }, [active, applyFeed]);
+
+  // ---- pulse scan ----
+  const [scan, setScan] = useState([]);
+  const [scanAt, setScanAt] = useState("");
+  const [scanMeta, setScanMeta] = useState({ mode: null, stale: false, symbols: 0 });
+  const [baselines, setBaselines] = useState({});
+  const [history, setHistory] = useState({});
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [pollMs, setPollMs] = useState(prefs.pollMs ?? 60000);
+  const [universe, setUniverse] = useState(prefs.universe || ["SPY", "QQQ", "IWM", "NVDA", "TSLA", "AAPL", "MSFT", "AMZN", "META", "GOOGL"]);
+  const [alertScore, setAlertScore] = useState(prefs.alertScore ?? 85);
+  const [notify, setNotify] = useState(!!prefs.notify);
+  const [alertUnivOnly, setAlertUnivOnly] = useState(prefs.alertUnivOnly ?? true);
+  const prevKeysRef = useRef(null);
+  const firstSeenRef = useRef(loadFirstSeen());
+  const hadDataRef = useRef(false);
+  useEffect(() => {
+    notifyRef.current = notify;
+  }, [notify]);
+  useEffect(() => {
+    hadDataRef.current = scan.length > 0;
+  }, [scan]);
+
+  const markNew = useCallback((rows, m) => {
+    const keyOf = (r) => `${r.under}|${r.type}|${r.strike}|${r.exp}`;
+    const keys = new Set(rows.map(keyOf));
+    const prev = prevKeysRef.current;
+    if (prev && prev.mode === m) {
+      for (const r of rows) r._new = !prev.keys.has(keyOf(r));
+    }
+    prevKeysRef.current = { mode: m, keys };
+    return rows;
+  }, []);
+
+  // Local alert log powers the Changed cell (counts) + rule-builder "Alert rule
+  // fired" matching via the same engine the old tape used.
+  const [alertLog, setAlertLog] = useState([]);
+  const alertSeenRef = useRef(loadAlertSeen());
+  const alertCfgRef = useRef({});
+  useEffect(() => {
+    alertCfgRef.current = { minScore: alertScore, allow: alertUnivOnly ? universe : null };
+  }, [alertScore, alertUnivOnly, universe]);
+  const ingestScanAlerts = useCallback(
+    (rows) => {
+      // NOTE: evalAlerts import intentionally dropped — the verdict feed is the
+      // server engine now. The Changed cell counts server feed arrivals + newly
+      // seen high-score contracts locally (deduped, no notifications here).
+      const cfg = alertCfgRef.current;
+      const allow = cfg.allow ? new Set(cfg.allow) : null;
+      const now = Date.now();
+      const seen = alertSeenRef.current;
+      const fresh = [];
+      for (const r of rows) {
+        if (!r._new) continue;
+        if (allow && !allow.has(r.under)) continue;
+        if ((r.score ?? 0) < (cfg.minScore ?? 85)) continue;
+        const key = `score|${r.under}|${r.type}|${r.strike}|${r.exp}`;
+        if ((seen[key] ?? 0) >= now - 30 * 60e3) continue;
+        seen[key] = now;
+        fresh.push({
+          key, rule: "SCORE", under: r.under, type: r.type, strike: r.strike,
+          exp: r.exp, score: r.score, t: now, time: fmtClock(now, true), day: sessionDay(),
+        });
+      }
+      if (fresh.length) {
+        try {
+          localStorage.setItem(ALERTSEEN_KEY, JSON.stringify(alertSeenRef.current));
+        } catch {
+          /* private mode */
+        }
+        setAlertLog((prev) => [...fresh, ...prev].slice(0, 100));
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    const ctrl = new AbortController();
+    const runOnce = async () => {
+      try {
+        const d = await getJSON(`${API}/scan?limit=300`, ctrl.signal);
+        if (cancelled) return;
+        if (d && Array.isArray(d.rows)) {
+          const regimes = d.regimes || {};
+          const prevOI = d.prev_oi || {};
+          const rows = d.rows.map((r) => {
+            const row = mkScanRow(r[0], r[2], r[3], r[4], Number(r[5]) || 0, Number(r[6]) || 0,
+              r[7], r[8], Number(r[9]) || null, regimes[r[0]] || null);
+            row.oiChg = oiChange(row.oi, prevOI[r[1]]);
+            row.oiChgPct = row.oiChg ? row.oiChg.pct : null;
+            return row;
+          });
+          markNew(rows, "market");
+          firstSeenRef.current = annotateFirstSeen(rows, firstSeenRef.current).seen;
+          try {
+            localStorage.setItem(FIRSTSEEN_KEY, JSON.stringify(firstSeenRef.current));
+          } catch {
+            /* private mode */
+          }
+          ingestScanAlerts(rows);
+          setScan(rows);
+          const nSyms = new Set(rows.map((x) => x.under)).size;
+          if (d.baselines) setBaselines(d.baselines);
+          setScanMeta({
+            mode: "market", stale: !!d.stale, symbols: nSyms,
+            age: d.cache_age_seconds ?? 0, retry: d.retry_after_seconds ?? null,
+            ttl: d.scan_ttl ?? 60, budget: d.budget ?? null,
+          });
+          setScanAt(new Date().toLocaleTimeString());
+        }
+      } catch (e) {
+        if (cancelled || e?.name === "AbortError") return;
+        setScanMeta((m) => ({ ...m, stale: hadDataRef.current, err: !hadDataRef.current }));
+      }
+    };
+    runOnce();
+    const id = pollMs > 0 ? setInterval(runOnce, Math.max(5000, pollMs)) : null;
+    return () => {
+      cancelled = true;
+      ctrl.abort();
+      if (id) clearInterval(id);
+    };
+  }, [active, refreshTick, pollMs, markNew, ingestScanAlerts]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify({ pollMs, universe, alertScore, notify, alertUnivOnly }));
+    } catch {
+      /* private mode */
+    }
+  }, [pollMs, universe, alertScore, notify, alertUnivOnly]);
+
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    const ctrl = new AbortController();
+    const load = async () => {
+      try {
+        const d = await getJSON(`${API}/scan/history?days=14`, ctrl.signal);
+        if (!cancelled && d?.tickers && Object.keys(d.tickers).length) setHistory(d.tickers);
+      } catch {
+        /* sparklines and streaks just stay empty */
+      }
+    };
+    load();
+    const id = setInterval(load, 15 * 60e3);
+    return () => {
+      cancelled = true;
+      ctrl.abort();
+      clearInterval(id);
+    };
+  }, [active]);
+
+  // ---- dealers cell owns its own always-on fetch: never cold on load ----
+  const [dealers, setDealers] = useState({ regime: null, heat: null, at: "", err: false });
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    const ctrl = new AbortController();
+    const load = async () => {
+      const [reg, heat] = await Promise.all([
+        getJSON(`${API}/regime/${focusTicker}`, ctrl.signal).catch(() => null),
+        getJSON(`${BACKEND_URL}/api/heatmap/${focusTicker}?expiries=6&mode=day`, ctrl.signal).catch(() => null),
+      ]);
+      if (cancelled) return;
+      setDealers({ regime: reg, heat, at: new Date().toLocaleTimeString(), err: !reg && !heat });
+    };
+    load();
+    const id = setInterval(load, 60000);
+    return () => {
+      cancelled = true;
+      ctrl.abort();
+      clearInterval(id);
+    };
+  }, [active, focusTicker]);
+
+  // ---- vpin stub (real route) ----
+  const [vpin, setVpin] = useState(null);
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    const ctrl = new AbortController();
+    getJSON(`${BACKEND_URL}/api/vpin/${focusTicker}`, ctrl.signal)
+      .then((d) => {
+        if (!cancelled) setVpin(d);
+      })
+      .catch(() => {
+        if (!cancelled) setVpin(null);
+      });
+    return () => {
+      cancelled = true;
+      ctrl.abort();
+    };
+  }, [active, focusTicker]);
+
+  // ---- trust row ----
+  const [calibBands, setCalibBands] = useState([]);
+  const [setupStats, setSetupStats] = useState(null);
+  useEffect(() => {
+    if (!active) return;
+    let alive = true;
+    fetch(`${API}/alerts/quality?days=30`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (alive && d) setCalibBands(d.conviction_calibration || []);
+      })
+      .catch(() => {});
+    fetch(`${API}/journal/stats?days=90`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (alive && d) setSetupStats(d);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [active, refreshTick]);
+
+  // ---- drill flow feed (public → cvserver fallback), only while drilling ----
+  const [drill, setDrill] = useState(null); // {ticker}
+  const [drillRows, setDrillRows] = useState([]);
+  const [drillFilter, setDrillFilter] = useState("all");
+  const [drillDte, setDrillDte] = useState("all");
+  const [drillSel, setDrillSel] = useState(null);
+  useEffect(() => {
+    if (!active || !drill?.ticker) return;
+    const t = drill.ticker;
     let cancelled = false;
     const ctrl = new AbortController();
     const poll = async () => {
-      // Path A: Public API chain (primary) — flat contract list with
-      // volume/oi/iv/bid/ask/last. Filters: vol >= 100, vol/oi >= 0.4.
       let rows = null;
-      let ds = null;                       // data_source: "public_api" | "cvserver"
       try {
         const d = await getJSON(
-          `${API}/public/chain/${ticker}?expirations=4&fields=strike,type,expiration,volume,openInterest,impliedVolatility,bid,ask,lastPrice`,
+          `${API}/public/chain/${t}?expirations=4&fields=strike,type,expiration,volume,openInterest,impliedVolatility,bid,ask,lastPrice`,
           ctrl.signal,
         );
         if (cancelled) return;
         if (d?.ok && Array.isArray(d.contracts) && d.contracts.length > 0) {
-          rows = mapPublicChainToRows(d.contracts, d.spot, ticker);
-          ds = "public_api";
+          rows = mapPublicChainToRows(d.contracts, d.spot, t);
         }
-      } catch { /* Public API unavailable — fall through to cvserver */ }
-      // Path B: cvserver chain (fallback) — nested chain[].strikes[] shape.
+      } catch {
+        /* fall through to cvserver */
+      }
       if (!rows) {
         try {
-          const d = await getJSON(
-            `${API}/chain/${ticker}?fields=oi,volume,iv,bid,ask,lastPrice`,
-            ctrl.signal,
-          );
+          const d = await getJSON(`${API}/chain/${t}?fields=oi,volume,iv,bid,ask,lastPrice`, ctrl.signal);
           if (cancelled) return;
           const params = d.params || [];
-          const vi = (name) => { const i = params.indexOf(name); return i > 0 ? i - 1 : -1; }; // vals skip strike
+          const vi = (name) => {
+            const i = params.indexOf(name);
+            return i > 0 ? i - 1 : -1;
+          };
           const iVol = vi("volume"), iOI = vi("openInterest"), iIV = vi("impliedVolatility");
           const iBid = vi("bid"), iAsk = vi("ask"), iLast = vi("lastPrice");
           const cvRows = [];
-          for (const exp of (d.chain || [])) {
-            for (const s of (exp.strikes || [])) {
+          for (const exp of d.chain || []) {
+            for (const s of exp.strikes || []) {
               const strike = s[0];
               for (const [sideU, vals] of [["CALL", s[1] || []], ["PUT", s[2] || []]]) {
                 const vol = Number(vals[iVol]) || 0;
@@ -450,15 +561,14 @@ export default function FlowseekerProBlademap({ active = true }) {
                 if (voi < 0.4) continue;
                 const iv = Number(vals[iIV]) || 0;
                 const last = Number(vals[iLast]) || 0;
-                const mid = last || (((Number(vals[iBid]) || 0) + (Number(vals[iAsk]) || 0)) / 2) || estPrice(strike, iv, exp.expiration);
+                const mid = last || ((Number(vals[iBid]) || 0) + Number(vals[iAsk]) || 0) / 2 || estPrice(strike, iv, exp.expiration);
                 const premium = Math.round(vol * mid * 100);
                 const dte = dteOf(exp.expiration);
                 const cls = premium >= 5e7 ? "block" : dte <= 2 ? "sweep" : "unusual";
                 const p = {
-                  ticker, type: sideU.toLowerCase(), classification: cls,
+                  ticker: t, type: sideU.toLowerCase(), classification: cls,
                   strike, expiration: exp.expiration, timestamp: Date.now(),
-                  volume: vol, oi, vol_oi_ratio: voi, iv: iv < 1 ? iv * 100 : iv,
-                  premium,
+                  volume: vol, oi, vol_oi_ratio: voi, iv: iv < 1 ? iv * 100 : iv, premium,
                 };
                 const cd = rowConviction(p);
                 p._conv = cd.conv;
@@ -469,282 +579,166 @@ export default function FlowseekerProBlademap({ active = true }) {
           }
           cvRows.sort((a, b) => b.vol_oi_ratio - a.vol_oi_ratio);
           rows = cvRows.slice(0, 100);
-          ds = "cvserver";
-        } catch { /* both paths failed — keep last data */ }
+        } catch {
+          /* keep last data */
+        }
       }
-      if (rows) {
-        setSignals(rows);
-        setScanMeta((m) => ({ ...m, data_source: ds }));
-      }
+      if (rows && !cancelled) setDrillRows(rows);
     };
     poll();
     const id = setInterval(poll, 15000);
-    return () => { cancelled = true; ctrl.abort(); clearInterval(id); };
-  }, [active, ticker, tab]);
-
-  // ---- cross-symbol market scan (Scanner tab, scenner34 grid) ----
-  // Prefer the efficient backend /scan endpoint (ONE market-wide cvforge screen);
-  // if it isn't deployed yet, fall back to looping the live per-ticker /chain over
-  // a universe. Both are 100% live cvserver day-volume-vs-OI — no synthetic data.
-  useEffect(() => {
-    if (!active || tab !== "scanner") return;   // poll only while the Scanner tab is visible
-    let cancelled = false;
-    let inFlight = false;                        // a slow poll must not overlap a newer one
-    const ctrl = new AbortController();
-    const run = async () => {
-      if (inFlight) return;
-      inFlight = true;
-      try { await runOnce(); } finally { inFlight = false; }
+    return () => {
+      cancelled = true;
+      ctrl.abort();
+      clearInterval(id);
     };
-    const runOnce = async () => {
-      // Path A: market-wide backend endpoint (columns: underlying,ticker,type,
-      // strike,exp,day_volume,oi,iv,delta,spot) + per-ticker regimes map.
-      try {
-        const d = await getJSON(`${API}/scan?limit=300`, ctrl.signal);
-        if (cancelled) return;
-        if (d && Array.isArray(d.rows)) {
-          const regimes = d.regimes || {};
-          const prevOI = d.prev_oi || {};
-          const rows = d.rows.map((r) => {
-            const row = mkScanRow(r[0], r[2], r[3], r[4], Number(r[5]) || 0, Number(r[6]) || 0,
-              r[7], r[8], Number(r[9]) || null, regimes[r[0]] || null);
-            // Join yesterday's OI for this exact contract (OCC ticker r[1]).
-            row.oiChg = oiChange(row.oi, prevOI[r[1]]);
-            row.oiChgPct = row.oiChg ? row.oiChg.pct : null;   // sortable scalar
-            return row;
-          });
-          const marked = markNew(rows, prevKeysRef, "market");
-          firstSeenRef.current = annotateFirstSeen(marked, firstSeenRef.current).seen;
-          try { localStorage.setItem(FIRSTSEEN_KEY, JSON.stringify(firstSeenRef.current)); } catch { /* private mode */ }
-          ingestAlerts(marked, "market");
-          setScan(marked);
-          const nSyms = new Set(rows.map((x) => x.under)).size;
-          if (d.baselines) setBaselines(d.baselines);
-          setScanMeta({ mode: "market", stale: !!d.stale, symbols: nSyms,
-            age: d.cache_age_seconds ?? 0, retry: d.retry_after_seconds ?? null,
-            ttl: d.scan_ttl ?? 60, budget: d.budget ?? null });
-          noteSourceFlip("market", nSyms);
-          setScanAt(new Date().toLocaleTimeString());
-          return;   // a 200 with rows[] is authoritative — even when empty
+  }, [active, drill]);
+
+  // ---- away digest re-arms on every return to the tab ----
+  const [away, setAway] = useState(null);
+  const lastSeenRef = useRef(Date.now());
+  useEffect(() => {
+    const onVis = () => {
+      if (document.hidden) {
+        try {
+          lastSeenRef.current = Date.now();
+        } catch {
+          /* noop */
         }
-      } catch (e) {
-        if (cancelled || e?.name === "AbortError") return;
-        // Backend answered 502/503 (upstream rate-limited or hourly budget
-        // spent): keep the last good data stale-marked. There is NO client
-        // fallback anymore — the old 18-symbol chain sweep cost 18 of the
-        // plan's 20 hourly cvforge calls in a single poll, which is exactly
-        // what kept exhausting the quota. The backend is the only spender.
-        if (hadDataRef.current) {
-          setScanMeta((m) => ({ ...m, stale: true }));
-        } else {
-          setScanMeta((m) => ({ ...m, err: true }));
-        }
-      }
-    };
-    run();
-    // Data refreshes on the backend's budgeted cadence (~4 min); a 60s poll
-    // re-serves that cache — snappy enough, and free.
-    const id = pollMs > 0 ? setInterval(run, Math.max(5000, pollMs)) : null;
-    return () => { cancelled = true; ctrl.abort(); if (id) clearInterval(id); };
-  }, [active, tab, refreshTick, pollMs]);
-
-  // Conviction v3 sidecar data: backend-ranked feed, calibration report,
-  // closed-trade journal stats. Silent-fail — the desk works without them.
-  useEffect(() => {
-    if (!active) return;
-    let alive = true;
-    fetch(`${API}/alerts/feed?days=2&sort_by=conviction`).then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (alive && d) setConvFeed(d.alerts || []); }).catch(() => {});
-    fetch(`${API}/alerts/quality`).then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (alive && d) setCalibBands(d.conviction_calibration || []); }).catch(() => {});
-    fetch(`${API}/journal/stats?days=90`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (alive && d) setSetupStats(d); }).catch(() => {});
-    return () => { alive = false; };
-  }, [active, refreshTick]);
-
-
-  // ---- daily volume history (sparklines + persistence streaks) ----
-  // Mongo-only on the backend (no upstream call) and it changes once a day —
-  // one fetch per Scanner-tab visit plus a slow 15-min re-poll is plenty.
-  useEffect(() => {
-    if (!active || tab !== "scanner") return;
-    let cancelled = false;
-    const ctrl = new AbortController();
-    const load = async () => {
-      try {
-        const d = await getJSON(`${API}/scan/history?days=14`, ctrl.signal);
-        // Ignore empty payloads — a transient Mongo hiccup must not wipe the
-        // good history (and with it flames/sparklines) until the next 15-min poll.
-        if (!cancelled && d && d.tickers && Object.keys(d.tickers).length) setHistory(d.tickers);
-      } catch { /* endpoint missing/cold — sparklines and streaks just stay empty */ }
-    };
-    load();
-    const id = setInterval(load, 15 * 60e3);
-    return () => { cancelled = true; ctrl.abort(); clearInterval(id); };
-  }, [active, tab]);
-
-  // ---- per-ticker microstructure (regime pill + selected conviction inputs) ----
-  useEffect(() => {
-    if (!active) return;
-    let cancelled = false;
-    const ctrl = new AbortController();
-    const load = async () => {
-      // On the Scanner tab only the header regime pill is visible — skip the
-      // heavy chart feeds (heatmap especially) so they don't crowd /scan out
-      // of the browser's per-host connection budget every 6s.
-      const chartsVisible = tab !== "scanner";
-      const [reg, vpin, lam, ofi, heat] = await Promise.all([
-        getJSON(`${API}/regime/${ticker}`, ctrl.signal).catch(() => null),
-        chartsVisible ? getJSON(`${API}/vpin/${ticker}`, ctrl.signal).catch(() => null) : null,
-        chartsVisible ? getJSON(`${API}/lambda/${ticker}`, ctrl.signal).catch(() => null) : null,
-        chartsVisible ? getJSON(`${API}/ofi/${ticker}`, ctrl.signal).catch(() => null) : null,
-        chartsVisible ? getJSON(`${BACKEND_URL}/api/heatmap/${ticker}?expiries=6&mode=day`, ctrl.signal).catch(() => null) : null,
-      ]);
-      if (cancelled) return;
-      microRef.current = {
-        vpin: vpin?.vpin, regimeConf: reg?.confidence, lambdaR2: lam?.r_squared,
-      };
-      const st = String(reg?.current_state || "").toLowerCase();
-      const cls = st.includes("trend") || st.includes("bull") ? "up"
-        : st.includes("mean") || st.includes("bear") || st.includes("rever") ? "down" : "chop";
-      setRegime({ label: reg?.current_state ? `${reg.current_state}${reg.is_warming ? " (warming)" : ""}` : "—", cls });
-      if (chartsVisible) {
-        ofiDataRef.current = ofi;
-        gexDataRef.current = heat;
-        drawOFI(); drawGEX();
-      }
-    };
-    load();
-    const id = setInterval(load, 6000);
-    return () => { cancelled = true; ctrl.abort(); clearInterval(id); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ticker, active, tab, plotlyReady]);
-
-  // auto-select first signal only (don't steal user clicks)
-  useEffect(() => {
-    if (!selected && signals.length) selectSignal(signals[0]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signals]);
-
-  const filtered = useMemo(() => signals.filter((s) => {
-    const side = String(s.type || "").toLowerCase().startsWith("c") ? "CALL" : "PUT";
-    const cls = String(s.classification || "").toUpperCase();
-    const dte = Number(dteOf(s.expiration)) || 0;
-    // DTE preset filter (applied first — narrows the time window)
-    switch (dteFilter) {
-      case "0dte": if (dte !== 0) return false; break;
-      case "1-7d": if (dte < 1 || dte > 7) return false; break;
-      case "weekly": if (dte < 1 || dte > 7) return false; break;
-      case "monthly": if (dte < 8 || dte > 35) return false; break;
-      case "qtrly": if (dte < 36 || dte > 90) return false; break;
-      case "leaps": if (dte < 91) return false; break;
-      default: break;   // "all" — no DTE filter
-    }
-    // Classification filter (type/conviction)
-    switch (filter) {
-      case "CALL": return side === "CALL";
-      case "PUT": return side === "PUT";
-      case "SWEEP": return cls === "SWEEP";
-      case "BLOCK": return cls === "BLOCK";
-      case "high": return s._conv >= 80;
-      default: return true;
-    }
-  }), [signals, filter, dteFilter]);
-
-  // scanner: filter + sort + KPI rollup. Simple mode ignores the hidden
-  // advanced knobs (a Min-Vol set weeks ago must not silently filter an
-  // interface with no visible controls) and applies one opinionated quality
-  // gate instead: only rows an institutional desk would look at.
-  const scanRows = useMemo(() => {
-    const q = (scanQ || "").trim().toUpperCase();
-    const isBest = (r) => r.score >= 70 || r.arch === "WHALE"
-      || (r.oiChgPct ?? 0) >= 0.3 || (r.premium ?? 0) >= 1e6;
-    const rows = scan.filter((r) => {
-      if (!advanced) {
-        if (!isBest(r)) return false;
       } else {
-        if (universeOnly && !universe.includes(r.under)) return false;
-        if (scanTypeF !== "all" && r.type !== scanTypeF) return false;
-        if (scanMinVol && r.vol < scanMinVol) return false;
-        if (scanMinScore && r.score < scanMinScore) return false;
+        const s = awaySummary(alertLog, scan, lastSeenRef.current);
+        setAway(s);
+        lastSeenRef.current = Date.now();
       }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alertLog, scan]);
+
+  // ---- screens ----
+  const customScreens = tide.screens || [];
+  const allScreens = useMemo(
+    () => [...BUILTIN_SCREENS, ...customScreens.map((s) => ({ ...s, custom: true }))],
+    [customScreens],
+  );
+  const [screenId, setScreenId] = useState("all");
+  const screen = allScreens.find((s) => s.id === screenId) || allScreens[0];
+  const [editingScreen, setEditingScreen] = useState(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [showMore, setShowMore] = useState(false);
+  const [showCols, setShowCols] = useState(false);
+
+  // today's knobs (behind Filters disclosure; active ones surface as chips)
+  const [knobType, setKnobType] = useState("all");
+  const [knobMinVol, setKnobMinVol] = useState(0);
+  const [knobMinScore, setKnobMinScore] = useState(0);
+  const [knobQ, setKnobQ] = useState("");
+  const [knobDteMin, setKnobDteMin] = useState(null);
+  const [knobDteMax, setKnobDteMax] = useState(null);
+  const [universeOnly, setUniverseOnly] = useState(false);
+  const [sortPreset, setSortPreset] = useState({ key: "score", dir: "desc" });
+  const [feedOrder, setFeedOrder] = useState("conviction");
+  const [showHistory, setShowHistory] = useState(false);
+  // Rule visibility chips (⋯ menu): hide whole rule families from the feed
+  // and the Changed counts. Visibility only — the server engine still fires.
+  const [hiddenRules, setHiddenRules] = useState([]);
+  const toggleRule = useCallback((rule) => {
+    setHiddenRules((h) => (h.includes(rule) ? h.filter((r) => r !== rule) : [...h, rule]));
+  }, []);
+  const [volTicker, setVolTicker] = useState("SPY");
+  const [acked, setAcked] = useState(loadAcked);
+  const [planned, setPlanned] = useState({});
+  const [forcing, setForcing] = useState(false);
+  const [kbIdx, setKbIdx] = useState(-1);
+  const knobQRef = useRef(null);
+
+  const ack = useCallback((key) => {
+    setAcked((m) => {
+      const n = { ...m, [key]: Date.now() };
+      try {
+        localStorage.setItem(ACK_KEY, JSON.stringify(n));
+      } catch {
+        /* private mode */
+      }
+      return n;
+    });
+  }, []);
+
+  const tickerFacts = useMemo(() => {
+    const roll = tickerRollup(scan, 1e9);
+    const out = {};
+    for (const e of roll) {
+      const st = streakOf(history[e.under] || []);
+      out[e.under] = {
+        premConc: e.prem,
+        pcr: e.pcr,
+        sigma: null, // σ comes from server SIGMA alerts only — raw client σ omitted
+        streak: st ? st.n : 0,
+        streakMult: st ? st.mult : null,
+        streakMedian: st ? st.median : null,
+      };
+    }
+    return out;
+  }, [scan, history]);
+
+  const screenedScans = useMemo(() => {
+    let rows = applyScreenToScans(scan, screen, { universe, tickerFacts });
+    const q = knobQ.trim().toUpperCase();
+    rows = rows.filter((r) => {
+      if (universeOnly && !universe.includes(r.under)) return false;
+      if (knobType !== "all" && r.type !== knobType) return false;
+      if (knobMinVol && r.vol < knobMinVol) return false;
+      if (knobMinScore && r.score < knobMinScore) return false;
       if (q && !(r.under || "").toUpperCase().includes(q)) return false;
-      // Zenith control-cluster quick filters
-      if (minScoreQF > 0 && (r.score ?? 0) < minScoreQF) return false;
-      if (dteRange[0] != null && dteDays(r.exp) != null && dteDays(r.exp) < dteRange[0]) return false;
-      if (dteRange[1] != null && dteDays(r.exp) != null && dteDays(r.exp) > dteRange[1]) return false;
+      const dd = dteDays(r.exp);
+      if (knobDteMin != null && dd != null && dd < knobDteMin) return false;
+      if (knobDteMax != null && dd != null && dd > knobDteMax) return false;
       return true;
     });
-    const k = scanSort.key, dir = scanSort.dir === "desc" ? -1 : 1;
-    rows.sort((a, b) => {
+    const k = sortPreset.key, dir = sortPreset.dir === "desc" ? -1 : 1;
+    rows = [...rows].sort((a, b) => {
       let av = a[k], bv = b[k];
       if (typeof av === "string" || typeof bv === "string") return String(av).localeCompare(String(bv)) * dir;
-      av = av == null ? -Infinity : av; bv = bv == null ? -Infinity : bv;
+      av = av == null ? -Infinity : av;
+      bv = bv == null ? -Infinity : bv;
       return (av < bv ? -1 : av > bv ? 1 : 0) * dir;
     });
     return rows;
-  }, [scan, scanTypeF, scanMinVol, scanMinScore, scanQ, scanSort, universe, universeOnly, advanced, minScoreQF, dteRange]);
-  // Keyboard nav (scanner tab only, ignored while typing in an input)
-  useEffect(() => {
-    if (!active || tab !== "scanner") return;
-    const onKey = (e) => {
-      const t = e.target;
-      if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) {
-        if (e.key === "Escape") t.blur();
-        return;
-      }
-      if (e.key === "/") { e.preventDefault(); scanQRef.current && scanQRef.current.focus(); return; }
-      if (e.key === "r" || e.key === "R") { forceRefresh(); return; }
-      const n = scanRows.length;
-      if (!n) return;
-      if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); setKbIdx((k) => Math.min(n - 1, k + 1)); }
-      else if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); setKbIdx((k) => Math.max(0, k - 1)); }
-      else if (e.key === "g") { e.preventDefault(); setKbIdx(0); }
-      else if (e.key === "G") { e.preventDefault(); setKbIdx(n - 1); }
-      else if (e.key === "Enter" && kbIdx >= 0 && scanRows[kbIdx]) {
-        setTicker(scanRows[kbIdx].under); setTab("flow");
-      } else if (e.key === "Escape") { setKbIdx(-1); }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [active, tab, scanRows, kbIdx, forceRefresh]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scan, screen, universe, tickerFacts, universeOnly, knobType, knobMinVol, knobMinScore, knobQ, knobDteMin, knobDteMax, sortPreset]);
 
-
-  const scanStats = useMemo(() => {
-    let notl = 0, cv = 0, pv = 0, unusual = 0, alerts = 0; const cnt = {};
-    for (const r of scanRows) {
-      notl += r.notional;
-      if (r.type === "call") cv += r.vol; else pv += r.vol;
-      if (r.volOI >= 2) unusual++;
-      if (r._new && r.score >= alertScore) alerts++;
-      cnt[r.under] = (cnt[r.under] || 0) + 1;
+  const screenedFeed = useMemo(
+    () => applyScreenToAlerts(feed, screen, { universe }),
+    [feed, screen, universe],
+  );
+  const visibleFeed = useMemo(() => {
+    const scope = alertUnivOnly ? screenedFeed.filter((a) => universe.includes(a.under || a.ticker)) : screenedFeed;
+    const ruleOk = (a) => !hiddenRules.includes(String(a.rule || "").toUpperCase());
+    const live = (showHistory ? scope : scope.filter((a) => !acked[a.key])).filter(ruleOk);
+    if (feedOrder === "new") {
+      return [...live].sort((a, b) => Date.parse(b.asof_ts || 0) - Date.parse(a.asof_ts || 0));
     }
-    let top = "—", best = 0;
-    for (const u of Object.keys(cnt)) if (cnt[u] > best) { best = cnt[u]; top = u; }
-    const tv = cv + pv, cpct = tv > 0 ? Math.round((cv / tv) * 100) : 0;
-    return { notl, cpct, tv, unusual, alerts, top, best };
-  }, [scanRows, alertScore]);
+    return live;
+  }, [screenedFeed, alertUnivOnly, universe, showHistory, acked, feedOrder, hiddenRules]);
 
-  const sortScan = (k) => setScanSort((s) => (s.key === k
-    ? { key: k, dir: s.dir === "desc" ? "asc" : "desc" }
-    : { key: k, dir: (k === "under" || k === "type" || k === "ftype") ? "asc" : "desc" }));
-
-  // Premium concentration across the FULL scan (not the filtered view) so the
-  // chips stay stable while a chip-click filters the table below them.
-  const rollup = useMemo(() => tickerRollup(scan, 8), [scan]);
-
-  // Alert tape summary: per-rule counts + session window (log is newest-first).
-  const alertSummary = useMemo(() => {
+  const withheld = verdictWithheld(scanMeta);
+  // Per-rule counts for the Vector header (the old tape's session summary).
+  const ruleCounts = useMemo(() => {
     const c = {};
-    for (const a of alertLog) c[a.rule] = (c[a.rule] || 0) + 1;
-    const newest = alertLog.length ? alertLog[0].time : null;
-    const oldest = alertLog.length ? alertLog[alertLog.length - 1].time : null;
-    return { c, newest, oldest };
-  }, [alertLog]);
-  // Institutional Heartbeat tier — drives the colored dot + label in the
-  // scanbar's Heartbeat chip. Pure helper delegates the precedence rules so
-  // the JSX never repeats them; same call backs the title-tooltip.
+    for (const a of screenedFeed) {
+      const r = String(a.rule || "").toUpperCase();
+      if (r) c[r] = (c[r] || 0) + 1;
+    }
+    return c;
+  }, [screenedFeed]);
+  const bestFeed = useMemo(
+    () => [...visibleFeed].sort((a, b) => (b.conviction ?? 0) - (a.conviction ?? 0))[0] || null,
+    [visibleFeed],
+  );
+  const tradeNow = withheld ? null : tradeNowOf(visibleFeed, TRADE_NOW_FLOOR);
+  const feedBody = feedBodyOf(visibleFeed, tradeNow);
+
   const heartbeat = useMemo(() => {
     const hb = pulseState({
       mode: scanMeta.mode, stale: !!scanMeta.stale,
@@ -752,894 +746,1271 @@ export default function FlowseekerProBlademap({ active = true }) {
       hasData: scan.length > 0, hasError: !!scanMeta.err,
       ttl: scanMeta.ttl || 60,
     });
-    // Budget context on the tooltip — an institutional desk knows its data
-    // cadence: X of the plan's hourly cvforge calls spent, next scan ETA.
     const b = scanMeta.budget;
     const next = scanMeta.ttl ? Math.max(0, scanMeta.ttl - (scanMeta.age || 0)) : null;
-    hb.hint = `${hb.hint}${next != null ? ` · next scan ~${elapsedClock(next)}` : ""}${b ? ` · ${b.used}/${b.hourly_cap} cvforge calls this hour` : ""}`;
+    hb.hint = `${hb.hint}${next != null ? ` · next scan ~${elapsedClock(next)}` : ""}${b ? ` · ${b.used}/${b.hourly_cap} calls this hour` : ""}`;
     return hb;
   }, [scanMeta, scan.length]);
-  // FOLLOW Leaderboard — the "what are they following" read. Pure helper
-  // sorts + clips the streaks map; the JSX renders the result.
-  const followStrip = useMemo(() => formatFOLLOWStrip(streaks, { top: 6 }), [streaks]);
-  const shownAlerts = useMemo(() => {
-    const a = alertOrder === "old" ? [...alertLog].reverse() : alertLog;
-    return a.slice(0, 60);
-  }, [alertLog, alertOrder]);
 
-  // FIRE Banner — the "definite alert" tier that demands attention. Pure
-  // helpers tierOf + selectFires + pickBanner keep the precedence Jest-testable.
-  // The banner shows ONE high-tier alert (OICONF / WHALE / FOLLOW≥3d / SIGMA≥5σ
-  // / SCORE≥90). User acknowledges OR auto-dismisses 60s after fire.
-  const [ackedKeys, setAckedKeys] = useState(() => new Set());
-  const ackFire = useCallback((k) => setAckedKeys((m) => { const n = new Set(m); n.add(k); return n; }), []);
-  const fires = useMemo(() => selectFires(alertLog, {
-    now: Date.now(), ttlMs: 60_000,
-    minScoreForFire: Math.max(alertScore, 90),
-    enabled: alertRules,
-    allow: alertUnivOnly ? universe : null,
-    acked: ackedKeys,
-  }), [alertLog, alertScore, alertRules, alertUnivOnly, universe, ackedKeys]);
-  const fireBanner = useMemo(() => pickBanner(fires), [fires]);
+  // ---- answer cells ----
+  const moneyFacts = useMemo(() => {
+    const roll = tickerRollup(screenedScans, 8);
+    const top = roll.slice(0, 3);
+    const sigmas = {};
+    for (const a of screenedFeed) {
+      if (String(a.rule || "").toUpperCase() === "SIGMA" && a.sigma != null) sigmas[a.under] = a.sigma;
+    }
+    return { roll, top, sigmas };
+  }, [screenedScans, screenedFeed]);
+
+  const changedFacts = useMemo(() => {
+    const ruleOk = (a) => !hiddenRules.includes(String(a.rule || "").toUpperCase());
+    const scope = (alertUnivOnly ? alertLog.filter((a) => universe.includes(a.under)) : alertLog).filter(ruleOk);
+    const feedNew = screenedFeed.filter((a) => {
+      const ts = Date.parse(a.asof_ts || 0);
+      return ts && Date.now() - ts < 3 * 3600e3;
+    }).length;
+    return { n: scope.length + feedNew, scope: scope.length, feedNew };
+  }, [alertLog, screenedFeed, alertUnivOnly, universe, hiddenRules]);
+
+  const dealersFacts = useMemo(() => {
+    const reg = dealers.regime || {};
+    const flip = reg.gamma_flip;
+    const dist = reg.dist_to_flip_pct;
+    const total = reg.total_gex;
+    const short = total != null ? total < 0 : null;
+    return { reg, flip, dist, total, short, at: dealers.at, err: dealers.err };
+  }, [dealers]);
+
+  // ---- market tape: one line under the cards ----
+  const tape = useMemo(() => {
+    let notl = 0, cv = 0, pv = 0, unusual = 0;
+    for (const r of screenedScans) {
+      notl += r.notional || 0;
+      if (r.type === "call") cv += r.vol || 0;
+      else pv += r.vol || 0;
+      if ((r.volOI || 0) >= 2) unusual++;
+    }
+    const tv = cv + pv;
+    return { notl, tv, cpct: tv > 0 ? Math.round((cv / tv) * 100) : null, unusual };
+  }, [screenedScans]);
+
+  const degradedLine = useMemo(() => {
+    if (scanMeta.err) return "feed unreachable · retrying";
+    if (scanMeta.stale) return `stale · next slot in ${elapsedClock(scanMeta.retry ?? scanMeta.ttl ?? 60)}`;
+    if (scanMeta.mode === "fallback" || !scanMeta.mode) return "waiting on market-wide scan";
+    if ((scanMeta.budget?.used ?? 0) >= (scanMeta.budget?.hourly_cap ?? Infinity)) return "hourly budget spent · serving cache";
+    return null;
+  }, [scanMeta]);
+
+  // ---- actions ----
+  const doDrill = useCallback((ticker) => {
+    if (ticker) setFocusTicker(ticker);
+    setDrill({ ticker });
+    setDrillSel(null);
+    scrollTo("lattice");
+  }, []);
+  const doWatch = useCallback((ticker) => {
+    if (!ticker) return;
+    setUniverse((u) => (u.includes(ticker) ? u : [...u, ticker]));
+  }, []);
+  const doPlan = useCallback((a) => {
+    if (!a || isContextual(a)) return;
+    const dir = directionOf(a);
+    const seed = {
+      ticker: a.under || a.ticker,
+      type: String(a.type || "call").toLowerCase(),
+      action: dir.cls === "bear" ? "sell" : "buy",
+      strike: a.strike,
+      expiry: a.exp,
+      entry_date: sessionDay(),
+      entry_price: a.levels?.entry ?? a.est_entry ?? null,
+      stop: a.levels?.invalidation ?? null,
+      target: a.levels?.target ?? null,
+      setup: "tidehunter-verdict",
+      conviction: a.conviction ?? null,
+      why: a.why || "",
+      source: "tidehunter-manual",
+    };
+    persistJournalSeeds([seed]);
+    setPlanned((p) => ({ ...p, [a.key]: true }));
+  }, []);
+  const forceRefresh = useCallback(async () => {
+    setForcing(true);
+    try {
+      await fetch(`${API}/scan/refresh?limit=300`, { method: "POST" });
+    } catch {
+      /* GET below serves cache */
+    }
+    setForcing(false);
+    setRefreshTick((t) => t + 1);
+  }, []);
+  const exportCSV = useCallback((rows) => {
+    const blob = new Blob([scanRowsToCSV(rows)], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `tidehunter-scan-${sessionDay()}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }, []);
+  const toggleNotify = useCallback(async () => {
+    if (!notify) {
+      if (!("Notification" in window)) return;
+      let perm = Notification.permission;
+      if (perm === "default") {
+        try {
+          perm = await Notification.requestPermission();
+        } catch {
+          return;
+        }
+      }
+      if (perm !== "granted") return;
+    }
+    setNotify((n) => !n);
+  }, [notify]);
+  const copyFeed = useCallback(() => {
+    const tsv = visibleFeed
+      .map((a) => [a.asof_ts || "", a.rule, a.under || a.ticker, a.type, a.strike, a.exp, a.conviction ?? "", a.bias || "", a.why || ""].join("\t"))
+      .join("\n");
+    try {
+      navigator.clipboard.writeText(tsv);
+    } catch {
+      /* clipboard blocked */
+    }
+  }, [visibleFeed]);
+  const clearDismissed = useCallback(() => {
+    setAcked({});
+    try {
+      localStorage.removeItem(ACK_KEY);
+    } catch {
+      /* noop */
+    }
+  }, []);
+
+  // ---- screen CRUD (built-ins are editable copies) ----
+  const saveCustomScreen = useCallback((s) => {
+    const list = [...(loadTide().screens || [])];
+    const i = list.findIndex((x) => x.id === s.id);
+    if (i >= 0) list[i] = s;
+    else list.push(s);
+    saveTide({ screens: list });
+    setTide((t) => ({ ...t, screens: list }));
+    setScreenId(s.id);
+    setEditingScreen(null);
+  }, []);
+  const deleteCustomScreen = useCallback((id) => {
+    const list = (loadTide().screens || []).filter((x) => x.id !== id);
+    saveTide({ screens: list });
+    setTide((t) => ({ ...t, screens: list }));
+    setScreenId("all");
+    setEditingScreen(null);
+  }, []);
+
+  // ---- pulse columns per mode ----
+  const colsForMode = tide.columns?.[mode] || (mode === "research" ? null : PULSE_DEFAULT_COLS);
+  const visibleCols = colsForMode || PULSE_COLUMNS.map((c) => c.key);
+  const setVisibleCols = (keys) => {
+    const columns = { ...(tide.columns || {}), [mode]: keys };
+    saveTide({ columns });
+    setTide((t) => ({ ...t, columns }));
+  };
+
+  // ---- keyboard nav (pulse) ----
   useEffect(() => {
-    if (!fireBanner) return;
-    const tid = setTimeout(() => ackFire(fireBanner.key), 60_000);
-    return () => clearTimeout(tid);
-  }, [fireBanner, ackFire]);
-
-
-  const SCAN_COLS = [
-    ["firstSeen", "Seen", false], ["score", "Score", false], ["under", "Ticker", true], ["type", "C/P", true],
-    ["strike", "Strike", false], ["dte", "DTE", false], ["vol", "Volume", false],
-    ["oi", "OI", false], ["oiChgPct", "ΔOI", false], ["volOI", "Vol/OI", false], ["premium", "Prem~", false],
-    ["notional", "Notional", false],
-    ["iv", "IV", false], ["ftype", "Flow", true], ["lean", "Lean", true],
-    ["trend", "Trd", false],
-  ];
-  // Simple mode: the columns a decision needs, nothing else.
-  const SIMPLE_KEYS = ["firstSeen", "score", "under", "type", "strike", "dte", "vol", "oiChgPct", "premium", "ftype"];
-  const colsShown = advanced ? SCAN_COLS : SCAN_COLS.filter(([k]) => SIMPLE_KEYS.includes(k));
-
-  function selectSignal(p) {
-    setSelected(p);
-    if (p?.ticker && p.ticker !== ticker) setTicker(p.ticker);
-    requestAnimationFrame(() => { drawGauge(p); drawRadar(p); });
-  }
-
-  // ---------- charts ----------
-  const P = useCallback(() => window.Plotly, []);
-  function drawGauge(p) {
-    if (!P() || !gaugeRef.current || !p) return;
-    const c = p._conv != null ? p._conv : (p._cd ? p._cd.conv : 50);
-    const col = c >= 85 ? PL.green : c >= 70 ? PL.blue : c >= 55 ? PL.amber : PL.red;
-    P().react(gaugeRef.current, [{
-      type: "indicator", mode: "gauge+number", value: c,
-      number: { font: { color: "#e6e8ee", size: 30, family: PL.font } },
-      gauge: { axis: { range: [0, 100], tickcolor: PL.axis, tickfont: { color: PL.muted, size: 9 } },
-        bar: { color: col, thickness: 0.25 }, bgcolor: "rgba(0,0,0,0)", borderwidth: 0,
-        steps: [{ range: [0, 55], color: "rgba(255,77,94,0.10)" }, { range: [55, 70], color: "rgba(245,176,66,0.10)" },
-          { range: [70, 85], color: "rgba(41,197,224,0.10)" }, { range: [85, 100], color: "rgba(25,210,124,0.10)" }],
-        threshold: { line: { color: "#e6e8ee", width: 2 }, thickness: 0.75, value: c } },
-    }], { paper_bgcolor: PL.paper, margin: { l: 8, r: 8, t: 14, b: 8 }, height: 190, font: { color: PL.text, family: PL.font } },
-    { displayModeBar: false, responsive: true });
-  }
-  function drawRadar(p) {
-    if (!P() || !radarRef.current || !p) return;
-    const d = p._cd || { stat: 0, pat: 0, size: 0, urg: 0 };
-    const cats = ["Unusualness", "Pattern", "Size", "Urgency"];
-    P().react(radarRef.current, [{
-      type: "scatterpolar", r: [d.stat, d.pat, d.size, d.urg, d.stat],
-      theta: cats.concat([cats[0]]), fill: "toself", fillcolor: "rgba(41,197,224,0.18)",
-      line: { color: PL.blue, width: 2 }, marker: { color: PL.blue, size: 4 },
-    }], { paper_bgcolor: PL.paper, polar: { bgcolor: "rgba(0,0,0,0)",
-        radialaxis: { range: [0, 30], tickfont: { color: PL.muted, size: 8 }, gridcolor: PL.grid, linecolor: PL.axis },
-        angularaxis: { tickfont: { color: PL.text, size: 9 }, gridcolor: PL.grid, linecolor: PL.axis } },
-      margin: { l: 34, r: 34, t: 12, b: 12 }, height: 190, showlegend: false, font: { family: PL.font } },
-    { displayModeBar: false, responsive: true });
-  }
-  function drawOFI() {
-    if (!P() || !ofiRef.current) return;
-    const o = ofiDataRef.current;
-    const per = (o?.of_per_level || []).map(Number);
-    if (!per.length) { P().react(ofiRef.current, [], { paper_bgcolor: PL.paper, margin: { t: 20 },
-      annotations: [{ text: o ? "OFI warming up…" : "no OFI data", showarrow: false, font: { color: PL.muted } }] }, { displayModeBar: false }); return; }
-    P().react(ofiRef.current, [{
-      type: "bar", x: per.map((_, i) => `L${i + 1}`), y: per,
-      marker: { color: per.map((v) => (v >= 0 ? PL.green : PL.red)) },
-      hovertemplate: "%{x}: %{y:.3f}<extra></extra>",
-    }], { paper_bgcolor: PL.paper, plot_bgcolor: PL.plot, margin: { l: 40, r: 14, t: 24, b: 28 },
-      title: { text: `Order-Flow Imbalance · ${o.imbalance_label || ""} (agg ${(o.of_aggregated ?? 0).toFixed?.(2) ?? o.of_aggregated})`, font: { color: PL.text, size: 11, family: PL.font } },
-      xaxis: { gridcolor: PL.grid, color: PL.muted }, yaxis: { gridcolor: PL.grid, color: PL.muted, zeroline: true, zerolinecolor: PL.axis },
-      font: { family: PL.font } }, { displayModeBar: false, responsive: true });
-  }
-  function drawGEX() {
-    if (!P() || !gexRef.current) return;
-    const h = gexDataRef.current;
-    const grid = h?.grid?.grid, expiries = h?.grid?.expiries || [], strikes = (h?.grid?.strikes || []).slice().sort((a, b) => a - b);
-    if (!grid || !strikes.length) { P().react(gexRef.current, [], { paper_bgcolor: PL.paper, margin: { t: 20 },
-      annotations: [{ text: "no GEX grid", showarrow: false, font: { color: PL.muted } }] }, { displayModeBar: false }); return; }
-    const z = strikes.map((s) => expiries.map((e) => Number(grid?.[e]?.[String(s)] ?? grid?.[e]?.[s] ?? 0)));
-    P().react(gexRef.current, [{
-      type: "heatmap", x: expiries.map((e) => String(e).slice(5)), y: strikes.map((s) => `$${s}`), z,
-      colorscale: [[0, "#5b1424"], [0.5, "#0c1322"], [1, "#1a5c7e"]], zmid: 0, xgap: 1, ygap: 1,
-      colorbar: { thickness: 8, len: 0.7, tickfont: { color: PL.muted, size: 9 } },
-      hovertemplate: "%{y} · %{x}<br>GEX %{z:.2f}<extra></extra>",
-    }], { paper_bgcolor: PL.paper, margin: { l: 64, r: 14, t: 18, b: 34 },
-      xaxis: { color: PL.muted, side: "top" }, yaxis: { color: PL.muted }, font: { family: PL.font } },
-    { displayModeBar: false, responsive: true });
-  }
-
-  // synthetic vol surface (no IV-surface backend) — labelled SIM
-  function drawVol() {
-    if (!P() || !volRef.current) return;
-    const mny = Array.from({ length: 21 }, (_, i) => 0.8 + i * 0.02);
-    const exp = [7, 14, 30, 60, 90, 180];
-    const z = exp.map((d) => mny.map((m) => {
-      const skew = (1 - m) * 28; const term = 12 + 30 / Math.sqrt(d); const smile = Math.pow(m - 1, 2) * 60;
-      return +(term + skew + smile).toFixed(2);
-    }));
-    P().react(volRef.current, [{ type: "surface", x: mny, y: exp, z,
-      colorscale: [[0, "#2c1339"], [0.5, "#29c5e0"], [1, "#19d27c"]], showscale: true,
-      colorbar: { thickness: 10, len: 0.6, tickfont: { color: PL.muted, size: 9 } },
-      hovertemplate: "Mny %{x}<br>%{y}d<br>IV %{z}%<extra></extra>" }],
-    { paper_bgcolor: PL.paper, scene: { camera: { eye: { x: 1.4, y: -1.6, z: 0.7 } },
-      xaxis: { title: "Moneyness", color: PL.muted, gridcolor: PL.grid },
-      yaxis: { title: "DTE", color: PL.muted, gridcolor: PL.grid },
-      zaxis: { title: "IV %", color: PL.muted, gridcolor: PL.grid } },
-      margin: { l: 8, r: 8, t: 8, b: 8 }, font: { family: PL.font, color: PL.text } },
-    { displayModeBar: false, responsive: true });
-  }
-  // gamma profile from REAL heatmap net-GEX per strike
-  function drawGamma() {
-    if (!P() || !gammaBarRef.current) return;
-    const h = gexDataRef.current, grid = h?.grid?.grid, expiries = h?.grid?.expiries || [];
-    const strikes = (h?.grid?.strikes || []).slice().sort((a, b) => a - b);
-    if (!grid || !strikes.length) return;
-    const net = strikes.map((s) => expiries.reduce((a, e) => a + Number(grid?.[e]?.[String(s)] ?? 0), 0));
-    P().react(gammaBarRef.current, [{ type: "bar", x: strikes.map((s) => `$${s}`), y: net,
-      marker: { color: net.map((v) => (v >= 0 ? PL.green : PL.red)) },
-      hovertemplate: "%{x}<br>Net GEX %{y:.2f}<extra></extra>" }],
-    { paper_bgcolor: PL.paper, margin: { l: 44, r: 12, t: 24, b: 40 }, title: { text: "Net GEX by Strike", font: { color: PL.text, size: 11 } },
-      xaxis: { color: PL.muted, gridcolor: PL.grid }, yaxis: { color: PL.muted, gridcolor: PL.grid, zeroline: true, zerolinecolor: PL.axis }, font: { family: PL.font } },
-    { displayModeBar: false, responsive: true });
-    let cum = 0; const cumA = net.map((v) => (cum += v));
-    if (gammaCurveRef.current) P().react(gammaCurveRef.current, [{ type: "scatter", mode: "lines", x: strikes.map((s) => `$${s}`), y: cumA,
-      line: { color: PL.blue, width: 2 }, fill: "tozeroy", fillcolor: "rgba(41,197,224,0.10)",
-      hovertemplate: "%{x}<br>Cum %{y:.2f}<extra></extra>" }],
-    { paper_bgcolor: PL.paper, margin: { l: 44, r: 12, t: 24, b: 40 }, title: { text: "Cumulative Dealer Gamma", font: { color: PL.text, size: 11 } },
-      xaxis: { color: PL.muted, gridcolor: PL.grid }, yaxis: { color: PL.muted, gridcolor: PL.grid }, font: { family: PL.font } },
-    { displayModeBar: false, responsive: true });
-  }
-
-  // redraw when tab/subtab/plotly changes
+    if (!active) return;
+    const onKey = (e) => {
+      const t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) {
+        if (e.key === "Escape") t.blur();
+        return;
+      }
+      if (e.key === "/") {
+        e.preventDefault();
+        knobQRef.current?.focus();
+        return;
+      }
+      if (e.key === "r" || e.key === "R") {
+        forceRefresh();
+        return;
+      }
+      const n = screenedScans.length;
+      if (!n) return;
+      if (e.key === "j" || e.key === "ArrowDown") {
+        e.preventDefault();
+        kbActiveRef.current = true; // verdict feed holds its order while navigating
+        setKbIdx((k) => Math.min(n - 1, k + 1));
+      } else if (e.key === "k" || e.key === "ArrowUp") {
+        e.preventDefault();
+        kbActiveRef.current = true;
+        setKbIdx((k) => Math.max(0, k - 1));
+      } else if (e.key === "g") {
+        e.preventDefault();
+        kbActiveRef.current = true;
+        setKbIdx(0);
+      } else if (e.key === "G") {
+        e.preventDefault();
+        kbActiveRef.current = true;
+        setKbIdx(n - 1);
+      } else if (e.key === "Enter" && kbIdx >= 0 && screenedScans[kbIdx]) {
+        doDrill(screenedScans[kbIdx].under);
+      } else if (e.key === "Escape") {
+        setKbIdx(-1);
+        kbActiveRef.current = false;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active, screenedScans, kbIdx, forceRefresh, doDrill]);
   useEffect(() => {
-    if (!plotlyReady) return;
-    if (tab === "flow") { if (subtab === "ofi") drawOFI(); else drawGEX(); if (selected) { drawGauge(selected); drawRadar(selected); } }
-    if (tab === "vol") drawVol();
-    if (tab === "gamma") drawGamma();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, subtab, plotlyReady, volTicker]);
+    setKbIdx(-1);
+    kbActiveRef.current = false;
+  }, [screenId, knobQ]);
 
-  const sideOf = (p) => (String(p.type || "").toLowerCase().startsWith("c") ? "CALL" : "PUT");
-  const typeOf = (p) => String(p.classification || "reg").toUpperCase();
+  const sortScan = (k) => {
+    setSortPreset((s) => {
+      if (s.key === k) return { key: k, dir: s.dir === "desc" ? "asc" : "desc" };
+      const asc = k === "under" || k === "type" || k === "exp";
+      return { key: k, dir: asc ? "asc" : "desc" };
+    });
+  };
 
-  // ---------- render ----------
-  // Focused on institutional smart order flow — dropped Vol Surface (synthetic) + Academy (education).
-  const TABS = [["flow", "Smart Order Flow"], ["gamma", "Dealer Positioning"], ["scanner", "Scanner"]];
+  // ---- lattice derived ----
+  const lattice = useMemo(() => {
+    const h = dealers.heat || {};
+    const grid = h?.grid?.grid;
+    const expiries = (h?.grid?.expiries || []).slice(0, 6);
+    let strikes = (h?.grid?.strikes || []).slice().sort((a, b) => a - b);
+    if (strikes.length > 14) {
+      const spot = Number(h?.spot) || Number(dealersFacts.reg?.gamma_flip) || strikes[Math.floor(strikes.length / 2)];
+      strikes = [...strikes].sort((a, b) => Math.abs(a - spot) - Math.abs(b - spot)).slice(0, 14).sort((a, b) => a - b);
+    }
+    const val = (s, e) => Number(grid?.[e]?.[String(s)] ?? grid?.[e]?.[s] ?? 0);
+    let maxAbs = 0;
+    for (const s of strikes) for (const e of expiries) maxAbs = Math.max(maxAbs, Math.abs(val(s, e)));
+    const cls = (v) => {
+      if (!maxAbs) return "c0";
+      const f = Math.abs(v) / maxAbs;
+      const lvl = f > 0.66 ? 3 : f > 0.33 ? 2 : f > 0.02 ? 1 : 0;
+      return v < 0 ? `n${lvl}` : `p${lvl}`;
+    };
+    const net = strikes.map((s) => expiries.reduce((a, e) => a + val(s, e), 0));
+    const cumMax = Math.max(1, ...net.map((v, i) => Math.abs(net.slice(0, i + 1).reduce((a, b) => a + b, 0))));
+    let cum = 0;
+    const cumArr = net.map((v) => (cum += v));
+    const nodes = h?.nodes || {};
+    const ceilings = nodes.ceilings || [];
+    const floors = nodes.floors || [];
+    return {
+      expiries, strikes, val, cls, net, cumArr, cumMax, maxAbs,
+      spot: h?.spot ?? null,
+      callWall: ceilings[0]?.strike ?? null,
+      putWall: floors[0]?.strike ?? null,
+      maxPain: h?.max_pain ?? nodes?.max_pain ?? null,
+      ok: !!grid && strikes.length > 0,
+    };
+  }, [dealers.heat, dealersFacts.reg]);
+
+  const drillFiltered = useMemo(() => drillRows.filter((p) => {
+    const side = String(p.type || "").toLowerCase().startsWith("c") ? "CALL" : "PUT";
+    const cls = String(p.classification || "").toUpperCase();
+    const dte = Number(dteOf(p.expiration)) || 0;
+    switch (drillDte) {
+      case "0dte": if (dte !== 0) return false; break;
+      case "1-7d": if (dte < 1 || dte > 7) return false; break;
+      case "monthly": if (dte < 8 || dte > 35) return false; break;
+      case "qtrly": if (dte < 36 || dte > 90) return false; break;
+      case "leaps": if (dte < 91) return false; break;
+      default: break;
+    }
+    switch (drillFilter) {
+      case "CALL": return side === "CALL";
+      case "PUT": return side === "PUT";
+      case "SWEEP": return cls === "SWEEP";
+      case "BLOCK": return cls === "BLOCK";
+      case "high": return p._conv >= 80;
+      default: return true;
+    }
+  }), [drillRows, drillFilter, drillDte]);
+
+  const activeChips = [];
+  if (knobType !== "all") activeChips.push(["Type", knobType]);
+  if (knobMinScore > 0) activeChips.push(["Score", `≥${knobMinScore}`]);
+  if (knobMinVol > 0) activeChips.push(["Vol", `≥${fmtK(knobMinVol)}`]);
+  if (knobDteMin != null || knobDteMax != null) activeChips.push(["DTE", `${knobDteMin ?? 0}–${knobDteMax ?? "∞"}`]);
+  if (universeOnly) activeChips.push(["Universe", `${universe.length} names`]);
+
+  const sectionOrder = tide.sectionOrder || ["board", "vector", "pulse", "lattice", "trust"];
+  const pulseRowCap = mode === "trade" ? 8 : mode === "monitor" ? 14 : 30;
+  const feedCap = mode === "research" ? 5 : mode === "monitor" ? 6 : 8;
+
+  const renderVerdictRow = (a, pinned = false) => {
+    const ctx = isContextual(a);
+    const dir = directionOf(a);
+    const st = stageOf(a);
+    const travel = targetTravelPct(a);
+    const lv = a.levels || {};
+    return (
+      <tr
+        key={a.key}
+        className={`${pinned ? "pinned" : ""} ${ctx ? "contextual" : dir.cls}`}
+        data-testid={pinned ? "trade-now-row" : undefined}
+        onClick={ctx ? undefined : () => doDrill(a.under || a.ticker)}
+        title={ctx ? (a.why || a.rule) : `${a.why || a.rule} — click to drill ${a.under || a.ticker}`}
+      >
+        <td className="l">
+          <span className="sym">{a.under || a.ticker}</span>
+          {pinned && <span className="sub">pinned · trade now</span>}
+          {!pinned && a.rule && <span className="sub">{a.rule}</span>}
+        </td>
+        <td className="l">
+          {ctx ? <span className="lo">ticker-level</span> : (
+            <>{a.strike} {String(a.type || "").toUpperCase()} · {(a.exp || "").slice(5)} <span className="sub">{a.dte != null ? `${a.dte} DTE` : ""}{moneynessPct(a.under_price, a.strike) ? ` · ${moneynessPct(a.under_price, a.strike)}` : ""}</span></>
+          )}
+        </td>
+        <td className="l">
+          {ctx
+            ? <span className="dir lo">— NO DIRECTION</span>
+            : <span className={`dir ${dir.cls}`}>{dir.arrow} {dir.word}</span>}
+        </td>
+        <td className="l">
+          <span className="stage" title={a.rule === "OICONF" ? "Overnight OI held" : a.rule === "FOLLOW" || a.rule === "SIGMA" ? "Repeated days or σ spike" : "Fresh print"}>
+            <span className="d">
+              {[1, 2, 3].map((i) => (
+                <React.Fragment key={i}>
+                  {i > 1 && <s className={i <= st.n ? "f" : ""} />}
+                  <i className={i <= st.n ? "f" : ""} />
+                </React.Fragment>
+              ))}
+            </span>
+            <small>{st.label} · {st.n}/3</small>
+          </span>
+        </td>
+        <td className="l">
+          <span className="conf" title={`conviction ${a.conviction}/99 · tier ${a.tier || "—"}`}>
+            <b>{a.conviction}</b>
+            <span className="bar"><i style={{ width: `${Math.max(0, Math.min(100, Number(a.conviction) || 0))}%` }} /></span>
+            <small>{a.tier || "—"}</small>
+          </span>
+        </td>
+        <td className="l">
+          <span className="state">
+            <b>{a.why || a.rule}</b>
+            {a.context?.activity_summary && <small>{a.context.activity_summary}</small>}
+            {a.context?.dealer_positioning && <small>{a.context.dealer_positioning}</small>}
+            {!ctx && (a.context?.institutional_indicators || []).slice(0, 3).map((ind) => (
+              <span key={ind} className="pl silver" style={{ marginRight: 4 }}>{ind}</span>
+            ))}
+          </span>
+        </td>
+        <td>{ctx ? <span className="lo">—</span> : <span className="lv">{lv.entry ?? a.est_entry ?? "—"}</span>}</td>
+        <td>
+          {ctx ? (
+            <span className="lvwrap lo">—</span>
+          ) : (
+            <span className="lvwrap"><span className="lv dn">{lv.invalidation ?? "—"}</span></span>
+          )}
+          <span className="acts">
+            <button type="button" className="act" onClick={(e) => { e.stopPropagation(); doDrill(a.under || a.ticker); }}>Drill</button>
+            {!ctx && (
+              <>
+                <button type="button" className="act" onClick={(e) => { e.stopPropagation(); doWatch(a.under || a.ticker); }}>Watch</button>
+                {planned[a.key]
+                  ? <span className="act p" title="Saved to the journal drafts (client-side only)">Planned ✓</span>
+                  : <button type="button" className="act p" title="Save to journal drafts — nothing is sent to a broker" onClick={(e) => { e.stopPropagation(); doPlan(a); }}>Plan</button>}
+                <button type="button" className="act" onClick={(e) => { e.stopPropagation(); ack(a.key); }}>Ack</button>
+              </>
+            )}
+          </span>
+        </td>
+        <td>{ctx ? <span className="lo">—</span> : <span className="lv up">{lv.target ?? "—"}</span>}</td>
+        <td className={Number(a.move_pct) < 0 ? "dn" : "up"}>
+          {ctx || a.move_pct == null ? <span className="lo">—</span> : (
+            <>{formatMovePct(a.move_pct)}{travel != null && <span className="sub"> {travel}% of target</span>}</>
+          )}
+          <span className="sub" style={{ display: "block" }}>{ageOf(a)} ago</span>
+        </td>
+      </tr>
+    );
+  };
+
+  const pulseCell = (r, key) => {
+    switch (key) {
+      case "firstSeen": return <span className="fsb-sub">{fmtClock(r.firstSeen)}{r._new && " ·new"}</span>;
+      case "under": return <span className="sym">{r.under}</span>;
+      case "strike": return r.strike % 1 === 0 ? r.strike.toFixed(0) : r.strike.toFixed(1);
+      case "type": return String(r.type || "").toUpperCase();
+      case "exp": return (r.exp || "").slice(5);
+      case "dte": return r.dte == null ? "—" : `${r.dte}d`;
+      case "ftype": return <span className={`pl ${(r.ftype || "").toLowerCase()}`}>{(r.ftype || "").toUpperCase()}</span>;
+      case "arch": return r.arch ? <span className="pl gold">{r.arch}</span> : <span className="lo">—</span>;
+      case "score": return (
+        <b title={r._parts ? `vol/OI ${r._parts.pos} · size ${r._parts.size} · notional ${r._parts.notl} · urgency ${r._parts.urg} · OTM ${r._parts.otm}${r._parts.nudge ? ` · γ-nudge +${r._parts.nudge}` : ""}${r._parts.band ? " · informed band +4" : ""}` : undefined}>
+          {r.score}
+        </b>
+      );
+      case "vol": return fmtK(r.vol);
+      case "oi": return fmtK(r.oi);
+      case "oiChgPct": return r.oiChg ? (
+        <span className={r.oiChg.pct >= 0 ? "up" : "dn"} title={`OI ${r.oiChg.abs >= 0 ? "+" : ""}${fmtK(r.oiChg.abs)} vs prior session`}>
+          {(r.oiChg.pct >= 0 ? "+" : "") + (r.oiChg.pct * 100).toFixed(0)}% {oiHeldLabel(r.oiChgPct)}
+        </span>
+      ) : <span className="lo">— no prior day</span>;
+      case "volOI": return r.volOI >= 99 ? "99+" : `${(r.volOI || 0).toFixed(1)}x`;
+      case "premium": return <span title="Estimated premium — no quote feed on this data">~{fmtUSD(r.premium)}</span>;
+      case "notional": return fmtUSD(r.notional);
+      case "iv": return fmtIV(r.iv);
+      case "delta": return r.delta == null ? "—" : `${r.deltaEst ? "~" : ""}${Number(r.delta).toFixed(2)}`;
+      case "trend": {
+        const days = cleanHistory(history[r.under] || []).slice(-7);
+        if (days.length < 2) return <span className="lo">—</span>;
+        const maxv = Math.max(1, ...days.map((d) => d.total_vol || 0));
+        return (
+          <span className="th-trend" title={`${r.under}: last ${days.length}d volume`}>
+            {days.map((d, di) => (
+              <i
+                key={di}
+                className={di === days.length - 1 ? "now" : ""}
+                style={{ height: `${Math.max(2, Math.round(((d.total_vol || 0) / maxv) * 12))}px` }}
+                title={`${d.date}: ${fmtK(d.total_vol)} vol`}
+              />
+            ))}
+          </span>
+        );
+      }
+      default: return String(r[key] ?? "—");
+    }
+  };
+
   return (
-    <div className="fsb-root">
-      <div className="fsb-topbar">
-        <div className="fsb-brand">
-          <span className="fsb-logo">◢</span>
-          <span className="fsb-brand-name">Tidehunter <span className="fsb-pro">Pro</span></span>
-          <span className="fsb-status-chip" title="Live cvforge data. Vol surface is simulated (no IV-surface backend).">LIVE · CVFORGE</span>
-        </div>
-        <div className="fsb-tabs">
-          {TABS.map(([id, label]) => (
-            <button key={id} className={`fsb-tab${tab === id ? " active" : ""}`} onClick={() => setTab(id)}>{label}</button>
-          ))}
-        </div>
-        <div className="fsb-meta">
-          <span className={`fsb-regime-pill ${regime.cls}`}>{regime.label}</span>
-          <span>{clock}</span>
-          <button type="button" className="fsb-ctrl" title="Refresh now"
-                  onClick={forceRefresh} disabled={forcing}>
-            {forcing ? "…" : "↻"}
-          </button>
-          <div className="fsb-ctrl-wrap">
-            <button type="button"
-                    className={`fsb-ctrl${(minScoreQF > 0 || dteRange[0] != null || dteRange[1] != null) ? " fsb-ctrl-active" : ""}`}
-                    title="Quick filters"
-                    onClick={() => { setShowQuickFilters((v) => !v); setShowSettings(false); }}>
-              ⧩
+    <div className="th-root" data-mode={mode} data-cb={cbMode ? "on" : "off"} data-testid="tide-root">
+      <div className="th-shell">
+        <aside className="th-side" aria-label="Sections">
+          <div className="th-brand"><i>◢</i><b>Tidehunter Pro</b></div>
+          <button type="button" className="th-nav" onClick={() => scrollTo("board")}>Board</button>
+          <button type="button" className="th-nav" onClick={() => scrollTo("vector")}>Vector · direction</button>
+          <button type="button" className="th-nav" onClick={() => scrollTo("pulse")}>Pulse · live flow</button>
+          <button type="button" className="th-nav" onClick={() => scrollTo("lattice")}>Lattice · positioning</button>
+          <button type="button" className="th-nav" onClick={() => scrollTo("trust")}>Trust</button>
+          <button type="button" className="th-nav" onClick={() => scrollTo("vol")}>Vol</button>
+          <button type="button" className="th-nav" onClick={() => scrollTo("academy")}>Academy</button>
+          <button type="button" className="th-nav" onClick={() => scrollTo("settings")}>Settings</button>
+          <span className="th-sp" />
+          <div className="th-st">
+            <span><b>{scanMeta.stale ? "STALE" : "LIVE"}</b> <span className={`dot ${heartbeat.dot}`} />cvforge · {scanMeta.symbols || "—"} symbols</span>
+            <span>{scanMeta.budget ? `${scanMeta.budget.used}/${scanMeta.budget.hourly_cap} calls this hour` : "budget n/a"}{scanMeta.ttl ? ` · next scan ~${elapsedClock(Math.max(0, scanMeta.ttl - (scanMeta.age || 0)))}` : ""}</span>
+            <span>Order-flow imbalance, price impact: no feed</span>
+          </div>
+        </aside>
+
+        <div className="th-content">
+          <div className="th-topbar">
+            <label className="th-pill" title="Focused ticker — drives the Dealers cell and Lattice">
+              <span className="k">Ticker</span>
+              <select
+                className="th-tickersel" value={focusTicker}
+                onChange={(e) => setFocusTicker(e.target.value)}
+                aria-label="Focused ticker"
+              >
+                {Array.from(new Set([focusTicker, ...universe])).map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </label>
+            <button type="button" className="th-pill" title="Jump to the screener" onClick={() => scrollTo("screens")}>
+              <span className="k">Screen</span><span className="v">{screen.label}</span><span className="c">▾</span>
             </button>
-            {showQuickFilters && (
-              <div className="fsb-pop">
-                <div className="fsb-pop-title">Quick filters</div>
-                <label className="fsb-pop-row">
-                  <span>Min score</span>
-                  <input type="range" min="0" max="95" step="5" value={minScoreQF}
-                         onChange={(e) => setMinScoreQF(Number(e.target.value))} />
-                  <b>{minScoreQF || "off"}</b>
-                </label>
-                <label className="fsb-pop-row">
-                  <span>DTE min</span>
-                  <input type="number" min="0" style={{ width: 56 }}
-                         value={dteRange[0] ?? ""}
-                         onChange={(e) => setDteRange([e.target.value === "" ? null : Number(e.target.value), dteRange[1]])} />
-                </label>
-                <label className="fsb-pop-row">
-                  <span>DTE max</span>
-                  <input type="number" min="0" style={{ width: 56 }}
-                         value={dteRange[1] ?? ""}
-                         onChange={(e) => setDteRange([dteRange[0], e.target.value === "" ? null : Number(e.target.value)])} />
-                </label>
-                <button type="button" className="fsb-pop-clear"
-                        onClick={() => { setMinScoreQF(0); setDteRange([null, null]); }}>
-                  Clear
+            <span className="th-sp" />
+            <span className="th-pill th-regime" title={heartbeat.hint}>
+              <span className={`dot ${heartbeat.dot}`} />
+              <span className="v">{dealersFacts.reg.current_state || "—"}{dealersFacts.reg.is_warming ? " · warming" : ""}</span>
+            </span>
+            <button type="button" className="th-icb" title="Refresh now" onClick={forceRefresh} disabled={forcing}>
+              {forcing ? "…" : "↻"}
+            </button>
+            <button type="button" className="th-icb" title="Settings" onClick={() => scrollTo("settings")}>⚙</button>
+          </div>
+
+          <div className="th-page">
+            {/* ===== BOARD ===== */}
+            <div className="th-sec" id="board">
+              <div className="th-ph">
+                <div>
+                  <h1>Board</h1>
+                  <div className="th-meta">
+                    <b>{scanMeta.stale ? "STALE" : "LIVE"}</b>
+                    <span className="k">Last updated</span><span>{scanAt || feedAt || "—"}</span>
+                    <span className="k">Showing</span><span>{screenedScans.length} contracts · {visibleFeed.length} signals · {screen.label}</span>
+                    <span className="k">{clock}</span>
+                  </div>
+                </div>
+                <div className="th-seg">
+                  <span className="lbl">Layout</span>
+                  <div className="th-segbar">
+                    {(["trade", "monitor", "research"]).map((m) => (
+                      <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)}>{m}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="th-answers">
+                <button type="button" className="th-ans top" data-testid="cell-trade" onClick={() => scrollTo("vector")}>
+                  <span className="q"><span className="lbl">Trade now</span><span className="tag">{screen.label}</span></span>
+                  {withheld ? (
+                    <span className="v">Verdict withheld · data {elapsedClock(scanMeta.age || 0)} stale</span>
+                  ) : tradeNow ? (
+                    <>
+                      <span className="v">
+                        {(directionOf(tradeNow).cls === "bear" ? "Sell " : "Buy ") + `${tradeNow.under || tradeNow.ticker} ${tradeNow.strike}${String(tradeNow.type || "").toUpperCase()[0] || ""} · ${tradeNow.dte ?? "?"}d — ${tradeNow.conviction} conviction`}
+                      </span>
+                      <span className="s">
+                        <b className={directionOf(tradeNow).cls === "bear" ? "dn" : "up"}>{directionOf(tradeNow).arrow} {directionOf(tradeNow).word}</b>
+                        <span>{tradeNow.why}</span>
+                        {tradeNow.levels && <span>Entry <b>{tradeNow.levels.entry}</b> · Stop <b>{tradeNow.levels.invalidation}</b> · Target <b>{tradeNow.levels.target}</b></span>}
+                        {tradeNow.move_pct != null && <span>Moved <b>{formatMovePct(tradeNow.move_pct)}</b>{targetTravelPct(tradeNow) != null && ` · ${targetTravelPct(tradeNow)}% of target`}</span>}
+                      </span>
+                      <span className="f">fired {ageOf(tradeNow)} ago · {LEVELS_LABEL}{tradeNow.under_price && tradeNow.strike ? ` · ${moneynessPct(tradeNow.under_price, tradeNow.strike)}` : ""}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="v">
+                        {visibleFeed.length && bestFeed
+                          ? `Nothing ≥${TRADE_NOW_FLOOR} · best ${bestFeed.conviction} ${bestFeed.under || bestFeed.ticker || ""}`
+                          : "Server feed empty — ranking client-side"}
+                      </span>
+                      <span className="f">{feedErr || `${scan.length} contracts screened · floor ${TRADE_NOW_FLOOR} conviction`}</span>
+                    </>
+                  )}
+                  {degradedLine && <span className="f warn">{degradedLine}</span>}
+                </button>
+
+                <button type="button" className="th-ans" data-testid="cell-money" onClick={() => scrollTo("pulse")}>
+                  <span className="q"><span className="lbl">Money building</span><span className="tag">{screen.label}</span></span>
+                  {moneyFacts.top.length ? (
+                    <>
+                      <span className="v">{moneyFacts.top[0].under} · where money is building · ~{fmtUSD(moneyFacts.top[0].prem)} est. premium</span>
+                      <span className="s">
+                        {moneyFacts.top.map((e) => (
+                          <span
+                            key={e.under}
+                            title={`${e.under}: ~${fmtUSD(e.prem)} est premium · ${e.count} contracts · ${e.callPct}% calls / ${100 - e.callPct}% puts · top score ${e.maxScore}`}
+                          >
+                            {e.under} ~{fmtUSD(e.prem)}
+                            <span className="sub"> {e.callPct}% calls</span>
+                            {e.regime ? <b> {e.regime === "positive" ? "γ+" : "γ−"}</b> : null}
+                            {e.pcr != null ? ` · PCR ${e.pcr}` : ""}
+                            {moneyFacts.sigmas[e.under] != null ? ` · ${moneyFacts.sigmas[e.under]}σ server-confirmed` : ""}
+                            {tickerFacts[e.under]?.streak >= 2 ? ` · ${tickerFacts[e.under].streak}d streak ≥${tickerFacts[e.under].streakMult}×` : ""}
+                            {(() => {
+                              const ds = cleanHistory(history[e.under] || []).slice(-10);
+                              if (ds.length < 3) return null;
+                              const mx = Math.max(1, ...ds.map((d) => d.total_vol || 0));
+                              return (
+                                <span className="th-spark" aria-hidden="true" title={`${e.under}: last ${ds.length} sessions volume`}>
+                                  {ds.map((d) => (
+                                    <i
+                                      key={d.date}
+                                      style={{ height: `${Math.max(12, Math.round(((d.total_vol || 0) / mx) * 100))}%` }}
+                                      title={`${d.date}: ${fmtK(d.total_vol)} vol`}
+                                    />
+                                  ))}
+                                </span>
+                              );
+                            })()}
+                          </span>
+                        ))}
+                      </span>
+                      <span className="f">premium is an estimate · σ from server SIGMA alerts only</span>
+                    </>
+                  ) : (
+                    <><span className="v">No concentration read yet</span><span className="f">waiting on the market-wide scan</span></>
+                  )}
+                  {degradedLine && <span className="f warn">{degradedLine}{scanMeta.stale ? " · σ/ΔOI unavailable while stale" : ""}</span>}
+                </button>
+
+                <button type="button" className="th-ans" data-testid="cell-changed" onClick={() => scrollTo("vector")}>
+                  <span className="q"><span className="lbl">Changed since you looked</span><span className="tag">{screen.label}</span></span>
+                  {away ? (
+                    <>
+                      <span className="v">{away.nAlerts + away.topNew.length} changes · away {fmtAge(Date.now() - away.gapMs, Date.now())}</span>
+                      <span className="s">
+                        {Object.entries(away.counts || {}).map(([k, v]) => <span key={k}><b>{v}</b> {k}</span>)}
+                        {away.topNew.map((r) => (
+                          <button
+                            key={`${r.under}${r.strike}${r.type}${r.exp}`}
+                            type="button" className="th-awaychip"
+                            title={`Score ${r.score} · first seen ${fmtClock(r.firstSeen)} — click to filter`}
+                            onClick={(e) => { e.stopPropagation(); setKnobQ(r.under); scrollTo("pulse"); }}
+                          >
+                            {r.under} {r.type === "call" ? "C" : "P"}{r.strike} <b>{r.score}</b>
+                          </button>
+                        ))}
+                      </span>
+                      <span className="f">re-arms every return · last check {clock}</span>
+                      <span className="f"><button type="button" className="th-chipb" onClick={(e) => { e.stopPropagation(); setAway(null); }}>Dismiss</button></span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="v">Nothing new since {clock || "you looked"}</span>
+                      <span className="s"><span><b>{changedFacts.n}</b> alerts this session{alertUnivOnly ? " · universe-scoped" : ""}</span></span>
+                      <span className="f">re-arms on every return to the tab</span>
+                    </>
+                  )}
+                  {degradedLine && <span className="f warn">{degradedLine}</span>}
+                </button>
+
+                <button type="button" className="th-ans" data-testid="cell-dealers" onClick={() => scrollTo("lattice")}>
+                  <span className="q"><span className="lbl">Dealers · {focusTicker}</span><span className="tag">focused</span></span>
+                  {dealersFacts.err ? (
+                    <><span className="v">{focusTicker} · GEX loading…</span><span className="f">regime + heatmap fetch in flight</span></>
+                  ) : (
+                    <>
+                      <span className="v">
+                        {dealersFacts.short == null ? "Dealer read pending" : dealersFacts.short ? "Short gamma" : "Long gamma"}
+                        {dealersFacts.flip != null && ` · flip $${dealersFacts.flip}`}
+                        {dealersFacts.dist != null && ` · ${Math.abs(dealersFacts.dist).toFixed(1)}% ${dealersFacts.dist > 0 ? "above" : "below"}`}
+                      </span>
+                      <span className="s">
+                        <span>{dealersFacts.dist != null && dealersFacts.dist < 0 ? "below flip — they chase" : "above flip — they dampen"}</span>
+                        <span>regime <b>{dealersFacts.reg.current_state || "—"}</b></span>
+                        {dealersFacts.reg.vol_env && <span>vol <b>{dealersFacts.reg.vol_env}</b></span>}
+                      </span>
+                      <span className="f">display-scale gamma · refreshed {dealersFacts.at || "—"}</span>
+                    </>
+                  )}
+                  {degradedLine && <span className="f warn">{degradedLine}</span>}
                 </button>
               </div>
-            )}
-          </div>
-          <div className="fsb-ctrl-wrap">
-            <button type="button" className={`fsb-ctrl${pollMs !== 60000 ? " fsb-ctrl-active" : ""}`}
-                    title="Settings"
-                    onClick={() => { setShowSettings((v) => !v); setShowQuickFilters(false); }}>
-              ⚙
-            </button>
-            {showSettings && (
-              <div className="fsb-pop">
-                <div className="fsb-pop-title">Display</div>
-                <label className="fsb-pop-row">
-                  <span>Poll interval</span>
-                  <select value={pollMs}
-                          onChange={(e) => setPollMs(Number(e.target.value))}>
-                    <option value={5000}>5s</option>
-                    <option value={15000}>15s</option>
-                    <option value={30000}>30s</option>
-                    <option value={60000}>60s</option>
-                    <option value={0}>Off</option>
+            </div>
+
+            {/* ===== MARKET TAPE — one line under the cards ===== */}
+            <div className="th-tape" data-testid="market-tape" title={heartbeat.hint}>
+              <span>Contracts <b>{screenedScans.length}/{scan.length}</b></span>
+              <span>Notional Σ <b>{fmtUSD(tape.notl)}</b><span className="sub"> est.</span></span>
+              <span>Call/Put <b>{tape.cpct == null ? "—" : `${tape.cpct}%/${100 - tape.cpct}%`}</b><span className="sub"> vol</span></span>
+              <span>Unusual ≥2× <b>{tape.unusual}</b></span>
+              <span><span className={`dot ${heartbeat.dot}`} />{heartbeat.label}
+                {scanMeta.budget ? ` · ${scanMeta.budget.used}/${scanMeta.budget.hourly_cap} calls this hour` : ""}
+                {scanMeta.ttl ? ` · next ~${elapsedClock(Math.max(0, scanMeta.ttl - (scanMeta.age || 0)))}` : ""}
+              </span>
+              <span>Updated <b>{scanMeta.stale ? `STALE · ${scanAt || "—"}` : scanAt || "—"}</b>
+                {(scanMeta.age ?? 0) >= 5 ? ` · data ${elapsedClock(scanMeta.age)} old` : ""}
+              </span>
+              <span>Source <b>{scanMeta.mode === "market" ? `LIVE · mkt-wide · ${scanMeta.symbols}` : "—"}</b></span>
+              <span>{clock}</span>
+            </div>
+
+            {/* ===== SCREENS ===== */}
+            <div className="th-screens" id="screens" data-testid="screens">
+              <div className="th-segbar" role="tablist" aria-label="Screens">
+                {allScreens.map((s) => (
+                  <button
+                    key={s.id} type="button" role="tab" aria-selected={screenId === s.id}
+                    aria-pressed={screenId === s.id}
+                    onClick={() => setScreenId(s.id)}
+                  >
+                    {s.label}
+                    <small>{s.custom ? applyScreenToScans(scan, s, { universe, tickerFacts }).length : ""}</small>
+                  </button>
+                ))}
+              </div>
+              <button type="button" className="th-chipb" onClick={() => { setEditingScreen({ id: `custom-${Date.now()}`, label: "My screen", rule: "ANY", conditions: [], custom: true }); setShowFilters(false); setShowMore(false); }}>
+                ✎ Edit screen
+              </button>
+              <button type="button" className="th-chipb" onClick={() => { setShowFilters((v) => !v); setShowMore(false); setEditingScreen(null); }}>
+                Filters{activeChips.length ? ` · ${activeChips.length}` : ""}
+              </button>
+              {activeChips.map(([k, v]) => <span key={k} className="th-fchip">{k} <b>{v}</b></span>)}
+              <button type="button" className="th-chipb" onClick={() => { setShowMore((v) => !v); setShowFilters(false); setEditingScreen(null); }}>⋯</button>
+
+              {showFilters && (
+                <div className="th-disc" data-testid="filters-panel">
+                  <span className="lbl">Type</span>
+                  <select value={knobType} onChange={(e) => setKnobType(e.target.value)}>
+                    <option value="all">All</option><option value="call">Calls</option><option value="put">Puts</option>
+                  </select>
+                  <input className="w70" type="number" min="0" placeholder="Min vol" value={knobMinVol || ""} onChange={(e) => setKnobMinVol(Number(e.target.value) || 0)} />
+                  <input className="w70" type="number" min="0" placeholder="Min score" value={knobMinScore || ""} onChange={(e) => setKnobMinScore(Number(e.target.value) || 0)} />
+                  <input ref={knobQRef} className="w110" placeholder="Ticker  ( / )" value={knobQ} onChange={(e) => setKnobQ((e.target.value || "").toUpperCase())} />
+                  <span className="lbl">DTE</span>
+                  <input className="w70" type="number" min="0" placeholder="min" value={knobDteMin ?? ""} onChange={(e) => setKnobDteMin(e.target.value === "" ? null : Number(e.target.value))} />
+                  <input className="w70" type="number" min="0" placeholder="max" value={knobDteMax ?? ""} onChange={(e) => setKnobDteMax(e.target.value === "" ? null : Number(e.target.value))} />
+                  <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input type="checkbox" checked={universeOnly} onChange={(e) => setUniverseOnly(e.target.checked)} /> My universe
+                  </label>
+                  <input
+                    className="w170" defaultValue={universe.join(",")} placeholder="Universe…"
+                    title="Comma-separated tickers"
+                    onBlur={(e) => {
+                      const u = (e.target.value || "").toUpperCase().split(/[,\s]+/).filter(Boolean);
+                      if (u.length) setUniverse(u);
+                    }}
+                  />
+                  <span className="lbl">Alert ≥</span>
+                  <input className="w70" type="number" min="50" max="100" value={alertScore} onChange={(e) => setAlertScore(Math.max(50, Math.min(100, parseInt(e.target.value, 10) || 85)))} />
+                  <span className="th-brk" />
+                  <span className="lbl">Sort</span>
+                  {[["Top score", { key: "score", dir: "desc" }], ["Big money", { key: "notional", dir: "desc" }],
+                    ["Unusual", { key: "volOI", dir: "desc" }], ["Short fuse", { key: "dte", dir: "asc" }],
+                    ["New arrivals", { key: "firstSeen", dir: "desc" }]].map(([l, s]) => (
+                    <button key={l} type="button" className={`th-chipb${sortPreset.key === s.key && sortPreset.dir === s.dir ? " on" : ""}`} onClick={() => setSortPreset(s)}>{l}</button>
+                  ))}
+                  <span className="lbl">Poll</span>
+                  <select value={pollMs} onChange={(e) => setPollMs(Number(e.target.value))}>
+                    <option value={5000}>5s</option><option value={15000}>15s</option>
+                    <option value={30000}>30s</option><option value={60000}>60s</option><option value={0}>Off</option>
+                  </select>
+                  <button type="button" className="th-chipb" onClick={forceRefresh}>⟳ Force</button>
+                  <button type="button" className="th-chipb" disabled={!screenedScans.length} onClick={() => exportCSV(screenedScans)}>⤓ CSV</button>
+                  <button
+                    type="button" className="th-chipb"
+                    title="Reset type, volume, score, ticker, DTE and universe filters to off"
+                    onClick={() => { setKnobType("all"); setKnobMinVol(0); setKnobMinScore(0); setKnobQ(""); setKnobDteMin(null); setKnobDteMax(null); setUniverseOnly(false); }}
+                  >
+                    Reset filters
+                  </button>
+                </div>
+              )}
+              {showMore && (
+                <div className="th-disc" data-testid="more-menu">
+                  <button type="button" className={`th-chipb${notify ? " on" : ""}`} onClick={toggleNotify}>🔔 Notify{notify ? " on" : ""}</button>
+                  <button type="button" className={`th-chipb${alertUnivOnly ? " on" : ""}`} onClick={() => setAlertUnivOnly((v) => !v)}>🎯 Alerts scoped to universe</button>
+                  <span className="th-rulechips" title="Hide whole rule families from the feed and Changed counts">
+                    {RULE_LIST.map((r) => (
+                      <button
+                        key={r} type="button"
+                        className={`th-chipb${hiddenRules.includes(r) ? "" : " on"}`}
+                        onClick={() => toggleRule(r)}
+                      >
+                        {r}
+                      </button>
+                    ))}
+                  </span>
+                  <button type="button" className="th-chipb" onClick={() => setFeedOrder((o) => (o === "conviction" ? "new" : "conviction"))}>
+                    Feed · {feedOrder === "conviction" ? "conviction rank" : "newest first"}
+                  </button>
+                  <button type="button" className="th-chipb" onClick={copyFeed}>⧉ Copy feed</button>
+                  <button type="button" className="th-chipb" onClick={clearDismissed}>Clear dismissed</button>
+                  <button type="button" className="th-chipb" onClick={() => setShowHistory((v) => !v)}>Show history · {Object.keys(acked).length}</button>
+                </div>
+              )}
+              {editingScreen && (
+                <ScreenBuilder
+                  initial={editingScreen}
+                  onSave={saveCustomScreen}
+                  onDelete={deleteCustomScreen}
+                  onCancel={() => setEditingScreen(null)}
+                />
+              )}
+            </div>
+
+            {/* ===== ORDERED SECTIONS ===== */}
+            {sectionOrder.map((sec) => {
+              if (sec === "vector") {
+                return (
+                  <div className="th-sec" id="vector" key="vector">
+                    <div className="th-sh">
+                      <h2>Vector</h2>
+                      <span className="th-meta"><b>{scanMeta.stale ? "STALE" : "LIVE"}</b> direction board · ranked by conviction · {visibleFeed.length} in screen · {screen.label}</span>
+                      <span className="th-sp" />
+                      <span className="th-rulecounts" title="Signals per rule in this screen">
+                        {Object.entries(ruleCounts).map(([k, v]) => <span key={k} className="th-fchip">{k} <b>{v}</b></span>)}
+                      </span>
+                      {pendingFeed && (
+                        <button type="button" className="th-chipb on" onClick={() => { setFeed(pendingFeed); setPendingFeed(null); setFeedAt(new Date().toLocaleTimeString()); }}>
+                          {pendingFeed.length} new above — apply
+                        </button>
+                      )}
+                    </div>
+                    <div
+                      className="th-tbl" data-testid="vector-feed"
+                      onMouseEnter={() => { feedHoverRef.current = true; }}
+                      onMouseLeave={() => { feedHoverRef.current = false; }}
+                    >
+                      {withheld ? (
+                        <div className="th-empty">Verdict withheld · data {elapsedClock(scanMeta.age || 0)} stale (limit {elapsedClock(2 * (scanMeta.ttl || 60))})</div>
+                      ) : visibleFeed.length === 0 ? (
+                        <div className="th-empty">{feedErr || "No signals in this screen yet — verdict feed is polling."}</div>
+                      ) : (
+                        <table>
+                          <thead><tr>
+                            <th className="l">Symbol</th><th className="l">Contract</th><th className="l">Direction</th>
+                            <th className="l">Stage</th><th className="l">Conviction</th><th className="l">State</th>
+                            <th>Price</th><th>Invalidation</th><th>Target</th><th>Moved</th>
+                          </tr></thead>
+                          <tbody>
+                            {tradeNow && renderVerdictRow(tradeNow, true)}
+                            {feedBody.slice(0, showHistory ? 50 : feedCap).map((a) => renderVerdictRow(a))}
+                          </tbody>
+                        </table>
+                      )}
+                      <div className="th-tblfoot">
+                        <span>Stage: Early = fresh print · Building = FOLLOW/SIGMA · Confirmed = OICONF</span>
+                        <span>{LEVELS_LABEL} — edit before you plan</span>
+                        <span>Plan writes a journal note only · nothing is sent to a broker</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              if (sec === "pulse") {
+                return (
+                  <div className="th-sec" id="pulse" key="pulse">
+                    <div className="th-sh">
+                      <h2>Pulse</h2>
+                      <span className="th-meta"><b>{scanMeta.stale ? "STALE" : "LIVE"}</b> screened contracts · {screenedScans.length} of {scan.length} · {screen.label}</span>
+                      <span className="th-sp" />
+                      <button type="button" className="th-chipb" aria-pressed={showCols} onClick={() => setShowCols((v) => !v)}>
+                        Columns · {visibleCols.length} of {PULSE_COLUMNS.length}
+                      </button>
+                    </div>
+                    {showCols && (
+                      <div className="th-disc" data-testid="column-chooser">
+                        {PULSE_COLUMNS.map((c) => (
+                          <label key={c.key} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12 }}>
+                            <input
+                              type="checkbox"
+                              checked={visibleCols.includes(c.key)}
+                              onChange={(e) => {
+                                const next = e.target.checked
+                                  ? [...visibleCols, c.key]
+                                  : visibleCols.filter((k) => k !== c.key);
+                                setVisibleCols(PULSE_COLUMNS.map((x) => x.key).filter((k) => next.includes(k)));
+                              }}
+                            />
+                            {c.label}
+                          </label>
+                        ))}
+                        <button type="button" className="th-chipb" onClick={() => setVisibleCols([...PULSE_DEFAULT_COLS])}>Reset to 10 default</button>
+                      </div>
+                    )}
+                    <div className="th-tbl" data-testid="pulse-table">
+                      {scan.length === 0 ? (
+                        <div className="th-empty">
+                          {scanMeta.err ? "Scan unreachable — backend /scan failing, retrying." : "Scanning market flow…"}
+                          {scanMeta.retry ? ` Next slot in ${elapsedClock(scanMeta.retry)}.` : ""}
+                        </div>
+                      ) : screenedScans.length === 0 ? (
+                        <div className="th-empty">No contracts pass this screen.</div>
+                      ) : (
+                        <table className="th-stab">
+                          <thead><tr>
+                            {PULSE_COLUMNS.filter((c) => visibleCols.includes(c.key)).map((c) => (
+                              <th key={c.key} className={`l${sortPreset.key === c.key ? " on" : ""}`} onClick={() => sortScan(c.key)}>
+                                {c.label}{sortPreset.key === c.key ? (sortPreset.dir === "desc" ? " ▾" : " ▴") : ""}
+                              </th>
+                            ))}
+                          </tr></thead>
+                          <tbody>
+                            {screenedScans.slice(0, pulseRowCap).map((r, i) => {
+                              const isCall = r.type === "call";
+                              const isTop = i === 0 && sortPreset.key === "score" && sortPreset.dir === "desc" && (r.score ?? 0) >= 90;
+                              return (
+                                <tr
+                                  key={`${r.under}-${r.strike}-${r.type}-${r.exp}-${i}`}
+                                  className={`${kbIdx === i ? "kbcursor " : ""}${isTop ? "top" : ""}${r._new ? "new" : ""}`}
+                                  onClick={() => doDrill(r.under)}
+                                >
+                                  {PULSE_COLUMNS.filter((c) => visibleCols.includes(c.key)).map((c) => (
+                                    <td key={c.key} className={c.key === "score" ? scoreGradeOf(r.score) : ""}>
+                                      {c.key === "firstSeen" && r._new ? <span className="th-newdot" title="New this refresh" /> : null}
+                                      {pulseCell(r, c.key)}
+                                      {c.key === "under" && (
+                                        <span className="sub"> {(r.exp || "").slice(5)}{isCall ? " · CALL" : " · PUT"}</span>
+                                      )}
+                                    </td>
+                                  ))}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      )}
+                      <div className="th-tblfoot">
+                        <span><kbd>j</kbd><kbd>k</kbd> move</span><span><kbd>Enter</kbd> drill</span>
+                        <span><kbd>/</kbd> ticker</span><span><kbd>r</kbd> force refresh</span>
+                        <span>ΔOI held = positioning stuck · faded = intraday churn</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              if (sec === "lattice") {
+                return (
+                  <div className="th-sec" id="lattice" key="lattice">
+                    <div className="th-sh">
+                      <h2>Lattice · {focusTicker}</h2>
+                      <span className="th-meta"><b>{dealersFacts.err ? "LOADING" : "LIVE"}</b> dealer positioning · display-scale gamma · refreshed {dealersFacts.at || "—"}</span>
+                    </div>
+                    <div className="th-lat" data-testid="lattice">
+                      <div className="th-lath">
+                        <div className="th-chips">
+                          <span className="th-mchip">Spot<b>{lattice.spot ?? "—"}</b></span>
+                          <span className="th-mchip">Flip<b>{dealersFacts.flip ?? "—"}</b></span>
+                          <span className="th-mchip">Dist<b>{dealersFacts.dist != null ? `${dealersFacts.dist.toFixed(2)}%` : "—"}</b></span>
+                          <span className="th-mchip">Net gamma<b>{dealersFacts.total != null ? fmtMoney(dealersFacts.total) : "—"}</b></span>
+                          <span className="th-mchip">Regime<b>{dealersFacts.reg.current_state || "—"}</b></span>
+                          {dealersFacts.reg.vol_env && <span className="th-mchip">Vol<b>{dealersFacts.reg.vol_env}</b></span>}
+                        </div>
+                      </div>
+                      <div className="th-keys">
+                        <span className="lbl">Key levels</span>
+                        <span className="th-key">Gamma flip<b>{dealersFacts.flip ?? "—"}</b></span>
+                        <span className="th-key">Call wall<b>{lattice.callWall ?? "—"}</b></span>
+                        <span className="th-key">Put wall<b>{lattice.putWall ?? "—"}</b></span>
+                        <span className="th-key">Max pain<b>{lattice.maxPain ?? "—"}</b></span>
+                      </div>
+                      {lattice.ok ? (
+                        <>
+                          <div className="th-grid" role="table" aria-label={`Net gamma by strike for ${focusTicker}`}>
+                            <div className="th-hd">Strike ↓</div>
+                            {lattice.expiries.map((e) => <div key={e} className="th-hd">{String(e).slice(5)}</div>)}
+                            {lattice.strikes.map((s) => (
+                              <React.Fragment key={s}>
+                                <div className="th-sk">{s}</div>
+                                {lattice.expiries.map((e) => {
+                                  const v = lattice.val(s, e);
+                                  return (
+                                    <div key={`${s}${e}`} className={`th-c ${lattice.cls(v)}${lattice.spot === s ? " spot" : ""}`} title={`${s} · ${e}: ${fmtMoney(v)}`}>
+                                      {fmtMoney(v)}
+                                    </div>
+                                  );
+                                })}
+                              </React.Fragment>
+                            ))}
+                          </div>
+                          <div className="th-gexbars" title="Net gamma by strike (bars) with cumulative gamma strip sharing the strike axis">
+                            {lattice.strikes.map((s, i) => {
+                              const v = lattice.net[i];
+                              const w = lattice.maxAbs ? Math.min(100, Math.abs(v) / lattice.maxAbs * 100) : 0;
+                              const c = lattice.cumArr[i];
+                              const cw = Math.min(100, Math.abs(c) / lattice.cumMax * 100);
+                              return (
+                                <div key={s} className="th-gexrow">
+                                  <span className="th-gexk">{s}</span>
+                                  <span className="th-gexbar"><i className={v < 0 ? "neg" : "pos"} style={{ width: `${w}%` }} /></span>
+                                  <span className="th-gexcum"><i className={c < 0 ? "neg" : "pos"} style={{ width: `${cw}%` }} /></span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="th-latfoot">
+                            <span>Long gamma dampens moves · short gamma amplifies</span>
+                            <span>Display-scale gamma only — never mixed with the model-feature scale</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="th-empty">{focusTicker} · GEX loading…</div>
+                      )}
+                      <div className="th-drill" data-testid="drill">
+                        <div className="th-drill-h">
+                          <span>Drill · {drill?.ticker || focusTicker} live flow</span>
+                          {!drill && (
+                            <button type="button" className="th-chipb" onClick={() => setDrill({ ticker: focusTicker })}>Open drill</button>
+                          )}
+                          {drill && (
+                            <button type="button" className="th-chipb" onClick={() => { setDrill(null); setDrillRows([]); }}>Close</button>
+                          )}
+                          <span className="th-chips-inline">
+                            {[["all", "All"], ["CALL", "Calls"], ["PUT", "Puts"], ["SWEEP", "Sweep"], ["BLOCK", "Block"], ["high", "≥80"]].map(([v, l]) => (
+                              <button key={v} type="button" className={`th-chip${drillFilter === v ? " on" : ""}`} onClick={() => setDrillFilter(v)}>{l}</button>
+                            ))}
+                          </span>
+                          <span className="th-chips-inline">
+                            {[["all", "All"], ["0dte", "0DTE"], ["1-7d", "1-7D"], ["monthly", "Mo"], ["qtrly", "Qtr"], ["leaps", "LEAPS"]].map(([v, l]) => (
+                              <button key={v} type="button" className={`th-chip${drillDte === v ? " on" : ""}`} onClick={() => setDrillDte(v)}>{l}</button>
+                            ))}
+                          </span>
+                          <span className="th-legendline">Legend: sweep = urgent short-fuse size · block = negotiated size · unusual = high vol-vs-OI · conviction = pattern + size + unusualness + urgency</span>
+                        </div>
+                        {drill ? (
+                          drillFiltered.length === 0 ? (
+                            <div className="th-empty">Loading unusual options activity for {drill.ticker}…</div>
+                          ) : (
+                            <table className="th-dtab">
+                              <thead><tr>
+                                <th className="l">Ticker</th><th className="l">Type</th><th className="l">Side</th><th>Strike</th>
+                                <th>DTE</th><th>Day $</th><th>V/OI</th><th>Conv</th>
+                              </tr></thead>
+                              <tbody>
+                                {drillFiltered.slice(0, 40).map((p, i) => (
+                                  <tr
+                                    key={`${p.ticker}-${p.timestamp}-${i}`}
+                                    className={drillSel === p ? "sel" : ""}
+                                    tabIndex={0}
+                                    onClick={() => setDrillSel(p)}
+                                    onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); setDrillSel(p); } }}
+                                  >
+                                    <td className="l sym">{p.ticker}</td>
+                                    <td className="l lo">{String(p.classification || "—").toUpperCase()}</td>
+                                    <td className={`l ${String(p.type).toLowerCase().startsWith("c") ? "up" : "dn"}`}>{String(p.type).toUpperCase()}</td>
+                                    <td>{Number(p.strike).toFixed(0)}</td>
+                                    <td>{dteOf(p.expiration)}d</td>
+                                    <td>{fmtMoney(p.premium)}</td>
+                                    <td>{Number(p.vol_oi_ratio || 0).toFixed(1)}</td>
+                                    <td>{p._conv}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )
+                        ) : (
+                          <div className="th-empty">Drill opens from any card, feed row, or table row.</div>
+                        )}
+                        {drillSel && (
+                          <div className="th-sel">
+                            <b>{drillSel.ticker} ${Number(drillSel.strike).toFixed(0)} {String(drillSel.type).toUpperCase()}</b>
+                            <span> conviction {drillSel._conv}/99 = pattern {drillSel._cd.pat} + size {drillSel._cd.size} + unusualness {drillSel._cd.stat} + urgency {drillSel._cd.urg}</span>
+                            <span> classification {drillSel.classification} · vol/OI {Number(drillSel.vol_oi_ratio || 0).toFixed(1)}x · est. notional {fmtMoney(drillSel.premium)}</span>
+                          </div>
+                        )}
+                        <div className="th-micro">
+                          <span>VPIN {vpin?.vpin != null ? Number(vpin.vpin).toFixed(3) : "— no feed"}</span>
+                          <span>OFI — NO FEED · endpoint does not exist</span>
+                          <span>Kyle-λ — NO FEED · endpoint does not exist</span>
+                          <span className="th-risk">Paper/educational only — not a trade recommendation.</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              if (sec === "trust") {
+                return (
+                  <div className="th-sec" id="trust" key="trust">
+                    <div className="th-sh"><h2>Is it working?</h2>
+                      <span className="th-meta">hit = moved ≥0.5% in the claimed direction · 30-day window · journal 90 days</span>
+                    </div>
+                    <div className="th-stats" data-testid="trust-row">
+                      {(calibBands.length ? calibBands : [{ band: "<50" }, { band: "50-59" }, { band: "60-74" }, { band: "75+" }]).map((b) => {
+                        const thin = (b.n_measured ?? 0) < 10;
+                        return (
+                          <div key={b.band} className={`th-stat${thin ? " thin" : ""}`} title={`${b.n ?? 0} alerts · ${b.n_measured ?? 0} measured${thin ? " · too few to trust" : ""}`}>
+                            <span className="lbl">{b.band} conviction</span>
+                            <b>{b.hit_rate != null ? `${Math.round(b.hit_rate * 100)}%` : "—"}<small>n {b.n_measured ?? 0}{thin ? " · too few" : ""}</small></b>
+                            <span className="bar"><i style={{ width: `${Math.round((b.hit_rate || 0) * 100)}%` }} /></span>
+                          </div>
+                        );
+                      })}
+                      {setupStats && setupStats.overall?.n > 0
+                        ? Object.entries(setupStats.by_setup || {}).slice(0, 2).map(([name, s]) => {
+                          const n = (s.wins ?? 0) + (s.losses ?? 0);
+                          return (
+                            <div key={name} className={`th-stat${n < 10 ? " thin" : ""}`} title={`journal 90d · ${name}: ${s.wins}W/${s.losses}L${s.avg_return != null ? `, avg ${(s.avg_return * 100).toFixed(1)}%` : ""}`}>
+                              <span className="lbl">Journal · {name}</span>
+                              <b>{Math.round((s.win_rate || 0) * 100)}%<small>{s.wins}W/{s.losses}L{n < 10 ? " · too few" : ""}</small></b>
+                              <span className="bar"><i style={{ width: `${Math.round((s.win_rate || 0) * 100)}%` }} /></span>
+                            </div>
+                          );
+                        })
+                        : (
+                          <div className="th-stat thin" title="no closed journaled trades in 90d">
+                            <span className="lbl">Journal</span>
+                            <b>—<small>no closed trades</small></b>
+                            <span className="bar"><i style={{ width: "0%" }} /></span>
+                          </div>
+                        )}
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })}
+
+            {/* ===== VOL (synthetic — no IV-surface endpoint) ===== */}
+            <div className="th-sec" id="vol">
+              <div className="th-sh"><h2>Vol</h2>
+                <span className="th-meta"><span className="pl gold">SIM</span> synthetic skew — no live IV-surface endpoint yet</span>
+                <span className="th-sp" />
+                <label className="th-sub">Ticker&nbsp;
+                  <select value={volTicker} onChange={(e) => setVolTicker(e.target.value)} aria-label="Vol surface ticker">
+                    {["SPY", "QQQ", "NVDA", "TSLA", "AAPL"].map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </label>
               </div>
-            )}
-          </div>
-        </div>
-      </div>
+              <div className="th-vol" data-testid="vol-section">
+                <VolSkew ticker={volTicker} />
+                <div className="th-empty">Illustrative smile only — never mixed with live data.</div>
+              </div>
+            </div>
 
-      <div className="fsb-body">
-        {/* FLOW VIEW */}
-        <div className={`fsb-view fsb-view-flow${tab === "flow" ? " active" : ""}`}>
-          {/* left */}
-          <div className="fsb-col">
-            <div className="fsb-panel" style={{ flex: "1 1 60%" }}>
-              <div className="fsb-panel-h"><span>Watchlist</span><span className="fsb-muted fsb-small">{WATCH.length} symbols</span></div>
-              <ul className="fsb-watchlist">
-                {WATCH.map((t) => (
-                  <li key={t} className={`fsb-wl-li${ticker === t ? " selected" : ""}`} onClick={() => setTicker(t)}>
-                    <span className="fsb-wl-ticker">{t}</span>
-                    <span className="fsb-wl-spot">{t === ticker ? "●" : ""}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="fsb-panel">
-              <div className="fsb-panel-h">Filters</div>
-              <div className="fsb-chips">
-                {[["all", "All"], ["CALL", "Calls"], ["PUT", "Puts"], ["SWEEP", "Sweep"], ["BLOCK", "Block"], ["high", "≥80"]].map(([v, l]) => (
-                  <button key={v} className={`fsb-chip${filter === v ? " active" : ""}`} onClick={() => setFilter(v)}>{l}</button>
-                ))}
+            {/* ===== ACADEMY (process, not signals) ===== */}
+            <div className="th-sec" id="academy">
+              <div className="th-sh"><h2>Academy</h2>
+                <span className="th-meta">process · not signals</span>
               </div>
-              <div className="fsb-panel-h fsb-panel-h-sm" style={{ marginTop: 8 }}>DTE</div>
-              <div className="fsb-chips">
-                {[["all", "All"], ["0dte", "0DTE"], ["1-7d", "1-7D"], ["weekly", "Wk"], ["monthly", "Mo"], ["qtrly", "Qtr"], ["leaps", "LEAPS"]].map(([v, l]) => (
-                  <button key={v} className={`fsb-chip fsb-chip-sm${dteFilter === v ? " active" : ""}`} onClick={() => setDteFilter(v)}>{l}</button>
+              <div className="th-academy" data-testid="academy-section">
+                {[
+                  ["01", "Market Microstructure", "Order flow, options mechanics, and dealer hedging — the mechanics behind every signal."],
+                  ["02", "Reading the Flow", "Sweep vs. block vs. split. How urgency, size, and persistence reveal institutional intent."],
+                  ["03", "Dealer Positioning", "Gamma, vanna, charm — translating dealer hedging pressure into actionable levels."],
+                  ["04", "Volatility Anatomy", "Skew dynamics, term structure, vol risk premium — and where institutions hide."],
+                  ["05", "Process & Execution", "Invalidation, position sizing, standing aside. The discipline that protects capital."],
+                  ["06", "Regime Adaptation", "Bull, bear, chop, melt-up — the same signal means different things across regimes."],
+                ].map(([n, t, d]) => (
+                  <div key={n} className="th-module">
+                    <div className="th-mod-num">{n}</div>
+                    <div className="th-mod-title">{t}</div>
+                    <p>{d}</p>
+                    <div className="th-sub">curriculum</div>
+                  </div>
                 ))}
               </div>
             </div>
-            <div className="fsb-panel">
-              <div className="fsb-panel-h">Legend</div>
-              <div className="fsb-legend">
-                <span><i className="fsb-dot call" /> Call flow</span>
-                <span><i className="fsb-dot put" /> Put flow</span>
-                <span><i className="fsb-dot sweep" /> Sweep (urgent)</span>
-                <span><i className="fsb-dot block" /> Block (negotiated)</span>
-              </div>
-            </div>
-          </div>
 
-          {/* center */}
-          <div className="fsb-col">
-            <div className="fsb-panel fsb-flow-panel">
-              <div className="fsb-panel-h"><span>Live Flow Feed</span><span><i className="fsb-live-dot" /><span className="fsb-muted fsb-small">live · {filtered.length}</span></span></div>
-              <div className="fsb-flow-wrap">
-                <table className="fsb-table">
-                  <thead><tr>
-                    <th>Ticker</th><th>Type</th><th>Side</th><th className="num">Strike</th>
-                    <th>DTE</th><th className="num">Day $</th><th className="num">V/OI</th><th className="num">Conv</th>
-                  </tr></thead>
+            {/* ===== SETTINGS ===== */}
+            <div className="th-sec" id="settings">
+              <div className="th-sh"><h2>Settings</h2>
+                <span className="th-meta">saved in floww Settings · this browser · follows the app&apos;s existing store</span>
+              </div>
+              <div className="th-set" data-testid="settings-table">
+                <table>
+                  <thead><tr><th className="l">Screen</th><th>Rules</th><th className="l">Type</th><th className="l">Default sort</th><th className="l">Status</th><th /></tr></thead>
                   <tbody>
-                    {filtered.length === 0 && <tr><td colSpan={8} className="fsb-muted" style={{ padding: 14, lineHeight: 1.7 }}>Loading unusual options activity from <b style={{ color: "var(--fsb-blue)" }}>cvforge</b> (ranked by volume-vs-open-interest)…</td></tr>}
-                    {filtered.slice(0, 80).map((p, i) => {
-                      const conv = p._conv;
-                      return (
-                        <tr key={`${p.ticker}-${p.timestamp}-${i}`} className={selected === p ? "selected" : ""}
-                            tabIndex={0} onClick={() => selectSignal(p)}
-                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectSignal(p); } }}>
-                          <td className="tk">{p.ticker}</td>
-                          <td className={`fsb-type-${typeOf(p).toLowerCase()}`}>{typeOf(p)}</td>
-                          <td className={sideOf(p) === "CALL" ? "fsb-side-call" : "fsb-side-put"}>{sideOf(p)}</td>
-                          <td className="num">{Number(p.strike).toFixed(0)}</td>
-                          <td>{dteOf(p.expiration)}d</td>
-                          <td className="num">{fmtMoney(p.premium)}</td>
-                          <td className="num">{Number(p.vol_oi_ratio || 0).toFixed(1)}</td>
-                          <td className="num"><span className={`fsb-conv-bar${conv >= 80 ? "" : conv >= 65 ? " mid" : " low"}`} style={{ width: Math.max(8, conv) * 0.6 }} />{conv}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div className="fsb-panel fsb-sub-panel">
-              <div className="fsb-subtabs">
-                <button className={`fsb-subtab${subtab === "ofi" ? " active" : ""}`} onClick={() => setSubtab("ofi")}>Order Flow Imbalance</button>
-                <button className={`fsb-subtab${subtab === "gex" ? " active" : ""}`} onClick={() => setSubtab("gex")}>Dealer GEX Heatmap</button>
-              </div>
-              <div ref={ofiRef} className="fsb-chart" style={{ display: subtab === "ofi" ? "block" : "none" }} />
-              <div ref={gexRef} className="fsb-chart" style={{ display: subtab === "gex" ? "block" : "none" }} />
-            </div>
-          </div>
-
-          {/* right */}
-          <div className="fsb-col">
-            <div className="fsb-panel fsb-action">
-              <div className="fsb-panel-h">Selected Signal</div>
-              {!selected ? <div className="fsb-sel-empty">Click any row to load its conviction profile.</div> : (
-                <>
-                  <div className="fsb-sel-head">
-                    <span className="tk">{selected.ticker}</span>
-                    <span className="strike">${Number(selected.strike).toFixed(0)} {sideOf(selected)[0]}</span>
-                    <span className="fsb-muted fsb-small">{dteOf(selected.expiration)}d · {typeOf(selected)}</span>
-                    <span className={`fsb-badge ${sideOf(selected) === "CALL" ? "call" : "put"}`}>{sideOf(selected)}</span>
-                  </div>
-                  <div className="fsb-con-grid">
-                    <div ref={gaugeRef} className="fsb-chart small" />
-                    <div ref={radarRef} className="fsb-chart small" />
-                  </div>
-                  <div className="fsb-rationale">
-                    <div style={{ marginBottom: 6 }}><strong>{typeOf(selected)} {sideOf(selected)} · {fmtMoney(selected.premium)}</strong> on {selected.ticker}</div>
-                    <ul>
-                      <li>Classification: {String(selected.classification || "unusual")} — volume/OI positioning proxy (cvserver has no trade-level tape)</li>
-                      <li>Vol/OI ratio: {Number(selected.vol_oi_ratio || 0).toFixed(1)}× · est. notional {fmtMoney(selected.premium)}</li>
-                      {selected._cd && (
-                        <li>Conviction {selected._conv}/99 = pattern {selected._cd.pat} + size {selected._cd.size} + unusualness {selected._cd.stat} + urgency {selected._cd.urg}</li>
-                      )}
-                    </ul>
-                    <div className="fsb-muted fsb-small" style={{ marginTop: 6 }}>Regime: {regime.label}. VPIN toxicity &amp; Kyle-λ price-impact need a trade-level order-flow feed (not available on cvserver) — they populate when a print feed is connected.</div>
-                  </div>
-                  <div className="fsb-actions">
-                    <div className="fsb-panel-h" style={{ marginBottom: 6 }}>Context</div>
-                    <ul>
-                      <li><span className="tag tgt">GEX</span>See dealer positioning in the GEX subtab for {selected.ticker}.</li>
-                      <li><span className="tag warn">RISK</span>Paper/educational only — not a trade recommendation.</li>
-                    </ul>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* VOL VIEW */}
-        <div className={`fsb-view${tab === "vol" ? " active" : ""}`} style={{ gridTemplateColumns: "1fr" }}>
-          <div className="fsb-panel">
-            <div className="fsb-panel-h"><span>3D Implied Volatility Surface</span><span className="fsb-status-chip" style={{ color: "var(--fsb-amber)", background: "rgba(245,176,66,0.06)" }}>SIM</span></div>
-            <div className="fsb-vol-controls">
-              <label className="fsb-muted fsb-small">Ticker&nbsp;
-                <select value={volTicker} onChange={(e) => setVolTicker(e.target.value)}>{["SPY", "QQQ", "NVDA", "TSLA", "AAPL"].map((t) => <option key={t}>{t}</option>)}</select>
-              </label>
-              <span className="fsb-muted fsb-small">Synthetic surface — no live IV-surface endpoint yet.</span>
-            </div>
-            <div ref={volRef} className="fsb-chart tall" />
-          </div>
-        </div>
-
-        {/* GAMMA VIEW */}
-        <div className={`fsb-view${tab === "gamma" ? " active" : ""}`} style={{ gridTemplateColumns: "1fr" }}>
-          <div className="fsb-panel">
-            <div className="fsb-panel-h"><span>Dealer Gamma Exposure · {ticker}</span><span className="fsb-muted fsb-small">real cvforge GEX</span></div>
-            <div className="fsb-gamma-grid">
-              <div ref={gammaBarRef} className="fsb-chart" />
-              <div ref={gammaCurveRef} className="fsb-chart" />
-            </div>
-            <div className="fsb-notes"><strong>Read:</strong> red bars = dealer short-gamma (hedging amplifies moves), green = long-gamma (dampens). The cumulative line crosses zero at gamma-flip levels.</div>
-          </div>
-        </div>
-
-        {/* SCANNER VIEW — cross-symbol BladeMap scanner (scenner34 grid) */}
-        <div className={`fsb-view${tab === "scanner" ? " active" : ""}`} style={{ gridTemplateColumns: "1fr" }}>
-          <div className="fsb-scanwrap">
-            <div className="fsb-scanbar">
-              {[
-                ["Source", scanMeta.mode === "market" ? `LIVE · mkt-wide ·${scanMeta.symbols}` : scanMeta.mode === "fallback" ? `FALLBACK ·${scanMeta.symbols} sym` : "—",
-                  scanMeta.stale ? "y" : scanMeta.mode === "market" ? "g" : scanMeta.mode ? "y" : ""],
-                ["Contracts", `${scanRows.length} / ${scan.length}${scanRows.length > 200 ? " ·top200" : ""}`, "b"],
-                ["Notional Σ", fmtUSD(scanStats.notl), ""],
-                ["Call/Put Vol", scanStats.tv > 0 ? `${scanStats.cpct}% / ${100 - scanStats.cpct}%` : "—", scanStats.cpct >= 50 ? "g" : "r"],
-                ["Unusual (≥2×)", String(scanStats.unusual), "y"],
-                ["⚡ Alerts", `${scanStats.alerts} · log ${alertLog.length}`, scanStats.alerts ? "r" : "", "Open the alert log"],
-                ["Updated",
-                  scanMeta.stale
-                    ? `STALE${scanMeta.retry ? ` ·retry ${Math.round(scanMeta.retry)}s` : ""} · ${scanAt || "—"}`
-                    : `${scanAt || "—"}${scanMeta.age >= 5 ? ` ·data ${scanMeta.age}s` : ""}`,
-                  scanMeta.stale ? "y" : "",
-                  "Local fetch time · upstream data age (60s server cache; STALE = upstream rate-limited, serving last good scan)"],
-                ["Heartbeat",
-                  <>
-                    <span className={`fsb-pulse ${heartbeat.dot}`} aria-hidden="true" />
-                    {scanMeta.mode
-                      ? `${heartbeat.label}${heartbeat.tier === "fresh" ? ` ·${scanAt || "—"}` : ""}`
-                      : heartbeat.label}
-                  </>,
-                  heartbeat.dot,
-                  heartbeat.tier === "fresh" && scanAt ? `${heartbeat.hint} · last fetch ${scanAt}` : heartbeat.hint],
-              ].filter(([l]) => advanced || ["Source", "⚡ Alerts", "Updated", "Heartbeat"].includes(l))
-                .map(([l, v, c, tip]) => (
-                <div key={l} className={`fsb-skpi${l === "⚡ Alerts" ? " fsb-skpi-click" : ""}`}
-                  onClick={l === "⚡ Alerts" ? () => setAlertsOpen((o) => !o) : undefined}
-                  title={tip}>
-                  <div className="fsb-skl">{l}</div><div className={`fsb-skv ${c}`}>{v}</div>
-                </div>
-              ))}
-              <button className="fsb-preset fsb-advtoggle"
-                title={advanced ? "Back to the simple view — alerts + best flow only" : "Show all filters, presets, universe and alert-rule controls"}
-                onClick={() => setAdvanced((a) => !a)}>
-                ⚙ {advanced ? "Simple" : "Advanced"}
-              </button>
-            </div>
-            {fireBanner && (
-              <div className="fsb-fire-banner" role="alert"
-                title={fireBanner.label || fireBanner.why || "Institutional alert"}
-                onClick={() => {
-                  if (fireBanner.label) {
-                    setScanQ(scanQ === fireBanner.under ? "" : fireBanner.under);
-                  } else {
-                    setTicker(fireBanner.under);
-                    setTab("flow");
-                  }
-                }}>
-                <span className="fsb-fire-ring" aria-hidden="true" />
-                <span className={`fsb-rulebadge r-${String(fireBanner.rule || "").toLowerCase()}`}>{fireBanner.rule}</span>
-                <span className="fsb-fire-t">
-                  {fireBanner.under}
-                  {!fireBanner.label && (
-                    <>
-                      {" · "}
-                      <span className={fireBanner.type === "call" ? "fsb-tcall" : "fsb-tput"}>
-                        {fireBanner.type === "call" ? "CALL" : "PUT"}
-                      </span>
-                      {" "}{fireBanner.strike} <span className="fsb-sub">{(fireBanner.exp || "").slice(5)}</span>
-                    </>
-                  )}
-                </span>
-                <span className="fsb-fire-why">
-                  {fireBanner.label || fireBanner.why || " "}
-                  {fireBanner.premium != null ? ` · ~${fmtUSD(fireBanner.premium)}` : ""}
-                  {fireBanner.sigma != null ? ` · ${fireBanner.sigma}σ` : ""}
-                  {fireBanner.streak != null ? ` · ${fireBanner.streak}d streak` : ""}
-                </span>
-                <span className="fsb-fire-age" title="Auto-dismiss after 60s">{fmtAge(fireBanner.t)}</span>
-                <button className="fsb-fire-x" title="Acknowledge — auto-dismisses after 60s anyway"
-                  onClick={(e) => { e.stopPropagation(); ackFire(fireBanner.key); }}>✕</button>
-              </div>
-            )}
-            {rollup.length > 0 && (
-              <div className="fsb-rollup">
-                <span className="fsb-rollup-label">PREM~ FLOW</span>
-                {rollup.map((e) => (
-                  <button key={e.under} className={`fsb-rollchip${scanQ === e.under ? " on" : ""}`}
-                    title={`${e.under}: ~${fmtUSD(e.prem)} est premium · ${e.count} contracts · ${e.callPct}% calls / ${100 - e.callPct}% puts · vol PCR ${e.pcr ?? "—"} (Pan-Poteshman: low P/C historically precedes outperformance) · top score ${e.maxScore}`}
-                    onClick={() => setScanQ(scanQ === e.under ? "" : e.under)}>
-                    <span className="fsb-rollchip-t">
-                      {e.under}
-                      {e.regime ? <sup className={`fsb-gtag ${e.regime === "positive" ? "gp" : "gn"}`}>{e.regime === "positive" ? "γ+" : "γ−"}</sup> : null}
-                      {streaks[e.under] ? <span className="fsb-streak" title={`${streaks[e.under].n} consecutive elevated-volume days (≥${streaks[e.under].mult}× its ${fmtK(streaks[e.under].median)} daily median) — persistent positioning`}>🔥{streaks[e.under].n}d</span> : null}
-                    </span>
-                    <span className="fsb-rollchip-p">~{fmtUSD(e.prem)}
-                      {e.pcr != null ? <span className={`fsb-pcr${e.pcr <= 0.5 ? " bull" : e.pcr >= 1.5 ? " bear" : ""}`}> PCR {e.pcr.toFixed(2)}</span> : null}
-                      {(() => { const s = volSigma(e.callVol + e.putVol, baselines[e.under]); return s != null && s >= 2 ? <span className="fsb-sigma" title={`Today's scan volume is ${s}σ above this ticker's ${baselines[e.under].days}-day baseline`}> {s}σ</span> : null; })()}
-                    </span>
-                    {cleanHistory(history[e.under]).length >= 3 && (
-                      <span className="fsb-spark" aria-hidden="true">
-                        {(() => {
-                          const ds = cleanHistory(history[e.under]).slice(-10);
-                          const mx = Math.max(...ds.map((d) => d.total_vol), 1);
-                          return ds.map((d) => (
-                            <i key={d.date} className={d.date === sessionDay() ? "t" : ""}
-                               style={{ height: `${Math.max(12, Math.round((d.total_vol / mx) * 100))}%` }}
-                               title={`${d.date}: ${fmtK(d.total_vol)} vol (${fmtK(d.call_vol)}C/${fmtK(d.put_vol)}P)`} />
-                          ));
-                        })()}
-                      </span>
-                    )}
-                  <span className="fsb-rollbar"><span className="fsb-rollbar-c" style={{ width: `${e.callPct}%` }} /></span>
-                </button>
-              ))}
-            </div>
-            )}
-            {followStrip.length > 0 && (
-              <div className="fsb-follow-strip">
-                <span className="fsb-follow-label">📈 FOLLOWING</span>
-                {followStrip.map(({ under, n, mult, median }) => (
-                  <button key={under} className={`fsb-follow-chip n-${Math.min(5, n)}${scanQ === under ? " on" : ""}`}
-                    title={`${under} elevated-volume ${n} straight days (≥${mult.toFixed(1)}× its ${fmtK(median)} daily median) — click to filter the scan to this ticker`}
-                    onClick={() => setScanQ(scanQ === under ? "" : under)}>
-                    <span className="fsb-follow-t">{under}</span>
-                    <span className="fsb-follow-n">{n}d</span>
-                    <span className="fsb-follow-x">{mult.toFixed(1)}×</span>
-                  </button>
-                ))}
-                <span className="fsb-follow-sub">
-                  persistent positioning · {followStrip.length} ticker{followStrip.length === 1 ? "" : "s"}
-                </span>
-              </div>
-            )}
-            {advanced && <div className="fsb-scanctrl">
-              <select value={scanTypeF} onChange={(e) => setScanTypeF(e.target.value)}>
-                <option value="all">All Types</option><option value="call">Calls</option><option value="put">Puts</option>
-              </select>
-              <input type="number" min="0" step="1000" placeholder="Min Vol" value={scanMinVol || ""} onChange={(e) => setScanMinVol(parseFloat(e.target.value) || 0)} />
-              <input type="number" min="0" max="100" step="5" placeholder="Min Score" value={scanMinScore || ""} onChange={(e) => setScanMinScore(parseFloat(e.target.value) || 0)} />
-              <input ref={scanQRef} placeholder="Ticker…  ( / )" value={scanQ} onChange={(e) => setScanQ((e.target.value || "").toUpperCase())} />
-              <span className="fsb-presets">
-                {[["Top Score", { key: "score", dir: "desc" }], ["Big Money", { key: "notional", dir: "desc" }],
-                  ["Unusual", { key: "volOI", dir: "desc" }], ["Short Fuse", { key: "dte", dir: "asc" }],
-                  ["New Arrivals", { key: "firstSeen", dir: "desc" }]].map(([l, s]) => (
-                  <button key={l} className={`fsb-preset${scanSort.key === s.key && scanSort.dir === s.dir ? " on" : ""}`}
-                    onClick={() => setScanSort(s)}>{l}</button>
-                ))}
-                <button className="fsb-preset fsb-force" disabled={forcing}
-                  title="Force refresh — bypasses cache & backoff (server-debounced 10s)"
-                  onClick={forceRefresh}>{forcing ? "…" : "⟳ Force"}</button>
-                <button className="fsb-preset" disabled={!scanRows.length}
-                  title="Download the current filtered view as CSV (premium column is an estimate)"
-                  onClick={() => exportCSV(scanRows)}>⤓ CSV</button>
-              </span>
-              <label className="fsb-uonly" title="Filter the scan to your universe list">
-                <input type="checkbox" checked={universeOnly} onChange={(e) => setUniverseOnly(e.target.checked)} /> My universe
-              </label>
-              <input className="fsb-univ" defaultValue={universe.join(",")} placeholder="Universe…"
-                title="Comma-separated tickers — used by the fallback scan and the 'My universe' filter"
-                onBlur={(e) => { const u = (e.target.value || "").toUpperCase().split(/[,\s]+/).filter(Boolean); if (u.length) setUniverse(u); }} />
-              <input className="fsb-alertn" type="number" min="50" max="100" value={alertScore}
-                title="Alert when a NEW contract scores ≥ this"
-                onChange={(e) => setAlertScore(Math.max(50, Math.min(100, parseInt(e.target.value, 10) || 85)))} />
-              <span className="fsb-scannote">Live cross-symbol flow · cvforge day-volume vs OI. No per-trade tape on this feed — Flow-type = volume-magnitude class; Lean = contract-type bias.</span>
-            </div>}
-            {away && (
-              <div className="fsb-away">
-                <span className="fsb-away-t">☾ While you were away · {fmtAge(Date.now() - away.gapMs)}</span>
-                {away.nAlerts > 0 && (
-                  <span className="fsb-alertsummary">
-                    {RULES_ORDER.filter((k) => away.counts[k]).map((k) => (
-                      <span key={k} className={`fsb-sumtag r-${k.toLowerCase()}`}>{k} {away.counts[k]}</span>
-                    ))}
-                  </span>
-                )}
-                {away.topNew.length > 0 && (
-                  <span className="fsb-away-new">
-                    top new:{" "}
-                    {away.topNew.map((r) => (
-                      <button key={`${r.under}${r.strike}${r.type}${r.exp}`} className="fsb-awaychip"
-                        title={`Score ${r.score} · first seen ${fmtClock(r.firstSeen)} — click to filter`}
-                        onClick={() => setScanQ(r.under)}>
-                        {r.under} {r.type === "call" ? "C" : "P"}{r.strike} <b>{r.score}</b>
-                      </button>
-                    ))}
-                  </span>
-                )}
-                <button className="fsb-away-x" title="Dismiss" onClick={() => setAway(null)}>✕</button>
-              </div>
-            )}
-            {alertsOpen && (
-              <div className="fsb-alertlog">
-                {/* Blademap v3 — conviction calibration + per-setup win rate */}
-                {(calibBands.length > 0 || (setupStats && setupStats.overall.n > 0)) && (
-                  <div className="fsb-v3strip">
-                    {calibBands.map((b) => (
-                      <div key={b.band}
-                           className={`fsb-v3cell${b.band === "75+" ? " hot" : ""}`}
-                           title={`${b.n} alerts · ${b.n_measured} measured · ${b.wins} hits`}>
-                        <span className="fsb-v3lbl">{b.band}</span>
-                        <span className="fsb-v3val">{b.hit_rate != null ? `${Math.round(b.hit_rate * 100)}%` : "—"}</span>
-                        <span className="fsb-v3bar"><i style={{ width: `${Math.round((b.hit_rate || 0) * 100)}%` }} /></span>
-                        <span className="fsb-v3n">{b.n_measured}/{b.n}</span>
-                      </div>
-                    ))}
-                    {setupStats && setupStats.overall.n > 0 && Object.entries(setupStats.by_setup).map(([name, s]) => (
-                      <div key={name} className={`fsb-v3cell${s.win_rate >= 0.5 ? " hot" : ""}`}
-                           title={`journal ${setupStats.days}d · ${name}: ${s.wins}W/${s.losses}L, avg ${(s.avg_return * 100).toFixed(1)}%`}>
-                        <span className="fsb-v3lbl">📓 {name}</span>
-                        <span className="fsb-v3val">{Math.round(s.win_rate * 100)}%</span>
-                        <span className="fsb-v3n">{s.wins}W/{s.losses}L</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="fsb-alertlog-h">
-                  <span>🏛 Institutional Alerts · {alertLog.length}</span>
-                  {alertLog.length > 0 && (
-                    <span className="fsb-alertsummary">
-                      {alertSummary.oldest === alertSummary.newest
-                        ? alertSummary.newest
-                        : `${alertSummary.oldest} → ${alertSummary.newest}`}
-                      {RULES_ORDER.filter((k) => alertSummary.c[k]).map((k) => (
-                        <span key={k} className={`fsb-sumtag r-${k.toLowerCase()}`}>{k} {alertSummary.c[k]}</span>
-                      ))}
-                    </span>
-                  )}
-                  <span className="fsb-rulechips">
-                    <button className={`fsb-rulechip${notify ? " on" : ""}`}
-                      title="Browser notification when alerts fire while this tab is hidden"
-                      onClick={toggleNotify}>🔔 Notify</button>
-                    {advanced && <>
-                      <button className={`fsb-rulechip${alertUnivOnly ? " on" : ""}`}
-                        title="Scope alerts + notifications to My Universe tickers only — off = whole market (700+ symbols)"
-                        onClick={() => setAlertUnivOnly((v) => !v)}>🎯 UNIV</button>
-                      {[["oiconf", "ΔOI CONF"], ["follow", "FOLLOW 2d+"], ["sigma", "SIGMA ≥4σ"],
-                        ["score", `SCORE≥${alertScore}`], ["whale", "WHALE ≥$10M~"], ["zerodte", "0DTE HOT"]].map(([k, lbl]) => (
-                        <button key={k} className={`fsb-rulechip${alertRules[k] ? " on" : ""}`}
-                          title="Toggle this alert rule"
-                          onClick={() => setAlertRules((r) => ({ ...r, [k]: !r[k] }))}>{lbl}</button>
-                      ))}
-                      <button className="fsb-rulechip" title="Toggle newest-first / oldest-first"
-                        onClick={() => setAlertOrder((o) => (o === "new" ? "old" : "new"))}>
-                        {alertOrder === "new" ? "⇊ Newest" : "⇈ Oldest"}
-                      </button>
-                    </>}
-                  </span>
-                  {advanced && <button className="fsb-alertclear" disabled={!alertLog.length}
-                    title="Copy the tape to the clipboard (tab-separated — pastes into Sheets/journal)"
-                    onClick={() => {
-                      const tsv = alertLog.map((a) => [a.day || "", a.time, a.rule, a.under, a.type, a.strike, a.exp, a.score ?? "", a.premium ?? "", a.label || a.why || ""].join("\t")).join("\n");
-                      try { navigator.clipboard.writeText(tsv); } catch { /* clipboard blocked */ }
-                    }}>
-                    ⧉ Copy
-                  </button>}
-                  <button className="fsb-alertclear"
-                    title="Clear the tape display — fired alerts stay deduped, so still-active conditions won't re-fire"
-                    onClick={() => { setAlertLog([]); try { localStorage.removeItem(ALERTS_KEY); } catch { /* noop */ } }}>
-                    Clear
-                  </button>
-                </div>
-                {alertLog.length === 0 ? (
-                  <div className="fsb-muted" style={{ padding: 10 }}>
-                    No alerts yet — rows crossing an enabled rule log here with arrival time, source, and the reason they fired. Confirmation tier: ΔOI CONF = overnight open-interest build proves yesterday's flow held; FOLLOW = multiple straight days of elevated volume; SIGMA = volume ≥4σ vs the ticker's own baseline. Intraday tier: SCORE / WHALE / 0DTE on newly arrived contracts (deduped 30min). Tape keeps today + yesterday; 🎯 UNIV scopes alerts to your universe.
-                  </div>
-                ) : (
-                  <table className="fsb-alerttab">
-                    <tbody>
-                      {shownAlerts.map((a, i) => (
-                        <tr key={`${a.key}-${a.t}-${i}`}
-                            title={a.why || undefined}
-                            onClick={a.rule === "SOURCE" ? undefined
-                              : a.label ? () => setScanQ(scanQ === a.under ? "" : a.under)
-                              : () => { setTicker(a.under); setTab("flow"); }}>
-                          <td title={a.src === "fallback" ? "18-symbol fallback scan" : a.src === "market" ? "market-wide scan" : ""}>
-                            <span className={`fsb-srcdot ${a.src || ""}`} />
-                          </td>
-                          <td className="fsb-sub" title={`${fmtAge(a.t)} ago`}>
-                            {a.day && a.day !== sessionDay() ? <span className="fsb-daytag">prev</span> : null}{a.time}
-                          </td>
-                          <td><span className={`fsb-rulebadge r-${a.rule.toLowerCase()}`}>{a.rule}</span></td>
-                          {a.label ? (
-                            // Ticker-level rows (SIGMA/FOLLOW) + SOURCE flips carry a full
-                            // sentence; contract columns don't apply. Click filters the scan.
-                            <td className="l fsb-sub" colSpan={4}>{a.label}</td>
-                          ) : (
+                    {allScreens.map((s) => (
+                      <tr key={s.id} className={s.id === screenId ? "sel" : ""}>
+                        <td className="l sym">{s.label}</td>
+                        <td>{s.custom ? (s.conditions || []).length + 1 : RULE_LIST.length}</td>
+                        <td className="l">{s.custom ? "mine" : "built-in"}</td>
+                        <td className="l">{s.custom ? "Top score" : (STRIPE_SORT_LABEL[s.id] || "Top score")}</td>
+                        <td className="l">{s.id === screenId ? "Active" : "Ready"}</td>
+                        <td className="l">
+                          {s.custom ? (
                             <>
-                              <td className="l">
-                                <span className="tk">{a.under}</span>{" "}
-                                <span className={a.type === "call" ? "fsb-tcall" : "fsb-tput"}>{a.type === "call" ? "CALL" : "PUT"}</span>{" "}
-                                {a.strike} <span className="fsb-sub">{(a.exp || "").slice(5)}</span>
-                                {a.why ? <span className="fsb-why"> · {a.why}</span> : null}
-                              </td>
-                              <td>{a.score}</td>
-                              <td>{a.premium != null ? `~${fmtUSD(a.premium)}` : "—"}</td>
-                              <td className="fsb-sub">{fmtAge(a.t)}</td>
+                              <button type="button" className="th-chipb" onClick={() => setEditingScreen({ ...s })}>edit</button>{" "}
+                              <button type="button" className="th-chipb" onClick={() => deleteCustomScreen(s.id)}>delete</button>
                             </>
+                          ) : (
+                            <button
+                              type="button" className="th-chipb"
+                              onClick={() => setEditingScreen({
+                                id: `custom-${Date.now()}`, label: `${s.label} (copy)`,
+                                rule: "ANY", conditions: [], custom: true, copyOf: s.id,
+                              })}
+                            >
+                              copy
+                            </button>
                           )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            )}
-            {/* Blademap v3 — top conviction signal cards (backend-ranked) */}
-            {active && convFeed.length === 0 && (
-              <div className="fsb-sigwrap">
-                <div className="fsb-sigh">
-                  <span className="fsb-sigh-t">◈ Top Conviction</span>
-                  <span className="fsb-sigh-s">loading ranked signals…</span>
-                </div>
-                <div className="fsb-sigcards">
-                  {[0, 1, 2, 3].map((n) => (
-                    <div key={n} className="fsb-sigcard fsb-skel" aria-hidden="true">
-                      <div className="fsb-sig-ring skel-ring" />
-                      <div className="fsb-sig-body">
-                        <div className="skel-line w60" />
-                        <div className="skel-line w40" />
-                        <div className="skel-line w75" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {convFeed.length > 0 && (
-              <div className="fsb-sigwrap">
-                <div className="fsb-sigh">
-                  <span className="fsb-sigh-t">◈ Top Conviction</span>
-                  <span key={refreshTick} className="fsb-fedotp" title={`feed refreshed · ${convFeed.length} signals`} />
-                  <span className="fsb-sigh-s">ranked by Blademap v3 · click to filter</span>
-                </div>
-                <div className="fsb-sigcards">
-                {convFeed.slice(0, 6).map((a) => {
-                  const isCall = String(a.type).toLowerCase() === "call";
-                  const kl = (() => { try { return a.key_levels_json ? JSON.parse(a.key_levels_json) : null; } catch { return null; } })();
-                  const tier = String(a.tier || "").toUpperCase();
-                  const bear = String(a.bias || "").toUpperCase().includes("BEAR");
-                  const mp = a.move_pct != null ? a.move_pct * 100 : null;
-                  return (
-                    <div key={a.key} className={`fsb-sigcard${Number(a.conviction) >= 75 ? " hot" : ""} ${
-                        (a.conviction ?? 0) >= 75 ? "heat-crit" :
-                        (a.conviction ?? 0) >= 60 ? "heat-high" :
-                        (a.conviction ?? 0) >= 45 ? "heat-elev" : "heat-norm"}`}
-                         title={`${a.why || "conviction " + a.conviction}${kl && kl.invalidation ? ` · invalidation ${kl.invalidation}` : ""} — click to filter ${a.under || a.ticker || ""}`}
-                         onClick={() => setScanQ(String(a.under || a.ticker || ""))}>
-                      <div className="fsb-sig-ring"
-                           style={{ "--pct": `${Math.max(0, Math.min(99, Number(a.conviction) || 0))}` }}
-                           title={`conviction ${a.conviction}/99`}>
-                        <span>{a.conviction}</span>
-                      </div>
-                      <div className="fsb-sig-body">
-                      <div className="fsb-sig-top">
-                        <span className={`fsb-sig-tk ${isCall ? "fsb-tcall" : "fsb-tput"}`}>
-                          {a.under || a.ticker} {isCall ? "CALL" : "PUT"} {a.strike}
-                        </span>
-                        <span className="fsb-sig-badges">
-                          {tier && <span className={`fsb-sig-tier t-${tier.toLowerCase()}`}>{tier}</span>}
-                          <span className="fsb-sig-conv">{a.conviction}</span>
-                        </span>
-                      </div>
-                      <div className="fsb-sig-sub">
-                        <span className={bear ? "dn" : "up"}>{bear ? "▼" : "▲"} {a.bias || ""}</span>
-                        {a.score != null ? ` · score ${a.score}` : ""}{a.notional ? ` · $${(a.notional / 1e6).toFixed(1)}M` : ""}
-                        {a.dte != null ? ` · ${a.dte}d` : ""}
-                        {mp != null ? <span className={mp < 0 ? " dn" : " up"}> · {mp >= 0 ? "+" : ""}{mp.toFixed(2)}%</span> : ""}
-                      </div>
-                      {kl && (kl.stop || kl.target || kl.invalidation) && (
-                        <div className="fsb-sig-lv">
-                          {kl.entry != null && <span>E {Number(kl.entry).toFixed(2)}</span>}
-                          {(kl.stop != null || kl.invalidation != null) && <span className="dn">S {Number(kl.stop ?? kl.invalidation).toFixed(2)}</span>}
-                          {kl.target != null && <span className="up">T {Number(kl.target).toFixed(2)}</span>}
-                        </div>
-                      )}
-                      </div>
-                    </div>
-                  );
-                })}
-                </div>
-              </div>
-            )}
-            <div className="fsb-scantable">
-              {scan.length === 0 ? (
-                <div className="fsb-muted" style={{ padding: 16 }}>Scanning market flow across {SCAN_UNIVERSE.length} symbols…</div>
-              ) : scanRows.length === 0 ? (
-                <div className="fsb-muted" style={{ padding: 16 }}>No contracts pass these filters.</div>
-              ) : (
-                <table className="fsb-stab">
-                  <thead><tr>
-                    {colsShown.map(([k, t, l]) => (
-                      <th key={k} className={`${l ? "l" : ""}${k === scanSort.key ? " on" : ""}`} onClick={() => sortScan(k)}>
-                        {t}{k === scanSort.key ? (scanSort.dir === "desc" ? " ▾" : " ▴") : ""}
-                      </th>
+                        </td>
+                      </tr>
                     ))}
-                  </tr></thead>
-                  <tbody>
-                    {scanRows.map((r, i) => {
-                      const isCall = r.type === "call";
-                      const otm = r.delta == null ? "" : (Math.abs(r.delta) < 0.45 ? "OTM" : "ITM");
-                      // POC-style: the single best-score row gets the ★ leader treatment
-                      const isTop = i === 0 && scanSort.key === "score" && scanSort.dir === "desc" && (r.score ?? 0) >= 90;
-                      return (
-                        <tr key={`${r.under}-${r.strike}-${r.type}-${r.exp}-${i}`}
-                            className={`${kbIdx === i ? "kbcursor " : ""}${isTop ? "top " : ""}${r.under === ticker ? "sel " : ""}${r._new ? "new " : ""}${r._new && r.score >= alertScore ? "alert" : ""}`.trim()}
-                            onClick={() => { setTicker(r.under); setTab("flow"); }}>
-                          <td className="fsb-seen" title={r.firstSeen ? `First seen ${fmtClock(r.firstSeen, true)} · ${fmtAge(r.firstSeen)} ago this session` : ""}>
-                            {r._new ? <span className="fsb-newdot" title="New this refresh" /> : null}
-                            <span className="fsb-sub">{fmtClock(r.firstSeen)}</span>
-                          </td>
-                          <td><span className={`fsb-sc ${scoreGradeOf(r.score)}`} title={r._parts ? `vol/OI ${r._parts.pos} · size ${r._parts.size} · notional ${r._parts.notl} · urgency ${r._parts.urg} · OTM ${r._parts.otm}${r._parts.nudge ? ` · γ-nudge +${r._parts.nudge}` : ""}` : ""}>{r.score}</span></td>
-                          <td className="l"><span className="tk">{r.under}</span>{r.regime ? <sup className={`fsb-gtag ${r.regime === "positive" ? "gp" : "gn"}`}>{r.regime === "positive" ? "γ+" : "γ−"}</sup> : null} <span className="fsb-sub">{(r.exp || "").slice(5)}</span></td>
-                          <td className={`l ${isCall ? "fsb-tcall" : "fsb-tput"}`}>{isCall ? "CALL" : "PUT"}</td>
-                          <td>{r.strike % 1 === 0 ? r.strike.toFixed(0) : r.strike.toFixed(1)}</td>
-                          <td>{r.dte == null ? "—" : `${r.dte}d`}</td>
-                          <td>{fmtK(r.vol)}</td>
-                          {advanced && <td>{fmtK(r.oi)}</td>}
-                          <td className={r.oiChg ? (r.oiChg.pct >= 0 ? "fsb-oiup" : "fsb-oidn") : ""}
-                              title={r.oiChg
-                                ? `Open interest ${r.oiChg.abs >= 0 ? "+" : ""}${fmtK(r.oiChg.abs)} vs last session (${fmtK(r.oi - r.oiChg.abs)} → ${fmtK(r.oi)})${r.arch === "FRESH" ? (r.oiChg.pct >= 0.1 ? " — FRESH held: new positioning stuck" : r.oiChg.pct <= -0.1 ? " — FRESH faded: intraday churn, OI fell back" : "") : ""}`
-                                : "No prior-day record for this contract yet — ΔOI appears next session"}>
-                            {r.oiChg
-                              ? `${r.oiChg.pct >= 0 ? "+" : ""}${(r.oiChg.pct * 100).toFixed(0)}%`
-                              : <span className="fsb-sub">—</span>}
-                          </td>
-                          {advanced && <td>{r.volOI >= 99 ? "99+" : `${r.volOI.toFixed(1)}x`}</td>}
-                          <td title="Estimated premium spent — no quote feed on cvserver, BS-lite estimate">{r.premium != null ? `~${fmtUSD(r.premium)}` : "—"}</td>
-                          {advanced && <td>{fmtUSD(r.notional)}</td>}
-                          {advanced && <td>{fmtIV(r.iv)}</td>}
-                          <td className="l">
-                            <span className={`fsb-flt ${r.ftype}`}>{r.ftype.toUpperCase()}</span>
-                            {r.arch ? <span className={`fsb-arch a-${r.arch.toLowerCase()}`} title={
-                              r.arch === "WHALE" ? "≥$10M estimated premium" :
-                              r.arch === "LOTTO" ? "deep-OTM, ≤2 DTE" :
-                              r.arch === "HEDGE" ? "mid-delta long-dated put — protective duration" :
-                              "volume ≥ 3× open interest — fresh positioning"
-                            }>{r.arch}</span> : null}
-                          </td>
-                          {advanced && <td className="l"><span className={`fsb-lean ${isCall ? "bull" : "bear"}`}>{isCall ? "▲ BULL" : "▼ BEAR"}</span>{otm ? <span className="fsb-sub"> {r.deltaEst ? "~" : ""}{otm}</span> : null}</td>}
-                          {advanced && (() => {
-                            const hist = history[r.under] || [];
-                            const days = hist.slice(-7);
-                            const maxv = Math.max(1, ...days.map((d) => d.total_vol || 0));
-                            const stk = (streaks[r.under] && streaks[r.under].n) || 0;
-                            return (
-                              <td className="fsb-trd" title={`${r.under}: last ${days.length}d volume (elevated-day streak ${stk}d)`}>
-                                {days.length > 1 ? days.map((d, di) => (
-                                  <i key={di}
-                                     className={di === days.length - 1 ? "now" : ""}
-                                     style={{ height: `${Math.max(2, Math.round(((d.total_vol || 0) / maxv) * 12))}px` }}
-                                     title={`${d.date}: ${((d.total_vol || 0) / 1e6).toFixed(1)}M`} />
-                                )) : <span className="fsb-sub">—</span>}
-                              </td>
-                            );
-                          })()}
-                        </tr>
-                      );
-                    })}
                   </tbody>
                 </table>
-              )}
+                <div className="th-setin">
+                  <TidehunterSettings />
+                </div>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* ACADEMY VIEW */}
-        <div className={`fsb-view${tab === "academy" ? " active" : ""}`} style={{ gridTemplateColumns: "1fr" }}>
-          <div className="fsb-panel" style={{ overflow: "auto" }}>
-            <div className="fsb-panel-h"><span>Tidehunter Academy</span><span className="fsb-muted fsb-small">process · not signals</span></div>
-            <div className="fsb-academy-grid">
-              {[["01", "Market Microstructure", "Order flow, options mechanics, and dealer hedging — the mechanics behind every signal."],
-                ["02", "Reading the Flow", "Sweep vs. block vs. split. How urgency, size, and persistence reveal institutional intent."],
-                ["03", "Dealer Positioning", "Gamma, vanna, charm — translating dealer hedging pressure into actionable levels."],
-                ["04", "Volatility Anatomy", "Skew dynamics, term structure, vol risk premium — and where institutions hide."],
-                ["05", "Process & Execution", "Invalidation, position sizing, standing aside. The discipline that protects capital."],
-                ["06", "Regime Adaptation", "Bull, bear, chop, melt-up — the same signal means different things across regimes."]].map(([n, t, d]) => (
-                <div key={n} className="fsb-module"><div className="fsb-mod-num">{n}</div><div className="fsb-mod-title">{t}</div><p>{d}</p><div className="fsb-mod-meta">curriculum</div></div>
-              ))}
-            </div>
+          <div className="th-foot">
+            <span>Live cvforge data · GEX/regime from the decoder backend. Vol surface removed (no IV-surface endpoint).</span>
+            <span>Tidehunter Pro · insight pipeline</span>
           </div>
         </div>
-      </div>
-
-      <div className="fsb-foot">
-        <span>Live cvforge data · GEX/OFI/regime from the decoder backend. VPIN/Kyle-λ need a trade-level feed (n/a on cvserver). Vol surface simulated.</span>
-        <span>Tidehunter Pro · Blademap layout</span>
       </div>
     </div>
   );
 }
 
+// ---------- synthetic vol skew (SIM): no IV-surface endpoint exists, so the
+// old 3D surface returns as a labelled 2D smile. Same formula, zero data claims.
+function VolSkew({ ticker }) {
+  const mny = Array.from({ length: 21 }, (_, i) => 0.8 + i * 0.02);
+  const series = [30, 90].map((d) => ({
+    d,
+    pts: mny.map((m) => {
+      const skew = (1 - m) * 28;
+      const term = 12 + 30 / Math.sqrt(d);
+      const smile = Math.pow(m - 1, 2) * 60;
+      return [m, term + skew + smile];
+    }),
+  }));
+  const allV = series.flatMap((s) => s.pts.map((p) => p[1]));
+  const lo = Math.min(...allV);
+  const hi = Math.max(...allV);
+  const X = (m) => ((m - 0.8) / 0.4) * 300;
+  const Y = (v) => 130 - ((v - lo) / (hi - lo || 1)) * 110;
+  const line = (pts) => pts.map(([m, v], i) => `${i ? "L" : "M"}${X(m).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+  const cols = ["#8b7cf6", "#5fb8c9"];
+  return (
+    <svg viewBox="0 0 340 150" width="100%" role="img" aria-label={`Synthetic volatility smile for ${ticker} (illustrative)`}>
+      {[0.25, 0.5, 0.75].map((f) => (
+        <line key={f} x1="0" x2="300" y1={140 * f} y2={140 * f} stroke="#25292f" strokeWidth="1" />
+      ))}
+      {series.map((s, i) => (
+        <path key={s.d} d={line(s.pts)} fill="none" stroke={cols[i]} strokeWidth="2" />
+      ))}
+      <text x="0" y="148" fill="#5a5f67" fontSize="9">0.80</text>
+      <text x="140" y="148" fill="#5a5f67" fontSize="9">1.00 moneyness</text>
+      <text x="282" y="148" fill="#5a5f67" fontSize="9">1.20</text>
+      <text x="306" y="40" fill={cols[0]} fontSize="9">30d</text>
+      <text x="306" y="70" fill={cols[1]} fontSize="9">90d</text>
+      <text x="306" y="100" fill="#d9a441" fontSize="9">SIM</text>
+    </svg>
+  );
+}
+
+// ---------- rule-builder screen editor ----------
+function ScreenBuilder({ initial, onSave, onDelete, onCancel }) {
+  const [label, setLabel] = useState(initial.label || "My screen");
+  const [rule, setRule] = useState(initial.rule || "ANY");
+  const [conditions, setConditions] = useState(initial.conditions || []);
+  const isBuiltinCopy = !initial.saved;
+
+  const addCond = () => setConditions((c) => [...c, { fact: "score", op: "≥", value: "70" }]);
+  const setCond = (i, patch) => setConditions((c) => c.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const delCond = (i) => setConditions((c) => c.filter((_, j) => j !== i));
+  const valid = conditions.every((c) => c.fact && c.op && String(c.value ?? "").trim() !== "");
+
+  return (
+    <div className="th-rb" data-testid="rule-builder">
+      <div className="th-rb-t">
+        <span className="lbl">Editing screen</span>
+        <input value={label} onChange={(e) => setLabel(e.target.value)} aria-label="Screen name" />
+        <span className="th-sub">combinations only — no new rules or scoring</span>
+      </div>
+      {(conditions.length === 0) && <div className="th-sub">No conditions yet — the screen matches everything its rule allows.</div>}
+      {conditions.map((c, i) => (
+        <div key={i} className="th-rule">
+          <span className="op">{i === 0 ? "IF" : "AND"}</span>
+          <select value={c.fact} onChange={(e) => setCond(i, { fact: e.target.value })} aria-label={`Fact ${i + 1}`}>
+            {[...SCAN_FACTS, ...TICKER_FACTS].map((f) => (
+              <option key={f} value={f}>{SCAN_FACT_LABELS[f] || TICKER_FACT_LABELS[f] || f}</option>
+            ))}
+          </select>
+          <select value={c.op} onChange={(e) => setCond(i, { op: e.target.value })} aria-label={`Operator ${i + 1}`}>
+            {OPS.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+          <input value={c.value} onChange={(e) => setCond(i, { value: e.target.value })} aria-label={`Value ${i + 1}`} placeholder={c.op === "between" ? "lo,hi" : "value"} />
+          <button type="button" className="th-x" onClick={() => delCond(i)} aria-label={`Remove condition ${i + 1}`}>✕</button>
+        </div>
+      ))}
+      <div className="th-rule">
+        <span className="op">OR</span>
+        <select value={rule} onChange={(e) => setRule(e.target.value)} aria-label="Alert rule fired">
+          <option value="ANY">Alert rule fired: any</option>
+          {RULE_LIST.map((r) => <option key={r} value={r}>Alert rule fired: {r}</option>)}
+        </select>
+      </div>
+      <div className="th-rb-ft">
+        <button type="button" className="th-chipb" onClick={addCond}>+ condition</button>
+        <span className="th-sp" />
+        {!isBuiltinCopy && initial.id && (
+          <button type="button" className="th-chipb" onClick={() => onDelete(initial.id)}>Delete</button>
+        )}
+        <button type="button" className="th-chipb" onClick={onCancel}>Cancel</button>
+        <button
+          type="button" className="th-chipb on" disabled={!valid || !label.trim()}
+          onClick={() => onSave({ id: initial.id, label: label.trim(), rule, conditions, custom: true, saved: true })}
+        >
+          Save screen
+        </button>
+      </div>
+      <div className="th-hint">
+        Facts: {[...SCAN_FACTS.map((f) => SCAN_FACT_LABELS[f]), ...TICKER_FACTS.map((f) => TICKER_FACT_LABELS[f])].join(" · ")}
+      </div>
+      {!valid && <div className="th-sub warn">Every condition needs a fact, an operator, and a value.</div>}
+    </div>
+  );
+}

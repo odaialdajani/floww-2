@@ -16,6 +16,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 from collections.abc import Callable
@@ -91,9 +92,35 @@ class FetchCoordinator:
             finally:
                 lock.release()
 
-        # We have the lock — perform the fetch
+        # We have the lock — perform the fetch. Budget-gated: refuse BEFORE
+        # creating the upstream task so a burst degrades to a structured
+        # payload instead of burning the retail Public.com key. Coalesced
+        # waiters above share the winner and never touch the budget; the slot
+        # releases via done-callback when the upstream call settles.
+        pub_budget = None
+        try:
+            from services.public_budget import BudgetExhausted
+            from services.public_budget import budget as _pub_budget
+        except ImportError:
+            # silent by design: the budget shield is optional, a missing
+            # module must not stop a fetch that used to work.
+            BudgetExhausted = _pub_budget = None
+        if _pub_budget is not None:
+            try:
+                await _pub_budget.acquire()
+                pub_budget = _pub_budget
+            except BudgetExhausted as exc:
+                logger.warning("Budget refused fetch for %s: %s", key, exc)
+                return degraded_response(
+                    "budget_exhausted", str(exc), retry_after=exc.retry_after
+                )
+            except Exception as exc:
+                logger.warning("Budget acquire failed for %s: %s", key, exc)
         logger.info("Initiating external fetch for %s", key)
         task = asyncio.create_task(self._do_fetch(key, ticker, expiries, fetcher))
+        if pub_budget is not None:
+            with contextlib.suppress(Exception):
+                task.add_done_callback(lambda _: pub_budget.release())
         self._inflight[key] = task
         try:
             async with lock:

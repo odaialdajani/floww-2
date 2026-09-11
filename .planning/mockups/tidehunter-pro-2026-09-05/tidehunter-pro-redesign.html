@@ -1,0 +1,1540 @@
+<!DOCTYPE html>
+<html lang="en" data-look="a" data-page="scanner" data-mode="simple">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tidehunter Pro — redesign mockup (3 directions)</title>
+<style>
+/* ============================================================
+   TIDEHUNTER PRO — REDESIGN MOCKUP
+   Low-glare only. No #fff, no #000. Base #16181c, ink #a4a8ae.
+   Palette validated with dataviz/scripts/validate_palette.js (dark):
+     bull #4fc3a1 / bear #e0607f  -> normal-vision ΔE 28.8 PASS,
+     contrast PASS, deutan ΔE 7.8 (floor band) => call/put is NEVER
+     colour-alone anywhere in this design: always a word or ▲/▼ glyph.
+   ============================================================ */
+:root{
+  --bg:#16181c; --surface:#1a1d23; --surface2:#1e2126; --surface3:#22262d;
+  --line:#262a31; --line2:#2f343c;
+  --ink:#a4a8ae; --ink-hi:#c3c7cd; --ink-lo:#71767e; --ink-xlo:#565b63;
+  --gold:#c9a84c; --gold-soft:rgba(201,168,76,.13);
+  --bull:#4fc3a1; --bear:#e0607f; --info:#6aa5c9; --warn:#d9a441; --violet:#9b7ade;
+  --bull-soft:rgba(79,195,161,.12); --bear-soft:rgba(224,96,127,.12);
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+  --r:10px; --r-sm:6px;
+  --ease-out:cubic-bezier(.23,1,.32,1);
+  /* per-look density knobs — overridden below */
+  --row:30px; --fs:13px; --fs-num:12.5px; --gap:12px; --pad:14px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:400 var(--fs)/1.45 var(--sans);
+  -webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+button,input,select{font:inherit;color:inherit}
+button{background:none;border:0;cursor:pointer}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:var(--fs-num)}
+
+/* ---------- mock chrome (not part of the design) ---------- */
+.mockbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:8px 14px;background:#1d1a12;border-bottom:1px solid #3a3220;flex:0 0 auto}
+.mockwarn{font:600 11px/1 var(--mono);letter-spacing:.08em;color:#d9a441;
+  border:1px solid rgba(217,164,65,.4);background:rgba(217,164,65,.08);
+  padding:5px 9px;border-radius:999px}
+.mockgrp{display:flex;align-items:center;gap:6px}
+.mocklbl{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-xlo)}
+.mockbtn{padding:5px 11px;border-radius:var(--r-sm);border:1px solid var(--line2);
+  color:var(--ink-lo);font-size:12px;transition:color .15s,background .15s,border-color .15s}
+.mockbtn:hover{color:var(--ink-hi);background:var(--surface2)}
+.mockbtn[aria-pressed="true"]{color:#16181c;background:var(--gold);border-color:var(--gold);font-weight:600}
+.mocknote{margin-left:auto;font-size:11.5px;color:var(--ink-xlo)}
+
+/* ---------- app shell ---------- */
+.app{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;
+  background:radial-gradient(1100px 520px at 18% -12%,#1c1a14 0%,var(--bg) 62%),var(--bg)}
+
+/* ===== TOP BAR ===== */
+.top{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:18px;
+  padding:9px var(--pad);border-bottom:1px solid var(--line);flex:0 0 auto;
+  background:linear-gradient(180deg,#191712,var(--bg))}
+.brand{display:flex;align-items:center;gap:10px}
+.logo{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--gold),#8d7431);color:#16181c;font-weight:800;font-size:14px}
+.bname{font-weight:600;font-size:14.5px;letter-spacing:.02em;color:var(--ink-hi)}
+.bname em{font-style:normal;color:var(--gold);font-weight:600}
+.chip-live{font:500 10.5px/1 var(--mono);letter-spacing:.08em;padding:4px 8px;border-radius:999px;
+  color:var(--bull);background:var(--bull-soft);border:1px solid rgba(79,195,161,.28)}
+.pages{display:flex;gap:2px}
+.pbtn{padding:7px 13px;border-radius:var(--r-sm);color:var(--ink-lo);font-size:13px;
+  transition:color .15s var(--ease-out),background .15s var(--ease-out)}
+.pbtn:hover{color:var(--ink-hi);background:var(--surface)}
+.pbtn[aria-pressed="true"]{color:var(--ink-hi);background:var(--surface2);box-shadow:inset 0 -2px 0 var(--gold)}
+.pbtn:active{transform:scale(.98)}
+.tmeta{display:flex;align-items:center;gap:10px}
+.pill{padding:3px 9px;border-radius:999px;font:500 11.5px/1.5 var(--mono);
+  border:1px solid var(--line2);background:var(--surface2);color:var(--ink)}
+.pill.chop{color:var(--warn);border-color:rgba(217,164,65,.32);background:rgba(217,164,65,.08)}
+.clock{font-family:var(--mono);font-size:11.5px;color:var(--ink-lo)}
+.icb{width:28px;height:28px;border-radius:var(--r-sm);border:1px solid var(--line2);
+  color:var(--ink-lo);display:grid;place-items:center;font-size:13px;
+  transition:color .15s,border-color .15s,background .15s,transform .12s var(--ease-out)}
+.icb:hover{color:var(--ink-hi);background:var(--surface2)}
+.icb:active{transform:scale(.95)}
+.icb.on{color:var(--gold);border-color:rgba(201,168,76,.42);background:var(--gold-soft)}
+.popwrap{position:relative}
+.pop{position:absolute;right:0;top:calc(100% + 7px);z-index:40;width:224px;padding:11px;
+  background:var(--surface2);border:1px solid var(--line2);border-radius:var(--r);
+  box-shadow:0 14px 34px rgba(0,0,0,.45);transform-origin:top right;
+  animation:popin .16s var(--ease-out) both}
+@keyframes popin{from{opacity:0;transform:scale(.96) translateY(-4px)}}
+.pop h4{margin:0 0 9px;font:600 10.5px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-xlo)}
+.poprow{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:5px 0;font-size:12px;color:var(--ink)}
+.poprow input[type=number],.poprow select{width:70px;background:var(--surface);border:1px solid var(--line2);
+  border-radius:var(--r-sm);padding:3px 6px;font-family:var(--mono);font-size:11.5px}
+.poprow input[type=range]{width:96px;accent-color:var(--gold)}
+.popclear{width:100%;margin-top:8px;padding:6px;border-radius:var(--r-sm);
+  border:1px solid var(--line2);font-size:11.5px;color:var(--ink-lo)}
+.popclear:hover{color:var(--ink-hi);background:var(--surface3)}
+
+/* ===== generic surfaces ===== */
+.body{flex:1 1 auto;min-height:0;overflow:auto;padding:var(--gap) var(--pad)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:9px 12px;border-bottom:1px solid var(--line);
+  font:600 11px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-lo)}
+.card-h .sub{font:400 11px/1 var(--mono);letter-spacing:0;text-transform:none;color:var(--ink-xlo)}
+.muted{color:var(--ink-lo)}.xmuted{color:var(--ink-xlo)}
+.up{color:var(--bull)}.dn{color:var(--bear)}
+.foot{flex:0 0 auto;display:flex;justify-content:space-between;gap:16px;
+  padding:7px var(--pad);border-top:1px solid var(--line);font-size:11px;color:var(--ink-xlo)}
+
+/* ===== KPI ribbon ===== */
+.kpis{display:flex;gap:0;align-items:stretch;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.kpi{flex:1 1 0;min-width:0;padding:8px 12px;border-right:1px solid var(--line)}
+.kpi:last-child{border-right:0}
+.kpi .k{font:500 9.5px/1.4 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-xlo);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px;color:var(--ink-hi);margin-top:3px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi .v.g{color:var(--bull)}.kpi .v.r{color:var(--bear)}.kpi .v.y{color:var(--warn)}.kpi .v.b{color:var(--info)}
+.kpi.click{cursor:pointer}.kpi.click:hover{background:var(--surface2)}
+.pulse{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--bull);
+  margin-right:6px;vertical-align:middle;box-shadow:0 0 0 0 rgba(79,195,161,.5);
+  animation:beat 2.4s var(--ease-out) infinite}
+@keyframes beat{70%{box-shadow:0 0 0 7px rgba(79,195,161,0)}100%{box-shadow:0 0 0 0 rgba(79,195,161,0)}}
+.advtoggle{align-self:center;margin-left:8px;padding:6px 11px;border-radius:var(--r-sm);
+  border:1px solid var(--line2);font-size:11.5px;color:var(--ink-lo);white-space:nowrap}
+.advtoggle:hover{color:var(--ink-hi);background:var(--surface2)}
+
+/* ===== fire banner ===== */
+.fire{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:var(--r);
+  border:1px solid rgba(224,96,127,.34);background:linear-gradient(90deg,rgba(224,96,127,.11),rgba(224,96,127,.03));
+  cursor:pointer;transition:border-color .15s,background .15s}
+.fire:hover{border-color:rgba(224,96,127,.5)}
+.fire-ring{width:8px;height:8px;border-radius:50%;background:var(--bear);flex:0 0 auto;
+  box-shadow:0 0 0 0 rgba(224,96,127,.55);animation:beat 1.9s var(--ease-out) infinite}
+.fire-t{font-family:var(--mono);font-size:12.5px;color:var(--ink-hi)}
+.fire-why{font-size:12px;color:var(--ink);flex:1 1 auto;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fire-age{font-family:var(--mono);font-size:11px;color:var(--ink-xlo)}
+.fire-x{width:22px;height:22px;border-radius:5px;color:var(--ink-xlo);font-size:11px}
+.fire-x:hover{color:var(--ink-hi);background:var(--surface3)}
+.rule{font:600 9.5px/1 var(--mono);letter-spacing:.07em;padding:4px 6px;border-radius:4px;
+  border:1px solid var(--line2);color:var(--ink-lo);background:var(--surface2);white-space:nowrap}
+.rule.r-oiconf{color:var(--bull);border-color:rgba(79,195,161,.32);background:var(--bull-soft)}
+.rule.r-whale{color:var(--violet);border-color:rgba(155,122,222,.32);background:rgba(155,122,222,.1)}
+.rule.r-follow{color:var(--info);border-color:rgba(106,165,201,.32);background:rgba(106,165,201,.1)}
+.rule.r-sigma{color:var(--warn);border-color:rgba(217,164,65,.32);background:rgba(217,164,65,.1)}
+.rule.r-score{color:var(--gold);border-color:rgba(201,168,76,.32);background:var(--gold-soft)}
+.rule.r-0dte{color:var(--bear);border-color:rgba(224,96,127,.32);background:var(--bear-soft)}
+.rule.r-source{color:var(--ink-lo)}
+
+/* ===== chips: premium flow + following ===== */
+.strip{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:8px 10px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.strip-l{font:600 9.5px/1 var(--sans);letter-spacing:.13em;text-transform:uppercase;color:var(--ink-xlo);
+  padding-right:4px;white-space:nowrap}
+.rollchip{display:grid;grid-template-columns:auto;gap:2px;padding:6px 9px;border-radius:var(--r-sm);
+  border:1px solid var(--line2);background:var(--surface2);min-width:96px;text-align:left;
+  transition:border-color .15s,background .15s,transform .12s var(--ease-out)}
+.rollchip:hover{border-color:var(--line2);background:var(--surface3)}
+.rollchip:active{transform:scale(.985)}
+.rollchip.on{border-color:rgba(201,168,76,.5);background:var(--gold-soft)}
+.rc-t{font:600 12px/1.2 var(--mono);color:var(--ink-hi)}
+.rc-t sup{font-size:8.5px;margin-left:3px;font-weight:500}
+.gp{color:var(--bull)}.gn{color:var(--bear)}
+.streak{font-size:9.5px;color:var(--warn);margin-left:4px}
+.rc-p{font:400 10.5px/1.2 var(--mono);color:var(--ink-lo)}
+.pcr.bull{color:var(--bull)}.pcr.bear{color:var(--bear)}
+.sigma{color:var(--warn)}
+.spark{display:flex;align-items:flex-end;gap:1.5px;height:13px;margin-top:2px}
+.spark i{width:3px;background:var(--line2);border-radius:1px 1px 0 0;display:block}
+.spark i.t{background:var(--gold)}
+.rollbar{display:block;height:2px;border-radius:1px;background:var(--bear);margin-top:4px;overflow:hidden}
+.rollbar i{display:block;height:100%;background:var(--bull)}
+.folchip{display:flex;align-items:baseline;gap:6px;padding:5px 9px;border-radius:999px;
+  border:1px solid var(--line2);background:var(--surface2);font-family:var(--mono);font-size:11.5px}
+.folchip:hover{background:var(--surface3)}
+.folchip .n{color:var(--info);font-weight:600}
+.folchip .x{color:var(--ink-xlo);font-size:10.5px}
+
+/* ===== advanced control row ===== */
+.ctrls{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:8px 10px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.ctrls select,.ctrls input{background:var(--surface2);border:1px solid var(--line2);
+  border-radius:var(--r-sm);padding:5px 8px;font-family:var(--mono);font-size:11.5px;color:var(--ink)}
+.ctrls input::placeholder{color:var(--ink-xlo)}
+.w80{width:88px}.w110{width:116px}.w170{width:178px}
+.preset{padding:5px 10px;border-radius:var(--r-sm);border:1px solid var(--line2);
+  font-size:11.5px;color:var(--ink-lo);transition:color .15s,background .15s,border-color .15s}
+.preset:hover{color:var(--ink-hi);background:var(--surface3)}
+.preset:active{transform:scale(.98)}
+.preset.on{color:var(--gold);border-color:rgba(201,168,76,.45);background:var(--gold-soft)}
+.uonly{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-lo)}
+.uonly input{accent-color:var(--gold)}
+.note{font-size:11px;color:var(--ink-xlo);flex:1 1 220px;min-width:180px}
+
+/* ===== away digest ===== */
+.away{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:8px 11px;border-radius:var(--r);
+  border:1px solid var(--line2);background:var(--surface2)}
+.away-t{font-family:var(--mono);font-size:11.5px;color:var(--ink)}
+.sumtag{font:600 9.5px/1 var(--mono);padding:3px 6px;border-radius:4px;
+  border:1px solid var(--line2);color:var(--ink-lo);margin-right:4px}
+.awaychip{font-family:var(--mono);font-size:11px;padding:3px 7px;border-radius:4px;
+  border:1px solid var(--line2);color:var(--ink);margin-right:4px}
+.awaychip:hover{background:var(--surface3)}
+.away-x{margin-left:auto;color:var(--ink-xlo);font-size:11px;padding:2px 6px;border-radius:4px}
+
+/* ===== alerts ===== */
+.v3strip{display:flex;gap:6px;flex-wrap:wrap;padding:9px 11px;border-bottom:1px solid var(--line)}
+.v3cell{min-width:78px;padding:6px 8px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--surface2)}
+.v3cell.hot{border-color:rgba(201,168,76,.34);background:var(--gold-soft)}
+.v3lbl{display:block;font:500 9.5px/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-xlo)}
+.v3val{display:block;font-family:var(--mono);font-size:14px;color:var(--ink-hi);margin-top:1px}
+.v3bar{display:block;height:2px;background:var(--line2);border-radius:1px;margin-top:4px;overflow:hidden}
+.v3bar i{display:block;height:100%;background:var(--gold)}
+.v3n{display:block;font-family:var(--mono);font-size:9.5px;color:var(--ink-xlo);margin-top:3px}
+.alerth{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:8px 11px;border-bottom:1px solid var(--line)}
+.alerth-t{font:600 11px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-lo)}
+.rulechip{padding:4px 8px;border-radius:999px;border:1px solid var(--line2);font-size:11px;color:var(--ink-xlo)}
+.rulechip:hover{color:var(--ink);background:var(--surface3)}
+.rulechip.on{color:var(--gold);border-color:rgba(201,168,76,.42);background:var(--gold-soft)}
+.alertclear{margin-left:auto;padding:4px 9px;border-radius:var(--r-sm);border:1px solid var(--line2);
+  font-size:11px;color:var(--ink-lo)}
+.alertclear:hover{color:var(--ink-hi);background:var(--surface3)}
+table.tape{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px}
+table.tape td{padding:5px 8px;border-bottom:1px solid var(--line);color:var(--ink);white-space:nowrap}
+table.tape tr:hover td{background:var(--surface2)}
+table.tape tr:last-child td{border-bottom:0}
+.srcdot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--bull)}
+.srcdot.fb{background:var(--warn)}
+.tk{font-weight:600;color:var(--ink-hi)}
+.why{color:var(--ink-xlo)}
+
+/* ===== conviction cards ===== */
+.sigh{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid var(--line)}
+.sigh-t{font:600 11px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-lo)}
+.sigh-s{font-size:11px;color:var(--ink-xlo)}
+.sigcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:9px;padding:11px}
+.sigcard{display:flex;gap:11px;padding:10px 11px;border-radius:var(--r);
+  border:1px solid var(--line);background:var(--surface2);text-align:left;align-items:flex-start;
+  transition:border-color .15s var(--ease-out),transform .14s var(--ease-out),background .15s}
+.sigcard:hover{border-color:var(--line2);background:var(--surface3);transform:translateY(-1px)}
+.sigcard:active{transform:scale(.99)}
+.sigcard.hot{border-color:rgba(201,168,76,.35)}
+.ring{--pct:70;position:relative;width:44px;height:44px;flex:0 0 auto;border-radius:50%;
+  background:conic-gradient(var(--gold) calc(var(--pct)*1%),var(--line) 0);display:grid;place-items:center}
+.ring::after{content:"";position:absolute;inset:4px;border-radius:50%;background:var(--surface2)}
+.ring span{position:relative;z-index:1;font-family:var(--mono);font-size:13px;color:var(--ink-hi)}
+.sig-body{min-width:0;flex:1 1 auto}
+.sig-top{display:flex;align-items:center;justify-content:space-between;gap:7px}
+.sig-tk{font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--ink-hi)}
+.tier{font:600 9px/1 var(--mono);letter-spacing:.07em;padding:3px 5px;border-radius:4px;
+  border:1px solid var(--line2);color:var(--ink-lo)}
+.tier.t-a{color:var(--gold);border-color:rgba(201,168,76,.4);background:var(--gold-soft)}
+.sig-sub{font-family:var(--mono);font-size:11px;color:var(--ink-lo);margin-top:3px}
+.sig-lv{display:flex;gap:9px;margin-top:6px;font-family:var(--mono);font-size:10.5px;color:var(--ink-xlo)}
+
+/* ===== scan table ===== */
+.tablecard{overflow:hidden}
+.scroll{overflow:auto;max-height:none}
+table.stab{width:100%;border-collapse:collapse}
+table.stab th{position:sticky;top:0;z-index:2;background:var(--surface2);
+  padding:7px 9px;text-align:right;white-space:nowrap;cursor:pointer;
+  font:600 9.5px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-xlo);
+  border-bottom:1px solid var(--line2)}
+table.stab th.l{text-align:left}
+table.stab th:hover{color:var(--ink)}
+table.stab th.on{color:var(--gold)}
+table.stab td{padding:0 9px;height:var(--row);text-align:right;white-space:nowrap;
+  border-bottom:1px solid var(--line);font-family:var(--mono);
+  font-variant-numeric:tabular-nums;font-size:var(--fs-num);color:var(--ink)}
+table.stab td.l{text-align:left}
+table.stab tr:hover td{background:var(--surface2)}
+table.stab tr.top td{background:rgba(201,168,76,.07)}
+table.stab tr.top td:first-child{box-shadow:inset 2px 0 0 var(--gold)}
+table.stab tr.kb td{background:var(--surface3);box-shadow:inset 0 0 0 1px var(--line2)}
+.newdot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--gold);margin-right:5px}
+.sc{display:inline-block;min-width:26px;padding:2px 5px;border-radius:4px;font-size:11.5px;
+  border:1px solid var(--line2);color:var(--ink-lo);background:var(--surface2)}
+.sc.a{color:var(--gold);border-color:rgba(201,168,76,.42);background:var(--gold-soft)}
+.sc.b{color:var(--info);border-color:rgba(106,165,201,.3);background:rgba(106,165,201,.08)}
+.side{font-weight:600}
+.side.c{color:var(--bull)}.side.p{color:var(--bear)}
+.flt{font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid var(--line2);color:var(--ink-lo)}
+.arch{font-size:9.5px;margin-left:4px;padding:2px 4px;border-radius:3px;
+  border:1px solid rgba(155,122,222,.3);color:var(--violet)}
+.arch.a-fresh{border-color:rgba(79,195,161,.3);color:var(--bull)}
+.arch.a-lotto{border-color:rgba(224,96,127,.3);color:var(--bear)}
+.oiup{color:var(--bull)}.oidn{color:var(--bear)}
+.trd{display:inline-flex;align-items:flex-end;gap:1.5px;height:12px}
+.trd i{width:3px;background:var(--line2);border-radius:1px}
+.trd i.now{background:var(--gold)}
+.lean{font-size:10.5px}
+.kbhint{padding:6px 11px;border-top:1px solid var(--line);font-family:var(--mono);
+  font-size:10.5px;color:var(--ink-xlo);display:flex;gap:14px;flex-wrap:wrap}
+kbd{font-family:var(--mono);font-size:10px;padding:1px 4px;border-radius:3px;
+  border:1px solid var(--line2);background:var(--surface2);color:var(--ink-lo)}
+
+/* ===== order flow page ===== */
+.flowgrid{display:grid;gap:var(--gap);grid-template-columns:250px 1fr 330px;align-items:start}
+.col{display:flex;flex-direction:column;gap:var(--gap);min-width:0}
+.wl{list-style:none;margin:0;padding:6px}
+.wl li{display:flex;justify-content:space-between;align-items:center;padding:6px 8px;
+  border-radius:var(--r-sm);font-family:var(--mono);font-size:12.5px;cursor:pointer;
+  transition:background .12s}
+.wl li:hover{background:var(--surface2)}
+.wl li.sel{background:var(--gold-soft);box-shadow:inset 2px 0 0 var(--gold);color:var(--ink-hi)}
+.chips{display:flex;flex-wrap:wrap;gap:5px;padding:9px 11px}
+.chip{padding:4px 9px;border-radius:999px;border:1px solid var(--line2);font-size:11.5px;color:var(--ink-lo);
+  transition:color .15s,background .15s,border-color .15s}
+.chip:hover{color:var(--ink-hi);background:var(--surface3)}
+.chip.on{color:var(--gold);border-color:rgba(201,168,76,.45);background:var(--gold-soft)}
+.chip.sm{font-size:11px;padding:3px 8px}
+.subh{padding:8px 11px 0;font:600 9.5px/1 var(--sans);letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-xlo)}
+.legend{display:grid;gap:6px;padding:10px 11px;font-size:11.5px;color:var(--ink-lo)}
+.legend span{display:flex;align-items:center;gap:7px}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.dot.call{background:var(--bull)}.dot.put{background:var(--bear)}
+.dot.sweep{background:var(--warn)}.dot.block{background:var(--violet)}
+.livedot{width:6px;height:6px;border-radius:50%;background:var(--bull);display:inline-block;margin-right:5px;
+  animation:beat 2.4s var(--ease-out) infinite}
+.subtabs{display:flex;gap:2px;padding:8px 10px 0}
+.subtab{padding:6px 11px;border-radius:var(--r-sm) var(--r-sm) 0 0;font-size:12px;color:var(--ink-lo)}
+.subtab:hover{color:var(--ink-hi);background:var(--surface2)}
+.subtab.on{color:var(--ink-hi);background:var(--surface2);box-shadow:inset 0 -2px 0 var(--gold)}
+.chart{padding:12px}
+.selhead{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid var(--line)}
+.selhead .k{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--ink-hi)}
+.badge{font:600 9.5px/1 var(--mono);letter-spacing:.07em;padding:4px 6px;border-radius:4px}
+.badge.call{color:var(--bull);background:var(--bull-soft);border:1px solid rgba(79,195,161,.3)}
+.gauges{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px}
+.gauge{display:grid;place-items:center;gap:6px}
+.gaugelbl{font:500 9.5px/1 var(--sans);letter-spacing:.11em;text-transform:uppercase;color:var(--ink-xlo)}
+.rationale{padding:0 12px 12px;font-size:12px;color:var(--ink);line-height:1.65}
+.rationale ul{margin:7px 0 0;padding-left:16px}
+.rationale li{margin-bottom:4px}
+.tag{font:600 9px/1 var(--mono);letter-spacing:.07em;padding:3px 5px;border-radius:4px;margin-right:6px;
+  border:1px solid var(--line2);color:var(--ink-lo)}
+.tag.tgt{color:var(--info);border-color:rgba(106,165,201,.32)}
+.tag.warn{color:var(--warn);border-color:rgba(217,164,65,.32)}
+
+/* ===== dealer positioning page ===== */
+.gammagrid{display:grid;grid-template-columns:1fr 1fr;gap:var(--gap)}
+.bars{display:flex;align-items:flex-end;gap:4px;height:190px;padding:14px 12px 0}
+.bars .b{flex:1;border-radius:2px 2px 0 0;background:var(--bull);position:relative}
+.bars .b.neg{background:var(--bear)}
+.axis{display:flex;gap:4px;padding:6px 12px 12px;font-family:var(--mono);font-size:9.5px;color:var(--ink-xlo)}
+.axis span{flex:1;text-align:center}
+.notes{padding:11px 12px;font-size:12px;color:var(--ink-lo);line-height:1.6;border-top:1px solid var(--line)}
+.notes b{color:var(--ink-hi);font-weight:600}
+
+/* ============================================================
+   LOOK A — QUIET DESK  (calm, one thing at a time)
+   ============================================================ */
+[data-look="a"]{--row:30px;--fs:13px;--fs-num:12.5px;--gap:12px;--pad:16px}
+[data-look="a"] .stack{display:flex;flex-direction:column;gap:var(--gap)}
+[data-look="a"] .ctxtabs{display:flex;gap:2px;padding:8px 10px 0;border-bottom:1px solid var(--line)}
+[data-look="a"] .ctxtab{padding:6px 12px;border-radius:var(--r-sm) var(--r-sm) 0 0;font-size:12px;color:var(--ink-lo)}
+[data-look="a"] .ctxtab.on{color:var(--ink-hi);background:var(--surface2);box-shadow:inset 0 -2px 0 var(--gold)}
+[data-look="a"] .kpi:nth-child(n+5){display:none}   /* simple mode = 4 tiles */
+[data-look="a"][data-mode="advanced"] .kpi{display:block}
+
+/* ============================================================
+   LOOK B — TAPE  (dense, two-column, terminal)
+   ============================================================ */
+[data-look="b"]{--row:23px;--fs:12.5px;--fs-num:11.5px;--gap:9px;--pad:11px;--r:7px;--r-sm:5px}
+[data-look="b"] .tapegrid{display:grid;grid-template-columns:1fr 335px;gap:var(--gap);align-items:start}
+[data-look="b"] .kpi{padding:6px 10px}
+[data-look="b"] .kpi .v{font-size:12px}
+[data-look="b"] table.stab td{padding:0 7px}
+[data-look="b"] .sigcards{grid-template-columns:1fr;gap:6px;padding:8px}
+[data-look="b"] .sigcard{padding:7px 9px;gap:9px}
+[data-look="b"] .ring{width:34px;height:34px}
+[data-look="b"] .ring span{font-size:11px}
+[data-look="b"] .rollchip{min-width:84px;padding:5px 7px}
+[data-look="b"] .card-h{padding:6px 10px;font-size:10px}
+[data-look="b"] .flowgrid{grid-template-columns:210px 1fr 300px}
+
+/* ============================================================
+   LOOK C — SIGNAL FIRST  (hero trade, editorial, premium)
+   ============================================================ */
+[data-look="c"]{--row:34px;--fs:13.5px;--fs-num:13px;--gap:14px;--pad:20px;--r:14px;--r-sm:8px}
+[data-look="c"] .hero{display:grid;grid-template-columns:auto 1fr auto;gap:20px;align-items:center;
+  padding:20px 22px;border-radius:var(--r);border:1px solid var(--line2);
+  background:linear-gradient(135deg,rgba(201,168,76,.09),var(--surface) 46%)}
+[data-look="c"] .hero .ring{width:82px;height:82px}
+[data-look="c"] .hero .ring::after{inset:7px;background:var(--surface)}
+[data-look="c"] .hero .ring span{font-size:23px;color:var(--gold)}
+[data-look="c"] .hero-t{font-family:var(--mono);font-size:23px;font-weight:600;color:var(--ink-hi);letter-spacing:-.01em}
+[data-look="c"] .hero-why{font-size:13.5px;color:var(--ink);margin-top:6px;max-width:62ch}
+[data-look="c"] .hero-lv{display:flex;gap:22px;margin-top:12px}
+[data-look="c"] .hero-lv div{display:grid;gap:2px}
+[data-look="c"] .hero-lv .lbl{font:500 9.5px/1 var(--sans);letter-spacing:.13em;text-transform:uppercase;color:var(--ink-xlo)}
+[data-look="c"] .hero-lv .val{font-family:var(--mono);font-size:16px;color:var(--ink-hi)}
+[data-look="c"] .filmstrip{display:flex;gap:10px;overflow:auto;padding:2px}
+[data-look="c"] .filmstrip .sigcard{min-width:216px;flex:0 0 auto}
+[data-look="c"] .drawer{position:relative}
+[data-look="c"] .kpis{background:transparent;border:0;gap:0}
+[data-look="c"] .kpi{border-right:1px solid var(--line);background:var(--surface);}
+[data-look="c"] .kpi:first-child{border-radius:var(--r) 0 0 var(--r);border-left:1px solid var(--line)}
+[data-look="c"] .kpi:last-child{border-radius:0 var(--r) var(--r) 0}
+[data-look="c"] .kpi{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+[data-look="c"] .flowgrid{grid-template-columns:1fr 380px}
+[data-look="c"] .flowgrid .col.rail{grid-column:1;grid-row:1}
+[data-look="c"] table.stab th{padding:9px 11px}
+
+/* look/page visibility */
+.look,.page{display:none}
+[data-look="a"] .look.a,[data-look="b"] .look.b,[data-look="c"] .look.c{display:block}
+[data-page="scanner"] .page.scanner,[data-page="flow"] .page.flow,[data-page="gamma"] .page.gamma{display:block}
+.stack{display:flex;flex-direction:column;gap:var(--gap)}
+[data-mode="simple"] .advonly{display:none !important}
+
+/* nothing-lost sheet */
+.nlsheet{display:none;padding:var(--gap) var(--pad)}
+[data-page="nl"] .nlsheet{display:block}
+[data-page="nl"] .page{display:none !important}
+.nl h3{margin:18px 0 8px;font:600 12px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--gold)}
+.nl ul{margin:0;padding-left:18px;columns:2;column-gap:34px}
+.nl li{font-size:12.5px;color:var(--ink);margin-bottom:4px;break-inside:avoid}
+.nl p{font-size:12.5px;color:var(--ink-lo);max-width:92ch}
+</style>
+</head>
+<body>
+
+<!-- ============ MOCK CHROME (not part of the design) ============ -->
+<div class="mockbar">
+  <span class="mockwarn">MADE-UP SAMPLE — NOT REAL DATA</span>
+  <span class="mockgrp"><span class="mocklbl">Look</span>
+    <button class="mockbtn" data-set-look="a" aria-pressed="true">A · Quiet Desk</button>
+    <button class="mockbtn" data-set-look="b" aria-pressed="false">B · Tape</button>
+    <button class="mockbtn" data-set-look="c" aria-pressed="false">C · Signal First</button>
+  </span>
+  <span class="mockgrp"><span class="mocklbl">Page</span>
+    <button class="mockbtn" data-set-page="scanner" aria-pressed="true">Scanner</button>
+    <button class="mockbtn" data-set-page="flow" aria-pressed="false">Order Flow</button>
+    <button class="mockbtn" data-set-page="gamma" aria-pressed="false">Dealer Positioning</button>
+    <button class="mockbtn" data-set-page="nl" aria-pressed="false">Nothing-lost list</button>
+  </span>
+  <span class="mocknote">Every number below is invented. Nothing here talks to the app.</span>
+</div>
+
+<div class="app">
+
+<!-- ============ TOP BAR (shared, themed per look) ============ -->
+<div class="top">
+  <div class="brand">
+    <span class="logo">◢</span>
+    <span class="bname">Tidehunter <em>Pro</em></span>
+    <span class="chip-live">LIVE · CVFORGE</span>
+  </div>
+  <div class="pages">
+    <button class="pbtn" data-set-page="flow">Smart Order Flow</button>
+    <button class="pbtn" data-set-page="gamma">Dealer Positioning</button>
+    <button class="pbtn" data-set-page="scanner" aria-pressed="true">Scanner</button>
+  </div>
+  <div class="tmeta">
+    <span class="pill chop">Chop (warming)</span>
+    <span class="clock">14:32:07</span>
+    <button class="icb" title="Refresh now">↻</button>
+    <span class="popwrap">
+      <button class="icb on" data-pop="qf" title="Quick filters">⧩</button>
+      <div class="pop" id="pop-qf" hidden>
+        <h4>Quick filters</h4>
+        <label class="poprow"><span>Min score</span><input type="range" min="0" max="95" step="5" value="70"><b class="num">70</b></label>
+        <label class="poprow"><span>DTE min</span><input type="number" value="0"></label>
+        <label class="poprow"><span>DTE max</span><input type="number" value="45"></label>
+        <button class="popclear">Clear</button>
+      </div>
+    </span>
+    <span class="popwrap">
+      <button class="icb" data-pop="set" title="Settings">⚙</button>
+      <div class="pop" id="pop-set" hidden>
+        <h4>Display</h4>
+        <label class="poprow"><span>Poll interval</span>
+          <select><option>5s</option><option>15s</option><option>30s</option><option selected>60s</option><option>Off</option></select>
+        </label>
+      </div>
+    </span>
+  </div>
+</div>
+
+<div class="body">
+
+<!-- ==================================================================
+     LOOK A — QUIET DESK
+     One thing at a time. Command row, then the one alert that matters,
+     then a single context rail (tabs swap Premium flow / Following /
+     Alert tape / Calibration), then the table gets the rest of the page.
+     ================================================================== -->
+<div class="look a">
+
+  <!-- ---------- SCANNER ---------- -->
+  <div class="page scanner stack">
+
+    <div style="display:flex;gap:var(--gap);align-items:stretch">
+      <div class="kpis" style="flex:1 1 auto">
+        <div class="kpi"><div class="k">Source</div><div class="v g">LIVE · mkt-wide · 712</div></div>
+        <div class="kpi click"><div class="k">⚡ Alerts</div><div class="v r">3 · log 41</div></div>
+        <div class="kpi"><div class="k">Updated</div><div class="v">14:31:52 · data 38s</div></div>
+        <div class="kpi"><div class="k">Heartbeat</div><div class="v g"><span class="pulse"></span>Fresh · 14:31:52</div></div>
+        <div class="kpi advonly"><div class="k">Contracts</div><div class="v b">184 / 1 204</div></div>
+        <div class="kpi advonly"><div class="k">Notional Σ</div><div class="v">$4.81B</div></div>
+        <div class="kpi advonly"><div class="k">Call/Put Vol</div><div class="v g">63% / 37%</div></div>
+        <div class="kpi advonly"><div class="k">Unusual (≥2×)</div><div class="v y">47</div></div>
+      </div>
+      <button class="advtoggle" data-toggle-mode>⚙ Advanced</button>
+    </div>
+
+    <div class="fire">
+      <span class="fire-ring"></span>
+      <span class="rule r-oiconf">OICONF</span>
+      <span class="fire-t">NVDA · <span class="side c">CALL</span> 182.5 <span class="xmuted">09-19</span></span>
+      <span class="fire-why">Open interest grew +41% overnight — yesterday's sweep was held, not churned · ~$18.4M</span>
+      <span class="fire-age">2m</span>
+      <button class="fire-x" title="Acknowledge">✕</button>
+    </div>
+
+    <div class="card">
+      <div class="ctxtabs">
+        <button class="ctxtab on" data-ctx="prem">Premium flow</button>
+        <button class="ctxtab" data-ctx="follow">Following</button>
+        <button class="ctxtab" data-ctx="tape">Alert tape · 41</button>
+        <button class="ctxtab" data-ctx="cal">Calibration</button>
+        <span style="margin-left:auto;display:flex;align-items:center;gap:6px;padding:0 8px 6px">
+          <button class="rulechip on">🔔 Notify</button>
+          <button class="rulechip advonly on">🎯 UNIV</button>
+          <button class="rulechip advonly on">ΔOI CONF</button>
+          <button class="rulechip advonly on">FOLLOW 2d+</button>
+          <button class="rulechip advonly on">SIGMA ≥4σ</button>
+          <button class="rulechip advonly on">SCORE≥85</button>
+          <button class="rulechip advonly on">WHALE ≥$10M~</button>
+          <button class="rulechip advonly on">0DTE HOT</button>
+          <button class="rulechip advonly">⇊ Newest</button>
+          <button class="alertclear advonly">⧉ Copy</button>
+          <button class="alertclear">Clear</button>
+        </span>
+      </div>
+
+      <div class="ctxpane" data-pane="prem">
+        <div class="strip" style="border:0;background:transparent">
+          <span class="strip-l">Prem~ flow</span>
+          <button class="rollchip on"><span class="rc-t">NVDA <sup class="gn">γ−</sup><span class="streak">🔥4d</span></span>
+            <span class="rc-p">~$182.4M <span class="pcr bull">PCR 0.41</span> <span class="sigma">4.2σ</span></span>
+            <span class="spark"><i style="height:38%"></i><i style="height:44%"></i><i style="height:31%"></i><i style="height:58%"></i><i style="height:52%"></i><i style="height:71%"></i><i style="height:66%"></i><i style="height:84%"></i><i style="height:78%"></i><i class="t" style="height:100%"></i></span>
+            <span class="rollbar"><i style="width:71%"></i></span></button>
+          <button class="rollchip"><span class="rc-t">SPY <sup class="gp">γ+</sup></span>
+            <span class="rc-p">~$96.1M <span class="pcr bear">PCR 1.62</span></span>
+            <span class="spark"><i style="height:62%"></i><i style="height:58%"></i><i style="height:71%"></i><i style="height:49%"></i><i style="height:55%"></i><i style="height:62%"></i><i style="height:44%"></i><i style="height:51%"></i><i style="height:58%"></i><i class="t" style="height:66%"></i></span>
+            <span class="rollbar"><i style="width:38%"></i></span></button>
+          <button class="rollchip"><span class="rc-t">TSLA <sup class="gn">γ−</sup><span class="streak">🔥2d</span></span>
+            <span class="rc-p">~$74.8M <span class="pcr">PCR 0.88</span></span>
+            <span class="spark"><i style="height:31%"></i><i style="height:38%"></i><i style="height:44%"></i><i style="height:41%"></i><i style="height:58%"></i><i style="height:66%"></i><i style="height:62%"></i><i style="height:71%"></i><i style="height:78%"></i><i class="t" style="height:88%"></i></span>
+            <span class="rollbar"><i style="width:59%"></i></span></button>
+          <button class="rollchip"><span class="rc-t">AMD</span>
+            <span class="rc-p">~$41.2M <span class="pcr bull">PCR 0.47</span> <span class="sigma">2.6σ</span></span>
+            <span class="spark"><i style="height:22%"></i><i style="height:28%"></i><i style="height:31%"></i><i style="height:38%"></i><i style="height:44%"></i><i style="height:52%"></i><i style="height:49%"></i><i style="height:62%"></i><i style="height:71%"></i><i class="t" style="height:92%"></i></span>
+            <span class="rollbar"><i style="width:68%"></i></span></button>
+          <button class="rollchip"><span class="rc-t">QQQ <sup class="gp">γ+</sup></span>
+            <span class="rc-p">~$33.9M <span class="pcr">PCR 1.09</span></span>
+            <span class="spark"><i style="height:51%"></i><i style="height:48%"></i><i style="height:55%"></i><i style="height:44%"></i><i style="height:49%"></i><i style="height:58%"></i><i style="height:52%"></i><i style="height:47%"></i><i style="height:55%"></i><i class="t" style="height:61%"></i></span>
+            <span class="rollbar"><i style="width:44%"></i></span></button>
+        </div>
+      </div>
+
+      <div class="ctxpane" data-pane="follow" hidden>
+        <div class="strip" style="border:0;background:transparent">
+          <span class="strip-l">📈 Following</span>
+          <button class="folchip"><span class="tk">NVDA</span><span class="n">4d</span><span class="x">2.8×</span></button>
+          <button class="folchip"><span class="tk">TSLA</span><span class="n">2d</span><span class="x">1.9×</span></button>
+          <button class="folchip"><span class="tk">PLTR</span><span class="n">3d</span><span class="x">2.2×</span></button>
+          <button class="folchip"><span class="tk">COIN</span><span class="n">2d</span><span class="x">1.7×</span></button>
+          <span class="note">persistent positioning · 4 tickers</span>
+        </div>
+      </div>
+
+      <div class="ctxpane" data-pane="tape" hidden>
+        <table class="tape">
+          <tr><td><span class="srcdot"></span></td><td class="xmuted">14:29:41</td><td><span class="rule r-oiconf">OICONF</span></td>
+            <td class="l"><span class="tk">NVDA</span> <span class="side c">CALL</span> 182.5 <span class="xmuted">09-19</span> <span class="why">· ΔOI +41% held</span></td>
+            <td>94</td><td>~$18.4M</td><td class="xmuted">2m</td></tr>
+          <tr><td><span class="srcdot"></span></td><td class="xmuted">14:22:03</td><td><span class="rule r-whale">WHALE</span></td>
+            <td class="l"><span class="tk">SPY</span> <span class="side p">PUT</span> 642 <span class="xmuted">09-06</span> <span class="why">· ~$12.1M single print</span></td>
+            <td>91</td><td>~$12.1M</td><td class="xmuted">10m</td></tr>
+          <tr><td><span class="srcdot"></span></td><td class="xmuted">14:18:55</td><td><span class="rule r-sigma">SIGMA</span></td>
+            <td class="l" colspan="4">AMD volume 4.6σ above its 14-day baseline — 612k contracts vs 118k median</td></tr>
+          <tr><td><span class="srcdot fb"></span></td><td class="xmuted">14:05:12</td><td><span class="rule r-follow">FOLLOW</span></td>
+            <td class="l" colspan="4">NVDA elevated volume 4 straight days (≥2.8× its 214k daily median)</td></tr>
+          <tr><td><span class="srcdot"></span></td><td class="xmuted">13:58:30</td><td><span class="rule r-0dte">0DTE</span></td>
+            <td class="l"><span class="tk">QQQ</span> <span class="side c">CALL</span> 588 <span class="xmuted">09-05</span> <span class="why">· 18× vol/OI, 0 DTE</span></td>
+            <td>88</td><td>~$3.4M</td><td class="xmuted">34m</td></tr>
+          <tr><td><span class="srcdot"></span></td><td class="xmuted">13:40:02</td><td><span class="rule r-source">SOURCE</span></td>
+            <td class="l" colspan="4">Recovered to market-wide coverage (712 symbols)</td></tr>
+        </table>
+      </div>
+
+      <div class="ctxpane" data-pane="cal" hidden>
+        <div class="v3strip" style="border:0">
+          <div class="v3cell"><span class="v3lbl">0–24</span><span class="v3val">31%</span><span class="v3bar"><i style="width:31%"></i></span><span class="v3n">96/141</span></div>
+          <div class="v3cell"><span class="v3lbl">25–49</span><span class="v3val">38%</span><span class="v3bar"><i style="width:38%"></i></span><span class="v3n">122/168</span></div>
+          <div class="v3cell"><span class="v3lbl">50–74</span><span class="v3val">51%</span><span class="v3bar"><i style="width:51%"></i></span><span class="v3n">88/109</span></div>
+          <div class="v3cell hot"><span class="v3lbl">75+</span><span class="v3val">64%</span><span class="v3bar"><i style="width:64%"></i></span><span class="v3n">41/52</span></div>
+          <div class="v3cell hot"><span class="v3lbl">📓 Sweep-follow</span><span class="v3val">58%</span><span class="v3n">14W/10L</span></div>
+          <div class="v3cell"><span class="v3lbl">📓 Gamma-flip</span><span class="v3val">44%</span><span class="v3n">8W/10L</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="away">
+      <span class="away-t">☾ While you were away · 3h 12m</span>
+      <span><span class="sumtag">OICONF 2</span><span class="sumtag">FOLLOW 3</span><span class="sumtag">SIGMA 1</span><span class="sumtag">WHALE 4</span></span>
+      <span class="xmuted" style="font-size:11.5px">top new:</span>
+      <button class="awaychip">NVDA C182.5 <b>94</b></button>
+      <button class="awaychip">AMD C168 <b>91</b></button>
+      <button class="awaychip">SPY P642 <b>89</b></button>
+      <button class="away-x">✕</button>
+    </div>
+
+    <div class="ctrls advonly">
+      <select><option>All Types</option><option>Calls</option><option>Puts</option></select>
+      <input class="w80" placeholder="Min Vol" />
+      <input class="w80" placeholder="Min Score" />
+      <input class="w110" placeholder="Ticker…  ( / )" />
+      <button class="preset on">Top Score</button>
+      <button class="preset">Big Money</button>
+      <button class="preset">Unusual</button>
+      <button class="preset">Short Fuse</button>
+      <button class="preset">New Arrivals</button>
+      <button class="preset">⟳ Force</button>
+      <button class="preset">⤓ CSV</button>
+      <label class="uonly"><input type="checkbox" checked /> My universe</label>
+      <input class="w170" value="SPY,QQQ,IWM,NVDA,TSLA,AAPL" />
+      <input class="w80" value="85" title="Alert when a NEW contract scores ≥ this" />
+      <span class="note">Live cross-symbol flow · cvforge day-volume vs OI. Flow-type = volume-magnitude class; Lean = contract-type bias.</span>
+    </div>
+
+    <div class="card">
+      <div class="sigh"><span class="sigh-t">◈ Top Conviction</span><span class="sigh-s">ranked by Blademap v3 · click to filter</span></div>
+      <div class="sigcards">
+        <button class="sigcard hot"><span class="ring" style="--pct:94"><span>94</span></span>
+          <span class="sig-body"><span class="sig-top"><span class="sig-tk">NVDA CALL 182.5</span><span><span class="tier t-a">A</span></span></span>
+            <span class="sig-sub"><span class="up">▲ BULLISH</span> · score 94 · $18.4M · 14d · <span class="up">+1.82%</span></span>
+            <span class="sig-lv"><span>E 4.20</span><span class="dn">S 2.95</span><span class="up">T 7.10</span></span></span></button>
+        <button class="sigcard hot"><span class="ring" style="--pct:91"><span>91</span></span>
+          <span class="sig-body"><span class="sig-top"><span class="sig-tk">SPY PUT 642</span><span><span class="tier t-a">A</span></span></span>
+            <span class="sig-sub"><span class="dn">▼ BEARISH</span> · score 91 · $12.1M · 1d · <span class="dn">−0.44%</span></span>
+            <span class="sig-lv"><span>E 1.86</span><span class="dn">S 1.20</span><span class="up">T 3.40</span></span></span></button>
+        <button class="sigcard"><span class="ring" style="--pct:78"><span>78</span></span>
+          <span class="sig-body"><span class="sig-top"><span class="sig-tk">AMD CALL 168</span><span><span class="tier">B</span></span></span>
+            <span class="sig-sub"><span class="up">▲ BULLISH</span> · score 78 · $6.2M · 21d</span>
+            <span class="sig-lv"><span>E 3.05</span><span class="dn">S 2.10</span><span class="up">T 5.60</span></span></span></button>
+        <button class="sigcard"><span class="ring" style="--pct:71"><span>71</span></span>
+          <span class="sig-body"><span class="sig-top"><span class="sig-tk">TSLA PUT 330</span><span><span class="tier">B</span></span></span>
+            <span class="sig-sub"><span class="dn">▼ BEARISH</span> · score 71 · $4.9M · 7d</span>
+            <span class="sig-lv"><span>E 5.40</span><span class="dn">S 3.80</span><span class="up">T 9.20</span></span></span></button>
+      </div>
+    </div>
+
+    <div class="card tablecard">
+      <div class="card-h"><span>Market Scan</span><span class="sub">184 of 1 204 contracts · sorted by Score ▾</span></div>
+      <div class="scroll">
+        <table class="stab">
+          <thead><tr>
+            <th class="l">Seen</th><th class="on">Score ▾</th><th class="l">Ticker</th><th class="l">C/P</th>
+            <th>Strike</th><th>DTE</th><th>Volume</th><th class="advonly">OI</th><th>ΔOI</th>
+            <th class="advonly">Vol/OI</th><th>Prem~</th><th class="advonly">Notional</th><th class="advonly">IV</th>
+            <th class="l">Flow</th><th class="l advonly">Lean</th><th class="advonly">Trd</th>
+          </tr></thead>
+          <tbody>
+            <tr class="top"><td class="l"><span class="newdot"></span><span class="xmuted">14:29</span></td><td><span class="sc a">94</span></td>
+              <td class="l"><span class="tk">NVDA</span><sup class="gn">γ−</sup> <span class="xmuted">09-19</span></td><td class="l"><span class="side c">CALL</span></td>
+              <td>182.5</td><td>14d</td><td>218k</td><td class="advonly">76k</td><td class="oiup">+41%</td><td class="advonly">2.9x</td>
+              <td>~$18.4M</td><td class="advonly">$3.98B</td><td class="advonly">38.2%</td>
+              <td class="l"><span class="flt">SWEEP</span><span class="arch a-fresh">FRESH</span></td>
+              <td class="l advonly"><span class="lean up">▲ BULL</span> <span class="xmuted">OTM</span></td>
+              <td class="advonly"><span class="trd"><i style="height:4px"></i><i style="height:6px"></i><i style="height:5px"></i><i style="height:8px"></i><i style="height:9px"></i><i style="height:10px"></i><i class="now" style="height:12px"></i></span></td></tr>
+            <tr class="kb"><td class="l"><span class="newdot"></span><span class="xmuted">14:22</span></td><td><span class="sc a">91</span></td>
+              <td class="l"><span class="tk">SPY</span><sup class="gp">γ+</sup> <span class="xmuted">09-06</span></td><td class="l"><span class="side p">PUT</span></td>
+              <td>642</td><td>1d</td><td>412k</td><td class="advonly">188k</td><td class="oiup">+22%</td><td class="advonly">2.2x</td>
+              <td>~$12.1M</td><td class="advonly">$26.4B</td><td class="advonly">14.7%</td>
+              <td class="l"><span class="flt">BLOCK</span><span class="arch">WHALE</span></td>
+              <td class="l advonly"><span class="lean dn">▼ BEAR</span> <span class="xmuted">ITM</span></td>
+              <td class="advonly"><span class="trd"><i style="height:7px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:5px"></i><i style="height:6px"></i><i style="height:7px"></i><i class="now" style="height:9px"></i></span></td></tr>
+            <tr><td class="l"><span class="xmuted">13:58</span></td><td><span class="sc b">88</span></td>
+              <td class="l"><span class="tk">QQQ</span><sup class="gp">γ+</sup> <span class="xmuted">09-05</span></td><td class="l"><span class="side c">CALL</span></td>
+              <td>588</td><td>0d</td><td>96k</td><td class="advonly">5k</td><td class="oidn">−8%</td><td class="advonly">18.4x</td>
+              <td>~$3.4M</td><td class="advonly">$5.64B</td><td class="advonly">22.1%</td>
+              <td class="l"><span class="flt">SWEEP</span><span class="arch a-lotto">LOTTO</span></td>
+              <td class="l advonly"><span class="lean up">▲ BULL</span> <span class="xmuted">~OTM</span></td>
+              <td class="advonly"><span class="trd"><i style="height:5px"></i><i style="height:5px"></i><i style="height:6px"></i><i style="height:4px"></i><i style="height:6px"></i><i style="height:5px"></i><i class="now" style="height:7px"></i></span></td></tr>
+            <tr><td class="l"><span class="newdot"></span><span class="xmuted">13:44</span></td><td><span class="sc b">84</span></td>
+              <td class="l"><span class="tk">AMD</span> <span class="xmuted">09-26</span></td><td class="l"><span class="side c">CALL</span></td>
+              <td>168</td><td>21d</td><td>142k</td><td class="advonly">48k</td><td class="oiup">+31%</td><td class="advonly">3.0x</td>
+              <td>~$6.2M</td><td class="advonly">$2.39B</td><td class="advonly">44.9%</td>
+              <td class="l"><span class="flt">SWEEP</span><span class="arch a-fresh">FRESH</span></td>
+              <td class="l advonly"><span class="lean up">▲ BULL</span> <span class="xmuted">OTM</span></td>
+              <td class="advonly"><span class="trd"><i style="height:3px"></i><i style="height:4px"></i><i style="height:5px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:9px"></i><i class="now" style="height:11px"></i></span></td></tr>
+            <tr><td class="l"><span class="xmuted">13:31</span></td><td><span class="sc">76</span></td>
+              <td class="l"><span class="tk">TSLA</span><sup class="gn">γ−</sup> <span class="xmuted">09-12</span></td><td class="l"><span class="side p">PUT</span></td>
+              <td>330</td><td>7d</td><td>88k</td><td class="advonly">62k</td><td class="oiup">+11%</td><td class="advonly">1.4x</td>
+              <td>~$4.9M</td><td class="advonly">$2.90B</td><td class="advonly">51.3%</td>
+              <td class="l"><span class="flt">UNUSUAL</span><span class="arch">HEDGE</span></td>
+              <td class="l advonly"><span class="lean dn">▼ BEAR</span> <span class="xmuted">ITM</span></td>
+              <td class="advonly"><span class="trd"><i style="height:6px"></i><i style="height:7px"></i><i style="height:5px"></i><i style="height:7px"></i><i style="height:8px"></i><i style="height:7px"></i><i class="now" style="height:9px"></i></span></td></tr>
+            <tr><td class="l"><span class="xmuted">13:12</span></td><td><span class="sc">72</span></td>
+              <td class="l"><span class="tk">PLTR</span> <span class="xmuted">10-17</span></td><td class="l"><span class="side c">CALL</span></td>
+              <td>44</td><td>42d</td><td>64k</td><td class="advonly">21k</td><td class="oiup">+18%</td><td class="advonly">3.0x</td>
+              <td>~$2.1M</td><td class="advonly">$281M</td><td class="advonly">58.7%</td>
+              <td class="l"><span class="flt">UNUSUAL</span><span class="arch a-fresh">FRESH</span></td>
+              <td class="l advonly"><span class="lean up">▲ BULL</span> <span class="xmuted">OTM</span></td>
+              <td class="advonly"><span class="trd"><i style="height:4px"></i><i style="height:4px"></i><i style="height:6px"></i><i style="height:5px"></i><i style="height:7px"></i><i style="height:8px"></i><i class="now" style="height:8px"></i></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="kbhint"><span><kbd>j</kbd><kbd>k</kbd> move</span><span><kbd>Enter</kbd> open in Order Flow</span><span><kbd>/</kbd> search ticker</span><span><kbd>r</kbd> force refresh</span><span><kbd>g</kbd>/<kbd>G</kbd> top / bottom</span></div>
+    </div>
+  </div>
+
+  <!-- ---------- ORDER FLOW (Look A) ---------- -->
+  <div class="page flow">
+    <div class="flowgrid">
+      <div class="col">
+        <div class="card"><div class="card-h"><span>Watchlist</span><span class="sub">10 symbols</span></div>
+          <ul class="wl">
+            <li class="sel"><span class="tk">SPY</span><span>●</span></li><li><span>QQQ</span><span></span></li>
+            <li><span>IWM</span><span></span></li><li><span>NVDA</span><span></span></li><li><span>TSLA</span><span></span></li>
+            <li><span>AAPL</span><span></span></li><li><span>MSFT</span><span></span></li><li><span>AMZN</span><span></span></li>
+            <li><span>META</span><span></span></li><li><span>GOOGL</span><span></span></li>
+          </ul></div>
+        <div class="card"><div class="card-h">Filters</div>
+          <div class="chips"><button class="chip on">All</button><button class="chip">Calls</button><button class="chip">Puts</button>
+            <button class="chip">Sweep</button><button class="chip">Block</button><button class="chip">≥80</button></div>
+          <div class="subh">DTE</div>
+          <div class="chips"><button class="chip sm on">All</button><button class="chip sm">0DTE</button><button class="chip sm">1-7D</button>
+            <button class="chip sm">Wk</button><button class="chip sm">Mo</button><button class="chip sm">Qtr</button><button class="chip sm">LEAPS</button></div></div>
+        <div class="card"><div class="card-h">Legend</div>
+          <div class="legend"><span><i class="dot call"></i> Call flow</span><span><i class="dot put"></i> Put flow</span>
+            <span><i class="dot sweep"></i> Sweep (urgent)</span><span><i class="dot block"></i> Block (negotiated)</span></div></div>
+      </div>
+
+      <div class="col">
+        <div class="card tablecard"><div class="card-h"><span>Live Flow Feed</span><span class="sub"><i class="livedot"></i>live · 62</span></div>
+          <div class="scroll"><table class="stab">
+            <thead><tr><th class="l">Ticker</th><th class="l">Type</th><th class="l">Side</th><th>Strike</th><th>DTE</th><th>Day $</th><th>V/OI</th><th>Conv</th></tr></thead>
+            <tbody>
+              <tr class="top"><td class="l tk">SPY</td><td class="l">BLOCK</td><td class="l"><span class="side p">PUT</span></td><td>642</td><td>1d</td><td>~$12.1M</td><td>2.2</td><td>91</td></tr>
+              <tr><td class="l tk">SPY</td><td class="l">SWEEP</td><td class="l"><span class="side c">CALL</span></td><td>648</td><td>1d</td><td>~$6.4M</td><td>4.1</td><td>84</td></tr>
+              <tr><td class="l tk">SPY</td><td class="l">UNUSUAL</td><td class="l"><span class="side c">CALL</span></td><td>655</td><td>8d</td><td>~$3.2M</td><td>1.8</td><td>72</td></tr>
+              <tr><td class="l tk">SPY</td><td class="l">SWEEP</td><td class="l"><span class="side p">PUT</span></td><td>636</td><td>1d</td><td>~$2.8M</td><td>3.4</td><td>69</td></tr>
+              <tr><td class="l tk">SPY</td><td class="l">UNUSUAL</td><td class="l"><span class="side c">CALL</span></td><td>660</td><td>15d</td><td>~$1.9M</td><td>1.2</td><td>58</td></tr>
+            </tbody></table></div></div>
+        <div class="card"><div class="subtabs"><button class="subtab on">Order Flow Imbalance</button><button class="subtab">Dealer GEX Heatmap</button></div>
+          <div class="chart"><div class="bars" style="height:130px">
+            <span class="b" style="height:62%"></span><span class="b" style="height:78%"></span><span class="b neg" style="height:34%"></span>
+            <span class="b" style="height:51%"></span><span class="b neg" style="height:44%"></span><span class="b" style="height:88%"></span>
+            <span class="b" style="height:71%"></span><span class="b neg" style="height:28%"></span><span class="b" style="height:58%"></span><span class="b" style="height:66%"></span>
+          </div><div class="axis"><span>L1</span><span>L2</span><span>L3</span><span>L4</span><span>L5</span><span>L6</span><span>L7</span><span>L8</span><span>L9</span><span>L10</span></div>
+          <div class="notes" style="border:0;padding-top:0">Order-Flow Imbalance · <span class="up">buy-side pressure</span> (agg +0.34). Green above the line = net buying at that book level.</div></div></div>
+      </div>
+
+      <div class="col">
+        <div class="card"><div class="card-h">Selected Signal</div>
+          <div class="selhead"><span class="k">SPY</span><span class="k">$642 P</span>
+            <span class="xmuted num">1d · BLOCK</span><span class="badge call" style="color:var(--bear);background:var(--bear-soft);border-color:rgba(224,96,127,.3)">PUT</span></div>
+          <div class="gauges">
+            <div class="gauge"><span class="ring" style="--pct:91;width:78px;height:78px"><span style="font-size:19px">91</span></span><span class="gaugelbl">Conviction</span></div>
+            <div class="gauge">
+              <svg width="86" height="78" viewBox="0 0 100 92" aria-label="conviction components radar">
+                <polygon points="50,6 92,32 76,84 24,84 8,32" fill="none" stroke="#2f343c" stroke-width="1"/>
+                <polygon points="50,29 71,42 63,68 37,68 29,42" fill="none" stroke="#2f343c" stroke-width="1"/>
+                <polygon points="50,10 88,34 70,80 30,76 14,36" fill="rgba(106,165,201,.18)" stroke="#6aa5c9" stroke-width="2"/>
+              </svg><span class="gaugelbl">Unusual · Pattern · Size · Urgency</span></div>
+          </div>
+          <div class="rationale">
+            <div style="margin-bottom:6px"><b style="color:var(--ink-hi)">BLOCK PUT · ~$12.1M</b> on SPY</div>
+            <ul>
+              <li>Classification: block — volume/OI positioning proxy (cvserver has no trade-level tape)</li>
+              <li>Vol/OI ratio: 2.2× · est. notional ~$12.1M</li>
+              <li>Conviction 91/99 = pattern 14 + size 30 + unusualness 33 + urgency 14</li>
+            </ul>
+            <div class="xmuted" style="margin-top:7px;font-size:11.5px">Regime: Chop (warming). VPIN toxicity and Kyle-λ price impact need a trade-level print feed — not available on cvserver.</div>
+            <div style="margin-top:11px"><div class="card-h" style="border:0;padding:0 0 6px">Context</div>
+              <ul style="padding-left:0;list-style:none;margin:0">
+                <li style="margin-bottom:5px"><span class="tag tgt">GEX</span>See dealer positioning for SPY.</li>
+                <li><span class="tag warn">RISK</span>Paper / educational only — not a trade recommendation.</li>
+              </ul></div>
+          </div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---------- DEALER POSITIONING (Look A) ---------- -->
+  <div class="page gamma">
+    <div class="card">
+      <div class="card-h"><span>Dealer Gamma Exposure · SPY</span><span class="sub">real cvforge GEX</span></div>
+      <div class="gammagrid" style="padding:12px">
+        <div class="card" style="background:var(--surface2)">
+          <div class="card-h" style="border-bottom:1px solid var(--line)"><span>Net GEX by Strike</span></div>
+          <div class="bars"><span class="b neg" style="height:28%"></span><span class="b neg" style="height:44%"></span>
+            <span class="b neg" style="height:62%"></span><span class="b neg" style="height:38%"></span><span class="b" style="height:22%"></span>
+            <span class="b" style="height:58%"></span><span class="b" style="height:88%"></span><span class="b" style="height:71%"></span>
+            <span class="b" style="height:49%"></span><span class="b" style="height:33%"></span><span class="b" style="height:18%"></span></div>
+          <div class="axis"><span>630</span><span>633</span><span>636</span><span>639</span><span>642</span><span>645</span><span>648</span><span>651</span><span>654</span><span>657</span><span>660</span></div>
+        </div>
+        <div class="card" style="background:var(--surface2)">
+          <div class="card-h" style="border-bottom:1px solid var(--line)"><span>Cumulative Dealer Gamma</span></div>
+          <div style="padding:14px 12px 0">
+            <svg viewBox="0 0 320 176" width="100%" height="190" preserveAspectRatio="none" aria-label="cumulative dealer gamma">
+              <line x1="0" y1="118" x2="320" y2="118" stroke="#2f343c" stroke-width="1" stroke-dasharray="3 4"/>
+              <path d="M0,150 L32,142 L64,128 L96,122 L128,118 L160,96 L192,58 L224,40 L256,32 L288,28 L320,26"
+                    fill="none" stroke="#6aa5c9" stroke-width="2"/>
+              <path d="M0,150 L32,142 L64,128 L96,122 L128,118 L160,96 L192,58 L224,40 L256,32 L288,28 L320,26 L320,176 L0,176 Z"
+                    fill="rgba(106,165,201,.1)"/>
+              <circle cx="128" cy="118" r="4" fill="#c9a84c"/>
+            </svg>
+          </div>
+          <div class="axis"><span>630</span><span>636</span><span>642</span><span>648</span><span>654</span><span>660</span></div>
+        </div>
+      </div>
+      <div class="notes"><b>Read:</b> red bars = dealer short gamma (hedging amplifies moves), green = long gamma (dampens). The gold dot marks where the cumulative line crosses zero — the gamma-flip level, here about $642.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================================================================
+     LOOK B — TAPE
+     Terminal density. Table owns 2/3 of the width and never scrolls out
+     of view; every strip and the tape live in one right-hand rail.
+     ================================================================== -->
+<div class="look b">
+
+  <div class="page scanner stack">
+    <div style="display:flex;gap:var(--gap)">
+      <div class="kpis" style="flex:1 1 auto">
+        <div class="kpi"><div class="k">Source</div><div class="v g">LIVE · 712</div></div>
+        <div class="kpi"><div class="k">Contracts</div><div class="v b">184/1204</div></div>
+        <div class="kpi"><div class="k">Notional Σ</div><div class="v">$4.81B</div></div>
+        <div class="kpi"><div class="k">C/P Vol</div><div class="v g">63/37</div></div>
+        <div class="kpi"><div class="k">Unusual ≥2×</div><div class="v y">47</div></div>
+        <div class="kpi click"><div class="k">⚡ Alerts</div><div class="v r">3 · 41</div></div>
+        <div class="kpi"><div class="k">Updated</div><div class="v">14:31:52 ·38s</div></div>
+        <div class="kpi"><div class="k">Heartbeat</div><div class="v g"><span class="pulse"></span>Fresh</div></div>
+      </div>
+      <button class="advtoggle" data-toggle-mode>⚙ Advanced</button>
+    </div>
+
+    <div class="fire">
+      <span class="fire-ring"></span><span class="rule r-oiconf">OICONF</span>
+      <span class="fire-t">NVDA · <span class="side c">CALL</span> 182.5 <span class="xmuted">09-19</span></span>
+      <span class="fire-why">ΔOI +41% overnight — yesterday's sweep held · ~$18.4M</span>
+      <span class="fire-age">2m</span><button class="fire-x">✕</button>
+    </div>
+
+    <div class="ctrls advonly">
+      <select><option>All Types</option><option>Calls</option><option>Puts</option></select>
+      <input class="w80" placeholder="Min Vol" /><input class="w80" placeholder="Min Score" />
+      <input class="w110" placeholder="Ticker…  ( / )" />
+      <button class="preset on">Top Score</button><button class="preset">Big Money</button><button class="preset">Unusual</button>
+      <button class="preset">Short Fuse</button><button class="preset">New Arrivals</button>
+      <button class="preset">⟳ Force</button><button class="preset">⤓ CSV</button>
+      <label class="uonly"><input type="checkbox" checked /> My universe</label>
+      <input class="w170" value="SPY,QQQ,IWM,NVDA,TSLA,AAPL" /><input class="w80" value="85" />
+    </div>
+
+    <div class="tapegrid">
+      <div class="card tablecard">
+        <div class="card-h"><span>Market Scan · 184/1204</span><span class="sub">Score ▾ · j/k · Enter opens flow · / search · r refresh</span></div>
+        <div class="scroll">
+          <table class="stab">
+            <thead><tr>
+              <th class="l">Seen</th><th class="on">Score ▾</th><th class="l">Ticker</th><th class="l">C/P</th>
+              <th>Strike</th><th>DTE</th><th>Vol</th><th class="advonly">OI</th><th>ΔOI</th>
+              <th class="advonly">V/OI</th><th>Prem~</th><th class="advonly">Notional</th><th class="advonly">IV</th>
+              <th class="l">Flow</th><th class="l advonly">Lean</th><th class="advonly">Trd</th></tr></thead>
+            <tbody>
+              <tr class="top"><td class="l"><span class="newdot"></span><span class="xmuted">14:29</span></td><td><span class="sc a">94</span></td>
+                <td class="l"><span class="tk">NVDA</span><sup class="gn">γ−</sup> <span class="xmuted">09-19</span></td><td class="l"><span class="side c">CALL</span></td>
+                <td>182.5</td><td>14d</td><td>218k</td><td class="advonly">76k</td><td class="oiup">+41%</td><td class="advonly">2.9x</td>
+                <td>~$18.4M</td><td class="advonly">$3.98B</td><td class="advonly">38.2%</td>
+                <td class="l"><span class="flt">SWEEP</span><span class="arch a-fresh">FRESH</span></td>
+                <td class="l advonly"><span class="lean up">▲ BULL</span></td><td class="advonly"><span class="trd"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i class="now" style="height:12px"></i></span></td></tr>
+              <tr class="kb"><td class="l"><span class="newdot"></span><span class="xmuted">14:22</span></td><td><span class="sc a">91</span></td>
+                <td class="l"><span class="tk">SPY</span><sup class="gp">γ+</sup> <span class="xmuted">09-06</span></td><td class="l"><span class="side p">PUT</span></td>
+                <td>642</td><td>1d</td><td>412k</td><td class="advonly">188k</td><td class="oiup">+22%</td><td class="advonly">2.2x</td>
+                <td>~$12.1M</td><td class="advonly">$26.4B</td><td class="advonly">14.7%</td>
+                <td class="l"><span class="flt">BLOCK</span><span class="arch">WHALE</span></td>
+                <td class="l advonly"><span class="lean dn">▼ BEAR</span></td><td class="advonly"><span class="trd"><i style="height:7px"></i><i style="height:6px"></i><i style="height:7px"></i><i class="now" style="height:9px"></i></span></td></tr>
+              <tr><td class="l"><span class="xmuted">13:58</span></td><td><span class="sc b">88</span></td>
+                <td class="l"><span class="tk">QQQ</span><sup class="gp">γ+</sup> <span class="xmuted">09-05</span></td><td class="l"><span class="side c">CALL</span></td>
+                <td>588</td><td>0d</td><td>96k</td><td class="advonly">5k</td><td class="oidn">−8%</td><td class="advonly">18.4x</td>
+                <td>~$3.4M</td><td class="advonly">$5.64B</td><td class="advonly">22.1%</td>
+                <td class="l"><span class="flt">SWEEP</span><span class="arch a-lotto">LOTTO</span></td>
+                <td class="l advonly"><span class="lean up">▲ BULL</span></td><td class="advonly"><span class="trd"><i style="height:5px"></i><i style="height:4px"></i><i style="height:5px"></i><i class="now" style="height:7px"></i></span></td></tr>
+              <tr><td class="l"><span class="newdot"></span><span class="xmuted">13:44</span></td><td><span class="sc b">84</span></td>
+                <td class="l"><span class="tk">AMD</span> <span class="xmuted">09-26</span></td><td class="l"><span class="side c">CALL</span></td>
+                <td>168</td><td>21d</td><td>142k</td><td class="advonly">48k</td><td class="oiup">+31%</td><td class="advonly">3.0x</td>
+                <td>~$6.2M</td><td class="advonly">$2.39B</td><td class="advonly">44.9%</td>
+                <td class="l"><span class="flt">SWEEP</span><span class="arch a-fresh">FRESH</span></td>
+                <td class="l advonly"><span class="lean up">▲ BULL</span></td><td class="advonly"><span class="trd"><i style="height:3px"></i><i style="height:6px"></i><i style="height:9px"></i><i class="now" style="height:11px"></i></span></td></tr>
+              <tr><td class="l"><span class="xmuted">13:31</span></td><td><span class="sc">76</span></td>
+                <td class="l"><span class="tk">TSLA</span><sup class="gn">γ−</sup> <span class="xmuted">09-12</span></td><td class="l"><span class="side p">PUT</span></td>
+                <td>330</td><td>7d</td><td>88k</td><td class="advonly">62k</td><td class="oiup">+11%</td><td class="advonly">1.4x</td>
+                <td>~$4.9M</td><td class="advonly">$2.90B</td><td class="advonly">51.3%</td>
+                <td class="l"><span class="flt">UNUSUAL</span><span class="arch">HEDGE</span></td>
+                <td class="l advonly"><span class="lean dn">▼ BEAR</span></td><td class="advonly"><span class="trd"><i style="height:6px"></i><i style="height:7px"></i><i style="height:8px"></i><i class="now" style="height:9px"></i></span></td></tr>
+              <tr><td class="l"><span class="xmuted">13:12</span></td><td><span class="sc">72</span></td>
+                <td class="l"><span class="tk">PLTR</span> <span class="xmuted">10-17</span></td><td class="l"><span class="side c">CALL</span></td>
+                <td>44</td><td>42d</td><td>64k</td><td class="advonly">21k</td><td class="oiup">+18%</td><td class="advonly">3.0x</td>
+                <td>~$2.1M</td><td class="advonly">$281M</td><td class="advonly">58.7%</td>
+                <td class="l"><span class="flt">UNUSUAL</span><span class="arch a-fresh">FRESH</span></td>
+                <td class="l advonly"><span class="lean up">▲ BULL</span></td><td class="advonly"><span class="trd"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i class="now" style="height:8px"></i></span></td></tr>
+              <tr><td class="l"><span class="xmuted">12:54</span></td><td><span class="sc">68</span></td>
+                <td class="l"><span class="tk">COIN</span> <span class="xmuted">09-19</span></td><td class="l"><span class="side c">CALL</span></td>
+                <td>310</td><td>14d</td><td>38k</td><td class="advonly">14k</td><td class="oiup">+9%</td><td class="advonly">2.7x</td>
+                <td>~$1.8M</td><td class="advonly">$1.18B</td><td class="advonly">66.2%</td>
+                <td class="l"><span class="flt">UNUSUAL</span></td>
+                <td class="l advonly"><span class="lean up">▲ BULL</span></td><td class="advonly"><span class="trd"><i style="height:5px"></i><i style="height:5px"></i><i style="height:7px"></i><i class="now" style="height:8px"></i></span></td></tr>
+              <tr><td class="l"><span class="xmuted">12:31</span></td><td><span class="sc">64</span></td>
+                <td class="l"><span class="tk">IWM</span><sup class="gp">γ+</sup> <span class="xmuted">09-06</span></td><td class="l"><span class="side p">PUT</span></td>
+                <td>228</td><td>1d</td><td>72k</td><td class="advonly">51k</td><td class="oidn">−4%</td><td class="advonly">1.4x</td>
+                <td>~$1.2M</td><td class="advonly">$1.64B</td><td class="advonly">19.8%</td>
+                <td class="l"><span class="flt">REGULAR</span></td>
+                <td class="l advonly"><span class="lean dn">▼ BEAR</span></td><td class="advonly"><span class="trd"><i style="height:6px"></i><i style="height:5px"></i><i style="height:6px"></i><i class="now" style="height:6px"></i></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="card">
+          <div class="sigh"><span class="sigh-t">◈ Top Conviction</span><span class="sigh-s">v3 · click filters</span></div>
+          <div class="sigcards">
+            <button class="sigcard hot"><span class="ring" style="--pct:94"><span>94</span></span>
+              <span class="sig-body"><span class="sig-top"><span class="sig-tk">NVDA CALL 182.5</span><span class="tier t-a">A</span></span>
+                <span class="sig-sub"><span class="up">▲ BULL</span> · $18.4M · 14d · <span class="up">+1.82%</span></span>
+                <span class="sig-lv"><span>E 4.20</span><span class="dn">S 2.95</span><span class="up">T 7.10</span></span></span></button>
+            <button class="sigcard hot"><span class="ring" style="--pct:91"><span>91</span></span>
+              <span class="sig-body"><span class="sig-top"><span class="sig-tk">SPY PUT 642</span><span class="tier t-a">A</span></span>
+                <span class="sig-sub"><span class="dn">▼ BEAR</span> · $12.1M · 1d · <span class="dn">−0.44%</span></span>
+                <span class="sig-lv"><span>E 1.86</span><span class="dn">S 1.20</span><span class="up">T 3.40</span></span></span></button>
+            <button class="sigcard"><span class="ring" style="--pct:78"><span>78</span></span>
+              <span class="sig-body"><span class="sig-top"><span class="sig-tk">AMD CALL 168</span><span class="tier">B</span></span>
+                <span class="sig-sub"><span class="up">▲ BULL</span> · $6.2M · 21d</span>
+                <span class="sig-lv"><span>E 3.05</span><span class="dn">S 2.10</span><span class="up">T 5.60</span></span></span></button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="strip" style="border:0;background:transparent;padding:8px">
+            <span class="strip-l">Prem~</span>
+            <button class="rollchip on"><span class="rc-t">NVDA <sup class="gn">γ−</sup><span class="streak">🔥4d</span></span>
+              <span class="rc-p">~$182M <span class="pcr bull">0.41</span> <span class="sigma">4.2σ</span></span>
+              <span class="rollbar"><i style="width:71%"></i></span></button>
+            <button class="rollchip"><span class="rc-t">SPY <sup class="gp">γ+</sup></span>
+              <span class="rc-p">~$96M <span class="pcr bear">1.62</span></span><span class="rollbar"><i style="width:38%"></i></span></button>
+            <button class="rollchip"><span class="rc-t">TSLA <sup class="gn">γ−</sup><span class="streak">🔥2d</span></span>
+              <span class="rc-p">~$75M <span class="pcr">0.88</span></span><span class="rollbar"><i style="width:59%"></i></span></button>
+            <button class="rollchip"><span class="rc-t">AMD</span>
+              <span class="rc-p">~$41M <span class="pcr bull">0.47</span></span><span class="rollbar"><i style="width:68%"></i></span></button>
+          </div>
+          <div class="strip" style="border:0;border-top:1px solid var(--line);background:transparent;padding:8px">
+            <span class="strip-l">📈 Following</span>
+            <button class="folchip"><span class="tk">NVDA</span><span class="n">4d</span><span class="x">2.8×</span></button>
+            <button class="folchip"><span class="tk">TSLA</span><span class="n">2d</span><span class="x">1.9×</span></button>
+            <button class="folchip"><span class="tk">PLTR</span><span class="n">3d</span><span class="x">2.2×</span></button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="v3strip">
+            <div class="v3cell"><span class="v3lbl">0–24</span><span class="v3val">31%</span><span class="v3bar"><i style="width:31%"></i></span><span class="v3n">96/141</span></div>
+            <div class="v3cell"><span class="v3lbl">25–49</span><span class="v3val">38%</span><span class="v3bar"><i style="width:38%"></i></span><span class="v3n">122/168</span></div>
+            <div class="v3cell"><span class="v3lbl">50–74</span><span class="v3val">51%</span><span class="v3bar"><i style="width:51%"></i></span><span class="v3n">88/109</span></div>
+            <div class="v3cell hot"><span class="v3lbl">75+</span><span class="v3val">64%</span><span class="v3bar"><i style="width:64%"></i></span><span class="v3n">41/52</span></div>
+            <div class="v3cell hot"><span class="v3lbl">📓 Sweep-follow</span><span class="v3val">58%</span><span class="v3n">14W/10L</span></div>
+          </div>
+          <div class="alerth">
+            <span class="alerth-t">🏛 Institutional Alerts · 41</span>
+            <span class="xmuted num" style="font-size:10.5px">09:31 → 14:29</span>
+            <span><span class="sumtag">OICONF 2</span><span class="sumtag">FOLLOW 3</span><span class="sumtag">SIGMA 1</span><span class="sumtag">WHALE 4</span></span>
+          </div>
+          <div class="alerth" style="padding-top:6px">
+            <button class="rulechip on">🔔 Notify</button>
+            <button class="rulechip on advonly">🎯 UNIV</button>
+            <button class="rulechip on advonly">ΔOI CONF</button>
+            <button class="rulechip on advonly">FOLLOW 2d+</button>
+            <button class="rulechip on advonly">SIGMA ≥4σ</button>
+            <button class="rulechip on advonly">SCORE≥85</button>
+            <button class="rulechip on advonly">WHALE ≥$10M~</button>
+            <button class="rulechip on advonly">0DTE HOT</button>
+            <button class="rulechip advonly">⇊ Newest</button>
+            <button class="alertclear advonly">⧉ Copy</button>
+            <button class="alertclear">Clear</button>
+          </div>
+          <div class="scroll" style="max-height:230px">
+            <table class="tape">
+              <tr><td><span class="srcdot"></span></td><td class="xmuted">14:29</td><td><span class="rule r-oiconf">OICONF</span></td>
+                <td class="l"><span class="tk">NVDA</span> <span class="side c">CALL</span> 182.5</td><td>94</td><td>~$18.4M</td></tr>
+              <tr><td><span class="srcdot"></span></td><td class="xmuted">14:22</td><td><span class="rule r-whale">WHALE</span></td>
+                <td class="l"><span class="tk">SPY</span> <span class="side p">PUT</span> 642</td><td>91</td><td>~$12.1M</td></tr>
+              <tr><td><span class="srcdot"></span></td><td class="xmuted">14:18</td><td><span class="rule r-sigma">SIGMA</span></td>
+                <td class="l" colspan="3">AMD volume 4.6σ above its 14-day baseline</td></tr>
+              <tr><td><span class="srcdot fb"></span></td><td class="xmuted">14:05</td><td><span class="rule r-follow">FOLLOW</span></td>
+                <td class="l" colspan="3">NVDA elevated volume 4 straight days (≥2.8×)</td></tr>
+              <tr><td><span class="srcdot"></span></td><td class="xmuted">13:58</td><td><span class="rule r-0dte">0DTE</span></td>
+                <td class="l"><span class="tk">QQQ</span> <span class="side c">CALL</span> 588</td><td>88</td><td>~$3.4M</td></tr>
+              <tr><td><span class="srcdot"></span></td><td class="xmuted">13:40</td><td><span class="rule r-source">SOURCE</span></td>
+                <td class="l" colspan="3">Recovered to market-wide coverage (712 symbols)</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="away">
+          <span class="away-t">☾ Away 3h 12m</span>
+          <span><span class="sumtag">OICONF 2</span><span class="sumtag">WHALE 4</span></span>
+          <button class="awaychip">NVDA C182.5 <b>94</b></button>
+          <button class="awaychip">AMD C168 <b>91</b></button>
+          <button class="away-x">✕</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page flow">
+    <div class="flowgrid">
+      <div class="col">
+        <div class="card"><div class="card-h"><span>Watchlist</span><span class="sub">10</span></div>
+          <ul class="wl"><li class="sel"><span class="tk">SPY</span><span>●</span></li><li><span>QQQ</span></li><li><span>IWM</span></li>
+            <li><span>NVDA</span></li><li><span>TSLA</span></li><li><span>AAPL</span></li><li><span>MSFT</span></li>
+            <li><span>AMZN</span></li><li><span>META</span></li><li><span>GOOGL</span></li></ul></div>
+        <div class="card"><div class="card-h">Filters</div>
+          <div class="chips"><button class="chip on">All</button><button class="chip">Calls</button><button class="chip">Puts</button>
+            <button class="chip">Sweep</button><button class="chip">Block</button><button class="chip">≥80</button></div>
+          <div class="subh">DTE</div>
+          <div class="chips"><button class="chip sm on">All</button><button class="chip sm">0DTE</button><button class="chip sm">1-7D</button>
+            <button class="chip sm">Wk</button><button class="chip sm">Mo</button><button class="chip sm">Qtr</button><button class="chip sm">LEAPS</button></div>
+          <div class="subh">Legend</div>
+          <div class="legend"><span><i class="dot call"></i> Call flow</span><span><i class="dot put"></i> Put flow</span>
+            <span><i class="dot sweep"></i> Sweep (urgent)</span><span><i class="dot block"></i> Block (negotiated)</span></div></div>
+      </div>
+      <div class="col">
+        <div class="card tablecard"><div class="card-h"><span>Live Flow Feed</span><span class="sub"><i class="livedot"></i>live · 62</span></div>
+          <div class="scroll"><table class="stab">
+            <thead><tr><th class="l">Ticker</th><th class="l">Type</th><th class="l">Side</th><th>Strike</th><th>DTE</th><th>Day $</th><th>V/OI</th><th>Conv</th></tr></thead>
+            <tbody>
+              <tr class="top"><td class="l tk">SPY</td><td class="l">BLOCK</td><td class="l"><span class="side p">PUT</span></td><td>642</td><td>1d</td><td>~$12.1M</td><td>2.2</td><td>91</td></tr>
+              <tr><td class="l tk">SPY</td><td class="l">SWEEP</td><td class="l"><span class="side c">CALL</span></td><td>648</td><td>1d</td><td>~$6.4M</td><td>4.1</td><td>84</td></tr>
+              <tr><td class="l tk">SPY</td><td class="l">UNUSUAL</td><td class="l"><span class="side c">CALL</span></td><td>655</td><td>8d</td><td>~$3.2M</td><td>1.8</td><td>72</td></tr>
+              <tr><td class="l tk">SPY</td><td class="l">SWEEP</td><td class="l"><span class="side p">PUT</span></td><td>636</td><td>1d</td><td>~$2.8M</td><td>3.4</td><td>69</td></tr>
+              <tr><td class="l tk">SPY</td><td class="l">UNUSUAL</td><td class="l"><span class="side c">CALL</span></td><td>660</td><td>15d</td><td>~$1.9M</td><td>1.2</td><td>58</td></tr>
+              <tr><td class="l tk">SPY</td><td class="l">REGULAR</td><td class="l"><span class="side p">PUT</span></td><td>630</td><td>22d</td><td>~$1.1M</td><td>0.9</td><td>51</td></tr>
+            </tbody></table></div></div>
+        <div class="card"><div class="subtabs"><button class="subtab on">Order Flow Imbalance</button><button class="subtab">Dealer GEX Heatmap</button></div>
+          <div class="chart"><div class="bars" style="height:110px">
+            <span class="b" style="height:62%"></span><span class="b" style="height:78%"></span><span class="b neg" style="height:34%"></span>
+            <span class="b" style="height:51%"></span><span class="b neg" style="height:44%"></span><span class="b" style="height:88%"></span>
+            <span class="b" style="height:71%"></span><span class="b neg" style="height:28%"></span><span class="b" style="height:58%"></span><span class="b" style="height:66%"></span>
+          </div><div class="axis"><span>L1</span><span>L2</span><span>L3</span><span>L4</span><span>L5</span><span>L6</span><span>L7</span><span>L8</span><span>L9</span><span>L10</span></div></div></div>
+      </div>
+      <div class="col">
+        <div class="card"><div class="card-h">Selected Signal</div>
+          <div class="selhead"><span class="k">SPY</span><span class="k">$642 P</span><span class="xmuted num">1d · BLOCK</span>
+            <span class="badge" style="color:var(--bear);background:var(--bear-soft);border:1px solid rgba(224,96,127,.3)">PUT</span></div>
+          <div class="gauges">
+            <div class="gauge"><span class="ring" style="--pct:91;width:62px;height:62px"><span style="font-size:16px">91</span></span><span class="gaugelbl">Conviction</span></div>
+            <div class="gauge"><svg width="74" height="66" viewBox="0 0 100 92">
+              <polygon points="50,6 92,32 76,84 24,84 8,32" fill="none" stroke="#2f343c"/>
+              <polygon points="50,10 88,34 70,80 30,76 14,36" fill="rgba(106,165,201,.18)" stroke="#6aa5c9" stroke-width="2"/>
+            </svg><span class="gaugelbl">Unusual·Pattern·Size·Urgency</span></div></div>
+          <div class="rationale">
+            <ul><li>Classification: block — volume/OI proxy (no trade-level tape)</li>
+              <li>Vol/OI 2.2× · est. notional ~$12.1M</li>
+              <li>91/99 = pattern 14 + size 30 + unusualness 33 + urgency 14</li></ul>
+            <div class="xmuted" style="margin-top:6px;font-size:11px">Regime: Chop (warming). VPIN and Kyle-λ need a print feed.</div>
+            <ul style="padding-left:0;list-style:none;margin-top:9px">
+              <li style="margin-bottom:5px"><span class="tag tgt">GEX</span>Dealer positioning for SPY.</li>
+              <li><span class="tag warn">RISK</span>Paper / educational only.</li></ul>
+          </div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page gamma">
+    <div class="card">
+      <div class="card-h"><span>Dealer Gamma Exposure · SPY</span><span class="sub">real cvforge GEX</span></div>
+      <div class="gammagrid" style="padding:10px">
+        <div class="card" style="background:var(--surface2)"><div class="card-h">Net GEX by Strike</div>
+          <div class="bars" style="height:150px"><span class="b neg" style="height:28%"></span><span class="b neg" style="height:44%"></span>
+            <span class="b neg" style="height:62%"></span><span class="b neg" style="height:38%"></span><span class="b" style="height:22%"></span>
+            <span class="b" style="height:58%"></span><span class="b" style="height:88%"></span><span class="b" style="height:71%"></span>
+            <span class="b" style="height:49%"></span><span class="b" style="height:33%"></span><span class="b" style="height:18%"></span></div>
+          <div class="axis"><span>630</span><span>633</span><span>636</span><span>639</span><span>642</span><span>645</span><span>648</span><span>651</span><span>654</span><span>657</span><span>660</span></div></div>
+        <div class="card" style="background:var(--surface2)"><div class="card-h">Cumulative Dealer Gamma</div>
+          <div style="padding:12px 10px 0"><svg viewBox="0 0 320 150" width="100%" height="150" preserveAspectRatio="none">
+            <line x1="0" y1="100" x2="320" y2="100" stroke="#2f343c" stroke-dasharray="3 4"/>
+            <path d="M0,128 L32,121 L64,110 L96,104 L128,100 L160,82 L192,50 L224,34 L256,27 L288,24 L320,22" fill="none" stroke="#6aa5c9" stroke-width="2"/>
+            <path d="M0,128 L32,121 L64,110 L96,104 L128,100 L160,82 L192,50 L224,34 L256,27 L288,24 L320,22 L320,150 L0,150 Z" fill="rgba(106,165,201,.1)"/>
+            <circle cx="128" cy="100" r="4" fill="#c9a84c"/></svg></div>
+          <div class="axis"><span>630</span><span>636</span><span>642</span><span>648</span><span>654</span><span>660</span></div></div>
+      </div>
+      <div class="notes"><b>Read:</b> red = dealer short gamma (hedging amplifies moves), green = long gamma (dampens). Gold dot = gamma-flip level, about $642.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================================================================
+     LOOK C — SIGNAL FIRST
+     The single best trade right now owns the top of the page. Next five
+     ride a filmstrip. Everything else is a card below. Premium spacing,
+     bigger numbers, one gold accent.
+     ================================================================== -->
+<div class="look c">
+
+  <div class="page scanner stack">
+
+    <div class="hero">
+      <span class="ring" style="--pct:94"><span>94</span></span>
+      <span>
+        <span class="rule r-oiconf">OICONF</span>
+        <span class="tier t-a" style="margin-left:6px">TIER A</span>
+        <div class="hero-t">NVDA <span class="side c">CALL</span> 182.5 <span class="xmuted" style="font-size:15px">· 19 Sep · 14d</span></div>
+        <div class="hero-why">Open interest grew 41% overnight, so yesterday's $18.4M sweep was held, not churned. Volume is 2.9× open interest and 4.2σ above this name's own 14-day baseline — fourth straight elevated day.</div>
+        <div class="hero-lv">
+          <div><span class="lbl">Entry</span><span class="val">4.20</span></div>
+          <div><span class="lbl">Stop</span><span class="val dn">2.95</span></div>
+          <div><span class="lbl">Target</span><span class="val up">7.10</span></div>
+          <div><span class="lbl">Premium</span><span class="val">~$18.4M</span></div>
+          <div><span class="lbl">Move since</span><span class="val up">+1.82%</span></div>
+        </div>
+      </span>
+      <span style="display:grid;gap:8px;justify-items:end">
+        <span class="fire-age">fired 2m ago</span>
+        <button class="fire-x" title="Acknowledge">✕</button>
+        <span class="xmuted" style="font-size:11px;text-align:right;max-width:130px">auto-dismisses<br>after 60s</span>
+      </span>
+    </div>
+
+    <div style="display:flex;gap:var(--gap);align-items:stretch">
+      <div class="kpis" style="flex:1 1 auto">
+        <div class="kpi"><div class="k">Source</div><div class="v g">LIVE · 712 symbols</div></div>
+        <div class="kpi click"><div class="k">⚡ Alerts</div><div class="v r">3 new · log 41</div></div>
+        <div class="kpi"><div class="k">Updated</div><div class="v">14:31:52 · data 38s</div></div>
+        <div class="kpi"><div class="k">Heartbeat</div><div class="v g"><span class="pulse"></span>Fresh</div></div>
+        <div class="kpi advonly"><div class="k">Contracts</div><div class="v b">184 / 1 204</div></div>
+        <div class="kpi advonly"><div class="k">Notional Σ</div><div class="v">$4.81B</div></div>
+        <div class="kpi advonly"><div class="k">Call/Put Vol</div><div class="v g">63% / 37%</div></div>
+        <div class="kpi advonly"><div class="k">Unusual ≥2×</div><div class="v y">47</div></div>
+      </div>
+      <button class="advtoggle" data-toggle-mode>⚙ Advanced</button>
+    </div>
+
+    <div>
+      <div class="sigh" style="border:0;padding:0 2px 9px"><span class="sigh-t">◈ Next in line</span>
+        <span class="sigh-s">ranked by Blademap v3 · click to filter the scan</span></div>
+      <div class="filmstrip">
+        <button class="sigcard hot"><span class="ring" style="--pct:91"><span>91</span></span>
+          <span class="sig-body"><span class="sig-top"><span class="sig-tk">SPY PUT 642</span><span class="tier t-a">A</span></span>
+            <span class="sig-sub"><span class="dn">▼ BEARISH</span> · $12.1M · 1d</span>
+            <span class="sig-lv"><span>E 1.86</span><span class="dn">S 1.20</span><span class="up">T 3.40</span></span></span></button>
+        <button class="sigcard"><span class="ring" style="--pct:84"><span>84</span></span>
+          <span class="sig-body"><span class="sig-top"><span class="sig-tk">AMD CALL 168</span><span class="tier">B</span></span>
+            <span class="sig-sub"><span class="up">▲ BULLISH</span> · $6.2M · 21d</span>
+            <span class="sig-lv"><span>E 3.05</span><span class="dn">S 2.10</span><span class="up">T 5.60</span></span></span></button>
+        <button class="sigcard"><span class="ring" style="--pct:78"><span>78</span></span>
+          <span class="sig-body"><span class="sig-top"><span class="sig-tk">QQQ CALL 588</span><span class="tier">B</span></span>
+            <span class="sig-sub"><span class="up">▲ BULLISH</span> · $3.4M · 0d</span>
+            <span class="sig-lv"><span>E 0.92</span><span class="dn">S 0.55</span><span class="up">T 1.90</span></span></span></button>
+        <button class="sigcard"><span class="ring" style="--pct:71"><span>71</span></span>
+          <span class="sig-body"><span class="sig-top"><span class="sig-tk">TSLA PUT 330</span><span class="tier">B</span></span>
+            <span class="sig-sub"><span class="dn">▼ BEARISH</span> · $4.9M · 7d</span>
+            <span class="sig-lv"><span>E 5.40</span><span class="dn">S 3.80</span><span class="up">T 9.20</span></span></span></button>
+        <button class="sigcard"><span class="ring" style="--pct:68"><span>68</span></span>
+          <span class="sig-body"><span class="sig-top"><span class="sig-tk">COIN CALL 310</span><span class="tier">C</span></span>
+            <span class="sig-sub"><span class="up">▲ BULLISH</span> · $1.8M · 14d</span>
+            <span class="sig-lv"><span>E 8.10</span><span class="dn">S 5.60</span><span class="up">T 14.0</span></span></span></button>
+      </div>
+    </div>
+
+    <div class="strip">
+      <span class="strip-l">Prem~ flow</span>
+      <button class="rollchip on"><span class="rc-t">NVDA <sup class="gn">γ−</sup><span class="streak">🔥4d</span></span>
+        <span class="rc-p">~$182.4M <span class="pcr bull">PCR 0.41</span> <span class="sigma">4.2σ</span></span>
+        <span class="spark"><i style="height:38%"></i><i style="height:44%"></i><i style="height:31%"></i><i style="height:58%"></i><i style="height:52%"></i><i style="height:71%"></i><i style="height:66%"></i><i style="height:84%"></i><i style="height:78%"></i><i class="t" style="height:100%"></i></span>
+        <span class="rollbar"><i style="width:71%"></i></span></button>
+      <button class="rollchip"><span class="rc-t">SPY <sup class="gp">γ+</sup></span>
+        <span class="rc-p">~$96.1M <span class="pcr bear">PCR 1.62</span></span>
+        <span class="spark"><i style="height:62%"></i><i style="height:58%"></i><i style="height:71%"></i><i style="height:49%"></i><i style="height:55%"></i><i style="height:62%"></i><i style="height:44%"></i><i style="height:51%"></i><i style="height:58%"></i><i class="t" style="height:66%"></i></span>
+        <span class="rollbar"><i style="width:38%"></i></span></button>
+      <button class="rollchip"><span class="rc-t">TSLA <sup class="gn">γ−</sup><span class="streak">🔥2d</span></span>
+        <span class="rc-p">~$74.8M <span class="pcr">PCR 0.88</span></span>
+        <span class="spark"><i style="height:31%"></i><i style="height:44%"></i><i style="height:41%"></i><i style="height:58%"></i><i style="height:66%"></i><i style="height:62%"></i><i style="height:71%"></i><i style="height:78%"></i><i style="height:82%"></i><i class="t" style="height:88%"></i></span>
+        <span class="rollbar"><i style="width:59%"></i></span></button>
+      <button class="rollchip"><span class="rc-t">AMD</span>
+        <span class="rc-p">~$41.2M <span class="pcr bull">PCR 0.47</span> <span class="sigma">2.6σ</span></span>
+        <span class="spark"><i style="height:22%"></i><i style="height:31%"></i><i style="height:38%"></i><i style="height:44%"></i><i style="height:52%"></i><i style="height:49%"></i><i style="height:62%"></i><i style="height:71%"></i><i style="height:82%"></i><i class="t" style="height:92%"></i></span>
+        <span class="rollbar"><i style="width:68%"></i></span></button>
+      <span style="width:1px;height:30px;background:var(--line2);margin:0 4px"></span>
+      <span class="strip-l">📈 Following</span>
+      <button class="folchip"><span class="tk">NVDA</span><span class="n">4d</span><span class="x">2.8×</span></button>
+      <button class="folchip"><span class="tk">TSLA</span><span class="n">2d</span><span class="x">1.9×</span></button>
+      <button class="folchip"><span class="tk">PLTR</span><span class="n">3d</span><span class="x">2.2×</span></button>
+    </div>
+
+    <div class="away">
+      <span class="away-t">☾ While you were away · 3h 12m</span>
+      <span><span class="sumtag">OICONF 2</span><span class="sumtag">FOLLOW 3</span><span class="sumtag">SIGMA 1</span><span class="sumtag">WHALE 4</span></span>
+      <span class="xmuted" style="font-size:11.5px">top new:</span>
+      <button class="awaychip">NVDA C182.5 <b>94</b></button><button class="awaychip">AMD C168 <b>91</b></button>
+      <button class="away-x">✕</button>
+    </div>
+
+    <div class="ctrls advonly">
+      <select><option>All Types</option><option>Calls</option><option>Puts</option></select>
+      <input class="w80" placeholder="Min Vol" /><input class="w80" placeholder="Min Score" />
+      <input class="w110" placeholder="Ticker…  ( / )" />
+      <button class="preset on">Top Score</button><button class="preset">Big Money</button><button class="preset">Unusual</button>
+      <button class="preset">Short Fuse</button><button class="preset">New Arrivals</button>
+      <button class="preset">⟳ Force</button><button class="preset">⤓ CSV</button>
+      <label class="uonly"><input type="checkbox" checked /> My universe</label>
+      <input class="w170" value="SPY,QQQ,IWM,NVDA,TSLA,AAPL" /><input class="w80" value="85" />
+      <span class="note">Live cross-symbol flow · cvforge day-volume vs OI. Flow-type = volume-magnitude class; Lean = contract-type bias.</span>
+    </div>
+
+    <div class="card tablecard">
+      <div class="card-h"><span>Market Scan</span><span class="sub">184 of 1 204 · Score ▾ · <kbd>j</kbd><kbd>k</kbd> move · <kbd>Enter</kbd> open · <kbd>/</kbd> search · <kbd>r</kbd> refresh</span></div>
+      <div class="scroll">
+        <table class="stab">
+          <thead><tr>
+            <th class="l">Seen</th><th class="on">Score ▾</th><th class="l">Ticker</th><th class="l">C/P</th>
+            <th>Strike</th><th>DTE</th><th>Volume</th><th class="advonly">OI</th><th>ΔOI</th>
+            <th class="advonly">Vol/OI</th><th>Prem~</th><th class="advonly">Notional</th><th class="advonly">IV</th>
+            <th class="l">Flow</th><th class="l advonly">Lean</th><th class="advonly">Trd</th></tr></thead>
+          <tbody>
+            <tr class="top"><td class="l"><span class="newdot"></span><span class="xmuted">14:29</span></td><td><span class="sc a">94</span></td>
+              <td class="l"><span class="tk">NVDA</span><sup class="gn">γ−</sup> <span class="xmuted">09-19</span></td><td class="l"><span class="side c">CALL</span></td>
+              <td>182.5</td><td>14d</td><td>218k</td><td class="advonly">76k</td><td class="oiup">+41%</td><td class="advonly">2.9x</td>
+              <td>~$18.4M</td><td class="advonly">$3.98B</td><td class="advonly">38.2%</td>
+              <td class="l"><span class="flt">SWEEP</span><span class="arch a-fresh">FRESH</span></td>
+              <td class="l advonly"><span class="lean up">▲ BULL</span></td><td class="advonly"><span class="trd"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i><i class="now" style="height:12px"></i></span></td></tr>
+            <tr class="kb"><td class="l"><span class="newdot"></span><span class="xmuted">14:22</span></td><td><span class="sc a">91</span></td>
+              <td class="l"><span class="tk">SPY</span><sup class="gp">γ+</sup> <span class="xmuted">09-06</span></td><td class="l"><span class="side p">PUT</span></td>
+              <td>642</td><td>1d</td><td>412k</td><td class="advonly">188k</td><td class="oiup">+22%</td><td class="advonly">2.2x</td>
+              <td>~$12.1M</td><td class="advonly">$26.4B</td><td class="advonly">14.7%</td>
+              <td class="l"><span class="flt">BLOCK</span><span class="arch">WHALE</span></td>
+              <td class="l advonly"><span class="lean dn">▼ BEAR</span></td><td class="advonly"><span class="trd"><i style="height:7px"></i><i style="height:6px"></i><i style="height:7px"></i><i style="height:8px"></i><i class="now" style="height:9px"></i></span></td></tr>
+            <tr><td class="l"><span class="xmuted">13:58</span></td><td><span class="sc b">88</span></td>
+              <td class="l"><span class="tk">QQQ</span><sup class="gp">γ+</sup> <span class="xmuted">09-05</span></td><td class="l"><span class="side c">CALL</span></td>
+              <td>588</td><td>0d</td><td>96k</td><td class="advonly">5k</td><td class="oidn">−8%</td><td class="advonly">18.4x</td>
+              <td>~$3.4M</td><td class="advonly">$5.64B</td><td class="advonly">22.1%</td>
+              <td class="l"><span class="flt">SWEEP</span><span class="arch a-lotto">LOTTO</span></td>
+              <td class="l advonly"><span class="lean up">▲ BULL</span></td><td class="advonly"><span class="trd"><i style="height:5px"></i><i style="height:4px"></i><i style="height:6px"></i><i style="height:5px"></i><i class="now" style="height:7px"></i></span></td></tr>
+            <tr><td class="l"><span class="newdot"></span><span class="xmuted">13:44</span></td><td><span class="sc b">84</span></td>
+              <td class="l"><span class="tk">AMD</span> <span class="xmuted">09-26</span></td><td class="l"><span class="side c">CALL</span></td>
+              <td>168</td><td>21d</td><td>142k</td><td class="advonly">48k</td><td class="oiup">+31%</td><td class="advonly">3.0x</td>
+              <td>~$6.2M</td><td class="advonly">$2.39B</td><td class="advonly">44.9%</td>
+              <td class="l"><span class="flt">SWEEP</span><span class="arch a-fresh">FRESH</span></td>
+              <td class="l advonly"><span class="lean up">▲ BULL</span></td><td class="advonly"><span class="trd"><i style="height:3px"></i><i style="height:5px"></i><i style="height:8px"></i><i style="height:9px"></i><i class="now" style="height:11px"></i></span></td></tr>
+            <tr><td class="l"><span class="xmuted">13:31</span></td><td><span class="sc">76</span></td>
+              <td class="l"><span class="tk">TSLA</span><sup class="gn">γ−</sup> <span class="xmuted">09-12</span></td><td class="l"><span class="side p">PUT</span></td>
+              <td>330</td><td>7d</td><td>88k</td><td class="advonly">62k</td><td class="oiup">+11%</td><td class="advonly">1.4x</td>
+              <td>~$4.9M</td><td class="advonly">$2.90B</td><td class="advonly">51.3%</td>
+              <td class="l"><span class="flt">UNUSUAL</span><span class="arch">HEDGE</span></td>
+              <td class="l advonly"><span class="lean dn">▼ BEAR</span></td><td class="advonly"><span class="trd"><i style="height:6px"></i><i style="height:7px"></i><i style="height:7px"></i><i style="height:8px"></i><i class="now" style="height:9px"></i></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="v3strip">
+        <div class="v3cell"><span class="v3lbl">0–24</span><span class="v3val">31%</span><span class="v3bar"><i style="width:31%"></i></span><span class="v3n">96/141</span></div>
+        <div class="v3cell"><span class="v3lbl">25–49</span><span class="v3val">38%</span><span class="v3bar"><i style="width:38%"></i></span><span class="v3n">122/168</span></div>
+        <div class="v3cell"><span class="v3lbl">50–74</span><span class="v3val">51%</span><span class="v3bar"><i style="width:51%"></i></span><span class="v3n">88/109</span></div>
+        <div class="v3cell hot"><span class="v3lbl">75+</span><span class="v3val">64%</span><span class="v3bar"><i style="width:64%"></i></span><span class="v3n">41/52</span></div>
+        <div class="v3cell hot"><span class="v3lbl">📓 Sweep-follow</span><span class="v3val">58%</span><span class="v3n">14W/10L</span></div>
+        <div class="v3cell"><span class="v3lbl">📓 Gamma-flip</span><span class="v3val">44%</span><span class="v3n">8W/10L</span></div>
+      </div>
+      <div class="alerth">
+        <span class="alerth-t">🏛 Institutional Alerts · 41</span>
+        <span class="xmuted num" style="font-size:11px">09:31 → 14:29</span>
+        <span><span class="sumtag">OICONF 2</span><span class="sumtag">FOLLOW 3</span><span class="sumtag">SIGMA 1</span><span class="sumtag">WHALE 4</span><span class="sumtag">SCORE 28</span><span class="sumtag">0DTE 3</span></span>
+        <button class="rulechip on">🔔 Notify</button>
+        <button class="rulechip on advonly">🎯 UNIV</button>
+        <button class="rulechip on advonly">ΔOI CONF</button>
+        <button class="rulechip on advonly">FOLLOW 2d+</button>
+        <button class="rulechip on advonly">SIGMA ≥4σ</button>
+        <button class="rulechip on advonly">SCORE≥85</button>
+        <button class="rulechip on advonly">WHALE ≥$10M~</button>
+        <button class="rulechip on advonly">0DTE HOT</button>
+        <button class="rulechip advonly">⇊ Newest</button>
+        <button class="alertclear advonly">⧉ Copy</button>
+        <button class="alertclear">Clear</button>
+      </div>
+      <table class="tape">
+        <tr><td><span class="srcdot"></span></td><td class="xmuted">14:29:41</td><td><span class="rule r-oiconf">OICONF</span></td>
+          <td class="l"><span class="tk">NVDA</span> <span class="side c">CALL</span> 182.5 <span class="xmuted">09-19</span> <span class="why">· ΔOI +41% held</span></td>
+          <td>94</td><td>~$18.4M</td><td class="xmuted">2m</td></tr>
+        <tr><td><span class="srcdot"></span></td><td class="xmuted">14:22:03</td><td><span class="rule r-whale">WHALE</span></td>
+          <td class="l"><span class="tk">SPY</span> <span class="side p">PUT</span> 642 <span class="xmuted">09-06</span> <span class="why">· ~$12.1M single print</span></td>
+          <td>91</td><td>~$12.1M</td><td class="xmuted">10m</td></tr>
+        <tr><td><span class="srcdot"></span></td><td class="xmuted">14:18:55</td><td><span class="rule r-sigma">SIGMA</span></td>
+          <td class="l" colspan="4">AMD volume 4.6σ above its 14-day baseline — 612k contracts vs 118k median</td></tr>
+        <tr><td><span class="srcdot fb"></span></td><td class="xmuted">14:05:12</td><td><span class="rule r-follow">FOLLOW</span></td>
+          <td class="l" colspan="4">NVDA elevated volume 4 straight days (≥2.8× its 214k daily median)</td></tr>
+        <tr><td><span class="srcdot"></span></td><td class="xmuted">13:40:02</td><td><span class="rule r-source">SOURCE</span></td>
+          <td class="l" colspan="4">Recovered to market-wide coverage (712 symbols)</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="page flow">
+    <div class="flowgrid">
+      <div class="col">
+        <div class="card tablecard"><div class="card-h"><span>Live Flow Feed · SPY</span><span class="sub"><i class="livedot"></i>live · 62</span></div>
+          <div class="scroll"><table class="stab">
+            <thead><tr><th class="l">Ticker</th><th class="l">Type</th><th class="l">Side</th><th>Strike</th><th>DTE</th><th>Day $</th><th>V/OI</th><th>Conv</th></tr></thead>
+            <tbody>
+              <tr class="top"><td class="l tk">SPY</td><td class="l">BLOCK</td><td class="l"><span class="side p">PUT</span></td><td>642</td><td>1d</td><td>~$12.1M</td><td>2.2</td><td>91</td></tr>
+              <tr><td class="l tk">SPY</td><td class="l">SWEEP</td><td class="l"><span class="side c">CALL</span></td><td>648</td><td>1d</td><td>~$6.4M</td><td>4.1</td><td>84</td></tr>
+              <tr><td class="l tk">SPY</td><td class="l">UNUSUAL</td><td class="l"><span class="side c">CALL</span></td><td>655</td><td>8d</td><td>~$3.2M</td><td>1.8</td><td>72</td></tr>
+              <tr><td class="l tk">SPY</td><td class="l">SWEEP</td><td class="l"><span class="side p">PUT</span></td><td>636</td><td>1d</td><td>~$2.8M</td><td>3.4</td><td>69</td></tr>
+              <tr><td class="l tk">SPY</td><td class="l">UNUSUAL</td><td class="l"><span class="side c">CALL</span></td><td>660</td><td>15d</td><td>~$1.9M</td><td>1.2</td><td>58</td></tr>
+            </tbody></table></div>
+          <div class="chips" style="border-top:1px solid var(--line)">
+            <button class="chip on">All</button><button class="chip">Calls</button><button class="chip">Puts</button>
+            <button class="chip">Sweep</button><button class="chip">Block</button><button class="chip">≥80</button>
+            <span style="width:1px;height:20px;background:var(--line2);margin:0 4px"></span>
+            <button class="chip sm on">All DTE</button><button class="chip sm">0DTE</button><button class="chip sm">1-7D</button>
+            <button class="chip sm">Wk</button><button class="chip sm">Mo</button><button class="chip sm">Qtr</button><button class="chip sm">LEAPS</button>
+          </div>
+        </div>
+        <div class="card"><div class="subtabs"><button class="subtab on">Order Flow Imbalance</button><button class="subtab">Dealer GEX Heatmap</button></div>
+          <div class="chart"><div class="bars" style="height:150px">
+            <span class="b" style="height:62%"></span><span class="b" style="height:78%"></span><span class="b neg" style="height:34%"></span>
+            <span class="b" style="height:51%"></span><span class="b neg" style="height:44%"></span><span class="b" style="height:88%"></span>
+            <span class="b" style="height:71%"></span><span class="b neg" style="height:28%"></span><span class="b" style="height:58%"></span><span class="b" style="height:66%"></span>
+          </div><div class="axis"><span>L1</span><span>L2</span><span>L3</span><span>L4</span><span>L5</span><span>L6</span><span>L7</span><span>L8</span><span>L9</span><span>L10</span></div>
+          <div class="notes">Order-Flow Imbalance · <span class="up">buy-side pressure</span> (aggregate +0.34).</div></div></div>
+      </div>
+      <div class="col">
+        <div class="card"><div class="card-h">Selected Signal</div>
+          <div class="selhead"><span class="k">SPY</span><span class="k">$642 P</span><span class="xmuted num">1d · BLOCK</span>
+            <span class="badge" style="color:var(--bear);background:var(--bear-soft);border:1px solid rgba(224,96,127,.3)">PUT</span></div>
+          <div class="gauges">
+            <div class="gauge"><span class="ring" style="--pct:91;width:92px;height:92px"><span style="font-size:23px">91</span></span><span class="gaugelbl">Conviction</span></div>
+            <div class="gauge"><svg width="100" height="92" viewBox="0 0 100 92">
+              <polygon points="50,6 92,32 76,84 24,84 8,32" fill="none" stroke="#2f343c"/>
+              <polygon points="50,29 71,42 63,68 37,68 29,42" fill="none" stroke="#2f343c"/>
+              <polygon points="50,10 88,34 70,80 30,76 14,36" fill="rgba(106,165,201,.18)" stroke="#6aa5c9" stroke-width="2"/>
+            </svg><span class="gaugelbl">Unusual · Pattern · Size · Urgency</span></div></div>
+          <div class="rationale">
+            <div style="margin-bottom:7px"><b style="color:var(--ink-hi)">BLOCK PUT · ~$12.1M</b> on SPY</div>
+            <ul><li>Classification: block — volume/OI positioning proxy (no trade-level tape on this feed)</li>
+              <li>Vol/OI ratio 2.2× · est. notional ~$12.1M</li>
+              <li>Conviction 91/99 = pattern 14 + size 30 + unusualness 33 + urgency 14</li></ul>
+            <div class="xmuted" style="margin-top:8px;font-size:11.5px">Regime: Chop (warming). VPIN toxicity and Kyle-λ price impact need a trade-level print feed — not available on cvserver.</div>
+            <ul style="padding-left:0;list-style:none;margin-top:12px">
+              <li style="margin-bottom:6px"><span class="tag tgt">GEX</span>See dealer positioning for SPY.</li>
+              <li><span class="tag warn">RISK</span>Paper / educational only — not a trade recommendation.</li></ul>
+          </div></div>
+        <div class="card"><div class="card-h"><span>Watchlist</span><span class="sub">10 symbols</span></div>
+          <ul class="wl"><li class="sel"><span class="tk">SPY</span><span>●</span></li><li><span>QQQ</span></li><li><span>IWM</span></li>
+            <li><span>NVDA</span></li><li><span>TSLA</span></li><li><span>AAPL</span></li><li><span>MSFT</span></li>
+            <li><span>AMZN</span></li><li><span>META</span></li><li><span>GOOGL</span></li></ul>
+          <div class="legend" style="border-top:1px solid var(--line)">
+            <span><i class="dot call"></i> Call flow</span><span><i class="dot put"></i> Put flow</span>
+            <span><i class="dot sweep"></i> Sweep (urgent)</span><span><i class="dot block"></i> Block (negotiated)</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page gamma">
+    <div class="card">
+      <div class="card-h"><span>Dealer Gamma Exposure · SPY</span><span class="sub">real cvforge GEX</span></div>
+      <div class="gammagrid" style="padding:14px">
+        <div class="card" style="background:var(--surface2)"><div class="card-h">Net GEX by Strike</div>
+          <div class="bars" style="height:220px"><span class="b neg" style="height:28%"></span><span class="b neg" style="height:44%"></span>
+            <span class="b neg" style="height:62%"></span><span class="b neg" style="height:38%"></span><span class="b" style="height:22%"></span>
+            <span class="b" style="height:58%"></span><span class="b" style="height:88%"></span><span class="b" style="height:71%"></span>
+            <span class="b" style="height:49%"></span><span class="b" style="height:33%"></span><span class="b" style="height:18%"></span></div>
+          <div class="axis"><span>630</span><span>633</span><span>636</span><span>639</span><span>642</span><span>645</span><span>648</span><span>651</span><span>654</span><span>657</span><span>660</span></div></div>
+        <div class="card" style="background:var(--surface2)"><div class="card-h">Cumulative Dealer Gamma</div>
+          <div style="padding:16px 14px 0"><svg viewBox="0 0 320 200" width="100%" height="220" preserveAspectRatio="none">
+            <line x1="0" y1="134" x2="320" y2="134" stroke="#2f343c" stroke-dasharray="3 4"/>
+            <path d="M0,172 L32,163 L64,146 L96,140 L128,134 L160,110 L192,66 L224,46 L256,36 L288,32 L320,30" fill="none" stroke="#6aa5c9" stroke-width="2"/>
+            <path d="M0,172 L32,163 L64,146 L96,140 L128,134 L160,110 L192,66 L224,46 L256,36 L288,32 L320,30 L320,200 L0,200 Z" fill="rgba(106,165,201,.1)"/>
+            <circle cx="128" cy="134" r="5" fill="#c9a84c"/></svg></div>
+          <div class="axis"><span>630</span><span>636</span><span>642</span><span>648</span><span>654</span><span>660</span></div></div>
+      </div>
+      <div class="notes"><b>Read:</b> red bars = dealer short gamma, so their hedging amplifies moves. Green = long gamma, hedging dampens moves. The gold dot marks the gamma-flip level where the cumulative line crosses zero — about $642 here.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ NOTHING-LOST SHEET ============ -->
+<div class="nlsheet nl">
+  <p style="font-size:13.5px;color:var(--ink-hi);max-width:92ch;margin-top:0">
+    Every control that exists in Tidehunter Pro today, and where it lives in each of the three looks.
+    Nothing on this list is dropped in any direction — only moved or grouped. Anything marked
+    <b style="color:var(--gold)">moved</b> is a deliberate change worth a yes/no from you.
+  </p>
+
+  <h3>Top bar — identical in all three looks</h3>
+  <ul>
+    <li>Brand mark and "Tidehunter Pro"</li>
+    <li>LIVE · CVFORGE status chip</li>
+    <li>Three page buttons: Smart Order Flow, Dealer Positioning, Scanner</li>
+    <li>Regime pill (Trend / Mean-revert / Chop, with "warming")</li>
+    <li>Live clock</li>
+    <li>Refresh now button</li>
+    <li>Quick-filters popup: min-score slider, DTE min, DTE max, Clear</li>
+    <li>Settings popup: poll interval 5s / 15s / 30s / 60s / Off</li>
+  </ul>
+
+  <h3>Scanner — status tiles</h3>
+  <ul>
+    <li>Source (live market-wide vs fallback, symbol count)</li>
+    <li>Contracts shown / total <span class="xmuted">(advanced only, as today)</span></li>
+    <li>Notional total <span class="xmuted">(advanced only)</span></li>
+    <li>Call/Put volume split <span class="xmuted">(advanced only)</span></li>
+    <li>Unusual count ≥2× <span class="xmuted">(advanced only)</span></li>
+    <li>Alerts count, clickable to open the tape</li>
+    <li>Updated time and data age, STALE state, retry countdown</li>
+    <li>Heartbeat with the pulsing freshness dot and its tooltip</li>
+    <li>Simple / Advanced toggle</li>
+  </ul>
+
+  <h3>Scanner — the alert layer</h3>
+  <ul>
+    <li>Fire banner: rule badge, ticker, side, strike, expiry, reason, premium, sigma, streak, age, acknowledge — <b style="color:var(--gold)">moved</b> in Look C, where it becomes the hero block at the top of the page</li>
+    <li>Institutional alert tape: source dot, time, rule badge, contract, score, premium, age — <b style="color:var(--gold)">moved</b> in Look A, where it is one tab of a single context panel instead of always-on</li>
+    <li>Rule toggles: Notify, Universe-only, ΔOI Confirm, Follow 2d+, Sigma ≥4σ, Score ≥85, Whale ≥$10M, 0DTE Hot</li>
+    <li>Tape order newest/oldest, Copy to clipboard, Clear</li>
+    <li>Session window (first alert → latest) and per-rule counts</li>
+    <li>Conviction calibration cells (0–24, 25–49, 50–74, 75+) with hit rate and sample size</li>
+    <li>Journal win-rate cells per setup</li>
+    <li>"While you were away" digest: gap, rule counts, top new contracts, dismiss</li>
+  </ul>
+
+  <h3>Scanner — context strips</h3>
+  <ul>
+    <li>Premium-flow chips: ticker, gamma sign, streak flame, estimated premium, put/call ratio, sigma, 10-day sparkline, call/put split bar, click-to-filter</li>
+    <li>Following strip: ticker, day count, volume multiple, click-to-filter</li>
+    <li>Top Conviction cards: conviction ring, tier, bias arrow, score, notional, days to expiry, move since alert, entry / stop / target</li>
+  </ul>
+
+  <h3>Scanner — filters and table</h3>
+  <ul>
+    <li>Type dropdown, min volume, min score, ticker search (slash key)</li>
+    <li>Sort presets: Top Score, Big Money, Unusual, Short Fuse, New Arrivals</li>
+    <li>Force refresh, CSV export</li>
+    <li>My-universe checkbox, universe list, alert-score threshold</li>
+    <li>All 16 table columns: Seen, Score, Ticker, Call/Put, Strike, DTE, Volume, OI, ΔOI, Vol/OI, Premium, Notional, IV, Flow type + archetype, Lean, 7-day trend bars</li>
+    <li>Simple mode still hides the same 6 columns it hides today</li>
+    <li>Sortable headers with direction arrow, top-row star treatment, new-row dot, keyboard cursor</li>
+    <li>Keyboard shortcuts j / k / g / G / Enter / slash / r — now written on screen instead of undocumented</li>
+    <li>Empty and loading states</li>
+  </ul>
+
+  <h3>Smart Order Flow page</h3>
+  <ul>
+    <li>Watchlist, 10 symbols, selected marker</li>
+    <li>Filter chips: All, Calls, Puts, Sweep, Block, ≥80</li>
+    <li>DTE chips: All, 0DTE, 1-7D, Weekly, Monthly, Quarterly, LEAPS</li>
+    <li>Legend: call, put, sweep, block</li>
+    <li>Live flow feed, all 8 columns, live dot and row count</li>
+    <li>Order-Flow Imbalance chart and Dealer GEX Heatmap sub-tabs</li>
+    <li>Selected signal: header, conviction gauge, four-part radar, rationale bullets, regime note, VPIN/Kyle-λ caveat, GEX and RISK context tags</li>
+    <li>In Look C the watchlist and legend <b style="color:var(--gold)">move</b> under the selected-signal card so the feed gets the width</li>
+  </ul>
+
+  <h3>Dealer Positioning page</h3>
+  <ul>
+    <li>Header with ticker and "real cvforge GEX" note</li>
+    <li>Net GEX by strike bars</li>
+    <li>Cumulative dealer gamma curve, now with the gamma-flip crossing marked</li>
+    <li>The read note explaining short vs long gamma</li>
+  </ul>
+
+  <h3>Footer</h3>
+  <ul>
+    <li>Data provenance line (cvforge live, VPIN/Kyle-λ unavailable, vol surface simulated)</li>
+    <li>Product line "Tidehunter Pro"</li>
+  </ul>
+
+  <h3>Deliberate changes, all three looks</h3>
+  <ul style="columns:1">
+    <li><b>Softer colours.</b> The current neon green and red glare on a dark screen. New pair is a teal-green and a rose-red, checked with the colour-blindness validator: normal-vision separation 28.8 (passes), red-green separation 7.8 (borderline), so call and put are never marked by colour alone — always the word CALL/PUT or an up/down arrow.</li>
+    <li><b>One accent.</b> Gold is the only "look here" colour. Green and red mean direction only. Amber means warning. This is what makes it read as calm and premium at once.</li>
+    <li><b>All numbers in one monospaced, equal-width font</b> so columns line up and your eye scans down instead of hunting.</li>
+    <li><b>The 3D volatility surface and the Academy pages stay removed</b> — they are already unreachable in the live tab today. Say the word if you want either back.</li>
+  </ul>
+</div>
+
+</div><!-- /body -->
+
+<div class="foot">
+  <span>Live cvforge data · GEX, order-flow imbalance and regime from the decoder backend. VPIN and Kyle-λ need a trade-level feed (not available on cvserver).</span>
+  <span>Tidehunter Pro</span>
+</div>
+</div><!-- /app -->
+
+<script>
+(function(){
+  var root = document.documentElement;
+  function press(sel, attr, val){
+    document.querySelectorAll(sel).forEach(function(b){
+      b.setAttribute('aria-pressed', String(b.getAttribute(attr) === val));
+    });
+  }
+  document.addEventListener('click', function(e){
+    var b = e.target.closest('[data-set-look]');
+    if (b){ root.setAttribute('data-look', b.dataset.setLook);
+            press('[data-set-look]','data-set-look', b.dataset.setLook); return; }
+    b = e.target.closest('[data-set-page]');
+    if (b){ root.setAttribute('data-page', b.dataset.setPage);
+            press('[data-set-page]','data-set-page', b.dataset.setPage); return; }
+    b = e.target.closest('[data-toggle-mode]');
+    if (b){ var m = root.getAttribute('data-mode') === 'simple' ? 'advanced' : 'simple';
+            root.setAttribute('data-mode', m);
+            document.querySelectorAll('[data-toggle-mode]').forEach(function(x){
+              x.textContent = m === 'simple' ? '⚙ Advanced' : '⚙ Simple'; });
+            return; }
+    b = e.target.closest('[data-pop]');
+    if (b){ var id = 'pop-' + b.dataset.pop, p = document.getElementById(id);
+            document.querySelectorAll('.pop').forEach(function(x){ if (x !== p) x.hidden = true; });
+            p.hidden = !p.hidden; return; }
+    b = e.target.closest('[data-ctx]');
+    if (b){ b.parentElement.querySelectorAll('[data-ctx]').forEach(function(x){ x.classList.toggle('on', x === b); });
+            document.querySelectorAll('[data-pane]').forEach(function(x){ x.hidden = x.dataset.pane !== b.dataset.ctx; });
+            return; }
+    if (!e.target.closest('.pop')) document.querySelectorAll('.pop').forEach(function(x){ x.hidden = true; });
+  });
+})();
+</script>
+</body>
+</html>

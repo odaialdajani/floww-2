@@ -190,8 +190,9 @@ read the live pin before using new syntax:
   `import server`. Syntax oracle before you commit new backend code:
   `cd backend && ./.venv/Scripts/python.exe -c "import py_compile;py_compile.compile('<file>',doraise=True)"`
   (`backend/.venv` is a bare Python 3.11.15 kept for exactly this check — it has no pytest.)
-- **Architecture decisions are binding:** `docs/adr/` holds 6 **Accepted** ADRs (model promotion
-  policy, data-source policy, backtest equity, deploy CORS, test discipline, coupling). Read the
+- **Architecture decisions are binding:** `docs/adr/` holds 7 **Accepted** ADRs (model promotion
+  policy, data-source policy, backtest equity, deploy CORS, test discipline, coupling, alert
+  persistence). Read the
   relevant one before touching ML promotion, data-source routing, or test assertions — ADR-0005 in
   particular makes the broad `data_source` taxonomy assertion in the heatmap tests deliberate.
 - **Codebase intel:** `.planning/codebase/` — 7 GSD map documents
@@ -307,10 +308,11 @@ Empty output means the pytest suite will error out on the Motor fixture in `test
   and none of the `session_2026-05-*_round9/round8` notes exist here. The macOS index
   `~/.claude/projects/-Users-nav-Documents-GitHub-floww/` does **not** exist on this machine — treat
   the repo's own `docs/` + `.planning/` as the durable record instead.
-- **Architecture decisions:** `docs/adr/` — 6 ADRs, all **Accepted**, index at `docs/adr/README.md`.
+- **Architecture decisions:** `docs/adr/` — 7 ADRs, all **Accepted**, index at `docs/adr/README.md`.
   They bind future work: 0001 model promotion policy (4 gates), 0002 data-source policy & priority
   chain, 0003 backtest equity model, 0004 deploy CORS headers, 0005 test discipline &
-  data-source assertion policy, 0006 Black Friday / Ferrari coupling boundary. Read the relevant
+  data-source assertion policy, 0006 Black Friday / Ferrari coupling boundary, 0007 alert
+  persistence policy (Mongo-backed rules + history). Read the relevant
   one BEFORE changing anything in its area; supersede, never rewrite.
 - **GSD phase tracking:** `.planning/STATE.md` (current phase) + `.planning/ROADMAP.md` (tickets) —
   authoritative, checked in, and the only place phase status should be read from.

@@ -8,8 +8,9 @@
  * with HeatseekerDashboard.test.jsx so coverage spans both layouts.
  */
 import React from "react";
-import { render, screen, act } from "@testing-library/react";
+import { render, screen, act, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
+import axios from "axios";
 
 // Mock IntersectionObserver — harmless for a smoke test, but defensive in
 // case any lazy subcomponent gets pulled in via transitive imports.
@@ -20,10 +21,23 @@ global.IntersectionObserver = class IntersectionObserver {
   unobserve() {};
 };
 
+// Mock axios: the overlay wide-band fetch must never hit the network in
+// tests (CRA resetMocks wipes factory impls, so (re)arm in beforeEach).
+jest.mock("axios", () => ({ get: jest.fn() }));
+
 // Mock Zenith sub-components to null-mounts (no network calls; faster).
 jest.mock("./SkylitTickerBar",       () => () => <div data-testid="mock-ticker-bar" />);
 jest.mock("./SkylitControlBar",      () => () => <div data-testid="mock-control-bar" />);
-jest.mock("./SkylitHeatmapGrid",     () => () => <div data-testid="mock-heatmap" />);
+jest.mock("./SkylitHeatmapGrid",     () => ({ onCellClick, windowRows, density }) => (
+  <div data-testid="mock-heatmap" data-window={windowRows} data-density={density}>
+    <button
+      data-testid="mock-heatmap-cell"
+      onClick={() => onCellClick && onCellClick(650, "2026-09-18", 123.4)}
+    >
+      cell
+    </button>
+  </div>
+));
 jest.mock("./SkylitMetricsSidebar",  () => () => <div data-testid="mock-metrics" />);
 
 // Mock the steal-list top-3 components (they fetch from :8000 which is not
@@ -50,8 +64,12 @@ jest.mock("./RndDensityPanel",              () => () => <div data-testid="hs-rnd
 // Import AFTER mocks are set up.
 import SkylitDashboard from "./SkylitDashboard";
 
+beforeEach(() => {
+  axios.get.mockImplementation(async () => ({ data: { strikes: [] } }));
+});
+
 describe("SkylitDashboard", () => {
-  test("mounts the skylit chrome and the steal-list bottom band", async () => {
+  test("mounts the skylit chrome with NO bottom boxes (removed 2026-09-03)", async () => {
     await act(async () => {
       render(<SkylitDashboard ticker="SPY" />);
     });
@@ -62,45 +80,110 @@ describe("SkylitDashboard", () => {
     expect(screen.getByTestId("mock-heatmap")).toBeInTheDocument();
     expect(screen.getByTestId("mock-metrics")).toBeInTheDocument();
 
-    // Steal-list bottom band — the whole point of this test
-    expect(screen.getByTestId("skylit-steal-list-band")).toBeInTheDocument();
-    expect(screen.getByTestId("hs-dual-gex")).toBeInTheDocument();
-    expect(screen.getByTestId("hs-iv-mid")).toBeInTheDocument();
-    expect(screen.getByTestId("hs-wheel-income")).toBeInTheDocument();
-    expect(screen.getByTestId("hs-max-pain")).toBeInTheDocument();
-    // Per-expiry max-pain-drift multi-line chart mounted full-width
-    // beneath the Wheel panel inside the steal-list band.
-    expect(screen.getByTestId("hs-max-pain-per-expiry-drift")).toBeInTheDocument();
-    // NEW (2026-07-16): steal-list #10 strike cone + #8 opportunity
-    // engine mirror — surfaced into the skylit bottom band alongside
-    // the existing #1/#3/#5/#9 mounts. Pairs with the SkylitDashboard.jsx
-    // edit that imports + mounts them inside the skylit-steal-list-band
-    // container. Count delta: +4 (inner hs-strike-cone + hs-opportunity
-    // + outer skylit-steal-strike-cone + skylit-steal-opportunity wrappers
-    // — keeps test parity with the existing 4-badge dual-level pattern).
-    expect(screen.getByTestId("hs-strike-cone")).toBeInTheDocument();
-    expect(screen.getByTestId("hs-opportunity")).toBeInTheDocument();
-    // skylit-steal-<feature> wrapper assertions mirror the dual-level
-    // pattern the existing 4 badges follow (DualGEX / IVMid / MaxPain /
-    // WheelIncome / MaxPainPerExpiryDriftTile) — see lines above.
-    // Adding these catches a future regression where a maintainer might
-    // rename or remove the wrapper testids without realising the
-    // convention is shared across the band.
-    expect(screen.getByTestId("skylit-steal-strike-cone")).toBeInTheDocument();
-    expect(screen.getByTestId("skylit-steal-opportunity")).toBeInTheDocument();
-    // NEW (2026-07-16): bottom-band news pulse + RND full-width mount.
-    expect(screen.getByTestId("skylit-steal-news-band")).toBeInTheDocument();
-    expect(screen.getByTestId("skylit-steal-rnd-density")).toBeInTheDocument();
-    // NEW (2026-07-15): skylit-steal-<feature> wrappers — standardize
-    // on the skylit-steal-<feature> prefix so visual verifications can
-    // target tiles by semantic purpose (dual-gex / iv-mid / max-pain /
-    // wheel-income / max-pain-per-expiry-drift) without screen-scraping
-    // the surrounding skylit chrome. Count delta +5 from the prior
-    // version of this test.
-    expect(screen.getByTestId("skylit-steal-dual-gex")).toBeInTheDocument();
-    expect(screen.getByTestId("skylit-steal-iv-mid")).toBeInTheDocument();
-    expect(screen.getByTestId("skylit-steal-max-pain")).toBeInTheDocument();
-    expect(screen.getByTestId("skylit-steal-wheel-income")).toBeInTheDocument();
-    expect(screen.getByTestId("skylit-steal-max-pain-per-expiry-drift")).toBeInTheDocument();
+    // Meridian & Velocity band REMOVED from Solstice (Nav directive) —
+    // neither the band, its toggle, nor any tile may mount here.
+    // (Tiles still live in HeatseekerDashboard/Zenith + direct API use.)
+    expect(screen.queryByTestId("skylit-steal-list-band")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("skylit-signals-toggle")).not.toBeInTheDocument();
+    for (const tid of [
+      "hs-dual-gex", "hs-iv-mid", "hs-wheel-income", "hs-max-pain",
+      "hs-max-pain-per-expiry-drift", "hs-strike-cone", "hs-opportunity",
+      "hs-news", "hs-rnd-density",
+      "skylit-steal-dual-gex", "skylit-steal-iv-mid", "skylit-steal-max-pain",
+      "skylit-steal-wheel-income", "skylit-steal-max-pain-per-expiry-drift",
+      "skylit-steal-strike-cone", "skylit-steal-opportunity",
+      "skylit-steal-news-band", "skylit-steal-rnd-density",
+    ]) {
+      expect(screen.queryByTestId(tid)).not.toBeInTheDocument();
+    }
+
+    // Expand control present (zoom removed 2026-09-03).
+    expect(screen.getByTestId("skylit-expand-btn")).toBeInTheDocument();
+
+    // In-frame grid is the compact windowed mode (fits on screen).
+    const inlineGrid = screen.getAllByTestId("mock-heatmap")[0];
+    expect(inlineGrid).toHaveAttribute("data-window", "21");
+  });
+
+  test("zoom controls scale the in-frame grid only", async () => {
+    await act(async () => {
+      render(<SkylitDashboard ticker="SPY" />);
+    });
+
+    const area = screen.getByTestId("skylit-heatmap-area");
+    expect(area.style.zoom).toBe("1");
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("skylit-zoom-in"));
+    });
+    expect(screen.getByTestId("skylit-heatmap-area").style.zoom).toBe("1.25");
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("skylit-zoom-out"));
+      fireEvent.click(screen.getByTestId("skylit-zoom-out"));
+    });
+    expect(screen.getByTestId("skylit-heatmap-area").style.zoom).toBe("0.75");
+  });
+
+  test("expand button opens the full-page grid overlay and closes it", async () => {    await act(async () => {
+      render(<SkylitDashboard ticker="SPY" />);
+    });
+
+    expect(screen.queryByTestId("skylit-grid-expanded")).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("skylit-expand-btn"));
+    });
+    expect(screen.getByTestId("skylit-grid-expanded")).toBeInTheDocument();
+    // Overlay reuses the heatmap grid (mocked here) — inline + overlay.
+    const grids = screen.getAllByTestId("mock-heatmap");
+    expect(grids.length).toBeGreaterThanOrEqual(2);
+    // Overlay grid is full-density with no row window (genuinely bigger).
+    expect(grids[grids.length - 1]).toHaveAttribute("data-density", "full");
+    expect(grids[grids.length - 1]).not.toHaveAttribute("data-window");
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("skylit-expand-close"));
+    });
+    expect(screen.queryByTestId("skylit-grid-expanded")).not.toBeInTheDocument();
+  });
+
+  test("clicking a cell outside trade mode shows the selected-cell readout", async () => {
+    await act(async () => {
+      render(<SkylitDashboard ticker="SPY" />);
+    });
+
+    expect(screen.queryByTestId("skylit-selected-cell")).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByTestId("mock-heatmap-cell")[0]);
+    });
+    const readout = screen.getByTestId("skylit-selected-cell");
+    expect(readout.textContent).toContain("650");
+    expect(readout.textContent).toContain("2026-09-18");
+  });
+
+  test("expand fetches a wider swing band for the overlay", async () => {
+    axios.get.mockImplementation(async (url) => ({
+      data: {
+        strikes: [{ strike: 100 }, { strike: 101 }],
+        grid: {},
+        spot: 100,
+      },
+    }));
+    await act(async () => {
+      render(<SkylitDashboard ticker="SPY" />);
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("skylit-expand-btn"));
+    });
+
+    await waitFor(() => {
+      const calls = axios.get.mock.calls.filter((c) => String(c[0]).includes("/heatmap/"));
+      expect(calls.length).toBeGreaterThan(0);
+      expect(calls[0][0]).toContain("mode=swing");
+      expect(calls[0][0]).toContain("expiries=8");
+    });
   });
 });

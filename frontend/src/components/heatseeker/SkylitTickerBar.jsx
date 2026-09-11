@@ -1,7 +1,8 @@
-import React, { memo } from "react";
+import React, { memo, useState } from "react";
 
 /**
- * SkylitTickerBar — Top ticker tape with quick-select buttons
+ * SkylitTickerBar — Top ticker tape with quick-select buttons + free-text
+ * search (2026-09-03: open universe — any symbol, not just the tape list).
  * Matches Zenith reference: scrollable row of ticker buttons
  */
 const DEFAULT_TICKERS = [
@@ -24,12 +25,39 @@ function SkylitTickerBar({
   allCount = 703,
 }) {
   const tickerList = tickers?.popular || tickers?.default || DEFAULT_TICKERS;
+  const [query, setQuery] = useState("");
+
+  const submitQuery = () => {
+    const t = query.trim().toUpperCase().replace(/^\$/, "");
+    if (t && onTickerChange) {
+      onTickerChange(t);
+      setQuery("");
+    }
+  };
 
   return (
     <div className="skylit-ticker-bar">
       <div className="skylit-ticker-scroll">
         <div className="skylit-ticker-inner">
           <span className="skylit-ticker-count">All Tickers {allCount}</span>
+          <span className="skylit-ticker-sep">|</span>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") submitQuery(); }}
+            placeholder="Search any ticker…"
+            aria-label="Search any ticker"
+            data-testid="skylit-ticker-search"
+            className="skylit-ticker-search"
+          />
+          <button
+            className="skylit-ticker-btn"
+            onClick={submitQuery}
+            title="Load ticker"
+            data-testid="skylit-ticker-go"
+          >
+            Go
+          </button>
           <span className="skylit-ticker-sep">|</span>
           {tickerList.map((t) => (
             <button

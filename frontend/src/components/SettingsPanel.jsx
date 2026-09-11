@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import TidehunterSettings from "./flowseeker/TidehunterSettings";
 
 const STORAGE_KEY = "floww_settings";
 
@@ -10,8 +11,13 @@ function loadSettings() {
   }
 }
 
-function saveSettings(s) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+export function saveSettings(s) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    return true;
+  } catch {
+    return false; // private mode — settings just don't persist
+  }
 }
 
 export function getSettings() {
@@ -88,6 +94,10 @@ export function SettingsPanel({ refreshMs, onRefreshMsChange, defaultTicker, onD
               </button>
             </div>
             <div className="text-[8px] text-slate-600 mt-0.5">Patterns instead of colors</div>
+          </div>
+          <div>
+            <div className="label mb-0.5">Tidehunter Pro</div>
+            <TidehunterSettings />
           </div>
         </div>
       )}

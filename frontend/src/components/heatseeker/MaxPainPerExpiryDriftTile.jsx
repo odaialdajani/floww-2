@@ -16,9 +16,8 @@
  *   - HeatseekerDashboard.jsx sub-section C, AFTER the existing
  *     ``MaxPainBadge`` (the OVERALL scalar readout). The rich tile and the
  *     at-a-glance tile complement each other.
- *   - SkylitDashboard.jsx inside ``data-testid="skylit-steal-list-band"``,
- *     full-width BELOW ``WheelIncomeScreenerPanel``. Multi-line charts need
- *     horizontal real estate.
+ *   - (Removed from SkylitDashboard.jsx 2026-09-03 with the rest of the
+ *     Solstice bottom band; served via Zenith + direct API use.)
  *
  * Color palette per the steal-list .md convention (8 hues, all -400):
  *   sky / emerald / amber / rose / purple / teal / violet / fuchsia.

@@ -246,3 +246,16 @@ blocking alert reliability. 6.4–6.6 are incremental improvements.
 portfolio/P&L (6.5 is the foundation only), Phase H App.js decomposition (architect
 sign-off needed), ML pipeline OOS harness (Phase C — verify `scripts/backtest_oos.py`
 exists first).
+
+## Tidehunter Pro UI redesign follow-up [PLANNED]
+
+- [ ] Carry the latest Blademap mockup's dealer drill-down into the live UI:
+      focused ticker, regime, gamma flip and distance, volatility environment,
+      net gamma bars by strike, and a cumulative line on the same strike axis.
+      The panel sits below the existing Lattice dealer map and opens from ticker
+      and Drill actions. Preserve keyboard access and colour-blind patterns.
+      Full dashboard design, build steps, drill-down requirements and included
+      preview reference are in the [UI redesign v3 plan](mockups/tidehunter-pro-2026-09-05/PLAN.md).
+      Shared screen-context integration belongs to the separate
+      [AI implementation plan](unknowns/lodestar-plan-v4-review-draft.md), section 7.1.
+      The standalone mockup was updated on 2026-09-11; live delivery remains open.
