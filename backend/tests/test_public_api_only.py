@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 
 import server
 from server import app
+from tests.offline_network import deny_external_network  # noqa: F401
 
 client = TestClient(app)
 
@@ -128,7 +129,8 @@ class TestSchwabDeleted:
         r = client.get("/api/schwab/sweeps/abc123")
         assert r.status_code == 404
 
-    def test_import_absent(self):
+    def test_import_absent(self, monkeypatch):
+        monkeypatch.setenv("API_SECRET_KEY", "test-secret-key")
         r = client.post("/api/schwab/import-to-portfolio/x/abc123",
                         headers={"X-API-Key": "test-secret-key"})
         assert r.status_code == 404
@@ -235,12 +237,13 @@ class TestAlphaShims:
 class TestPublicBarsHistoryTechnical:
     def test_bars(self):
         with patch("routes.public_api.fetch_bars_from_public_api",
-                   new=AsyncMock(return_value=_bars(5))):
-            r = client.get("/api/public/bars/SPY?interval=daily")
+                   new=AsyncMock(return_value=_bars(5))) as fetch:
+            r = client.get("/api/public/bars/SPY?timeframe=1Day")
+        fetch.assert_awaited_once_with("SPY", timeframe="1Day", limit=100, sessions="regular")
         assert r.status_code == 200
         d = r.json()
         assert d["ok"] is True
-        assert d["n_bars"] == 5
+        assert d["count"] == 5
         assert d["data_source"] == "public_api"
 
     def test_bars_502_when_unavailable(self):
@@ -259,9 +262,10 @@ class TestPublicBarsHistoryTechnical:
         assert r.json()["n_bars"] == 5
 
     def test_technical_sma(self):
-        with patch("routes.public_api.fetch_bars_from_public_api",
-                   new=AsyncMock(return_value=_bars(30))):
+        with patch("routes.public_api.fetch_bars_by_interval",
+                   new=AsyncMock(return_value=_bars(30))) as fetch:
             r = client.get("/api/public/technical/SPY/SMA?time_period=10")
+        fetch.assert_awaited_once_with("SPY", interval="daily")
         assert r.status_code == 200
         d = r.json()
         assert d["indicator"] == "SMA"
@@ -269,7 +273,7 @@ class TestPublicBarsHistoryTechnical:
         assert d["value"] == pytest.approx(124.5)
 
     def test_technical_bad_indicator_400(self):
-        with patch("routes.public_api.fetch_bars_from_public_api",
+        with patch("routes.public_api.fetch_bars_by_interval",
                    new=AsyncMock(return_value=_bars(30))):
             r = client.get("/api/public/technical/SPY/NOPE")
         assert r.status_code == 400

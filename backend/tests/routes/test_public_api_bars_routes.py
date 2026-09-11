@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
 from server import app
+from tests.offline_network import deny_external_network  # noqa: F401
 
 client = TestClient(app)
 
@@ -172,9 +173,13 @@ def test_public_quotes_resolves_caret_prefixed_symbol() -> None:
 
 
 def test_public_router_exposes_no_order_endpoint() -> None:
+    from routes.public_api import router
+
+    # The market-data router has its own boundary. The app also mounts the
+    # separately protected brokerage router, tested by test_public_brokerage_gate.
     paths = {
         route.path
-        for route in app.routes
+        for route in router.routes
         if getattr(route, "path", "").startswith("/api/public")
     }
     assert "/api/public/bars/{ticker}" in paths
