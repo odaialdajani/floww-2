@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import re
 from datetime import UTC, datetime, timedelta
 
 from services.agent.access.horizon import horizon_window
 from services.agent.contracts import INTERPRETATIONS, finite, validate_model_answer
+from services.agent.narrative import explain_snapshot, request_limit
 from services.agent.saved_history import history_facts
 
 
@@ -24,15 +26,24 @@ def deterministic_answer(snapshots, spec):
         sections.append(
             dict(
                 name=snapshot["ticker"],
-                text=text or "No usable readings are available.",
+                text=(text + ". " + explain_snapshot(snapshot)).strip()
+                if text
+                else "No usable readings are available.",
                 fact_ids=[f["id"] for f in snapshot["facts"]],
             )
         )
     if spec.get("context_conflict"):
         gaps.append("The question names a different ticker from the selected screen; screen contract was not reused")
+    if spec.get("question_scope") is not None:
+        gaps.append("Expiry scope follows the question; the original chart selection is retained as context only")
     summary = "Available readings are shown below. Exposure estimates do not establish trade direction."
     if not any(finite(f["value"]) and f["metric"] == "Underlying price" for f in facts):
         summary = "There is not enough cached market data to answer reliably. Open the market view and try again."
+    limits = request_limit(spec.get("question", ""))
+    if limits:
+        summary = limits
+    elif re.search(r"\bputs?\b", spec.get("question", ""), re.IGNORECASE):
+        summary = "Put contract type alone does not establish trade direction; buyer versus seller activity and the wider position matter."
     return dict(
         summary=summary,
         sections=sections,
@@ -83,17 +94,56 @@ class ResearchService:
                     for ticker in spec["tickers"]:
                         if not await self.repository.progress(owner, turn_id, f"Checking {ticker} coverage"):
                             return
-                        screen = spec["screen"] if not spec["context_conflict"] else {}
+                        screen = (
+                            spec["screen"]
+                            if not spec["context_conflict"] and spec["screen"].get("ticker") == ticker
+                            else {}
+                        )
+                        selected_expiry = (
+                            spec["question_scope"]["selected_expiry"]
+                            if spec.get("question_scope") is not None
+                            else screen.get("selectedExpiry")
+                        )
                         snapshots.append(
-                            await self.reads.snapshot(
-                                ticker, spec["horizon"], selected_expiry=screen.get("selectedExpiry")
-                            )
+                            await self.reads.snapshot(ticker, spec["horizon"], selected_expiry=selected_expiry)
                         )
                         await self.repository.save_anchor(owner, snapshots[-1])
-                        await self.repository.watch_observations(
-                            owner, ticker, spec["horizon"], screen.get("selectedExpiry")
-                        )
+                        await self.repository.watch_observations(owner, ticker, spec["horizon"], selected_expiry)
                     answer = deterministic_answer(snapshots, spec)
+                    if re.search(
+                        r"\b(?:changed?|since|previous|prior|yesterday|closing|last close)\b",
+                        spec["question"],
+                        re.IGNORECASE,
+                    ):
+                        answer["history_closing_only"] = bool(
+                            re.search(r"\b(?:closing|close|yesterday)\b", spec["question"], re.IGNORECASE)
+                        )
+                        answer["history_previous_session"] = bool(
+                            re.search(r"\b(?:yesterday|previous|prior)\b", spec["question"], re.IGNORECASE)
+                        )
+                        for snapshot in snapshots:
+                            more, note = await history_facts(
+                                self.repository,
+                                owner,
+                                snapshot,
+                                closing_only=answer["history_closing_only"],
+                                previous_session=answer["history_previous_session"],
+                            )
+                            existing = {item["id"] for item in answer["facts"]}
+                            answer["facts"].extend(item for item in more if item["id"] not in existing)
+                            text = note
+                            if more:
+                                change = more[-1]
+                                text += f". Price change: {change['value']:+,.4g} {change['unit']}."
+                            else:
+                                answer["gaps"].append(note)
+                            answer["sections"].append(
+                                {
+                                    "name": f"{snapshot['ticker']} history",
+                                    "text": text,
+                                    "fact_ids": [item["id"] for item in more],
+                                }
+                            )
                     if self.model is not None and any(f["metric"] == "Underlying price" for f in answer["facts"]):
                         try:
                             await self._interpret(owner, turn_id, spec, answer, snapshots)
@@ -156,7 +206,13 @@ class ResearchService:
                     else:
                         inspected = True
                         snapshot = next(s for s in snapshots if s["ticker"] == requested["ticker"])
-                        more, history_note = await history_facts(self.repository, owner, snapshot)
+                        more, history_note = await history_facts(
+                            self.repository,
+                            owner,
+                            snapshot,
+                            closing_only=answer.get("history_closing_only", False),
+                            previous_session=answer.get("history_previous_session", False),
+                        )
                         existing = {f["id"] for f in answer["facts"]}
                         answer["facts"].extend(f for f in more if f["id"] not in existing)
                         if not more:
@@ -222,6 +278,8 @@ class ResearchService:
             return
         async with self._maintenance_lock:
             async with asyncio.timeout(50):
+                await self.repository.project_claims()
+                await self.repository.collect_claim_paths(now or datetime.now(UTC))
                 if self.model is not None:
                     await self.model.reconcile()
                 now = now or datetime.now(UTC)

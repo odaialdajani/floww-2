@@ -28,6 +28,11 @@ def test_week_uses_sessions_not_available_expiry_count():
     assert slice_expiries(rows, "week", now=datetime(2026, 9, 11, 11, tzinfo=ET)) == rows[:2]
 
 
+def test_week_contains_five_actual_exchange_sessions_across_holiday():
+    assert horizon_window("week", now=datetime(2026, 9, 4, 11, tzinfo=ET))["end"] == "2026-09-11"
+    assert horizon_window("week", now=datetime(2026, 9, 11, 11, tzinfo=ET))["end"] == "2026-09-17"
+
+
 def test_early_close_and_missing_expiries():
     w = horizon_window("0dte", now=datetime(2026, 11, 27, 14, tzinfo=ET))
     assert w["session_state"] == "closed"

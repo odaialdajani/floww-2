@@ -64,3 +64,58 @@ async def test_collected_anchor_is_available_without_an_earlier_question():
     facts, _ = await history_facts(repo, "alice", after)
     assert facts[-1]["value"] == 2
     assert (await history_facts(repo, "bob", after))[0] == []
+
+
+@pytest.mark.asyncio
+async def test_requested_previous_close_never_uses_an_older_close():
+    from services.agent.contracts import fact
+
+    repo = AgentRepository(AsyncMongoMockClient().test)
+    await repo.initialize()
+    current = {
+        "ticker": "DIA",
+        "horizon": "all",
+        "captured_at": "2026-09-11T15:00:00+00:00",
+        "observed_at": "2026-09-11T15:00:00+00:00",
+        "coverage_id": "same",
+        "snapshot_id": "current",
+        "facts": [
+            fact(
+                "Underlying price",
+                95,
+                "USD",
+                ticker="DIA",
+                source="fixture",
+                snapshot_id="current",
+                event_time="2026-09-11T15:00:00Z",
+            )
+        ],
+    }
+
+    def closing(day):
+        stamp = f"2026-09-{day}T20:00:00+00:00"
+        return {
+            **current,
+            "snapshot_id": f"close{day}",
+            "observed_at": stamp,
+            "anchor_kind": "close",
+            "window": {"session_close": stamp},
+            "facts": [
+                fact(
+                    "Underlying price",
+                    90,
+                    "USD",
+                    ticker="DIA",
+                    source="fixture",
+                    snapshot_id=f"close{day}",
+                    event_time=stamp,
+                )
+            ],
+        }
+
+    await repo.save_anchor("alice", closing("09"))
+    facts, note = await history_facts(repo, "alice", current, closing_only=True)
+    assert facts == [] and "2026-09-10" in note
+    await repo.save_anchor("alice", closing("10"))
+    facts, note = await history_facts(repo, "alice", current, closing_only=True)
+    assert facts[-1]["value"] == 5 and "2026-09-10" in note

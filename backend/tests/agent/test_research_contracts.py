@@ -62,6 +62,31 @@ def test_explicit_question_ticker_wins_without_relabelling_context():
     assert spec["context_conflict"]
 
 
+@pytest.mark.parametrize(
+    "question,horizon,expiry",
+    [
+        ("Use contracts expiring today for MSFT", "0dte", None),
+        ("Use the next five trading sessions for MSFT", "week", None),
+        ("Explain MSFT expiry 2026-10-16", "all", "2026-10-16"),
+    ],
+)
+def test_question_expiry_scope_wins_but_original_screen_remains_saved(question, horizon, expiry):
+    screen = {"ticker": "MSFT", "horizon": "month", "selectedExpiry": "2026-09-18"}
+    spec = request_spec({"question": question, "screen": screen})
+    assert spec["horizon"] == horizon
+    assert spec["question_scope"]["selected_expiry"] == expiry
+    assert spec["screen"] == screen
+
+
+def test_observation_date_does_not_change_expiry_and_same_ticker_keeps_range():
+    spec = request_spec(
+        {"question": "What changed today since the last close?", "screen": {"ticker": "DIA", "horizon": "month"}}
+    )
+    assert spec["horizon"] == "month" and spec["question_scope"] is None
+    spec = request_spec({"question": "Explain DIA", "screen": {"ticker": "DIA", "expiryRange": [3, 12]}})
+    assert spec["horizon"] == "range:3:12"
+
+
 @pytest.mark.parametrize("text", ["The price is 999", "Price is above flip", "This is guaranteed bullish"])
 def test_model_cannot_hide_factual_claims_in_commentary(text):
     with pytest.raises(ValueError):

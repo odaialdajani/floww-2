@@ -104,8 +104,38 @@ def request_spec(body):
     if len(tickers) > 3 or any(not re.fullmatch(r"[A-Z][A-Z0-9.-]{0,9}", t) for t in tickers):
         raise ValueError("Choose at most three valid tickers")
     horizon = normalize_horizon(body.get("horizon") or screen.get("horizon") or screen.get("dte") or "all")
+    question_scope = None
+    named_scopes = [
+        value
+        for pattern, value in (
+            (r"\b(?:0dte|same-day expiry|expiring today|expires today|today's expiry|today's expiration)\b", "0dte"),
+            (r"\b(?:next trading (?:day|session)|1dte)\b", "1dte"),
+            (r"\bnext (?:five|5) (?:trading )?(?:sessions|days)\b", "week"),
+            (r"\b(?:next|coming) month\b", "month"),
+        )
+        if re.search(pattern, question, re.IGNORECASE)
+    ]
+    expiry_dates = list(
+        dict.fromkeys(
+            re.findall(
+                r"\b(?:expiry|expiration|expiring|expires)(?:\s+on)?\s+(\d{4}-\d{2}-\d{2})\b", question, re.IGNORECASE
+            )
+        )
+    )
+    if len(named_scopes) + len(expiry_dates) > 1:
+        raise ValueError("Choose one explicit expiry scope per question")
+    if expiry_dates:
+        expiry = date.fromisoformat(expiry_dates[0]).isoformat()
+        horizon, question_scope = "all", {"selected_expiry": expiry}
+    elif named_scopes:
+        horizon, question_scope = named_scopes[0], {"selected_expiry": None}
     bounds = screen.get("expiryRange")
-    if bounds and bounds != [None, None] and not explicit:
+    if (
+        bounds
+        and bounds != [None, None]
+        and (not explicit or tickers == [screen.get("ticker")])
+        and question_scope is None
+    ):
         if not isinstance(bounds, list) or len(bounds) != 2:
             raise ValueError("Invalid visible expiry range")
         lo, hi = bounds
@@ -119,6 +149,7 @@ def request_spec(body):
         horizon=horizon,
         screen=screen,
         context_conflict=bool(screen.get("ticker") and screen["ticker"] not in tickers),
+        question_scope=question_scope,
     )
 
 

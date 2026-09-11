@@ -1,10 +1,18 @@
 """Comparison only between owner-saved observations with matching coverage."""
 
-from services.agent.contracts import fact, finite
+from datetime import datetime
+
+from services.agent.access.horizon import required_close
+from services.agent.contracts import fact, finite, instant
 from services.agent.repository import utcnow
 
 
-async def history_facts(repository, owner, current):
+async def history_facts(repository, owner, current, *, closing_only=False, previous_session=False):
+    close_time = (
+        required_close(datetime.fromisoformat(current["captured_at"]), previous_session=previous_session)
+        if closing_only
+        else None
+    )
     cursor = (
         repository.turns.find(
             {"owner": owner, "status": "completed", "answer.snapshots.ticker": current["ticker"]},
@@ -28,7 +36,15 @@ async def history_facts(repository, owner, current):
         previous_snapshots.append(anchor["snapshot"])
     previous_snapshots.sort(key=lambda snapshot: snapshot.get("observed_at") or "", reverse=True)
     unavailable = "No earlier compatible source observation was saved"
+    if closing_only:
+        unavailable = f"No verified closing observation was saved for {close_time}"
     for previous in previous_snapshots:
+        if closing_only and (
+            previous.get("anchor_kind") != "close"
+            or instant(previous.get("observed_at")) != close_time
+            or instant(previous.get("window", {}).get("session_close")) != close_time
+        ):
+            continue
         if previous["ticker"] != current["ticker"] or previous["horizon"] != current["horizon"]:
             continue
         if (
@@ -42,6 +58,8 @@ async def history_facts(repository, owner, current):
             continue
         before = next((f for f in previous["facts"] if f["metric"] == "Underlying price"), None)
         after = next((f for f in current["facts"] if f["metric"] == "Underlying price"), None)
+        if closing_only and (not before or instant(before.get("event_time")) != close_time):
+            continue
         if (
             not before
             or not after

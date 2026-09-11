@@ -68,7 +68,7 @@ def horizon_window(horizon: str, *, now: datetime | None = None, selected_expiry
         start = end = next_session.date().isoformat()
     elif horizon == "week":
         first = stamp if is_session and state != "closed" else next_session
-        sessions = cal.sessions_window(first, 4)
+        sessions = cal.sessions_window(first, 5)
         start, end = sessions[0].date().isoformat(), sessions[-1].date().isoformat()
     elif horizon == "month":
         start = today.isoformat()
@@ -89,6 +89,19 @@ def horizon_window(horizon: str, *, now: datetime | None = None, selected_expiry
 
 def is_prep_mode(now: datetime | None = None) -> bool:
     return horizon_window("all", now=now)["session_state"] != "open"
+
+
+def required_close(now, *, previous_session=False):
+    """Exact completed exchange close requested by a saved-history comparison."""
+    current = _now(now)
+    cal = _calendar()
+    stamp = pd.Timestamp(current.date())
+    if cal.is_session(stamp):
+        closing = cal.session_close(stamp).to_pydatetime()
+        session = cal.previous_session(stamp) if previous_session or current < closing else stamp
+    else:
+        session = cal.date_to_session(stamp, direction="previous")
+    return cal.session_close(session).to_pydatetime().isoformat()
 
 
 def slice_expiries(contracts, horizon, *, now=None, selected_expiry=None):

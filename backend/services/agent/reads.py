@@ -91,6 +91,7 @@ class ResearchReads:
         if finite(spot) and spot > 0:
             add("Underlying price", spot, "USD")
         add("Available contracts", len(contracts), "contracts")
+        add("Available expiry dates", sorted({str(contract['expiry']) for contract in contracts}), "dates")
         valid = [
             c
             for c in contracts
