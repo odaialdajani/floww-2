@@ -1,0 +1,38 @@
+# Remaining work and handoff
+
+Updated 2026-09-11 23:40 UTC. This is the entry point for unfinished work after the AI/UI reconciliation. **The full goal is not complete.** Mobile optimization is paused. Publishing this branch does not approve a release, paper orders, live orders, extra model calls, or a merge into main.
+
+## Resume here
+
+1. Read the [complete current work/dependency list](.planning/eval/full-scope-remaining-20260911.md), [AI plan](.planning/unknowns/lodestar-plan-v4-review-draft.md), and [UI plan](.planning/mockups/tidehunter-pro-2026-09-05/PLAN.md). Preserve their requirements; do not shrink the goal to the delivered research subset.
+2. Resolve the morning-checklist contract without restoring unreviewed legacy trade/risk suggestions. Its original assertion still fails because levels, strategy, risk and hedging fields are missing.
+3. Finish the sealed 30-case AI comparison: one candidate requires 26 model calls, then independent grading. Last verified usage was 34/40 on September 11 UTC; check the current day and shared usage before starting. The requested allowance increase is unanswered. Do not reset usage or spend beyond the existing limit. The runner must still match its frozen files, data, dependencies and executable; refuse drift. Preserve failed cases in the denominator and the unsuccessful earlier comparison.
+4. After initial research acceptance, finish the wider company, microstructure, comparisons, historical-range and volatility capabilities, including a real production history connection and verified product-expiry metadata.
+5. Build and validate concrete trade proposals, then the durable paper lifecycle. The proposal to count slippage once remains an unanswered user decision. Preserve the existing accepted accounting rule until explicitly superseded.
+6. Finish private watches, material-change cards, quiet/mute controls, morning briefs, deduplication, full-session budgets, actual forward outcomes and learning acceptance.
+7. Finish eventual broker-entry tracking/reconciliation. Immediate confirmed fills are corrected; later fills and old guessed holdings still require evidence-backed reconciliation. Production journal migration has only temporary-store/reopen/rollback proof, not a production rollout.
+8. Finish the remaining incoming-code audit and verification items below. Preserve the review decisions on open PRs 3/4/5; their obsolete/broken branches were not merged or closed. No claim was made that every line of all 133 changed production files was audited.
+9. Keep later live trading behind its separate written approval, concrete limits and future paper/forward evidence. Keep mobile work paused unless the user changes that priority.
+
+## Verification and release business still open
+
+- The recorded full backend run was **5656 passed, 2 failed, 39 skipped**, no deselections/errors, coverage 68.08%. One failure was an outdated expiry expectation, corrected afterward with 19 related checks passing. The morning checklist remains a genuine failure. This is **not a final full-suite pass**. Preserve the [exact result](.planning/eval/backend-suite-20260911-2324.json).
+- The 39 skips comprise 38 named test cases plus one collection-time skip. The saved full log confirms that split; the collection-time identity still needs to be captured explicitly. The named cases cover browser/reference screenshots, missing shipped model/metadata artifacts, sample-chain calculations and historical replay. Their exact names are in the result above. Resolve each prerequisite or document an explicit retirement; never convert missing evidence into a pass.
+- Four metadata/truth claims remain unverified from the separate truth audit. See [its recorded result](.planning/eval/delivery-checks-20260911-2222.json); this is separate from the 39 skipped backend checks.
+- Latest frontend evidence is 84 suites / 723 tests and a successful build. The equity select option was added after test collection; final build and actual controlled browser include it. Journal stock/option math has separate independent checks. See [final checks](.planning/eval/delivery-checks-20260911-2324.json).
+- Real local research storage, fresh-process reopening and sample-record restore passed. Forced crash recovery, complete production-scale backup/restore, full background-worker startup, and production-wide acquisition sharing are not certified. The preview backend started at21:44; later order/outcome/ingestion changes were tested in isolated routes/stores, not represented as loaded by that old process. Perform an intentional production startup/delivery check before release.
+- Local-only research ownership is supported; remote authenticated identity/account binding is not implemented or enabled.
+- Incident follow-up remains documented: early tests unexpectedly made read-only provider requests before the stronger guard; two derived whale records reached a shared journal before isolation; a Windows test fixture briefly selected real quality tools. No known order was sent. Preserve audit evidence and obtain exact broker/store evidence before historical repairs; do not infer zero side effects or delete records speculatively. See [delivery history](.planning/INTEGRATION_AI_UI_GOAL.md).
+- Refresh stale operational documentation against current source before relying on it. Older documents still describe superseded blockers, paths, route reachability and model results. Historical results are not current guarantees.
+
+## Older work is retained, not declared complete
+
+[NEXT_TASKS.md](NEXT_TASKS.md) retains the older regime-filter backtest, intraday causal checks, bear-market test, toxicity display connection, real historical training, walk-forward work and FOMC validation. Its old network/storage blocker labels require rechecking. The wider [BACKLOG.md](BACKLOG.md), [MORNING_QUEUE.md](MORNING_QUEUE.md), [MORNING_CHECKLIST.md](MORNING_CHECKLIST.md), [roadmap](.planning/ROADMAP.md) and kanban cards remain separate sources of existing obligations. This handoff does not close or silently promote them.
+
+## Saved work and local-only evidence
+
+Implementation and detailed reviews are committed on `work/reconcile-ai-ui-20260911`, including source commit `b1208083`. The next handoff commit also preserves the two previously unstaged tracked changes: removal of the planning tool selection and the generated bottleneck timestamp snapshot. Those edits are saved as existing local state, not claimed as independently implemented features or proof of no project blockers.
+
+External safety copy, raw storage/restore artifacts, journal audit, full session checkpoint, raw transcripts, browser captures and output remain preserved locally. They include private recovery/session material or scratch evidence and are not publication artifacts. Sanitized results and frozen comparison inputs are committed. No local artifact was deleted. Only the current working branch is to be pushed; merging into main, deployment and closing PRs remain separate actions.
+
+Read [the full section-by-section AI review](.planning/eval/ai-plan-sweep-20260911.md), [UI review](.planning/eval/ui-plan-sweep-20260911.md), [restored-check inventory](.planning/eval/backend-unverified-checks-20260911.md), [order review](.planning/eval/merged-order-boundary-review-20260911.md), and [independent journal review](.planning/eval/journal-order-identity-independent-review-20260911.md) for detailed evidence and limits.

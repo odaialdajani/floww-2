@@ -1,5 +1,10 @@
 # Full requested scope and remaining work
 
+Publication handoff added23:40: [root remaining-work record](../../REMAINING_WORK.md)
+also preserves the verification/operational gaps, older backlogs, local-only
+evidence and branch-only push scope. The user's push instruction does not close
+any unfinished item below or authorize extra model calls or trading.
+
 Updated 2026-09-11 23:17 UTC. The user's 22:32 instruction retains the original full objective: preserve local work, reconcile shared work, review incoming changes and outstanding PRs, implement both exact AI/UI plans, report genuine blocks and all unfinished work. Mobile optimization is set aside. Neither full-plan completion nor complete audit of every incoming line is claimed.
 
 ## Completed and newly corrected

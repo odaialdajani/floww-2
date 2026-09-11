@@ -1,5 +1,10 @@
 # NEXT_TASKS.md
 
+> Current handoff (2026-09-11): [REMAINING_WORK.md](REMAINING_WORK.md) records the
+> full unfinished AI/UI work, blockers, verification gaps and publication scope.
+> The older tasks below are retained; their historical status and blockers have
+> not been revalidated or marked complete by the current integration work.
+
 ## Phase 5 Causal Inference — Complete (2026-05-23)
 
 ### Shipped ✅
