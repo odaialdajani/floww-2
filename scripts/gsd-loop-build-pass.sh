@@ -1,6 +1,6 @@
 #!/bin/zsh
 # gsd-loop BUILD lane — one playbook pass per wake.
-# Scheduled task: "gsd-loop build — mrbeast1179-sketch/floww"
+# Scheduled task: "gsd-loop build — odaialdajani/floww-2"
 # (launchd com.nav.gsd-loop.build.floww, StartInterval 900).
 #
 # Each wake: exactly one build-playbook pass via `opencode run`, then the
@@ -53,7 +53,7 @@ elif [ ! -f "$PLAYBOOK" ]; then EVENT=blocked; REASON="playbook-missing"; fi
 
 if [ -z "$EVENT" ]; then
   PASSLOG="/tmp/gsd-loop-build-pass-${now}.log"
-  PROMPT="Run exactly ONE gsd-loop BUILD pass for repo $REPO (owner/repo mrbeast1179-sketch/floww). Read and follow ONLY this playbook: $PLAYBOOK. Wherever it says LINKAGE_SYNC, use exactly: $LINKAGE. Rules: one repair or one issue-to-PR, all checkout-side work in a dedicated git worktree (main tree stays on its branch), never merge, never force-push, never touch uncommitted work that is not yours. Your final response MUST end with exactly one line of the form GSD_LOOP_RESULT={\"lane\":\"build\",\"status\":\"work|idle|blocked\",\"reason\":\"short-reason\"} and no text after it."
+  PROMPT="Run exactly ONE gsd-loop BUILD pass for repo $REPO (owner/repo odaialdajani/floww-2). Read and follow ONLY this playbook: $PLAYBOOK. Wherever it says LINKAGE_SYNC, use exactly: $LINKAGE. Rules: one repair or one issue-to-PR, all checkout-side work in a dedicated git worktree (main tree stays on its branch), never merge, never force-push, never touch uncommitted work that is not yours. Your final response MUST end with exactly one line of the form GSD_LOOP_RESULT={\"lane\":\"build\",\"status\":\"work|idle|blocked\",\"reason\":\"short-reason\"} and no text after it."
   if [ "${GSD_DRY_RUN:-0}" = "1" ]; then
     echo 'GSD_LOOP_RESULT={"lane":"build","status":"idle","reason":"dry-run"}' > "$PASSLOG"
   else
@@ -92,7 +92,7 @@ import json,sys
 p,i,ts,pa,n = sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5]
 try: d=json.load(open(p))
 except Exception: d={}
-d.update({"lane":"build","repo":"mrbeast1179-sketch/floww","task":"gsd-loop build \u2014 mrbeast1179-sketch/floww","idle_count":int(i),"last_run":int(ts),"paused":(pa=="True"),"interval_minutes":int(n)})
+d.update({"lane":"build","repo":"odaialdajani/floww-2","task":"gsd-loop build \u2014 odaialdajani/floww-2","idle_count":int(i),"last_run":int(ts),"paused":(pa=="True"),"interval_minutes":int(n)})
 json.dump(d,open(p,"w"),indent=2)
 EOF
 log "pass done event=$EVENT action=$ACTION idle=$NEWIDLE next_in=${NEWINT}m"

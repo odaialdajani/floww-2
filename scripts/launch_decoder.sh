@@ -8,13 +8,13 @@
 #   ./scripts/launch_decoder.sh --restart # force restart backend + react
 #
 # Add an alias so it's a one-keystroke launch:
-#   echo 'alias decoder="bash $HOME/Documents/GitHub/floww/scripts/launch_decoder.sh"' >> ~/.zshrc
+#   echo 'alias decoder="bash $HOME/Documents/GitHub/floww-2/scripts/launch_decoder.sh"' >> ~/.zshrc
 #   source ~/.zshrc
 #   decoder      # done
 
 set -e
 
-REPO_ROOT="$HOME/Documents/GitHub/floww"
+REPO_ROOT="$HOME/Documents/GitHub/floww-2"
 PWA_PATH="$HOME/Applications/Chrome Apps.localized/Meridian.app"
 BACKEND_PORT=8000
 REACT_PORT=3000
