@@ -467,11 +467,13 @@ class TestBrokerageGuards:
         assert d["positions"][0]["symbol"] == "SPY"
 
     @pytest.mark.parametrize("bad", ["abc", None, "", -1, 0])
-    def test_place_order_rejects_bad_quantity_422(self, bad):
+    def test_place_order_rejects_bad_quantity_422(self, bad, monkeypatch):
+        monkeypatch.setenv("API_SECRET_KEY", "test-secret-key")
         import routes.public_brokerage as mod
         broker = _mock_brokerage()
         broker.place_order = AsyncMock()
         with patch.object(mod, "_get_broker", new=AsyncMock(return_value=broker)):
+            monkeypatch.setenv("FLOWW_ENABLE_LIVE_PUBLIC", "1")
             r = client.post("/api/public/order", headers={"X-API-Key": "test-secret-key"}, json={
                 "symbol": "AAPL", "side": "BUY", "order_type": "MARKET",
                 "quantity": bad, "time_in_force": "DAY",
@@ -480,11 +482,13 @@ class TestBrokerageGuards:
         assert r.status_code == 422, r.text
         broker.place_order.assert_not_called()
 
-    def test_place_order_rejects_bad_prices_422(self):
+    def test_place_order_rejects_bad_prices_422(self, monkeypatch):
+        monkeypatch.setenv("API_SECRET_KEY", "test-secret-key")
         import routes.public_brokerage as mod
         broker = _mock_brokerage()
         broker.place_order = AsyncMock()
         with patch.object(mod, "_get_broker", new=AsyncMock(return_value=broker)):
+            monkeypatch.setenv("FLOWW_ENABLE_LIVE_PUBLIC", "1")
             r = client.post("/api/public/order", headers={"X-API-Key": "test-secret-key"}, json={
                 "symbol": "AAPL", "side": "BUY", "order_type": "LIMIT",
                 "quantity": 1, "limit_price": "abc",

@@ -58,6 +58,7 @@ class ResearchService:
         self.capacity = concurrent + queued
         self.timeout = timeout
         self._maintenance_lock = asyncio.Lock()
+        self._maintenance_task = None
 
     async def ask(self, owner, request_id, spec):
         async with self._admission:
@@ -195,9 +196,25 @@ class ResearchService:
 
     async def close(self):
         tasks = list(self.tasks.values())
+        if self._maintenance_task is not None:
+            tasks.append(self._maintenance_task)
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+
+    def schedule_maintenance(self):
+        """One tracked task keeps slow reconciliation off the market scheduler."""
+        if self._maintenance_task is None or self._maintenance_task.done():
+            self._maintenance_task = asyncio.create_task(self._safe_maintenance())
+        return self._maintenance_task
+
+    async def _safe_maintenance(self):
+        try:
+            await self.maintenance()
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).exception("Research maintenance failed")
 
     async def maintenance(self, now=None):
         """Existing app scheduler calls this; cache-only and idle-priority."""

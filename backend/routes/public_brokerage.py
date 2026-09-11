@@ -17,9 +17,9 @@ POST /api/public/order — place a single-leg order.
 
 POST /api/public/order/{order_id}/cancel — cancel an open order.
 
-Paper trading mode by default — no live orders until the user explicitly
-connects a live account and generates a secret key at
-public.com/settings/security/api.
+Public.com orders are LIVE, not a paper simulation. New submissions are
+disabled unless FLOWW_ENABLE_LIVE_PUBLIC is exactly 1 after explicit operator
+authorization. Merely configuring a data key does not enable submissions.
 
 Mounted at /api/public alongside /api/public/chain + /api/public/quotes
 from routes/public_api.py.
@@ -27,10 +27,12 @@ from routes/public_api.py.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from auth import require_api_key
 from services.public_api_adapter import _get_broker
 
 log = logging.getLogger(__name__)
@@ -339,7 +341,7 @@ async def get_account() -> dict[str, Any]:
 # POST /order — place a single-leg order
 # ---------------------------------------------------------------------------
 
-@router.post("/order")
+@router.post("/order", dependencies=[Depends(require_api_key)])
 async def place_order(request: dict[str, Any]) -> dict[str, Any]:
     """Place a single-leg order via Public.com.
 
@@ -354,6 +356,8 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
         instrument_type:    EQUITY, OPTION, CRYPTO, BOND
         equity_market_session: optional for EQUITY
     """
+    if os.getenv("FLOWW_ENABLE_LIVE_PUBLIC") != "1":
+        raise HTTPException(status_code=403, detail="Live Public.com submissions are disabled; explicit approval is required")
     broker = await _get_broker()
     if broker is None:
         raise HTTPException(status_code=502, detail={
@@ -443,7 +447,7 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
 # POST /order/{order_id}/cancel
 # ---------------------------------------------------------------------------
 
-@router.post("/order/{order_id}/cancel")
+@router.post("/order/{order_id}/cancel", dependencies=[Depends(require_api_key)])
 async def cancel_order(order_id: str) -> dict[str, Any]:
     """Cancel an open order by ID. Uses DELETE under the hood (Public API
     accepts DELETE to .../order/{id}; POST to .../cancel returns 404)."""

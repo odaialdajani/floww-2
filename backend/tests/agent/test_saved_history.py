@@ -39,3 +39,28 @@ async def test_history_requires_owner_source_time_and_matching_contract_coverage
     assert (await history_facts(repo, "bob", after))[0] == []
     assert (await history_facts(repo, "alice", {**after, "observed_at": None}))[0] == []
     assert "coverage" in (await history_facts(repo, "alice", {**after, "coverage_id": "changed"}))[1]
+
+
+@pytest.mark.asyncio
+async def test_collected_anchor_is_available_without_an_earlier_question():
+    repo = AgentRepository(AsyncMongoMockClient().test)
+    await repo.initialize()
+    now = datetime(2026, 9, 11, 15, tzinfo=UTC)
+    source = {"spot": 100, "source": "fixture", "event_time": "2026-09-11T14:59:00Z", "contracts": []}
+    reads = ResearchReads(lambda *a: source, lambda *a: None, lambda *a: [])
+    before = await reads.snapshot("SPY", "all", now=now)
+    await repo.save_anchor("alice", before)
+    await repo.save_anchor(
+        "alice",
+        {
+            **before,
+            "snapshot_id": "different-coverage",
+            "observed_at": "2026-09-11T14:59:30+00:00",
+            "coverage_id": "changed",
+        },
+    )
+    source.update(spot=102, event_time=now.isoformat())
+    after = await reads.snapshot("SPY", "all", now=now)
+    facts, _ = await history_facts(repo, "alice", after)
+    assert facts[-1]["value"] == 2
+    assert (await history_facts(repo, "bob", after))[0] == []

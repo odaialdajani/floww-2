@@ -27,6 +27,24 @@ async def setup():
 
 
 @pytest.mark.asyncio
+async def test_slow_maintenance_is_single_tracked_task_and_shutdown_cancels_it():
+    _, service = await setup()
+    entered = asyncio.Event()
+
+    async def slow():
+        entered.set()
+        await asyncio.Event().wait()
+
+    service.maintenance = slow
+    first = service.schedule_maintenance()
+    await asyncio.wait_for(entered.wait(), 1)
+    assert service.schedule_maintenance() is first
+    assert not first.done()
+    await service.close()
+    assert first.cancelled()
+
+
+@pytest.mark.asyncio
 async def test_rotation_logout_and_recovery_keep_history_private():
     repo, _ = await setup()
     identity_owner, token = await repo.session()
@@ -51,12 +69,22 @@ async def test_server_key_is_required_for_budget_and_owner_recovery(monkeypatch)
     identity_owner, _ = await repo.session()
     app = FastAPI()
     app.include_router(router)
+    app.add_middleware(AgentCORSMiddleware)
     app.state.research_service = service
     async with AsyncClient(
         transport=ASGITransport(app=app, client=("127.0.0.1", 123)),
         base_url="http://localhost:8000",
         headers={"Origin": "http://localhost:3000"},
     ) as client:
+        preflight = await client.options(
+            "/api/agent/session/recover",
+            headers={
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type,x-api-key",
+            },
+        )
+        assert preflight.status_code == 204
+        assert "x-api-key" in preflight.headers["access-control-allow-headers"].lower()
         assert (await client.get("/api/agent/budget")).status_code == 401
         assert (await client.post("/api/agent/session/recover", json={"owner": identity_owner})).status_code == 401
         recovery = await client.post(

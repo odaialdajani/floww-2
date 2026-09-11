@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from mongomock_motor import AsyncMongoMockClient
@@ -20,6 +21,12 @@ os.environ["FLOWW_AGENT_DEPLOYMENT"] = "local"
 os.environ["FLOWW_AGENT_ORIGINS"] = "http://localhost:3101,http://127.0.0.1:3101,http://localhost:3102"
 app = FastAPI()
 app.include_router(router)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3101", "http://localhost:3102"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
+)
 app.add_middleware(AgentCORSMiddleware)
 STAMP = datetime.now(UTC).isoformat()
 EXPIRY = (datetime.now(UTC) + timedelta(days=7)).date().isoformat()
@@ -134,6 +141,7 @@ async def alert_stream():
 
 
 @app.websocket("/ws/signals")
+@app.websocket("/ws/gex/{ticker}")
 async def signals(socket: WebSocket):
     await socket.accept()
     try:
@@ -141,6 +149,11 @@ async def signals(socket: WebSocket):
             await socket.receive_text()
     except WebSocketDisconnect:
         pass
+
+
+@app.post("/api/preferences/theme")
+async def theme_preference():
+    return {"saved": True, "source": "OFFLINE BROWSER FIXTURE"}
 
 
 @app.get("/api/{path:path}")

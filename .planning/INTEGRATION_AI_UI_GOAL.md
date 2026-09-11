@@ -34,10 +34,27 @@ User objective confirmed 2026-09-11: preserve and commit local work, review coll
 ## Open findings
 - Incoming invalid/nonfinite return counting fixed and regression-tested in the integration commit.
 - Latest full frontend run: 75 suites, 609 tests passed. Production build and both narrow/wide browser views checked with explicitly synthetic offline data. More focused controls and two-address checks are in progress.
-- Latest focused research run: 60 tests passed on Python 3.11. Coverage includes real calculators, native DuckDB read seam, owner isolation, bounded work, cancellation, restart, model format validation, spending/reconciliation and import/order boundaries.
+- Latest focused research run: 77 tests passed on Python 3.11. Coverage includes real calculators, native DuckDB read seam, owner isolation, bounded work, cancellation, restart, model format validation, spending/reconciliation and import/order boundaries.
 - Full backend attempt stopped with 867 passed and 29 failed after roughly 17 percent. A missing local MongoDB makes every root fixture wait; failures also include existing model files, ticker routes and other services. This is not a full pass or total-coverage proof.
 - Automatic approval review rejected downloading/starting the local MongoDB with reason "blocked by policy". No database was installed. Real durable restart and authorized provider benchmarking remain blocked; the browser fixture is explicitly not that proof.
 - Paper accounting correction is proposed in ADR 0010; user decision is pending. Paper, remote identity, account bindings, live enabling and forward promotion remain gated.
 - Remaining research release work includes outcome-path/minimal resolver completion, full fault/functional evaluation, provider comparison, and deployed storage-driver proof. Later catalog/proposal/watch/paper/live stages are not being marked complete by the core implementation.
 - Unrelated changes to .planning/config.json and kanban/BOTTLENECK_ALERTS.md are preserved and excluded from this delivery staging.
 - Scratch transcripts/research remain local and backed up; they are not implementation artifacts.
+
+## Checked checkpoint - 2026-09-11 17:38 UTC
+
+- Final frontend: 75 suites / 609 tests pass; final production build succeeds. Viewed final 1280px board and dealer chart with explicit synthetic offline source. Prior 390px fit and same/separate-origin saved-answer flows were exercised. No production data or restart proof is inferred from this fixture.
+- Research: 77 focused tests pass, including corrected-bar ambiguity, receipt-time lookahead, immutable claim identity, owner-only collected history, browser recovery preflight, and nonblocking tracked maintenance. Prediction resolver remains a tested primitive: no predictive claims are issued, no real bar-range source/projection is enabled, no performance claims are made.
+- Backend full Ruff passes. Required medium Bandit scan passes with the CI exclusions plus the second local virtual environment. Existing truth audit: 24 pass / 0 fail. Full backend remains incomplete; prior run stopped at 867 pass / 29 fail. Changed agent endpoint tests now pass; data-route invariant still fails because separately mounted brokerage paths share the prefix.
+- Newly found merged live-order exposure: public_brokerage submission had no environment gate and falsely claimed paper default. Added explicit off-by-default FLOWW_ENABLE_LIVE_PUBLIC gate before broker access and explicit private-key dependencies for submission/cancellation. Six refusal tests failed before and pass after; seven existing mocked validation tests pass. No real orders were sent, no enablement setting changed. This is a safety repair, not approval or readiness for live use.
+- Full test_public_api_only isolated attempt had four additional failures beyond the now-passing six authenticated validation cases: unavailable removed route expectation, history response shape, quote source mismatch, indicator error status. Preserve these in the review backlog; do not label the full backend green.
+- Remote fetched at 17:35: branch contains current origin/main (3 ahead / 0 behind before this checkpoint commit). New colleague appshell typo branch duplicates the compile fix already integrated. No main merge, deployment or live service restart performed.
+
+## Release blockers and next accepted work
+
+1. User starts a real local database. Original automated installation/start was rejected by automatic approval review, reason: blocked by policy. No retry or workaround performed. Real driver compatibility, durable restart, restore, recovery/concurrency tests remain mandatory.
+2. Freeze and evaluate >=30 held-out functional prompts, then compare the authorized models against deterministic answers with actual cost accounting. No paid benchmark or provider quality improvement is claimed.
+3. Complete and validate claim projection and actual historical path availability, freshness/product policy and full research acceptance before expanding later catalogs/proposals/watch features. Current answers remain descriptive/non-gradeable.
+4. Resolve broader merged-test failures with reproductions and scope evidence. Do not silence the data-only routing invariant merely because a gated brokerage route exists.
+5. User accounting decision remains pending; paper book and later live stages are gated by the exact plan. Remote public access still requires verified identity. Do not enable later features merely to call the whole plan complete.

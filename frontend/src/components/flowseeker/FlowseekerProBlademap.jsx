@@ -1347,10 +1347,10 @@ export default function FlowseekerProBlademap({ active = true }) {
                     <>
                       <span className="v">
                         {visibleFeed.length && bestFeed
-                          ? `Nothing ≥${TRADE_NOW_FLOOR} · best ${bestFeed.conviction} ${bestFeed.under || bestFeed.ticker || ""}`
+                          ? `No eligible trade · highest reading ${bestFeed.conviction} ${bestFeed.under || bestFeed.ticker || ""}`
                           : "Server feed empty — ranking client-side"}
                       </span>
-                      <span className="f">{feedErr || `${scan.length} contracts screened · floor ${TRADE_NOW_FLOOR} conviction`}</span>
+                      <span className="f">{feedErr || `${scan.length} contracts screened · needs a fresh, complete contract and ${TRADE_NOW_FLOOR}+ conviction`}</span>
                     </>
                   )}
                   {degradedLine && <span className="f warn">{degradedLine}</span>}

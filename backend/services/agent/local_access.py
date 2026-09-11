@@ -63,8 +63,16 @@ class AgentCORSMiddleware(BaseHTTPMiddleware):
         origin = request.headers.get("origin")
         if request.method == "OPTIONS":
             method = request.headers.get("access-control-request-method", "")
+            # CORS permission does not grant anonymous access: these exact
+            # administrative routes retain their server-key dependency.
+            administrative = (method, request.url.path) in {
+                ("POST", "/api/agent/session/recover"),
+                ("GET", "/api/agent/budget"),
+            }
             response = Response(
-                status_code=204 if origin in trusted_origins() and research_path(method, request.url.path) else 403
+                status_code=204
+                if origin in trusted_origins() and (research_path(method, request.url.path) or administrative)
+                else 403
             )
         else:
             response = await call_next(request)
@@ -75,6 +83,6 @@ class AgentCORSMiddleware(BaseHTTPMiddleware):
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
             response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, OPTIONS"
-            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Last-Event-ID"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Last-Event-ID, X-API-Key"
             response.headers["Vary"] = "Origin"
         return response

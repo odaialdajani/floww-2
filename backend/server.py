@@ -1987,7 +1987,7 @@ async def _scheduler_loop():
                 log.warning(f"snapshot tick err: {e}")
             research = getattr(app.state, "research_service", None)
             if research is not None and os.getenv("FLOWW_AGENT_DISABLED") != "1":
-                await research.maintenance()
+                research.schedule_maintenance()
         except Exception as e:
             log.warning(f"scheduler tick err: {e}")
         await asyncio.sleep(60)
