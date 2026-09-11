@@ -2,6 +2,11 @@ import React from "react";
 import {render, screen, within} from "@testing-library/react";
 import AgentPanelAnswer from "./AgentPanelAnswer";
 
+test("answer heading uses the saved expiry scope instead of broad request alias",()=>{
+ render(<AgentPanelAnswer turn={{ticker:"SPY",horizon:"all",status:"completed",answer:{snapshots:[{ticker:"SPY",window:{start:"2026-09-18",end:"2026-09-18"}}]}}}/>);
+ expect(screen.getByRole("heading").textContent).toBe("SPY · 2026-09-18");
+});
+
 // Explicitly synthetic chart fixtures; they test display of saved evidence.
 const displayScope = `display:${"a".repeat(64)}`;
 const mapScope = `map:${"b".repeat(64)}`;
