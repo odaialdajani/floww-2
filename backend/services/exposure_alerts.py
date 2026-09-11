@@ -37,6 +37,7 @@ RULE_CHARM_PIN = "CHARM_PIN"
 RULE_TOXIC_FLOW = "TOXIC_FLOW"
 RULE_GAMMA_FLIP = "GAMMA_FLIP"
 RULE_LIQUIDITY_STRESS = "LIQUIDITY_STRESS"
+RULE_VOMMA_WALL = "VOMMA_WALL"
 
 # VPIN toxicity gate (Easley-Lopez de Prado-O'Hara high-toxicity regime).
 # vpin_state: {"vpin": float, "cdf": float|None, "n_buckets": int} | None.
@@ -104,6 +105,47 @@ def _norm_grid(section: Any) -> dict[str, dict[float, float]]:
     return out
 
 
+def _wall_events(new_sec: dict, old_sec: dict, threshold_pct: float,
+                 formed_kind: str, broken_kind: str) -> list[dict]:
+    """Wall formed/broken diff for one grid section (VEX, vomma).
+
+    Extracted verbatim from the VEX inline block: an event fires when a
+    cell's |value| crosses ABOVE threshold * max_abs of its grid between
+    snapshots (strictly greater for formed; the prior cell must be below).
+    Broken fires when a previously-above-threshold cell drops below.
+    """
+    out: list[dict] = []
+    threshold_new = threshold_pct * _max_abs(new_sec)
+    if threshold_new > 0:
+        for expiry, row in new_sec.items():
+            old_row = old_sec.get(expiry, {}) if old_sec else {}
+            thr_old = threshold_pct * _max_abs(old_sec) if old_sec else 0.0
+            for strike, val in row.items():
+                v = float(val)
+                was = float(old_row.get(strike, 0) or 0)
+                above_now = _cell_above(v, threshold_new)
+                # A zero/degenerate old threshold means we can't judge the
+                # prior state — treat as below so first snapshots emit "formed".
+                above_before = (
+                    _cell_above(was, thr_old) and thr_old > 0
+                    if old_row else False
+                )
+                if above_now and not above_before:
+                    out.append({
+                        "kind": formed_kind, "strike": float(strike),
+                        "expiry": expiry, "magnitude": abs(v) if math.isfinite(v) else 0.0,
+                    })
+                elif above_before:
+                    # Wall existed at old threshold; check whether it's gone now.
+                    broken_thr = max(thr_old, threshold_new)
+                    if not _cell_above(v, broken_thr):
+                        out.append({
+                            "kind": broken_kind, "strike": float(strike),
+                            "expiry": expiry, "magnitude": abs(was) if math.isfinite(was) else 0.0,
+                        })
+    return out
+
+
 def evaluate_exposure_events(
     new_grid: dict,
     old_grid: dict | None = None,
@@ -117,6 +159,7 @@ def evaluate_exposure_events(
 
     Returns a list of event dicts sorted by |magnitude| descending:
     {"kind": "vex_wall_formed" | "vex_wall_broken"
+             | "vomma_wall_formed" | "vomma_wall_broken"
              | "charm_pin_formed" | "charm_pin_shifted" | "toxic_flow"
              | "gamma_flip_approach",
      "strike": float, "expiry": str, "magnitude": float}
@@ -132,38 +175,17 @@ def evaluate_exposure_events(
 
     new_vex = _norm_grid(new_grid.get("vex_grid"))
     new_charm = _norm_grid(new_grid.get("charm_grid"))
+    new_vomma = _norm_grid(new_grid.get("vomma_grid"))
     old_vex = _norm_grid((old_grid or {}).get("vex_grid"))
     old_charm = _norm_grid((old_grid or {}).get("charm_grid"))
+    old_vomma = _norm_grid((old_grid or {}).get("vomma_grid"))
 
     # --- VEX walls ---
-    vex_threshold_new = threshold_pct * _max_abs(new_vex)
-    if vex_threshold_new > 0:
-        for expiry, row in new_vex.items():
-            old_row = old_vex.get(expiry, {}) if old_vex else {}
-            thr_old = threshold_pct * _max_abs(old_vex) if old_vex else 0.0
-            for strike, val in row.items():
-                v = float(val)
-                was = float(old_row.get(strike, 0) or 0)
-                above_now = _cell_above(v, vex_threshold_new)
-                # A zero/degenerate old threshold means we can't judge the
-                # prior state — treat as below so first snapshots emit "formed".
-                above_before = (
-                    _cell_above(was, thr_old) and thr_old > 0
-                    if old_row else False
-                )
-                if above_now and not above_before:
-                    events.append({
-                        "kind": "vex_wall_formed", "strike": float(strike),
-                        "expiry": expiry, "magnitude": abs(v) if math.isfinite(v) else 0.0,
-                    })
-                elif above_before:
-                    # Wall existed at old threshold; check whether it's gone now.
-                    broken_thr = max(thr_old, vex_threshold_new)
-                    if not _cell_above(v, broken_thr):
-                        events.append({
-                            "kind": "vex_wall_broken", "strike": float(strike),
-                            "expiry": expiry, "magnitude": abs(was) if math.isfinite(was) else 0.0,
-                        })
+    events.extend(_wall_events(new_vex, old_vex, threshold_pct,
+                              "vex_wall_formed", "vex_wall_broken"))
+    # --- Vomma walls (vol-convexity concentration, one Greek deeper) ---
+    events.extend(_wall_events(new_vomma, old_vomma, threshold_pct,
+                              "vomma_wall_formed", "vomma_wall_broken"))
     # --- Charm pins ---
     charm_threshold_new = threshold_pct * _max_abs(new_charm)
     if charm_threshold_new > 0:
@@ -292,6 +314,8 @@ _WHY = {
     "toxic_flow": "Toxic flow — VPIN in the high regime: makers adversely selected, spreads/vol may widen (heuristic, not a direction call)",
     "gamma_flip_approach": "Gamma flip proximity — price pressing dealer flip level (support above / resistance below)",
     "liquidity_stress": "Liquidity stress — Kyle and Amihud agree the tape is illiquid: size moves price, expect slippage (heuristic, not a direction call)",
+    "vomma_wall_formed": "Vomma wall formed — vol-convexity concentration: dealer hedging accelerates into vol moves at this strike (heuristic, not a direction call)",
+    "vomma_wall_broken": "Vomma wall broken — vol-convexity concentration released, hedging pressure may shift",
 }
 
 
@@ -319,6 +343,9 @@ def events_to_alerts(ticker: str, spot: float,
         elif kind == "liquidity_stress":
             rule = RULE_LIQUIDITY_STRESS
             score = 75
+        elif kind.startswith("vomma_"):
+            rule = RULE_VOMMA_WALL
+            score = min(99, max(50, int(abs(mag) / 1e6) + 50))
         else:
             rule = RULE_VEX_WALL if kind.startswith("vex_") else RULE_CHARM_PIN
             score = min(99, max(50, int(abs(mag) / 1e6) + 50))
@@ -383,6 +410,7 @@ def evaluate_ticker(ticker: str, grid_payload: dict | None, spot: float,
         _LAST_GRIDS[sym] = {
             "vex_grid": grid_payload.get("vex_grid") or {},
             "charm_grid": grid_payload.get("charm_grid") or {},
+            "vomma_grid": grid_payload.get("vomma_grid") or {},
         }
         if len(_LAST_GRIDS) > _LAST_GRIDS_MAX:
             _LAST_GRIDS.pop(next(iter(_LAST_GRIDS)))

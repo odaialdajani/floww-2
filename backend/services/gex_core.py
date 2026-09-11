@@ -183,6 +183,7 @@ def compute_gex_grid(spot: float, contracts: list[dict[str, Any]], ticker: str =
             ivs_c: list[float] = []
             kinds_c: list[bool] = []
             expiries_c: list[str] = []
+            contracts_c: list[dict[str, Any]] = []
             for c in contracts:
                 oi = safe_float(c.get("oi"))
                 iv = safe_float(c.get("iv"))
@@ -197,15 +198,35 @@ def compute_gex_grid(spot: float, contracts: list[dict[str, Any]], ticker: str =
                 ivs_c.append(iv)
                 kinds_c.append((c.get("type") or "call") == "call")
                 expiries_c.append(expiry)
+                contracts_c.append(c)
             out = _dc.compute_gex_grid(spot, strikes_c, ts_c, ois_c, ivs_c,
                                        kinds_c, expiries_c, q)
             if out is not None and out.get("grid"):
+                # The Rust core predates vomma: merge a Python-computed
+                # vomma section with identical fallback semantics (same
+                # filters incl. gamma>0, same sign convention, same units).
+                vomma_sec: dict[str, dict[str, float]] = {}
+                for _c, _strike, _tt, _oi, _iv, _exp in zip(
+                        contracts_c, strikes_c, ts_c, ois_c, ivs_c, expiries_c,
+                        strict=True):
+                    _g = bs_gamma(spot, _strike, _tt, _iv, q=q)
+                    if _g <= 0:
+                        continue
+                    _ct = _c.get("type") or "call"
+                    _sgn = 1.0 if _ct == "call" else -1.0
+                    _cell = _sgn * bs_vomma(spot, _strike, _tt, _iv, q=q) * _oi * 100.0
+                    _row = vomma_sec.setdefault(_exp, {})
+                    # Same strike-key encoding as the fallback return below
+                    # (_k is defined after this block; replicate verbatim).
+                    _kk = str(int(_strike)) if float(_strike).is_integer() else str(_strike)
+                    _row[_kk] = _row.get(_kk, 0.0) + _cell
                 return {
                     "expiries": out["expiries"],
                     "strikes": out["strikes"],
                     "grid": out["grid"],
                     "charm_grid": out["charm_grid"],
                     "vex_grid": out["vex_grid"],
+                    "vomma_grid": vomma_sec,
                     "strike_totals": out["strike_totals"],
                 }
         except Exception as exc:  # pragma: no cover - fallback path
@@ -214,6 +235,7 @@ def compute_gex_grid(spot: float, contracts: list[dict[str, Any]], ticker: str =
     grid: dict[str, dict[float, float]] = {}
     charm_grid: dict[str, dict[float, float]] = {}
     vex_grid: dict[str, dict[float, float]] = {}
+    vomma_grid: dict[str, dict[float, float]] = {}
     strike_totals: dict[float, float] = {}
     for c in contracts:
         oi = safe_float(c.get("oi"))
@@ -235,21 +257,26 @@ def compute_gex_grid(spot: float, contracts: list[dict[str, Any]], ticker: str =
         gamma = bs_gamma(spot, strike, T, iv, q=q)
         charm = bs_charm(spot, strike, T, iv, q=q, kind=contract_type)
         vanna = bs_vanna(spot, strike, T, iv, q=q)
+        vomma = bs_vomma(spot, strike, T, iv, q=q)
         if gamma <= 0:
             continue
         gex_unit = dollar_gex_per_contract(gamma, oi, spot)
         charm_unit = dollar_charm_per_contract(charm, oi, spot)
         vex_unit = dollar_vex_per_contract(vanna, oi, spot)
+        vomma_unit = vomma * oi * 100.0  # contract-dollars of volga (cf. per-strike path)
         sign = 1.0 if contract_type == "call" else -1.0
         cell = sign * gex_unit
         charm_cell = sign * charm_unit
         vex_cell = sign * vex_unit
+        vomma_cell = sign * vomma_unit
         d = grid.setdefault(expiry, {})
         d[strike] = d.get(strike, 0.0) + cell
         dc = charm_grid.setdefault(expiry, {})
         dc[strike] = dc.get(strike, 0.0) + charm_cell
         dv = vex_grid.setdefault(expiry, {})
         dv[strike] = dv.get(strike, 0.0) + vex_cell
+        dvm = vomma_grid.setdefault(expiry, {})
+        dvm[strike] = dvm.get(strike, 0.0) + vomma_cell
         strike_totals[strike] = strike_totals.get(strike, 0.0) + cell
 
     expiries = sorted(grid.keys())
@@ -264,6 +291,7 @@ def compute_gex_grid(spot: float, contracts: list[dict[str, Any]], ticker: str =
         "grid": {e: {_k(k): v for k, v in grid[e].items()} for e in expiries},
         "charm_grid": {e: {_k(k): v for k, v in charm_grid[e].items()} for e in expiries},
         "vex_grid": {e: {_k(k): v for k, v in vex_grid[e].items()} for e in expiries},
+        "vomma_grid": {e: {_k(k): v for k, v in vomma_grid[e].items()} for e in expiries},
         "strike_totals": [{"strike": k, "gex": v} for k, v in sorted(strike_totals.items())],
     }
 
