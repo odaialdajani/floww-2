@@ -3,6 +3,27 @@ import { isTradeClosed, tradePnl, tradeOutcome } from "./tradeMath";
 import { API } from "../config/api";
 
 
+// Date-part normalization for merge dedupe: server rows carry full ISO
+// timestamps (YYYY-MM-DDTHH:MM:SS) while local rows store date-only.
+// Comparing raw strings duplicated every ticket; comparing date-parts
+// dedupes identical tickets while keeping distinct-day tickets apart.
+export function journalDateKey(v) {
+  if (v == null) return "";
+  return String(v).slice(0, 10);
+}
+
+export function journalKeysEqual(a, b) {
+  const pick = (t) => [
+    String(t?.ticker || "").replace("^", "").toUpperCase(),
+    t?.type, t?.action,
+    String(t?.strike ?? ""),
+    journalDateKey(t?.expiry),
+    journalDateKey(t?.entry_date),
+  ].join("|");
+  return pick(a) === pick(b);
+}
+
+
 // ─── Trade Form Modal ─────────────────────────────────────────────────────────
 function TradeForm({ trade, onSave, onCancel, ticker, spot }) {
   const [form, setForm] = useState(trade || {
@@ -226,13 +247,15 @@ export default function TradeJournal({ ticker }) {
   // Load from localStorage, then merge server-persisted auto-journal rows.
   // Server rows (source flowseeker-auto) survive localStorage clears and
   // sync across devices; local manual entries always win their own slot.
+  // Merge keys are date-normalized: server writes full ISO timestamps while
+  // local rows store date-only, which previously duplicated every ticket.
   useEffect(() => {
     let cancelled = false;
-    try {
-      const saved = localStorage.getItem("floww_trades_v2");
-      if (saved) setTrades(JSON.parse(saved));
-    } catch (e) { console.error("TradeJournal load failed:", e); }
-    (async () => {
+    const loadServer = async () => {
+      try {
+        const saved = localStorage.getItem("floww_trades_v2");
+        if (saved) setTrades(JSON.parse(saved));
+      } catch (e) { console.error("TradeJournal load failed:", e); }
       try {
         const res = await fetch(`${API}/flowseeker/journal/trades?days=365`);
         if (!res.ok) return;
@@ -240,17 +263,27 @@ export default function TradeJournal({ ticker }) {
         const server = data.trades || [];
         if (cancelled || server.length === 0) return;
         setTrades(prev => {
-          const seen = new Set(prev.map(t =>
-            [t.ticker, t.type, t.action, t.strike ?? "", t.expiry ?? "", t.entry_date ?? ""].join("|")));
           const fresh = server
-            .filter(s => !seen.has([s.ticker, s.type, s.action, s.strike ?? "", s.expiry ?? "", s.entry_date ?? ""].join("|")))
+            .filter(s => !prev.some(t => journalKeysEqual(t, s)))
             .map((s, i) => ({ ...s, id: `srv-${Date.now()}-${i}`, created_at: s.created_at }));
           return fresh.length ? [...fresh, ...prev] : prev;
         });
       } catch (e) { /* server store unreachable — localStorage is the fallback */ }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+    };
+    loadServer();
+    // Tickets confirmed in another tab/panel land without refresh.
+    // Skipped while the edit modal is open so a refetch can't revert
+    // the row being edited mid-keystroke.
+    const onStorage = (e) => { if (e.key === "floww_trades_v2" && !showForm) loadServer(); };
+    const onFocus = () => { if (!showForm) loadServer(); };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [showForm]);
 
   // Save to localStorage
   useEffect(() => {
@@ -370,7 +403,7 @@ export default function TradeJournal({ ticker }) {
                       {isPos ? "+" : ""}${pnl.toFixed(0)}
                     </div>
                     <div className={`w-full rounded-sm min-h-[2px] ${isPos ? "bg-emerald-500/60" : "bg-rose-500/60"}`} style={{ height: `${Math.max(height, 4)}%` }} />
-                    <div className="text-[6px] text-slate-600 truncate w-full text-center">{date.slice(5)}</div>
+                    <div className="text-[6px] text-slate-600 truncate w-full text-center" title={date}>{date.slice(5)}</div>
                   </div>
                 );
               })}

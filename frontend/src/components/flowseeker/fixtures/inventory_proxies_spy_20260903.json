@@ -1,0 +1,86 @@
+{
+ "asof": "2026-09-03",
+ "ticker": "SPY",
+ "top10": [
+  {
+   "strike": 774,
+   "type": "call",
+   "mid": 1.4449999999999998,
+   "relSpread": 0.020761245674740504,
+   "driftBp": null,
+   "tag": "LEVEL"
+  },
+  {
+   "strike": 772,
+   "type": "put",
+   "mid": 1.435,
+   "relSpread": 0.0069686411149825845,
+   "driftBp": null,
+   "tag": "LEVEL"
+  },
+  {
+   "strike": 770,
+   "type": "put",
+   "mid": 0.855,
+   "relSpread": 0.01169590643274855,
+   "driftBp": null,
+   "tag": "LEVEL"
+  },
+  {
+   "strike": 775,
+   "type": "call",
+   "mid": 1.0150000000000001,
+   "relSpread": 0.00985221674876848,
+   "driftBp": null,
+   "tag": "LEVEL"
+  },
+  {
+   "strike": 773,
+   "type": "put",
+   "mid": 1.84,
+   "relSpread": 0.010869565217391313,
+   "driftBp": null,
+   "tag": "LEVEL"
+  },
+  {
+   "strike": 773,
+   "type": "call",
+   "mid": 1.9449999999999998,
+   "relSpread": 0.005141388174807203,
+   "driftBp": null,
+   "tag": "LEVEL"
+  },
+  {
+   "strike": 770,
+   "type": "call",
+   "mid": 3.9699999999999998,
+   "relSpread": 0.025188916876574218,
+   "driftBp": null,
+   "tag": "LEVEL"
+  },
+  {
+   "strike": 769,
+   "type": "put",
+   "mid": 0.655,
+   "relSpread": 0.015267175572519097,
+   "driftBp": null,
+   "tag": "LEVEL"
+  },
+  {
+   "strike": 776,
+   "type": "call",
+   "mid": 0.695,
+   "relSpread": 0.014388489208633108,
+   "driftBp": null,
+   "tag": "LEVEL"
+  },
+  {
+   "strike": 768,
+   "type": "put",
+   "mid": 0.505,
+   "relSpread": 0.01980198019801982,
+   "driftBp": null,
+   "tag": "LEVEL"
+  }
+ ]
+}

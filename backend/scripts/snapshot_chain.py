@@ -99,75 +99,21 @@ async def _fetch_chain_yfinance(ticker: str, expiries: int = 4) -> dict:
 
 
 async def _fetch_chain_alphavantage(ticker: str, expiries: int = 4) -> dict:
-    """Fetch chain via Alpha Vantage options API."""
-    from data_providers import ALPHA_VANTAGE_KEY
+    """RETIRED 2026-09-03 (public-api-only) — always falls back.
 
-    if not ALPHA_VANTAGE_KEY:
-        logger.warning("ALPHA_VANTAGE_KEY not set, falling back to yfinance")
-        return await _fetch_chain_yfinance(ticker, expiries)
+    Kept so `--source alphavantage` doesn't crash historical scripts;
+    routes to Public API first, then yfinance. No alphavantage.co call.
+    """
+    from services.public_api_adapter import fetch_chain_from_public_api
 
-    import aiohttp
-
-    # Alpha Vantage options chain endpoint
-    url = "https://www.alphavantage.co/query"
-    params = {
-        "function": "OPTION_CHAIN",
-        "symbol": ticker,
-        "apikey": ALPHA_VANTAGE_KEY,
-    }
-
+    logger.warning("--source alphavantage retired — using Public API (then yfinance)")
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                if resp.status != 200:
-                    logger.warning(f"AV returned {resp.status}, falling back to yfinance")
-                    return await _fetch_chain_yfinance(ticker, expiries)
-                data = await resp.json()
+        pub = await fetch_chain_from_public_api(ticker, max_expiries=expiries)
+        if pub and pub.get("contracts"):
+            return pub
     except Exception as e:
-        logger.warning(f"AV fetch failed ({e}), falling back to yfinance")
-        return await _fetch_chain_yfinance(ticker, expiries)
-
-    if not data or "data" not in data:
-        logger.warning("AV returned empty data, falling back to yfinance")
-        return await _fetch_chain_yfinance(ticker, expiries)
-
-    spot = float(data.get("stock_price", 0) or 0)
-    contracts = []
-    for entry in data.get("data", []):
-        exp = entry.get("expirationDate", "")
-        if not exp:
-            continue
-        for side in ("call", "put"):
-            prefix = side
-            oi_key = f"{prefix}OpenInterest"
-            vol_key = f"{prefix}Volume"
-            strike_key = "strikePrice"
-            iv_key = f"{prefix}ImpliedVolatility"
-            delta_key = f"{prefix}Delta"
-            gamma_key = f"{prefix}Gamma"
-
-            oi = entry.get(oi_key, 0) or 0
-            vol = entry.get(vol_key, 0) or 0
-            strike = entry.get(strike_key, 0) or 0
-
-            if strike <= 0:
-                continue
-
-            contracts.append({
-                "expiry": exp,
-                "strike": float(strike),
-                "type": "C" if side == "call" else "P",
-                "oi": int(oi),
-                "volume": int(vol),
-                "iv": float(entry.get(iv_key, 0) or 0),
-                "delta": float(entry.get(delta_key, 0) or 0),
-                "gamma": float(entry.get(gamma_key, 0) or 0),
-            })
-
-        if len(contracts) >= expiries * 200:
-            break
-
-    return {"ticker": ticker, "spot": spot, "contracts": contracts}
+        logger.warning(f"Public API fetch failed ({e}), falling back to yfinance")
+    return await _fetch_chain_yfinance(ticker, expiries)
 
 
 # ---------------------------------------------------------------------------

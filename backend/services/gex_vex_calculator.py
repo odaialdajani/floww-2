@@ -46,6 +46,11 @@ def compute_vex_surface(
     VEX_per_unit = vomma * OI * 100 * spot^2 * 0.01
     Same scaling as GEX but with vomma instead of gamma.
 
+    NOTE: this is the GEX-parity display scale, NOT the per-unit-σ scale
+    documented in ``bs_greeks`` (vomma * OI * 100). The two differ by
+    exactly spot^2 * 0.01, pinned by
+    ``backend/tests/services/test_vex_scale_parity.py``. Do not mix them.
+
     Sign convention: same as GEX (calls +, puts -)
 
     Args:

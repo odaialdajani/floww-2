@@ -32,6 +32,30 @@ def _get_engine(ticker: str, bucket_size: float = 50000.0, window: int = 50):
     return _vpin_engines[ticker]
 
 
+def snapshot_vpin_state(ticker: str, min_buckets: int = 10) -> dict | None:
+    """Read-only VPIN snapshot for alert gating: {"vpin", "cdf", "n_buckets"}.
+
+    Returns None for untracked tickers (never creates engines as a side
+    effect — heatmap scans must not grow the registry) or cold engines.
+    Never raises: fail-open for alert call sites.
+    """
+    try:
+        sym = (ticker or "").strip().upper()
+        if not sym:
+            return None
+        engine = _vpin_engines.get(sym)
+        if engine is None:
+            return None
+        n = int(engine.vpin_history_length or 0)
+        if n < min_buckets:
+            return None
+        return {"vpin": float(engine.compute_vpin()),
+                "cdf": float(engine.compute_vpin_cdf()),
+                "n_buckets": n}
+    except Exception:
+        return None
+
+
 @router.get("/{ticker}")
 async def get_vpin_state(ticker: str):
     """Return the current VPIN engine state for a ticker."""

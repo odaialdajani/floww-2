@@ -202,6 +202,39 @@ def test_eval_whale_rule_premium_floor():
     assert any(a["rule"] == "WHALE" for a in alerts)
 
 
+def test_calibration_attached_stage0_uncalibrated_never_blocks():
+    """Stage-0 calibration → every fired alert carries p_move=None +
+    method 'uncalibrated' and NO alert is suppressed (None never gates)."""
+    rows = norm_rows([_raw(vol=60000, oi=1500)])
+    cal = {"stage": 0, "model": None, "n": 42, "method_note": "uncalibrated: n=42 < 60"}
+    alerts = eval_institutional(rows, opts={"min_score": 1, "whale_premium": 1.0,
+                                            "calibration": cal})
+    assert alerts, "alerts must still fire with an uncalibrated model"
+    for a in alerts:
+        assert a["p_move"] is None
+        assert a["p_method"] == "uncalibrated"
+        assert a["p_n"] == 42
+
+
+def test_calibration_attached_stage1_real_p_on_alerts():
+    """Stage-1 decile model → fired alerts carry the measured decile p."""
+    rows = norm_rows([_raw(vol=60000, oi=1500)])
+    # Fixture alert scores 89 → decile 8. Cover BOTH 8 and 9 so the test
+    # pins the p-attach contract, not the fixture's exact score.
+    cal = {"stage": 1, "n": 120, "method_note": "decile",
+           "model": {"kind": "decile", "n": 120,
+                     "table": {"8": {"n": 40, "hits": 16, "p": 0.4, "ci": [0.26, 0.56]},
+                               "9": {"n": 40, "hits": 20, "p": 0.5, "ci": [0.35, 0.65]}}}}
+    alerts = eval_institutional(rows, opts={"min_score": 1, "whale_premium": 1.0,
+                                            "calibration": cal})
+    scored = [a for a in alerts if a.get("score") is not None and (a["score"] or 0) >= 80]
+    assert scored, "fixture must produce a SCORE-band alert"
+    for a in scored:
+        d = str(min(9, int(a["score"] or 0) // 10))
+        assert a["p_move"] == cal["model"]["table"][d]["p"]
+        assert a["p_method"] == "decile"
+
+
 def test_eval_oiconf_capped_at_top5_by_pct():
     rows = []
     for i in range(8):
@@ -258,7 +291,9 @@ def test_persist_and_read_round_trip(fresh_engine):
 def test_dedup_filter_suppresses_within_ttl_and_refires_after(fresh_engine):
     init_flow_alert_tables(fresh_engine)
     rows = norm_rows([_raw(vol=60000, oi=1500)])
-    alerts = eval_institutional(rows)
+    # Low the alert gates so this tests the DEDUP mechanics, not the alert
+    # thresholds (which tightened in the 2026-09-02 noise pass).
+    alerts = eval_institutional(rows, opts={"min_score": 1, "whale_premium": 1.0})
     first = dedup_filter(fresh_engine, alerts, now=1000.0)
     assert len(first) == 1
     again = dedup_filter(fresh_engine, alerts, now=1000.0 + 60)
@@ -270,7 +305,7 @@ def test_dedup_filter_suppresses_within_ttl_and_refires_after(fresh_engine):
 def test_update_moves_sets_move_pct_from_new_spot(fresh_engine):
     init_flow_alert_tables(fresh_engine)
     rows = norm_rows([_raw(vol=60000, oi=1500, spot=133.0)])
-    persist_alerts(fresh_engine, eval_institutional(rows))
+    persist_alerts(fresh_engine, eval_institutional(rows, opts={"min_score": 1, "whale_premium": 1.0}))
     changed = update_moves(fresh_engine, {"PLTR": 138.2})
     assert changed == 1
     f = read_alert_feed(fresh_engine, days=3)[0]
@@ -297,7 +332,8 @@ def test_read_alert_feed_min_tier_filter_and_order(fresh_engine):
 
 def test_persist_same_key_same_day_upserts_not_duplicates(fresh_engine):
     init_flow_alert_tables(fresh_engine)
-    alerts = eval_institutional(norm_rows([_raw(vol=60000, oi=1500)]))
+    alerts = eval_institutional(norm_rows([_raw(vol=60000, oi=1500)]),
+                                opts={"min_score": 1, "whale_premium": 1.0})
     persist_alerts(fresh_engine, alerts)
     persist_alerts(fresh_engine, alerts)
     assert len(read_alert_feed(fresh_engine, days=3)) == 1
@@ -315,26 +351,28 @@ def test_gex_confluent_fires_on_lowercase_bias_vs_negative_gamma():
     from services.flow_alerts import _common_factors
     r = dict(norm_rows([_bearish_raw()])[0])
     r["bias"] = "BEARISH"
-    gex_ctx = {"gamma_imbalance": {"gamma_imbalance_pct": -1.2,
-                                   "regime": "negative_gamma"}}
+    gex_ctx = {"PLTR": {"gamma_imbalance": {"gamma_imbalance_pct": -1.2,
+                                            "regime": "negative_gamma"}}}
     f = _common_factors(r, {}, set(), {}, {}, gex_context=gex_ctx)
     assert f["gex_confluent"] is True
+    assert f["gex_regime"] == "negative"
 
 
 def test_gex_confluent_fires_bullish_positive_gamma():
     from services.flow_alerts import _common_factors
     r = dict(norm_rows([_raw(vol=60000, oi=1500)])[0])
-    gex_ctx = {"gamma_imbalance": {"gamma_imbalance_pct": 0.9,
-                                   "regime": "positive_gamma"}}
+    gex_ctx = {"PLTR": {"gamma_imbalance": {"gamma_imbalance_pct": 0.9,
+                                            "regime": "positive_gamma"}}}
     f = _common_factors(r, {}, set(), {}, {}, gex_context=gex_ctx)
     assert f["gex_confluent"] is True
+    assert f["gex_regime"] == "positive"
 
 
 def test_gex_confluent_false_when_opposed():
     from services.flow_alerts import _common_factors
     r = dict(norm_rows([_raw(vol=60000, oi=1500)])[0])
-    gex_ctx = {"gamma_imbalance": {"gamma_imbalance_pct": -1.2,
-                                   "regime": "negative_gamma"}}
+    gex_ctx = {"PLTR": {"gamma_imbalance": {"gamma_imbalance_pct": -1.2,
+                                            "regime": "negative_gamma"}}}
     f = _common_factors(r, {}, set(), {}, {}, gex_context=gex_ctx)
     assert f["gex_confluent"] is False
 

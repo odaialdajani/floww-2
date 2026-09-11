@@ -31,6 +31,12 @@ unit [1/spot] for vanna/charm/vomma cancels one of the spot factors:
     vomma = vomma  * OI * MULTIPLIER                 (per unit-σ; no 0.01)
     vega  = vega   * OI * MULTIPLIER                 (per unit-σ; no 0.01)
 
+NOTE: ``services/gex_vex_calculator.compute_vex_surface`` deliberately uses
+GEX-like scaling (vomma * OI * 100 * spot^2 * 0.01) for its display surface.
+The two scales differ by exactly spot^2 * 0.01 (~3364x at SPY 580), pinned by
+``backend/tests/services/test_vex_scale_parity.py``. Neither is observed
+dealer inventory; both assume dealer positioning and sign.
+
 CRITICAL: This display/UI scale is **distinct from** the *frozen ML-feature*
 scale used in ``services/gex_history.py`` (which uses a *single* spot factor
 and fixed ``iv=0.20`` for model-input stability). The two scales differ by

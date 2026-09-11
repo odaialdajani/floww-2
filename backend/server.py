@@ -146,6 +146,8 @@ async def rate_limit_middleware(request: Request, call_next):
         "/api/heatseeker", "/api/analytics", "/api/flowseeker", "/api/heatmap",
         "/api/spot", "/api/data", "/api/tickers", "/api/portfolio", "/api/alerts",
         "/api/agent/",
+        "/api/dual_gex", "/api/iv_mid", "/api/screener", "/api/wheel_income",
+        "/api/max_pain", "/api/contract", "/api/chain",
     )):
         return await call_next(request)
     client_ip = request.client.host if request.client else "unknown"
@@ -644,9 +646,16 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
     # ── 2. Fallback: yfinance + Databento ──
     yf_success = True
     try:
-        yf_data = await asyncio.to_thread(fetch_spot_and_chains, ticker, max_expiries)
+        yf_data = await asyncio.wait_for(
+            asyncio.to_thread(fetch_spot_and_chains, ticker, max_expiries),
+            timeout=30.0,
+        )
         if not yf_data or not yf_data.get("spot"):
             yf_success = False
+    except TimeoutError:
+        log.warning(f"yfinance timeout for {ticker}, giving up on chain data")
+        yf_success = False
+        yf_data = {"spot": 0, "contracts": []}
     except Exception:
         yf_success = False
         yf_data = {"spot": 0, "contracts": []}
@@ -669,13 +678,9 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
             pass
     yf_data["spot"]
 
-    # Free-tier short-circuit: use yfinance OI only
-    short = ticker.upper().replace("^", "")
-    if short not in PAID_TICKERS:
-        for c in yf_data["contracts"]:
-            c["oi_source"] = "yfinance"
-        return {**yf_data, "data_source": "yfinance"}
-
+    # Open universe (2026-09-03): every ticker attempts the Databento OI
+    # overlay via the generic OPRA parent fallback — no PAID_TICKERS gate.
+    # Misses fall through to yfinance-only below (unchanged).
     dbn_oi = {}
     dbn_success = False
     try:
@@ -776,6 +781,12 @@ async def tap_counts(ticker: str, strikes: list[float], days: int = 5) -> dict[f
 
 TRINITY = ["^SPX", "SPY", "QQQ"]
 DEFAULT_TICKERS = ["SPY", "QQQ", "^SPX", "IWM", "AAPL", "NVDA", "TSLA", "META", "AMZN", "MSFT", "GOOGL", "AMD", "KO", "XOM", "GM", "MCD", "^VIX"]
+
+# Full-listed-universe cache for /api/tickers/all (T2). Finnhub US symbols,
+# refreshed at most every 30 min; the frontend pages through it.
+_TICKER_CACHE: list[str] | None = None
+_TICKER_CACHE_TS: float | None = None
+CACHE_TTL_S = 1800  # 30 minutes
 POPULAR_UNIVERSE = [
     # Mega Cap Tech
     "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "AMD", "AVGO", "NFLX",
@@ -911,8 +922,7 @@ def _attach_strike_volumes(
 # ----------------------------- Heatmap Core -----------------------------------
 
 _BUILD_HEATMAP_CACHE: dict[str, Any] = {}
-_BUILD_HEATMAP_CACHE_TTL = 60
-# Stale-while-revalidate: serve stale data immediately (up to STALE_TTL) while a
+_BUILD_HEATMAP_CACHE_TTL = 60# Stale-while-revalidate: serve stale data immediately (up to STALE_TTL) while a
 # single background task refreshes it. Cuts cold /api/data from ~4s to <50ms
 # for repeat views. In-flight set provides single-flight per cache key.
 _BUILD_HEATMAP_STALE_TTL = 900  # 15 min — max age of stale-serveable data
@@ -969,6 +979,25 @@ async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = Tr
                 "error": str(e)}
 
 
+MIN_GRID_STRIKES = 8  # sparse-grid floor: thin names keep a usable grid
+
+
+def _top_up_strike_set(shown: set, full_ordered: list, min_n: int) -> set:
+    """Top a band-filtered strike set back up to `min_n` with the nearest-by-
+    distance listed strikes (same ordering the max_strikes cap uses). Returns
+    a set of strike values already present in the analytics inputs — callers
+    filter their rows by it, so every shown row carries full data. Real rows
+    only, never fabricated (H1). `full_ordered` is strike values nearest-first."""
+    if len(shown) >= min_n:
+        return set(shown)
+    kept = set(shown)
+    for strike in full_ordered:
+        if len(kept) >= min_n:
+            break
+        kept.add(strike)
+    return kept
+
+
 async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: bool = True, mode: str = "day", dte: int | None = None, scalp: bool = False, max_strikes: int = 200) -> dict[str, Any]:
     log.info(f"build_heatmap: {ticker} expiries={max_expiries} mode={mode} max_strikes={max_strikes}")
     # Check cache first
@@ -990,6 +1019,26 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     is_index = ticker.startswith("^") or ticker.startswith("I:")
     raw = None  # initialize before cvserver fast-path; falls through to merged fetch
     if is_index and not scalp:
+        # PUBLIC-FIRST (2026-09-06, Nav directive: Solstice data is 100%
+        # Public; cvserver is strict failover). Try the merged (Public-first)
+        # fetch on a short leash first — index option chains may not exist
+        # on every venue, in which case we fall through to the cvserver
+        # screen path below instead of stalling the desk.
+        try:
+            raw = await asyncio.wait_for(
+                fetch_spot_and_chains_merged(ticker, max_expiries),
+                timeout=12.0,
+            )
+            if raw and raw.get("contracts") and (raw.get("spot") or 0) > 0:
+                raw["data_source"] = raw.get("data_source", "public_api")
+                log.info(f"build_heatmap: Public-first hit for index {ticker} "
+                         f"({len(raw['contracts'])} contracts via {raw['data_source']})")
+            else:
+                raw = None
+        except Exception as e:
+            log.info(f"build_heatmap: Public-first miss for index {ticker} ({e}); trying cvserver screen")
+            raw = None
+    if is_index and not scalp and raw is None:
         # First get spot price from a quick chain fetch (just 1 expiry, minimal fields)
         from services.cvserver_client import CVSERVER_API_KEY, fetch_chain_for_heatmap, fetch_chain_from_cvserver
         if CVSERVER_API_KEY:
@@ -1036,6 +1085,51 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         except Exception as e:
             log.error(f"fetch_spot_and_chains_merged failed for {ticker}: {e}")
             raise HTTPException(404, f"No options data for {ticker}") from e
+
+    # Sparse-chain strategy (Public-first; cvserver strictly budgeted):
+    # small caps often return only a handful of strikes per expiry. Deepen
+    # with Public (unlimited) first; enrich from cvserver (20/hr cap, 1 call)
+    # only if still sparse. Real vendor rows only — never fabricated strikes
+    # (H1: test_strike_truth_h1.py bans synthetic row generators on main).
+    if max_expiries < 8 and ticker.upper() not in ("^SPX", "^NDX", "^RUT", "^VIX") and raw is not None:
+        unique_after = len({c.get("strike") for c in raw.get("contracts", [])})
+        if unique_after < 40 and raw.get("spot", 0) > 0:
+            log.info(f"build_heatmap: sparse chain ({unique_after} strikes) — re-fetching with 8 expiries")
+            try:
+                deeper = await asyncio.wait_for(
+                    fetch_spot_and_chains_merged(ticker, max_expiries=8),
+                    timeout=30.0,
+                )
+                if deeper and deeper.get("contracts") and deeper.get("spot", 0) > 0:
+                    deeper_unique = len({c.get("strike") for c in deeper["contracts"]})
+                    if deeper_unique > unique_after:
+                        raw = deeper
+                        log.info(f"build_heatmap: deepened chain for {ticker} — {deeper_unique} unique strikes (was {unique_after})")
+            except Exception as e:
+                log.debug(f"build_heatmap: deeper fetch failed for {ticker}: {e}")
+    unique_strikes = len({c.get("strike") for c in raw.get("contracts", [])})
+    SPARSE_STRIKE_THRESHOLD = 30
+    if unique_strikes < SPARSE_STRIKE_THRESHOLD and ticker.upper() not in ("^SPX", "^NDX", "^RUT", "^VIX"):
+        from services.cvserver_client import CVSERVER_API_KEY, fetch_chain_from_cvserver
+        if CVSERVER_API_KEY and raw.get("spot", 0) > 0:
+            log.info(f"build_heatmap: Public chain sparse ({unique_strikes} strikes for {ticker}) — enriching from cvserver full chain")
+            try:
+                cv_data = await asyncio.wait_for(
+                    fetch_chain_from_cvserver(ticker, max_expiries=max_expiries),
+                    timeout=15.0,
+                )
+                if cv_data and cv_data.get("contracts") and cv_data.get("spot", 0) > 0:
+                    cv_unique = len({c.get("strike") for c in cv_data["contracts"]})
+                    if cv_unique > unique_strikes:
+                        raw = {
+                            "spot": cv_data["spot"],
+                            "contracts": cv_data["contracts"],
+                            "expiries": cv_data.get("expiries", raw.get("expiries", [])),
+                            "data_source": "cvserver",
+                        }
+                        log.info(f"build_heatmap: cvserver full-chain enrichment for {ticker} — {len(raw['contracts'])} contracts, {cv_unique} unique strikes")
+            except Exception as e:
+                log.debug(f"build_heatmap: cvserver enrichment failed for {ticker}: {e}")
     spot = raw["spot"]
     if not spot or spot != spot or not raw["contracts"]:  # spot != spot catches NaN
         raise HTTPException(404, f"No options data for {ticker}")
@@ -1112,10 +1206,20 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         else:
             band = base_band
 
-    strikes = [s for s in strikes if abs(s["strike"] - spot) / spot <= band]
+    # Band + sparse-grid floor. Banding computes SETS (never rebinds the row
+    # lists first): rebinding would destroy dropped rows and the floor could
+    # never restore them. Floor tops the band set back up to MIN_GRID_STRIKES
+    # with the nearest listed strikes (KYTX: band left 3 of 8), then rows are
+    # filtered by the topped-up set — every shown row keeps full analytics
+    # data. Real rows only, never fabricated (H1).
+    band_set = {s["strike"] for s in strikes if abs(s["strike"] - spot) / spot <= band}
+    full_ordered = sorted({(c.get("strike") or 0) for c in raw.get("contracts", [])},
+                          key=lambda s: abs(s - spot))
+    kept = _top_up_strike_set(band_set, full_ordered, MIN_GRID_STRIKES)
+    strikes = [s for s in strikes if s["strike"] in kept]
     if not scalp:
-        grid["strikes"] = [k for k in grid["strikes"] if abs(k - spot) / spot <= band]
-        grid["strike_totals"] = [s for s in grid["strike_totals"] if abs(s["strike"] - spot) / spot <= band]
+        grid["strikes"] = [k for k in grid["strikes"] if k in kept]
+        grid["strike_totals"] = [s for s in grid["strike_totals"] if s["strike"] in kept]
 
     # Tag fresh/tested via tap counts
     tap_map: dict[float, int] = {}
@@ -1139,9 +1243,9 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                 s["lifecycle"] = "decaying"
             s["tap_prob"] = [0.80, 0.66, 0.33, 0.10][min(tc, 3)]
 
-    # Per-strike traded volume for the Profile view's volume column. Runs on
-    # the raw contracts, so it is independent of which GEX engine produced
-    # `strikes`.
+    # Per-strike traded volume for the Profile view's volume column. Engine-agnostic
+    # rollup from the raw contracts (Public/cvserver/yfinance all carry volume),
+    # independent of which GEX engine produced `strikes`. None-safe: raw can be None.
     _attach_strike_volumes(strikes, (raw or {}).get("contracts", []))
 
     nodes = classify_nodes(strikes, spot)
@@ -1705,54 +1809,6 @@ async def stop_live_tape() -> dict:
     return {"status": "stopped", "stopped": True}
 
 
-# ============ Schwab Stubs ============
-
-def get_schwab_auth_url() -> dict:
-    """Return Schwab auth URL (stub — needs credentials)."""
-    import os
-    client_id = os.environ.get("SCHWAB_CLIENT_ID")
-    if not client_id:
-        return {"error": "SCHWAB_CLIENT_ID not set", "auth_url": None}
-    redirect_uri = os.environ.get("SCHWAB_REDIRECT_URI", "https://localhost:8000/api/schwab/auth")
-    return {
-        "auth_url": f"https://api.schwabapi.com/v1/oauth/authorize?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code",
-    }
-
-
-async def schwab_auth_handler(request: dict):
-    """Handle Schwab OAuth callback (stub).
-
-    Returns JSONResponse(503) so monitoring agents that filter on
-    status_code != 200 can detect the unconfigured state (gemini.py
-    JSONResponse precedent — commit 23baf34). The body shape is unchanged
-    (status=error, message=...) so the frontend error path is not affected.
-    """
-    return JSONResponse(
-        status_code=503,
-        content={"status": "error", "message": "Schwab auth not configured"},
-    )
-
-
-async def schwab_get_accounts() -> dict:
-    """Get Schwab accounts (stub)."""
-    return {"accounts": []}
-
-
-async def schwab_get_positions(account_hash: str) -> dict:
-    """Get Schwab positions (stub)."""
-    return {"positions": []}
-
-
-async def schwab_get_sweeps(account_hash: str) -> dict:
-    """Get Schwab sweeps (stub)."""
-    return {"sweeps": []}
-
-
-async def schwab_import_to_portfolio(name: str, account_hash: str) -> dict:
-    """Import Schwab positions to portfolio (stub)."""
-    return {"status": "ok", "imported": 0}
-
-
 # ---------- Scheduled pre-fetch (APScheduler) ----------
 _scheduler_started = False
 _scheduler_task: asyncio.Task | None = None
@@ -1798,6 +1854,58 @@ async def _snapshot_chains():
             batch = contracts_to_recordbatch(raw)
             n = bulk_insert(conn, batch)
             log.info(f"chain snapshot {t}: {n} rows")
+            # Exposure alerts (VEX walls / charm pins vs last grid snapshot).
+            # Ported pattern from floww-2 gsd/010 (their repo untouched):
+            # scheduled coverage for the big three regardless of heatmap
+            # views (the HTTP heatmap route covers viewed tickers). Fail-open.
+            try:
+                from services import exposure_alerts as _ea
+                from services import flow_alerts as _fa
+                from services.duckdb_engine import db as _duckdb
+
+                grid = compute_gex_grid(raw.get("spot") or 0,
+                                        raw.get("contracts") or [], t)
+                _fa.init_flow_alert_tables(_duckdb)
+                try:
+                    from routes.vpin import snapshot_vpin_state
+                    _vpin_state = snapshot_vpin_state(t)
+                except Exception:
+                    _vpin_state = None
+                try:
+                    from advanced_analytics import calc_gamma_flip_levels
+                    _flip = calc_gamma_flip_levels(
+                        float(raw.get("spot") or 0),
+                        raw.get("contracts") or [], t).get("gamma_flip")
+                except Exception:
+                    _flip = None
+                try:
+                    from services.liquidity_state import feed as _liq_feed
+                    from services.liquidity_state import snapshot as _liq_snap
+                    _contracts = raw.get("contracts") or []
+                    _call_vol = sum(float(c.get("volume") or 0)
+                                    for c in _contracts
+                                    if str(c.get("type") or "").lower() == "call")
+                    _put_vol = sum(float(c.get("volume") or 0)
+                                   for c in _contracts
+                                   if str(c.get("type") or "").lower() == "put")
+                    _liq_feed(t, _call_vol, _put_vol, float(raw.get("spot") or 0))
+                    _liq_state = _liq_snap(t)
+                except Exception:
+                    _liq_state = None
+                events = _ea.evaluate_ticker(
+                    t,
+                    {"vex_grid": grid.get("vex_grid") or {},
+                     "charm_grid": grid.get("charm_grid") or {}},
+                    float(raw.get("spot") or 0),
+                    vpin_state=_vpin_state, flip_level=_flip,
+                    liquidity_state=_liq_state)
+                if events:
+                    kept = _fa.dedup_filter(_duckdb, events)
+                    if kept:
+                        _fa.persist_alerts(_duckdb, kept)
+                        log.info(f"exposure alerts {t}: {len(kept)} events")
+            except Exception as e:
+                log.warning(f"exposure alert eval {t}: {e}")
         except Exception as e:
             log.warning(f"chain snapshot {t}: {e}")
 
@@ -1818,8 +1926,7 @@ async def _prefetch_paid_oi():
 
 async def _scheduler_loop():
     """Lightweight scheduler — fires once per day at PREFETCH_HHMM ET. No extra deps.
-    Also refreshes live policy from Mongo every 5 min for multi-worker sync.
-    Updates Schwab token TTL gauge every tick."""
+    Also refreshes live policy from Mongo every 5 min for multi-worker sync."""
     fired_for_date = None
     policy_refresh_counter = 0
     while True:
@@ -1829,21 +1936,6 @@ async def _scheduler_loop():
             if policy_refresh_counter >= 5:
                 policy_refresh_counter = 0
                 await _load_policy_from_mongo()
-
-            # Update Schwab token TTL metric
-            try:
-                from schwab import SchwabTokenManager
-                _tm = SchwabTokenManager()
-                _token = _tm.load()
-                if _token:
-                    _expires_at = _token.get("expires_at", 0)
-                    _now = datetime.now(UTC).timestamp()
-                    _ttl = max(0, _expires_at - _now)
-                    obs_metrics.schwab_token_expires_in_seconds.set(_ttl)
-                else:
-                    obs_metrics.schwab_token_expires_in_seconds.set(0)
-            except Exception:
-                obs_metrics.schwab_token_expires_in_seconds.set(0)
 
             # Update provider health Prometheus gauges from DataProviderMonitor
             try:
@@ -2212,8 +2304,9 @@ async def flow_sse(
     """SSE flow endpoint for real-time options flow with paid-ticker and window enforcement."""
     t = ticker.strip().upper()
 
-    # Check paid ticker restriction
-    if t not in PAID_TICKERS:
+    # Check paid ticker restriction ("*" in PAID_TICKERS opens all tickers;
+    # set via /api/live/policy — open universe 2026-09-03).
+    if t not in PAID_TICKERS and "*" not in PAID_TICKERS:
         async def _error_stream():
             import json as _json
             msg = _json.dumps({"error": f"{t} not in paid_tickers. Add it via /api/live/policy.", "ticker": t})
@@ -2558,6 +2651,71 @@ async def _vpin_autofeed_loop():
     log.info("VPIN auto-feed: shutdown complete")
 
 
+async def _public_sweep_loop():
+    """Background institutional sweep over the paid Public universe.
+    (B-REGION — Agent B domain: sweep cadence, slice width, budget behavior.)
+
+    Rotates one public_scanner slice per tick — RTH cadence 45s, off-hours
+    600s (FLOWW_PUBLIC_SWEEP_RTH_S / _OFFH_S), slice width
+    FLOWW_PUBLIC_SWEEP_SLICE, chain depth FLOWW_PUBLIC_SWEEP_MAX_EXPIRES —
+    feeding the SAME baseline + institutional alert pipeline as the HTTP scan
+    routes, so alerts fire and persist with no tabs open. Budget-gated inside
+    sweep_once (skips cleanly when the paid budget is spent); kill switch
+    FLOWW_PUBLIC_SWEEP=0. RTH is 09:30–16:05 ET (options session + close
+    auction; pre/post-market burns no paid budget on first boot). Follows the
+    _vpin_autofeed_loop conventions (shutdown event + wait_for timeout).
+    """
+    if os.environ.get("FLOWW_PUBLIC_SWEEP", "1") != "1":
+        log.info("public sweep disabled (FLOWW_PUBLIC_SWEEP=0)")
+        return
+    try:
+        rth_s = float(os.environ.get("FLOWW_PUBLIC_SWEEP_RTH_S", "45"))
+        off_s = float(os.environ.get("FLOWW_PUBLIC_SWEEP_OFFH_S", "600"))
+        sl = int(os.environ.get("FLOWW_PUBLIC_SWEEP_SLICE", "8"))
+        mx = int(os.environ.get("FLOWW_PUBLIC_SWEEP_MAX_EXPIRES", "2"))
+    except (TypeError, ValueError):
+        rth_s, off_s, sl, mx = 45.0, 600.0, 8, 2
+    log.info("public sweep loop started (rth=%ss offh=%ss slice=%d expiries=%d)",
+             rth_s, off_s, sl, mx)
+    # U1 provenance: every future sweep/alert mystery resolves to a process.
+    # PID + tree sha are logged once here (fail-open; never blocks startup).
+    try:
+        import pathlib
+        import subprocess
+
+        _root = str(pathlib.Path(__file__).resolve().parent.parent)
+        _sha = subprocess.run(
+            ["git", "-C", _root, "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5).stdout.strip() or "unknown"
+    except Exception:
+        _sha = "unknown"
+    log.info("public sweep identity: pid=%d tree=%s", os.getpid(), _sha)
+    cadence = rth_s
+    first_tick = True
+    while not _shutdown_event.is_set():
+        try:
+            try:
+                from zoneinfo import ZoneInfo
+                et_now = datetime.now(ZoneInfo("America/New_York"))
+                mins = et_now.hour * 60 + et_now.minute
+                in_rth = et_now.weekday() < 5 and 9 * 60 + 30 <= mins <= 16 * 60 + 5
+            except Exception:
+                in_rth = True  # unknown TZ: stay fresh rather than stall
+            cadence = rth_s if in_rth else off_s
+            # Off-hours boot must not burn a paid sweep before anyone is
+            # watching: sleep through the first off-hours tick, sweep after.
+            if in_rth or not first_tick:
+                from services.public_scanner import sweep_once
+                await sweep_once(slice_size=sl, max_expiries=mx)
+            first_tick = False
+        except Exception as e:
+            log.warning(f"public sweep loop error: {e}")
+            cadence = 60.0
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(_shutdown_event.wait(), timeout=cadence)
+    log.info("public sweep: shutdown complete")
+
+
 @app.on_event("startup")
 async def on_start():
     try:
@@ -2586,6 +2744,11 @@ async def on_start():
     _background_tasks.add(_t)
     _t.add_done_callback(_background_tasks.discard)
     log.info("VPIN auto-feed started for toxicity ensemble")
+    # Start paid-Public institutional sweep (alerts with no tabs open)
+    _ps = asyncio.create_task(_logged_task(_public_sweep_loop(), "public_sweep"))
+    _background_tasks.add(_ps)
+    _ps.add_done_callback(_background_tasks.discard)
+    log.info("public sweep loop started")
     log.info("databento cache initialized")
 
 
@@ -2649,6 +2812,10 @@ from routes.alpaca import router as alpaca_router
 
 app.include_router(alpaca_router, tags=["alpaca"])
 
+from routes.discord import router as discord_router
+
+app.include_router(discord_router, tags=["discord"])
+
 from routes.analytics import router as analytics_router
 
 app.include_router(analytics_router, prefix="/api", tags=["analytics"])
@@ -2702,6 +2869,10 @@ from routes.public_api import router as public_api_router
 
 app.include_router(public_api_router, tags=["public_api"])
 
+from routes.public_brokerage import router as public_brokerage_router
+
+app.include_router(public_brokerage_router, prefix="/api", tags=["public_brokerage"])
+
 from routes.ml_predict_api import router as ml_predict_router
 
 app.include_router(ml_predict_router, tags=["ml-predict"])
@@ -2735,10 +2906,6 @@ from routes.portfolio import router as portfolio_router
 
 app.include_router(portfolio_router, prefix="/api", tags=["portfolio"])
 
-from routes.schwab import router as schwab_router
-
-app.include_router(schwab_router, prefix="/api", tags=["schwab"])
-
 from routes.social_flow import router as social_flow_router
 
 app.include_router(social_flow_router, tags=["social"])
@@ -2747,10 +2914,6 @@ app.include_router(social_flow_router, tags=["social"])
 from routes.alerts import router as alerts_router
 
 app.include_router(alerts_router, tags=["alerts"])
-
-from routes.alerts_api import router as alerts_api_router
-
-app.include_router(alerts_api_router, tags=["alerts-api"])
 
 # Preferences & theme sync
 from routes.preferences import router as preferences_router
@@ -2943,7 +3106,9 @@ async def startup_ingestion():
         )
         await _ingestion_pipeline.start()
 
-        # Use mock feed (swap to SchwabStreamer when credentials available)
+        # Synthetic dev tick generator. Live market data comes from the
+        # Public.com API (fetch_spot_and_chains_merged → public_api_adapter);
+        # Schwab is retired (2026-09-03) and this feed is never a live source.
         _mock_feed = MockSchwabFeed(rate=100.0, symbols=["SPY", "QQQ"], seed=42)
         _mock_feed.on_tick(_ingestion_pipeline.enqueue_tick)
         _mock_feed.on_chain(_ingestion_pipeline.enqueue_chain)

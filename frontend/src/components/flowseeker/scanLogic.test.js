@@ -4,8 +4,29 @@ import {
   archetypeOf, volSigma, annotateFirstSeen, sessionDay, fmtClock, fmtAge,
   awaySummary, scanRowsToCSV, oiChange, streakOf, isTradingDay, evalTickerAlerts,
   pulseState, elapsedClock, formatFOLLOWStrip,
-  tierOf, selectFires, pickBanner,
+  tierOf, selectFires, pickBanner, spreadPosition, overviewStats,
+  equityType, signedOtm, isOpexDay, highlightState, flagSpreadLegs,
+  interpDeltaIV, skewLevels, pinRisk, quoteSkew, midDrift, stampPollDeltas, nearestExpiryPin,
+  rollSpread, pushCapped, rollPooled, contractKey, signedBias,
 } from "./scanLogic";
+
+describe("signedBias mirrors the server desk matrix (A2 parity)", () => {
+  // Same 5 contracts both sides: backend side_bias (public_scanner) and
+  // engine infer_side_bias (flow_alerts) must agree with this table.
+  const cases = [
+    ["call", "ASK", "BUY", "BULLISH"],
+    ["put", "ASK", "BUY", "BEARISH"],
+    ["call", "BID", "SELL", "BEARISH"],
+    ["put", "BID", "SELL", "BULLISH"],
+    ["call", null, "FLOW", null],
+  ];
+  it.each(cases)("%s + %s → %s / %s", (type, signed, side, bias) => {
+    expect(signedBias(type, signed)).toEqual({ side, bias });
+  });
+  it("unknown garbage stays unlabeled", () => {
+    expect(signedBias("call", "MAYBE")).toEqual({ side: "FLOW", bias: null });
+  });
+});
 
 describe("estimateDelta", () => {
   it("is ~±0.5 at the money", () => {
@@ -146,7 +167,7 @@ describe("estPremium", () => {
 describe("evalAlerts", () => {
   const mk = (over) => ({
     under: "SPY", type: "call", strike: 745, exp: "2099-01-08",
-    score: 90, premium: 2e6, notional: 5e7, volOI: 3, dte: 5, _new: true, ...over,
+    score: 93, premium: 2e6, notional: 5e7, volOI: 3, dte: 5, _new: true, ...over,
   });
   it("only fires on _new rows", () => {
     expect(evalAlerts([mk({ _new: false })])).toEqual([]);
@@ -163,6 +184,21 @@ describe("evalAlerts", () => {
     expect(hits).toHaveLength(1);
     expect(hits[0].rule).toBe("WHALE");
   });
+  it("PRIME fires in the 55-62% bracket below the SCORE bar (SNDK gap)", () => {
+    const hits = evalAlerts([mk({ score: 82, premium: 600e3, volOI: 6 })]);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].rule).toBe("PRIME");
+    expect(hits[0].key).toBe("prime|SPY|call|745|2099-01-08");
+  });
+  it("PRIME stays off below the $250k / 5x floors", () => {
+    expect(evalAlerts([mk({ score: 82, premium: 100e3, volOI: 6 })])).toEqual([]);
+    expect(evalAlerts([mk({ score: 82, premium: 600e3, volOI: 2 })])).toEqual([]);
+  });
+  it("PRIME yields to SCORE and WHALE (size first)", () => {
+    expect(evalAlerts([mk({ score: 95, premium: 600e3, volOI: 6 })])[0].rule).toBe("SCORE");
+    expect(evalAlerts([mk({ score: 40, premium: 30e6, volOI: 8 })])[0].rule).toBe("WHALE");
+    expect(evalAlerts([mk({ score: 40, premium: 5e6, volOI: 8 })])[0].rule).toBe("PRIME");
+  });
   it("0DTE fires on short-dated near-threshold flow", () => {
     const hits = evalAlerts([mk({ score: 72, premium: 1e5, dte: 0 })], { minScore: 85, zeroDteScore: 70 });
     expect(hits).toHaveLength(1);
@@ -178,18 +214,36 @@ describe("evalAlerts", () => {
     expect(hit.key).toBe("score|SPY|call|745|2099-01-08");   // dedup ttls stay per-rule
     expect(hit.ckey).toBe("SPY|call|745|2099-01-08");
   });
+  it("omitted-opts callers inherit post-tightening gates (92/$25M/6σ-era)", () => {
+    // SCORE: 91 silent, 93 fires.
+    expect(evalAlerts([mk({ score: 91, premium: 1e5 })])).toEqual([]);
+    expect(evalAlerts([mk({ score: 93, premium: 1e5 })])).toHaveLength(1);
+    // WHALE: $24M silent, $26M fires (score quiet).
+    expect(evalAlerts([mk({ score: 40, premium: 24e6 })])).toEqual([]);
+    expect(evalAlerts([mk({ score: 40, premium: 26e6 })])[0].rule).toBe("WHALE");
+  });
+  it("0DTE needs score>=85 AND volOI>=2 (lotto shut out)", () => {
+    expect(evalAlerts([mk({ score: 84, premium: 1e5, dte: 0, volOI: 5 })])).toEqual([]);
+    expect(evalAlerts([mk({ score: 86, premium: 1e5, dte: 0, volOI: 1 })])).toEqual([]);
+    const hits = evalAlerts([mk({ score: 86, premium: 1e5, dte: 0, volOI: 3 })]);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].rule).toBe("0DTE");
+  });
 });
 
-describe("evalAlerts allowlist", () => {
+describe("evalAlerts universe fully open (no allowlist)", () => {
   const rows = [
     { _new: true, under: "SPY", type: "call", strike: 750, exp: "2099-01-08", score: 95, premium: 1e6, dte: 5 },
     { _new: true, under: "ZZTOP", type: "put", strike: 10, exp: "2099-01-08", score: 99, premium: 1e6, dte: 5 },
   ];
-  it("scopes alerts to the allowlist when provided", () => {
-    const hits = evalAlerts(rows, { allow: ["SPY", "QQQ"] });
-    expect(hits.map((h) => h.under)).toEqual(["SPY"]);
+  it("fires for a non-universe ticker with default opts (whole market)", () => {
+    const hits = evalAlerts([rows[1]]);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].under).toBe("ZZTOP");
+    expect(hits[0].rule).toBe("SCORE");
   });
-  it("empty or missing allowlist means market-wide (back-compat)", () => {
+  it("a legacy allow opt is accepted but ignored — both rows still fire", () => {
+    expect(evalAlerts(rows, { allow: ["SPY", "QQQ"] })).toHaveLength(2);
     expect(evalAlerts(rows, { allow: [] })).toHaveLength(2);
     expect(evalAlerts(rows, {})).toHaveLength(2);
   });
@@ -441,10 +495,34 @@ describe("evalAlerts OICONF (overnight OI confirmation)", () => {
     expect(off[0].rule).toBe("SCORE");
   });
   it("intraday rules carry a plain-English why", () => {
-    const [hit] = evalAlerts([mk({ _new: true, score: 90, volOI: 5.2, premium: 1.2e6 })]);
+    const [hit] = evalAlerts([mk({ _new: true, score: 93, volOI: 5.2, premium: 1.2e6 })]);
     expect(hit.rule).toBe("SCORE");
-    expect(hit.why).toMatch(/score 90/);
+    expect(hit.why).toMatch(/score 93/);
     expect(hit.why).toMatch(/5.2× OI/);
+  });
+});
+
+describe("evalAlerts ΔOI hygiene parity (server: services/oi_hygiene.py)", () => {
+  const mk = (over) => ({
+    under: "NVDA", type: "call", strike: 100, exp: "2099-01-08",
+    score: 40, premium: 2e5, notional: 5e7, volOI: 1, dte: 10, _new: false, ...over,
+  });
+  it("rollover-tagged OI pops never fire OICONF (migration ≠ new flow)", () => {
+    const hits = evalAlerts([mk({ oiChg: { abs: 5000, pct: 0.5, tag: { rollover: true, expiring: false, earnings: null } } })]);
+    expect(hits).toEqual([]);
+  });
+  it("expiring-tagged rows never fire OICONF", () => {
+    const hits = evalAlerts([mk({ oiChg: { abs: 5000, pct: 0.9, tag: { expiring: true, rollover: false, earnings: null } } })]);
+    expect(hits).toEqual([]);
+  });
+  it("earnings-tagged OICONF still fires (never-remove) with the ambiguity suffix", () => {
+    const [hit] = evalAlerts([mk({ oiChg: { abs: 5000, pct: 0.5, tag: { expiring: false, rollover: false, earnings: { days_to: 2 } } } })]);
+    expect(hit.rule).toBe("OICONF");
+    expect(hit.why).toContain("earnings in 2 session(s) — direction ambiguous");
+  });
+  it("untagged rows behave exactly as before (no suffix, no suppression)", () => {
+    const [hit] = evalAlerts([mk({ oiChg: { abs: 5000, pct: 0.5 } })]);
+    expect(hit.why).not.toContain("[");
   });
 });
 
@@ -494,14 +572,14 @@ describe("streakOf (multi-day persistence)", () => {
 });
 
 describe("evalTickerAlerts (SIGMA + FOLLOW)", () => {
-  const roll = [{ under: "NVDA", callVol: 90000, putVol: 30000, maxScore: 71 }];
+  const roll = [{ under: "NVDA", callVol: 105000, putVol: 35000, maxScore: 71 }];
   const baselines = { NVDA: { avg: 40000, std: 15000, days: 6 } };
-  it("SIGMA fires at ≥4σ above the ticker's baseline with a label + long ttl", () => {
+  it("SIGMA fires at ≥6σ above the ticker's baseline with a label + long ttl", () => {
     const hits = evalTickerAlerts(roll, baselines, {});
     expect(hits).toHaveLength(1);
     expect(hits[0].rule).toBe("SIGMA");
     expect(hits[0].key).toBe("sigma|NVDA");
-    expect(hits[0].label).toMatch(/5.3σ above its 6-day baseline/);
+    expect(hits[0].label).toMatch(/6.7σ above its 6-day baseline/);
     expect(hits[0].ttl).toBe(4 * 3600e3);
   });
   it("stays quiet below the sigma threshold or without a baseline", () => {
@@ -514,9 +592,9 @@ describe("evalTickerAlerts (SIGMA + FOLLOW)", () => {
     expect(hits[0].rule).toBe("FOLLOW");
     expect(hits[0].label).toMatch(/3 straight days/);
   });
-  it("respects the allowlist and enabled flags", () => {
+  it("ignores any legacy allow opt and respects enabled flags", () => {
     const streaks = { NVDA: { n: 2, mult: 1.5, median: 40000 } };
-    expect(evalTickerAlerts(roll, baselines, streaks, { allow: ["SPY"] })).toEqual([]);
+    expect(evalTickerAlerts(roll, baselines, streaks, { allow: ["SPY"] })).toHaveLength(2);   // allow ignored: whole market
     const only = evalTickerAlerts(roll, baselines, streaks, { enabled: { sigma: false, follow: true } });
     expect(only.map((h) => h.rule)).toEqual(["FOLLOW"]);
   });
@@ -687,9 +765,9 @@ describe("selectFires", () => {
     const out = selectFires(log, { now: baseT, enabled: { whale: false, oiconf: true } });
     expect(out.map((h) => h.rule)).toEqual(["OICONF"]);
   });
-  it("respects allow list (universe scoping)", () => {
+  it("ignores any legacy allow opt (universe fully open)", () => {
     const log = [mk({ under: "NVDA", rule: "OICONF" }), mk({ under: "QQQ", rule: "OICONF" })];
-    expect(selectFires(log, { now: baseT, allow: ["NVDA"] }).map((h) => h.under)).toEqual(["NVDA"]);
+    expect(selectFires(log, { now: baseT, allow: ["NVDA"] }).map((h) => h.under)).toEqual(["NVDA", "QQQ"]);
   });
   it("drops entries older than ttlMs (defensive; alertLog usually pre-trims)", () => {
     const log = [mk({ rule: "OICONF", t: baseT - 90_000 })];
@@ -734,5 +812,332 @@ describe("pickBanner", () => {
   });
   it("returns the only fire when one qualifies", () => {
     expect(pickBanner([mk("FOLLOW")]).rule).toBe("FOLLOW");
+  });
+});
+
+describe("evalAlerts noise pass (2026-09-02)", () => {
+  const mk = (over = {}) => ({
+    under: "SPY", type: "call", strike: 745, exp: "2099-01-08",
+    score: 90, premium: 2e6, notional: 5e7, volOI: 3, dte: 5, _new: true, ...over,
+  });
+  it("enabled.scoreMin overrides the legacy minScore default (92 > 85)", () => {
+    // No explicit minScore — the tightened default must come from enabled.scoreMin.
+    const hits = evalAlerts([mk({ score: 88 })], { enabled: { score: true, scoreMin: 92 } });
+    expect(hits).toHaveLength(0);
+    const hits2 = evalAlerts([mk({ score: 93 })], { enabled: { score: true, scoreMin: 92 } });
+    expect(hits2).toHaveLength(1);
+  });
+  it("enabled.whaleMin overrides the legacy whalePremium default ($25M)", () => {
+    const hits = evalAlerts([mk({ score: 40, premium: 12e6 })], { enabled: { whale: true, whaleMin: 25e6 } });
+    expect(hits).toHaveLength(0);
+    const hits2 = evalAlerts([mk({ score: 40, premium: 26e6 })], { enabled: { whale: true, whaleMin: 25e6 } });
+    expect(hits2[0].rule).toBe("WHALE");
+  });
+  it("perTickerCap keeps the strongest claims per ticker, priority SCORE > WHALE > 0DTE", () => {
+    const rows = [
+      mk({ under: "SPY", strike: 700, score: 95, premium: 1e6 }),                       // SCORE #1
+      mk({ under: "SPY", strike: 705, score: 93, premium: 1e6 }),                       // SCORE #2
+      mk({ under: "SPY", strike: 710, score: 91, premium: 30e6 }),                      // WHALE — cap hit
+      mk({ under: "QQQ", strike: 500, score: 90, premium: 1e6 }),                       // other ticker untouched
+    ];
+    const hits = evalAlerts(rows, { perTickerCap: 2, enabled: { score: true, scoreMin: 85, whale: true, whaleMin: 25e6 } });
+    const spy = hits.filter((h) => h.under === "SPY");
+    expect(spy).toHaveLength(2);
+    expect(spy.map((h) => h.strike).sort()).toEqual([700, 705]);   // strongest scores kept
+    expect(hits.some((h) => h.under === "QQQ")).toBe(true);
+  });
+  it("perTickerCap=0 disables the cap (old behavior)", () => {
+    const rows = [mk({ strike: 700 }), mk({ strike: 705 }), mk({ strike: 710 })];
+    const hits = evalAlerts(rows, { perTickerCap: 0, enabled: { score: true, scoreMin: 85 } });
+    expect(hits).toHaveLength(3);
+  });
+  it("side gate filters intraday rules by contract side, OICONF exempt", () => {
+    const rows = [mk({ type: "put", score: 95 }), mk({ type: "call", score: 95 })];
+    const callsOnly = evalAlerts(rows, { side: "call", enabled: { score: true, scoreMin: 85 } });
+    expect(callsOnly).toHaveLength(1);
+    expect(callsOnly[0].type).toBe("call");
+    expect(evalAlerts(rows, { side: "all", enabled: { score: true, scoreMin: 85 } })).toHaveLength(2);
+  });
+});
+
+describe("evalTickerAlerts noise pass (2026-09-02)", () => {
+  const rollup = (under, vol) => [{ under, callVol: vol / 2, putVol: vol / 2, prem: 0, callPrem: 0, putPrem: 0, count: 1, maxScore: 90 }];
+  const baseline = { avg: 8000, std: 4000, days: 5 };
+  it("enabled.sigmaMin overrides the legacy sigmaMin default (6 > 4)", () => {
+    // vol 36000 → σ = (36000-8000)/4000 = 7.0
+    const hit7 = evalTickerAlerts(rollup("SPY", 36000), { SPY: baseline }, {}, { enabled: { sigma: true, sigmaMin: 6 } });
+    expect(hit7).toHaveLength(1);
+    const hit5 = evalTickerAlerts(rollup("SPY", 28000), { SPY: baseline }, {}, { enabled: { sigma: true, sigmaMin: 6 } });
+    expect(hit5).toHaveLength(0);   // σ = 5.0 — passed the old 4σ gate, fails 6σ
+  });
+  it("enabled.followMin overrides the legacy followDays default (3 > 2)", () => {
+    const streaks = { SPY: { n: 2, mult: 1.5, median: 10000, thr: 15000 } };
+    expect(evalTickerAlerts(rollup("SPY", 36000), {}, streaks, { enabled: { follow: true, followMin: 3 } })).toHaveLength(0);
+    streaks.SPY.n = 3;
+    expect(evalTickerAlerts(rollup("SPY", 36000), {}, streaks, { enabled: { follow: true, followMin: 3 } })).toHaveLength(1);
+  });
+});
+
+describe("W1 tracer — spreadPosition", () => {
+  it("maps bid->0, mid->0.5, ask->1, clamps outside", () => {
+    expect(spreadPosition(4, 4.2, 4)).toMatchObject({ pos: 0, state: "OK", side: "BID" });
+    expect(spreadPosition(4, 4.2, 4.1).pos).toBeCloseTo(0.5, 5);
+    expect(spreadPosition(4, 4.2, 4.2)).toMatchObject({ pos: 1, state: "OK", side: "ASK" });
+    expect(spreadPosition(4, 4.2, 9).pos).toBe(1);
+    expect(spreadPosition(4, 4.2, 1).pos).toBe(0);
+  });
+  it("NO_QUOTE on missing/zero, LOCKED on crossed (ask<=bid)", () => {
+    expect(spreadPosition(null, 4.2, 4.1).state).toBe("NO_QUOTE");
+    expect(spreadPosition(4, null, 4.1).state).toBe("NO_QUOTE");
+    expect(spreadPosition(4, 4.2, null).state).toBe("NO_QUOTE");
+    expect(spreadPosition(0, 0, 5).state).toBe("NO_QUOTE");
+    expect(spreadPosition(4.2, 4, 4.1).state).toBe("LOCKED");
+    expect(spreadPosition(4.2, 4, 4.1).side).toBe("LOCKED");
+  });
+  it("BID/MID/ASK exact, clamp edges, side label", () => {
+    expect(spreadPosition(4, 4.2, 4).side).toBe("BID");
+    expect(spreadPosition(4, 4.2, 4.1).side).toBe("MID");
+    expect(spreadPosition(4, 4.2, 4.2).side).toBe("ASK");
+    // boundary: pos<=0.33 → BID, pos>=0.67 → ASK — use clearly interior values
+    expect(spreadPosition(4, 4.6, 4.15).side).toBe("BID"); // (4.15-4)/0.6 = 0.25
+    expect(spreadPosition(4, 4.6, 4.45).side).toBe("ASK"); // (4.45-4)/0.6 = 0.75
+    // near-boundary: 0.33 BID, 0.67 ASK (with tolerance)
+    expect(spreadPosition(4, 4.6, 4.19).side).toBe("BID"); // (4.19-4)/0.6 ≈ 0.316
+    expect(spreadPosition(4, 4.6, 4.42).side).toBe("ASK"); // (4.42-4)/0.6 = 0.70
+  });
+});
+
+describe("W1 tracer — overviewStats", () => {
+  const r = (type, side, premium) => ({ type, side, premium });
+  it("rolls bull/bear legs, FIR, P/C, lean per H1", () => {
+    const s = overviewStats([
+      r("call", "ASK", 100000), r("call", "ASK", 50000),
+      r("put", "BID", 30000), r("put", "ASK", 20000),
+    ]);
+    // bull = 100k+50k calls ASK + 30k puts BID = 180k; bear = 20k puts ASK
+    expect(s.bullPrem).toBe(180000);
+    expect(s.bearPrem).toBe(20000);
+    expect(s.netPrem).toBe(160000);
+    expect(s.fir).toBeCloseTo(0.8, 5);
+    expect(s.pc).toBeCloseTo(50000 / 150000, 5);
+    expect(s.lean).toBe("Bullish");
+    expect(s.n).toBe(4);
+    expect(s.rvol).toBeNull();
+  });
+  it("Neutral below FIR 0.3; empty tape is Neutral zeros", () => {
+    const s = overviewStats([r("call", "ASK", 100), r("put", "ASK", 90)]);
+    expect(s.fir).toBeCloseTo(10 / 190, 5);
+    expect(s.lean).toBe("Neutral");
+    const e = overviewStats([]);
+    expect(e).toMatchObject({ bullPrem: 0, bearPrem: 0, netPrem: 0, fir: 0, lean: "Neutral", n: 0 });
+  });
+});
+
+describe("W6 filter depth — equityType/signedOtm/isOpexDay", () => {
+  it("classifies tickers without a vendor", () => {
+    expect(equityType("SPY")).toBe("ETF");
+    expect(equityType("QQQ")).toBe("ETF");
+    expect(equityType("SPX")).toBe("INDEX");
+    expect(equityType("VIX")).toBe("INDEX");
+    expect(equityType("NVDA")).toBe("STOCK");
+    expect(equityType("tsla")).toBe("STOCK");
+    expect(equityType(null)).toBe("STOCK");
+  });
+  it("signed moneyness orients by type", () => {
+    expect(signedOtm("call", 460, 450)).toBeCloseTo(10 / 450, 5);
+    expect(signedOtm("call", 440, 450)).toBeCloseTo(-10 / 450, 5);
+    expect(signedOtm("put", 440, 450)).toBeCloseTo(10 / 450, 5);
+    expect(signedOtm("put", 460, 450)).toBeCloseTo(-10 / 450, 5);
+    expect(signedOtm("call", 460, null)).toBeNull();
+  });
+  it("OPEX is the third Friday", () => {
+    expect(isOpexDay("2026-09-18")).toBe(true);   // third Friday Sep 2026
+    expect(isOpexDay("2026-09-11")).toBe(false);  // second Friday
+    expect(isOpexDay("2026-09-19")).toBe(false);  // Saturday
+    expect(isOpexDay("junk")).toBe(false);
+  });
+});
+
+describe("W3-partial highlighting — highlightState", () => {
+  it("BURST beats VOL_OI; VOL_OI needs volOI>=1; else NONE", () => {
+    expect(highlightState({ volDelta: 1500, volOI: 3, oi: 1000 })).toBe("BURST");
+    expect(highlightState({ volDelta: 10, volOI: 2.5, oi: 1000 })).toBe("VOL_OI");
+    expect(highlightState({ volDelta: 0, volOI: 0.5, oi: 1000 })).toBe("NONE");
+    expect(highlightState({ volDelta: 5000, volOI: 9, oi: 0 })).toBe("VOL_OI");
+    expect(highlightState({})).toBe("NONE");
+  });
+});
+
+describe("W2 strategy-leg port — flagSpreadLegs", () => {
+  const leg = (ticker, type, strike, volume, exp = "2026-09-18") =>
+    ({ ticker, type, strike, expiration: exp, volume });
+  it("flags verticals on matched volumes, ignores the rest", () => {
+    const rows = [leg("SPY", "call", 450, 2000), leg("SPY", "call", 455, 2100), leg("SPY", "call", 460, 50)];
+    expect(flagSpreadLegs(rows)).toBe(2);
+    expect(rows[0]._strat).toBe("VERT?");
+    expect(rows[1]._strat).toBe("VERT?");
+    expect(rows[2]._strat).toBeUndefined();
+  });
+  it("flags straddles within 5% strikes, respects the 1000 floor", () => {
+    const rows = [leg("SPY", "call", 450, 3000), leg("SPY", "put", 445, 2900)];
+    expect(flagSpreadLegs(rows)).toBe(2);
+    expect(rows[0]._strat).toBe("STRADDLE?");
+    const small = [leg("SPY", "call", 450, 500), leg("SPY", "put", 445, 480)];
+    expect(flagSpreadLegs(small)).toBe(0);
+  });
+});
+
+describe("Wave-2 SHIP engine — skew/pin/inventory", () => {
+  const c = (type, delta, iv, strike = 450, oi = 1000) => ({ type, delta, iv, strike, oi });
+  it("interpDeltaIV hits exact, interpolates, refuses extrapolation", () => {
+    const rows = [c("put", -0.1, 0.30), c("put", -0.3, 0.40)];
+    expect(interpDeltaIV(rows, -0.1, "put")).toBeCloseTo(0.30, 6);
+    expect(interpDeltaIV(rows, -0.2, "put")).toBeCloseTo(0.35, 6);
+    expect(interpDeltaIV(rows, -0.5, "put")).toBeNull();
+    expect(interpDeltaIV([c("put", -0.2, 0.3)], -0.2, "put")).toBeNull();
+  });
+  it("skewLevels matches XZZ/C-W/Yan/convexity definitions", () => {
+    const rows = [
+      c("put", -0.2, 0.40), c("put", -0.5, 0.30), c("put", -0.8, 0.50),
+      c("call", 0.3, 0.22), c("call", 0.5, 0.20),
+    ];
+    const s = skewLevels(rows);
+    expect(s.smirk).toBeCloseTo(0.20, 6);
+    expect(s.cwSpread).toBeCloseTo(-0.10, 6);
+    expect(s.yanSlope).toBeCloseTo(0.10, 6);
+    expect(s.convexity).toBeCloseTo(0.50, 6);
+  });
+  it("pinRisk finds max-OI strike, concentration, distance", () => {
+    const rows = [c("call", 0.5, 0.2, 450, 5000), c("put", -0.5, 0.3, 450, 3000), c("call", 0.5, 0.2, 460, 1000), c("put", -0.5, 0.3, 440, 1000), c("call", 0.5, 0.2, 470, 1000)];
+    const p = pinRisk(rows, 452);
+    expect(p.maxOiStrike).toBe(450);
+    expect(p.concentration).toBeCloseTo(10000 / 11000, 6);
+    expect(p.distPct).toBeCloseTo(((450 - 452) / 452) * 100, 6);
+    expect(pinRisk([], 452)).toBeNull();
+  });
+  it("quoteSkew spreads always, direction only vs prevMid", () => {
+    const q = quoteSkew(1.0, 1.2);
+    expect(q.tag).toBe("LEVEL");
+    expect(q.relSpread).toBeCloseTo(0.2 / 1.1, 6);
+    expect(quoteSkew(1.0, 1.2, 1.0).tag).toBe("UP");
+    expect(quoteSkew(1.0, 1.2, 1.2).tag).toBe("DOWN");
+    expect(quoteSkew(1.0, 1.2, 1.1).tag).toBe("FLAT");
+    expect(quoteSkew(0, 0).tag).toBe("NOQUOTE");
+    expect(quoteSkew(1.2, 1.0).tag).toBe("NOQUOTE");
+  });
+  it("midDrift returns pct over window, null when unusable", () => {
+    expect(midDrift([100, 101, 102]).driftPct).toBeCloseTo(2, 6);
+    expect(midDrift([100, 101, 102]).n).toBe(3);
+    expect(midDrift([100])).toBeNull();
+  });
+});
+
+describe("stampPollDeltas — per-poll stamping", () => {
+  const s = (vol, mid) => ({ ticker: "SPY", type: "call", strike: 450, expiration: "2026-09-18", volume: vol, mid });
+  it("first sighting: delta 0, prevMid null; second poll: delta + prior mid", () => {
+    const v = new Map(), m = new Map();
+    const p1 = [s(100, 4.1)];
+    stampPollDeltas(p1, v, m);
+    expect(p1[0]._volDelta).toBe(0);
+    expect(p1[0]._prevMid).toBeNull();
+    const p2 = [s(150, 4.2)];
+    stampPollDeltas(p2, v, m);
+    expect(p2[0]._volDelta).toBe(50);
+    expect(p2[0]._prevMid).toBeCloseTo(4.1, 6);
+  });
+  it("volume reset reads as unknown (0), mid map keeps last good", () => {
+    const v = new Map(), m = new Map();
+    stampPollDeltas([s(500, 4.2)], v, m);
+    const p2 = [s(10, null)];
+    stampPollDeltas(p2, v, m);
+    expect(p2[0]._volDelta).toBe(0);
+    expect(p2[0]._prevMid).toBeCloseTo(4.2, 6);
+  });
+});
+
+describe("nearestExpiryPin — Friday gate + nearest expiry", () => {
+  const r = (ticker, strike, oi, exp, spot = 452) => ({ ticker, strike, oi, expiration: exp, spot });
+  const MON = new Date("2026-08-31T12:00:00").getTime(); // Monday
+  const FRI = new Date("2026-09-04T12:00:00").getTime(); // Friday
+  it("index names eligible any day; picks nearest expiry", () => {
+    const rows = [r("SPY", 450, 8000, "2026-09-18"), r("SPY", 450, 1000, "2026-09-18"), r("SPY", 455, 9000, "2026-09-25")];
+    const p = nearestExpiryPin(rows, "SPY", MON);
+    expect(p.eligible).toBe(true);
+    expect(p.exp).toBe("2026-09-18");
+    expect(p.maxOiStrike).toBe(450);
+  });
+  it("single names gated to Friday", () => {
+    const rows = [r("NVDA", 180, 5000, "2026-09-18", 182)];
+    expect(nearestExpiryPin(rows, "NVDA", MON)).toEqual({ eligible: false, reason: "Fri-only" });
+    const fri = nearestExpiryPin(rows, "NVDA", FRI);
+    expect(fri.eligible).toBe(true);
+    expect(fri.maxOiStrike).toBe(180);
+  });
+  it("null on empty or ticker mismatch", () => {
+    expect(nearestExpiryPin([], "SPY", MON)).toBeNull();
+    expect(nearestExpiryPin([r("SPY", 450, 100, "2026-09-18")], "QQQ", MON)).toBeNull();
+  });
+});
+
+describe("rollSpread — Roll 1984 bounce estimator", () => {
+  it("recovers known spread from synthetic bounce", () => {
+    const px = [100, 101, 100, 101, 100, 101, 100, 101, 100]; // 8 even deltas
+    const r = rollSpread(px);
+    expect(r.truncated).toBe(false);
+    expect(r.spread).toBeCloseTo(2, 6);
+    expect(r.n).toBe(9);
+  });
+  it("truncates flat and trending series to 0", () => {
+    expect(rollSpread([5, 5, 5, 5, 5]).truncated).toBe(true);
+    expect(rollSpread([5, 5, 5, 5, 5]).spread).toBe(0);
+    expect(rollSpread([1, 2, 3, 4, 5, 6]).truncated).toBe(true);
+  });
+  it("needs 3+ mids; pushCapped bounds the ring", () => {
+    expect(rollSpread([1, 2]).spread).toBeNull();
+    const r = pushCapped(pushCapped([1, 2], 3, 3), 4, 3);
+    expect(r).toEqual([2, 3, 4]);
+  });
+});
+
+describe("rollPooled — expiry-bucket cost", () => {
+  const bounce = (n, lo = 4, hi = 4.2) => Array.from({ length: n }, (_, i) => (i % 2 === 0 ? lo : hi));
+  it("pools two bounce rings into one spread", () => {
+    const r = rollPooled([bounce(20), bounce(20)]);
+    expect(r.building).toBe(false);
+    expect(r.spread).toBeCloseTo(0.4, 1); // full bounce amplitude ± joint noise
+  });
+  it("building state under 30 deltas, never a number", () => {
+    const r = rollPooled([bounce(10)]);
+    expect(r.building).toBe(true);
+    expect(r.spread).toBeNull();
+  });
+});
+
+describe("poll-chain integration — the effect's exact sequence", () => {
+  it("poll2 arrows + deltas; pool exits building at 30 deltas", () => {
+    const prevVol = new Map(), prevMid = new Map(), rings = new Map();
+    const mk = (vol, a, b) => ([
+      { ticker: "SPY", type: "call", strike: 450, expiration: "2026-09-18", volume: vol, mid: a },
+      { ticker: "SPY", type: "put", strike: 445, expiration: "2026-09-18", volume: vol, mid: b },
+    ]);
+    let arrows, deltas;
+    for (let p = 0; p < 16; p++) {
+      const batch = mk(100 + p * 10, 4.1 + p * 0.01, 4.0 - p * 0.005);
+      stampPollDeltas(batch, prevVol, prevMid);
+      for (const s of batch) {
+        rings.set(contractKey(s), pushCapped(rings.get(contractKey(s)), Number(s.mid), 60));
+      }
+      if (p === 1) {
+        arrows = batch.map((s) => quoteSkew(4.0, 4.3, s._prevMid).tag);
+        deltas = batch.map((s) => s._volDelta);
+      }
+    }
+    expect(arrows).toEqual(["UP", "UP"]);
+    expect(deltas).toEqual([10, 10]);
+    const pool = rollPooled([...rings.values()]);
+    expect(pool.building).toBe(false);
+    // steady drift = positive autocov = textbook truncation, not a bug.
+    expect(pool.truncated).toBe(true);
+    expect(pool.spread).toBe(0);
   });
 });

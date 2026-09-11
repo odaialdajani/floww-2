@@ -28,6 +28,21 @@ HISTORY_FILE = KANBAN_DIR / "throughput_history.json"
 
 def extract_card_features(card_path: Path) -> dict:
     """Extract features from a completed card file."""
+
+    def _as_dt(val):
+        """YAML auto-parses unquoted ISO timestamps into datetime objects,
+        on which .replace("Z", "+00:00") raises TypeError (silently
+        swallowed). Accept datetime objects directly; parse strings."""
+        if val is None or isinstance(val, bool):
+            return None
+        if isinstance(val, datetime):
+            return val if val.tzinfo is not None else val
+        if isinstance(val, (int, float)):
+            return None
+        try:
+            return datetime.fromisoformat(str(val).replace("Z", "+00:00"))
+        except (ValueError, TypeError, AttributeError):
+            return None
     content = card_path.read_text()
 
     # Parse frontmatter
@@ -58,14 +73,10 @@ def extract_card_features(card_path: Path) -> dict:
 
     # Time features from last_update
     last_update = fm.get("last_update", "")
-    if last_update:
-        try:
-            dt = datetime.fromisoformat(last_update.replace("Z", "+00:00"))
-            features["time_of_day"] = dt.hour
-            features["day_of_week"] = dt.weekday()
-        except (ValueError, TypeError):
-            features["time_of_day"] = 12
-            features["day_of_week"] = 0
+    dt = _as_dt(last_update)
+    if dt is not None:
+        features["time_of_day"] = dt.hour
+        features["day_of_week"] = dt.weekday()
     else:
         features["time_of_day"] = 12
         features["day_of_week"] = 0
@@ -73,13 +84,9 @@ def extract_card_features(card_path: Path) -> dict:
     # Calculate completion time if we have created/updated timestamps
     created = fm.get("created_at", "")
     updated = fm.get("last_update", "")
-    if created and updated:
-        try:
-            t_created = datetime.fromisoformat(created.replace("Z", "+00:00"))
-            t_updated = datetime.fromisoformat(updated.replace("Z", "+00:00"))
-            features["completion_hours"] = (t_updated - t_created).total_seconds() / 3600
-        except (ValueError, TypeError):
-            features["completion_hours"] = features["estimate_hours"]
+    t_created, t_updated = _as_dt(created), _as_dt(updated)
+    if t_created is not None and t_updated is not None:
+        features["completion_hours"] = (t_updated - t_created).total_seconds() / 3600
     else:
         features["completion_hours"] = features["estimate_hours"]
 

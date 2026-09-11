@@ -1,11 +1,15 @@
 """
 Free Data Source Integrations for Confluence Decoder
 
-Aggregates data from multiple free APIs:
-- Finnhub (60 calls/min free): real-time quotes, earnings, news
-- Alpha Vantage (5 calls/min, 500/day free): technical indicators, forex
-- Polygon.io (5 calls/min free): real-time options data
-- Yahoo Finance via yfinance (unlimited): options chains, historical
+PUBLIC-API-ONLY POLICY (2026-09-03, per architect directive):
+- PRIMARY: Public.com API via services/public_api_adapter.py
+  (chains, spot quotes, bars/history, portfolio, orders)
+- Emergency fallback only: Finnhub/Polygon quotes, yfinance chains
+  (kept for offline resilience; see ADR-0002 data source policy)
+- REMOVED from production path: Schwab (no account), Alpha Vantage
+  (retired). AlphaVantageProvider below is a disabled stub kept only so
+  legacy imports don't break — it never makes network calls and always
+  reports enabled=False.
 
 Falls back gracefully when rate limits hit.
 """
@@ -260,7 +264,8 @@ class PolygonProvider(FreeDataProvider):
 class DataAggregator:
     """
     Aggregates data from all free providers with fallback.
-    Priority: Finnhub -> Polygon -> Alpha Vantage -> yfinance
+    Priority: Public API -> Finnhub -> Polygon -> yfinance
+    (Alpha Vantage retired 2026-09-03 — stub kept for import compat only.)
     """
 
     def __init__(self):
@@ -270,6 +275,17 @@ class DataAggregator:
 
     async def get_spot_price(self, ticker: str) -> dict | None:
         """Get spot price from best available source."""
+        # Try Public API first (primary source per public-api-only policy)
+        try:
+            from services.public_api_adapter import fetch_spot_from_public_api
+            spot = await fetch_spot_from_public_api(ticker)
+            if spot and spot > 0:
+                _record_provider_call("public_api", True)
+                return {"price": spot, "source": "public_api"}
+            _record_provider_call("public_api", False)
+        except Exception:
+            _record_provider_call("public_api", False)
+
         # Try Finnhub first (fastest, highest rate limit)
         quote = await self.finnhub.get_quote(ticker)
         if quote:
@@ -283,10 +299,7 @@ class DataAggregator:
                 "source": "polygon",
             }
 
-        # Try Alpha Vantage
-        av_quote = await self.alphavantage.get_quote(ticker)
-        if av_quote:
-            return av_quote
+        # Alpha Vantage retired (2026-09-03) — skipped, provider disabled.
 
         # Fallback to yfinance
         try:
@@ -348,10 +361,10 @@ class DataAggregator:
         # Analyst recommendation
         result["recommendation"] = await self.finnhub.get_recommendation(ticker)
 
-        # Technical indicators (Alpha Vantage - rate limited)
-        rsi = await self.alphavantage.get_technical_indicator(ticker, "RSI")
-        if rsi:
-            result["technicals"]["rsi"] = rsi
+        # Technical indicators (Alpha Vantage retired 2026-09-03 —
+        # use /api/public/technical/{ticker}/{indicator}, computed locally
+        # from Public API bars). Kept empty so callers don't hit a dead API.
+        result["technicals"] = {}
 
         # Options contracts (Polygon)
         result["options_contracts"] = await self.polygon.get_options_contracts(ticker, limit=10)
@@ -361,119 +374,44 @@ class DataAggregator:
     def get_status(self) -> dict:
         """Get status of all data providers."""
         return {
+            "public_api": {"enabled": True, "rate_limit": "primary source"},
             "finnhub": {"enabled": self.finnhub.enabled, "rate_limit": "60/min"},
             "polygon": {"enabled": self.polygon.enabled, "rate_limit": "5/min"},
-            "alphavantage": {"enabled": self.alphavantage.enabled, "rate_limit": "5/min, 500/day"},
+            "alphavantage": {"enabled": False, "rate_limit": "retired 2026-09-03 — use /api/public/*"},
             "yfinance": {"enabled": True, "rate_limit": "unlimited (unofficial)"},
         }
 
 
 class AlphaVantageProvider(FreeDataProvider):
-    """Alpha Vantage free tier: 5 calls/min, 500/day."""
+    """Alpha Vantage — RETIRED 2026-09-03 (public-api-only policy).
+
+    Disabled stub kept so legacy imports (routes, scripts, tests) don't
+    break. All methods return None without making network calls. Use
+    /api/public/* endpoints (Public.com API) instead:
+      quote      -> GET /api/public/quotes/{ticker}
+      chain      -> GET /api/public/chain/{ticker}
+      technicals -> GET /api/public/technical/{ticker}/{indicator}
+      bars       -> GET /api/public/bars/{ticker} | /history/{ticker}
+    """
 
     def __init__(self):
         super().__init__("AlphaVantage", rate_limit=5)
-        self.enabled = bool(ALPHA_VANTAGE_KEY)
+        # Forced disabled — never read ALPHA_VANTAGE_KEY.
+        self.enabled = False
         self.base = "https://www.alphavantage.co/query"
 
     async def get_quote(self, ticker: str) -> dict | None:
-        """Get real-time quote. 5 calls/min, 500/day free tier."""
-        if not self.enabled:
-            return None
-        try:
-            from services.alpha_vantage_client import CircuitBreakerOpenError, circuit
-            data = await circuit.call(self._get, self.base, {
-                "function": "GLOBAL_QUOTE",
-                "symbol": ticker,
-                "apikey": ALPHA_VANTAGE_KEY,
-            })
-        except CircuitBreakerOpenError:
-            logger.warning("AlphaVantage circuit OPEN — skipping get_quote(%s)", ticker)
-            return None
-        if data and "Global Quote" in data and data["Global Quote"]:
-            q = data["Global Quote"]
-            price = float(q.get("05. price", 0))
-            if price > 0:
-                prev_close = float(q.get("08. previous close", 0))
-                change = float(q.get("09. change", 0))
-                change_pct = float(q.get("10. change percent", "0%").replace("%", ""))
-                return {
-                    "price": price,
-                    "open": float(q.get("02. open", 0)),
-                    "high": float(q.get("03. high", 0)),
-                    "low": float(q.get("04. low", 0)),
-                    "volume": int(q.get("06. volume", 0)),
-                    "prev_close": prev_close,
-                    "change": change,
-                    "change_pct": change_pct,
-                    "latest_trading_day": q.get("07. latest trading day", ""),
-                    "source": "alphavantage",
-                }
+        """Retired — always None. Use fetch_spot_from_public_api()."""
+        logger.info("AlphaVantage retired — get_quote(%s) skipped, use Public API", ticker)
         return None
 
     async def get_technical_indicator(self, ticker: str, indicator: str = "RSI", period: int = 14) -> dict | None:
-        """Get technical indicator (RSI, MACD, SMA, EMA, etc.)."""
-        if not self.enabled:
-            return None
-
-        function_map = {
-            "RSI": "RSI",
-            "MACD": "MACD",
-            "SMA": "SMA",
-            "EMA": "EMA",
-            "BBANDS": "BBANDS",
-            "STOCH": "STOCH",
-            "ADX": "ADX",
-            "ATR": "ATR",
-        }
-
-        function = function_map.get(indicator, indicator)
-        params = {
-            "function": function,
-            "symbol": ticker,
-            "interval": "daily",
-            "time_period": period,
-            "series_type": "close",
-            "apikey": ALPHA_VANTAGE_KEY,
-        }
-
-        try:
-            from services.alpha_vantage_client import CircuitBreakerOpenError, circuit
-            data = await circuit.call(self._get, self.base, params)
-        except CircuitBreakerOpenError:
-            logger.warning("AlphaVantage circuit OPEN — skipping get_technical_indicator(%s, %s)", ticker, indicator)
-            return None
-        if data and "Error Message" not in data:
-            tech_key = f"Technical Analysis: {function}"
-            if tech_key in data:
-                dates = sorted(data[tech_key].keys(), key=lambda d: datetime.strptime(d[:10], "%Y-%m-%d"))
-                latest_date = dates[-1]
-                values = data[tech_key][latest_date]
-                return {
-                    "indicator": indicator,
-                    "date": latest_date,
-                    "values": values,
-                    "source": "alphavantage",
-                }
+        """Retired — always None. Use /api/public/technical/{ticker}/{indicator}."""
+        logger.info("AlphaVantage retired — get_technical_indicator(%s, %s) skipped", ticker, indicator)
         return None
 
     async def get_forex_rate(self, from_cur: str = "USD", to_cur: str = "EUR") -> float | None:
-        """Get forex rate."""
-        if not self.enabled:
-            return None
-        try:
-            from services.alpha_vantage_client import CircuitBreakerOpenError, circuit
-            data = await circuit.call(self._get, self.base, {
-                "function": "CURRENCY_EXCHANGE_RATE",
-                "from_currency": from_cur,
-                "to_currency": to_cur,
-                "apikey": ALPHA_VANTAGE_KEY,
-            })
-        except CircuitBreakerOpenError:
-            logger.warning("AlphaVantage circuit OPEN — skipping get_forex_rate(%s, %s)", from_cur, to_cur)
-            return None
-        if data and "Realtime Currency Exchange Rate" in data:
-            rate = data["Realtime Currency Exchange Rate"].get("5. Exchange Rate")
-            return float(rate) if rate else None
+        """Retired — always None. Use Public API quotes."""
+        logger.info("AlphaVantage retired — get_forex_rate(%s, %s) skipped", from_cur, to_cur)
         return None
 

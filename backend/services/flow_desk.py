@@ -164,6 +164,33 @@ def apply_campaign(alerts, prior_days, min_days: int = _CAMPAIGN_MIN_DAYS) -> in
     return n
 
 
+# ── 2b. earnings protocol (C5, C-side) ──────────────────────────────────
+# Muravyev-Pearson direction: anneal, don't demote. Earnings-window alerts
+# still fire but route to the event protocol — flag (drives the C3 1%
+# sizing cap), 1.5x wider invalidation, event-day exit note. Never removes.
+_EARNINGS_STOP_WIDEN = 1.5
+
+
+def apply_earnings_protocol(alerts, oi_tags) -> int:
+    """Flag + widen earnings-window alerts. Returns count routed."""
+    n = 0
+    for a in alerts or []:
+        tag = (oi_tags or {}).get(a.get("ckey")) or {}
+        if not isinstance(tag.get("earnings"), dict):
+            continue
+        a["earnings_protocol"] = True
+        kl = a.get("key_levels")
+        if isinstance(kl, dict):
+            try:
+                entry, inv = float(kl["entry"]), float(kl["invalidation"])
+                kl["invalidation"] = round(entry - (entry - inv) * _EARNINGS_STOP_WIDEN, 4)
+            except (TypeError, ValueError, KeyError):
+                pass
+        a["why"] = (a.get("why") or "") + " · earnings protocol: reduced size, wider stop, exit by event day"
+        n += 1
+    return n
+
+
 # ── 3. IV context ───────────────────────────────────────────────────
 
 def record_iv_daily(engine, rows, snapshot_date: str | None = None) -> int:
@@ -223,9 +250,9 @@ def iv_context(engine, alerts, snapshot_date: str | None = None,
 
 # ── orchestrator ────────────────────────────────────────────────────
 
-def desk_pass(engine, rows, alerts, now: float | None = None) -> list:
+def desk_pass(engine, rows, alerts, now: float | None = None, oi_tags: dict | None = None) -> list:
     """The full desk pass: fresh-interest gate → campaign promotion →
-    IV-context demotion. Returns the surviving (annotated) alerts."""
+    earnings protocol → IV-context demotion. Returns the surviving (annotated) alerts."""
     try:
         init_desk_tables(engine)
         deltas = mark_vol_deltas(engine, rows, now=now)
@@ -233,6 +260,8 @@ def desk_pass(engine, rows, alerts, now: float | None = None) -> list:
         if alerts:
             prior = read_prior_alert_days(engine, [a["ckey"] for a in alerts if a.get("ckey")])
             apply_campaign(alerts, prior)
+        if alerts and oi_tags:
+            apply_earnings_protocol(alerts, oi_tags)
         record_iv_daily(engine, rows)
         if alerts:
             iv_context(engine, alerts)

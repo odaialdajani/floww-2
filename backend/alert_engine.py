@@ -445,13 +445,13 @@ class AlertEngine:
             )
         return None
 
-    def get_alert_summary(self, ticker: str) -> dict[str, Any]:
+    def get_alert_summary(self, ticker: str, momentum_score: int = 50) -> dict[str, Any]:
         """Get a summary of current alerts for a ticker."""
         latest = self.get_latest(ticker)
         if not latest:
             return {"ticker": ticker, "status": "no_data"}
 
-        alerts = self.detect_alerts(ticker)
+        alerts = self.detect_alerts(ticker, momentum_score=momentum_score)
 
         return {
             "ticker": ticker,

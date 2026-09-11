@@ -68,6 +68,12 @@ def _normalize_contract(c: dict) -> dict | None:
     iv = float(c.get("iv") or c.get("impliedVolatility") or 0.0)
     vol = int(float(c.get("volume") or c.get("vol") or 0))
     oi = int(float(c.get("openInterest") or c.get("oi") or 0))
+    # No tradable market (2026-09-03): zero prints AND zero holders means
+    # the mid is a phantom wide quote — annualizing it yields nonsense ARR
+    # (e.g. 1600%+). Drop it here so both rankers never surface it.
+    # Rows with OI but no volume today (existing holders) are kept.
+    if vol == 0 and oi == 0:
+        return None
     # dte comes from either T (years) or expiry (string) or dte (int)
     dte_raw = c.get("dte")
     if dte_raw is None:

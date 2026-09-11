@@ -137,18 +137,15 @@ async def get_greeks_profile(ticker: str):
     vanna, charm) from the gflows_greeks DuckDB table.
 
     Path Parameters:
-        ticker: One of SPY, QQQ, SPX, IWM
+        ticker: any symbol (case-insensitive). Seeded tickers return rows;
+        unseeded tickers return 404.
 
     Returns:
         JSON with ticker, strikes array, and Greek arrays.
     """
-    # Validate ticker (I-7: correct route mounting)
+    # Open universe (2026-09-03): no allowlist — unseeded tickers fall
+    # through to the 404 below with a clear message.
     upper_ticker = ticker.upper().strip()
-    if upper_ticker not in VALID_TICKERS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid ticker '{ticker}'. Must be one of: {', '.join(sorted(VALID_TICKERS))}",
-        )
 
     db_path = _get_db_path()
     rows = _query_greeks(db_path, upper_ticker)

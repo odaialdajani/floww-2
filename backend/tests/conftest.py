@@ -8,12 +8,13 @@ collect_ignore = ["service_tests"]
 
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 try:
     from server import app
 except (ImportError, SyntaxError):
-    import sys, os
+    import os
+    import sys
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from server import app
 
@@ -37,21 +38,13 @@ async def aclient():
 @pytest_asyncio.fixture(autouse=True)
 async def _reset_event_loop_and_motor(aclient, monkeypatch):
     """Reset event loop AND motor client before each test."""
-    import server
     from motor.motor_asyncio import AsyncIOMotorClient
+
+    import server
 
     # Set API_SECRET_KEY for tests so auth doesn't block mutating routes
     # Force-override so .env value (dev-local-testing-key) doesn't win over test key
     os.environ["API_SECRET_KEY"] = "test-secret-key"
-
-    # Defence-in-depth default for the live-Schwab env gate in
-    # services/order_router.py — legacy order_router health tests below
-    # exercise the happy path via httpx mocking; with FLOWW_ENABLE_LIVE_SCHWAB
-    # set to "1" here, they reach the post-guard code path unchanged.  The
-    # dedicated gate tests in
-    # backend/tests/services/test_order_router_gate.py explicitly delete
-    # this env var via monkeypatch to verify the gate short-circuits.
-    os.environ.setdefault("FLOWW_ENABLE_LIVE_SCHWAB", "1")
 
     # Step 1: Close old event loop
     try:

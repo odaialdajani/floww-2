@@ -47,6 +47,7 @@ implied volatility — important for vol-of-vol and skew dynamics.
 """
 
 import os
+from datetime import date, datetime
 from typing import Any
 
 import numba  # type: ignore[import-untyped]
@@ -245,6 +246,39 @@ class GexAggregator:
         )
 
     @staticmethod
+    def _parse_expiry(val: Any, contract: dict[str, Any] | None = None) -> float:
+        """Expiry value in years. float-first (existing behavior identical);
+        then YYYY-MM-DD / ISO date strings (vendor-shaped contracts carry
+        ``expiry`` as a date string alongside numeric ``T``); then the
+        contract's ``T`` key; else 0.0. Never raises."""
+        if val is None:
+            return 0.0
+        if isinstance(val, (int, float, np.integer, np.floating)) and not isinstance(val, bool):
+            return float(val)
+        if isinstance(val, str):
+            s = val.strip()
+            try:
+                return float(s)
+            except (ValueError, TypeError):
+                pass  # silent by design: non-numeric string, try date parse next
+            try:
+                exp_d = datetime.strptime(s[:10], "%Y-%m-%d").date()
+                days = (exp_d - date.today()).days
+                return max(days, 0) / 365.0
+            except (ValueError, TypeError):
+                pass  # silent by design: not a date string, try T key next
+        if contract:
+            t_val = contract.get("T", contract.get("time_to_expiry"))
+            if isinstance(t_val, (int, float, np.integer, np.floating)) and not isinstance(t_val, bool):
+                return float(t_val)
+            if isinstance(t_val, str):
+                try:
+                    return float(t_val.strip())
+                except (ValueError, TypeError, AttributeError):
+                    pass  # silent by design: unparseable expiry degrades to 0.0 (unknown)
+        return 0.0
+
+    @staticmethod
     def _parse_option_type(val: Any) -> int:
         """
         Parse option type to 0 (call) or 1 (put).
@@ -318,7 +352,7 @@ class GexAggregator:
             ois[i] = float(oi_val) if oi_val is not None else 0.0
             types[i] = self._parse_option_type(self._resolve(c, self._TYPE_KEYS))
             exp_val = self._resolve(c, self._EXPIRY_KEYS, default=0.0)
-            expiries[i] = float(exp_val) if exp_val is not None else 0.0
+            expiries[i] = self._parse_expiry(exp_val, c)
             vomm_val = self._resolve(c, self._VOMMA_KEYS, default=0.0)
             vommas[i] = float(vomm_val) if vomm_val is not None else 0.0
 

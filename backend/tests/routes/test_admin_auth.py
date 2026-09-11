@@ -1,7 +1,7 @@
 """
 backend/tests/routes/test_admin_auth.py
 
-Verify that all 6 admin trading routes require authentication.
+Verify that all 5 admin trading routes require authentication.
 Each route is tested for:
   - 401 without API key
   - 200 with valid API key
@@ -21,7 +21,6 @@ client = TestClient(app)
 ROUTES_GET = [
     "/api/admin/trading/status",
     "/api/admin/trading/circuit-breaker/log",
-    "/api/admin/schwab/health",
 ]
 
 ROUTES_POST = [

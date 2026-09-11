@@ -88,6 +88,17 @@ class CacheRouter:
         try:
             from server import fetch_spot_and_chains_merged
             data = await coordinator.fetch(ticker, expiries, fetch_spot_and_chains_merged)
+            if isinstance(data, dict) and data.get("reason") == "budget_exhausted" and entry is not None:
+                # Budget gate refused the refresh (2026-09-04) — serve the
+                # stale entry with the reason instead of an empty degrade.
+                result = dict(entry.data)
+                result["_cache"] = {
+                    "hit": True,
+                    "stale": True,
+                    "stale_reason": "budget_cooldown",
+                    "retry_after": data.get("retry_after", 15),
+                }
+                return result
             if data and data.get("spot") and data.get("contracts"):
                 entry = CacheEntry(
                     ticker=ticker.upper(),

@@ -155,29 +155,64 @@ def dual_gex(ticker: str) -> dict[str, Any]:
     }
     try:
         spot, calls, puts, _expiry = _load_chain(ticker)
-        # The yfinance row only carries OI; per-strike gamma floww already
-        # computes elsewhere. Here we treat gamma=1 so the *ratio* stays
-        # meaningful (it'll be 1.0 by construction when volume == OI) and the
-        # caller can later wire in the greeks pipeline for production parity.
-        # Bare yfinance rows also carry no type/option_type column — the side
-        # exists only in the calls-vs-puts split, so stamp it here or
-        # GexAggregator._resolve would raise KeyError (live 500, 2026-07-15).
+        # Production gamma via the numba Black-Scholes pipeline (2026-09-03):
+        # bare yfinance rows carry strike + impliedVolatility + stamped
+        # expiry but no greeks. Compute per-row gamma from (S, K, T, IV)
+        # so the activity ratio is a true Σ±γ·Vol / Σ±γ·OI instead of
+        # degenerating to |signed Vol| / |signed OI| (gamma=1.0 fallback).
+        # Bare rows also carry no type column — stamp side here or
+        # GexAggregator._resolve raises KeyError (live 500, 2026-07-15).
+        today = datetime.now(UTC).date()
+        sided: list[tuple[str, dict]] = (
+            [("call", c) for c in calls] + [("put", p) for p in puts]
+        )
+        gammas: list[float] | None = None
+        try:
+            import numpy as np
+
+            from services.numba_greeks import bs_gamma_vec
+
+            _K: list[float] = []
+            _IV: list[float] = []
+            _T: list[float] = []
+            for _, c in sided:
+                _K.append(float(c.get("strike") or 0))
+                _IV.append(float(c.get("impliedVolatility") or c.get("iv") or 0.2))
+                try:
+                    _exp_d = datetime.strptime(
+                        str(c.get("expiry", "")), "%Y-%m-%d"
+                    ).date()
+                    _dte = max((_exp_d - today).days, 1)
+                except (ValueError, TypeError):
+                    _dte = 30
+                _T.append(_dte / 365.0)
+            gammas = [
+                float(g) for g in bs_gamma_vec(
+                    float(spot), np.array(_K), np.array(_T), np.array(_IV),
+                    q=_DIV_YIELD, r=_RISK_FREE,
+                )
+            ]
+        except Exception as exc:  # noqa: BLE001 — numba fallback, not a route failure
+            logger.warning("dual_gex: numba gamma failed for %s (%s); using 1.0", ticker, exc)
+            gammas = None
         augmented: list[dict] = []
-        for side, rows in (("call", calls), ("put", puts)):
-            for c in rows:
-                aug = dict(c)
-                aug.setdefault("type", side)
-                aug.setdefault("gamma", 1.0)
-                augmented.append(aug)
+        for (side, c), g in zip(
+            sided, gammas if gammas is not None else [1.0] * len(sided),
+            strict=False,
+        ):
+            aug = dict(c)
+            aug.setdefault("type", side)
+            aug["gamma"] = g
+            augmented.append(aug)
 
         result = DualGexCalculator.compute(spot, augmented)
         result["ticker"] = ticker.upper()
         result["spot"] = round(spot, 4)
         result["source"] = "steal-three-router"
+        result["gamma_model"] = "numba_bs" if gammas is not None else "flat_1.0_fallback"
         result["note"] = (
-            "Gamma defaulted to 1.0 because the bare yfinance row does not "
-            "carry it. Wire the existing numba_greeks pipeline through to this "
-            "router for production-quality ratios that match the Heatseeker heatmap."
+            "Per-row gamma from the numba Black-Scholes pipeline "
+            "(S, K, T, IV); flat 1.0 only if the kernel fails."
         )
 
         # ── Paper-accurate GEX metrics (Barbon-Buraschi + Ni-Pearson) ──
@@ -239,9 +274,9 @@ def iv_mid(
 
     out_rows: list[dict] = []
     for row in atmos_calls:
-        out_rows.append(_iv_row(row, spot, T, "call"))
+        out_rows.append(_iv_row(row, spot, T, "call", dte_days))
     for row in atm_puts:
-        out_rows.append(_iv_row(row, spot, T, "put"))
+        out_rows.append(_iv_row(row, spot, T, "put", dte_days))
 
     return {
         "ticker": ticker.upper(),
@@ -253,12 +288,14 @@ def iv_mid(
     }
 
 
-def _iv_row(row: dict, spot: float, T: float, kind: str) -> dict[str, Any]:
+def _iv_row(row: dict, spot: float, T: float, kind: str, dte_days: int = 0) -> dict[str, Any]:
     """Solve IV from the bid/ask mid (Newton + bisection fallback in bs_greeks).
 
     Returns a dict with yfinance_iv vs solved_iv vs round-trip residual.
     Includes a sentinel ``solved_iv_is_invalid`` flag so the frontend can
-    distinguish 'intrinsic-floor guard tripped' from 'genuine zero IV'.
+    distinguish 'intrinsic-floor guard tripped' from 'genuine zero IV', plus
+    a machine-readable ``invalid_reason`` (None when valid):
+      zero_mid | below_intrinsic | degenerate_expiry | solve_failed
     """
     K = float(row["strike"])
     bid = float(row.get("bid") or 0.0)
@@ -272,31 +309,49 @@ def _iv_row(row: dict, spot: float, T: float, kind: str) -> dict[str, Any]:
     if raw_iv <= 0 or raw_iv > 3.0:
         raw_iv = 0.0
 
+    invalid_reason: str | None = None
+    # Vega collapses as T -> 0 (1-DTE rows: Newton explodes, bisection
+    # starves on penny time-value). Floor the *solve* T at 2 days; the
+    # displayed T_years is untouched.
+    solve_T = max(T, 2 / 365.0)
+    if T <= 0:
+        invalid_reason = "degenerate_expiry"
+    elif mid <= 0:
+        invalid_reason = "zero_mid"
+    else:
+        intrinsic = max(spot - K, 0.0) if kind == "call" else max(K - spot, 0.0)
+        if mid < intrinsic - 1e-8:
+            # Stale wide quote below parity — no IV exists. Flag honestly
+            # instead of letting the solver spin and return boundary dust.
+            invalid_reason = "below_intrinsic"
+
     # float() casts: the Newton solve returns np.float64 when it actually
     # runs (T>0); numpy scalars leak numpy.bool into the == comparison below
     # and Pydantic cannot serialize them (live 500, 2026-07-15).
     # 2026-08-22: decoder_core Rust solver first — parity verified, ~723x
     # faster per solve; python fallback retained.
-    if mid > 0 and _dc_iv is not None:
+    if invalid_reason is None and mid > 0 and _dc_iv is not None:
         try:
-            solved_iv = float(_dc_iv(mid, spot, K, T, kind, q=_DIV_YIELD, r=_RISK_FREE))
+            solved_iv = float(_dc_iv(mid, spot, K, solve_T, kind, q=_DIV_YIELD, r=_RISK_FREE))
         except Exception:
             solved_iv = float(implied_vol_from_price(
-                mid, spot, K, T, kind=kind, q=_DIV_YIELD, r=_RISK_FREE
+                mid, spot, K, solve_T, kind=kind, q=_DIV_YIELD, r=_RISK_FREE
             ))
-    elif mid > 0:
+    elif invalid_reason is None and mid > 0:
         solved_iv = float(implied_vol_from_price(
-            mid, spot, K, T, kind=kind, q=_DIV_YIELD, r=_RISK_FREE
+            mid, spot, K, solve_T, kind=kind, q=_DIV_YIELD, r=_RISK_FREE
         ))
     else:
         solved_iv = 0.0
+    if invalid_reason is None and solved_iv == 0.0:
+        invalid_reason = "solve_failed"
 
     # Round-trip sanity: plug solved sigma back into bs_*_price.
     if solved_iv > 0:
         if kind == "call":
-            rt_price = bs_call_price(spot, K, T, solved_iv, r=_RISK_FREE, q=_DIV_YIELD)
+            rt_price = bs_call_price(spot, K, solve_T, solved_iv, r=_RISK_FREE, q=_DIV_YIELD)
         else:
-            rt_price = bs_put_price(spot, K, T, solved_iv, r=_RISK_FREE, q=_DIV_YIELD)
+            rt_price = bs_put_price(spot, K, solve_T, solved_iv, r=_RISK_FREE, q=_DIV_YIELD)
         rt_diff = float(abs(rt_price - mid))
     else:
         rt_diff = 0.0
@@ -309,9 +364,10 @@ def _iv_row(row: dict, spot: float, T: float, kind: str) -> dict[str, Any]:
         "yfinance_iv": round(raw_iv, 4),
         "solved_iv": round(solved_iv, 4),
         "solved_iv_is_invalid": solved_iv == 0.0,
+        "invalid_reason": invalid_reason,
         "iv_delta": round(solved_iv - raw_iv, 4) if raw_iv > 0 else None,
         "round_trip_diff": round(rt_diff, 6),
-        "dte_days": 0,
+        "dte_days": dte_days,
     }
 
 
@@ -411,11 +467,25 @@ def _run_income_screener(
     """Pure-logic runner shared by ``/api/screener/income`` and the
     backwards-compat ``/api/wheel_income/{ticker}`` alias. Validates
     DTE bounds + dispatches to the canonical rank_*_to_sell helpers.
+
+    30s TTL cache (2026-09-03): the loader scrapes 1 + up-to-8 Yahoo
+    pages per call and the dashboard mounts this panel on every view —
+    without coalescing, panel polling Yahoo-429s itself. Cache key covers
+    every filter so distinct screens never share rows.
     """
     if max_dte < min_dte:
         raise HTTPException(
             status_code=400, detail="max_dte must be >= min_dte",
         )
+    import time as _time
+
+    _key = (symbol.upper(), side, min_iv, min_volume, min_dte, max_dte, top)
+    _now = _time.time()
+    _hit = _income_cache.get(_key)
+    if _hit is not None and _now - _hit[0] < _INCOME_CACHE_TTL:
+        _cached = dict(_hit[1])
+        _cached["cached"] = True
+        return _cached
     spot, calls, puts = _load_chain_window(symbol, min_dte, max_dte)
 
     def _keep(c: dict) -> bool:
@@ -445,7 +515,7 @@ def _run_income_screener(
             min_dte=min_dte, max_dte=max_dte, top=top,
         )
 
-    return {
+    result = {
         "symbol": symbol.upper(),
         "spot": round(spot, 4),
         "filters": {
@@ -458,7 +528,17 @@ def _run_income_screener(
         "puts": res["puts"],
         "calls": res["calls"],
         "source": "steal-three-router",
+        "cached": False,
     }
+    if len(_income_cache) > 256:
+        _income_cache.clear()
+    _income_cache[_key] = (_now, result)
+    return result
+
+
+# TTL cache for _run_income_screener (key -> (timestamp, result)).
+_income_cache: dict[tuple, tuple[float, dict[str, Any]]] = {}
+_INCOME_CACHE_TTL: float = 30.0
 
 
 @router.get("/api/screener/income")

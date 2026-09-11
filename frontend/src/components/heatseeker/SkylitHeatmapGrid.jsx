@@ -66,6 +66,13 @@ function SkylitHeatmapGrid({
   viewMode = "gex",
   onCellClick,
   onStrikeClick,
+  // Compact (default): tight rows for the in-frame view. "full": roomy
+  // rows + larger type for the expanded overlay.
+  density = "compact",
+  // Window the rendered rows to N strikes centered on spot (2026-09-03:
+  // the in-frame grid fits on screen instead of squeezing 100+ rows).
+  // null = render every strike (expanded overlay).
+  windowRows = null,
 }) {
   const gridKey = GRID_BY_VIEW[viewMode] || "grid";
 
@@ -167,10 +174,21 @@ function SkylitHeatmapGrid({
 
   const range = maxV - minV;
 
+  // Windowing (2026-09-03): slice the RENDERED rows only — King, spot,
+  // and the viridis scale above always use the full matrix.
+  let shownStrikes = strikes;
+  if (windowRows != null && strikes.length > windowRows) {
+    let center = strikes.indexOf(spotStrike);
+    if (center === -1) center = Math.floor(strikes.length / 2);
+    const half = Math.floor(windowRows / 2);
+    let start = Math.max(0, Math.min(center - half, strikes.length - windowRows));
+    shownStrikes = strikes.slice(start, start + windowRows);
+  }
+
   return (
     <div className="skylit-heatmap-wrapper">
       <div className="skylit-heatmap-container">
-        <table className="trin-grid-table">
+        <table className={`trin-grid-table${density === "full" ? " density-full" : ""}`}>
           <thead>
             <tr>
               <th className="trin-th-strike">Strike</th>
@@ -180,7 +198,7 @@ function SkylitHeatmapGrid({
             </tr>
           </thead>
           <tbody>
-            {strikes.map((strike) => {
+            {shownStrikes.map((strike) => {
               const isSpot = strike === spotStrike;
               const sk = strikeKey(strike);
               return (
@@ -235,6 +253,11 @@ function SkylitHeatmapGrid({
         <span className="trin-legend-label">{fmtK(minV) || "$0"}</span>
         <div className="trin-legend-bar" />
         <span className="trin-legend-label">{fmtK(maxV) || "$0"}</span>
+        {shownStrikes.length < strikes.length && (
+          <span className="trin-legend-window" data-testid="skylit-grid-window-note">
+            Showing {shownStrikes.length} of {strikes.length} strikes · Expand for full grid
+          </span>
+        )}
       </div>
     </div>
   );

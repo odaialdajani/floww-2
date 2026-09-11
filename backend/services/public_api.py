@@ -111,6 +111,8 @@ class OptionContract:
     last: float | None = None
     bid: float | None = None
     ask: float | None = None
+    bid_size: int | None = None
+    ask_size: int | None = None
     volume: int | None = None
     open_interest: int | None = None
     iv: float | None = None
@@ -118,6 +120,17 @@ class OptionContract:
     gamma: float | None = None
     theta: float | None = None
     vega: float | None = None
+
+    @property
+    def mid(self) -> float | None:
+        """NBBO mid — the executable-reference price for side inference.
+
+        None when no two-sided quote exists; callers must treat a missing
+        mid as unknown (proxy reads), never fabricate it from last.
+        """
+        if self.bid is not None and self.ask is not None:
+            return (self.bid + self.ask) / 2
+        return None
 
 
 @dataclass
@@ -522,6 +535,14 @@ class PublicBroker:
 
         od = quote_data.get("optionDetails", {})
         greeks = od.get("greeks", {}) if od else {}
+        try:
+            bid_size = int(quote_data["bidSize"]) if quote_data.get("bidSize") is not None else None
+        except (TypeError, ValueError):
+            bid_size = None
+        try:
+            ask_size = int(quote_data["askSize"]) if quote_data.get("askSize") is not None else None
+        except (TypeError, ValueError):
+            ask_size = None
         return OptionContract(
             symbol=sym,
             option_type=otype,
@@ -530,6 +551,8 @@ class PublicBroker:
             last=float(quote_data["last"]) if quote_data.get("last") is not None else None,
             bid=float(quote_data["bid"]) if quote_data.get("bid") is not None else None,
             ask=float(quote_data["ask"]) if quote_data.get("ask") is not None else None,
+            bid_size=bid_size,
+            ask_size=ask_size,
             volume=int(quote_data["volume"]) if quote_data.get("volume") is not None else None,
             open_interest=int(quote_data["openInterest"]) if quote_data.get("openInterest") is not None else None,
             iv=float(greeks.get("impliedVolatility")) if greeks.get("impliedVolatility") is not None else None,

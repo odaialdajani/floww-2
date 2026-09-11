@@ -104,7 +104,7 @@ def test_chaos_scenarios_exist():
     assert len(scenarios) >= 4
     names = [s.name for s in scenarios]
     assert "duckdb_lock_contention" in names
-    assert "schwab_ws_disconnect" in names
+    assert "ingestion_ws_disconnect" in names
     assert "memory_pressure" in names
     assert "databento_rate_limit" in names
 

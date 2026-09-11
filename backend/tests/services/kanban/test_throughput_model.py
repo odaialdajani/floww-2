@@ -469,16 +469,10 @@ class TestExtractCardFeaturesEdgeCases:
         features = extract_card_features(card)
         assert features["completion_hours"] == pytest.approx(4.5)
 
-    @pytest.mark.xfail(
-        reason="BUG: extract_card_features line 80 — YAML auto-parses "
-               "ISO timestamps as datetime objects, then str.replace() "
-               "fails silently in except clause. "
-               "created_at/last_update must be quoted in card frontmatter "
-               "or code must handle datetime objects."
-    )
     def test_completion_hours_from_timestamps(self, tmp_path):
         """completion_hours computed from last_update - created_at.
-        NOTE: This test is xfail due to a real bug — see FINDINGS.
+        Un-xfailed 2026-09-08: extract_card_features now accepts YAML-parsed
+        datetime objects via _as_dt (was: str.replace TypeError swallowed).
         """
         card = tmp_path / "time_diff.md"
         card.write_text("---\nassignee: A1\nstatus: done\ncreated_at: 2026-06-01T10:00:00Z\nlast_update: 2026-06-01T14:30:00Z\ncommits: []\n---\n")

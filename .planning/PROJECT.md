@@ -23,7 +23,8 @@ A Dash app at `/dashboard/` is an embedded tab in the React UI — not a separat
 
 ### In scope
 
-- Real-time market-data ingestion (Schwab WebSocket, Databento, yfinance; no polling)
+- Real-time market-data ingestion (Public.com API primary; yfinance/cvserver
+  emergency fallback only — Schwab + Alpha Vantage retired 2026-09-03, public-api-only policy)
 - Options microstructure analytics: VPIN, GEX/VEX surfaces, Hawkes processes,
   stochastic vol (SABR/SVI), liquidity metrics, Heatseeker flip zones / stacked
   nodes / tug-of-war, Trinity confluence, Flowseeker flow analysis
@@ -48,8 +49,9 @@ A Dash app at `/dashboard/` is an embedded tab in the React UI — not a separat
 5. **Decimal for money** (except internal microstructure float64 math).
 6. **Structured logging** (structlog JSON in prod); rate limit 60 req/min/IP.
 7. **Graceful degradation:** DuckDB-only mode without Mongo; statistical fallback
-   without PyTorch; yfinance→Finnhub/AlphaVantage/Polygon fallbacks on cloud IPs.
-8. **yfinance on cloud IPs may 429** — mitigated by caching + provider fallbacks.
+   without PyTorch; Public API primary with cvserver→yfinance emergency
+   fallbacks on cloud IPs (Schwab/Alpha Vantage retired 2026-09-03).
+8. **yfinance on cloud IPs may 429** — mitigated by caching + Public API primary.
 
 ## Locked decisions (from ADRs)
 
@@ -66,7 +68,7 @@ A Dash app at `/dashboard/` is an embedded tab in the React UI — not a separat
 
 Public URL serves the full Decoder to friend-scale traffic at $0/month with all
 endpoints healthy (`deploy/free/smoke.sh` green) and test suites green
-(backend 4606 passed, 64 skipped, 1 xfailed, 0 failed · Phase 3 [CLOSED] · Phase 5 [COMPLETE 2026-08-31] — frontend OptionsChainTable 10/10 + FlowseekerProBlademap 17/17 passing).
+(backend 3 passed · frontend 56 suites / 409 tests · lane trio 4 suites / 178 tests · craco build clean — Phase 9 2026-09-04).
 
 ## Key documents
 

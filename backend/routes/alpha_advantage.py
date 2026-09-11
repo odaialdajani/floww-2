@@ -1,114 +1,62 @@
 """
 backend/routes/alpha_advantage.py
 
-Alpha Advantage data proxy routes.
-Exposes real-time and historical data from Alpha Vantage API.
+Alpha Vantage proxy — RETIRED 2026-09-03 (public-api-only policy).
 
-Endpoints:
-  GET  /api/alpha/quote/{ticker}           — Real-time quote
-  GET  /api/alpha/options/{ticker}          — Options chain
-  GET  /api/alpha/technical/{ticker}/{indicator} — Technical indicators
-  GET  /api/alpha/forex/{from}/{to}         — Forex rates
-  GET  /api/alpha/crypto/{symbol}           — Crypto prices
+Every route now answers from the Public.com API (primary source) or returns
+HTTP 410 Gone with a `replacement` pointer to the /api/public/* equivalent:
+
+  /api/alpha/quote/{ticker}      -> GET /api/public/quotes/{ticker}   (live)
+  /api/alpha/options/{ticker}    -> GET /api/public/chain/{ticker}    (live)
+  /api/alpha/technical/...       -> GET /api/public/technical/...    (live)
+  /api/alpha/historical/{ticker} -> GET /api/public/history/{ticker}  (live)
+  /api/alpha/intraday/{ticker}   -> GET /api/public/bars/{ticker}     (live)
+  everything else                -> 410 + replacement hint
+
+No request ever touches the retired vendor host.
 """
 
 from __future__ import annotations
 
 import logging
-import os
-from typing import Any
 
-import aiohttp
 from fastapi import APIRouter, HTTPException, Query
-
-from services.alpha_vantage_client import CircuitBreakerOpenError, circuit
-from services.rate_limit_tracker import av_rate_tracker
+from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/alpha", tags=["alpha-vantage"])
 
-ALPHA_VANTAGE_BASE = "https://www.alphavantage.co/query"
-
-# Alpha Vantage free tier requires apikey as a URL query parameter — header auth
-# is not supported for most endpoints. The key is sourced from the ALPHA_VANTAGE_KEY
-# environment variable and never accepted from or exposed to clients.
-ALPHA_VANTAGE_KEY = os.environ.get("ALPHA_VANTAGE_KEY", "")
+_RETIRED = (
+    "Alpha Vantage retired 2026-09-03 — floww is public-API-only. "
+    "Use the replacement /api/public/* endpoint."
+)
 
 
-def _safe_params(params: dict[str, str]) -> dict[str, str]:
-    """Return a copy of params with apikey redacted for safe logging."""
-    redacted = dict(params)
-    if "apikey" in redacted:
-        redacted["apikey"] = "***REDACTED***"
-    return redacted
-
-
-async def _av_request(params: dict[str, str]) -> dict[str, Any]:
-    """Make an Alpha Vantage API request with rate limiting awareness.
-
-    NOTE: Alpha Vantage's free tier requires ?apikey=... in the query string.
-    Header-based auth is not available for most endpoints, so we must send it
-    as a query param. The key is loaded from ALPHA_VANTAGE_KEY env var and
-    never logged in URL form.
-    """
-    params["apikey"] = ALPHA_VANTAGE_KEY
-    av_rate_tracker.record_call()
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(ALPHA_VANTAGE_BASE, params=params, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-                if resp.status != 200:
-                    logger.error(
-                        "Alpha Vantage returned %s for params %s",
-                        resp.status,
-                        _safe_params(params),
-                    )
-                    raise HTTPException(status_code=resp.status, detail=f"Alpha Vantage returned {resp.status}")
-                data = await resp.json()
-                if "Error Message" in data:
-                    raise HTTPException(status_code=400, detail=data["Error Message"])
-                if "Note" in data:
-                    # Rate limit hit
-                    raise HTTPException(status_code=429, detail="Alpha Vantage rate limit reached. Try again in 60s.")
-                return data
-    except aiohttp.ClientError as e:
-        logger.error("Alpha Vantage request failed for params %s: %s", _safe_params(params), e)
-        raise HTTPException(status_code=502, detail=str(e)) from None
-
-
-async def _av_request_circuit(params: dict[str, Any]) -> dict[str, Any]:
-    """Alpha Vantage request wrapper with circuit breaker protection.
-
-    Wraps _av_request_circuit() with the circuit breaker. If the circuit is OPEN,
-    returns a 503 response immediately instead of hitting the API.
-    """
-    try:
-        return await circuit.call(_av_request, params)
-    except CircuitBreakerOpenError as e:
-        logger.warning("Circuit breaker OPEN for Alpha Vantage: %s", e)
-        raise HTTPException(
-            status_code=503,
-            detail=f"Alpha Vantage circuit breaker is open. Service temporarily unavailable. {e}",
-        ) from e
+def _gone(replacement: str) -> JSONResponse:
+    """HTTP 410 Gone with a machine-readable replacement pointer."""
+    return JSONResponse(
+        status_code=410,
+        content={"error": "alpha_vantage_retired", "message": _RETIRED, "replacement": replacement},
+    )
 
 
 @router.get("/quote/{ticker}")
 async def get_quote(ticker: str):
-    """Get real-time quote for a ticker."""
-    data = await _av_request_circuit({
-        "function": "GLOBAL_QUOTE",
-        "symbol": ticker.upper(),
-    })
-    quote = data.get("Global Quote", {})
-    if not quote:
-        raise HTTPException(status_code=404, detail=f"No quote found for {ticker}")
+    """Retired shim — served live from Public API quotes."""
+    from services.public_api_adapter import fetch_spot_from_public_api
+    spot = await fetch_spot_from_public_api(ticker)
+    if spot is None:
+        raise HTTPException(status_code=502, detail=f"Public API unavailable for {ticker}")
     return {
-        "ticker": quote.get("01. symbol", ticker),
-        "price": float(quote.get("05. price", 0)),
-        "change": float(quote.get("09. change", 0)),
-        "change_pct": quote.get("10. change percent", "0%"),
-        "volume": int(quote.get("06. volume", 0)),
-        "latest_trading_day": quote.get("07. latest trading day", ""),
+        "ticker": ticker.upper(),
+        "price": spot,
+        "change": 0,
+        "change_pct": "0%",
+        "volume": 0,
+        "latest_trading_day": "",
+        "data_source": "public_api",
+        "note": "served by Public API (alpha retired 2026-09-03)",
     }
 
 
@@ -117,15 +65,23 @@ async def get_options_chain(
     ticker: str,
     date: str | None = Query(None, description="Expiration date YYYY-MM-DD"),
 ):
-    """Get options chain for a ticker."""
-    params = {
-        "function": "OPTION_CHAIN",
-        "symbol": ticker.upper(),
-    }
+    """Retired shim — served live from Public API chain."""
+    from services.public_api_adapter import fetch_chain_from_public_api
+    result = await fetch_chain_from_public_api(ticker.upper(), max_expiries=4)
+    if result is None:
+        raise HTTPException(status_code=502, detail=f"Public API unavailable for {ticker}")
+    contracts = result.get("contracts", [])
     if date:
-        params["date"] = date
-    data = await _av_request_circuit(params)
-    return data
+        contracts = [c for c in contracts if c.get("expiry") == date]
+    return {
+        "ticker": ticker.upper(),
+        "spot": result.get("spot", 0),
+        "expiries": result.get("expiries", []),
+        "contracts": contracts,
+        "data_source": "public_api",
+        "stale": result.get("stale", False),
+        "note": "served by Public API (alpha retired 2026-09-03)",
+    }
 
 
 @router.get("/technical/{ticker}/{indicator}")
@@ -136,18 +92,15 @@ async def get_technical_indicator(
     time_period: int = Query(14, ge=1, le=200),
     series_type: str = Query("close", pattern="^(open|high|low|close)$"),
 ):
-    """Get technical indicator for a ticker.
+    """Retired shim — technicals computed from Public API bars.
 
     Supported indicators: SMA, EMA, RSI, MACD, BBANDS, STOCH, ADX, CCI, AROON, OBV, WILLR, MFI, TEMA, TRIMA, KAMA, MAMA, VWAP, HT_TRENDLINE, HT_SINE, HT_TRENDMODE, HT_DCPERIOD, HT_DCPHASE, HT_PHASOR
     """
-    data = await _av_request_circuit({
-        "function": indicator.upper(),
-        "symbol": ticker.upper(),
-        "interval": interval,
-        "time_period": str(time_period),
-        "series_type": series_type,
-    })
-    return data
+    from services.public_api_adapter import compute_technical_from_bars, fetch_bars_from_public_api
+    bars = await fetch_bars_from_public_api(ticker.upper(), interval=interval)
+    if not bars:
+        raise HTTPException(status_code=502, detail=f"Public API bars unavailable for {ticker}")
+    return compute_technical_from_bars(ticker.upper(), indicator.upper(), bars, time_period)
 
 
 @router.get("/forex/{from_currency}/{to_currency}")
@@ -155,22 +108,8 @@ async def get_forex_rate(
     from_currency: str,
     to_currency: str,
 ):
-    """Get forex exchange rate."""
-    data = await _av_request_circuit({
-        "function": "CURRENCY_EXCHANGE_RATE",
-        "from_currency": from_currency.upper(),
-        "to_currency": to_currency.upper(),
-    })
-    rate = data.get("Realtime Currency Exchange Rate", {})
-    if not rate:
-        raise HTTPException(status_code=404, detail="Forex rate not found")
-    return {
-        "from": rate.get("1. From_Currency Code", from_currency),
-        "to": rate.get("2. To_Currency Code", to_currency),
-        "rate": float(rate.get("5. Exchange Rate", 0)),
-        "bid": float(rate.get("8. Bid Price", 0)),
-        "ask": float(rate.get("9. Ask Price", 0)),
-    }
+    """Retired — forex is quoted via Public API instruments; no AV call."""
+    return _gone(f"/api/public/quotes/{from_currency.upper()}{to_currency.upper()}")
 
 
 @router.get("/crypto/{symbol}")
@@ -178,42 +117,25 @@ async def get_crypto_price(
     symbol: str,
     market: str = Query("USD"),
 ):
-    """Get cryptocurrency price."""
-    data = await _av_request_circuit({
-        "function": "CURRENCY_EXCHANGE_RATE",
-        "from_currency": symbol.upper(),
-        "to_currency": market.upper(),
-    })
-    rate = data.get("Realtime Currency Exchange Rate", {})
-    if not rate:
-        raise HTTPException(status_code=404, detail=f"Crypto price not found for {symbol}")
-    return {
-        "symbol": rate.get("1. From_Currency Code", symbol),
-        "market": rate.get("2. To_Currency Code", market),
-        "price": float(rate.get("5. Exchange Rate", 0)),
-    }
+    """Retired shim — crypto spot via Public API quotes."""
+    from services.public_api_adapter import fetch_spot_from_public_api
+    pair = f"{symbol.upper()}-{market.upper()}"
+    spot = await fetch_spot_from_public_api(pair)
+    if spot is None:
+        return _gone(f"/api/public/quotes/{symbol.upper()}")
+    return {"symbol": symbol.upper(), "market": market.upper(), "price": spot, "data_source": "public_api"}
 
 
 @router.get("/overview/{ticker}")
 async def get_company_overview(ticker: str):
-    """Get company overview/fundamentals."""
-    data = await _av_request_circuit({
-        "function": "OVERVIEW",
-        "symbol": ticker.upper(),
-    })
-    if not data or "Symbol" not in data:
-        raise HTTPException(status_code=404, detail=f"No overview found for {ticker}")
-    return data
+    """Retired — fundamentals are not a Public API surface; see replacement."""
+    return _gone(f"/api/public/quotes/{ticker.upper()}")
 
 
 @router.get("/earnings/{ticker}")
 async def get_earnings(ticker: str):
-    """Get earnings data."""
-    data = await _av_request_circuit({
-        "function": "EARNINGS",
-        "symbol": ticker.upper(),
-    })
-    return data
+    """Retired — earnings calendar lives on Finnhub; no AV call."""
+    return _gone("/api/data/full/{ticker}")
 
 
 @router.get("/news")
@@ -222,35 +144,20 @@ async def get_news(
     topics: str | None = Query(None, description="Comma-separated topics"),
     limit: int = Query(20, ge=1, le=100),
 ):
-    """Get market news and sentiment."""
-    params = {
-        "function": "NEWS_SENTIMENT",
-        "limit": str(limit),
-    }
-    if tickers:
-        params["tickers"] = tickers.upper()
-    if topics:
-        params["topics"] = topics.lower()
-    data = await _av_request_circuit(params)
-    return data
+    """Retired — news lives on Finnhub; no AV call."""
+    return _gone("/api/data/news/{ticker}")
 
 
 @router.get("/market-status")
 async def get_market_status():
-    """Get current market status (open/closed)."""
-    data = await _av_request_circuit({
-        "function": "MARKET_STATUS",
-    })
-    return data
+    """Retired — no AV call."""
+    return _gone("/api/health")
 
 
 @router.get("/top-gainers-losers")
 async def get_top_gainers_losers():
-    """Get top gainers, losers, and most active stocks."""
-    data = await _av_request_circuit({
-        "function": "TOP_GAINERS_LOSERS",
-    })
-    return data
+    """Retired — no AV call."""
+    return _gone("/api/public/quotes/SPY")
 
 
 @router.get("/historical/{ticker}")
@@ -259,18 +166,12 @@ async def get_historical(
     interval: str = Query("daily", pattern="^(daily|weekly|monthly)$"),
     output_size: str = Query("compact", pattern="^(compact|full)$"),
 ):
-    """Get historical OHLCV data."""
-    func_map = {
-        "daily": "TIME_SERIES_DAILY",
-        "weekly": "TIME_SERIES_WEEKLY",
-        "monthly": "TIME_SERIES_MONTHLY",
-    }
-    data = await _av_request_circuit({
-        "function": func_map[interval],
-        "symbol": ticker.upper(),
-        "outputsize": output_size,
-    })
-    return data
+    """Retired shim — OHLCV history from Public API bars."""
+    from services.public_api_adapter import fetch_history_from_public_api
+    bars = await fetch_history_from_public_api(ticker.upper(), interval=interval)
+    if bars is None:
+        raise HTTPException(status_code=502, detail=f"Public API history unavailable for {ticker}")
+    return bars
 
 
 @router.get("/intraday/{ticker}")
@@ -279,11 +180,9 @@ async def get_intraday(
     interval: str = Query("5min", pattern="^(1min|5min|15min|30min|60min)$"),
     output_size: str = Query("compact", pattern="^(compact|full)$"),
 ):
-    """Get intraday OHLCV data."""
-    data = await _av_request_circuit({
-        "function": "TIME_SERIES_INTRADAY",
-        "symbol": ticker.upper(),
-        "interval": interval,
-        "outputsize": output_size,
-    })
-    return data
+    """Retired shim — intraday bars from Public API."""
+    from services.public_api_adapter import fetch_bars_from_public_api
+    bars = await fetch_bars_from_public_api(ticker.upper(), interval=interval)
+    if bars is None:
+        raise HTTPException(status_code=502, detail=f"Public API bars unavailable for {ticker}")
+    return {"ticker": ticker.upper(), "interval": interval, "bars": bars, "data_source": "public_api"}

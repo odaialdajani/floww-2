@@ -397,6 +397,11 @@ def get_cache() -> DatabentoCache | None:
 
 async def fetch_oi_for_ticker(ticker: str, day: date_cls | None = None) -> dict[str, Any]:
     """Public API: get OI keyed by raw OSI symbol for a ticker."""
+    # 2026-09-02: Databento decommissioned for the flow stack (Public.com is
+    # primary OI/chain source; cvserver is the fallback). The kill switch makes
+    # the OFF switch explicit and testable instead of relying on key removal.
+    if os.environ.get("DISABLE_DATABENTO", "").lower() in ("1", "true", "yes"):
+        return {}
     key = os.environ.get("DATABENTO_API_KEY", DBN_KEY)
     if not key or not _cache:
         return {}

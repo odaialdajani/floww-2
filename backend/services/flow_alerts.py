@@ -50,11 +50,28 @@ _TTL_S = {
     "OICONF": 20 * 3600,
     "SIGMA": 4 * 3600,
     "SCORE": 2 * 3600,
+    "PRIME": 2 * 3600,
+    "CLUSTER": 4 * 3600,
     "WHALE": 6 * 3600,
     "0DTE": 1 * 3600,
 }
 
 _TIER_RANK = {"GOLD": 0, "SILVER": 1, "BRONZE": 2}
+
+# Production alert gates (see eval_institutional). Module-level so exactly
+# one test pins the values; logic tests pass explicit opts instead.
+DEFAULT_EVAL_OPTS: dict = {
+    "min_score": 92,
+    "whale_premium": 25e6,
+    # 0DTE parity with the frontend tape (scanLogic zeroDteScore=85 + volOI>=2
+    # lotto shutout): the server must not fire where the tape stays silent.
+    "zero_dte_score": 85,
+    "zero_dte_vol_oi": 2.0,
+    "oiconf_pct": 0.30,
+    "oiconf_notional": 1e6,
+    "sigma_min": 6.0,
+    "fdr_q": 0.10,
+}
 
 
 # ── helpers ──────────────────────────────────────────────────────────
@@ -162,8 +179,11 @@ def scan_score(r: dict, regime: str | None = None) -> int:
         s += 5
     elif regime == "positive" and vol_oi >= 2:
         s += 3
-    # Informed-positioning band (Pan & Poteshman, RFS 2006): 7–90 DTE +
-    # vol≥3×OI + ≥$25k premium is where directional bets live.
+    # Informed-positioning band (internal desk heuristic: 7–90 DTE +
+    # vol≥3×OI + ≥$25k premium is where directional bets live; shorter is
+    # gamma noise, longer is hedges). Pan & Poteshman (RFS 2006) is cited
+    # ONLY for the directional put-call-ratio finding — that paper has no
+    # DTE band and no volume/OI/premium thresholds. Keep it that way.
     if dte is not None and 7 <= dte <= 90 and vol_oi >= 3 and (r.get("premium") or 0) >= 25e3:
         s += 4
     return max(0, min(100, round(s)))
@@ -202,13 +222,84 @@ def est_entry(r: dict) -> float | None:
 def infer_side_bias(r: dict) -> tuple[str, str | None]:
     """Opening-dominant flow (vol well above resting OI) reads as initiated
     BUYing on a print-less feed; anything else is unlabeled FLOW — a desk
-    never claims a side it can't defend."""
+    never claims a side it can't defend.
+
+    Paid-feed upgrade: initiation is KNOWN, not proxied, in two tiers —
+    r["signed_side"] (Lee-Ready via flow_signing: quote rule, else tick test
+    on the previous sweep's mid) wins; legacy r["nbbo_side"] (touch-only,
+    no tick fallback) is the fallback. ASK = buyer lifted, BID = seller
+    hit, with the desk's direction matrix.
+    """
+    signed = (r.get("signed_side") or "").upper()
+    if signed in ("ASK", "BID"):
+        from services.public_scanner import side_bias as _side_bias
+
+        return _side_bias(str(r.get("type") or ""), signed)
+    nbbo = (r.get("nbbo_side") or "").upper()
+    if nbbo in ("ASK", "BID"):
+        from services.public_scanner import side_bias as _side_bias
+
+        return _side_bias(str(r.get("type") or ""), nbbo)
     if (r.get("vol_oi") or 0) >= 1.5:
         return "BUY", ("BULLISH" if r.get("type") == "call" else "BEARISH")
     return "FLOW", None
 
 
+def apply_quote_truth(
+    rows: list[dict],
+    extras: dict[str, dict] | None,
+) -> list[dict]:
+    """Overlay paid-feed quote truth onto normalized rows (in place).
+
+    extras is {ckey: {premium_true, nbbo_side, signed_side, sign_method,
+    velocity_per_min, ...}} from the Public scanner. True premium replaces
+    the BS estimate for the PRIME/WHALE money gates; signed/NBBO side
+    upgrades bias inference; velocity feeds conviction. Missing keys leave
+    the row untouched — cvserver rows without extras score exactly as before.
+    """
+    if not extras:
+        return rows
+    for r in rows or []:
+        x = (extras or {}).get(r.get("ckey", "")) or {}
+        pt = x.get("premium_true")
+        if pt is not None and pt > 0:
+            r["premium"] = pt
+            r["premium_truth"] = True
+        if x.get("nbbo_side") in ("ASK", "BID"):
+            r["nbbo_side"] = x["nbbo_side"]
+        if x.get("signed_side") in ("ASK", "BID"):
+            r["signed_side"] = x["signed_side"]
+            if x.get("sign_method") in ("quote", "tick"):
+                r["sign_method"] = x["sign_method"]
+        rs = x.get("rel_spread")
+        try:
+            if rs is not None and float(rs) >= 0:
+                r["rel_spread"] = float(rs)
+        except (TypeError, ValueError):
+            pass
+        v = x.get("velocity_per_min")
+        if v is not None and v >= 0:
+            r["velocity_per_min"] = v
+    return rows
+
+
 # ── tiering ─────────────────────────────────────────────────────────
+
+def _norm_gex_regime(raw: object) -> str | None:
+    """Normalize dealer-regime vocabulary to negative/positive/None.
+
+    Producers disagree: gex_paper_accurate emits strong_positive_gamma /
+    positive_gamma / neutral_gamma / negative_gamma / ..., the Public
+    scanner emits negative / positive. Downstream (key levels, WHY block)
+    only understands the short form — normalize once, at the boundary.
+    """
+    s = str(raw or "").lower()
+    if "negative" in s:
+        return "negative"
+    if "positive" in s:
+        return "positive"
+    return None
+
 
 def tier_of(factors: dict) -> str | None:
     n = sum(1 for v in (factors or {}).values() if v)
@@ -237,15 +328,79 @@ _W_CONFLUENCE = 25  # GEX/CW/cluster/sigma/regime confluences
 _W_TAIL = 10        # whale premium / score90 tail events
 
 
+# ── Exposure-alert → conviction wiring (A3) ──────────────────────────
+#
+# Exposure alerts (services/exposure_alerts.py: vex_wall_formed/broken,
+# charm_pin_formed/shifted) are evaluated beside the heatmap in
+# routes/data_providers.py but never fed into any conviction scorer
+# (A34 verdict: files coexist, no scorer consumes them). This mapper
+# closes that gap additively: callers pass live exposure events for the
+# row's ticker through exposure_adjustment_for_events() and hand the
+# result to score_conviction(exposure_adjustment=...). Default 0 keeps
+# every existing caller byte-identical; the ±5 clamp keeps a structural
+# overlay from ever overriding the tape read.
+
+_EXPOSURE_KIND_WEIGHTS: dict[str, int] = {
+    "vex_wall_formed": -2,    # vol suppression defended — fade directional prints
+    "vex_wall_broken": 3,     # suppression released — regime may shift, tradable
+    "charm_pin_formed": 2,    # hedging concentration into expiry — follow-through
+    "charm_pin_shifted": 1,   # magnet moved strikes — weak continuation
+}
+
+_EXPOSURE_ADJUST_MIN = -5
+_EXPOSURE_ADJUST_MAX = 5
+
+
+def _exposure_kind_of(item: dict) -> str:
+    """Extract the exposure kind from an event dict or an alert dict.
+
+    Events (evaluate_exposure_events) carry ``kind`` directly; alert
+    dicts (events_to_alerts) embed it in ``key`` as
+    ``exposure:<kind>:<ticker>:<expiry>:<strike>``.
+    """
+    kind = str(item.get("kind") or "").strip()
+    if kind:
+        return kind
+    key = str(item.get("key") or "")
+    if key.startswith("exposure:"):
+        parts = key.split(":")
+        if len(parts) >= 2 and parts[1]:
+            return parts[1]
+    return ""
+
+
+def exposure_adjustment_for_events(events: list[dict] | None) -> int:
+    """Map exposure events/alerts to a bounded conviction adjustment.
+
+    Sums per-kind weights (unknown kinds contribute 0) and clamps the
+    total to [-5, +5]. Empty/None input → 0.
+    """
+    total = 0
+    for item in events or []:
+        if not isinstance(item, dict):
+            continue
+        total += _EXPOSURE_KIND_WEIGHTS.get(_exposure_kind_of(item), 0)
+    return max(_EXPOSURE_ADJUST_MIN, min(_EXPOSURE_ADJUST_MAX, total))
+
+
 def score_conviction(r: dict, factors: dict | None = None,
-                     regime: str | None = None) -> int:
+                     regime: str | None = None,
+                     exposure_adjustment: float = 0) -> int:
     """Weighted 0-100 conviction for one normalized row.
 
     Flow dimension reuses the parity scan_score components (they're the
     calibrated tape read); structure re-weights urgency toward the
     informed band; confluence counts Blademap-style confirmations with
     GEX confluency weighted heaviest (paper-accurate ΓIB is our hardest
-    context signal); tail catches the 1-in-a-hundred prints.
+    context signal); tail catches the 1-in-a-hundred prints; evidence
+    rewards paid-feed truth (arrival velocity + NBBO-known initiation),
+    absent on print-less rows by design.
+
+    ``exposure_adjustment`` is an additive structural overlay from
+    exposure_adjustment_for_events() (VEX walls / charm pins for the
+    row's ticker). It defaults to 0 (existing callers unchanged), is
+    defensively clamped to [-5, +5], and applies inside the 0..100
+    clamp so it can nudge but never override the tape read.
     """
     f = factors or {}
     vol_oi = r.get("vol_oi") or 0.0
@@ -281,7 +436,26 @@ def score_conviction(r: dict, factors: dict | None = None,
     # same +5 the parity score grants), capped inside the clamp.
     bump = 3 if (regime == "negative" and dte is not None and dte <= 7) else 0
 
-    return max(0, min(100, round(flow + structure + confluence + tail + bump)))
+    # Evidence dimension (paid-feed truth only): arrival intensity +
+    # known initiation. cvserver rows carry neither key and score exactly
+    # as before — this rewards MEASURED urgency, never a proxy.
+    vel = r.get("velocity_per_min") or 0
+    vel_bonus = 4 if vel >= 1000 else (2 if vel >= 300 else 0)
+    # Known initiation: quote-rule reads full weight, tick-fallback half —
+    # a sweep-mid tick is evidence, not proof.
+    _method = r.get("sign_method")
+    if r.get("signed_side") in ("ASK", "BID"):
+        know_bonus = 2 if _method == "quote" else 1
+    else:
+        know_bonus = 2 if r.get("nbbo_side") in ("ASK", "BID") else 0
+
+    try:
+        _adj = float(exposure_adjustment or 0.0)
+    except (TypeError, ValueError):
+        _adj = 0.0
+    _adj = max(_EXPOSURE_ADJUST_MIN, min(_EXPOSURE_ADJUST_MAX, _adj))
+
+    return max(0, min(100, round(flow + structure + confluence + tail + bump + vel_bonus + know_bonus + _adj)))
 
 
 # ── Blademap alert contract: key levels + context ───────────────────
@@ -317,14 +491,14 @@ def build_key_levels(r: dict, bias: str | None,
 
 _INDICATOR_LABELS = (
     ("score90", "Top-decile composite score"),
-    ("whale", "Whale premium (≥$10M)"),
+    ("whale", "Whale premium (≥$25M)"),
     ("sigma_ticker", "σ spike (BH-FDR surviving)"),
-    ("informed_band", "Informed-positioning band (7–90 DTE, Pan-Poteshman)"),
+    ("informed_band", "Informed-positioning band (7–90 DTE tenor heuristic)"),
     ("regime_confluent", "Regime-confluent tenor"),
     ("prime", "Prime print (≥$250k, ≥5× OI)"),
     ("cluster", "Same-bias cluster (≥3 contracts)"),
     ("cw_confirm", "Cremers-Weinbaum IV spread confirms"),
-    ("gex_confluent", "Dealer gamma confluency (ΓIB)"),
+    ("gex_confluent", "Dealer gamma confluency (ΓIB proxy)"),
 )
 
 
@@ -360,6 +534,19 @@ def build_context(r: dict, factors: dict) -> dict:
 
 # ── the engine ──────────────────────────────────────────────────────
 
+def minutes_since_open_now() -> float | None:
+    """Minutes since today's 09:30 ET open (seconds-precision frozen at call
+    time). None outside RTH — the caller freezes None honestly rather than a
+    fake number; weekends/holidays are not special-cased (a holiday scan
+    would freeze minutes-since-midnight, harmless for a covariate)."""
+    now = datetime.now(_ET)
+    open_dt = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    secs = (now - open_dt).total_seconds()
+    if secs < 0:
+        return None
+    return round(secs / 60.0, 1)
+
+
 def _mk_alert(r: dict, rule: str, extra: dict, factors: dict, asof: str) -> dict:
     side, bias = infer_side_bias(r)
     regime = factors.get("gex_regime") if isinstance(factors, dict) else None
@@ -388,9 +575,20 @@ def _mk_alert(r: dict, rule: str, extra: dict, factors: dict, asof: str) -> dict
         # gets cluster=True; the frontend can now render an honest CLUSTER
         # chip without inferring a proxy from tier+SIGMA.
         "cluster": bool(factors.get("cluster", False)),
+        # Always-emit provenance (CONTRACTS C6): consumers may rely on these
+        # keys existing. premium_truth mirrors the row overlay; p_move stays
+        # None until a calibration stage is explicitly passed in opts.
+        "premium_truth": bool(r.get("premium_truth", False)),
+        "p_move": None,
+        "p_method": "uncalibrated",
+        # C4 execution input: relative spread at fire time (None when the
+        # feed had no two-sided quote). Kyle-λ arrives separately (B).
+        "rel_spread": r.get("rel_spread"),
         "why": extra.get("why", ""),
         "ttl_s": _TTL_S.get(rule, 2 * 3600),
         "asof": asof,
+        # Feature freeze (2026-09-02): intraday context frozen at fire time.
+        "mins_since_open": minutes_since_open_now(),
     }
     return a
 
@@ -416,12 +614,23 @@ def _common_factors(r: dict, regimes: dict, sigma_tickers: set,
     _, bias = infer_side_bias(r)
 
     # Paper-accurate GEX confluency (Ni-Pearson 2020 + Barbon-Buraschi 2021)
+    # Contract: gex_context is {underlying: {"gamma_imbalance": {...}}}
+    # (both _cached_gex_context and the Public scanner's dealer feed speak
+    # it). A flat {"gamma_imbalance": ...} payload is ALSO accepted — the
+    # unit tests pin the factor math through it.
     gex_confluent = False
     gex_regime = None
     if gex_context:
-        gi = gex_context.get("gamma_imbalance", {})
-        gex_regime = gi.get("regime")
+        gi = gex_context.get("gamma_imbalance")
+        if gi is None:
+            per = gex_context.get(r["under"], {}) or {}
+            gi = per.get("gamma_imbalance", {}) or {}
+        gi = gi or {}
+        gex_regime = _norm_gex_regime(gi.get("regime"))
+        # pct None = regime-only feed (dealer walls without ADV magnitude):
+        # propagate the regime, never confluence — None must not compare.
         gib_pct = gi.get("gamma_imbalance_pct", 0)
+        gib_pct = 0 if gib_pct is None else gib_pct
         # Confluent: negative gamma + bearish flow, or positive gamma + bullish
         # flow. infer_side_bias returns "BULLISH"/"BEARISH" uppercase — compare
         # case-insensitively (was a case-sensitive dead comparison).
@@ -431,7 +640,7 @@ def _common_factors(r: dict, regimes: dict, sigma_tickers: set,
 
     return {
         "score90": (r.get("_score") or 0) >= 90,
-        "whale": (r.get("premium") or 0) >= 10e6,
+        "whale": (r.get("premium") or 0) >= 25e6,
         "sigma_ticker": r["under"] in sigma_tickers,
         "informed_band": dte is not None and 7 <= dte <= 90 and vol_oi >= 3 and (r.get("premium") or 0) >= 25e3,
         "regime_confluent": (reg == "negative" and dte is not None and dte <= 7)
@@ -447,25 +656,41 @@ def _common_factors(r: dict, regimes: dict, sigma_tickers: set,
 
 
 def eval_institutional(rows, baselines=None, prev_oi=None, regimes=None, opts=None,
-                       gex_context: dict | None = None):
+                       gex_context: dict | None = None, oi_tags: dict | None = None):
     """Evaluate normalized rows into enriched institutional alerts.
 
     One alert per contract, strongest claim first (OICONF > SCORE > WHALE >
-    0DTE), plus per-ticker SIGMA alerts. Pure logic — dedup/persistence are
-    the I/O layer's job so this stays unit-testable.
+    PRIME > 0DTE), plus per-ticker SIGMA and CLUSTER alerts. Pure logic —
+    dedup/persistence are the I/O layer's job so this stays unit-testable.
+
+    PRIME (premium >= $250k AND vol/OI >= 5, the 55-62% UOA bracket) sits
+    BELOW whale size: a $25M+ line is whale flow first. PRIME exists for the
+    sub-whale mid-cap bracket that never clears SCORE 92 — the SNDK gap.
     """
     from services.flow_quality import (
         bh_fdr,
         cluster_biases,
         cw_iv_spread,
         detect_spreads,
+        is_prime,
         sigma_pvalue,
     )
 
     o = {
-        "min_score": 85, "whale_premium": 10e6, "zero_dte_score": 70,
-        "oiconf_pct": 0.30, "oiconf_notional": 1e6, "sigma_min": 3.0,
-        "fdr_q": 0.10,
+        # 2026-09-02 institutional noise pass — mirrors the frontend's tightened
+        # defaults (scanLogic.js / FlowseekerProBlademap.jsx DEFAULT_RULES):
+        # SCORE 85→92, WHALE $10M→$25M, SIGMA 3.0→6.0. Parity contract: the
+        # frontend tape and this feed must never disagree about what qualifies.
+        # Extracted as DEFAULT_EVAL_OPTS so the gate value is pinned by exactly
+        # one test (test_default_gate_matches_noise_pass) instead of drifting
+        # silently inside dozens of logic fixtures.
+        **DEFAULT_EVAL_OPTS,
+        # calibration: pre-fitted stage blob from flow_calibration.fit_calibration
+        # (loaded by the caller from the cron's Mongo snapshot). When supplied,
+        # every fired alert gains p_move/p_method/p_n — server-computed,
+        # structural parity. GATING on p is intentionally inert until the
+        # model promotes past stage 0: p_move=None must never block a fire.
+        "calibration": None,
         **(opts or {}),
     }
     baselines = baselines or {}
@@ -515,8 +740,17 @@ def eval_institutional(rows, baselines=None, prev_oi=None, regimes=None, opts=No
 
     # Pass 1 — OICONF: overnight OI build is the one hard "yesterday's flow
     # was real" proof a print-less feed offers. Top 5 by % build.
+    # ΔOI hygiene (services/oi_hygiene.py, 2026-09-02): rollover/expiring
+    # contracts are skipped entirely — a roll's next-expiry pop is migration,
+    # not new flow. Earnings-window alerts still fire (never-remove) but the
+    # why-string carries the ambiguity tag and tier is capped below GOLD.
+    from services.oi_hygiene import oi_hygiene_why_suffix
+
     cand = []
     for r in rows:
+        tag = (oi_tags or {}).get(r["ckey"]) or {}
+        if tag.get("rollover") or tag.get("expiring"):
+            continue
         prev = prev_oi.get(r["ckey"])
         if prev is None or prev <= 0 or not r.get("oi"):
             continue
@@ -524,18 +758,24 @@ def eval_institutional(rows, baselines=None, prev_oi=None, regimes=None, opts=No
         pct = chg / prev
         add_notl = abs(chg) * 100 * r["strike"]
         if pct >= o["oiconf_pct"] and add_notl >= o["oiconf_notional"]:
-            cand.append((pct, add_notl, r))
+            cand.append((pct, add_notl, r, tag))
     cand.sort(key=lambda c: c[0], reverse=True)
     winners = set()
-    for pct, add_notl, r in cand[:5]:
+    for pct, add_notl, r, tag in cand[:5]:
         winners.add(r["ckey"])
         f = _common_factors(r, regimes, sigma_tickers, cw_map, clusters,
                             gex_context=gex_context)
         f["oiconf"] = True
-        out.append(_finalize(_mk_alert(r, "OICONF", {
+        a = _finalize(_mk_alert(r, "OICONF", {
             "oi_chg_pct": round(pct, 4),
             "why": f"OI +{round(pct * 100)}% overnight (${add_notl / 1e6:.1f}M added notional) — prior-day flow HELD as new positioning",
-        }, f, asof), r, cw_map))
+        }, f, asof), r, cw_map)
+        suffix = oi_hygiene_why_suffix(tag)
+        if suffix:
+            a["why"] += suffix
+            if isinstance(tag.get("earnings"), dict) and a["tier"] == "GOLD":
+                a["tier"] = "SILVER"   # direction ambiguous into the event
+        out.append(a)
 
     # Pass 2 — intraday per-contract rules, strongest first, one per contract.
     for r in rows:
@@ -551,7 +791,13 @@ def eval_institutional(rows, baselines=None, prev_oi=None, regimes=None, opts=No
         elif (r.get("premium") or 0) >= o["whale_premium"]:
             rule = "WHALE"
             why = f"~${(r.get('premium') or 0) / 1e6:.1f}M estimated premium on a single line"
-        elif r.get("dte") is not None and r["dte"] <= 1 and score >= o["zero_dte_score"]:
+        elif is_prime(r):
+            rule = "PRIME"
+            why = (f"prime print — ~${(r.get('premium') or 0) / 1e3:.0f}k premium at "
+                   f"{r['vol_oi']:.1f}× OI, score {score} (55-62% directional bracket)")
+        elif (r.get("dte") is not None and r["dte"] <= 1
+                and score >= o["zero_dte_score"]
+                and (r.get("vol_oi") or 0) >= o.get("zero_dte_vol_oi", 2.0)):
             rule = "0DTE"
             why = f"{r['dte']} DTE with score {score} — urgent short-fuse positioning"
         if not rule:
@@ -574,6 +820,41 @@ def eval_institutional(rows, baselines=None, prev_oi=None, regimes=None, opts=No
         a["cw_spread"] = round(cw, 4) if cw is not None else None
         out.append(a)
 
+    # Pass 4 — per-ticker CLUSTER alerts (laddered accumulation in ONE
+    # snapshot: >=3 same-bias qualifying contracts). The SNDK read — steady
+    # multi-strike building where no single line clears SCORE 92 and no
+    # multi-day baseline exists yet for SIGMA. Anchored on the ticker's best
+    # row so the desk can click through to the lead contract.
+    for under, bias in (clusters or {}).items():
+        legs = [r for r in rows
+                if r["under"] == under and infer_side_bias(r) == ("BUY", bias)]
+        if len(legs) < 3:
+            continue
+        best = max(legs, key=lambda r: r.get("_score") or 0)
+        f = _common_factors(best, regimes, sigma_tickers, cw_map, clusters,
+                            gex_context=gex_context)
+        a = _mk_alert(best, "CLUSTER", {
+            "why": (f"{under} laddered {bias} accumulation — {len(legs)} opening-shaped "
+                    f"contracts in one snapshot, lead score {best.get('_score')}"),
+        }, f, asof)
+        a["key"] = f"cluster|{under}"
+        cw = cw_map.get(under)
+        a["cw_spread"] = round(cw, 4) if cw is not None else None
+        out.append(_finalize(a, best, cw_map))
+
+    # Calibration provenance — attach the server-computed p_move to every
+    # fired alert. Stage-0 model → p_move=None + "uncalibrated" on each row:
+    # the tape stays complete and the ledger records WHAT the model knew at
+    # fire time (auditable stage promotion later). Gating on p is a future
+    # change gated on stage ≥ 1 by design — never let None block a fire.
+    cal = o.get("calibration")
+    if cal is not None:
+        from services.flow_calibration import predict_p_move
+        for a in out:
+            try:
+                a.update(predict_p_move(cal, {**a, "score": a.get("score")}))
+            except Exception:
+                a["p_move"], a["p_method"] = None, "calibration_error"
     return out
 
 
@@ -611,13 +892,30 @@ def init_flow_alert_tables(engine) -> None:
         "ALTER TABLE flow_alerts_daily ADD COLUMN IF NOT EXISTS conviction INTEGER",
         "ALTER TABLE flow_alerts_daily ADD COLUMN IF NOT EXISTS key_levels_json TEXT",
         "ALTER TABLE flow_alerts_daily ADD COLUMN IF NOT EXISTS context_json TEXT",
+        # Outcome-ledger / calibration columns (2026-09-02): p_move provenance
+        # persisted at fire time so stage promotion can be audited retroactively.
+        "ALTER TABLE flow_alerts_daily ADD COLUMN IF NOT EXISTS p_move DOUBLE",
+        # Feature-freeze columns (2026-09-02): frozen at fire time so the
+        # stage-2 logistic trains on the snapshot the alert actually saw.
+        "ALTER TABLE flow_alerts_daily ADD COLUMN IF NOT EXISTS mins_since_open DOUBLE",
+        "ALTER TABLE flow_alerts_daily ADD COLUMN IF NOT EXISTS p_method TEXT",
     ):
         with contextlib.suppress(Exception):
-            # Blademap v3 contract columns (2026-08-22).
             engine.execute_write(ddl)
     engine.execute_write("""
         CREATE TABLE IF NOT EXISTS flow_alert_dedup (
             key TEXT PRIMARY KEY, last_fired_ts DOUBLE, ttl_s DOUBLE
+        )
+    """)
+    # Horizon-move legs (Agent C, C1, 2026-09-05): per-stamp persistence so
+    # +1/+5/+20 reads don't collapse into the latest move_pct. Append-only;
+    # readers derive session legs from ordered stamps. No PK (stamps are
+    # scan-cadence; microsecond ts keeps collisions practically impossible).
+    engine.execute_write("""
+        CREATE TABLE IF NOT EXISTS flow_alert_moves (
+            asof_date DATE, key TEXT, under TEXT,
+            stamp_ts TIMESTAMP, stamp_date DATE,
+            last_price DOUBLE, move_pct DOUBLE
         )
     """)
 
@@ -640,14 +938,18 @@ def persist_alerts(engine, alerts, snapshot_date: str | None = None) -> int:
         a.get("conviction"),
         json.dumps(a.get("key_levels")) if a.get("key_levels") else None,
         json.dumps(a.get("context")) if a.get("context") else None,
+        # Calibration provenance (2026-09-02): server-computed p_move.
+        a.get("p_move"), a.get("p_method"),
+        a.get("mins_since_open"),
     ] for a in alerts]
     engine.execute_write("""
         INSERT INTO flow_alerts_daily (
             asof_date, asof_ts, key, ckey, rule, tier, side, bias, under, type,
             strike, exp, dte, score, est_entry, premium, notional, vol_oi,
             sigma, oi_chg_pct, under_price, cw_spread, cluster, why,
-            conviction, key_levels_json, context_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            conviction, key_levels_json, context_json, p_move, p_method,
+            mins_since_open
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (asof_date, key) DO UPDATE SET
             asof_ts = excluded.asof_ts, tier = excluded.tier, side = excluded.side,
             bias = excluded.bias, score = excluded.score,
@@ -658,7 +960,8 @@ def persist_alerts(engine, alerts, snapshot_date: str | None = None) -> int:
             cluster = excluded.cluster, why = excluded.why,
             conviction = excluded.conviction,
             key_levels_json = excluded.key_levels_json,
-            context_json = excluded.context_json
+            context_json = excluded.context_json,
+            p_move = excluded.p_move, p_method = excluded.p_method
     """, rows)
     return len(rows)
 
@@ -883,10 +1186,21 @@ def dedup_filter(engine, alerts, now: float | None = None) -> list[dict]:
     return kept
 
 
-def update_moves(engine, spot_map: dict) -> int:
+def update_moves(engine, spot_map: dict, stamp_ts: str | None = None) -> int:
     """Stamp the latest underlying price onto open alerts → move-since-alert.
-    Called with every fresh scan's spots; zero extra upstream calls."""
+    Called with every fresh scan's spots; zero extra upstream calls.
+
+    C1 horizon legs: every stamp ALSO appends one row per open alert into
+    flow_alert_moves (fail-open — a leg-write failure never blocks the
+    latest-price UPDATE above). stamp_ts is injectable for deterministic
+    tests; live callers leave it None (now, ET).
+    """
     n = 0
+    now_iso = stamp_ts or datetime.now(_ET).isoformat()
+    try:
+        stamp_day = date.fromisoformat(str(now_iso)[:10]).isoformat()
+    except Exception:
+        stamp_day = date.today().isoformat()
     for under, px in (spot_map or {}).items():
         p = _f(px)
         if p is None or p <= 0:
@@ -903,9 +1217,77 @@ def update_moves(engine, spot_map: dict) -> int:
                 WHERE under = ? AND under_price > 0
             """, [[p, p, under]])
             n += c
+            with contextlib.suppress(Exception):
+                open_rows = engine.query(
+                    "SELECT asof_date, key, under_price FROM flow_alerts_daily "
+                    "WHERE under = ? AND under_price > 0", [under])
+                legs = []
+                for r in open_rows or []:
+                    try:
+                        base = float(r["under_price"])
+                    except (TypeError, ValueError):
+                        continue
+                    if base <= 0:
+                        continue
+                    legs.append([str(r["asof_date"]), str(r["key"]), under,
+                                 now_iso, stamp_day, p,
+                                 (p - base) / base * 100.0])
+                if legs:
+                    engine.execute_write("""
+                        INSERT INTO flow_alert_moves
+                        (asof_date, key, under, stamp_ts, stamp_date,
+                         last_price, move_pct)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, legs)
         except Exception as e:
             logger.debug(f"flow_alerts.update_moves({under}): {e}")
     return n
+
+
+def get_move_path(engine, asof_date: str, key: str) -> list[dict]:
+    """Ordered horizon legs for one alert (oldest stamp first).
+
+    Empty list = never stamped (unknown), never a fabricated zero leg.
+    """
+    try:
+        return engine.query("""
+            SELECT stamp_ts, stamp_date, last_price, move_pct
+            FROM flow_alert_moves
+            WHERE asof_date = ? AND key = ?
+            ORDER BY stamp_ts ASC
+        """, [str(asof_date), str(key)]) or []
+    except Exception as e:
+        logger.debug(f"flow_alerts.get_move_path({key}): {e}")
+        return []
+
+
+def horizon_moves(engine, asof_date: str, key: str,
+                  horizons: tuple[int, ...] = (1, 5, 20)) -> dict[int, float | None]:
+    """Per-horizon move legs: h-th distinct stamp session's move_pct.
+
+    Sessions are counted as distinct stamp_dates in stamp order (no trading
+    calendar needed at write time). Unmeasured horizons are None — honest
+    empty, never interpolated.
+    """
+    legs = get_move_path(engine, asof_date, key)
+    seen: list[str] = []
+    sess_move: dict[str, float | None] = {}
+    for leg in legs:
+        day = str(leg.get("stamp_date") or "")[:10]
+        if day and day not in sess_move:
+            seen.append(day)
+            try:
+                sess_move[day] = None if leg.get("move_pct") is None else float(leg["move_pct"])
+            except (TypeError, ValueError):
+                sess_move[day] = None
+        elif day:
+            # Same session, later stamp wins (closest to close).
+            with contextlib.suppress(TypeError, ValueError):
+                sess_move[day] = None if leg.get("move_pct") is None else float(leg["move_pct"])
+    out: dict[int, float | None] = {}
+    for h in horizons:
+        out[int(h)] = sess_move.get(seen[int(h) - 1]) if 0 < int(h) <= len(seen) else None
+    return out
 
 
 def read_alert_feed(engine, days: int = 7, min_tier: str | None = None,

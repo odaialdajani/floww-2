@@ -1,0 +1,56 @@
+{
+ "asof": "2026-09-03",
+ "ticker": "SPY",
+ "spot": 773.21,
+ "source": "live /api/public/chain snapshot (fixture-frozen)",
+ "by_expiry": {
+  "2026-09-04": {
+   "n": 131,
+   "skew": {
+    "smirk": 0.006717542015474386,
+    "cwSpread": -0.0014337540343915336,
+    "yanSlope": 0.005283787981082852,
+    "convexity": 0.006595912915455346
+   },
+   "pin": {
+    "maxOiStrike": 765,
+    "maxOi": 63689,
+    "concentration": 0.24260822457097594,
+    "totalOi": 463319,
+    "distPct": -1.061807270987188
+   }
+  },
+  "2026-09-08": {
+   "n": 122,
+   "skew": {
+    "smirk": 0.02108953362135814,
+    "cwSpread": -0.010345480807424257,
+    "yanSlope": 0.010744052813933883,
+    "convexity": 0.033280481881481555
+   },
+   "pin": {
+    "maxOiStrike": 680,
+    "maxOi": 9260,
+    "concentration": 0.2443524055670304,
+    "totalOi": 92473,
+    "distPct": -12.054939796433056
+   }
+  },
+  "2026-09-09": {
+   "n": 103,
+   "skew": {
+    "smirk": 0.021671794871794853,
+    "cwSpread": -0.009954202499713322,
+    "yanSlope": 0.011717592372081531,
+    "convexity": 0.03277013964677575
+   },
+   "pin": {
+    "maxOiStrike": 760,
+    "maxOi": 4163,
+    "concentration": 0.17328724532718826,
+    "totalOi": 54678,
+    "distPct": -1.7084621254251802
+   }
+  }
+ }
+}

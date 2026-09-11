@@ -317,6 +317,91 @@ class PaperTradingEngine:
     def get_trade_history(self, limit: int = 50) -> list[dict[str, Any]]:
         return self.trade_history[-limit:]
 
+    def get_pnl_attribution(
+        self, current_prices: dict[str, float] | None = None
+    ) -> dict[str, Any]:
+        """P&L attribution by ticker (Phase 6.5 remainder, 2026-09-05).
+
+        Replays trade_history with average-cost matching per symbol, the same
+        convention as get_portfolio_summary (fills are recorded with their
+        realized fill_price, so this is deterministic for a given history):
+          - buys accumulate cost; sells realize (sell_price - avg_buy) * qty
+          - short-first flow mirrors: covers realize (avg_short - buy_price)
+          - commissions summed per symbol (not allocated to open/closed)
+        Unrealized P&L needs live marks: pass current_prices
+        {symbol: price} or it reports null (honest unknown, never
+        mark-to-model).
+        """
+        prices = current_prices or {}
+        by_symbol: dict[str, dict[str, float]] = {}
+        for t in self.trade_history:
+            sym = t.get("symbol", "")
+            qty = float(t.get("quantity") or 0)
+            px = float(t.get("fill_price") or 0)
+            fee = float(t.get("commission") or 0)
+            if not sym or qty <= 0:
+                continue
+            a = by_symbol.setdefault(sym, {
+                "trades": 0, "buy_qty": 0.0, "sell_qty": 0.0,
+                "buy_cost": 0.0, "sell_proceeds": 0.0,
+                "realized_pnl": 0.0, "commissions": 0.0,
+            })
+            a["trades"] += 1
+            a["commissions"] += fee
+            if t.get("side") == "buy":
+                # Covering a short first (if any), else adding long.
+                # Accumulation stays GROSS (net = buys − sells); average cost
+                # is invariant to partial closes, realized captures the rest.
+                short_open = a["sell_qty"] - a["buy_qty"]
+                if short_open > 0:
+                    covering = min(qty, short_open)
+                    avg_short = (a["sell_proceeds"] / a["sell_qty"]) if a["sell_qty"] else 0.0
+                    a["realized_pnl"] += (avg_short - px) * covering
+                a["buy_qty"] += qty
+                a["buy_cost"] += px * qty
+            else:
+                # Closing a long first (if any), else opening short.
+                long_open = a["buy_qty"] - a["sell_qty"]
+                if long_open > 0:
+                    closing = min(qty, long_open)
+                    avg_buy = (a["buy_cost"] / a["buy_qty"]) if a["buy_qty"] else 0.0
+                    a["realized_pnl"] += (px - avg_buy) * closing
+                a["sell_qty"] += qty
+                a["sell_proceeds"] += px * qty
+
+        symbols = []
+        total_realized = 0.0
+        total_unrealized = 0.0
+        for sym, a in sorted(by_symbol.items()):
+            net = a["buy_qty"] - a["sell_qty"]
+            if net > 0:
+                avg = (a["buy_cost"] / a["buy_qty"]) if a["buy_qty"] else 0.0
+            elif net < 0:
+                avg = (a["sell_proceeds"] / a["sell_qty"]) if a["sell_qty"] else 0.0
+            else:
+                avg = 0.0
+            if sym in prices and prices[sym] is not None and net != 0:
+                unrealized = (prices[sym] - avg) * net
+            else:
+                unrealized = None  # no live mark: unknown, never mark-to-model
+            if unrealized is not None:
+                total_unrealized += unrealized
+            total_realized += a["realized_pnl"]
+            symbols.append({
+                "symbol": sym,
+                "trades": a["trades"],
+                "net_qty": round(net, 4),
+                "realized_pnl": round(a["realized_pnl"], 2),
+                "unrealized_pnl": round(unrealized, 2) if unrealized is not None else None,
+                "commissions": round(a["commissions"], 2),
+            })
+        return {
+            "symbols": symbols,
+            "total_realized_pnl": round(total_realized, 2),
+            "total_unrealized_pnl": round(total_unrealized, 2),
+            "data_source": "paper_trading",
+        }
+
     def get_state(self) -> dict[str, Any]:
         return {
             "cash": round(self.cash, 2),

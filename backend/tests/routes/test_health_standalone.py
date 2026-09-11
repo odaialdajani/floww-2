@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import os
 import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi import FastAPI
@@ -41,6 +41,7 @@ class TestHealthEndpoint:
         resp = client.get("/api/health")
         checks = resp.json()["checks"]
         assert "duckdb" in checks
+        assert "public_api" in checks
         assert "alpha_vantage" in checks
         assert "websocket" in checks
 
@@ -66,34 +67,22 @@ class TestHealthEndpoint:
             assert data["checks"]["duckdb"]["status"] == "unhealthy"
             assert "DuckDB down" in data["checks"]["duckdb"]["error"]
 
-    def test_health_degraded_when_av_times_out(self):
-        with patch("routes.health.get_alpha_vantage_key", return_value="test-key"):
-            with patch("routes.health.httpx") as mock_httpx:
-                mock_client = AsyncMock()
-                mock_httpx.AsyncClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-                mock_httpx.AsyncClient.return_value.__aexit__ = AsyncMock(return_value=False)
-                mock_client.get.side_effect = Exception("Connection timeout")
-                resp = client.get("/api/health")
-                data = resp.json()
-                assert data["status"] == "degraded"
-                assert data["checks"]["alpha_vantage"]["status"] == "unhealthy"
-                assert "Connection timeout" in data["checks"]["alpha_vantage"]["error"]
-
-    def test_health_av_unhealthy_on_missing_key(self):
-        with patch("routes.health.get_alpha_vantage_key", return_value=""):
+    def test_health_degraded_when_public_api_key_missing(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("PUBLIC_API_KEY", None)
             resp = client.get("/api/health")
-            av = resp.json()["checks"]["alpha_vantage"]
-            assert av["status"] == "unhealthy"
-            assert "ALPHA_VANTAGE_KEY not configured" in av["error"]
+        data = resp.json()
+        assert data["status"] == "degraded"
+        assert data["checks"]["public_api"]["status"] == "unhealthy"
+        assert "PUBLIC_API_KEY not configured" in data["checks"]["public_api"]["error"]
 
-    def test_health_av_healthy_on_200(self):
-        with patch("routes.health.get_alpha_vantage_key", return_value="test-key"):
-            with patch("routes.health.httpx") as mock_httpx:
-                mock_client = AsyncMock()
-                mock_resp = MagicMock()
-                mock_resp.status_code = 200
-                mock_client.get = AsyncMock(return_value=mock_resp)
-                mock_httpx.AsyncClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-                mock_httpx.AsyncClient.return_value.__aexit__ = AsyncMock(return_value=False)
-                resp = client.get("/api/health")
-                assert resp.json()["checks"]["alpha_vantage"]["status"] == "healthy"
+    def test_health_public_api_healthy_with_key(self):
+        with patch.dict(os.environ, {"PUBLIC_API_KEY": "test-key"}):
+            resp = client.get("/api/health")
+            assert resp.json()["checks"]["public_api"]["status"] == "healthy"
+
+    def test_health_av_retired_stub(self):
+        resp = client.get("/api/health")
+        av = resp.json()["checks"]["alpha_vantage"]
+        assert av["status"] == "disabled"
+        assert av.get("deprecated") is True

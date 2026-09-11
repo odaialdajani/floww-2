@@ -17,9 +17,39 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def _h2_isolated_public_budget(monkeypatch):
+    """H2: adapter-level acquire debits the shared singleton even behind fake
+    brokers. Isolate every test with a fresh high-capacity budget so file
+    order can never starve a suite. Production behavior unchanged."""
+    from services import public_budget as pb_mod
+    monkeypatch.setattr(
+        pb_mod, "budget",
+        pb_mod.PublicBudget(capacity=10000, refill_per_sec=10000.0))
+
 _BACKEND = os.path.join(os.path.dirname(__file__), "..", "..")
+
+
+@pytest.fixture(autouse=True)
+def _isolated_public_budget_singleton():
+    # D1: the adapter debits the shared budget singleton per C8, so each
+    # test starts from a full bucket; otherwise module order decides
+    # who exhausts whom.
+    from services.public_budget import budget
+
+    budget.reset()
+    yield
+    budget.reset()
 if _BACKEND not in sys.path:
     sys.path.insert(0, _BACKEND)
+
+
+def _quote(**kw):
+    q = MagicMock()
+    for k, v in kw.items():
+        setattr(q, k, v)
+    return q
 
 
 @pytest.fixture
@@ -66,6 +96,7 @@ def mock_broker(mock_option_contract):
     quote = MagicMock()
     quote.mid_price = 520.50
     quote.last = 520.50
+    quote.symbol = "SPY"
     broker.get_quotes = AsyncMock(return_value=[quote])
 
     # Return two calls + two puts for 2026-09-18 only
@@ -264,7 +295,7 @@ class TestEmptyChain:
             return_value=["2026-09-18"]
         )
         broker.get_quotes = AsyncMock(
-            return_value=[MagicMock(mid_price=520.50)]
+            return_value=[_quote(mid_price=520.50, symbol="SPY")]
         )
         broker.get_option_chain_parsed = AsyncMock(
             return_value={"calls": [], "puts": []}

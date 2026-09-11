@@ -48,7 +48,6 @@ class TestVpinProperties:
 
 
 class TestGexProperties:
-    @pytest.mark.skip(reason="Pre-existing bug: GEX aggregator can't parse date strings as float")
     @given(spot=st.floats(min_value=50.0, max_value=500.0), multiplier=st.floats(min_value=0.1, max_value=5.0))
     @settings(max_examples=50, deadline=None)
     def test_gex_linear_in_oi(self, spot, multiplier):

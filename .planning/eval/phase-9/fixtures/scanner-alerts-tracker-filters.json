@@ -1,0 +1,164 @@
+{
+ "_note": "Scanner rows, alerts (gate/TTL/cap), tracker items, filter subtractiveness. Each case has expected output.",
+ "scanner_rows": [
+  {
+   "id": "SC1_whale",
+   "ticker": "SPY",
+   "premium": 30000000,
+   "expected": {
+    "badges": [
+     "WHALE"
+    ],
+    "alert": "WHALE rule fires"
+   }
+  },
+  {
+   "id": "SC2_sigma",
+   "ticker": "QQQ",
+   "zscore": 6.5,
+   "expected": {
+    "alert": "SIGMA rule fires"
+   }
+  },
+  {
+   "id": "SC3_0dte",
+   "ticker": "SPY",
+   "dte": 0,
+   "volOI": 2.0,
+   "expected": {
+    "alert": "0DTE rule fires (boundary inclusive)"
+   }
+  },
+  {
+   "id": "SC4_below",
+   "ticker": "IWM",
+   "premium": 20000,
+   "expected": {
+    "alert": "none - below $25K floor"
+   }
+  }
+ ],
+ "alerts": [
+  {
+   "id": "A1",
+   "rule": "SCORE",
+   "score": 95,
+   "expected": "fires"
+  },
+  {
+   "id": "A2",
+   "rule": "SCORE",
+   "score": 91,
+   "expected": "suppressed - below 92"
+  },
+  {
+   "id": "A3",
+   "rule": "SCORE",
+   "contract": "SPY-760C-0904",
+   "repeat_inside_ttl": true,
+   "expected": "suppressed - TTL dedup, counted"
+  },
+  {
+   "id": "A4",
+   "rule": "WHALE",
+   "repeat_inside_ttl": true,
+   "expected": "suppressed - per-rule TTL independent of SCORE clock"
+  },
+  {
+   "id": "A5",
+   "rule": "SCORE",
+   "premium_vs_firing": 2.1,
+   "inside_ttl": true,
+   "expected": "RECOMMENDED refire - escalation override (not yet implemented)"
+  },
+  {
+   "id": "A6",
+   "rule": "SIGMA",
+   "fifth_in_hour": true,
+   "expected": "suppressed - 4/hour cap plus visible counter"
+  }
+ ],
+ "tracker": [
+  {
+   "id": "T1",
+   "mark_priority": "mid then last then stale",
+   "statuses": [
+    "STILL IN",
+    "PENDING",
+    "PARTIAL N%",
+    "EXITED",
+    "EXPIRED",
+    "UNKNOWN"
+   ],
+   "expected": {
+    "close_detection": "labeled proxy (OI drift/volume)"
+   }
+  }
+ ],
+ "filter_subtractiveness": [
+  {
+   "id": "F1",
+   "rows_before": 500,
+   "filter": "sweep-only proxy",
+   "rows_after": 120,
+   "expected": {
+    "after_lt_before": true,
+    "bars": "not rescaled upward"
+   }
+  },
+  {
+   "id": "F2",
+   "filter": "NOT-SPY exclusion",
+   "expected": {
+    "no_SPY_rows_remain": true
+   }
+  },
+  {
+   "id": "F3",
+   "sort": "Premium",
+   "expected": {
+    "floor": "premium >= 25000 applied for non-Time sorts"
+   }
+  }
+ ],
+ "sweep_definition_conflict": {
+  "_note": "ROUND-2 V10: three definitions disagree. Evaluator expects exactly ONE after fix.",
+  "contracts_md": "dte<=2 AND premium>=5M",
+  "blademap_jsx_lines_83_594": "premium>=50M->block else dte<=2->sweep (no premium floor)",
+  "scanLogic_scanTypeOf": "vol>=25000->sweep, vol>=8000->block (no DTE/premium)",
+  "conflict_case": {
+   "dte": 1,
+   "vol": 30000,
+   "premium": 100000
+  },
+  "expected_after_fix": "single owner (scanLogic), proxy label everywhere, CONTRACTS reconciled"
+ },
+ "side_fallback": {
+  "_note": "ROUND-2 V11: quote-missing rows must not receive confident SIDE",
+  "case": {
+   "bid": 0,
+   "ask": 0,
+   "last": 0,
+   "volume": 2000,
+   "oi": 1000,
+   "voi": 2.0
+  },
+  "current_behavior": "voi>=1.5 renders ASK (overconfident)",
+  "expected_after_fix": "SIDE renders unknown dash, score UNAVAILABLE, NO_QUOTE state"
+ },
+ "popover_copy": {
+  "_note": "ROUND-2 V9: HOW-TO-READ must label inference",
+  "banned_phrases": [
+   "where the print crossed",
+   "lifted the offer",
+   "Price paid per contract (last print",
+   "latest print"
+  ],
+  "required_phrases": [
+   "inferred",
+   "no tape",
+   "proxy"
+  ],
+  "expected_after_fix": "all banned absent, all required present"
+ }
+}
