@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-REPO_URL="https://github.com/mrbeast1179-sketch/floww.git"
+REPO_URL="https://github.com/odaialdajani/floww-2.git"
 APP_DIR="/opt/floww"
 
 echo "── 1. System packages ──"

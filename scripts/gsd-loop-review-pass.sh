@@ -1,6 +1,6 @@
 #!/bin/zsh
 # gsd-loop REVIEW lane — one playbook pass per wake.
-# Scheduled task: "gsd-loop review — mrbeast1179-sketch/floww"
+# Scheduled task: "gsd-loop review — odaialdajani/floww-2"
 # (launchd com.nav.gsd-loop.review.floww, StartInterval 900).
 # State (.gsd/scheduled_tasks.review.lock), log, lockdir and plist are all
 # separate from the build lane so the two lanes never mix state.
@@ -51,7 +51,7 @@ elif [ ! -f "$PLAYBOOK" ]; then EVENT=blocked; REASON="playbook-missing"; fi
 
 if [ -z "$EVENT" ]; then
   PASSLOG="/tmp/gsd-loop-review-pass-${now}.log"
-  PROMPT="Run exactly ONE gsd-loop REVIEW pass for repo $REPO (owner/repo mrbeast1179-sketch/floww). Read and follow ONLY this playbook: $PLAYBOOK. Rules: audit-only — never touch git (no checkout, commit, push, worktree changes), never merge; verdicts go in as issue/PR comments per the playbook. Your final response MUST end with exactly one line of the form GSD_LOOP_RESULT={\"lane\":\"review\",\"status\":\"work|idle|blocked\",\"reason\":\"short-reason\"} and no text after it."
+  PROMPT="Run exactly ONE gsd-loop REVIEW pass for repo $REPO (owner/repo odaialdajani/floww-2). Read and follow ONLY this playbook: $PLAYBOOK. Rules: audit-only — never touch git (no checkout, commit, push, worktree changes), never merge; verdicts go in as issue/PR comments per the playbook. Your final response MUST end with exactly one line of the form GSD_LOOP_RESULT={\"lane\":\"review\",\"status\":\"work|idle|blocked\",\"reason\":\"short-reason\"} and no text after it."
   if [ "${GSD_DRY_RUN:-0}" = "1" ]; then
     echo 'GSD_LOOP_RESULT={"lane":"review","status":"idle","reason":"dry-run"}' > "$PASSLOG"
   else
@@ -90,7 +90,7 @@ import json,sys
 p,i,ts,pa,n = sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5]
 try: d=json.load(open(p))
 except Exception: d={}
-d.update({"lane":"review","repo":"mrbeast1179-sketch/floww","task":"gsd-loop review \u2014 mrbeast1179-sketch/floww","idle_count":int(i),"last_run":int(ts),"paused":(pa=="True"),"interval_minutes":int(n)})
+d.update({"lane":"review","repo":"odaialdajani/floww-2","task":"gsd-loop review \u2014 odaialdajani/floww-2","idle_count":int(i),"last_run":int(ts),"paused":(pa=="True"),"interval_minutes":int(n)})
 json.dump(d,open(p,"w"),indent=2)
 EOF
 log "pass done event=$EVENT action=$ACTION idle=$NEWIDLE next_in=${NEWINT}m"

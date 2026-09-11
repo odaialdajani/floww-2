@@ -12,7 +12,7 @@
 set -euo pipefail
 
 APP_DIR="/opt/floww"
-REPO_SSH="git@github.com:mrbeast1179-sketch/floww.git"
+REPO_SSH="git@github.com:odaialdajani/floww-2.git"
 DEPLOY_KEY_SRC="$HOME/deploy_key_ed25519"
 # Under `sudo bash` HOME may reset to /root while the key was scp'd to the
 # invoking user's home — fall back to that path.
