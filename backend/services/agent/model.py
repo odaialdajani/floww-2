@@ -12,6 +12,7 @@ from decimal import Decimal
 import httpx
 
 from services.agent.contracts import canonical
+from services.agent.explanations import explanation_menu
 from services.agent.spend import money_units
 
 MODELS = {"anthropic/claude-sonnet-4", "openai/gpt-4.1-mini"}
@@ -30,6 +31,8 @@ ANSWER_TOOL = {
             "additionalProperties": False,
             "required": ["sections"],
             "properties": {
+                "explanations": {"type":"array","maxItems":4,"items":{"type":"string"},
+                                 "description":"IDs from explanation_menu that directly resolve the user's question."},
                 "relationships": {
                     "type": "array",
                     "maxItems": 8,
@@ -114,6 +117,7 @@ class GroundedModel:
                     {
                         "question": question,
                         "facts": facts,
+                        "explanation_menu": explanation_menu(facts),
                         "history": history_note,
                         "repair_previous_invalid_answer": repair,
                     }

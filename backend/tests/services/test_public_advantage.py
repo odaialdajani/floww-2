@@ -159,6 +159,12 @@ def test_nbbo_side_matrix_and_mid_print_unknown():
     assert side_bias("call", None) == ("FLOW", None)
 
 
+@pytest.mark.parametrize("bid,ask,mid", [(None,None,2),(0,3,1.5),(3,2,2.5),(1,2,float("inf")),(1,2,10)])
+def test_midpoint_needs_valid_finite_matching_book(bid,ask,mid):
+    from services.public_scanner import _contract_mid
+    assert _contract_mid({"bid":bid,"ask":ask,"mid":mid}) is None
+
+
 def test_mid_rings_feed_ticker_roll_read():
     """A9: sweeper stamps capped mid rings; dealer carries the pooled Roll read."""
     import services.public_scanner as ps
@@ -319,7 +325,8 @@ async def test_scan_next_merges_and_never_wipes_on_failure():
         async def fake_slice(tickers, max_expiries=2, concurrency=3):
             return {t: {"rows": [[t, f"O:{t}", "call", 100.0, "2026-09-18",
                                   500, 100, 0.4, 0.4, 99.0]],
-                        "extras": {}, "dealer": {"regime": "positive"}} for t in tickers}
+                        "extras": {}, "dealer": {"regime": "positive"},
+                        "status": "ok", "received_ts": time.time()} for t in tickers}
         with patch.object(ps, "scan_slice", side_effect=fake_slice):
             uni = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"]
             v1 = await ps.scan_next(slice_size=8, universe=uni)
@@ -916,7 +923,7 @@ async def test_scan_next_trims_slice_to_affordability(monkeypatch):
             seen.extend(tickers)
             return {t: {"rows": [[t, f"O:{t}", "call", 100.0, "2026-09-18",
                                   500, 100, 0.4, 0.4, 99.0]],
-                        "extras": {}, "dealer": None} for t in tickers}
+                        "extras": {}, "dealer": None, "status": "ok", "received_ts": time.time()} for t in tickers}
 
         # capacity 9, cost 4/ticker -> afford 2 of 8 requested
         monkeypatch.setattr("services.public_budget.budget",

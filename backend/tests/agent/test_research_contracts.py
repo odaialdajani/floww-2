@@ -62,6 +62,21 @@ def test_explicit_question_ticker_wins_without_relabelling_context():
     assert spec["context_conflict"]
 
 
+@pytest.mark.parametrize("question", [
+    "Explain QQQ's saved structure, not the SPY selection still visible on my screen.",
+    "Explain QQQ instead of SPY", "Explain $QQQ, excluding $SPY", "Ignore SPY and explain QQQ",
+])
+def test_excluded_ticker_is_never_reintroduced_from_screen(question):
+    spec = request_spec({"question":question,"screen":{"ticker":"SPY","selectedExpiry":"2026-09-18"}})
+    assert spec["tickers"] == ["QQQ"] and spec["context_conflict"]
+    assert spec["screen"]["ticker"] == "SPY"
+
+
+def test_excluding_only_named_ticker_requires_a_positive_selection():
+    with pytest.raises(ValueError,match="ticker"):
+        request_spec({"question":"Do not use SPY", "screen":{"ticker":"SPY"}})
+
+
 @pytest.mark.parametrize(
     "question,horizon,expiry",
     [

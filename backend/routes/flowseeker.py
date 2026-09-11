@@ -421,6 +421,9 @@ async def public_chain_flat(
         "expiries": result.get("expiries", []),
         "n_contracts": len(flat),
         "data_source": "public_api",
+        **{key: result.get(key) for key in (
+            "spot_source", "spot_event_time", "spot_fetched_at", "event_time", "fetched_at", "cache_age_s",
+        )},
         "stale": result.get("stale", False),
         "contracts": flat,
     }
@@ -1173,6 +1176,13 @@ def _scan_payload(rows: list, stale: bool, asof: str, columns: list, cache_age: 
     }
 
 
+@router.get("/market-session")
+async def market_session():
+    from services.agent.access.horizon import horizon_window
+
+    return {**horizon_window("all"), "checked_at": datetime.now(UTC).isoformat()}
+
+
 @router.get("/scan")
 async def market_scan(
     # Paid-Public era (2026-09-05): floor 2500→1000, limit 300→500. Same ONE
@@ -1190,6 +1200,8 @@ async def market_scan(
     good result marked stale=true rather than collapsing to a client fallback.
     Use ?force=true to bypass cache and backoff (debounced server-side).
     """
+    if os.getenv("FLOWW_MARKET_DATA_PROVIDER", "").lower() == "public":
+        return await _public_dashboard_scan(min_volume, limit)
     columns = [
         "underlying_ticker", "ticker", "contract_type", "strike_price",
         "expiration_date", "day_volume", "open_interest",
@@ -1337,6 +1349,8 @@ async def force_refresh_scan(
     Debounced: ignores if last force refresh was < 10s ago.
     """
     global _last_force_refresh, _scan_backoff
+    if os.getenv("FLOWW_MARKET_DATA_PROVIDER", "").lower() == "public":
+        return await _public_dashboard_scan(min_volume, limit)
     now = time.time()
     if now - _last_force_refresh < 10.0:
         return {"status": "debounced", "retry_after_seconds": int(10 - (now - _last_force_refresh))}
@@ -1535,6 +1549,34 @@ async def public_market_scan(
         "baselines": await _volume_baselines(),
         "prev_oi": await _prev_contract_oi(),
     }
+
+
+_public_dashboard_lock = asyncio.Lock()
+_public_dashboard_cache = None
+
+
+async def _public_dashboard_scan(min_volume, limit):
+    """One shared bounded Public sweep per minute, including force refresh.
+
+    Filters do not spend extra provider calls. Returned age is the oldest
+    included slice age plus time since this cached response was assembled.
+    """
+    import copy
+
+    global _public_dashboard_cache
+    async with _public_dashboard_lock:
+        now = time.monotonic()
+        if _public_dashboard_cache is None or now - _public_dashboard_cache[0] >= 60:
+            payload = await public_market_scan(slice_size=2, max_expiries=2)
+            _public_dashboard_cache = (time.monotonic(), copy.deepcopy(payload))
+        saved_at, payload = _public_dashboard_cache
+        result = copy.deepcopy(payload)
+        age = (result.get("coverage", {}).get("max_age_s") or 0) + max(0, time.monotonic() - saved_at)
+        eligible = [row for row in result.get("rows", []) if len(row) > 5 and float(row[5] or 0) >= min_volume]
+        result.update(rows=eligible[:limit], count=min(len(eligible), limit), truncated=len(eligible) > limit,
+                      cache_age_seconds=age, stale=bool(result.get("stale")) or age > 300,
+                      budget=None)
+        return result
 
 
 @router.get("/alerts/quality")

@@ -30,9 +30,9 @@ async def _duckdb_fallback(ticker: str) -> dict[str, Any] | None:
     try:
         from services.duckdb_engine import db as duckdb_engine
         rows = await duckdb_engine.query_async(
-            """SELECT symbol, bid, ask, last, volume, oi, timestamp
+            """SELECT symbol, bid, ask, last, volume, oi, timestamp, data_source
                FROM ticks
-               WHERE symbol = ?
+               WHERE symbol = ? AND data_source = 'public_api'
                ORDER BY timestamp DESC
                LIMIT 1""",
             [ticker],
@@ -57,9 +57,10 @@ async def _duckdb_fallback(ticker: str) -> dict[str, Any] | None:
             "volume": row.get("volume", 0),
             "oi": row.get("oi", 0),
             "ts": ts.isoformat() if ts else None,
-            "data_source": "duckdb_fallback",
+            "data_source": row.get("data_source", "public_api"),
+            "storage_source": "duckdb",
             "data_fallback": True,
-            "stale_age_s": round(age_s, 1) if age_s else None,
+            "stale_age_s": round(age_s, 1) if age_s is not None else None,
         }
     except Exception:
         return None
@@ -101,26 +102,21 @@ async def list_all_tickers(
     page: int = Query(1, ge=1, le=1000),
     refresh: bool = Query(False),
 ):
-    """Full Finnhub symbol universe, paged (T2).
-
-    Returns the sorted deduped symbol list; the frontend pages through it
-    (``has_more``) to build the full scroller universe instead of the
-    featured-only sets above. Cached in memory for 30 minutes;
-    ``?refresh=true`` forces a fresh fetch. Empty list when Finnhub is not
-    configured (callers fall back to the featured sets).
-    """
+    """Paged configured ticker universe; never claim a full exchange catalog."""
+    import os
     import time as _time
 
     import server as _server_mod
 
     now_s = _time.time()
-    if (not refresh and _server_mod._TICKER_CACHE_TS
+    configured = os.getenv("FLOWW_PUBLIC_UNIVERSE", "").strip()
+    if configured:
+        all_syms = sorted({s.strip().upper() for s in configured.split(",") if s.strip()})
+    elif (not refresh and _server_mod._TICKER_CACHE_TS
             and (now_s - _server_mod._TICKER_CACHE_TS) < _server_mod.CACHE_TTL_S):
         all_syms = _server_mod._TICKER_CACHE
     else:
-        from services.finnhub_client import FinnhubClient
-        client = FinnhubClient()
-        all_syms = client.symbols_us_equities() or []
+        all_syms = sorted({str(s).strip().upper() for s in _server_mod.POPULAR_UNIVERSE if str(s).strip()})
         _server_mod._TICKER_CACHE = all_syms
         _server_mod._TICKER_CACHE_TS = now_s
 
@@ -134,10 +130,12 @@ async def list_all_tickers(
         "page": page,
         "limit": limit,
         "has_more": start + limit < total,
-        "cached": not refresh and _server_mod._TICKER_CACHE_TS is not None,
+        "cached": not configured and not refresh and _server_mod._TICKER_CACHE_TS is not None,
         "cached_age_s": (round(now_s - _server_mod._TICKER_CACHE_TS, 1)
-                         if _server_mod._TICKER_CACHE_TS else None),
+                         if not configured and _server_mod._TICKER_CACHE_TS else None),
         "asof": _now_dt.isoformat(),
+        "source": "configured-universe" if configured else "featured-universe",
+        "complete_exchange_catalog": False,
     }
 
 
@@ -219,9 +217,8 @@ async def trinity(
 
 @router.get("/spot/{ticker}")
 async def spot(ticker: str):
-    from datetime import datetime
-
     from server import fetch_spot_and_chains_merged
+    from services.market_provenance import spot_provenance
     t = ticker.strip().upper()
     if t == "SPX":
         t = "^SPX"
@@ -233,7 +230,11 @@ async def spot(ticker: str):
         if fallback:
             return fallback
         raise HTTPException(503, f"Live data unavailable for {ticker} and no cache") from None
-    return {"ticker": t, "spot": raw.get("spot", 0), "ts": datetime.now(UTC).isoformat(), "data_source": "live"}
+    observation = spot_provenance(raw, datetime.now(UTC))
+    return {"ticker": t, "spot": raw.get("spot"), "ts": observation["event_time"],
+            "fetched_at": observation["received_at"], "data_source": observation["source"],
+            "status": observation["status"], "stale": observation["status"] == "stale",
+            "data_fallback": bool(raw.get("stale") or observation["source"] == "yfinance-fallback")}
 
 
 @router.get("/chain/{ticker}")
@@ -308,7 +309,9 @@ async def chain(
     # Apply DTE filter if specified
     if dte_max is not None:
         rows = [r for r in rows if r.get("dte", 0) <= dte_max]
-    return _sanitize({"ticker": t, "spot": raw["spot"], "expiries": raw.get("expiries", []), "rows": rows, "count": len(rows)})
+    return _sanitize({"ticker": t, "spot": raw["spot"], "expiries": raw.get("expiries", []), "rows": rows, "count": len(rows),
+                      **{key: raw.get(key) for key in ("data_source", "event_time", "fetched_at", "spot_source",
+                                                      "spot_event_time", "spot_fetched_at", "stale", "cache_age_s")}})
 
 
 @router.get("/gex-timeframes/{ticker}")

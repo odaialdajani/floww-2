@@ -27,12 +27,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import copy
 import logging
 import math
 import os
 import time
 from collections.abc import Sequence
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -205,32 +206,38 @@ def _quote_ts_utc(q) -> datetime | None:
     except ValueError:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
+        return None
     return dt.astimezone(UTC)
 
 
 def _last_us_close_utc(now: datetime | None = None) -> datetime:
-    """Most recent 16:00 America/New_York close, as UTC (weekends walk back)."""
-    from zoneinfo import ZoneInfo
-    et = ZoneInfo("America/New_York")
+    """Most recent completed exchange close, including holidays and early closes."""
+    from services.agent.access.horizon import required_close
     cur = now if now is not None else datetime.now(UTC)
     if cur.tzinfo is None:
         cur = cur.replace(tzinfo=UTC)
-    et_now = cur.astimezone(et)
-    day = et_now.date()
-    if (et_now.hour, et_now.minute) < (16, 0):
-        day -= timedelta(days=1)  # today's session hasn't closed yet
-    while day.weekday() >= 5:  # Sat/Sun -> walk back to Friday
-        day -= timedelta(days=1)
-    close_et = datetime(day.year, day.month, day.day, 16, 0, tzinfo=et)
-    return close_et.astimezone(UTC)
+    return datetime.fromisoformat(required_close(cur)).astimezone(UTC)
+
+
+def _mid_ts_utc(q):
+    from services.market_provenance import timestamp
+    bid_time = timestamp(getattr(q, "bid_timestamp", None))
+    ask_time = timestamp(getattr(q, "ask_timestamp", None))
+    # A midpoint depends on both sides, so use the older verified side.
+    return min(bid_time, ask_time) if bid_time and ask_time else None
+
+
+def _timestamp_text(value):
+    from services.market_provenance import timestamp
+    parsed = timestamp(value)
+    return parsed.isoformat() if parsed else None
 
 
 def _public_quote_spot(q, now: datetime | None = None) -> tuple[float | None, str]:
     """Trusted Public mid/last, or (None, reason).
 
-    Reasons: crossed-book | wide-book | stale-quote | no-price.
-    Unassessable books/timestamps keep legacy trust (existing callers/mocks).
+    Invalid or one-sided books cannot supply a midpoint. Unknown observation
+    time remains unknown in the separate provenance fields.
     """
     bid = _fnum(getattr(q, "bid", None))
     ask = _fnum(getattr(q, "ask", None))
@@ -239,7 +246,7 @@ def _public_quote_spot(q, now: datetime | None = None) -> tuple[float | None, st
             return None, "crossed-book"
         if (ask - bid) / ((ask + bid) / 2) > _SPOT_MAX_REL_SPREAD:
             return None, "wide-book"
-    ts = _quote_ts_utc(q)
+    ts = _mid_ts_utc(q) or _quote_ts_utc(q)
     if ts is not None and ts < _last_us_close_utc(now):
         return None, "stale-quote"
     raw_mid = getattr(q, "mid_price", None)
@@ -249,6 +256,8 @@ def _public_quote_spot(q, now: datetime | None = None) -> tuple[float | None, st
         # downstream fails over, never substitute `last` (pinned contract).
         return 0.0, "zero-mid"
     if mid is not None and mid > 0:
+        if bid is None or ask is None or bid <= 0 or ask <= 0:
+            return None, "invalid-book"
         return mid, "public-mid"
     last = _fnum(getattr(q, "last", None))
     if last is not None and last > 0:
@@ -271,6 +280,12 @@ def _yfinance_spot(symbol: str) -> float | None:
 
 async def _resolve_spot(pb, symbol: str, account_id: str,
                         now: datetime | None = None) -> tuple[float | None, str]:
+    observation = await _resolve_spot_observation(pb, symbol, account_id, now)
+    return observation["price"], observation["source"]
+
+
+async def _resolve_spot_observation(pb, symbol: str, account_id: str,
+                                    now: datetime | None = None) -> dict[str, Any]:
     """Validated spot + source tag. Never raises.
 
     Returns (None, 'symbol-mismatch') to fail closed on wrong-symbol
@@ -283,7 +298,10 @@ async def _resolve_spot(pb, symbol: str, account_id: str,
         if q is not None:
             price, reason = _public_quote_spot(q, now=now)
             if price is not None:
-                return price, reason
+                ts = _mid_ts_utc(q) if reason == "public-mid" else _quote_ts_utc(q)
+                return {"price": price, "source": reason,
+                        "event_time": ts.isoformat() if ts else None,
+                        "fetched_at": datetime.now(UTC).isoformat()}
             log.warning("Public API spot rejected for %s (%s) — yfinance fallback",
                         symbol, reason)
         elif quotes:
@@ -291,17 +309,23 @@ async def _resolve_spot(pb, symbol: str, account_id: str,
             # may label another instrument's price with our ticker.
             log.warning("Public API quote symbol mismatch for %s — refusing substitution",
                         symbol)
-            return None, "symbol-mismatch"
+            return {"price": None, "source": "symbol-mismatch", "event_time": None,
+                    "fetched_at": datetime.now(UTC).isoformat()}
     except Exception as e:
         _note_public_429(e)
         log.warning("Public API quote fail for %s: %s", symbol, e)
+    if os.getenv("FLOWW_MARKET_DATA_PROVIDER") == "public":
+        return {"price": None, "source": "public-unavailable", "event_time": None,
+                "fetched_at": datetime.now(UTC).isoformat()}
     try:
         yf_spot = await asyncio.to_thread(_yfinance_spot, symbol)
         if yf_spot:
-            return yf_spot, "yfinance-fallback"
+            return {"price": yf_spot, "source": "yfinance-fallback", "event_time": None,
+                    "fetched_at": datetime.now(UTC).isoformat()}
     except Exception as e:
         log.warning("yfinance spot fallback fail for %s: %s", symbol, e)
-    return 0.0, "none"
+    return {"price": 0.0, "source": "none", "event_time": None,
+            "fetched_at": datetime.now(UTC).isoformat()}
 
 
 # ---------------------------------------------------------------------------
@@ -350,13 +374,26 @@ def _clear_chain_cache() -> None:
 
 
 def _cached_copy(entry: dict[str, Any], stale: bool) -> dict[str, Any]:
-    out = dict(entry)
-    out["contracts"] = list(entry.get("contracts", []))
-    out["expiries"] = list(entry.get("expiries", []))
+    out = copy.deepcopy(entry)
+    out.setdefault("contracts", [])
+    out.setdefault("expiries", [])
     if "max_expiries" not in out:
         out["max_expiries"] = entry.get("max_expiries")
     out["stale"] = stale
+    from services.market_provenance import receipt_age
+    out["cache_age_s"] = receipt_age(entry.get("fetched_at"))
     return out
+
+
+def peek_chain_from_public_api(ticker: str, preferred: int = 6):
+    """Read a previously fetched Public chain without calling or authenticating a provider."""
+    choices = [(key, entry) for key, entry in _CHAIN_CACHE.items() if key[0] == ticker.upper()]
+    if not choices:
+        return None
+    key, entry = max(choices, key=lambda item: (item[1][0], item[0][1] == preferred))
+    result = _cached_copy(entry[2], stale=bool(entry[2].get("stale")))
+    result["requested_expiry_count"] = key[1]
+    return result
 
 
 async def fetch_chain_from_public_api(
@@ -483,7 +520,8 @@ async def _fetch_chain_live(
     # 2. Get spot quote (validated: rotten NBBO / pre-session books fall
     # back to the yfinance close instead of printing a fiction mid).
     try:
-        spot, spot_source = await _resolve_spot(pb, symbol, account_id)
+        spot_observation = await _resolve_spot_observation(pb, symbol, account_id)
+        spot, spot_source = spot_observation["price"], spot_observation["source"]
     except Exception as e:
         _note_public_429(e)
         log.warning("Public API quote fail for %s: %s", ticker, e)
@@ -544,6 +582,9 @@ async def _fetch_chain_live(
                     "ask_size": _finite(oc.ask_size),
                     "volume": _finite(oc.volume, 0),
                     "oi_source": "public_api",
+                    "last_event_time": _timestamp_text(getattr(oc, "last_timestamp", None)),
+                    "bid_event_time": _timestamp_text(getattr(oc, "bid_timestamp", None)),
+                    "ask_event_time": _timestamp_text(getattr(oc, "ask_timestamp", None)),
                 })
 
     if not contracts:
@@ -554,6 +595,12 @@ async def _fetch_chain_live(
         "ticker": ticker.upper(),
         "spot": float(spot or 0.0),
         "spot_source": spot_source,
+        "spot_event_time": spot_observation["event_time"],
+        "spot_fetched_at": spot_observation["fetched_at"],
+        # Quote sides have their own times; Public supplies no observation
+        # timestamp for the whole chain's OI/Greeks. Keep that distinct.
+        "event_time": None,
+        "fetched_at": datetime.now(UTC).isoformat(),
         "expiries": exp_dates,
         "contracts": contracts,
         "data_source": "public_api",
@@ -979,9 +1026,10 @@ async def fetch_quotes_from_public_api(
         symbol = _normalize_symbol(str(getattr(q, "symbol", "") or ""))
         if not symbol:
             continue
-        mid = q.mid_price
-        # 0.0 is a real mid price — only a missing mid falls back to last.
-        spot = mid if mid is not None else (q.last or 0.0)
+        spot, spot_source = _public_quote_spot(q)
+        if spot is None or (spot <= 0 and _fnum(getattr(q, "mid_price", None)) != 0):
+            continue
+        mid = spot_source == "public-mid"
         out[symbol] = {
             "ticker": symbol,
             "spot": float(spot),
@@ -995,6 +1043,13 @@ async def fetch_quotes_from_public_api(
             "change": q.change,
             "percent_change": q.percent_change,
             "timestamp": q.timestamp,
+            "last_event_time": q.timestamp,
+            "bid_event_time": getattr(q, "bid_timestamp", None),
+            "ask_event_time": getattr(q, "ask_timestamp", None),
+            "spot_source": spot_source,
+            "spot_event_time": (_mid_ts_utc(q).isoformat() if _mid_ts_utc(q) else None)
+            if mid else (_quote_ts_utc(q).isoformat() if spot_source == "public-last" and _quote_ts_utc(q) else None),
+            "spot_fetched_at": datetime.now(UTC).isoformat(),
             "data_source": "public_api",
         }
 

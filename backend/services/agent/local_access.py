@@ -11,7 +11,7 @@ from starlette.responses import Response
 COOKIE = "floww_research"
 _EXACT = {
     "POST": {"/api/agent/session", "/api/agent/ask", "/api/agent/session/rotate", "/api/agent/session/logout"},
-    "GET": {"/api/agent/history", "/api/agent/claims", "/api/agent/prefs"},
+    "GET": {"/api/agent/history", "/api/agent/claims", "/api/agent/prefs", "/api/agent/models"},
     "PUT": {"/api/agent/prefs"},
 }
 

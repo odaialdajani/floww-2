@@ -1,7 +1,7 @@
 export const finite = value => value !== null && value !== undefined && value !== "" && typeof value !== "boolean" && Number.isFinite(Number(value)) ? Number(value) : null;
-export function dealerSeries(heat, flip, maxStrikes = 14) {
+export function dealerSeries(heat, flip, maxStrikes = 14, selectedExpiries = null) {
  const g = heat?.grid || {};
- const expiries = [...new Set(g.expiries || [])].slice(0, 6);
+ const expiries = [...new Set(g.expiries || [])].filter(expiry => selectedExpiries == null || selectedExpiries.includes(expiry)).slice(0, 6);
  let strikes = [...new Set((g.strikes || []).map(finite).filter(v => v != null))].sort((a,b) => a-b);
  const spot = finite(heat?.spot);
  if (strikes.length > maxStrikes) {

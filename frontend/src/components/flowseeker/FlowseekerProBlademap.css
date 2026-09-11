@@ -11,8 +11,8 @@
   --th-line2: #2f343c;
   --th-ink: #a4a8ae;
   --th-hi: #c3c7cd;
-  --th-lo: #767b83;
-  --th-xlo: #5a5f67;
+  --th-lo: #9398a0;
+  --th-xlo: #8b919b;
   --th-acc: #8b7cf6;
   --th-acc-s: rgba(139, 124, 246, 0.14);
   --th-bull: #4fc3a1;
@@ -188,7 +188,7 @@ button.th-pill:hover { border-color: var(--th-acc); }
 .state small { font-size: 10.5px; color: var(--th-lo); }
 .lv { font-weight: 500; color: var(--th-hi); }
 .lv.dn { color: var(--th-bear); } .lv.up { color: var(--th-bull); }
-.acts { display: none; gap: 6px; }
+.acts { display: inline-flex; gap: 6px; flex-wrap: wrap; }
 tr:hover .acts { display: inline-flex; }
 tr:hover .lvwrap { display: none; }
 .act { padding: 4px 9px; border-radius: 6px; border: 1px solid var(--th-line2); font-size: 11px; color: var(--th-ink); }

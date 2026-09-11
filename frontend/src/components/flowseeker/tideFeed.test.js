@@ -14,6 +14,7 @@ const dirAlert = (over = {}) => ({
   score: 94, premium: 18400000, under_price: 178.4, move_pct: 1.8, asof_ts: new Date().toISOString(),
   key_levels_json: JSON.stringify({ entry: 178.4, invalidation: 173.94, target: 188.21 }),
   context_json: JSON.stringify({
+    source_event_time: new Date().toISOString(), source_quality: "ok",
     activity_summary: "Call print: 218,000 contracts",
     institutional_indicators: ["Top-decile composite score"],
     market_regime: "NEGATIVE_GAMMA",
@@ -31,6 +32,12 @@ const sigmaAlert = (over = {}) => ({
 });
 
 describe("parseAlert — key_levels_json + context_json (never parsed before)", () => {
+  it("withholds malformed nested text and levels without making React children", () => {
+    const a=parseAlert({context_json:JSON.stringify({activity_summary:{bad:1},dealer_positioning:[],institutional_indicators:"not a list"}),
+      key_levels_json:JSON.stringify({entry:{bad:1},target:"102.25",invalidation:false})});
+    expect(a.context).toEqual({activity_summary:null,dealer_positioning:null,institutional_indicators:[]});
+    expect(a.levels).toEqual({target:102.25});
+  });
   it("parses both JSON blobs", () => {
     const a = parseAlert(dirAlert());
     expect(a.levels).toEqual({ entry: 178.4, invalidation: 173.94, target: 188.21 });
@@ -105,6 +112,12 @@ describe("directionOf", () => {
 });
 
 describe("tradeNowOf / feedBodyOf", () => {
+  it("does not treat newly computed alerts as fresh market evidence", () => {
+    const now = Date.now();
+    const alert = dirAlert({asof_ts:new Date(now).toISOString(), context_json:null});
+    expect(tradeNowOf([alert],75,now)).toBeNull();
+    expect(tradeNowOf([dirAlert({context_json:JSON.stringify({source_event_time:new Date(now-3600000).toISOString(),source_quality:"ok"})})],75,now)).toBeNull();
+  });
   const low = dirAlert({ key: "score|x", rule: "SCORE", conviction: 68, under: "SPY", strike: 642 });
   it("picks the top directional row ≥ floor", () => {
     expect(tradeNowOf([sigmaAlert(), low, dirAlert()]).key).toBe(dirAlert().key);

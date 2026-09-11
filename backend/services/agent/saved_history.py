@@ -34,23 +34,27 @@ async def history_facts(repository, owner, current, *, closing_only=False, previ
     )
     async for anchor in anchors:
         previous_snapshots.append(anchor["snapshot"])
-    previous_snapshots.sort(key=lambda snapshot: snapshot.get("observed_at") or "", reverse=True)
+    def price_time(snapshot):
+        price = next((f for f in snapshot.get("facts", []) if f["metric"] == "Underlying price"), {})
+        return instant(price.get("event_time"))
+
+    previous_snapshots.sort(key=lambda snapshot: price_time(snapshot) or "", reverse=True)
     unavailable = "No earlier compatible source observation was saved"
     if closing_only:
         unavailable = f"No verified closing observation was saved for {close_time}"
     for previous in previous_snapshots:
         if closing_only and (
             previous.get("anchor_kind") != "close"
-            or instant(previous.get("observed_at")) != close_time
+            or price_time(previous) != close_time
             or instant(previous.get("window", {}).get("session_close")) != close_time
         ):
             continue
         if previous["ticker"] != current["ticker"] or previous["horizon"] != current["horizon"]:
             continue
         if (
-            not previous.get("observed_at")
-            or not current.get("observed_at")
-            or previous["observed_at"] >= current["observed_at"]
+            not price_time(previous)
+            or not price_time(current)
+            or price_time(previous) >= price_time(current)
         ):
             continue
         if previous.get("coverage_id") != current.get("coverage_id"):
@@ -76,11 +80,11 @@ async def history_facts(repository, owner, current, *, closing_only=False, previ
             ticker=current["ticker"],
             source="compatible saved observations",
             snapshot_id=current["snapshot_id"],
-            event_time=current["observed_at"],
+            event_time=price_time(current),
             horizon=current["horizon"],
             parents=[before["id"], after["id"]],
             status=after["status"],
             reason=after.get("reason"),
         )
-        return [before, change], f"Compared with source observation at {previous['observed_at']}"
+        return [before, change], f"Compared with source observation at {price_time(previous)}"
     return [], unavailable

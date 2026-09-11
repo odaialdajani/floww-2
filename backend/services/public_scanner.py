@@ -48,6 +48,7 @@ import logging
 import math
 import os
 import time
+from datetime import datetime
 from typing import Any
 
 from services.flow_signing import sign_print as _sign_print
@@ -350,14 +351,7 @@ def unusual_rows_from_chain(
             bid = c.get("bid")
             ask = c.get("ask")
             last = c.get("last")
-            mid = c.get("mid")
-            try:
-                mid_f = float(mid) if mid is not None else None
-                if (mid_f is None and bid is not None and ask is not None
-                        and float(ask) > float(bid) > 0):
-                    mid_f = (float(bid) + float(ask)) / 2
-            except (TypeError, ValueError):
-                mid_f = None
+            mid_f = _contract_mid(c)
             px = mid_f
             if px is None:
                 try:
@@ -502,14 +496,17 @@ def _reset_state() -> None:
 
 
 def _contract_mid(c: dict[str, Any]) -> float | None:
-    """Best mid for one chain contract: vendor mid, else (bid+ask)/2."""
+    """Finite midpoint backed by a valid two-sided book."""
     try:
-        mid = c.get("mid")
-        if mid is not None and float(mid) > 0:
-            return float(mid)
         bid, ask = float(c.get("bid")), float(c.get("ask"))
-        if ask > bid > 0:
-            return (bid + ask) / 2
+        if not math.isfinite(bid) or not math.isfinite(ask) or not ask >= bid > 0:
+            return None
+        mid = c.get("mid")
+        if mid is None:
+            return bid + (ask - bid) / 2
+        value = float(mid)
+        if math.isfinite(value) and bid <= value <= ask:
+            return value
     except (TypeError, ValueError):
         pass
     return None
@@ -528,6 +525,8 @@ def _stamp_marks(contracts: list[dict[str, Any]], now: float) -> None:
                 continue
             osi = str(c.get("osi") or "")
             if not osi:
+                continue
+            if osi in _vol_marks and _vol_marks[osi][1] >= now:
                 continue
             _vol_marks[osi] = (float(c.get("volume") or 0), now)
             mid = _contract_mid(c)
@@ -562,11 +561,11 @@ async def scan_slice(
     rows (the caller then clears obsolete rows); "failed" when no fresh
     read exists (the caller keeps the prior slice with its age).
     """
+    from services.agent.contracts import instant
     from services.public_api_adapter import fetch_chain_from_public_api
 
     out: dict[str, dict[str, Any]] = {}
     sem = asyncio.Semaphore(max(1, concurrency))
-    now = time.time()
 
     async def _one(t: str) -> None:
         async with sem:
@@ -579,6 +578,12 @@ async def scan_slice(
             if not chain:
                 out[t] = {"rows": [], "extras": {}, "dealer": None, "status": "failed"}
                 return
+            received = instant(chain.get("fetched_at"))
+            received_ts = datetime.fromisoformat(received).timestamp() if received else None
+            if chain.get("stale") or received_ts is None or not -30 <= time.time() - received_ts <= 300:
+                out[t] = {"rows": [], "extras": {}, "dealer": None, "status": "failed"}
+                return
+            now = received_ts
             contracts = chain.get("contracts", []) or []
             rows, extras = unusual_rows_from_chain(
                 chain, vol_marks=_vol_marks, mid_marks=_mid_marks, now=now
@@ -604,7 +609,8 @@ async def scan_slice(
                          if isinstance(c, dict) and c.get("osi")}
             tick_rings = {o: _mid_rings[o] for o in tick_osis if o in _mid_rings}
             dealer["roll_spread"] = _roll_pooled_for(tick_rings)
-            out[t] = {"rows": rows, "extras": extras, "dealer": dealer, "status": "ok"}
+            out[t] = {"rows": rows, "extras": extras, "dealer": dealer, "status": "ok", "received_ts": received_ts,
+                      "event_time": instant(chain.get("event_time"))}
 
     await asyncio.gather(*(_one(t) for t in tickers))
     return out
@@ -654,18 +660,15 @@ async def scan_next(
         }
         if tickers:
             fresh = await scan_slice(tickers, max_expiries=max_expiries)
-            now = time.time()
             for t, pack in fresh.items():
                 # D3: a successful fresh read (even zero rows) replaces the
                 # slice — obsolete rows must not pose as current. Only a
                 # failed read keeps the prior slice with its age (merge
                 # drops it past TTL and names it in coverage).
-                if pack.get("status") == "ok":
-                    _slices[t] = {"ts": now, "rows": pack["rows"],
+                received_ts = pack.get("received_ts")
+                if pack.get("status") == "ok" and isinstance(received_ts, (float, int)) and math.isfinite(received_ts):
+                    _slices[t] = {"ts": received_ts, "rows": pack["rows"], "event_time": pack.get("event_time"),
                                   "extras": pack["extras"], "dealer": pack["dealer"]}
-                    dealer[t] = pack["dealer"]
-                elif pack["rows"]:
-                    _slices[t] = {"ts": now, **pack}
                     dealer[t] = pack["dealer"]
         rows, extras, coverage = merge_slices(_slices)
         # Dealer context only for tickers actually in the merged view —

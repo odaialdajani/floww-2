@@ -188,6 +188,7 @@ export default function Sidebar({ page, onNavigate, userEmail, userTier }) {
                   <button
                     key={item.id}
                     onClick={() => onNavigate(item.id)}
+                    aria-label={item.label}
                     aria-current={active ? "page" : undefined}
                     className="group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors"
                     style={{

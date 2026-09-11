@@ -67,7 +67,7 @@ function SkylitMetricsSidebar({
   const regimeLabel =
     regime === "positive" ? "Positive γ" :
     regime === "negative" ? "Negative γ" :
-    "Neutral γ";
+    regime === "neutral" ? "Neutral γ" : "Gamma reading unavailable";
 
   return (
     <div className="skylit-metrics-sidebar">

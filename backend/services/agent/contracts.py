@@ -113,6 +113,16 @@ def request_spec(body):
             for s in re.findall(r"\b[A-Z][A-Z0-9.]{1,5}\b", question)
             if s not in {"AI", "USD", "ETF", "GEX", "VEX", "AND", "OR", "THE", "IV", "OI"}
         ]
+    excluded = {
+        symbol.upper() for symbol in explicit
+        if re.search(
+            r"\b(?:not(?:\s+use)?|don't use|except|excluding|exclude|ignore|instead of|rather than)(?:\s+the)?\s+\$?"
+            + re.escape(symbol) + r"\b", question, re.IGNORECASE
+        )
+    }
+    explicit = [symbol for symbol in explicit if symbol.upper() not in excluded]
+    if excluded and not explicit:
+        raise ValueError("Name the ticker you want to use, rather than only the ticker to exclude")
     tickers = list(dict.fromkeys(s.upper() for s in explicit)) or [
         str(body.get("ticker") or screen.get("ticker") or "SPY").upper()
     ]
@@ -183,7 +193,7 @@ INTERPRETATIONS = {
 
 
 def validate_model_answer(answer, ledger):
-    if not isinstance(answer, dict) or set(answer) - {"sections", "relationships"}:
+    if not isinstance(answer, dict) or set(answer) - {"sections", "relationships", "explanations"}:
         raise ValueError("Unexpected answer fields")
     sections = answer.get("sections")
     if not isinstance(sections, list) or not 1 <= len(sections) <= 8:
@@ -211,6 +221,8 @@ def validate_model_answer(answer, ledger):
     if not isinstance(relationships, list) or len(relationships) > 8:
         raise ValueError("Invalid relationships")
     checked["relationship_text"] = [relationship_text(r, ledger) for r in relationships]
+    from services.agent.explanations import select_explanations
+    checked["explanations"] = select_explanations(answer.get("explanations",[]),list(ledger.values()))
     return checked
 
 

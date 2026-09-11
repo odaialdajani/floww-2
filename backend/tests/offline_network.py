@@ -1,6 +1,8 @@
 """Fail closed when an offline route test misses a provider mock."""
 
+import os
 import socket
+import traceback
 
 import httpx
 import pytest
@@ -16,11 +18,17 @@ def deny_external_network():
     original_connect_ex = socket.socket.connect_ex
 
     def refuse(*args, **kwargs):
-        attempts.append(True)
+        request = next((a for a in args if isinstance(a, httpx.Request)), None)
+        # No headers, credentials, query strings or source-code lines in logs.
+        attempts.append({
+            "test": os.getenv("PYTEST_CURRENT_TEST", "setup or background"),
+            "host": request.url.host if request else "socket",
+            "stack": [f"{frame.name}:{frame.lineno}" for frame in traceback.extract_stack(limit=7)[:-1]],
+        })
         raise AssertionError("Offline test attempted an external connection")
 
     async def refuse_async(*args, **kwargs):
-        refuse()
+        refuse(*args, **kwargs)
 
     def local_connect(sock, address):
         # Windows asyncio creates a loopback socketpair to wake its event loop.
@@ -41,4 +49,4 @@ def deny_external_network():
         yield
     finally:
         monkeypatch.undo()
-    assert not attempts, "Provider mock was missed; external requests were blocked"
+    assert not attempts, f"Provider mock was missed; external requests were blocked: {attempts[:20]}"

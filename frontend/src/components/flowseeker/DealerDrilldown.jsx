@@ -1,7 +1,7 @@
 import React, { useId } from "react";
 import { finite } from "./dealerSeries";
 const money = v => v == null ? "Unavailable" : new Intl.NumberFormat("en-US", {notation:"compact",maximumFractionDigits:1}).format(v);
-export default function DealerDrilldown({ ticker, series, regime = {}, loading, error, stale, colorBlind }) {
+export default function DealerDrilldown({ ticker, series, regime = {}, loading, error, stale, colorBlind, selectedExpiry }) {
  const pattern = `short-${useId().replace(/:/g,"")}`;
  const { strikes, net, cumulative, flipFraction, flip, spot } = series;
  const width = Math.max(620, strikes.length * 52), left = 42, right = width-30;
@@ -16,6 +16,7 @@ export default function DealerDrilldown({ ticker, series, regime = {}, loading, 
  const state = loading ? "Loading" : error ? "Unavailable" : stale ? "Stale or source time unknown" : "Available";
  return <section className="th-dealer-detail" id="dealer-drilldown" tabIndex={-1} aria-label={`Drill-down ${ticker}`} data-testid="dealer-drilldown">
   <header><h3>Drill-down <span>{ticker}</span></h3><span>{state}</span></header>
+  <p>{selectedExpiry ? `Selected expiry: ${selectedExpiry}. ` : ""}Displayed expiries: {series.expiries.join(", ") || "none in the loaded data"}. Regime and flip describe the full loaded chain.</p>
   <div className="th-dealer-facts">
    <div><small>Market regime</small><strong>{regime.current_state || "Unavailable"}{regime.is_warming ? " - warming" : ""}</strong></div>
    <div><small>Gamma flip</small><strong>{flip ?? "Unavailable"}</strong><span>{dist == null ? "Spot distance unavailable" : `Spot ${Math.abs(dist).toFixed(1)}% ${dist < 0 ? "below" : dist > 0 ? "above" : "at"} flip`}</span></div>

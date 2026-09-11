@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import sys
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -224,7 +225,8 @@ def _quote(symbol="SPY", bid=499.0, ask=501.0, last=500.5):
     q.previous_close = 498.0
     q.change = 2.5
     q.percent_change = 0.5
-    q.timestamp = "2026-09-03T20:00:00Z"
+    q.timestamp = datetime.now(UTC).isoformat()
+    q.bid_timestamp = q.ask_timestamp = q.timestamp
     q.mid_price = (bid + ask) / 2 if (bid is not None and ask is not None) else None
     return q
 

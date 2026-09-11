@@ -210,6 +210,17 @@ async def prefs(request: Request):
     return await storage_result(service(request).repository.get_preferences(await owner(request)))
 
 
+@router.get("/models")
+async def models(request: Request):
+    identity = await owner(request)
+    model = service(request).model
+    if model is None or not hasattr(model, "catalog"):
+        raise HTTPException(503, "ChatGPT login is unavailable")
+    return {"models": await storage_result(model.catalog()),
+            "selected": await storage_result(model.settings_for(identity)),
+            "usage": await storage_result(model.spend.state())}
+
+
 @router.put("/prefs")
 async def save_prefs(body: dict, request: Request):
     identity = await owner(request)
@@ -220,6 +231,7 @@ async def save_prefs(body: dict, request: Request):
         "muted_tickers",
         "max_cards_per_day",
         "ticker_notes",
+        "ai_settings",
     }
     if set(body) - allowed or len(json.dumps(body)) > 8000:
         raise HTTPException(422, "Unsupported preference")
@@ -230,6 +242,14 @@ async def save_prefs(body: dict, request: Request):
             normalize_horizon(body["default_horizon"])
         except (ValueError, AttributeError):
             raise HTTPException(422, "Invalid horizon") from None
+    if "ai_settings" in body:
+        model = service(request).model
+        if model is None or not hasattr(model, "validate_settings"):
+            raise HTTPException(503, "AI choices are unavailable")
+        try:
+            body["ai_settings"] = await model.validate_settings(body["ai_settings"])
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
     await storage_result(service(request).repository.save_preferences(identity, body))
     return {"saved": True}
 

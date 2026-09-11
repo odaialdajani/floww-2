@@ -30,7 +30,7 @@ import {
   BUILTIN_SCREENS, PULSE_COLUMNS, PULSE_DEFAULT_COLS,
   parseFeedAlerts, isContextual, stageOf, formatMovePct, targetTravelPct,
   directionOf, ageOf, tradeNowOf, feedBodyOf, oiHeldLabel,
-  scanFreshness,
+  scanFreshness, hasFreshAlertSource, screenDefaultSort,
   moneynessPct, applyScreenToScans, applyScreenToAlerts,
   SCAN_FACTS, SCAN_FACT_LABELS, TICKER_FACTS, TICKER_FACT_LABELS, RULE_LIST,
 } from "./tideFeed";
@@ -133,6 +133,7 @@ export function mapPublicChainToRows(contracts, spot, ticker) {
     const cls = premium >= 5e7 ? "block" : dte <= 2 ? "sweep" : "unusual";
     const p = {
       ticker, type: String(c.type || "").toLowerCase(), classification: cls,
+      osi: c.osi || c.symbol || c.contract_symbol || null,
       strike: Number(c.strike), expiration: c.expiry, timestamp: Date.now(),
       volume: vol, oi, vol_oi_ratio: voi, iv: iv < 1 ? iv * 100 : iv, premium,
     };
@@ -144,6 +145,8 @@ export function mapPublicChainToRows(contracts, spot, ticker) {
   rows.sort((a, b) => b.vol_oi_ratio - a.vol_oi_ratio);
   return rows.slice(0, 100);
 }
+
+const contractIdentity = row => row?.osi || row?.ckey || (row ? [row.under || row.ticker,row.type,row.strike,row.exp || row.expiration].join("|") : null);
 
 function loadPrefs() {
   try {
@@ -241,6 +244,10 @@ export default function FlowseekerProBlademap({ active = true }) {
   const notifyRef = useRef(false);
   const prevTopKeyRef = useRef(null);
   const kbActiveRef = useRef(false);
+  const presentationTimeRef = useRef(Date.now());
+  const holdingPresentation = feedHoverRef.current || feedFocusRef.current || kbActiveRef.current;
+  if (!holdingPresentation) presentationTimeRef.current = Date.now();
+  const presentationTime = presentationTimeRef.current;
   const applyFeed = useCallback((alerts) => {
     const parsed = parseFeedAlerts(alerts);
     setFeedErr(null);
@@ -478,6 +485,19 @@ export default function FlowseekerProBlademap({ active = true }) {
 
   // ---- dealers cell owns its own always-on fetch: never cold on load ----
   const [dealers, setDealers] = useState({ regime: null, heat: null, at: "", err: false, loading: true });
+  const [marketSession, setMarketSession] = useState(null);
+  useEffect(()=>{
+    if(!active)return;
+    let alive=true,inFlight=false;const ctrl=new AbortController();
+    const load=async()=>{
+      if(inFlight)return;inFlight=true;
+      try{const result=await getJSON(`${API}/market-session`,ctrl.signal);if(alive)setMarketSession(result);}
+      catch{if(alive)setMarketSession(null);}
+      finally{inFlight=false;}
+    };
+    load();const timer=setInterval(load,60000);
+    return()=>{alive=false;ctrl.abort();clearInterval(timer);};
+  },[active]);
   useEffect(() => {
     if (!active) return;
     let cancelled = false;
@@ -526,23 +546,28 @@ export default function FlowseekerProBlademap({ active = true }) {
   // ---- trust row ----
   const [calibBands, setCalibBands] = useState([]);
   const [setupStats, setSetupStats] = useState(null);
+  const [trustState,setTrustState]=useState({calibration:"loading",journal:"loading"});
   useEffect(() => {
     if (!active) return;
     let alive = true;
-    fetch(`${API}/alerts/quality?days=30`)
-      .then((r) => (r.ok ? r.json() : null))
+    const ctrl=new AbortController();
+    setTrustState({calibration:"loading",journal:"loading"});
+    fetch(`${API}/alerts/quality?days=30`,{signal:ctrl.signal})
+      .then((r) => {if(!r.ok)throw new Error();return r.json();})
       .then((d) => {
-        if (alive && d) setCalibBands(d.conviction_calibration || []);
+        if(!d || !Array.isArray(d.conviction_calibration))throw new Error();
+        if (alive) {setCalibBands(d.conviction_calibration);setTrustState(s=>({...s,calibration:"ready"}));}
       })
-      .catch(() => {});
-    fetch(`${API}/journal/stats?days=90`)
-      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => {if(alive)setTrustState(s=>({...s,calibration:"unavailable"}));});
+    fetch(`${API}/journal/stats?days=90`,{signal:ctrl.signal})
+      .then((r) => {if(!r.ok)throw new Error();return r.json();})
       .then((d) => {
-        if (alive && d) setSetupStats(d);
+        if(!d || typeof d.overall !== "object")throw new Error();
+        if (alive) {setSetupStats(d);setTrustState(s=>({...s,journal:"ready"}));}
       })
-      .catch(() => {});
+      .catch(() => {if(alive)setTrustState(s=>({...s,journal:"unavailable"}));});
     return () => {
-      alive = false;
+      alive = false;ctrl.abort();
     };
   }, [active, refreshTick]);
 
@@ -553,6 +578,15 @@ export default function FlowseekerProBlademap({ active = true }) {
   const [drillFilter, setDrillFilter] = useState("all");
   const [drillDte, setDrillDte] = useState("all");
   const [drillSel, setDrillSel] = useState(null);
+  useEffect(()=>{
+    const latest=previous=>{
+      if(!previous)return previous;
+      const match=drillRows.find(row=>contractIdentity(row)===contractIdentity(previous));
+      return match || {...previous,_missing:true};
+    };
+    setDrillSel(latest);
+    setSelectedRow(previous=>drillRows.find(row=>contractIdentity(row)===contractIdentity(previous)) || previous);
+  },[drillRows]);
   useEffect(() => {
     if (!active || !drill?.ticker) return;
     const t = drill.ticker;
@@ -560,8 +594,11 @@ export default function FlowseekerProBlademap({ active = true }) {
     setDrillSel(null);
     setDrillState("loading");
     let cancelled = false;
+    let inFlight = false;
     const ctrl = new AbortController();
     const poll = async () => {
+      if (inFlight || cancelled) return;
+      inFlight = true;
       let rows = null;
       try {
         const d = await getJSON(
@@ -621,6 +658,7 @@ export default function FlowseekerProBlademap({ active = true }) {
         }
       }
       if (!cancelled) { setDrillRows(rows || []); setDrillState(rows == null ? "error" : "ready"); }
+      inFlight = false;
     };
     poll();
     const id = setInterval(poll, 15000);
@@ -637,10 +675,11 @@ export default function FlowseekerProBlademap({ active = true }) {
   });
   const lastSeenRef=useRef(visitBaseline);
   useEffect(()=>{
+    if (!active) return;
     const leave=()=>{lastSeenRef.current=Date.now();try{sessionStorage.setItem("th-last-visit",String(lastSeenRef.current));}catch{}};
     const returnToPage=()=>setVisitBaseline(lastSeenRef.current);
     const visibility=()=>document.hidden?leave():returnToPage();
-    if(active)returnToPage();else leave();
+    returnToPage();
     document.addEventListener("visibilitychange",visibility);
     return ()=>{leave();document.removeEventListener("visibilitychange",visibility);};
   },[active]);
@@ -657,6 +696,10 @@ export default function FlowseekerProBlademap({ active = true }) {
   const [showFilters, setShowFilters] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [showCols, setShowCols] = useState(false);
+  const [actionNotice, setActionNotice] = useState("");
+  const [preferencesFailed,setPreferencesFailed]=useState(false);
+  const [pulsePages,setPulsePages]=useState(1);
+  const pulseRowCap = (mode === "trade" ? 8 : mode === "monitor" ? 14 : 30) * pulsePages;
 
   // today's knobs (behind Filters disclosure; active ones surface as chips)
   const [knobType, setKnobType] = useState(prefs.knobType ?? "all");
@@ -681,6 +724,7 @@ export default function FlowseekerProBlademap({ active = true }) {
   const [forcing, setForcing] = useState(false);
   const [kbIdx, setKbIdx] = useState(-1);
   const applyPendingReadings = () => {
+    feedHoverRef.current = false; feedFocusRef.current = false;
     if (pendingFeed) { setFeed(pendingFeed.rows); setFeedReceived(pendingFeed.received); setFeedAt(new Date(pendingFeed.received).toLocaleTimeString()); }
     if (pendingScan) { setScan(pendingScan.rows); setScanMeta(pendingScan.meta); setScanAt(new Date(pendingScan.meta.received).toLocaleTimeString()); }
     setPendingScan(null); setPendingFeed(null); setKbIdx(-1); kbActiveRef.current = false;
@@ -688,7 +732,8 @@ export default function FlowseekerProBlademap({ active = true }) {
   const knobQRef = useRef(null);
   useEffect(() => {
     try { localStorage.setItem("fsb.pollMs", String(pollMs)); localStorage.setItem(PREFS_KEY, JSON.stringify({pollMs, universe, alertScore, notify, alertUnivOnly, screenId, knobType, knobMinVol, knobMinScore, knobQ, knobDteMin, knobDteMax, universeOnly, sortPreset, feedOrder, hiddenRules})); }
-    catch { /* Preference changes remain usable but are not marked saved. */ }
+    catch { setPreferencesFailed(true); return; }
+    setPreferencesFailed(false);
   }, [pollMs, universe, alertScore, notify, alertUnivOnly, screenId, knobType, knobMinVol, knobMinScore, knobQ, knobDteMin, knobDteMax, universeOnly, sortPreset, feedOrder, hiddenRules]);
 
   const ack = useCallback((key) => {
@@ -697,7 +742,7 @@ export default function FlowseekerProBlademap({ active = true }) {
       try {
         localStorage.setItem(ACK_KEY, JSON.stringify(n));
       } catch {
-        /* private mode */
+        setActionNotice("Acknowledgment was not saved. It applies only to this visit.");
       }
       return n;
     });
@@ -718,15 +763,14 @@ export default function FlowseekerProBlademap({ active = true }) {
       };
     }
     for (const alert of feed) {
-      const observed = Date.parse(alert.asof_ts || "");
       const ticker = alert.under || alert.ticker;
       if (String(alert.rule).toUpperCase() === "SIGMA" && Number.isFinite(alert.sigma) &&
-          Number.isFinite(observed) && Date.now() - observed >= 0 && Date.now() - observed <= 900000) {
+          hasFreshAlertSource(alert, presentationTime)) {
         out[ticker] = { ...out[ticker], sigma: alert.sigma };
       }
     }
     return out;
-  }, [scan, history, feed, clock]);
+  }, [scan, history, feed, presentationTime]);
 
   const screenedScans = useMemo(() => {
     let rows = applyScreenToScans(scan, screen, { universe, tickerFacts, alerts: feed });
@@ -816,7 +860,13 @@ export default function FlowseekerProBlademap({ active = true }) {
       });
     } catch { /* Notification support varies by browser. */ }
   }, [tradeNow]);
-  const feedBody = feedBodyOf(visibleFeed, tradeNow);
+  const orderedFeedRef = useRef([]);
+  const pinnedLayoutRef = useRef(false);
+  if (!holdingPresentation) {
+    orderedFeedRef.current = tradeNow ? [tradeNow, ...feedBodyOf(visibleFeed, tradeNow)] : visibleFeed;
+    pinnedLayoutRef.current = !!tradeNow;
+  }
+  const orderedFeed = holdingPresentation ? orderedFeedRef.current.filter(a=>visibleFeed.some(row=>row.key===a.key)) : orderedFeedRef.current;
 
   const heartbeat = useMemo(() => {
     const hb = pulseState({
@@ -839,9 +889,8 @@ export default function FlowseekerProBlademap({ active = true }) {
     const top = roll.slice(0, 3);
     const sigmas = {};
     for (const a of screenedFeed) {
-      const observed=Date.parse(a.asof_ts || "");
       if (String(a.rule || "").toUpperCase() === "SIGMA" && Number.isFinite(a.sigma) &&
-          Number.isFinite(observed) && Date.now()-observed>=0 && Date.now()-observed<=900000) sigmas[a.under || a.ticker] = a.sigma;
+          hasFreshAlertSource(a)) sigmas[a.under || a.ticker] = a.sigma;
     }
     return { roll, top, sigmas };
   }, [screenedScans, screenedFeed,clock]);
@@ -858,9 +907,11 @@ export default function FlowseekerProBlademap({ active = true }) {
     const flip = finite(dealers.heat?.gamma_flip?.gamma_flip);
     const spot = finite(dealers.heat?.spot);
     const dist = spot != null && flip != null && flip > 0 ? (spot - flip) / flip * 100 : null;
-    const total = reg.total_gex;
+    const total = finite(dealers.heat?.gamma_flip?.total_gex);
+    const regimeTime = typeof reg.asof === "string" && Number.isFinite(Date.parse(reg.asof)) ? reg.asof : "unavailable";
+    const regimeSource = `Regime is a separate reading; response time ${regimeTime}. Its market observation time is not verified against this map.`;
     const short = total != null ? total < 0 : null;
-    return { reg, flip, dist, total, short, at: dealers.at, err: dealers.err };
+    return { reg, flip, dist, total, short, regimeSource, at: dealers.at, err: dealers.err };
   }, [dealers]);
 
   // ---- market tape: one line under the cards ----
@@ -888,9 +939,9 @@ export default function FlowseekerProBlademap({ active = true }) {
   // ---- actions ----
   const doDrill = useCallback((row) => {
     const ticker = typeof row === "string" ? row : row?.under || row?.ticker;
-    setSelectedRow(typeof row === "object" ? row : null);
+    setSelectedRow(previous=>typeof row === "object" ? row : ticker === focusTicker ? previous : null);
     if (ticker) setFocusTicker(ticker);
-    setDrill({ ticker });
+    setDrill(previous=>previous?.ticker === ticker ? previous : {ticker});
     setDrillSel(null);
     if (mode === "monitor") setMode("trade");
     setTimeout(() => {
@@ -898,7 +949,7 @@ export default function FlowseekerProBlademap({ active = true }) {
       panel?.scrollIntoView?.({ block: "nearest" });
       panel?.focus();
     }, 0);
-  }, [mode]);
+  }, [mode, focusTicker]);
   const doWatch = useCallback((ticker) => {
     if (!ticker) return;
     setUniverse((u) => (u.includes(ticker) ? u : [...u, ticker]));
@@ -932,13 +983,22 @@ export default function FlowseekerProBlademap({ active = true }) {
   }, []);
   const forceRefresh = useCallback(async () => {
     setForcing(true);
+    const controller = new AbortController();
+    let timer;
     try {
-      await fetch(`${API}/scan/refresh?limit=300`, { method: "POST" });
+      const response = await Promise.race([
+        fetch(`${API}/scan/refresh?limit=300`, { method: "POST", signal: controller.signal }),
+        new Promise((_, reject) => { timer=setTimeout(()=>{controller.abort();reject(new Error("timeout"));},15000); }),
+      ]);
+      if (!response.ok) throw new Error("rejected");
+      setActionNotice("Refresh requested. Checking the latest available reading.");
     } catch {
-      /* GET below serves cache */
+      setActionNotice("Refresh failed or timed out. Showing the latest available reading.");
+    } finally {
+      clearTimeout(timer);
+      setForcing(false);
+      setRefreshTick((t) => t + 1);
     }
-    setForcing(false);
-    setRefreshTick((t) => t + 1);
   }, []);
   const exportCSV = useCallback((rows) => {
     const blob = new Blob([scanRowsToCSV(rows)], { type: "text/csv" });
@@ -950,27 +1010,29 @@ export default function FlowseekerProBlademap({ active = true }) {
   }, []);
   const toggleNotify = useCallback(async () => {
     if (!notify) {
-      if (!("Notification" in window)) return;
+      if (!("Notification" in window)) { setActionNotice("Notifications are unavailable in this browser."); return; }
       let perm = Notification.permission;
       if (perm === "default") {
         try {
           perm = await Notification.requestPermission();
         } catch {
-          return;
+          setActionNotice("Notification permission could not be checked."); return;
         }
       }
-      if (perm !== "granted") return;
+      if (perm !== "granted") { setActionNotice("Notifications are blocked. Allow them in browser settings to use this option."); return; }
     }
     setNotify((n) => !n);
+    setActionNotice(notify ? "Notifications turned off." : "Notifications turned on.");
   }, [notify]);
-  const copyFeed = useCallback(() => {
+  const copyFeed = useCallback(async () => {
     const tsv = visibleFeed
       .map((a) => [a.asof_ts || "", a.rule, a.under || a.ticker, a.type, a.strike, a.exp, a.conviction ?? "", a.bias || "", a.why || ""].join("\t"))
       .join("\n");
     try {
-      navigator.clipboard.writeText(tsv);
+      await navigator.clipboard.writeText(tsv);
+      setActionNotice("Feed copied.");
     } catch {
-      /* clipboard blocked */
+      setActionNotice("Copy failed. Browser clipboard access is unavailable.");
     }
   }, [visibleFeed]);
   const clearDismissed = useCallback(() => {
@@ -978,14 +1040,14 @@ export default function FlowseekerProBlademap({ active = true }) {
     try {
       localStorage.removeItem(ACK_KEY);
     } catch {
-      /* noop */
+      setActionNotice("Restore was not saved. It applies only to this visit.");
     }
   }, []);
   const clearFeed=useCallback(()=>{
     const next={...clearedFeed};
     for(const alert of visibleFeed)next[alert.key]=Date.parse(alert.asof_ts || "") || Date.now();
     setClearedFeed(next);
-    try{localStorage.setItem(CLEARED_FEED_KEY,JSON.stringify(next));}catch{/* Display clear still works for this visit. */}
+    try{localStorage.setItem(CLEARED_FEED_KEY,JSON.stringify(next));}catch{setActionNotice("Clear was not saved. It applies only to this visit.");}
   },[clearedFeed,visibleFeed]);
 
   // ---- screen CRUD (built-ins are editable copies) ----
@@ -998,6 +1060,7 @@ export default function FlowseekerProBlademap({ active = true }) {
     if (!saveTide({ screens: list })) { window.alert("Screen could not be saved."); return; }
     setTide((t) => ({ ...t, screens: list }));
     setScreenId(s.id);
+    setSortPreset(screenDefaultSort(s));
     setEditingScreen(null);
   }, []);
   const deleteCustomScreen = useCallback((id) => {
@@ -1037,7 +1100,7 @@ export default function FlowseekerProBlademap({ active = true }) {
         forceRefresh();
         return;
       }
-      const n = screenedScans.length;
+      const n = Math.min(screenedScans.length, pulseRowCap);
       if (!n) return;
       if (e.key === "j" || e.key === "ArrowDown") {
         e.preventDefault();
@@ -1064,11 +1127,11 @@ export default function FlowseekerProBlademap({ active = true }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, screenedScans, kbIdx, forceRefresh, doDrill]);
+  }, [active, screenedScans, pulseRowCap, kbIdx, forceRefresh, doDrill]);
   useEffect(() => {
     setKbIdx(-1);
     kbActiveRef.current = false;
-  }, [screenId, knobQ]);
+  }, [screenId, knobQ, pulseRowCap]);
 
   const sortScan = (k) => {
     setSortPreset((s) => {
@@ -1079,7 +1142,16 @@ export default function FlowseekerProBlademap({ active = true }) {
   };
 
   // The map and detail consume one displayed scope and preserve missing cells.
-  const dealerData = useMemo(() => dealerSeries(dealers.heat, dealersFacts.flip), [dealers.heat, dealersFacts.flip]);
+  const dealerData = useMemo(() => {
+    const selectedExpiry=selectedRow?.exp || selectedRow?.expiration;
+    const eligible=(dealers.heat?.grid?.expiries || []).filter(expiry=>{
+      const days=dteDays(expiry);
+      return (!selectedExpiry || expiry===selectedExpiry) &&
+        (knobDteMin == null || (days != null && days >= knobDteMin)) &&
+        (knobDteMax == null || (days != null && days <= knobDteMax));
+    });
+    return dealerSeries(dealers.heat, dealersFacts.flip, 14, eligible);
+  }, [dealers.heat, dealersFacts.flip, selectedRow, knobDteMin, knobDteMax, clock]);
   const sourceTime = dealers.heat?.event_time || dealers.heat?.observed_at;
   const sourceMs = sourceTime ? Date.parse(sourceTime) : NaN;
   const dealerStale = !!dealers.heat?.stale || !Number.isFinite(sourceMs) || Date.now() - sourceMs > 120000 || sourceMs-Date.now()>30000;
@@ -1095,7 +1167,7 @@ export default function FlowseekerProBlademap({ active = true }) {
     return { expiries:dealerData.expiries,strikes:dealerData.strikes,val:dealerData.valueAt,cls,
       spot:dealerData.spot,callWall:h.nodes?.ceilings?.[0]?.strike ?? null,
       putWall:h.nodes?.floors?.[0]?.strike ?? null,maxPain:h.max_pain ?? h.nodes?.max_pain ?? null,
-      ok:dealerData.hasData };
+      ok:cellValues.length > 0 };
   }, [dealers.heat,dealerData]);
 
   useEffect(()=>{
@@ -1103,6 +1175,7 @@ export default function FlowseekerProBlademap({ active = true }) {
     publishScreenContext({page:"flowseeker-pro",ticker:focusTicker,dte:"all",mode,
       selectedContract:selectedRow?.osi || selectedRow?.ckey || null,
       selectedExpiry:selectedRow?.exp || selectedRow?.expiration || null,selectedStrike:selectedRow?.strike ?? null,
+      selectedType:selectedRow?.type || null,
       expiryRange:[knobDteMin,knobDteMax],expiries:dealerData.expiries,
       metric:"gex",mapQuery:dealers.heat?.map_query || null,
       mapVersion:dealers.heat?.asof || null,mapStrikes:dealerData.strikes,mapExpiries:dealerData.expiries,
@@ -1140,7 +1213,6 @@ export default function FlowseekerProBlademap({ active = true }) {
   if (universeOnly) activeChips.push(["Universe", `${universe.length} names`,()=>setUniverseOnly(false)]);
 
   const sectionOrder = tide.sectionOrder || ["board", "vector", "pulse", "lattice", "trust"];
-  const pulseRowCap = mode === "trade" ? 8 : mode === "monitor" ? 14 : 30;
   const feedCap = mode === "research" ? 5 : mode === "monitor" ? 6 : 8;
 
   const renderVerdictRow = (a, pinned = false) => {
@@ -1152,13 +1224,13 @@ export default function FlowseekerProBlademap({ active = true }) {
     return (
       <tr
         key={a.key}
-        className={`${pinned ? "pinned" : ""} ${ctx ? "contextual" : dir.cls}`}
+        className={`${pinned ? "pinned" : ""} ${ctx ? "contextual" : dir.cls} ${selectedRow?.key === a.key ? "sel" : ""}`}
         data-testid={pinned ? "trade-now-row" : undefined}
         onClick={ctx ? undefined : () => doDrill(a)}
         title={ctx ? (a.why || a.rule) : `${a.why || a.rule} — click to drill ${a.under || a.ticker}`}
       >
         <td className="l">
-          <span className="sym">{a.under || a.ticker}</span>
+          <button type="button" className="sym" onClick={event=>{event.stopPropagation();doDrill(a);}}>{a.under || a.ticker}</button>
           {pinned && <span className="sub">pinned · trade now</span>}
           {!pinned && a.rule && <span className="sub">{a.rule}</span>}
         </td>
@@ -1227,7 +1299,7 @@ export default function FlowseekerProBlademap({ active = true }) {
           {ctx || a.move_pct == null ? <span className="lo">—</span> : (
             <>{formatMovePct(a.move_pct)}{travel != null && <span className="sub"> {travel}% of target</span>}</>
           )}
-          <span className="sub" style={{ display: "block" }}>{ageOf(a)} ago</span>
+          <span className="sub" style={{ display: "block" }}>Computed {ageOf(a)} ago · {a.context?.source_event_time ? "source time supplied" : "source time unknown"}</span>
         </td>
       </tr>
     );
@@ -1237,7 +1309,7 @@ export default function FlowseekerProBlademap({ active = true }) {
     switch (key) {
       case "firstSeen": return <span className="fsb-sub">{fmtClock(r.firstSeen)}{r._new && " ·new"}</span>;
       case "under": return <span className="sym">{r.under}</span>;
-      case "strike": return r.strike % 1 === 0 ? r.strike.toFixed(0) : r.strike.toFixed(1);
+      case "strike": return Number.isFinite(r.strike) ? String(r.strike) : "—";
       case "type": return String(r.type || "").toUpperCase();
       case "exp": return (r.exp || "").slice(5);
       case "dte": return r.dte == null ? "—" : `${r.dte}d`;
@@ -1303,6 +1375,7 @@ export default function FlowseekerProBlademap({ active = true }) {
 
         <div className="th-content">
           <div className="th-topbar">
+            <span className="th-pill">Market {marketSession?.session_state || "state unavailable"}</span>
             <label className="th-pill" title="Focused ticker — drives the Dealers cell and Lattice">
               <span className="k">Ticker</span>
               <select
@@ -1378,7 +1451,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                     <>
                       <span className="v">
                         {visibleFeed.length && bestFeed
-                          ? `No eligible trade · highest reading ${bestFeed.conviction} ${bestFeed.under || bestFeed.ticker || ""}`
+                          ? `No eligible trade with verified fresh data · highest reading ${finite(bestFeed.conviction) == null ? "conviction unavailable" : bestFeed.conviction} ${bestFeed.under || bestFeed.ticker || ""}`
                           : "No unacknowledged signals in this screen"}
                       </span>
                       <span className="f">{feedErr || `${scan.length} contracts screened · needs a fresh, complete contract and ${TRADE_NOW_FLOOR}+ conviction`}</span>
@@ -1425,6 +1498,8 @@ export default function FlowseekerProBlademap({ active = true }) {
                         ))}
                       </span>
                       <span className="f">premium is an estimate · σ from server SIGMA alerts only</span>
+                      <span className="f">Market observation age unknown · scan retrieved {elapsedScanAge == null ? "at an unknown time" : `${elapsedClock(elapsedScanAge)} ago`}</span>
+                      <span className="f">History and streaks cover the full ticker; premium covers the current screen.</span>
                     </>
                   ) : (
                     <><span className="v">No concentration read yet</span><span className="f">waiting on the market-wide scan</span></>
@@ -1439,13 +1514,14 @@ export default function FlowseekerProBlademap({ active = true }) {
                   <span className="s">{changedFacts.feedNew} alerts · {changedFacts.scope} new screened contracts</span>
                   {limitedScan && <span className="f warn">{limitedScan}</span>}
                   <span className="f">Current screen only · re-arms on return</span>
+                  <span className="f">Market observation age unknown · counts use when readings were computed or first seen.</span>
                   {degradedLine && <span className="f warn">{degradedLine}</span>}
                 </button>
 
                 <button type="button" className="th-ans" data-testid="cell-dealers" onClick={() => doDrill(focusTicker)}>
                   <span className="q"><span className="lbl">Dealers · {focusTicker}</span><span className="tag">focused</span></span>
                   {dealersFacts.err ? (
-                    <><span className="v">{focusTicker} · {dealers.loading ? "GEX loading…" : "dealer data unavailable"}</span><span className="f">regime + heatmap fetch in flight</span></>
+                    <><span className="v">{focusTicker} · {dealers.loading ? "GEX loading…" : "dealer data unavailable"}</span><span className="f">{dealers.loading ? "Loading regime and heatmap" : "The latest request did not return usable dealer data"}</span></>
                   ) : (
                     <>
                       <span className="v">
@@ -1461,6 +1537,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                       <span className="f">display-scale gamma · refreshed {dealersFacts.at || "—"}</span>
                     </>
                   )}
+                  <span className="f">{dealersFacts.regimeSource}</span>
                   {dealerStale && <span className="f warn">Dealer source is stale or its observation time is unknown</span>}
                 </button>
               </div>
@@ -1490,10 +1567,10 @@ export default function FlowseekerProBlademap({ active = true }) {
                   <button
                     key={s.id} type="button" role="tab" aria-selected={screenId === s.id}
                     aria-pressed={screenId === s.id}
-                    onClick={() => setScreenId(s.id)}
+                    onClick={() => {setScreenId(s.id);setSortPreset(screenDefaultSort(s));}}
                   >
                     {s.label}
-                    <small>{s.custom ? applyScreenToScans(scan, s, { universe, tickerFacts }).length : ""}</small>
+                    <small>{s.custom ? applyScreenToScans(scan, s, { universe, tickerFacts, alerts:feed }).length : ""}</small>
                   </button>
                 ))}
               </div>
@@ -1522,7 +1599,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                     <input type="checkbox" checked={universeOnly} onChange={(e) => setUniverseOnly(e.target.checked)} /> My universe
                   </label>
                   <input
-                    className="w170" defaultValue={universe.join(",")} placeholder="Universe…"
+                    key={universe.join(",")} className="w170" defaultValue={universe.join(",")} placeholder="Universe…"
                     title="Comma-separated tickers"
                     onBlur={(e) => {
                       const u = (e.target.value || "").toUpperCase().split(/[,\s]+/).filter(Boolean);
@@ -1533,7 +1610,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                   <input className="w70" type="number" min="50" max="100" value={alertScore} onChange={(e) => setAlertScore(Math.max(50, Math.min(100, parseInt(e.target.value, 10) || 85)))} />
                   <span className="th-brk" />
                   <span className="lbl">Sort</span>
-                  {[["Top score", { key: "score", dir: "desc" }], ["Big money", { key: "notional", dir: "desc" }],
+                  {[["Top score", { key: "score", dir: "desc" }], ["Big money", { key: "premium", dir: "desc" }],
                     ["Unusual", { key: "volOI", dir: "desc" }], ["Short fuse", { key: "dte", dir: "asc" }],
                     ["New arrivals", { key: "firstSeen", dir: "desc" }]].map(([l, s]) => (
                     <button key={l} type="button" className={`th-chipb${sortPreset.key === s.key && sortPreset.dir === s.dir ? " on" : ""}`} onClick={() => setSortPreset(s)}>{l}</button>
@@ -1580,12 +1657,15 @@ export default function FlowseekerProBlademap({ active = true }) {
               )}
               {editingScreen && (
                 <ScreenBuilder
+                  key={editingScreen.id || "new-screen"}
                   initial={editingScreen}
                   onSave={saveCustomScreen}
                   onDelete={deleteCustomScreen}
                   onCancel={() => setEditingScreen(null)}
                 />
               )}
+              {actionNotice && <p role="status">{actionNotice}</p>}
+              {preferencesFailed && <p role="alert">These preference changes could not be saved. They will be lost on reload.</p>}
             </div>
 
               </React.Fragment>);
@@ -1612,9 +1692,8 @@ export default function FlowseekerProBlademap({ active = true }) {
                       onFocusCapture={() => { feedFocusRef.current = true; }}
                       onBlurCapture={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) feedFocusRef.current = false; }}
                     >
-                      {withheld ? (
-                        <div className="th-empty">Verdict withheld · {withheld}</div>
-                      ) : visibleFeed.length === 0 ? (
+                      {withheld && <div className="th-empty">Verdict withheld · {withheld}</div>}
+                      {withheld && !holdingPresentation ? null : visibleFeed.length === 0 ? (
                         <div className="th-empty">{feedErr || "No signals in this screen yet — verdict feed is polling."}</div>
                       ) : (
                         <table>
@@ -1624,8 +1703,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                             <th>Price</th><th>Invalidation</th><th>Target</th><th>Moved</th>
                           </tr></thead>
                           <tbody>
-                            {tradeNow && renderVerdictRow(tradeNow, true)}
-                            {feedBody.slice(0, showHistory ? 50 : feedCap).map((a) => renderVerdictRow(a))}
+                            {orderedFeed.slice(0, showHistory ? 50 : feedCap + (pinnedLayoutRef.current ? 1 : 0)).map((a) => renderVerdictRow(a, a.key === tradeNow?.key))}
                           </tbody>
                         </table>
                       )}
@@ -1645,6 +1723,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                       <h2>Pulse</h2>
                       <span className="th-meta"><b>{scanState.status}</b> screened contracts · {screenedScans.length} of {scan.length} · {screen.label}{limitedScan && ` · ${limitedScan}`}</span>
                       <span className="th-sp" />
+                      {holdingPresentation && <span className="th-meta">Row positions held while you interact; age labels keep updating.</span>}
                       {(pendingFeed || pendingScan) && <button type="button" className="th-chipb on" onClick={applyPendingReadings}>Apply new readings</button>}
                       <button type="button" className="th-chipb" aria-pressed={showCols} onClick={() => setShowCols((v) => !v)}>
                         Columns · {visibleCols.length} of {PULSE_COLUMNS.length}
@@ -1673,7 +1752,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                     <div className="th-tbl" data-testid="pulse-table" onMouseEnter={() => { feedHoverRef.current = true; }} onMouseLeave={() => { feedHoverRef.current = false; }} onFocusCapture={() => { feedFocusRef.current = true; }} onBlurCapture={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) feedFocusRef.current = false; }}>
                       {scan.length === 0 ? (
                         <div className="th-empty">
-                          {scanMeta.err ? "Scan unreachable — backend /scan failing, retrying." : "Scanning market flow…"}
+                          {scanMeta.err ? "Scan unavailable; retrying." : scanMeta.mode ? "No contracts were returned by the current scan." : "Scanning market flow…"}
                           {scanMeta.retry ? ` Next slot in ${elapsedClock(scanMeta.retry)}.` : ""}
                         </div>
                       ) : screenedScans.length === 0 ? (
@@ -1682,8 +1761,10 @@ export default function FlowseekerProBlademap({ active = true }) {
                         <table className="th-stab">
                           <thead><tr>
                             {PULSE_COLUMNS.filter((c) => visibleCols.includes(c.key)).map((c) => (
-                              <th key={c.key} className={`l${sortPreset.key === c.key ? " on" : ""}`} onClick={() => sortScan(c.key)}>
+                              <th key={c.key} className={`l${sortPreset.key === c.key ? " on" : ""}`} aria-sort={sortPreset.key === c.key ? (sortPreset.dir === "desc" ? "descending" : "ascending") : "none"}>
+                                <button type="button" onClick={() => sortScan(c.key)}>
                                 {c.label}{sortPreset.key === c.key ? (sortPreset.dir === "desc" ? " ▾" : " ▴") : ""}
+                                </button>
                               </th>
                             ))}
                           </tr></thead>
@@ -1693,14 +1774,16 @@ export default function FlowseekerProBlademap({ active = true }) {
                               const isTop = i === 0 && sortPreset.key === "score" && sortPreset.dir === "desc" && (r.score ?? 0) >= 90;
                               return (
                                 <tr
-                                  key={`${r.under}-${r.strike}-${r.type}-${r.exp}-${i}`}
-                                  className={`${kbIdx === i ? "kbcursor " : ""}${isTop ? "top" : ""}${r._new ? "new" : ""}`}
+                                  key={contractIdentity(r)}
+                                  className={`${kbIdx === i ? "kbcursor " : ""}${isTop ? "top " : ""}${r._new ? "new " : ""}${selectedRow?.osi && selectedRow.osi===r.osi ? "sel" : ""}`}
+                                  tabIndex={0} aria-label={`Open ${r.under} ${r.strike} ${r.type} ${r.exp}`}
                                   onClick={() => doDrill(r)}
+                                  onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); doDrill(r); } }}
                                 >
                                   {PULSE_COLUMNS.filter((c) => visibleCols.includes(c.key)).map((c) => (
                                     <td key={c.key} className={c.key === "score" ? scoreGradeOf(r.score) : ""}>
                                       {c.key === "firstSeen" && r._new ? <span className="th-newdot" title="New this refresh" /> : null}
-                                      {pulseCell(r, c.key)}
+                                      {c.key === "under" ? <button type="button" onClick={(event) => { event.stopPropagation(); doDrill(r); }}>{pulseCell(r, c.key)}</button> : pulseCell(r, c.key)}
                                       {c.key === "under" && (
                                         <span className="sub"> {(r.exp || "").slice(5)}{isCall ? " · CALL" : " · PUT"}</span>
                                       )}
@@ -1713,6 +1796,9 @@ export default function FlowseekerProBlademap({ active = true }) {
                         </table>
                       )}
                       <div className="th-tblfoot">
+                        <span>Showing {Math.min(screenedScans.length,pulseRowCap)} of {screenedScans.length}</span>
+                        {screenedScans.length > pulseRowCap && <button type="button" onClick={()=>setPulsePages(p=>p+1)}>Show more contracts</button>}
+                        {pulsePages > 1 && <button type="button" onClick={()=>setPulsePages(1)}>Show fewer contracts</button>}
                         <span><kbd>j</kbd><kbd>k</kbd> move</span><span><kbd>Enter</kbd> drill</span>
                         <span><kbd>/</kbd> ticker</span><span><kbd>r</kbd> force refresh</span>
                         <span>ΔOI held = positioning stuck · faded = intraday churn</span>
@@ -1729,6 +1815,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                       <span className="th-meta"><b>{dealers.loading ? "LOADING" : dealersFacts.err ? "UNAVAILABLE" : dealerStale ? "STALE / TIME UNKNOWN" : "AVAILABLE"}</b> dealer positioning · display-scale gamma · refreshed {dealersFacts.at || "—"}</span>
                     </div>
                     <div className="th-lat" data-testid="lattice">
+                      <p>{dealersFacts.regimeSource}</p>
                       <div className="th-lath">
                         <div className="th-chips">
                           <span className="th-mchip">Spot<b>{lattice.spot ?? "—"}</b></span>
@@ -1774,7 +1861,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                       ) : (
                         <div className="th-empty">{focusTicker} · {dealers.loading ? "GEX loading…" : "dealer data unavailable"}</div>
                       )}
-                    <DealerDrilldown ticker={focusTicker} series={dealerData} regime={dealersFacts.reg} loading={dealers.loading} error={dealers.err} stale={dealerStale} colorBlind={cbMode} />
+                    {mode !== "monitor" && <DealerDrilldown ticker={focusTicker} series={dealerData} regime={dealersFacts.reg} loading={dealers.loading} error={dealers.err} stale={dealerStale} colorBlind={cbMode} selectedExpiry={selectedRow?.exp || selectedRow?.expiration} />}
                       <div className="th-drill" data-testid="drill">
                         <div className="th-drill-h">
                           <span>Drill · {drill?.ticker || focusTicker} available options activity</span>
@@ -1806,10 +1893,10 @@ export default function FlowseekerProBlademap({ active = true }) {
                                 <th>DTE</th><th>Day $</th><th>V/OI</th><th>Conv</th>
                               </tr></thead>
                               <tbody>
-                                {drillFiltered.slice(0, 40).map((p, i) => (
+                                {drillFiltered.slice(0, 40).map((p) => (
                                   <tr
-                                    key={`${p.ticker}-${p.timestamp}-${i}`}
-                                    className={drillSel === p ? "sel" : ""}
+                                    key={contractIdentity(p)}
+                                    className={contractIdentity(drillSel) === contractIdentity(p) ? "sel" : ""}
                                     tabIndex={0}
                                     onClick={() => { setDrillSel(p); setSelectedRow(p); }}
                                     onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); ev.stopPropagation(); setDrillSel(p); setSelectedRow(p); } }}
@@ -1817,7 +1904,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                                     <td className="l sym">{p.ticker}</td>
                                     <td className="l lo">{String(p.classification || "—").toUpperCase()}</td>
                                     <td className={`l ${String(p.type).toLowerCase().startsWith("c") ? "up" : "dn"}`}>{String(p.type).toUpperCase()}</td>
-                                    <td>{Number(p.strike).toFixed(0)}</td>
+                                    <td>{String(p.strike)}</td>
                                     <td>{dteOf(p.expiration)}d</td>
                                     <td>{fmtMoney(p.premium)}</td>
                                     <td>{Number(p.vol_oi_ratio || 0).toFixed(1)}</td>
@@ -1832,7 +1919,8 @@ export default function FlowseekerProBlademap({ active = true }) {
                         )}
                         {drillSel && (
                           <div className="th-sel">
-                            <b>{drillSel.ticker} ${Number(drillSel.strike).toFixed(0)} {String(drillSel.type).toUpperCase()}</b>
+                            <b>{drillSel.ticker} ${String(drillSel.strike)} {String(drillSel.type).toUpperCase()}</b>
+                            {drillSel._missing && <span>Selected contract is absent from the latest activity refresh; showing its saved reading.</span>}
                             <span> conviction {drillSel._conv}/99 = pattern {drillSel._cd.pat} + size {drillSel._cd.size} + unusualness {drillSel._cd.stat} + urgency {drillSel._cd.urg}</span>
                             <span> classification {drillSel.classification} · vol/OI {Number(drillSel.vol_oi_ratio || 0).toFixed(1)}x · est. notional {fmtMoney(drillSel.premium)}</span>
                           </div>
@@ -1856,6 +1944,8 @@ export default function FlowseekerProBlademap({ active = true }) {
                       <span className="th-meta">hit = moved ≥0.5% in the claimed direction · 30-day window · journal 90 days</span>
                     </div>
                     <div className="th-stats" data-testid="trust-row">
+                      {trustState.calibration !== "ready" && <p role="status">Alert results {trustState.calibration}. Any retained figures are from an earlier refresh.</p>}
+                      {trustState.journal !== "ready" && <p role="status">Journal results {trustState.journal}. Any retained figures are from an earlier refresh.</p>}
                       {(calibBands.length ? calibBands : [{ band: "<50" }, { band: "50-59" }, { band: "60-74" }, { band: "75+" }]).map((b) => {
                         const thin = (b.n_measured ?? 0) < 10;
                         return (
@@ -1867,7 +1957,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                         );
                       })}
                       {setupStats && setupStats.overall?.n > 0
-                        ? Object.entries(setupStats.by_setup || {}).slice(0, 2).map(([name, s]) => {
+                        ? Object.entries(setupStats.by_setup || {}).map(([name, s]) => {
                           const n = (s.wins ?? 0) + (s.losses ?? 0);
                           return (
                             <div key={name} className={`th-stat${n < 10 ? " thin" : ""}`} title={`journal 90d · ${name}: ${s.wins}W/${s.losses}L${s.avg_return != null ? `, avg ${(s.avg_return * 100).toFixed(1)}%` : ""}`}>
@@ -1880,7 +1970,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                         : (
                           <div className="th-stat thin" title="no closed journaled trades in 90d">
                             <span className="lbl">Journal</span>
-                            <b>—<small>no closed trades</small></b>
+                            <b>—<small>{trustState.journal === "ready" ? "no closed trades" : "journal results unavailable"}</small></b>
                             <span className="bar"><i style={{ width: "0%" }} /></span>
                           </div>
                         )}

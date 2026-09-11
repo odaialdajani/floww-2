@@ -8,30 +8,16 @@ import re
 from datetime import UTC, datetime, timedelta
 
 from services.agent.access.horizon import horizon_window
+from services.agent.answer_sections import build_answer_sections, merge_history_section
 from services.agent.contracts import INTERPRETATIONS, finite, validate_model_answer
-from services.agent.narrative import explain_snapshot, request_limit
+from services.agent.narrative import request_limit
 from services.agent.saved_history import history_facts
 
 
 def deterministic_answer(snapshots, spec):
     facts = [f for s in snapshots for f in s["facts"]]
     gaps = list(dict.fromkeys(g for s in snapshots for g in s["gaps"]))
-    sections = []
-    for snapshot in snapshots:
-        scalar = [f for f in snapshot["facts"] if finite(f["value"])]
-        text = "; ".join(
-            f"{f['metric']}: {f['value']:,.4g} {f['unit']} ({f['status']}; observed {f['event_time'] or 'time unknown'})"
-            for f in scalar
-        )
-        sections.append(
-            dict(
-                name=snapshot["ticker"],
-                text=(text + ". " + explain_snapshot(snapshot)).strip()
-                if text
-                else "No usable readings are available.",
-                fact_ids=[f["id"] for f in snapshot["facts"]],
-            )
-        )
+    sections = build_answer_sections(snapshots, spec)
     if spec.get("context_conflict"):
         gaps.append("The question names a different ticker from the selected screen; screen contract was not reused")
     if spec.get("question_scope") is not None:
@@ -87,6 +73,11 @@ class ResearchService:
             existing = await self.repository.turns.find_one({"owner": owner, "request_id": request_id})
             if existing is None and len(self.tasks) >= self.capacity:
                 raise OverflowError("Research queue is full")
+            if (existing is None and not spec.get("price_only") and self.model is not None
+                    and hasattr(self.model, "settings_for")):
+                spec = {**spec, "ai_settings": await self.model.settings_for(owner)}
+            elif existing is not None and "ai_settings" in existing.get("spec", {}):
+                spec = {**spec, "ai_settings": existing["spec"]["ai_settings"]}
             doc, created = await self.repository.admit(owner, request_id, spec)
             if created:
                 task = asyncio.create_task(self._work(owner, doc["turn_id"], spec))
@@ -154,13 +145,7 @@ class ResearchService:
                                 text += f". Price change: {change['value']:+,.4g} {change['unit']}."
                             else:
                                 answer["gaps"].append(note)
-                            answer["sections"].append(
-                                {
-                                    "name": f"{snapshot['ticker']} history",
-                                    "text": text,
-                                    "fact_ids": [item["id"] for item in more],
-                                }
-                            )
+                            merge_history_section(answer, snapshot["ticker"], text, more, snapshot.get("horizon", "all"))
                     if (
                         not spec.get("price_only")
                         and self.model is not None
@@ -186,7 +171,7 @@ class ResearchService:
         repaired = False
         history_note = None
         answer["usage"] = []
-        for _ in range(3):
+        for _ in range(1 if getattr(self.model, "single_attempt", False) else 3):
             if not await self.repository.progress(
                 owner, turn_id, "Checking an interpretation against the saved evidence"
             ):
@@ -198,6 +183,7 @@ class ResearchService:
                 allow_inspect=not inspected,
                 history_note=history_note,
                 repair=repaired,
+                **({"owner": owner, "settings": spec["ai_settings"]} if "ai_settings" in spec else {}),
             )
             answer["usage"].append(
                 {
@@ -210,6 +196,7 @@ class ResearchService:
                         "model",
                         "provider",
                         "policy_version",
+                        "effort", "speed", "tokens",
                     )
                     if k in result
                 }
@@ -236,8 +223,13 @@ class ResearchService:
                         )
                         existing = {f["id"] for f in answer["facts"]}
                         answer["facts"].extend(f for f in more if f["id"] not in existing)
+                        text = history_note
+                        if more:
+                            change = more[-1]
+                            text += f". Price change: {change['value']:+,.4g} {change['unit']}."
                         if not more:
                             answer["gaps"].append(history_note)
+                        merge_history_section(answer, snapshot["ticker"], text, more, snapshot.get("horizon", "all"))
                         continue
                 else:
                     try:
@@ -253,6 +245,7 @@ class ResearchService:
                         ]
                         answer["mode"] = "model-assisted"
                         answer["model_relationships"] = checked["relationship_text"]
+                        answer["model_explanations"] = checked["explanations"]
                         answer["model_status"] = (
                             "Checked interpretation; quantitative readings remain the saved evidence"
                         )
@@ -263,7 +256,9 @@ class ResearchService:
             if result["status"] != "invalid" or repaired:
                 return
             repaired = True
-        answer["model_status"] = "Model work limit reached; showing the deterministic reading"
+        # Preserve the actual refusal reason on single-attempt providers. A
+        # rejected comparison is not a quota exhaustion or transport failure.
+        answer.setdefault("model_status", "Model work limit reached; showing the deterministic reading")
 
     async def cancel(self, owner, turn_id):
         won = await self.repository.finish(owner, turn_id, "cancelled", error="Cancelled by you")

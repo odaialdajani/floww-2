@@ -511,19 +511,21 @@ def build_context(r: dict, factors: dict) -> dict:
                      else "POSITIVE_GAMMA" if regime == "positive"
                      else "UNKNOWN")
     if regime == "negative":
-        dealer = ("Net short gamma â€” dealer hedging amplifies moves; "
-                  "flows in this regime tend to chase")
+        dealer = ("Estimated net short gamma - hedging may amplify moves; "
+                  "actual dealer holdings are not observed")
     elif regime == "positive":
-        dealer = ("Net long gamma â€” dealer hedging dampens moves; "
-                  "flows mean-revert toward walls")
+        dealer = ("Estimated net long gamma - hedging may dampen moves; "
+                  "actual dealer holdings are not observed")
     else:
         dealer = "Dealer positioning unknown (no GEX context for ticker)"
     vol = r.get("vol") or 0
     premium = r.get("premium") or 0
     vol_oi = r.get("vol_oi") or 0
-    summary = (f"{r.get('type', 'call').capitalize()} print: {vol:,} contracts "
-               f"vs {int(vol_oi * 100):,} resting OI ({vol_oi:.1f}أ—), "
-               f"~${premium / 1e6:.2f}M premium, {r.get('dte')} DTE")
+    oi = _f(r.get("oi"))
+    oi_text = f"{oi:,.0f} open interest ({vol_oi:.1f}x)" if oi is not None and oi > 0 else "open interest unavailable"
+    summary = (f"{r.get('type', 'call').capitalize()} session volume: {vol:,.0f} contracts "
+               f"vs {oi_text}, "
+               f"~${premium / 1e6:.2f}M estimated premium, {r.get('dte')} DTE")
     return {
         "activity_summary": summary,
         "institutional_indicators": indicators,
@@ -794,7 +796,7 @@ def eval_institutional(rows, baselines=None, prev_oi=None, regimes=None, opts=No
         elif is_prime(r):
             rule = "PRIME"
             why = (f"prime print â€” ~${(r.get('premium') or 0) / 1e3:.0f}k premium at "
-                   f"{r['vol_oi']:.1f}أ— OI, score {score} (55-62% directional bracket)")
+                   f"{r['vol_oi']:.1f}x OI, score {score} (uncalibrated activity screen)")
         elif (r.get("dte") is not None and r["dte"] <= 1
                 and score >= o["zero_dte_score"]
                 and (r.get("vol_oi") or 0) >= o.get("zero_dte_vol_oi", 2.0)):

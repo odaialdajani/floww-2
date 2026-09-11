@@ -33,8 +33,8 @@ class TestReplayEngine:
             ts = (now + timedelta(seconds=i)).isoformat()
             db.conn.execute(
                 """INSERT INTO ticks (timestamp, symbol, bid, ask, last, volume, oi,
-                   delta_val, gamma_val, theta_val, vega_val, vanna_val, charm_val, vomma_val)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   delta_val, gamma_val, theta_val, vega_val, vanna_val, charm_val, vomma_val, data_source)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'public_api')""",
                 (ts, "SPY", 500.0, 500.1, 500.05, 1000+i*100, 5000, 0.5, 0.01, -0.05, 0.2, 0.001, -0.02, 0.003),
             )
 
@@ -49,6 +49,20 @@ class TestReplayEngine:
         await engine.start()
 
         assert len(collected) == 10
+        assert all(t["source"] == "replay" and t["original_source"] == "public_api" for t in collected)
+
+    @pytest.mark.asyncio
+    async def test_replay_excludes_synthetic_and_unverifiable_legacy_rows(self):
+        db = DuckDBEngine(":memory:")
+        now = datetime.now(UTC)
+        for source in ("mock", "Yahoo", "unknown", "public_api"):
+            db.conn.execute("INSERT INTO ticks (timestamp,symbol,last,data_source) VALUES (?,?,?,?)",
+                            (now.isoformat(), "SPY", 500, source))
+        collected = []
+        engine = ReplayEngine(db=db, start=now-timedelta(seconds=1), end=now+timedelta(seconds=1), speed=100)
+        engine.on_tick(collected.append)
+        await engine.start()
+        assert len(collected) == 1 and collected[0]["original_source"] == "public_api"
 
     @pytest.mark.asyncio
     async def test_replay_respects_speed(self):
@@ -59,8 +73,8 @@ class TestReplayEngine:
             ts = (now + timedelta(seconds=i)).isoformat()
             db.conn.execute(
                 """INSERT INTO ticks (timestamp, symbol, bid, ask, last, volume, oi,
-                   delta_val, gamma_val, theta_val, vega_val, vanna_val, charm_val, vomma_val)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   delta_val, gamma_val, theta_val, vega_val, vanna_val, charm_val, vomma_val, data_source)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'public_api')""",
                 (ts, "SPY", 500.0, 500.1, 500.05, 1000, 5000, 0.5, 0.01, -0.05, 0.2, 0.001, -0.02, 0.003),
             )
 
@@ -108,8 +122,8 @@ class TestReplayEngine:
             ts = (now + timedelta(seconds=i)).isoformat()
             db.conn.execute(
                 """INSERT INTO ticks (timestamp, symbol, bid, ask, last, volume, oi,
-                   delta_val, gamma_val, theta_val, vega_val, vanna_val, charm_val, vomma_val)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   delta_val, gamma_val, theta_val, vega_val, vanna_val, charm_val, vomma_val, data_source)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'public_api')""",
                 (ts, "SPY", 500.0, 500.1, 500.05, 1000, 5000, 0.5, 0.01, -0.05, 0.2, 0.001, -0.02, 0.003),
             )
 
@@ -150,8 +164,8 @@ class TestReplayEngine:
             ts = (now + timedelta(minutes=i)).isoformat()
             db.conn.execute(
                 """INSERT INTO ticks (timestamp, symbol, bid, ask, last, volume, oi,
-                   delta_val, gamma_val, theta_val, vega_val, vanna_val, charm_val, vomma_val)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   delta_val, gamma_val, theta_val, vega_val, vanna_val, charm_val, vomma_val, data_source)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'public_api')""",
                 (ts, "SPY", 500.0, 500.1, 500.05, 1000, 5000, 0.5, 0.01, -0.05, 0.2, 0.001, -0.02, 0.003),
             )
 

@@ -174,9 +174,9 @@ async def _upstream(ticker: str, period: str, aggregation: str,
 
     Returns bars or None. Raises on transport failure. Separated for tests.
     """
-    from services.public_api_adapter import fetch_bars_from_public_api
+    from services.public_api_adapter import fetch_bars_by_interval
 
-    return await fetch_bars_from_public_api(
+    return await fetch_bars_by_interval(
         ticker, interval="daily", period=period, aggregation=aggregation,
         sessions=sessions,
     )

@@ -79,6 +79,8 @@ class Quote:
     change: float | None = None
     percent_change: float | None = None
     timestamp: str | None = None
+    bid_timestamp: str | None = None
+    ask_timestamp: str | None = None
     option_details: dict[str, Any] | None = None
     bond_details: dict[str, Any] | None = None
 
@@ -120,6 +122,9 @@ class OptionContract:
     gamma: float | None = None
     theta: float | None = None
     vega: float | None = None
+    last_timestamp: str | None = None
+    bid_timestamp: str | None = None
+    ask_timestamp: str | None = None
 
     @property
     def mid(self) -> float | None:
@@ -407,6 +412,8 @@ class PublicBroker:
                 change=float(odc.get("change")) if odc.get("change") is not None else None,
                 percent_change=float(odc.get("percentChange")) if odc.get("percentChange") is not None else None,
                 timestamp=q.get("lastTimestamp"),
+                bid_timestamp=q.get("bidTimestamp"),
+                ask_timestamp=q.get("askTimestamp"),
                 option_details=od,
                 bond_details=bd,
             )
@@ -548,6 +555,9 @@ class PublicBroker:
             option_type=otype,
             strike=strike,
             expiration=exp_str,
+            last_timestamp=quote_data.get("lastTimestamp"),
+            bid_timestamp=quote_data.get("bidTimestamp"),
+            ask_timestamp=quote_data.get("askTimestamp"),
             last=float(quote_data["last"]) if quote_data.get("last") is not None else None,
             bid=float(quote_data["bid"]) if quote_data.get("bid") is not None else None,
             ask=float(quote_data["ask"]) if quote_data.get("ask") is not None else None,

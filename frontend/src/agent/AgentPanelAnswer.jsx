@@ -1,4 +1,5 @@
 import Evidence from "./Evidence";
+import {THINKING_LABELS,SPEED_LABELS} from "./AgentModelSettings";
 export default function AgentPanelAnswer({turn}){
  if(!turn)return null;
  const answer=turn.answer;
@@ -9,6 +10,11 @@ export default function AgentPanelAnswer({turn}){
   <small>{turn.saved === false ? "Not saved" : turn.status==="completed" ? "Saved answer" : turn.status}</small>
   <p>{answer?.summary || turn.text || "No answer available"}</p>
   {answer?.model_status && <small>{answer.model_status}</small>}
+  {(answer?.usage || []).filter(u=>u.provider).map((u,i)=><p key={`usage-${i}`} className="lodestar-ai-usage">
+   {u.provider} · {u.model}{u.effort && ` · ${THINKING_LABELS[u.effort] || u.effort} thinking`}{u.speed && ` · ${SPEED_LABELS[u.speed] || u.speed} speed`}
+   {u.accounting==="subscription_usage" && <small>Uses your ChatGPT allowance; dollar cost is not reported.</small>}
+  </p>)}
+  {(answer?.model_explanations || []).map(item=><p key={item.id}>{item.text}</p>)}
   {(answer?.model_relationships || []).map((text,i)=><p key={`relation-${i}`}>{text}</p>)}
   {(answer?.gaps || []).length>0 && <p>Missing: {answer.gaps.join(", ")}</p>}
   {(answer?.sections || []).map(s=><details key={s.name}><summary>{s.name}</summary><p>{s.text}</p></details>)}

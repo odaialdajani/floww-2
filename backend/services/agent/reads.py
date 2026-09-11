@@ -11,18 +11,31 @@ from services.agent.access.horizon import horizon_window, slice_expiries
 from services.agent.confluence import score
 from services.agent.contracts import canonical, fact, finite, instant
 from services.agent.display_map import display_facts
+from services.agent.structure_reads import structure_facts
+from services.agent.volatility_reads import volatility_facts
 from services.heatseeker import _gex_per_strike, calc_flip_zones
+from services.market_provenance import spot_provenance
 
 
 class ResearchReads:
-    def __init__(self, peek_chain, peek_map, read_alerts):
+    def __init__(self, peek_chain, peek_map, read_alerts, *, read_daily_bars=None):
         self._peek_chain = peek_chain
         self._peek_map = peek_map
         self._read_alerts = read_alerts
+        self._read_daily_bars = read_daily_bars
 
     async def snapshot(self, ticker, horizon, *, selected_expiry=None, now=None, screen=None, price_only=False):
         now = now or datetime.now(UTC)
         gaps = []
+        daily_bars = None
+        if not price_only and self._read_daily_bars is not None:
+            try:
+                daily_bars = copy.deepcopy(await asyncio.wait_for(
+                    asyncio.to_thread(self._read_daily_bars, ticker), timeout=5))
+                canonical(daily_bars)
+            except Exception:
+                daily_bars = None
+                gaps.append("Daily bar cache could not be read; research did not refresh it")
         try:
             raw = copy.deepcopy(self._peek_chain(ticker, 6))
         except Exception:
@@ -70,6 +83,10 @@ class ResearchReads:
             source_time=source_time,
             contracts=contracts,
             spot=raw.get("spot"),
+            provenance={key: raw.get(key) for key in (
+                "source", "data_source", "event_time", "fetched_at", "spot_source",
+                "spot_event_time", "spot_fetched_at", "stale", "cache_age_s",
+            )},
             dealer=dealer,
             display_selection={
                 key: (screen or {}).get(key)
@@ -86,6 +103,7 @@ class ResearchReads:
                 )
             },
             alerts=alerts[:200],
+            daily_bars=daily_bars,
         )
         # Sources may contain datetime values; convert timestamps explicitly at seam.
         digest_body = canonical(body)
@@ -111,7 +129,9 @@ class ResearchReads:
 
         spot = raw.get("spot")
         if finite(spot) and spot > 0:
-            add("Underlying price", spot, "USD")
+            facts.append(fact("Underlying price", spot, "USD", ticker=ticker,
+                              snapshot_id=snapshot_id, horizon=horizon,
+                              **spot_provenance(raw, now)))
         if not price_only:
             add("Available contracts", len(contracts), "contracts")
             add("Available expiry dates", sorted({str(contract["expiry"]) for contract in contracts}), "dates")
@@ -145,6 +165,14 @@ class ResearchReads:
                 add("Estimated flip levels", levels, "USD")
         elif not price_only:
             gaps.append("Exposure inputs are unavailable")
+        if not price_only:
+            context = dict(ticker=ticker, snapshot_id=snapshot_id, horizon=horizon, now=now)
+            extra, missing = structure_facts(contracts, facts, **context)
+            facts.extend(extra)
+            gaps.extend(missing)
+            extra, missing = volatility_facts(contracts, facts, daily_bars, **context)
+            facts.extend(extra)
+            gaps.extend(missing)
         flow = []
         flow_times = []
         for alert in alerts[:200]:
@@ -215,6 +243,11 @@ class ResearchReads:
             flow=flow,
             observed_at=source_time,
             captured_at=now.isoformat(),
+            anchor_kind="close" if any(
+                f["metric"] == "Underlying price" and f["status"] == "ok"
+                and f["event_time"] == instant(window.get("session_close"))
+                for f in facts
+            ) else "observation",
             coverage=len(contracts),
             agreement=agreement,
             coverage_id=hashlib.sha256(

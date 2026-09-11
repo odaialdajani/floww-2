@@ -5,6 +5,7 @@ import re
 from datetime import datetime
 
 from services.agent.contracts import canonical, fact, finite, instant
+from services.market_provenance import spot_provenance
 
 
 def map_cache_key(ticker, query):
@@ -107,13 +108,15 @@ def display_facts(raw, screen, ticker, now):
         add("Displayed expiry dates", expiries, "dates")
         spot = number(raw.get("spot"))
         if spot is not None and spot > 0:
-            add(
+            facts.append(fact(
                 "Cached map price",
                 spot,
                 "USD",
-                whole_map=True,
+                ticker=ticker, snapshot_id=identity,
+                horizon="map:" + hashlib.sha256(key.encode()).hexdigest(),
+                **spot_provenance(raw, now, max_age=120),
                 reason="Price from the cached map; a separate live quote may differ",
-            )
+            ))
         flip = number((raw.get("gamma_flip") or {}).get("gamma_flip"))
         if screen.get("page") == "heatseeker" and raw.get("flip_zones"):
             first = raw["flip_zones"][0].get("price")

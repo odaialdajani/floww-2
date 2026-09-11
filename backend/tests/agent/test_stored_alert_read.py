@@ -14,16 +14,17 @@ def test_real_duckdb_columns_timestamp_and_error_contract():
         with pytest.raises(duckdb.CatalogException):
             stored_research_alerts(engine.query_strict, "SPY")
         engine.execute_write(
-            "CREATE TABLE flow_alerts_daily (under VARCHAR, exp DATE, bias VARCHAR, conviction DOUBLE, asof_ts TIMESTAMP, asof_date DATE)"
+            "CREATE TABLE flow_alerts_daily (under VARCHAR, exp DATE, bias VARCHAR, conviction DOUBLE, asof_ts TIMESTAMP, asof_date DATE, context_json VARCHAR)"
         )
         now = datetime.now(ZoneInfo("America/New_York")).replace(microsecond=0)
         engine.execute_write(
-            "INSERT INTO flow_alerts_daily VALUES (?, ?, ?, ?, ?, ?)",
-            [("SPY", now.date().isoformat(), "BULLISH", 80, now.isoformat(), now.date().isoformat())],
+            "INSERT INTO flow_alerts_daily VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [("SPY", now.date().isoformat(), "BULLISH", 80, now.isoformat(), now.date().isoformat(), None)],
         )
         rows = stored_research_alerts(engine.query_strict, "SPY")
         assert len(rows) == 1
-        assert rows[0]["asof_ts"] == now
+        assert rows[0]["asof_ts"] is None
+        assert rows[0]["computed_at"] == now
         assert rows[0]["expiry"] == now.date()
         assert stored_research_alerts(engine.query_strict, "QQQ") == []
     finally:

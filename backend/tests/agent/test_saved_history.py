@@ -37,7 +37,10 @@ async def test_history_requires_owner_source_time_and_matching_contract_coverage
     assert facts[-1]["parents"][0] == facts[0]["id"]
     assert "14:59" in note
     assert (await history_facts(repo, "bob", after))[0] == []
-    assert (await history_facts(repo, "alice", {**after, "observed_at": None}))[0] == []
+    # Price comparisons use price time, even when chain time is unknown.
+    assert (await history_facts(repo, "alice", {**after, "observed_at": None}))[0][-1]["value"] == 2
+    missing_price_time = {**after, "facts": [{**f, "event_time": None} for f in after["facts"]]}
+    assert (await history_facts(repo, "alice", missing_price_time))[0] == []
     assert "coverage" in (await history_facts(repo, "alice", {**after, "coverage_id": "changed"}))[1]
 
 

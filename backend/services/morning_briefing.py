@@ -557,7 +557,7 @@ async def build_briefing(
             # Query latest chain snapshot
             chain_rows = duckdb_conn.execute(
                 "SELECT strike, type, open_interest, gamma, iv, expiry "
-                "FROM chains WHERE ticker = ? ORDER BY timestamp DESC LIMIT 500",
+                "FROM chains WHERE ticker = ? AND data_source = 'public_api' ORDER BY timestamp DESC LIMIT 500",
                 [ticker],
             ).fetchall()
 

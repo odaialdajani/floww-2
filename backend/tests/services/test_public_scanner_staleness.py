@@ -10,6 +10,7 @@
 import json
 import math
 import time
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -35,7 +36,34 @@ def clean_state():
 
 
 def empty_chain():
-    return {"ticker": "T00", "spot": 100.0, "contracts": [], "stale": False}
+    return {"ticker": "T00", "spot": 100.0, "contracts": [], "stale": False,
+            "fetched_at": datetime.now(UTC).isoformat()}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("changes", [{"stale": True}, {"fetched_at": None},
+                                     {"fetched_at": "2020-01-01T00:00:00+00:00"}])
+async def test_stale_chain_cannot_reset_slice_or_marks(fresh_budget, clean_state, changes):
+    seed_prior([list(r) for r in OLD_ROWS], age_s=100)
+    prior_time = scanner._slices["T00"]["ts"]
+    chain = empty_chain() | changes
+    with patch("services.public_api_adapter.fetch_chain_from_public_api", return_value=chain), \
+         patch.object(scanner, "_stamp_marks") as stamp:
+        view = await scanner.scan_next(slice_size=1, universe=["T00"])
+    assert scanner._slices["T00"]["ts"] == prior_time
+    assert view["coverage"]["max_age_s"] >= 100
+    stamp.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_cached_chain_retains_receipt_age(fresh_budget, clean_state):
+    received = datetime.now(UTC) - timedelta(seconds=80)
+    chain = empty_chain() | {"fetched_at": received.isoformat()}
+    with patch("services.public_api_adapter.fetch_chain_from_public_api", return_value=chain), \
+         patch.object(scanner, "_get_adv", None):
+        await scanner.scan_next(slice_size=1, universe=["T00"])
+    assert scanner._slices["T00"]["ts"] == received.timestamp()
+    assert scanner._slices["T00"]["event_time"] is None
 
 
 def seed_prior(rows, age_s=10.0):

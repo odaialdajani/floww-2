@@ -4,7 +4,7 @@
 // no new props. Syncs across mounts via a `storage` event. Private-mode safe.
 
 import React, { useState, useEffect } from "react";
-import { PULSE_DEFAULT_COLS, migrateScreenUnits } from "./tideFeed";
+import { PULSE_COLUMNS, PULSE_DEFAULT_COLS, migrateScreenUnits } from "./tideFeed";
 
 export const SETTINGS_KEY = "floww_settings";
 export const DEFAULT_MODE = "trade";
@@ -25,7 +25,7 @@ export function defaultTide() {
     columns: {
       trade: [...PULSE_DEFAULT_COLS],
       monitor: [...PULSE_DEFAULT_COLS].slice(0, 8),
-      research: null, // null = all 17
+      research: null, // null = every available column
     },
     mode: DEFAULT_MODE,
   };
@@ -134,8 +134,8 @@ export default function TidehunterSettings() {
         ))}
       </ol>
       <p style={{ fontSize: 12, marginBottom: 0 }}>
-        Columns are saved per mode · Trade: {(tide.columns?.trade || []).length} of 17 · Monitor:{" "}
-        {(tide.columns?.monitor || []).length} · Research: all 17. Colour-blind mode follows the app setting.
+        Columns are saved per mode · Trade: {(tide.columns?.trade || []).length} of {PULSE_COLUMNS.length} · Monitor:{" "}
+        {(tide.columns?.monitor || []).length} · Research: all {PULSE_COLUMNS.length}. Colour-blind mode follows the app setting.
       </p>
     </div>
   );

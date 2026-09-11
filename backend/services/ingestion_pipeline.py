@@ -227,7 +227,7 @@ class IngestionPipeline:
                 float(t.get("vanna", 0.0)),
                 float(t.get("charm", 0.0)),
                 float(t.get("vomma", 0.0)),
-                t.get("data_source", "Yahoo"),
+                t.get("data_source") or t.get("source") or "unknown",
                 int(t.get("delay_seconds", 0)),
             )
             for t in ticks
@@ -260,7 +260,7 @@ class IngestionPipeline:
                 float(c.get("gamma", 0.0)),
                 float(c.get("theta", 0.0)),
                 float(c.get("vega", 0.0)),
-                c.get("data_source", "Yahoo"),
+                c.get("data_source") or c.get("source") or "unknown",
                 int(c.get("delay_seconds", 0)),
             )
             for c in chains

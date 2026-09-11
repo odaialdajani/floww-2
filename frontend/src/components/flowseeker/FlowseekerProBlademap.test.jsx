@@ -231,10 +231,12 @@ describe("Phase 5.3 dual-path: Public API → cvserver fallback", () => {
 // ---- Tidehunter Pro v3 render tests (insight pipeline) ----
 
 import React from "react";
-import { render, screen, waitFor, within, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, within, fireEvent, act } from "@testing-library/react";
 import FlowseekerProBlademap from "./FlowseekerProBlademap";
 
 const NOW_ISO = new Date().toISOString();
+// Market observation time is separate from the later alert computation time.
+const SOURCE_ISO = new Date(Date.parse(NOW_ISO) - 2000).toISOString();
 const FEED_ALERTS = [
   {
     key: "oiconf|NVDA|call|182.5|2026-09-19", ckey: "NVDA|call|182.5|2026-09-19",
@@ -244,6 +246,8 @@ const FEED_ALERTS = [
     move_pct: 1.8, asof_ts: NOW_ISO,
     key_levels_json: JSON.stringify({ entry: 178.4, invalidation: 173.94, target: 188.21 }),
     context_json: JSON.stringify({
+      source_event_time: SOURCE_ISO,
+      source_quality: "ok",
       activity_summary: "Call print held overnight",
       institutional_indicators: ["Top-decile composite score"],
       market_regime: "NEGATIVE_GAMMA",
@@ -265,6 +269,8 @@ const FEED_ALERTS = [
     move_pct: -0.4, asof_ts: NOW_ISO,
     key_levels_json: JSON.stringify({ entry: 640, invalidation: 656, target: 617.6 }),
     context_json: JSON.stringify({
+      source_event_time: SOURCE_ISO,
+      source_quality: "ok",
       activity_summary: "Put print", institutional_indicators: [],
       market_regime: "UNKNOWN", dealer_positioning: "unknown",
     }),
@@ -277,7 +283,7 @@ const SCAN_ROWS = [
   ["AMD", "OCC3", "call", 168, "2026-09-26", 142000, 90000, 0.45, null, 164.2],
 ];
 
-function mockBackend({alerts=FEED_ALERTS,scanOverrides={}}={}) {
+function mockBackend({alerts=FEED_ALERTS,scanOverrides={},heatOverrides={},regimeOverrides={}}={}) {
   const urls = [];
   global.fetch = jest.fn((url) => {
     urls.push(String(url));
@@ -297,6 +303,7 @@ function mockBackend({alerts=FEED_ALERTS,scanOverrides={}}={}) {
       body = {
         ticker: "SPY", current_state: "RANGING", confidence: 0.2, is_warming: false,
         gamma_flip: 640, dist_to_flip_pct: -0.5, total_gex: -1000000, vol_env: "normal",
+        ...regimeOverrides,
       };
     } else if (u.includes("/api/heatmap/")) {
       body = {
@@ -304,6 +311,7 @@ function mockBackend({alerts=FEED_ALERTS,scanOverrides={}}={}) {
         gamma_flip: {gamma_flip: 641},
         grid: { grid: { "2026-09-12": { 640: -1000, 650: 2000 } }, expiries: ["2026-09-12"], strikes: [640, 650] },
         nodes: { ceilings: [{ strike: 650 }], floors: [{ strike: 630 }] },
+        ...heatOverrides,
       };
     } else if (u.includes("/api/vpin/")) body = { vpin: 0.3 };
     else if (u.includes("/alerts/quality")) {
@@ -329,6 +337,180 @@ beforeEach(() => {
 });
 
 describe("Tidehunter Pro v3 — one page, zero page tabs", () => {
+  it("ignores browser visibility changes while the page is inactive", async () => {
+    mockBackend();const view=render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("trade-now-row")).toBeInTheDocument());
+    view.rerender(<FlowseekerProBlademap active={false} />);
+    const left=sessionStorage.getItem("th-last-visit");
+    jest.spyOn(Date,"now").mockReturnValue(Number(left)+10000);
+    Object.defineProperty(document,"hidden",{configurable:true,value:true});
+    fireEvent(document,new Event("visibilitychange"));
+    Object.defineProperty(document,"hidden",{configurable:true,value:false});
+    fireEvent(document,new Event("visibilitychange"));
+    expect(sessionStorage.getItem("th-last-visit")).toBe(left);
+  });
+  it("keeps hovered rows in place when their live eligibility expires", async () => {
+    mockBackend();const view=render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("trade-now-row")).toBeInTheDocument());
+    const table=screen.getByTestId("vector-feed");
+    const row=screen.getByTestId("trade-now-row");fireEvent.mouseEnter(table);
+    jest.spyOn(Date,"now").mockReturnValue(Date.now()+16*60000);
+    view.rerender(<FlowseekerProBlademap active />);
+    expect(row).toBeInTheDocument();expect(table.querySelector("tbody tr")).toBe(row);
+    expect(screen.queryByTestId("trade-now-row")).toBeNull();
+    expect(table.textContent).toMatch(/Verdict withheld/);
+  });
+  it("shows storage failures for Ack, clear and restore", async () => {
+    mockBackend();render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("trade-now-row")).toBeInTheDocument());
+    jest.spyOn(Storage.prototype,"setItem").mockImplementation(()=>{throw new Error("full");});
+    jest.spyOn(Storage.prototype,"removeItem").mockImplementation(()=>{throw new Error("blocked");});
+    fireEvent.click(within(screen.getByTestId("trade-now-row")).getByText("Ack"));
+    expect(screen.getByRole("status").textContent).toMatch(/Acknowledgment.*not.*saved/);
+    fireEvent.click(screen.getByText("⋯"));fireEvent.click(screen.getByText("Clear feed"));
+    expect(screen.getByRole("status").textContent).toMatch(/Clear.*not.*saved/);
+    fireEvent.click(screen.getByText("Restore dismissed"));
+    expect(screen.getByRole("status").textContent).toMatch(/Restore.*not.*saved/);
+  });
+  it("reports a rejected forced refresh", async () => {
+    mockBackend();const fetcher=global.fetch;
+    global.fetch=jest.fn((url,...args)=>String(url).includes("/scan/refresh")?Promise.resolve({ok:false,status:503}):fetcher(url,...args));
+    render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("trade-now-row")).toBeInTheDocument());
+    fireEvent.click(screen.getByTitle("Refresh now"));
+    await waitFor(()=>expect(screen.getByRole("status").textContent).toMatch(/Refresh failed/));
+    expect(screen.getByTitle("Refresh now")).not.toBeDisabled();
+  });
+  it("ends a forced refresh that never responds", async () => {
+    mockBackend();const fetcher=global.fetch;
+    global.fetch=jest.fn((url,...args)=>String(url).includes("/scan/refresh")?new Promise(()=>{}):fetcher(url,...args));
+    render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("trade-now-row")).toBeInTheDocument());
+    jest.useFakeTimers({doNotFake:["setInterval","clearInterval"]});
+    try {
+      fireEvent.click(screen.getByTitle("Refresh now"));
+      await act(async()=>{jest.advanceTimersByTime(15001);});
+      expect(screen.getByRole("status").textContent).toMatch(/timed out/);
+      expect(screen.getByTitle("Refresh now")).not.toBeDisabled();
+    } finally {jest.useRealTimers();}
+  });
+  it("keeps the same focused activity row across changed receipt timestamps", async () => {
+    mockBackend();const fetcher=global.fetch;let activityPoll;
+    const nativeInterval=global.setInterval;
+    jest.spyOn(global,"setInterval").mockImplementation((fn,delay,...args)=>{
+      if(delay===15000)activityPoll=fn;
+      return nativeInterval(fn,delay,...args);
+    });
+    global.fetch=jest.fn((url,...args)=>String(url).includes("/api/public/chain/")?Promise.resolve({ok:true,json:async()=>({ok:true,spot:180,contracts:[{osi:"NVDA261019C00182500",strike:182.5,type:"call",expiry:"2026-10-19",volume:5000,oi:1000,last:4,bid:3.9,ask:4.1}]})}):fetcher(url,...args));
+    render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("trade-now-row")).toBeInTheDocument());
+    fireEvent.click(within(screen.getByTestId("vector-feed")).getByRole("button",{name:"NVDA"}));
+    await waitFor(()=>expect(document.querySelector(".th-dtab tbody tr")).not.toBeNull());
+    const row=document.querySelector(".th-dtab tbody tr");row.focus();
+    jest.spyOn(Date,"now").mockReturnValue(Date.now()+1000);
+    await act(async()=>{await activityPoll();});
+    expect(document.querySelector(".th-dtab tbody tr")).toBe(row);expect(row).toHaveFocus();
+  });
+  it("labels card observation limits and full-ticker history separately", async () => {
+    mockBackend();render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("trade-now-row")).toBeInTheDocument());
+    expect(screen.getByTestId("cell-money").textContent).toMatch(/Market observation age unknown/);
+    expect(screen.getByTestId("cell-money").textContent).toMatch(/full ticker.*current screen/i);
+    expect(screen.getByTestId("cell-changed").textContent).toMatch(/Market observation age unknown/);
+    expect(within(screen.getByTestId("vector-feed")).getByRole("button",{name:"NVDA"})).toBeInTheDocument();
+  });
+  it("labels separately returned regime facts without treating their time as map observation time", async () => {
+    mockBackend({regimeOverrides:{asof:"2026-09-10T12:00:00Z"},heatOverrides:{
+      asof:NOW_ISO,event_time:SOURCE_ISO,gamma_flip:{gamma_flip:641,total_gex:2000000},
+    }});
+    render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("cell-dealers")).toHaveTextContent("Long gamma"));
+    expect(screen.getByTestId("cell-dealers")).toHaveTextContent(/Regime is a separate reading/);
+    expect(screen.getByTestId("cell-dealers")).toHaveTextContent("2026-09-10T12:00:00Z");
+    expect(screen.getByTestId("lattice")).toHaveTextContent(/Regime is a separate reading/);
+  });
+
+  it("shows additional contract controls in Pulse and expands its visible rows", async () => {
+    const rows=Array.from({length:12},(_,i)=>[...SCAN_ROWS[0].slice(0,1),`contract-${i}`,"call",180+i,"2026-09-19",218000,100000,.38,null,178.4]);
+    mockBackend({scanOverrides:{rows}});render(<FlowseekerProBlademap active />);
+    const pulse=screen.getByTestId("pulse-table");
+    await waitFor(()=>expect(pulse.querySelectorAll("tbody tr")).toHaveLength(8));
+    expect(within(screen.getByTestId("vector-feed")).queryByRole("button",{name:"Show more contracts"})).toBeNull();
+    fireEvent.click(within(pulse).getByRole("button",{name:"Show more contracts"}));
+    expect(pulse.querySelectorAll("tbody tr")).toHaveLength(12);
+  });
+
+  it("a copied Whale screen selects its premium default sort", async () => {
+    localStorage.setItem("floww_settings",JSON.stringify({tidehunter:{screens:[{
+      id:"my-whales",label:"My whales",custom:true,copyOf:"whale",rule:"ANY",conditions:[],ruleUnitsVersion:2,
+    }]}}));
+    mockBackend();render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("pulse-table").querySelector("tbody")).not.toBeNull());
+    fireEvent.click(screen.getByRole("tab",{name:/My whales/}));
+    expect(within(screen.getByTestId("pulse-table")).getByRole("button",{name:/Prem/}).closest("th")).toHaveAttribute("aria-sort","descending");
+  });
+
+  it.each([null, {source_quality:"unknown"}, {
+    source_quality:"ok",source_event_time:new Date(Date.parse(NOW_ISO)-16*60000).toISOString(),
+  }])("freshly computed SIGMA with unverified market source %p cannot support Money building", async context => {
+    const alerts=FEED_ALERTS.map(a=>a.rule==="SIGMA"?{...a,asof_ts:NOW_ISO,context_json:context ? JSON.stringify(context) : null}:a);
+    mockBackend({alerts});render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("trade-now-row")).toBeInTheDocument());
+    expect(screen.getByTestId("cell-money")).not.toHaveTextContent("4.6σ server-confirmed");
+  });
+
+  it("SIGMA with verified fresh market time can support Money building", async () => {
+    const alerts=FEED_ALERTS.map(a=>a.rule==="SIGMA"?{...a,context_json:JSON.stringify({source_event_time:SOURCE_ISO,source_quality:"ok"})}:a);
+    mockBackend({alerts});render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("cell-money")).toHaveTextContent("4.6σ server-confirmed"));
+  });
+
+  it("missing conviction is stated honestly in the no-eligible card", async () => {
+    mockBackend({alerts:[{...FEED_ALERTS[0],conviction:null}]});render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(screen.getByTestId("cell-trade")).toHaveTextContent("conviction unavailable"));
+    expect(screen.getByTestId("cell-trade")).not.toHaveTextContent(/highest reading null|highest reading 0/);
+  });
+
+  it.each([
+    ["legacy alert with no context", null],
+    ["alert with unknown source time", JSON.stringify({
+      activity_summary: "Recomputed from an older saved reading",
+      source_quality: "unknown",
+    })],
+  ])("withholds a newly computed %s despite high conviction", async (_label, context_json) => {
+    const newlyComputed = {
+      ...FEED_ALERTS[0],
+      asof_ts: new Date().toISOString(),
+      context_json,
+    };
+    mockBackend({alerts: [newlyComputed]});
+    render(<FlowseekerProBlademap active />);
+    const vector = screen.getByTestId("vector-feed");
+    await waitFor(() => expect(within(vector).getByText(/source time unknown/)).toBeInTheDocument());
+    expect(vector).toHaveTextContent(/Computed \d+s ago/);
+    expect(within(vector).getByText("94")).toBeInTheDocument();
+    expect(screen.queryByTestId("trade-now-row")).toBeNull();
+    expect(screen.getByTestId("cell-trade")).toHaveTextContent("No eligible trade with verified fresh data");
+    expect(screen.getByTestId("cell-trade")).not.toHaveTextContent("pinned");
+  });
+
+  it("does not make stale market observations eligible by recomputing their alert now", async () => {
+    const newlyComputed = {
+      ...FEED_ALERTS[0],
+      asof_ts: new Date().toISOString(),
+      context_json: JSON.stringify({
+        ...JSON.parse(FEED_ALERTS[0].context_json),
+        source_event_time: new Date(Date.now() - 16 * 60000).toISOString(),
+      }),
+    };
+    mockBackend({alerts: [newlyComputed]});
+    render(<FlowseekerProBlademap active />);
+    await waitFor(() => expect(screen.getByTestId("vector-feed")).toHaveTextContent("source time supplied"));
+    expect(screen.getByTestId("vector-feed")).toHaveTextContent(/Computed \d+s ago/);
+    expect(screen.queryByTestId("trade-now-row")).toBeNull();
+    expect(screen.getByTestId("cell-trade")).toHaveTextContent("No eligible trade with verified fresh data");
+  });
+
   it("showing acknowledged history does not revive Trade now",async()=>{
     mockBackend();render(<FlowseekerProBlademap active />);
     await waitFor(()=>expect(screen.getByTestId("trade-now-row")).toBeInTheDocument());
@@ -396,7 +578,14 @@ describe("Tidehunter Pro v3 — one page, zero page tabs", () => {
     expect(localStorage.getItem("th-acked-v1")).toBe(ack);
   });
   it("keeps the pinned trade once while sorting the remaining feed oldest-first",async()=>{
-    const alerts=FEED_ALERTS.map((a,i)=>({...a,asof_ts:new Date(Date.now()-(i+1)*60000).toISOString()}));
+    const alerts=FEED_ALERTS.map((a,i)=>{
+      const computedAt = Date.now() - (i + 1) * 60000;
+      return {...a,asof_ts:new Date(computedAt).toISOString(),
+        context_json:a.context_json ? JSON.stringify({...JSON.parse(a.context_json),
+          source_event_time:new Date(computedAt - 2000).toISOString(),
+        }) : null,
+      };
+    });
     mockBackend({alerts});render(<FlowseekerProBlademap active />);
     await waitFor(()=>expect(screen.getByTestId("trade-now-row")).toBeInTheDocument());
     fireEvent.click(screen.getByText("⋯"));

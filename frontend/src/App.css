@@ -4157,7 +4157,8 @@ input[class*="bg-slate-800"], select[class*="bg-slate-800"], textarea[class*="bg
 
 .lodestar-open { position:fixed;right:18px;bottom:18px;z-index:50;background:#22262d;color:#d2d6dd;border:1px solid #495160;border-radius:8px;padding:10px 16px;box-shadow:0 4px 20px #0005; }
 .lodestar-open small {display:block;font-size:10px;color:#98a3b4;}
-.lodestar-panel {position:fixed;right:0;top:0;bottom:0;z-index:80;width:min(480px,100vw);padding:22px;background:#1b1e24;color:#c5ccd6;border-left:1px solid #444c59;overflow:auto;box-shadow:-8px 0 36px #0005;}
+.lodestar-backdrop {position:fixed;inset:0;z-index:1199;background:#0004;}
+.lodestar-panel {position:fixed;right:0;top:0;bottom:0;z-index:1200;width:min(480px,100vw);padding:22px;background:#1b1e24;color:#c5ccd6;border-left:1px solid #444c59;overflow:auto;box-shadow:-8px 0 36px #0005;}
 .lodestar-panel header {display:flex;justify-content:space-between;align-items:center;}
 .lodestar-panel h2 {font-size:20px;}
 .lodestar-panel button {border:1px solid #4b5463;border-radius:5px;padding:6px 10px;margin:5px 6px 5px 0;}
@@ -4169,5 +4170,11 @@ input[class*="bg-slate-800"], select[class*="bg-slate-800"], textarea[class*="bg
 .lodestar-context,.lodestar-panel small {font-size:11px;color:#9ba7b7;}
 .lodestar-answer {margin-top:18px;padding-top:14px;border-top:1px solid #39414d;}
 .lodestar-answer h3 {font-size:15px;}
+.lodestar-model-settings {margin:10px 0; font-size:13px;}
+.lodestar-model-settings fieldset {display:grid;gap:10px;padding:12px;margin:10px 0;border:1px solid #46505f;min-width:0;}
+.lodestar-model-settings label {display:grid;gap:5px;}
+.lodestar-model-settings select {width:100%;min-width:0;padding:8px;color:#e8edf3;background:#141a23;border:1px solid #657083;border-radius:5px;}
+.lodestar-model-settings small,.lodestar-ai-usage small {display:block;margin-top:7px;line-height:1.5;color:#adb7c7;}
+.lodestar-model-settings select:focus-visible {outline:2px solid #7fc2ff;outline-offset:2px;}
 .lodestar-answer p {font-size:13px;line-height:1.6;margin:8px 0;}
 .lodestar-evidence pre {white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;}

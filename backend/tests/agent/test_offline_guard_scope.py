@@ -29,3 +29,4 @@ def test_module_startup_cannot_escape_network_guard(tmp_path):
     )
     assert result.returncode == 1, result.stdout + result.stderr
     assert "Provider mock was missed; external requests were blocked" in result.stdout
+    assert "guard-probe.invalid" in result.stdout and "test_probe" in result.stdout

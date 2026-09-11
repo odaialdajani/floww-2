@@ -77,10 +77,23 @@ function safeJSON(text) {
 // the old UI. Returns the row with .levels + .context attached (null-safe).
 export function parseAlert(a) {
   if (!a) return a;
+  const raw = safeJSON(a.context_json) || safeJSON(a.context);
+  const rawLevels = safeJSON(a.key_levels_json) || safeJSON(a.key_levels);
+  const levels = rawLevels && typeof rawLevels === "object" && !Array.isArray(rawLevels)
+    ? Object.fromEntries(Object.entries(rawLevels).filter(([,value])=>
+      (typeof value === "number" || (typeof value === "string" && value.trim() !== "")) && Number.isFinite(Number(value)))
+      .map(([key,value])=>[key,Number(value)])) : null;
+  const context = raw && typeof raw === "object" && !Array.isArray(raw) ? {
+    ...raw,
+    activity_summary: typeof raw.activity_summary === "string" ? raw.activity_summary : null,
+    dealer_positioning: typeof raw.dealer_positioning === "string" ? raw.dealer_positioning : null,
+    institutional_indicators: Array.isArray(raw.institutional_indicators)
+      ? raw.institutional_indicators.filter(item => typeof item === "string").slice(0, 12) : [],
+  } : null;
   return {
     ...a,
-    levels: safeJSON(a.key_levels_json) || safeJSON(a.key_levels),
-    context: safeJSON(a.context_json) || safeJSON(a.context),
+    levels,
+    context,
   };
 }
 export function parseFeedAlerts(alerts) {
@@ -145,16 +158,29 @@ export function ageOf(a, now = Date.now()) {
 
 // Trade-now = top directional row ≥ floor by conviction; pinned header row,
 // excluded from the feed body.
+export function hasFreshAlertSource(a, now = Date.now(), maxAgeMs = 15 * 60 * 1000) {
+    const context = safeJSON(a.context_json) || safeJSON(a.context);
+    const sourceTime = context?.source_event_time;
+    const aware = typeof sourceTime === "string" && /(?:Z|[+-]\d{2}:\d{2})$/i.test(sourceTime);
+    const age = aware ? now - Date.parse(sourceTime) : NaN;
+    const computedAge = now - Date.parse(a.asof_ts || "");
+  return context?.source_quality === "ok" && Number.isFinite(computedAge) && computedAge >= -60000 && computedAge <= maxAgeMs && Number.isFinite(age) && age >= -60000 && age <= maxAgeMs;
+}
+
+export function screenDefaultSort(screen) {
+ const id=screen?.copyOf || screen?.id;
+ return {key:id === "whale" ? "premium" : id === "oiconf" ? "oiChgPct" : id === "fresh" ? "volOI" : "score",dir:"desc"};
+}
+
 export function tradeNowOf(alerts, floor = TRADE_NOW_FLOOR, now = Date.now(), maxAgeMs = 15 * 60 * 1000) {
   const today = new Intl.DateTimeFormat("en-CA", {timeZone:"America/New_York",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(now));
   const dir = (alerts || []).filter(a => {
-    const age = now - Date.parse(a.asof_ts || "");
     const expiry = Date.parse(`${a.exp}T12:00:00Z`);
     return isDirectional(a) && !!(a.under || a.ticker) && ["call","put"].includes(String(a.type).toLowerCase())
       && Number.isFinite(Number(a.strike)) && Number(a.strike) > 0
       && Number.isFinite(expiry) && new Date(expiry).toISOString().slice(0,10) === a.exp && a.exp >= today
       && /^\d{4}-\d{2}-\d{2}$/.test(a.exp || "") && Number.isFinite(Number(a.conviction))
-      && Number.isFinite(age) && age >= -60000 && age <= maxAgeMs;
+      && hasFreshAlertSource(a, now, maxAgeMs);
   });
   if (!dir.length) return null;
   const top = [...dir].sort((a, b) => (b.conviction ?? 0) - (a.conviction ?? 0))[0];
@@ -225,8 +251,8 @@ export const BUILTIN_SCREENS = [
   },
   {
     id: "zerodte", label: "0DTE lottos",
-    matchScan: (r) => r.dte != null && r.dte <= 1,
-    matchAlert: (a) => a.dte != null && a.dte <= 1,
+    matchScan: (r) => r.dte === 0,
+    matchAlert: (a) => a.dte === 0,
     rankScan: byScoreDesc,
     rankAlert: (a, b) => (b.conviction ?? 0) - (a.conviction ?? 0),
   },
@@ -329,7 +355,7 @@ export function applyScreenToScans(rows, screen, ctx) {
     ? (r) => (!copied || copied.matchScan(r,ctx)) && matchCustomScan(r, s, ctx?.tickerFacts?.[r.under], ctx?.alerts)
     : (r) => s.matchScan(r, ctx);
   const out = (rows || []).filter(match);
-  out.sort(s.rankScan || byScoreDesc);
+  out.sort(s.rankScan || copied?.rankScan || byScoreDesc);
   return out;
 }
 export function applyScreenToAlerts(alerts, screen, ctx) {

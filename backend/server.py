@@ -603,6 +603,9 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
                 # must not abort the cvserver fallback below.
                 pass
 
+    if os.getenv("FLOWW_MARKET_DATA_PROVIDER") == "public":
+        raise HTTPException(503, "Public market data is unavailable; alternate sources are disabled")
+
     # ── 1. Try cvserver first (with timeout) ──
     try:
         from services.cvserver_client import fetch_chain_from_cvserver
@@ -948,14 +951,14 @@ async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = Tr
     Stale-while-revalidate: if the fresh-TTL cache misses but a stale entry
     (< STALE_TTL) exists, serve it immediately and refresh in the background
     (single-flight per key)."""
+    from services.market_provenance import cached_market_copy
     cache_key = f"{ticker}:{max_expiries}:{mode}:{dte}:{scalp}:{with_taps}:{max_strikes}"
     cached = _BUILD_HEATMAP_CACHE.get(cache_key)
     age = (time.time() - cached["ts"]) if cached else None
     if cached is not None and age is not None:
         if age < _BUILD_HEATMAP_CACHE_TTL:
             # Contract: frontend StaleDataBadge reads data.stale_age_s (App.js).
-            cached["data"]["stale_age_s"] = round(age, 1)
-            return cached["data"]  # fresh
+            return cached_market_copy(cached["data"], age)
         if (
             age < _BUILD_HEATMAP_STALE_TTL
             and cache_key not in _BUILD_HEATMAP_INFLIGHT
@@ -966,8 +969,7 @@ async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = Tr
             asyncio.create_task(_revalidate_heatmap(
                 cache_key, ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes,
             ))
-            cached["data"]["stale_age_s"] = round(age, 1)
-            return cached["data"]  # stale-but-serveable, refresh running
+            return cached_market_copy(cached["data"], age, revalidating=True)
     try:
         return await _build_heatmap_impl(ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes)
     except HTTPException:
@@ -1292,10 +1294,13 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         "velocity": velocity,
         "tap_counts": {str(k): v for k, v in tap_map.items()},
         # Contract fields read by the frontend (App.js / HeatseekerDashboard):
-        "stale_age_s": 0.0,
-        "data_fallback": False,
+        "stale_age_s": raw.get("cache_age_s"),
+        "stale": bool(raw.get("stale")),
+        "data_fallback": bool(raw.get("stale") or raw.get("data_fallback")),
         "gex_regime": nodes.get("regime"),
-        "data_source": raw.get("data_source", "yfinance"),
+        "data_source": raw.get("data_source", "unknown"),
+        **{key: raw.get(key) for key in ("spot_source", "spot_event_time", "spot_fetched_at")
+           if key in raw},
         "mode": mode,
         "map_query": requested_map_query,
         "asof": datetime.now(UTC).isoformat(),
@@ -1339,6 +1344,8 @@ def _sanitize(obj):
         return {k: _sanitize(v) for k, v in obj.items()}
     if isinstance(obj, list):
         return [_sanitize(v) for v in obj]
+    if isinstance(obj, (bool, np.bool_)):
+        return bool(obj)
     if isinstance(obj, (float, np.floating)):
         if math.isnan(obj) or math.isinf(obj):
             return None
@@ -3061,16 +3068,20 @@ try:
             from services.research_data_seam import stored_research_alerts
             return stored_research_alerts(duckdb_engine.query_strict, ticker)
 
+        def peek_chain(ticker, preferred):
+            from services.public_api_adapter import peek_chain_from_public_api
+            return peek_chain_from_public_api(ticker, preferred) or chain_cache.peek_available_chain(ticker, preferred)
+
         try:
             repository = AgentRepository(db)
             await repository.initialize()
-            reads = ResearchReads(chain_cache.peek_available_chain, peek_map, read_alerts)
-            from services.agent.model import GroundedModel
+            reads = ResearchReads(peek_chain, peek_map, read_alerts)
+            from services.agent.codex_model import CodexModel
             from services.agent.spend import SpendLedger, money_units
             spending = SpendLedger(repository.budgets, cap_units=money_units(os.getenv("AGENT_DAILY_BUDGET_USD", "20")), audit_collection=db["agent_budget_audit"])
             await spending.initialize()
             await spending.recover_undispatched()
-            app.state.research_service = ResearchService(repository, reads, model=GroundedModel(spending))
+            app.state.research_service = ResearchService(repository, reads, model=CodexModel(repository, db.agent_oauth_usage))
             from services.agent.tools import configure_reads
             configure_reads(reads)
         except Exception as exc:
@@ -3135,21 +3146,17 @@ async def shutdown_duckdb():
     except Exception as e:
         log.warning(f"server.py: duckdb_engine.stop() raise swallowed (shutdown continued): {e}", exc_info=True)
 
-# ============ Ingestion Pipeline (Mock Feed for now) ============
+# ============ Ingestion Pipeline (verified producers only) ============
 import contextlib
 
 from services.ingestion_pipeline import IngestionPipeline
-from services.mock_schwab_feed import MockSchwabFeed
 
 _ingestion_pipeline: IngestionPipeline | None = None
-_mock_feed: MockSchwabFeed | None = None
-_mock_feed_task: asyncio.Task | None = None
-_mock_feed_task: asyncio.Task | None = None
 
 @app.on_event("startup")
 async def startup_ingestion():
-    """Launch ingestion pipeline with mock feed on startup."""
-    global _ingestion_pipeline, _mock_feed, _mock_feed_task
+    """Start storage ingestion. Synthetic producers belong in isolated fixtures."""
+    global _ingestion_pipeline
     try:
         _ingestion_pipeline = IngestionPipeline(
             db=duckdb_engine,
@@ -3158,34 +3165,15 @@ async def startup_ingestion():
         )
         await _ingestion_pipeline.start()
 
-        # Synthetic dev tick generator. Live market data comes from the
-        # Public.com API (fetch_spot_and_chains_merged → public_api_adapter);
-        # Schwab is retired (2026-09-03) and this feed is never a live source.
-        _mock_feed = MockSchwabFeed(rate=100.0, symbols=["SPY", "QQQ"], seed=42)
-        _mock_feed.on_tick(_ingestion_pipeline.enqueue_tick)
-        _mock_feed.on_chain(_ingestion_pipeline.enqueue_chain)
-        _mock_feed.on_lob(_ingestion_pipeline.enqueue_lob)
-        _mock_feed.on_lob_depth(_ingestion_pipeline.enqueue_lob_depth)
-
-        # Run mock feed in background with tracked task
-        _mock_feed_task = asyncio.create_task(_mock_feed.start())
-        _background_tasks.add(_mock_feed_task)
-        _mock_feed_task.add_done_callback(_background_tasks.discard)
-        log.info("Ingestion pipeline + mock feed started")
+        log.info("Ingestion storage started; awaiting verified market producers")
     except Exception as e:
         log.warning(f"Ingestion startup failed (non-fatal): {e}")
 
 @app.on_event("shutdown")
 async def shutdown_ingestion() -> None:
     """Drain queue and stop ingestion on shutdown."""
-    global _ingestion_pipeline, _mock_feed, _mock_feed_task
+    global _ingestion_pipeline
     try:
-        if _mock_feed_task and not _mock_feed_task.done():
-            _mock_feed_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await _mock_feed_task
-        if _mock_feed:
-            await _mock_feed.stop()
         if _ingestion_pipeline:
             await _ingestion_pipeline.stop()
         log.info("Ingestion pipeline stopped")

@@ -29,6 +29,8 @@ test("collapse toggle persists to localStorage apw.sidebarCollapsed", () => {
   render(<Sidebar page="trinity" onNavigate={() => {}} />);
   fireEvent.click(screen.getByRole("button", { name: /collapse sidebar/i }));
   expect(localStorage.getItem(SIDEBAR_KEY)).toBe("true");
+  expect(screen.getByRole("button",{name:"Solstice",exact:true})).toBeInTheDocument();
+  expect(screen.getByRole("button",{name:"Tidehunter Pro",exact:true})).toBeInTheDocument();
 });
 
 // Steal Three shipped with backend routes and a rendered component but no nav

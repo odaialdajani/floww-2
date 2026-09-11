@@ -121,6 +121,12 @@ class TestKeyLevels:
 # ── 3. context block ─────────────────────────────────────────────────
 
 class TestContextBlock:
+    def test_summary_uses_actual_open_interest_not_volume_ratio(self):
+        from services.flow_alerts import build_context
+        text = build_context(_row(vol=60000,oi=1500),{})["activity_summary"]
+        assert "1,500" in text and "4,000 resting" not in text
+        assert "session volume" in text
+
     def test_build_context_lists_indicators(self):
         from services.flow_alerts import build_context
         r = _row(vol=60000, oi=1500)
