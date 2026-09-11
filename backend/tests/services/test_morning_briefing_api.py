@@ -16,12 +16,32 @@ Run with:
 
 from __future__ import annotations
 
-import time
+from unittest.mock import AsyncMock, call
 
 import pytest
 from fastapi.testclient import TestClient
 
 from server import app
+
+
+@pytest.fixture(autouse=True)
+def briefing_inputs(monkeypatch):
+    import routes.morning_briefing_api as api
+    import server
+    import services.morning_briefing as briefing
+
+    async def chain(ticker, max_expiries):
+        assert max_expiries == 4
+        return {"spot": 500.0 if ticker == "SPY" else 450.0,
+                "contracts": [{"strike": 500.0, "type": "call", "expiry": "2030-01-18",
+                               "oi": 1000, "iv": 0.2, "gamma": 0.02, "delta": 0.5}]}
+
+    fetch = AsyncMock(side_effect=chain)
+    monkeypatch.setattr(server, "fetch_spot_and_chains_merged", fetch)
+    monkeypatch.setattr(server, "_movers_cache", {"data": []})
+    monkeypatch.setattr(briefing, "_outcome_ledger_metrics", AsyncMock(return_value={}))
+    monkeypatch.setattr(api, "_briefing_cache", {})
+    return fetch
 
 
 @pytest.fixture
@@ -32,10 +52,12 @@ def client():
 class TestBriefingEndpoint:
     """Test GET /api/briefing/{ticker}."""
 
-    def test_briefing_returns_200_for_spy(self, client):
+    def test_briefing_returns_200_for_spy(self, client, briefing_inputs):
         """GET /api/briefing/SPY returns 200."""
         r = client.get("/api/briefing/SPY")
         assert r.status_code == 200, f"Expected 200, got {r.status_code}: {r.text[:200]}"
+        briefing_inputs.assert_awaited_once_with("SPY", max_expiries=4)
+        assert r.json()["metrics"]["spot"] == 500.0
 
     def test_briefing_returns_valid_json(self, client):
         """Response is valid JSON."""
@@ -97,7 +119,7 @@ class TestBriefingEndpoint:
         r = client.get("/api/api/briefing/SPY")
         assert r.status_code == 404
 
-    def test_briefing_different_tickers(self, client):
+    def test_briefing_different_tickers(self, client, briefing_inputs):
         """Different tickers return their own briefings."""
         r_spy = client.get("/api/briefing/SPY")
         r_qqq = client.get("/api/briefing/QQQ")
@@ -105,6 +127,8 @@ class TestBriefingEndpoint:
         assert r_qqq.status_code == 200
         assert r_spy.json()["ticker"] == "SPY"
         assert r_qqq.json()["ticker"] == "QQQ"
+        briefing_inputs.assert_has_awaits([call("SPY", max_expiries=4), call("QQQ", max_expiries=4)])
+        assert briefing_inputs.await_count == 2
 
     def test_briefing_metrics_contain_expected_keys(self, client):
         """Metrics dict has expected sub-keys."""
@@ -119,7 +143,7 @@ class TestBriefingEndpoint:
 class TestBriefingCache:
     """Test the 15-minute cache behavior."""
 
-    def test_cache_returns_same_result(self, client):
+    def test_cache_returns_same_result(self, client, briefing_inputs):
         """Two calls for same ticker return the same cached result."""
         import routes.morning_briefing_api as api
         api._briefing_cache.clear()
@@ -127,19 +151,15 @@ class TestBriefingCache:
         r1 = client.get("/api/briefing/SPY")
         r2 = client.get("/api/briefing/SPY")
         assert r1.json() == r2.json()
+        briefing_inputs.assert_awaited_once_with("SPY", max_expiries=4)
 
-    def test_cache_second_call_faster(self, client):
-        """Second call should be faster (cache hit)."""
+    def test_cache_refreshes_after_fifteen_minutes(self, client, briefing_inputs):
+        """Cached requests avoid fetching until the documented lifetime expires."""
         import routes.morning_briefing_api as api
-        api._briefing_cache.clear()
 
-        t1_start = time.monotonic()
-        client.get("/api/briefing/SPY")
-        t1 = time.monotonic() - t1_start
-
-        t2_start = time.monotonic()
-        client.get("/api/briefing/SPY")
-        t2 = time.monotonic() - t2_start
-
-        # Second call should be <= first (cached)
-        assert t2 <= t1 * 1.5  # Allow some variance
+        assert client.get("/api/briefing/SPY").status_code == 200
+        assert client.get("/api/briefing/SPY").status_code == 200
+        assert briefing_inputs.await_count == 1
+        api._briefing_cache["SPY"]["_cached_at"] -= api._CACHE_TTL_SECONDS + 1
+        assert client.get("/api/briefing/SPY").status_code == 200
+        assert briefing_inputs.await_count == 2

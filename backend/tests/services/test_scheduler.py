@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
@@ -29,6 +29,11 @@ os.environ.setdefault("TESTING", "1")
 import contextlib
 
 from services.scheduler import PollingScheduler
+
+
+@pytest.fixture(autouse=True)
+def isolated_storage(monkeypatch):
+    monkeypatch.setattr("services.scheduler.get_duckdb_conn", MagicMock())
 
 
 @pytest_asyncio.fixture
@@ -130,25 +135,34 @@ class TestSchedulerFetchers:
 
     @pytest.mark.asyncio
     async def test_options_fetcher_called(self, scheduler):
-        """Options fetcher is called during execution."""
-        with patch.object(scheduler, "_fetch_options", new_callable=AsyncMock) as mock_opt,              patch.object(scheduler, "_fetch_underlying", new_callable=AsyncMock):
-            _task = asyncio.create_task(scheduler.start())
-            await asyncio.sleep(1.3)
-            scheduler.stop()
-            await asyncio.sleep(0.3)
-
-            assert mock_opt.call_count >= 1
+        """First execution runs both price fetchers and daily news exactly once."""
+        with patch.object(scheduler, "_fetch_options", new_callable=AsyncMock) as options, \
+                patch.object(scheduler, "_fetch_underlying", new_callable=AsyncMock) as underlying, \
+                patch.object(scheduler, "_poll_news_for_universe", new_callable=AsyncMock) as news, \
+                patch.object(scheduler, "_poll_max_pain_for_universe", new_callable=AsyncMock) as max_pain, \
+                patch.object(scheduler, "_poll_rv_for_universe", new_callable=AsyncMock) as rv:
+            await scheduler._run_fetchers()
+            options.assert_awaited_once_with()
+            underlying.assert_awaited_once_with()
+            news.assert_awaited_once_with()
+            max_pain.assert_not_awaited()
+            rv.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_underlying_fetcher_called(self, scheduler):
-        """Underlying fetcher is called during execution."""
-        with patch.object(scheduler, "_fetch_options", new_callable=AsyncMock),              patch.object(scheduler, "_fetch_underlying", new_callable=AsyncMock) as mock_und:
-            _task = asyncio.create_task(scheduler.start())
-            await asyncio.sleep(1.3)
-            scheduler.stop()
-            await asyncio.sleep(0.3)
-
-            assert mock_und.call_count >= 1
+        """A later ordinary execution runs both fetchers without daily polls."""
+        scheduler._execution_count = 1
+        with patch.object(scheduler, "_fetch_options", new_callable=AsyncMock) as options, \
+                patch.object(scheduler, "_fetch_underlying", new_callable=AsyncMock) as underlying, \
+                patch.object(scheduler, "_poll_news_for_universe", new_callable=AsyncMock) as news, \
+                patch.object(scheduler, "_poll_max_pain_for_universe", new_callable=AsyncMock) as max_pain, \
+                patch.object(scheduler, "_poll_rv_for_universe", new_callable=AsyncMock) as rv:
+            await scheduler._run_fetchers()
+            options.assert_awaited_once_with()
+            underlying.assert_awaited_once_with()
+            news.assert_not_awaited()
+            max_pain.assert_not_awaited()
+            rv.assert_not_awaited()
 
 
 # ─────────────────────────────────────────────────────────────────────

@@ -3,6 +3,7 @@
 import os
 import socket
 import traceback
+from collections import Counter
 
 import httpx
 import pytest
@@ -49,4 +50,10 @@ def deny_external_network():
         yield
     finally:
         monkeypatch.undo()
-    assert not attempts, f"Provider mock was missed; external requests were blocked: {attempts[:20]}"
+    # Keep every originating test visible even when one caller retries heavily.
+    # Retain bounded stack examples without hiding later leaking fixtures.
+    by_test = dict(Counter(item["test"] for item in attempts))
+    assert not attempts, (
+        f"Provider mock was missed; external requests were blocked; attempts by test: {by_test}; "
+        f"first examples: {attempts[:5]}"
+    )
