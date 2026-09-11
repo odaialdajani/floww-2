@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>ai.tidehunter.discord-bot</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/nav/Documents/GitHub/floww/backend/.venv/bin/python3</string>
+        <string>/Users/nav/Documents/GitHub/floww/backend/discord_bot.py</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/nav/Documents/GitHub/floww/backend</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+    <key>StandardOutPath</key>
+    <string>/tmp/tidehunter-discord-bot.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/tidehunter-discord-bot.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- Secrets stay in backend/.env (loaded by the bot via dotenv).
+             Nothing secret goes here — this file may live in the repo. -->
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+</dict>
+</plist>

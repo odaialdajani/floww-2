@@ -10,6 +10,6 @@ export const STARTER_PRESETS = [
     id: 'sweeps250k',
     title: 'High-Conviction Sweeps',
     filters: { minPremium: 250000, sweepsOnly: true, minScore: 60, absScore: true },
-    description: 'Sweep-classified flow ≥$250K, |score|>60 — fewer rows, higher conviction.',
+    description: 'Sweep-classified (size-bucket proxy, no venue tape) flow ≥$250K, |score|>60 — fewer rows, higher conviction.',
   },
 ];

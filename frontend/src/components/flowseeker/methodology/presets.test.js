@@ -9,9 +9,10 @@ describe('starter presets', () => {
     expect(p.filters.equityType.stocks).toBe(true);
     expect(p.filters.equityType.etfs).toBe(false);
   });
-  it('High-Conviction Sweeps', () => {
+  it('High-Conviction Sweeps names the size-bucket proxy', () => {
     const p = STARTER_PRESETS.find((x) => x.id === 'sweeps250k');
     expect(p.filters.sweepsOnly).toBe(true);
     expect(p.filters.absScore).toBe(true);
+    expect(p.description).toMatch(/proxy/i);
   });
 });

@@ -131,16 +131,6 @@ websocket_connections = Gauge(
 )
 
 # ---------------------------------------------------------------------------
-# Schwab Auth Health
-# ---------------------------------------------------------------------------
-schwab_token_expires_in_seconds = Gauge(
-    "floww_schwab_token_expires_in_seconds",
-    "Seconds until Schwab OAuth token expires (0 if no token)",
-    registry=REGISTRY,
-)
-
-
-# ---------------------------------------------------------------------------
 # Helper: generate Prometheus exposition format
 # ---------------------------------------------------------------------------
 def get_metrics_bytes() -> bytes:
@@ -239,6 +229,19 @@ provider_alerts_fired_total = Counter(
     "floww_provider_alerts_fired_total",
     "Total alerts fired for data provider health issues",
     labelnames=["provider", "alert_type"],  # alert_type: "low_success_rate" | "provider_down" | "repeated_failures"
+    registry=REGISTRY,
+)
+
+quarantine_total = Counter(
+    "floww_quarantine_total",
+    "Total malformed provider payloads quarantined at the boundary (never raised)",
+    labelnames=["source", "reason"],  # reason: short snake_case code from contract_validators
+    registry=REGISTRY,
+)
+
+sweep_last_unixtime = Gauge(
+    "floww_sweep_last_unixtime",
+    "Wall-clock unixtime of the last completed universe sweep (dead-man gauge; 0 = never)",
     registry=REGISTRY,
 )
 

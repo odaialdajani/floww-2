@@ -33,7 +33,7 @@ import {
   moneynessPct, applyScreenToScans, applyScreenToAlerts,
   SCAN_FACTS, SCAN_FACT_LABELS, TICKER_FACTS, TICKER_FACT_LABELS, RULE_LIST,
 } from "./tideFeed";
-import { persistJournalSeeds } from "./autoTrade";
+import { persistJournalSeeds } from "./journalPlans";
 import TidehunterSettings, { loadTide, saveSettings as saveTide } from "./TidehunterSettings";
 import "./FlowseekerProBlademap.css";
 
@@ -142,7 +142,10 @@ export function mapPublicChainToRows(contracts, spot, ticker) {
 
 function loadPrefs() {
   try {
-    return JSON.parse(localStorage.getItem(PREFS_KEY)) || {};
+    const prefs = JSON.parse(localStorage.getItem(PREFS_KEY)) || {};
+    const oldPoll = localStorage.getItem("fsb.pollMs");
+    if (prefs.pollMs == null && oldPoll != null && Number.isFinite(Number(oldPoll)) && Number(oldPoll) >= 0) prefs.pollMs = Number(oldPoll);
+    return prefs;
   } catch {
     return {};
   }
@@ -383,7 +386,22 @@ export default function FlowseekerProBlademap({ active = true }) {
           const rows = d.rows.map((r) => {
             const row = mkScanRow(r[0], r[2], r[3], r[4], Number(r[5]) || 0, Number(r[6]) || 0,
               r[7], r[8], Number(r[9]) || null, regimes[r[0]] || null);
-            row.oiChg = oiChange(row.oi, prevOI[r[1]]);
+            row.osi = typeof r[1] === "string" ? r[1] : null;
+            const quote = (d.quote_truth || {})[`${row.under}|${row.type}|${row.strike}|${row.exp}`];
+            row.premiumSource = "estimate";
+            if (quote) {
+              if (Number.isFinite(quote.premium_true) && quote.premium_true >= 0) {
+                row.premium = quote.premium_true;
+                row.premiumSource = "quote";
+              }
+              if (["ASK", "BID"].includes(quote.nbbo_side)) row.nbbo = quote.nbbo_side;
+              if (["ASK", "BID"].includes(quote.signed_side)) row.signedSide = quote.signed_side;
+              if (["quote", "tick"].includes(quote.sign_method)) row.signMethod = quote.sign_method;
+              if (Number.isFinite(quote.velocity_per_min)) row.velocity = quote.velocity_per_min;
+            }
+            row.oiTag = (d.oi_tags || {})[r[1]] || (row.exp && row.exp <= sessionDay() ? { expiring: true } : null);
+            row.oiChg = row.oiTag?.expiring || row.oiTag?.rollover ? null : oiChange(row.oi, prevOI[r[1]]);
+            if (row.oiChg && row.oiTag) row.oiChg.tag = row.oiTag;
             row.oiChgPct = row.oiChg ? row.oiChg.pct : null;
             return row;
           });
@@ -421,6 +439,7 @@ export default function FlowseekerProBlademap({ active = true }) {
 
   useEffect(() => {
     try {
+      localStorage.setItem("fsb.pollMs", String(pollMs));
       localStorage.setItem(PREFS_KEY, JSON.stringify({ pollMs, universe, alertScore, notify, alertUnivOnly }));
     } catch {
       /* private mode */
@@ -824,7 +843,9 @@ export default function FlowseekerProBlademap({ active = true }) {
       strike: a.strike,
       expiry: a.exp,
       entry_date: sessionDay(),
-      entry_price: a.levels?.entry ?? a.est_entry ?? null,
+      entry_price: null,
+      underlying_reference: a.levels?.entry ?? a.est_entry ?? null,
+      contract_id: a.osi || a.contract_id || null,
       stop: a.levels?.invalidation ?? null,
       target: a.levels?.target ?? null,
       setup: "tidehunter-verdict",
@@ -832,8 +853,12 @@ export default function FlowseekerProBlademap({ active = true }) {
       why: a.why || "",
       source: "tidehunter-manual",
     };
-    persistJournalSeeds([seed]);
-    setPlanned((p) => ({ ...p, [a.key]: true }));
+    try {
+      persistJournalSeeds([seed]);
+      setPlanned((p) => ({ ...p, [a.key]: true }));
+    } catch {
+      window.alert("Your plan could not be saved. Check browser storage and try again.");
+    }
   }, []);
   const forceRefresh = useCallback(async () => {
     setForcing(true);
@@ -1154,9 +1179,9 @@ export default function FlowseekerProBlademap({ active = true }) {
         <span className={r.oiChg.pct >= 0 ? "up" : "dn"} title={`OI ${r.oiChg.abs >= 0 ? "+" : ""}${fmtK(r.oiChg.abs)} vs prior session`}>
           {(r.oiChg.pct >= 0 ? "+" : "") + (r.oiChg.pct * 100).toFixed(0)}% {oiHeldLabel(r.oiChgPct)}
         </span>
-      ) : <span className="lo">— no prior day</span>;
+      ) : <span className="lo">{r.oiTag?.expiring ? "Expiring - change withheld" : r.oiTag?.rollover ? "Rollover - change withheld" : "— no prior day"}</span>;
       case "volOI": return r.volOI >= 99 ? "99+" : `${(r.volOI || 0).toFixed(1)}x`;
-      case "premium": return <span title="Estimated premium — no quote feed on this data">~{fmtUSD(r.premium)}</span>;
+      case "premium": return <span title={r.premiumSource === "quote" ? "Premium from observed quote" : "Estimated premium — no quote feed on this data"}>{r.premiumSource === "quote" ? "" : "~"}{fmtUSD(r.premium)}</span>;
       case "notional": return fmtUSD(r.notional);
       case "iv": return fmtIV(r.iv);
       case "delta": return r.delta == null ? "—" : `${r.deltaEst ? "~" : ""}${Number(r.delta).toFixed(2)}`;

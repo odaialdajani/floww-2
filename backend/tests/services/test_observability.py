@@ -146,19 +146,6 @@ def test_duckdb_batch_size_histogram():
 
 
 # ---------------------------------------------------------------------------
-# Test 10: schwab_token_expires_in_seconds gauge
-# ---------------------------------------------------------------------------
-def test_schwab_token_ttl_gauge():
-    from services.observability import get_metrics_bytes, schwab_token_expires_in_seconds
-    schwab_token_expires_in_seconds.set(900)
-    output = get_metrics_bytes().decode()
-    assert "floww_schwab_token_expires_in_seconds 900" in output
-    schwab_token_expires_in_seconds.set(0)
-    output = get_metrics_bytes().decode()
-    assert "floww_schwab_token_expires_in_seconds 0" in output
-
-
-# ---------------------------------------------------------------------------
 # Test 11: /metrics endpoint returns valid Prometheus format
 # ---------------------------------------------------------------------------
 def test_metrics_endpoint_returns_prometheus_format():

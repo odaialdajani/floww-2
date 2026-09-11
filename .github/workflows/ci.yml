@@ -44,16 +44,7 @@ jobs:
           #   Dockerfile.backend:1        FROM python:3.11-slim AS production
           #   .github/workflows/deploy.yml:25   python-version: "3.11"
           # Testing on any other version validates code that production never
-          # runs. A previous pass bumped this to "3.13"; that hid a real defect
-          # (see below) rather than fixing it, so it is reverted.
-          #
-          # KNOWN RED: backend/routes/quant.py:187 uses a PEP 701 f-string that
-          # reuses the outer quote character. That syntax is Python 3.12+ only,
-          # so the file is a SyntaxError on 3.11 and server.py imports it
-          # (server.py:2734 `from routes.quant import router as quant_router`).
-          # This job will fail here until quant.py:187 is fixed — that failure
-          # is CORRECT: the shipped python:3.11-slim image cannot import
-          # server.py today either. Do NOT silence it by raising this pin.
+          # runs. quant.py:187 PEP-701 defect fixed (d29ae3f), so 3.11 is green.
           python-version: "3.11"
           cache: "pip"
           cache-dependency-path: backend/requirements.txt
@@ -102,6 +93,7 @@ jobs:
           bandit -r . --severity-level medium -q --exclude ./.venv,./tests --skip B101,B108,B301,B310,B313,B314,B324,B604,B608,B614,B615
 
       - name: Run tests with coverage
+        timeout-minutes: 15
         working-directory: ./backend
         env:
           MONGO_URL: mongodb://localhost:27017
@@ -141,11 +133,29 @@ jobs:
         # local install flow so CI matches dev.
         run: npm ci --legacy-peer-deps
 
-      # No frontend lint step: linting is disabled on purpose. craco.config.js
+<      # No frontend lint step: linting is disabled on purpose. craco.config.js
       # strips ESLintWebpackPlugin and eslint-loader from the webpack config and
       # there is no eslint config file, so package.json has no `lint` script.
-      # The step that used to live here ran `npm run lint || true`, which could
-      # only ever fail-and-be-masked. Backend lint still gates (ruff, above).
+      # Backend lint still gates (ruff, above). CRA production build compiles
+      # with eslint warnings-as-errors and is the current lint signal.
+
+      # Deterministic, cheap gate: catch untracked frontend source files.
+      # Fails closed so the run stops before the Tests step.
+      - name: Frontend filesystem integrity
+        working-directory: ./frontend
+        run: |
+          set -euo pipefail
+          echo "Checking for untracked frontend source files..."
+          RAW=$(git ls-files --others --exclude-standard src/)
+          UNTRACKED=$(echo "$RAW" | grep -E '\.(jsx|js|css|ts|tsx)$' || true)
+          if [ -z "$UNTRACKED" ]; then
+            echo "OK: no untracked frontend source files."
+            exit 0
+          fi
+          echo "::error::Untracked frontend source files detected:"
+          echo "$UNTRACKED"
+          echo "Commit or remove them before merge. Run: git add <files> or rm <files>"
+          exit 1
 
       # Deterministic, cheap gate: catch untracked frontend source files (e.g. a
       # dangling panel JSX + shared CSS dropped into the worktree by another
@@ -172,16 +182,9 @@ jobs:
 
       - name: Tests
         working-directory: ./frontend
-        # This suite is green and MUST gate: 280 passed / 280 total across 44
-        # suites. The previous `continue-on-error: true` cited 12-18 failing
-        # visual-panel / axios-mock tests; those are fixed and the claim was
-        # stale, so the mask is removed.
-        #
-        # CAVEAT on that 280/280 evidence: it was gathered locally on Node
-        # v24. This job pins node-version "20" above, so the gate has not yet
-        # been observed green on the CI Node. If the FIRST run after this
-        # change fails, check for a Node 20-vs-24 difference (jsdom/jest
-        # engine behaviour) before assuming a code regression.
+        # This suite MUST gate (no continue-on-error). Baselines: 280/280 (44 suites)
+        # and 59 suites / 453 tests on newer Node — counts drift as suites land,
+        # so failures block the gate from here on regardless of exact total.
         env:
           CI: true
         # CRA's `react-scripts test` runs jest in watch mode by default; --watchAll=false

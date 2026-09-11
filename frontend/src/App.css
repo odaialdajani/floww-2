@@ -4089,6 +4089,16 @@ button, select, input {
 .skylit-ticker-search::placeholder { color: #475569; }
 .skylit-ticker-search:focus { border-color: rgba(56,189,248,0.5); }
 
+.skylit-ticker-more {
+  font-size: 10px;
+  color: #64748b;
+  padding: 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
 /* ── Selected cell readout (above grid) ───────────────────────────── */
 .skylit-selected-cell-readout {
   font-family: "JetBrains Mono", monospace;

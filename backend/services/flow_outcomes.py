@@ -6,36 +6,36 @@ tape actually predict?"). Joins the persisted alert ledger
 (flow_alerts_daily, written by services/flow_alerts.py) to subsequent
 underlying returns and produces per-rule, control-matched precision stats.
 
-Why: every alert threshold in the system (SCORE≥92, WHALE≥$25M, SIGMA≥6σ…)
+Why: every alert threshold in the system (SCOREâ‰¥92, WHALEâ‰¥$25M, SIGMAâ‰¥6دƒâ€¦)
 is currently a hand-picked default. This module is the foundation for tuning
 those thresholds from measured hit rates instead of intuition.
 
 Design (desk-standard, mirrors the Kimi plan #1):
 
-  • Unit of analysis = ONE alert row (already deduped per (asof_date, key) —
+  â€¢ Unit of analysis = ONE alert row (already deduped per (asof_date, key) â€”
     see flow_alerts_daily PRIMARY KEY). Ticker-day clustering is handled by
     block-bootstrap resampling CLUSTERS, not rows.
-  • Label y = 1 if the side-signed cumulative underlying return over the
-    next N trading sessions reached k·σ20 (vol-scaled threshold), where the
-    return direction is +1 for call-side alerts (bias BULLISH) and −1 for
+  â€¢ Label y = 1 if the side-signed cumulative underlying return over the
+    next N trading sessions reached kآ·دƒ20 (vol-scaled threshold), where the
+    return direction is +1 for call-side alerts (bias BULLISH) and âˆ’1 for
     put-side (bias BEARISH). Censored windows (fewer than N forward sessions
     of bars available) are EXCLUDED from stats, never zero-filled.
-  • Control cohort: for each alert (ticker, date), sample up to
-    `control_per_alert` non-alert ticker-dates within ±`control_window_days`
+  â€¢ Control cohort: for each alert (ticker, date), sample up to
+    `control_per_alert` non-alert ticker-dates within آ±`control_window_days`
     calendar days, matched on VIX tercile when a VIX series is supplied
-    (fallback: unmatched). Controls are labeled with the SAME rule — i.e.
-    "what did non-alert SPY days do over the same window?" — so lift =
-    precision − control_rate is an apples-to-apples excess-hit-rate read.
-  • σ20 (daily realized vol stdev of log returns) is computed from the same
+    (fallback: unmatched). Controls are labeled with the SAME rule â€” i.e.
+    "what did non-alert SPY days do over the same window?" â€” so lift =
+    precision âˆ’ control_rate is an apples-to-apples excess-hit-rate read.
+  â€¢ دƒ20 (daily realized vol stdev of log returns) is computed from the same
     supplied bars, trailing 20 sessions ending the day BEFORE the alert.
-  • MFE/MAE (max favorable / adverse excursion, side-signed, in σ units)
+  â€¢ MFE/MAE (max favorable / adverse excursion, side-signed, in دƒ units)
     over the N-session window, for payoff-asymmetry reads.
 
-No network calls here — the caller supplies bars:
+No network calls here â€” the caller supplies bars:
     bars: {ticker: [(date_iso, close), ...]} ascending by date
     vix:  [(date_iso, close), ...] ascending, optional
 
-All numbers that depend on sample size are None below `min_alerts` — honest
+All numbers that depend on sample size are None below `min_alerts` â€” honest
 empty state, never a fabricated precision on n=2.
 
 DuckDB invariant: read-only against flow_alerts_daily; no writes.
@@ -51,22 +51,22 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# ── tunables (thresholds live in flow_alerts; these are measurement params) ──
-DEFAULT_HORIZON_SESSIONS = 2      # N: forward sessions to measure (Pan-Poteshman next-day power → N=2 primary)
-DEFAULT_SIGMA_K = 0.75            # hit = |side-signed cum return| ≥ k·σ20
-DEFAULT_SIGMA_WINDOW = 20         # trailing sessions for σ20
+# â”€â”€ tunables (thresholds live in flow_alerts; these are measurement params) â”€â”€
+DEFAULT_HORIZON_SESSIONS = 2      # N: forward sessions to measure (Pan-Poteshman next-day power heuristic â†’ N=2 primary)
+DEFAULT_SIGMA_K = 0.75            # hit = |side-signed cum return| â‰¥ kآ·دƒ20
+DEFAULT_SIGMA_WINDOW = 20         # trailing sessions for دƒ20
 DEFAULT_CONTROL_PER_ALERT = 20    # matched controls per alert ticker-day
-DEFAULT_CONTROL_WINDOW_DAYS = 45  # ±calendar days for the control search
+DEFAULT_CONTROL_WINDOW_DAYS = 45  # آ±calendar days for the control search
 DEFAULT_MIN_ALERTS = 5            # below this: precision/lift are None (uncalibrated)
 DEFAULT_BOOTSTRAP_ITERS = 500     # block (cluster) bootstrap iterations
 DEFAULT_BOOTSTRAP_SEED = 42       # deterministic CIs for reproducible dashboards
 DEFAULT_LOOKBACK_DAYS = 60        # how much alert history to measure per run
 
 
-# ── bars helpers ─────────────────────────────────────────────────────────────
+# â”€â”€ bars helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _index_bars(bars: dict[str, list[tuple[str, float]]]) -> dict[str, dict[str, float]]:
-    """{ticker: [(date, close), ...]} → {ticker: {date: close}} (ascending assumed)."""
+    """{ticker: [(date, close), ...]} â†’ {ticker: {date: close}} (ascending assumed)."""
     out: dict[str, dict[str, float]] = {}
     for tkr, series in (bars or {}).items():
         out[tkr] = {str(d): float(c) for d, c in series if d is not None and c is not None}
@@ -98,7 +98,7 @@ def _sigma20(bars_by_date: dict[str, float], dates_asc: list[str], asof: str,
     """Trailing `window`-session log-return stdev ending the session BEFORE asof."""
     i = _bisect_right(dates_asc, asof)
     hist = dates_asc[max(0, i - window - 1):i]
-    if len(hist) < window:  # need window returns → window+1 closes
+    if len(hist) < window:  # need window returns â†’ window+1 closes
         return None
     rets = []
     for a, b in zip(hist, hist[1:], strict=False):
@@ -118,7 +118,7 @@ def _forward_path(bars_by_date: dict[str, float], dates_asc: list[str], asof: st
                   entry_price: float, n: int, side_sign: int) -> dict[str, Any] | None:
     """Side-signed forward returns over the n sessions after asof.
 
-    Returns None when censored (< n forward sessions — excluded, never zero-filled).
+    Returns None when censored (< n forward sessions â€” excluded, never zero-filled).
     """
     fwd = _trading_dates_after(dates_asc, asof, n)
     if len(fwd) < n:
@@ -130,7 +130,7 @@ def _forward_path(bars_by_date: dict[str, float], dates_asc: list[str], asof: st
             return None
         path.append(side_sign * (px / entry_price - 1.0))
     cum = path[-1]
-    # side-signed MFE/MAE in return space (not yet σ units — caller scales)
+    # side-signed MFE/MAE in return space (not yet دƒ units â€” caller scales)
     peak, trough = path[0], path[0]
     for r in path:
         peak = max(peak, r)
@@ -147,7 +147,7 @@ def _vix_tercile(vix: list[tuple[str, float]] | None, asof: str) -> int | None:
         return None
     q1, q2 = vals[len(vals) // 3], vals[2 * len(vals) // 3]
     px = None
-    for d, c in vix:  # series ascending: last ≤ asof wins
+    for d, c in vix:  # series ascending: last â‰¤ asof wins
         if str(d) <= asof:
             px = float(c)
         else:
@@ -161,7 +161,7 @@ def _vix_tercile(vix: list[tuple[str, float]] | None, asof: str) -> int | None:
     return 2
 
 
-# ── labeling ─────────────────────────────────────────────────────────────────
+# â”€â”€ labeling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def label_alerts(
     alerts: list[dict[str, Any]],
@@ -176,7 +176,7 @@ def label_alerts(
 
     Each alert gains: sigma20, hit (bool|None), ret (float|None),
     mfe_sigma / mae_sigma (float|None), censored (bool), vix_tercile.
-    Side sign: call-side +1, put-side −1 (from `side` or `type`).
+    Side sign: call-side +1, put-side âˆ’1 (from `side` or `type`).
     """
     indexed = _index_bars(bars)
     dates_by_tkr = {t: sorted(m.keys()) for t, m in indexed.items()}
@@ -210,13 +210,13 @@ def label_alerts(
             row["mfe_sigma"] = path["peak"] / sig
             row["mae_sigma"] = path["trough"] / sig
         else:
-            # no vol context → absolute floor: 1% move counts as a hit (documented)
+            # no vol context â†’ absolute floor: 1% move counts as a hit (documented)
             row["hit"] = abs(path["cum"]) >= 0.01
         out.append(row)
     return out
 
 
-# ── control cohort ───────────────────────────────────────────────────────────
+# â”€â”€ control cohort â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def build_controls(
     labeled: list[dict[str, Any]],
@@ -233,7 +233,7 @@ def build_controls(
     """Control cohort: non-alert ticker-days, same labeling machinery.
 
     For each labeled alert, sample up to `per_alert` candidate (ticker, date)
-    days within ±window_days that (a) have no alert that day for that ticker,
+    days within آ±window_days that (a) have no alert that day for that ticker,
     (b) match the alert's VIX tercile when both are known. Deterministic given
     the same rng seed.
     """
@@ -296,7 +296,7 @@ def build_controls(
     return controls
 
 
-# ── stats ────────────────────────────────────────────────────────────────────
+# â”€â”€ stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _wilson_ci(hits: int, n: int, z: float = 1.96) -> tuple[float, float] | None:
     if n == 0:
@@ -316,9 +316,9 @@ def _block_bootstrap_lift(
     iters: int,
     rng: random.Random,
 ) -> tuple[float, float] | None:
-    """95% CI for (precision − control_rate) via cluster bootstrap.
+    """95% CI for (precision âˆ’ control_rate) via cluster bootstrap.
 
-    Resamples CLUSTERS (ticker-days), not rows — alert bursts on one ticker-day
+    Resamples CLUSTERS (ticker-days), not rows â€” alert bursts on one ticker-day
     are correlated and would otherwise fake tight CIs.
     """
     if not alert_hits or not control_hits:
@@ -365,7 +365,7 @@ def outcome_stats(
     """
     rng = rng or random.Random(DEFAULT_BOOTSTRAP_SEED)
     # Censored rows are KEPT in by_rule (for honest n_censored accounting) but
-    # excluded from every hits/return list below — excluded, never zero-filled.
+    # excluded from every hits/return list below â€” excluded, never zero-filled.
     by_rule: dict[str, list[dict]] = {}
     for a in labeled or []:
         by_rule.setdefault(a.get("rule") or "UNKNOWN", []).append(a)
@@ -414,7 +414,7 @@ def outcome_stats(
             "median_mae_sigma": round(sorted(mae)[len(mae) // 2], 3) if mae else None,
             "uncalibrated": n < min_alerts,
             # Rule-decay governance (2026-09-02): ledger-driven status. Display
-            # only — thresholds stay the desk's dials, nothing auto-tuned.
+            # only â€” thresholds stay the desk's dials, nothing auto-tuned.
             **_decay_status(lift, rows),
         }
         overall_hits += h
@@ -448,7 +448,7 @@ def compute_outcomes(
     bootstrap_iters: int = DEFAULT_BOOTSTRAP_ITERS,
     seed: int = DEFAULT_BOOTSTRAP_SEED,
 ) -> dict[str, Any]:
-    """One-shot: label → controls → stats. This is what the route calls."""
+    """One-shot: label â†’ controls â†’ stats. This is what the route calls."""
     labeled = label_alerts(alerts, bars, vix, horizon=horizon, sigma_k=sigma_k, sigma_window=sigma_window)
     controls = build_controls(labeled, bars, vix, horizon=horizon, sigma_k=sigma_k,
                               sigma_window=sigma_window, per_alert=per_alert,
@@ -463,7 +463,7 @@ def compute_outcomes(
 def _decay_status(lift: float | None, rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Governance status from the ledger itself: a rule whose lift sits below
     1.0 across the last 30 days of measured alerts is AMBER (display/status
-    only — thresholds are the desk's dials, never auto-tuned)."""
+    only â€” thresholds are the desk's dials, never auto-tuned)."""
     import datetime as _dt
 
     if lift is None:
@@ -483,7 +483,7 @@ def _decay_status(lift: float | None, rows: list[dict[str, Any]]) -> dict[str, A
 def read_alert_history(engine: Any, days: int = DEFAULT_LOOKBACK_DAYS) -> list[dict[str, Any]]:
     """Read the persisted alert ledger (flow_alerts_daily) for measurement.
 
-    Read-only — the DuckDB invariant (writes only via execute_write) is
+    Read-only â€” the DuckDB invariant (writes only via execute_write) is
     untouched; this module never writes. Uses engine.query (returns
     list[dict]) per the DuckDBEngine contract.
     """
@@ -520,4 +520,74 @@ def fetch_bars_yfinance(tickers: list[str], period_days: int = 90) -> dict[str, 
                 continue
     except Exception as e:
         logger.warning("flow_outcomes: yfinance bars unavailable: %s", e)
+    return out
+
+
+# â”€â”€ C7 rule value (Agent C, 2026-09-05) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Ex-post value per rule on LABELED rows (label_alerts shape): realized
+# side-signed edge net of estimated one-way cost. Feeds the Sync-3
+# kill/keep read. Verdicts are display/status only â€” thresholds are the
+# desk's dials, never auto-tuned (same governance as _decay_status).
+VALUE_THIN_N = 10          # below this: THIN (unjudged), never CUT
+VALUE_DEFAULT_COST_BPS = 25.0  # one-way cost when no per-row estimate
+
+
+def rule_value_table(labeled_rows: list[dict[str, Any]],
+                     default_cost_bps: float = VALUE_DEFAULT_COST_BPS) -> dict[str, dict[str, Any]]:
+    """Per-rule realized edge: {n, n_measured, hit_rate, avg_edge_net, verdict}.
+
+    Net edge per measured row = ret âˆ’ cost/1e4, where cost is the row's
+    slippage_bps_est (C4, when present) else default_cost_bps.
+    """
+    by_rule: dict[str, list[dict[str, Any]]] = {}
+    for r in labeled_rows or []:
+        by_rule.setdefault(str(r.get("rule") or "UNKNOWN"), []).append(r)
+    out: dict[str, dict[str, Any]] = {}
+    for rule, rows in by_rule.items():
+        measured = []
+        for row in rows:
+            if row.get("censored") or isinstance(row.get("ret"), bool):
+                continue
+            try:
+                value = float(row.get("ret"))
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if math.isfinite(value):
+                measured.append(row)
+        n_measured = len(measured)
+        if n_measured == 0:
+            out[rule] = {"n": len(rows), "n_measured": 0, "hit_rate": None,
+                         "avg_edge_net": None, "verdict": "THIN"}
+            continue
+        nets = []
+        for r in measured:
+            try:
+                ret = float(r["ret"])
+            except (TypeError, ValueError):
+                continue
+            cost = r.get("slippage_bps_est")
+            try:
+                cost = float(cost) if cost is not None else default_cost_bps
+            except (TypeError, ValueError):
+                cost = default_cost_bps
+            if not math.isfinite(cost) or cost < 0:
+                cost = default_cost_bps
+            nets.append(ret - cost / 1e4)
+        if not nets:
+            out[rule] = {"n": len(rows), "n_measured": n_measured, "hit_rate": None,
+                         "avg_edge_net": None, "verdict": "THIN"}
+            continue
+        hits = sum(1 for r in measured if r.get("hit"))
+        avg_net = sum(nets) / len(nets)
+        if n_measured < VALUE_THIN_N:
+            verdict = "THIN"
+        elif avg_net > 0:
+            verdict = "KEEP"
+        elif avg_net > -default_cost_bps / 1e4:
+            verdict = "WATCH"
+        else:
+            verdict = "CUT"
+        out[rule] = {"n": len(rows), "n_measured": n_measured,
+                     "hit_rate": round(hits / n_measured, 4),
+                     "avg_edge_net": round(avg_net, 4), "verdict": verdict}
     return out

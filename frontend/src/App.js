@@ -47,12 +47,15 @@ import { SocialFlowPanel } from "./components/SocialFlowPanel";
 import SkylitDashboard from "./components/heatseeker/SkylitDashboard";
 import StealThreePreview from "./components/heatseeker/StealThreePreview";
 import FlowseekerProBlademap from "./components/flowseeker/FlowseekerProBlademap";
+import PublicPanel from "./components/PublicPanel";
 import AlertOverlay from "./components/AlertOverlay";
 import PWAInstallBanner from "./components/PWAInstallBanner";
 import AppShell from "./shell/AppShell";
 import { useTheme } from "./context/ThemeContext";
 import { autoDecimate } from "./utils/dataDecimator";
+import { mutatingHeaders } from "./utils/appKey";
 import { PAGE_NAMES } from "./shell/navConfig";
+import { buildTickerUniverse, fetchFullUniverse, normalizeTicker } from "./components/heatseeker/tickerUniverse";
 
 import ToxicityGauge from "./components/ToxicityGauge";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -121,41 +124,25 @@ function Movers({ onPick }) {
 }
 
 // ============ Nodes Table ============
-function NodesTable({ data }) {
-  if (!data?.nodes) return null;
-  return (
-    <div className="panel p-3" data-testid="nodes-table">
-      <div className="label mb-2">Key Nodes</div>
-      <table className="w-full text-[11px] mono">
-        <thead className="text-slate-500 text-[10px] uppercase tracking-widest">
-          <tr>
-            <th className="text-left text-[10px] uppercase tracking-widest text-slate-500 font-normal px-2 py-1">Strike</th>
-            <th className="text-left text-[10px] uppercase tracking-widest text-slate-500 font-normal px-2 py-1">GEX</th>
-            <th className="text-left text-[10px] uppercase tracking-widest text-slate-500 font-normal px-2 py-1">Role</th>
-            <th className="text-left text-[10px] uppercase tracking-widest text-slate-500 font-normal px-2 py-1">Life</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(data.nodes.key_nodes || []).map((n, i) => (
-            <tr key={i} className="bar-row">
-              <td className="px-2 py-1">{fmt(n.strike, 0)}</td>
-              <td className={`px-2 py-1 ${n.gex > 0 ? "text-emerald-400" : "text-rose-400"}`}>{n.gex > 0 ? "+" : ""}{fmtAbs(n.gex)}</td>
-              <td className="px-2 py-1"><span className={`tag ${n.role}`}>{n.role}</span></td>
-              <td className="px-2 py-1 text-slate-500">{n.life || "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 // ============ Ticker Search ============
+// Open universe (2026-09-03, Nav-approved): Enter submits free text — any
+// symbol, not just the suggestion list. For the suggestion popover we render
+// from the same deduped universe the ticker bar and arrows use, so the header
+// suggestions, bar buttons, count, and arrow order are one contract.
 function TickerSearch({ tickers, value, onChange }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const ref = useRef();
-  const filtered = (tickers || []).filter(t => !q || t.toLowerCase().includes(q.toLowerCase())).slice(0, 12);
+  const universe = useMemo(() => buildTickerUniverse(tickers), [tickers]);
+  const filtered = useMemo(() => {
+    if (!q) return universe.slice(0, 12);
+    const ql = q.toLowerCase();
+    return universe.filter(t => t.toLowerCase().includes(ql)).slice(0, 12);
+  }, [universe, q]);
+  const submitFreeText = () => {
+    const t = q.trim().toUpperCase().replace(/^\$/, "");
+    if (t) { onChange(t); setOpen(false); setQ(""); }
+  };
   useEffect(() => {
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener("mousedown", handler);
@@ -165,9 +152,10 @@ function TickerSearch({ tickers, value, onChange }) {
     <div ref={ref} className="relative">
       <input
         className="mono text-[12px] px-2 py-1 rounded"
-        style={{ background: "var(--surface-1)", border: "1px solid var(--border-c)", color: "var(--text-primary)", width: 100 }}
+        style={{ background: "var(--panel)", border: "1px solid var(--border)", color: "var(--text-primary)", width: 100 }}
         value={q}
         onChange={e => { setQ(e.target.value); setOpen(true); }}
+        onKeyDown={e => { if (e.key === "Enter") submitFreeText(); }}
         onFocus={() => setOpen(true)}
         placeholder={value || "SPY"}
       />
@@ -199,7 +187,7 @@ function ApHeader({ page, ticker, onTickerChange, tickers, data, onSignOut, user
           <svg className="hidden lg:block" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--text-quaternary)" }}>
             <path d="M9 18l6-6-6-6"/>
           </svg>
-          <span className="truncate font-semibold" style={{ color: "var(--text-primary)" }}>{pageName}</span>
+          <span className="truncate font-semibold" title={pageName} style={{ color: "var(--text-primary)" }}>{pageName}</span>
         </div>
 
         {/* Right side actions */}
@@ -207,7 +195,7 @@ function ApHeader({ page, ticker, onTickerChange, tickers, data, onSignOut, user
           {/* Ticker search for relevant pages */}
           {tickers && (page === "heatseeker" || page === "trinity" || page === "skylit" || page === "ticker-analysis") && (
             <TickerSearch
-              tickers={[...(tickers.trinity || []), ...(tickers.default || []), ...(tickers.popular || [])]}
+              tickers={buildTickerUniverse(tickers)}
               value={ticker}
               onChange={onTickerChange}
             />
@@ -525,7 +513,6 @@ export default function App() {
   const [expiries, setExpiries] = useState(4);
   const [trinityTab, setTrinityTab] = useState("gex");
   const [dte, setDte] = useState(null);
-  const [drilldown, setDrilldown] = useState(null);
   const [tickers, setTickers] = useState(null);
   const [advanced, setAdvanced] = useState(null);
   const [advancedLoading, setAdvancedLoading] = useState(true);
@@ -543,8 +530,31 @@ export default function App() {
   const debouncedExpiries = useDebounce(expiries, 300);
   const debouncedDte = useDebounce(dte, 300);
 
-  // Fetch tickers
-  useEffect(() => { axios.get(`${API}/tickers`).then(r => setTickers(r.data)).catch(() => {}); }, []);
+  // Fetch tickers: featured sets first, then the full listed universe page by
+  // page (T2) so the scroller/search/arrows traverse every tradable name, not
+  // just featured ones. Same {trinity, default, popular} shape is retained —
+  // the full list rides in `popular` and the shared universe helper dedups.
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      let base = null;
+      try {
+        const r = await axios.get(`${API}/tickers`);
+        base = r.data || null;
+        if (on && base) setTickers(base);
+      } catch (_) { /* offline: leave prior tickers */ }
+      try {
+        const full = await fetchFullUniverse((u) => axios.get(u), API);
+        if (!on || full.symbols.length === 0) return;
+        setTickers({
+          trinity: (base && base.trinity) || [],
+          default: (base && base.default) || [],
+          popular: full.symbols,
+        });
+      } catch (_) { /* full list failed: featured sets already set */ }
+    })();
+    return () => { on = false; };
+  }, []);
 
   // Flowseeker signal cards dispatch this to focus the desk ticker.
   useEffect(() => {
@@ -686,17 +696,29 @@ export default function App() {
         case "ArrowUp":
           e.preventDefault();
           if (tickers) {
-            const all = [...(tickers.trinity || []), ...(tickers.default || []), ...(tickers.popular || [])];
-            const idx = all.indexOf(ticker);
-            if (idx > 0) setTicker(all[idx - 1]);
+            const all = buildTickerUniverse(tickers);
+            if (all.length > 0) {
+              setTicker(prev => {
+                const current = normalizeTicker(prev);
+                const idx = all.indexOf(current);
+                if (idx === -1) return all[all.length - 1];
+                return idx > 0 ? all[idx - 1] : all[all.length - 1];
+              });
+            }
           }
           break;
         case "ArrowDown":
           e.preventDefault();
           if (tickers) {
-            const all = [...(tickers.trinity || []), ...(tickers.default || []), ...(tickers.popular || [])];
-            const idx = all.indexOf(ticker);
-            if (idx < all.length - 1) setTicker(all[idx + 1]);
+            const all = buildTickerUniverse(tickers);
+            if (all.length > 0) {
+              setTicker(prev => {
+                const current = normalizeTicker(prev);
+                const idx = all.indexOf(current);
+                if (idx === -1) return all[0];
+                return idx < all.length - 1 ? all[idx + 1] : all[0];
+              });
+            }
           }
           break;
         default: break;
@@ -782,10 +804,50 @@ export default function App() {
             <QuickTradePanel
               selection={tradeSelection}
               onClose={() => setTradeSelection(null)}
-              onSubmit={(trade) => {
+              onSubmit={async (trade) => {
                 console.log("[Triad] Trade submitted:", trade);
+                // Submit real order to backend if it has an OSI symbol
+                if (trade.order_id) {
+                  // Already submitted server-side in handleSubmit
+                  return;
+                }
+                if (trade.oi_symbol) {
+                  try {
+                    const isCall = trade.strategy.includes("call") || trade.strategy === "straddle" || trade.strategy === "iron_condor";
+                    const side = trade.strategy.startsWith("buy") ? "BUY" : "SELL";
+                    const price = isCall
+                      ? (trade.limitPrice ?? trade.call_ask ?? trade.call_last ?? NaN)
+                      : (trade.limitPrice ?? trade.put_bid ?? trade.put_last ?? NaN);
+                    const limitPriceVal = Number.isFinite(price) ? price : null;
+                    // PAPER VENUE (2026-09-06, Nav directive): option clicks
+                    // route to Alpaca paper, never the live Public brokerage.
+                    // UI journaling happens server-side (source api-alpaca-option).
+                    const q = new URLSearchParams({
+                      symbol: trade.oi_symbol,
+                      qty: String(trade.quantity ?? 1),
+                      side: side.toLowerCase(),
+                      order_type: limitPriceVal != null ? "limit" : "market",
+                      limit_price: String(limitPriceVal ?? 0),
+                    });
+                    const resp = await fetch(`${API}/alpaca/order/option?${q}`, {
+                      method: "POST",
+                      // App key header: auth middleware 401s every mutating
+                      // call without it (orders failed from birth). Prompted
+                      // once, stored in this browser only (utils/appKey).
+                      headers: mutatingHeaders() || undefined,
+                    });
+                    const result = await resp.json();
+                    // Alpaca route returns HTTP 200 with an error body on
+                    // validation/transport failure — resp.ok alone fakes success
+                    // and orphans the local journal row (issue #23).
+                    if (!resp.ok || result?.error || result?.detail) throw new Error(result.detail?.message || result.message || result.error || resp.statusText);
+                    console.log("[Triad] Order placed:", result);
+                  } catch (err) {
+                    console.error("[Triad] Order failed:", err);
+                    alert("Order failed: " + err.message);
+                  }
+                }
                 setTradeSelection(null);
-                // TODO: send to backend / journal
               }}
             />
           </div>
@@ -920,7 +982,9 @@ export default function App() {
               ) : view === "multi" ? (
                 <MultiTickerHeatmap tickers={tickers} />
               ) : view === "profile" ? (
-                <VolumeProfileGrid data={displayData} spot={livespot?.spot ?? displayData?.spot} />
+                <div className="volume-profile-page">
+                  <VolumeProfileGrid data={displayData} spot={livespot?.spot ?? displayData?.spot} />
+                </div>
               ) : view === "skylit" || view === "grid" ? (
                 <SkylitDashboard
                   ticker={ticker}
@@ -941,15 +1005,40 @@ export default function App() {
                   onExpiriesChange={setExpiries}
                   onTickerChange={setTicker}
                   onRefresh={() => { setErr(null); fetchData(); }}
-                  onCellClick={(strike, colKey, value) => {
+                  onCellClick={async (strike, colKey, value) => {
                     const row = displayData?.strikes?.find(s => s.strike === strike);
+                    let contractData = null;
+                    try {
+                      const cd = await fetch(
+                        `${API}/contract/${ticker}/${strike}/${colKey}`
+                      );
+                      if (cd.ok) contractData = await cd.json();
+                    } catch (_) { /* contract detail optional */ }
+
+                    const callC = contractData?.contracts?.find(c => c.type === 'call')
+                      || contractData?.contracts?.[0];
+                    const putC = contractData?.contracts?.find(c => c.type === 'put')
+                      || contractData?.contracts?.[1];
+
                     setTradeSelection({
                       ticker, strike, expiry: colKey,
-                      spot: livespot?.spot ?? data?.spot, gex: value,
-                      iv: row?.iv ?? data?.iv, delta: row?.delta ?? data?.delta,
-                      oi: row?.total_oi ?? row?.oi ?? data?.oi,
-                      call_gex: row?.call_gex, put_gex: row?.put_gex,
-                      vex: row?.vex, charm: row?.charm,
+                      spot: livespot?.spot ?? data?.spot,
+                      gex: value,
+                      iv: row?.iv ?? callC?.iv ?? data?.iv,
+                      delta: row?.delta ?? callC?.delta ?? data?.delta,
+                      oi: row?.total_oi ?? row?.oi ?? data?.oi
+                        ?? (callC?.open_interest ?? 0) + (putC?.open_interest ?? 0),
+                      call_gex: row?.call_gex,
+                      put_gex: row?.put_gex,
+                      vex: row?.vex,
+                      charm: row?.charm,
+                      oi_symbol: callC?.osi || putC?.osi || null,
+                      call_bid: callC?.bid,
+                      call_ask: callC?.ask,
+                      call_last: callC?.last,
+                      put_bid: putC?.bid,
+                      put_ask: putC?.ask,
+                      put_last: putC?.last,
                     });
                   }}
                   onStrikeClick={(strike) => setTradeSelection({ ticker, strike, spot: livespot?.spot ?? data?.spot })}
@@ -977,15 +1066,40 @@ export default function App() {
                   onExpiriesChange={setExpiries}
                   onTickerChange={setTicker}
                   onRefresh={() => { setErr(null); fetchData(); }}
-                  onCellClick={(strike, colKey, value) => {
+                  onCellClick={async (strike, colKey, value) => {
                     const row = displayData?.strikes?.find(s => s.strike === strike);
+                    let contractData = null;
+                    try {
+                      const cd = await fetch(
+                        `${API}/contract/${ticker}/${strike}/${colKey}`
+                      );
+                      if (cd.ok) contractData = await cd.json();
+                    } catch (_) { /* contract detail optional */ }
+
+                    const callC = contractData?.contracts?.find(c => c.type === 'call')
+                      || contractData?.contracts?.[0];
+                    const putC = contractData?.contracts?.find(c => c.type === 'put')
+                      || contractData?.contracts?.[1];
+
                     setTradeSelection({
                       ticker, strike, expiry: colKey,
-                      spot: livespot?.spot ?? data?.spot, gex: value,
-                      iv: row?.iv ?? data?.iv, delta: row?.delta ?? data?.delta,
-                      oi: row?.total_oi ?? row?.oi ?? data?.oi,
-                      call_gex: row?.call_gex, put_gex: row?.put_gex,
-                      vex: row?.vex, charm: row?.charm,
+                      spot: livespot?.spot ?? data?.spot,
+                      gex: value,
+                      iv: row?.iv ?? callC?.iv ?? data?.iv,
+                      delta: row?.delta ?? callC?.delta ?? data?.delta,
+                      oi: row?.total_oi ?? row?.oi ?? data?.oi
+                        ?? (callC?.open_interest ?? 0) + (putC?.open_interest ?? 0),
+                      call_gex: row?.call_gex,
+                      put_gex: row?.put_gex,
+                      vex: row?.vex,
+                      charm: row?.charm,
+                      oi_symbol: callC?.osi || putC?.osi || null,
+                      call_bid: callC?.bid,
+                      call_ask: callC?.ask,
+                      call_last: callC?.last,
+                      put_bid: putC?.bid,
+                      put_ask: putC?.ask,
+                      put_last: putC?.last,
                     });
                   }}
                   onStrikeClick={(strike) => setTradeSelection({ ticker, strike, spot: livespot?.spot ?? data?.spot })}
@@ -1073,11 +1187,16 @@ export default function App() {
           <TradeJournal ticker={ticker} />
         )}
 
+        {/* Public Brokerage */}
+        {page === "public" && (
+          <PublicPanel />
+        )}
+
         {/* Tidehunter Pro Tab */}
         {page === "flowseeker-pro" && (
           <div className="flex-1 overflow-auto">
             <ErrorBoundary>
-              <FlowseekerProBlademap active={page === "flowseeker-pro"} />
+              <FlowseekerProBlademap active={page === "flowseeker-pro"} onTrade={setTradeSelection} />
             </ErrorBoundary>
           </div>
         )}
@@ -1087,15 +1206,52 @@ export default function App() {
           <StealThreePreview defaultTicker="SPY" />
         )}
 
-        {/* Drilldown Modal */}
-        {drilldown && <Drilldown {...drilldown} onClose={() => setDrilldown(null)} />}
-
         {/* Quick Trade Panel */}
-        {tradeSelection && page === "heatseeker" && (
+        {tradeSelection && (page === "heatseeker" || page === "flowseeker-pro") && (
           <QuickTradePanel
             selection={tradeSelection}
             onClose={() => setTradeSelection(null)}
             onSubmit={(trade) => {
+              // Direct Public order when the selection carries live contract
+              // data (cell clicks via /api/contract). Mirrors the Triad
+              // submit path; falls through to paper logging regardless.
+              // (2026-09-03, Nav-approved App.js surgical edit.)
+              if (trade.oi_symbol && !trade.order_id) {
+                (async () => {
+                  try {
+                    const isCall = trade.strategy.includes("call") || trade.strategy === "straddle" || trade.strategy === "iron_condor";
+                    const side = trade.strategy.startsWith("buy") ? "BUY" : "SELL";
+                    const price = isCall
+                      ? (trade.limitPrice ?? trade.call_ask ?? trade.call_last ?? NaN)
+                      : (trade.limitPrice ?? trade.put_bid ?? trade.put_last ?? NaN);
+                    const limitPriceVal = Number.isFinite(price) ? price : null;
+                    // PAPER VENUE (2026-09-06, Nav directive): option clicks
+                    // route to Alpaca paper, never the live Public brokerage.
+                    // UI journaling happens server-side (source api-alpaca-option).
+                    const q = new URLSearchParams({
+                      symbol: trade.oi_symbol,
+                      qty: String(trade.quantity ?? 1),
+                      side: side.toLowerCase(),
+                      order_type: limitPriceVal != null ? "limit" : "market",
+                      limit_price: String(limitPriceVal ?? 0),
+                    });
+                    const resp = await fetch(`${API}/alpaca/order/option?${q}`, {
+                      method: "POST",
+                      // App key header: auth middleware 401s every mutating
+                      // call without it (orders failed from birth). Prompted
+                      // once, stored in this browser only (utils/appKey).
+                      headers: mutatingHeaders() || undefined,
+                    });
+                    const result = await resp.json();
+                    // Same HTTP200-with-error guard as the Triad handler above.
+                    if (!resp.ok || result?.error || result?.detail) throw new Error(result.detail?.message || result.message || result.error || resp.statusText);
+                    console.log("[Solstice] Order placed:", result);
+                  } catch (err) {
+                    console.error("[Solstice] Order failed:", err);
+                    alert("Order failed: " + err.message);
+                  }
+                })();
+              }
               // Submit to trade memory endpoint
               axios.post(`${API}/memory/trade`, {
                 ...trade,

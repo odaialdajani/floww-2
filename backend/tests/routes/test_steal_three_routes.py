@@ -27,9 +27,19 @@ def _build_minimal_app():
     return app
 
 
+def _schema_paths(app: FastAPI) -> dict[str, dict]:
+    """Return the public route contract, independent of router internals.
+
+    FastAPI 0.141 stores included routers as nested route objects instead of
+    flattening every child into ``app.routes``.  OpenAPI remains the supported
+    public inventory and therefore works across both layouts.
+    """
+    return app.openapi()["paths"]
+
+
 def test_router_exports_expected_paths():
     app = _build_minimal_app()
-    paths = sorted({r.path for r in app.routes if hasattr(r, "path")})
+    paths = _schema_paths(app)
     # Three core endpoints must be present.
     assert "/api/dual_gex/{ticker}" in paths
     assert "/api/iv_mid/{ticker}" in paths
@@ -38,13 +48,10 @@ def test_router_exports_expected_paths():
 
 def test_router_exposes_get_methods_on_all_three_endpoints():
     app = _build_minimal_app()
-    paths_to_methods: dict[str, set[str]] = {}
-    for r in app.routes:
-        if hasattr(r, "path") and hasattr(r, "methods"):
-            paths_to_methods.setdefault(r.path, set()).update(r.methods)
-    assert "GET" in paths_to_methods["/api/dual_gex/{ticker}"]
-    assert "GET" in paths_to_methods["/api/iv_mid/{ticker}"]
-    assert "GET" in paths_to_methods["/api/screener/income"]
+    paths = _schema_paths(app)
+    assert "get" in paths["/api/dual_gex/{ticker}"]
+    assert "get" in paths["/api/iv_mid/{ticker}"]
+    assert "get" in paths["/api/screener/income"]
 
 
 def test_routes_init_exposes_steal_three_router():
@@ -62,20 +69,17 @@ def test_routes_init_exposes_steal_three_router():
 def test_sidecar_can_mount_router_without_collisions():
     """The :8001 sidecar builds its own FastAPI app — verify it can mount
     the same router and the only extra route is the sidecar's /health."""
-    from routes.steal_three import router as steal_three_router
     from services.steal_three_server import app as sidecar_app
 
-    paths = sorted({r.path for r in sidecar_app.routes if hasattr(r, "path")})
+    paths = _schema_paths(sidecar_app)
     # The 3 core endpoints are there.
     assert "/api/dual_gex/{ticker}" in paths
     assert "/api/iv_mid/{ticker}" in paths
     assert "/api/screener/income" in paths
     # Plus the sidecar-specific /health, and no collisions.
     assert "/health" in paths
-    assert paths.count("/api/dual_gex/{ticker}") == 1
-    assert paths.count("/api/iv_mid/{ticker}") == 1
-    assert paths.count("/api/screener/income") == 1
-    assert paths.count("/health") == 1
+    canonical_paths = _schema_paths(_build_minimal_app())
+    assert set(paths) == set(canonical_paths) | {"/health"}
 
 
 def test_router_minimal_request_validation():
@@ -433,14 +437,10 @@ def test_regime_persistence_route_present():
     directly.
     """
     app = _build_minimal_app()
-    paths = sorted({r.path for r in app.routes if hasattr(r, "path")})
+    paths = _schema_paths(app)
     assert "/api/regime_persistence/{ticker}" in paths
     # And the method is GET.
-    paths_to_methods: dict[str, set[str]] = {}
-    for r in app.routes:
-        if hasattr(r, "path") and hasattr(r, "methods"):
-            paths_to_methods.setdefault(r.path, set()).update(r.methods)
-    assert "GET" in paths_to_methods["/api/regime_persistence/{ticker}"]
+    assert "get" in paths["/api/regime_persistence/{ticker}"]
 
 
 def test_regime_persistence_route_handles_mongo_unreachable(monkeypatch):

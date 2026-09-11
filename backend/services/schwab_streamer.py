@@ -29,30 +29,28 @@ from typing import Any
 
 import websockets
 
-from schwab import SchwabTokenManager
-
 logger = logging.getLogger(__name__)
 
 SCHWAB_WS_URL = "wss://streamerapi.schwab.com/ws/v1/stream"
 
 
 class SchwabStreamer:
-    """WebSocket client for Schwab streaming data.
+    """WebSocket client for streaming market data (ex-Schwab protocol harness).
 
-    Usage:
-        streamer = SchwabStreamer()
-        streamer.on_tick(handle_tick)
-        streamer.on_chain(handle_chain)
-        await streamer.start()
+    NOTE: the Schwab brokerage account is deleted — there is no token
+    manager anymore. A token_manager MUST be injected (tests pass a mock);
+    without one the streamer reports not-connected and never dials out.
     """
 
     def __init__(
         self,
-        token_manager: SchwabTokenManager | None = None,
+        token_manager: Any | None = None,
         max_reconnect_delay: float = 60.0,
         initial_reconnect_delay: float = 1.0,
     ):
-        self.tokens = token_manager or SchwabTokenManager()
+        # No default manager: the Schwab account is deleted. Pass a mock
+        # (tests) or a compatible manager; None means never-connected.
+        self.tokens = token_manager
         self.max_reconnect_delay = max_reconnect_delay
         self.initial_reconnect_delay = initial_reconnect_delay
 
@@ -197,6 +195,9 @@ class SchwabStreamer:
 
     async def _get_valid_token(self) -> str | None:
         """Get a valid access token, refreshing if needed."""
+        if self.tokens is None:
+            logger.error("No token manager — Schwab account deleted, streamer cannot connect")
+            return None
         token = self.tokens.get_access_token()
         if token and not self.tokens.is_expired():
             return token

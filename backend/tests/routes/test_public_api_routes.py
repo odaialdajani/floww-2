@@ -41,7 +41,7 @@ def test_public_portfolio_serializes_nested_dataclasses() -> None:
     broker.get_portfolio = AsyncMock(return_value=portfolio)
 
     with patch("routes.public_api._get_broker", new=AsyncMock(return_value=broker)):
-        response = client.get("/api/public/portfolio")
+        response = client.get("/api/public/portfolio/raw")
 
     assert response.status_code == 200
     body = response.json()
@@ -55,7 +55,7 @@ def test_public_portfolio_serializes_nested_dataclasses() -> None:
 
 def test_public_portfolio_returns_502_without_broker() -> None:
     with patch("routes.public_api._get_broker", new=AsyncMock(return_value=None)):
-        response = client.get("/api/public/portfolio")
+        response = client.get("/api/public/portfolio/raw")
 
     assert response.status_code == 502
 
@@ -65,7 +65,7 @@ def test_public_portfolio_returns_502_without_trading_account() -> None:
     broker.get_trading_account.return_value = None
 
     with patch("routes.public_api._get_broker", new=AsyncMock(return_value=broker)):
-        response = client.get("/api/public/portfolio")
+        response = client.get("/api/public/portfolio/raw")
 
     assert response.status_code == 502
 
@@ -77,6 +77,6 @@ def test_public_portfolio_returns_502_on_upstream_error() -> None:
     broker.get_portfolio = AsyncMock(side_effect=RuntimeError("upstream unavailable"))
 
     with patch("routes.public_api._get_broker", new=AsyncMock(return_value=broker)):
-        response = client.get("/api/public/portfolio")
+        response = client.get("/api/public/portfolio/raw")
 
     assert response.status_code == 502

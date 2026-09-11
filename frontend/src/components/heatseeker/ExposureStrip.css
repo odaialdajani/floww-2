@@ -1,0 +1,25 @@
+/* ExposureStrip — per-ticker exposure-rule badges (heatseeker).
+   Scoped to .skylit-exp-strip. Heuristic labels, same honesty contract
+   as the Blademap .fsb-sig-exp pills. Hidden entirely when no live rule
+   (component returns null). */
+.skylit-exp-strip {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 2px 12px 6px;
+}
+.skylit-exp-badge {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  line-height: 14px;
+  color: #f0b35e;
+  background: rgba(240, 179, 94, 0.15);
+  border: 1px solid rgba(240, 179, 94, 0.35);
+}
+.skylit-exp-badge.e-toxic_flow { color: #f4796b; background: rgba(244, 121, 107, 0.14); border-color: rgba(244, 121, 107, 0.4); }
+.skylit-exp-badge.e-gamma_flip { color: #7dd3fc; background: rgba(125, 211, 252, 0.12); border-color: rgba(125, 211, 252, 0.35); }

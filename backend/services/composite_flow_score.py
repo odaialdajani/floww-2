@@ -5,29 +5,32 @@ Composite Flow Score synthesis service.
 
 This is the *headline synthesis* of every analytics service that has
 been ported into Flowseeker Pro so far. It takes the existing five
-sub-services and produces a single 0..100 tradable conviction score +
+sub-services and produces a single 0..100 heuristic magnitude score +
 a 4-band label, displayed as the LEAD chip in the Flowseeker Pro
 summary bar.
 
 Pure-Python only — no torch / numba / scipy (Round-9 freeze rule).
 
-The score combines four orthogonal sub-scores (each in [0, 1]):
+The score combines five sub-scores (each in [0, 1]). Statistical independence
+and tradability are not established by this weighted construction:
 
   * **illiquidity** — average of (Amihud normalised) and (|Kyle's λ|
     normalised). High when the chained illiquidity story suggests
     shallow markets.
   * **toxicity**    — VPIN itself (already 0..1). High when the order
-    flow has a high informed-fraction.
+    flow proxy reads elevated; this does not observe an informed-trader fraction.
   * **dislocation** — HMM regime confidence × disagreement-with-OFI
-    factor. ELEVATES when regime and flow disagree (tradable
-    mispricing).
+    factor. ELEVATES when regime and flow disagree, without establishing
+    mispricing or an executable opportunity.
   * **direction**   — |OFI aggregate| normalised to a 1000-share cap.
     High when short-term book dominance is strong in either direction.
+  * **sentiment** — magnitude of the available sentiment polarity;
+    missing sentiment contributes zero.
 
 Composite::
 
-    score = 100 · (0.30·illiquidity + 0.25·toxicity
-                  + 0.25·dislocation + 0.20·direction)
+    score = 100 · (0.25·illiquidity + 0.20·toxicity + 0.25·dislocation
+                  + 0.20·direction + 0.10·sentiment)
 
 Threshold bands (mirrors the Blademap
 :func:`institutional_detector.convictionLabel` precedent)::
@@ -49,7 +52,8 @@ Output schema (snake_case, matches the established Flowseeker style)::
         "label":         "HIGH" | "MED" | "WATCH" | "LOW",
         "label_color":   "#...",
         "sub_scores":    { "illiquidity": .., "toxicity": ..,
-                           "dislocation": .., "direction": .. },
+                           "dislocation": .., "direction": ..,
+                           "sentiment": .. },
         "components":    { "amihud_norm": .., "kyle_norm": ..,
                            "vpin": .., "regime": "TRENDING_BULL"|..,
                            "ofi_aggr": float },
@@ -145,7 +149,7 @@ def _dislocation(regime_out: dict[str, Any], ofi_out: dict[str, Any]) -> float:
     A trending regime agreeing with the flow direction scores
     ~``0.5 · confidence`` (normal trend; *some* dislocation).
     A trending regime disagreeing with the flow direction scores
-    ``1.0 · confidence`` (deep dislocation; tradable mispricing).
+    ``min(1.5 · confidence, 1.0)`` (heuristic disagreement, not proven mispricing).
     A ranging regime scores 0 regardless of OFI.
 
     Capped at 1.0.

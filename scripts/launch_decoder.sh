@@ -8,13 +8,13 @@
 #   ./scripts/launch_decoder.sh --restart # force restart backend + react
 #
 # Add an alias so it's a one-keystroke launch:
-#   echo 'alias decoder="bash $HOME/Documents/GitHub/floww/scripts/launch_decoder.sh"' >> ~/.zshrc
+#   echo 'alias decoder="bash $HOME/Documents/GitHub/floww-2/scripts/launch_decoder.sh"' >> ~/.zshrc
 #   source ~/.zshrc
 #   decoder      # done
 
 set -e
 
-REPO_ROOT="$HOME/Documents/GitHub/floww"
+REPO_ROOT="$HOME/Documents/GitHub/floww-2"
 PWA_PATH="$HOME/Applications/Chrome Apps.localized/Meridian.app"
 BACKEND_PORT=8000
 REACT_PORT=3000
@@ -96,7 +96,9 @@ else
   echo "  starting uvicorn..."
   cd "$REPO_ROOT/backend"
   source .venv/bin/activate
-  nohup uvicorn server:app --port $BACKEND_PORT > /tmp/uvicorn_decoder.log 2>&1 &
+  # Unbuffered: otherwise all structlog app lines sit in the pipe buffer and
+  # the log shows only uvicorn access lines, hiding startup/sweep evidence.
+  PYTHONUNBUFFERED=1 nohup uvicorn server:app --port $BACKEND_PORT > /tmp/uvicorn_decoder.log 2>&1 &
   cd "$REPO_ROOT"
   # Wait up to 15s for it to bind
   for i in {1..15}; do

@@ -5,6 +5,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def _h2_isolated_public_budget(monkeypatch):
+    """H2: adapter-level acquire debits the shared singleton even behind fake
+    brokers. Isolate every test with a fresh high-capacity budget so file
+    order can never starve a suite. Production behavior unchanged."""
+    from services import public_budget as pb_mod
+    monkeypatch.setattr(
+        pb_mod, "budget",
+        pb_mod.PublicBudget(capacity=10000, refill_per_sec=10000.0))
+
 import services.public_api_adapter as adapter
 from services.public_api import PublicBroker
 

@@ -31,6 +31,16 @@ _TIER_RANK = {"GOLD": 0, "SILVER": 1, "BRONZE": 2}
 RISK_PCT_PER_TRADE = 0.02   # 2% of account equity per position
 DEFAULT_MIN_DTE = 2         # skip same-day + next-day expiries
 
+# C3 Kelly caps (Agent C, 2026-09-05): quarter-Kelly of the calibrated edge,
+# hard-capped per name; earnings-protocol alerts (C5) size to the blackout
+# fraction. p_method values that count as calibrated (staged) — anything
+# else (None/"uncalibrated*"/"calibration_error"/"missing_features") takes
+# the legacy flat schedule.
+KELLY_FRACTION = 0.25       # quarter-Kelly: parameter-uncertain edges
+SINGLE_NAME_CAP = 0.05      # 5% equity risk per name, hard
+EARNINGS_RISK_CAP = 0.01    # earnings-protocol blackout sizing
+STAGED_METHODS = frozenset({"decile", "logistic", "logistic+isotonic"})
+
 
 def eligible_for_auto_trade(alert: dict, *, min_tier: str = "SILVER",
                             min_dte: int = DEFAULT_MIN_DTE) -> bool:
@@ -72,14 +82,78 @@ def _position_size(est_entry: float, account_equity: float,
     return max(qty, 1)
 
 
+def _payoff_ratio(key_levels: dict | None) -> float | None:
+    """Reward:risk from key levels: (target-entry)/(entry-invalidation)."""
+    try:
+        kl = key_levels or {}
+        entry, inv, tgt = float(kl["entry"]), float(kl["invalidation"]), float(kl["target"])
+    except (TypeError, ValueError, KeyError):
+        return None
+    risk = entry - inv
+    if risk <= 0 or tgt <= entry:
+        return None
+    return (tgt - entry) / risk
+
+
+def kelly_size(alert: dict, *, account_equity: float = 100_000.0) -> dict[str, Any]:
+    """C3 sizing: quarter-Kelly of the calibrated edge, hard-capped.
+
+    Calibrated (p_method staged + valid key levels) → Kelly qty with
+    size_basis {method, p, b, f, cap}. Negative edge → qty 0 (refuse).
+    Anything else → legacy conviction-scaled flat schedule (min 1).
+    """
+    entry = alert.get("est_entry")
+    try:
+        per_contract = max(float(entry), 0.01) * 100.0
+    except (TypeError, ValueError):
+        per_contract = 0.01 * 100.0
+    try:
+        flat_entry = float(entry)
+    except (TypeError, ValueError):
+        flat_entry = 0.01
+    flat_qty = _position_size(flat_entry, account_equity, conviction=alert.get("conviction"))
+
+    def _flat(reason: str) -> dict[str, Any]:
+        return {"qty": flat_qty,
+                "size_basis": {"method": "flat", "reason": reason,
+                               "risk_frac": RISK_PCT_PER_TRADE}}
+
+    p, method = alert.get("p_move"), str(alert.get("p_method") or "")
+    if p is None or method not in STAGED_METHODS:
+        return _flat("uncalibrated" if p is None else f"unstaged:{method or 'none'}")
+    try:
+        p = float(p)
+    except (TypeError, ValueError):
+        return _flat("bad_p")
+    if not 0.0 < p < 1.0:
+        return _flat("p_out_of_range")
+    b = _payoff_ratio(alert.get("key_levels") if isinstance(alert.get("key_levels"), dict) else None)
+    if b is None:
+        return _flat("no_key_levels")
+    from domain.position_sizing import kelly_fraction
+    f_star = kelly_fraction(p, b)
+    f = KELLY_FRACTION * f_star
+    cap = EARNINGS_RISK_CAP if alert.get("earnings_protocol") else SINGLE_NAME_CAP
+    risk_frac = min(f, cap)
+    if risk_frac <= 0:
+        return {"qty": 0, "size_basis": {"method": "kelly_capped", "p_move": round(p, 4),
+                                         "payoff_ratio": round(b, 4), "kelly_f": round(f, 4),
+                                         "risk_frac": 0.0, "cap": cap,
+                                         "reason": "no_edge_refused"}}
+    qty = max(int(math.floor(max(account_equity, 0.0) * risk_frac / per_contract)), 1)
+    return {"qty": qty, "size_basis": {"method": "kelly_capped", "p_move": round(p, 4),
+                                       "payoff_ratio": round(b, 4), "kelly_f": round(f, 4),
+                                       "risk_frac": round(risk_frac, 4), "cap": cap}}
+
+
 def alert_to_order(alert: dict, *, account_equity: float = 100_000.0) -> dict[str, Any]:
     """Alert → PaperTradingEngine.submit_order kwargs."""
     entry = float(alert["est_entry"])
+    sized = kelly_size(alert, account_equity=account_equity)
     return {
         "symbol": str(alert["under"]).upper(),
         "side": "BUY",
-        "quantity": _position_size(entry, account_equity,
-                                   conviction=alert.get("conviction")),
+        "quantity": sized["qty"],
         "order_type": "market",
         "metadata": {
             "source": "flowseeker",
@@ -93,6 +167,10 @@ def alert_to_order(alert: dict, *, account_equity: float = 100_000.0) -> dict[st
             "dte": alert.get("dte"),
             "est_entry": entry,
             "under_price": alert.get("under_price"),
+            "p_move": alert.get("p_move"),
+            "p_method": alert.get("p_method"),
+            "size_basis": sized["size_basis"],
+            "execution": advise_execution(alert),
         },
     }
 
@@ -125,6 +203,72 @@ def alert_to_journal_entry(alert: dict) -> dict[str, Any]:
         "setup": setup,
         "tags": "flowseeker,auto",
     }
+
+
+# C4 execution advisor (Agent C, 2026-09-05): Almgren-Chriss direction —
+# patient limit vs urgent take from Kyle-lambda + spread + velocity.
+# Thresholds are provisional desk parameters (named, tested, ledger-noted),
+# not measured fits: λ bands reuse kyle_lambda's published labels;
+# spread/velocity cuts are starting points for the Sync-3 kill/keep read.
+ADVISE_SPREAD_TIGHT_BPS = 50.0    # pay the spread below this
+ADVISE_SPREAD_XWIDE_BPS = 200.0   # untradable above this when illiquid
+ADVISE_LIQ_LAMBDA = 0.001         # kyle LABEL_LIQUID boundary
+ADVISE_ILLIQ_LAMBDA = 0.005       # kyle LABEL_ILLIQUID boundary
+ADVISE_HOT_VELOCITY = 10.0        # prints/min: urgency trigger (provisional)
+ADVISE_IMPACT_SLICE = 0.25        # our slice of a fully-imbalanced λ move
+
+
+def advise_execution(alert: dict | None, *, kyle_lambda: float | None = None,
+                     spread_bps: float | None = None,
+                     velocity: float | None = None,
+                     toxic: bool | None = None) -> dict[str, Any]:
+    """TAKE (pay spread) vs WORK (patient limit) vs SKIP + slippage estimate.
+
+    Reads explicit kwargs first, alert-embedded fields second
+    (kyle_lambda / spread_bps / velocity_per_min / toxic). Fail-open:
+    no inputs → WORK with slippage None (patient default, never a
+    fabricated estimate).
+    """
+    a = alert if isinstance(alert, dict) else {}
+    lam = kyle_lambda if kyle_lambda is not None else a.get("kyle_lambda")
+    spr = spread_bps if spread_bps is not None else a.get("spread_bps")
+    vel = velocity if velocity is not None else a.get("velocity_per_min")
+    tox = toxic if toxic is not None else a.get("toxic")
+    try:
+        lam = float(lam) if lam is not None else None
+    except (TypeError, ValueError):
+        lam = None
+    try:
+        spr = float(spr) if spr is not None else None
+    except (TypeError, ValueError):
+        spr = None
+    try:
+        vel = float(vel) if vel is not None else None
+    except (TypeError, ValueError):
+        vel = None
+
+    slip = None
+    if spr is not None or lam is not None:
+        slip = round((spr or 0.0) / 2.0 + ADVISE_IMPACT_SLICE * (lam or 0.0) * 10000.0, 1)
+
+    if tox:
+        return {"action": "SKIP", "slippage_bps_est": slip,
+                "reason": "toxic tape — stand down"}
+    if (lam is not None and lam >= ADVISE_ILLIQ_LAMBDA
+            and spr is not None and spr >= ADVISE_SPREAD_XWIDE_BPS):
+        return {"action": "SKIP", "slippage_bps_est": slip,
+                "reason": "illiquid + untradable spread — no exit"}
+    hot = (vel is not None and vel >= ADVISE_HOT_VELOCITY)
+    tight = (spr is not None and spr <= ADVISE_SPREAD_TIGHT_BPS)
+    deep = (lam is not None and lam < ADVISE_LIQ_LAMBDA)
+    if hot and tight and deep:
+        return {"action": "TAKE", "slippage_bps_est": slip,
+                "reason": "hot + tight + deep — pay the spread"}
+    if spr is None and lam is None and vel is None:
+        return {"action": "WORK", "slippage_bps_est": None,
+                "reason": "no urgency inputs — patient default"}
+    return {"action": "WORK", "slippage_bps_est": slip,
+            "reason": "no urgency edge — work a limit"}
 
 
 def dedupe_alerts(alerts: list[dict]) -> list[dict]:

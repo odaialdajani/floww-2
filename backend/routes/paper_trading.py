@@ -106,6 +106,31 @@ async def portfolio_summary():
     return _paper_engine.get_portfolio_summary()
 
 
+@router.get("/api/paper-trading/attribution")
+async def pnl_attribution(tickers: str | None = Query(default=None)):
+    """P&L attribution by ticker (Phase 6.5, 2026-09-05).
+
+    Query params:
+      tickers: optional comma-separated symbols to fetch live marks for
+        unrealized P&L (via the merged chain fetcher). Omitted tickers
+        report unrealized_pnl=null (unknown, never mark-to-model).
+    """
+    global _paper_engine
+    if not _paper_engine:
+        raise HTTPException(503, "Paper trading engine not initialized")
+    prices: dict[str, float] = {}
+    if tickers:
+        from server import fetch_spot_and_chains_merged
+        for sym in [t.strip().upper() for t in tickers.split(",") if t.strip()][:20]:
+            try:
+                raw = await fetch_spot_and_chains_merged(sym, 1)
+                if raw and (raw.get("spot") or 0) > 0:
+                    prices[sym] = float(raw["spot"])
+            except Exception as e:
+                logger.warning("attribution mark fetch failed for %s: %s", sym, e)
+    return {"status": "ok", **_paper_engine.get_pnl_attribution(prices or None)}
+
+
 @router.get("/api/paper-trading/history")
 async def trade_history(limit: int = Query(50, ge=1, le=500)):
     """Get trade history."""

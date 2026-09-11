@@ -4,7 +4,7 @@ title: [FOLLOW-UP] PR. The fixtures are kept so the test still documents intent.
 assignee: Agent 4
 source: todo_extractor.py
 auto: true
-status: ready
+status: done
 created: 2026-05-23T03:20:08.073220+00:00
 file: backend/tests/test_api.py
 line: 179
@@ -27,3 +27,5 @@ PR. The fixtures are kept so the test still documents intent.
 - [ ] Verify fix doesn't break existing tests
 - [ ] Commit with conventional message: `fix(backend): PR. The fixtures are kept so the test st`
 
+## Resolution (2026-09-05 architect sweep)
+Invalid: sentence fragment, no actionable task.

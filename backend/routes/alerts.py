@@ -12,6 +12,40 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/alerts", tags=["alerts"])
 
 
+def _parse_strike_map(raw: Any, value_kind: str = "float") -> dict[float, Any]:
+    """Coerce a JSON strike-keyed map to float keys.
+
+    JSON object keys always arrive as strings; the detectors do strike
+    arithmetic on keys, so raw string keys crash detection with a 503.
+    Malformed entries are skipped, never raised: a partial map still
+    carries signal, and an empty map disables only its own detector.
+    """
+    import math
+
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[float, Any] = {}
+    for key, value in raw.items():
+        try:
+            strike = float(key)
+            amount = float(value)
+        except (TypeError, ValueError, OverflowError):
+            continue
+        if not math.isfinite(strike) or not math.isfinite(amount):
+            continue
+        out[strike] = int(amount) if value_kind == "int" else amount
+    return out
+
+
+def _parse_momentum_score(raw: Any) -> int:
+    """Coerce a momentum input to the 0-100 detector scale."""
+    try:
+        score = int(float(raw))
+    except (TypeError, ValueError, OverflowError):
+        return 50
+    return max(0, min(100, score))
+
+
 def _compute_paper_metrics(snapshot: dict) -> dict:
     """Compute Barbon-Buraschi paper metrics from alert snapshot."""
     try:
@@ -151,12 +185,30 @@ async def get_alert_status():
         return JSONResponse(status_code=503, content={"error": str(e)})
 
 
+@router.get("/whales")
+async def get_whale_tracks(state: str | None = Query(None),
+                           days: int = Query(30, ge=1, le=365)):
+    """P1-7 whale-tracker badge read (Agent C): bookmarked whale alerts with
+    live STILL_IN/PARTIAL/EXITED/EXPIRED state + underlying-leg P&L proxy.
+    Declared before /{ticker} so 'whales' never matches the catch-all."""
+    try:
+        from services.journal_store import get_engine, init_whale_tables, read_whales
+        jeng = get_engine()
+        init_whale_tables(jeng)
+        tracks = read_whales(jeng, state=state, days=days)
+        return {"ok": True, "tracks": tracks, "n": len(tracks)}
+    except Exception as e:
+        return JSONResponse(status_code=503, content={"ok": False, "error": str(e)})
+
+
 @router.get("/{ticker}")
 async def get_alerts(ticker: str, momentum_score: int = Query(50, ge=0, le=100)):
     """Get current alerts for a ticker."""
     try:
         engine = get_alert_engine()
-        summary = engine.get_alert_summary(ticker.upper())
+        summary = engine.get_alert_summary(
+            ticker.upper(), momentum_score=momentum_score
+        )
         return summary
     except Exception as e:
         return {"ticker": ticker.upper(), "error": str(e)}
@@ -180,13 +232,17 @@ async def add_snapshot(snapshot: dict[str, Any]):
             total_gex=snapshot.get("total_gex", 0),
             net_gex=snapshot.get("net_gex", 0),
             regime=snapshot.get("regime", "UNKNOWN"),
-            gex_by_strike=snapshot.get("gex_by_strike", {}),
+            gex_by_strike=_parse_strike_map(snapshot.get("gex_by_strike", {})),
+            volume_by_strike=_parse_strike_map(
+                snapshot.get("volume_by_strike", {}), value_kind="int"
+            ),
         )
 
         engine.add_snapshot(snap)
 
         # Detect alerts
-        alerts = engine.detect_alerts(snap.ticker)
+        momentum = _parse_momentum_score(snapshot.get("momentum_score", 50))
+        alerts = engine.detect_alerts(snap.ticker, momentum_score=momentum)
 
         return {
             "status": "ok",

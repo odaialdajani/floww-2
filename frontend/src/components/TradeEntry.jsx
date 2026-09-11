@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { BACKEND_URL, API } from "../config/api";
+import { tradeIdeaToJournalEntries, JOURNAL_STORAGE_KEY } from "./tradeMath";
 
 // API imported from config/api.js
 
@@ -122,8 +123,49 @@ export function TradeEntry({ ticker, spot }) {
       regime,
       timestamp: new Date().toISOString(),
     };
+    // Issue #17 O-1: persist to the shared journal store in TradeJournal
+    // shape so the idea survives unmount/remount + page reload and renders
+    // in TradeJournal + TradeAnalytics. Prepend (newest first, matching the
+    // in-session list); never overwrite rows from other panels. On corrupt
+    // store or quota failure keep the idea in-session and flag the error
+    // instead of silently dropping existing records.
+    try {
+      const entries = tradeIdeaToJournalEntries(trade).map(e => ({
+        ...e,
+        id: e.id ?? Date.now() + Math.floor(Math.random() * 1000),
+        created_at: new Date().toISOString(),
+      }));
+      const saved = JSON.parse(localStorage.getItem(JOURNAL_STORAGE_KEY) || "[]");
+      localStorage.setItem(JOURNAL_STORAGE_KEY, JSON.stringify([...entries, ...saved]));
+    } catch (e) {
+      console.error("[TradeEntry] journal write failed:", e);
+      setError("Saved in session only — journal store unavailable");
+    }
     setSavedTrades(prev => [trade, ...prev].slice(0, 10));
   };
+
+  // Issue #17 O-1: rebuild the in-session list from our own journal rows
+  // after unmount/remount (other panels' rows are left for the journal).
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(JOURNAL_STORAGE_KEY) || "[]");
+      const ours = saved
+        .filter(e => e?.source === "trade-entry")
+        .slice(0, 10)
+        .map(e => ({
+          id: e.id ?? Date.now(),
+          template: e.template || "single_leg",
+          templateName: e.templateName || e.setup || e.template || "Single Leg",
+          ticker: e.ticker,
+          spot: e.spot ?? null,
+          data: {},
+          regime: e.gex_regime || "unknown",
+          timestamp: e.created_at || new Date().toISOString(),
+        }));
+      if (ours.length > 0) setSavedTrades(ours);
+    } catch (e) { console.error("[TradeEntry] journal hydrate failed:", e); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="panel p-3 space-y-3">

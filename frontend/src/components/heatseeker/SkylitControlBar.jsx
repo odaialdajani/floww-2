@@ -1,5 +1,6 @@
-import React, { memo, useCallback, useEffect, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { TICKER_SETS } from "./SkylitTickerBar";
+import { buildTickerUniverse, stepIndex } from "./tickerUniverse";
 
 /**
  * SkylitControlBar — Second header bar with GEX/VEX tabs, LIVE badge,
@@ -28,8 +29,8 @@ function SkylitControlBar({
   // frozen App.js call sites omit it and the button degrades to a no-op).
   onExpand,
   // Optional ticker cycling for the prev/next arrows (2026-09-03).
-  // Defaults to the tape list; unknown current ticker → no-op so open
-  // universe symbols never get yanked back into the list.
+  // T1 (2026-09-07): arrows traverse the same deduped universe as the bar;
+  // open-universe tickers wrap from the boundary (pinned by tests).
   onTickerChange,
   tickers = null,
   // Auto-refresh cadence while Playback is armed.
@@ -55,14 +56,23 @@ function SkylitControlBar({
     return () => clearInterval(id);
   }, [playing, onRefresh, playbackIntervalMs]);
 
+  // T1 contract: same deduped universe as the ticker bar (object, array, or
+  // null shape); position denominator and arrows agree with buttons/count.
+  const tickerList = useMemo(() => {
+    const u = buildTickerUniverse(tickers);
+    return u.length > 0 ? u : TICKER_SETS.popular;
+  }, [tickers]);
+  const tickerPos = useMemo(() => {
+    if (tickerList.length === 0) return null;
+    const idx = tickerList.indexOf(ticker);
+    return idx === -1 ? null : idx + 1;
+  }, [tickerList, ticker]);
   const stepTicker = useCallback((dir) => {
     if (!onTickerChange) return;
-    const list = tickers || TICKER_SETS.popular;
-    const idx = list.indexOf(ticker);
-    if (idx === -1) return; // open-universe symbol: stay put
-    const next = list[(idx + dir + list.length) % list.length];
+    if (tickerList.length === 0) return;
+    const next = tickerList[stepIndex(tickerList, ticker, dir)];
     if (next) onTickerChange(next);
-  }, [onTickerChange, tickers, ticker]);
+  }, [onTickerChange, tickerList, ticker]);
 
   const handleShare = useCallback(async () => {    const url = typeof window !== "undefined" ? window.location.href : "";
     try {
@@ -152,6 +162,9 @@ function SkylitControlBar({
         <div className="skylit-ticker-display">
           <span className="skylit-ticker-name">{ticker}</span>
           {isLive && <span className="skylit-live-dot" />}
+          {tickerPos != null && tickerList.length > 0 && (
+            <span className="skylit-ticker-pos">{tickerPos}/{tickerList.length}</span>
+          )}
         </div>
 
         <div className="skylit-price-display">

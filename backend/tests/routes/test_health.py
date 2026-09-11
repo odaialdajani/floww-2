@@ -1,12 +1,16 @@
 """
 backend/tests/routes/test_health.py
 
-Tests for /api/health: DuckDB/AlphaVantage/WebSocket manager circuit breaker.
+Tests for /api/health: DuckDB/Public API/WebSocket manager circuit breaker.
 All external calls are mocked so tests run offline deterministically.
+
+PUBLIC-API-ONLY (2026-09-03): the live check is `public_api`;
+`alpha_vantage` is a deprecated disabled stub, excluded from the verdict.
 """
 from __future__ import annotations
 
 import logging
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -24,20 +28,9 @@ logger = logging.getLogger(__name__)
 
 @pytest.fixture(autouse=True)
 def _patch_externals():
-    """Avoid calling real AV/DuckDB/WebSocket singletons during tests."""
-    # Alpha Vantage network call
-    with patch("routes.health.httpx.AsyncClient") as mock_client_cls:
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {
-            "Global Quote": {"01. symbol": "SPY", "05. price": "450.00"}
-        }
-        mock_client = MagicMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.get = AsyncMock(return_value=mock_resp)
-        mock_client_cls.return_value = mock_client
-
+    """Avoid calling real Public API/DuckDB/WebSocket singletons during tests."""
+    # Public API key presence probe (routes.health reads PUBLIC_API_KEY env)
+    with patch.dict(os.environ, {"PUBLIC_API_KEY": "test-key"}):
         # DuckDB DB connection
         with patch("routes.health.duckdb_engine") as mock_duck:
             mock_duck._conn = MagicMock()
@@ -47,7 +40,6 @@ def _patch_externals():
             with patch("routes.health.ws_manager") as mock_ws:
                 mock_ws._all = {MagicMock(): MagicMock()}  # one active connection
                 yield {
-                    "client_cls": mock_client_cls,
                     "duckdb": mock_duck,
                     "ws": mock_ws,
                 }
@@ -65,10 +57,15 @@ def test_all_healthy():
     assert body["status"] == "healthy"
     assert set(body["checks"].keys()) >= {
         "duckdb",
+        "public_api",
         "alpha_vantage",
         "websocket",
         "circuit_breaker",
     }
+    assert body["checks"]["public_api"]["status"] == "healthy"
+    # Retired provider stays visible but never flips the verdict.
+    assert body["checks"]["alpha_vantage"]["status"] == "disabled"
+    assert body["checks"]["alpha_vantage"].get("deprecated") is True
 
 
 def test_duckdb_fails():
@@ -84,16 +81,23 @@ def test_duckdb_fails():
 
 
 def test_av_fails():
-    import routes.health as health_mod
-    health_mod.httpx.AsyncClient.return_value.get.side_effect = RuntimeError(
-        "AV offline"
-    )
-
+    # Retired stub is always disabled and never degrades overall health.
     resp = client.get("/api/health")
     assert resp.status_code == 200
     body = resp.json()
+    assert body["checks"]["alpha_vantage"]["status"] == "disabled"
+
+
+def test_public_api_missing_key_degrades():
+    import os
+
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("PUBLIC_API_KEY", None)
+        resp = client.get("/api/health")
+    assert resp.status_code == 200
+    body = resp.json()
     assert body["status"] == "degraded"
-    assert body["checks"]["alpha_vantage"]["status"] == "unhealthy"
+    assert body["checks"]["public_api"]["status"] == "unhealthy"
 
 
 def test_ws_manager_check():
