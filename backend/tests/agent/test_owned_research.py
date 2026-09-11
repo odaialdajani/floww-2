@@ -14,6 +14,46 @@ from services.agent.repository import AgentRepository
 from services.agent.research import ResearchService
 
 
+@pytest.mark.asyncio
+async def test_open_observer_stops_after_session_revocation(monkeypatch):
+    from starlette.requests import Request
+
+    from routes.agent import stream
+    from services.agent.local_access import COOKIE
+
+    monkeypatch.setenv("FLOWW_AGENT_DEPLOYMENT", "local")
+    repo, service = await setup()
+    who, token = await repo.session()
+    turn, _ = await repo.admit(who, identity(), {"ticker": "SPY", "horizon": "all", "question": "Private"})
+    await repo.progress(who, turn["turn_id"], "Private progress")
+    app = FastAPI()
+    app.state.research_service = service
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "scheme": "http",
+            "path": "/api/agent/stream/" + turn["turn_id"],
+            "query_string": b"",
+            "headers": [(b"host", b"localhost:8000"), (b"cookie", f"{COOKIE}={token}".encode())],
+            "client": ("127.0.0.1", 123),
+            "server": ("localhost", 8000),
+            "app": app,
+        }
+    )
+
+    async def connected():
+        return False
+
+    request.is_disconnected = connected
+    response = await stream(turn["turn_id"], request)
+    iterator = response.body_iterator
+    assert await anext(iterator)
+    await repo.revoke_session(token)
+    with pytest.raises(StopAsyncIteration):
+        await anext(iterator)
+
+
 def identity():
     return f"{int(time.time() * 1000)}-{uuid.uuid4()}"
 

@@ -81,5 +81,6 @@ export default function useAgentStream({onEvent}={}) {
   watch.cancelRequested=true;setState("cancelling");
   if(watch.id)await cancelKnown(watch);
  },[cancelKnown]);
- return {state,ask,cancel};
+ const disconnect=useCallback(()=>{stop();setState("idle");},[stop]);
+ return {state,ask,cancel,disconnect};
 }

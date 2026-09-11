@@ -172,18 +172,28 @@ async def stream(turn_id: str, request: Request):
         raise HTTPException(422, "Invalid event cursor") from None
 
     async def observe():
+        async def allowed():
+            try:
+                return await repository.owner(request.cookies.get(COOKIE)) == identity
+            except Exception:
+                return False
+
         cursor = start
         for _ in range(260):
-            if await request.is_disconnected():
+            if await request.is_disconnected() or not await allowed():
                 return
             doc = await repository.read(identity, turn_id)
             if doc is None:
                 return
             for event in doc["events"]:
                 if event["id"] > cursor:
+                    if not await allowed():
+                        return
                     yield f"id: {event['id']}\nevent: {event['type']}\ndata: {json.dumps(event)}\n\n"
                     cursor = event["id"]
             if doc["status"] in TERMINAL:
+                return
+            if not await allowed():
                 return
             yield ": heartbeat\n\n"
             await asyncio.sleep(0.5)
