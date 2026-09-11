@@ -11,10 +11,17 @@ request their rollback.
 **Status (2026-09-11 implementation update):** The production redesign, dealer
 detail and shared research context are implemented. Actual Public-backed wide,
 narrow and colour-blind views were inspected against the included reference.
-All 676 frontend checks pass and the final production build succeeds. The
+All 723 frontend checks pass and the final production build succeeds (23:16 UTC). The
 companion AI release still has open acceptance gates; UI completion does not
 close them. See the dated [full UI sweep](../../eval/ui-plan-sweep-20260911.md)
 for retained limitations and [delivery evidence](../../INTEGRATION_AI_UI_GOAL.md).
+
+The final desktop follow-up preserved nested settings, restored explicit outcome
+access with Public-only refusal, kept exact selected chart cells across refresh,
+and verified the real saved selected-cell answer after reload. Newer broker closes
+also refresh the journal without losing local notes. See the
+[complete remaining-work record](../../eval/full-scope-remaining-20260911.md).
+No mobile work was added after the user's pause.
 
 There are two implementation plans for this work:
 

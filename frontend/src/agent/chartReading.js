@@ -3,6 +3,7 @@ const finite = value => typeof value === "number" && Number.isFinite(value);
 const price = value => `$${value.toLocaleString("en-US", {maximumFractionDigits: 6})}`;
 function amount(value) {
   const size = Math.abs(value);
+  if (size > 0 && size < 0.01) return `${value > 0 ? "+" : ""}${String(value)}`;
   const [scale, suffix] = size >= 1e9 ? [1e9, "B"] : size >= 1e6 ? [1e6, "M"] : size >= 1e3 ? [1e3, "K"] : [1, ""];
   return `${value > 0 ? "+" : ""}${(value / scale).toLocaleString("en-US", {maximumFractionDigits: 2})}${suffix}`;
 }
@@ -30,8 +31,9 @@ export function savedChartReading(answer, ticker) {
   add(`${strikes.value.length} strikes · ${expiry.value.length} expiries: ${expiry.value.join(", ")}.`, [strikes, expiry]);
   const cell = display("Selected display cell");
   const parts = typeof cell?.contract === "string" ? cell.contract.split(":") : [];
+  const expectedUnit = ["gex", "skylit"].includes(parts[2]) ? "display gamma units" : `display ${parts[2]} units`;
   if (parts.length === 3 && finite(cell.value) && strikes.value.includes(Number(parts[1])) &&
-      expiry.value.includes(parts[0]) && ["gex", "skylit", "vex", "charm"].includes(parts[2])) {
+      expiry.value.includes(parts[0]) && ["gex", "skylit", "vex", "charm"].includes(parts[2]) && cell.unit === expectedUnit) {
     const measure = {gex: "gamma", skylit: "gamma", vex: "vanna", charm: "charm"}[parts[2]];
     add(`Selected cell: ${ticker} ${price(Number(parts[1]))} · ${parts[0]} · ${amount(cell.value)} displayed ${measure}.`, [cell, strikes, expiry]);
     add("This is the chart's estimate for that strike and expiry, not an observed dealer position.", [cell]);

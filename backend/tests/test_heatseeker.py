@@ -1,11 +1,7 @@
-"""
-In-process tests for the legacy Heatseeker API surface (root / tickers /
-glossary / history / etc.).
+"""Local route contracts using controlled market inputs and storage boundaries.
 
-Migrated from the requests-against-localhost driver to FastAPI's TestClient
-so the suite runs in CI without a backend on :8000. Heavy heatmap / movers /
-trinity tests are kept here (skipped) so the original intent is preserved
-and a developer can flip them on for a manual smoke run.
+Real route calculations run without provider calls or starting server lifespan.
+These checks do not certify live-provider acceptance.
 """
 from __future__ import annotations
 
@@ -20,6 +16,21 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from server import app  # noqa: E402
+from tests.test_heatseeker_v2 import install_offline_market  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def offline_routes(monkeypatch):
+    from unittest.mock import AsyncMock
+
+    import server
+
+    install_offline_market(monkeypatch)
+    monkeypatch.setattr(server, "save_snapshot", AsyncMock())
+    monkeypatch.setattr(server, "velocity_and_rolling", AsyncMock(return_value={
+        "velocity_score": 0, "rolling_floor": "stable",
+        "rolling_ceiling": "stable", "history": [],
+    }))
 
 
 def _has_nan_or_inf(obj):
@@ -119,15 +130,8 @@ def test_history_spy(client):
     assert isinstance(d["snapshots"], list)
 
 
-# --------- Heavy chain-dependent endpoints — integration only ---------
-#
-# /heatmap, /trinity, /movers all chain together yfinance + Polygon + Mongo
-# writes inside the route. The single chain mock isn't enough; they remain
-# skipped here and live in the QA smoke suite that runs against a real
-# backend. TODO: trim build_heatmap so its tap_counts / Mongo writes can be
-# stubbed in unit tests too.
+# --------- Real route calculations with offline source fixtures ---------
 
-@pytest.mark.skip(reason="build_heatmap reaches yfinance/Polygon/Mongo; integration only")
 def test_heatmap_spy(client):
     r = client.get("/api/heatmap/SPY?expiries=2")
     assert r.status_code == 200, r.text
@@ -154,7 +158,6 @@ def test_heatmap_spy(client):
     assert not _has_nan_or_inf(d)
 
 
-@pytest.mark.skip(reason="build_heatmap reaches yfinance/Polygon/Mongo; integration only")
 def test_heatmap_qqq(client):
     r = client.get("/api/heatmap/QQQ?expiries=2")
     assert r.status_code == 200
@@ -165,7 +168,6 @@ def test_heatmap_qqq(client):
     assert not _has_nan_or_inf(d)
 
 
-@pytest.mark.skip(reason="build_heatmap reaches yfinance/Polygon/Mongo; integration only")
 def test_heatmap_spx(client):
     r = client.get("/api/heatmap/%5ESPX?expiries=2")
     assert r.status_code == 200, r.text
@@ -175,7 +177,6 @@ def test_heatmap_spx(client):
     assert len(d["strikes"]) > 0
 
 
-@pytest.mark.skip(reason="trinity fans out to build_heatmap × 3; integration only")
 def test_trinity(client):
     r = client.get("/api/trinity")
     assert r.status_code == 200
@@ -188,14 +189,17 @@ def test_trinity(client):
     assert "confluence" in align and "regime" in align
 
 
-@pytest.mark.skip(reason="hits Polygon for top movers; integration only")
-def test_movers(client):
+def test_movers(client, monkeypatch):
+    from unittest.mock import Mock
+
+    rows = [{"ticker": ticker, "pct": 6-i, "close": 100+i}
+            for i, ticker in enumerate(("SPY", "QQQ", "IWM", "AAPL", "NVDA", "DIA"))]
+    fetch = Mock(return_value=rows)
+    monkeypatch.setattr("server._fetch_movers_sync", fetch)
     r = client.get("/api/movers?limit=5")
     assert r.status_code == 200
     d = r.json()
     assert "results" in d
     assert isinstance(d["results"], list)
-    if d["results"]:
-        row = d["results"][0]
-        for k in ("ticker", "pct", "close"):
-            assert k in row
+    assert d["results"] == rows[:5]
+    fetch.assert_called_once_with()

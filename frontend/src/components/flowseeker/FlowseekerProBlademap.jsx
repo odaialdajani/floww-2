@@ -35,6 +35,7 @@ import {
   SCAN_FACTS, SCAN_FACT_LABELS, TICKER_FACTS, TICKER_FACT_LABELS, RULE_LIST,
 } from "./tideFeed";
 import { persistJournalSeeds } from "./journalPlans";
+import OutcomeLedger from "./OutcomeLedger";
 import TidehunterSettings, { loadTide, saveSettings as saveTide } from "./TidehunterSettings";
 import "./FlowseekerProBlademap.css";
 import { publishScreenContext } from "../../agent/useScreenContext";
@@ -1975,6 +1976,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                           </div>
                         )}
                     </div>
+                    <OutcomeLedger active={active} />
                   </div>
                 );
               }

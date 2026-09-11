@@ -102,13 +102,15 @@ class TestOptionRoute:
 
         fake_client = AsyncMock()
         fake_client.place_option_order = AsyncMock(
-            return_value={"id": "oid-9", "status": "accepted"})
+            return_value={"id": "oid-9", "status": "filled", "qty": "2",
+                          "symbol": "SPY260904C00760000", "side": "buy",
+                          "filled_qty": "2", "filled_avg_price": "3.0"})
         monkeypatch.setattr("alpaca_client.AlpacaClient", lambda: fake_client)
 
         res = await route_mod.place_option_order(
             symbol="SPY260904C00760000", qty=2, side="buy",
             order_type="limit", limit_price=3.0)
-        assert res["status"] == "accepted"
+        assert res["status"] == "filled"
         trades = read_trades(eng)
         assert len(trades) == 1
         t = trades[0]

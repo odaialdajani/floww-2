@@ -541,8 +541,6 @@ async def _fetch_chain_live(
             _note_public_429(e)
             log.warning("Public API chain fail for %s %s: %s", ticker, exp, e)
             continue
-        exp_dates.append(exp)
-
         for side in ("calls", "puts"):
             for oc in parsed.get(side, []):
                 try:
@@ -561,7 +559,7 @@ async def _fetch_chain_live(
                     continue
                 contracts.append({
                     "osi": oc.symbol,  # OSI symbol for order placement (e.g. SPY260904C00760000)
-                    "expiry": oc.expiration,
+                    "expiry": exp_d.isoformat(),
                     "T": T,
                     # cvserver convention: lowercase "call"/"put".
                     # gex_core.py and analytics.py compare c["type"] == "call"
@@ -586,6 +584,11 @@ async def _fetch_chain_live(
                     "bid_event_time": _timestamp_text(getattr(oc, "bid_timestamp", None)),
                     "ask_event_time": _timestamp_text(getattr(oc, "ask_timestamp", None)),
                 })
+                # Available coverage describes accepted contracts, not a
+                # successful empty request or contracts rejected above.
+                accepted_expiry = exp_d.isoformat()
+                if accepted_expiry not in exp_dates:
+                    exp_dates.append(accepted_expiry)
 
     if not contracts:
         log.warning("Public API returned 0 contracts for %s", ticker)

@@ -70,9 +70,9 @@ def validate_chain_row(row: Any) -> tuple[bool, str | None]:
         date.fromisoformat(str(exp))
     except (ValueError, TypeError):
         return False, "bad_expiry"
-    if not _is_num(vol) or vol < 0:
+    if not _finite(vol) or vol < 0:
         return False, "bad_volume"
-    if not _is_num(oi) or oi < 0:
+    if not _finite(oi) or oi < 0:
         return False, "bad_oi"
     if not _finite(iv):
         return False, "bad_iv"

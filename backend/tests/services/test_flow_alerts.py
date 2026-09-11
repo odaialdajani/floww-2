@@ -88,10 +88,14 @@ def test_norm_rows_drops_malformed_rows_not_crash():
     assert len(rows) == 1
 
 
-@pytest.mark.flaky_env
-def test_biz_dte_same_day_is_zero_and_skips_weekends():
-    assert biz_dte(date.today().isoformat()) == 0
-    assert biz_dte(_future_exp(3)) == 3
+@pytest.mark.parametrize("today,expiry,expected", [
+    (date(2026, 9, 11), "2026-09-11", 0),
+    (date(2026, 9, 11), "2026-09-16", 3),
+    (date(2026, 9, 12), "2026-09-14", 1),
+    (date(2026, 9, 13), "2026-09-14", 1),
+])
+def test_biz_dte_same_day_is_zero_and_skips_weekends(today, expiry, expected):
+    assert biz_dte(expiry, today=today) == expected
 
 
 # ── SCORING PARITY ──────────────────────────────────────────────────

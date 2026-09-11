@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { API as BACKEND_API } from "../../config/api";
 import SkylitTickerBar from "./SkylitTickerBar";
@@ -51,7 +51,7 @@ function SkylitDashboard({
   loading = false,
 }) {
   const [tradeMode, setTradeMode] = useState(false);
-  const [selectedCell, setSelectedCell] = useState(null);
+  const [selectedIdentity, setSelectedIdentity] = useState(null);
   // Grid zoom, in-frame only (2026-09-04): the expanded overlay keeps its
   // designed full density instead of compounding scale on scale.
   const [gridZoom, setGridZoom] = useState(1);
@@ -117,7 +117,22 @@ function SkylitDashboard({
   const wideData = expData?.ticker === ticker ? expData : null;
   const overlayData = wideData || baseData;
   const visibleData = expanded ? overlayData : baseData;
-  useEffect(()=>{setSelectedCell(null);},[ticker,viewMode,expanded,visibleData?.asof]);
+  // The click selects an identity. Its value always comes from the exact
+  // currently displayed map, so a poll cannot either erase the choice or
+  // pair an old cell value with a new map version.
+  const selectedCell = useMemo(() => {
+    if (!selectedIdentity || selectedIdentity.ticker !== ticker || selectedIdentity.metric !== viewMode) return null;
+    const { strike, colKey } = selectedIdentity;
+    if (!shownMapStrikes(visibleData, spot, expanded ? null : fitRows).includes(strike) ||
+        !visibleData?.grid?.expiries?.includes(colKey)) return null;
+    const gridKey = { gex: "grid", skylit: "grid", vex: "vex_grid", charm: "charm_grid" }[viewMode];
+    const value = gridKey ? visibleData.grid[gridKey]?.[colKey]?.[String(strike)] : null;
+    return typeof value === "number" && Number.isFinite(value) ? { strike, colKey, value } : null;
+  }, [selectedIdentity, ticker, viewMode, visibleData, spot, expanded, fitRows]);
+  useEffect(() => {
+    // Once removed from scope, a former selection must not silently return.
+    if (selectedIdentity && !selectedCell) setSelectedIdentity(null);
+  }, [selectedIdentity, selectedCell]);
   useEffect(()=>{
     publishScreenContext({page:"heatseeker",ticker,dte:dte==null?"all":dte===0?"0dte":`days:${dte}`,metric:viewMode,mode:timeframe,
       expiries,selectedStrike:selectedCell?.strike ?? null,selectedExpiry:selectedCell?.colKey ?? null,
@@ -134,10 +149,10 @@ function SkylitDashboard({
 
   const handleCellClick = useCallback(
     (strike, colKey, value) => {
-      setSelectedCell({ strike, colKey, value });
+      setSelectedIdentity({ ticker, metric: viewMode, strike, colKey });
       if (tradeMode && onCellClick) onCellClick(strike, colKey, value);
     },
-    [tradeMode, onCellClick]
+    [ticker, viewMode, tradeMode, onCellClick]
   );
 
   const handleStrikeClick = useCallback(

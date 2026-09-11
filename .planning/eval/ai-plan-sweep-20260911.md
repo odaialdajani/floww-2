@@ -1,5 +1,12 @@
 # AI plan evidence sweep - 2026-09-11
 
+Latest23:19 follow-up: see [full remaining scope](full-scope-remaining-20260911.md)
+and the top of [delivery evidence](../INTEGRATION_AI_UI_GOAL.md). Fresh30-case
+inputs and execution are sealed and independently checked, with30 passing
+route/storage input checks and no candidate run. The prior unbound status is
+historical. Actual selected-cell save/reload now verified with16 facts. Full
+research acceptance, later catalog/proposals/paper/watch/live gates remain open.
+
 ## Scope and verdict
 
 Source plan: `.planning/unknowns/lodestar-plan-v4-review-draft.md`, revision 4. This report inventories every numbered section and subsection against the working tree reviewed through approximately 20:42 UTC. It is not a release approval, a complete security certification, a trading-performance claim, or acceptance of the companion UI plan. Files are being edited concurrently; findings require an exact-head recheck before closure.

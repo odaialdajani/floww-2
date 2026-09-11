@@ -177,7 +177,10 @@ class TestApproveJournals:
         alert = _alert()
         router = MagicMock()
         router.submit_order = AsyncMock(return_value={
-            "status": "submitted", "client_order_id": "cid-1"})
+            "status": "submitted", "client_order_id": "cid-1",
+            "broker": {"id": "entry-1", "status": "filled", "symbol": "SPY",
+                       "side": "buy", "qty": "2", "filled_qty": "2",
+                       "filled_avg_price": "500"}})
         with patch.object(ops, "fetch_recent_alerts", return_value=[alert]):
             res = await ops.execute_approve(alert["key"], 2, MagicMock(), router)
         assert res["status"] == "submitted"

@@ -66,7 +66,7 @@ jobs:
           pip install -r requirements.txt
           # pytest-timeout is not optional here — it is what turns a hung test
           # into a named failure instead of a 6-hour stall (see backend/pytest.ini).
-          pip install pytest pytest-asyncio httpx pytest-cov bandit pytest-timeout
+          pip install pytest pytest-asyncio httpx pytest-cov bandit pytest-timeout -r requirements-test.txt
 
       - name: Lint with ruff
         working-directory: ./backend

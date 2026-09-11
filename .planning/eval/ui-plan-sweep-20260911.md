@@ -1,5 +1,13 @@
 # Tidehunter UI plan sweep - 2026-09-11
 
+Latest desktop follow-up23:19:84 suites/723 tests and production build pass.
+Nested settings, Public-only outcome refusal, selected-cell persistence and
+saved exact small readings were repaired and checked. Actual Solstice selected
+SPY764/2026-09-14 answer retained+48.06M and source limits after saved-history
+reload. Newer broker closes refresh cached execution without losing notes.
+See [complete current scope](full-scope-remaining-20260911.md). No mobile work
+was added after the user's pause; earlier mobile evidence below is historical.
+
 Reviewed the complete `.planning/mockups/tidehunter-pro-2026-09-05/PLAN.md`, sections 1 through 9, against production code and existing focused tests. This is a static/source review plus isolated DOM refutation, not live market/provider/model acceptance. No provider requests were made and no application code was edited by this reviewer. Only this report is owned by this reviewer.
 
 Snapshot: initial review 20:33-20:38 UTC. Parent began fixes during the review. Fixes reported or observed below are **pending recheck**, not accepted merely because source changed. Later parent evidence must update closure status.

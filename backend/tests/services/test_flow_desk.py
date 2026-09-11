@@ -15,7 +15,7 @@ BEFORE dedup/persist (collision-safe sibling of flow_alerts/flow_quality):
                 alerts fired into rich vol (>=80th own-history percentile)
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 
@@ -104,17 +104,22 @@ def test_fresh_gate_fractional_rule_for_big_contracts():
 
 # ── CAMPAIGN ────────────────────────────────────────────────────────
 
-@pytest.mark.flaky_env
-def test_prior_alert_days_counts_distinct_prior_sessions(fresh_engine):
+def test_prior_alert_days_counts_distinct_prior_sessions(fresh_engine, monkeypatch):
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 9, 11, 12, tzinfo=tz)
+    monkeypatch.setattr("services.flow_desk.datetime", FixedDateTime)
     init_flow_alert_tables(fresh_engine)
-    rows = norm_rows([_raw(vol=60000, oi=1500, delta=0.25)])
-    alerts = eval_institutional(rows)
-    d0 = date.today()
-    persist_alerts(fresh_engine, alerts, snapshot_date=(d0 - timedelta(days=2)).isoformat())
-    persist_alerts(fresh_engine, alerts, snapshot_date=(d0 - timedelta(days=1)).isoformat())
-    persist_alerts(fresh_engine, alerts, snapshot_date=d0.isoformat())
-    days = read_prior_alert_days(fresh_engine, [alerts[0]["ckey"]])
-    assert days[alerts[0]["ckey"]] == 2               # today excluded
+    alert = {**_alert(), "asof": "2026-09-11T12:00:00", "type": "call", "exp": "2026-09-18"}
+    for day in ("2026-09-09", "2026-09-10", "2026-09-11"):
+        # Same contract has two distinct rules each day, and one repeated upsert.
+        second = {**alert, "key": "whale|" + alert["ckey"], "rule": "WHALE"}
+        assert persist_alerts(fresh_engine, [alert, second], snapshot_date=day) == 2
+        assert persist_alerts(fresh_engine, [alert], snapshot_date=day) == 1
+    assert persist_alerts(fresh_engine, [alert], snapshot_date="2026-08-20") == 1
+    days = read_prior_alert_days(fresh_engine, [alert["ckey"]])
+    assert days == {alert["ckey"]: 2}  # today, duplicates and outside-lookback rows excluded
 
 
 def test_apply_campaign_promotes_one_notch_with_reason():

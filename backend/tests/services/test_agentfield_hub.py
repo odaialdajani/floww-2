@@ -24,11 +24,6 @@ Run with:
 
 from __future__ import annotations
 
-import pytest
-
-pytest.importorskip("agentfield", reason="agentfield SDK not installed")
-
-
 import os
 import sys
 from pathlib import Path
@@ -82,45 +77,32 @@ class FakeRouter:
         return decorator
 
 
-# Inject the fake agentfield module
-# The hub does `from agentfield import Agent, ...` at module import time, and
-# agentfield internals do `from agentfield.agent_pause import ...`. A bare
-# MagicMock stub breaks both (submodule imports raise "'agentfield' is not a
-# package"). Use a types.ModuleType shim that carries the four fake names for
-# the hub while exposing __path__ so real submodules still resolve.
-import types  # noqa: E402
-
-import agentfield as _real_agentfield  # noqa: E402
+# Load a private copy; restore the fake dependency immediately after import.
+import importlib.util
+import types
 
 fake_agentfield = types.ModuleType("agentfield")
-fake_agentfield.__path__ = _real_agentfield.__path__
+fake_agentfield.__path__ = []
 fake_agentfield.Agent = FakeAgent
 fake_agentfield.AgentRouter = FakeRouter
 fake_agentfield.AIConfig = FakeAIConfig
 fake_agentfield.CostTracker = FakeCostTracker
-sys.modules["agentfield"] = fake_agentfield
-
-# conftest.py imports `server` at session start, which imports
-# services.agentfield_hub with its names already bound to the REAL agentfield
-# classes (`from agentfield import Agent, ...`). Rebinding the shim on
-# sys.modules isn't enough — patch the hub module's bound names directly.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-import services.agentfield_hub as _hub_mod  # noqa: E402
-
-_hub_mod.Agent = FakeAgent
-_hub_mod.AgentRouter = FakeRouter
-_hub_mod.AIConfig = FakeAIConfig
-_hub_mod.CostTracker = FakeCostTracker
-
+_hub_path = Path(__file__).resolve().parents[2] / "services" / "agentfield_hub.py"
+_hub_spec = importlib.util.spec_from_file_location("_isolated_agentfield_hub_tests", _hub_path)
+_hub_mod = importlib.util.module_from_spec(_hub_spec)
+_dependency_before = sys.modules.get("agentfield")
+_production_before = sys.modules.get("services.agentfield_hub")
+with patch.dict(sys.modules, {"agentfield": fake_agentfield}):
+    _hub_spec.loader.exec_module(_hub_mod)
+assert sys.modules.get("agentfield") is _dependency_before
+assert sys.modules.get("services.agentfield_hub") is _production_before
 AgentFieldHub, get_hub, init_hub = _hub_mod.AgentFieldHub, _hub_mod.get_hub, _hub_mod.init_hub
-
-# ── Fixtures ────────────────────────────────────────────────────────────────
 
 
 @pytest.fixture(autouse=True)
 def _reset_singleton():
     """Reset the global _hub singleton before each test."""
-    import services.agentfield_hub as mod
+    mod = _hub_mod
     mod._hub = None
     yield
     mod._hub = None
@@ -167,7 +149,7 @@ class TestGetHub:
         assert h1 is h2
 
     def test_returns_none_before_first_call(self):
-        import services.agentfield_hub as mod
+        mod = _hub_mod
         assert mod._hub is None
 
 
@@ -205,7 +187,7 @@ class TestHubInit:
     async def test_init_custom_model_from_env(self, monkeypatch):
         monkeypatch.setenv("AGENTFIELD_MODEL", "openrouter/owl-alpha")
         # Need a fresh hub with the env var set
-        import services.agentfield_hub as mod
+        mod = _hub_mod
         mod._hub = None
         h = AgentFieldHub()
         await h.init()
@@ -432,8 +414,6 @@ class TestReasonerErrorHandling:
     @pytest.mark.asyncio
     async def test_gex_regime_returns_error_on_exception(self, hub, monkeypatch):
         """If compute_gex_profile raises, gex_regime returns status=error."""
-        import services.agentfield_hub as mod
-
         async def fake_compute(ticker):
             raise RuntimeError("backend unavailable")
 

@@ -72,9 +72,10 @@ _JOURNAL_DDL = """
         tags TEXT,
         key_levels_json TEXT,
         source TEXT DEFAULT 'flowseeker-auto',
+        broker_order_id TEXT NOT NULL DEFAULT '',
         created_at TIMESTAMP DEFAULT current_timestamp,
         updated_at TIMESTAMP DEFAULT current_timestamp,
-        PRIMARY KEY (ticker, type, action, strike, expiry, entry_date)
+        PRIMARY KEY (ticker, type, action, strike, expiry, entry_date, broker_order_id)
     )
 """
 
@@ -85,12 +86,38 @@ def init_journal_tables(engine) -> None:
     with contextlib.suppress(Exception):
         engine.execute_write(
             "ALTER TABLE flow_journal_trades ADD COLUMN IF NOT EXISTS key_levels_json TEXT")
+    # DuckDB cannot alter a primary key in place. Rebuild transactionally while
+    # copying every existing column verbatim; legacy rows keep their old key.
+    with engine._conn_lock:
+        conn = engine._conn
+        keys = conn.execute("SELECT constraint_column_names FROM duckdb_constraints() "
+                            "WHERE table_name='flow_journal_trades' AND constraint_type='PRIMARY KEY'").fetchall()
+        if keys and "broker_order_id" in keys[0][0]:
+            return
+        columns = [r[1] for r in conn.execute("PRAGMA table_info('flow_journal_trades')").fetchall()]
+        conn.execute("BEGIN TRANSACTION")
+        try:
+            conn.execute(_JOURNAL_DDL.replace("IF NOT EXISTS flow_journal_trades",
+                                             "flow_journal_trades__identity_next"))
+            quoted = ",".join('"' + col.replace('"', '""') + '"' for col in columns)
+            conn.execute(f"INSERT INTO flow_journal_trades__identity_next ({quoted}) "
+                         f"SELECT {quoted} FROM flow_journal_trades")
+            conn.execute("DROP TABLE flow_journal_trades")
+            conn.execute("ALTER TABLE flow_journal_trades__identity_next RENAME TO flow_journal_trades")
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
 
 
 def journal_seed_key(seed: dict) -> str:
     """Same composite key as the frontend's journalSeedKey()."""
-    return "|".join(str(seed.get(k) or "") for k in
-                    ("ticker", "type", "action", "strike", "expiry", "entry_date"))
+    parts = [str(seed[k]) if seed.get(k) is not None else "" for k in
+             ("ticker", "type", "action", "strike", "expiry", "entry_date")]
+    if seed.get("broker_order_id"):
+        from urllib.parse import quote
+        parts.append(quote(str(seed["broker_order_id"]), safe=""))
+    return "|".join(parts)
 
 
 def _to_db_row(seed: dict) -> dict[str, Any]:
@@ -105,6 +132,7 @@ def _to_db_row(seed: dict) -> dict[str, Any]:
 
     return {
         "ckey": seed.get("ckey"),
+        "broker_order_id": str(seed.get("broker_order_id") or ""),
         "ticker": str(seed.get("ticker") or "").upper(),
         "type": str(seed.get("type") or "call").lower(),
         "action": str(seed.get("action") or "buy").lower(),
@@ -137,15 +165,15 @@ def save_seeds(engine, seeds: list[dict]) -> int:
                 INSERT INTO flow_journal_trades (
                     ckey, ticker, type, action, strike, expiry, quantity,
                     entry_price, exit_price, entry_date, exit_date, notes,
-                    gex_regime, setup, tags, source, key_levels_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    gex_regime, setup, tags, source, key_levels_json, broker_order_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [[row["ckey"], row["ticker"], row["type"], row["action"],
                  row["strike"], row["expiry"], row["quantity"],
                  row["entry_price"], row["exit_price"], row["entry_date"],
                  row["exit_date"], row["notes"], row["gex_regime"],
                  row["setup"], row["tags"], row["source"],
-                 row["key_levels_json"]]],
+                 row["key_levels_json"], row["broker_order_id"]]],
             )
             added += 1
         except Exception as e:
@@ -159,7 +187,7 @@ def save_seeds(engine, seeds: list[dict]) -> int:
 
 _COLS = ("ckey, ticker, type, action, strike, expiry, quantity, entry_price, "
          "exit_price, entry_date, exit_date, notes, gex_regime, setup, tags, "
-         "source, key_levels_json, created_at, updated_at")
+         "source, key_levels_json, created_at, updated_at, broker_order_id")
 
 
 def read_trades(engine, *, status: str = "all", days: int = 365) -> list[dict]:
@@ -181,7 +209,7 @@ def read_trades(engine, *, status: str = "all", days: int = 365) -> list[dict]:
         out.append({
             **{k: r.get(k) for k in
                ("ticker", "type", "action", "expiry", "quantity", "notes",
-                "gex_regime", "setup", "tags", "ckey", "source")},
+                "gex_regime", "setup", "tags", "ckey", "source", "broker_order_id")},
             "strike": r.get("strike"),
             "entry_price": r.get("entry_price"),
             # frontend treats "" as no-exit
@@ -204,15 +232,14 @@ def close_open_by_symbol(engine, symbol: str, *, exit_price: float,
     for that symbol gets its exit stamped automatically."""
     try:
         rows = engine.query(
-            "SELECT ticker, type, action, strike, expiry, entry_date "
+            "SELECT ticker, type, action, strike, expiry, entry_date, broker_order_id "
             "FROM flow_journal_trades "
             "WHERE ticker = ? AND COALESCE(exit_date, '') = '' AND exit_price IS NULL",
             [str(symbol).upper()],
         )
         closed = 0
         for r in rows:
-            key = "|".join(str(r.get(k) or "") for k in
-                           ("ticker", "type", "action", "strike", "expiry", "entry_date"))
+            key = journal_seed_key(r)
             if close_trade(engine, key, exit_price=exit_price, exit_date=exit_date):
                 closed += 1
         return closed
@@ -239,7 +266,7 @@ def journal_lifecycle(engine, spot_map: dict) -> int:
     """
     try:
         rows = engine.query(
-            "SELECT ticker, type, action, strike, expiry, entry_date, key_levels_json "
+            "SELECT ticker, type, action, strike, expiry, entry_date, key_levels_json, broker_order_id "
             "FROM flow_journal_trades "
             "WHERE COALESCE(exit_date, '') = '' AND exit_price IS NULL "
             "AND key_levels_json IS NOT NULL",
@@ -270,8 +297,7 @@ def journal_lifecycle(engine, spot_map: dict) -> int:
         if not (stop_hit or tgt_hit):
             continue
         exit_px = float(tgt) if tgt_hit else float(inv)   # target wins ties
-        key = "|".join(str(r.get(k) or "") for k in
-                       ("ticker", "type", "action", "strike", "expiry", "entry_date"))
+        key = journal_seed_key(r)
         if close_trade(engine, key, exit_price=exit_px, exit_date=today):
             closed += 1
             logger.info("journal lifecycle: %s %s via %s @ %s (spot %s)",
@@ -282,18 +308,22 @@ def journal_lifecycle(engine, spot_map: dict) -> int:
 def close_trade(engine, key: str, *, exit_price: float, exit_date: str) -> bool:
     """Set exit fields on the trade matching a journalSeedKey() key."""
     parts = str(key).split("|")
-    if len(parts) != 6:
+    if len(parts) not in (6, 7):
         return False
-    ticker, ctype, action, strike, expiry, entry_date = parts
+    from urllib.parse import unquote
+    ticker, ctype, action, strike, expiry, entry_date = parts[:6]
+    broker_order_id = unquote(parts[6]) if len(parts) == 7 else ""
     try:
-        strike_f = float(strike) if strike else None
+        # Historical equity keys dropped zero through `value or ''`.
+        strike_f = float(strike) if strike else (0.0 if ctype.lower() == "equity" else None)
     except ValueError:
         return False
 
     existing = engine.query(
         "SELECT ticker FROM flow_journal_trades WHERE ticker = ? AND type = ? "
-        "AND action = ? AND strike IS NOT DISTINCT FROM ? AND expiry = ? AND entry_date = ?",
-        [ticker.upper(), ctype.lower(), action.lower(), strike_f, expiry, entry_date],
+        "AND action = ? AND strike IS NOT DISTINCT FROM ? AND expiry = ? AND entry_date = ? "
+        "AND broker_order_id = ?",
+        [ticker.upper(), ctype.lower(), action.lower(), strike_f, expiry, entry_date, broker_order_id],
     )
     if not existing:
         return False
@@ -303,9 +333,10 @@ def close_trade(engine, key: str, *, exit_price: float, exit_date: str) -> bool:
         SET exit_price = ?, exit_date = ?, updated_at = current_timestamp
         WHERE ticker = ? AND type = ? AND action = ?
           AND strike IS NOT DISTINCT FROM ? AND expiry = ? AND entry_date = ?
+          AND broker_order_id = ?
         """,
         [(float(exit_price), exit_date, ticker.upper(), ctype.lower(),
-         action.lower(), strike_f, expiry, entry_date)],
+         action.lower(), strike_f, expiry, entry_date, broker_order_id)],
     )
     return True
 

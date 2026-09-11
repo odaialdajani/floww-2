@@ -54,6 +54,9 @@ class IngestionPipeline:
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=max_queue_size)
         self._running = False
         self._writer_task: asyncio.Task | None = None
+        self._stop_event = asyncio.Event()
+        self._lifecycle_lock = asyncio.Lock()
+        self._flush_lock = asyncio.Lock()
 
         # Metrics
         self._last_drop_warning: float = 0.0
@@ -67,6 +70,9 @@ class IngestionPipeline:
             "lob_depth_inserted": 0,
             "flush_cycles": 0,
             "errors": 0,
+            # A storage exception can occur after INSERT committed. These rows
+            # are neither confirmed inserts nor known drops; never auto-retry.
+            "unconfirmed_write_rows": 0,
             "last_flush_ms": 0,
         }
 
@@ -75,24 +81,29 @@ class IngestionPipeline:
     # ------------------------------------------------------------------
 
     async def start(self):
-        """Start the batching writer coroutine."""
-        self._running = True
-        self._writer_task = asyncio.create_task(self._writer_loop())
-        logger.info(
-            f"Ingestion pipeline started (queue={self.max_queue_size}, "
-            f"flush={self.flush_interval*1000:.0f}ms)"
-        )
+        """Start one batching task; concurrent starts share the existing task."""
+        async with self._lifecycle_lock:
+            if self._writer_task is not None and not self._writer_task.done():
+                return
+            self._stop_event.clear()
+            self._running = True
+            self._writer_task = asyncio.create_task(self._writer_loop())
+            logger.info(
+                f"Ingestion pipeline started (queue={self.max_queue_size}, "
+                f"flush={self.flush_interval*1000:.0f}ms)"
+            )
 
     async def stop(self):
-        """Drain remaining queue and stop."""
-        self._running = False
-        if self._writer_task:
-            self._writer_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._writer_task
-        # Final drain
-        await self._drain_and_flush()
-        logger.info(f"Ingestion pipeline stopped. Metrics: {self.get_metrics()}")
+        """Wake idle task, finish any active write, then drain remaining rows."""
+        async with self._lifecycle_lock:
+            self._running = False
+            self._stop_event.set()
+            if self._writer_task:
+                # Cancelling a to_thread await does not stop the storage call.
+                # Let its outcome reach accounting before final drain/return.
+                await asyncio.shield(self._writer_task)
+            await self._drain_and_flush()
+            logger.info(f"Ingestion pipeline stopped. Metrics: {self.get_metrics()}")
 
     # ------------------------------------------------------------------
     # Enqueue (called by streamer handlers)
@@ -145,19 +156,27 @@ class IngestionPipeline:
     # ------------------------------------------------------------------
 
     async def _writer_loop(self):
-        """Main writer loop: drain queue every flush_interval."""
+        """Drain periodically, or wake promptly when stop is requested."""
         while self._running:
             try:
-                await asyncio.sleep(self.flush_interval)
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(self._stop_event.wait(), self.flush_interval)
+                if not self._running:
+                    break
                 await self._drain_and_flush()
             except asyncio.CancelledError:
-                break
+                raise
             except Exception as e:
                 self._metrics["errors"] += 1
                 logger.error(f"Writer loop error: {e}")
 
     async def _drain_and_flush(self):
-        """Drain queue into buffers and bulk INSERT."""
+        """Serialize manual/final drains with the periodic write."""
+        async with self._flush_lock:
+            await self._flush_pending()
+
+    async def _flush_pending(self):
+        """Drain queue into buffers and attempt each data type independently."""
         start = time.monotonic()
         ticks = []
         chains = []
@@ -180,23 +199,23 @@ class IngestionPipeline:
             except asyncio.QueueEmpty:
                 break
 
-        # Bulk INSERT into DuckDB
-        try:
-            if ticks:
-                await self._insert_ticks(ticks)
-                self._metrics["ticks_inserted"] += len(ticks)
-            if chains:
-                await self._insert_chains(chains)
-                self._metrics["chains_inserted"] += len(chains)
-            if lob:
-                await self._insert_lob(lob)
-                self._metrics["lob_inserted"] += len(lob)
-            if lob_depth:
-                await self._insert_lob_depth(lob_depth)
-                self._metrics["lob_depth_inserted"] += len(lob_depth)
-        except Exception as e:
-            self._metrics["errors"] += 1
-            logger.error(f"Bulk insert error: {e}")
+        # One failed/uncertain table write must not discard other data types.
+        for batch, insert, metric in (
+            (ticks, self._insert_ticks, "ticks_inserted"),
+            (chains, self._insert_chains, "chains_inserted"),
+            (lob, self._insert_lob, "lob_inserted"),
+            (lob_depth, self._insert_lob_depth, "lob_depth_inserted"),
+        ):
+            if not batch:
+                continue
+            try:
+                await insert(batch)
+            except Exception as e:
+                self._metrics["errors"] += 1
+                self._metrics["unconfirmed_write_rows"] += len(batch)
+                logger.error(f"Bulk insert outcome unconfirmed ({metric}, rows={len(batch)}): {e}")
+            else:
+                self._metrics[metric] += len(batch)
 
         elapsed_ms = (time.monotonic() - start) * 1000
         self._metrics["last_flush_ms"] = round(elapsed_ms, 2)

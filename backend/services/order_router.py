@@ -204,6 +204,7 @@ class OrderRouter:
                 side=payload["side"],
                 order_type=payload["type"],
                 limit_price=float(payload.get("limit_price") or 0),
+                stop_price=float(payload.get("stop_price") or 0),
                 client_order_id=payload["client_order_id"],
             )
             if not result:
@@ -220,10 +221,14 @@ class OrderRouter:
                    "venue": VENUE, "broker": result}
             self._order_cache[client_order_id] = out
 
-            # Update position tracker
-            ticker = intent.get("ticker", "")
-            qty = int(intent.get("qty", 0))
-            side = intent.get("side", "buy")
+            # Submission is not execution. Count only reported priced fills.
+            from services.entry_fills import confirmed_entry_fill
+            fill = confirmed_entry_fill(result, int(payload["qty"]), payload["symbol"], payload["side"])
+            out["fill_status"] = fill["journal_status"]
+            out["unfilled_qty"] = fill["unfilled_qty"]
+            ticker = payload["symbol"]
+            qty = fill["quantity"] or 0
+            side = payload["side"]
             current = self.position_tracker.get(ticker)
             delta = qty if side == "buy" else -qty
             self.position_tracker.update(ticker, current + delta)

@@ -453,7 +453,9 @@ async def _reconcile_fill(router, res: dict) -> dict:
         if not isinstance(order, dict):
             return {"venue_status": "unknown",
                     "reason": f"venue refetch empty for {venue_id}"}
-        return {"venue_status": str(order.get("status", "unknown")),
+        if str(order.get("id") or "") != venue_id:
+            return {"venue_status": "unknown", "reason": "venue order identity mismatch"}
+        return {**order, "venue_status": str(order.get("status", "unknown")),
                 "filled_avg_price": order.get("filled_avg_price", ""),
                 "filled_qty": order.get("filled_qty", ""),
                 "reason": ""}
@@ -471,7 +473,8 @@ def _journal_approve_fill(alert: dict[str, Any], side: str, qty: int, res: dict,
     lifecycle tracking follows it to exit. Never raises into the trade path.
     """
     try:
-        from services.journal_store import get_engine, init_journal_tables, save_seeds
+        from services.entry_fills import journal_confirmed_entry
+        from services.journal_store import get_engine, init_journal_tables
 
         broker_raw = res.get("broker")
         broker_map = broker_raw if isinstance(broker_raw, dict) else {}
@@ -508,7 +511,7 @@ def _journal_approve_fill(alert: dict[str, Any], side: str, qty: int, res: dict,
             "notes": (f"Discord approve {side} {qty} shares from {alert.get('rule')} "
                       f"{alert.get('tier')} alert ({alert.get('key')}) | "
                       f"Alpaca paper ({broker_id}, broker status '{broker_status or 'submitted'}' — "
-                      f"submission, not a confirmed fill; reconcile via get_order){fill_bits} | "
+                      f"confirmed execution only){fill_bits} | "
                       f"ref px {ref_px} (equity leg, "
                       f"not a strike) | {alert.get('why', '')}"[:500]),
             "gex_regime": "",
@@ -519,6 +522,9 @@ def _journal_approve_fill(alert: dict[str, Any], side: str, qty: int, res: dict,
         }
         engine = get_engine()
         init_journal_tables(engine)
-        save_seeds(engine, [seed])
+        # Prefer a real readback; absent readback fields never invent fills.
+        order = rec if rec.get("id") else broker_map
+        res.update(journal_confirmed_entry(
+            engine, seed, order, qty, seed["ticker"], side))
     except Exception as e:
         logger.warning("discord approve journaling failed (non-fatal): %s", e)

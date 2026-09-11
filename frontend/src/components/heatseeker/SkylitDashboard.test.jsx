@@ -39,6 +39,8 @@ jest.mock("./SkylitHeatmapGrid",     () => ({ onCellClick, windowRows, density }
   </div>
 ));
 jest.mock("./SkylitMetricsSidebar",  () => () => <div data-testid="mock-metrics" />);
+jest.mock("./ExposureStrip", () => () => null);
+jest.mock("../flowseeker/AlertEngineStrip", () => () => null);
 
 // Mock the steal-list top-3 components (they fetch from :8000 which is not
 // running in tests). Use the same data-testids the components expose in
@@ -67,26 +69,74 @@ import useScreenContext from "../../agent/useScreenContext";
 
 function ResearchSelection(){const [context]=useScreenContext();return <output data-testid="research-selection">{JSON.stringify(context)}</output>;}
 
+function selectionMap(value = 123.4, asof = "2026-09-11T18:00:00Z") {
+ return {ticker:"SPY",asof,map_query:{expiries:4,mode:"day",dte:null},strikes:[{strike:650}],
+   grid:{strikes:[650],expiries:["2026-09-18"],grid:{"2026-09-18":{"650":value}}}};
+}
+
+test("same-scope polling retains the selected cell with the latest displayed value and map version",()=>{
+ const mounted=render(<><SkylitDashboard ticker="SPY" data={selectionMap()} spot={650}/><ResearchSelection/></>);
+ fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+ expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("123.4");
+ mounted.rerender(<><SkylitDashboard ticker="SPY" data={selectionMap(567.8,"2026-09-11T18:01:00Z")} spot={650}/><ResearchSelection/></>);
+ expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("567.8");
+ expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({selectedStrike:650,selectedExpiry:"2026-09-18",mapVersion:"2026-09-11T18:01:00Z"});
+});
+
+test("selection uses current exact data even when a response keeps the same version",()=>{
+ const mounted=render(<SkylitDashboard ticker="SPY" data={selectionMap()} spot={650}/>);
+ fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+ mounted.rerender(<SkylitDashboard ticker="SPY" data={selectionMap(0)} spot={650}/>);
+ expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("0.0");
+});
+
+test.each([null,NaN,Infinity])("a missing or invalid selected value clears its identity permanently (%s)",(value)=>{
+ const mounted=render(<><SkylitDashboard ticker="SPY" data={selectionMap()} spot={650}/><ResearchSelection/></>);
+ fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+ mounted.rerender(<><SkylitDashboard ticker="SPY" data={selectionMap(value)} spot={650}/><ResearchSelection/></>);
+ expect(screen.queryByTestId("skylit-selected-cell")).not.toBeInTheDocument();
+ expect(JSON.parse(screen.getByTestId("research-selection").textContent).selectedStrike).toBeNull();
+ mounted.rerender(<><SkylitDashboard ticker="SPY" data={selectionMap()} spot={650}/><ResearchSelection/></>);
+ expect(screen.queryByTestId("skylit-selected-cell")).not.toBeInTheDocument();
+});
+
+test.each(["ticker","measure","expiry","visible rows"])("changing %s out of the selected scope clears and does not restore an old choice",(change)=>{
+ const original={ticker:"SPY",data:selectionMap(),spot:650};
+ const mounted=render(<><SkylitDashboard {...original}/><ResearchSelection/></>);
+ fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+ let next={...original};
+ if(change==="ticker")next={...next,ticker:"QQQ",data:{...next.data,ticker:"QQQ"}};
+ if(change==="measure")next={...next,viewMode:"vex",data:{...next.data,grid:{...next.data.grid,vex_grid:{"2026-09-18":{"650":999}}}}};
+ if(change==="expiry")next={...next,data:{...next.data,grid:{...next.data.grid,expiries:["2026-09-25"]}}};
+ if(change==="visible rows")next={...next,spot:600,data:{...next.data,grid:{...next.data.grid,strikes:Array.from({length:51},(_,i)=>600+i)}}};
+ mounted.rerender(<><SkylitDashboard {...next}/><ResearchSelection/></>);
+ expect(screen.queryByTestId("skylit-selected-cell")).not.toBeInTheDocument();
+ expect(JSON.parse(screen.getByTestId("research-selection").textContent).selectedStrike).toBeNull();
+ mounted.rerender(<><SkylitDashboard {...original}/><ResearchSelection/></>);
+ expect(screen.queryByTestId("skylit-selected-cell")).not.toBeInTheDocument();
+});
+
 test("research follows the rendered wide map and never carries it into another ticker",async()=>{
  const stamp="2026-09-11T18:00:00Z";
  const query={expiries:4,mode:"day",dte:null,scalp:false,withTaps:true,maxStrikes:80};
- const base={ticker:"SPY",asof:stamp,mode:"day",map_query:query,strikes:[{strike:500}],grid:{strikes:[500],expiries:["2026-09-18"]}};
+ const base={...selectionMap(),asof:stamp,mode:"day",map_query:query};
  let resolveWide;
  axios.get.mockImplementation(()=>new Promise(resolve=>{resolveWide=resolve;}));
  const mounted=render(<><SkylitDashboard ticker="SPY" data={base} spot={500}/><ResearchSelection/></>);
  const current=()=>JSON.parse(screen.getByTestId("research-selection").textContent);
  expect(current().mapQuery.expiries).toBe(4);
- expect(current().mapStrikes).toEqual([500]);
+ expect(current().mapStrikes).toEqual([650]);
  mounted.rerender(<><SkylitDashboard ticker="SPY" data={base} spot={500} expiries={8} dte={7}/><ResearchSelection/></>);
  expect(current().mapQuery).toEqual(query);
  fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
  expect(current().selectedStrike).toBe(650);
  fireEvent.click(screen.getByTestId("skylit-expand-btn"));
- expect(current().selectedStrike).toBeNull();
+ expect(current().selectedStrike).toBe(650);
  await act(async()=>{resolveWide({data:{...base,mode:"swing",map_query:{...query,expiries:8,mode:"swing"},asof:"2026-09-11T18:01:00Z",grid:{strikes:[490,500,510],expiries:["2026-09-18"]}}});});
  expect(current().mapQuery).toMatchObject({expiries:8,mode:"swing",dte:null});
  expect(current().mapStrikes).toEqual([510,500,490]);
  expect(current().mapVersion).toBe("2026-09-11T18:01:00Z");
+ expect(current().selectedStrike).toBeNull();
  mounted.rerender(<><SkylitDashboard ticker="QQQ" data={base} spot={600}/><ResearchSelection/></>);
  expect(current().ticker).toBe("QQQ");
  expect(current().mapVersion).toBeNull();
@@ -179,7 +229,7 @@ describe("SkylitDashboard", () => {
 
   test("clicking a cell outside trade mode shows the selected-cell readout", async () => {
     await act(async () => {
-      render(<SkylitDashboard ticker="SPY" />);
+      render(<SkylitDashboard ticker="SPY" data={selectionMap()} spot={650} />);
     });
 
     expect(screen.queryByTestId("skylit-selected-cell")).not.toBeInTheDocument();

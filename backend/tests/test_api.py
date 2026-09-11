@@ -1,11 +1,7 @@
-"""
-In-process API tests for the Confluence Decoder backend.
+"""Local route contracts using controlled market inputs and storage boundaries.
 
-Migrated from httpx-against-localhost to FastAPI's TestClient so the suite
-runs in CI without a live server. Heavy chain/yfinance endpoints either
-patch ``fetch_spot_and_chains_merged`` with a static contracts fixture or
-are skipped as integration-only — they remain in this file so the original
-intent is preserved and a developer can flip them on locally.
+Real route calculations run without provider calls or starting server lifespan.
+These checks do not certify live-provider acceptance.
 """
 from __future__ import annotations
 
@@ -22,6 +18,21 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from server import app  # noqa: E402
+from tests.test_heatseeker_v2 import install_offline_market  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def offline_routes(monkeypatch):
+    from unittest.mock import AsyncMock
+
+    import server
+
+    install_offline_market(monkeypatch)
+    monkeypatch.setattr(server, "save_snapshot", AsyncMock())
+    monkeypatch.setattr(server, "velocity_and_rolling", AsyncMock(return_value={
+        "velocity_score": 0, "rolling_floor": "stable",
+        "rolling_ceiling": "stable", "history": [],
+    }))
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -157,29 +168,32 @@ def test_alerts_crud(client):
 
 
 # ---------------------------------------------------------------------------
-# Health — depends on Mongo + yfinance reachability. Skip in CI.
+# Health uses controlled storage, key-presence and connection-count inputs.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.skip(reason="requires live Mongo and yfinance; integration only")
-def test_health(client):
+def test_health(client, monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+    monkeypatch.setenv("PUBLIC_API_KEY", "test-key")
+    monkeypatch.setattr("routes.health.duckdb_engine", MagicMock())
+    monkeypatch.setattr("routes.health.ws_manager", SimpleNamespace(_all={}))
+    monkeypatch.setattr("routes.health.av_circuit", SimpleNamespace(state=SimpleNamespace(value="closed"), failure_count=0, success_count=0))
+    monkeypatch.setattr("routes.health._institutional_section", lambda feed: {"feed": feed})
     r = client.get("/api/health")
     assert r.status_code == 200
     d = r.json()
-    assert d["status"] in ("healthy", "degraded")
-    assert "dependencies" in d
+    assert d["status"] == "healthy"
+    assert set(d["checks"]) == {"duckdb", "public_api", "alpha_vantage", "websocket", "circuit_breaker"}
+    assert d["checks"]["public_api"] == {"status": "healthy", "key_configured": True}
+    assert d["checks"]["alpha_vantage"]["deprecated"] is True
+    assert d["checks"]["websocket"]["active_connections"] == 0
 
 
 # ---------------------------------------------------------------------------
-# Chain-dependent routes — patch the chain fetcher
-#
-# Some downstream helpers (yfinance realised-vol, IV-rank, Polygon tap counts,
-# Mongo snapshot inserts) still reach out to the network even when the chain
-# is mocked. Those are skipped for now and tracked as integration-only in a
-# follow-up PR. The fixtures are kept so the test still documents intent.
+# Chain-dependent routes exercise real calculations from offline inputs.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.skip(reason="build_heatmap calls yfinance/Polygon/Mongo beyond chain fetch; integration only")
-def test_heatmap_spy(client, patched_chain):
+def test_heatmap_spy(client):
     r = client.get("/api/heatmap/SPY?expiries=4")
     assert r.status_code == 200
     d = r.json()
@@ -191,8 +205,7 @@ def test_heatmap_spy(client, patched_chain):
     assert len(d["strikes"]) > 0
 
 
-@pytest.mark.skip(reason="build_heatmap calls yfinance/Polygon/Mongo beyond chain fetch; integration only")
-def test_heatmap_modes(client, patched_chain):
+def test_heatmap_modes(client):
     for mode in ["day", "swing", "scalp"]:
         r = client.get(f"/api/heatmap/SPY?expiries=2&mode={mode}")
         assert r.status_code == 200, f"Mode {mode} failed"
@@ -200,12 +213,18 @@ def test_heatmap_modes(client, patched_chain):
         assert d["mode"] == mode
 
 
-@pytest.mark.skip(reason="build_heatmap calls yfinance/Polygon/Mongo beyond chain fetch; integration only")
-def test_heatmap_dte_filter(client, patched_chain):
+def test_heatmap_dte_filter(client):
     r = client.get("/api/heatmap/SPY?expiries=4&dte=2")
     assert r.status_code == 200
     d = r.json()
-    assert "strikes" in d
+    # Controlled contracts begin seven days out; two days must not widen.
+    assert d["strikes"] == []
+    assert d["grid"] == {}
+    assert d["expiries_used"] == []
+    within_week = client.get("/api/heatmap/SPY?expiries=4&dte=8")
+    assert within_week.status_code == 200
+    assert within_week.json()["strikes"]
+    assert len(within_week.json()["grid"]["expiries"]) == 1
 
 
 def test_chain_spy(client, patched_chain):
@@ -367,8 +386,7 @@ def test_gamma_flip_endpoint(client, patched_chain):
     assert d["regime"] in ("positive_gamma", "negative_gamma", "unknown")
 
 
-@pytest.mark.skip(reason="daily-checklist calls build_heatmap which reaches yfinance/Polygon/Mongo; integration only")
-def test_daily_checklist_endpoint(client, patched_chain):
+def test_daily_checklist_endpoint(client):
     r = client.get("/api/daily-checklist/SPY?expiries=2")
     assert r.status_code == 200
     d = r.json()
@@ -380,25 +398,29 @@ def test_daily_checklist_endpoint(client, patched_chain):
     assert "recommended_strategies" in d["strategy"]
 
 
-@pytest.mark.skip(reason="trinity fans out to build_heatmap × 3; integration only")
-def test_trinity(client, patched_chain):
+def test_trinity(client):
     r = client.get("/api/trinity")
     assert r.status_code == 200
     d = r.json()
-    tickers = d.get("tickers", d)
-    assert "SPY" in tickers or "^SPX" in tickers
+    assert set(d["tickers"]) == {"^SPX", "SPY", "QQQ"}
+    for ticker, result in d["tickers"].items():
+        assert "error" not in result
+        assert result["ticker"] == ticker
+        assert result["spot"] == (5000.0 if ticker == "^SPX" else 500.0)
+        assert result["strikes"]
 
 
-@pytest.mark.skip(reason="hits live yfinance fast_info; integration only")
 def test_spot_spy(client):
     r = client.get("/api/spot/SPY")
     assert r.status_code == 200
     d = r.json()
-    assert "spot" in d
-    assert d["spot"] > 0
+    assert d["ticker"] == "SPY"
+    assert d["spot"] == 500.0
+    assert d["data_source"] == "yfinance"
+    assert d["status"] == "ok"
+    assert d["ts"] is not None
 
 
-@pytest.mark.skip(reason="loops over 5 tickers, build_heatmap reaches yfinance/Polygon/Mongo; integration only")
 def test_multiple_tickers(client):
     for ticker in ["SPY", "QQQ", "IWM", "AAPL", "NVDA"]:
         r = client.get(f"/api/heatmap/{ticker}?expiries=2")

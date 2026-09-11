@@ -2380,9 +2380,23 @@ def get_calibration_status() -> dict:
             "model_kind": model.get("kind"), "age_s": age}
 
 
+def _require_legacy_outcome_source():
+    # This legacy calculation uses yfinance history, including its cached
+    # reports. Neither may bypass an explicitly selected Public-only source.
+    # Missing configuration defaults to the source in .env.example.
+    mode = (os.getenv("FLOWW_MARKET_DATA_PROVIDER") or "").strip().lower() or "public"
+    if mode == "public":
+        raise HTTPException(
+            status_code=503,
+            detail="Historical outcome comparison is unavailable in Public-only mode. "
+                   "Legacy prices and recalculation are disabled; no compatible Public history is available.",
+        )
+
+
 async def _load_outcomes(days: int, horizon: int) -> dict | None:
     """Precomputed stats from the nightly cron (Mongo flow_outcome_cache);
     falls back to computing live when the cron hasn't run yet."""
+    _require_legacy_outcome_source()
     import time as _time
 
     from services import flow_outcomes as fo
@@ -2435,9 +2449,10 @@ async def alert_outcomes_refresh(
     X-API-Key) and the result is written to Mongo flow_outcome_cache, where
     the brief's outcome section reads it.
 
-    Always 200 with a status field: cold ledger (no_alerts) and missing
-    bars (no_bars) are normal nightly states, not errors.
+    When legacy sources are enabled, cold ledger (no_alerts) and missing
+    bars (no_bars) return 200 with a status. Public-only mode refuses with 503.
     """
+    _require_legacy_outcome_source()
     import time as _time
 
     from services import flow_calibration as fc
@@ -2505,6 +2520,7 @@ async def calibration_model():
     desk can see whether the probability on the tape is measured or honest-
     uncalibrated. Structural parity: the frontend never recomputes p.
     """
+    _require_legacy_outcome_source()
     from services import flow_calibration as fc
     from services import flow_outcomes as fo
     from services.duckdb_engine import db as duckdb_engine

@@ -10,6 +10,8 @@ remaining AI features. Retain completed fixes; no mobile rollback was requested.
 
 **Status (2026-09-11 implementation update):** Research is implemented and exercised with actual Public market data, managed ChatGPT login, durable local storage and both real dashboard contexts. The research release is **not accepted**: the completed independent comparison did not establish a usefulness improvement, and a fresh comparison remains unrun. Capability expansion, proposals, paper trading, proactive delivery and later live release remain incomplete/gated. No trading-performance certification or live authorization is implied. See [current delivery evidence](../INTEGRATION_AI_UI_GOAL.md) and [complete section sweep](../eval/ai-plan-sweep-20260911.md).
 
+**23:18 update:** The fresh 30-case inputs and executable are now sealed and independently checked; all 30 route/storage input checks passed with zero candidate calls. One candidate needs 26 calls; the shared unchanged daily allowance has 6 remaining after the real selected-cell desktop check. The allowance question is pending. The [full remaining-work record](../eval/full-scope-remaining-20260911.md) preserves the entire requested scope, including the unresolved checklist contract, later-entry reconciliation and future catalog/proposal/paper/watch/live work. These are not silently counted complete by the desktop repairs.
+
 Project root: `C:/Users/DARK HERO/Desktop/FLOWW2.0`.
 Canonical plan: `C:/Users/DARK HERO/.claude/plans/i-would-like-to-replicated-stardust.md`.
 Original preserved as `i-would-like-to-replicated-stardust.v3-before-review-2026-09-11.md` in the same directory.

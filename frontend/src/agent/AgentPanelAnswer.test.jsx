@@ -120,3 +120,17 @@ test("saved answers without chart evidence keep their original answer", () => {
   expect(screen.getByText(turn.answer.summary)).toBeVisible();
   expect(screen.queryByRole("region", {name: "Saved chart reading"})).not.toBeInTheDocument();
 });
+
+test.each([0.004, -0.004, 0.00000004])("small selected values stay nonzero: %s", value => {
+  render(<AgentPanelAnswer turn={saved([reading("Selected display cell", value,
+    {contract: "2026-09-18:105:charm", unit: "display charm units"})])}/>);
+  const text = screen.getByText(/Selected cell:/).textContent;
+  expect(text).not.toMatch(/[+-]0 displayed/);
+  expect(text).toContain(String(value));
+});
+
+test("selected cell with incompatible units is withheld", () => {
+  render(<AgentPanelAnswer turn={saved([reading("Selected display cell", 125,
+    {contract: "2026-09-18:105:charm", unit: "USD"})])}/>);
+  expect(screen.queryByText(/Selected cell:/)).not.toBeInTheDocument();
+});

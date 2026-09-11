@@ -90,8 +90,9 @@ async def test_load_calibration_fail_open_without_mongo():
 
 
 @pytest.mark.asyncio
-async def test_model_endpoint_carries_rule_value():
+async def test_model_endpoint_carries_rule_value(monkeypatch):
     """/model live report must include the per-rule value table (Sync-3 kill/keep)."""
+    monkeypatch.setenv("FLOWW_MARKET_DATA_PROVIDER", "legacy")
     labeled = [
         {"rule": "SCORE", "score": 94.0, "hit": True, "ret": r, "censored": False,
          "asof_date": "2026-08-01", "vol_oi": 6.0, "premium": 5e5, "dte": 10,
