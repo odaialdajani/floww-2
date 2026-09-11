@@ -243,6 +243,38 @@ async def test_owner_idempotency_conflict_and_expired_identity():
 
 
 @pytest.mark.asyncio
+async def test_disabling_new_research_preserves_history_replay_and_logout(monkeypatch):
+    monkeypatch.setenv("FLOWW_AGENT_DEPLOYMENT", "local")
+    monkeypatch.delenv("FLOWW_AGENT_DISABLED", raising=False)
+    repo, service = await setup()
+    app = FastAPI()
+    app.include_router(router)
+    app.state.research_service = service
+    async with AsyncClient(
+        transport=ASGITransport(app=app, client=("127.0.0.1", 123)),
+        base_url="http://localhost:8000",
+        headers={"Origin": "http://localhost:3000"},
+    ) as client:
+        assert (await client.post("/api/agent/session")).status_code == 200
+        response = await client.post("/api/agent/ask", json={"question": "SPY structure", "request_id": identity()})
+        turn_id = response.json()["turn_id"]
+        await asyncio.gather(*list(service.tasks.values()))
+        monkeypatch.setenv("FLOWW_AGENT_DISABLED", "1")
+        assert (
+            await client.post("/api/agent/ask", json={"question": "SPY structure", "request_id": identity()})
+        ).status_code == 503
+        history = await client.get("/api/agent/history")
+        assert history.status_code == 200
+        assert [turn["turn_id"] for turn in history.json()["turns"]] == [turn_id]
+        assert (await client.get(f"/api/agent/turn/{turn_id}")).json()["status"] == "completed"
+        assert "event: done" in (await client.get(f"/api/agent/stream/{turn_id}")).text
+        assert not service.tasks
+        assert (await client.post("/api/agent/session/logout")).status_code == 200
+        assert (await client.get("/api/agent/history")).status_code == 401
+        assert await repo.turns.count_documents({}) == 1
+
+
+@pytest.mark.asyncio
 async def test_transport_starts_on_post_and_stream_replay_does_not_repeat(monkeypatch):
     monkeypatch.setenv("FLOWW_AGENT_DEPLOYMENT", "local")
     repo, service = await setup()

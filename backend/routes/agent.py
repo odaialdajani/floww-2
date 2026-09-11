@@ -17,8 +17,6 @@ router = APIRouter(prefix="/api/agent", tags=["agent"])
 
 
 def service(request):
-    if os.getenv("FLOWW_AGENT_DISABLED") == "1":
-        raise HTTPException(503, "Research is disabled")
     result = getattr(request.app.state, "research_service", None)
     if result is None:
         raise HTTPException(503, "Saved research storage is unavailable")
@@ -125,6 +123,10 @@ async def session(request: Request, response: Response):
 @router.post("/ask")
 async def ask(body: dict, request: Request):
     identity = await owner(request)
+    # Rollback stops new work while retaining private history, observation,
+    # cancellation and session revocation for work already saved.
+    if os.getenv("FLOWW_AGENT_DISABLED") == "1":
+        raise HTTPException(503, "New research is disabled")
     try:
         doc = await service(request).ask(identity, body.get("request_id"), request_spec(body))
         return {"turn_id": doc["turn_id"], "status": doc["status"]}
