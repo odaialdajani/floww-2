@@ -91,7 +91,7 @@ export function parseFeedAlerts(alerts) {
 // contextual: sentence only, no levels, no direction arrow, Drill only.
 export function isContextual(a) {
   if (!a) return true;
-  return a.bias == null || a.strike == null || a.strike === "";
+  return !["BULLISH", "BEARISH"].includes(String(a.bias).toUpperCase()) || a.strike == null || a.strike === "";
 }
 export function isDirectional(a) {
   return !isContextual(a);
@@ -145,8 +145,17 @@ export function ageOf(a, now = Date.now()) {
 
 // Trade-now = top directional row ≥ floor by conviction; pinned header row,
 // excluded from the feed body.
-export function tradeNowOf(alerts, floor = TRADE_NOW_FLOOR) {
-  const dir = (alerts || []).filter(isDirectional);
+export function tradeNowOf(alerts, floor = TRADE_NOW_FLOOR, now = Date.now(), maxAgeMs = 15 * 60 * 1000) {
+  const today = new Intl.DateTimeFormat("en-CA", {timeZone:"America/New_York",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(now));
+  const dir = (alerts || []).filter(a => {
+    const age = now - Date.parse(a.asof_ts || "");
+    const expiry = Date.parse(`${a.exp}T12:00:00Z`);
+    return isDirectional(a) && !!(a.under || a.ticker) && ["call","put"].includes(String(a.type).toLowerCase())
+      && Number.isFinite(Number(a.strike)) && Number(a.strike) > 0
+      && Number.isFinite(expiry) && new Date(expiry).toISOString().slice(0,10) === a.exp && a.exp >= today
+      && /^\d{4}-\d{2}-\d{2}$/.test(a.exp || "") && Number.isFinite(Number(a.conviction))
+      && Number.isFinite(age) && age >= -60000 && age <= maxAgeMs;
+  });
   if (!dir.length) return null;
   const top = [...dir].sort((a, b) => (b.conviction ?? 0) - (a.conviction ?? 0))[0];
   return (top?.conviction ?? 0) >= floor ? top : null;
@@ -244,6 +253,10 @@ export function factValueOf(r, fact, tickerCtx) {
   return r[fact] ?? null;
 }
 export function testCondition(r, cond, tickerCtx) {
+  if (Array.isArray(cond.conditions)) {
+    if (!cond.conditions.length) return false;
+    return cond.join === "OR" ? cond.conditions.some(c=>testCondition(r,c,tickerCtx)) : cond.conditions.every(c=>testCondition(r,c,tickerCtx));
+  }
   const v = factValueOf(r, cond.fact, tickerCtx);
   if (v == null) return false;
   const num = Number(cond.value);
@@ -266,25 +279,22 @@ export function testCondition(r, cond, tickerCtx) {
       return false;
   }
 }
-export function matchCustomScan(r, screen, tickerCtx) {
+export function matchCustomScan(r, screen, tickerCtx, alerts = []) {
   if (!screen) return true;
   if (screen.rule && screen.rule !== "ANY") {
-    // Client scan rows carry no fired-rule tags; approximate: OICONF≈ΔOI build,
-    // FOLLOW≈streak, SIGMA≈σ, SCORE≈score≥threshold in conds, WHALE≈premium,
-    // 0DTE≈dte≤1, SOURCE≈always true.
     const rule = String(screen.rule).toUpperCase();
-    if (rule === "OICONF" && !((r.oiChgPct ?? 0) >= 0.2)) return false;
-    if (rule === "FOLLOW" && !((tickerCtx?.streak ?? 0) >= 2)) return false;
-    if (rule === "SIGMA" && !((tickerCtx?.sigma ?? 0) >= 4)) return false;
-    if (rule === "WHALE" && !((r.premium ?? 0) >= 10e6)) return false;
-    if (rule === "0DTE" && !(r.dte != null && r.dte <= 1)) return false;
+    const fired = alerts.some(a => String(a.rule || "").toUpperCase() === rule &&
+      (a.under || a.ticker) === r.under && String(a.type || "").toLowerCase() === String(r.type).toLowerCase() &&
+      a.strike != null && Number(a.strike) === Number(r.strike) && a.exp === r.exp);
+    if (!fired) return false;
   }
   return (screen.conditions || []).every((c) => testCondition(r, c, tickerCtx));
 }
 export function applyScreenToScans(rows, screen, ctx) {
   const s = screen || BUILTIN_SCREENS[0];
+  const copied = BUILTIN_SCREENS.find(b=>b.id===s.copyOf);
   const match = s.custom
-    ? (r) => matchCustomScan(r, s, ctx?.tickerFacts?.[r.under])
+    ? (r) => (!copied || copied.matchScan(r,ctx)) && matchCustomScan(r, s, ctx?.tickerFacts?.[r.under], ctx?.alerts)
     : (r) => s.matchScan(r, ctx);
   const out = (rows || []).filter(match);
   out.sort(s.rankScan || byScoreDesc);
@@ -293,10 +303,14 @@ export function applyScreenToScans(rows, screen, ctx) {
 export function applyScreenToAlerts(alerts, screen, ctx) {
   const s = screen || BUILTIN_SCREENS[0];
   if (s.custom) {
-    if (!s.rule || s.rule === "ANY") return [...(alerts || [])];
-    return (alerts || []).filter(
-      (a) => String(a.rule || "").toUpperCase() === String(s.rule).toUpperCase(),
-    );
+    const copied=BUILTIN_SCREENS.find(b=>b.id===s.copyOf);
+    return (alerts || []).filter(a=>{
+      if(copied && !copied.matchAlert(a,ctx))return false;
+      if(s.rule && s.rule!=="ANY" && String(a.rule || "").toUpperCase()!==String(s.rule).toUpperCase())return false;
+      const scan=(ctx?.scanRows || []).find(r=>r.under===(a.under || a.ticker) && r.type===a.type && Number(r.strike)===Number(a.strike) && r.exp===a.exp);
+      const facts={...scan,...a,under:a.under || a.ticker};
+      return (s.conditions || []).every(c=>testCondition(facts,c,ctx?.tickerFacts?.[facts.under]));
+    });
   }
   return (alerts || []).filter((a) => s.matchAlert(a, ctx)).sort(s.rankAlert);
 }

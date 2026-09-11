@@ -13,10 +13,10 @@ User objective confirmed 2026-09-11: preserve and commit local work, review coll
 - [x] Commit 77 source/test/design files at 3b98ada0 on work/reconcile-ai-ui-20260911.
 - [x] Fetch colleague main (7685a44b initially; 424 commits ahead of original local main).
 - [x] Review 18 merge conflicts independently for backend and main dashboard; resolve preserving local single-page design and incoming backend/Skylit fixes.
-- [ ] Pass combined baseline checks and commit integration.
-- [ ] Review open PRs 3, 4, 5; integrate sound missing fixes. PRs 4/5 have failed ruff checks at initial inspection.
+- [x] Commit integration at 9d5e500a; focused merge checks passed (full release checks remain open).
+- [x] Review open PRs 3, 4, 5. Do not merge obsolete regressions; retain useful fixes already present and preserve unknown source times.
 - [ ] Review remaining merged changes and record actionable backlog with evidence.
-- [ ] AI contracts and failing examples.
+- [x] Bounded research contracts and reproduced failures for grounding, spending, request identity and cancellation.
 - [ ] Complete durable evidence-backed research and shared screen context.
 - [ ] UI v3 full controls, four answers and dealer drill-down.
 - [ ] Research acceptance/recovery/ownership/cost proof.
@@ -32,6 +32,12 @@ User objective confirmed 2026-09-11: preserve and commit local work, review coll
 - Preserve local alert-persistence decision naming actual floww database.
 
 ## Open findings
-- Incoming rule-value statistics admit invalid/nonfinite returns into sample counts; reproduce and fix.
-- Frontend merge validation running; backend first invocation failed because pytest-cov is absent (--no-cov unsupported), rerun without it.
+- Incoming invalid/nonfinite return counting fixed and regression-tested in the integration commit.
+- Latest full frontend run: 75 suites, 609 tests passed. Production build and both narrow/wide browser views checked with explicitly synthetic offline data. More focused controls and two-address checks are in progress.
+- Latest focused research run: 60 tests passed on Python 3.11. Coverage includes real calculators, native DuckDB read seam, owner isolation, bounded work, cancellation, restart, model format validation, spending/reconciliation and import/order boundaries.
+- Full backend attempt stopped with 867 passed and 29 failed after roughly 17 percent. A missing local MongoDB makes every root fixture wait; failures also include existing model files, ticker routes and other services. This is not a full pass or total-coverage proof.
+- Automatic approval review rejected downloading/starting the local MongoDB with reason "blocked by policy". No database was installed. Real durable restart and authorized provider benchmarking remain blocked; the browser fixture is explicitly not that proof.
+- Paper accounting correction is proposed in ADR 0010; user decision is pending. Paper, remote identity, account bindings, live enabling and forward promotion remain gated.
+- Remaining research release work includes outcome-path/minimal resolver completion, full fault/functional evaluation, provider comparison, and deployed storage-driver proof. Later catalog/proposal/watch/paper/live stages are not being marked complete by the core implementation.
+- Unrelated changes to .planning/config.json and kanban/BOTTLENECK_ALERTS.md are preserved and excluded from this delivery staging.
 - Scratch transcripts/research remain local and backed up; they are not implementation artifacts.

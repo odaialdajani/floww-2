@@ -49,7 +49,7 @@ test("active mount renders the scanner without tripping the ErrorBoundary", () =
   expect(screen.queryByText("Something went wrong")).not.toBeInTheDocument();
   // Positive control: the active shell actually mounted (header text exists
   // in the component's own chrome).
-  expect(screen.getByText(/Smart Order Flow/i)).toBeInTheDocument();
+  expect(screen.getByTestId("cell-trade")).toBeInTheDocument();
 });
 
 test("all Tidehunter sub-tabs mount active without a boundary trip", () => {
@@ -62,11 +62,11 @@ test("all Tidehunter sub-tabs mount active without a boundary trip", () => {
   expect(screen.queryByText("Something went wrong")).not.toBeInTheDocument();
 });
 
-test("scanner rows carry a Trade button that lifts the OCC contract to onTrade", async () => {
+test("scanner row opens the matching dealer drill without firing a trade", async () => {
   const React = require("react");
   const { render, screen, fireEvent, waitFor } = require("@testing-library/react");
   global.fetch = jest.fn().mockImplementation((url) => {
-    if (String(url).includes("/scan-public")) {
+    if (String(url).includes("/scan?limit=")) {
       return Promise.resolve({
         ok: true, status: 200,
         json: async () => ({
@@ -90,10 +90,13 @@ test("scanner rows carry a Trade button that lifts the OCC contract to onTrade",
   window.localStorage.clear();
   const onTrade = jest.fn();
   render(React.createElement(FlowseekerProBlademap, { active: true, onTrade }));
-  const btn = await waitFor(() => screen.getByTestId("scan-trade-SPY-760"), { timeout: 8000 });
-  fireEvent.click(btn);
-  expect(onTrade).toHaveBeenCalledTimes(1);
-  expect(onTrade.mock.calls[0][0]).toMatchObject({
-    ticker: "SPY", strike: 760, oi_symbol: "SPY260918C00760000",
+  const row = await waitFor(() => {
+    const element=document.querySelector("#pulse tbody tr");
+    expect(element).not.toBeNull();
+    return element;
   });
+  expect(row.textContent).toContain("SPY");
+  fireEvent.click(row);
+  expect(screen.getByTestId("drill").textContent).toContain("Drill · SPY");
+  expect(onTrade).not.toHaveBeenCalled();
 });

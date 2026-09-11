@@ -1,7 +1,7 @@
 # starlette is the production serving layer (Dockerfile.backend installs this
 # file and runs `uvicorn server:app`), so its CVEs are live-exposure, not dev
 # noise. fastapi==0.110.1 hard-capped starlette<0.38.0,>=0.37.2, and OSV reports
-# 7 advisories against starlette 0.37.2 — no floor bump could clear them while
+# 7 advisories against starlette 0.37.2 â€” no floor bump could clear them while
 # that cap held, hence the fastapi move:
 #   CVE-2024-47874  multipart/form-data DoS                 fixed in 0.40.0
 #   CVE-2025-54121  large-file multipart DoS                fixed in 0.47.2
@@ -70,7 +70,7 @@ prometheus-client>=0.25.0
 vaderSentiment>=3.3.2
 textblob>=0.19.0
 
-# Imported by live code but previously MISSING from this file — a fresh
+# Imported by live code but previously MISSING from this file â€” a fresh
 # `pip install -r requirements.txt` installed clean, then the app hit
 # ModuleNotFoundError at runtime / pytest (added 2026-07-21 audit):
 aiohttp>=3.9.0            # routes/alpha_advantage.py, flashalpha_client.py
@@ -79,3 +79,10 @@ pyyaml>=6.0               # services/agent_hub, services/alerts/engine.py (yaml)
 databento>=0.34.0         # services/databento_oi.py, databento_provider.py
 tenacity>=8.2.0           # services/yoptions_fetcher.py
 Pillow>=10.0.0            # services/memory/chart_embeddings.py (PIL)
+
+# Lodestar exchange sessions, including holidays and early closes.
+exchange-calendars==4.13.2
+
+# Offline contract tests only; production research never uses this store.
+mongomock-motor==0.0.36
+discord.py>=2.3.0

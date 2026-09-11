@@ -1,13 +1,12 @@
-"""Deterministic confluence scorer (plan v3 L4). The LLM narrates; never invents.
+"""Fixed research agreement weights, with explicit missing dimensions.
 
-Composition of flow conviction + trinity + regime + GEX posture + VEX/charm
-+ ML class (where covered) + vol posture + time_delta direction.
-Rule: no fifth scorer — reuse the server-side calibrated score.
+An agreement reading is not a calibrated probability or a trading edge.
 """
 
 from __future__ import annotations
 
 import json
+import math
 import os
 from typing import Any
 
@@ -40,20 +39,29 @@ def score(inputs: dict[str, Any]) -> dict[str, Any]:
     status = inputs.get("inputs_status", {}) if isinstance(inputs, dict) else {}
     out: dict[str, Any] = {"dimensions": {}, "total": 0.0, "weights_version": w.get("version", "v1")}
     total = 0.0
+    coverage = 0.0
     for name, weight in dims.items():
         try:
             weight_f = float(weight)
         except Exception:
             weight_f = 0.0
-        val = _clamp(inputs.get(name, 0.0)) if isinstance(inputs, dict) else 0.0
-        contrib = round(val * weight_f * 100.0, 2)
-        total += val * weight_f
+        raw = inputs.get(name) if isinstance(inputs, dict) else None
+        valid = isinstance(raw,(float,int)) and not isinstance(raw,bool) and math.isfinite(raw) and status.get(name,"ok")=="ok"
+        val = _clamp(raw) if valid else None
+        contrib = round(val * weight_f * 100.0, 2) if valid else None
+        if valid:
+            total += val * weight_f
+            coverage += weight_f
         out["dimensions"][name] = {
             "value": val,
             "contribution": contrib,
             "weight": weight_f,
-            "inputs_status": status.get(name, "ok"),
+            "inputs_status": status.get(name, "ok" if valid else "unavailable"),
         }
-    out["total"] = round(total * 100.0, 2)
+    out["total"] = round(total * 100.0, 2) if coverage else None
+    out["coverage_weight"] = round(coverage,4)
+    out["missing_input_policy"] = "All declared dimensions required for a directional conclusion"
     out["direction"] = "bullish" if total > 0.15 else ("bearish" if total < -0.15 else "neutral")
+    if any(v["inputs_status"] != "ok" or v["value"] is None for v in out["dimensions"].values()):
+        out["direction"] = "insufficient_evidence"
     return out

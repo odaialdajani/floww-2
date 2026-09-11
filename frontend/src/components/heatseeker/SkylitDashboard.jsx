@@ -6,6 +6,7 @@ import SkylitControlBar from "./SkylitControlBar";
 import SkylitHeatmapGrid from "./SkylitHeatmapGrid";
 import SkylitMetricsSidebar from "./SkylitMetricsSidebar";
 import ExposureStrip from "./ExposureStrip";
+import { publishScreenContext } from "../../agent/useScreenContext";
 import AlertEngineStrip from "../flowseeker/AlertEngineStrip";
 
 /**
@@ -50,6 +51,12 @@ function SkylitDashboard({
 }) {
   const [tradeMode, setTradeMode] = useState(false);
   const [selectedCell, setSelectedCell] = useState(null);
+  useEffect(()=>{setSelectedCell(null);},[ticker]);
+  useEffect(()=>{
+    publishScreenContext({page:"heatseeker",ticker,dte:dte==null?"all":dte===0?"0dte":`days:${dte}`,metric:viewMode,mode:timeframe,
+      expiries,selectedStrike:selectedCell?.strike ?? null,selectedExpiry:selectedCell?.colKey ?? null,
+      observedAt:data?.event_time || data?.observed_at || null});
+  },[ticker,dte,viewMode,timeframe,expiries,selectedCell,data?.event_time,data?.observed_at]);
   // Grid zoom, in-frame only (2026-09-04): the expanded overlay keeps its
   // designed full density instead of compounding scale on scale.
   const [gridZoom, setGridZoom] = useState(1);
@@ -120,11 +127,8 @@ function SkylitDashboard({
 
   const handleCellClick = useCallback(
     (strike, colKey, value) => {
-      if (tradeMode && onCellClick) {
-        onCellClick(strike, colKey, value);
-      } else {
-        setSelectedCell({ strike, colKey, value });
-      }
+      setSelectedCell({ strike, colKey, value });
+      if (tradeMode && onCellClick) onCellClick(strike, colKey, value);
     },
     [tradeMode, onCellClick]
   );

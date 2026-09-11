@@ -1,269 +1,234 @@
-"""Lodestar transport (plan v3 L8).
-
-POST /api/agent/ask -> {turn_id} (key-free on local app via PUBLIC_PATHS).
-GET  /api/agent/stream/{turn_id} SSE: step -> sentence -> done, id: on every
-event, Last-Event-ID resume, max_seconds=120, heartbeat.
-GET  /api/agent/turn/{id} replay. POST /api/agent/cancel/{id}.
-GET  /api/agent/budget, GET /api/agent/claims, GET/PUT /api/agent/prefs.
-
-Contract mirrors tests/routes/test_llm_endpoints.py: 200 or clean 503,
-never 500. Errors after the stream opens are event: error frames.
-"""
-
-from __future__ import annotations
+"""Owned local research. GET only observes durable work."""
 
 import asyncio
-import contextlib
 import json
-import logging
 import os
-import time
-import uuid
-from typing import Any
 
-from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
 
-from services.agent.budget import budget_state
+from auth import require_api_key
+from services.agent.contracts import request_spec
+from services.agent.local_access import COOKIE, require_local
+from services.agent.repository import TERMINAL
 
-logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
-_TURNS: dict[str, dict[str, Any]] = {}
-_CANCEL: set[str] = set()
-_INFLIGHT: dict[str, str] = {}
-_PREFS: dict[str, Any] = {
-    "risk_pct": 1.0,
-    "default_horizon": "all",
-    "watchlist_extra": [],
-    "venue_default": "paper",
-    "quiet_hours": [],
-    "conviction_floor": 60,
-    "max_cards_per_day": 24,
-    "muted_tickers": [],
-}
-_CORS = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
-}
 
-MAX_SECONDS = 120
+def service(request):
+    if os.getenv("FLOWW_AGENT_DISABLED") == "1":
+        raise HTTPException(503, "Research is disabled")
+    result = getattr(request.app.state, "research_service", None)
+    if result is None:
+        raise HTTPException(503, "Saved research storage is unavailable")
+    return result
 
 
-def _disabled() -> bool:
-    if os.environ.get("FLOWW_AGENT_DISABLED", "") == "1":
-        return True
+async def owner(request):
+    require_local(request)
     try:
-        return bool(_PREFS.get("agent_enabled") is False)
+        result = await service(request).repository.owner(request.cookies.get(COOKIE))
+    except HTTPException:
+        raise
     except Exception:
-        return False
+        raise HTTPException(503, "Session storage is unavailable") from None
+    if not result:
+        raise HTTPException(401, "Research session expired")
+    return result
 
 
-def _db(request: Request):  # Mongo or None
+def public_turn(doc):
+    return jsonable_encoder({k: v for k, v in doc.items() if k not in {"_id", "owner", "digest", "request_id"}})
+
+
+async def storage_result(operation):
     try:
-        return request.app.state.mongo_db if hasattr(request.app.state, "mongo_db") else None
+        return await operation
+    except HTTPException:
+        raise
     except Exception:
-        return None
+        raise HTTPException(503, "Saved research storage is unavailable") from None
 
 
-def _frame(event: str, payload: Any, eid: str) -> str:
+@router.get("/budget", dependencies=[Depends(require_api_key)])
+async def budget(request: Request):
+    # This path is deliberately not exempt from the existing secret-key guard.
+    model = service(request).model
+    if model is None:
+        raise HTTPException(503, "Model budget is unavailable")
+    return await storage_result(model.spend.state())
+
+
+def set_session_cookie(response, request, token):
+    response.set_cookie(
+        COOKIE,
+        token,
+        httponly=True,
+        secure=request.url.scheme == "https",
+        samesite="strict",
+        max_age=30 * 86400,
+        path="/api/agent",
+    )
+
+
+@router.post("/session/rotate")
+async def rotate_session(request: Request, response: Response):
+    await owner(request)
+    _, token = await storage_result(service(request).repository.rotate_session(request.cookies[COOKIE]))
+    set_session_cookie(response, request, token)
+    return {"status": "ready"}
+
+
+@router.post("/session/logout")
+async def logout_session(request: Request, response: Response):
+    require_local(request)
+    await storage_result(service(request).repository.revoke_session(request.cookies.get(COOKIE)))
+    response.delete_cookie(COOKIE, path="/api/agent")
+    return {"status": "signed-out"}
+
+
+@router.post("/session/recover", dependencies=[Depends(require_api_key)])
+async def recover_session(body: dict, request: Request, response: Response):
+    require_local(request)
     try:
-        data = json.dumps(payload, default=str)
+        token = await service(request).repository.recover_session(body.get("owner"))
+    except ValueError:
+        raise HTTPException(404, "Owner history not found") from None
     except Exception:
-        data = "{}"
-    return f"id: {eid}\nevent: {event}\ndata: {data}\n\n"
+        raise HTTPException(503, "Session recovery is unavailable") from None
+    set_session_cookie(response, request, token)
+    return {"status": "ready"}
+
+
+@router.post("/session")
+async def session(request: Request, response: Response):
+    require_local(request)
+    try:
+        _, token = await service(request).repository.session(request.cookies.get(COOKIE))
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(503, "Session could not be saved") from None
+    response.set_cookie(
+        COOKIE,
+        token,
+        httponly=True,
+        secure=request.url.scheme == "https",
+        samesite="strict",
+        max_age=30 * 86400,
+        path="/api/agent",
+    )
+    return {"status": "ready"}
 
 
 @router.post("/ask")
-async def ask(body: dict[str, Any], request: Request):
+async def ask(body: dict, request: Request):
+    identity = await owner(request)
     try:
-        if _disabled():
-            return JSONResponse(status_code=503, content={"error": "agent-disabled", "message": "Agent is disabled."}, headers=_CORS)
-        q = str((body or {}).get("question", "") or "")[:2000]
-        ticker = str((body or {}).get("ticker", "SPY") or "SPY")[:12]
-        horizon = str((body or {}).get("horizon", "all") or "all")[:12]
-        qclass = str((body or {}).get("question_class", "full-research") or "full-research")[:32]
-        screen = (body or {}).get("screen") if isinstance(body, dict) else None
-        if not q:
-            return JSONResponse(status_code=422, content={"error": "empty-question"}, headers=_CORS)
-        key = f"{ticker.upper()}:{(horizon or 'all').lower()}"
-        if key in _INFLIGHT:
-            return JSONResponse(status_code=200, content={"turn_id": _INFLIGHT[key], "deduped": True}, headers=_CORS)
-        turn_id = str(uuid.uuid4())
-        _INFLIGHT[key] = turn_id
-        _TURNS[turn_id] = {"status": "queued", "body": {"question": q, "ticker": ticker, "horizon": horizon, "question_class": qclass, "screen": screen}, "events": [], "key": key}
-        return JSONResponse(status_code=200, content={"turn_id": turn_id}, headers=_CORS)
-    except Exception as e:
-        logger.warning("agent ask failed: %s", e)
-        return JSONResponse(status_code=503, content={"error": "agent-unavailable", "message": str(e)[:200]}, headers=_CORS)
-
-
-async def _run_and_store(turn_id: str, db: Any) -> None:
-    spec = _TURNS.get(turn_id, {})
-    body = spec.get("body", {})
-    try:
-        from services.agent.loop import run_turn
-
-        turn = await run_turn(question=body.get("question", ""), ticker=body.get("ticker", "SPY"), horizon=body.get("horizon", "all"), question_class=body.get("question_class", "full-research"), screen=body.get("screen"), db=db)
-        turn["turn_id"] = turn_id
-        _TURNS[turn_id] = turn
-    except Exception as e:
-        _TURNS[turn_id] = {"turn_id": turn_id, "status": "error", "error": str(e)[:300], "events": [], "text": "", "verdict": {}}
-    finally:
-        key = spec.get("key", "")
-        if key and _INFLIGHT.get(key) == turn_id:
-            _INFLIGHT.pop(key, None)
-
-
-@router.get("/stream/{turn_id}")
-async def stream(turn_id: str, request: Request):
-    try:
-        if _disabled():
-            async def _off():
-                yield _frame("error", {"error": "agent-disabled"}, "0")
-
-            return StreamingResponse(_off(), media_type="text/event-stream", headers=_CORS)
-        spec = _TURNS.get(turn_id)
-        if spec is None:
-            try:
-                db = _db(request)
-                if db is not None:
-                    doc = db["agent_turns"].find_one({"turn_id": turn_id})
-                    if doc:
-                        _TURNS[turn_id] = {"turn_id": turn_id, "status": "done", "events": doc.get("events", []), "text": "", "verdict": doc.get("verdict", {})}
-                        spec = _TURNS[turn_id]
-            except Exception:
-                pass
-        if spec is None:
-            async def _nf():
-                yield _frame("error", {"error": "unknown-turn"}, "0")
-
-            return StreamingResponse(_nf(), media_type="text/event-stream", headers=_CORS)
-
-        last_id = request.headers.get("Last-Event-ID", "")
-        db = _db(request)
-
-        async def _gen():
-            eid = 0
-            yield _frame("heartbeat", {"turn_id": turn_id}, str(eid))
-            if spec.get("status") == "queued":
-                task = asyncio.create_task(_run_and_store(turn_id, db))
-                t0 = time.time()
-                while _TURNS.get(turn_id, {}).get("status") == "queued" and (time.time() - t0) < MAX_SECONDS:
-                    if turn_id in _CANCEL:
-                        task.cancel()
-                        yield _frame("error", {"error": "cancelled"}, str(eid + 1))
-                        return
-                    await asyncio.sleep(0.25)
-                with contextlib.suppress(Exception):
-                    await asyncio.wait_for(task, timeout=5)
-            turn = _TURNS.get(turn_id, {})
-            if turn.get("status") == "error":
-                yield _frame("error", {"error": turn.get("error", "failed")}, "1")
-                return
-            events = turn.get("events", []) or []
-            start = 0
-            try:
-                start = int(last_id) if str(last_id).isdigit() else 0
-            except Exception:
-                start = 0
-            eid = start
-            for ev in events[start:]:
-                eid += 1
-                yield _frame("step", ev, str(eid))
-            text = turn.get("text", "") or ""
-            # Sentence-level streaming (token streaming is incompatible
-            # with cite substitution + regeneration).
-            sents = [s.strip() for s in text.replace("\n", " ").split(". ") if s.strip()][:40]
-            if not sents and text:
-                sents = [text[:800]]
-            for s in sents:
-                eid += 1
-                if turn_id in _CANCEL:
-                    yield _frame("error", {"error": "cancelled"}, str(eid))
-                    return
-                yield _frame("sentence", {"text": s[:800]}, str(eid))
-            eid += 1
-            cost = {}
-            with contextlib.suppress(Exception):
-                cost = budget_state(db)
-            yield _frame("done", {"turn_id": turn_id, "verdict": turn.get("verdict", {}), "flagged": turn.get("flagged", []), "cost": cost, "prep_mode": turn.get("prep_mode", False)}, str(eid))
-
-        return StreamingResponse(_gen(), media_type="text/event-stream", headers={**_CORS, "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
-    except Exception as e:
-        logger.warning("agent stream failed: %s", e)
-
-        async def _err():
-            yield _frame("error", {"error": "agent-unavailable"}, "0")
-
-        return StreamingResponse(_err(), media_type="text/event-stream", headers=_CORS)
+        doc = await service(request).ask(identity, body.get("request_id"), request_spec(body))
+        return {"turn_id": doc["turn_id"], "status": doc["status"]}
+    except ValueError as exc:
+        raise HTTPException(409 if "already belongs" in str(exc) else 422, str(exc)) from None
+    except OverflowError:
+        raise HTTPException(429, "Research queue is full") from None
+    except Exception:
+        raise HTTPException(503, "Request could not be saved") from None
 
 
 @router.get("/turn/{turn_id}")
 async def get_turn(turn_id: str, request: Request):
-    try:
-        turn = _TURNS.get(turn_id)
-        if turn is None and _db(request) is not None:
-            try:
-                doc = _db(request)["agent_turns"].find_one({"turn_id": turn_id})
-                if doc:
-                    doc.pop("_id", None)
-                    return JSONResponse(status_code=200, content=doc, headers=_CORS)
-            except Exception:
-                pass
-        if turn is None:
-            return JSONResponse(status_code=404, content={"error": "unknown-turn"}, headers=_CORS)
-        safe = {k: v for k, v in turn.items() if k != "ledger"}
-        return JSONResponse(status_code=200, content=safe, headers=_CORS)
-    except Exception as e:
-        return JSONResponse(status_code=503, content={"error": "agent-unavailable", "message": str(e)[:200]}, headers=_CORS)
+    identity = await owner(request)
+    doc = await storage_result(service(request).repository.read(identity, turn_id))
+    if doc is None:
+        raise HTTPException(404, "Answer not found")
+    return public_turn(doc)
+
+
+@router.get("/history")
+async def history(request: Request):
+    identity = await owner(request)
+    return {"turns": [public_turn(doc) for doc in await storage_result(service(request).repository.history(identity))]}
 
 
 @router.post("/cancel/{turn_id}")
-async def cancel(turn_id: str):
-    _CANCEL.add(turn_id)
-    return JSONResponse(status_code=200, content={"cancelled": turn_id}, headers=_CORS)
+async def cancel(turn_id: str, request: Request):
+    identity = await owner(request)
+    doc = await storage_result(service(request).cancel(identity, turn_id))
+    if doc is None:
+        raise HTTPException(404, "Answer not found")
+    return public_turn(doc)
 
 
-@router.get("/budget")
-async def budget(request: Request):
+@router.get("/stream/{turn_id}")
+async def stream(turn_id: str, request: Request):
+    identity = await owner(request)
+    repository = service(request).repository
+    if await storage_result(repository.read(identity, turn_id)) is None:
+        raise HTTPException(404, "Answer not found")
     try:
-        return JSONResponse(status_code=200, content=budget_state(_db(request)), headers=_CORS)
-    except Exception as e:
-        return JSONResponse(status_code=503, content={"error": "agent-unavailable", "message": str(e)[:200]}, headers=_CORS)
+        start = max(0, int(request.headers.get("Last-Event-ID", "0")))
+    except ValueError:
+        raise HTTPException(422, "Invalid event cursor") from None
 
+    async def observe():
+        cursor = start
+        for _ in range(260):
+            if await request.is_disconnected():
+                return
+            doc = await repository.read(identity, turn_id)
+            if doc is None:
+                return
+            for event in doc["events"]:
+                if event["id"] > cursor:
+                    yield f"id: {event['id']}\nevent: {event['type']}\ndata: {json.dumps(event)}\n\n"
+                    cursor = event["id"]
+            if doc["status"] in TERMINAL:
+                return
+            yield ": heartbeat\n\n"
+            await asyncio.sleep(0.5)
 
-@router.get("/claims")
-async def claims(request: Request, ticker: str = "", limit: int = 50):
-    try:
-        db = _db(request)
-        if db is None:
-            return JSONResponse(status_code=200, content={"claims": [], "note": "no db"}, headers=_CORS)
-        q: dict[str, Any] = {}
-        if ticker:
-            q["ticker"] = ticker.upper()
-        cur = db["agent_claims"].find(q).sort("made_at", -1).limit(max(1, min(int(limit), 200)))
-        out = []
-        for d in cur:
-            d.pop("_id", None)
-            out.append(d)
-        return JSONResponse(status_code=200, content={"claims": out}, headers=_CORS)
-    except Exception as e:
-        return JSONResponse(status_code=503, content={"error": "agent-unavailable", "message": str(e)[:200]}, headers=_CORS)
+    return StreamingResponse(
+        observe(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    )
 
 
 @router.get("/prefs")
-async def get_prefs():
-    return JSONResponse(status_code=200, content=_PREFS, headers=_CORS)
+async def prefs(request: Request):
+    return await storage_result(service(request).repository.get_preferences(await owner(request)))
 
 
 @router.put("/prefs")
-async def put_prefs(body: dict[str, Any]):
-    try:
-        for k in ("risk_pct", "default_horizon", "watchlist_extra", "venue_default", "quiet_hours", "conviction_floor", "max_cards_per_day", "muted_tickers"):
-            if k in (body or {}):
-                _PREFS[k] = body[k]
-        return JSONResponse(status_code=200, content=_PREFS, headers=_CORS)
-    except Exception as e:
-        return JSONResponse(status_code=503, content={"error": "agent-unavailable", "message": str(e)[:200]}, headers=_CORS)
+async def save_prefs(body: dict, request: Request):
+    identity = await owner(request)
+    allowed = {
+        "default_horizon",
+        "watchlist_extra",
+        "quiet_hours",
+        "muted_tickers",
+        "max_cards_per_day",
+        "ticker_notes",
+    }
+    if set(body) - allowed or len(json.dumps(body)) > 8000:
+        raise HTTPException(422, "Unsupported preference")
+    if "default_horizon" in body:
+        from services.agent.access.horizon import normalize_horizon
+
+        try:
+            normalize_horizon(body["default_horizon"])
+        except (ValueError, AttributeError):
+            raise HTTPException(422, "Invalid horizon") from None
+    await storage_result(service(request).repository.save_preferences(identity, body))
+    return {"saved": True}
+
+
+@router.get("/claims")
+async def claims(request: Request):
+    identity = await owner(request)
+    docs = (
+        await service(request)
+        .repository.claims.find({"owner": identity}, {"_id": 0, "owner": 0})
+        .limit(100)
+        .to_list(length=100)
+    )
+    return {"claims": jsonable_encoder(docs)}

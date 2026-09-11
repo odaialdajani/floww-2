@@ -47,6 +47,7 @@ export function saveSettings(patch) {
     const all = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {};
     const next = { ...all, tidehunter: { ...((all || {}).tidehunter || {}), ...patch } };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+    window.dispatchEvent(new Event("floww-settings-changed"));
     return true;
   } catch {
     return false;
@@ -64,25 +65,24 @@ export default function TidehunterSettings() {
     const onStorage = (e) => {
       if (e.key === SETTINGS_KEY) setTide(loadTide());
     };
+    const refresh = () => setTide(loadTide());
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    window.addEventListener("floww-settings-changed", refresh);
+    return () => { window.removeEventListener("storage", onStorage); window.removeEventListener("floww-settings-changed", refresh); };
   }, []);
 
   const setMode = (mode) => {
-    saveSettings({ mode });
+    if (!saveSettings({ mode })) { window.alert("Layout could not be saved."); return; }
     setTide((t) => ({ ...t, mode }));
   };
 
   const moveSection = (id, dir) => {
-    setTide((t) => {
-      const order = [...(t.sectionOrder || DEFAULT_SECTION_ORDER)];
-      const i = order.indexOf(id);
-      const j = i + dir;
-      if (i < 0 || j < 0 || j >= order.length) return t;
-      [order[i], order[j]] = [order[j], order[i]];
-      saveSettings({ sectionOrder: order });
-      return { ...t, sectionOrder: order };
-    });
+    const order=[...(tide.sectionOrder || DEFAULT_SECTION_ORDER)];
+    const i=order.indexOf(id),j=i+dir;
+    if(i<0 || j<0 || j>=order.length)return;
+    [order[i],order[j]]=[order[j],order[i]];
+    if(!saveSettings({sectionOrder:order})){window.alert("Section order could not be saved.");return;}
+    setTide(t=>({...t,sectionOrder:order}));
   };
 
   const order = tide.sectionOrder || DEFAULT_SECTION_ORDER;
@@ -96,6 +96,9 @@ export default function TidehunterSettings() {
           What runs, what is shown, and in which order. {customCount} custom screen{customCount === 1 ? "" : "s"} saved in floww Settings.
         </p>
       </div>
+      <label style={{display:"block",marginBottom:12}}><input type="checkbox" checked={!!tide.colorBlindMode} onChange={e=>{
+        if(!saveSettings({colorBlindMode:e.target.checked}))window.alert("Display choice could not be saved.");
+      }}/> Colour-blind patterns and labels</label>
       <div style={{ marginBottom: 6, fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase" }}>
         Layout mode
       </div>

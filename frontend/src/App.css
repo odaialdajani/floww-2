@@ -4154,3 +4154,20 @@ input[class*="bg-slate-800"], select[class*="bg-slate-800"], textarea[class*="bg
   background: rgba(13,17,23,0.7) !important;
   border-color: rgba(255,255,255,0.09) !important;
 }
+
+.lodestar-open { position:fixed;right:18px;bottom:18px;z-index:50;background:#22262d;color:#d2d6dd;border:1px solid #495160;border-radius:8px;padding:10px 16px;box-shadow:0 4px 20px #0005; }
+.lodestar-open small {display:block;font-size:10px;color:#98a3b4;}
+.lodestar-panel {position:fixed;right:0;top:0;bottom:0;z-index:80;width:min(480px,100vw);padding:22px;background:#1b1e24;color:#c5ccd6;border-left:1px solid #444c59;overflow:auto;box-shadow:-8px 0 36px #0005;}
+.lodestar-panel header {display:flex;justify-content:space-between;align-items:center;}
+.lodestar-panel h2 {font-size:20px;}
+.lodestar-panel button {border:1px solid #4b5463;border-radius:5px;padding:6px 10px;margin:5px 6px 5px 0;}
+.lodestar-panel textarea {width:100%;min-height:84px;resize:vertical;background:#13161b;color:#d7dce5;border:1px solid #4b5463;border-radius:5px;padding:10px;}
+.lodestar-panel label {display:block;margin:12px 0 5px;font-size:12px;}
+.lodestar-panel summary {cursor:pointer;padding:7px 0;}
+.lodestar-panel [role=alert] {color:#e1ac97;}
+.lodestar-panel button:focus-visible,.lodestar-panel summary:focus-visible,.lodestar-panel textarea:focus-visible {outline:2px solid #9b9ed3;outline-offset:3px;}
+.lodestar-context,.lodestar-panel small {font-size:11px;color:#9ba7b7;}
+.lodestar-answer {margin-top:18px;padding-top:14px;border-top:1px solid #39414d;}
+.lodestar-answer h3 {font-size:15px;}
+.lodestar-answer p {font-size:13px;line-height:1.6;margin:8px 0;}
+.lodestar-evidence pre {white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;}

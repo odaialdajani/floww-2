@@ -1985,6 +1985,9 @@ async def _scheduler_loop():
                     _last_snapshot_hhmm = today_et + slot
             except Exception as e:
                 log.warning(f"snapshot tick err: {e}")
+            research = getattr(app.state, "research_service", None)
+            if research is not None and os.getenv("FLOWW_AGENT_DISABLED") != "1":
+                await research.maintenance()
         except Exception as e:
             log.warning(f"scheduler tick err: {e}")
         await asyncio.sleep(60)
@@ -3030,6 +3033,49 @@ try:
     from routes.agent import router as agent_router
 
     app.include_router(agent_router, tags=["agent"])
+    from services.agent.local_access import AgentCORSMiddleware
+    app.add_middleware(AgentCORSMiddleware)
+
+    @app.on_event("startup")
+    async def startup_research():
+        # Composition owns the broad application dependencies. Research only
+        # receives these three fixed, copy-only read functions.
+        import copy
+
+        from routes.analytics import _cache as chain_cache
+        from services.agent.reads import ResearchReads
+        from services.agent.repository import AgentRepository
+        from services.agent.research import ResearchService
+
+        def peek_map(ticker):
+            entry = _BUILD_HEATMAP_CACHE.get(f"{ticker}:6:day:None:False:True:200")
+            return copy.deepcopy(entry["data"]) if entry else None
+
+        def read_alerts(ticker):
+            from services.research_data_seam import stored_research_alerts
+            return stored_research_alerts(duckdb_engine.query_strict, ticker)
+
+        try:
+            repository = AgentRepository(db)
+            await repository.initialize()
+            reads = ResearchReads(chain_cache.peek_available_chain, peek_map, read_alerts)
+            from services.agent.model import GroundedModel
+            from services.agent.spend import SpendLedger, money_units
+            spending = SpendLedger(repository.budgets, cap_units=money_units(os.getenv("AGENT_DAILY_BUDGET_USD", "20")), audit_collection=db["agent_budget_audit"])
+            await spending.initialize()
+            await spending.recover_undispatched()
+            app.state.research_service = ResearchService(repository, reads, model=GroundedModel(spending))
+            from services.agent.tools import configure_reads
+            configure_reads(reads)
+        except Exception as exc:
+            app.state.research_service = None
+            log.warning("Saved research unavailable: %s", type(exc).__name__)
+
+    @app.on_event("shutdown")
+    async def shutdown_research():
+        research = getattr(app.state, "research_service", None)
+        if research is not None:
+            await research.close()
 except Exception as _agent_import_err:  # noqa: BLE001 - non-fatal; feature degrades
     log.warning(f"Lodestar agent routes disabled (non-fatal): {_agent_import_err}")
 

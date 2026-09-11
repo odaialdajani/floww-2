@@ -197,10 +197,33 @@ describe("rule builder over the 17 facts + 4 ticker facts", () => {
     expect(testCondition(scanRow(), { fact: "streak", op: "≥", value: "3" }, { streak: 4 })).toBe(true);
     expect(testCondition(scanRow(), { fact: "streak", op: "≥", value: "3" }, {})).toBe(false);
   });
-  it("matchCustomScan approximates fixed rules without inventing new ones", () => {
-    expect(matchCustomScan(scanRow(), { rule: "WHALE", conditions: [] }, {})).toBe(true);
+  it("matchCustomScan requires a matching fired rule instead of a price proxy", () => {
+    expect(matchCustomScan(scanRow(), { rule: "WHALE", conditions: [] }, {})).toBe(false);
     expect(matchCustomScan(scanRow(), { rule: "0DTE", conditions: [] }, {})).toBe(false);
-    expect(matchCustomScan(scanRow(), { rule: "OICONF", conditions: [] }, {})).toBe(true);
+    expect(matchCustomScan(scanRow(), { rule: "OICONF", conditions: [] }, {})).toBe(false);
+    expect(matchCustomScan(scanRow(), { rule: "SCORE", conditions: [] }, {})).toBe(false);
+    expect(matchCustomScan(scanRow(), { rule: "SCORE", conditions: [] }, {}, [{...scanRow(), rule:"SCORE"}])).toBe(true);
     expect(matchCustomScan(scanRow({ score: 50 }), { rule: "ANY", conditions: [{ fact: "score", op: "≥", value: "70" }] }, {})).toBe(false);
   });
+});
+
+
+describe("shared screen safety",()=>{
+ it("withholds old and incomplete trade-now candidates",()=>{
+  expect(tradeNowOf([dirAlert({asof_ts:"2020-01-01T00:00:00Z"})])).toBeNull();
+  expect(tradeNowOf([dirAlert({bias:"UNKNOWN"})])).toBeNull();
+  expect(tradeNowOf([dirAlert({type:null})])).toBeNull();
+ });
+ it("applies custom conditions and copied built-ins to both sections",()=>{
+  const custom={custom:true,rule:"ANY",conditions:[{fact:"under",op:"is",value:"NVDA"}]};
+  expect(applyScreenToAlerts([dirAlert(),dirAlert({under:"SPY"})],custom,{})).toHaveLength(1);
+  const copy={custom:true,copyOf:"mine",rule:"ANY",conditions:[]};
+  expect(applyScreenToScans([scanRow()],copy,{universe:[]})).toHaveLength(0);
+  expect(applyScreenToAlerts([dirAlert()],copy,{universe:[]})).toHaveLength(0);
+ });
+ it("evaluates OR groups without weakening outer AND conditions",()=>{
+  const s={custom:true,conditions:[{fact:"score",op:"≥",value:70},{join:"OR",conditions:[{fact:"type",op:"is",value:"put"},{fact:"under",op:"is",value:"NVDA"}]}]};
+  expect(matchCustomScan(scanRow(),s,{})).toBe(true);
+  expect(matchCustomScan(scanRow({under:"SPY"}),s,{})).toBe(false);
+ });
 });

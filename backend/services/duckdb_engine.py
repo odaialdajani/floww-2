@@ -458,6 +458,13 @@ class DuckDBEngine:
             except Exception as e:
                 logger.error(f"DuckDB flow flush error: {e}")
 
+    def query_strict(self, sql: str, params: list | None = None) -> list[dict]:
+        """Read with explicit failure, for callers distinguishing outage from empty."""
+        with self._conn_lock:
+            cursor = self._conn.execute(sql, params or [])
+            names = [column[0] for column in cursor.description]
+            return [dict(zip(names, row, strict=True)) for row in cursor.fetchall()]
+
     def execute_write(self, sql: str, params_seq: list | None = None) -> None:
         """Serialized write against the shared connection. Pass a sequence of
         row tuples for executemany, or None for a parameterless statement.

@@ -342,7 +342,7 @@ describe("Tidehunter Pro v3 — one page, zero page tabs", () => {
     // the internal TABS array is dissolved — no page-tab buttons anywhere
     expect(container.querySelector(".fsb-tab")).toBeNull();
     expect(container.querySelector(".fsb-view-flow")).toBeNull();
-    expect(container.querySelectorAll(".th-nav")).toHaveLength(8);
+    expect(container.querySelectorAll(".th-nav")).toHaveLength(6);
   });
 
   it("pins trade-now once and renders contextual rows without levels or arrow", async () => {
@@ -409,9 +409,10 @@ describe("Tidehunter Pro v3 — one page, zero page tabs", () => {
     await waitFor(() => expect(screen.getByTestId("pulse-table").querySelector("tbody")).not.toBeNull());
     const tape = screen.getByTestId("market-tape");
     for (const label of ["Contracts", "Notional Σ", "Call/Put", "Unusual ≥2×", "Updated", "Source"]) {
-      expect(within(tape).getByText(label, { exact: false })).toBeInTheDocument();
+      expect(within(tape).getAllByText(label, { exact: false }).length).toBeGreaterThan(0);
     }
-    expect(within(tape).getByText(/mkt-wide/)).toBeInTheDocument();
+    expect(within(tape).getByText("Source not supplied")).toBeInTheDocument();
+    expect(within(tape).queryByText(/LIVE/)).not.toBeInTheDocument();
   });
 
   it("ticker select re-focuses the dealers cell and lattice", async () => {
@@ -449,14 +450,11 @@ describe("Tidehunter Pro v3 — one page, zero page tabs", () => {
     expect(withTip).not.toBeNull();
   });
 
-  it("keeps the vol surface (SIM) and academy as in-page sections", async () => {
-    mockBackend();
-    render(<FlowseekerProBlademap active />);
-    await waitFor(() => expect(screen.getByTestId("vol-section")).toBeInTheDocument());
-    expect(screen.getByTestId("academy-section")).toBeInTheDocument();
-    expect(screen.getByText("Market Microstructure")).toBeInTheDocument();
-    // no page tabs anywhere — sections, not a tab switcher
-    expect(document.querySelector(".fsb-tab")).toBeNull();
+  it("keeps the approved dashboard scope without simulated pages", async () => {
+    mockBackend(); render(<FlowseekerProBlademap active />);
+    await waitFor(() => expect(screen.getByTestId("dealer-drilldown")).toBeInTheDocument());
+    expect(screen.queryByTestId("vol-section")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("academy-section")).not.toBeInTheDocument();
   });
 
   it("rule chips hide whole rule families from the feed", async () => {

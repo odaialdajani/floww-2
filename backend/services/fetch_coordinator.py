@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import copy
 import logging
 import time
 from collections.abc import Callable
@@ -196,6 +197,26 @@ class CacheRouter:
 
     def __init__(self):
         self._cache: dict[str, dict[str, Any]] = {}
+
+    def peek_chain(self, ticker: str, expiries: int = 6) -> dict[str, Any] | None:
+        """Copy an existing observation without refreshing or extending its age."""
+        entry = self._cache.get(f"chain:{ticker.upper()}:{expiries}")
+        if entry is None:
+            return None
+        result = copy.deepcopy(entry["data"])
+        result["cache_age_s"] = max(0.0, time.monotonic() - entry["ts"])
+        return result
+
+    def peek_available_chain(self, ticker: str, preferred: int = 6) -> dict[str, Any] | None:
+        prefix = f"chain:{ticker.upper()}:"
+        candidates = [(key, value) for key, value in self._cache.items() if key.startswith(prefix)]
+        if not candidates:
+            return None
+        key, _ = max(candidates, key=lambda item: (item[0] == f"{prefix}{preferred}", item[1]["ts"]))
+        count = int(key.rsplit(":", 1)[1])
+        result = self.peek_chain(ticker, count)
+        result["requested_expiry_count"] = count
+        return result
 
     async def get_chain(
         self,

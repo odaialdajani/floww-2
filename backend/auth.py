@@ -43,16 +43,7 @@ PUBLIC_PATHS = {
     "/dashboard/_dash-layout",
     "/dashboard/_dash-dependencies",
     "/favicon.ico",
-    # Lodestar agent reads — key-free on the local app for asking (ADR-0008).
-    # Never a bare "/api/agent/" prefix: the actions router lives at
-    # "/api/agent-actions/" and must stay key-protected.
-    "/api/agent/ask",
-    "/api/agent/stream/",
-    "/api/agent/turn/",
-    "/api/agent/cancel/",
-    "/api/agent/budget",
-    "/api/agent/claims",
-    "/api/agent/prefs",
+
 }
 
 
@@ -105,6 +96,10 @@ async def verify_api_key(request: Request):
     # Only protect mutating methods
     if request.method not in PROTECTED_METHODS:
         return True
+
+    from services.agent.local_access import research_path
+    if research_path(request.method, request.url.path):
+        return True  # Routes independently enforce local session ownership.
 
     # Public paths don't need auth
     if is_public_path(request.url.path):

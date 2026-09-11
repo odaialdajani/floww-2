@@ -1,47 +1,69 @@
-"""Call-boundary proof (plan v3 L1): no research tool can fire an order call.
+"""Every advertised capability runs with real calculators and order/network traps."""
 
-Patches every order/liquidation entry point to raise, runs representative
-tools + a loop turn off fixtures, asserts none fired.
-"""
+import importlib
+from datetime import UTC, datetime
 
-import contextlib
-
+import httpx
 import pytest
 
-import services.agent.tools  # noqa: F401 (registers catalog)
+import services.agent.tools as catalog
+from services.agent.reads import ResearchReads
 from services.agent.registry import list_tools
 
 
 @pytest.mark.asyncio
-async def test_no_tool_fires_order_calls(monkeypatch):
-    fired: list[str] = []
+async def test_all_advertised_tools_have_no_order_or_provider_calls(monkeypatch):
+    fired = []
 
-    def _boom(name):
-        def _raise(*a, **k):
-            fired.append(name)
-            raise AssertionError(f"order path fired: {name}")
+    def forbidden(*args, **kwargs):
+        fired.append("forbidden")
+        raise AssertionError("Research crossed the read-only boundary")
 
-        return _raise
-
-    targets = [
-        ("services.public_api", "PublicBroker"),
-        ("alpaca_client", "AlpacaClient"),
-        ("services.paper_trading", "PaperTradingEngine"),
-        ("paper_trading", "execute_paper_trade"),
-    ]
-    for mod_name, attr in targets:
-        with contextlib.suppress(Exception):
-            mod = __import__(mod_name, fromlist=[attr])
-            obj = getattr(mod, attr, None)
-            if obj is None:
-                continue
-            for meth in ("place_order", "place_market_order", "place_limit_order", "place_stop_order", "place_multileg_order", "place_stock_order", "close_position", "cancel_order", "submit_order"):
-                if hasattr(obj, meth):
-                    with contextlib.suppress(Exception):
-                        monkeypatch.setattr(obj, meth, _boom(f"{mod_name}.{attr}.{meth}"))
-
-    for tool in list_tools()[:12]:
-        with contextlib.suppress(Exception):
-            if tool.fn is not None:
-                await tool.fn("SPY", horizon="all")
+    targets = {
+        ("services.public_api", "PublicBroker"): [
+            "place_order",
+            "place_market_order",
+            "place_limit_order",
+            "place_stop_order",
+            "place_multileg_order",
+            "cancel_order",
+        ],
+        ("alpaca_client", "AlpacaClient"): [
+            "place_stock_order",
+            "place_option_order",
+            "place_bracket_order",
+            "close_position",
+            "cancel_order",
+        ],
+        ("services.paper_trading", "PaperTradingEngine"): ["submit_order", "execute_order"],
+    }
+    for (module, owner), methods in targets.items():
+        cls = getattr(importlib.import_module(module), owner)
+        for method in methods:
+            monkeypatch.setattr(cls, method, forbidden)
+    monkeypatch.setattr(httpx.AsyncClient, "request", forbidden)
+    now = datetime.now(UTC).isoformat()
+    chain = {
+        "spot": 100,
+        "event_time": now,
+        "contracts": [
+            {"strike": strike, "type": kind, "gamma": 0.01, "open_interest": 10, "expiry": "2026-09-18"}
+            for strike, kind in [(95, "P"), (100, "C"), (105, "C")]
+        ],
+    }
+    reads = ResearchReads(
+        lambda *args: chain,
+        lambda *args: None,
+        lambda *args: [{"asof_ts": now, "expiry": "2026-09-18", "bias": "BULLISH", "conviction": 80}],
+    )
+    monkeypatch.setattr(catalog, "_reads", reads)
+    tools = list_tools()
+    assert {tool.name for tool in tools} == {"market_context", "gex_profile", "flip_zones", "alerts_feed"}
+    for tool in tools:
+        result = await tool.fn("SPY", horizon="all")
+        assert result["status"] in {"ok", "degraded", "unavailable"}
+        if result["status"] == "ok":
+            assert result["data"]
+        if tool.name in {"market_context", "gex_profile", "alerts_feed"}:
+            assert result["data"], tool.name
     assert fired == []
