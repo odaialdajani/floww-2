@@ -2,6 +2,42 @@
 
 User objective confirmed 2026-09-11: preserve and commit local work, review colleague changes and backlog, bring current main into the working branch, implement the two specified plans, validate and commit delivery.
 
+## Current authoritative delivery status - 2026-09-11 22:23 UTC
+
+This section supersedes older checkpoint status below; historical failures and incidents are retained as evidence. **The full AI plan is not complete or accepted.**
+
+**Latest user priority,22:22:42 UTC:** Stop all work focused on mobile optimization; mobile is the least concern. No further mobile implementation, polish or dedicated testing. Preserve completed fixes without a rollback; prioritize desktop behavior, actual Public data, AI acceptance and remaining AI capabilities. Earlier mobile screenshots/checks below are historical evidence, not a new work queue.
+
+- Preservation/integration: external safety copy and original-work commit retained. Reviewed and merged the 424 incoming main commits with 18 resolved conflicts. Current implementation commits include `ba6a637e` (real Public/OAuth/research/UI) and `c0e23df0` (Windows checks and confirmed dependency fixes). Fetch at22:07 found16 commits ahead and0 behind origin/main. No push, main merge or production deployment was performed.
+- PR backlog: reviewed open PRs3/4/5; do not merge their obsolete/broken branches. Useful fixes are present or were ported with source-time corrections. No PR comments, closing actions or messages were sent. This is a bounded conflict/PR/dependency review, not a claim of auditing every incoming line.
+- UI: production v3 ordering, four answers, screens/rules/actions/settings, dealer chart, source states, keyboard controls, narrow layouts and colour-blind patterns implemented. Real Public views and exact selected-contract/map research handoffs were inspected on both dashboards. Final frontend at22:07:81 suites/676 tests passed; final build at22:00 passed after all UI source edits. The companion UI checklist and complete sweep now distinguish these results from historical mockup checks.
+- Research: real local MongoDB with pinned driver acceptance; owner-bound durable ask/save/reload/cancel/recovery paths; exact immutable displayed-map and contract scope; deterministic ten-section answers; computed exposure/levels; explicit unavailable data; managed ChatGPT OAuth and saved supported model/depth/speed controls. Actual saved model-assisted answers were exercised on Tidehunter and Solstice. The preview uses actual Public reads and an isolated journal; it is not proof of full production deployment or all background workers.
+- Research validation: final whole-backend run completed5486 passed/70 skipped/9 deselected/0 failures/0 errors in425.57s, coverage67.52% against60% required. The session network guard passed with no blocked attempt. Full Ruff, whole-backend required-medium Bandit and the final frontend/build passed. Truth audit reported23 passed/0 failed/4 unverified skips. Records: eval/backend-suite-20260911-2222.json and eval/delivery-checks-20260911-2222.json. The earlier22:04 guard failure remains recorded; repaired fixtures and all-origin diagnostics were saved at45e104e4. No earlier failed result is rewritten as a pass.
+- Quality gate: the first independent real OAuth comparison had27 assessed pairs,0 wins/27 ties/0 losses and a critical excluded-ticker error (subsequently fixed). Preserve that failed acceptance. A later exposed three-case development check had3 wins but cannot establish unseen quality. A fresh30-case set is frozen, **UNBOUND/NOT_RUN**; no acceptance is inferred from preparation. A separately hashed prospective amendment restores the original plan's permission for clearly labeled synthetic failure cases alongside real recorded Public data. Four-ticker raw Public chains and map responses are captured; no fresh candidate has run.
+- Usage: actual model calls use ChatGPT allowance; returned dollar cost is unknown. At22:00 there were31 of40 reserved daily calls, leaving9. One fresh candidate run can require26 additional calls; the planned two-candidate comparison can require52. No quota reset, allowance increase or extra calls were made to force acceptance. Missing source prerequisites can independently prevent a complete comparison.
+- Remaining scope: real historical-range and complete volatility/product metadata, broader company/microstructure/comparison capabilities, validated proposals, durable paper lifecycle, owner-scoped watch/brief delivery and forward-learning acceptance remain incomplete. The paper slippage decision is still awaiting the user. Live implementation/enabling still requires its separate written approval and future evidence; actual Public data access is not order approval.
+- Preserved local state: unrelated `.planning/config.json`, `kanban/BOTTLENECK_ALERTS.md`, scratch files, raw storage backups, journal audit and internal checkpoint remain outside delivery staging. User app windows and the installed MongoDB were not closed.
+
+Evidence index:
+
+| Evidence | Meaning and limits |
+| --- | --- |
+| `eval/ai-plan-sweep-20260911.md` | Section-by-section AI inventory, corrections and retained missing capabilities/gates |
+| `eval/ui-plan-sweep-20260911.md` | Full UI control inventory, reproduced findings, repairs and final rendered acceptance |
+| `eval/storage-pinned-20260911-1933.json` | Actual pinned Motor/PyMongo/Mongo sample-record concurrency, fresh-process recovery and quiescent restore; not production-scale crash/restore proof |
+| `eval/public-ui-real-20260911-2117.json` | Actual Public, real saved Tidehunter answers and exact selected option contract |
+| `eval/public-solstice-real-20260911-2146.json` | Actual Public, managed OAuth and saved Solstice displayed-map scope |
+| `eval/oauth-heldout-v1-independent-review.md` | Original independent comparison failed acceptance; exposed cases retained |
+| `eval/oauth-development-20260911-review.md` | Three exposed development wins only; no held-out claim |
+| `eval/oauth-heldout-v2-manifest.json` | Fresh30-case freeze; no evidence binding or model execution yet |
+| `eval/oauth-heldout-v2-binding-proposal.json` | Independent input/setup proposal; all30 questions retained, AAPL source missing, not runner-ready, no model execution |
+| `eval/backend-suite-20260911-2222.json` | Final5486-pass run, declared skips,67.52% coverage and zero network-guard errors |
+| `eval/delivery-checks-20260911-2222.json` | Final frontend/build/lint/security evidence and unverified truth-audit skips |
+
+### Corrected incident record
+
+Earlier source incidents are retained below. Additionally, a preview run wrote two derived whale records to the shared journal before its path was isolated; local audit/backup evidence was preserved. No paper trade is known from that incident. A Windows verification fixture briefly resolved the real repository tools instead of its fake tools and launched the real quality script into a long security scan; only verified child processes from those attempts were stopped. Path assertions were corrected and47 fixture checks passed. No before-byte baseline exists for every touched report, so zero side effects are not claimed. These findings are not hidden by later passing tests.
+
 ## Authoritative scope
 - AI: .planning/unknowns/lodestar-plan-v4-review-draft.md
 - UI: .planning/mockups/tidehunter-pro-2026-09-05/PLAN.md
@@ -15,14 +51,14 @@ User objective confirmed 2026-09-11: preserve and commit local work, review coll
 - [x] Review 18 merge conflicts independently for backend and main dashboard; resolve preserving local single-page design and incoming backend/Skylit fixes.
 - [x] Commit integration at 9d5e500a; focused merge checks passed (full release checks remain open).
 - [x] Review open PRs 3, 4, 5. Do not merge obsolete regressions; retain useful fixes already present and preserve unknown source times.
-- [ ] Review remaining merged changes and record actionable backlog with evidence.
+- [x] Review conflicted/affected merged dependencies and PR backlog with evidence; retain the bounded-review limitation above.
 - [x] Bounded research contracts and reproduced failures for grounding, spending, request identity and cancellation.
-- [ ] Complete durable evidence-backed research and shared screen context.
-- [ ] UI v3 full controls, four answers and dealer drill-down.
+- [x] Implement durable evidence-backed descriptive research and shared screen context; research release remains gated separately.
+- [x] UI v3 full controls, four answers and dealer drill-down, with the final evidence recorded above.
 - [ ] Research acceptance/recovery/ownership/cost proof.
 - [ ] Remaining meaningful capabilities, proposals, paper book, watch/briefs per AI gates.
-- [ ] Full required checks, real UI comparison and read-only research handoff.
-- [ ] Final commits, refresh remote and publish reviewable delivery.
+- [x] Selected full backend/frontend, lint, required security/build checks and real desktop research handoff; declared skips and wider research acceptance limits remain recorded above.
+- [x] Save implementation/evidence commits and refresh remote for local reviewable delivery; no remote push or production deployment requested/performed.
 
 ## Merge decisions
 - Preserve local dashboard JSX/CSS as base: incoming version restores obsolete scanner/flow/gamma tabs. Port useful incoming factual metadata separately.
@@ -166,3 +202,11 @@ MongoDB was still absent at27017 in this third consecutive goal turn. The origin
 - Observed failures include old circuit-breaker expectations, imports of the removed Finnhub client, memory test failures, model artifact unpickling failures, incomplete torch test substitutes, anomaly return-shape expectations, strict floating-point equality, Windows child environments failing before server import, and Windows paths passed to Bash. These are recorded findings, not a claim that every cause has been repaired or independently attributed. No full backend release pass is claimed.
 - The final teardown error explicitly records missed provider mocks caught by the external-network guard. Its association with the last test is teardown placement, not proof that the last test caused those attempts. Earlier pre-session-guard setup gaps remain disclosed above. No known order was sent; no model comparison was performed.
 - All current research changes are covered by131passing focused checks; syntax guard3pass; guarded Greeks/setup checks43pass; real pinned-driver sample-record recovery/restore pass; scoped Ruff/security checks pass. Frontend unchanged from627passing checks/build/rendered evidence. The complete AI/UI plans remain incomplete pending actual supported-source/model acceptance, a fresh unseen usefulness comparison, the paper decision and later gated work. Mongo installation is no longer the blocker.
+
+## Final local save and next authorized scope - 22:25 UTC
+
+All implementation changes are saved through45e104e4; final documentation/evaluation artifacts are saved in the following delivery commit. Remote fetch22:24: current source branch17ahead/0behind origin/main before that documentation commit. No push/deployment, paper order or live order is claimed.
+
+Independent input-binding proposal and hashes are saved for all30 fresh questions. Twenty-nine have concrete input/setup proposals; AAPL remains missing. Status is PROPOSAL_NOT_RUNNER_READY, not completed binding or executed comparison. Before spending: complete recorded-input/clock execution, transformed fixture hashes, equivalent owned history/context event sequence and independent fact checks; obtain the pending model allowance decision. No quota change or answer-quality acceptance is inferred from this preparation.
+
+The user explicitly paused mobile optimization. Continue desktop/data/AI work only. Paper accounting is still an unanswered owner decision, and later paper/live prerequisites remain intact. The full original goal remains incomplete; this save preserves the completed work and exact outstanding scope rather than claiming the entire AI plan is done.

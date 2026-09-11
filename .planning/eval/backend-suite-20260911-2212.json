@@ -1,0 +1,21 @@
+{
+  "status": "failed",
+  "source_commit": "c0e23df0",
+  "python": "3.11.15",
+  "command": "python -m pytest tests/ -v --tb=short --cov=. -m 'not flaky_env' -p tests.offline_network",
+  "mongo": "real loopback isolated test database",
+  "journal": "separate acceptance/suite-final-20260911.duckdb",
+  "passed": 5486,
+  "failed": 0,
+  "errors": 1,
+  "skipped": 70,
+  "deselected": 9,
+  "warnings": 136,
+  "duration_seconds": 435.9,
+  "coverage_percent": 66.54,
+  "required_coverage_percent": 60,
+  "exit_code": 1,
+  "error_description": "Session network guard caught blocked unmocked requests from route ordering, morning briefing and scheduler tests. Teardown location is not causation. First20 examples truncate possible later origins.",
+  "log_sha256": "30c461af63eb6399bbf98d15558957399ac867a6b09efaba2874dbfeed910e12",
+  "recorded_at": "2026-09-11T22:13:55.218337+00:00"
+}

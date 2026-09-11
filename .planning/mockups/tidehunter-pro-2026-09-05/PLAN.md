@@ -2,9 +2,19 @@
 
 Updated: 2026-09-11
 
-**Status:** Consolidated UI implementation plan. The preview is available; live
-implementation and acceptance remain pending. Existing working app features
-may be retained after verification, not assumed complete from the preview.
+**User priority update,2026-09-11 22:22 UTC:** Stop mobile optimization work.
+Desktop behavior and remaining AI/data features take priority. Do not schedule
+further mobile layout, polish or dedicated validation. Previously completed
+mobile fixes and recorded checks remain historical; this instruction does not
+request their rollback.
+
+**Status (2026-09-11 implementation update):** The production redesign, dealer
+detail and shared research context are implemented. Actual Public-backed wide,
+narrow and colour-blind views were inspected against the included reference.
+All 676 frontend checks pass and the final production build succeeds. The
+companion AI release still has open acceptance gates; UI completion does not
+close them. See the dated [full UI sweep](../../eval/ui-plan-sweep-20260911.md)
+for retained limitations and [delivery evidence](../../INTEGRATION_AI_UI_GOAL.md).
 
 There are two implementation plans for this work:
 
@@ -252,21 +262,25 @@ without first establishing that existing capabilities cannot meet the need.
 - [x] Record this required panel in the redesign build plan.
 - [x] Consolidate the complete v3 UI scope, build notes and preview reference
   into this one UI implementation plan.
-- [ ] Verify the current app baseline and retained-control inventory.
-- [ ] Implement the full v3 page structure and four answer cells.
-- [ ] Complete active screens, filters/rules, Vector/Pulse actions and settings.
-- [ ] Implement the panel in the live component, reusing existing dealer state.
-- [ ] Cover live loading/error/stale/empty states and rapid ticker changes.
-- [ ] Verify chart maths with fixed expected values, including the displayed
+- [x] Verify the current app baseline and retained-control inventory.
+- [x] Implement the full v3 page structure and four answer cells.
+- [x] Complete active screens, filters/rules, Vector/Pulse actions and settings.
+- [x] Implement the panel in the live component, reusing existing dealer state.
+- [x] Cover live loading/error/stale/empty states and rapid ticker changes.
+- [x] Verify chart maths with fixed expected values, including the displayed
   expiry scope, negative sums, single strike, all-zero data and out-of-range flip.
-- [ ] Verify keyboard selection, focus, Monitor/Trade/Research, colour-blind
+- [x] Verify keyboard selection, focus, Monitor/Trade/Research, colour-blind
   mode and narrow-screen readability in the live app.
-- [ ] Verify the shared AI screen-context handoff without stale answer relabelling.
-- [ ] Run the focused frontend checks and build; visually compare the live panel
+- [x] Verify the shared AI screen-context handoff without stale answer relabelling.
+- [x] Run the focused frontend checks and build; visually compare the live panel
   and full dashboard with the supplied reference and updated mockup before
   marking the redesign complete.
 
-## 9. Existing mockup verification and limits
+Checks above combine mounted behavior tests and actual rendered browser inspection;
+they do not claim every possible permission response or market state was observed
+live. Current Public data with unknown observation times remains visibly limited.
+
+## 9. Historical mockup verification and limits
 
 - 2026-09-11: Node syntax check and a JSDOM execution of the complete HTML passed
   with no script errors or duplicate element IDs.
@@ -279,5 +293,6 @@ without first establishing that existing capabilities cannot meet the need.
 - A browser-rendered visual check was not performed: browser control rejected
   this local-file URL earlier in the session. These checks establish document
   structure, calculations and interaction state, not screenshot equivalence.
-- Live implementation and live acceptance items remain unchecked until that
-  work is carried out. The production frontend was not changed by this task.
+- At the original mockup-only review, live implementation remained unchecked
+  and production source was unchanged. The later implementation update above
+  supersedes that historical status without changing these mockup-only claims.

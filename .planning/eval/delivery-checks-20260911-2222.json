@@ -1,0 +1,35 @@
+{
+  "recorded_at": "2026-09-11T22:22:34.416754+00:00",
+  "backend_source_commit": "45e104e4",
+  "frontend_source_commit": "c0e23df0",
+  "frontend": {
+    "suites": 81,
+    "passed": 676,
+    "failed": 0,
+    "build": "passed after all frontend source edits"
+  },
+  "ruff": "passed all backend",
+  "bandit": "passed whole backend at required medium severity with CI exclusions plus second virtual environment",
+  "truth_audit": {
+    "exit_code": 0,
+    "passed": 23,
+    "failed": 0,
+    "skipped": 4,
+    "limit": "Skipped metadata claims were not verified"
+  },
+  "logs": {
+    "floww-ui-final-2207.log": "6831b76f7d95201edf1932ceeb48a21eb9cd59236e38468b51c2b0580f13c042",
+    "floww-build-final-2200.log": "1c3f39c9d37135bcd0ad34c20d10d4f34ae0dc0bd6baaa7e0aa2dff4e7c27f95",
+    "floww-bandit-final-2217.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "floww-truth-final-2217.log": "d0a5c258221525147d617f9e3d22cadea9565df8c66683872a8d6dc8edfd775f"
+  },
+  "full_ai_plan_complete": false,
+  "research_release_accepted": false,
+  "v2_model_calls": 0,
+  "oauth_usage_last_read": {
+    "calls": 31,
+    "daily_limit": 40,
+    "actual_cost": null,
+    "checked_at": "2026-09-11T22:18:36Z"
+  }
+}

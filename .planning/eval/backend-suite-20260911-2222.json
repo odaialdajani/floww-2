@@ -1,0 +1,26 @@
+{
+  "status": "passed_with_declared_skips",
+  "source_commit": "45e104e4",
+  "python": "3.11.15",
+  "command": "python -m pytest tests/ -v --tb=short --cov=. -m 'not flaky_env' -p tests.offline_network",
+  "mongo": "real loopback; isolated test_floww_final_20260911 database",
+  "journal": "separate acceptance/suite-final-20260911.duckdb",
+  "environment": {
+    "FLOWW_PUBLIC_SWEEP": "0",
+    "FLOWW_ENABLE_LIVE_PUBLIC": "0",
+    "FLOWW_ENABLE_LIVE_SCHWAB": "0"
+  },
+  "passed": 5486,
+  "failed": 0,
+  "errors": 0,
+  "skipped": 70,
+  "deselected": 9,
+  "warnings": 136,
+  "duration_seconds": 425.57,
+  "coverage_percent": 67.52,
+  "required_coverage_percent": 60,
+  "exit_code": 0,
+  "network_guard": "active whole session; teardown passed; no blocked external attempt",
+  "log_sha256": "b6c8f0747b8bb29c5fdcf4ea918ef8cf749a252d56e63dd8ef7787095971cd63",
+  "recorded_at": "2026-09-11T22:22:34.416048+00:00"
+}

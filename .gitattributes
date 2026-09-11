@@ -1,0 +1,5 @@
+# Frozen evaluation hashes identify exact bytes across Windows checkouts.
+/.planning/eval/oauth-* -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+/.planning/eval/public-oauth-live-* -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+/.planning/eval/public-solstice-real-* -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+/.planning/eval/public-ui-real-* -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

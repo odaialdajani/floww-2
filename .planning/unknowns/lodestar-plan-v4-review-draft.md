@@ -2,16 +2,24 @@
 
 Revision 4 - 2026-09-11 - revised from the Claude Code planning session.
 
+**User priority update,2026-09-11 22:22 UTC:** Stop work focused on mobile
+optimization. Prioritize desktop research, real data, AI acceptance and the
+remaining AI features. Retain completed fixes; no mobile rollback was requested.
+
 **Purpose:** Give Solstice and Tidehunter Pro an assistant that understands the selected market, joins reliable evidence, explains changes, proposes specific trades, records its calls, and earns its way toward supervised execution.
 
-**Status:** Revised implementation proposal; the existing research release is **partial**, not accepted. This review changes planning documents only. It does not implement features, certify trading performance, approve live execution, or mark any build milestone complete.
+**Status (2026-09-11 implementation update):** Research is implemented and exercised with actual Public market data, managed ChatGPT login, durable local storage and both real dashboard contexts. The research release is **not accepted**: the completed independent comparison did not establish a usefulness improvement, and a fresh comparison remains unrun. Capability expansion, proposals, paper trading, proactive delivery and later live release remain incomplete/gated. No trading-performance certification or live authorization is implied. See [current delivery evidence](../INTEGRATION_AI_UI_GOAL.md) and [complete section sweep](../eval/ai-plan-sweep-20260911.md).
 
 Project root: `C:/Users/DARK HERO/Desktop/FLOWW2.0`.
 Canonical plan: `C:/Users/DARK HERO/.claude/plans/i-would-like-to-replicated-stardust.md`.
 Original preserved as `i-would-like-to-replicated-stardust.v3-before-review-2026-09-11.md` in the same directory.
 Source baseline: HEAD `1a512c335757cc0dbccb35fd7e0a2bc728568498`, plus the current uncommitted working tree inspected on 2026-09-11. Shared files are changing; recheck them before implementation.
 
-Review completed on 2026-09-11: three independent scoped code reviews, a second pass against this revised design, incorporated corrections, and a final document consistency check. See `C:/Users/DARK HERO/Desktop/FLOWW2.0/.planning/unknowns/lodestar-plan-review-2026-09-11.md` for the review record. Implementation remains pending.
+Planning review completed on 2026-09-11: three independent scoped code reviews, a second pass against this revised design, incorporated corrections, and a final document consistency check. See `C:/Users/DARK HERO/Desktop/FLOWW2.0/.planning/unknowns/lodestar-plan-review-2026-09-11.md` for that historical review. Subsequent implementation evidence is recorded in the current delivery document above; the original requirements below remain intact.
+
+### User-directed transport update
+
+The user's later instruction, "use the openai oauth", supersedes the initial OpenRouter transport choice. Production research uses the installed Codex app server's managed ChatGPT login, with verified supported model/depth/speed choices and owner-scoped saved preferences. Dollar charges are not reported by that subscription path: display unknown dollars, retain actual reported token usage and reserve a durable maximum of 40 model calls per UTC day. Do not describe subscription use as free or claim that the original monetary comparison gate passed. The $20/day OpenRouter guard remains for its optional legacy path; it does not measure ChatGPT subscription charges. Baseline/stronger-candidate acceptance and any change to the daily allowance remain explicit work.
 
 ## 1. Decisions and the revised approach
 
@@ -426,7 +434,7 @@ Insufficient or negative forward evidence means no promotion. Research and paper
 
 ## 11. Build order and completion gates
 
-All gates below remain pending. Existing useful code may be retained only after passing the corresponding behavior checks.
+The work below is the retained build order. Contracts and the bounded research workflow have substantial implementation evidence; first-release acceptance remains open. Later gates must not be marked complete from research unit checks. Consult the dated delivery record for current results rather than treating this table's requirements as completion claims.
 
 | Milestone | Work and ownership | Exit evidence |
 | --- | --- | --- |

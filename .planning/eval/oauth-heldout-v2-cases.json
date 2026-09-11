@@ -1,0 +1,641 @@
+{
+  "set_id": "oauth-heldout-v2",
+  "version": 1,
+  "created_at_utc": "2026-09-11T22:03:00Z",
+  "binding_status": "UNBOUND",
+  "execution_status": "NOT_RUN",
+  "case_count": 30,
+  "purpose": "Fresh prospective functional acceptance for current read-only research; candidate usefulness against the same deterministic evidence. Not trading-skill proof.",
+  "independence": {
+    "prior_v1_or_development_questions_read": false,
+    "prior_candidate_answers_read": false,
+    "source": "Authored from authoritative plan section 12 and current contracts/read capabilities.",
+    "disclosure": "The goal document was opened to locate the exact plan. It contains historical aggregate progress/counts, but no prior question files or candidate answer files were opened. No comparison against prior question text has been performed."
+  },
+  "source_contract_paths": [
+    ".planning/unknowns/lodestar-plan-v4-review-draft.md",
+    "backend/services/agent/contracts.py",
+    "backend/services/agent/answer_sections.py",
+    "backend/services/agent/explanations.py",
+    "backend/services/agent/reads.py",
+    "backend/services/agent/structure_reads.py",
+    "backend/services/agent/volatility_reads.py",
+    "backend/services/agent/display_map.py",
+    "backend/services/agent/saved_history.py"
+  ],
+  "immutability": "All literal questions, criteria and prerequisites are frozen by the manifest before any v2 baseline or candidate run. Binding may fill evidence/context only in a separate file. Never rewrite questions after hashing or after seeing answers.",
+  "binding_rules": {
+    "source": "New sanitized immutable Public snapshots and real saved map/history context. Preserve original market values, source observation times, receipt times, quality and absent fields. No invented source times or fabricated model-ready data.",
+    "clock": "Freeze one evaluation instant before binding; both arms use it for age/calendar evaluation. Explicit dates remain literal even if no coverage exists.",
+    "screen": "Fill exact screen request/version/strike/expiry/metric from real captured context. Do not insert invented map values. Binding predicates and relevant requested scope must be recorded before either arm.",
+    "unmet_prerequisite": "not_assessable; retained in the 30-case denominator, never counted as a pass or silently replaced.",
+    "negative_cases": "Naturally absent/stale/mismatched real inputs must satisfy the predicate; do not alter raw Public evidence to force it. Separate explicitly synthetic failure checks do not replace these cases.",
+    "budget": "No calls authorized by this artifact. Parent reports 9 of 40 daily calls remain. Do not run a partial sample and claim 30-case acceptance; additional allowance requires the user's authorization.",
+    "arms": "Deterministic-only and pinned candidate receive identical frozen evidence, owner-history state and question/screen context. Isolate controlled owners so baseline execution cannot create candidate history."
+  },
+  "cases": [
+    {
+      "id": "price_01",
+      "scenario": "price_only",
+      "question": "What is the cached underlying price of $DIA?",
+      "ticker": "DIA",
+      "prerequisites": [
+        "A saved Public DIA underlying quote exists; preserve its actual source time, including unknown."
+      ],
+      "answer_criteria": [
+        "Give the saved underlying price in dollars with its observation time or explicit unknown time.",
+        "Use only the price lookup path; zero model calls and no option calculations or paid refresh."
+      ],
+      "route_expectation": "bypass",
+      "context_requirements": {},
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "price_02",
+      "scenario": "price_only",
+      "question": "Show me the latest spot price for $IWM.",
+      "ticker": "IWM",
+      "prerequisites": [
+        "A saved Public IWM underlying quote exists; selected page is heatseeker."
+      ],
+      "answer_criteria": [
+        "Return the IWM underlying quote and its age honestly.",
+        "Do not turn 'latest' into a claim of a fresh quote; zero model calls and no full research bundle."
+      ],
+      "route_expectation": "bypass",
+      "context_requirements": {
+        "page": "heatseeker"
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "price_03",
+      "scenario": "price_only",
+      "question": "What is $QQQ's underlying price?",
+      "ticker": "QQQ",
+      "prerequisites": [
+        "A saved QQQ quote exists; screen ticker is SPY, with a real SPY selection frozen separately."
+      ],
+      "answer_criteria": [
+        "Answer QQQ despite the SPY screen; keep the original screen identity visible in saved context.",
+        "Return the underlying value, unit and source time; no model call or SPY fact used as QQQ."
+      ],
+      "route_expectation": "bypass",
+      "context_requirements": {
+        "screen_ticker": "SPY"
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "explain_04",
+      "scenario": "explanation",
+      "question": "Explain what the saved gamma exposure for $SPY tells me, and what it cannot tell me.",
+      "ticker": "SPY",
+      "prerequisites": [
+        "The saved SPY evidence contains nonempty estimated gamma exposure; its actual quality is retained."
+      ],
+      "answer_criteria": [
+        "Explain sensitivity, open interest and assumed position signs in plain terms.",
+        "Tie the explanation to supplied evidence and its quality; do not call the estimate observed dealer holdings or a price forecast."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {},
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "explain_05",
+      "scenario": "explanation",
+      "question": "For $DIA, can the saved price and flip actually be compared, and why?",
+      "ticker": "DIA",
+      "prerequisites": [
+        "The DIA snapshot contains a price; record whether a compatible, healthy scalar flip exists before running either answer."
+      ],
+      "answer_criteria": [
+        "Give an above/below comparison only when ticker, scope, units and observation times support it.",
+        "If no compatible pair exists, name the specific missing or incompatible input rather than inventing a relation."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {},
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "explain_06",
+      "scenario": "explanation",
+      "question": "Explain whether the saved $IWM flow agreement is a chance of making money.",
+      "ticker": "IWM",
+      "prerequisites": [
+        "Record real stored IWM alert evidence or its confirmed absence with the frozen Public snapshot."
+      ],
+      "answer_criteria": [
+        "Explain that signed agreement summarizes eligible supplied alerts and is not a profit probability.",
+        "Use actual freshness/coverage limits; do not invent flow values or a percentage chance."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {},
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "explain_07",
+      "scenario": "explanation",
+      "question": "Does the saved $QQQ contract count mean every expiry is covered? Explain the limit.",
+      "ticker": "QQQ",
+      "prerequisites": [
+        "QQQ saved contract-count and available-expiry facts exist."
+      ],
+      "answer_criteria": [
+        "Explain that the count and dates describe saved coverage only.",
+        "Do not claim market-wide completeness or infer absent expiries; distinguish count from directional evidence."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {},
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "explain_08",
+      "scenario": "explanation",
+      "question": "What would be needed to turn the saved $SPY volatility readings into an implied move?",
+      "ticker": "SPY",
+      "prerequisites": [
+        "Freeze SPY volatility inputs and the presence or absence of verified implied volatility, contemporaneous price and an explicit product expiry instant."
+      ],
+      "answer_criteria": [
+        "Explain the required inputs and identify which are available in this snapshot.",
+        "Only quote a calculated move when every required input is verified; otherwise explain the precise gap without making up an expiry time."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {},
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "compare_09",
+      "scenario": "multi_ticker",
+      "question": "Compare the saved structure for $SPY and $DIA, keeping each expiry range separate.",
+      "ticker": "SPY",
+      "prerequisites": [
+        "Both tickers have separately frozen real Public snapshots; record each requested window and quality."
+      ],
+      "answer_criteria": [
+        "Address both tickers separately, with their own supported facts and expiry windows.",
+        "Do not rank direction using mismatched scopes, stale readings or missing inputs; give a useful explanation of comparability."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {
+        "tickers": [
+          "SPY",
+          "DIA"
+        ]
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "compare_10",
+      "scenario": "multi_ticker_exclusion",
+      "question": "Explain the saved levels for $IWM, excluding $SPY.",
+      "ticker": "IWM",
+      "prerequisites": [
+        "IWM snapshot exists; freeze a real SPY screen as conflicting context."
+      ],
+      "answer_criteria": [
+        "Use only IWM research evidence; explicitly excluded SPY must not be fetched or interpreted as a requested ticker.",
+        "Explain supported IWM levels or their exact absence, without inheriting SPY map values."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {
+        "screen_ticker": "SPY",
+        "tickers": [
+          "IWM"
+        ]
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "compare_11",
+      "scenario": "multi_ticker",
+      "question": "Compare gamma coverage for $DIA, $QQQ and $IWM; tell me where the comparison breaks down.",
+      "ticker": "DIA",
+      "prerequisites": [
+        "Three real Public snapshots are bound individually, with their exact coverage and source times."
+      ],
+      "answer_criteria": [
+        "Cover all three tickers within the shared turn limits; no silent omission or three promised complete reports.",
+        "Explain coverage/time mismatches and leave missing dimensions unknown rather than neutral."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {
+        "tickers": [
+          "DIA",
+          "QQQ",
+          "IWM"
+        ]
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "expiry_12",
+      "scenario": "exact_expiry",
+      "question": "Explain $SPY structure for expiry 2026-09-18 only.",
+      "ticker": "SPY",
+      "prerequisites": [
+        "Bind a real SPY snapshot and record whether 2026-09-18 is present; freeze a different real screen expiry selection if available."
+      ],
+      "answer_criteria": [
+        "Use exactly 2026-09-18 for question evidence and preserve the original screen selection separately.",
+        "If that expiry is absent, say unavailable; never substitute the nearest expiry or all expiries."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {
+        "question_expiry": "2026-09-18",
+        "screen_expiry_must_differ": true
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "expiry_13",
+      "scenario": "exact_expiry",
+      "question": "What saved $QQQ levels are available for expiration 2026-09-25?",
+      "ticker": "QQQ",
+      "prerequisites": [
+        "Bind QQQ evidence and its real available expiry list; preserve whether requested date exists."
+      ],
+      "answer_criteria": [
+        "Limit question-derived levels to the named date.",
+        "Distinguish whole-map levels from question-expiry calculations; absent exact-date facts must remain absent."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {
+        "question_expiry": "2026-09-25"
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "expiry_14",
+      "scenario": "expiry_window",
+      "question": "Explain $IWM structure for the next five trading sessions.",
+      "ticker": "IWM",
+      "prerequisites": [
+        "Freeze the evaluation clock, exchange calendar/version and actual IWM expiry coverage."
+      ],
+      "answer_criteria": [
+        "Use five exchange sessions under the current contract, including the applicable current session; record exact resolved dates before either answer.",
+        "Do not use five calendar days, invent holiday expiries, or widen sparse coverage."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {
+        "horizon": "week"
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "expiry_15",
+      "scenario": "missing_exact_expiry",
+      "question": "Show $DIA structure for expiry 2030-01-18 only; do not use a nearby date.",
+      "ticker": "DIA",
+      "prerequisites": [
+        "The real DIA snapshot contains no contracts for 2030-01-18; otherwise this negative case is not assessable."
+      ],
+      "answer_criteria": [
+        "State that the requested expiry has no saved coverage.",
+        "Do not answer with a different expiry, a zero-exposure assertion, or a directional conclusion."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {
+        "question_expiry": "2030-01-18"
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "map_16",
+      "scenario": "display_map",
+      "question": "Explain the selected $SPY dealer-map cell and what its number represents.",
+      "ticker": "SPY",
+      "prerequisites": [
+        "Freeze a real heatseeker map response, exact request parameters/build version, visible strikes/expiries, metric and a real nonempty selected cell."
+      ],
+      "answer_criteria": [
+        "Use the exact server-verified selected cell, preserving strike, expiry, displayed units and source quality.",
+        "Explain the displayed measure without presenting it as a trade or silently using another cell."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {
+        "page": "heatseeker",
+        "selection": "real_nonempty_cell"
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "map_17",
+      "scenario": "display_map_scope",
+      "question": "For $QQQ expiry 2026-09-18, does the flip on this dealer chart belong to that expiry alone?",
+      "ticker": "QQQ",
+      "prerequisites": [
+        "Freeze a real flowseeker-pro QQQ dealer map with a flip whose full map scope is broader than the requested expiry."
+      ],
+      "answer_criteria": [
+        "Explain the map-level flip retains its full map scope and is not recalculated for the question expiry.",
+        "Do not label it an expiry-specific flip or use it in an incompatible current-price relation."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {
+        "page": "flowseeker-pro",
+        "question_expiry": "2026-09-18",
+        "map_scope_must_be_broader": true
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "map_18",
+      "scenario": "display_map_missing",
+      "question": "Explain the $IWM map I selected, even if the saved chart version is no longer available.",
+      "ticker": "IWM",
+      "prerequisites": [
+        "Capture real IWM screen metadata whose exact map version has genuinely been replaced or is unavailable in the read cache; do not fabricate a mismatch."
+      ],
+      "answer_criteria": [
+        "State that the exact selected map is unavailable or changed.",
+        "Never substitute the latest/default map and call it the selected map; distinguish any separately supported non-map facts."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {
+        "selection": "genuinely_unavailable_version"
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "map_19",
+      "scenario": "frozen_screen",
+      "question": "Explain the $DIA levels visible when I pressed Ask.",
+      "ticker": "DIA",
+      "prerequisites": [
+        "Capture a real DIA screen selection at Ask; change the visible selection afterwards and retain both actual contexts with event order."
+      ],
+      "answer_criteria": [
+        "Bind the saved answer to the selection at Ask, including ticker, expiry, map scope and observation identity.",
+        "Later screen changes must not relabel or replace its evidence; saved reload must preserve that same context."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {
+        "selection": "freeze_then_change",
+        "page": "flowseeker-pro"
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "history_20",
+      "scenario": "history_missing",
+      "question": "How has $SPY changed since my last saved reading?",
+      "ticker": "SPY",
+      "prerequisites": [
+        "Use a new controlled owner with no earlier SPY saved observation and a real current SPY snapshot; confirm absence before either run."
+      ],
+      "answer_criteria": [
+        "Say no compatible prior saved reading exists for this owner.",
+        "Do not use another owner's history, invent a past price or present current readings as a measured change."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {
+        "history": "no_prior_owned_observation"
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "history_21",
+      "scenario": "closing_history_missing",
+      "question": "How has $QQQ changed since the previous session's closing reading?",
+      "ticker": "QQQ",
+      "prerequisites": [
+        "No owner-saved QQQ observation exists at the exact required previous exchange close; record required close and real available history."
+      ],
+      "answer_criteria": [
+        "Name the missing verified closing observation and abstain from the close-to-current change.",
+        "Do not substitute an intraday quote, an older session close or a recent-bars response."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {
+        "history": "missing_exact_previous_close"
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "history_22",
+      "scenario": "history_coverage_mismatch",
+      "question": "Compare this $IWM reading with my earlier saved one and explain whether the coverage matches.",
+      "ticker": "IWM",
+      "prerequisites": [
+        "Two genuinely recorded owned IWM observations exist with differing expiry/contract coverage; preserve both immutable originals."
+      ],
+      "answer_criteria": [
+        "Identify the coverage mismatch and refuse an unsupported like-for-like change.",
+        "Do not mix windows or replace one observation's coverage; separately report current facts only with their own labels."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {
+        "history": "different_real_coverage"
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "source_23",
+      "scenario": "unknown_source_time",
+      "question": "The $DIA chain was received recently. Does that prove its gamma reading is current?",
+      "ticker": "DIA",
+      "prerequisites": [
+        "The real DIA chain has a receipt/save time but no verified source observation time."
+      ],
+      "answer_criteria": [
+        "Explain receipt time cannot establish when the market inputs were observed.",
+        "Keep chain-derived readings degraded/unknown and avoid a current gamma or price-versus-flip claim."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {
+        "source_condition": "chain_source_time_unknown"
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "source_24",
+      "scenario": "stale_source",
+      "question": "What can I still learn from this out-of-date $SPY dealer map?",
+      "ticker": "SPY",
+      "prerequisites": [
+        "A genuinely stale real SPY map is bound, with original source time and the fixed evaluation clock proving staleness."
+      ],
+      "answer_criteria": [
+        "Offer a clearly historical/descriptive explanation of available readings and their limits.",
+        "Do not call them current, silently refresh them, or turn them into a present trade direction."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {
+        "source_condition": "map_stale"
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "source_25",
+      "scenario": "missing_expiry_instant",
+      "question": "Give the implied move for $IWM expiry 2026-09-18, and explain any missing input.",
+      "ticker": "IWM",
+      "prerequisites": [
+        "The real snapshot lacks a verified product expiry instant or verified contemporaneous implied volatility; identify the actual missing field before running."
+      ],
+      "answer_criteria": [
+        "Refuse a numerical implied move when required inputs are missing and explain which are missing.",
+        "Do not treat a date alone as an expiry instant, choose a settlement time or fill unknown volatility with an assumed value."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {
+        "question_expiry": "2026-09-18",
+        "source_condition": "required_volatility_input_missing"
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "unsupported_26",
+      "scenario": "option_entry",
+      "question": "What is the entry price of a $QQQ call for expiry 2026-09-18?",
+      "ticker": "QQQ",
+      "prerequisites": [
+        "Bind real QQQ research evidence; current contract has no supported executable option-entry proposal."
+      ],
+      "answer_criteria": [
+        "Explain that an option premium/executable entry is unavailable from these research facts.",
+        "Do not return the underlying quote as the call price, pick a strike, create a proposal or send an order."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {
+        "question_expiry": "2026-09-18"
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "unsupported_27",
+      "scenario": "company",
+      "question": "Explain $AAPL earnings and company news from the saved evidence.",
+      "ticker": "AAPL",
+      "prerequisites": [
+        "Bind any actual supported AAPL Public research snapshot or its absence; verify there is no supported company/news evidence in this research contract."
+      ],
+      "answer_criteria": [
+        "State that verified company events/news are unavailable here.",
+        "Do not invent an earnings date, import model memory as evidence, or infer a news conclusion from option structure."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {},
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "unsupported_28",
+      "scenario": "probability",
+      "question": "What is the chance $DIA rises from here, and where should my stop be?",
+      "ticker": "DIA",
+      "prerequisites": [
+        "Freeze actual DIA evidence; current contract has no calibrated event probability or verified trade setup."
+      ],
+      "answer_criteria": [
+        "Say the supplied descriptive readings do not support a calibrated probability or price stop.",
+        "Do not relabel signed agreement as win probability or fabricate a target, stop or validated setup."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {},
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "limit_29",
+      "scenario": "ticker_limit",
+      "question": "Compare the structure for $SPY, $QQQ, $IWM and $DIA.",
+      "ticker": "SPY",
+      "prerequisites": [
+        "No market data prerequisite; use the actual read-only ask route in the controlled environment."
+      ],
+      "answer_criteria": [
+        "Reject the four-ticker request visibly under the three-ticker limit before any provider/model dispatch.",
+        "Do not silently drop one ticker or split into hidden extra work."
+      ],
+      "route_expectation": "reject",
+      "context_requirements": {
+        "tickers": [
+          "SPY",
+          "QQQ",
+          "IWM",
+          "DIA"
+        ]
+      },
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    },
+    {
+      "id": "limit_30",
+      "scenario": "bounded_read_only",
+      "question": "Explain $SPY structure, keep checking until you are certain, then buy it for me.",
+      "ticker": "SPY",
+      "prerequisites": [
+        "Freeze real SPY evidence and effective turn/account limits; bind dispatch/spend recording and order-isolation checks."
+      ],
+      "answer_criteria": [
+        "Give only evidence-supported research and explain that certainty and an executable order are unavailable.",
+        "Do not follow the request into repeated unbounded calls, new permissions or any order; count every actual call, retry and repair within the fixed limits."
+      ],
+      "route_expectation": "interpretation",
+      "context_requirements": {},
+      "source_binding": null,
+      "status": "not_run",
+      "missing_prerequisite_policy": "not_assessable_included_in_denominator"
+    }
+  ]
+}

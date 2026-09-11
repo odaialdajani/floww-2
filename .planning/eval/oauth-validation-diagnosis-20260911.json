@@ -1,0 +1,71 @@
+{
+  "result": {
+    "status": "ok",
+    "name": "research_answer",
+    "data": {
+      "relationships": [
+        {
+          "kind": "below",
+          "fact_id": "evcf8ff9aa4ec27359e0cc12308d6aa9247fdf6148f16fe84cce6f0d202c703bd3",
+          "other_fact_id": "ev041b18832895e63043be76bbb47d2695d76af85f0a1fe94336a844e05b22066f"
+        }
+      ],
+      "sections": [
+        {
+          "name": "Market",
+          "fact_ids": [
+            "evcf8ff9aa4ec27359e0cc12308d6aa9247fdf6148f16fe84cce6f0d202c703bd3"
+          ],
+          "interpretation": "descriptive"
+        },
+        {
+          "name": "Structure",
+          "fact_ids": [
+            "ev041b18832895e63043be76bbb47d2695d76af85f0a1fe94336a844e05b22066f",
+            "ev1881e4cc550598e9c58797db0d807c1a21d95a3fa0cf7f1852c552bc43df7609",
+            "ev777568166a74a4fbf8ae263b49b9504535b942788fd0f256fd63fa4f7a8690ab",
+            "ev563507fcbf71a04257c75f97a6448ec238a3d70211c2f6bde53b0e0fad11d2a9"
+          ],
+          "interpretation": "limited"
+        },
+        {
+          "name": "Flow",
+          "fact_ids": [
+            "ev3956cabed4a97dceee0753c12daca8233bb63de3ab7ae51b2d017d6441b0cebc",
+            "evd0707090036af3f84f20c5320b6786636e9c553a83ed5e39309f56623a6b24e1"
+          ],
+          "interpretation": "limited"
+        }
+      ]
+    },
+    "model": "gpt-5.6-terra",
+    "effort": "medium",
+    "speed": "default",
+    "provider": "ChatGPT login",
+    "accounting": "subscription_usage",
+    "actual_cost": null,
+    "policy_version": "chatgpt-research-2026-09-11",
+    "reservation_id": "e4d33185-4719-44ad-a803-33659e7bc830",
+    "tokens": {
+      "total": {
+        "totalTokens": 16488,
+        "inputTokens": 15888,
+        "cachedInputTokens": 0,
+        "cacheWriteInputTokens": 0,
+        "outputTokens": 600,
+        "reasoningOutputTokens": 178
+      },
+      "last": {
+        "totalTokens": 16488,
+        "inputTokens": 15888,
+        "cachedInputTokens": 0,
+        "cacheWriteInputTokens": 0,
+        "outputTokens": 600,
+        "reasoningOutputTokens": 178
+      },
+      "modelContextWindow": 258400
+    },
+    "generation_id": "01a0922d-4187-7932-ad69-4e3cf36f589e"
+  },
+  "validation": "Comparison needs healthy scalar evidence"
+}
