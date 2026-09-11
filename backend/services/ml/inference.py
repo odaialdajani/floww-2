@@ -447,7 +447,8 @@ class InferenceEngine:
         if not os.path.exists(model_path):
             raise DegenerateModelError(f"Model artifact not found: {model_path}")
 
-        artifact = joblib.load(model_path)
+        from services.ml.artifact_paths import resolve_artifact_path
+        artifact = joblib.load(resolve_artifact_path(model_path))
 
         if isinstance(artifact, dict):
             model = artifact["model"]

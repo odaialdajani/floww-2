@@ -4,6 +4,46 @@ import pytest
 pytestmark = pytest.mark.asyncio
 
 
+def install_offline_market(monkeypatch):
+    """Supply deterministic provider inputs while exercising real route calculations."""
+    from datetime import UTC, datetime, timedelta
+    from unittest.mock import AsyncMock
+
+    import routes.analytics as analytics
+    import server
+
+    async def chain(ticker, max_expiries=4, *args, **kwargs):
+        now = datetime.now(UTC)
+        expiries = [(now + timedelta(days=7 * (i + 1))).date().isoformat()
+                    for i in range(max_expiries)]
+        spot = 5000.0 if ticker == "^SPX" else 500.0
+        contracts = [{"strike": spot * (1 + j / 100), "type": kind,
+                      "expiry": expiry, "T": 7 * (i + 1) / 365,
+                      "oi": 1000 + j * 10, "volume": 100, "iv": 0.2,
+                      "gamma": 0.02, "delta": 0.5 if kind == "call" else -0.5,
+                      "bid": 4.9, "ask": 5.1}
+                     for i, expiry in enumerate(expiries)
+                     for j in range(-25, 26) for kind in ("call", "put")]
+        return {"ticker": ticker, "spot": spot, "contracts": contracts,
+                "expiries": expiries, "data_source": "yfinance",
+                "spot_source": "yfinance", "event_time": now.isoformat(),
+                "spot_event_time": now.isoformat(), "fetched_at": now.isoformat()}
+
+    monkeypatch.setattr(server, "fetch_spot_and_chains_merged", chain)
+    monkeypatch.setattr(analytics._cache, "get_chain", chain)
+    monkeypatch.setattr(server, "_BUILD_HEATMAP_CACHE", {})
+    monkeypatch.setattr(server, "tap_counts", AsyncMock(return_value={}))
+    monkeypatch.setattr(server, "_fetch_movers_sync", lambda: [])
+    monkeypatch.setattr(server, "calc_realized_volatility", lambda *a, **k: {})
+    monkeypatch.setattr(server, "calc_iv_rank_percentile", lambda *a, **k: {})
+    monkeypatch.setattr(server, "velocity_and_rolling", AsyncMock(return_value={}))
+
+
+@pytest.fixture(autouse=True)
+def offline_market(monkeypatch):
+    install_offline_market(monkeypatch)
+
+
 # --- Grid + data_source on heatmap SPY day ---
 @pytest.mark.flaky_env
 async def test_heatmap_spy_day_grid(aclient):

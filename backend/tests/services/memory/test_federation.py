@@ -93,6 +93,18 @@ class TestFederationEvent:
 
 
 class TestFileBasedFederationQueue:
+    def test_boundary_events_and_limited_poll_keep_time_order(self, tmp_queue_dir):
+        queue = FileBasedFederationQueue(queue_dir=tmp_queue_dir)
+        for index, stamp in enumerate((1002.0, 1000.0, 1001.0, 1000.0)):
+            queue.publish(FederationEvent("remote", str(index), "write", "value", stamp))
+        first = queue.poll(since_ts=1000.0, limit=2)
+        assert [event.timestamp_utc for event in first] == [1000.0, 1000.0]
+        for event in first:
+            queue.mark_processed(event)
+        assert queue.processed_dir == tmp_queue_dir / "processed"
+        assert len(list(queue.processed_dir.glob("*.json"))) == 2
+        assert [event.timestamp_utc for event in queue.poll(since_ts=1000.0)] == [1001.0, 1002.0]
+
     def test_publish_and_poll(self, tmp_queue_dir):
         queue = FileBasedFederationQueue(queue_dir=tmp_queue_dir)
         event = FederationEvent(

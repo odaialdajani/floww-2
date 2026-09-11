@@ -75,6 +75,12 @@ function safeJSON(text) {
 
 // Parse one raw feed row: key_levels_json + context_json were never parsed by
 // the old UI. Returns the row with .levels + .context attached (null-safe).
+function readableAlertText(value) {
+  if (typeof value !== "string") return value;
+  return value.replace(/â€”/g, "—").replace(/â€“/g, "–")
+    .replace(/â‰¥/g, "≥").replace(/â‰¤/g, "≤")
+    .replace(/أ—|Ã—/g, "×").replace(/Â±/g, "±").replace(/â†’/g, "→");
+}
 export function parseAlert(a) {
   if (!a) return a;
   const raw = safeJSON(a.context_json) || safeJSON(a.context);
@@ -85,13 +91,14 @@ export function parseAlert(a) {
       .map(([key,value])=>[key,Number(value)])) : null;
   const context = raw && typeof raw === "object" && !Array.isArray(raw) ? {
     ...raw,
-    activity_summary: typeof raw.activity_summary === "string" ? raw.activity_summary : null,
-    dealer_positioning: typeof raw.dealer_positioning === "string" ? raw.dealer_positioning : null,
+    activity_summary: typeof raw.activity_summary === "string" ? readableAlertText(raw.activity_summary) : null,
+    dealer_positioning: typeof raw.dealer_positioning === "string" ? readableAlertText(raw.dealer_positioning) : null,
     institutional_indicators: Array.isArray(raw.institutional_indicators)
-      ? raw.institutional_indicators.filter(item => typeof item === "string").slice(0, 12) : [],
+      ? raw.institutional_indicators.filter(item => typeof item === "string").slice(0, 12).map(readableAlertText) : [],
   } : null;
   return {
     ...a,
+    why: readableAlertText(a.why),
     levels,
     context,
   };

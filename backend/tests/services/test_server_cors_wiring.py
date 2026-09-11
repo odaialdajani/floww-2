@@ -259,11 +259,9 @@ class TestGlobalExceptionHandlerPayloadRedaction:
         backend_dir = repo_root / "backend"
 
         env = {
-            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin",
+            **_SUBPROCESS_MIN_ENV,
             "PYTHONPATH": str(backend_dir),
             "HOME": str(Path.home()),
-            "API_SECRET_KEY": "test-secret-key",
-            "FLOWW_ENABLE_LIVE_SCHWAB": "0",
             # ENVIRONMENT drives _is_prod/_is_staging (top-of-file helper) AND the
             # CORS config block (server.py ~L2500+).  ENV also so the helper's
             # `os.getenv(ENVIRONMENT) or os.getenv(ENV)` fallback resolves to prod.

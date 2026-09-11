@@ -12,6 +12,12 @@ import pytest
 pytestmark = pytest.mark.asyncio
 
 
+@pytest.fixture(autouse=True)
+def offline_market(monkeypatch):
+    from tests.test_heatseeker_v2 import install_offline_market
+    install_offline_market(monkeypatch)
+
+
 # --- /api/databento/usage shape ---
 async def test_databento_usage_v3_shape(aclient):
     r = await aclient.get("/api/databento/usage")

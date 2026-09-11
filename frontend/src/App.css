@@ -4155,7 +4155,8 @@ input[class*="bg-slate-800"], select[class*="bg-slate-800"], textarea[class*="bg
   border-color: rgba(255,255,255,0.09) !important;
 }
 
-.lodestar-open { position:fixed;right:18px;bottom:18px;z-index:50;background:#22262d;color:#d2d6dd;border:1px solid #495160;border-radius:8px;padding:10px 16px;box-shadow:0 4px 20px #0005; }
+.lodestar-open { position:fixed;right:18px;bottom:18px;z-index:1100;background:#22262d;color:#d2d6dd;border:1px solid #495160;border-radius:8px;padding:10px 16px;box-shadow:0 4px 20px #0005; }
+@media (max-width: 768px) { .lodestar-open { bottom:calc(64px + env(safe-area-inset-bottom)); } }
 .lodestar-open small {display:block;font-size:10px;color:#98a3b4;}
 .lodestar-backdrop {position:fixed;inset:0;z-index:1199;background:#0004;}
 .lodestar-panel {position:fixed;right:0;top:0;bottom:0;z-index:1200;width:min(480px,100vw);padding:22px;background:#1b1e24;color:#c5ccd6;border-left:1px solid #444c59;overflow:auto;box-shadow:-8px 0 36px #0005;}

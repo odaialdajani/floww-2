@@ -48,6 +48,8 @@ class FakeClient:
 
 @pytest.fixture(autouse=True)
 def reset(monkeypatch):
+    # This suite exercises the retained CVForge cache/backoff path explicitly.
+    monkeypatch.setenv("FLOWW_MARKET_DATA_PROVIDER", "legacy")
     monkeypatch.setattr(fs, "CVFORGE_API_KEY", "test-key")
     monkeypatch.setattr(fs.httpx, "AsyncClient", FakeClient)
     # Stub the regimes lookup: its deferred `import server` drags the whole app

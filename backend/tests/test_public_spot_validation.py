@@ -87,7 +87,8 @@ def test_last_us_close_weekday():
 
 
 @pytest.mark.asyncio
-async def test_resolve_spot_falls_back_to_yfinance():
+async def test_resolve_spot_falls_back_to_yfinance(monkeypatch):
+    monkeypatch.setenv("FLOWW_MARKET_DATA_PROVIDER", "legacy")
     from services import public_api_adapter as adapter
     broker = MagicMock()
     broker.get_quotes = AsyncMock(return_value=[
@@ -96,6 +97,19 @@ async def test_resolve_spot_falls_back_to_yfinance():
         spot, source = await adapter._resolve_spot(broker, "AFRM", "ACCT")
     assert spot == pytest.approx(72.35)
     assert source == "yfinance-fallback"
+
+
+@pytest.mark.asyncio
+async def test_public_only_rejects_stale_spot_without_alternate_fetch(monkeypatch):
+    from services import public_api_adapter as adapter
+    monkeypatch.setenv("FLOWW_MARKET_DATA_PROVIDER", "public")
+    broker = MagicMock()
+    broker.get_quotes = AsyncMock(return_value=[
+        _q(symbol="AFRM", last=74.5, bid=74.41, ask=89.0, timestamp=FRI_AM)])
+    with patch.object(adapter, "_yfinance_spot") as fallback:
+        spot, source = await adapter._resolve_spot(broker, "AFRM", "ACCT", now=SUN)
+    assert spot is None and source == "public-unavailable"
+    fallback.assert_not_called()
 
 
 @pytest.mark.asyncio

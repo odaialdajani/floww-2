@@ -81,7 +81,7 @@ class FileBasedFederationQueue:
 
     def __init__(self, queue_dir: Path = FEDERATION_QUEUE_DIR):
         self.queue_dir = queue_dir
-        self.processed_dir = FEDERATION_PROCESSED_DIR
+        self.processed_dir = self.queue_dir / "processed"
         self.queue_dir.mkdir(parents=True, exist_ok=True)
         self.processed_dir.mkdir(parents=True, exist_ok=True)
 
@@ -97,13 +97,13 @@ class FileBasedFederationQueue:
         for event_file in sorted(self.queue_dir.glob("*.json")):
             try:
                 data = json.loads(event_file.read_text())
-                if data["timestamp_utc"] > since_ts:
+                if data["timestamp_utc"] >= since_ts:
                     events.append(FederationEvent.from_dict(data))
             except (json.JSONDecodeError, KeyError):
                 continue
-            if len(events) >= limit:
-                break
-        return events
+        # Files are named by hashes, so filename order cannot advance a time
+        # cursor safely. Include its boundary for events arriving in one tick.
+        return sorted(events, key=lambda event: (event.timestamp_utc, event.event_id))[:limit]
 
     def mark_processed(self, event: FederationEvent):
         """Mark an event as processed."""
