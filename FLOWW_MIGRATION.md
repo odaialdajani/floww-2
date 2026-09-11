@@ -41,3 +41,30 @@ receive no commits, merges, or pushes ever again.**
 confluence-decoder-start.sh, 4 LaunchAgent WorkingDirectories, hermes cron
 jobs.json, skill-bundle canonical repo, `.claude` trust + allowlist — all now
 point at `/Users/nav/Documents/GitHub/floww-2`.
+
+## Parked: ex-floww issue #8 (reopen as a floww-2 issue once Issues are enabled)
+
+floww-2 currently has GitHub Issues disabled (needs the `odaialdajani`
+owner). Until then, this spec lives here. Original:
+`mrbeast1179-sketch/floww#8` (labels were `gsd:ready`, `gsd:blocked`;
+both labels pre-created in floww-2).
+
+Title: heatseeker X chatter card via xurl search (needs X API credits)
+
+Why: the heatseeker tab has no social-signal surface; show X chatter about
+the watched ticker alongside the quantitative panels. xurl CLI installed and
+authed; only X API credits block it (402 credits-depleted as of 2026-08-25).
+
+Outcomes:
+- O-1 — backend route GET /api/heatseeker/x-chatter/{ticker} via xurl search,
+  normalized posts {author, text, url, posted_at, engagement}
+- O-2 — 10-minute server-cache so polls don't burn credits
+- O-3 — HeatseekerDashboard lazy "X Chatter" card, silently hidden on
+  credits/402 errors
+
+Exclusions: no X writes; no sentiment/LLM scoring (deferred); briefing strip,
+charm panel, signal cards untouched.
+
+Pointers: BriefingStrip.jsx (card pattern), server.py SWR cache-key
+convention, useHeatseeker.js (fetch hook). Tests: normalizer incl. malformed
+frames; cache single-upstream assertion.
