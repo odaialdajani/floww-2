@@ -504,6 +504,7 @@ async def _fetch_chain_live(
         "expiries": exp_dates,
         "contracts": contracts,
         "data_source": "public_api",
+        "fetched_at": datetime.now(UTC).isoformat(),
     }
 
 

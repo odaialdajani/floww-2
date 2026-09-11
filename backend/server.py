@@ -1265,6 +1265,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         "data_source": raw.get("data_source", "yfinance"),
         "mode": mode,
         "asof": datetime.now(UTC).isoformat(),
+        "fetched_at": raw.get("fetched_at") or datetime.now(UTC).isoformat(),
         # New analytics
         "implied_move": implied_move,
         "prob_distribution": prob_distribution,

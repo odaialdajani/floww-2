@@ -108,6 +108,11 @@ def costed_hit_rate_enveloped(envelopes, *, win=1.0, loss=1.0, cost=0.0,
 
     Filters to point-in-time-complete envelopes before scoring. Rows missing
     event_time are excluded; no timestamp is fabricated.
+
+    IMPORTANT: this function is infrastructure-only. callers must opt in by
+    using costed_hit_rate_enveloped rather than raw costed_hit_rate; the
+    unfiltered function remains available for legacy script paths that
+    supply already-validated rows.
     """
     preds, actuals = pit_filter(envelopes, pred_key=pred_key, actual_key=actual_key)
     if not preds:
