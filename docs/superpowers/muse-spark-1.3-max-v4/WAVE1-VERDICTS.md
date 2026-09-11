@@ -79,6 +79,13 @@ Needs main-update + CI at merged head, then merge.
 
 ## Integration order (disjoint payloads, branch protection needs fresh base)
 
-PR59 -> PR60 -> PR58 -> PR61 -> PR62 -> PR63, each: merge main
-(fast-forward push, no force, never touching lane worktrees) -> green CI
-at merged head -> merge. PR57 needs a repair push first.
+## Integration order (disjoint payloads, branch protection needs fresh base)
+
+PR57 already GC'd before this receipt landed; Agent 2 must publish the
+main-merged head first. PR58 (withdrawn by tool state) is behind. PR59
+merged via 43fa666, PR60 merged via 2c33de0. PR61/62/63 remote heads
+already main-merged (verified hashes below); pushing them myself risks a
+second-thread race with owning worktrees.
+
+Next: publish the 57 main-merge outbound, then merge 57, 58, 61, 62, 63
+in that order as each reaches clean exact-head CI.
