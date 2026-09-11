@@ -1,0 +1,100 @@
+{
+ "_note": "Dark pool levels, FINRA/Reg SHO context, missing-field states. All copy per dark-pool-methodology.md.",
+ "dark_pool_levels": [
+  {
+   "cluster_price": 752.4,
+   "total_notional": 2200000000,
+   "print_count": 14,
+   "latest_date": "2026-05-15",
+   "sector": "ETF",
+   "days_since_last": 110,
+   "expected": {
+    "label": "DP $2.2B \u00b7 2026-05-15",
+    "forbidden": [
+     "side",
+     "direction",
+     "bullish",
+     "bearish"
+    ],
+    "footer": "Unsigned prints: activity and venue mix only \u2014 no buy/sell inference"
+   }
+  }
+ ],
+ "finra_context": {
+  "ticker": "SPY",
+  "week_ending": "2026-08-28",
+  "off_exchange_share_pct": 42,
+  "prior_week_pct": 30,
+  "delay_stamp": "data as of W ending 2026-08-28, published with delay",
+  "expected": {
+   "copy": "off-exchange share = 42% (venue mix, no direction)"
+  }
+ },
+ "reg_sho_context": {
+  "ticker": "GME-like",
+  "date": "2026-09-02",
+  "short_volume": 5000000,
+  "total_volume": 12000000,
+  "expected": {
+   "short_ratio": 0.4167,
+   "copy": "settlement/positioning context, never direction of today's prints"
+  }
+ },
+ "missing_field_states": [
+  {
+   "field": "SIDE",
+   "expected": "score UNAVAILABLE + no-quote state"
+  },
+  {
+   "field": "OI",
+   "expected": "|score| capped at 50 + DEGRADED"
+  },
+  {
+   "field": "IV",
+   "expected": "IV component omitted + rescale + DEGRADED"
+  },
+  {
+   "field": "RVOL baseline",
+   "expected": "honest-empty 'needs baseline', never fake 1.0"
+  },
+  {
+   "field": "earnings",
+   "expected": "dash, not zero"
+  },
+  {
+   "field": "sector",
+   "expected": "Unknown bucket"
+  },
+  {
+   "field": "deltaOI",
+   "expected": "dash + stale/unavailable tooltip"
+  },
+  {
+   "field": "dark prints",
+   "expected": "empty state + paid-gate note for real-time TRF"
+  },
+  {
+   "field": "retail imbalance (unsigned only)",
+   "expected": "'NOT computable here \u2014 requires signed subpenny TAQ imbalance', no arrow"
+  }
+ ],
+ "briefing_propagation_V16": {
+  "_note": "crash prob served wholesale via briefing API",
+  "route": "GET /api/briefing/{ticker} returns metrics wholesale (morning_briefing_api.py:160,194)",
+  "payload_field": "metrics.flash_crash_risk.crash_probability_estimate",
+  "expected_after_fix": "field absent; fragility tag only"
+ },
+ "phantom_charm_V6": {
+  "_note": "fabricated citation must not appear in docs/copy",
+  "banned_strings": [
+   "Charming! Retail Option Volume",
+   "SSRN 5054370",
+   "Ni-Pearson 2021 Charm"
+  ],
+  "locations": [
+   "backend/services/gex_paper_accurate.py:1005-1007",
+   "backend/services/morning_briefing.py:750"
+  ],
+  "expected_after_fix": "all banned strings absent repo-wide"
+ }
+}

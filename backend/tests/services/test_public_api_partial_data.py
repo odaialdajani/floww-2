@@ -5,6 +5,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _isolated_public_budget_singleton():
+    # D1: the adapter debits the shared budget singleton per C8, so each
+    # test starts from a full bucket; otherwise module order decides
+    # who exhausts whom.
+    from services.public_budget import budget
+
+    budget.reset()
+    yield
+    budget.reset()
+
+
 @pytest.mark.asyncio
 async def test_partial_expiry_failure_keeps_successful_contracts() -> None:
     from services.public_api_adapter import fetch_chain_from_public_api
@@ -34,7 +46,8 @@ async def test_partial_expiry_failure_keeps_successful_contracts() -> None:
         result = await fetch_chain_from_public_api("SPY")
 
     assert result is not None
-    assert result["expiries"] == ["2026-09-18", "2026-10-16"]
+    # D4: returned coverage lists only fetched expiries (failed expiry excluded)
+    assert result["expiries"] == ["2026-09-18"]
     assert len(result["contracts"]) == 1
 
 

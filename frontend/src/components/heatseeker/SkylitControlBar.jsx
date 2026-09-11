@@ -1,4 +1,6 @@
-import React, { memo, useState, useEffect } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { TICKER_SETS } from "./SkylitTickerBar";
+import { buildTickerUniverse, stepIndex } from "./tickerUniverse";
 
 /**
  * SkylitControlBar — Second header bar with GEX/VEX tabs, LIVE badge,
@@ -23,12 +25,65 @@ function SkylitControlBar({
   onRefresh,
   expiries = 4,
   onExpiriesChange,
+  // Optional: open the full-page grid overlay (wired by SkylitDashboard;
+  // frozen App.js call sites omit it and the button degrades to a no-op).
+  onExpand,
+  // Optional ticker cycling for the prev/next arrows (2026-09-03).
+  // T1 (2026-09-07): arrows traverse the same deduped universe as the bar;
+  // open-universe tickers wrap from the boundary (pinned by tests).
+  onTickerChange,
+  tickers = null,
+  // Auto-refresh cadence while Playback is armed.
+  playbackIntervalMs = 15000,
 }) {
   const [now, setNow] = useState(new Date());
+  // Playback (2026-09-03): arms interval refresh via onRefresh.
+  const [playing, setPlaying] = useState(false);
+  // Share feedback (2026-09-03): transient "Copied" label.
+  const [copied, setCopied] = useState(false);
+  // Info popover (2026-09-03): the ⓘ button now explains the grid
+  // instead of sitting decorative.
+  const [showInfo, setShowInfo] = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (!playing) return undefined;
+    const id = setInterval(() => { if (onRefresh) onRefresh(); }, playbackIntervalMs);
+    return () => clearInterval(id);
+  }, [playing, onRefresh, playbackIntervalMs]);
+
+  // T1 contract: same deduped universe as the ticker bar (object, array, or
+  // null shape); position denominator and arrows agree with buttons/count.
+  const tickerList = useMemo(() => {
+    const u = buildTickerUniverse(tickers);
+    return u.length > 0 ? u : TICKER_SETS.popular;
+  }, [tickers]);
+  const tickerPos = useMemo(() => {
+    if (tickerList.length === 0) return null;
+    const idx = tickerList.indexOf(ticker);
+    return idx === -1 ? null : idx + 1;
+  }, [tickerList, ticker]);
+  const stepTicker = useCallback((dir) => {
+    if (!onTickerChange) return;
+    if (tickerList.length === 0) return;
+    const next = tickerList[stepIndex(tickerList, ticker, dir)];
+    if (next) onTickerChange(next);
+  }, [onTickerChange, tickerList, ticker]);
+
+  const handleShare = useCallback(async () => {    const url = typeof window !== "undefined" ? window.location.href : "";
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (_) {
+      setCopied(false);
+    }
   }, []);
 
   const timeStr = now.toLocaleTimeString("en-US", {
@@ -66,17 +121,39 @@ function SkylitControlBar({
           </svg>
           VEX
         </button>
-        <button className="skylit-info-btn" title="Info">
+        <button
+          className="skylit-info-btn"
+          title="How to read this grid"
+          onClick={() => setShowInfo(!showInfo)}
+          data-testid="skylit-info-btn"
+        >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="10" />
             <path d="M12 16v-4" /><path d="M12 8h.01" />
           </svg>
         </button>
+        {showInfo && (
+          <div
+            className="skylit-info-popover"
+            data-testid="skylit-info-popover"
+            onClick={() => setShowInfo(false)}
+          >
+            <div><b>GEX</b> — gold/teal cells: dealer gamma walls (King ★ = max).</div>
+            <div><b>VEX</b> — blue/purple cells: vanna exposure regime.</div>
+            <div>Click a cell to inspect it · arm <b>Trade</b> to open Quick Trade.</div>
+            <div>Data: Public.com live chain → cvserver → yfinance.</div>
+          </div>
+        )}
       </div>
 
       {/* Center: Ticker + Price + Timeframe */}
       <div className="skylit-control-center">
-        <button className="skylit-nav-arrow" title="Previous ticker">
+        <button
+          className="skylit-nav-arrow"
+          title="Previous ticker"
+          onClick={() => stepTicker(-1)}
+          data-testid="skylit-prev-ticker"
+        >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <polyline points="15 18 9 12 15 6" />
           </svg>
@@ -85,6 +162,9 @@ function SkylitControlBar({
         <div className="skylit-ticker-display">
           <span className="skylit-ticker-name">{ticker}</span>
           {isLive && <span className="skylit-live-dot" />}
+          {tickerPos != null && tickerList.length > 0 && (
+            <span className="skylit-ticker-pos">{tickerPos}/{tickerList.length}</span>
+          )}
         </div>
 
         <div className="skylit-price-display">
@@ -96,7 +176,12 @@ function SkylitControlBar({
           )}
         </div>
 
-        <button className="skylit-nav-arrow" title="Next ticker">
+        <button
+          className="skylit-nav-arrow"
+          title="Next ticker"
+          onClick={() => stepTicker(1)}
+          data-testid="skylit-next-ticker"
+        >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <polyline points="9 18 15 12 9 6" />
           </svg>
@@ -146,12 +231,26 @@ function SkylitControlBar({
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
           </svg>
         </button>
-        <button className="skylit-action-btn" title="Playback">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polygon points="5 3 19 12 5 21 5 3" />
+        <button
+          className={`skylit-action-btn${playing ? " active" : ""}`}
+          title={playing ? "Playback on — auto-refreshing" : "Playback"}
+          onClick={() => setPlaying(!playing)}
+          data-testid="skylit-playback-btn"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill={playing ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+            {playing ? (
+              <><rect x="5" y="4" width="4" height="16" /><rect x="15" y="4" width="4" height="16" /></>
+            ) : (
+              <polygon points="5 3 19 12 5 21 5 3" />
+            )}
           </svg>
         </button>
-        <button className="skylit-action-btn" title="View options">
+        <button
+          className="skylit-action-btn"
+          title="Expand grid full-screen"
+          onClick={() => { if (onExpand) onExpand(); }}
+          data-testid="skylit-expand-toolbar-btn"
+        >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <rect x="3" y="3" width="7" height="7" />
             <rect x="14" y="3" width="7" height="7" />
@@ -159,11 +258,20 @@ function SkylitControlBar({
             <rect x="14" y="14" width="7" height="7" />
           </svg>
         </button>
-        <button className="skylit-action-btn" title="Share">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-          </svg>
+        <button
+          className="skylit-action-btn"
+          title={copied ? "Copied!" : "Share"}
+          onClick={handleShare}
+          data-testid="skylit-share-btn"
+        >
+          {copied ? (
+            <span style={{ fontSize: 10, fontWeight: 700 }}>✓</span>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+            </svg>
+          )}
         </button>
       </div>
     </div>

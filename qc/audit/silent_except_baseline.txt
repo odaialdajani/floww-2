@@ -1,0 +1,41 @@
+routes/alerts.py:get_alerts_summary:(ValueError, AttributeError)#1
+routes/data_providers.py:get_data_health:Exception#1
+routes/flowseeker.py:_load_calibration:Exception#1
+routes/flowseeker.py:_load_outcomes:Exception#1
+routes/steal_three.py:risk_neutral_density_endpoint:ValueError#1
+server.py:_scheduler_loop:Exception#1
+server.py:fetch_spot_and_chains_merged:Exception#1
+server.py:fetch_spot_and_chains_merged:Exception#2
+server.py:fetch_spot_and_chains_merged:Exception#3
+server.py:fetch_spot_and_chains_merged:Exception#4
+server.py:fetch_spot_and_chains_merged:Exception#5
+server.py:fetch_spot_and_chains_merged:Exception#6
+server.py:fetch_spot_and_chains_merged:Exception#7
+server.py:fetch_spot_and_chains_merged:Exception#8
+server.py:fetch_spot_and_chains_merged:Exception#9
+server.py:on_stop:asyncio.CancelledError#1
+server.py:provider_health:Exception#1
+services/alerts/engine.py:AlertEngine._resolve_value:ValueError#1
+services/contract_validators.py:Quarantine.submit:Exception#1
+services/contract_validators.py:Quarantine.submit:Exception#2
+services/fill_monitor.py:FillMonitor.record_fill:Exception#1
+services/flow_alerts.py:apply_quote_truth:(TypeError, ValueError)#1
+services/flow_desk.py:apply_earnings_protocol:(TypeError, ValueError, KeyError)#1
+services/gex_term_structure.py:compute_gex_term_structure:Exception#1
+services/ingestion_pipeline.py:IngestionPipeline._enqueue:asyncio.QueueEmpty#1
+services/insider_scraper.py:_parse_date:ValueError#1
+services/insider_scraper.py:_parse_date:ValueError#2
+services/insider_scraper.py:_parse_date:ValueError#3
+services/kanban/bottleneck.py:compute_agent_metrics:(ValueError, TypeError)#1
+services/memory/code_embeddings.py:extract_python_chunks:SyntaxError#1
+services/morning_briefing.py:_outcome_ledger_metrics:Exception#1
+services/public_api_adapter.py:_get_broker:Exception#1
+services/public_api_adapter.py:_note_public_429:Exception#1
+services/public_api_adapter.py:_note_public_429:Exception#2
+services/public_api_adapter.py:fetch_chain_from_public_api:Exception#1
+services/public_scanner.py:_contract_mid:(TypeError, ValueError)#1
+services/replay_engine.py:ReplayEngine.start:asyncio.CancelledError#1
+services/squeeze_exposure_profile.py:_open_interest:(TypeError, ValueError)#1
+services/sweep_watch.py:note_sweep:Exception#1
+services/tier_lock.py:_tier_window_wins:(TypeError, ValueError)#1
+services/vpin_cdf.py:VpinCdfCalculator._persist:RuntimeError#1

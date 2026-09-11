@@ -16,6 +16,7 @@ Families:
 import pytest
 
 from services.flow_alerts import (
+    DEFAULT_EVAL_OPTS,
     alert_quality,
     alert_quality_daily,
     eval_institutional,
@@ -24,6 +25,23 @@ from services.flow_alerts import (
     persist_alerts,
     update_moves,
 )
+
+
+def test_default_gate_matches_noise_pass():
+    """Pin the production alert gates in exactly one place.
+
+    2026-09-02 institutional noise pass (SCORE 85→92, WHALE $10M→$25M,
+    SIGMA 3.0→6.0, mirroring the frontend DEFAULT_RULES). Logic tests
+    pass explicit opts so a deliberate gate change breaks HERE (loud,
+    intentional) instead of surfacing as four mysterious fixture failures.
+    """
+    assert DEFAULT_EVAL_OPTS["min_score"] == 92
+    assert DEFAULT_EVAL_OPTS["whale_premium"] == 25e6
+    # 0DTE parity with the frontend tape (zeroDteScore=85 + volOI>=2 lotto
+    # shutout) — server must not fire where the tape stays silent.
+    assert DEFAULT_EVAL_OPTS["zero_dte_score"] == 85
+    assert DEFAULT_EVAL_OPTS["zero_dte_vol_oi"] == 2.0
+    assert DEFAULT_EVAL_OPTS["sigma_min"] == 6.0
 from services.flow_quality import (
     bh_fdr,
     cluster_biases,
@@ -371,9 +389,10 @@ def test_eval_does_not_stamp_cluster_for_two_legs():
         _raw(under="PLTR", occ="O:1", strike=138.0, exp=exp, vol=60000, oi=1500, delta=0.35),
         _raw(under="PLTR", occ="O:2", strike=142.0, exp=exp, vol=12000, oi=1300, delta=0.30),
     ])
-    for r in rows:
-        r["_score"] = 90
-    alerts = eval_institutional(rows)
+    # Gate is min_score=92 (institutional noise pass raised it from 85).
+    # This test pins CLUSTER-threshold logic, not the gate value (pinned
+    # once in test_default_gate_matches_noise_pass), so it runs below gate.
+    alerts = eval_institutional(rows, opts={"min_score": 80})
     pltr_alerts = [a for a in alerts if a["under"] == "PLTR"]
     assert pltr_alerts, "PLTR should fire on score"
     assert all(a["cluster"] is False for a in pltr_alerts), \
@@ -656,7 +675,9 @@ def test_alert_quality_daily_excludes_directionless_strategic_rows(fresh_engine)
         _raw(under="AMD", occ="O:DEMO_A1", strike=150.0, exp=exp, vol=5000, oi=800, delta=0.30, spot=150.0),
         _raw(under="AMD", occ="O:DEMO_A2", strike=155.0, exp=exp, vol=5200, oi=700, delta=0.25, spot=155.0),
     ])
-    alerts = eval_institutional(rows)
+    # Logic under test is spread-demotion, not the production gate
+    # (pinned once in test_default_gate_matches_noise_pass).
+    alerts = eval_institutional(rows, opts={"min_score": 80})
     strategy_alerts = [a for a in alerts if a.get("side") == "STRATEGY"]
     assert strategy_alerts, \
         "eval_institutional should produce at least one STRATEGY row for the vertical pair fixture"
@@ -704,7 +725,7 @@ def test_alert_quality_daily_tier_filter_returns_subset(fresh_engine):
     rows = norm_rows([
         _raw(under="X", occ="O:X1", strike=100.0, vol=60000, oi=2000, delta=0.30, spot=100.0),
     ])
-    alerts = eval_institutional(rows)
+    alerts = eval_institutional(rows, opts={"min_score": 80})
     persist_alerts(fresh_engine, alerts, snapshot_date=(today - timedelta(days=1)).isoformat())
     update_moves(fresh_engine, {"X": 102.5})  # +2.5% BULLISH hit
     only_gold = alert_quality_daily(fresh_engine, tier="GOLD", days=30)
@@ -725,7 +746,7 @@ def test_alert_quality_daily_date_is_serialized_to_iso(fresh_engine):
     from datetime import date, timedelta
     today = date.today()
     rows = norm_rows([_raw(under="QQ", occ="O:Q1", strike=90.0, vol=30000, oi=2000, delta=0.25, spot=90.0)])
-    alerts = eval_institutional(rows)
+    alerts = eval_institutional(rows, opts={"min_score": 80})
     persist_alerts(fresh_engine, alerts, snapshot_date=(today - timedelta(days=1)).isoformat())
     update_moves(fresh_engine, {"QQ": 91.0})  # +1.1% BULLISH hit
     series = alert_quality_daily(fresh_engine, days=30)

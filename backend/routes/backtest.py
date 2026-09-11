@@ -28,6 +28,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/backtest", tags=["backtest"])
 
+# In-memory per-ticker store of the last /run report (2026-09-04).
+# Process-local by design (matches the heatmap SWR cache pattern);
+# a restart simply returns not_found until the next run.
+_reports: dict[str, dict[str, Any]] = {}
+
 
 def _result_to_dict(result: BacktestResult) -> dict[str, Any]:
     """Serialize a BacktestResult for JSON transport."""
@@ -122,7 +127,22 @@ async def run_backtest(payload: dict[str, Any]) -> dict[str, Any]:
     signal = RuleBasedSignal()
     engine = BacktestEngine(signal=signal, config=config)
     result = engine.run(snapshots, bars, ticker=ticker)
-    return {"status": "ok", "result": _result_to_dict(result)}
+    report = {"status": "ok", "result": _result_to_dict(result)}
+    _reports[ticker.upper()] = report
+    return report
+
+
+@router.get("/report/{ticker}")
+async def get_backtest_report(ticker: str) -> dict[str, Any]:
+    """Retrieve the last /run report for a ticker (case-insensitive).
+
+    Returns ``{"status": "not_found", "ticker": ...}`` (HTTP 200 — honest
+    empty, not an error) when no run has been stored yet.
+    """
+    report = _reports.get(ticker.upper())
+    if report is None:
+        return {"status": "not_found", "ticker": ticker.upper()}
+    return report
 
 
 @router.post("/is-oos")

@@ -237,7 +237,11 @@ export default function TrinityView({ onFocusTicker, onTradeSelect }) {
     mountedRef.current = true;
     if (Object.keys(cacheRef.current).length > 0) { setAllData(cacheRef.current); setLoading(false); }
     fetchAll(false);
-    const id = setInterval(() => fetchAll(true), 30000);
+    // 60s cadence (2026-09-04): each poll fans out to ~7 uncached Public
+    // chain fetches (~6 upstream calls each). 30s sustained ~80+/min on a
+    // single retail key — 60s halves that alongside the backend 60s chain
+    // TTL without visibly aging the Triad view.
+    const id = setInterval(() => fetchAll(true), 60000);
     return () => { mountedRef.current = false; clearInterval(id); };
   }, [fetchAll]);
 
@@ -427,8 +431,36 @@ function TrinityPanel({ ticker, data, viewMode, gexVexMode, loading: panelLoadin
   }, [gexVexMode]);
 
   const handleRowClick = useCallback((row) => {
-    if (onTradeSelect) onTradeSelect({ ticker, strike: row.strike, spot, gex: row.gex, call_gex: row.call_gex, put_gex: row.put_gex, iv: row.iv, oi: row.total_oi, delta: row.delta });
-  }, [ticker, spot, onTradeSelect]);
+    const base = { ticker, strike: row.strike, spot, gex: row.gex, call_gex: row.call_gex, put_gex: row.put_gex, iv: row.iv, oi: row.total_oi, delta: row.delta };
+    if (onTradeSelect) onTradeSelect(base);
+    // Enrich with live Public.com contract data (OSI + bid/ask/last) so the
+    // QuickTradePanel can submit a real order via /api/public/order.
+    // Fire-and-forget upgrade: the base selection opens the panel instantly,
+    // then we re-emit once Public data arrives (same strike → panel keeps
+    // state and just fills in prices). Failure keeps the base selection.
+    const front = row.expiry || expiries[0];
+    if (onTradeSelect && front) {
+      axios.get(
+        `${API}/contract/${encodeURIComponent(ticker)}/${row.strike}/${front}`,
+        { timeout: 15000 },
+      ).then(({ data }) => {
+        const contracts = data?.contracts || [];
+        const callC = contracts.find((c) => c.type === "call") || contracts[0];
+        const putC = contracts.find((c) => c.type === "put") || contracts[1];
+        if (!callC && !putC) return;
+        onTradeSelect({
+          ...base,
+          expiry: front,
+          iv: base.iv ?? callC?.iv,
+          delta: base.delta ?? callC?.delta,
+          oi: base.oi ?? (callC?.open_interest ?? 0) + (putC?.open_interest ?? 0),
+          oi_symbol: callC?.osi || putC?.osi || null,
+          call_bid: callC?.bid, call_ask: callC?.ask, call_last: callC?.last,
+          put_bid: putC?.bid, put_ask: putC?.ask, put_last: putC?.last,
+        });
+      }).catch(() => { /* base selection stands */ });
+    }
+  }, [ticker, spot, expiries, onTradeSelect]);
 
   const displayName = ticker.replace("^", "");
   const regime = nodes?.regime || "—";

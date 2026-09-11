@@ -208,8 +208,8 @@ class ChaosForecaster:
             recommended_action="Kill long-running DuckDB query; restart duckdb_engine if needed",
         ),
         ChaosScenario(
-            name="schwab_ws_disconnect",
-            description="Schwab WebSocket drops and reconnect loop fails",
+            name="ingestion_ws_disconnect",
+            description="Market-data WebSocket drops and reconnect loop fails",
             injected_metrics={"ingestion_rate_spy": 0.0, "ingestion_rate_qqq": 0.0},
             cascade_predictions=[
                 "Ingestion rate drops to 0 → IngestionStalled WARNING in 2min",
@@ -217,7 +217,7 @@ class ChaosForecaster:
                 "Trinity score freezes → stale alignment signals",
             ],
             max_severity="WARNING",
-            recommended_action="Check Schwab token expiry; restart schwab_streamer",
+            recommended_action="Check brokerage/API credentials; restart the streamer",
         ),
         ChaosScenario(
             name="memory_pressure",

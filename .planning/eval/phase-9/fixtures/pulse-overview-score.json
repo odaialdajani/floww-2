@@ -1,0 +1,188 @@
+{
+ "_note": "Pulse rows + overview bar payloads + highlighting + score boundary cases. Each case has expected output.",
+ "pulse_rows": [
+  {
+   "id": "P1_call_ask",
+   "ticker": "SPY",
+   "type": "CALL",
+   "strike": 760,
+   "expiration": "2026-09-04",
+   "bid": 1.2,
+   "ask": 1.4,
+   "last": 1.4,
+   "volume": 5000,
+   "oi": 2000,
+   "iv": 18.5,
+   "spot": 768.0,
+   "expected": {
+    "side": "ASK (inferred)",
+    "signal": "BULLISH",
+    "spread_position": 1.0,
+    "volOI": 2.5,
+    "score_sign": "+",
+    "tags": []
+   }
+  },
+  {
+   "id": "P2_put_ask_hedge",
+   "ticker": "SPY",
+   "type": "PUT",
+   "strike": 750,
+   "expiration": "2026-09-04",
+   "bid": 2.0,
+   "ask": 2.2,
+   "last": 2.2,
+   "volume": 8000,
+   "oi": 3000,
+   "iv": 22.0,
+   "spot": 768.0,
+   "expected": {
+    "side": "ASK (inferred)",
+    "signal": "BULLISH",
+    "tags": [
+     "HEDGE?"
+    ],
+    "note": "put-ASK stays BULLISH per D2"
+   }
+  },
+  {
+   "id": "P3_no_quote",
+   "ticker": "QQQ",
+   "type": "CALL",
+   "strike": 600,
+   "expiration": "2026-09-18",
+   "bid": 0,
+   "ask": 0,
+   "last": 0,
+   "volume": 100,
+   "oi": 500,
+   "iv": 0,
+   "spot": null,
+   "expected": {
+    "side": "UNAVAILABLE",
+    "score": "UNAVAILABLE",
+    "state": "NO_QUOTE",
+    "otm": "\u2014"
+   }
+  },
+  {
+   "id": "P4_zero_oi",
+   "ticker": "IWM",
+   "type": "CALL",
+   "strike": 250,
+   "expiration": "2026-09-04",
+   "bid": 0.5,
+   "ask": 0.7,
+   "last": 0.7,
+   "volume": 3000,
+   "oi": 0,
+   "iv": 30.0,
+   "spot": 245.0,
+   "expected": {
+    "volOI": "max component",
+    "tags": [
+     "LOW_OI"
+    ],
+    "score_sign": "+"
+   }
+  },
+  {
+   "id": "P5_put_bid",
+   "ticker": "DIA",
+   "type": "PUT",
+   "strike": 440,
+   "expiration": "2026-09-11",
+   "bid": 3.0,
+   "ask": 3.4,
+   "last": 3.0,
+   "volume": 4000,
+   "oi": 5000,
+   "iv": 19.0,
+   "spot": 448.0,
+   "expected": {
+    "side": "BID (inferred)",
+    "signal": "BEARISH",
+    "score_sign": "-"
+   }
+  }
+ ],
+ "overview_bar": {
+  "payload": {
+   "netPremium": 12500000,
+   "callPrem": 40000000,
+   "putPrem": 27500000
+  },
+  "expected": {
+   "FIR": 0.185,
+   "session": "Neutral",
+   "note": "FIR<0.3 so Neutral despite NetPrem>0"
+  },
+  "contract_FIR_definition": "|callPrem-putPrem|/(callPrem+putPrem) = 0.1852 -> Neutral",
+  "implementation_FIR_definition": "overviewStats uses |bullPrem-bearPrem|/(bull+bear) over SIGNAL-side premium - DIFFERENT quantity (see V20)",
+  "expected_after_fix": "one definition, one name; evaluator and implementation agree"
+ },
+ "highlighting": [
+  {
+   "id": "H1",
+   "volume": 6000,
+   "oi": 5000,
+   "expected": {
+    "size_gt_oi": true,
+    "color": "yellow"
+   }
+  },
+  {
+   "id": "H2",
+   "volume": 6000,
+   "oi": 0,
+   "expected": {
+    "vol_gt_oi": true,
+    "color": "purple",
+    "note": "OI=0,numerator>0 is true"
+   }
+  },
+  {
+   "id": "H3",
+   "volume": 0,
+   "oi": 0,
+   "expected": {
+    "both": false
+   }
+  }
+ ],
+ "score_boundaries": [
+  {
+   "id": "S_MAX",
+   "desc": "perfect bullish",
+   "expected": "+100 (capped)"
+  },
+  {
+   "id": "S_MIN",
+   "desc": "perfect bearish mirror",
+   "expected": "-100 (capped)"
+  },
+  {
+   "id": "S_ZERO",
+   "desc": "MID tiny print",
+   "expected": "0 + MID? tag"
+  },
+  {
+   "id": "S_0DTE",
+   "dte": 0,
+   "volOI": 2.5,
+   "expected": {
+    "dte_weight": "full"
+   }
+  }
+ ],
+ "informed_band_V15": {
+  "_note": "REFUTED P&P band must not gate scoring",
+  "case": {
+   "dte": 30,
+   "volOI": 3.0,
+   "premium": 30000
+  },
+  "current_behavior": "flow_alerts.py +4 with P&P citation, label served to UI",
+  "expected_after_fix": "no P&P citation; heuristic relabeled or removed"
+ }
+}

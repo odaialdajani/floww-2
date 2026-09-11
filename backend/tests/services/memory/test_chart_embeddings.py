@@ -15,7 +15,19 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
 # Mock PIL and clip before importing chart_embeddings (heavy deps not in venv)
+# Suite-hygiene (2026-09-06): an earlier revision of this file injected the
+# mocks into sys.modules and never restored them, silently breaking every
+# later test that imports real PIL (e.g. heatmap PNG rendering). Import the
+# REAL modules first (evicting any stale poison), then mock, import the
+# service (which binds the mocks into its own namespace), then RESTORE the
+# real modules so the rest of the suite is unaffected.
+import importlib
 import types
+
+for _mod in ("PIL.Image", "PIL"):
+    sys.modules.pop(_mod, None)
+_real_pil = importlib.import_module("PIL")
+_real_pil_image = importlib.import_module("PIL.Image")
 
 _mock_pil = types.ModuleType("PIL")
 _mock_pil_image = types.ModuleType("PIL.Image")
@@ -35,6 +47,11 @@ from services.memory.chart_embeddings import (
     index_screenshots,
     search_screenshots,
 )
+
+# Restore real PIL for the remainder of the suite. chart_embeddings keeps
+# its mock bindings (resolved at its import above); everyone else gets truth.
+sys.modules["PIL"] = _real_pil
+sys.modules["PIL.Image"] = _real_pil_image
 
 # ---------------------------------------------------------------------------
 # ChartEmbeddingIndex — pure logic (mocked CLIP)

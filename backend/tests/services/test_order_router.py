@@ -1,7 +1,9 @@
 """
 backend/tests/services/test_order_router.py
 
-Unit tests for order_router.py — paper-trade order client.
+Unit tests for order_router.py — Alpaca PAPER order client.
+Paper by construction (paper-api.alpaca.markets is hardcoded); no live
+gate, no token manager. Broker is injectable for tests.
 """
 
 import sys
@@ -11,6 +13,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+
+def _mock_broker(**over):
+    broker = MagicMock()
+    broker.place_stock_order = AsyncMock(return_value={"id": "ord-1", "status": "accepted"})
+    broker.get_order_by_client_order_id = AsyncMock(return_value=None)
+    broker.get_positions = AsyncMock(return_value=[])
+    for k, v in over.items():
+        setattr(broker, k, v)
+    return broker
 
 
 class TestPositionTracker:
@@ -117,6 +129,15 @@ class TestOrderRouter:
         id2 = router._make_client_order_id("sig-xyz", 1000000)
         assert id1 != id2
 
+    def test_client_order_id_stable_across_retry_timestamps(self):
+        """One logical signal keeps one venue id across process retries."""
+        from services.order_router import OrderRouter
+        router = OrderRouter.__new__(OrderRouter)
+        router.account_id = "test"
+        first = router._make_client_order_id("sig-abc", 1000000)
+        retry = router._make_client_order_id("sig-abc", 9000000)
+        assert first == retry
+
     def test_build_limit_payload(self):
         from services.order_router import OrderRouter
         router = OrderRouter.__new__(OrderRouter)
@@ -131,9 +152,12 @@ class TestOrderRouter:
             "timestamp_us": 1000000,
         }
         payload = router._build_order_payload(intent)
-        assert payload["orderType"] == "LIMIT"
-        assert payload["price"] == 450.0
-        assert payload["orderLegCollection"][0]["quantity"] == 1
+        assert payload["type"] == "limit"
+        assert payload["limit_price"] == "450.0"
+        assert payload["qty"] == "1"
+        assert payload["symbol"] == "SPY"
+        assert payload["time_in_force"] == "day"
+        assert len(payload["client_order_id"]) == 16
 
     def test_build_stop_payload(self):
         from services.order_router import OrderRouter
@@ -150,8 +174,8 @@ class TestOrderRouter:
             "timestamp_us": 1000000,
         }
         payload = router._build_order_payload(intent)
-        assert payload["orderType"] == "STOP"
-        assert "stopPrice" in payload
+        assert payload["type"] == "stop"
+        assert payload["stop_price"] == "440.0"
 
     def test_build_stop_limit_payload(self):
         from services.order_router import OrderRouter
@@ -168,8 +192,9 @@ class TestOrderRouter:
             "timestamp_us": 1000000,
         }
         payload = router._build_order_payload(intent)
-        assert payload["orderType"] == "STOP_LIMIT"
-        assert "stopPrice" in payload
+        assert payload["type"] == "stop_limit"
+        assert payload["stop_price"] == "440.0"
+        assert payload["limit_price"] == "450.0"
 
     def test_market_order_rejected_by_default(self):
         from services.order_router import OrderRouter
@@ -187,19 +212,18 @@ class TestOrderRouter:
             router._build_order_payload(intent)
 
     def test_get_state(self):
-        from services.order_router import ALLOW_MARKET_ORDERS, OrderRouter
-        mock_tokens = MagicMock()
-        router = OrderRouter("acc-123", token_manager=mock_tokens)
+        from services.order_router import ALLOW_MARKET_ORDERS, VENUE, OrderRouter
+        router = OrderRouter("acc-123", broker=_mock_broker())
         state = router.get_state()
         assert state["account_id"] == "acc-123"
+        assert state["venue"] == VENUE == "alpaca-paper"
         assert state["positions"] == {}
         assert state["cached_orders"] == 0
         assert state["allow_market"] == ALLOW_MARKET_ORDERS
 
     def test_on_fill_handler(self):
         from services.order_router import OrderRouter
-        mock_tokens = MagicMock()
-        router = OrderRouter("acc-123", token_manager=mock_tokens)
+        router = OrderRouter("acc-123", broker=_mock_broker())
         handler = MagicMock()
         router.on_fill(handler)
         assert handler in router._fill_handlers
@@ -207,10 +231,7 @@ class TestOrderRouter:
     @pytest.mark.asyncio
     async def test_submit_order_idempotency(self):
         from services.order_router import OrderRouter
-        mock_tokens = MagicMock()
-        mock_tokens.get_access_token.return_value = "fake-token"
-        mock_tokens.is_expired.return_value = False
-        router = OrderRouter("acc-123", token_manager=mock_tokens)
+        router = OrderRouter("acc-123", broker=_mock_broker())
         router._order_cache["test-cid"] = {"status": "submitted", "client_order_id": "test-cid"}
         intent = {
             "ticker": "SPY",
@@ -225,13 +246,91 @@ class TestOrderRouter:
         assert result["client_order_id"] == "test-cid"
 
     @pytest.mark.asyncio
-    async def test_submit_order_no_token(self):
+    async def test_submit_order_calls_alpaca_paper(self):
         from services.order_router import OrderRouter
-        mock_tokens = MagicMock()
-        mock_tokens.get_access_token.return_value = None
-        mock_tokens.is_expired.return_value = True
-        mock_tokens.refresh_token = AsyncMock(return_value=None)
-        router = OrderRouter("acc-123", token_manager=mock_tokens)
+        broker = _mock_broker()
+        router = OrderRouter("acc-123", broker=broker)
+        intent = {
+            "ticker": "SPY",
+            "side": "buy",
+            "qty": 5,
+            "order_type": "limit",
+            "limit_price": 450.0,
+            "signal_id": "sig-1",
+            "timestamp_us": 1000000,
+        }
+        result = await router.submit_order(intent)
+        assert result["status"] == "submitted"
+        assert result["venue"] == "alpaca-paper"
+        broker.place_stock_order.assert_awaited_once()
+        call = broker.place_stock_order.call_args
+        assert call.args[0] == "SPY" and call.args[1] == 5
+        assert router.position_tracker.get("SPY") == 5
+
+    @pytest.mark.asyncio
+    async def test_anonymous_submission_uses_one_client_order_id(self):
+        """Cache, lookup, response, and venue payload share one generated ID."""
+        from services.order_router import OrderRouter
+
+        broker = _mock_broker()
+        router = OrderRouter("acc-123", broker=broker)
+        with patch("services.order_router.time.time", side_effect=[1.0, 2.0]):
+            result = await router.submit_order({
+                "ticker": "SPY", "side": "buy", "qty": 1,
+            })
+
+        transmitted = broker.place_stock_order.call_args.kwargs["client_order_id"]
+        assert result["client_order_id"] == transmitted
+        broker.get_order_by_client_order_id.assert_awaited_once_with(transmitted)
+
+    @pytest.mark.asyncio
+    async def test_restart_retry_recovers_existing_venue_order(self):
+        """A fresh router finds the first order instead of posting a duplicate."""
+        from services.order_router import OrderRouter
+        broker = _mock_broker()
+        broker.get_order_by_client_order_id = AsyncMock(return_value={
+            "id": "ord-existing", "status": "accepted",
+            "client_order_id": "venue-cid",
+        })
+        router = OrderRouter("acc-123", broker=broker)
+        with patch.object(router, "_make_client_order_id",
+                          return_value="venue-cid"):
+            result = await router.submit_order({
+                "ticker": "SPY", "side": "buy", "qty": 1,
+                "signal_id": "sig-retry", "timestamp_us": 9000000,
+            })
+        assert result["status"] == "submitted"
+        assert result["recovered"] is True
+        broker.place_stock_order.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_ambiguous_submit_recovers_by_client_order_id(self):
+        """A lost POST response is resolved by the stable venue key."""
+        from services.order_router import OrderRouter
+        broker = _mock_broker()
+        broker.place_stock_order = AsyncMock(return_value=None)
+        broker.get_order_by_client_order_id = AsyncMock(side_effect=[
+            None,
+            {"id": "ord-existing", "status": "accepted",
+             "client_order_id": "venue-cid"},
+        ])
+        router = OrderRouter("acc-123", broker=broker)
+        with patch.object(router, "_make_client_order_id",
+                          return_value="venue-cid"):
+            result = await router.submit_order({
+                "ticker": "SPY", "side": "buy", "qty": 1,
+                "signal_id": "sig-lost-response", "timestamp_us": 1000000,
+            })
+        assert result["status"] == "submitted"
+        assert result["recovered"] is True
+        broker.place_stock_order.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_submit_order_broker_failure_is_error(self):
+        from services.order_router import OrderRouter
+        broker = _mock_broker()
+        broker.place_stock_order = AsyncMock(return_value=None)
+        router = OrderRouter("acc-123", broker=broker)
         intent = {
             "ticker": "SPY",
             "side": "buy",
@@ -241,43 +340,12 @@ class TestOrderRouter:
         }
         result = await router.submit_order(intent)
         assert result["status"] == "error"
-        assert result["reason"] == "no_access_token"
-
-    @pytest.mark.asyncio
-    async def test_submit_order_updates_positions(self):
-        from services.order_router import OrderRouter
-        mock_tokens = MagicMock()
-        mock_tokens.get_access_token.return_value = "fake-token"
-        mock_tokens.is_expired.return_value = False
-        router = OrderRouter("acc-123", token_manager=mock_tokens)
-        intent = {
-            "ticker": "SPY",
-            "side": "buy",
-            "qty": 5,
-            "signal_id": "sig-1",
-            "timestamp_us": 1000000,
-        }
-        with patch.object(router, "_make_client_order_id", return_value="new-cid"):
-            with patch("httpx.AsyncClient") as mock_client_cls:
-                mock_client = AsyncMock()
-                mock_resp = MagicMock()
-                mock_resp.status_code = 200
-                mock_resp.raise_for_status = MagicMock()
-                mock_resp.json.return_value = {}
-                mock_client.post.return_value = mock_resp
-                mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-                mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-                result = await router.submit_order(intent)
-        assert result["status"] == "submitted"
-        assert router.position_tracker.get("SPY") == 5
+        assert result["reason"] == "alpaca_empty_response"
 
     @pytest.mark.asyncio
     async def test_sell_reduces_position(self):
         from services.order_router import OrderRouter
-        mock_tokens = MagicMock()
-        mock_tokens.get_access_token.return_value = "fake-token"
-        mock_tokens.is_expired.return_value = False
-        router = OrderRouter("acc-123", token_manager=mock_tokens)
+        router = OrderRouter("acc-123", broker=_mock_broker())
         router.position_tracker.update("SPY", 10)
         intent = {
             "ticker": "SPY",
@@ -287,53 +355,29 @@ class TestOrderRouter:
             "timestamp_us": 2000000,
         }
         with patch.object(router, "_make_client_order_id", return_value="sell-cid"):
-            with patch("httpx.AsyncClient") as mock_client_cls:
-                mock_client = AsyncMock()
-                mock_resp = MagicMock()
-                mock_resp.status_code = 200
-                mock_resp.raise_for_status = MagicMock()
-                mock_resp.json.return_value = {}
-                mock_client.post.return_value = mock_resp
-                mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-                mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-                result = await router.submit_order(intent)
+            result = await router.submit_order(intent)
         assert result["status"] == "submitted"
         assert router.position_tracker.get("SPY") == 7
 
     @pytest.mark.asyncio
-    async def test_get_positions_from_schwab(self):
+    async def test_get_positions_from_alpaca(self):
         from services.order_router import OrderRouter
-        mock_tokens = MagicMock()
-        mock_tokens.get_access_token.return_value = "fake-token"
-        mock_tokens.is_expired.return_value = False
-        router = OrderRouter("acc-123", token_manager=mock_tokens)
-        with patch("httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_resp = MagicMock()
-            mock_resp.status_code = 200
-            mock_resp.raise_for_status = MagicMock()
-            mock_resp.json.return_value = {
-                "securitiesAccount": {
-                    "positions": [
-                        {"instrument": {"symbol": "SPY"}, "longQuantity": 100, "shortQuantity": 0},
-                        {"instrument": {"symbol": "QQQ"}, "longQuantity": 0, "shortQuantity": 50},
-                    ]
-                }
-            }
-            mock_client.get.return_value = mock_resp
-            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-            positions = await router.get_positions_from_schwab()
+        broker = _mock_broker()
+        broker.get_positions = AsyncMock(return_value=[
+            {"symbol": "SPY", "qty": "100"},
+            {"symbol": "QQQ", "qty": "-50"},
+            {"symbol": "BAD", "qty": "n/a"},
+        ])
+        router = OrderRouter("acc-123", broker=broker)
+        positions = await router.get_positions_from_alpaca()
         assert positions["SPY"] == 100
         assert positions["QQQ"] == -50
+        assert "BAD" not in positions
 
     @pytest.mark.asyncio
     async def test_get_positions_handles_error(self):
         from services.order_router import OrderRouter
-        mock_tokens = MagicMock()
-        mock_tokens.get_access_token.return_value = None
-        mock_tokens.is_expired.return_value = True
-        mock_tokens.refresh_token = AsyncMock(return_value=None)
-        router = OrderRouter("acc-123", token_manager=mock_tokens)
-        positions = await router.get_positions_from_schwab()
-        assert positions == {}
+        broker = _mock_broker()
+        broker.get_positions = AsyncMock(side_effect=Exception("down"))
+        router = OrderRouter("acc-123", broker=broker)
+        assert await router.get_positions_from_alpaca() == {}

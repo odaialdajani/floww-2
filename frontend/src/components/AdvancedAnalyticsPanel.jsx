@@ -54,7 +54,7 @@ function MiniBar({ value, max, color = "teal", label }) {
   const barColor = color === "teal" ? "bg-teal-500/60" : color === "rose" ? "bg-rose-500/60" : color === "amber" ? "bg-amber-500/60" : "bg-sky-500/60";
   return (
     <div className="flex items-center gap-2 text-[10px]">
-      <span className="text-slate-500 w-14 text-right truncate font-medium">{label}</span>
+      <span className="text-slate-500 w-14 text-right truncate font-medium" title={label}>{label}</span>
       <div className="flex-1 h-2 bg-slate-800/60 rounded-full overflow-hidden">
         <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
       </div>

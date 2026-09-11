@@ -14,7 +14,6 @@ from .market_data import router as market_data_router
 from .memory import router as memory_router
 from .paper_trading import router as paper_trading_router
 from .portfolio import router as portfolio_router
-from .schwab import router as schwab_router
 
 # Steal-list top-3 (Dual-GEX #1, Wheel income #3, IV-from-mid #5).
 # Mounted by backend/server.py so the routes live on canonical :8000;
@@ -30,7 +29,6 @@ __all__ = [
     "briefing_router",
     "admin_router",
     "llm_router",
-    "schwab_router",
     "live_trading_router",
     "memory_router",
     "steal_three_router",

@@ -180,11 +180,15 @@ class TestArrayConsistency:
 # ======================================================================
 
 class TestInvalidTickers:
-    """Invalid tickers return 400."""
+    """Unseeded tickers return 404 (open universe, 2026-09-04).
 
-    def test_invalid_ticker_400(self, client):
+    The old VALID_TICKERS allowlist (400) was removed so any symbol is
+    accepted; tickers with no seeded Greeks data get an honest 404.
+    """
+
+    def test_unseeded_ticker_404(self, client):
         resp = client.get("/api/greeks/profile/INVALID")
-        assert resp.status_code == 400
+        assert resp.status_code == 404
 
     def test_lowercase_ticker_normalized(self, client):
         """Lowercase ticker is normalized to uppercase and returns 200."""

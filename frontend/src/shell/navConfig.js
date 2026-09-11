@@ -19,6 +19,7 @@ export const NAV_ITEMS = [
   // Trading
   { id: "portfolio",  label: "Portfolio",  group: "Trading", icon: "trending-up" },
   { id: "journal",    label: "Journal",    group: "Trading", icon: "list" },
+  { id: "public",     label: "Broker",     group: "Trading", icon: "briefcase" },
 ];
 
 export const LEGACY_PAGES = new Set(NAV_ITEMS.filter(i => i.legacy).map(i => i.id));

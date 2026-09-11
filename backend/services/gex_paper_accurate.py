@@ -3,7 +3,7 @@ backend/services/gex_paper_accurate.py
 
 Paper-accurate GEX metrics implementing the methodology from:
 
-  Paper #1 — Ni, Pearson, Poteshman & White (2020)
+  Paper #1 — Ni, Pearson, Poteshman & White (2021)
     "Does Option Trading Have a Pervasive Impact on Underlying Stock Prices?"
     SSRN: https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2867461
 
@@ -444,10 +444,11 @@ def flash_crash_risk(
     amihud_illiquidity: float | None = None,
     net_gex: float = 0.0,
 ) -> dict[str, Any]:
-    """Estimate flash crash probability from gamma imbalance.
+    """Classify flash crash fragility from gamma imbalance.
 
-    Barbon-Buraschi finding (Table V): one std dev decrease in ΓIB
-    → ~16 bps increase in daily High-Low spread, and the effect is
+    Heuristic tag only — this function does not estimate a numeric crash
+    probability. Barbon-Buraschi finding (Table V): one std dev decrease
+    in ΓIB → ~16 bps increase in daily High-Low spread, and the effect is
     stronger for illiquid stocks and near the flip level.
 
     Args:
@@ -457,7 +458,7 @@ def flash_crash_risk(
         net_gex: Raw net dollar GEX for context
 
     Returns:
-        dict with risk_level, crash_probability_estimate, warning flags
+        dict with risk_level, stability (fragile/stable), warning flags
     """
     # Base risk from gamma imbalance sign and magnitude
     if gamma_imbalance_pct > 2.0:
@@ -520,9 +521,11 @@ def flash_crash_risk(
             "provides structural stabilization."
         )
 
+    stability = "fragile" if risk_level in ("EXTREME", "HIGH", "ELEVATED") else "stable"
+
     return {
         "risk_level": risk_level,
-        "crash_probability_estimate": round(crash_prob, 4),
+        "stability": stability,
         "gamma_imbalance_pct": round(gamma_imbalance_pct, 4),
         "flip_distance_pct": round(flip_distance_pct, 4) if flip_distance_pct is not None else None,
         "recommendation": recommendation,
@@ -619,13 +622,12 @@ def put_call_ratio_signal(
     call_vol: float = 0.0,
     put_vol: float = 0.0,
 ) -> dict[str, Any]:
-    """Pan-Poteshman (2006) put-call ratio directional signal.
+    """Put-call ratio directional signal (OI-based proxy).
 
-    'The Information of Option Volume for Future Stock Prices'
-    Review of Financial Studies 19, 871-908.
-
-    Key finding: stocks with LOW PCR outperform by 40bps next day, 1% next week.
-    Uses OI-based PCR as primary proxy when trade-level buyer-initiated data unavailable.
+    Motivated by Pan-Poteshman (2006), 'The Information in Option Volume
+    for Future Stock Prices', who used buyer-initiated trade volume.
+    This function does NOT have that volume data: it uses OI-based PCR
+    as a proxy, and the P&P return finding is not verified for OI PCR here.
     """
     total_oi = call_oi + put_oi
     total_vol = call_vol + put_vol
@@ -635,13 +637,13 @@ def put_call_ratio_signal(
 
     if pcr < 0.35:
         signal, confidence = "BULLISH", "high"
-        interp = f"PCR {pcr:.2f} — calls dominate. Low PCR stocks outperform (Pan-Poteshman 2006)."
+        interp = f"PCR {pcr:.2f} — calls dominate (OI-based proxy, not P&P volume)."
     elif pcr < 0.45:
         signal, confidence = "BULLISH", "medium"
         interp = f"PCR {pcr:.2f} — mild call dominance."
     elif pcr > 0.65:
         signal, confidence = "BEARISH", "high"
-        interp = f"PCR {pcr:.2f} — puts dominate. High PCR stocks underperform."
+        interp = f"PCR {pcr:.2f} — puts dominate (OI-based proxy, not P&P volume)."
     elif pcr > 0.55:
         signal, confidence = "BEARISH", "medium"
         interp = f"PCR {pcr:.2f} — mild put dominance."
@@ -1002,29 +1004,26 @@ def charm_hedging_pressure(
     theta: float,
     dte_days: float = 1.0,
 ) -> dict[str, Any]:
-    """Charm hedging pressure — Ni-Pearson-Poteshman-White (2021).
-
-    'Charming! Retail Option Volume, Delta Hedging, and the...'
-    SSRN 5054370.
+    """Charm hedging pressure (theta-derived proxy, unverified against tape).
 
     Charm (dDelta/dTime) measures how option delta changes as time passes.
     Unlike gamma which reacts to spot moves, charm creates a PERSISTENT
     hedging need that accumulates each day regardless of spot direction.
+    Computed here from daily theta as a heuristic proxy — NOT measured
+    dealer flow. Treat signals as unverified estimates.
 
     For ATM options near expiry:
       Charm ≈ -Θ / S  (for calls)
       Charm ≈ Θ / S   (for puts)
 
-    Key implications:
+    Key implications (heuristic):
       - High negative charm → dealers must buy more stock each day
       - High positive charm → dealers must sell more stock each day
       - Charm effects peak in the final week before expiration
 
     Args:
         delta: Current option delta
-        gamma: Current option gamma
         theta: Current option theta (daily)
-        net_gamma: Net position gamma for context
         dte_days: Days to expiration
 
     Returns:
@@ -1046,17 +1045,16 @@ def charm_hedging_pressure(
     if charm < -0.01 and near_expiry:
         result["signal"] = "CHARM_BUYING_PRESSURE"
         result["interpretation"] = (
-            f"Charm {charm:.4f} near expiry ({dte_days:.0f}d). "
-            "Dealers must BUY more stock daily to maintain delta-neutral. "
-            "Persistent upward drift from charm hedging. "
-            "Per Ni-Pearson 2021: charm effects strongest in final week."
+            f"Theta-proxy charm {charm:.4f} near expiry ({dte_days:.0f}d). "
+            "Heuristic estimate: dealers may BUY more stock daily to maintain delta-neutral. "
+            "Unverified proxy, not measured dealer flow."
         )
     elif charm > 0.01 and near_expiry:
         result["signal"] = "CHARM_SELLING_PRESSURE"
         result["interpretation"] = (
-            f"Charm +{charm:.4f} near expiry ({dte_days:.0f}d). "
-            "Dealers must SELL more stock daily to maintain delta-neutral. "
-            "Persistent downward drift from charm hedging."
+            f"Theta-proxy charm +{charm:.4f} near expiry ({dte_days:.0f}d). "
+            "Heuristic estimate: dealers may SELL more stock daily to maintain delta-neutral. "
+            "Unverified proxy, not measured dealer flow."
         )
     elif near_expiry:
         result["signal"] = "CHARM_NEUTRAL_NEAR_EXPIRY"

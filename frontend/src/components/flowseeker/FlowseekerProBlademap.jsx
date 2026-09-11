@@ -2,37 +2,42 @@
  * FlowseekerProBlademap.jsx — Blademap.ai-style Tidehunter Pro, wired to REAL
  * market data. Phase 5.3 (2026-08-31): live flow feed now tries Public API
  * (/api/public/chain) first, falls back to cvserver (/api/flowseeker/chain).
- *   /api/flowseeker/live  /ofi/{t}  /regime/{t}  /vpin/{t}  /lambda/{t}
+ *   /api/flowseeker/live  /regime/{t}  /api/vpin/{t} (microstructure router)
  *   /api/heatmap/{t} (real GEX grid)  /api/public/chain/{t} (Phase 5.3)
- * Vol surface stays synthetic (no IV-surface backend) and is labelled SIM.
+ * NOTE: /api/flowseeker/ofi/{t} and /lambda/{t} DO NOT EXIST on the backend —
+ * the fetches below .catch(() => null) by design; VPIN/λ stay blank until a
+ * trade-level feed exists. Vol surface tab removed from the tab strip.
  *
  * Self-contained: scoped CSS (.fsb-root, fsb-* classes), Plotly via CDN.
  * The agent's FlowseekerProTab.jsx is left untouched.
  */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { BACKEND_URL } from "../../config/api";
-import { mkScanRow, evalAlerts, evalTickerAlerts, streakOf, cleanHistory, tickerRollup, volSigma, annotateFirstSeen, sessionDay, fmtClock, fmtAge, awaySummary, scanRowsToCSV, oiChange, fmtUSD, fmtK, fmtIV, scoreGradeOf, pulseState, elapsedClock, formatFOLLOWStrip, tierOf, selectFires, pickBanner } from "./scanLogic";
+import { mkScanRow, evalAlerts, evalTickerAlerts, streakOf, cleanHistory, tickerRollup, volSigma, annotateFirstSeen, sessionDay, fmtClock, fmtAge, awaySummary, scanRowsToCSV, oiChange, fmtUSD, fmtK, fmtIV, scoreGradeOf, pulseState, elapsedClock, formatFOLLOWStrip, tierOf, selectFires, pickBanner, bizDTE, spreadPosition, overviewStats, equityType, signedOtm, isOpexDay, highlightState, flagSpreadLegs, quoteSkew, stampPollDeltas, contractKey, nearestExpiryPin, rollPooled, pushCapped } from "./scanLogic";
+import DarkPoolPanel from "./darkpool/DarkPoolPanel";
+import { NetPremiumTrend, StrikeDistribution, VolOiFooter } from "./history/HistoryViews";
+import { Checklist, FunnelEmpty } from "./methodology/Methodology";
+import Tracker from "./tracker/Tracker";
+import ChartModal from "./chart/ChartModal";
+import { widenActions, applyFilters, defaultFilterState } from "./filters/filterState";
+import { exposureBadgeFor } from "./exposureBadges";
 import "./FlowseekerProBlademap.css";
 
 const API = `${BACKEND_URL}/api/flowseeker`;
-const WATCH = ["SPY", "QQQ", "IWM", "NVDA", "TSLA", "AAPL", "MSFT", "AMZN", "META", "GOOGL"];
 const NOISE_FLOOR = 5; // ignore day-volume deltas below this many contracts
+// Desk noise budget: max tape-visible alerts per rule per hour. The eval
+// engines still count EVERY hit (deltas + ⚡badge stay truthful); this only
+// caps what reaches the tape. 0 = unlimited (kept for parity with the old
+// behavior if a desk wants the flood back).
+const ALERT_NOISE_CAP_H = 4;
 
 const PL = {
-  paper: "rgba(0,0,0,0)", plot: "rgba(0,0,0,0)", grid: "#1c2230", axis: "#3a4358",
-  text: "#b3b8c5", muted: "#6c7382", font: "11px ui-monospace, Menlo, monospace",
-  green: "#19d27c", red: "#ff4d5e", blue: "#29c5e0", purple: "#a267ff", amber: "#f5b042",
+  paper: "rgba(0,0,0,0)", plot: "rgba(0,0,0,0)", grid: "#ffffff0f", axis: "#ffffff1f",
+  text: "#fffffff2", muted: "#ffffff73", font: "11px 'JetBrains Mono', ui-monospace, Consolas, monospace",
+  green: "#22c55e", red: "#ef4444", blue: "#38bdf8", purple: "#a267ff", amber: "#e8c96a",
 };
 
-// ---------- helpers ----------
-const fmtMoney = (v) => {
-  const n = Math.abs(Number(v) || 0);
-  if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
-  if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}k`;
-  return `$${n.toFixed(0)}`;
-};
-const fmtTime = (ts) => { try { return new Date(ts).toLocaleTimeString(); } catch { return String(ts || ""); } };
-const dteOf = (exp) => { try { const d = Math.round((new Date(exp) - Date.now()) / 86400000); return d >= 0 ? d : 0; } catch { return 0; } };
+// ---------- helpers (formatting/DTE live in ./scanLogic — single source) ----------
 async function getJSON(url, signal) {
   const r = await fetch(url, { signal });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -40,7 +45,7 @@ async function getJSON(url, signal) {
 }
 // Rough ATM premium estimate when cvserver isn't quoting bid/ask (per-contract $).
 function estPrice(strike, iv, expiry) {
-  const dte = Math.max(1, dteOf(expiry));
+  const dte = Math.max(1, bizDTE(expiry));
   const ivv = iv > 1 ? iv / 100 : (iv || 0.2);
   return Math.max(0.05, strike * ivv * Math.sqrt(dte / 365) * 0.4);
 }
@@ -55,7 +60,7 @@ function rowConviction(p) {
   const size = Math.min(30, Math.log10(Math.max(1e4, prem) / 1e4) * 9);                      // 0-30 size (log)
   const voi = Number(p.vol_oi_ratio) || 0;
   const stat = Math.min(26, Math.log10(Math.max(1, voi) + 1) * 14);                          // 0-26 unusualness (log)
-  const dte = Number(dteOf(p.expiration)) || 0;
+  const dte = Number(bizDTE(p.expiration)) || 0;
   const urg = dte <= 1 ? 14 : dte <= 7 ? 9 : dte <= 30 ? 5 : 2;                              // 2-14 urgency
   const conv = Math.round(Math.max(20, Math.min(99, pat + size + stat + urg)));
   return { pat: +pat.toFixed(1), size: +size.toFixed(1), stat: +stat.toFixed(1), urg: +urg.toFixed(1), conv };
@@ -78,12 +83,23 @@ export function mapPublicChainToRows(contracts, spot, ticker) {
     const last = Number(c.last) || 0;
     const mid = last || ((bid + ask) / 2) || estPrice(Number(c.strike), iv, c.expiry);
     const premium = Math.round(vol * mid * 100);
-    const dte = dteOf(c.expiry);
+    const dte = bizDTE(c.expiry);
     const cls = premium >= 5e7 ? "block" : dte <= 2 ? "sweep" : "unusual";
+    // Pulse SIDE inference (BladeMap contract): last trading at/above the
+    // quote mid = aggressive lift (ASK), below = hit (BID). No quotes →
+    // UNKNOWN (F11: never guess from vol/OI proxy); renders as a dash.
+    const midQ = (bid > 0 && ask > 0) ? (bid + ask) / 2 : 0;
+    const side = (bid > 0 && ask > 0 && last > 0) ? (last >= midQ ? "ASK" : "BID") : "UNKNOWN";
+    const sp = Number(spot) || 0;
+    const strikeN = Number(c.strike);
+    const otm = sp > 0 && strikeN > 0 ? Math.abs((strikeN - sp) / sp) * 100 : null;
     const p = {
       ticker, type: String(c.type || "").toLowerCase(), classification: cls,
-      strike: Number(c.strike), expiration: c.expiry, timestamp: Date.now(),
+      strike: strikeN, expiration: c.expiry, timestamp: Date.now(),
       volume: vol, oi, vol_oi_ratio: voi, iv: iv < 1 ? iv * 100 : iv, premium,
+      mid, side, spot: sp || null, otm,
+      bid: bid > 0 ? bid : null, ask: ask > 0 ? ask : null,
+      last: last > 0 ? last : null,
     };
     const cd = rowConviction(p);
     p._conv = cd.conv;
@@ -94,11 +110,109 @@ export function mapPublicChainToRows(contracts, spot, ticker) {
   return rows.slice(0, 100);
 }
 
+// ---------- BladeMap Pulse helpers (Tidehunter Pro tape) ----------
+// Mirrors the BladeMap.ai Pulse table contract from the desk reference:
+// deterministic SIDE→SIGNAL, 0-10 score, SILVER/GOLDEN/WHALE badges,
+// 90-second print aggregation. Exported for Jest tests.
+
+// Conviction 20-99 → BladeMap 0-10 score (1 decimal).
+export function pulseScore10(conv) {
+  const c = Math.max(20, Math.min(99, Number(conv) || 20));
+  return +(c / 10).toFixed(1);
+}
+
+// ASK (aggressive lift) → BULLISH, BID (hit) → BEARISH. Matches the
+// reference tape on every visible row (CALL or PUT alike). UNKNOWN (no
+// quote, F11) stays UNKNOWN — never defaulted to BEARISH.
+export function pulseSignal(side) {
+  const s = String(side || "").toUpperCase();
+  if (s === "ASK") return "BULLISH";
+  if (s === "BID") return "BEARISH";
+  return "UNKNOWN";
+}
+
+// Put-ASK is often protective buying, not directional bullishness. The tape
+// keeps the reference BULLISH signal; this flag annotates the ambiguity.
+export function pulseHedge(type, side) {
+  return String(type || "").toLowerCase().startsWith("p")
+    && String(side || "").toUpperCase() === "ASK";
+}
+
+// Thresholds read off the reference tape ($899K SILVER vs $950K GOLDEN).
+export function pulseBadges(premium) {
+  const prem = Number(premium) || 0;
+  const b = ["SILVER"];
+  if (prem >= 900e3) b.push("GOLDEN");
+  if (prem >= 1e6) b.push("WHALE");
+  return b;
+}
+
+// COST copy in ONE place (Step 1.4 honesty contract): building state shows a
+// count, never a number; every state carries the mid-quote-not-executable
+// caption. Jest pins the wording so the readout can't silently harden.
+export const COST_TITLE = "Mid-quote Roll spread over the pin expiry bucket — quote bounce + quote staleness included. NOT an executable taker cost: always compare live quotes before trading. Needs 30 deltas across the bucket.";
+export const COST_CAPTION = "mid-quote, not executable";
+export const COST_CAPTION_TITLE = "Mid-quote Roll spread: quote bounce + quote staleness included. NOT an executable taker cost.";
+export function costLabel(costRead) {
+  if (!costRead) return null;
+  if (costRead.building) return { text: `COST building ${costRead.nd}/30`, title: COST_TITLE, caption: COST_CAPTION };
+  return { text: `COST ~$${Number(costRead.spread).toFixed(2)}`, title: COST_TITLE, caption: COST_CAPTION };
+}
+
+// Sweep/block copy in ONE place (XH-1 honesty contract): snapshot-chain
+// classes are size/tenor buckets, not observed executions. The old titles
+// ("multi-print burst", "multi-exchange urgency") described mechanisms the
+// classifiers never measure — scanTypeOf buckets single-row volume
+// (vol>=25000 sweep, vol>=8000 block) and the chain-scan path buckets
+// premium/DTE. Jest pins the wording so the labels can't silently harden.
+export const FLOW_PROXY_NOTE = "Sweep/Block classes are size/tenor-bucket proxies on snapshot chains (cvserver has no venue tape). Ov-bar NetPrem = 90s rolled tape sum — reconcile if diverged (P0).";
+export function flowClassTitle(pcls) {
+  const c = String(pcls || "").toUpperCase();
+  if (c === "SWEEP") return "Sweep class: size/tenor-bucket proxy — no multi-venue execution observed (no venue tape)";
+  if (c === "BLOCK") return "Block class: size-bucket proxy — not an observed block print";
+  return c || "REG";
+}
+export const FILTER_CHIP_TITLES = {
+  SWEEP: "Sweep class: size/tenor-bucket proxy — no venue tape",
+  BLOCK: "Block class: size-bucket proxy — not an observed block print",
+};
+
+// Drop prints older than the Pulse window (trailing-90s tape).
+export function pruneBuffer(buf, windowMs = 90e3, now = Date.now()) {
+  return (buf || []).filter((r) => now - (Number(r.timestamp) || now) < windowMs);
+}
+
+// Aggregate prints into 90-second windows per contract so one hot contract
+// renders ONE row (premium summed, print count kept) instead of flooding
+// the tape. Prints outside [now-windowMs, now] are excluded. Returns agg
+// rows premium-ranked, capped at 50.
+export function aggregatePulse(rows, windowMs = 90e3, now = Date.now()) {
+  const fresh = (rows || []).filter((r) => now - (Number(r.timestamp) || now) < windowMs);
+  const map = new Map();
+  for (const r of fresh) {
+    const key = `${r.ticker}|${String(r.type || "").toLowerCase()}|${r.strike}|${String(r.expiration || "").slice(0, 10)}`;
+    const g = map.get(key);
+    const ts = Number(r.timestamp) || now;
+    if (!g) {
+      map.set(key, { row: r, prem: Number(r.premium) || 0, size: Number(r.volume) || 0, n: 1, ts });
+    } else {
+      // Same contract seen again inside the window → roll up.
+      g.prem += Number(r.premium) || 0;
+      g.size += Number(r.volume) || 0;
+      g.n += 1;
+      if (ts > g.ts) { g.ts = ts; g.row = r; }
+    }
+  }
+  const out = [...map.values()].map((g) => ({ ...g.row, _aggPrem: g.prem, _aggSize: g.size, _aggN: g.n, _aggTs: g.ts }));
+  out.sort((a, b) => (b._aggPrem || 0) - (a._aggPrem || 0));
+  return out.slice(0, 50);
+}
+
 // ---------- cross-symbol scanner (scenner34 BladeMap grid) ----------
-// A broader universe than the flow watchlist so the scan surfaces hot names
-// (ENPH, AMD, PLTR…) the way a market-wide screen does. Used only as the
-// fallback path — when the efficient backend /scan endpoint is deployed the
-// component prefers that (one call, the whole market).
+// Fallback-loop ticker list only — the live path is the market-wide backend
+// /scan endpoint (one call, the whole market). SCAN_UNIVERSE is used solely
+// if a per-ticker fallback loop is ever reintroduced; nothing filters or
+// alerts by it.
 const SCAN_UNIVERSE = ["SPY", "QQQ", "IWM", "NVDA", "TSLA", "AAPL", "MSFT", "AMZN", "META", "GOOGL", "AMD", "PLTR", "ENPH", "NFLX", "AVGO", "MU", "COIN", "SMCI"];
 // (scanner math — bizDTE/scanTypeOf/scanScoreOf/estimateDelta/approxSpot/mkScanRow
 // and the fmt* helpers — lives in ./scanLogic.js, tested in scanLogic.test.js)
@@ -108,8 +222,15 @@ const ALERTS_KEY = "fsb-scan-alerts-v1";
 const ALERTSEEN_KEY = "fsb-scan-alertseen-v1";
 // Rule defaults are MERGED over stored prefs — a pref blob saved before a new
 // rule existed must not silently disable it. Order = tape-summary display order.
-const DEFAULT_RULES = { oiconf: true, follow: true, sigma: true, score: true, whale: true, zerodte: true };
-const RULES_ORDER = ["OICONF", "FOLLOW", "SIGMA", "SCORE", "WHALE", "0DTE", "SOURCE"];
+// 2026-09-02 institutional noise pass: SCORE 85→92, WHALE $10M→$25M, SIGMA 4σ→6σ,
+// FOLLOW 2d→3d. The chips stay user-toggleable — an existing pref blob keeps its
+// saved thresholds (merge only fills keys that don't exist yet), so nobody's
+// setup changes under them without a click.
+const DEFAULT_RULES = {
+  oiconf: true, follow: true, sigma: true, score: true, prime: true, whale: true, zerodte: true,
+  scoreMin: 92, whaleMin: 25e6, sigmaMin: 6, followMin: 3,
+};
+const RULES_ORDER = ["OICONF", "FOLLOW", "SIGMA", "SCORE", "WHALE", "PRIME", "0DTE", "SOURCE"];
 const FIRSTSEEN_KEY = "fsb-scan-firstseen-v1";
 const LASTSEEN_KEY = "fsb-scan-lastseen-v1";
 function loadScanPrefs() {
@@ -165,60 +286,126 @@ function markNew(rows, prevKeysRef, mode) {
   return rows;
 }
 
-// Days to expiry for an ISO date string; null when unparseable.
-function dteDays(exp) {
-  if (!exp) return null;
-  const t = Date.parse(String(exp).length === 10 ? `${exp}T00:00:00` : exp);
-  if (Number.isNaN(t)) return null;
-  return Math.max(0, Math.round((t - Date.now()) / 86400000));
-}
-
 // ---------- component ----------
-export default function FlowseekerProBlademap({ active = true }) {
+export default function FlowseekerProBlademap({ active = true, onTrade = null }) {
   const [tab, setTab] = useState("scanner");   // land on the cross-symbol scanner (the hero view)
   const [ticker, setTicker] = useState("SPY");
   const [signals, setSignals] = useState([]);     // merged feed, newest first
+  const [flowPaused, setFlowPaused] = useState(false);  // Pulse pause (reference ⏸ button)
+  const [flowNonce, setFlowNonce] = useState(0);        // Pulse refresh (reference ⟳ button)
+  const [howTo, setHowTo] = useState(false);            // HOW TO READ popover
   const [selected, setSelected] = useState(null);
+  const [chartRow, setChartRow] = useState(null);
   const [filter, setFilter] = useState("all");
+  // W6 filter depth: equity scope, moneyness, OPEX, strike range.
+  const [equity, setEquity] = useState("all");
+  const [money, setMoney] = useState("all");
+  const [opexOnly, setOpexOnly] = useState(false);
+  const [strikeMin, setStrikeMin] = useState("");
+  const [strikeMax, setStrikeMax] = useState("");
   // Flow feed time-frame preset: All / 0DTE / 1-7D / Weekly / Monthly / Qtrly / LEAPS
   const [dteFilter, setDteFilter] = useState("all");
-  const [subtab, setSubtab] = useState("ofi");
+  // Pulse tape controls (BladeMap header contract): ticker scope, exclusive
+  // DTE band, minimum 0-10 score.
+  const [pulseTicker, setPulseTicker] = useState("ALL");
+  const [pulseQ, setPulseQ] = useState("");
+  // Open universe (2026-09-04): focus the tape on ANY ticker, not a list.
+  const focusPulseTicker = useCallback(() => {
+    const t = pulseQ.trim().toUpperCase().replace(/^\$/, "");
+    if (!t) return;
+    setPulseTicker(t);
+    setTicker(t);
+  }, [pulseQ]);
+  const [pulseDte, setPulseDte] = useState("ALL");
+  const [pulseScore, setPulseScore] = useState(0);
   const [regime, setRegime] = useState({ label: "—", cls: "chop" });
   const [clock, setClock] = useState("");
   const [plotlyReady, setPlotlyReady] = useState(!!window.Plotly);
-  const [volTicker, setVolTicker] = useState("SPY");
-  // cross-symbol scanner state (Scanner tab) — filters/sort/universe persist in localStorage
+  // cross-symbol scanner state (Scanner tab) — filters/sort persist in localStorage.
+  // The universe is FULLY OPEN: no allowlists, no My-universe filter, no
+  // alert scoping — the market-wide scan alerts on any symbol.
   const prefs = useMemo(loadScanPrefs, []);
   const [scan, setScan] = useState([]);
   const [scanAt, setScanAt] = useState("");
   const [scanSort, setScanSort] = useState(prefs.scanSort || { key: "score", dir: "desc" });
   const [scanTypeF, setScanTypeF] = useState(prefs.scanTypeF || "all");
   const [scanMinVol, setScanMinVol] = useState(prefs.scanMinVol || 0);
+  const [scanMinPrem, setScanMinPrem] = useState(prefs.scanMinPrem || 0);
+  const [scanMinOI, setScanMinOI] = useState(prefs.scanMinOI || 0);
   const [scanMinScore, setScanMinScore] = useState(prefs.scanMinScore || 0);
+  // DTE time-frame preset for the SCAN table too — the flow feed has had this
+  // since fe0e9ef; the Scanner lost it in the Simple-mode consolidation. Same
+  // presets, same semantics as the flow feed's dteFilter.
+  const [scanDteF, setScanDteF] = useState(prefs.scanDteF || "all");
   const [scanQ, setScanQ] = useState("");
   const [scanMeta, setScanMeta] = useState({ mode: null, stale: false, symbols: 0 });
   const [baselines, setBaselines] = useState({});   // {ticker: {avg, std, days}} from /scan
-  const [universe, setUniverse] = useState(prefs.universe || SCAN_UNIVERSE);
-  const [universeOnly, setUniverseOnly] = useState(!!prefs.universeOnly);
-  const [alertScore, setAlertScore] = useState(prefs.alertScore ?? 85);
+  const [alertScore, setAlertScore] = useState(prefs.alertScore ?? 92);
+  // Methodology checklist state — W7 verdict wiring (real state, not no-ops).
+  const [checks, setChecks] = useState({});
+  const [verdict, setVerdict] = useState(null);
+  // Filter pipeline bridge — W6 funnel-empty wiring.
+  // Bridges the Blademap inline scan knobs to the unified subtractive filter
+  // pipeline so FunnelEmpty can show honest widening actions when the result
+  // hits zero — without duplicating filter logic in the scan.
+  const fsFilter = useMemo(() => ({
+    equityType: { stocks: true, etfs: true, indices: true },
+    sweepsOnly: false,
+    side: { BID: true, MID: true, ASK: true },
+    otm: false,
+    itm: false,
+    dte0: scanDteF === "0dte",
+    opexOnly: false,
+    strikeRange: { min: null, max: null },
+    oiGrowth: { min: 0 },
+    sentiment: { contract: [-100, 100], chain: [-100, 100] },
+    absScore: false,
+    minPremium: scanMinPrem || 0,
+    minScore: scanMinScore || 0,
+    dteBand: scanDteF === "all" ? null : scanDteF,
+  }), [scanDteF, scanMinPrem, scanMinScore]);
   const [alertRules, setAlertRules] = useState({ ...DEFAULT_RULES, ...(prefs.alertRules || {}) });
   const [history, setHistory] = useState({});   // {ticker: [{date, total_vol, call_vol, put_vol}]} from /scan/history
   const [alertLog, setAlertLog] = useState(loadAlertLog);
-  // Simple mode (default): institutional alerts + a best-only table, no knobs.
-  // ⚙ Advanced reveals the full filter/preset/universe/rule-chip toolkit.
+  const [suppressedCount, setSuppressedCount] = useState(0);   // noise-budget overflow (truthful, session-scoped)
+  // ── Outcome ledger: measured alert quality (per-rule precision/lift) ──
+  // Backend joins the alert ledger to forward returns + a matched control
+  // cohort; rules below min_alerts come back precision=null → we render
+  // "uncalibrated · n=k", never a fabricated hit rate.
+  const [outcomes, setOutcomes] = useState(null);
+  const [calibration, setCalibration] = useState(null);
+  const [outcomesOpen, setOutcomesOpen] = useState(false);
+  const loadOutcomes = useCallback(async () => {
+    try {
+      const d = await getJSON(`${API}/outcomes?days=60`);
+      if (d && d.ok) setOutcomes(d);
+    } catch { /* ledger cold or bars slow — the strip just stays empty */ }
+    try {
+      const c = await getJSON(`${API}/model`);
+      if (c && c.ok) setCalibration(c);
+    } catch { /* model endpoint cold — panel stays empty */ }
+  }, []);
+  // NOTE: the refreshTick-consuming effect lives BELOW refreshTick's
+  // declaration (TDZ: `const` is not usable before its initializer runs).
+  // Simple mode (default): institutional alerts + the full quality-gated table,
+  // no knobs. ⚙ Advanced reveals the full filter/preset/rule-chip toolkit.
   const [advanced, setAdvanced] = useState(!!prefs.advanced);
   const [alertsOpen, setAlertsOpen] = useState(true);   // the feed IS the product — open by default
   const [alertOrder, setAlertOrder] = useState("new");   // tape order: newest | oldest first
-  const [alertUnivOnly, setAlertUnivOnly] = useState(prefs.alertUnivOnly ?? true);   // scope alerts to My Universe
+  const [scanSideF, setScanSideF] = useState(prefs.scanSideF || "all");   // Calls/Puts — visible in both modes
   const [away, setAway] = useState(null);                 // "while you were away" digest, null = hidden
   const [notify, setNotify] = useState(!!prefs.notify);
   const [forcing, setForcing] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
+  // Outcomes/model refresh — declared here because refreshTick is declared
+  // above this line (TDZ-safe; the hook reads it in its dependency array).
+  useEffect(() => { if (active) loadOutcomes(); }, [active, loadOutcomes, refreshTick]);
   // ── Keyboard navigation: j/k cursor, Enter focus, / search, r refresh ──
   const [kbIdx, setKbIdx] = useState(-1);
   const scanQRef = useRef(null);
   // ── Blademap v3: conviction-ranked feed + calibration + journal stats ──
   const [convFeed, setConvFeed] = useState([]);
+  const [convFeedState, setConvFeedState] = useState("loading"); // loading | ready | unavailable
   const [calibBands, setCalibBands] = useState([]);
   const [setupStats, setSetupStats] = useState(null);
   // ── Zenith-style control cluster state (settings + quick filters) ──
@@ -254,7 +441,7 @@ export default function FlowseekerProBlademap({ active = true }) {
   useEffect(() => { baselinesRef.current = baselines; }, [baselines]);
 
   // Log (and optionally notify) when the scan source flips market↔fallback —
-  // a coverage change from 700+ symbols to 18 is something a desk wants to know.
+  // a coverage change is something a desk wants to know.
   const lastModeRef = useRef(null);
   const noteSourceFlip = useCallback((mode, symbols) => {
     const prev = lastModeRef.current;
@@ -280,16 +467,15 @@ export default function FlowseekerProBlademap({ active = true }) {
     }
   }, []);
   // Poll effect reads alert config via ref so rule tweaks don't re-arm the interval.
+  // Alerting is market-wide: allow=null (whole market), no universe scoping.
   const alertCfgRef = useRef({});
   useEffect(() => {
-    alertCfgRef.current = { minScore: alertScore, enabled: alertRules, allow: alertUnivOnly ? universe : null };
-  }, [alertScore, alertRules, alertUnivOnly, universe]);
+    alertCfgRef.current = { minScore: alertScore, enabled: alertRules, allow: null, side: scanSideF };
+  }, [alertScore, alertRules, scanSideF]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify({ scanTypeF, scanMinVol, scanMinScore, scanSort, universe, universeOnly, alertScore, alertRules, notify, alertUnivOnly, advanced }));
+  useEffect(() => {    try { localStorage.setItem(PREFS_KEY, JSON.stringify({ scanTypeF, scanMinVol, scanMinPrem, scanMinOI, scanMinScore, scanSideF, scanDteF, scanSort, alertScore, alertRules, notify, advanced }));
     } catch { /* private mode — prefs just don't persist */ }
-  }, [scanTypeF, scanMinVol, scanMinScore, scanSort, universe, universeOnly, alertScore, alertRules, notify, alertUnivOnly, advanced]);
+  }, [scanTypeF, scanMinVol, scanMinPrem, scanMinOI, scanMinScore, scanSideF, scanDteF, scanSort, alertScore, alertRules, notify, advanced]);
 
   // "While you were away" — keep the last-seen stamp current while visible
   // (the previous visit's value was snapshotted at module load, see AWAY_FROM).
@@ -320,11 +506,49 @@ export default function FlowseekerProBlademap({ active = true }) {
   }, []);
 
   // Force refresh via the backend's debounced /scan/refresh, then re-poll.
+  // Also bumps refreshTick so the Pulse tape (overview rollup + print buffer)
+  // refreshes on the Scanner tab — without this, the inline tape surfaces only
+  // refresh on the Flow tab's chain poll (L614-697), leaving Scanner-tab tape
+  // stale until manual ⟳. The chain call here is the same one the Flow
+  // tab would make on next poll; connection-budget impact is one POST per
+  // manual refresh, not a new recurring interval.
+  //
+  // Abort-safety (X4 race-gap closure): a ticker switch or repeated button
+  // click must not leave two /scan/refresh in flight against the same session.
+  // The ref + AbortController mirrors the ExposureStrip race-safety pattern:
+  // the new call aborts the previous one before starting, so a stale response
+  // cannot land on the wrong ticker's tape surfaces.
+  const refreshAbortRef = useRef(null);
   const forceRefresh = useCallback(async () => {
+    if (refreshAbortRef.current) {
+      refreshAbortRef.current.abort();
+    }
+    const ctrl = new AbortController();
+    refreshAbortRef.current = ctrl;
     setForcing(true);
-    try { await fetch(`${API}/scan/refresh?limit=300`, { method: "POST" }); } catch { /* GET below will serve cache */ }
+    try {
+      await fetch(`${API}/scan/refresh?limit=500`, {
+        method: "POST",
+        signal: ctrl.signal,
+      });
+      // Wake the Pulse tape on the Scanner tab: bump refreshTick so the
+      // [signals] effect (L940-971) re-runs and re-stamps the buffer.
+      // The tape's rows come from printBufferRef which is fed by the Flow-tab
+      // chain poll; on Scanner tab this re-runs existing queued prints through
+      // the tape filters without a new chain fetch.
+      setRefreshTick((t) => t + 1);
+    } catch (e) {
+      if (e.name !== "AbortError") { /* GET below will serve cache */ }
+    }
     setForcing(false);
     setRefreshTick((t) => t + 1);
+  }, []);
+
+  // Clean up any in-flight refresh when the component unmounts.
+  useEffect(() => {
+    return () => {
+      if (refreshAbortRef.current) refreshAbortRef.current.abort();
+    };
   }, []);
 
   // Browser notifications — opt-in, permission-gated.
@@ -344,6 +568,10 @@ export default function FlowseekerProBlademap({ active = true }) {
   // the standalone alertSeen store — NOT the display tape — so tape eviction
   // or Clear can't re-fire still-true alerts; tape display caps at 100.
   const alertSeenRef = useRef(loadAlertSeen());
+  // Mirror of the tape for the noise-budget window counts — reads stay OUTSIDE
+  // the setAlertLog updater (updaters must stay pure; StrictMode double-invokes).
+  const alertLogRef = useRef(alertLog);
+  useEffect(() => { alertLogRef.current = alertLog; }, [alertLog]);
   const ingestAlerts = useCallback((rows, mode) => {
     const cfg = alertCfgRef.current;
     const hits = [
@@ -353,37 +581,55 @@ export default function FlowseekerProBlademap({ active = true }) {
       // SIGMA compares today's coverage against baselines recorded from the
       // market-wide path, so it only runs on market-mode scans.
       ...evalTickerAlerts(tickerRollup(rows, 1e9), baselinesRef.current, streaksRef.current,
-        { enabled: { ...cfg.enabled, sigma: !!cfg.enabled.sigma && mode === "market" }, allow: cfg.allow }),
+        { enabled: { ...cfg.enabled, sigma: !!cfg.enabled.sigma && (mode === "market" || mode === "public") }, allow: cfg.allow }),
     ];
     if (!hits.length) return;
-    setAlertLog((prev) => {
-      const now = Date.now();
-      const seen = alertSeenRef.current;
-      const fresh = hits.filter((h) => (seen[h.key] ?? 0) < now - (h.ttl || 30 * 60e3))
-        .map((h) => ({ ...h, t: now, time: fmtClock(now, true), src: mode, day: sessionDay(),
-          firstSeen: rows.find((r) => `${r.under}|${r.type}|${r.strike}|${r.exp}` === (h.ckey || h.key))?.firstSeen }));
-      if (!fresh.length) return prev;
-      for (const h of fresh) seen[h.key] = now;
-      try { localStorage.setItem(ALERTSEEN_KEY, JSON.stringify(seen)); } catch { /* private mode */ }
-      if (notifyRef.current && document.hidden && "Notification" in window && Notification.permission === "granted") {
-        try {
-          new Notification(`⚡ ${fresh.length} flow alert${fresh.length > 1 ? "s" : ""}`, {
-            body: fresh.slice(0, 3).map((h) => h.label
-              ? `${h.rule}: ${h.label}`
-              : `${h.rule} ${h.under} ${h.type === "call" ? "C" : "P"}${h.strike}${h.why ? ` — ${h.why}` : ""}`).join("\n"),
-          });
-        } catch { /* notification constructor can throw on some platforms */ }
+    const now = Date.now();
+    const seen = alertSeenRef.current;
+    const fresh = hits.filter((h) => (seen[h.key] ?? 0) < now - (h.ttl || 30 * 60e3))
+      .map((h) => ({ ...h, t: now, time: fmtClock(now, true), src: mode, day: sessionDay(),
+        firstSeen: rows.find((r) => `${r.under}|${r.type}|${r.strike}|${r.exp}` === (h.ckey || h.key))?.firstSeen }));
+    if (!fresh.length) return;
+    // Desk noise budget: after dedup, cap tape-visible fires per rule per
+    // hour (ALERT_NOISE_CAP_H). Overflow is counted, not dropped silently —
+    // the ⚡ Alerts KPI shows +N held back so the total stays truthful.
+    // Suppressed fires STILL get dedup-marked below: the budget limits tape
+    // delivery, not evaluation — otherwise a static all-day SIGMA would
+    // re-fire every poll and inflate the held-back counter meaninglessly.
+    const capped = [];
+    let suppressed = 0;
+    if (ALERT_NOISE_CAP_H > 0) {
+      for (const h of fresh) {
+        const rule = String(h.rule || "").toUpperCase();
+        const nRecent = alertLogRef.current.filter((a) => a.rule === rule && now - a.t < 3600e3).length
+          + capped.filter((a) => a.rule === rule).length;
+        if (nRecent >= ALERT_NOISE_CAP_H) { suppressed++; continue; }
+        capped.push(h);
       }
-      const next = [...fresh, ...prev].slice(0, 100);
+    } else {
+      capped.push(...fresh);
+    }
+    if (suppressed) setSuppressedCount((c) => c + suppressed);
+    if (!capped.length) return;
+    for (const h of fresh) seen[h.key] = now;   // ALL fresh — capped + suppressed
+    try { localStorage.setItem(ALERTSEEN_KEY, JSON.stringify(seen)); } catch { /* private mode */ }
+    if (notifyRef.current && document.hidden && "Notification" in window && Notification.permission === "granted") {
+      try {
+        new Notification(`⚡ ${capped.length} flow alert${capped.length > 1 ? "s" : ""}${suppressed ? ` (+${suppressed} held back)` : ""}`, {
+          body: capped.slice(0, 3).map((h) => h.label
+            ? `${h.rule}: ${h.label}`
+            : `${h.rule} ${h.under} ${h.type === "call" ? "C" : "P"}${h.strike}${h.why ? ` — ${h.why}` : ""}`).join("\n"),
+        });
+      } catch { /* notification constructor can throw on some platforms */ }
+    }
+    setAlertLog((prev) => {
+      const next = [...capped, ...prev].slice(0, 100);
       try { localStorage.setItem(ALERTS_KEY, JSON.stringify(next)); } catch { /* private mode */ }
       return next;
     });
   }, []);
 
-  const microRef = useRef({});            // { vpin, regimeConf, lambdaR2 } for selected ticker
-  const gaugeRef = useRef(null), radarRef = useRef(null), ofiRef = useRef(null);
-  const gexRef = useRef(null), volRef = useRef(null), gammaBarRef = useRef(null), gammaCurveRef = useRef(null);
-  const ofiDataRef = useRef(null), gexDataRef = useRef(null);
+  const gaugeRef = useRef(null), radarRef = useRef(null);
 
   // Plotly CDN
   useEffect(() => {
@@ -450,15 +696,20 @@ export default function FlowseekerProBlademap({ active = true }) {
                 if (voi < 0.4) continue;
                 const iv = Number(vals[iIV]) || 0;
                 const last = Number(vals[iLast]) || 0;
-                const mid = last || (((Number(vals[iBid]) || 0) + (Number(vals[iAsk]) || 0)) / 2) || estPrice(strike, iv, exp.expiration);
+                const bidV = Number(vals[iBid]) || 0;
+                const askV = Number(vals[iAsk]) || 0;
+                const mid = last || ((bidV + askV) / 2) || estPrice(strike, iv, exp.expiration);
                 const premium = Math.round(vol * mid * 100);
-                const dte = dteOf(exp.expiration);
+                const dte = bizDTE(exp.expiration);
                 const cls = premium >= 5e7 ? "block" : dte <= 2 ? "sweep" : "unusual";
+                const side = (bidV > 0 && askV > 0 && last > 0) ? (last >= (bidV + askV) / 2 ? "ASK" : "BID") : "UNKNOWN";
                 const p = {
                   ticker, type: sideU.toLowerCase(), classification: cls,
                   strike, expiration: exp.expiration, timestamp: Date.now(),
                   volume: vol, oi, vol_oi_ratio: voi, iv: iv < 1 ? iv * 100 : iv,
-                  premium,
+                  premium, mid, side, spot: null, otm: null,
+                  bid: bidV > 0 ? bidV : null, ask: askV > 0 ? askV : null,
+                  last: last > 0 ? last : null,
                 };
                 const cd = rowConviction(p);
                 p._conv = cd.conv;
@@ -477,15 +728,15 @@ export default function FlowseekerProBlademap({ active = true }) {
         setScanMeta((m) => ({ ...m, data_source: ds }));
       }
     };
+    if (flowPaused) return () => { cancelled = true; ctrl.abort(); };
     poll();
     const id = setInterval(poll, 15000);
     return () => { cancelled = true; ctrl.abort(); clearInterval(id); };
-  }, [active, ticker, tab]);
+  }, [active, ticker, tab, flowPaused, flowNonce]);
 
   // ---- cross-symbol market scan (Scanner tab, scenner34 grid) ----
-  // Prefer the efficient backend /scan endpoint (ONE market-wide cvforge screen);
-  // if it isn't deployed yet, fall back to looping the live per-ticker /chain over
-  // a universe. Both are 100% live cvserver day-volume-vs-OI — no synthetic data.
+  // Market-wide backend /scan endpoint (ONE cvforge screen, the whole market).
+  // 100% live cvserver day-volume-vs-OI — no synthetic data.
   useEffect(() => {
     if (!active || tab !== "scanner") return;   // poll only while the Scanner tab is visible
     let cancelled = false;
@@ -497,43 +748,105 @@ export default function FlowseekerProBlademap({ active = true }) {
       try { await runOnce(); } finally { inFlight = false; }
     };
     const runOnce = async () => {
-      // Path A: market-wide backend endpoint (columns: underlying,ticker,type,
-      // strike,exp,day_volume,oi,iv,delta,spot) + per-ticker regimes map.
+      // Shared ingest for BOTH scan sources (identical 10 columns).
+      const ingestPayload = (d) => {
+        const regimes = { ...(d.regimes || {}) };
+        // Dealer-regime fill (paid path only): the heatmap regime wins when
+        // present; paid gamma walls cover tickers the heatmap cache hasn't
+        // seen — same merge the server alert pipeline applies.
+        for (const [t, dd] of Object.entries(d.dealer || {})) {
+          if (!regimes[t] && dd && (dd.regime === "negative" || dd.regime === "positive")) regimes[t] = dd.regime;
+        }
+        // Quote-truth extras (paid path only), keyed by contract identity.
+        const truth = d.quote_truth || {};
+        const prevOI = d.prev_oi || {};
+        // ΔOI hygiene tags (server: services/oi_hygiene.py) — keyed by OCC
+        // ticker here; expired-today contracts are nulled locally as a
+        // fallback when the server predates the tag payload.
+        const oiTags = d.oi_tags || {};
+        const occTag = (occ) => {
+          const t = oiTags[occ];
+          if (t) return t;
+          const m = typeof occ === "string" && occ.match(/(\d{6})[CP]\d+$/);
+          if (m) {
+            const ey = 2000 + parseInt(m[1].slice(0, 2), 10);
+            const exp = `${ey}-${m[1].slice(2, 4)}-${m[1].slice(4, 6)}`;
+            const today = new Date().toISOString().slice(0, 10);
+            if (exp <= today) return { expiring: true, rollover: false, earnings: null };
+          }
+          return null;
+        };
+        const rows = d.rows.map((r) => {
+          const row = mkScanRow(r[0], r[2], r[3], r[4], Number(r[5]) || 0, Number(r[6]) || 0,
+            r[7], r[8], Number(r[9]) || null, regimes[r[0]] || null);
+          // OCC/OSI contract id rides along for click-to-trade (Alpaca paper
+          // needs the exact contract; never synthesized client-side).
+          row.osi = typeof r[1] === "string" && r[1] ? r[1] : null;
+          // Paid quote truth: true premium replaces the BS estimate for
+          // the PRIME/WHALE money gates; NBBO side + velocity ride along
+          // for display and future sorting (never fabricated when absent).
+          const xt = truth[`${row.under}|${row.type}|${row.strike}|${row.exp}`];
+          if (xt) {
+            if (xt.premium_true != null && xt.premium_true > 0) row.premium = xt.premium_true;
+            if (xt.nbbo_side === "ASK" || xt.nbbo_side === "BID") row.nbbo = xt.nbbo_side;
+            if (xt.signed_side === "ASK" || xt.signed_side === "BID") {
+              row.signedSide = xt.signed_side;
+              if (xt.sign_method === "quote" || xt.sign_method === "tick") row.signMethod = xt.sign_method;
+            }
+            if (xt.velocity_per_min != null) row.velocity = xt.velocity_per_min;
+          }
+          // Join yesterday's OI for this exact contract (OCC ticker r[1]).
+          const tag = occTag(r[1]);
+          row.oiTag = tag || null;   // surface hygiene state even when ΔOI is nulled
+          row.oiChg = (tag && (tag.expiring || tag.rollover))
+            ? null
+            : oiChange(row.oi, prevOI[r[1]]);
+          if (row.oiChg && tag) row.oiChg.tag = tag;   // engine + UI consume
+          row.oiChgPct = row.oiChg ? row.oiChg.pct : null;   // sortable scalar
+          return row;
+        });
+        const marked = markNew(rows, prevKeysRef, d.source === "public-scan" ? "public" : "market");
+        firstSeenRef.current = annotateFirstSeen(marked, firstSeenRef.current).seen;
+        try { localStorage.setItem(FIRSTSEEN_KEY, JSON.stringify(firstSeenRef.current)); } catch { /* private mode */ }
+        ingestAlerts(marked, d.source === "public-scan" ? "public" : "market");
+        setScan(marked);
+        const nSyms = new Set(rows.map((x) => x.under)).size;
+        if (d.baselines) setBaselines(d.baselines);
+        setScanMeta({ mode: "market", stale: !!d.stale, symbols: nSyms,
+          age: d.cache_age_seconds ?? 0, retry: d.retry_after_seconds ?? null,
+          ttl: d.scan_ttl ?? 60, budget: d.budget ?? null, data_source: d.source === "public-scan" ? "public" : "cvserver", coverage: d.coverage || null });
+        noteSourceFlip("market", nSyms);
+        setScanAt(new Date().toLocaleTimeString());
+        return;   // a 200 with rows[] is authoritative — even when empty
+      };
+      // Path P (primary, paid): Public universe scan — same 10 columns as
+      // /scan plus quote_truth extras (true premium, NBBO side, velocity)
+      // and dealer walls, joined below. Falls through to cvserver on ANY
+      // failure: the paid feed is primary, cvserver is strict failover.
       try {
-        const d = await getJSON(`${API}/scan?limit=300`, ctrl.signal);
+        const d = await getJSON(`${API}/scan-public?slice_size=8`, ctrl.signal);
+        if (cancelled) return;
+        if (d && Array.isArray(d.rows)) { ingestPayload(d); return; }
+      } catch (e) {
+        if (cancelled || e?.name === "AbortError") return;
+        // fall through to the cvserver failover path
+      }
+      // Path C (failover): cvserver market-wide screen (columns:
+      // underlying,ticker,type, strike,exp,day_volume,oi,iv,delta,spot)
+      // + per-ticker regimes map.
+      try {
+        const d = await getJSON(`${API}/scan?limit=500`, ctrl.signal);
         if (cancelled) return;
         if (d && Array.isArray(d.rows)) {
-          const regimes = d.regimes || {};
-          const prevOI = d.prev_oi || {};
-          const rows = d.rows.map((r) => {
-            const row = mkScanRow(r[0], r[2], r[3], r[4], Number(r[5]) || 0, Number(r[6]) || 0,
-              r[7], r[8], Number(r[9]) || null, regimes[r[0]] || null);
-            // Join yesterday's OI for this exact contract (OCC ticker r[1]).
-            row.oiChg = oiChange(row.oi, prevOI[r[1]]);
-            row.oiChgPct = row.oiChg ? row.oiChg.pct : null;   // sortable scalar
-            return row;
-          });
-          const marked = markNew(rows, prevKeysRef, "market");
-          firstSeenRef.current = annotateFirstSeen(marked, firstSeenRef.current).seen;
-          try { localStorage.setItem(FIRSTSEEN_KEY, JSON.stringify(firstSeenRef.current)); } catch { /* private mode */ }
-          ingestAlerts(marked, "market");
-          setScan(marked);
-          const nSyms = new Set(rows.map((x) => x.under)).size;
-          if (d.baselines) setBaselines(d.baselines);
-          setScanMeta({ mode: "market", stale: !!d.stale, symbols: nSyms,
-            age: d.cache_age_seconds ?? 0, retry: d.retry_after_seconds ?? null,
-            ttl: d.scan_ttl ?? 60, budget: d.budget ?? null });
-          noteSourceFlip("market", nSyms);
-          setScanAt(new Date().toLocaleTimeString());
+          ingestPayload(d);
           return;   // a 200 with rows[] is authoritative — even when empty
         }
       } catch (e) {
         if (cancelled || e?.name === "AbortError") return;
-        // Backend answered 502/503 (upstream rate-limited or hourly budget
-        // spent): keep the last good data stale-marked. There is NO client
-        // fallback anymore — the old 18-symbol chain sweep cost 18 of the
-        // plan's 20 hourly cvforge calls in a single poll, which is exactly
-        // what kept exhausting the quota. The backend is the only spender.
+        // BOTH scan sources failed (paid budget spent AND cvserver
+        // rate-limited): keep the last good data stale-marked. The paid
+        // path is primary, cvserver is strict failover — there is no
+        // client-side chain sweep (it used to burn the hourly budget).
         if (hadDataRef.current) {
           setScanMeta((m) => ({ ...m, stale: true }));
         } else {
@@ -554,7 +867,8 @@ export default function FlowseekerProBlademap({ active = true }) {
     if (!active) return;
     let alive = true;
     fetch(`${API}/alerts/feed?days=2&sort_by=conviction`).then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (alive && d) setConvFeed(d.alerts || []); }).catch(() => {});
+      .then((d) => { if (!alive) return; setConvFeed(d?.alerts || []); setConvFeedState(d ? "ready" : "unavailable"); })
+      .catch(() => { if (alive) setConvFeedState("unavailable"); });
     fetch(`${API}/alerts/quality`).then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (alive && d) setCalibBands(d.conviction_calibration || []); }).catch(() => {});
     fetch(`${API}/journal/stats?days=90`)
@@ -584,42 +898,26 @@ export default function FlowseekerProBlademap({ active = true }) {
     return () => { cancelled = true; ctrl.abort(); clearInterval(id); };
   }, [active, tab]);
 
-  // ---- per-ticker microstructure (regime pill + selected conviction inputs) ----
+  // ---- per-ticker regime pill (only live microstructure left) ----
+  // OFI / GEX charts, VPIN, λ removed 2026-09-05 (Nav directive): the
+  // endpoints don't exist (.catch null loops every 6s) and the subtab
+  // charts rendered empty. Regime drives the topbar pill — that stays.
   useEffect(() => {
     if (!active) return;
     let cancelled = false;
     const ctrl = new AbortController();
     const load = async () => {
-      // On the Scanner tab only the header regime pill is visible — skip the
-      // heavy chart feeds (heatmap especially) so they don't crowd /scan out
-      // of the browser's per-host connection budget every 6s.
-      const chartsVisible = tab !== "scanner";
-      const [reg, vpin, lam, ofi, heat] = await Promise.all([
-        getJSON(`${API}/regime/${ticker}`, ctrl.signal).catch(() => null),
-        chartsVisible ? getJSON(`${API}/vpin/${ticker}`, ctrl.signal).catch(() => null) : null,
-        chartsVisible ? getJSON(`${API}/lambda/${ticker}`, ctrl.signal).catch(() => null) : null,
-        chartsVisible ? getJSON(`${API}/ofi/${ticker}`, ctrl.signal).catch(() => null) : null,
-        chartsVisible ? getJSON(`${BACKEND_URL}/api/heatmap/${ticker}?expiries=6&mode=day`, ctrl.signal).catch(() => null) : null,
-      ]);
+      const reg = await getJSON(`${API}/regime/${ticker}`, ctrl.signal).catch(() => null);
       if (cancelled) return;
-      microRef.current = {
-        vpin: vpin?.vpin, regimeConf: reg?.confidence, lambdaR2: lam?.r_squared,
-      };
       const st = String(reg?.current_state || "").toLowerCase();
       const cls = st.includes("trend") || st.includes("bull") ? "up"
         : st.includes("mean") || st.includes("bear") || st.includes("rever") ? "down" : "chop";
       setRegime({ label: reg?.current_state ? `${reg.current_state}${reg.is_warming ? " (warming)" : ""}` : "—", cls });
-      if (chartsVisible) {
-        ofiDataRef.current = ofi;
-        gexDataRef.current = heat;
-        drawOFI(); drawGEX();
-      }
     };
     load();
     const id = setInterval(load, 6000);
     return () => { cancelled = true; ctrl.abort(); clearInterval(id); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ticker, active, tab, plotlyReady]);
+  }, [ticker, active]);
 
   // auto-select first signal only (don't steal user clicks)
   useEffect(() => {
@@ -627,10 +925,12 @@ export default function FlowseekerProBlademap({ active = true }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signals]);
 
-  const filtered = useMemo(() => signals.filter((s) => {
+  // Left-panel predicate shared by the snapshot list AND the Pulse buffer —
+  // one definition so the two views can never disagree on what "filtered" means.
+  const leftPass = useCallback((s) => {
     const side = String(s.type || "").toLowerCase().startsWith("c") ? "CALL" : "PUT";
     const cls = String(s.classification || "").toUpperCase();
-    const dte = Number(dteOf(s.expiration)) || 0;
+    const dte = Number(bizDTE(s.expiration)) || 0;
     // DTE preset filter (applied first — narrows the time window)
     switch (dteFilter) {
       case "0dte": if (dte !== 0) return false; break;
@@ -641,39 +941,156 @@ export default function FlowseekerProBlademap({ active = true }) {
       case "leaps": if (dte < 91) return false; break;
       default: break;   // "all" — no DTE filter
     }
-    // Classification filter (type/conviction)
+    // Classification filter (type/conviction/side)
     switch (filter) {
       case "CALL": return side === "CALL";
       case "PUT": return side === "PUT";
       case "SWEEP": return cls === "SWEEP";
       case "BLOCK": return cls === "BLOCK";
+      case "ASK": return String(s.side || "").toUpperCase() === "ASK";
+      case "BID": return String(s.side || "").toUpperCase() === "BID";
       case "high": return s._conv >= 80;
-      default: return true;
+      default: break;
     }
-  }), [signals, filter, dteFilter]);
+    // W6 depth gates: equity scope, signed moneyness, OPEX week, strike range.
+    if (equity !== "all" && equityType(s.ticker) !== equity) return false;
+    const sotm = signedOtm(s.type, s.strike, s.spot);
+    if (money === "OTM" && !(sotm != null && sotm > 0)) return false;
+    if (money === "ITM" && !(sotm != null && sotm < 0)) return false;
+    if (opexOnly && !isOpexDay(s.expiration)) return false;
+    if (strikeMin !== "" && Number(s.strike) < Number(strikeMin)) return false;
+    if (strikeMax !== "" && Number(s.strike) > Number(strikeMax)) return false;
+    return true;
+  }, [filter, dteFilter, equity, money, opexOnly, strikeMin, strikeMax]);
+
+  const filtered = useMemo(() => signals.filter(leftPass), [signals, leftPass]);
+
+  // Trailing-90s print buffer: each poll REPLACES signals, so aggregating the
+  // snapshot alone can never show N>1. The buffer keeps every fresh print and
+  // expires anything older than the Pulse window (cap 500 for memory).
+  // WeakSet dedupes StrictMode double-effect replays of the same objects.
+  const printBufferRef = useRef([]);
+  const seenPrintsRef = useRef(new WeakSet());
+  const prevVolRef = useRef(new Map()); // contract key -> last-seen day volume (burst math)
+  const prevMidRef = useRef(new Map()); // contract key -> last-seen mid (drift read)
+  const midRingRef = useRef(new Map()); // contract key -> capped mid ring (Roll cost)
+  const [pulseTick, setPulseTick] = useState(0);
+  useEffect(() => {
+    if (!signals.length) return;
+    const now = Date.now();
+    let buf = pruneBuffer(printBufferRef.current, 90e3, now);
+    const fresh = [];
+    for (const s of signals) {
+      if (seenPrintsRef.current.has(s)) continue;
+      seenPrintsRef.current.add(s);
+      fresh.push(s);
+      buf.push(s);
+    }
+    // Per-poll snapshot stamping on fresh objects only (StrictMode-safe).
+    stampPollDeltas(fresh, prevVolRef.current, prevMidRef.current);
+    // Session mid rings for the pooled Roll bucket (cap 60 ≈ 15 min).
+    for (const s of fresh) {
+      const m = Number(s.mid);
+      if (Number.isFinite(m) && m > 0) {
+        const key = contractKey(s);
+        midRingRef.current.set(key, pushCapped(midRingRef.current.get(key), m, 60));
+      }
+    }
+    // Strategy-leg fingerprints over the full snapshot leg set (heuristic).
+    try { flagSpreadLegs(signals); } catch { /* never break the tape */ }
+    if (prevVolRef.current.size > 2000) {
+      const keep = new Set(buf.map((r) => contractKey(r)));
+      for (const k of [...prevVolRef.current.keys()]) if (!keep.has(k)) prevVolRef.current.delete(k);
+      for (const k of [...prevMidRef.current.keys()]) if (!keep.has(k)) prevMidRef.current.delete(k);
+      for (const k of [...midRingRef.current.keys()]) if (!keep.has(k)) midRingRef.current.delete(k);
+    }
+    printBufferRef.current = buf.slice(-500);
+    setPulseTick((t) => t + 1);
+  }, [signals]);
+
+  // Pulse tape: trailing-90s buffer, left filters + BladeMap gates. One row
+  // per contract — ticker scope + DTE band + min score gate, ranked by
+  // aggregated premium.
+  const pulseRows = useMemo(() => {
+    const now = Date.now();
+    const gated = pruneBuffer(printBufferRef.current, 90e3, now).filter((s) => {
+      if (!leftPass(s)) return false;
+      if (pulseTicker !== "ALL" && s.ticker !== pulseTicker) return false;
+      const dte = Number(bizDTE(s.expiration)) || 0;
+      // Exclusive bands (2026-09-05): each preset is a disjoint slice.
+      if (pulseDte === "0D" && dte !== 0) return false;
+      else if (pulseDte === "1-7D" && (dte < 1 || dte > 7)) return false;
+      else if (pulseDte === "8-21D" && (dte < 8 || dte > 21)) return false;
+      else if (pulseDte === "22-45D" && (dte < 22 || dte > 45)) return false;
+      else if (pulseDte === "45D+" && dte <= 45) return false;
+      if (pulseScore > 0 && pulseScore10(s._conv) < pulseScore) return false;
+      return true;
+    });
+    return aggregatePulse(gated, 90e3, now);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pulseTick, leftPass, pulseTicker, pulseDte, pulseScore]);
+
+  // Overview bar rollup over the visible 90s tape (Phase 9 W1 tracer).
+  const pulseOv = useMemo(() => overviewStats(pulseRows), [pulseRows]);
+  // Pin-risk readout for the single-ticker tape (SHIP-1; multi-ticker ALL
+  // has no single expiry to pin to — metric hidden, not averaged).
+  const pinRead = useMemo(
+    () => (pulseTicker === "ALL" ? null : nearestExpiryPin(pulseRows, pulseTicker)),
+    [pulseRows, pulseTicker]
+  );
+  // Pooled Roll cost over the pin expiry bucket (needs 30 deltas; the poll
+  // tick in deps re-runs the memo as rings fill — refs mutate in place).
+  const costRead = useMemo(() => {
+    if (!pinRead || !pinRead.eligible || !pinRead.exp) return null;
+    const rings = [];
+    for (const [k, ring] of midRingRef.current) {
+      const parts = String(k).split("|");
+      if (parts.length === 4 && parts[0].toUpperCase() === String(pulseTicker).toUpperCase() && parts[3] === pinRead.exp) {
+        rings.push(ring);
+      }
+    }
+    return rings.length ? rollPooled(rings) : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pulseRows, pulseTick, pulseTicker, pinRead]);
 
   // scanner: filter + sort + KPI rollup. Simple mode ignores the hidden
   // advanced knobs (a Min-Vol set weeks ago must not silently filter an
-  // interface with no visible controls) and applies one opinionated quality
-  // gate instead: only rows an institutional desk would look at.
+  // interface with no visible controls). The universe is fully open — no
+  // priority gate, no allowlist: quality gates (SCORE ≥92 / DTE / side /
+  // search) do the filtering, not a ticker list.
+  // Side + DTE-preset + Min-Prem~/Min-OI apply in BOTH modes (side and DTE
+  // are visible controls; the number inputs are advanced-only).
   const scanRows = useMemo(() => {
     const q = (scanQ || "").trim().toUpperCase();
-    const isBest = (r) => r.score >= 70 || r.arch === "WHALE"
-      || (r.oiChgPct ?? 0) >= 0.3 || (r.premium ?? 0) >= 1e6;
+    const dteIn = (r, preset) => {
+      const d = r.dte;
+      switch (preset) {
+        case "0dte": return d === 0;
+        case "1-7d": return d >= 1 && d <= 7;
+        case "weekly": return d >= 1 && d <= 7;
+        case "monthly": return d >= 8 && d <= 35;
+        case "qtrly": return d >= 36 && d <= 90;
+        case "leaps": return d >= 91;
+        default: return true;
+      }
+    };
     const rows = scan.filter((r) => {
-      if (!advanced) {
-        if (!isBest(r)) return false;
-      } else {
-        if (universeOnly && !universe.includes(r.under)) return false;
+      if (scanSideF !== "all" && r.type !== scanSideF) return false;
+      if (!dteIn(r, scanDteF)) return false;
+      if (advanced) {
         if (scanTypeF !== "all" && r.type !== scanTypeF) return false;
         if (scanMinVol && r.vol < scanMinVol) return false;
+        if (scanMinPrem && (r.premium ?? 0) < scanMinPrem) return false;
+        if (scanMinOI && (r.oi ?? 0) < scanMinOI) return false;
         if (scanMinScore && r.score < scanMinScore) return false;
+      } else {
+        if (scanMinPrem && (r.premium ?? 0) < scanMinPrem) return false;
       }
       if (q && !(r.under || "").toUpperCase().includes(q)) return false;
       // Zenith control-cluster quick filters
       if (minScoreQF > 0 && (r.score ?? 0) < minScoreQF) return false;
-      if (dteRange[0] != null && dteDays(r.exp) != null && dteDays(r.exp) < dteRange[0]) return false;
-      if (dteRange[1] != null && dteDays(r.exp) != null && dteDays(r.exp) > dteRange[1]) return false;
+      if (dteRange[0] != null && bizDTE(r.exp) != null && bizDTE(r.exp) < dteRange[0]) return false;
+      if (dteRange[1] != null && bizDTE(r.exp) != null && bizDTE(r.exp) > dteRange[1]) return false;
       return true;
     });
     const k = scanSort.key, dir = scanSort.dir === "desc" ? -1 : 1;
@@ -684,7 +1101,7 @@ export default function FlowseekerProBlademap({ active = true }) {
       return (av < bv ? -1 : av > bv ? 1 : 0) * dir;
     });
     return rows;
-  }, [scan, scanTypeF, scanMinVol, scanMinScore, scanQ, scanSort, universe, universeOnly, advanced, minScoreQF, dteRange]);
+  }, [scan, scanSideF, scanDteF, scanTypeF, scanMinVol, scanMinPrem, scanMinOI, scanMinScore, scanQ, scanSort, advanced, minScoreQF, dteRange]);
   // Keyboard nav (scanner tab only, ignored while typing in an input)
   useEffect(() => {
     if (!active || tab !== "scanner") return;
@@ -775,11 +1192,11 @@ export default function FlowseekerProBlademap({ active = true }) {
   const ackFire = useCallback((k) => setAckedKeys((m) => { const n = new Set(m); n.add(k); return n; }), []);
   const fires = useMemo(() => selectFires(alertLog, {
     now: Date.now(), ttlMs: 60_000,
-    minScoreForFire: Math.max(alertScore, 90),
+    minScoreForFire: alertScore,
     enabled: alertRules,
-    allow: alertUnivOnly ? universe : null,
+    allow: null,
     acked: ackedKeys,
-  }), [alertLog, alertScore, alertRules, alertUnivOnly, universe, ackedKeys]);
+  }), [alertLog, alertScore, alertRules, ackedKeys]);
   const fireBanner = useMemo(() => pickBanner(fires), [fires]);
   useEffect(() => {
     if (!fireBanner) return;
@@ -837,102 +1254,30 @@ export default function FlowseekerProBlademap({ active = true }) {
       margin: { l: 34, r: 34, t: 12, b: 12 }, height: 190, showlegend: false, font: { family: PL.font } },
     { displayModeBar: false, responsive: true });
   }
-  function drawOFI() {
-    if (!P() || !ofiRef.current) return;
-    const o = ofiDataRef.current;
-    const per = (o?.of_per_level || []).map(Number);
-    if (!per.length) { P().react(ofiRef.current, [], { paper_bgcolor: PL.paper, margin: { t: 20 },
-      annotations: [{ text: o ? "OFI warming up…" : "no OFI data", showarrow: false, font: { color: PL.muted } }] }, { displayModeBar: false }); return; }
-    P().react(ofiRef.current, [{
-      type: "bar", x: per.map((_, i) => `L${i + 1}`), y: per,
-      marker: { color: per.map((v) => (v >= 0 ? PL.green : PL.red)) },
-      hovertemplate: "%{x}: %{y:.3f}<extra></extra>",
-    }], { paper_bgcolor: PL.paper, plot_bgcolor: PL.plot, margin: { l: 40, r: 14, t: 24, b: 28 },
-      title: { text: `Order-Flow Imbalance · ${o.imbalance_label || ""} (agg ${(o.of_aggregated ?? 0).toFixed?.(2) ?? o.of_aggregated})`, font: { color: PL.text, size: 11, family: PL.font } },
-      xaxis: { gridcolor: PL.grid, color: PL.muted }, yaxis: { gridcolor: PL.grid, color: PL.muted, zeroline: true, zerolinecolor: PL.axis },
-      font: { family: PL.font } }, { displayModeBar: false, responsive: true });
-  }
-  function drawGEX() {
-    if (!P() || !gexRef.current) return;
-    const h = gexDataRef.current;
-    const grid = h?.grid?.grid, expiries = h?.grid?.expiries || [], strikes = (h?.grid?.strikes || []).slice().sort((a, b) => a - b);
-    if (!grid || !strikes.length) { P().react(gexRef.current, [], { paper_bgcolor: PL.paper, margin: { t: 20 },
-      annotations: [{ text: "no GEX grid", showarrow: false, font: { color: PL.muted } }] }, { displayModeBar: false }); return; }
-    const z = strikes.map((s) => expiries.map((e) => Number(grid?.[e]?.[String(s)] ?? grid?.[e]?.[s] ?? 0)));
-    P().react(gexRef.current, [{
-      type: "heatmap", x: expiries.map((e) => String(e).slice(5)), y: strikes.map((s) => `$${s}`), z,
-      colorscale: [[0, "#5b1424"], [0.5, "#0c1322"], [1, "#1a5c7e"]], zmid: 0, xgap: 1, ygap: 1,
-      colorbar: { thickness: 8, len: 0.7, tickfont: { color: PL.muted, size: 9 } },
-      hovertemplate: "%{y} · %{x}<br>GEX %{z:.2f}<extra></extra>",
-    }], { paper_bgcolor: PL.paper, margin: { l: 64, r: 14, t: 18, b: 34 },
-      xaxis: { color: PL.muted, side: "top" }, yaxis: { color: PL.muted }, font: { family: PL.font } },
-    { displayModeBar: false, responsive: true });
-  }
-
-  // synthetic vol surface (no IV-surface backend) — labelled SIM
-  function drawVol() {
-    if (!P() || !volRef.current) return;
-    const mny = Array.from({ length: 21 }, (_, i) => 0.8 + i * 0.02);
-    const exp = [7, 14, 30, 60, 90, 180];
-    const z = exp.map((d) => mny.map((m) => {
-      const skew = (1 - m) * 28; const term = 12 + 30 / Math.sqrt(d); const smile = Math.pow(m - 1, 2) * 60;
-      return +(term + skew + smile).toFixed(2);
-    }));
-    P().react(volRef.current, [{ type: "surface", x: mny, y: exp, z,
-      colorscale: [[0, "#2c1339"], [0.5, "#29c5e0"], [1, "#19d27c"]], showscale: true,
-      colorbar: { thickness: 10, len: 0.6, tickfont: { color: PL.muted, size: 9 } },
-      hovertemplate: "Mny %{x}<br>%{y}d<br>IV %{z}%<extra></extra>" }],
-    { paper_bgcolor: PL.paper, scene: { camera: { eye: { x: 1.4, y: -1.6, z: 0.7 } },
-      xaxis: { title: "Moneyness", color: PL.muted, gridcolor: PL.grid },
-      yaxis: { title: "DTE", color: PL.muted, gridcolor: PL.grid },
-      zaxis: { title: "IV %", color: PL.muted, gridcolor: PL.grid } },
-      margin: { l: 8, r: 8, t: 8, b: 8 }, font: { family: PL.font, color: PL.text } },
-    { displayModeBar: false, responsive: true });
-  }
-  // gamma profile from REAL heatmap net-GEX per strike
-  function drawGamma() {
-    if (!P() || !gammaBarRef.current) return;
-    const h = gexDataRef.current, grid = h?.grid?.grid, expiries = h?.grid?.expiries || [];
-    const strikes = (h?.grid?.strikes || []).slice().sort((a, b) => a - b);
-    if (!grid || !strikes.length) return;
-    const net = strikes.map((s) => expiries.reduce((a, e) => a + Number(grid?.[e]?.[String(s)] ?? 0), 0));
-    P().react(gammaBarRef.current, [{ type: "bar", x: strikes.map((s) => `$${s}`), y: net,
-      marker: { color: net.map((v) => (v >= 0 ? PL.green : PL.red)) },
-      hovertemplate: "%{x}<br>Net GEX %{y:.2f}<extra></extra>" }],
-    { paper_bgcolor: PL.paper, margin: { l: 44, r: 12, t: 24, b: 40 }, title: { text: "Net GEX by Strike", font: { color: PL.text, size: 11 } },
-      xaxis: { color: PL.muted, gridcolor: PL.grid }, yaxis: { color: PL.muted, gridcolor: PL.grid, zeroline: true, zerolinecolor: PL.axis }, font: { family: PL.font } },
-    { displayModeBar: false, responsive: true });
-    let cum = 0; const cumA = net.map((v) => (cum += v));
-    if (gammaCurveRef.current) P().react(gammaCurveRef.current, [{ type: "scatter", mode: "lines", x: strikes.map((s) => `$${s}`), y: cumA,
-      line: { color: PL.blue, width: 2 }, fill: "tozeroy", fillcolor: "rgba(41,197,224,0.10)",
-      hovertemplate: "%{x}<br>Cum %{y:.2f}<extra></extra>" }],
-    { paper_bgcolor: PL.paper, margin: { l: 44, r: 12, t: 24, b: 40 }, title: { text: "Cumulative Dealer Gamma", font: { color: PL.text, size: 11 } },
-      xaxis: { color: PL.muted, gridcolor: PL.grid }, yaxis: { color: PL.muted, gridcolor: PL.grid }, font: { family: PL.font } },
-    { displayModeBar: false, responsive: true });
-  }
-
-  // redraw when tab/subtab/plotly changes
+  // redraw conviction charts when tab/plotly changes
   useEffect(() => {
     if (!plotlyReady) return;
-    if (tab === "flow") { if (subtab === "ofi") drawOFI(); else drawGEX(); if (selected) { drawGauge(selected); drawRadar(selected); } }
-    if (tab === "vol") drawVol();
-    if (tab === "gamma") drawGamma();
+    if (tab === "flow" && selected) { drawGauge(selected); drawRadar(selected); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, subtab, plotlyReady, volTicker]);
+  }, [tab, plotlyReady]);
 
   const sideOf = (p) => (String(p.type || "").toLowerCase().startsWith("c") ? "CALL" : "PUT");
   const typeOf = (p) => String(p.classification || "reg").toUpperCase();
 
   // ---------- render ----------
-  // Focused on institutional smart order flow — dropped Vol Surface (synthetic) + Academy (education).
-  const TABS = [["flow", "Smart Order Flow"], ["gamma", "Dealer Positioning"], ["scanner", "Scanner"]];
+  // Focused on institutional smart order flow + cross-symbol scanner.
+  // WTI Crude, Stat-Arb Pairs, and Dealer Positioning tabs removed
+  // 2026-09-04 (Nav directive: failed experiments). Scanner is the hero.
+  const TABS = [
+    ["flow", "Smart Order Flow"],
+    ["scanner", "Scanner"],
+  ];
   return (
     <div className="fsb-root">
       <div className="fsb-topbar">
         <div className="fsb-brand">
           <span className="fsb-logo">◢</span>
           <span className="fsb-brand-name">Tidehunter <span className="fsb-pro">Pro</span></span>
-          <span className="fsb-status-chip" title="Live cvforge data. Vol surface is simulated (no IV-surface backend).">LIVE · CVFORGE</span>
         </div>
         <div className="fsb-tabs">
           {TABS.map(([id, label]) => (
@@ -1012,23 +1357,30 @@ export default function FlowseekerProBlademap({ active = true }) {
         <div className={`fsb-view fsb-view-flow${tab === "flow" ? " active" : ""}`}>
           {/* left */}
           <div className="fsb-col">
-            <div className="fsb-panel" style={{ flex: "1 1 60%" }}>
-              <div className="fsb-panel-h"><span>Watchlist</span><span className="fsb-muted fsb-small">{WATCH.length} symbols</span></div>
-              <ul className="fsb-watchlist">
-                {WATCH.map((t) => (
-                  <li key={t} className={`fsb-wl-li${ticker === t ? " selected" : ""}`} onClick={() => setTicker(t)}>
-                    <span className="fsb-wl-ticker">{t}</span>
-                    <span className="fsb-wl-spot">{t === ticker ? "●" : ""}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
             <div className="fsb-panel">
               <div className="fsb-panel-h">Filters</div>
               <div className="fsb-chips">
-                {[["all", "All"], ["CALL", "Calls"], ["PUT", "Puts"], ["SWEEP", "Sweep"], ["BLOCK", "Block"], ["high", "≥80"]].map(([v, l]) => (
-                  <button key={v} className={`fsb-chip${filter === v ? " active" : ""}`} onClick={() => setFilter(v)}>{l}</button>
+                {[["all", "All"], ["CALL", "Calls"], ["PUT", "Puts"], ["SWEEP", "Sweep"], ["BLOCK", "Block"], ["ASK", "Ask"], ["BID", "Bid"], ["high", "≥80"]].map(([v, l]) => (
+                  <button key={v} className={`fsb-chip${filter === v ? " active" : ""}`} onClick={() => setFilter(v)} title={FILTER_CHIP_TITLES[v]}>{l}</button>
                 ))}
+              </div>
+              <div className="fsb-panel-h fsb-panel-h-sm" style={{ marginTop: 8 }}>Equity</div>
+              <div className="fsb-chips">
+                {[["all", "All"], ["STOCK", "Stocks"], ["ETF", "ETFs"], ["INDEX", "Index"]].map(([v, l]) => (
+                  <button key={v} className={`fsb-chip fsb-chip-sm${equity === v ? " active" : ""}`} onClick={() => setEquity(v)} title={v === "all" ? "Whole market" : v === "STOCK" ? "Single names only (macro ETF flow excluded)" : v === "ETF" ? "ETF/index-product flow only" : "Index options only"}>{l}</button>
+                ))}
+              </div>
+              <div className="fsb-panel-h fsb-panel-h-sm" style={{ marginTop: 8 }}>Moneyness</div>
+              <div className="fsb-chips">
+                {[["all", "All"], ["OTM", "OTM"], ["ITM", "ITM"]].map(([v, l]) => (
+                  <button key={v} className={`fsb-chip fsb-chip-sm${money === v ? " active" : ""}`} onClick={() => setMoney(v)} title="From spot at print time; rows without spot are excluded when gated">{l}</button>
+                ))}
+                <button className={`fsb-chip fsb-chip-sm${opexOnly ? " active" : ""}`} onClick={() => setOpexOnly((o) => !o)} title="Only contracts expiring in the monthly OPEX week (third Friday)">OPEX</button>
+              </div>
+              <div className="fsb-panel-h fsb-panel-h-sm" style={{ marginTop: 8 }}>Strikes</div>
+              <div className="fsb-chips">
+                <input className="fsb-chip fsb-chip-sm" style={{ width: 64 }} type="number" placeholder="Min" value={strikeMin} onChange={(e) => setStrikeMin(e.target.value)} />
+                <input className="fsb-chip fsb-chip-sm" style={{ width: 64 }} type="number" placeholder="Max" value={strikeMax} onChange={(e) => setStrikeMax(e.target.value)} />
               </div>
               <div className="fsb-panel-h fsb-panel-h-sm" style={{ marginTop: 8 }}>DTE</div>
               <div className="fsb-chips">
@@ -1043,7 +1395,9 @@ export default function FlowseekerProBlademap({ active = true }) {
                 <span><i className="fsb-dot call" /> Call flow</span>
                 <span><i className="fsb-dot put" /> Put flow</span>
                 <span><i className="fsb-dot sweep" /> Sweep (urgent)</span>
-                <span><i className="fsb-dot block" /> Block (negotiated)</span>
+                <span><i className="fsb-dot block" /> Block (large print)</span>
+                <span><i className="fsb-dot burst" /> 15s burst &gt; OI</span>
+                <span><i className="fsb-dot voloi" /> Vol &gt; OI</span>
               </div>
             </div>
           </div>
@@ -1051,29 +1405,112 @@ export default function FlowseekerProBlademap({ active = true }) {
           {/* center */}
           <div className="fsb-col">
             <div className="fsb-panel fsb-flow-panel">
-              <div className="fsb-panel-h"><span>Live Flow Feed</span><span><i className="fsb-live-dot" /><span className="fsb-muted fsb-small">live · {filtered.length}</span></span></div>
+              <div className="fsb-panel-h"><span>Live Options Flow</span><span><i className="fsb-live-dot" style={flowPaused ? { background: "#f5b042" } : undefined} /><span className="fsb-muted fsb-small">{flowPaused ? "PAUSED" : "LIVE"} · LAST UPDATED {clock || "—"} · SHOWING {pulseRows.length} PRINTS</span><button className="fsb-iconbtn" title="Refresh now" onClick={() => { setFlowPaused(false); setFlowNonce((n) => n + 1); }}>⟳</button><button className="fsb-iconbtn" title={flowPaused ? "Resume live polling" : "Pause live polling"} onClick={() => setFlowPaused((p) => !p)}>{flowPaused ? "▶" : "⏸"}</button></span></div>
+              <div><button className="fsb-howto" onClick={() => setHowTo((h) => !h)}>ⓘ HOW TO READ</button></div>
+              {howTo && <div className="fsb-howto-pop">SIDE = inferred print side (last vs mid, no tape — unknown when quotes are missing). SIGNAL follows SIDE: ASK→BULLISH, BID→BEARISH, calls and puts alike. BADGES: SILVER every row; GOLDEN ≥$900K rolled premium; WHALE ≥$1M (tape size tier — not the $25M alert rule). HEDGE? = put bought aggressively, often protection rather than direction. SCORE = conviction/10. PREM subline = 90s rolled premium (print count).</div>}
+              <div className="fsb-pulsebar">
+                <span className="fsb-ovbar" title="Session rollup over the visible 90s tape (direction = premium-flow proxy, not confirmed buys/sells)">
+                  <span className={`fsb-pill ${pulseOv.lean === "Bullish" ? "fsb-sig-bullish" : pulseOv.lean === "Bearish" ? "fsb-sig-bearish" : "fsb-badge-silver"}`}>{pulseOv.lean}</span>
+                  <span className="fsb-ovmetric" title="Bullish-leg premium minus bearish-leg premium">Net {pulseOv.netPrem < 0 ? "−" : "+"}{fmtUSD(pulseOv.netPrem)}</span>
+                  <span className="fsb-ovmetric" title="Put premium / call premium">P/C {Number.isFinite(pulseOv.pc) ? pulseOv.pc.toFixed(2) : "—"}</span>
+                  <span className="fsb-ovmetric" title="Flow imbalance ratio |bull-bear|/(bull+bear)">FIR {pulseOv.fir.toFixed(2)}</span>
+                  <span className="fsb-ovmetric" title="Relative volume needs time-of-day baselines">RVOL needs baseline</span>
+                  {pinRead ? (
+                    <span className="fsb-ovmetric" title={pinRead.eligible ? `Expiry-day pin risk (${pinRead.exp}): distance to max-OI strike, top-3 OI concentration. Unsigned exposure — never direction.` : "Single names pin only on Fridays (weekly expirations); daily read available for SPX/SPY/QQQ/IWM."}>
+                      {pinRead.eligible && pinRead.maxOiStrike != null
+                        ? `PIN ${pinRead.maxOiStrike} · ${(pinRead.concentration * 100).toFixed(0)}%${pinRead.distPct != null ? ` · ${pinRead.distPct >= 0 ? "+" : ""}${pinRead.distPct.toFixed(1)}%` : ""}`
+                        : "PIN Fri-only"}
+                    </span>
+                  ) : null}
+                  {(() => { const cl = costLabel(costRead); return cl ? (
+                    <>
+                      <span className="fsb-ovmetric" title={cl.title}>
+                        {cl.text}
+                      </span>
+                      <span className="fsb-muted fsb-small" title={COST_CAPTION_TITLE}>{cl.caption}</span>
+                    </>
+                  ) : null; })()}
+                </span>
+                <label className="fsb-muted fsb-small">Ticker&nbsp;
+                  <input
+                    className="fsb-ticker-input"
+                    value={pulseQ}
+                    onChange={(e) => setPulseQ(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") focusPulseTicker(); }}
+                    placeholder="ANY"
+                    aria-label="Focus any ticker"
+                    data-testid="fsb-ticker-search"
+                  />
+                  <button className="fsb-chip fsb-chip-sm" onClick={focusPulseTicker} title="Focus tape on any ticker (open universe)">Go</button>
+                  {pulseTicker !== "ALL" && (
+                    <button className="fsb-chip fsb-chip-sm" onClick={() => { setPulseTicker("ALL"); setPulseQ(""); }} title="Back to all tickers">ALL</button>
+                  )}
+                </label>
+                <span className="fsb-pulsebar-group"><span className="fsb-muted fsb-small">DTE</span>
+                  {[["0D", "0D"], ["1-7D", "1-7D"], ["8-21D", "8-21D"], ["22-45D", "22-45D"], ["45D+", "45D+"], ["ALL", "ALL"]].map(([v, l]) => (
+                    <button key={v} className={`fsb-chip fsb-chip-sm${pulseDte === v ? " active" : ""}`} onClick={() => setPulseDte(v)}>{l}</button>
+                  ))}
+                </span>
+                <span className="fsb-pulsebar-group"><span className="fsb-muted fsb-small">SCORE</span>
+                  {[[0, "ALL"], [3, "3+"], [5, "5+"], [7, "7+"]].map(([v, l]) => (
+                    <button key={l} className={`fsb-chip fsb-chip-sm${pulseScore === v ? " active" : ""}`} onClick={() => setPulseScore(v)}>{l}</button>
+                  ))}
+                </span>
+              </div>
+              <div className="fsb-scanbar" data-testid="flow-kpi-strip">
+                {[
+                  ["Feed", pulseTicker === "ALL" ? `ALL · ${ticker}` : pulseTicker, ""],
+                  ["Prints", String(pulseRows.length), "b"],
+                  ["Net", `${pulseOv.netPrem < 0 ? "−" : "+"}${fmtUSD(pulseOv.netPrem)}`, pulseOv.lean === "Bullish" ? "g" : pulseOv.lean === "Bearish" ? "r" : ""],
+                  ["P/C", Number.isFinite(pulseOv.pc) ? pulseOv.pc.toFixed(2) : "—", ""],
+                  ["FIR", pulseOv.fir.toFixed(2), ""],
+                  ["Source", scanMeta.data_source === "public" ? "LIVE · public" : scanMeta.data_source === "public_api" ? "LIVE · public" : scanMeta.data_source === "cvserver" ? "LIVE · cvserver" : flowPaused ? "PAUSED" : "—", scanMeta.data_source ? "g" : "y"],
+                  ["Updated", clock || "—", ""],
+                ].map(([l, v, c]) => (
+                  <div key={l} className="fsb-skpi"><div className="fsb-skl">{l}</div><div className={`fsb-skv ${c}`}>{v}</div></div>
+                ))}
+              </div>
               <div className="fsb-flow-wrap">
-                <table className="fsb-table">
+                <table className="fsb-table fsb-pulse">
                   <thead><tr>
-                    <th>Ticker</th><th>Type</th><th>Side</th><th className="num">Strike</th>
-                    <th>DTE</th><th className="num">Day $</th><th className="num">V/OI</th><th className="num">Conv</th>
+                    <th title="Local time of the latest print in the 90s window">FLOW ET</th><th>SYM</th><th className="num">STRIKE</th><th>C/P</th><th className="num" title="Absolute distance of strike from spot at print time">OTM</th><th>EXP</th><th className="num" title="Trading days to expiry">DTE</th><th className="num" title="Price paid per contract (last print; mid when last is missing)">FILL</th><th title="ASK = lifted the offer (aggressive buy); BID = hit the bid">SIDE</th><th title="Where last traded inside bid-ask: left = bid, right = ask">SPREAD</th><th title="Follows SIDE: ASK→BULLISH, BID→BEARISH">SIGNAL</th><th title="SILVER always; GOLDEN ≥$900K; WHALE ≥$1M rolled premium">BADGES</th><th className="num" title="Conviction mapped 0-10">SCORE</th><th className="num" title="Contracts in the 90s window">SIZE</th><th className="num" title="Rolled premium in the 90s window">PREM</th>
                   </tr></thead>
                   <tbody>
-                    {filtered.length === 0 && <tr><td colSpan={8} className="fsb-muted" style={{ padding: 14, lineHeight: 1.7 }}>Loading unusual options activity from <b style={{ color: "var(--fsb-blue)" }}>cvforge</b> (ranked by volume-vs-open-interest)…</td></tr>}
-                    {filtered.slice(0, 80).map((p, i) => {
+                    {pulseRows.length === 0 && <tr><td colSpan={15} className="fsb-muted" style={{ padding: 14, lineHeight: 1.7 }}>No prints for {pulseTicker === "ALL" ? ticker : pulseTicker} pass the Pulse gates (DTE {pulseDte} · score {pulseScore === 0 ? "ALL" : pulseScore + "+"}).{pulseTicker !== "ALL" && pulseTicker !== ticker ? ` Feed is on ${ticker} — type ${pulseTicker} above and hit Go, then wait one poll.` : " Thin name or market closed? Try SPY/QQQ, widen DTE, or check back at the open. Trailing-90s tape: Public API first, cvserver fallback, ranked by aggregated premium…"}</td></tr>}
+                    {pulseRows.map((p, i) => {
                       const conv = p._conv;
+                      const score = pulseScore10(conv);
+                      const side = String(p.side || (String(p.type || "").toLowerCase().startsWith("c") ? "ASK" : "BID"));
+                      const sig = pulseSignal(side);
+                      const badges = pulseBadges(p._aggPrem ?? p.premium);
+                      const cp = String(p.type || "").toLowerCase().startsWith("c") ? "CALL" : "PUT";
+                      const pcls = String(p.classification || "").toUpperCase();
+                      const flowIcon = pcls === "SWEEP" ? "⌁ " : pcls === "BLOCK" ? "◫ " : "";
+                      const hl = highlightState({ volDelta: p._volDelta, volOI: p.vol_oi_ratio, oi: p.oi });
+                      const price = Number(p.mid) || (Number(p.volume) > 0 ? (Number(p.premium) || 0) / (Number(p.volume) * 100) : 0);
+                      const fill = Number(p.last) || 0;
+                      const sp = spreadPosition(p.bid, p.ask, p.last);
+                      const qs = quoteSkew(p.bid, p.ask, p._prevMid);
+                      const driftArrow = qs.tag === "UP" ? "▲" : qs.tag === "DOWN" ? "▼" : "";
                       return (
-                        <tr key={`${p.ticker}-${p.timestamp}-${i}`} className={selected === p ? "selected" : ""}
+                        <tr key={`${p.ticker}-${p.strike}-${String(p.expiration || "").slice(0, 10)}-${i}`} className={`${selected === p ? "selected" : ""}${hl === "BURST" ? " hl-burst" : hl === "VOL_OI" ? " hl-vol" : ""}`}
                             tabIndex={0} onClick={() => selectSignal(p)}
                             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectSignal(p); } }}>
-                          <td className="tk">{p.ticker}</td>
-                          <td className={`fsb-type-${typeOf(p).toLowerCase()}`}>{typeOf(p)}</td>
-                          <td className={sideOf(p) === "CALL" ? "fsb-side-call" : "fsb-side-put"}>{sideOf(p)}</td>
+                          <td className="fsb-muted">{fmtClock(p._aggTs ?? p.timestamp, true)}</td>
+                          <td className="tk" title={pcls === "SWEEP" || pcls === "BLOCK" ? flowClassTitle(pcls) : typeOf(p)}>{flowIcon}{p.ticker}</td>
                           <td className="num">{Number(p.strike).toFixed(0)}</td>
-                          <td>{dteOf(p.expiration)}d</td>
-                          <td className="num">{fmtMoney(p.premium)}</td>
-                          <td className="num">{Number(p.vol_oi_ratio || 0).toFixed(1)}</td>
-                          <td className="num"><span className={`fsb-conv-bar${conv >= 80 ? "" : conv >= 65 ? " mid" : " low"}`} style={{ width: Math.max(8, conv) * 0.6 }} />{conv}</td>
+                          <td className={`fsb-type-${cp.toLowerCase()}`} title={p._strat ? `${p._strat} multi-leg fingerprint (heuristic: matched volumes, no exchange linkage)` : cp}>{p._strat ? "◈" : ""}{cp}</td>
+                          <td className="num">{p.otm == null ? "—" : `+${Number(p.otm).toFixed(1)}%`}</td>
+                          <td className="fsb-muted">{String(p.expiration || "").slice(0, 10)}</td>
+                          <td className="num">{bizDTE(p.expiration)}</td>
+                          <td className="num" title={driftArrow ? `Mid ${qs.tag === "UP" ? "up" : "down"} ${Math.abs(qs.driftBp).toFixed(0)}bp vs prior poll (dealer-pressure read, Ho-Stoll-lite)` : undefined}>{driftArrow}{fill > 0 ? fill.toFixed(2) : price > 0 ? price.toFixed(2) : "—"}</td>
+                          <td><span className={`fsb-pill fsb-side-${side.toLowerCase()}`}>{side === "UNKNOWN" ? "—" : side}</span></td>
+                          <td>{sp.state === "NO_QUOTE" ? <span className="fsb-muted fsb-small" title="No quote — bid/ask unavailable">no quote</span> : sp.state === "LOCKED" ? <span className="fsb-muted fsb-small" title="Locked/crossed spread — no fill">LOCKED</span> : <span className="fsb-spreadbar" title={`last at ${(sp.pos * 100).toFixed(0)}% of bid-ask spread${qs.relSpread != null ? ` · rel spread ${(qs.relSpread * 100).toFixed(2)}%` : ""}`}><span className="fsb-spreadmark" style={{ left: `${(sp.pos * 100).toFixed(1)}%` }} /></span>}</td>
+                          <td><span className={`fsb-pill fsb-sig-${sig.toLowerCase()}`}>{sig === "UNKNOWN" ? "—" : sig}</span>{pulseHedge(p.type, side) && <span className="fsb-pill fsb-hedge" title="Put bought aggressively — often a hedge, not directional bullishness">HEDGE?</span>}</td>
+                          <td>{badges.map((b) => <span key={b} className={`fsb-pill fsb-badge-${b.toLowerCase()}`} title={b === "WHALE" ? "Tape size tier: ≥$1M rolled premium in 90s — not the $25M alert rule" : b === "GOLDEN" ? "Premium ≥ $900K rolled in 90s" : "Baseline badge: every print starts here"}>{b}</span>)}</td>
+                          <td className="num">{score.toFixed(1)}</td>
+                          <td className="num">{Number(p._aggSize ?? p.volume) || 0}</td>
+                          <td className="num">{fmtUSD(p._aggPrem ?? p.premium)}<div className="fsb-muted fsb-small">90s {fmtUSD(p._aggPrem)} ({p._aggN || 1})</div></td>
                         </tr>
                       );
                     })}
@@ -1081,26 +1518,16 @@ export default function FlowseekerProBlademap({ active = true }) {
                 </table>
               </div>
             </div>
-            <div className="fsb-panel fsb-sub-panel">
-              <div className="fsb-subtabs">
-                <button className={`fsb-subtab${subtab === "ofi" ? " active" : ""}`} onClick={() => setSubtab("ofi")}>Order Flow Imbalance</button>
-                <button className={`fsb-subtab${subtab === "gex" ? " active" : ""}`} onClick={() => setSubtab("gex")}>Dealer GEX Heatmap</button>
-              </div>
-              <div ref={ofiRef} className="fsb-chart" style={{ display: subtab === "ofi" ? "block" : "none" }} />
-              <div ref={gexRef} className="fsb-chart" style={{ display: subtab === "gex" ? "block" : "none" }} />
-            </div>
-          </div>
 
-          {/* right */}
-          <div className="fsb-col">
-            <div className="fsb-panel fsb-action">
+          {/* Selected signal — full width below the tape (scroll to read) */}
+          <div className="fsb-panel">
               <div className="fsb-panel-h">Selected Signal</div>
               {!selected ? <div className="fsb-sel-empty">Click any row to load its conviction profile.</div> : (
                 <>
                   <div className="fsb-sel-head">
                     <span className="tk">{selected.ticker}</span>
                     <span className="strike">${Number(selected.strike).toFixed(0)} {sideOf(selected)[0]}</span>
-                    <span className="fsb-muted fsb-small">{dteOf(selected.expiration)}d · {typeOf(selected)}</span>
+                    <span className="fsb-muted fsb-small">{bizDTE(selected.expiration)}d · {typeOf(selected)}</span>
                     <span className={`fsb-badge ${sideOf(selected) === "CALL" ? "call" : "put"}`}>{sideOf(selected)}</span>
                   </div>
                   <div className="fsb-con-grid">
@@ -1108,67 +1535,98 @@ export default function FlowseekerProBlademap({ active = true }) {
                     <div ref={radarRef} className="fsb-chart small" />
                   </div>
                   <div className="fsb-rationale">
-                    <div style={{ marginBottom: 6 }}><strong>{typeOf(selected)} {sideOf(selected)} · {fmtMoney(selected.premium)}</strong> on {selected.ticker}</div>
+                    <div style={{ marginBottom: 6 }}><strong>{typeOf(selected)} {sideOf(selected)} · {fmtUSD(selected.premium)}</strong> on {selected.ticker}</div>
                     <ul>
                       <li>Classification: {String(selected.classification || "unusual")} — volume/OI positioning proxy (cvserver has no trade-level tape)</li>
-                      <li>Vol/OI ratio: {Number(selected.vol_oi_ratio || 0).toFixed(1)}× · est. notional {fmtMoney(selected.premium)}</li>
+                      <li>Vol/OI ratio: {Number(selected.vol_oi_ratio || 0).toFixed(1)}× · est. notional {fmtUSD(selected.premium)}</li>
                       {selected._cd && (
                         <li>Conviction {selected._conv}/99 = pattern {selected._cd.pat} + size {selected._cd.size} + unusualness {selected._cd.stat} + urgency {selected._cd.urg}</li>
                       )}
                     </ul>
-                    <div className="fsb-muted fsb-small" style={{ marginTop: 6 }}>Regime: {regime.label}. VPIN toxicity &amp; Kyle-λ price-impact need a trade-level order-flow feed (not available on cvserver) — they populate when a print feed is connected.</div>
+                    <div className="fsb-muted fsb-small" style={{ marginTop: 6 }}>Regime: {regime.label}. VPIN toxicity &amp; Kyle-λ price-impact need a trade-level order-flow feed (n/a on snapshot chains) — they populate when a print feed is connected.</div>
                   </div>
                   <div className="fsb-actions">
                     <div className="fsb-panel-h" style={{ marginBottom: 6 }}>Context</div>
                     <ul>
-                      <li><span className="tag tgt">GEX</span>See dealer positioning in the GEX subtab for {selected.ticker}.</li>
                       <li><span className="tag warn">RISK</span>Paper/educational only — not a trade recommendation.</li>
                     </ul>
+                    <button
+                      className="fsb-chip"
+                      onClick={() => setChartRow(selected)}
+                      data-testid="selected-chart-open"
+                    >
+                      📊 Chart + checklist
+                    </button>
                   </div>
+                  <ChartModal
+                    row={chartRow}
+                    open={!!chartRow}
+                    onClose={() => setChartRow(null)}
+                    history={[]}
+                    netPremiumSeries={[]}
+                  />
                 </>
               )}
             </div>
           </div>
-        </div>
-
-        {/* VOL VIEW */}
-        <div className={`fsb-view${tab === "vol" ? " active" : ""}`} style={{ gridTemplateColumns: "1fr" }}>
-          <div className="fsb-panel">
-            <div className="fsb-panel-h"><span>3D Implied Volatility Surface</span><span className="fsb-status-chip" style={{ color: "var(--fsb-amber)", background: "rgba(245,176,66,0.06)" }}>SIM</span></div>
-            <div className="fsb-vol-controls">
-              <label className="fsb-muted fsb-small">Ticker&nbsp;
-                <select value={volTicker} onChange={(e) => setVolTicker(e.target.value)}>{["SPY", "QQQ", "NVDA", "TSLA", "AAPL"].map((t) => <option key={t}>{t}</option>)}</select>
-              </label>
-              <span className="fsb-muted fsb-small">Synthetic surface — no live IV-surface endpoint yet.</span>
+        {/* W8: extras drawer — honest states (fixture-first); only on flow tab, sibling to flow grid */}
+        {tab === "flow" && (
+          <div className="fsb-panel fsb-drawer" data-testid="flowseeker-drawer">
+            <div className="fsb-panel-h"><span>Flow extras</span><span className="fsb-muted fsb-small">honest states · display-only</span></div>
+            <div className="fsb-drawer-grid">
+              <div className="fsb-drawer-col" data-testid="drawer-tracker">
+                <h4 className="fsb-drawer-h">Tracker <span className="fsb-muted fsb-small" title="P/L assumes 1 contract (qty proxy) — real qty not in snapshot feed">qty=1 proxy</span></h4>
+                <Tracker />
+              </div>
+              <div className="fsb-drawer-col" data-testid="drawer-history">
+                <h4 className="fsb-drawer-h">History</h4>
+                <NetPremiumTrend series={[]} state="ready" />
+                <StrikeDistribution buckets={[]} state="ready" />
+                <VolOiFooter rows14d={[]} state="ready" />
+              </div>
+              <div className="fsb-drawer-col" data-testid="drawer-darkpool">
+                <h4 className="fsb-drawer-h" title="Off-exchange prints — no side or direction is known">Dark pool</h4>
+                <DarkPoolPanel prints={[]} state="ready" />
+              </div>
+              <div className="fsb-drawer-col" data-testid="drawer-methodology">
+                <h4 className="fsb-drawer-h">Methodology</h4>
+                <Checklist steps={["NetPrem 5-7D","Underlying $","Contract + IV + RVOL","Strike 1W","Vol/OI 14d","Heatseeker cross-check"]} checks={checks} onToggle={(i) => setChecks((c) => ({ ...c, [i]: !c[i] }))} verdict={verdict} onVerdict={(v) => setVerdict(v)} />
+                <div className="fsb-drawer-foot" title="Per-row sort ranking floors: premium $25K, size 150 contracts — rows below floor still sort, only tick to show they ranked lower">Floors: prem $25K · size 150 (ranking only)</div>
+              </div>
+              {/* W6 funnel-empty — honest widening path when filtered result hits zero */}
+              {scanRows.length === 0 && (
+                <div className="fsb-drawer-col" data-testid="drawer-funnel-empty">
+                  <h4 className="fsb-drawer-h">Filter funnel</h4>
+                  <FunnelEmpty beforeCount={scan.length} afterCount={0} actions={widenActions(fsFilter)} onWiden={(a) => {
+                    if (a.action === "reset") { setScanDteF("all"); setScanMinPrem(0); setScanMinScore(0); }
+                    else if (a.action === "clear_sweep") { /* sweepsOnly not wired yet */ }
+                    else if (a.action === "enable_etfs") { /* equityType toggle not wired yet */ }
+                    else if (a.action === "lower_premium") { setScanMinPrem(Math.max(0, (fsFilter.minPremium || 0) - 25000)); }
+                    else if (a.action === "lower_score") { setScanMinScore(Math.max(0, (fsFilter.minScore || 0) - 5)); }
+                    else if (a.action === "clear_dte") { setScanDteF("all"); }
+                  }} />
+                </div>
+              )}
             </div>
-            <div ref={volRef} className="fsb-chart tall" />
+            <div className="fsb-drawer-note fsb-muted fsb-small">{FLOW_PROXY_NOTE}</div>
           </div>
-        </div>
-
-        {/* GAMMA VIEW */}
-        <div className={`fsb-view${tab === "gamma" ? " active" : ""}`} style={{ gridTemplateColumns: "1fr" }}>
-          <div className="fsb-panel">
-            <div className="fsb-panel-h"><span>Dealer Gamma Exposure · {ticker}</span><span className="fsb-muted fsb-small">real cvforge GEX</span></div>
-            <div className="fsb-gamma-grid">
-              <div ref={gammaBarRef} className="fsb-chart" />
-              <div ref={gammaCurveRef} className="fsb-chart" />
-            </div>
-            <div className="fsb-notes"><strong>Read:</strong> red bars = dealer short-gamma (hedging amplifies moves), green = long-gamma (dampens). The cumulative line crosses zero at gamma-flip levels.</div>
-          </div>
+        )}
         </div>
 
         {/* SCANNER VIEW — cross-symbol BladeMap scanner (scenner34 grid) */}
         <div className={`fsb-view${tab === "scanner" ? " active" : ""}`} style={{ gridTemplateColumns: "1fr" }}>
           <div className="fsb-scanwrap">
-            <div className="fsb-scanbar">
-              {[
-                ["Source", scanMeta.mode === "market" ? `LIVE · mkt-wide ·${scanMeta.symbols}` : scanMeta.mode === "fallback" ? `FALLBACK ·${scanMeta.symbols} sym` : "—",
+            <div className="fsb-scanbar">                {[
+                  ["Source", scanMeta.mode === "market" ? `LIVE · mkt-wide ·${scanMeta.symbols}` : scanMeta.mode === "fallback" ? `FALLBACK ·${scanMeta.symbols} sym` : "—",
                   scanMeta.stale ? "y" : scanMeta.mode === "market" ? "g" : scanMeta.mode ? "y" : ""],
                 ["Contracts", `${scanRows.length} / ${scan.length}${scanRows.length > 200 ? " ·top200" : ""}`, "b"],
                 ["Notional Σ", fmtUSD(scanStats.notl), ""],
                 ["Call/Put Vol", scanStats.tv > 0 ? `${scanStats.cpct}% / ${100 - scanStats.cpct}%` : "—", scanStats.cpct >= 50 ? "g" : "r"],
                 ["Unusual (≥2×)", String(scanStats.unusual), "y"],
-                ["⚡ Alerts", `${scanStats.alerts} · log ${alertLog.length}`, scanStats.alerts ? "r" : "", "Open the alert log"],
+                ...((alertRules.scoreMin ?? 92) > 85 || (alertRules.whaleMin ?? 25e6) > 10e6
+                  ? [["Quality gate", `SCORE≥${alertRules.scoreMin ?? 92} · WHALE≥$${Math.round((alertRules.whaleMin ?? 25e6) / 1e6)}M · SIGMA≥${alertRules.sigmaMin ?? 6}σ`, "b"]]
+                  : []),
+                ["⚡ Alerts", `${alertLog.length}${suppressedCount ? ` ·+${suppressedCount} held` : ""}`, alertLog.length ? "r" : "", "Open the alert log — count includes every fire this session; held back = noise-budget overflow that stayed truthful but off the tape"],
                 ["Updated",
                   scanMeta.stale
                     ? `STALE${scanMeta.retry ? ` ·retry ${Math.round(scanMeta.retry)}s` : ""} · ${scanAt || "—"}`
@@ -1184,7 +1642,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                   </>,
                   heartbeat.dot,
                   heartbeat.tier === "fresh" && scanAt ? `${heartbeat.hint} · last fetch ${scanAt}` : heartbeat.hint],
-              ].filter(([l]) => advanced || ["Source", "⚡ Alerts", "Updated", "Heartbeat"].includes(l))
+              ].filter(([l]) => advanced || ["Source", "⚡ Alerts", "Updated", "Heartbeat", "Quality gate"].includes(l))
                 .map(([l, v, c, tip]) => (
                 <div key={l} className={`fsb-skpi${l === "⚡ Alerts" ? " fsb-skpi-click" : ""}`}
                   onClick={l === "⚡ Alerts" ? () => setAlertsOpen((o) => !o) : undefined}
@@ -1193,7 +1651,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                 </div>
               ))}
               <button className="fsb-preset fsb-advtoggle"
-                title={advanced ? "Back to the simple view — alerts + best flow only" : "Show all filters, presets, universe and alert-rule controls"}
+              title={advanced ? "Back to the simple view — alerts + full flow table" : "Show all filters, presets and alert-rule controls"}
                 onClick={() => setAdvanced((a) => !a)}>
                 ⚙ {advanced ? "Simple" : "Advanced"}
               </button>
@@ -1285,11 +1743,27 @@ export default function FlowseekerProBlademap({ active = true }) {
                 </span>
               </div>
             )}
+            {/* Institutional: side + DTE presets always visible (the lost filter — restored, both modes). */}
+            <div className="fsb-scanctrl fsb-scanctrl-always">
+              <select value={scanSideF} onChange={(e) => setScanSideF(e.target.value)}>
+                <option value="all">All Side</option><option value="call">Calls</option><option value="put">Puts</option>
+              </select>
+              <span className="fsb-presets">
+                {["all", "0dte", "1-7d", "weekly", "monthly", "qtrly", "leaps"].map((p) => (
+                  <button key={p} className={`fsb-preset${scanDteF === p ? " on" : ""}`}
+                    onClick={() => setScanDteF(p)}>
+                    {p === "all" ? "All DTE" : p === "0dte" ? "0DTE" : p === "1-7d" ? "1-7D" : p === "weekly" ? "Wk" : p === "monthly" ? "Mo" : p === "qtrly" ? "Qtr" : "LEAPS"}
+                  </button>
+                ))}
+              </span>
+            </div>
             {advanced && <div className="fsb-scanctrl">
               <select value={scanTypeF} onChange={(e) => setScanTypeF(e.target.value)}>
                 <option value="all">All Types</option><option value="call">Calls</option><option value="put">Puts</option>
               </select>
               <input type="number" min="0" step="1000" placeholder="Min Vol" value={scanMinVol || ""} onChange={(e) => setScanMinVol(parseFloat(e.target.value) || 0)} />
+              <input type="number" min="0" step="250000" placeholder="Min Prem~" value={scanMinPrem || ""} onChange={(e) => setScanMinPrem(parseFloat(e.target.value) || 0)} />
+              <input type="number" min="0" step="500" placeholder="Min OI" value={scanMinOI || ""} onChange={(e) => setScanMinOI(parseFloat(e.target.value) || 0)} />
               <input type="number" min="0" max="100" step="5" placeholder="Min Score" value={scanMinScore || ""} onChange={(e) => setScanMinScore(parseFloat(e.target.value) || 0)} />
               <input ref={scanQRef} placeholder="Ticker…  ( / )" value={scanQ} onChange={(e) => setScanQ((e.target.value || "").toUpperCase())} />
               <span className="fsb-presets">
@@ -1306,17 +1780,80 @@ export default function FlowseekerProBlademap({ active = true }) {
                   title="Download the current filtered view as CSV (premium column is an estimate)"
                   onClick={() => exportCSV(scanRows)}>⤓ CSV</button>
               </span>
-              <label className="fsb-uonly" title="Filter the scan to your universe list">
-                <input type="checkbox" checked={universeOnly} onChange={(e) => setUniverseOnly(e.target.checked)} /> My universe
-              </label>
-              <input className="fsb-univ" defaultValue={universe.join(",")} placeholder="Universe…"
-                title="Comma-separated tickers — used by the fallback scan and the 'My universe' filter"
-                onBlur={(e) => { const u = (e.target.value || "").toUpperCase().split(/[,\s]+/).filter(Boolean); if (u.length) setUniverse(u); }} />
               <input className="fsb-alertn" type="number" min="50" max="100" value={alertScore}
-                title="Alert when a NEW contract scores ≥ this"
-                onChange={(e) => setAlertScore(Math.max(50, Math.min(100, parseInt(e.target.value, 10) || 85)))} />
+                title="Alert when a NEW contract scores ≥ this (drives the SCORE rule)"
+                onChange={(e) => {
+                  const v = Math.max(50, Math.min(100, parseInt(e.target.value, 10) || 85));
+                  setAlertScore(v);
+                  // SCORE rule reads enabled.scoreMin first — keep both in sync
+                  // so this visible control stays the source of truth.
+                  setAlertRules((r) => ({ ...r, scoreMin: v }));
+                }} />
               <span className="fsb-scannote">Live cross-symbol flow · cvforge day-volume vs OI. No per-trade tape on this feed — Flow-type = volume-magnitude class; Lean = contract-type bias.</span>
             </div>}
+            {/* Outcome ledger — per-rule measured precision/lift vs matched controls.
+                The desk trusts hit rates, not scores; this is where thresholds get
+                argued from data instead of defaults. precision=null → uncalibrated. */}
+            {outcomesOpen && outcomes && (outcomes.per_rule && Object.keys(outcomes.per_rule).length > 0) && (
+              <div className="fsb-outcomes">
+                <div className="fsb-outcomes-h">
+                  <span>📏 Outcome Ledger</span>
+                  <span className="fsb-muted fsb-small">
+                    hit = |side-signed move| ≥ {outcomes.sigma_k}σ in {outcomes.horizon_sessions} sessions · vs matched controls
+                    {calibration && (
+                      <> · P(move): <b className={calibration.stage >= 1 ? "" : "fsb-muted"}>{calibration.stage >= 1 ? `stage ${calibration.stage} (${calibration.model_kind || "decile"})` : `uncalibrated · n=${calibration.n}`}</b></>
+                    )}
+                  </span>
+                  <button className="fsb-alertclear" onClick={() => setOutcomesOpen(false)} title="Collapse">—</button>
+                </div>
+                <table className="fsb-outcometab">
+                  <thead><tr>
+                    <th>Rule</th><th className="num">n</th><th className="num">Precision</th>
+                    <th className="num">Control</th><th className="num">Lift</th><th className="num">95% CI</th><th className="num">MFE/MAE σ</th>
+                  </tr></thead>
+                  <tbody>
+                    {Object.entries(outcomes.per_rule).map(([rule, s]) => (
+                      <tr key={rule} className={s.decayed ? "fsb-amber-row" : ""}>
+                        <td><span className={`fsb-rulebadge r-${rule.toLowerCase()}`}>{rule}</span>{s.status === "AMBER" ? <span className="fsb-amber-chip" title="rule's recent precision dropped below its own lift line (30d window) — measured decay, review thresholds">⚠ AMBER</span> : null}</td>
+                        <td className="num">{s.n_measured}{s.n_censored ? <span className="fsb-muted"> +{s.n_censored}⧗</span> : ""}</td>
+                        {s.uncalibrated ? (
+                          <td className="num fsb-muted" colSpan={2} title={`only ${s.n_measured} measured alerts — no honest number yet`}>uncalibrated · n={s.n_measured}</td>
+                        ) : (
+                          <>
+                            <td className="num"><b>{Math.round(s.precision * 100)}%</b></td>
+                            <td className="num fsb-muted">{s.control_rate != null ? `${Math.round(s.control_rate * 100)}% · ${s.n_controls}` : "—"}</td>
+                          </>
+                        )}
+                        {!s.uncalibrated && (
+                          <>
+                            <td className={`num ${s.lift != null && s.lift > 0 ? "pos" : s.lift != null && s.lift < 0 ? "neg" : ""}`}>
+                              {s.lift != null ? `${s.lift > 0 ? "+" : ""}${Math.round(s.lift * 100)}pp` : "—"}
+                            </td>
+                            <td className="num fsb-muted">{s.lift_ci ? `[${Math.round(s.lift_ci[0] * 100)}pp, ${Math.round(s.lift_ci[1] * 100)}pp]` : s.precision_ci ? `[${Math.round(s.precision_ci[0] * 100)}%, ${Math.round(s.precision_ci[1] * 100)}%]` : "—"}</td>
+                            <td className="num fsb-muted">{s.median_mfe_sigma != null ? `${s.median_mfe_sigma}/${s.median_mae_sigma}` : "—"}</td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {outcomes.overall && outcomes.overall.n_measured > 0 && (
+                  <div className="fsb-outcomes-f fsb-muted fsb-small">
+                    overall {outcomes.overall.precision != null ? `${Math.round(outcomes.overall.precision * 100)}%` : "uncalibrated"} across {outcomes.overall.n_measured} measured alerts · {outcomes.tickers_measured?.length || 0} tickers · ⧗ = censored (window not yet complete — excluded, not zero-filled)
+                  </div>
+                )}
+              </div>
+            )}
+            {outcomesOpen && !outcomes && (
+              <div className="fsb-outcomes fsb-muted" style={{ padding: 10 }}>
+                📏 Outcome ledger: measuring alert precision vs matched controls… (fills as the alert ledger accumulates)
+              </div>
+            )}
+            {!outcomesOpen && (
+              <button className="fsb-outcomes-collapsed" onClick={() => setOutcomesOpen(true)} title="Show measured alert precision vs matched controls">
+                📏 Outcome Ledger — show calibration
+              </button>
+            )}
             {away && (
               <div className="fsb-away">
                 <span className="fsb-away-t">☾ While you were away · {fmtAge(Date.now() - away.gapMs)}</span>
@@ -1345,7 +1882,7 @@ export default function FlowseekerProBlademap({ active = true }) {
             {alertsOpen && (
               <div className="fsb-alertlog">
                 {/* Blademap v3 — conviction calibration + per-setup win rate */}
-                {(calibBands.length > 0 || (setupStats && setupStats.overall.n > 0)) && (
+                {(calibBands.length > 0 || (setupStats?.overall?.n > 0)) && (
                   <div className="fsb-v3strip">
                     {calibBands.map((b) => (
                       <div key={b.band}
@@ -1357,7 +1894,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                         <span className="fsb-v3n">{b.n_measured}/{b.n}</span>
                       </div>
                     ))}
-                    {setupStats && setupStats.overall.n > 0 && Object.entries(setupStats.by_setup).map(([name, s]) => (
+                    {setupStats?.overall?.n > 0 && Object.entries(setupStats.by_setup || {}).map(([name, s]) => (
                       <div key={name} className={`fsb-v3cell${s.win_rate >= 0.5 ? " hot" : ""}`}
                            title={`journal ${setupStats.days}d · ${name}: ${s.wins}W/${s.losses}L, avg ${(s.avg_return * 100).toFixed(1)}%`}>
                         <span className="fsb-v3lbl">📓 {name}</span>
@@ -1384,11 +1921,8 @@ export default function FlowseekerProBlademap({ active = true }) {
                       title="Browser notification when alerts fire while this tab is hidden"
                       onClick={toggleNotify}>🔔 Notify</button>
                     {advanced && <>
-                      <button className={`fsb-rulechip${alertUnivOnly ? " on" : ""}`}
-                        title="Scope alerts + notifications to My Universe tickers only — off = whole market (700+ symbols)"
-                        onClick={() => setAlertUnivOnly((v) => !v)}>🎯 UNIV</button>
-                      {[["oiconf", "ΔOI CONF"], ["follow", "FOLLOW 2d+"], ["sigma", "SIGMA ≥4σ"],
-                        ["score", `SCORE≥${alertScore}`], ["whale", "WHALE ≥$10M~"], ["zerodte", "0DTE HOT"]].map(([k, lbl]) => (
+                      {[["oiconf", "ΔOI CONF"], ["follow", `FOLLOW ${alertRules.followMin ?? 3}d+`], ["sigma", `SIGMA ≥${alertRules.sigmaMin ?? 6}σ`],
+                        ["score", `SCORE≥${alertRules.scoreMin ?? 92}`], ["whale", `WHALE ≥$${Math.round((alertRules.whaleMin ?? 25e6) / 1e6)}M~`], ["prime", "PRIME $250k·5×"], ["zerodte", "0DTE HOT"]].map(([k, lbl]) => (
                         <button key={k} className={`fsb-rulechip${alertRules[k] ? " on" : ""}`}
                           title="Toggle this alert rule"
                           onClick={() => setAlertRules((r) => ({ ...r, [k]: !r[k] }))}>{lbl}</button>
@@ -1415,7 +1949,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                 </div>
                 {alertLog.length === 0 ? (
                   <div className="fsb-muted" style={{ padding: 10 }}>
-                    No alerts yet — rows crossing an enabled rule log here with arrival time, source, and the reason they fired. Confirmation tier: ΔOI CONF = overnight open-interest build proves yesterday's flow held; FOLLOW = multiple straight days of elevated volume; SIGMA = volume ≥4σ vs the ticker's own baseline. Intraday tier: SCORE / WHALE / 0DTE on newly arrived contracts (deduped 30min). Tape keeps today + yesterday; 🎯 UNIV scopes alerts to your universe.
+                    No alerts yet — rows crossing an enabled rule log here with arrival time, source, and the reason they fired. Confirmation tier: ΔOI CONF = overnight open-interest build proves yesterday's flow held; FOLLOW = 3+ straight days of elevated volume; SIGMA = volume ≥6σ vs the ticker's own baseline. Intraday tier: SCORE ≥92 / WHALE ≥$25M~ / 0DTE on newly arrived contracts (deduped, noise-budget capped at 4/rule/hour). Tape keeps today + yesterday; alerts cover the whole market.
                   </div>
                 ) : (
                   <table className="fsb-alerttab">
@@ -1426,7 +1960,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                             onClick={a.rule === "SOURCE" ? undefined
                               : a.label ? () => setScanQ(scanQ === a.under ? "" : a.under)
                               : () => { setTicker(a.under); setTab("flow"); }}>
-                          <td title={a.src === "fallback" ? "18-symbol fallback scan" : a.src === "market" ? "market-wide scan" : ""}>
+                          <td title={a.src === "fallback" ? "fallback scan" : a.src === "market" ? "market-wide scan" : ""}>
                             <span className={`fsb-srcdot ${a.src || ""}`} />
                           </td>
                           <td className="fsb-sub" title={`${fmtAge(a.t)} ago`}>
@@ -1458,7 +1992,7 @@ export default function FlowseekerProBlademap({ active = true }) {
               </div>
             )}
             {/* Blademap v3 — top conviction signal cards (backend-ranked) */}
-            {active && convFeed.length === 0 && (
+            {active && convFeed.length === 0 && convFeedState === "loading" && (
               <div className="fsb-sigwrap">
                 <div className="fsb-sigh">
                   <span className="fsb-sigh-t">◈ Top Conviction</span>
@@ -1475,6 +2009,15 @@ export default function FlowseekerProBlademap({ active = true }) {
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+            {active && convFeed.length === 0 && convFeedState === "unavailable" && (
+              <div className="fsb-sigwrap">
+                <div className="fsb-sigh">
+                  <span className="fsb-sigh-t">◈ Top Conviction</span>
+                  <span className="fsb-sigh-s">feed unavailable (backend /alerts/feed) — tape below is live</span>
+                  <button className="fsb-chip fsb-chip-sm" onClick={() => { setConvFeedState("loading"); setRefreshTick((t) => t + 1); }}>Retry</button>
                 </div>
               </div>
             )}
@@ -1511,6 +2054,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                         </span>
                         <span className="fsb-sig-badges">
                           {tier && <span className={`fsb-sig-tier t-${tier.toLowerCase()}`}>{tier}</span>}
+                          {(() => { const eb = exposureBadgeFor(a.rule, a); return eb ? <span key={eb.rule} className={`fsb-sig-exp e-${eb.rule.toLowerCase()}`} title={eb.title}>{eb.label}</span> : null; })()}
                           <span className="fsb-sig-conv">{a.conviction}</span>
                         </span>
                       </div>
@@ -1535,8 +2079,10 @@ export default function FlowseekerProBlademap({ active = true }) {
               </div>
             )}
             <div className="fsb-scantable">
-              {scan.length === 0 ? (
-                <div className="fsb-muted" style={{ padding: 16 }}>Scanning market flow across {SCAN_UNIVERSE.length} symbols…</div>
+              {scanMeta.err ? (
+                <div className="fsb-muted" style={{ padding: 16 }}>Flow scan fetch failed — not a filter issue. <button className="fsb-chip fsb-chip-sm" onClick={() => { setScanMeta((m) => ({ ...m, err: false })); setRefreshTick((t) => t + 1); }}>Retry</button></div>
+              ) : scan.length === 0 ? (
+                <div className="fsb-muted" style={{ padding: 16 }}>Scanning market-wide flow{scanMeta.symbols ? ` across ${scanMeta.symbols} symbols` : ""}…</div>
               ) : scanRows.length === 0 ? (
                 <div className="fsb-muted" style={{ padding: 16 }}>No contracts pass these filters.</div>
               ) : (
@@ -1572,10 +2118,17 @@ export default function FlowseekerProBlademap({ active = true }) {
                           <td className={r.oiChg ? (r.oiChg.pct >= 0 ? "fsb-oiup" : "fsb-oidn") : ""}
                               title={r.oiChg
                                 ? `Open interest ${r.oiChg.abs >= 0 ? "+" : ""}${fmtK(r.oiChg.abs)} vs last session (${fmtK(r.oi - r.oiChg.abs)} → ${fmtK(r.oi)})${r.arch === "FRESH" ? (r.oiChg.pct >= 0.1 ? " — FRESH held: new positioning stuck" : r.oiChg.pct <= -0.1 ? " — FRESH faded: intraday churn, OI fell back" : "") : ""}`
+                                : (r.oiTag && r.oiTag.expiring) ? "Contract expires today — ΔOI suppressed (OI is about to evaporate; hygiene gate)"
+                                : (r.oiTag && r.oiTag.rollover) ? "Rollover detected — position migrated expiries, ΔOI suppressed (not new flow)"
                                 : "No prior-day record for this contract yet — ΔOI appears next session"}>
                             {r.oiChg
                               ? `${r.oiChg.pct >= 0 ? "+" : ""}${(r.oiChg.pct * 100).toFixed(0)}%`
+                              : (r.oiTag && r.oiTag.expiring) ? <span className="fsb-oitag" title="expires today — ΔOI suppressed">EXP</span>
+                              : (r.oiTag && r.oiTag.rollover) ? <span className="fsb-oitag" title="rollover — ΔOI suppressed">ROLL</span>
                               : <span className="fsb-sub">—</span>}
+                            {r.oiChg && r.oiChg.tag && r.oiChg.tag.earnings ? (
+                              <span className="fsb-oitag fe" title={r.oiChg.tag.earnings.unknown ? "earnings window unknown — direction ambiguous" : `earnings in ${r.oiChg.tag.earnings.days_to} session(s) — direction ambiguous`}>E</span>
+                            ) : null}
                           </td>
                           {advanced && <td>{r.volOI >= 99 ? "99+" : `${r.volOI.toFixed(1)}x`}</td>}
                           <td title="Estimated premium spent — no quote feed on cvserver, BS-lite estimate">{r.premium != null ? `~${fmtUSD(r.premium)}` : "—"}</td>
@@ -1607,6 +2160,24 @@ export default function FlowseekerProBlademap({ active = true }) {
                               </td>
                             );
                           })()}
+                          <td>
+                            <button
+                              className="fsb-chip"
+                              title={r.osi ? `Paper-trade ${r.under} ${r.type} ${r.strike} on Alpaca (paper only)` : "No contract id on this row — trade unavailable"}
+                              disabled={!r.osi || !onTrade}
+                              data-testid={`scan-trade-${r.under}-${r.strike}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onTrade && r.osi) onTrade({
+                                  ticker: r.under, strike: r.strike, spot: r.spot,
+                                  oi_symbol: r.osi, iv: r.iv, delta: r.delta,
+                                  oi: r.oi, dte: r.dte, exp: r.exp,
+                                  call_ask: null, call_last: null, put_bid: null, put_last: null,
+                                });
+                              }}>
+                              ⚡Trade
+                            </button>
+                          </td>
                         </tr>
                       );
                     })}
@@ -1617,29 +2188,12 @@ export default function FlowseekerProBlademap({ active = true }) {
           </div>
         </div>
 
-        {/* ACADEMY VIEW */}
-        <div className={`fsb-view${tab === "academy" ? " active" : ""}`} style={{ gridTemplateColumns: "1fr" }}>
-          <div className="fsb-panel" style={{ overflow: "auto" }}>
-            <div className="fsb-panel-h"><span>Tidehunter Academy</span><span className="fsb-muted fsb-small">process · not signals</span></div>
-            <div className="fsb-academy-grid">
-              {[["01", "Market Microstructure", "Order flow, options mechanics, and dealer hedging — the mechanics behind every signal."],
-                ["02", "Reading the Flow", "Sweep vs. block vs. split. How urgency, size, and persistence reveal institutional intent."],
-                ["03", "Dealer Positioning", "Gamma, vanna, charm — translating dealer hedging pressure into actionable levels."],
-                ["04", "Volatility Anatomy", "Skew dynamics, term structure, vol risk premium — and where institutions hide."],
-                ["05", "Process & Execution", "Invalidation, position sizing, standing aside. The discipline that protects capital."],
-                ["06", "Regime Adaptation", "Bull, bear, chop, melt-up — the same signal means different things across regimes."]].map(([n, t, d]) => (
-                <div key={n} className="fsb-module"><div className="fsb-mod-num">{n}</div><div className="fsb-mod-title">{t}</div><p>{d}</p><div className="fsb-mod-meta">curriculum</div></div>
-              ))}
-            </div>
-          </div>
-        </div>
       </div>
 
       <div className="fsb-foot">
-        <span>Live cvforge data · GEX/OFI/regime from the decoder backend. VPIN/Kyle-λ need a trade-level feed (n/a on cvserver). Vol surface simulated.</span>
+        <span>Live Public API data · GEX/OFI/regime from the decoder backend. VPIN/Kyle-λ need a trade-level feed (n/a on snapshot chains).</span>
         <span>Tidehunter Pro · Blademap layout</span>
       </div>
     </div>
   );
 }
-

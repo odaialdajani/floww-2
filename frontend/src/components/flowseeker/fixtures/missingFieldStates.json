@@ -1,0 +1,9 @@
+[
+  { "name": "missing_bid_ask", "row": { "ticker": "AAPL", "bid": null, "ask": null, "last": 1.2 }, "expected": { "side": "NO_QUOTE", "label": "NO_QUOTE", "honest": "no-quote state, never guessed spread" } },
+  { "name": "missing_oi", "row": { "ticker": "SPY", "volume": 500, "oi": null }, "expected": { "sizeGtOI": false, "volGtOI": false, "tooltip": "OI unavailable — highlighting disabled" } },
+  { "name": "missing_earnings", "row": { "ticker": "NVDA", "earningsDate": null }, "expected": { "earningsLabel": "—", "state": "missing" } },
+  { "name": "missing_sector", "row": { "ticker": "ZZTOP" }, "expected": { "sector": "Unknown", "bucket": "Unknown" } },
+  { "name": "missing_iv", "row": { "ticker": "TSLA", "iv": null }, "expected": { "ivLabel": "—" } },
+  { "name": "rvol_no_baseline", "row": {}, "expected": { "rvolState": "needs_baseline", "rvolLabel": "needs baseline" } },
+  { "name": "ask_le_bid", "row": { "ticker": "MSFT", "bid": 1.5, "ask": 1.4, "last": 1.45 }, "expected": { "side": "NO_QUOTE" } }
+]

@@ -95,6 +95,52 @@ async def list_tickers():
     }
 
 
+@router.get("/tickers/all", response_model=None)
+async def list_all_tickers(
+    limit: int = Query(12000, ge=100, le=40000),
+    page: int = Query(1, ge=1, le=1000),
+    refresh: bool = Query(False),
+):
+    """Full Finnhub symbol universe, paged (T2).
+
+    Returns the sorted deduped symbol list; the frontend pages through it
+    (``has_more``) to build the full scroller universe instead of the
+    featured-only sets above. Cached in memory for 30 minutes;
+    ``?refresh=true`` forces a fresh fetch. Empty list when Finnhub is not
+    configured (callers fall back to the featured sets).
+    """
+    import time as _time
+
+    import server as _server_mod
+
+    now_s = _time.time()
+    if (not refresh and _server_mod._TICKER_CACHE_TS
+            and (now_s - _server_mod._TICKER_CACHE_TS) < _server_mod.CACHE_TTL_S):
+        all_syms = _server_mod._TICKER_CACHE
+    else:
+        from services.finnhub_client import FinnhubClient
+        client = FinnhubClient()
+        all_syms = client.symbols_us_equities() or []
+        _server_mod._TICKER_CACHE = all_syms
+        _server_mod._TICKER_CACHE_TS = now_s
+
+    total = len(all_syms)
+    start = (page - 1) * limit
+    page_syms = all_syms[start: start + limit]
+    _now_dt = datetime.now(tz=UTC) if UTC is not None else datetime.utcnow()
+    return {
+        "tickers": page_syms,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "has_more": start + limit < total,
+        "cached": not refresh and _server_mod._TICKER_CACHE_TS is not None,
+        "cached_age_s": (round(now_s - _server_mod._TICKER_CACHE_TS, 1)
+                         if _server_mod._TICKER_CACHE_TS else None),
+        "asof": _now_dt.isoformat(),
+    }
+
+
 @router.get("/heatmap/{ticker}")
 async def heatmap(
     ticker: str,
@@ -244,19 +290,19 @@ async def chain(
             "type": c["type"],
             "strike": c["strike"],
             "expiry": c["expiry"],
-            "iv": c.get("iv", 0),
-            "delta": c.get("delta", 0),
-            "gamma": c.get("gamma", 0),
-            "vega": c.get("vega", 0),
-            "theta": c.get("theta", 0),
+            "iv": c.get("iv", 0) or 0,
+            "delta": c.get("delta", 0) or 0,
+            "gamma": c.get("gamma", 0) or 0,
+            "vega": c.get("vega", 0) or 0,
+            "theta": c.get("theta", 0) or 0,
             "vanna": vanna,
             "charm": charm,
             "moneyness_pct": moneyness_pct,
             "dte": dte_val,
-            "oi": c.get("oi", c.get("open_interest", 0)),
-            "volume": c.get("volume", 0),
-            "bid": c.get("bid", 0),
-            "ask": c.get("ask", 0),
+            "oi": c.get("oi", c.get("open_interest", 0)) or 0,
+            "volume": c.get("volume", 0) or 0,
+            "bid": c.get("bid", 0) or 0,
+            "ask": c.get("ask", 0) or 0,
             "gex": gex,
         })
     # Apply DTE filter if specified

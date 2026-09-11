@@ -1,7 +1,8 @@
 """
 backend/routes/public_api.py
 
-Public API (public.com) data endpoints.
+Public API (public.com) data endpoints — the SOLE live market-data source
+(public-api-only policy, 2026-09-03).
 
 Routes:
     GET /api/public/chain/{ticker}?expiration=YYYY-MM-DD&expirations=N
@@ -12,6 +13,18 @@ Routes:
 
     GET /api/public/bars/{ticker}?timeframe=1Day&limit=100
         OHLCV price bars from Public API (stocks data feed)
+
+    GET /api/public/bars/{ticker}?interval=daily
+        OHLCV bars (daily/weekly/monthly/1min/5min/15min/30min/60min)
+
+    GET /api/public/history/{ticker}?interval=daily
+        OHLCV history shaped like the retired alpha historical endpoint
+
+    GET /api/public/technical/{ticker}/{indicator}?time_period=14
+        RSI/SMA/EMA/MACD computed locally from Public API bars
+
+    GET /api/public/expirations/{ticker}
+        Listed option expirations for a ticker
 
     GET /api/public/portfolio
         Account portfolio from Public API (paper trading only)
@@ -33,8 +46,11 @@ from services.public_api_adapter import (
     PUBLIC_BARS_TIMEFRAMES,
     _get_broker,
     _normalize_symbol,
+    compute_technical_from_bars,
+    fetch_bars_by_interval,
     fetch_bars_from_public_api,
     fetch_chain_from_public_api,
+    fetch_history_from_public_api,
     fetch_quotes_from_public_api,
 )
 
@@ -88,6 +104,7 @@ async def get_public_chain(
         "expiries": result.get("expiries", []),
         "n_contracts": len(result.get("contracts", [])),
         "data_source": result.get("data_source", "public_api"),
+        "stale": result.get("stale", False),
         "contracts": result.get("contracts", []),
     }
 
@@ -184,9 +201,15 @@ async def get_public_bars(
     }
 
 
-@router.get("/portfolio")
+@router.get("/portfolio/raw")
 async def get_public_portfolio():
-    """Return the authenticated Public.com paper-trading portfolio."""
+    """Return the raw authenticated Public.com paper-trading portfolio.
+
+    NOTE: the canonical UI-facing portfolio (flattened positions, money
+    fields) lives at GET /api/public/portfolio (routes/public_brokerage.py),
+    which takes precedence on that path. This raw view is kept for
+    debugging/inspection.
+    """
     broker = await _get_broker()
     if broker is None:
         raise HTTPException(
@@ -208,5 +231,56 @@ async def get_public_portfolio():
         "ok": True,
         "account_id": account.account_id,
         "portfolio": _jsonable(portfolio),
+        "data_source": "public_api",
+    }
+
+
+@router.get("/history/{ticker}")
+async def get_public_history(
+    ticker: str,
+    interval: str = Query(default="daily", description="daily/weekly/monthly"),
+):
+    """OHLCV history from Public API (replaces alpha historical)."""
+    result = await fetch_history_from_public_api(ticker.upper(), interval=interval)
+    if result is None:
+        raise HTTPException(status_code=502, detail=f"Public API history unavailable for {ticker}")
+    return {"ok": True, **result}
+
+
+@router.get("/technical/{ticker}/{indicator}")
+async def get_public_technical(
+    ticker: str,
+    indicator: str,
+    time_period: int = Query(default=14, ge=1, le=200),
+    interval: str = Query(default="daily"),
+):
+    """RSI/SMA/EMA/MACD computed locally from Public API bars (replaces alpha technical)."""
+    bars = await fetch_bars_by_interval(ticker.upper(), interval=interval)
+    if bars is None:
+        raise HTTPException(status_code=502, detail=f"Public API bars unavailable for {ticker}")
+    result = compute_technical_from_bars(ticker.upper(), indicator.upper(), bars, time_period)
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result)
+    return {"ok": True, **result}
+
+
+@router.get("/expirations/{ticker}")
+async def get_public_expirations(ticker: str):
+    """Listed option expirations from Public API."""
+    broker = await _get_broker()
+    if broker is None:
+        raise HTTPException(status_code=502, detail=f"Public API unavailable for {ticker}")
+    account = broker.get_trading_account()
+    if account is None:
+        raise HTTPException(status_code=502, detail="No trading account available")
+    try:
+        expiries = await broker.get_option_expirations(ticker.upper(), account.account_id)
+    except Exception as exc:
+        log.warning("Public API expirations failed for %s: %s", ticker, exc)
+        raise HTTPException(status_code=502, detail=f"Public API expirations unavailable for {ticker}") from exc
+    return {
+        "ok": True,
+        "ticker": ticker.upper(),
+        "expirations": expiries,
         "data_source": "public_api",
     }

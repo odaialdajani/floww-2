@@ -176,7 +176,7 @@ async def get_latest(
 @router.post("/snapshot/{ticker}")
 async def trigger_snapshot(
     ticker: str,
-    source: str = Query(default="yfinance", description="Data source: yfinance or alphavantage"),
+    source: str = Query(default="public_api", description="Data source: public_api (primary; legacy values yfinance/alphavantage ignored — chain always comes from fetch_spot_and_chains_merged)"),
     expiries: int = Query(default=4, ge=1, le=12),
 ):
     """Trigger a live snapshot of the options chain.

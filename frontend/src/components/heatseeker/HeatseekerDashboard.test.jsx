@@ -52,6 +52,9 @@ jest.mock("./NewsBadge", () => () => <div data-testid="hs-news" />);
 // to :8000) — we mock it so the test stays synchronous + side-effect-free.
 jest.mock("./RndDensityPanel", () => () => <div data-testid="hs-rnd-density" />);
 
+// Mock BriefingStrip — it calls fetch() on mount for /api/briefing/{ticker}
+jest.mock("./BriefingStrip", () => () => <div data-testid="hs-briefing-strip" />);
+
 // Mock lazy-loaded chart components
 jest.mock("../VannaChart", () => () => <div data-testid="mock-vanna" />);
 jest.mock("../CharmChart", () => () => <div data-testid="mock-charm" />);
@@ -80,6 +83,7 @@ describe("HeatseekerDashboard", () => {
       render(<HeatseekerDashboard ticker="SPY" spot={500} />);
     });
     expect(screen.getByTestId("heatseeker-dashboard")).toBeInTheDocument();
+    expect(screen.getByTestId("hs-briefing-strip")).toBeInTheDocument();
     [
       // Row 3 container — visual-regression sweep target (2026-07-15)
       "hs-row3-confluence-velocity",

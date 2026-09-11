@@ -49,7 +49,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Install dependencies
         working-directory: ./backend
@@ -89,7 +89,7 @@ jobs:
       - name: Install and build
         working-directory: ./frontend
         run: |
-          npm ci
+          npm ci --legacy-peer-deps
           npm run build
         env:
           REACT_APP_BACKEND_URL: ${{ secrets.REACT_APP_BACKEND_URL }}

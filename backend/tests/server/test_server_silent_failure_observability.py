@@ -17,7 +17,7 @@ Per-site contracts pinned here:
   L274   | log.warning containing "perf_monitor" + response+header preserved                | 274
   L2661  | log.warning containing "route template" inside performance_middleware           | 2661
   L3072  | log.warning containing "duckdb_engine.stop()" inside shutdown_duckdb            | 3072
-  L2178  | schwab_auth_handler returns JSONResponse with status_code=503 + status=error body | 2178
+  L2178  | DELETED 2026-09-06 (Schwab removed): server has no schwab_auth_handler; no /api/schwab routes | —
 
 TEST STRATEGY: Each test is either (a) a SOURCE-FILE GREP check (counts
 log.warning patterns directly in server.py source), or (b) an IMPORT-TIME
@@ -134,30 +134,22 @@ def test_L3072_duckdb_shutdown_log_warning_present_in_source():
     )
 
 
-# ────────────── L2178 ──────────────────────────────────────────────────────────
-# Behavioral test: schwab_auth_handler returns JSONResponse(503) with
-# status=error body. Direct call (function not bound to a FastAPI route).
+# ────────────── L2178 (DELETED) ───────────────────────────────────────────
+# The schwab_auth_handler stub was deleted with Schwab on 2026-09-06.
+# Contract now: no such attribute on server, no schwab paths in OpenAPI.
 
-@pytest.mark.asyncio
-async def test_L2178_schwab_auth_handler_returns_jsonresponse_503(monkeypatch):
-    from fastapi.responses import JSONResponse
-    monkeypatch.delenv("SCHWAB_CLIENT_ID", raising=False)
+def test_L2178_schwab_auth_handler_deleted():
     import server
-    result = await server.schwab_auth_handler(request={})
-    assert isinstance(result, JSONResponse), (
-        f"L2178 fix NOT applied: schwab_auth_handler must return JSONResponse for 503 propagation; got {type(result).__name__}"
-    )
-    assert result.status_code == 503, (
-        f"L2178 fix: status_code must be 503 (gemini.py JSONResponse precedent); got {result.status_code}"
-    )
-    body = json.loads(result.body)
-    assert body.get("status") == "error"
-    assert "not configured" in body.get("message", "")
+    assert not hasattr(server, "schwab_auth_handler"), (
+        "schwab_auth_handler must stay deleted (Schwab removed 2026-09-06)")
+    paths = [r.path for r in server.app.routes if hasattr(r, "path")]
+    assert not [p for p in paths if "/schwab" in p], (
+        "no /api/schwab routes may remain registered")
 
 
 # ────────────── SUMMARY (one test that asserts ALL fixes exist at once) ─────────────
-def test_all_seven_fixes_present_in_source():
-    """Single-trip structural assertion — all 6 log.warning fix-shapes + 1 JSONResponse."""
+def test_all_six_fixes_present_in_source():
+    """Single-trip structural assertion — all 6 log.warning fix-shapes (Schwab JSONResponse fix deleted with Schwab 2026-09-06)."""
     src = _read_server_source()
     required_patterns = [
         ("L153", "rate_limit_429_count metric raise swallowed"),
@@ -172,9 +164,5 @@ def test_all_seven_fixes_present_in_source():
         if pattern not in src:
             missing.append(f"{site} ({pattern})")
     assert not missing, f"Missing log.warning patterns in server.py: {missing}"
-    assert "async def schwab_auth_handler" in src, "schwab_auth_handler function missing entirely"
-    # Confirm schwab function uses JSONResponse + status_code=503
-    schwab_idx = src.find("async def schwab_auth_handler")
-    schwab_window = src[schwab_idx:schwab_idx + 800]
-    assert "JSONResponse" in schwab_window, "schwab_auth_handler must use JSONResponse"
-    assert "status_code=503" in schwab_window, "schwab_auth_handler must use status_code=503"
+    assert "async def schwab_auth_handler" not in src, (
+        "schwab_auth_handler must stay deleted (Schwab removed 2026-09-06)")

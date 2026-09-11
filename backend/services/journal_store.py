@@ -358,3 +358,162 @@ def setup_stats(engine, *, days: int = 90) -> dict:
         "by_setup": _finalize(by_setup),
         "by_gex_regime": _finalize(by_regime),
     }
+
+
+# ── P1-7 whale tracker (Agent C, 2026-09-05) ──────────────────────────
+# Bookmark an alert → live STILL_IN/PARTIAL/EXITED/EXPIRED via Vol/ΔOI
+# decay + badge P&L. P&L is the side-signed UNDERLYING-leg move
+# (pnl_underlying_pct) — a labeled proxy, not premium P&L (premium needs
+# chain mids at scan time; a future pass can attach last_mid).
+
+_WHALE_DDL = """
+    CREATE TABLE IF NOT EXISTS whale_tracks (
+        asof_date DATE, alert_key TEXT, ckey TEXT, under TEXT,
+        type TEXT, side TEXT, bias TEXT, strike DOUBLE, exp TEXT,
+        entry_spot DOUBLE, entry_oi DOUBLE, entry_vol DOUBLE,
+        last_spot DOUBLE, last_oi DOUBLE, last_vol DOUBLE,
+        state TEXT, pnl_underlying_pct DOUBLE, reason TEXT,
+        updated_ts TIMESTAMP,
+        PRIMARY KEY (asof_date, alert_key)
+    )
+"""
+
+WHALE_PARTIAL_DROP = 0.10   # OI decay 10-50% → PARTIAL
+WHALE_EXIT_DROP = 0.50      # OI collapse >50% → EXITED
+WHALE_CLOSER_VOL_MULT = 2.0  # vol burst vs entry…
+WHALE_CLOSER_OI_DROP = 0.25  # …with OI decay ≥25% → closer-shape EXITED
+
+
+def init_whale_tables(engine) -> None:
+    engine.execute_write(_WHALE_DDL)
+
+
+def _side_sign(track: dict) -> int:
+    side = str(track.get("side") or track.get("type") or "").lower()
+    bias = str(track.get("bias") or "").upper()
+    if side.startswith("p") or bias == "BEARISH":
+        return -1
+    return 1
+
+
+def whale_state(track: dict, snap: dict) -> dict[str, Any]:
+    """Pure state read: bookmark snapshot + live snapshot → state/pnl/reason."""
+    try:
+        entry_spot = float(track.get("entry_spot") or 0)
+        spot = float(snap.get("spot") or 0)
+    except (TypeError, ValueError):
+        entry_spot, spot = 0.0, 0.0
+    pnl = None
+    if entry_spot > 0 and spot > 0:
+        pnl = round(_side_sign(track) * (spot - entry_spot) / entry_spot * 100.0, 2)
+    try:
+        dte = snap.get("dte")
+        dte = None if dte is None else int(dte)
+    except (TypeError, ValueError):
+        dte = None
+    if dte is not None and dte <= 0:
+        return {"state": "EXPIRED", "pnl_underlying_pct": pnl,
+                "reason": "past expiry — position closed by time"}
+    try:
+        entry_oi = float(track.get("entry_oi") or 0)
+        oi = float(snap.get("oi") if snap.get("oi") is not None else entry_oi)
+    except (TypeError, ValueError):
+        entry_oi, oi = 0.0, 0.0
+    if entry_oi <= 0:
+        return {"state": "STILL_IN", "pnl_underlying_pct": pnl,
+                "reason": "no OI basis — held by default"}
+    drop = 1.0 - oi / entry_oi
+    try:
+        entry_vol = float(track.get("entry_vol") or 0)
+        vol = float(snap.get("vol") or 0)
+    except (TypeError, ValueError):
+        entry_vol, vol = 0.0, 0.0
+    closer = (entry_vol > 0 and vol >= WHALE_CLOSER_VOL_MULT * entry_vol
+              and drop >= WHALE_CLOSER_OI_DROP)
+    if drop >= WHALE_EXIT_DROP or closer:
+        why = (f"OI collapsed {drop * 100:.0f}% — exited"
+               if drop >= WHALE_EXIT_DROP
+               else f"closer shape: {vol:,.0f} prints on {drop * 100:.0f}% OI decay")
+        return {"state": "EXITED", "pnl_underlying_pct": pnl, "reason": why}
+    if drop >= WHALE_PARTIAL_DROP:
+        return {"state": "PARTIAL", "pnl_underlying_pct": pnl,
+                "reason": f"OI decayed {drop * 100:.0f}% — scaling out"}
+    return {"state": "STILL_IN", "pnl_underlying_pct": pnl,
+            "reason": f"OI held ({drop * 100:+.0f}%) — still in"}
+
+
+def bookmark_whale(engine, alert: dict, *, spot: float, oi: float, vol: float) -> int:
+    """Idempotent bookmark of a whale alert. Returns 1 added / 0 existing."""
+    try:
+        asof = str(alert.get("asof") or "")[:10] or datetime.now(_ET).date().isoformat()
+        key = str(alert.get("key") or alert.get("ckey") or "")
+        if not key:
+            return 0
+        have = engine.query(
+            "SELECT count(*) AS c FROM whale_tracks WHERE asof_date = ? AND alert_key = ?",
+            [asof, key])
+        if have and int(have[0]["c"]) > 0:
+            return 0
+        engine.execute_write("""
+            INSERT INTO whale_tracks
+            (asof_date, alert_key, ckey, under, type, side, bias, strike, exp,
+             entry_spot, entry_oi, entry_vol, last_spot, last_oi, last_vol,
+             state, pnl_underlying_pct, reason, updated_ts)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, current_timestamp)
+        """, [[asof, key, str(alert.get("ckey") or ""), str(alert.get("under") or "").upper(),
+               str(alert.get("type") or "call").lower(), str(alert.get("side") or "BUY"),
+               str(alert.get("bias") or ""),
+               float(alert.get("strike") or 0), str(alert.get("exp") or ""),
+               float(spot or 0), float(oi or 0), float(vol or 0),
+               float(spot or 0), float(oi or 0), float(vol or 0),
+               "STILL_IN", 0.0, "bookmarked — awaiting first update"]])
+        return 1
+    except Exception as e:
+        logger.debug(f"journal_store.bookmark_whale: {e}")
+        return 0
+
+
+def update_whales(engine, snaps: dict) -> dict[str, dict]:
+    """Apply live snapshots {ckey: {spot, oi, vol, dte}} → {ckey: state row}."""
+    out: dict[str, dict] = {}
+    try:
+        rows = engine.query("SELECT * FROM whale_tracks WHERE state != 'EXPIRED'")
+    except Exception as e:
+        logger.debug(f"journal_store.update_whales read: {e}")
+        return out
+    for r in rows or []:
+        r = dict(r)
+        snap = (snaps or {}).get(str(r.get("ckey"))) or {}
+        if not snap:
+            continue
+        track = {"entry_spot": r.get("entry_spot"), "entry_oi": r.get("entry_oi"),
+                 "entry_vol": r.get("entry_vol"), "side": r.get("side"),
+                 "type": r.get("type"), "bias": r.get("bias")}
+        st = whale_state(track, snap)
+        with contextlib.suppress(Exception):
+            engine.execute_write("""
+                UPDATE whale_tracks
+                SET last_spot = ?, last_oi = ?, last_vol = ?,
+                    state = ?, pnl_underlying_pct = ?, reason = ?,
+                    updated_ts = current_timestamp
+                WHERE asof_date = ? AND alert_key = ?
+            """, [[float(snap.get("spot") or 0), float(snap.get("oi") or 0),
+                   float(snap.get("vol") or 0), st["state"], st["pnl_underlying_pct"],
+                   st["reason"], str(r.get("asof_date"))[:10], str(r.get("alert_key"))]])
+        out[str(r.get("ckey"))] = st
+    return out
+
+
+def read_whales(engine, *, state: str | None = None, days: int = 30) -> list[dict]:
+    """Live badge read: open tracks (optionally state-filtered)."""
+    try:
+        sql = "SELECT * FROM whale_tracks WHERE asof_date >= current_date - INTERVAL '30' DAY"
+        params: list = []
+        if state:
+            sql += " AND state = ?"
+            params.append(state)
+        sql += " ORDER BY updated_ts DESC"
+        return engine.query(sql, params) or []
+    except Exception as e:
+        logger.debug(f"journal_store.read_whales: {e}")
+        return []

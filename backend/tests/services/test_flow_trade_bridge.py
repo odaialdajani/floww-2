@@ -119,3 +119,25 @@ def test_dedupe_different_ckey_passes():
     out = dedupe_alerts([_alert(), _alert(ckey="QQQ261218P00480000",
                                          under="QQQ", key="score|x")])
     assert len(out) == 2
+
+
+# ── DETERMINISM (C8, Agent C) ────────────────────────────────────────
+# Paper fills must replay byte-identical: same alert in → same order out
+# (qty, size_basis, execution, timestamps all derived from the alert, no
+# wall-clock, no randomness). Timestamps are audited: entry_date comes
+# from the alert's asof (fire time), never now.
+
+def test_build_auto_trades_deterministic():
+    from services.flow_trade_bridge import build_auto_trades
+    alerts = [_alert(), _alert()]
+    first = build_auto_trades(alerts)
+    second = build_auto_trades(alerts)
+    assert first == second
+    assert len(first) == 1, "same ckey twice → one trade (idempotent)"
+
+
+def test_order_timestamps_come_from_alert_not_clock():
+    o = alert_to_order(_alert())
+    assert o["metadata"]["size_basis"]["method"] == "flat"  # uncalibrated fixture
+    j = alert_to_journal_entry(_alert())
+    assert j["entry_date"] == "2026-08-22", "journal entry dated at fire time"

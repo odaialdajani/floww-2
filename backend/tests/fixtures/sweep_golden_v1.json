@@ -1,0 +1,49 @@
+{
+ "schema": "sweep_replay/v1",
+ "rows": [
+  {
+   "under": "SPY",
+   "occ": "O:SPY261218C00760000",
+   "type": "call",
+   "strike": 760.0,
+   "exp": "2026-12-18",
+   "dte": 75,
+   "vol": 200000.0,
+   "oi": 2000.0,
+   "iv": 0.5,
+   "delta": 0.3,
+   "spot": 758.0,
+   "vol_oi": 100.0,
+   "notional": 15200000000.0,
+   "ckey": "SPY|call|760|2026-12-18",
+   "est_entry": 70.69,
+   "premium": 1413800000.0
+  }
+ ],
+ "baselines": {
+  "SPY": {
+   "avg": 50000.0,
+   "std": 20000.0,
+   "days": 10
+  }
+ },
+ "prev_oi": {
+  "SPY|call|760|2026-12-18": 1500.0
+ },
+ "regimes": {
+  "SPY": "negative"
+ },
+ "gex_context": {
+  "SPY": {
+   "gamma_imbalance": {
+    "gamma_imbalance_pct": -1.2,
+    "regime": "negative"
+   }
+  }
+ },
+ "oi_tags": {},
+ "calibration": null,
+ "opts": {},
+ "asof": "2026-09-05T10:00:00-04:00",
+ "mins_since_open": 30.0
+}

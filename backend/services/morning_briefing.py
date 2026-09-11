@@ -77,6 +77,123 @@ def _is_effectively_zero(val: float) -> bool:
 
 
 # ────────────────────────────────────────────────────────────────────────
+# Tidehunter outcome ledger (nightly cron precomputed)
+# ────────────────────────────────────────────────────────────────────────
+
+_outcome_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_OUTCOME_TTL_S = 6 * 3600  # cron refreshes nightly; brief re-reads at most every 6h
+
+
+async def _read_mongo_snapshot(horizon: int = 2) -> dict[str, Any] | None:
+    """Read the cron's precomputed outcome snapshot from Mongo.
+
+    Async by contract: Motor clients are bound to the loop that created them,
+    so this must run on the server's loop (call from async context only).
+    Monkeypatched in tests.
+    """
+    from server import db as mongo_db  # deferred: circular import
+
+    doc = await mongo_db.flow_outcome_cache.find_one({"_id": f"outcomes_h{horizon}"})
+    if not doc or doc.get("status") != "ok":
+        return None
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+
+async def _read_calibration_snapshot(horizon: int = 2) -> dict[str, Any] | None:
+    """Read the cron's calibration snapshot (same loop contract as above)."""
+    from server import db as mongo_db  # deferred: circular import
+
+    doc = await mongo_db.flow_outcome_cache.find_one({"_id": "calibration_latest"})
+    if not doc:
+        return None
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+
+async def _outcome_ledger_metrics(horizon: int = 2) -> dict[str, Any]:
+    """Measured alert quality from the nightly outcome-refresh snapshot.
+
+    Reads Mongo flow_outcome_cache (written by cron_outcomes.py at 20:30 ET)
+    — never computes live here, so the brief stays fast and network-light
+    (one cached Mongo read per 6h). Fails soft: any problem yields
+    {"available": False, "reason": ...} rather than breaking the brief.
+
+    Shape:
+      {available, computed_at, overall_precision,
+       rules: [{rule, n_measured, precision, control_rate, lift, uncalibrated}],
+       calibration?: {stage, n, method_note, ...}}
+    """
+    import time as _time
+
+    key = f"h{horizon}"
+    hit = _outcome_cache.get(key)
+    if hit and _time.time() - hit[0] < _OUTCOME_TTL_S:
+        return hit[1]
+
+    try:
+        doc = await _read_mongo_snapshot(horizon)
+        if doc is None:
+            out = {"available": False, "reason": "no snapshot yet — cron has not run"}
+        else:
+            rules = []
+            for rule, s in sorted((doc.get("per_rule") or {}).items()):
+                rules.append({
+                    "rule": rule,
+                    "n_measured": s.get("n_measured", 0),
+                    "precision": s.get("precision"),
+                    "control_rate": s.get("control_rate"),
+                    "lift": s.get("lift"),
+                    "uncalibrated": s.get("uncalibrated", True),
+                })
+            out = {
+                "available": True,
+                "computed_at": doc.get("computed_at"),
+                "overall_precision": (doc.get("overall") or {}).get("precision"),
+                "rules": rules,
+            }
+            try:
+                cal_doc = await _read_calibration_snapshot(horizon)
+                if cal_doc:
+                    from services.flow_calibration import calibration_status_blob
+                    out["calibration"] = calibration_status_blob(cal_doc)
+            except Exception:
+                pass  # calibration enrichment is optional
+        _outcome_cache[key] = (_time.time(), out)
+        return out
+    except Exception as e:
+        return {"available": False, "reason": f"outcome ledger read failed: {type(e).__name__}"}
+
+
+def _outcome_narrative_line(ao: dict[str, Any] | None) -> str:
+    """One honest sentence about the alert ledger, appended to the brief text.
+
+    Contracts: unavailable/cold ledger → empty string (the brief never lies
+    about measurement it doesn't have); only rules with measured precision
+    are quoted; negative lift is called out because that's the number that
+    says a rule is currently worse than coin-flipping vs its control cohort.
+    """
+    if not ao or not ao.get("available"):
+        return ""
+    all_rules = ao.get("rules") or []
+    measured = [r for r in all_rules
+                if not r.get("uncalibrated") and isinstance(r.get("precision"), (int, float))
+                and isinstance(r.get("lift"), (int, float))]
+    if not measured:
+        n = sum(r.get("n_measured", 0) for r in all_rules)
+        return (f"Alert ledger: {n} measured alert(s) — not yet enough for "
+                "per-rule hit rates.") if n else ""
+    best = max(measured, key=lambda r: r["lift"])
+    segs = [f"{best['rule']} {best['precision']:.0%} hit, lift {best['lift']:+.2f}"]
+    worst = min(measured, key=lambda r: r["lift"])
+    if worst is not best and worst["lift"] < 0:
+        segs.append(f"{worst['rule']} lift {worst['lift']:+.2f}")
+    line = "Measured alert quality: " + "; ".join(segs)
+    overall = ao.get("overall_precision")
+    if isinstance(overall, (int, float)):
+        line += f" — overall {overall:.0%}"
+    return line + "."
+
+
+# ────────────────────────────────────────────────────────────────────────
 # Regime Classifier
 # ────────────────────────────────────────────────────────────────────────
 
@@ -559,6 +676,16 @@ async def build_briefing(
         put_oi=put_oi_total,
     )
 
+    # Tidehunter outcome ledger — one honest sentence on whether recent
+    # alerts actually predicted (nightly cron's precomputed snapshot;
+    # empty until the ledger accumulates). Must never break the brief.
+    try:
+        _ao_line = _outcome_narrative_line(await _outcome_ledger_metrics())
+        if _ao_line:
+            narrative = f"{narrative}\n\n{_ao_line}"
+    except Exception:
+        logger.debug("outcome narrative line skipped", exc_info=True)
+
     # ── Paper-accurate GEX diagnostic (Ni-Pearson + Barbon-Buraschi) ────
     paper_metrics = {}
     pcr_signal = {}
@@ -620,7 +747,7 @@ async def build_briefing(
             ooi_signal = options_order_imbalance(
                 call_open_interest=call_oi_total, put_open_interest=put_oi_total
             )
-            # Ni-Pearson 2021 Charm — use theta from chain if available
+            # Theta-derived charm proxy from chain averages (heuristic, unverified)
             charm_signal = {"signal": "data_unavailable"}
             if chain_contracts and len(chain_contracts) > 0:
                 avg_theta = sum(c.get("theta", 0) or 0 for c in chain_contracts[:20]) / max(1, min(20, len(chain_contracts)))
@@ -799,4 +926,8 @@ async def build_briefing(
             "real_drift_burst": burst_signal,
             # Cross-asset gamma spillover — index gamma → this ticker
             "cross_asset_spillover": spillover_signal,
+            # Tidehunter outcome ledger (2026-09-02) — measured alert quality
+            # from the nightly cron's precomputed snapshot. Read-only context:
+            # the brief reports whether yesterday's tape actually predicted.
+            "alert_outcomes": await _outcome_ledger_metrics(),
         }))

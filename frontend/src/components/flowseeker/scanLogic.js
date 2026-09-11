@@ -113,9 +113,11 @@ export function scanScoreOf(r, regime = null) {
   else if (regime === "positive" && r.volOI >= 2) nudge = 3;
   s += nudge;
   // Informed-positioning band: 7-90 DTE + vol≥3×OI + ≥$25k premium is where
-  // directional bets live (shorter = gamma noise, longer = hedges) — the
-  // standard UOA filter conjunction; cf. Pan & Poteshman (RFS 2006) on option
-  // volume carrying multi-day directional information.
+  // directional bets live (shorter = gamma noise, longer = hedges) — a desk
+  // heuristic, NOT from Pan & Poteshman (RFS 2006): that paper finds buyer-open
+  // put-call ratios predict returns (low PC → +40bp next day, stronger for
+  // high-leverage/OTM), with no DTE band and no volume/OI/premium thresholds.
+  // Keep the band as [internal heuristic]; cite P&P only for PC direction.
   let band = 0;
   if (r.dte != null && r.dte >= 7 && r.dte <= 90 && (r.volOI || 0) >= 3 && (r.premium || 0) >= 25e3) band = 4;
   s += band;
@@ -141,19 +143,28 @@ export function estPremium(r) {
 // fires at most one alert (first matching rule wins, in priority order).
 // Every hit carries a plain-English `why` (a desk explains its alerts) and an
 // optional `ttl` — how long ingest should dedupe this key before re-firing.
-// opts.allow: optional ticker allowlist (array) — scopes alerting to the
-// user's universe so market-wide scans don't ping for 700 random symbols.
+// The universe is FULLY OPEN: no ticker allowlist — market-wide scans alert
+// on any symbol. A legacy `opts.allow` is accepted and ignored (back-compat).
 export function evalAlerts(rows, opts = {}) {
   const {
-    minScore = 85,
-    whalePremium = 10e6,
-    zeroDteScore = 70,
+    // Post-tightening gates (2026-09-02 noise pass, enforced Phase 7.1):
+    // omitted-opts callers inherit desk gates, never the old loose values.
+    minScore = 92,
+    whalePremium = 25e6,
+    primePremium = 250e3,
+    primeVolOI = 5,
+    zeroDteScore = 85,
     oiConfPct = 0.30,
     oiConfNotional = 1e6,
-    enabled = { score: true, whale: true, zerodte: true, oiconf: true },
-    allow = null,
+    // 2026-09-02 noise pass: per-ticker alert cap per scan. Contract rules
+    // fire on NEW rows; a 60-name breadth day can legitimately flag 60 rows
+    // — that is data, but 60 notifications is noise. Top-cap keeps the
+    // strongest claims per ticker; count stays truthful (engine still
+    // evaluated everything). This is a NOTIFICATION throttle, not a universe
+    // limit — every ticker is still evaluated.
+    perTickerCap = 2,
+    enabled = { score: true, whale: true, zerodte: true, oiconf: true, prime: true },
   } = opts;
-  const allowSet = allow && allow.length ? new Set(allow) : null;
   // key is rule-namespaced so dedup ttls stay independent across rules — a
   // SCORE fire yesterday afternoon must not suppress this morning's OICONF
   // confirmation on the same contract. ckey keeps the raw contract identity.
@@ -170,9 +181,24 @@ export function evalAlerts(rows, opts = {}) {
   // real" proof a print-less feed offers (open interest that JUMPED overnight
   // means the positioning held). Doesn't require _new; capped to the top 5 by
   // % build so the tape gets the strongest follow-through, not 50 rows of +30%.
+  // ΔOI hygiene parity (server: services/oi_hygiene.py): rows carry a hygiene
+  // tag (r.oiChg.tag, shipped on /scan payload as oi_tags) — rollover/expiring
+  // contracts are migration artifacts, never "new flow"; earnings-window
+  // alerts still fire but the why-string carries the ambiguity tag.
+  const hygieneSuffix = (tag) => {
+    if (!tag) return "";
+    const parts = [];
+    if (tag.rollover) parts.push("rollover detected — position migrated expiries, not new flow");
+    if (tag.earnings && typeof tag.earnings === "object") {
+      if (tag.earnings.unknown) parts.push("earnings window unknown — direction ambiguous");
+      else if (tag.earnings.days_to != null) parts.push(`earnings in ${tag.earnings.days_to} session(s) — direction ambiguous`);
+    }
+    return parts.length ? " [" + parts.join("; ") + "]" : "";
+  };
   const cand = [];
   for (const r of rows || []) {
-    if (allowSet && !allowSet.has(r.under)) continue;
+    const tag = (r.oiChg && r.oiChg.tag) || null;
+    if (tag && (tag.rollover || tag.expiring)) continue;
     const addNotl = r.oiChg ? r.oiChg.abs * 100 * (r.strike || 0) : 0;
     if (enabled.oiconf && r.oiChg && r.oiChg.pct >= oiConfPct && addNotl >= oiConfNotional) {
       cand.push({ r, addNotl });
@@ -183,28 +209,57 @@ export function evalAlerts(rows, opts = {}) {
   const inTop = new Set(topConf.map((c) => c.r));
   const out = topConf.map(({ r, addNotl }) => mkHit(r, "OICONF", {
     oiChgPct: r.oiChg.pct,
-    why: `OI +${Math.round(r.oiChg.pct * 100)}% overnight (+${fmtK(r.oiChg.abs)} contracts, ${fmtUSD(addNotl)} notional) — prior-day flow HELD as new positioning`,
+    why: `OI +${Math.round(r.oiChg.pct * 100)}% overnight (+${fmtK(r.oiChg.abs)} contracts, ${fmtUSD(addNotl)} notional) — prior-day flow HELD as new positioning`
+      + hygieneSuffix(r.oiChg && r.oiChg.tag),
     ttl: 20 * 3600e3,
   }));
   // Pass 2 — intraday rules on NEW rows. Rows that won an OICONF slot skip
   // this (one alert per row, strongest claim wins); rows that qualified but
   // ranked 6+ fall through here so their one-shot _new alert isn't swallowed.
+  // Side gate on intraday rules: oiconf stays side-agnostic.
+  const sideGate = typeof opts.side === "string" && opts.side !== "all"
+    ? opts.side : null;
   for (const r of rows || []) {
     if (!r._new || inTop.has(r)) continue;
-    if (allowSet && !allowSet.has(r.under)) continue;
+    if (sideGate && r.type !== sideGate) continue;
     let rule = null, why = null;
-    if (enabled.score && r.score >= minScore) {
+    if (enabled.score && r.score >= (enabled.scoreMin ?? minScore)) {
       rule = "SCORE";
       why = `score ${r.score} — vol ${r.volOI >= 99 ? "99+" : (r.volOI ?? 0).toFixed(1)}× OI${r.premium != null ? `, ~${fmtUSD(r.premium)} premium` : ""}${r.dte != null ? `, ${r.dte} DTE` : ""}`;
-    } else if (enabled.whale && r.premium != null && r.premium >= whalePremium) {
+    } else if (enabled.whale && r.premium != null && r.premium >= (enabled.whaleMin ?? whalePremium)) {
       rule = "WHALE";
       why = `~${fmtUSD(r.premium)} estimated premium on a single line`;
-    } else if (enabled.zerodte && r.dte != null && r.dte <= 1 && r.score >= zeroDteScore) {
+    } else if (enabled.prime && (r.premium ?? 0) >= primePremium && (r.volOI ?? 0) >= primeVolOI) {
+      // PRIME — the 55-62% UOA bracket sits BELOW whale size: a $25M+ line
+      // is whale flow first. PRIME catches sub-whale mid-cap institutional
+      // building that never clears SCORE≥92 (the SNDK gap).
+      // Server parity: flow_alerts.eval_institutional Pass 2.
+      rule = "PRIME";
+      why = `prime print — ~${fmtUSD(r.premium)} premium at ${(r.volOI ?? 0).toFixed(1)}× OI, score ${r.score} (55-62% directional bracket)`;
+    } else if (enabled.zerodte && r.dte != null && r.dte <= 1 && r.score >= zeroDteScore && (r.volOI ?? 0) >= 2) {
       rule = "0DTE";
       why = `${r.dte} DTE with score ${r.score} — urgent short-fuse positioning`;
     }
     if (!rule) continue;
     out.push(mkHit(r, rule, { why }));
+  }
+  // Per-ticker cap — contract rules only, priority order OICONF > SCORE >
+  // WHALE > PRIME > 0DTE (mirrors the rule precedence). OICONF pass-1 hits are
+  // exempt (already capped at top-5 globally by % build).
+  if (perTickerCap > 0) {
+    const prio = { SCORE: 0, WHALE: 1, PRIME: 2, "0DTE": 3 };
+    const perTicker = new Map();
+    const kept = [];
+    for (const h of out) {
+      if (!prio.hasOwnProperty(h.rule)) { kept.push(h); continue; }   // OICONF etc exempt
+      const n = perTicker.get(h.under) || 0;
+      if (n >= perTickerCap) continue;
+      perTicker.set(h.under, n + 1);
+      kept.push(h);
+    }
+    kept.sort((a, b) => (prio[a.rule] ?? 9) - (prio[b.rule] ?? 9));
+    out.length = 0;
+    out.push(...kept);
   }
   return out;
 }
@@ -281,16 +336,14 @@ export function streakOf(days, { mult = 1.5, minDays = 4, today = sessionDay() }
 //           positioning; institutions building over days, not one print.
 // Hits use the label pathway (no strike) and long ttls so the tape stays signal.
 export function evalTickerAlerts(rollup, baselines = {}, streaks = {}, opts = {}) {
-  const { sigmaMin = 4, followDays = 2, enabled = { sigma: true, follow: true }, allow = null } = opts;
-  const allowSet = allow && allow.length ? new Set(allow) : null;
+  const { sigmaMin = 6, followDays = 2, enabled = { sigma: true, follow: true } } = opts;
   const out = [];
   for (const e of rollup || []) {
-    if (allowSet && !allowSet.has(e.under)) continue;
     const base = { under: e.under, type: "", strike: "", exp: "", score: e.maxScore ?? null, premium: null, dte: null };
     if (enabled.sigma) {
       const b = baselines[e.under];
       const s = volSigma(e.callVol + e.putVol, b);
-      if (s != null && s >= sigmaMin) {
+      if (s != null && s >= (enabled.sigmaMin ?? sigmaMin)) {
         out.push({
           ...base, key: `sigma|${e.under}`, rule: "SIGMA", sigma: s,
           label: `${e.under} options volume ${s}σ above its ${b.days}-day baseline (${fmtK(e.callVol + e.putVol)} vs ~${fmtK(b.avg)} avg)`,
@@ -300,7 +353,7 @@ export function evalTickerAlerts(rollup, baselines = {}, streaks = {}, opts = {}
     }
     if (enabled.follow) {
       const st = streaks[e.under];
-      if (st && st.n >= followDays) {
+      if (st && st.n >= (enabled.followMin ?? followDays)) {
         out.push({
           ...base, key: `follow|${e.under}`, rule: "FOLLOW", streak: st.n,
           label: `${e.under} elevated options volume ${st.n} straight days (≥${st.mult}× its median) — persistent positioning`,
@@ -506,14 +559,13 @@ export function tierOf(hit, { minScoreForFire = 90 } = {}) {
 
 // Select banner-eligible fires from the (already-dedup'd by alertSeen) alertLog.
 // Returns the subset tagged _tier="high" sorted banner-priority. Defensive on
-// each axis: respects per-rule enabled flags + universe allow (mirrors the
-// evalAlerts/evalTickerAlerts gating) and drops entries older than ttlMs
+// each axis: respects per-rule enabled flags (universe is fully open — no
+// allowlist) and drops entries older than ttlMs
 // (alertLog is already deduped, but TTL handling stays here for stub tests).
 // acked accepts either a Set<string> or a plain {key: ms} object.
 export function selectFires(alertLog, opts = {}) {
-  const { now = Date.now(), ttlMs = 60_000, minScoreForFire = 90, enabled, allow, acked } = opts;
+  const { now = Date.now(), ttlMs = 60_000, minScoreForFire = 90, enabled, acked } = opts;
   const ackedSet = acked instanceof Set ? acked : new Set(Object.keys(acked || {}));
-  const allowSet = allow && allow.length ? new Set(allow) : null;
   const enabledMap = enabled || {};
   const out = [];
   for (const hit of alertLog || []) {
@@ -522,7 +574,6 @@ export function selectFires(alertLog, opts = {}) {
     const rl = String(hit.rule || "").toLowerCase();
     // enabled-map is keyed by lowercase rule names (oiconf / whale / zerodte etc)
     if (enabledMap[rl] === false) continue;
-    if (allowSet && hit.under && !allowSet.has(hit.under)) continue;
     if (hit.t != null && now - hit.t > ttlMs) continue;
     const t = tierOf(hit, { minScoreForFire });
     if (t !== "high") continue;
@@ -575,4 +626,352 @@ export function formatFOLLOWStrip(streaks, { top = 6 } = {}) {
   }
   arr.sort((a, b) => (b.n - a.n) || (b.mult - a.mult) || a.under.localeCompare(b.under));
   return arr.slice(0, Math.max(0, top));
+}
+
+// ---------- W1 tracer: spread position + overview bar (Phase 9) ----------
+// Spread position: where last traded inside [bid, ask]. 0 = at bid, 1 = at ask.
+// Returns {pos, state, side, label}: state NO_QUOTE when bid/ask/last missing or zero,
+// LOCKED when bid/ask present but crossed/locked (ask<=bid) — never a guessed number (C4).
+// side/label: BID (pos<=0.33) / MID (0.33<pos<0.67) / ASK (pos>=0.67) / NO_QUOTE|LOCKED.
+export function spreadPosition(bid, ask, last) {
+  const b = Number(bid), a = Number(ask), l = Number(last);
+  // Missing or zero quotes → NO_QUOTE (never guess)
+  if (!Number.isFinite(b) || !Number.isFinite(a) || !Number.isFinite(l)
+    || b <= 0 || a <= 0 || l <= 0) {
+    return { pos: null, state: "NO_QUOTE", side: "NO_QUOTE", label: "NO_QUOTE" };
+  }
+  // Crossed/locked spread (ask<=bid) → LOCKED distinct from NO_QUOTE
+  if (a <= b) {
+    return { pos: null, state: "LOCKED", side: "LOCKED", label: "LOCKED" };
+  }
+  const pos = Math.max(0, Math.min(1, (l - b) / (a - b)));
+  let side;
+  if (pos <= 0.33) side = "BID";
+  else if (pos < 0.67) side = "MID";
+  else side = "ASK";
+  return { pos, state: "OK", side, label: side };
+}
+
+// Overview bar rollup over Pulse rows. Direction proxy (snapshot chains carry
+// no bought/sold flags): bullish leg = (call&ASK)|(put&BID), bearish leg =
+// (call&BID)|(put&ASK). FIR = |bull-bear|/(bull+bear); Lean gated at 0.3 (H1).
+// RVOL needs baselines we don't have → always honest-empty here (H2 daily
+// resolution lands with B1 cadence).
+export function overviewStats(rows) {
+  let bull = 0, bear = 0, callPrem = 0, putPrem = 0, n = 0;
+  for (const r of rows || []) {
+    const prem = Number(r._aggPrem ?? r.premium) || 0;
+    if (prem <= 0) continue;
+    const isCall = String(r.type || "").toLowerCase().startsWith("c");
+    const ask = String(r.side || "").toUpperCase() === "ASK";
+    if ((isCall && ask) || (!isCall && !ask)) bull += prem;
+    else bear += prem;
+    if (isCall) callPrem += prem; else putPrem += prem;
+    n += 1;
+  }
+  const total = bull + bear;
+  const fir = total > 0 ? Math.abs(bull - bear) / total : 0;
+  const netPrem = bull - bear;
+  const pc = callPrem > 0 ? putPrem / callPrem : (putPrem > 0 ? Infinity : 0);
+  const lean = fir >= 0.3 ? (netPrem > 0 ? "Bullish" : netPrem < 0 ? "Bearish" : "Neutral") : "Neutral";
+  return { bullPrem: bull, bearPrem: bear, netPrem, callPrem, putPrem, fir, pc, lean, n, rvol: null };
+}
+
+// ---------- W6 filter depth (Phase 9) ----------
+// Equity-type triple toggle: static map, no vendor needed. ETF macro flow
+// separated from single-name conviction per the Academy.
+const ETF_SET = new Set(["SPY", "QQQ", "IWM", "DIA", "TLT", "XLF", "XLE", "XLK", "XLV", "XLI", "XLU", "XLB", "XLY", "XLP", "XLC", "XLRE", "XBI", "XHB", "XME", "XOP", "XRT", "SMH", "SOXX", "ARKK", "ARKG", "TQQQ", "SQQQ", "UPRO", "SPXU", "SPXS", "SPXL", "QLD", "QID", "DDM", "DXD", "DIA", "UDOW", "SDOW", "TMF", "TMV", "TNA", "TZA", "FAS", "FAZ", "NUGT", "DUST", "USO", "UNG", "GLD", "SLV", "GDX", "HYG", "LQD", "IEF", "SHY", "TIP", "EEM", "EFA", "FXI", "EWJ", "EWZ", "INDA", "VTI", "VOO", "VEA", "VWO", "VNQ", "SCHD", "JEPI", "JEPQ", "QQQM", "SPYV", "SPYG", "IVV", "VO", "VB", "VUG", "VTV"]);
+const IDX_SET = new Set(["SPX", "NDX", "RUT", "VIX", "DJX", "OEX", "XEO", "NQX"]);
+export function equityType(ticker) {
+  const t = String(ticker || "").toUpperCase();
+  if (IDX_SET.has(t)) return "INDEX";
+  if (ETF_SET.has(t)) return "ETF";
+  return "STOCK";
+}
+
+// Signed moneyness from spot (our stored otm is absolute): + means OTM.
+export function signedOtm(type, strike, spot) {
+  const k = Number(strike), s = Number(spot);
+  if (!k || !s) return null;
+  const isCall = String(type || "").toLowerCase().startsWith("c");
+  return isCall ? (k - s) / s : (s - k) / s;
+}
+
+// Signed side → (side, bias): the frontend mirror of the server's desk
+// matrix (services/public_scanner.py side_bias, fed by Lee-Ready
+// flow_signing on the backend). ASK = buyer lifted, BID = seller hit;
+// unknown (or anything else) stays unlabeled FLOW — parity tested on the
+// same 5 contracts both sides (scanLogic.test.js ↔ test_public_advantage).
+export function signedBias(type, signedSide) {
+  const t = String(type || "").toLowerCase().startsWith("c") ? "call" : "put";
+  if (signedSide === "ASK") return { side: "BUY", bias: t === "call" ? "BULLISH" : "BEARISH" };
+  if (signedSide === "BID") return { side: "SELL", bias: t === "call" ? "BEARISH" : "BULLISH" };
+  return { side: "FLOW", bias: null };
+}
+
+// OPEX = third Friday of the month (standard US equity expiry week).
+// Date-only inputs parse at local noon to dodge UTC-midnight timezone shift.
+export function isOpexDay(dateLike) {
+  const s = String(dateLike || "");
+  const d = new Date(s.length === 10 ? `${s}T12:00:00` : s);
+  if (Number.isNaN(d.getTime())) return false;
+  const y = d.getFullYear(), m = d.getMonth();
+  const first = new Date(y, m, 1);
+  const offset = (5 - first.getDay() + 7) % 7; // days to first Friday
+  return d.getDate() === 1 + offset + 14;
+}
+
+// ---------- Highlighting (Phase 9 W3-partial; Academy article 4) ----------
+// Snapshot chains carry day-volume + prior-close OI, but NOT single-print size.
+// Honest mapping: VOL>OI (purple) is exact. SIZE>OI cannot fire without prints,
+// so the loud tier is a 15s volume BURST bigger than entire OI (yellow) —
+// labeled burst, never "Size>OI".
+export function highlightState({ volDelta, volOI, oi }) {
+  const o = Number(oi) || 0;
+  const dv = Number(volDelta) || 0;
+  const voi = Number(volOI) || 0;
+  if (o > 0 && dv > o) return "BURST";
+  if (voi >= 1) return "VOL_OI";
+  return "NONE";
+}
+
+// ---------- Strategy-leg port (Phase 9 W2; mirrors backend flow_quality) ----------
+// Same fingerprints: vertical = same ticker+exp+type, different strikes, volume
+// ratio within 0.7–1.43x with 1000-contract floor each leg; straddle/strangle =
+// opposite types, strikes within 5%, matched volumes. Tags r._strat with
+// "VERT?" or "STRADDLE?" (heuristic — no multi-exchange leg linkage). Returns count.
+const SPREAD_LO = 0.7, SPREAD_HI = 1 / 0.7, SPREAD_VOL_FLOOR = 1000, STRADDLE_TOL = 0.05;
+export function flagSpreadLegs(rows) {
+  let n = 0;
+  const byTE = new Map();
+  for (const r of rows || []) {
+    const k = `${r.ticker}|${String(r.expiration || "").slice(0, 10)}`;
+    if (!byTE.has(k)) byTE.set(k, []);
+    byTE.get(k).push(r);
+  }
+  const ratioOk = (a, b) => {
+    const va = Number(a.volume) || 0, vb = Number(b.volume) || 0;
+    if (va < SPREAD_VOL_FLOOR || vb < SPREAD_VOL_FLOOR) return false;
+    const q = va / vb;
+    return q >= SPREAD_LO && q <= SPREAD_HI;
+  };
+  for (const legs of byTE.values()) {
+    if (legs.length < 2) continue;
+    for (let i = 0; i < legs.length; i++) {
+      for (let j = i + 1; j < legs.length; j++) {
+        const a = legs[i], b = legs[j];
+        if (!ratioOk(a, b)) continue;
+        const ta = String(a.type || "").toLowerCase(), tb = String(b.type || "").toLowerCase();
+        const ka = Number(a.strike) || 0, kb = Number(b.strike) || 0;
+        let tag = null;
+        if (ta === tb && ka !== kb) tag = "VERT?";
+        else if (ta !== tb && ka > 0 && kb > 0
+          && Math.abs(ka - kb) / Math.max(ka, kb) <= STRADDLE_TOL) tag = "STRADDLE?";
+        if (!tag) continue;
+        for (const leg of [a, b]) {
+          if (!leg._strat) { leg._strat = tag; n += 1; }
+        }
+      }
+    }
+  }
+  return n;
+}
+
+// ---------- Wave-2 SHIP engine (pure; synthesis tidehunter-wave2-synthesis.md) ----------
+// Conventions: IVs normalized by the same <3-decimal rule as fmtIV. Delta
+// interpolation never extrapolates (null outside observed range). Rows with
+// estimated deltas (deltaEst) degrade interpolation — callers preferring
+// precision should pre-filter; helpers stay honest and compute anyway.
+
+// Linear-interpolate IV at a target delta across same-type contracts.
+// Returns null with <2 usable points or target outside observed delta range.
+export function interpDeltaIV(rows, targetDelta, type) {
+  const t = String(type || "").toLowerCase().startsWith("c") ? "call" : "put";
+  const pts = [];
+  for (const r of rows || []) {
+    if (String(r.type || "").toLowerCase() !== t) continue;
+    const d = Number(r.delta), v = Number(r.iv);
+    if (!Number.isFinite(d) || r.iv == null) continue;
+    const iv = Number(v) >= 3 ? Number(v) / 100 : Number(v);
+    if (iv <= 0) continue;
+    pts.push([d < 0 ? d : (t === "put" ? -d : d), iv]); // signed delta
+  }
+  if (pts.length < 2) return null;
+  // Signed delta: calls +d, puts −|d|.
+  const signed = pts.map(([d, iv]) => [d, iv]).sort((a, b) => a[0] - b[0]);
+  const x = Number(targetDelta);
+  if (x < signed[0][0] || x > signed[signed.length - 1][0]) return null;
+  for (let i = 0; i < signed.length - 1; i++) {
+    const [x0, y0] = signed[i], [x1, y1] = signed[i + 1];
+    if (x >= x0 && x <= x1) {
+      if (x1 === x0) return y0;
+      return y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
+    }
+  }
+  return null;
+}
+
+// Single-expiry skew levels (XZZ smirk, C-W spread, Yan slope, convexity).
+// Pass rows for ONE expiry (front liquid monthly); nulls where uncomputable.
+export function skewLevels(rows) {
+  const put = (d) => interpDeltaIV(rows, d, "put");
+  const call = (d) => interpDeltaIV(rows, d, "call");
+  const p20 = put(-0.2), p50 = put(-0.5), p80 = put(-0.8), c50 = call(0.5);
+  const sub = (a, b) => (a == null || b == null ? null : a - b);
+  return {
+    smirk: sub(p20, c50),          // XZZ: IVput(-0.2) − IVcall(0.5)
+    cwSpread: sub(c50, p50),       // Cremers-Weinbaum: IVcall(0.5) − IVput(-0.5)
+    yanSlope: sub(p20, p50),       // Yan: IVput(-0.2) − IVput(-0.5)
+    convexity: p20 == null || p80 == null || c50 == null
+      ? null : p20 + p80 - 2 * c50,
+  };
+}
+
+// Expiry-day pin risk from one snapshot: max-OI strike, top-3 concentration,
+// 0DTE-OI share not computable here (needs multi-expiry view — caller joins).
+export function pinRisk(rows, spot) {
+  const byStrike = new Map();
+  let total = 0;
+  for (const r of rows || []) {
+    const oi = Number(r.oi) || 0;
+    if (oi <= 0) continue;
+    const k = Number(r.strike) || 0;
+    byStrike.set(k, (byStrike.get(k) || 0) + oi);
+    total += oi;
+  }
+  if (!byStrike.size || total <= 0) return null;
+  const ranked = [...byStrike.entries()].sort((a, b) => b[1] - a[1]);
+  const top3 = ranked.slice(0, 3).reduce((s, [, v]) => s + v, 0);
+  const s = Number(spot);
+  return {
+    maxOiStrike: ranked[0][0],
+    maxOi: ranked[0][1],
+    concentration: top3 / total,
+    totalOi: total,
+    distPct: Number.isFinite(s) && s > 0 ? ((ranked[0][0] - s) / s) * 100 : null,
+  };
+}
+
+// Ho-Stoll-lite quote read: relative spread always; direction needs a reference.
+// DOWN = mid shifted down vs prevMid (dealer-long pressure), UP = inverse.
+// Without prevMid there is no direction — tag LEVEL, never a fabricated side.
+export function quoteSkew(bid, ask, prevMid = null) {
+  const b = Number(bid), a = Number(ask);
+  if (!Number.isFinite(b) || !Number.isFinite(a) || a <= b || b <= 0) {
+    return { mid: null, relSpread: null, driftBp: null, tag: "NOQUOTE" };
+  }
+  const mid = (a + b) / 2;
+  const relSpread = (a - b) / mid;
+  const pm = Number(prevMid);
+  if (!Number.isFinite(pm) || pm <= 0) return { mid, relSpread, driftBp: null, tag: "LEVEL" };
+  const driftBp = ((mid - pm) / pm) * 1e4;
+  const tag = Math.abs(driftBp) < 1 ? "FLAT" : driftBp < 0 ? "DOWN" : "UP";
+  return { mid, relSpread, driftBp, tag };
+}
+
+// Midpoint drift over oldest→newest mids (reservation-price proxy).
+export function midDrift(mids) {
+  const xs = (mids || []).map(Number).filter(Number.isFinite);
+  if (xs.length < 2 || xs[0] <= 0) return null;
+  return { driftPct: ((xs[xs.length - 1] - xs[0]) / xs[0]) * 100, n: xs.length };
+}
+
+// ---------- Per-poll snapshot stamping (skip lists: SHIP-4/6) ----------
+// Shared contract key so buffer, volume-delta, and mid tracking agree.
+export function contractKey(r) {
+  return `${r.ticker}|${String(r.type || "").toLowerCase()}|${r.strike}|${String(r.expiration || "").slice(0, 10)}`;
+}
+// Stamps FRESH signals only (never re-stamp: StrictMode double-effects and
+// repeat polls would zero the deltas). Day volume is cumulative; a drop =
+// data reset → delta unknown (0), mid map untouched.
+export function stampPollDeltas(signals, prevVol, prevMid) {
+  for (const s of signals || []) {
+    const key = contractKey(s);
+    const pv = prevVol.get(key);
+    s._volDelta = pv == null ? 0 : Math.max(0, (Number(s.volume) || 0) - pv);
+    prevVol.set(key, Number(s.volume) || 0);
+    s._prevMid = prevMid.has(key) ? prevMid.get(key) : null;
+    const m = Number(s.mid);
+    if (Number.isFinite(m) && m > 0) prevMid.set(key, m);
+  }
+  return signals;
+}
+
+// ---------- Pin-risk readout (SHIP-1; CL-06 gate) ----------
+// Daily expirations verified only for SPX/SPXW/SPY/QQQ/IWM/XSP — every other
+// name is Friday-only (single-name equity options expire weekly). Nearest
+// expiry group scoped to the ticker; spot from first row carrying one.
+const PIN_DAILY = new Set(["SPX", "SPXW", "SPY", "QQQ", "IWM", "XSP"]);
+export function nearestExpiryPin(rows, ticker, nowMs = Date.now()) {
+  const t = String(ticker || "").toUpperCase();
+  const scoped = (rows || []).filter(
+    (r) => String(r.ticker || "").toUpperCase() === t && Number(r.oi) > 0
+  );
+  if (!scoped.length) return null;
+  if (!PIN_DAILY.has(t) && new Date(nowMs).getDay() !== 5) {
+    return { eligible: false, reason: "Fri-only" };
+  }
+  const exps = [...new Set(
+    scoped.map((r) => String(r.expiration || "").slice(0, 10)).filter(Boolean)
+  )].sort();
+  if (!exps.length) return null;
+  const group = scoped.filter((r) => String(r.expiration || "").slice(0, 10) === exps[0]);
+  const withSpot = group.find((r) => Number(r.spot) > 0);
+  const pin = pinRisk(group, withSpot ? withSpot.spot : null);
+  if (!pin) return null;
+  return { eligible: true, exp: exps[0], ...pin };
+}
+
+// ---------- Roll 1984 effective spread (SHIP-7 engine; ROLL-01..08) ----------
+// s = 2*sqrt(-cov(dP_t, dP_{t+1})). Defined ONLY for negative autocovariance;
+// cov >= 0 → truncated (spread 0, truncated:true) per ROLL-02. Measures
+// quoted-bounce + staleness on snapshots, NOT taker cost (ROLL-07). Needs
+// ~30+ mids for a non-degenerate read (ROLL-05) — callers show n.
+export function rollSpread(mids) {
+  const xs = (mids || []).map(Number).filter((v) => Number.isFinite(v) && v > 0);
+  if (xs.length < 3) return { spread: null, n: xs.length, truncated: false };
+  const d = [];
+  for (let i = 1; i < xs.length; i++) d.push(xs[i] - xs[i - 1]);
+  const mu = d.reduce((a, b) => a + b, 0) / d.length;
+  let cov = 0;
+  for (let i = 0; i < d.length - 1; i++) cov += (d[i] - mu) * (d[i + 1] - mu);
+  cov /= d.length - 1;
+  if (cov >= 0) return { spread: 0, n: xs.length, truncated: true };
+  return { spread: 2 * Math.sqrt(-cov), n: xs.length, truncated: false };
+}
+
+// Capped push for per-contract mid rings (Roll history; caller persists).
+export function pushCapped(ring, v, cap = 60) {
+  const r = Array.isArray(ring) ? ring : [];
+  const x = Number(v);
+  if (Number.isFinite(x) && x > 0) r.push(x);
+  while (r.length > cap) r.shift();
+  return r;
+}
+
+// ---------- Pooled Roll bucket (SHIP-7 wiring; ROLL-08) ----------
+// Aggregates dP covariance across contracts in one expiry bucket. Deltas are
+// concatenated per-ring (one spurious joint adjacency per ring — negligible
+// past ~30 deltas, documented not hidden). Under 30 deltas → building state,
+// never a number.
+export function rollPooled(rings) {
+  const deltas = [];
+  let nMid = 0;
+  for (const ring of rings || []) {
+    const xs = (Array.isArray(ring) ? ring : [])
+      .map(Number).filter((v) => Number.isFinite(v) && v > 0);
+    nMid += xs.length;
+    for (let i = 1; i < xs.length; i++) deltas.push(xs[i] - xs[i - 1]);
+  }
+  if (deltas.length < 30) {
+    return { spread: null, n: nMid, nd: deltas.length, building: true, truncated: false };
+  }
+  const mu = deltas.reduce((a, b) => a + b, 0) / deltas.length;
+  let cov = 0;
+  for (let i = 0; i < deltas.length - 1; i++) cov += (deltas[i] - mu) * (deltas[i + 1] - mu);
+  cov /= deltas.length - 1;
+  if (cov >= 0) {
+    return { spread: 0, n: nMid, nd: deltas.length, building: false, truncated: true };
+  }
+  return { spread: 2 * Math.sqrt(-cov), n: nMid, nd: deltas.length, building: false, truncated: false };
 }

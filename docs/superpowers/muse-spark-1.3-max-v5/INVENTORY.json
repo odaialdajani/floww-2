@@ -1,0 +1,1424 @@
+{
+  "observedAt": "2026-09-10T05:24:02.445Z",
+  "main": "2c33de0d1115eb764cdc7d787305ef3fa629a2a6",
+  "worktrees": [
+    {
+      "path": "/Users/nav/Documents/GitHub/floww",
+      "head": "3d8bfa515bfdf5a3e7cfce39a3fad8e6d1549be9",
+      "branch": "refs/heads/phase9/g1-reads-witness",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/private/tmp/agent4-pr48-49-50",
+      "head": "6387f1359095b437465014c6f14561f1bf604f1a",
+      "branch": null,
+      "dirty": [
+        "M  backend/advanced_analytics.py",
+        "M  backend/services/exposure_alerts.py",
+        "M  backend/services/gex_core.py",
+        "M  backend/services/liquidity_state.py",
+        "A  backend/tests/services/test_gamma_vanna_vec_wiring.py",
+        "A  backend/tests/services/test_signal_truth.py",
+        "A  backend/tests/services/test_vomma_walls.py"
+      ],
+      "mergeInProgress": true
+    },
+    {
+      "path": "/private/tmp/int-63",
+      "head": "6869bc7c89ea9924d1abfa4196f660502aa4aafb",
+      "branch": null,
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/private/tmp/int-63-merge",
+      "head": "c4d8ad1975a8441bf33e940ca93a4fd14ee1b0f8",
+      "branch": null,
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/private/tmp/pr48-v81255",
+      "head": "2f57bea3d56a075692339051525cb73d97d99513",
+      "branch": null,
+      "dirty": [
+        " M frontend/yarn.lock"
+      ],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/private/tmp/pr50-merge-check",
+      "head": "f7bc499eaa2a7f39837f74d839ebfb1dac976bdf",
+      "branch": null,
+      "dirty": [
+        "M  backend/advanced_analytics.py",
+        "M  backend/services/exposure_alerts.py",
+        "M  backend/services/gex_core.py",
+        "M  backend/services/liquidity_state.py",
+        "A  backend/tests/services/test_gamma_vanna_vec_wiring.py",
+        "A  backend/tests/services/test_signal_truth.py",
+        "A  backend/tests/services/test_vomma_walls.py"
+      ],
+      "mergeInProgress": true
+    },
+    {
+      "path": "/private/tmp/rev-57",
+      "head": "0b052293ed959e75d9bccfc8cfce30745523403b",
+      "branch": null,
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/private/tmp/rev-58",
+      "head": "1c5f88650279f01157e322f0f6c805108d4ff3eb",
+      "branch": null,
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/private/tmp/rev-base",
+      "head": "5851f53fa86f990efdaa069d1cc5b5c569d337fd",
+      "branch": null,
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/private/tmp/w-h1",
+      "head": "a09e040733c3107937542d6308d973e13f699b05",
+      "branch": "refs/heads/astra/h1-strike-truth",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/private/tmp/w-h2",
+      "head": "bd060069b8951e19ff0a3b5d4f66ae6d096dba96",
+      "branch": "refs/heads/astra/h2-provider-cost",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/private/tmp/wt-57",
+      "head": "8c55302b3af56f6b08cad1239267515c897491b3",
+      "branch": null,
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/private/tmp/wt-61",
+      "head": "e65111b1abee90f9d174183e12aa2024bf8544d8",
+      "branch": null,
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/private/tmp/wt-62",
+      "head": "13b82a7826968407c9d1afdf3d786b635b9673d3",
+      "branch": null,
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/private/tmp/wt-63",
+      "head": "6869bc7c89ea9924d1abfa4196f660502aa4aafb",
+      "branch": null,
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-g3",
+      "head": "04d2b1647e1bbb35238f4b4ac2958011afcd0ffa",
+      "branch": "refs/heads/phase9/g3-paper-loop",
+      "dirty": [
+        " M kanban/BOTTLENECK_ALERTS.md"
+      ],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/agent2-calib-registry",
+      "head": "6869bc7c89ea9924d1abfa4196f660502aa4aafb",
+      "branch": "refs/heads/agent2/calib-registry",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/agent2-composite-truth",
+      "head": "13b82a7826968407c9d1afdf3d786b635b9673d3",
+      "branch": "refs/heads/agent2/composite-truth",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/agent2-data-contract",
+      "head": "a364128155c2b1db06af6ce84ffa87aa21140c2b",
+      "branch": "refs/heads/agent2/data-contract",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/agent2-eval-harness",
+      "head": "eba1ee979f4473c9b3228adbe92a8d948f8635b1",
+      "branch": "refs/heads/agent2/eval-harness",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/agent2-exec-recon",
+      "head": "b9d611aa2c2b0b222296fcd9a3433841786dc7f3",
+      "branch": "refs/heads/agent2/exec-recon",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/agent2-signal-truth",
+      "head": "b1fad090a86355e391378ae7fc807c7ca160ef59",
+      "branch": "refs/heads/astra/agent2-signal-truth",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/agent2-vex-parity",
+      "head": "e65111b1abee90f9d174183e12aa2024bf8544d8",
+      "branch": "refs/heads/agent2/vex-parity",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/agent2-wave1",
+      "head": "8c55302b3af56f6b08cad1239267515c897491b3",
+      "branch": "refs/heads/agent2/wave1",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/alert-surfacing-agent3",
+      "head": "8ed71c2857030fc2e132c160e4b65763d175379d",
+      "branch": "refs/heads/a3/alert-engine-badges",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/dependency-p2-v1",
+      "head": "f7bb35f6cccb5cd523ca2cede3acfa2ece547f7c",
+      "branch": "refs/heads/architect/dependency-p2-v1",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/evidence-control-v3",
+      "head": "58b79705a325ab3215f92416b16c4f1805145993",
+      "branch": "refs/heads/architect/20260908-evidence-control-v3",
+      "dirty": [
+        " M docs/superpowers/muse-spark-1.3-max-v4/WAVE1-VERDICTS.md"
+      ],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/floww-pr48-fix",
+      "head": "9eb5e7d567f56180a25723bb07b363a0562149a5",
+      "branch": "refs/heads/a3/alert-surfacing",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/g3-split",
+      "head": "bffa5deb78259b9c2c9598480f1eb05012215ed2",
+      "branch": "refs/heads/astra/g3-paper-loop",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/order-safety-v1",
+      "head": "c4970a53c5f93079f81e279e74d3ecee48f88b77",
+      "branch": "refs/heads/architect/order-safety-v1",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/pr48-semantic-main-v1",
+      "head": "7481f727cdbf826145190a6ada2668666c34a191",
+      "branch": "refs/heads/architect/pr48-semantic-main-v1",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/recovery-control-plane-v2",
+      "head": "c724d2644a2b3b93028633eecff65fce8d180bf4",
+      "branch": "refs/heads/architect/20260906-recovery-control-plane-v2",
+      "dirty": [
+        "?? ...[truncated]"
+      ],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/run-20260906-data",
+      "head": "5b9d9a96a29951e548e883d108a806b93c2d11a9",
+      "branch": "refs/heads/run/20260906-data",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/run-20260906-experience",
+      "head": "5b9d9a96a29951e548e883d108a806b93c2d11a9",
+      "branch": "refs/heads/run/20260906-experience",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/run-20260906-platform",
+      "head": "5b9d9a96a29951e548e883d108a806b93c2d11a9",
+      "branch": "refs/heads/run/20260906-platform",
+      "dirty": [
+        "?? task-cards/feature/topic-checker/2026-09-09/runstate-precond-rerun/E4-8A-topic-checker-verbatim-review.md"
+      ],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/run-20260906-proof",
+      "head": "377dfa5822472f8e43029d5c8dbcc3984a420cea",
+      "branch": "refs/heads/astra/p1-clean",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/signal-truth-repair",
+      "head": "56cfff2ec909313c81fbe616a3595c937238037a",
+      "branch": "refs/heads/codex/signal-truth-repair",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/tidehunter",
+      "head": "efca38f4116ef57f330df3af670d53cce1e21fb3",
+      "branch": "refs/heads/main",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/vomma-walls",
+      "head": "15b924893d514407e63874a0828429e4a64951bb",
+      "branch": "refs/heads/astra/vomma-walls",
+      "dirty": [],
+      "mergeInProgress": false
+    },
+    {
+      "path": "/Users/nav/Documents/GitHub/floww-worktrees/xh1-proxy-labels",
+      "head": "40542b090e93bd1a8514bb14f8c01f33fabf07b0",
+      "branch": "refs/heads/a3/xh1-proxy-labels",
+      "dirty": [],
+      "mergeInProgress": false
+    }
+  ],
+  "refs": [
+    {
+      "ref": "refs/heads/a3/alert-engine-badges",
+      "sha": "8ed71c2857030fc2e132c160e4b65763d175379d",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/a3/alert-surfacing",
+      "sha": "9eb5e7d567f56180a25723bb07b363a0562149a5",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/a3/pr48-semantic-fixes",
+      "sha": "f7bc499eaa2a7f39837f74d839ebfb1dac976bdf",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/a3/xh1-proxy-labels",
+      "sha": "40542b090e93bd1a8514bb14f8c01f33fabf07b0",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/agent2/calib-registry",
+      "sha": "6869bc7c89ea9924d1abfa4196f660502aa4aafb",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/agent2/composite-truth",
+      "sha": "13b82a7826968407c9d1afdf3d786b635b9673d3",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/agent2/data-contract",
+      "sha": "a364128155c2b1db06af6ce84ffa87aa21140c2b",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/agent2/eval-harness",
+      "sha": "eba1ee979f4473c9b3228adbe92a8d948f8635b1",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/agent2/exec-recon",
+      "sha": "b9d611aa2c2b0b222296fcd9a3433841786dc7f3",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/agent2/vex-parity",
+      "sha": "e65111b1abee90f9d174183e12aa2024bf8544d8",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/agent2/wave1",
+      "sha": "8c55302b3af56f6b08cad1239267515c897491b3",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/agent3/t1-scroller-fix",
+      "sha": "8e30a600f1a5b6d6f8232d10acfe7274130a0de0",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/agent3/t1-scroller-fix-v2",
+      "sha": "9289775681cf9c8b93e5e7f8895c1d6366af0952",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/architect/20260906-recovery-control-plane-v2",
+      "sha": "c724d2644a2b3b93028633eecff65fce8d180bf4",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/architect/20260908-evidence-control-v3",
+      "sha": "58b79705a325ab3215f92416b16c4f1805145993",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/architect/dependency-p2-v1",
+      "sha": "f7bb35f6cccb5cd523ca2cede3acfa2ece547f7c",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/architect/order-safety-v1",
+      "sha": "c4970a53c5f93079f81e279e74d3ecee48f88b77",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/architect/pr48-semantic-main-v1",
+      "sha": "7481f727cdbf826145190a6ada2668666c34a191",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/archive/20260907-g1-recovery",
+      "sha": "b5f9ae5d99a4d502efdaf1d0c4d8386c2fa9b0d0",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/astra/a3-clean",
+      "sha": "a81a04c3a0dc8c37b0941fd1748fe66ee9584ca3",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/a3-conviction-wiring",
+      "sha": "a4952dc69ed9e9d535566bfc526d0fc17251abe9",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/astra/agent2-signal-truth",
+      "sha": "b1fad090a86355e391378ae7fc807c7ca160ef59",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/bugfix-gex-expiry",
+      "sha": "99128631341cd51af016802495a4d9ad8200b00c",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/c4-doc-hygiene",
+      "sha": "65760c13963b71535377ad69813c287ff5bf62c1",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/astra/cleanup-dead-code",
+      "sha": "06dfd2e29b7dd903f1f9599faf33f7060898ecc6",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/d7-clean",
+      "sha": "18b10b5601ef0bc0dd27a083d66f2d8ad164665a",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/d7-contract-parity",
+      "sha": "6b408204b3e578bd0ad25bf4a295e8004a976fc4",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/astra/f0-honesty-backend",
+      "sha": "f880971b939594dc15e6247418c07f3f86a75dfd",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/g3-paper-loop",
+      "sha": "bffa5deb78259b9c2c9598480f1eb05012215ed2",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/gamma-flip-alerts",
+      "sha": "cb5952a1c5cba1e431f1b76f16265c5ef93b6855",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/gamma-vanna-vec",
+      "sha": "a6b2aa0a45720e88a9c71ae87fd32bb7bf3910ba",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/h1-strike-truth",
+      "sha": "a09e040733c3107937542d6308d973e13f699b05",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/h2-provider-cost",
+      "sha": "bd060069b8951e19ff0a3b5d4f66ae6d096dba96",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/honesty-citations",
+      "sha": "967aa0a5b26ca6f777fc2062faa99caf1817a469",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/honesty-labels",
+      "sha": "a009e6faba8979d151b474d458cedf64bb606a36",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/numba-greeks",
+      "sha": "65a952e8bc6c0e6c2d12ffdf0e12f36d24e4df06",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/p1-clean",
+      "sha": "377dfa5822472f8e43029d5c8dbcc3984a420cea",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/p1-silent-except",
+      "sha": "53b076cbe978db58ed9cd0af51242467c506272e",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/astra/sparse-chain-public",
+      "sha": "830c8424d510121153a36d29a1c68f53f88e4ea9",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/sparse-chain-v2",
+      "sha": "d0de8c08af548deba3af739106217d819c1a102b",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/t1-only",
+      "sha": "c82856f093124eac1c86c94a0c0da08abbd36523",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/t1-scroller-v1",
+      "sha": "9482ac6b39dd02480f98fe156cd2bfcc10739b5d",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/astra/toxic-flow-alerts",
+      "sha": "88b9b9b98c8c7e6085e8c1358d05fa1d7bf7c7ec",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/trade-fire",
+      "sha": "d015aecf6a8559dbba00164a07f30b53816cb354",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/vomma-walls",
+      "sha": "15b924893d514407e63874a0828429e4a64951bb",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/x1-clean",
+      "sha": "568de16a3d2da32c218660e1007ad89b2d97228f",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/astra/x1-tradeentry-journal",
+      "sha": "a66845e67047449deb6e742859f4d442cc04b3dc",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/audit/gex-gamma-correctness",
+      "sha": "0fed14a3713690729f7284b63fbb9aada1f00238",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/deepseek-bulletproof-20260525-111707",
+      "sha": "ddd8870ca059fc630a78a84e81f4dae999626e3e",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/deepseek-r8-20260524-154032",
+      "sha": "7b6c6d3120b5d2a15182a1f4716c260da2c13ef5",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/backup/deepseek-v4-20260525-100030",
+      "sha": "59009206599811c92bc9c6cdd906719db350e460",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/deepseek-v4-deep-20260525-102536",
+      "sha": "a72b517fe1b1cef01f5a3d4b557ac6170a843088",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/foundation_20260602-232239",
+      "sha": "24690400a0f7f9150d0e41257cd4df0526fad28c",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/hermes-b-20260524-111312",
+      "sha": "a95823bcb1c7377223e306e22a15560a964f2c2e",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/backup/hermes-r8-A-20260524-215655",
+      "sha": "11dd0fbc21526933e071d65912bc0908d82dc0ef",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/backup/pre-recovery-20260524-063733",
+      "sha": "7d405b33075a76a997ed6f72668090eed234c6af",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/pre-recovery-20260524-083902",
+      "sha": "b5872e216aaf706f330dc8932caf87f1aee8f707",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/backup/prompt-a-20260524-105545",
+      "sha": "b5872e216aaf706f330dc8932caf87f1aee8f707",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/backup/r10_A1_20260526-221702",
+      "sha": "44e1438fd0b7e72a8bf990566d6f580be064f36b",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r10_H16_20260525-223916",
+      "sha": "1c5b79207549d6fdbcfc6db378bfda379f26b372",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r10_H17_20260525-223945",
+      "sha": "1c5b79207549d6fdbcfc6db378bfda379f26b372",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r10_H18_20260525-225500",
+      "sha": "7eccafaae7fd45d297d3ef01d7247953071b80fa",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r10_H19_20260525-224712",
+      "sha": "7eccafaae7fd45d297d3ef01d7247953071b80fa",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r10_H20_20260525-224037",
+      "sha": "1c5b79207549d6fdbcfc6db378bfda379f26b372",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r10_H21_20260525-224606",
+      "sha": "7eccafaae7fd45d297d3ef01d7247953071b80fa",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r10_H22_20260525-224537",
+      "sha": "7eccafaae7fd45d297d3ef01d7247953071b80fa",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r10_H23_20260525-224659",
+      "sha": "7eccafaae7fd45d297d3ef01d7247953071b80fa",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r10_H24_20260525-224625",
+      "sha": "7eccafaae7fd45d297d3ef01d7247953071b80fa",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r12-wip-20260531-070635",
+      "sha": "f59487a89760f2e344f57e5516ea40c3d1e30cd3",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/backup/r21_H21_20260525-224222",
+      "sha": "1c5b79207549d6fdbcfc6db378bfda379f26b372",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r9_DSFLASH_20260525-154220",
+      "sha": "638aec0723298ee6db85c7fccd4c313fd38e0721",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r9_GLM_20260525-154249",
+      "sha": "638aec0723298ee6db85c7fccd4c313fd38e0721",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r9_H10_20260525-215633",
+      "sha": "ec6e963111b0c8935d999173fef1d69b9b31075a",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r9_H10_20260525-223152",
+      "sha": "1c5b79207549d6fdbcfc6db378bfda379f26b372",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r9_H11_20260525-215620",
+      "sha": "ec6e963111b0c8935d999173fef1d69b9b31075a",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r9_H13_20260525-215718",
+      "sha": "ec6e963111b0c8935d999173fef1d69b9b31075a",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r9_H14_20260525-215742",
+      "sha": "ec6e963111b0c8935d999173fef1d69b9b31075a",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r9_H15_20260525-215954",
+      "sha": "ec6e963111b0c8935d999173fef1d69b9b31075a",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r9_H1PRO_20260525-153800",
+      "sha": "638aec0723298ee6db85c7fccd4c313fd38e0721",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r9_H6_20260525-215307",
+      "sha": "ba4e2a9b7d0f2bb71894738feeb90c33cb42f18d",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r9_H7_20260525-215429",
+      "sha": "ec6e963111b0c8935d999173fef1d69b9b31075a",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r9_H8_20260525-215521",
+      "sha": "ec6e963111b0c8935d999173fef1d69b9b31075a",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r9_H8_20260525-223312",
+      "sha": "1c5b79207549d6fdbcfc6db378bfda379f26b372",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r9_H8_20260525-223648",
+      "sha": "1c5b79207549d6fdbcfc6db378bfda379f26b372",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r9_H9_20260525-215714",
+      "sha": "ec6e963111b0c8935d999173fef1d69b9b31075a",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r9_L1_20260525-215950",
+      "sha": "ec6e963111b0c8935d999173fef1d69b9b31075a",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/backup/r9_PRO_20260525-220621",
+      "sha": "04afffdcacb540575113619d673ed930e59d39cc",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/chore/finish-alphapod-removal",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/chore/mypy-consolidate-overrides",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/codex/signal-truth-repair",
+      "sha": "56cfff2ec909313c81fbe616a3595c937238037a",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/feat/flowseeker-tab",
+      "sha": "822c0e8af823e82b9703a28227754fb110c39434",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/feat/flowseeker-tab-wip",
+      "sha": "c1bb04dcd5d1d577bc73d4d8b0de3b0677b16995",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/feat/skylit-absorb-heatseeker-panels",
+      "sha": "0bb6ffc178c4f84560716a35dabbd04f4cab0226",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/feature/ml-real-data-spy",
+      "sha": "3fc6d41f9f6d5a270261b350b2a3b3a716e5997d",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/fix/security-routes-hardening",
+      "sha": "3a989e44435c7f63b2309af81737b11aaeba4518",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/fix/skylit-panel-bugs",
+      "sha": "ada23412f3902557500bce822f6707d73a32a73a",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/fix/skylit-tab-restore",
+      "sha": "0f43e03e594dc976692b97377664a7e8680ed8cf",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/main",
+      "sha": "efca38f4116ef57f330df3af670d53cce1e21fb3",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/ml/v5-real-data-training",
+      "sha": "948ddd2e00cbb94fb95224aaa30fb74929fd1937",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/mypy/backend-databento_provider",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/scripts-16-error-batch",
+      "sha": "f1df8a728c8e198f31ddc0e566a780358dbbd6b9",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/mypy/scripts-17-error-batch",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/scripts-20-batch",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/scripts-3-more-small",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/scripts-4-error-batch",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/scripts-5-error-batch",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/scripts-5-more-small",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/scripts-backfill_yfinance",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/scripts-consolidate_memory_daily",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/scripts-load_test_dashboard",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/scripts-predict_throughput",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/scripts-prune_trading_memory",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/scripts-train_production",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/scripts-train_spy_regime_enhanced",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/scripts-walkforward_backtest_spy",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/services-alert_dispatcher",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/services-circuit_breaker",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/services-execution_engine",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/services-flowseeker",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/services-hawkes_process",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/services-liquidity_metrics",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/services-node_lifecycle",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/services-numba_greeks",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/services-slo_tracker",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/services-stochastic_vol",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/services-trinity_alignment",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/services-uoa",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/services-volume_clock",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/mypy/services-vpin_engine",
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/phase9/agent1-architect",
+      "sha": "3835c3f07e0988b3cb98075bceecc6ab1c6677e6",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/phase9/agent2-flowseeker",
+      "sha": "3088262db1b005a0955f8554931bb914e5c5aeca",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/phase9/agent2-flowseeker-ticket",
+      "sha": "5ab259fb1e8cb1f7decb7e449fdeca28d5840295",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/phase9/agent4-eval",
+      "sha": "987c0ea9cde515051098a8728c892df827b7e931",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/phase9/g1-reads-witness",
+      "sha": "3d8bfa515bfdf5a3e7cfce39a3fad8e6d1549be9",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/phase9/g3-paper-loop",
+      "sha": "04d2b1647e1bbb35238f4b4ac2958011afcd0ffa",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/phase9/heatmap-agent5",
+      "sha": "a9068c9a33a1c7362065fc42c082448c3e5abc7d",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/phase9/other-lanes-artifacts",
+      "sha": "89a4756979b9ad65e9b19cbcd3cf288e39c8b47e",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/heads/pr28-verify",
+      "sha": "18b10b5601ef0bc0dd27a083d66f2d8ad164665a",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/pr29-verify",
+      "sha": "568de16a3d2da32c218660e1007ad89b2d97228f",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/pr30-verify",
+      "sha": "377dfa5822472f8e43029d5c8dbcc3984a420cea",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/pr30/head",
+      "sha": "06b75020dddb7b6ecc1d9c220b9fffac6fc0575b",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/pr31-verify",
+      "sha": "a81a04c3a0dc8c37b0941fd1748fe66ee9584ca3",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/run/20260906-data",
+      "sha": "5b9d9a96a29951e548e883d108a806b93c2d11a9",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/run/20260906-experience",
+      "sha": "5b9d9a96a29951e548e883d108a806b93c2d11a9",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/run/20260906-platform",
+      "sha": "5b9d9a96a29951e548e883d108a806b93c2d11a9",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/heads/run/20260906-proof",
+      "sha": "5b9d9a96a29951e548e883d108a806b93c2d11a9",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/HEAD",
+      "sha": "2c33de0d1115eb764cdc7d787305ef3fa629a2a6",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/a3/alert-engine-badges",
+      "sha": "8ed71c2857030fc2e132c160e4b65763d175379d",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/a3/alert-surfacing",
+      "sha": "9eb5e7d567f56180a25723bb07b363a0562149a5",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/a3/pr48-semantic-fixes",
+      "sha": "f7bc499eaa2a7f39837f74d839ebfb1dac976bdf",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/a3/xh1-proxy-labels",
+      "sha": "40542b090e93bd1a8514bb14f8c01f33fabf07b0",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/agent2/calib-registry",
+      "sha": "6869bc7c89ea9924d1abfa4196f660502aa4aafb",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/agent2/composite-truth",
+      "sha": "13b82a7826968407c9d1afdf3d786b635b9673d3",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/agent2/data-contract",
+      "sha": "a364128155c2b1db06af6ce84ffa87aa21140c2b",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/agent2/eval-harness",
+      "sha": "eba1ee979f4473c9b3228adbe92a8d948f8635b1",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/agent2/exec-recon",
+      "sha": "76d771784bf019cdb99c721b7d7c538e9618a79d",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/agent2/vex-parity",
+      "sha": "e65111b1abee90f9d174183e12aa2024bf8544d8",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/agent2/wave1",
+      "sha": "8c55302b3af56f6b08cad1239267515c897491b3",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/architect/20260906-recovery-control-plane-v2",
+      "sha": "c724d2644a2b3b93028633eecff65fce8d180bf4",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/architect/20260908-evidence-control-v3",
+      "sha": "58b79705a325ab3215f92416b16c4f1805145993",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/architect/dependency-p2-v1",
+      "sha": "f7bb35f6cccb5cd523ca2cede3acfa2ece547f7c",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/architect/order-safety-v1",
+      "sha": "c4970a53c5f93079f81e279e74d3ecee48f88b77",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/architect/pr48-semantic-main-v1",
+      "sha": "7481f727cdbf826145190a6ada2668666c34a191",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/archive/20260907-g1-recovery",
+      "sha": "b5f9ae5d99a4d502efdaf1d0c4d8386c2fa9b0d0",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/astra/a3-clean",
+      "sha": "a81a04c3a0dc8c37b0941fd1748fe66ee9584ca3",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/astra/agent2-signal-truth",
+      "sha": "b1fad090a86355e391378ae7fc807c7ca160ef59",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/astra/d7-clean",
+      "sha": "19b4f17debabae5f69693375dfdcbbe66b8df1cd",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/astra/f0-honesty-backend",
+      "sha": "3e5bbd4df03262a5a676fba30b86930533ca5302",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/astra/g3-paper-loop",
+      "sha": "bffa5deb78259b9c2c9598480f1eb05012215ed2",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/astra/gamma-flip-alerts",
+      "sha": "cb5952a1c5cba1e431f1b76f16265c5ef93b6855",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/astra/gamma-vanna-vec",
+      "sha": "a6b2aa0a45720e88a9c71ae87fd32bb7bf3910ba",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/astra/h1-strike-truth",
+      "sha": "a09e040733c3107937542d6308d973e13f699b05",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/astra/h2-provider-cost",
+      "sha": "bd060069b8951e19ff0a3b5d4f66ae6d096dba96",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/astra/numba-greeks",
+      "sha": "65a952e8bc6c0e6c2d12ffdf0e12f36d24e4df06",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/astra/p1-clean",
+      "sha": "377dfa5822472f8e43029d5c8dbcc3984a420cea",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/astra/toxic-flow-alerts",
+      "sha": "88b9b9b98c8c7e6085e8c1358d05fa1d7bf7c7ec",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/astra/vomma-walls",
+      "sha": "15b924893d514407e63874a0828429e4a64951bb",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/astra/x1-clean",
+      "sha": "568de16a3d2da32c218660e1007ad89b2d97228f",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/audit/gex-gamma-correctness",
+      "sha": "c7ebd44934c5a3812ed10dab6288df6b74ee0391",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/backup/tidehunter-main-20260904",
+      "sha": "2f3ff8f7ac2bcad68ff21c76bcee5da90af41aed",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/chore/mypy-consolidate-overrides",
+      "sha": "6996982f078398adc9b381e4cfc8975796ef6bd7",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/feat/skylit-absorb-heatseeker-panels",
+      "sha": "c296de83d77a1e93f72f019691bcc7573bc59569",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/feature/ml-real-data-spy",
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/fix/skylit-panel-bugs",
+      "sha": "ca255571c3e2dae059567fba3f74d180750b1e38",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/main",
+      "sha": "2c33de0d1115eb764cdc7d787305ef3fa629a2a6",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/ml/v5-real-data-training",
+      "sha": "fd1a8d8cd21cd0f3c6d71b922c44eec7efe2ddb7",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/backend-databento_provider",
+      "sha": "74120ac3c5ee445d7ffeef4cf1ada948e0b23442",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-16-error-batch",
+      "sha": "44db6d350468733b0e73bc669eed661fd33c742b",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-17-error-batch",
+      "sha": "ed44d81025ae2f46f23202fc30691a1527c89faa",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-20-batch",
+      "sha": "b844b4b0eb72f8adfa2bff2ad5b69a523e9558a5",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-3-more-small",
+      "sha": "0488d66d0389e574ff931fee8ef69d1467ae594f",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-4-error-batch",
+      "sha": "88cd7e932e9c2a4b128703507a22e10565bf902d",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-5-error-batch",
+      "sha": "8021805cd30062c6e322996f59bd77d1515d476d",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-5-more-small",
+      "sha": "f560e9b4707d86d709b4f126ffba2dace7aea52c",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-backfill_yfinance",
+      "sha": "7b4c40250c3c3d29ab3fb81c2272c80ac29ef3d1",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-consolidate_memory_daily",
+      "sha": "dc95305e9a5ff0fc66eeb9dd674d1a5ea11e2dd9",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-load_test_dashboard",
+      "sha": "0e5f7348908cce2a8bca5034b1e7f00ab0cd3d3e",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-predict_throughput",
+      "sha": "7c76611c4796e7f6f4fcd949ec49f2c17b013cef",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-prune_trading_memory",
+      "sha": "8a0c97f8ea3c0cd6ca0b2f6695c123a8d6813ac2",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-train_production",
+      "sha": "5c4fc26a2a9c97256e96e07ed1eb0f99b11a6a25",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-train_spy_regime_enhanced",
+      "sha": "8161e2748b4dc4a47d5b2597564b6792dd218172",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-walkforward_backtest_spy",
+      "sha": "b61d78bf988396e9fa77c440f2c300380d9d46b0",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-alert_dispatcher",
+      "sha": "933cfb58b5d31bed3e11cb93e5aab30f57a9cda4",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-circuit_breaker",
+      "sha": "67db18b3d4353b56d41601670fba0c9f85d26fb8",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-execution_engine",
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-flowseeker",
+      "sha": "959eddbbbc84d604d50f030d20f16f653581150f",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-hawkes_process",
+      "sha": "f0e0e5c9c0c6d0b661630cafa55490211abb2534",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-liquidity_metrics",
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-node_lifecycle",
+      "sha": "3c0a7cd0a0215cc27b0cb2a3b6e79ab8c879f91e",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-numba_greeks",
+      "sha": "11e64911f4cd8223a72cd5758d7bd1e05828e01c",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-slo_tracker",
+      "sha": "f804c702756a07a553d86d3b1f511d50579d4a51",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-stochastic_vol",
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-trinity_alignment",
+      "sha": "cfca3dcc424dfa7d30313e7ebf9da34dc73509d9",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-vpin_engine",
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/phase9/agent1-architect",
+      "sha": "3835c3f07e0988b3cb98075bceecc6ab1c6677e6",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/phase9/agent2-flowseeker",
+      "sha": "87c628316977b2c6c33f722348cbd1b65d181894",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/phase9/agent2-flowseeker-ticket",
+      "sha": "5ab259fb1e8cb1f7decb7e449fdeca28d5840295",
+      "ancestorOfMain": true
+    },
+    {
+      "ref": "refs/remotes/origin/phase9/agent4-eval",
+      "sha": "987c0ea9cde515051098a8728c892df827b7e931",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/phase9/g1-reads-witness",
+      "sha": "3d8bfa515bfdf5a3e7cfce39a3fad8e6d1549be9",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/phase9/g3-paper-loop",
+      "sha": "04d2b1647e1bbb35238f4b4ac2958011afcd0ffa",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/phase9/heatmap-agent5",
+      "sha": "a9068c9a33a1c7362065fc42c082448c3e5abc7d",
+      "ancestorOfMain": false
+    },
+    {
+      "ref": "refs/remotes/origin/phase9/other-lanes-artifacts",
+      "sha": "89a4756979b9ad65e9b19cbcd3cf288e39c8b47e",
+      "ancestorOfMain": false
+    }
+  ]
+}

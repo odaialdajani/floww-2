@@ -96,7 +96,9 @@ else
   echo "  starting uvicorn..."
   cd "$REPO_ROOT/backend"
   source .venv/bin/activate
-  nohup uvicorn server:app --port $BACKEND_PORT > /tmp/uvicorn_decoder.log 2>&1 &
+  # Unbuffered: otherwise all structlog app lines sit in the pipe buffer and
+  # the log shows only uvicorn access lines, hiding startup/sweep evidence.
+  PYTHONUNBUFFERED=1 nohup uvicorn server:app --port $BACKEND_PORT > /tmp/uvicorn_decoder.log 2>&1 &
   cd "$REPO_ROOT"
   # Wait up to 15s for it to bind
   for i in {1..15}; do

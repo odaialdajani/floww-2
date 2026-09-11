@@ -76,9 +76,26 @@ def test_normalize_yfinance_shape():
 
 
 def test_normalize_handles_missing_bidask():
-    raw = {"strike": 580, "lastPrice": 1.50, "iv": 0.30}
+    # Holders exist (OI>0) but no quote — mid falls back to last print.
+    raw = {"strike": 580, "lastPrice": 1.50, "iv": 0.30, "openInterest": 12}
     n = _normalize_contract(raw)
     assert n["mid"] == pytest.approx(1.50, rel=1e-9)
+
+
+def test_normalize_drops_no_market_rows():
+    # 2026-09-03: zero prints AND zero holders = phantom quote with
+    # nonsense ARR — dropped so the screener never surfaces it.
+    assert _normalize_contract(
+        {"strike": 250.0, "bid": 160.0, "ask": 178.0, "lastPrice": 0.0,
+         "iv": 0.0, "volume": 0, "openInterest": 0, "expiry": "2026-09-18"}
+    ) is None
+    # …but OI holders with no volume today are a real market: kept.
+    kept = _normalize_contract(
+        {"strike": 250.0, "bid": 1.0, "ask": 1.2, "lastPrice": 1.1,
+         "iv": 0.25, "volume": 0, "openInterest": 40, "expiry": "2026-09-18"}
+    )
+    assert kept is not None
+    assert kept["mid"] == pytest.approx(1.10, rel=1e-9)
 
 
 def test_normalize_rejects_garbage_strike():

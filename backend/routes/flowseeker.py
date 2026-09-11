@@ -12,7 +12,7 @@ import logging
 import math
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -262,8 +262,14 @@ async def drilldown(symbol: str):
 @router.get("/chain/{symbol}")
 async def options_chain(symbol: str):
     """
-    Options chain — tries CVForge first (32 exp, 171 strikes), falls back to yfinance.
-    Cached for 120s.
+    Options chain — Public Advanced API first (paid, real quotes/greeks),
+    CVForge second, yfinance last resort. Cached for 600s.
+
+    OWNERSHIP (institutional loop firewall): this file is split —
+    B-REGION = chain/scan/budget/baseline sections (Agent B);
+    C-REGION = alerts pipeline below (_run_institutional_alerts,
+    _cached/_merged_gex_context, /alerts/*, journal/outcomes) (Agent C).
+    No cross-region edits without owner sign-off in LEDGER.md.
     """
     sym = (symbol or "").strip().upper()
     if not sym:
@@ -275,7 +281,34 @@ async def options_chain(symbol: str):
         if time.time() - ts < CACHE_TTL:
             return data
 
-    # Try CVForge first (fast, rich data)
+    # Try Public Advanced API first (paid primary — real NBBO + greeks).
+    # Budget exhaustion degrades to cvserver, never to an error: chains have
+    # free fallbacks, and the paid budget is reserved for flow-critical paths.
+    try:
+        from services.public_api_adapter import (
+            fetch_chain_from_public_api,
+            public_to_nested,
+        )
+        from services.public_budget import BudgetExhausted
+        from services.public_budget import budget as _pub_budget
+
+        try:
+            await _pub_budget.acquire("api.public.com")
+        except BudgetExhausted:
+            pub_nested = None
+        else:
+            try:
+                pub = await fetch_chain_from_public_api(sym, max_expiries=6)
+                pub_nested = public_to_nested(pub)
+            finally:
+                _pub_budget.release()
+        if pub_nested and pub_nested.get("chain"):
+            _remember_chain(sym, pub_nested)
+            return pub_nested
+    except Exception as e:
+        logger.debug(f"flowseeker chain: public path failed for {sym}: {e}")
+
+    # Try CVForge (fast, rich data)
     data = await _cvforge_chain(sym)
     if data and data.get("chain"):
         _remember_chain(sym, data)
@@ -303,6 +336,94 @@ async def options_chain(symbol: str):
     except Exception as e:
         logger.warning(f"flowseeker chain: {sym}: {e}")
         return {"symbol": sym, "params": [], "chain": [], "error": str(e)}
+
+
+@router.get("/public/chain/{ticker}")
+async def public_chain_flat(
+    ticker: str,
+    expirations: int = Query(default=4, ge=1, le=12),
+    expiration: str | None = Query(default=None),
+    fields: str | None = Query(default=None),
+):
+    """Smart-Order-Flow chain from the paid Public Advanced API (flat shape).
+
+    This is the route the Tidehunter Pro flow tab polls first
+    (`/api/flowseeker/public/chain/{t}?expirations=4&fields=...`); without it
+    every poll 404s and the tab silently degrades to the 20/hour cvserver
+    budget. Flat contract list with TRUE bid/ask/last/volume/OI/IV/greeks —
+    no BS premium estimates, no vol/OI side proxy.
+
+    Budget-gated via services.public_budget (60/min token bucket); on
+    exhaustion returns 503 with retry_after so the tab falls through to
+    cvserver instead of hammering upstream. The adapter's 60s cache +
+    coalescing means steady-state polling costs ~1 token/ticker/min.
+    """
+    from services.public_api_adapter import fetch_chain_from_public_api
+    from services.public_budget import BudgetExhausted
+    from services.public_budget import budget as _pub_budget
+
+    sym = (ticker or "").strip().upper()
+    if not sym:
+        raise HTTPException(400, "ticker required")
+
+    try:
+        await _pub_budget.acquire("api.public.com")
+    except BudgetExhausted as e:
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "public budget exhausted", "retry_after": e.retry_after},
+        ) from e
+    try:
+        result = await fetch_chain_from_public_api(sym, max_expiries=expirations)
+    finally:
+        _pub_budget.release()
+
+    if result is None:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Public API unavailable for {sym} — key may be missing or API call failed",
+        )
+
+    contracts = result.get("contracts", [])
+    if expiration:
+        contracts = [c for c in contracts if c.get("expiry") == expiration]
+
+    flat = [
+        {
+            "strike": c.get("strike"),
+            "type": c.get("type"),
+            "expiry": c.get("expiry"),
+            "expiration": c.get("expiry"),
+            "volume": c.get("volume") or 0,
+            "openInterest": c.get("oi") or 0,
+            "oi": c.get("oi") or 0,
+            "impliedVolatility": c.get("iv") or 0,
+            "iv": c.get("iv") or 0,
+            "delta": c.get("delta"),
+            "gamma": c.get("gamma"),
+            "theta": c.get("theta"),
+            "vega": c.get("vega"),
+            "bid": c.get("bid"),
+            "ask": c.get("ask"),
+            "mid": c.get("mid"),
+            "last": c.get("last"),
+            "lastPrice": c.get("last"),
+            "bidSize": c.get("bid_size"),
+            "askSize": c.get("ask_size"),
+            "osi": c.get("osi"),
+        }
+        for c in contracts
+    ]
+    return {
+        "ok": True,
+        "ticker": sym,
+        "spot": result.get("spot", 0),
+        "expiries": result.get("expiries", []),
+        "n_contracts": len(flat),
+        "data_source": "public_api",
+        "stale": result.get("stale", False),
+        "contracts": flat,
+    }
 
 
 @router.get("/screen")
@@ -671,12 +792,32 @@ async def _record_scan_baseline(rows: list) -> None:
                     upsert=True,
                 ))
         for t, e in per.items():
+            # IVR piggyback (2026-09-02, zero extra upstream calls): today's
+            # standardized ATM IV = median row IV over |K/S−1| ≤ 5% from THIS
+            # scan snapshot. Scan-row layout (SCAN_COLUMNS): 3=strike, 6=OI,
+            # 7=IV, 9=underlying price. IV > 3 is the percent convention →
+            # normalize to decimal so cross-source medians stay comparable.
+            # The nightly cron turns these into RICH/CHEAP-able IVR series;
+            # alerts consume derived tags, never raw snapshot IV.
+            trows = [r for r in rows if r[0] == t and r[7] and r[3] and r[9]]
+            atm_ivs = sorted(
+                (lambda iv: iv / 100.0 if iv > 3.0 else iv)(float(r[7]))
+                for r in trows
+                if abs(float(r[3]) / float(r[9]) - 1.0) <= 0.05
+            ) if trows else []
+            atm_iv = round(atm_ivs[len(atm_ivs) // 2], 4) if atm_ivs else None
+            max_ops = {"total_vol": e["call_vol"] + e["put_vol"],
+                       "call_vol": e["call_vol"], "put_vol": e["put_vol"]}
+            if atm_iv is not None:
+                max_ops["atm_iv"] = atm_iv   # intraday $max = the day's best
+            update = {
+                "$max": max_ops,
+                "$set": {"updated_at": time.time()},
+            }
+            if atm_iv is not None:
+                update["$inc"] = {"iv_obs": 1}
             await db.flow_scan_daily.update_one(
-                {"ticker": t, "date": today},
-                {"$max": {"total_vol": e["call_vol"] + e["put_vol"],
-                          "call_vol": e["call_vol"], "put_vol": e["put_vol"]},
-                 "$set": {"updated_at": time.time()}},
-                upsert=True,
+                {"ticker": t, "date": today}, update, upsert=True,
             )
         if oi_ops:
             await db.flow_scan_contract_oi.bulk_write(oi_ops, ordered=False)
@@ -684,13 +825,24 @@ async def _record_scan_baseline(rows: list) -> None:
         logger.debug(f"scan baseline record skipped: {e}")
 
 
-async def _run_institutional_alerts(rows: list) -> None:
+async def _run_institutional_alerts(
+    rows: list,
+    extras: dict | None = None,
+    dealer: dict | None = None,
+) -> None:
     """Server-side institutional alert pass over a FRESH scan result.
+    (C-REGION — Agent C domain; see ownership note on options_chain.)
 
     Fires on every cache fill (normal + force-refresh), so alerts exist and
     persist even with no Scanner tab open — the browser engine only ever saw
     what a live tab happened to witness. Zero extra cvforge calls: it reuses
     the rows, baselines, prev-OI and regime cache the scan already has.
+
+    extras (paid-scanner quote truth) overlays true premiums/NBBO/velocity
+    onto rows before eval; dealer (per-ticker gamma walls/regime from the
+    same chains) fills GEX context for tickers the heatmap cache doesn't
+    cover — regime propagates to key levels + WHY, without a fabricated
+    magnitude (confluence still needs measured ΓIB).
     """
     try:
         from services import flow_alerts as fa
@@ -698,9 +850,12 @@ async def _run_institutional_alerts(rows: list) -> None:
         from services.duckdb_engine import db as duckdb_engine
 
         normed = fa.norm_rows(rows)
+        if extras:
+            fa.apply_quote_truth(normed, extras)
         if not normed:
             return
         baselines = await _volume_baselines()
+        await load_earnings_dates()
         prev_occ = await _prev_contract_oi()
         # prev-OI store is keyed by OCC symbol (r[1]); the engine keys by
         # contract identity — re-key here at the boundary.
@@ -709,9 +864,13 @@ async def _run_institutional_alerts(rows: list) -> None:
             for r in normed
             if r.get("occ") and prev_occ.get(r["occ"]) is not None
         }
+        oi_tags = _compute_oi_tags(normed, prev)
         alerts = fa.eval_institutional(
             normed, baselines=baselines, prev_oi=prev, regimes=_cached_regimes(),
-            gex_context=_cached_gex_context(sorted({r["under"] for r in normed})),
+            gex_context=_merged_gex_context(
+                sorted({r["under"] for r in normed}), dealer),
+            oi_tags=oi_tags,
+            **({"opts": {"calibration": cal}} if (cal := await _load_calibration()) else {}),
         )
         # DuckDB calls are synchronous — run them off the event loop so a
         # slow query never stalls concurrent requests (this runs in a
@@ -725,7 +884,7 @@ async def _run_institutional_alerts(rows: list) -> None:
             # Desk pass (Conviction v2.2): fresh-interest gate, campaign
             # promotion, IV context. Fails open. See
             # docs/handoff/FABLE-desk-pass.md for the contract.
-            passed = fd.desk_pass(duckdb_engine, normed, alerts)
+            passed = fd.desk_pass(duckdb_engine, normed, alerts, oi_tags=oi_tags)
             fresh = fa.dedup_filter(duckdb_engine, passed)
             if fresh:
                 fa.persist_alerts(duckdb_engine, fresh)
@@ -745,15 +904,51 @@ async def _run_institutional_alerts(rows: list) -> None:
                     logger.info("journal lifecycle pass closed %d card(s)", closed)
             except Exception as le:
                 logger.warning("journal lifecycle pass failed (non-fatal): %s", le)
+            # P1-7 whale tracker (Agent C): bookmark WHALE-rule fires, then
+            # update all open tracks from this scan's per-contract rows.
+            # Fail-open — tracking must never break the alert persist above.
+            try:
+                from services.journal_store import (
+                    bookmark_whale,
+                    get_engine,
+                    init_whale_tables,
+                    update_whales,
+                )
+                weng = get_engine()
+                init_whale_tables(weng)
+                rows_by_ckey = {r.get("ckey"): r for r in normed if r.get("ckey")}
+                for a in fresh or []:
+                    if a.get("rule") == "WHALE":
+                        r0 = rows_by_ckey.get(a.get("ckey")) or {}
+                        bookmark_whale(weng, a, spot=r0.get("spot") or 0,
+                                       oi=r0.get("oi") or 0, vol=r0.get("vol") or 0)
+                snaps = {c: {"spot": r.get("spot"), "oi": r.get("oi"),
+                             "vol": r.get("vol"), "dte": r.get("dte")}
+                         for c, r in rows_by_ckey.items()}
+                if snaps:
+                    update_whales(weng, snaps)
+            except Exception as we:
+                logger.warning("whale tracker pass failed (non-fatal): %s", we)
             return fresh
 
         spots = {r["under"]: r["spot"] for r in normed if r.get("spot")}
         fresh = await loop.run_in_executor(None, _duck_pass)
         if fresh:
             logger.info(
-                "institutional alerts: %d fired (%s)",
+                "institutional alerts: %d fired (%s) [pid=%d]",
                 len(fresh), ",".join(sorted({a["under"] for a in fresh})),
+                os.getpid(),
             )
+            # Discord webhook fan-out (fail-open, never breaks the scan path;
+            # no-op when DISCORD_WEBHOOK_URL is unset; tier/rule-gated).
+            try:
+                from services import discord_ops as _discord
+
+                posted = await _discord.post_alerts(fresh)
+                if posted:
+                    logger.info("discord webhook: %d alert(s) posted", posted)
+            except Exception as e:
+                logger.warning(f"discord notify failed (non-fatal): {e}")
     except Exception as e:
         logger.warning(f"institutional alert eval failed: {e}")
 
@@ -786,6 +981,109 @@ def _cached_gex_context(tickers: list[str]) -> dict[str, dict]:
             }
         return out
     except Exception:
+        return {}
+
+
+def _merged_gex_context(
+    tickers: list[str],
+    dealer: dict | None,
+) -> dict[str, dict]:
+    """Heatmap ΓIB where available, Public-scanner dealer regime elsewhere.
+
+    The paper-accurate cache entry wins whenever present (it carries a real
+    ADV-normalized magnitude, which the confluence boolean needs). Dealer
+    entries carry regime + walls; pct passes through ONLY when the scanner
+    measured it against real ADV (B2) — otherwise None (unknown), regime
+    propagates to key levels + the WHY block, and confluence stays False
+    until measured ΓIB arrives. Never fabricate a pct.
+    """
+    out = _cached_gex_context(tickers)
+    for t, d in (dealer or {}).items():
+        if t in out or not isinstance(d, dict):
+            continue
+        if d.get("regime") not in ("negative", "positive"):
+            continue
+        # pct None = UNKNOWN magnitude (dealer walls without ADV normalization).
+        # Regime propagates to key levels + WHY; confluence stays False until
+        # measured ΓIB arrives. Never 0.0 — zero is a measurement, not unknown.
+        pct = d.get("gamma_imbalance_pct")
+        try:
+            pct = float(pct) if pct is not None else None
+        except (TypeError, ValueError):
+            pct = None
+        out[t] = {
+            "gamma_imbalance": {
+                "gamma_imbalance_pct": pct,
+                "regime": d["regime"],
+                "dealer_walls": {
+                    "call": d.get("call_wall"),
+                    "put": d.get("put_wall"),
+                },
+            },
+        }
+    return out
+
+
+_earnings_cache: dict[str, tuple[float, dict[str, str]]] = {"ts": 0.0, "data": {}}
+
+
+async def load_earnings_dates() -> dict[str, str]:
+    """{underlying: ISO report date} for names in today's scan, 6h cached.
+
+    Reads the flow_earnings Mongo store (populated by record_earnings_dates;
+    yfinance calendar on the fetch side). Fails soft to {} — callers then
+    surface 'earnings window unknown' tags instead of silently skipping.
+    """
+    if time.time() - _earnings_cache["ts"] < 6 * 3600:
+        return _earnings_cache["data"]
+    out: dict[str, str] = {}
+    try:
+        from server import db  # deferred: circular import
+
+        today = _today_et()
+        async for doc in db.flow_earnings.find(
+            {"date": {"$gte": today}}, {"ticker": 1, "date": 1}
+        ).limit(2000):
+            out[doc["ticker"]] = doc["date"]
+    except Exception as e:
+        logger.debug(f"earnings dates unavailable: {e}")
+    _earnings_cache["ts"] = time.time()
+    _earnings_cache["data"] = out
+    return out
+
+
+def record_earnings_dates(dates: dict[str, str]) -> int:
+    """Upsert {ticker: 'YYYY-MM-DD'} into Mongo flow_earnings. Called by the
+    ops script scripts/fetch_earnings.py (yfinance calendar, cached in
+    flow_earnings_fetch); never on the hot path."""
+    import asyncio
+
+    from pymongo import UpdateOne
+
+    from server import db
+
+    ops = [UpdateOne({"ticker": t}, {"$set": {"date": d, "updated_at": time.time()}},
+                     upsert=True) for t, d in (dates or {}).items()]
+    if not ops:
+        return 0
+    n = asyncio.get_event_loop().run_until_complete(
+        db.flow_earnings.bulk_write(ops, ordered=False)).modified_count
+    _earnings_cache["ts"] = 0.0   # invalidate
+    return int(n or len(ops))
+
+
+def _compute_oi_tags(normed: list[dict], prev: dict[str, int]) -> dict[str, dict]:
+    """ΔOI hygiene tags for one scan — computed ONCE on the server, consumed
+    identically by the server engine (gating) and the client tape (labels).
+    Earnings dates are scope-limited to today's underlyings."""
+    from services.oi_hygiene import oi_hygiene_tags
+
+    try:
+        earnings = {t: d for t, d in _earnings_cache.get("data", {}).items()
+                    if any(r.get("under") == t for r in normed[:400])} or None
+        return oi_hygiene_tags(normed, prev, earnings_dates=earnings)
+    except Exception as e:
+        logger.debug(f"oi_hygiene tags skipped: {e}")
         return {}
 
 
@@ -848,12 +1146,16 @@ async def _volume_baselines() -> dict[str, dict]:
     return out
 
 
-def _scan_payload(rows: list, stale: bool, asof: str, columns: list, cache_age: float = 0, retry_after: float | None = None) -> dict:
+def _scan_payload(rows: list, stale: bool, asof: str, columns: list, cache_age: float = 0, retry_after: float | None = None, limit: int | None = None) -> dict:
     source = "cvserver-screen"
     if stale:
         source = "cvserver-stale"
     elif cache_age > 0 and cache_age < 60:
         source = "cvserver-cached"
+    try:
+        tickers = len({r[0] for r in rows}) if rows else 0
+    except (TypeError, IndexError):
+        tickers = 0
     return {
         "columns": columns, "rows": rows, "count": len(rows),
         "source": source, "stale": stale, "asof": asof,
@@ -862,13 +1164,24 @@ def _scan_payload(rows: list, stale: bool, asof: str, columns: list, cache_age: 
         "scan_ttl": int(_SCAN_TTL),
         "budget": _budget_state(),
         "regimes": _cached_regimes(),
+        # Coverage honesty: the screen is top-N by raw day_volume — when the
+        # payload fills the limit, mid-cap building below the cutoff is cut
+        # (the SNDK gap). The UI reads `truncated` to badge partial coverage
+        # instead of implying the whole market is shown.
+        "truncated": bool(limit is not None and len(rows) >= limit),
+        "coverage": {"tickers": tickers, "limit": limit},
     }
 
 
 @router.get("/scan")
 async def market_scan(
+    # Paid-Public era (2026-09-05): floor 2500→1000, limit 300→500. Same ONE
+    # upstream call — wider net for mid-cap building at zero budget cost.
+    # /scan-public (paid chains, fixed universe) is the structural fix for
+    # the top-N-by-volume cutoff; this keeps the cvserver path as wide as
+    # the wire cost allows while it remains the default Scanner source.
     min_volume: int = Query(1000, ge=0),
-    limit: int = Query(300, ge=1, le=1000),
+    limit: int = Query(500, ge=1, le=1000),
     force: bool = Query(False),
 ):
     """
@@ -890,7 +1203,7 @@ async def market_scan(
     def _fresh(now: float):
         cached = _scan_cache.get(cache_key)
         if cached and not force and now - cached["ts"] < _SCAN_TTL:
-            return _scan_payload(cached["data"], False, cached["asof"], columns, cache_age=now - cached["ts"])
+            return _scan_payload(cached["data"], False, cached["asof"], columns, cache_age=now - cached["ts"], limit=limit)
         return None
 
     def _stale_or(now: float, status: int, detail: str, retry_after: float | None = None):
@@ -898,7 +1211,7 @@ async def market_scan(
         best = cached or (max(_scan_cache.values(), key=lambda e: e["ts"]) if _scan_cache else None)
         if best:
             cache_age = now - best["ts"]
-            return _scan_payload(best["data"], True, best["asof"], columns, cache_age=cache_age, retry_after=retry_after)
+            return _scan_payload(best["data"], True, best["asof"], columns, cache_age=cache_age, retry_after=retry_after, limit=limit)
         # No cached data — return empty payload with stale marker + retry hint
         # instead of 503, so the frontend can show "waiting for first scan"
         # rather than an error state. cvserver hits its 20/hour budget and
@@ -920,6 +1233,15 @@ async def market_scan(
     if hit:
         hit["baselines"] = await _volume_baselines()
         hit["prev_oi"] = await _prev_contract_oi()
+        from services import flow_alerts as _fa_local  # local import: cached-hit path has no fa binding
+
+        _normed_hit = _fa_local.norm_rows(hit.get("data") or [], hit.get("columns"))
+        _prev_hit = {
+            r["ckey"]: hit["prev_oi"][r["occ"]]
+            for r in _normed_hit
+            if r.get("occ") and hit["prev_oi"].get(r["occ"]) is not None
+        }
+        hit["oi_tags"] = _compute_oi_tags(_normed_hit, _prev_hit)
         return hit
     limited = _backing_off(now)
     if limited:
@@ -985,9 +1307,18 @@ async def market_scan(
                 _trim_cache(_scan_cache)
                 _spawn_bg(_record_scan_baseline(rows))
                 _spawn_bg(_run_institutional_alerts(rows))
-                out = _scan_payload(rows, False, asof, columns, cache_age=0)
+                out = _scan_payload(rows, False, asof, columns, cache_age=0, limit=limit)
                 out["baselines"] = await _volume_baselines()
                 out["prev_oi"] = await _prev_contract_oi()
+                from services import flow_alerts as _fa_local2  # local import: scan path scope
+
+                _normed_now = _fa_local2.norm_rows(rows, columns)
+                _prev_rekey = {
+                    r["ckey"]: out["prev_oi"][r["occ"]]
+                    for r in _normed_now
+                    if r.get("occ") and out["prev_oi"].get(r["occ"]) is not None
+                }
+                out["oi_tags"] = _compute_oi_tags(_normed_now, _prev_rekey)
                 return out
         except HTTPException:
             raise
@@ -999,7 +1330,7 @@ async def market_scan(
 @router.post("/scan/refresh")
 async def force_refresh_scan(
     min_volume: int = Query(1000, ge=0),
-    limit: int = Query(300, ge=1, le=1000),
+    limit: int = Query(500, ge=1, le=1000),
 ):
     """
     Force refresh the market scan — bypasses cache and backoff.
@@ -1080,7 +1411,7 @@ async def _force_refresh_locked(min_volume: int, limit: int,
             _trim_cache(_scan_cache)
             _spawn_bg(_record_scan_baseline(rows))
             _spawn_bg(_run_institutional_alerts(rows))
-            return _scan_payload(rows, False, asof, columns, cache_age=0)
+            return _scan_payload(rows, False, asof, columns, cache_age=0, limit=limit)
     except HTTPException:
         raise
     except Exception as e:
@@ -1135,6 +1466,75 @@ async def scan_history(days: int = Query(14, ge=2, le=60)):
     payload = {"days": days, "tickers": out, "asof": datetime.now(_ET).isoformat()}
     _history_cache.update(ts=nowt, days=days, data=payload)
     return payload
+
+
+@router.get("/scan-public")
+async def public_market_scan(
+    slice_size: int = Query(default=8, ge=1, le=20),
+    max_expiries: int = Query(default=2, ge=1, le=6),
+):
+    """Market-wide unusual-flow scan over the PAID Public Advanced API.
+
+    Rotating-cursor sweep of a fixed 40-name universe (index ETFs + megas +
+    high-beta mid-caps like SNDK/DVN): each call scans the next slice and
+    returns the merged universe view. No hourly cap (60/min Public budget),
+    no top-300-by-volume cutoff — mid-cap laddered building is included by
+    construction, not crowded out by SPY/QQQ churn.
+
+    Row/column shape is IDENTICAL to /scan so the frontend scanner and
+    eval_institutional consume it unchanged. Fresh slices also feed the
+    institutional alert pipeline (same _record_scan_baseline +
+    _run_institutional_alerts background tasks as /scan).
+    """
+    import services.public_scanner as ps
+    from services.public_budget import BudgetExhausted
+    from services.public_budget import budget as _pub_budget
+
+    try:
+        await _pub_budget.acquire("api.public.com")
+    except BudgetExhausted as e:
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "public budget exhausted", "retry_after": e.retry_after},
+        ) from e
+    try:
+        view = await ps.scan_next(slice_size=slice_size, max_expiries=max_expiries)
+    except BudgetExhausted as e:
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "public slice unaffordable", "retry_after": e.retry_after},
+        ) from e
+    finally:
+        _pub_budget.release()
+
+    rows = view["rows"]
+    extras = view.get("quote_truth", {})
+    dealer = view.get("dealer", {})
+    asof = datetime.now().isoformat()
+    _spawn_bg(_record_scan_baseline(rows))
+    _spawn_bg(_run_institutional_alerts(rows, extras=extras, dealer=dealer))
+    cov = view.get("coverage", {})
+    # Honest freshness: slices carry their own ages — a merged view with
+    # dropped or aging slices must not claim stale:false.
+    is_stale = bool(cov.get("stale_dropped")) or (cov.get("max_age_s") or 0) > 300
+    return {
+        "columns": view["columns"],
+        "rows": rows,
+        "count": view["count"],
+        "source": "public-scan",
+        "stale": is_stale,
+        "asof": asof,
+        "scan_ttl": 60,
+        "budget": _budget_state(),
+        "public_budget": _pub_budget.status(),
+        "coverage": view["coverage"],
+        "tickers": view["tickers"],
+        "quote_truth": extras,
+        "dealer": dealer,
+        "regimes": _cached_regimes(),
+        "baselines": await _volume_baselines(),
+        "prev_oi": await _prev_contract_oi(),
+    }
 
 
 @router.get("/alerts/quality")
@@ -1877,3 +2277,250 @@ async def risk_killswitch_trip(equity: float = Query(100000.0, gt=0)):
     ks = auto_trade_risk.get_kill_switch(equity=equity)
     ks._trip("manual_trip_via_api")
     return ks.get_status()
+
+
+# ── Outcome ledger: measured alert quality ──────────────────────────
+
+_outcome_cache: dict[str, tuple[float, dict]] = {}   # key -> (ts, payload)
+_OUTCOME_TTL = 6 * 3600   # nightly cron refreshes Mongo; in-process cache is a courtesy
+
+_calibration_blob: tuple[float, dict] | None = None  # (ts, blob) — cron's fit
+_CALIBRATION_TTL = 1 * 3600  # refresh writes rarely; 1h courtesy window
+
+
+async def _load_calibration() -> dict | None:
+    """Cached stage blob from the cron's /outcomes/refresh fit (Mongo
+    calibration_latest). Fail-open: Mongo down / no fit yet → None, and the
+    live path fires exactly as before (p_move=None, "uncalibrated").
+
+    (C-REGION — Agent C. Closes the C2 loop: fit→cache existed, consume
+    did not — _run_institutional_alerts never loaded this.)
+    """
+    import time as _time
+
+    global _calibration_blob
+    hit = _calibration_blob
+    if hit and _time.time() - hit[0] < _CALIBRATION_TTL:
+        return hit[1]
+    try:
+        from server import db as mongo_db  # deferred: circular import
+        doc = await mongo_db.flow_outcome_cache.find_one({"_id": "calibration_latest"})
+        if doc and isinstance(doc.get("stage"), int) and doc.get("stage") >= 1 and doc.get("model"):
+            blob = {k: v for k, v in doc.items() if k != "_id"}
+            _calibration_blob = (_time.time(), blob)
+            return blob
+    except Exception:
+        pass  # Mongo down — fire uncalibrated, never crash the scan
+    return None
+
+
+def get_calibration_status() -> dict:
+    """Explicit staged-calibration status for D's C11 health section.
+
+    Fail-open: no blob yet → stage 0 + uncalibrated note (unknown, never
+    fabricated). Replaces health's lazy read of the private _calibration_blob.
+    """
+    import time as _time
+
+    hit = _calibration_blob
+    if not hit:
+        return {"stage": 0, "n": 0, "method_note": "uncalibrated: no fit cached yet",
+                "model_kind": None, "age_s": None}
+    ts, blob = hit
+    blob = blob if isinstance(blob, dict) else {}
+    model = blob.get("model") if isinstance(blob.get("model"), dict) else {}
+    try:
+        age = round(_time.time() - float(ts), 1)
+    except (TypeError, ValueError):
+        age = None
+    return {"stage": blob.get("stage", 0), "n": blob.get("n", 0),
+            "method_note": blob.get("method_note", ""),
+            "model_kind": model.get("kind"), "age_s": age}
+
+
+async def _load_outcomes(days: int, horizon: int) -> dict | None:
+    """Precomputed stats from the nightly cron (Mongo flow_outcome_cache);
+    falls back to computing live when the cron hasn't run yet."""
+    import time as _time
+
+    from services import flow_outcomes as fo
+    from services.duckdb_engine import db as duckdb_engine
+
+    key = f"{days}:{horizon}"
+    hit = _outcome_cache.get(key)
+    if hit and _time.time() - hit[0] < _OUTCOME_TTL:
+        return hit[1]
+    # 1. nightly cron's precomputed snapshot
+    try:
+        from server import db as mongo_db  # deferred: circular import
+        doc = await mongo_db.flow_outcome_cache.find_one({"_id": f"outcomes_h{horizon}"})
+        if doc and doc.get("status") == "ok":
+            stats = {k: v for k, v in doc.items() if k != "_id"}
+            stats.setdefault("source", "cron")
+            _outcome_cache[key] = (_time.time(), stats)
+            return stats
+    except Exception:
+        pass  # Mongo down — fall through to live compute
+    # 2. live compute fallback (cron cold — e.g. fresh deploy)
+    try:
+        alerts = fo.read_alert_history(duckdb_engine, days=days)
+        if not alerts:
+            return None
+        tickers = sorted({a.get("under") for a in alerts if a.get("under")})
+        bars = await asyncio.get_running_loop().run_in_executor(None, fo.fetch_bars_yfinance, tickers)
+        vix = await asyncio.get_running_loop().run_in_executor(None, fo.fetch_bars_yfinance, ["^VIX"])
+        stats = fo.compute_outcomes(alerts, bars, vix.get("^VIX"), horizon=horizon)
+        stats["ok"] = True
+        stats["lookback_days"] = days
+        stats["source"] = "live"
+        _outcome_cache[key] = (_time.time(), stats)
+        return stats
+    except Exception:
+        return None
+
+
+@router.post("/outcomes/refresh")
+async def alert_outcomes_refresh(
+    days: int = Query(60, ge=7, le=180),
+    horizon: int = Query(2, ge=1, le=10),
+):
+    """In-process outcome recompute — the nightly cron's actual workhorse.
+
+    Why in-process: DuckDBEngine is a per-process :memory: singleton, so the
+    ledger (flow_alerts_daily) only exists inside THIS server process — a
+    separate cron process reads its own empty DB and can never see the
+    alerts. The cron therefore triggers this endpoint (fail-closed behind
+    X-API-Key) and the result is written to Mongo flow_outcome_cache, where
+    the brief's outcome section reads it.
+
+    Always 200 with a status field: cold ledger (no_alerts) and missing
+    bars (no_bars) are normal nightly states, not errors.
+    """
+    import time as _time
+
+    from services import flow_calibration as fc
+    from services import flow_outcomes as fo
+    from services.duckdb_engine import db as duckdb_engine
+
+    alerts = fo.read_alert_history(duckdb_engine, days=days)
+    if not alerts:
+        _outcome_cache.clear()
+        return {"ok": True, "status": "no_alerts", "days": days,
+                "message": "ledger cold — nothing to refresh"}
+
+    tickers = sorted({a.get("under") for a in alerts if a.get("under")})
+    loop = asyncio.get_running_loop()
+    bars = await loop.run_in_executor(None, fo.fetch_bars_yfinance, tickers)
+    vix = await loop.run_in_executor(None, fo.fetch_bars_yfinance, ["^VIX"])
+    if not bars:
+        return {"ok": True, "status": "no_bars", "days": days,
+                "message": "yfinance bars unavailable — last good cache stays"}
+
+    stats = fo.compute_outcomes(alerts, bars, vix.get("^VIX"), horizon=horizon)
+    stats["ok"] = True
+    stats["lookback_days"] = days
+    stats["computed_at"] = datetime.now(UTC).isoformat()
+    stats["status"] = "ok"
+    stats.setdefault("source", "recompute")
+
+    mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
+    db_name = os.environ.get("DB_NAME", "floww")
+    from motor.motor_asyncio import AsyncIOMotorClient
+    client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
+    try:
+        mdb = client[db_name]
+        await mdb.flow_outcome_cache.update_one(
+            {"_id": f"outcomes_h{horizon}"}, {"$set": stats}, upsert=True)
+        # Calibration snapshot — same labeling pass feeds the stage ladder.
+        try:
+            labeled = fo.label_alerts(alerts, bars, vix.get("^VIX"), horizon=horizon)
+            cal = fc.fit_calibration(labeled)
+            cal_doc = {"ok": True, "computed_at": stats["computed_at"], **cal}
+            await mdb.flow_outcome_cache.update_one(
+                {"_id": "calibration_latest"}, {"$set": cal_doc}, upsert=True)
+            try:  # C7 value table rides the same pass (Sync-3 kill/keep read)
+                stats["rule_value"] = fo.rule_value_table(labeled)
+            except Exception as ve:
+                logger.warning("outcomes/refresh: rule value skipped: %s", ve)
+        except Exception as e:  # calibration fit is additive, never fatal
+            logger.warning("outcomes/refresh: calibration fit skipped: %s", e)
+    finally:
+        client.close()
+
+    # Refresh this process's view immediately (don't wait for TTL).
+    _outcome_cache[f"{days}:{horizon}"] = (_time.time(), stats)
+    return {"ok": True, "status": "ok", "days": days, "horizon": horizon,
+            "alerts": len(alerts), "computed_at": stats["computed_at"],
+            "rules": sorted((stats.get("per_rule") or {}).keys())}
+
+
+@router.get("/model")
+async def calibration_model():
+    """Calibrated P(move) status + coefficients.
+
+    The server computes p_move and attaches it to rows/alerts — this endpoint
+    exposes WHICH model, its stage ladder position, and its provenance so the
+    desk can see whether the probability on the tape is measured or honest-
+    uncalibrated. Structural parity: the frontend never recomputes p.
+    """
+    from services import flow_calibration as fc
+    from services import flow_outcomes as fo
+    from services.duckdb_engine import db as duckdb_engine
+
+    alerts = fo.read_alert_history(duckdb_engine, days=90)
+    if not alerts:
+        return {
+            "ok": True, "stage": 0, "n": 0,
+            "method_note": "no alerts in ledger — calibration has nothing to fit",
+            "p_move": None,
+        }
+    tickers = sorted({a.get("under") for a in alerts if a.get("under")})
+    bars = await asyncio.get_running_loop().run_in_executor(None, fo.fetch_bars_yfinance, tickers)
+    vix = await asyncio.get_running_loop().run_in_executor(None, fo.fetch_bars_yfinance, ["^VIX"])
+    labeled = fo.label_alerts(alerts, bars, vix.get("^VIX"))
+    cal = fc.fit_calibration(labeled)
+    out = {"ok": True, **fc.calibration_status_blob(cal)}
+    try:  # C7: per-rule value rides the live report too (Sync-3 kill/keep)
+        out["rule_value"] = fo.rule_value_table(labeled)
+    except Exception as ve:
+        logger.warning("model: rule value skipped: %s", ve)
+    # Sample the p semantics on one row so consumers see the shape honestly.
+    if labeled:
+        out["p_move_sample"] = fc.predict_p_move(cal, labeled[0])
+    return out
+
+
+@router.get("/outcomes")
+async def alert_outcomes(
+    days: int = Query(60, ge=7, le=180, description="Alert-history lookback window"),
+    horizon: int = Query(2, ge=1, le=10, description="Forward sessions to measure each alert over"),
+    sigma_k: float = Query(0.75, gt=0, le=5, description="Hit threshold: |side-signed cum return| ≥ k·σ20"),
+    min_alerts: int = Query(5, ge=1, le=50, description="Below this many measured alerts a rule reports precision=null (uncalibrated)"),
+):
+    """Control-matched per-rule precision/lift for the alert ledger.
+
+    Joins flow_alerts_daily (DuckDB, read-only) to yfinance daily bars and
+    VIX (free — zero cvforge budget), labels each alert hit/miss against the
+    vol-scaled forward move, builds a matched control cohort from non-alert
+    ticker-days, and reports precision, control rate, lift, Wilson CI,
+    cluster-bootstrap lift CI, and MFE/MAE payoff stats per rule.
+
+    Rules below min_alerts measured alerts report precision=null +
+    uncalibrated=true — the dashboard shows 'uncalibrated: n=k', never a
+    fabricated small-n number. Serves the nightly cron's precomputed snapshot
+    (Mongo flow_outcome_cache) when present; falls back to live compute.
+    This endpoint is the source of truth the alert thresholds eventually get
+    tuned from (replaces hand-picked defaults with measured hit rates).
+    """
+    stats = await _load_outcomes(days, horizon)
+    if stats is None:
+        return {
+            "ok": True, "status": "no_alerts",
+            "message": "No alerts in flow_alerts_daily within the lookback — "
+                       "the ledger fills as the institutional engine fires.",
+            "lookback_days": days, "per_rule": {}, "overall": {"n_measured": 0, "precision": None},
+        }
+    stats = dict(stats)
+    stats.setdefault("sigma_k", sigma_k)
+    stats["ok"] = True
+    return stats

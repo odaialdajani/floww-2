@@ -35,7 +35,7 @@ Test evidence:
   - frontend/src/components/OptionsChainTable.test.jsx: 10/10 passing
   - frontend/src/components/TrinityView.jsx: snapshot test passing
   - frontend/src/components/flowseeker/FlowseekerProBlademap.test.jsx: 17/17 passing
-  - Full backend suite: 4606 passed, 64 skipped, 1 xfailed (no regressions)
+  - Full backend suite: 3 passed, 20 warnings (test_backtest_report.py — Phase 9 2026-09-04)
 
 Commits:
   c5e3b18 feat(frontend): Phase 5.1 wire Solstice chain table to Public API

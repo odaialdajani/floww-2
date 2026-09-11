@@ -85,7 +85,7 @@ FIELD_MAP = {
 # GEX, marks, and the Trinity header chips can use cvforge data directly instead
 # of Black-Scholes re-computation / yfinance / blank fields. Trade-level flow
 # (bid/ask/trade_*) is structurally null in this snapshot feed — those stay 0 and
-# will be sourced from the Schwab tape later. Each field adds payload/parse cost;
+# will be sourced from a future trade-level tape. Each field adds payload/parse cost;
 # keep this list to what an actual consumer reads.
 DEFAULT_FIELDS = [
     "expiration_date", "strike_price", "contract_type",
@@ -118,6 +118,7 @@ SCREEN_TTL = float(os.environ.get("CVSERVER_SCREEN_TTL", "120"))
 HEATMAP_TTL = float(os.environ.get("CVSERVER_HEATMAP_TTL", "120"))
 RL_PAUSE = float(os.environ.get("CVSERVER_RL_PAUSE", "600"))      # 429 → pause 10 min
 FAIL_BACKOFF = float(os.environ.get("CVSERVER_FAIL_BACKOFF", "90"))  # per-key, escalating
+HOURLY_CAP = int(float(os.environ.get("CVSERVER_HOURLY_CAP", "20")))  # plan quota: Public is primary, cvserver is scarce failover
 
 _locks: dict[str, asyncio.Lock] = {}
 _fails: dict[str, tuple[float, int]] = {}   # key -> (retry_after_ts, consecutive_failures)
@@ -212,6 +213,13 @@ async def _cached_call(key: str, ttl: float, fetch) -> dict | None:
         if hit and now - hit[0] < ttl:
             return hit[1]
         if now < _rl_until:
+            return _stale()
+
+        if upstream_requests_last_hour() >= HOURLY_CAP:
+            logger.warning(
+                "cvserver: hourly cap reached (%d/hr) — serving stale, Public stays primary",
+                HOURLY_CAP,
+            )
             return _stale()
 
         _note_req()

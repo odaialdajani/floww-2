@@ -1,0 +1,88 @@
+/* AlertEngineStrip — alert-engine detector badge strip (heatseeker panel) */
+
+.skylit-ae-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.skylit-ae-badge.ae-gamma_squeeze {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.skylit-ae-badge.ae-momentum_extreme {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.skylit-ae-badge.ae-wall_breach {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.skylit-ae-badge.ae-gex_magnitude_shift {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.skylit-ae-badge.ae-gamma_flip_proximity {
+  background: #fefce8;
+  color: #a16207;
+  border-color: #fef08a;
+}
+
+.skylit-ae-badge.ae-pin_risk {
+  background: #f8fafc;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+
+.skylit-ae-badge.ae-charm_pinning {
+  background: #f3e8ff;
+  color: #6b21a8;
+  border-color: #e9d5ff;
+}
+
+.skylit-ae-badge.ae-vanna_regime_change {
+  background: #f3e8ff;
+  color: #6b21a8;
+  border-color: #e9d5ff;
+}
+
+.skylit-ae-badge.ae-unusual_pc_oi_ratio {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.skylit-ae-badge.ae-max_pain_magnet {
+  background: #f8fafc;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+
+.skylit-ae-badge.ae-volume_spike {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.skylit-alert-engine-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 0;
+  margin: 0 -8px;
+}
