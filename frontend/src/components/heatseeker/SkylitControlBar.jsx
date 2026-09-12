@@ -56,17 +56,13 @@ function SkylitControlBar({
     return () => clearInterval(id);
   }, [playing, onRefresh, playbackIntervalMs]);
 
-  // T1 contract: same deduped universe as the ticker bar (object, array, or
-  // null shape); position denominator and arrows agree with buttons/count.
+  // Universe: same deduped list as the ticker bar (object, array, or
+  // null shape). No position counter by design (2026-09-12): the arrows
+  // cycle the endless universe with wrap — there is no meaningful "x of N".
   const tickerList = useMemo(() => {
     const u = buildTickerUniverse(tickers);
     return u.length > 0 ? u : TICKER_SETS.popular;
   }, [tickers]);
-  const tickerPos = useMemo(() => {
-    if (tickerList.length === 0) return null;
-    const idx = tickerList.indexOf(ticker);
-    return idx === -1 ? null : idx + 1;
-  }, [tickerList, ticker]);
   const stepTicker = useCallback((dir) => {
     if (!onTickerChange) return;
     if (tickerList.length === 0) return;
@@ -162,9 +158,6 @@ function SkylitControlBar({
         <div className="skylit-ticker-display">
           <span className="skylit-ticker-name">{ticker}</span>
           {isLive && <span className="skylit-live-dot" />}
-          {tickerPos != null && tickerList.length > 0 && (
-            <span className="skylit-ticker-pos">{tickerPos}/{tickerList.length}</span>
-          )}
         </div>
 
         <div className="skylit-price-display">
