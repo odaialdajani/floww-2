@@ -9,7 +9,7 @@ A change > 10% (absolute) is considered significant — this catches
 both large new positions (increase) and large unwinds (decrease).
 
 Usage:
-    from services.oi_needle_detector import OiChangeDetector
+    from services.oi_change_detector import OiChangeDetector
 
     detector = OiChangeDetector()
     result = detector.detect(current_oi, previous_oi, strikes)

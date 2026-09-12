@@ -79,3 +79,4 @@ pyyaml>=6.0               # services/agent_hub, services/alerts/engine.py (yaml)
 databento>=0.34.0         # services/databento_oi.py, databento_provider.py
 tenacity>=8.2.0           # services/yoptions_fetcher.py
 Pillow>=10.0.0            # services/memory/chart_embeddings.py (PIL)
+finnhub-python>=2.4.29    # services/finnhub_client.py (Finnhub SDK; /api/tickers/all universe)

@@ -63,11 +63,28 @@ def test_no_key_returns_empty(monkeypatch):
     assert out["has_more"] is False
 
 
+def test_missing_module_serves_empty_not_500(monkeypatch):
+    """2026-09-12 regression: deleting services/finnhub_client.py while
+    market_data.py still imports it 500'd /api/tickers/all (ModuleNotFound)
+    and killed the frontend's endless ticker scroll. The endpoint must
+    degrade to the documented empty-list contract instead."""
+    import sys
+
+    # None in sys.modules makes the in-function import raise ImportError,
+    # exactly as a deleted module does.
+    monkeypatch.setitem(sys.modules, "services.finnhub_client", None)
+    import asyncio
+    out = asyncio.run(list_all_tickers(limit=1000, page=1, refresh=True))
+    assert out["tickers"] == [] and out["total"] == 0
+    assert out["has_more"] is False
+
+
 def test_symbols_us_equities_unit(monkeypatch):
     from services.finnhub_client import FinnhubClient
 
     class Raw:
-        def symbol_list(self):
+        def stock_symbols(self, exchange):
+            assert exchange == "US"
             return [{"symbol": "b"}, {"symbol": "A "}, {"symbol": "a"},
                     {"symbol": ""}, {"symbol": "C"}]
 

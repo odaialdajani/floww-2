@@ -118,9 +118,17 @@ async def list_all_tickers(
             and (now_s - _server_mod._TICKER_CACHE_TS) < _server_mod.CACHE_TTL_S):
         all_syms = _server_mod._TICKER_CACHE
     else:
-        from services.finnhub_client import FinnhubClient
-        client = FinnhubClient()
-        all_syms = client.symbols_us_equities() or []
+        try:
+            from services.finnhub_client import FinnhubClient
+        except ImportError:
+            # Optional provider module absent (2026-09-12: a dead-code
+            # cleanup deleted it while this route still imported it,
+            # 500ing /api/tickers/all). Serve empty per the contract
+            # below — never 500.
+            all_syms = []
+        else:
+            client = FinnhubClient()
+            all_syms = client.symbols_us_equities() or []
         _server_mod._TICKER_CACHE = all_syms
         _server_mod._TICKER_CACHE_TS = now_s
 
