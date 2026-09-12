@@ -47,6 +47,10 @@ function SkylitDashboard({
   isLive = false,
   regime = null,
   loading = false,
+  // Full ticker universe from App.js ({trinity, default, popular} with the
+  // /api/tickers/all list merged into popular). Wired through to the bar +
+  // control bar so arrows/buttons/search traverse everything, not fallbacks.
+  tickers = null,
 }) {
   const [tradeMode, setTradeMode] = useState(false);
   const [selectedCell, setSelectedCell] = useState(null);
@@ -142,7 +146,7 @@ function SkylitDashboard({
       <SkylitTickerBar
         activeTicker={ticker}
         onTickerChange={onTickerChange}
-        allCount={703}
+        tickers={tickers}
       />
 
       {/* 2. Control Bar */}
@@ -161,6 +165,7 @@ function SkylitDashboard({
         onRefresh={onRefresh}
         onExpand={() => setExpanded(true)}
         onTickerChange={onTickerChange}
+        tickers={tickers}
       />
 
       {/* 2.5 Exposure strip — live backend exposure-rule badges, hidden when none */}

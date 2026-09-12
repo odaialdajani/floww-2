@@ -1004,6 +1004,7 @@ export default function App() {
                   expiries={expiries}
                   onExpiriesChange={setExpiries}
                   onTickerChange={setTicker}
+                  tickers={tickers}
                   onRefresh={() => { setErr(null); fetchData(); }}
                   onCellClick={async (strike, colKey, value) => {
                     const row = displayData?.strikes?.find(s => s.strike === strike);
@@ -1065,6 +1066,7 @@ export default function App() {
                   expiries={expiries}
                   onExpiriesChange={setExpiries}
                   onTickerChange={setTicker}
+                  tickers={tickers}
                   onRefresh={() => { setErr(null); fetchData(); }}
                   onCellClick={async (strike, colKey, value) => {
                     const row = displayData?.strikes?.find(s => s.strike === strike);

@@ -26,8 +26,15 @@ global.IntersectionObserver = class IntersectionObserver {
 jest.mock("axios", () => ({ get: jest.fn() }));
 
 // Mock Zenith sub-components to null-mounts (no network calls; faster).
-jest.mock("./SkylitTickerBar",       () => () => <div data-testid="mock-ticker-bar" />);
-jest.mock("./SkylitControlBar",      () => () => <div data-testid="mock-control-bar" />);
+// Ticker bar + control bar echoes the tickers prop so the universe
+// pass-through is pinnable (2026-09-12: the Solstice bar/control silently
+// fell back to 23/10 featured sets because nothing passed tickers down).
+jest.mock("./SkylitTickerBar",       () => (props) => (
+  <div data-testid="mock-ticker-bar" data-tickers={JSON.stringify(props.tickers ?? null)} />
+));
+jest.mock("./SkylitControlBar",      () => (props) => (
+  <div data-testid="mock-control-bar" data-tickers={JSON.stringify(props.tickers ?? null)} />
+));
 jest.mock("./SkylitHeatmapGrid",     () => ({ onCellClick, windowRows, density }) => (
   <div data-testid="mock-heatmap" data-window={windowRows} data-density={density}>
     <button
@@ -163,8 +170,7 @@ describe("SkylitDashboard", () => {
     expect(readout.textContent).toContain("2026-09-18");
   });
 
-  test("expand fetches a wider swing band for the overlay", async () => {
-    axios.get.mockImplementation(async (url) => ({
+  test("expand fetches a wider swing band for the overlay", async () => {    axios.get.mockImplementation(async (url) => ({
       data: {
         strikes: [{ strike: 100 }, { strike: 101 }],
         grid: {},
@@ -185,5 +191,22 @@ describe("SkylitDashboard", () => {
       expect(calls[0][0]).toContain("mode=swing");
       expect(calls[0][0]).toContain("expiries=8");
     });
+  });
+
+  test("passes the full ticker universe to the bar and control bar (no fallback)", async () => {
+    // 2026-09-12 regression: neither child received `tickers`, so the bar
+    // fell back to 23 featured tickers and the arrows cycled 10 ("1/10")
+    // while App.js held the 31k universe. An exotic symbol must flow through.
+    const universe = { trinity: ["SPY"], default: [], popular: ["ZZZEXOTIC"] };
+    await act(async () => {
+      render(<SkylitDashboard ticker="SPY" tickers={universe} />);
+    });
+
+    expect(screen.getByTestId("mock-ticker-bar")).toHaveAttribute(
+      "data-tickers", JSON.stringify(universe)
+    );
+    expect(screen.getByTestId("mock-control-bar")).toHaveAttribute(
+      "data-tickers", JSON.stringify(universe)
+    );
   });
 });

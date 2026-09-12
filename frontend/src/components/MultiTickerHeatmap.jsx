@@ -63,7 +63,11 @@ export default function MultiTickerHeatmap({ tickers }) {
   const [error, setError] = useState(null);
 
   const selectedTickers = useMemo(() => {
-    const list = (tickers?.popular || DEFAULT_TICKERS).slice(0, 20);
+    // Featured sets ONLY (trinity + default): `popular` carries the 12k
+    // full universe since 2026-09-12, so slicing it would render 20 random
+    // micro-caps and fire 20 junk heatmap fetches.
+    const featured = [...(tickers?.trinity || []), ...(tickers?.default || [])];
+    const list = (featured.length > 0 ? featured : DEFAULT_TICKERS).slice(0, 20);
     if (!list.includes("SPY")) list.unshift("SPY");
     return [...new Set(list)];
   }, [tickers]);
