@@ -31,6 +31,8 @@ const SIZE_MAP = {
 function _getMessage(errorCode, customMessage) {
   if (customMessage) return customMessage;
   switch (errorCode) {
+    case "404":
+      return "No options data for this ticker.";
     case "429":
       return "Data source is rate-limited.";
     case "500":
@@ -209,7 +211,11 @@ export const ErrorState = memo(function ErrorState({
     }
   }
 
-  const isRateLimited = errorCode === 429;
+  const codeStr = errorCode !== null && errorCode !== undefined ? String(errorCode) : null;
+  const isRateLimited = codeStr === "429";
+  // 404 ("No options data for <ticker>") is permanent for that ticker — never
+  // auto-retry it; the manual button stays for a deliberate re-attempt.
+  const isNotFound = codeStr === "404";
   const initialDelay = isRateLimited ? 60 : 10;
 
   return (
@@ -227,9 +233,10 @@ export const ErrorState = memo(function ErrorState({
       </div>
       <RetryButton
         onRetry={onRetry}
-        errorCode={errorCode ? String(errorCode) : null}
+        errorCode={codeStr}
+        message={isNotFound ? "No options data for this ticker — try another symbol." : undefined}
         initialDelay={initialDelay}
-        autoRetry={true}
+        autoRetry={!isNotFound}
       />
     </div>
   );
