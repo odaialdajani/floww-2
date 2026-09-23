@@ -172,7 +172,7 @@ def test_t22_eval_corpus_and_fallback():
 
 
 def test_r4_04_model_modes():
-    from services.solstice_ai_eval import _packet_for, CASES, run_corpus
+    from services.solstice_ai_eval import CASES, _packet_for, run_corpus
     from services.solstice_evidence import deterministic_fallback, validate_explainer_output
 
     def honest(pkt):
