@@ -119,6 +119,9 @@ Environment: macOS `/Users/nav/Documents/GitHub/floww-2` (CLAUDE.md Windows cano
   QQQ 724/126/4, replay verified, compare honestly unavailable.
 
 ## Slice 10 — Revision-4 P01+P02 (branch solstice/r4-p01-p02, 23 Sep 2026)
+PR #19 (r4-p01-p02 → main): OPEN, MERGEABLE; CI `ruff` PASSED after one
+I001 fix (local ruff 0.15.14 missed an ordering 0.15.22 enforces).
+Not merged — R4 packet withholds merge authorization.
 - P01: R4-01..R4-18 reconciled against head in RECONCILIATION.md (R4-01..04
   repaired with red-first evidence; R4-05..18 confirmed, mapped to P03–P12).
 - P02: content-hashed immutable snapshot IDs + deepcopy; unknown-first typed
