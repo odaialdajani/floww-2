@@ -92,6 +92,14 @@ function SkylitDashboard({
   // T04: metric overlay state — same snapshot, raw wall identity locked while
   // viewing activity (walls come from the payload, never recomputed per tab).
   const [metric, setMetric] = useState("raw");
+  // F15 display-scale control: freeze the live auto range into a locked
+  // comparison scale for replay. Cleared on any scope change so a stale
+  // scale can never color a new symbol/metric/view.
+  const [liveScale, setLiveScale] = useState(null);
+  const [scaleLock, setScaleLock] = useState(null);
+  const handleScaleReady = useCallback((s) => {
+    setLiveScale((prev) => (prev && prev.min === s.min && prev.max === s.max ? prev : s));
+  }, []);
   // Grid zoom, in-frame only (2026-09-04): the expanded overlay keeps its
   // designed full density instead of compounding scale on scale.
   const [gridZoom, setGridZoom] = useState(1);
@@ -142,6 +150,10 @@ function SkylitDashboard({
     setExpData(null);
     setExpWidened(false);
   }, [ticker, timeframe, expiries]);
+  // Locked comparison scale never survives a scope change.
+  useEffect(() => {
+    setScaleLock(null);
+  }, [ticker, metric, viewMode, timeframe, expiries, expWidened]);
   useEffect(() => {
     if (!expanded) return undefined;
     let cancelled = false;
@@ -275,6 +287,14 @@ function SkylitDashboard({
           A+
         </button>
         <button
+          className={`skylit-trade-mode-btn${scaleLock ? " active" : ""}`}
+          onClick={() => setScaleLock((cur) => (cur ? null : liveScale))}
+          title={scaleLock ? "Unlock comparison scale — back to relative" : "Lock the current color scale for replay comparison (clears on scope change)"}
+          data-testid="skylit-scale-lock"
+        >
+          {scaleLock ? "Scale locked" : "Lock scale"}
+        </button>
+        <button
           className="skylit-trade-mode-btn"
           onClick={() => setExpanded(true)}
           title="Expand grid full-screen (Esc to close)"
@@ -337,6 +357,8 @@ function SkylitDashboard({
             ticker={ticker}
             viewMode={viewMode}
             metric={metric}
+            scale={scaleLock ? { ...scaleLock, locked: true } : null}
+            onScaleReady={handleScaleReady}
             onCellClick={handleCellClick}
             onStrikeClick={handleStrikeClick}
             windowRows={fitRows}
@@ -402,6 +424,7 @@ function SkylitDashboard({
                 ticker={ticker}
                 viewMode={viewMode}
                 metric={metric}
+                scale={scaleLock ? { ...scaleLock, locked: true } : null}
                 onCellClick={handleCellClick}
                 onStrikeClick={handleStrikeClick}
                 density="full"

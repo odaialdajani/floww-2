@@ -118,6 +118,20 @@ Environment: macOS `/Users/nav/Documents/GitHub/floww-2` (CLAUDE.md Windows cano
   explicitly unprobed with reasons. Live capture: SPY 684 contracts/2 walls,
   QQQ 724/126/4, replay verified, compare honestly unavailable.
 
+## Slice 7 — display scale + spot precision (branch solstice/sweep7-scale-spot, 23 Sep 2026)
+- Display-scale control (§8/F15): Lock-scale button freezes the live auto
+  range into a locked comparison scale for replay; auto-clears on any scope
+  change (ticker/metric/view/timeframe/expiries/widen). Grid reports its live
+  range via `onScaleReady` (loop-guarded).
+- Spot precision (§8 rail): spot chip carries exact spot + signed offset to
+  the nearest listed strike (no silent rounding).
+- PR #12 (ticker-az-paging) reviewed: touches TickerBar + yarn.lock only, no
+  Solstice math/data overlap; mergeable state UNKNOWN; left for its owner.
+
+## Verification (slice 7)
+- Frontend grid/slice/dash: 19 passed (incl. lock + spot-chip tests).
+- Backend untouched this slice (solstice suite green on main post-#15).
+
 ## Slice 6 — verification hardening (branch solstice/sweep6-verify, 23 Sep 2026)
 - Envelope bug fixed: tuple `or`-chaining always returned the first parse
   (breaking alternate keys); naive timestamps now UTC-normalized with an

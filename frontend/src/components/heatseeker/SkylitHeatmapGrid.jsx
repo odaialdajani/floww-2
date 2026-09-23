@@ -80,6 +80,8 @@ function SkylitHeatmapGrid({
   // (relative, labelled). `{min,max,locked:true}` = fixed comparison scale —
   // unchanged values keep colors when an unrelated extreme moves.
   scale = null,
+  // Reports the live auto min/max so a parent can freeze a locked scale.
+  onScaleReady,
 }) {
   const gridKey = GRID_BY_VIEW[viewMode] || "grid";
 
@@ -128,6 +130,14 @@ function SkylitHeatmapGrid({
     }
     return [lo, hi, "relative"];
   }, [expiries, matrix, scale]);
+
+  // Publish the live auto range so a parent can freeze a locked scale.
+  // No-op when a locked scale is already applied (avoid feedback loop).
+  const scaleLocked = !!(scale && scale.locked);
+  useEffect(() => {
+    if (!onScaleReady || scaleLocked) return;
+    onScaleReady({ min: minV, max: maxV });
+  }, [minV, maxV, onScaleReady, scaleLocked]);
 
   // King cell: max |value| across the matrix (F17: largest CELL — the
   // sidebar owns strongest aggregate wall + nearest wall separately).
@@ -301,6 +311,12 @@ function SkylitHeatmapGrid({
               const sk = strikeKey(strike);
               const conc = strikeGross[strike] || 0;
               const concPct = maxStrikeGross > 0 ? Math.round((conc / maxStrikeGross) * 100) : 0;
+              // Exact spot line: the chip snaps to the nearest listed strike,
+              // so carry the exact spot + signed offset (never round silently).
+              const spotOffset = isSpot && spot != null ? Number(spot) - strike : null;
+              const spotTitle = isSpot && spot != null
+                ? `Spot ${Number(spot).toFixed(2)} · nearest listed ${fmtStrike(strike)} (${spotOffset >= 0 ? "+" : ""}${spotOffset.toFixed(2)})`
+                : null;
               return (
                 <tr key={strike} className="trin-row">
                   <td
@@ -309,7 +325,7 @@ function SkylitHeatmapGrid({
                     title={conc > 0 ? `Gross concentration ${fmtK(conc)} (${concPct}% of max)` : "No aggregated exposure for this strike"}
                   >
                     {isSpot ? (
-                      <span className="trin-spot-chip">{fmtStrike(strike)}</span>
+                      <span className="trin-spot-chip" title={spotTitle || undefined} data-testid="skylit-spot-chip">{fmtStrike(strike)}</span>
                     ) : (
                       <span className="trin-strike">{fmtStrike(strike)}</span>
                     )}
