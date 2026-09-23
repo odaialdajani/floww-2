@@ -108,6 +108,9 @@ Environment: macOS `/Users/nav/Documents/GitHub/floww-2` (CLAUDE.md Windows cano
   verified identical on stashed tree. Full frontend: 576/2, both inherited.
 - Branch stacks open PR #11 (base local main 5db4971a); PR opened for review,
   NOT merged (needs separate authorization).
+- PR #13 (solstice/t00-t03-foundation → main): OPEN, MERGEABLE; CI `ruff`
+  check PASSED on the PR head (16s). Live full-suite CI beyond lint not
+  inferred — see baselines above.
 
 ## Verification (slice 4)
 - `backend/tests/solstice/`: 52 passed (incl. max-pain parity canary).
