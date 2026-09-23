@@ -5,8 +5,43 @@ import SkylitTickerBar from "./SkylitTickerBar";
 import SkylitControlBar from "./SkylitControlBar";
 import SkylitHeatmapGrid from "./SkylitHeatmapGrid";
 import SkylitMetricsSidebar from "./SkylitMetricsSidebar";
+import SolsticeStatusStrip from "./SolsticeStatusStrip";
+import WallInspector from "./WallInspector";
+import ScenarioStrip from "./ScenarioStrip";
 import ExposureStrip from "./ExposureStrip";
+import ReplayStrip from "./ReplayStrip";
 import AlertEngineStrip from "../flowseeker/AlertEngineStrip";
+
+/**
+ * SelectedWallBlock — resolves the selected cell to its wall by identity from
+ * the CURRENT snapshot (T06/T21 reuse). Stale asof/ticker selections render
+ * nothing rather than a wrong wall.
+ */
+function SelectedWallBlock({ data, spot, selectedCell }) {
+  if (!selectedCell || !data) return null;
+  if (selectedCell.ticker && data.ticker && selectedCell.ticker !== data.ticker) return null;
+  if (selectedCell.asof && data.asof && selectedCell.asof !== data.asof) return null;
+  const walls = data.metrics?.walls || [];
+  const strike = Number(selectedCell.strike);
+  const wall = walls.find((w) => strike >= Number(w.low) && strike <= Number(w.high))
+    || (walls.length ? [...walls].sort((a, b) =>
+      Math.abs(Number(a.mid) - strike) - Math.abs(Number(b.mid) - strike))[0] : null);
+  const side = spot != null && wall ? (spot < Number(wall.low) ? "below" : "above") : "below";
+  const scenarios = wall ? [
+    { name: side === "below" ? "Bounce watch" : "Rejection watch", type: "reversal_watch",
+      confirmation: `reclaim and hold ${side === "below" ? "above " + wall.low : "below " + wall.high}`,
+      invalidation: `sustained acceptance ${side === "below" ? "below " + wall.low : "above " + wall.high}` },
+    { name: side === "below" ? "Breakdown continuation" : "Breakout continuation", type: "continuation",
+      confirmation: "acceptance beyond zone + follow-through/retest",
+      invalidation: `reclaim and hold ${side === "below" ? "above " + wall.low : "below " + wall.high}` },
+  ] : [];
+  return (
+    <>
+      <WallInspector wall={wall} quality={data.quality} scenario={scenarios[0]} />
+      <ScenarioStrip scenarios={scenarios} />
+    </>
+  );
+}
 
 /**
  * SkylitDashboard — Full Zenith-style trading dashboard
@@ -54,6 +89,9 @@ function SkylitDashboard({
 }) {
   const [tradeMode, setTradeMode] = useState(false);
   const [selectedCell, setSelectedCell] = useState(null);
+  // T04: metric overlay state — same snapshot, raw wall identity locked while
+  // viewing activity (walls come from the payload, never recomputed per tab).
+  const [metric, setMetric] = useState("raw");
   // Grid zoom, in-frame only (2026-09-04): the expanded overlay keeps its
   // designed full density instead of compounding scale on scale.
   const [gridZoom, setGridZoom] = useState(1);
@@ -179,6 +217,8 @@ function SkylitDashboard({
         onTimeframeChange={onTimeframeChange}
         expiries={expiries}
         onExpiriesChange={onExpiriesChange}
+        metric={metric}
+        onMetricChange={setMetric}
         isLive={isLive}
         onRefresh={onRefresh}
         onExpand={() => setExpanded(true)}
@@ -186,8 +226,14 @@ function SkylitDashboard({
         tickers={tickers}
       />
 
+      {/* 2.4 Solstice status strip — Environment · Location · Setup state · Data status (T23) */}
+      <SolsticeStatusStrip data={data} spot={spot} ticker={ticker} isLive={isLive} />
+
       {/* 2.5 Exposure strip — live backend exposure-rule badges, hidden when none */}
       <ExposureStrip ticker={ticker} />
+
+      {/* 2.6 Bottom replay strip — deterministic session replay + data status */}
+      <ReplayStrip ticker={ticker} />
 
       {/* 2.6 Alert-engine strip — live detector badges (GAMMA_FLIP excluded; stays in exposure path) */}
       <AlertEngineStrip ticker={ticker} />
@@ -290,6 +336,7 @@ function SkylitDashboard({
             spot={spot}
             ticker={ticker}
             viewMode={viewMode}
+            metric={metric}
             onCellClick={handleCellClick}
             onStrikeClick={handleStrikeClick}
             windowRows={fitRows}
@@ -304,6 +351,8 @@ function SkylitDashboard({
             viewMode={viewMode}
             regime={regime}
           />
+          {/* T07/T23: selected-wall inspector + two-sided scenarios (deterministic) */}
+          <SelectedWallBlock data={data} spot={spot} selectedCell={selectedCell} />
         </div>
       </div>
 
@@ -352,6 +401,7 @@ function SkylitDashboard({
                 spot={spot}
                 ticker={ticker}
                 viewMode={viewMode}
+                metric={metric}
                 onCellClick={handleCellClick}
                 onStrikeClick={handleStrikeClick}
                 density="full"

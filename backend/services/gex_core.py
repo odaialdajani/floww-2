@@ -1105,6 +1105,69 @@ def compute_gex_grid_vendor(spot: float, contracts: list[dict[str, Any]]) -> dic
     }
 
 
+def compute_gex_grid_delta_weighted(spot: float, contracts: list[dict[str, Any]]) -> dict[str, Any]:
+    """T04: per-cell Δ-weighted grid (Σ c·u·N·|δ|) over the same scope.
+
+    Missing delta → contribution unavailable (skipped, counted). Same units
+    and sign convention as the vendor grid; walls stay raw-locked.
+    """
+    if spot <= 0 or not contracts:
+        return {"expiries": [], "strikes": [], "grid": {}, "exposure_basis": "OI_DELTA_WEIGHTED",
+                "missing_delta": 0, "formula_version": "gex.v2"}
+    grid: dict[str, dict[float, float]] = {}
+    totals: dict[float, float] = {}
+    missing = 0
+    for c in contracts:
+        oi = safe_float_or_none(c.get("oi", c.get("open_interest")))
+        if oi is None or oi <= 0:
+            continue
+        gamma = _vendor_gamma(c)
+        if gamma is None:
+            continue
+        d_raw = c.get("delta")
+        try:
+            ad = abs(float(d_raw)) if d_raw is not None else None
+        except (TypeError, ValueError):
+            ad = None
+        if ad is None or not math.isfinite(ad) or ad > 1.0 + 1e-9:
+            missing += 1
+            continue
+        ad = min(ad, 1.0)
+        strike = safe_float_or_none(c.get("strike"))
+        if strike is None or strike <= 0:
+            continue
+        expiry = c.get("expiry") or ""
+        if not expiry:
+            continue
+        mult = 100.0
+        try:
+            m_f = float(c.get("multiplier", 100.0) or 100.0)
+            if math.isfinite(m_f) and m_f > 0:
+                mult = m_f
+        except (TypeError, ValueError):
+            pass
+        sign = 1.0 if str(c.get("type", "")).lower().startswith("c") else -1.0
+        cell = sign * gamma * mult * spot * spot * 0.01 * ad * oi
+        d = grid.setdefault(expiry, {})
+        d[strike] = d.get(strike, 0.0) + cell
+        totals[strike] = totals.get(strike, 0.0) + cell
+    expiries = sorted(grid.keys())
+    strikes = sorted(totals.keys())
+
+    def _k(x: float) -> str:
+        return str(int(x)) if float(x).is_integer() else str(x)
+
+    return {
+        "expiries": expiries,
+        "strikes": strikes,
+        "grid": {e: {_k(k): v for k, v in grid[e].items()} for e in expiries},
+        "strike_totals": [{"strike": k, "gex": v} for k, v in sorted(totals.items())],
+        "exposure_basis": "OI_DELTA_WEIGHTED",
+        "missing_delta": missing,
+        "formula_version": "gex.v2",
+    }
+
+
 def find_zero_crossings(spot: float, contracts: list[dict]) -> list[float]:
     """
     Find zero-gamma flip points by linear interpolation.

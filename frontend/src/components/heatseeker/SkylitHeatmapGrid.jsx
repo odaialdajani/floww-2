@@ -64,6 +64,9 @@ function SkylitHeatmapGrid({
   spot = null,
   ticker = "",
   viewMode = "gex",
+  // T04: metric overlay — raw | delta | activity. Same snapshot, same wall
+  // identity; walls stay raw-locked. VEX/Charm viewModes keep their grids.
+  metric = "raw",
   onCellClick,
   onStrikeClick,
   // Compact (default): tight rows for the in-frame view. "full": roomy
@@ -80,7 +83,16 @@ function SkylitHeatmapGrid({
 }) {
   const gridKey = GRID_BY_VIEW[viewMode] || "grid";
 
-  const g = data?.grid || null;
+  // T04: metric overlay selects the per-cell surface from the SAME snapshot.
+  // Raw uses the main grid; delta/activity use payload metrics grids when
+  // present (same scope, no extra fetch). VEX/Charm views keep their own
+  // grids regardless of metric. Basis shown in the legend.
+  const useOverlay = metric !== "raw" && (viewMode === "gex" || viewMode === "skylit");
+  const overlay = useOverlay ? (data?.metrics?.grids || {})[metric] : null;
+  const g = (overlay && overlay.grid ? overlay : data?.grid) || null;
+  const metricBasis = useOverlay && overlay && overlay.grid
+    ? (metric === "delta" ? "OI_DELTA_WEIGHTED" : (overlay.exposure_basis || "VOLUME"))
+    : (data?.exposure_basis || "OI");
   const expiries = useMemo(() => (g?.expiries ? [...g.expiries] : []), [g]);
   const matrix = useMemo(() => (g?.[gridKey] || {}), [g, gridKey]);
 
@@ -147,12 +159,12 @@ function SkylitHeatmapGrid({
   // % change vs previous refresh, per (expiry, strike). Computed in the effect
   // (once per new asof) and HELD in state — computing it in a useMemo raced the
   // snapshot update, so badges flashed for one render then recomputed to empty.
-  // F16: keyed by ticker+view+expiries scope (not ticker alone); any provider,
+  // F16: keyed by ticker+view+metric+expiries scope (not ticker alone); any provider,
   // basis, horizon or coverage change resets badges instead of diffing across
   // incomparable scopes.
   const prevRef = useRef({ key: null, asof: null, matrix: null });
-  const scopeSig = `${(data?.expiries_used || []).join(",")}|${data?.exposure_basis || ""}|${data?.mode || ""}|${data?.data_source || ""}`;
-  const snapKey = `${ticker}|${gridKey}|${scopeSig}`;
+  const scopeSig = `${(data?.expiries_used || []).join(",")}|${metricBasis}|${data?.mode || ""}|${data?.data_source || ""}`;
+  const snapKey = `${ticker}|${gridKey}|${metric}|${scopeSig}`;
   const [badges, setBadges] = useState({});
 
   useEffect(() => {
@@ -273,6 +285,9 @@ function SkylitHeatmapGrid({
         <span className="trin-legend-label">{fmtK(maxV) || "$0"}</span>
         <span className="trin-legend-scale" title="Zero-anchored signed scale">
           {scaleMode === "locked" ? "locked scale · 0 anchored" : scaleMode === "fixed" ? "fixed scale · 0 anchored" : "relative scale · 0 anchored"}
+        </span>
+        <span className="trin-legend-basis" data-testid="skylit-grid-basis" title="Exposure basis for this overlay">
+          {metricBasis}
         </span>
         {shownStrikes.length < strikes.length && (
           <span className="trin-legend-window" data-testid="skylit-grid-window-note">

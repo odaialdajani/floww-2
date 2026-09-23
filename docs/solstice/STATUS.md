@@ -32,13 +32,43 @@ Environment: macOS `/Users/nav/Documents/GitHub/floww-2` (CLAUDE.md Windows cano
 - F25–F27: cancel→DELETE with empty-body tolerance; multileg placement `type` (preflight keeps `orderType`); Order gains openClose/averagePrice/bracket linkage/legs; added replace/search/v2/strategy-quote wrappers (disarmed, mocked in tests).
 - AI harness: `solstice_evidence.py` packet + validator + deterministic fallback; `useSolsticeSnapshot` single-flight hook; WallInspector + ScenarioStrip (deterministic first, AI optional).
 
-## Verification (this session)
-- F02 reproduction: grid ignores supplied gamma (3,810,251 both runs) vs panel 100,000/9,900,000 — confirmed before fix; vendor engine now changes output (new tests).
-- `python3 qc/audit/check_silent_excepts.py` → OK (258 files).
-- New tests: `backend/tests/solstice/test_solstice_foundation.py` (14 checks: metric invariants, put-sign trap, exact clock, timestamp preservation, vendor-gamma sensitivity, unknown states, gross ratio, order contracts).
-- Targeted suites: 91 passed (`test_heatseeker_routes velocity`, `test_heatseeker`, `test_gex_dual`, `test_public_api_integration`, `test_public_api_partial_data`, solstice foundation).
-- Frontend heatseeker: 23 suites / 87 tests passed (incl. updated scope-preservation test).
-- Inherited failures (present on main, unchanged by this branch): `/api/public/order` route exists (data-router order test), ChainCache + bars/technical fixtures with stale hardcoded dates/symbols, dash_ui plotly collection errors. Documented, not silenced.
+## Slice 2 — read-only desk completion (same branch, 23 Sep 2026)
+- T04: per-cell delta/activity grids from the same snapshot (`metrics.grids`);
+  frontend Raw/Δ-wtd/Activity switch with raw-locked walls, scope-keyed badges.
+- T09: DuckDB v2 recorder (7 tables, idempotent digests) + available-at replay
+  + session manifest; `save_snapshot` typed `ts` + `ts_iso` compat; velocity
+  mixed-type ordering hardened; rolling route requires 2+ full-chain histories.
+- T05/T07: wall registry wired into payload (`metrics.walls/nearest_walls`);
+  interaction state machine + two-sided scenarios; inspector resolves selection
+  by identity from the current snapshot.
+- T08: moneyness/OI-change/relative-volume enrichment (no inference).
+- T10: scout already side-first; counts attached to payload + `/scout` route.
+- T11: first-passage labels, walk-forward splits, baselines registry.
+- T12: disarmed exec tests (UUID idempotency, pending≠canceled, bracket
+  linkage, data-adapter has no order method). No live calls; still disarmed.
+- T13: ROLLOUT.md (shadow/SLO/rollback, read-only first).
+- T14: METHODOLOGY.md label→formula map + replay guide; control-bar popover.
+- T15: corrected regime/roots contract (sign never permits direction).
+- T16: five-pattern numeric library + distant-node relevance (no intent).
+- T17: Vanna/Vomma-separated views + expiry-removal scenario.
+- T18/T26: 27-operation registry + unknown-first measured manifest.
+- T19/T20: session permissions/playbooks + whole-contract sizing/stress.
+- T21/T22: evidence packet + 8-case adversarial corpus runner + docs.
+- T23: status strip + replay strip + guided manifest.
+- T24/T29: ticket harness + longevity/migration/ownership + retention.
+- T25: missed-opportunity causal ledger + ≤3-question review.
+- T28: Q1/Q2/Q3 frozen protocols + sizing ablation.
+- F05/F19: App.js single-flight (generation IDs + abort) + freshness-derived
+  `heatLive` replaces `!!livespot` at both Skylit mounts (surgical).
+- Routes: `/api/solstice/*` (snapshot, evidence, walls, regime, patterns,
+  vanna, scout, capability, replay, manifest) — all read-only, no writes.
+
+## Verification (slice 2)
+- `backend/tests/solstice/`: 37 passed (foundation 14 + slice2 17 + exec 4 + routes 2).
+- Targeted backend total: 128 passed; silent-except gate OK (279 files).
+- Frontend heatseeker+slice: 24 suites / 92 tests passed.
+- Inherited failures unchanged (pre-existing on main): public data-router
+  order-path test, ChainCache/bars stale fixtures, dash_ui plotly collection.
 
 ## Next
 - T04–T07: wire vendor engine into build_heatmap behind flag + wall registry integration + full snapshot route; replay recorder (T09) start capture.
