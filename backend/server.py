@@ -3328,6 +3328,100 @@ async def shutdown_ingestion() -> None:
     except Exception as e:
         log.warning(f"Ingestion shutdown error: {e}")
 
+# ============ Solstice background capture (T09, opt-in) ============
+# Tab-independent recording: when FLOWW_SOLSTICE_CAPTURE=1, a bounded loop
+# builds fresh heatmaps on cadence so the DuckDB research history grows even
+# with no browser open. Default OFF — no behavior change unless enabled.
+# Respects the shared Public budget (fresh builds debit fan-out; 429s back
+# off via the existing cooler). Market-hours guard skips nights/weekends.
+_solstice_capture_task: asyncio.Task | None = None
+_solstice_capture_running: bool = False
+
+
+def _solstice_capture_cfg() -> dict[str, Any] | None:
+    if os.getenv("FLOWW_SOLSTICE_CAPTURE", "").strip().lower() not in ("1", "true", "yes"):
+        return None
+    tickers = [t.strip().upper() for t in
+               os.getenv("FLOWW_SOLSTICE_CAPTURE_TICKERS", "SPY,QQQ").split(",") if t.strip()]
+    try:
+        interval = max(60, int(os.getenv("FLOWW_SOLSTICE_CAPTURE_SEC", "300")))
+    except (TypeError, ValueError):
+        interval = 300
+    hours_only = os.getenv("FLOWW_SOLSTICE_CAPTURE_HOURS_ONLY", "1").strip().lower() in ("1", "true", "yes")
+    return {"tickers": tickers[:6], "interval": interval, "hours_only": hours_only}
+
+
+def _solstice_in_hours(now: datetime | None = None) -> bool:
+    try:
+        from zoneinfo import ZoneInfo
+        et = (now.astimezone(ZoneInfo("America/New_York")) if now is not None
+              else datetime.now(ZoneInfo("America/New_York")))
+        return et.weekday() < 5 and (9, 0) <= (et.hour, et.minute) < (16, 30)
+    except Exception as e:
+        log.debug("capture hours check failed (capturing): %s", e)
+        return True
+
+
+async def _solstice_capture_loop(tickers: list[str], interval: int, hours_only: bool) -> None:
+    global _solstice_capture_running
+    while True:
+        try:
+            if hours_only and not _solstice_in_hours():
+                await asyncio.sleep(60)
+                continue
+            if _solstice_capture_running:
+                await asyncio.sleep(15)
+                continue
+            _solstice_capture_running = True
+            try:
+                for t in tickers:
+                    try:
+                        # Fresh impl (not the cache wrapper): guarantees a new
+                        # observation for the recorder; stale-serves never record.
+                        await _build_heatmap_impl(t, max_expiries=4)
+                    except Exception as e:
+                        log.debug("solstice capture %s failed (non-fatal): %s", t, e)
+                    await asyncio.sleep(5)  # pace tickers, share budget
+            finally:
+                _solstice_capture_running = False
+            await asyncio.sleep(interval)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.warning("solstice capture loop error (continuing): %s", e)
+            await asyncio.sleep(60)
+
+
+@app.on_event("startup")
+async def startup_solstice_capture() -> None:
+    """Start opt-in Solstice background capture (default off)."""
+    global _solstice_capture_task
+    try:
+        cfg = _solstice_capture_cfg()
+        if cfg is None:
+            return
+        _solstice_capture_task = asyncio.create_task(_solstice_capture_loop(**cfg))
+        _background_tasks.add(_solstice_capture_task)
+        _solstice_capture_task.add_done_callback(_background_tasks.discard)
+        log.info("Solstice background capture ON: %s every %ss",
+                 cfg["tickers"], cfg["interval"])
+    except Exception as e:
+        log.warning("Solstice capture startup failed (non-fatal): %s", e)
+
+
+@app.on_event("shutdown")
+async def shutdown_solstice_capture() -> None:
+    """Stop background capture on shutdown."""
+    global _solstice_capture_task
+    try:
+        if _solstice_capture_task and not _solstice_capture_task.done():
+            _solstice_capture_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await _solstice_capture_task
+    except Exception as e:
+        log.warning("Solstice capture shutdown error: %s", e)
+
+
 # ============ Paper Trading Engine ============
 from routes.paper_trading import set_paper_engine as _set_paper_engine
 from services.paper_trading import PaperTradingEngine

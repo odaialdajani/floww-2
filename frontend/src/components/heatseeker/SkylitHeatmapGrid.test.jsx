@@ -42,6 +42,27 @@ test('density="full" enlarges the table', () => {
   expect(container.querySelectorAll('tbody tr.trin-row').length).toBe(10);
 });
 
+test('strike rail shows concentration bars from aggregated rows', () => {
+  const d = mockData();
+  d.strikes = STRIKES.map((s) => ({ strike: s, gex: (s - 650) * 1000, call_gex: (s - 650) * 500, put_gex: (s - 650) * 500 }));
+  const { container } = render(<SkylitHeatmapGrid data={d} spot={650} ticker="SPY" />);
+  expect(container.querySelectorAll('[data-testid="skylit-conc-bar"]').length).toBeGreaterThan(0);
+});
+
+test('expiry headers carry coverage titles and 0DTE contribution shows', () => {
+  const today = new Date();
+  const iso = (d) => d.toISOString().slice(0, 10);
+  const e0 = iso(today);
+  const e1 = iso(new Date(today.getTime() + 86400000 * 7));
+  const grid = { [e0]: { 650: 1000 }, [e1]: { 650: 3000 } };
+  const d = { asof: new Date().toISOString(), grid: { expiries: [e0, e1], strikes: [650], grid } };
+  const { container } = render(<SkylitHeatmapGrid data={d} spot={650} ticker="SPY" />);
+  const ths = container.querySelectorAll('th.trin-th-exp');
+  expect(ths[0].title).toContain('0DTE');
+  expect(ths[1].title).toContain('7d left');
+  expect(screen.getByTestId('skylit-grid-0dte').textContent).toContain('25.0%');
+});
+
 test('cell click reports strike, expiry, value', () => {
   const onCellClick = jest.fn();
   const { container } = render(

@@ -118,10 +118,22 @@ Environment: macOS `/Users/nav/Documents/GitHub/floww-2` (CLAUDE.md Windows cano
   explicitly unprobed with reasons. Live capture: SPY 684 contracts/2 walls,
   QQQ 724/126/4, replay verified, compare honestly unavailable.
 
-## Verification (slice 4)
-- `backend/tests/solstice/`: 52 passed (incl. max-pain parity canary).
-- `cargo test` (rust/decoder-core, py3.12): 29 passed (incl. new intrinsic test).
-- Targeted backend + silent gate + frontend slice: all green (see above).
+## Slice 5 — missed-items sweep (branch solstice/sweep5-missed-items, 23 Sep 2026)
+PR #14 (sweep5 → main): OPEN, MERGEABLE; CI `ruff` PASSED. Not merged
+(needs separate authorization).
+- §8 grid gaps closed: strike-rail gross-concentration bars (no cancellation),
+  expiry headers with exact date + days-left + column coverage, 0DTE column
+  share of matrix gross. All client-side from the same snapshot.
+- Tab-independent recording: opt-in `FLOWW_SOLSTICE_CAPTURE` scheduler
+  (default OFF, 6-ticker cap, 60s floor, market-hours guard, paced, tested).
+- SOURCES.md adoption register (28 texts + cheat sheet, duplicates noted).
+- Registry carries docs base + review date (S12–S27 + pinned SDK).
+- Reconciliation test: vendor rows = cells = aggregate net/gross + walls.
+- Full-suite baselines unchanged (remaining failures verified pre-existing).
+
+## Verification (slice 5)
+- `backend/tests/solstice/`: 54 passed. Silent-except gate OK (280 files).
+- Ruff clean on all touched files. Frontend grid/slice/dash: 17 passed.
 
 ## Next
 - T04–T07: wire vendor engine into build_heatmap behind flag + wall registry integration + full snapshot route; replay recorder (T09) start capture.
