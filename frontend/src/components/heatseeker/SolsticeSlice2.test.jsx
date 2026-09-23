@@ -84,6 +84,19 @@ test("wall inspector + scenarios render for selected wall", () => {
   expect(screen.getByTestId("scenario-strip")).toBeInTheDocument();
 });
 
+test("wall inspector shows interaction state and touches", () => {
+  const React = require("react");
+  const { render: r2, screen: s2 } = require("@testing-library/react");
+  const WallInspector2 = require("./WallInspector").default;
+  r2(React.createElement(WallInspector2, {
+    wall: data.metrics.walls[0],
+    interaction: { wall_id: "w_abc", state: "testing", event: "first_touch", taps: null },
+    quality: data.quality,
+  }));
+  expect(s2.getByText("Interaction")).toBeInTheDocument();
+  expect(s2.getByText("Touches")).toBeInTheDocument();
+});
+
 test("replay strip loads manifest", async () => {
   const axios = require("axios");
   axios.get.mockImplementation(async (url) => {

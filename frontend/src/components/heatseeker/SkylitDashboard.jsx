@@ -26,18 +26,22 @@ function SelectedWallBlock({ data, spot, selectedCell }) {
   const wall = walls.find((w) => strike >= Number(w.low) && strike <= Number(w.high))
     || (walls.length ? [...walls].sort((a, b) =>
       Math.abs(Number(a.mid) - strike) - Math.abs(Number(b.mid) - strike))[0] : null);
+  // Interactions + scenarios come from the SAME snapshot when the backend
+  // attached them; the client-side pair below is a compat fallback only.
+  const interaction = (data.interactions || []).find((i) => i.wall_id === wall?.wall_id) || null;
+  const serverScenarios = data.scenarios || [];
   const side = spot != null && wall ? (spot < Number(wall.low) ? "below" : "above") : "below";
-  const scenarios = wall ? [
+  const scenarios = serverScenarios.length ? serverScenarios : (wall ? [
     { name: side === "below" ? "Bounce watch" : "Rejection watch", type: "reversal_watch",
       confirmation: `reclaim and hold ${side === "below" ? "above " + wall.low : "below " + wall.high}`,
       invalidation: `sustained acceptance ${side === "below" ? "below " + wall.low : "above " + wall.high}` },
     { name: side === "below" ? "Breakdown continuation" : "Breakout continuation", type: "continuation",
       confirmation: "acceptance beyond zone + follow-through/retest",
       invalidation: `reclaim and hold ${side === "below" ? "above " + wall.low : "below " + wall.high}` },
-  ] : [];
+  ] : []);
   return (
     <>
-      <WallInspector wall={wall} metrics={data.metrics} grids={data.metrics?.grids} quality={data.quality} scenario={scenarios[0]} />
+      <WallInspector wall={wall} interaction={interaction} metrics={data.metrics} grids={data.metrics?.grids} quality={data.quality} scenario={scenarios[0]} />
       <ScenarioStrip scenarios={scenarios} />
     </>
   );

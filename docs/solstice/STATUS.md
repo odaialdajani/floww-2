@@ -118,6 +118,19 @@ Environment: macOS `/Users/nav/Documents/GitHub/floww-2` (CLAUDE.md Windows cano
   explicitly unprobed with reasons. Live capture: SPY 684 contracts/2 walls,
   QQQ 724/126/4, replay verified, compare honestly unavailable.
 
+## Slice 9 — merge follow-through (branch solstice/sweep9-followup, 23 Sep 2026)
+- Envelope zone-bug fix, window volume deltas + compare UI, vanna FD check.
+- Interactions + scenarios attached to payload (same snapshot for UI and AI);
+  inspector renders state/event/touches.
+- File-backed DuckDB via DUCKDB_PATH (crash-safe fallback to memory).
+- RECONCILIATION.md (PRs vs plan status table) + FROZEN_PROTOCOL.md (frozen
+  hypotheses/baselines/params/outcomes/costs, collection inventory: 2
+  snapshots, 0 outcome events).
+
+## Verification (slice 9)
+- Solstice + envelope: 70 passed. Ruff + silent gate clean.
+- Frontend heatseeker+slice: 24 suites / 97 passed.
+
 ## Slice 8 — user-gap closure (branch solstice/sweep8-close-gaps, 23 Sep 2026)
 - OI dating measured: 2,296 SPY contracts, `oi_effective_date` all None →
   OI cadence unobservable via vendor field; `OI_EFFECTIVE_UNKNOWN` registered;

@@ -234,3 +234,21 @@ def test_t08_enrichment_no_inference():
     cur = [dict(_c(500, "call", 0.05, 150), oi_effective_date="2030-01-02")]
     oc = oi_changes(cur, prev)
     assert oc["changes"][0]["delta"] == 50
+
+
+def test_interaction_first_sighting_unknowns():
+    from services.wall_interaction import scenario_for, transition
+    wall = {"wall_id": "w_x", "low": 498.0, "high": 502.0, "mid": 500.0}
+    tr = transition("unobserved", 500.0, wall, last={"gap": False, "approach_side": "above"})
+    assert tr["state"] == "testing" and tr["event"] == "first_touch"
+    # Session gap breaks continuity — never a fabricated touch history.
+    tr2 = transition("testing", 500.0, wall, last={"gap": True})
+    assert tr2["state"] == "unobserved" and tr2["event"] == "continuity_break"
+    assert len(scenario_for(wall, 500.0)) == 2
+
+
+def test_duckdb_path_fallback_never_blocks_startup(monkeypatch):
+    import services.duckdb_engine as eng
+    monkeypatch.setenv("DUCKDB_PATH", "/nonexistent-dir-xyz/q.duckdb")
+    db = eng._open_shared_db()
+    assert db is not None and db.conn is not None

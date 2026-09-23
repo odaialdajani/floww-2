@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 import threading
 from datetime import UTC, datetime
 from functools import wraps
@@ -537,7 +538,20 @@ class DuckDBEngine:
         return self._conn
 
 
-db = DuckDBEngine()
+def _open_shared_db() -> DuckDBEngine:
+    # T09 persistence: file-backed storage when DUCKDB_PATH is set so the
+    # research recorder survives restarts; default :memory: (no behavior
+    # change). An unusable path must never prevent startup — fall back.
+    path = os.environ.get("DUCKDB_PATH", ":memory:") or ":memory:"
+    if path != ":memory:":
+        try:
+            return DuckDBEngine(path)
+        except Exception as e:
+            logger.warning("DUCKDB_PATH=%s unusable (%s) — falling back to :memory:", path, e)
+    return DuckDBEngine()
+
+
+db = _open_shared_db()
 # Never let test teardown close the shared app singleton.
 db._is_shared_singleton = True
 DuckDBEngine._live_instances.remove(db)
