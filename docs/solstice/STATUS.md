@@ -118,6 +118,19 @@ Environment: macOS `/Users/nav/Documents/GitHub/floww-2` (CLAUDE.md Windows cano
   explicitly unprobed with reasons. Live capture: SPY 684 contracts/2 walls,
   QQQ 724/126/4, replay verified, compare honestly unavailable.
 
+## Slice 10 — Revision-4 P01+P02 (branch solstice/r4-p01-p02, 23 Sep 2026)
+- P01: R4-01..R4-18 reconciled against head in RECONCILIATION.md (R4-01..04
+  repaired with red-first evidence; R4-05..18 confirmed, mapped to P03–P12).
+- P02: content-hashed immutable snapshot IDs + deepcopy; unknown-first typed
+  quality adapter with separate clocks; evidence endpoint serves recorded-ID
+  or full-scope rebuild with identical query keys; strict validator (typed
+  number binding, required schema/refs, failure≠pass, real injections).
+- Comprehension Q1 on hold per R4 packet (unbiased UI study first).
+
+## Verification (slice 10)
+- Red-first: 7/8 new P02 tests failed on baseline, 8/8 pass after.
+- Solstice suite: 68 passed, incl. updated T22 model-mode tests.
+
 ## Slice 9 — merge follow-through (branch solstice/sweep9-followup, 23 Sep 2026)
 - Envelope zone-bug fix, window volume deltas + compare UI, vanna FD check.
 - Interactions + scenarios attached to payload (same snapshot for UI and AI);

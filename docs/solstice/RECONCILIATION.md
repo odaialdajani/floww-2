@@ -1,5 +1,31 @@
 # Solstice RECONCILIATION — merged PRs vs Revision-3 master plan (23 Sep 2026)
 
+## Revision-4 audit reconciliation (P01, branch solstice/r4-p01-p02)
+
+Independent R4 audit of `5f325e10` reproduced 19 counterexamples (A01–A19).
+Status per finding at current head — verified, not assumed:
+
+| ID | Verdict | Evidence / target |
+|---|---|---|
+| R4-01 snapshot IDs/content | **Repaired P02** | content-hash IDs + deepcopy immutability; red tests fail-before/pass-after |
+| R4-02 quality unknown-first/clocks | **Repaired P02** | `normalize_quality()`; unknown→unavailable/ineligible; clocks separate |
+| R4-03 evidence scope drift | **Repaired P02** | evidence-by-recorded-ID + full-scope rebuild, identical query keys |
+| R4-04 validator/corpus strictness | **Repaired P02** | typed number binding, required schema/refs, failure≠pass, real injections |
+| R4-05 interaction side semantics | Confirmed by inspection | Target: P04 explicit side vocabulary + dwell clocks |
+| R4-06 interaction persistence/selection | Confirmed by inspection | Target: P04 persisted states + scoped-ID joins (P05 selection) |
+| R4-07 same-side nearest/gaps/IDs | Confirmed by inspection | Target: P03 below/inside/above, zero-mass, gap clustering |
+| R4-08 scout freshness/0DTE/NaN | Confirmed by inspection | Target: P06 eligibility gates |
+| R4-09 session calendar/0DTE clock | Confirmed by inspection | Target: P06 calendars + horizons |
+| R4-10 OI baseline dating | Confirmed by inspection | Target: P03 dated-pair matching |
+| R4-11 outcome chronology | Confirmed by inspection | Target: P10 encounter-first labels |
+| R4-12 study scoring/quiz | Confirmed by inspection | Target: P09 actual-grid tasks (Q1 on hold per packet) |
+| R4-13 recorder atomicity/coverage | Confirmed by inspection | Target: P07 atomic commit + recovery tests |
+| R4-14 window activity/missing metric | Confirmed by inspection | Target: P03 matched-epoch windows, no raw fallback |
+| R4-15 local ratios/replay scope | Confirmed by inspection | Target: P05 wall-local values, real replay |
+| R4-16 patterns/regime/timer bounds | Confirmed by inspection | Target: P12 research quarantine |
+| R4-17 ablation config/costs | Confirmed by inspection | Target: P10 single frozen config + costed outcomes |
+| R4-18 capability/event producers | Confirmed by inspection | Target: P07/P11 production writers |
+
 Scope key: ✅ implemented + verified · 🔶 implemented, validation needs
 sessions/time/user · ⬜ incomplete (no code) · ⛔ externally blocked.
 Evidence = tests/docs/live runs in this repo. "56 tests pass" never stands in

@@ -168,6 +168,44 @@ def test_t22_eval_corpus_and_fallback():
     from services.solstice_ai_eval import run_corpus
     rep = run_corpus()
     assert rep["n"] == 8 and rep["passed"] == 8
+    assert rep["model_evaluated"] is False  # fallback-availability only
+
+
+def test_r4_04_model_modes():
+    from services.solstice_ai_eval import _packet_for, CASES, run_corpus
+    from services.solstice_evidence import deterministic_fallback, validate_explainer_output
+
+    def honest(pkt):
+        out = deterministic_fallback(pkt)
+        out["observations"] = [{"text": "spot is 500",
+                                "evidence_refs": ["fact-spot"],
+                                "values": [{"fact_id": "fact-spot", "value": 500.0}]}]
+        return out
+
+    rep = run_corpus(honest)
+    assert rep["model_evaluated"] is True and rep["passed"] == 8
+
+    def fabricator(pkt):
+        out = honest(pkt)
+        out["observations"][0]["values"] = [{"fact_id": "fact-spot", "value": 12345.0}]
+        return out
+
+    rep = run_corpus(fabricator)
+    assert rep["passed"] == 0
+
+    def raiser(pkt):
+        raise RuntimeError("model blew up")
+
+    rep = run_corpus(raiser)
+    assert rep["passed"] == 0
+    assert all(r["mode"] == "model" and "model_error" in r for r in rep["results"])
+
+    # Injection text is delivered into the packet (quarantined, not quotable).
+    pkt = _packet_for([c for c in CASES if c["id"] == "injected_instruction"][0])
+    assert any(f.get("kind") == "UNTRUSTED_USER_TEXT" for f in pkt["facts"])
+    bad = honest(pkt)
+    bad["observations"][0]["evidence_refs"] = ["fact-user-text"]
+    assert validate_explainer_output(bad, pkt) != []
 
 
 def test_t25_missed_ledger_causal():
