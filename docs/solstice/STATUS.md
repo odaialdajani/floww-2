@@ -1,7 +1,9 @@
 # Solstice STATUS — T00 baseline + T01–T03 foundation (living receipt)
 
-Base: `main` 61d17917276b92913ff64339f9824b8a19d9b36a (12 Sep 2026).
-Work branch: `solstice/t00-t03-foundation` (from main, not from feat/ticker-az-paging).
+Base: local `main` 5db4971a (includes open-PR #11 retry-404 work) stacked on
+origin/main 61d17917276b92913ff64339f9824b8a19d9b36a (12 Sep 2026).
+Work branch: `solstice/t00-t03-foundation` (from local main; includes #11, avoids duplicating it).
+Correction to earlier receipt line: base is NOT bare origin/main — local main already contains #11.
 Environment: macOS `/Users/nav/Documents/GitHub/floww-2` (CLAUDE.md Windows canonical path does not apply here; reconciled).
 
 ## Branch / PR disposition (rechecked 23 Sep 2026)
