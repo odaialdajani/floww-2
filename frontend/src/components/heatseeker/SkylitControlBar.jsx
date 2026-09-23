@@ -25,6 +25,10 @@ function SkylitControlBar({
   onRefresh,
   expiries = 4,
   onExpiriesChange,
+  // T04: primary metric choices — Raw, Δ-weighted, Activity. Gross/net and
+  // window length progress through the inspector; advanced Greeks separately.
+  metric = "raw",
+  onMetricChange,
   // Optional: open the full-page grid overlay (wired by SkylitDashboard;
   // frozen App.js call sites omit it and the button degrades to a no-op).
   onExpand,
@@ -128,6 +132,24 @@ function SkylitControlBar({
             <path d="M12 16v-4" /><path d="M12 8h.01" />
           </svg>
         </button>
+        {/* T04 metric switch: same snapshot, different overlay (no new fetch) */}
+        <div className="skylit-metric-switch" data-testid="skylit-metric-switch" title="Metric overlay — same snapshot, same walls">
+          {[
+            ["raw", "Raw", "gex_net_v1 / gex_gross_v1 — call-minus-put proxy + gross concentration (USD/1% move)"],
+            ["delta", "Δ-wtd", "dadgex_net_v1 / dadgex_gross_v1 — experimental moneyness weighting, not flow"],
+            ["activity", "Activity", "volume_gamma_v1 — session turnover, not positioning"],
+          ].map(([m, label, tip]) => (
+            <button
+              key={m}
+              className={`skylit-mode-btn${metric === m ? " active" : ""}`}
+              onClick={() => onMetricChange && onMetricChange(m)}
+              title={tip}
+              data-testid={`skylit-metric-${m}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         {showInfo && (
           <div
             className="skylit-info-popover"
@@ -136,6 +158,10 @@ function SkylitControlBar({
           >
             <div><b>GEX</b> — gold/teal cells: dealer gamma walls (King ★ = max).</div>
             <div><b>VEX</b> — blue/purple cells: vanna exposure regime.</div>
+            <div><b>Raw</b> = Σc·u·N (net) + Σu·N (gross), u=Γ·m·S²×0.01, gex.v2.</div>
+            <div><b>Δ-wtd</b> = Σc·u·N·|δ| — experimental weighting, not buying/selling.</div>
+            <div><b>Activity</b> = Σc·u·V — turnover, not new positions. Trade side unavailable in Public-only mode.</div>
+            <div>Regime sign never permits direction alone. Unknown/no-data are valid states.</div>
             <div>Click a cell to inspect it · arm <b>Trade</b> to open Quick Trade.</div>
             <div>Data: Public.com live chain → cvserver → yfinance.</div>
           </div>

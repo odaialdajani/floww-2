@@ -90,11 +90,12 @@ class DualGexCalculator:
     )
 
     @staticmethod
-    def _resolve_volume(contract: dict, oi_fallback: float) -> float:
-        """Resolve contract volume, gracefully falling back to OI.
+    def _resolve_volume(contract: dict, oi_fallback: float) -> float | None:
+        """F13: resolve contract volume WITHOUT OI substitution.
 
-        This mirrors the aaguiar10/gflows volume-for-OI convention used
-        in ``is_short_dte``: when 'volume' is missing, substitute OI.
+        Missing/invalid volume → None (unknown). Callers skip the contract for
+        the volume leg and record coverage; they never relabel OI as activity.
+        The oi_fallback arg is retained for signature compat and ignored.
         """
         for key in DualGexCalculator._VOLUME_KEYS:
             v = contract.get(key)
@@ -104,13 +105,19 @@ class DualGexCalculator:
                 f = float(v)
             except (TypeError, ValueError):
                 continue
-            if f >= 0.0:
+            if f >= 0.0 and f == f and f != float("inf"):
                 return f
-        return oi_fallback
+        return None
 
     @staticmethod
     def compute(spot: float, contracts: list[dict]) -> dict[str, Any]:
-        """Return both 1D GEX series + summary metrics + activity badge."""
+        """Return both 1D GEX series + summary metrics + activity badge.
+
+        F14: gross-based activity denominator with minimum support and
+        unknown/undefined states. Legacy net/net ratio retained as
+        `activity_ratio_legacy_net` (clearly named). Zero denominator →
+        None/unknown, never 0/quiet.
+        """
         empty: dict[str, Any] = {
             "strikes": [],
             "gex_oi_1d": [],
@@ -120,27 +127,43 @@ class DualGexCalculator:
             "net_gex_volume": 0.0,
             "gex_oi_total": 0.0,
             "gex_volume_total": 0.0,
-            "activity_ratio": 0.0,
-            "activity_badge": "quiet",
+            "activity_ratio": None,
+            "activity_ratio_legacy_net": None,
+            "activity_ratio_basis": "GROSS_UNKNOWN",
+            "activity_badge": "unknown",
             "positive_gex_oi": 0.0,
             "positive_gex_volume": 0.0,
+            "volume_coverage": {"usable": 0, "missing": 0},
         }
         if not contracts or spot <= 0.0:
             return empty
 
-        n = len(contracts)
+        usable: list[dict] = []
+        missing_vol = 0
+        for c in contracts:
+            v = DualGexCalculator._resolve_volume(c, 0.0)
+            if v is None:
+                missing_vol += 1
+                continue
+            usable.append(c)
+        if not usable:
+            out = dict(empty)
+            out["volume_coverage"] = {"usable": 0, "missing": missing_vol}
+            return out
+
+        n = len(usable)
         strikes = np.empty(n, dtype=np.float64)
         gammas = np.empty(n, dtype=np.float64)
         ois = np.empty(n, dtype=np.float64)
         vols = np.empty(n, dtype=np.float64)
         types = np.empty(n, dtype=np.int64)
 
-        for i, c in enumerate(contracts):
+        for i, c in enumerate(usable):
             strikes[i] = float(GexAggregator._resolve(c, GexAggregator._STRIKE_KEYS))
             gammas[i] = float(GexAggregator._resolve(c, GexAggregator._GAMMA_KEYS))
             oi = float(GexAggregator._resolve(c, GexAggregator._OI_KEYS))
             ois[i] = oi
-            vols[i] = DualGexCalculator._resolve_volume(c, oi)
+            vols[i] = float(DualGexCalculator._resolve_volume(c, 0.0) or 0.0)
             types[i] = GexAggregator._parse_option_type(
                 GexAggregator._resolve(c, GexAggregator._TYPE_KEYS)
             )
@@ -157,14 +180,26 @@ class DualGexCalculator:
         pos_vol = float(np.sum(gex_volume_1d[gex_volume_1d > 0]))
         net_oi = float(np.sum(gex_oi_1d))
         net_vol = float(np.sum(gex_volume_1d))
+        gross_oi = float(np.sum(np.abs(gex_oi_1d)))
+        gross_vol = float(np.sum(np.abs(gex_volume_1d)))
 
-        ratio = abs(net_vol / net_oi) if abs(net_oi) > 1e-9 else 0.0
-        if ratio > 1.0 and net_vol != 0.0:
-            badge = "live"
-        elif ratio > 0.3 and net_vol != 0.0:
-            badge = "active"
+        legacy = abs(net_vol / net_oi) if abs(net_oi) > 1e-9 else None
+        MIN_SUPPORT = 1e3  # minimum gross exposure for a defined ratio
+        if gross_oi < MIN_SUPPORT:
+            ratio = None
+            basis = "GROSS_INSUFFICIENT_SUPPORT"
+            badge = "unknown"
         else:
-            badge = "quiet"
+            ratio = gross_vol / gross_oi
+            basis = "GROSS"
+            if gross_vol <= 0:
+                badge = "unknown"
+            elif ratio > 1.0:
+                badge = "live"
+            elif ratio > 0.3:
+                badge = "active"
+            else:
+                badge = "quiet"
 
         return {
             "strikes": unique_strikes.tolist(),
@@ -177,16 +212,21 @@ class DualGexCalculator:
             "net_gex_volume": net_vol,
             "gex_oi_total": pos_oi,
             "gex_volume_total": net_vol,
-            "activity_ratio": round(ratio, 4),
+            "gross_gex_oi": gross_oi,
+            "gross_gex_volume": gross_vol,
+            "activity_ratio": round(ratio, 4) if ratio is not None else None,
+            "activity_ratio_legacy_net": round(legacy, 4) if legacy is not None else None,
+            "activity_ratio_basis": basis,
+            "volume_coverage": {"usable": n, "missing": missing_vol},
             "_spot": float(spot) if spot else None,  # for paper metrics computation
             "activity_badge": badge,
         }
 
 
 # Convenience for callers that just want the badge (UI surfaces).
-def activity_badge_from_ratio(ratio: float, vol_nonzero: bool = True) -> str:
-    if not vol_nonzero:
-        return "quiet"
+def activity_badge_from_ratio(ratio: float | None, vol_nonzero: bool = True) -> str:
+    if ratio is None or not vol_nonzero:
+        return "unknown"
     if ratio > 1.0:
         return "live"
     if ratio > 0.3:

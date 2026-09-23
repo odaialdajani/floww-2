@@ -81,8 +81,9 @@ def _noise_floor(ticker: str, spot: float | None) -> float | None:
             v = float(rv or 0)
         if spot and v:
             return round(float(spot) * float(v) * 0.5, 2)
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug("noise floor unavailable for %s: %s", ticker, e)
     return None
 
 

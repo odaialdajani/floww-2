@@ -68,6 +68,19 @@ def safe_float(v, default=0.0):
         return default
 
 
+def safe_float_or_none(v) -> float | None:
+    """F03/F13: unknown stays None (never 0-fill). NaN/Inf/invalid → None."""
+    if v is None:
+        return None
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(f) or math.isinf(f):
+        return None
+    return f
+
+
 def classify_nodes_rust(rows: list[dict[str, Any]], spot: float) -> dict[str, Any] | None:
     """Rust classify_nodes via decoder_core; None when unavailable/failed."""
     if not _RUST_GEX:
@@ -669,17 +682,25 @@ def classify_nodes(strikes: list[dict[str, Any]], spot: float) -> dict[str, Any]
         charm_flip = spot
 
     max_pain = None
+    max_pain_basis = "unavailable"
     if strikes:
+        # Proper max-pain: expiry-specific call intrinsic max(K-S,0)*call_OI +
+        # put intrinsic max(S-K,0)*put_OI, minimized over candidate settle S.
+        # The prior total-OI×|distance| statistic is retained as
+        # `oi_weighted_center` for compat but MUST NOT be presented as max pain.
         strike_range = sorted(set(s["strike"] for s in strikes))
         min_pain = float("inf")
         for test_strike in strike_range:
             pain = 0.0
             for s in strikes:
-                oi = s.get("total_oi", 0) or 0
-                pain += oi * abs(s["strike"] - test_strike)
+                call_oi = s.get("call_oi", 0) or 0
+                put_oi = s.get("put_oi", 0) or 0
+                pain += call_oi * max(test_strike - s["strike"], 0.0)
+                pain += put_oi * max(s["strike"] - test_strike, 0.0)
             if pain < min_pain:
                 min_pain = pain
                 max_pain = test_strike
+        max_pain_basis = "call_put_intrinsic_expiry_scoped" if max_pain is not None else "unavailable"
 
     total_call_oi = sum(s.get("call_oi", 0) or 0 for s in strikes)
     total_put_oi = sum(s.get("put_oi", 0) or 0 for s in strikes)
@@ -723,6 +744,7 @@ def classify_nodes(strikes: list[dict[str, Any]], spot: float) -> dict[str, Any]
         "total_zomma": round(total_zomma, 4),
         "charm_flip": round(charm_flip, 4),
         "max_pain": max_pain,
+        "max_pain_basis": max_pain_basis,
         "put_call_ratio": round(put_call_ratio, 4) if put_call_ratio is not None else None,
         "_spot": round(spot, 2),
         "risk_metrics": {
@@ -981,6 +1003,169 @@ def compute_gex_by_strike_volume(spot: float, contracts: list[dict[str, Any]], t
         else:
             bucket["put_gex"] += gex_unit
     return sorted(agg.values(), key=lambda r: r["strike"])
+
+
+# ── Solstice canonical vendor-gamma engine (F02) ──────────────────────────
+# Grid, row totals, sidebar and inspector MUST agree. Vendor gamma is the
+# default current-chain input when valid; local BS gamma is an explicitly
+# versioned scenario path. Changing supplied gamma MUST change the result.
+
+def _vendor_gamma(c: dict[str, Any]) -> float | None:
+    g = safe_float_or_none(c.get("gamma"))
+    if g is None or g < 0 or g == 0:
+        return None
+    return g
+
+
+def compute_gex_by_strike_vendor(spot: float, contracts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """F02 canonical: per-strike net GEX from SUPPLIED vendor gamma.
+
+    Same dollar convention (u=Γ·m·S²×0.01) and sign as heatseeker._gex_per_strike.
+    Unknown/missing gamma or OI → skipped with counts; never BS-recomputed here.
+    """
+    if spot <= 0 or not contracts:
+        return []
+    agg: dict[float, dict[str, float]] = {}
+    for c in contracts:
+        oi = safe_float_or_none(c.get("oi", c.get("open_interest")))
+        if oi is None or oi <= 0:
+            continue
+        gamma = _vendor_gamma(c)
+        if gamma is None:
+            continue
+        strike = safe_float_or_none(c.get("strike"))
+        if strike is None or strike <= 0:
+            continue
+        mult = 100.0
+        try:
+            m_raw = c.get("multiplier", 100.0)
+            m_f = float(m_raw) if m_raw is not None else 100.0
+            if math.isfinite(m_f) and m_f > 0:
+                mult = m_f
+        except (TypeError, ValueError):
+            pass
+        gex_unit = gamma * oi * mult * spot * spot * 0.01
+        sign = 1.0 if str(c.get("type", "")).lower().startswith("c") else -1.0
+        bucket = agg.setdefault(strike, {"strike": strike, "gex": 0.0, "call_gex": 0.0,
+                                         "put_gex": 0.0, "total_oi": 0.0})
+        bucket["gex"] += sign * gex_unit
+        if sign > 0:
+            bucket["call_gex"] += gex_unit
+        else:
+            bucket["put_gex"] += gex_unit
+        bucket["total_oi"] += oi
+    return sorted(agg.values(), key=lambda r: r["strike"])
+
+
+def compute_gex_grid_vendor(spot: float, contracts: list[dict[str, Any]]) -> dict[str, Any]:
+    """F02 canonical: 2D grid from SUPPLIED vendor gamma (same scope as compute_gex_grid)."""
+    if spot <= 0 or not contracts:
+        return {"expiries": [], "strikes": [], "grid": {}, "exposure_basis": "OI_VENDOR"}
+    grid: dict[str, dict[float, float]] = {}
+    totals: dict[float, float] = {}
+    for c in contracts:
+        oi = safe_float_or_none(c.get("oi", c.get("open_interest")))
+        if oi is None or oi <= 0:
+            continue
+        gamma = _vendor_gamma(c)
+        if gamma is None:
+            continue
+        strike = safe_float_or_none(c.get("strike"))
+        if strike is None or strike <= 0:
+            continue
+        expiry = c.get("expiry") or ""
+        if not expiry:
+            continue
+        mult = 100.0
+        try:
+            m_raw = c.get("multiplier", 100.0)
+            m_f = float(m_raw) if m_raw is not None else 100.0
+            if math.isfinite(m_f) and m_f > 0:
+                mult = m_f
+        except (TypeError, ValueError):
+            pass
+        sign = 1.0 if str(c.get("type", "")).lower().startswith("c") else -1.0
+        cell = sign * gamma * oi * mult * spot * spot * 0.01
+        d = grid.setdefault(expiry, {})
+        d[strike] = d.get(strike, 0.0) + cell
+        totals[strike] = totals.get(strike, 0.0) + cell
+    expiries = sorted(grid.keys())
+    strikes = sorted(totals.keys())
+
+    def _k(x: float) -> str:
+        return str(int(x)) if float(x).is_integer() else str(x)
+
+    return {
+        "expiries": expiries,
+        "strikes": strikes,
+        "grid": {e: {_k(k): v for k, v in grid[e].items()} for e in expiries},
+        "strike_totals": [{"strike": k, "gex": v} for k, v in sorted(totals.items())],
+        "exposure_basis": "OI_VENDOR",
+        "formula_version": "gex.v2",
+    }
+
+
+def compute_gex_grid_delta_weighted(spot: float, contracts: list[dict[str, Any]]) -> dict[str, Any]:
+    """T04: per-cell Δ-weighted grid (Σ c·u·N·|δ|) over the same scope.
+
+    Missing delta → contribution unavailable (skipped, counted). Same units
+    and sign convention as the vendor grid; walls stay raw-locked.
+    """
+    if spot <= 0 or not contracts:
+        return {"expiries": [], "strikes": [], "grid": {}, "exposure_basis": "OI_DELTA_WEIGHTED",
+                "missing_delta": 0, "formula_version": "gex.v2"}
+    grid: dict[str, dict[float, float]] = {}
+    totals: dict[float, float] = {}
+    missing = 0
+    for c in contracts:
+        oi = safe_float_or_none(c.get("oi", c.get("open_interest")))
+        if oi is None or oi <= 0:
+            continue
+        gamma = _vendor_gamma(c)
+        if gamma is None:
+            continue
+        d_raw = c.get("delta")
+        try:
+            ad = abs(float(d_raw)) if d_raw is not None else None
+        except (TypeError, ValueError):
+            ad = None
+        if ad is None or not math.isfinite(ad) or ad > 1.0 + 1e-9:
+            missing += 1
+            continue
+        ad = min(ad, 1.0)
+        strike = safe_float_or_none(c.get("strike"))
+        if strike is None or strike <= 0:
+            continue
+        expiry = c.get("expiry") or ""
+        if not expiry:
+            continue
+        mult = 100.0
+        try:
+            m_f = float(c.get("multiplier", 100.0) or 100.0)
+            if math.isfinite(m_f) and m_f > 0:
+                mult = m_f
+        except (TypeError, ValueError):
+            pass
+        sign = 1.0 if str(c.get("type", "")).lower().startswith("c") else -1.0
+        cell = sign * gamma * mult * spot * spot * 0.01 * ad * oi
+        d = grid.setdefault(expiry, {})
+        d[strike] = d.get(strike, 0.0) + cell
+        totals[strike] = totals.get(strike, 0.0) + cell
+    expiries = sorted(grid.keys())
+    strikes = sorted(totals.keys())
+
+    def _k(x: float) -> str:
+        return str(int(x)) if float(x).is_integer() else str(x)
+
+    return {
+        "expiries": expiries,
+        "strikes": strikes,
+        "grid": {e: {_k(k): v for k, v in grid[e].items()} for e in expiries},
+        "strike_totals": [{"strike": k, "gex": v} for k, v in sorted(totals.items())],
+        "exposure_basis": "OI_DELTA_WEIGHTED",
+        "missing_delta": missing,
+        "formula_version": "gex.v2",
+    }
 
 
 def find_zero_crossings(spot: float, contracts: list[dict]) -> list[float]:

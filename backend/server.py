@@ -428,9 +428,14 @@ def cache_set(key: str, data: Any):
 
 async def save_snapshot(ticker: str, payload: dict[str, Any]):
     try:
+        # F12: typed UTC datetime for ts (ISO string kept as ts_iso for compat
+        # readers); research history lives in DuckDB (heatmap_history), this
+        # Mongo cache stays a short 50-row display buffer.
+        now = datetime.now(UTC)
         doc = {
             "ticker": ticker,
-            "ts": datetime.now(UTC).isoformat(),
+            "ts": now,
+            "ts_iso": now.isoformat(),
             "spot": payload["spot"],
             "king_strike": payload["nodes"]["king"]["strike"] if payload["nodes"].get("king") else None,
             "king_gex": payload["nodes"]["king"]["gex"] if payload["nodes"].get("king") else None,
@@ -450,9 +455,27 @@ async def save_snapshot(ticker: str, payload: dict[str, Any]):
 
 
 async def velocity_and_rolling(ticker: str, current_nodes: dict[str, Any]) -> dict[str, Any]:
-    """Compute rate of change vs prior snapshot + rolling floor/ceiling sequence."""
+    """Compute rate of change vs prior snapshot + rolling floor/ceiling sequence.
+
+    F12 migration: ts may be datetime (new) or ISO string (legacy rows).
+    Normalizes in Python after fetch so mixed-type storage never misorders.
+    """
     cur = db.snapshots.find({"ticker": ticker}, {"_id": 0}).sort("ts", -1).limit(10)
     history = [d async for d in cur]
+
+    def _ts_key(d: dict) -> float:
+        ts = d.get("ts")
+        if isinstance(ts, datetime):
+            t = ts if ts.tzinfo else ts.replace(tzinfo=UTC)
+            return t.timestamp()
+        iso = d.get("ts_iso") or (ts if isinstance(ts, str) else None)
+        try:
+            dt = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+            return (dt if dt.tzinfo else dt.replace(tzinfo=UTC)).timestamp()
+        except (TypeError, ValueError):
+            return 0.0
+
+    history.sort(key=_ts_key, reverse=True)
     if len(history) < 1:
         return {"velocity_score": 0, "rolling_floor": "stable", "rolling_ceiling": "stable", "history": []}
 
@@ -1170,20 +1193,24 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         raw["contracts"] = filtered
         raw["expiries"] = sorted({c["expiry"] for c in raw["contracts"]})
 
-    # Choose GEX computation: volume-weighted for scalp, OI for normal
+    # F07: every supported mode produces a real 2D matrix. Scalp is a
+    # horizon/display/weighting combination — not an empty grid.
+    exposure_basis = "OI"
     if scalp:
         strikes = compute_gex_by_strike_volume(spot, raw["contracts"], ticker)
-        grid = {"expiries": raw["expiries"], "strikes": [], "grid": {}, "strike_totals": []}
+        from services.gex_core import compute_gex_grid_volume
+        grid = compute_gex_grid_volume(spot, raw["contracts"], ticker)
+        exposure_basis = "VOLUME_SCALP"
     else:
         strikes = compute_gex_by_strike(spot, raw["contracts"], ticker)
         grid = compute_gex_grid(spot, raw["contracts"], ticker)
         if not strikes and any((c.get("volume") or 0) > 0 for c in raw["contracts"]):
-            # Yahoo suppresses OI in certain windows (overnight/throttle) — all OI=0
-            # would blank the desk. Volume-weighted GEX keeps it alive; tagged so the
-            # UI can show the degraded source honestly.
+            # OI unavailable — volume-weighted grid keeps the desk alive but the
+            # basis is explicit (F13): never relabelled as raw OI GEX.
             from services.gex_core import compute_gex_grid_volume
             strikes = compute_gex_by_strike_volume(spot, raw["contracts"], ticker)
             grid = compute_gex_grid_volume(spot, raw["contracts"], ticker)
+            exposure_basis = "VOLUME_FALLBACK_OI_UNKNOWN"
             log.warning(f"build_heatmap: OI unavailable for {ticker} — volume-weighted GEX fallback (grid populated)")
 
     # Band: scalp=±2%, day=±15%, swing=±25%
@@ -1217,31 +1244,55 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                           key=lambda s: abs(s - spot))
     kept = _top_up_strike_set(band_set, full_ordered, MIN_GRID_STRIKES)
     strikes = [s for s in strikes if s["strike"] in kept]
-    if not scalp:
-        grid["strikes"] = [k for k in grid["strikes"] if k in kept]
-        grid["strike_totals"] = [s for s in grid["strike_totals"] if s["strike"] in kept]
+    grid["strikes"] = [k for k in grid.get("strikes", []) if k in kept]
+    grid["strike_totals"] = [s for s in grid.get("strike_totals", []) if s["strike"] in kept]
 
-    # Tag fresh/tested via tap counts
+    # F09/F10: taps are observed touches; unknown history stays unknown.
+    # No calibrated outcome probability is emitted here (tap_prob=None).
     tap_map: dict[float, int] = {}
+    taps_unknown = False
     if with_taps and not scalp:
-        tap_map = await tap_counts(ticker, [s["strike"] for s in strikes], days=5)
+        try:
+            tap_map = await tap_counts(ticker, [s["strike"] for s in strikes], days=5)
+        except Exception as e:
+            log.debug("tap_counts failed for %s (unknown history): %s", ticker, e)
+            taps_unknown = True
+    else:
+        taps_unknown = True
     for s in strikes:
         if scalp:
-            s["taps"] = 0
-            s["lifecycle"] = "live"
-            s["tap_prob"] = 1.0
+            s["taps"] = None
+            s["lifecycle"] = "unknown"
+            s["tap_prob"] = None
+            s["tap_reason"] = "SCALP_NO_HISTORY"
+        elif taps_unknown and not tap_map:
+            s["taps"] = None
+            s["lifecycle"] = "unknown"
+            s["tap_prob"] = None
+            s["tap_reason"] = "HISTORY_UNKNOWN"
         else:
-            tc = tap_map.get(s["strike"], 0)
-            s["taps"] = tc
-            if tc == 0:
+            tc = tap_map.get(s["strike"])
+            if tc is None:
+                s["taps"] = None
+                s["lifecycle"] = "unknown"
+                s["tap_prob"] = None
+                s["tap_reason"] = "HISTORY_UNKNOWN"
+            elif tc == 0:
                 s["lifecycle"] = "fresh"
+                s["taps"] = 0
+                s["tap_prob"] = None
             elif tc == 1:
                 s["lifecycle"] = "tested"
+                s["taps"] = 1
+                s["tap_prob"] = None
             elif tc == 2:
                 s["lifecycle"] = "delivered"
+                s["taps"] = 2
+                s["tap_prob"] = None
             else:
                 s["lifecycle"] = "decaying"
-            s["tap_prob"] = [0.80, 0.66, 0.33, 0.10][min(tc, 3)]
+                s["taps"] = tc
+                s["tap_prob"] = None
 
     # Per-strike traded volume for the Profile view's volume column. Engine-agnostic
     # rollup from the raw contracts (Public/cvserver/yfinance all carry volume),
@@ -1250,6 +1301,61 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
 
     nodes = classify_nodes(strikes, spot)
     patterns = detect_patterns(strikes, nodes, spot)
+
+    # T04: distinct raw/delta/activity surfaces from the SAME normalized
+    # contracts (no extra upstream calls). Default strikes/grid stay compat;
+    # `metrics` carries all registered views with per-expiry contributions.
+    # Window volume-delta needs recorder history; until then it is explicitly
+    # unavailable (never zero-filled).
+    metrics: dict[str, Any] = {"default_basis": exposure_basis}
+    try:
+        from domain.exposure_metrics import compute_delta_weighted_oi, compute_raw_oi, compute_volume_gamma
+        from services.gex_core import (
+            compute_gex_by_strike_vendor,
+            compute_gex_grid_delta_weighted,
+            compute_gex_grid_vendor,
+            compute_gex_grid_volume,
+        )
+        from services.wall_structure import discover_walls, nearest_walls
+        raw_m = compute_raw_oi(raw["contracts"], spot)
+        dw_m = compute_delta_weighted_oi(raw["contracts"], spot)
+        vol_m = compute_volume_gamma(raw["contracts"], spot)
+        vendor_rows = compute_gex_by_strike_vendor(spot, raw["contracts"])
+        vendor_grid = compute_gex_grid_vendor(spot, raw["contracts"])
+        delta_grid = compute_gex_grid_delta_weighted(spot, raw["contracts"])
+        activity_grid = compute_gex_grid_volume(spot, raw["contracts"], ticker)
+        metrics.update({
+            "gex_gross_v1": raw_m.gross, "gex_net_v1": raw_m.net,
+            "gex_call": raw_m.call, "gex_put": raw_m.put,
+            "dadgex_gross_v1": dw_m.gross, "dadgex_net_v1": dw_m.net,
+            "dadgex_usable": dw_m.usable, "dadgex_missing_delta": dw_m.missing_delta,
+            "volume_gamma_gross": vol_m.gross, "volume_gamma_net": vol_m.net,
+            "window_dadgex_v1": None, "window_dadgex_reason": "HISTORY_NOT_YET_RECORDED",
+            # §28.3 registry name alias (same unavailable state, both keys).
+            "window_delta_weighted_volume_v1": None,
+            "magnitude_ratio_delta_over_raw": (dw_m.gross / raw_m.gross) if raw_m.gross > 0 else None,
+            "vendor_rows": vendor_rows, "vendor_grid": vendor_grid,
+            "grids": {"raw": None, "delta": delta_grid, "activity": activity_grid,
+                      "vendor": vendor_grid},
+            "formula_version": "gex.v2",
+        })
+        sol_walls = discover_walls(strikes if exposure_basis == "OI" else vendor_rows, spot)
+        metrics["walls"] = sol_walls
+        metrics["nearest_walls"] = nearest_walls(sol_walls, spot)
+        # F23: off-screen landmarks from the FULL universe (pre-band vendor
+        # rows), so major walls outside the visible window stay navigable.
+        try:
+            universe_walls = discover_walls(vendor_rows, spot)
+            kept = {w["wall_id"] for w in sol_walls}
+            metrics["offscreen_landmarks"] = [
+                {**w, "offscreen": True} for w in universe_walls
+                if w["wall_id"] not in kept][:3]
+        except Exception as le:
+            log.debug("offscreen landmarks failed: %s", le)
+            metrics["offscreen_landmarks"] = []
+    except Exception as me:
+        log.debug("solstice metrics surfaces failed (non-fatal): %s", me)
+        metrics["error"] = "METRICS_UNAVAILABLE"
 
     # --- New analytics (from EzOptions + GEX-Dashboard) ---
     implied_move = calc_implied_move(spot, raw["contracts"])
@@ -1290,11 +1396,24 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         "patterns": patterns,
         "velocity": velocity,
         "tap_counts": {str(k): v for k, v in tap_map.items()},
-        # Contract fields read by the frontend (App.js / HeatseekerDashboard):
+        # F04: upstream age survives caches. stale_age_s is time since build
+        # here; source age comes from raw.received_at when present. Never reset
+        # upstream age to zero by rebuilding. data_fallback reflects actual
+        # provider switch, not a hardcoded False.
         "stale_age_s": 0.0,
-        "data_fallback": False,
-        "gex_regime": nodes.get("regime"),
+        "source_received_at": raw.get("received_at"),
+        "source_age_s": None,
+        "data_fallback": raw.get("data_source", "yfinance") != "public_api",
         "data_source": raw.get("data_source", "yfinance"),
+        "exposure_basis": exposure_basis,
+        "formula_version": "gex.v2",
+        "quality": {
+            "setup_eligible": exposure_basis == "OI",
+            "execution_eligible": False,
+            "reason_codes": [] if exposure_basis == "OI" else [exposure_basis],
+            "trade_side_capability": "none",
+        },
+        "gex_regime": nodes.get("regime"),
         "mode": mode,
         "asof": datetime.now(UTC).isoformat(),
         # New analytics
@@ -1314,11 +1433,76 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         "hedge_impulse": hedge_impulse,
         "pressure_cloud": pressure_cloud,
         "charm_integral": charm_integral,
+        # Solstice read-only desk (T04–T10/T15–T20, deterministic, no execution)
+        "metrics": metrics,
     }
+    # Attach session permission, corrected regime, patterns v1, vanna, scout,
+    # enrichment — each best-effort, never breaking the core payload.
+    try:
+        from services.solstice_session import playbook_for, session_state
+        payload["session"] = session_state(quality=payload.get("quality"))
+        top_wall = (metrics.get("nearest_walls") or [None])[0]
+        payload["playbook"] = playbook_for(top_wall, spot, payload.get("quality"))
+    except Exception as se:
+        log.debug("solstice session attach failed: %s", se)
+    try:
+        from services.solstice_regime import regime_at_spot
+        payload["gamma_regime_v1"] = regime_at_spot(spot, raw["contracts"], ticker)
+    except Exception as re:
+        log.debug("solstice regime attach failed: %s", re)
+    try:
+        from services.solstice_patterns import detect_patterns_v1
+        payload["patterns_v1"] = detect_patterns_v1(
+            payload.get("strikes", []), spot, metrics.get("walls", []))
+    except Exception as pe:
+        log.debug("solstice patterns attach failed: %s", pe)
+    try:
+        from services.solstice_vanna import vanna_by_expiry
+        payload["vanna_v1"] = vanna_by_expiry(raw["contracts"], spot, ticker)
+    except Exception as ve:
+        log.debug("solstice vanna attach failed: %s", ve)
+    try:
+        from services.contract_scout import scout_candidates
+        # Scout needs a scenario side; default reports both sides' eligibility
+        # counts without selecting (no dwell without a scenario).
+        payload["scout"] = {
+            "calls": scout_candidates(raw["contracts"], "CALLS", spot)["n_eligible"],
+            "puts": scout_candidates(raw["contracts"], "PUTS", spot)["n_eligible"],
+        }
+    except Exception as ce:
+        log.debug("solstice scout attach failed: %s", ce)
+    try:
+        from services.solstice_enrichment import moneyness_buckets
+        payload["moneyness"] = moneyness_buckets(raw["contracts"], spot)
+    except Exception as ee:
+        log.debug("solstice enrichment attach failed: %s", ee)
 
     _t = asyncio.create_task(_logged_task(save_snapshot(ticker, payload), f"save_snapshot:{ticker}"))
     _background_tasks.add(_t)
     _t.add_done_callback(_background_tasks.discard)
+    # T09: record fresh builds to immutable research history (never stale-serves).
+    try:
+        from services.duckdb_engine import db as _ddb
+        from services.heatmap_history import record_snapshot
+        _conn = getattr(_ddb, "conn", None)
+        if _conn is not None:
+            _t2 = asyncio.create_task(asyncio.to_thread(
+                record_snapshot, _conn, {"ticker": ticker,
+                                         "expiries_used": payload.get("expiries_used"),
+                                         "spot": spot,
+                                         "data_source": payload.get("data_source"),
+                                         "exposure_basis": exposure_basis,
+                                         "formula_version": "gex.v2",
+                                         "asof": payload.get("asof"),
+                                         "source_received_at": payload.get("source_received_at"),
+                                         "contracts": raw.get("contracts", [])[:2000],
+                                         "strikes": strikes,
+                                         "metrics": {"walls": metrics.get("walls", [])}},
+                f"{ticker}:{mode}:{dte}:{scalp}"))
+            _background_tasks.add(_t2)
+            _t2.add_done_callback(_background_tasks.discard)
+    except Exception as rh:
+        log.debug("heatmap_history record skipped: %s", rh)
     sanitized = _sanitize(payload)
     _BUILD_HEATMAP_CACHE[cache_key] = {"ts": time.time(), "data": sanitized}
     if len(_BUILD_HEATMAP_CACHE) > 200:
@@ -2864,6 +3048,10 @@ app.include_router(heatseeker_router, tags=["heatseeker"])
 from routes.heatseeker_snapshots_api import router as heatseeker_snapshots_router
 
 app.include_router(heatseeker_snapshots_router, prefix="/api/heatseeker", tags=["heatseeker-snapshots"])
+
+from routes.solstice import router as solstice_router
+
+app.include_router(solstice_router, tags=["solstice"])
 
 from routes.public_api import router as public_api_router
 

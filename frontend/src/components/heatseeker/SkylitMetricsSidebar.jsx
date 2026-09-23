@@ -47,6 +47,11 @@ function SkylitMetricsSidebar({
   const kingNode = nodes.king;
   const floors = nodes.floors || [];
   const ceilings = nodes.ceilings || [];
+  // F17: three distinct concepts — largest CELL (grid king), strongest
+  // aggregate WALL (sidebar king), nearest relevant WALL. Sidebar respects the
+  // active metric for its summary; grid king stays cell-scoped.
+  const metricLabel = viewMode === "vex" ? "VEX" : viewMode === "charm" ? "Charm" : "GEX";
+  const exposureBasis = data?.exposure_basis || "OI";
   // net GEX lives on nodes.total_gex; |GEX| is summed client-side because the
   // heatmap payload never exports total_abs_gex; flip point from gamma_flip
   const netGex = data?.net_gex_total ?? nodes?.total_gex;
@@ -79,13 +84,13 @@ function SkylitMetricsSidebar({
 
       {/* Key metrics */}
       <div className="skylit-metrics-section">
-        <div className="skylit-section-title">Key Levels</div>
+        <div className="skylit-section-title">Key Levels · {metricLabel} · {exposureBasis}</div>
 
         <MetricRow
-          label="KING"
+          label="STRONGEST WALL"
           value={kingNode ? `$${fmtStrike(kingNode.strike || kingNode)}` : "—"}
           color="#fbbf24"
-          sub={kingNode?.gex ? fmtGex(kingNode.gex) : null}
+          sub={kingNode?.gex ? `${fmtGex(kingNode.gex)} agg.` : "aggregate"}
         />
 
         <MetricRow

@@ -173,14 +173,18 @@ class TestNodeLifecycle:
         ]
         result = calc_node_lifecycle(spot, contracts, history)
         nodes_by_strike = {n["strike"]: n for n in result["nodes"]}
+        # F09/F10 (corrected): taps are observed; outcome probability is NOT
+        # calibrated here — tap_probability stays None with legacy schedule kept
+        # only as explicitly uncalibrated compat.
         assert nodes_by_strike[95.0]["state"] == "fresh"
-        assert nodes_by_strike[95.0]["tap_probability"] == 80
+        assert nodes_by_strike[95.0]["taps"] == 0
+        assert nodes_by_strike[95.0]["tap_probability"] is None
         assert nodes_by_strike[100.0]["state"] == "tested"
-        assert nodes_by_strike[100.0]["tap_probability"] == 66
+        assert nodes_by_strike[100.0]["tap_probability"] is None
         assert nodes_by_strike[105.0]["state"] == "delivered"
-        assert nodes_by_strike[105.0]["tap_probability"] == 33
+        assert nodes_by_strike[105.0]["tap_probability"] is None
         assert nodes_by_strike[110.0]["state"] == "decaying"
-        assert nodes_by_strike[110.0]["tap_probability"] == 10
+        assert nodes_by_strike[110.0]["tap_probability"] is None
 
     def test_empty_contracts(self):
         """Empty contracts must return empty nodes."""
@@ -188,7 +192,7 @@ class TestNodeLifecycle:
         assert result["nodes"] == []
 
     def test_boundary_all_fresh_no_history(self):
-        """With empty history, every node is fresh and prob=80."""
+        """F09 (corrected): empty history → unknown, never fresh/80%."""
         spot = 100.0
         contracts = [
             _c(95.0, "P", 0.05, 1000),
@@ -196,11 +200,12 @@ class TestNodeLifecycle:
             _c(105.0, "C", 0.05, 600),
         ]
         result = calc_node_lifecycle(spot, contracts, history=[])
+        assert result["history_status"] == "unknown"
         assert len(result["nodes"]) == 3
         for n in result["nodes"]:
-            assert n["state"] == "fresh"
-            assert n["tap_probability"] == 80
-            assert n["taps"] == 0
+            assert n["state"] == "unknown"
+            assert n["tap_probability"] is None
+            assert n["taps"] is None
 
     def test_regression_top10_only_and_sorted_by_abs_gex(self):
         """
@@ -463,10 +468,10 @@ class TestVelocityMode:
         assert result["n_snapshots"] == 2
 
     def test_empty_history_returns_calm(self):
-        """Zero snapshots → velocity 0, mode 'calm'."""
+        """F09 (corrected): zero snapshots → unknown, never calm/0."""
         result = calc_velocity_mode([])
-        assert result["velocity_strikes_per_min"] == pytest.approx(0.0)
-        assert result["mode"] == "calm"
+        assert result["velocity_strikes_per_min"] is None
+        assert result["mode"] == "unknown"
         assert result["n_snapshots"] == 0
 
     def test_urgent_mode_high_velocity(self):
@@ -484,13 +489,13 @@ class TestVelocityMode:
         assert result["n_snapshots"] == 2
 
     def test_single_snapshot_returns_calm(self):
-        """One snapshot is not enough to compute velocity → velocity 0, calm."""
+        """F09 (corrected): one snapshot → unknown (insufficient history)."""
         history = [
             {"timestamp": "2026-05-18T13:30:00+00:00", "king_node_strike": 100.0, "spot": 100.0},
         ]
         result = calc_velocity_mode(history)
-        assert result["velocity_strikes_per_min"] == pytest.approx(0.0)
-        assert result["mode"] == "calm"
+        assert result["velocity_strikes_per_min"] is None
+        assert result["mode"] == "unknown"
         assert result["n_snapshots"] == 1
 
 

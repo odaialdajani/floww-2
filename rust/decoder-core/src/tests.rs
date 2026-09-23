@@ -355,3 +355,35 @@ fn test_prob_dist_itm_delta_gt_otm() {
     // ITM call delta > OTM call delta
     assert!(rows[0].delta > rows[1].delta);
 }
+
+#[test]
+fn test_max_pain_is_call_put_intrinsic() {
+    use crate::gex::StrikeRow;
+    use crate::nodes::classify_nodes;
+    // calls 200 @ 90, puts 100 @ 100, calls 100 @ 110, spot 100.
+    // Intrinsic pain: @90 → 1000, @100 → 2000, @110 → 4000 ⇒ max pain 90.
+    // (The old total-OI×|distance| statistic tied 90/100 here.)
+    let mk = |strike: f64, gex: f64, call_oi: f64, put_oi: f64| StrikeRow {
+        strike,
+        gex,
+        call_gex: if call_oi > 0.0 { gex } else { 0.0 },
+        put_gex: if put_oi > 0.0 { gex } else { 0.0 },
+        call_oi,
+        put_oi,
+        total_oi: call_oi + put_oi,
+        vex: 0.0,
+        call_vex: 0.0,
+        put_vex: 0.0,
+        vega: 0.0,
+        charm: 0.0,
+        vomma: 0.0,
+        zomma: 0.0,
+    };
+    let rows = vec![
+        mk(90.0, 2.0, 200.0, 0.0),
+        mk(100.0, -1.0, 0.0, 100.0),
+        mk(110.0, 1.0, 100.0, 0.0),
+    ];
+    let n = classify_nodes(&rows, 100.0).expect("nodes");
+    assert_eq!(n.max_pain, Some(90.0));
+}

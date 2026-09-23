@@ -184,21 +184,19 @@ def calc_node_lifecycle(
     Decaying based on how many times spot has come within 0.1% of them in the
     supplied ``history`` (typically last 24h of spot snapshots).
 
-    Tap-probability schedule (Skylit's documented decay curve):
-        fresh      → 80
-        tested     → 66
-        delivered  → 33
-        decaying   → 10
-
-    ``history`` is a list of dicts with at least ``spot`` (and ``timestamp``,
-    unused here but kept in the signature for the caller's contract).
+    F08/F09/F10: unknown history MUST stay unknown. Empty/missing history →
+    state 'unknown', taps=None, tap_probability=None with reason codes — never
+    'fresh'/80% or 'calm'. Tap counts are observed touches; outcome
+    probabilities require held-out calibration (not hardcoded 80/66/33/10).
+    The legacy schedule is retained ONLY as `legacy_tap_schedule` for compat,
+    explicitly uncalibrated.
     """
     if not spot or spot <= 0:
-        return {"nodes": []}
+        return {"nodes": [], "history_status": "unknown", "reason": "INVALID_SPOT"}
 
     gex = _gex_per_strike(spot, contracts)
     if not gex:
-        return {"nodes": []}
+        return {"nodes": [], "history_status": "unknown", "reason": "NO_GEX"}
 
     # Top 10 strikes by absolute net GEX.
     ranked = sorted(gex.items(), key=lambda kv: abs(kv[1]), reverse=True)[:10]
@@ -211,6 +209,21 @@ def calc_node_lifecycle(
         except (TypeError, ValueError):
             continue
 
+    if not history_spots:
+        nodes = [
+            {
+                "strike": round(strike, 4),
+                "net_gex": round(net_gex, 4),
+                "taps": None,
+                "state": "unknown",
+                "tap_probability": None,
+                "reason": "HISTORY_UNKNOWN",
+                "legacy_tap_schedule": None,
+            }
+            for strike, net_gex in ranked if strike > 0
+        ]
+        return {"nodes": nodes, "history_status": "unknown", "reason": "HISTORY_UNKNOWN"}
+
     nodes: list[dict[str, Any]] = []
     for strike, net_gex in ranked:
         if strike <= 0:
@@ -220,22 +233,25 @@ def calc_node_lifecycle(
             if abs(s - strike) / strike <= 0.001
         )
         if taps == 0:
-            state, prob = "fresh", 80
+            state = "fresh"
         elif taps == 1:
-            state, prob = "tested", 66
+            state = "tested"
         elif taps == 2:
-            state, prob = "delivered", 33
+            state = "delivered"
         else:
-            state, prob = "decaying", 10
+            state = "decaying"
+        legacy = {0: 80, 1: 66, 2: 33}.get(min(taps, 3), 10)
         nodes.append({
             "strike": round(strike, 4),
             "net_gex": round(net_gex, 4),
             "taps": taps,
             "state": state,
-            "tap_probability": prob,
+            "tap_probability": None,
+            "tap_probability_reason": "UNCALIBRATED",
+            "legacy_tap_schedule": legacy,
         })
 
-    return {"nodes": nodes}
+    return {"nodes": nodes, "history_status": "ok"}
 
 
 # ---------------------------------------------------------------------------
@@ -550,9 +566,10 @@ def calc_velocity_mode(history: list[dict[str, Any]]) -> dict[str, Any]:
     n = len(history)
     if n < 2:
         return {
-            "velocity_strikes_per_min": 0.0,
-            "mode": "calm",
+            "velocity_strikes_per_min": None,
+            "mode": "unknown",
             "n_snapshots": n,
+            "reason": "INSUFFICIENT_HISTORY",
         }
 
     first = history[0]
@@ -562,25 +579,28 @@ def calc_velocity_mode(history: list[dict[str, Any]]) -> dict[str, Any]:
         kn1 = float(last.get("king_node_strike"))
     except (TypeError, ValueError):
         return {
-            "velocity_strikes_per_min": 0.0,
-            "mode": "calm",
+            "velocity_strikes_per_min": None,
+            "mode": "unknown",
             "n_snapshots": n,
+            "reason": "INVALID_KING_NODE",
         }
 
     t0 = _parse_ts(first.get("timestamp"))
     t1 = _parse_ts(last.get("timestamp"))
     if t0 is None or t1 is None:
         return {
-            "velocity_strikes_per_min": 0.0,
-            "mode": "calm",
+            "velocity_strikes_per_min": None,
+            "mode": "unknown",
             "n_snapshots": n,
+            "reason": "TIMESTAMP_UNKNOWN",
         }
     minutes = (t1 - t0).total_seconds() / 60.0
     if minutes <= 0:
         return {
-            "velocity_strikes_per_min": 0.0,
-            "mode": "calm",
+            "velocity_strikes_per_min": None,
+            "mode": "unknown",
             "n_snapshots": n,
+            "reason": "NONPOSITIVE_WINDOW",
         }
 
     velocity = (kn1 - kn0) / minutes
@@ -841,22 +861,17 @@ def classify_nodes(
     nodes: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """
-    Distinguish between "real" dealer positioning nodes (growing gamma
-    exposure) and "hedge" nodes (fading protection).
+    F08: lifecycle-derived `oi_trend` is NOT an OI observation. This function
+    now requires explicit OI evidence: nodes must carry `oi_observations`
+    (list of {oi, effective_date}) or `oi_trend_source == 'observed'`.
+    Lifecycle-only trends → classification 'unknown' with reason
+    OI_TREND_UNOBSERVED. Dealer-intent labels ('real'/'hedge') are deprecated
+    proxies; they describe observed OI direction only, never intent.
 
-    Classification rules:
+    Classification rules (observed OI only):
         - gamma_sign == "positive" AND oi_trend == "growing"  → "real"
         - gamma_sign == "negative" AND oi_trend == "fading"   → "hedge"
         - otherwise                                            → "unknown"
-
-    Each node dict must contain at least ``strike``, ``gamma_sign``,
-    ``oi_trend``. All other fields (``net_gex``, ``taps``, ``state``,
-    ``tap_probability``) are passed through.
-
-    Returns
-    -------
-    dict with keys: ``nodes`` (list with ``classification`` added),
-    ``real_count``, ``hedge_count``.
     """
     nodes = nodes or []
     classified: list[dict[str, Any]] = []
@@ -866,6 +881,14 @@ def classify_nodes(
     for node in nodes:
         gamma_sign = str(node.get("gamma_sign", "")).lower()
         oi_trend = str(node.get("oi_trend", "")).lower()
+        trend_source = str(node.get("oi_trend_source", "")).lower()
+        has_obs = isinstance(node.get("oi_observations"), list) and len(node["oi_observations"]) >= 2
+
+        if not oi_trend or (trend_source and trend_source not in ("observed", "oi_history")) and not has_obs:
+            # Unobserved trend (e.g. derived from lifecycle state) → unknown.
+            classified.append({**node, "classification": "unknown",
+                               "classification_reason": "OI_TREND_UNOBSERVED"})
+            continue
 
         if gamma_sign == "positive" and oi_trend == "growing":
             classification = "real"

@@ -557,6 +557,10 @@ fn classify_nodes(
         Some(mp) => d.set_item("max_pain", mp)?,
         None => d.set_item("max_pain", py.None())?,
     }
+    match n.max_pain {
+        Some(_) => d.set_item("max_pain_basis", "call_put_intrinsic_expiry_scoped")?,
+        None => d.set_item("max_pain_basis", "unavailable")?,
+    }
     match n.put_call_ratio {
         Some(r) => d.set_item("put_call_ratio", (r * 10000.0).round() / 10000.0)?,
         None => d.set_item("put_call_ratio", py.None())?,

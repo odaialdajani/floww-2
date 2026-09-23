@@ -564,15 +564,26 @@ export default function App() {
   }, []);
 
   const [loading, setLoading] = useState(false);
+  // F19: single-flight fetch — generation IDs + abort so a slow SPY response
+  // can never render under a new QQQ query (also guards manual refresh).
+  const fetchGen = useRef(0);
+  const fetchCtrl = useRef(null);
 
   // Fetch heatmap data
   const fetchData = useCallback(async () => {
+    const myGen = ++fetchGen.current;
+    if (fetchCtrl.current) { try { fetchCtrl.current.abort(); } catch (e) { /* noop */ } }
+    const ctrl = new AbortController();
+    fetchCtrl.current = ctrl;
     setLoading(true);
     try {
       const qs = buildHeatmapQuery({ expiries: debouncedExpiries, mode: debouncedMode, dte: debouncedDte });
-      const res = await axios.get(`${API}/heatmap/${ticker}?${qs}`, { timeout: 30000 });
+      const res = await axios.get(`${API}/heatmap/${ticker}?${qs}`, { timeout: 30000, signal: ctrl.signal });
+      if (fetchGen.current !== myGen) return; // superseded — never render stale
       setData(res.data); setErr(null);
     } catch (e) {
+      if (axios.isCancel?.(e)) return;
+      if (fetchGen.current !== myGen) return;
       let msg = "Failed to load data";
       if (e.code === "ECONNABORTED") {
         msg = "Request timed out. The server may be busy.";
@@ -587,7 +598,7 @@ export default function App() {
       }
       setErr(msg);
     } finally {
-      setLoading(false);
+      if (fetchGen.current === myGen) setLoading(false);
     }
   }, [ticker, debouncedExpiries, debouncedMode, debouncedDte]);
 
@@ -609,6 +620,8 @@ export default function App() {
   // Main data fetch with in-flight guard
   useEffect(() => {
     let cancelled = false;
+    const ctrl = new AbortController();
+    const myGen = ++fetchGen.current;
     const doFetch = async () => {
       if (cancelled) return;
       try {
@@ -616,13 +629,13 @@ export default function App() {
         // overwrites the user's DTE/Expiries/mode selection with backend
         // defaults on every tick (Round-8 regression).
         const qs = buildHeatmapQuery({ expiries: debouncedExpiries, mode: debouncedMode, dte: debouncedDte });
-        const r = await axios.get(`${API}/data/${ticker}?${qs}`);
-        if (!cancelled) setData(r.data);
-      } catch (e) { if (!cancelled) setErr(e.message); }
+        const r = await axios.get(`${API}/data/${ticker}?${qs}`, { signal: ctrl.signal });
+        if (!cancelled && fetchGen.current === myGen) setData(r.data);
+      } catch (e) { if (!cancelled && fetchGen.current === myGen && !axios.isCancel?.(e)) setErr(e.message); }
     };
     doFetch();
     const id = setInterval(doFetch, refreshMs);
-    return () => { cancelled = true; clearInterval(id); };
+    return () => { cancelled = true; ctrl.abort(); clearInterval(id); };
   }, [ticker, refreshMs, debouncedExpiries, debouncedMode, debouncedDte]);
 
   // Advanced analytics with in-flight guard
@@ -752,6 +765,21 @@ export default function App() {
       ...data,
       strikes: autoDecimate(data.strikes, 5000),
     };
+  }, [data]);
+
+  // F05: liveness is chain/Greek freshness, never socket/object presence.
+  // Independent spot / chain / history / flow status from the snapshot itself.
+  const heatLive = useMemo(() => {
+    if (!data?.asof || !data?.spot) return false;
+    const ageMs = Date.now() - new Date(data.asof).getTime();
+    if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > 120000) return false;
+    const q = data.quality;
+    if (q && q.setupEligible === false && (q.reasonCodes || []).length > 0) {
+      // Degraded setup eligibility still counts as live display; trade
+      // eligibility stays false. Only stale/unavailable kills liveness.
+      if (q.state === "stale" || q.state === "unavailable") return false;
+    }
+    return true;
   }, [data]);
 
   return (
@@ -1043,7 +1071,7 @@ export default function App() {
                     });
                   }}
                   onStrikeClick={(strike) => setTradeSelection({ ticker, strike, spot: livespot?.spot ?? data?.spot })}
-                  isLive={!!livespot}
+                  isLive={heatLive}
                   regime={data?.nodes?.regime}
                   loading={loading && !data}
                 />
@@ -1105,7 +1133,7 @@ export default function App() {
                     });
                   }}
                   onStrikeClick={(strike) => setTradeSelection({ ticker, strike, spot: livespot?.spot ?? data?.spot })}
-                  isLive={!!livespot}
+                  isLive={heatLive}
                   regime={data?.nodes?.regime}
                   loading={loading && !data}
                 />

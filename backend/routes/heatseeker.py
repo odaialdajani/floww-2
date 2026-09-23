@@ -279,8 +279,8 @@ async def _fetch_king_node_history(ticker: str) -> list[dict[str, Any]]:
     Strategy: query last 30 minutes of spot snapshots from ``db.snapshots``.
     If a snapshot has a stored ``king_strike`` (the Mongo field written by
     ``save_snapshot``), use it to build a ``king_node_strike`` output entry;
-    otherwise leave the history empty (the pure function returns calm/0 in
-    that case). On
+    otherwise leave the history empty (the pure function returns unknown in
+    that case, F09). On
     any Mongo failure, return an empty list so the route still returns a
     well-formed payload.
     """
@@ -475,8 +475,7 @@ async def velocity_mode_route(ticker: str = "SPY"):
 
     History comes from Mongo ``db.snapshots`` (entries with a stored
     ``king_node_strike``). If Mongo is unavailable or no usable rows exist,
-    the pure function returns ``velocity=0, mode="calm", n_snapshots=0`` —
-    matching Wave 1's node-lifecycle fallback shape.
+    the pure function returns unknown (F09) — never fabricated calm/0.
     """
     try:
         from server import _sanitize
@@ -485,7 +484,7 @@ async def velocity_mode_route(ticker: str = "SPY"):
         return _sanitize({"ticker": ticker.upper(), **result})
     except Exception as e:
         logger.warning(f"velocity-mode route fail: {e}")
-        return {"ticker": ticker.upper() if isinstance(ticker, str) else "unknown", "velocity_strikes_per_min": 0.0, "mode": "calm", "n_snapshots": 0, "error": str(e), "status": "degraded"}
+        return {"ticker": ticker.upper() if isinstance(ticker, str) else "unknown", "velocity_strikes_per_min": None, "mode": "unknown", "n_snapshots": 0, "error": str(e), "status": "degraded"}
 
 
 @router.get("/trinity-confluence")
@@ -526,21 +525,44 @@ async def rolling_floors_ceilings_route(
     expiries: int = Query(4, ge=1, le=12),
     lookback_days: int = Query(20, ge=1, le=60),
 ):
-    """Rolling floors/ceilings tracker — trend formation signals."""
+    """Rolling floors/ceilings tracker — F11: reads real aligned history.
+
+    Single-current-chain input cannot produce a rolling series; with fewer
+    than 2 historical snapshots the route returns history_unavailable (never
+    a one-element trend).
+    """
     try:
-        from server import _sanitize, fetch_spot_and_chains_merged
+        from server import _sanitize, db, fetch_spot_and_chains_merged
         from services.heatseeker import calc_rolling_floors_ceilings
         t = ticker.strip().upper()
-        # Fetch daily snapshots for the lookback period
         raw = await fetch_spot_and_chains_merged(t, expiries)
         spot = raw.get("spot", 0)
         contracts = raw.get("contracts", [])
         if not spot or not contracts:
             raise HTTPException(404, f"No options data for {ticker}")
-        # Build synthetic daily snapshots from available data
-        snapshots = [{"spot": spot, "contracts": contracts}]
-        result = calc_rolling_floors_ceilings(spot, snapshots, ticker=t, lookback_days=lookback_days)
-        return _sanitize({"ticker": t, **result})
+        # Real aligned history: distinct Mongo snapshots (newest last).
+        try:
+            cur = db.snapshots.find({"ticker": t}, {"_id": 0}).sort("ts", -1).limit(lookback_days)
+            hist = [d async for d in cur]
+        except Exception:
+            hist = []
+        snapshots = []
+        for h in reversed(hist):
+            sc = h.get("strikes_compact")
+            if h.get("spot") and sc:
+                # strikes_compact lacks full contracts; mark provenance so the
+                # pure function treats thin snapshots honestly.
+                snapshots.append({"spot": h["spot"], "contracts": [],
+                                  "strikes_compact": sc, "ts": h.get("ts_iso", h.get("ts"))})
+        snapshots.append({"spot": spot, "contracts": contracts})
+        with_history = [s for s in snapshots if s.get("contracts")]
+        if len(with_history) < 2:
+            return _sanitize({"ticker": t, "floor_series": [], "ceiling_series": [],
+                              "floor_trend": "flat", "ceiling_trend": "flat",
+                              "signal": "neutral", "history_status": "history_unavailable",
+                              "reason": "need 2+ full-chain snapshots; current chain alone is not history"})
+        result = calc_rolling_floors_ceilings(spot, with_history, ticker=t, lookback_days=lookback_days)
+        return _sanitize({"ticker": t, **result, "history_status": "ok"})
     except HTTPException:
         raise
     except Exception as e:

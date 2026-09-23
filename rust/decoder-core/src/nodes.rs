@@ -179,7 +179,10 @@ pub fn classify_nodes(rows: &[StrikeRow], spot: f64) -> Option<NodesOut> {
         spot
     };
 
-    // Max pain: O(n²) — parallelize across candidate strikes
+    // Max pain (parity with Python classify_nodes): expiry-scoped call/put
+    // intrinsic payoff — call OI * max(test - strike, 0) + put OI *
+    // max(strike - test, 0), minimized over candidate settle strikes.
+    // The old total-OI * |distance| statistic is NOT max pain. O(n²).
     let strike_set: Vec<f64> = {
         let mut v: Vec<f64> = rows.iter().map(|s| s.strike).collect();
         v.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
@@ -192,7 +195,10 @@ pub fn classify_nodes(rows: &[StrikeRow], spot: f64) -> Option<NodesOut> {
             .map(|&test| {
                 let pain: f64 = rows
                     .iter()
-                    .map(|s| s.total_oi * (s.strike - test).abs())
+                    .map(|s| {
+                        s.call_oi * (test - s.strike).max(0.0)
+                            + s.put_oi * (s.strike - test).max(0.0)
+                    })
                     .sum();
                 (pain, test)
             })

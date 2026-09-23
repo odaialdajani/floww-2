@@ -46,8 +46,8 @@ async def get_data_health():
         try:
             from services.public_budget import budget as _pub_budget
             health["public_budget"] = _pub_budget.status()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("public budget status unavailable (non-fatal): %s", e)
 
         return health
     except Exception as e:

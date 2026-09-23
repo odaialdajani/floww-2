@@ -5,8 +5,43 @@ import SkylitTickerBar from "./SkylitTickerBar";
 import SkylitControlBar from "./SkylitControlBar";
 import SkylitHeatmapGrid from "./SkylitHeatmapGrid";
 import SkylitMetricsSidebar from "./SkylitMetricsSidebar";
+import SolsticeStatusStrip from "./SolsticeStatusStrip";
+import WallInspector from "./WallInspector";
+import ScenarioStrip from "./ScenarioStrip";
 import ExposureStrip from "./ExposureStrip";
+import ReplayStrip from "./ReplayStrip";
 import AlertEngineStrip from "../flowseeker/AlertEngineStrip";
+
+/**
+ * SelectedWallBlock — resolves the selected cell to its wall by identity from
+ * the CURRENT snapshot (T06/T21 reuse). Stale asof/ticker selections render
+ * nothing rather than a wrong wall.
+ */
+function SelectedWallBlock({ data, spot, selectedCell }) {
+  if (!selectedCell || !data) return null;
+  if (selectedCell.ticker && data.ticker && selectedCell.ticker !== data.ticker) return null;
+  if (selectedCell.asof && data.asof && selectedCell.asof !== data.asof) return null;
+  const walls = data.metrics?.walls || [];
+  const strike = Number(selectedCell.strike);
+  const wall = walls.find((w) => strike >= Number(w.low) && strike <= Number(w.high))
+    || (walls.length ? [...walls].sort((a, b) =>
+      Math.abs(Number(a.mid) - strike) - Math.abs(Number(b.mid) - strike))[0] : null);
+  const side = spot != null && wall ? (spot < Number(wall.low) ? "below" : "above") : "below";
+  const scenarios = wall ? [
+    { name: side === "below" ? "Bounce watch" : "Rejection watch", type: "reversal_watch",
+      confirmation: `reclaim and hold ${side === "below" ? "above " + wall.low : "below " + wall.high}`,
+      invalidation: `sustained acceptance ${side === "below" ? "below " + wall.low : "above " + wall.high}` },
+    { name: side === "below" ? "Breakdown continuation" : "Breakout continuation", type: "continuation",
+      confirmation: "acceptance beyond zone + follow-through/retest",
+      invalidation: `reclaim and hold ${side === "below" ? "above " + wall.low : "below " + wall.high}` },
+  ] : [];
+  return (
+    <>
+      <WallInspector wall={wall} metrics={data.metrics} grids={data.metrics?.grids} quality={data.quality} scenario={scenarios[0]} />
+      <ScenarioStrip scenarios={scenarios} />
+    </>
+  );
+}
 
 /**
  * SkylitDashboard — Full Zenith-style trading dashboard
@@ -54,6 +89,9 @@ function SkylitDashboard({
 }) {
   const [tradeMode, setTradeMode] = useState(false);
   const [selectedCell, setSelectedCell] = useState(null);
+  // T04: metric overlay state — same snapshot, raw wall identity locked while
+  // viewing activity (walls come from the payload, never recomputed per tab).
+  const [metric, setMetric] = useState("raw");
   // Grid zoom, in-frame only (2026-09-04): the expanded overlay keeps its
   // designed full density instead of compounding scale on scale.
   const [gridZoom, setGridZoom] = useState(1);
@@ -92,46 +130,64 @@ function SkylitDashboard({
     return () => window.removeEventListener("keydown", onKey);
   }, [expanded]);
 
-  // Expanded view fetches its OWN wider band (2026-09-04): the in-frame
-  // grid is deliberately windowed to 21 rows around spot, so expanding the
-  // same payload could never show more strikes. swing mode widens the
-  // server band (±25%) with more expiries; failure falls back to the
-  // in-frame data so the overlay never blanks.
+  // Expanded view preserves analytical scope (F18): same mode/expiries as the
+  // in-frame grid by default; widening analysis is an explicit user action.
+  // expData is cleared on ticker/mode/expiries change with query-keyed guards
+  // so no stale/cross-symbol response is ever shown under a new heading.
   const [expData, setExpData] = useState(null);
   const [expLoading, setExpLoading] = useState(false);
+  const [expWidened, setExpWidened] = useState(false);
+  const expQueryKey = `${ticker}|${timeframe}|${expiries}`;
+  useEffect(() => {
+    setExpData(null);
+    setExpWidened(false);
+  }, [ticker, timeframe, expiries]);
   useEffect(() => {
     if (!expanded) return undefined;
     let cancelled = false;
     const ctrl = new AbortController();
+    const myKey = expQueryKey;
     setExpLoading(true);
+    const widen = expWidened ? "&expiries=8" : "";
+    // Preserve current scope: derive mode from timeframe selection instead of
+    // hardcoding swing; widen only on explicit action.
+    const modeParam = timeframe === "scalp" ? "scalp" : timeframe === "swing" ? "swing" : "day";
     axios
-      .get(`${BACKEND_API}/heatmap/${encodeURIComponent(ticker)}?mode=swing&expiries=8`, {
+      .get(`${BACKEND_API}/heatmap/${encodeURIComponent(ticker)}?mode=${modeParam}&expiries=${expWidened ? 8 : expiries}${widen && expWidened ? "" : ""}`, {
         timeout: 45000,
         signal: ctrl.signal,
       })
-      .then((r) => { if (!cancelled && r?.data?.strikes?.length) setExpData(r.data); })
+      .then((r) => {
+        if (!cancelled && myKey === expQueryKey && r?.data?.strikes?.length) setExpData(r.data);
+      })
       .catch(() => { /* fallback to in-frame data below */ })
-      .finally(() => { if (!cancelled) setExpLoading(false); });
+      .finally(() => { if (!cancelled && myKey === expQueryKey) setExpLoading(false); });
     return () => { cancelled = true; ctrl.abort(); };
-  }, [expanded, ticker]);
+  }, [expanded, ticker, timeframe, expiries, expWidened, expQueryKey]);
   const overlayData = expData || data;
   const overlayNote = (() => {
     const n = overlayData?.strikes?.length || 0;
     if (!n) return "";
-    if (expData) return `±25% band · ${n} strikes · 8 expiries`;
-    return expLoading ? "widening band…" : `${n} strikes`;
+    const scope = `${timeframe} · ${expWidened ? 8 : expiries} expiries`;
+    if (expData) return `${scope} · ${n} strikes`;
+    return expLoading ? "loading scope…" : `${scope} · ${n} strikes`;
   })();
 
   const handleCellClick = useCallback(
     (strike, colKey, value) => {
+      // F19: snapshot-linked inspector — value resolved from the displayed
+      // snapshot, never a stored number reused across refreshes.
+      const snap = { asof: (expData || data)?.asof || data?.asof || null, ticker };
       if (tradeMode && onCellClick) {
-        onCellClick(strike, colKey, value);
+        onCellClick(strike, colKey, value, snap);
       } else {
-        setSelectedCell({ strike, colKey, value });
+        setSelectedCell({ strike, colKey, value, ...snap });
       }
     },
-    [tradeMode, onCellClick]
+    [tradeMode, onCellClick, data, expData, ticker]
   );
+  // Clear ticker-dependent selection on symbol change (F18).
+  useEffect(() => { setSelectedCell(null); }, [ticker]);
 
   const handleStrikeClick = useCallback(
     (strike) => {
@@ -161,6 +217,8 @@ function SkylitDashboard({
         onTimeframeChange={onTimeframeChange}
         expiries={expiries}
         onExpiriesChange={onExpiriesChange}
+        metric={metric}
+        onMetricChange={setMetric}
         isLive={isLive}
         onRefresh={onRefresh}
         onExpand={() => setExpanded(true)}
@@ -168,8 +226,14 @@ function SkylitDashboard({
         tickers={tickers}
       />
 
+      {/* 2.4 Solstice status strip — Environment · Location · Setup state · Data status (T23) */}
+      <SolsticeStatusStrip data={data} spot={spot} ticker={ticker} isLive={isLive} />
+
       {/* 2.5 Exposure strip — live backend exposure-rule badges, hidden when none */}
       <ExposureStrip ticker={ticker} />
+
+      {/* 2.6 Bottom replay strip — deterministic session replay + data status */}
+      <ReplayStrip ticker={ticker} />
 
       {/* 2.6 Alert-engine strip — live detector badges (GAMMA_FLIP excluded; stays in exposure path) */}
       <AlertEngineStrip ticker={ticker} />
@@ -272,6 +336,7 @@ function SkylitDashboard({
             spot={spot}
             ticker={ticker}
             viewMode={viewMode}
+            metric={metric}
             onCellClick={handleCellClick}
             onStrikeClick={handleStrikeClick}
             windowRows={fitRows}
@@ -286,6 +351,8 @@ function SkylitDashboard({
             viewMode={viewMode}
             regime={regime}
           />
+          {/* T07/T23: selected-wall inspector + two-sided scenarios (deterministic) */}
+          <SelectedWallBlock data={data} spot={spot} selectedCell={selectedCell} />
         </div>
       </div>
 
@@ -309,6 +376,14 @@ function SkylitDashboard({
               <span className="skylit-expanded-ticker">{ticker}</span>
               <span className="skylit-expanded-label">Full grid</span>
               {overlayNote && <span className="skylit-expanded-coverage">{overlayNote}</span>}
+              <button
+                className="skylit-trade-mode-btn"
+                onClick={() => setExpWidened((w) => !w)}
+                title="Widen analysis to 8 expiries (explicit scope change)"
+                data-testid="skylit-expand-widen"
+              >
+                {expWidened ? "Scope: wide (8)" : "Widen to 8"}
+              </button>
               <span className="skylit-expanded-hint">Esc to close</span>
             </div>
             <button
@@ -326,6 +401,7 @@ function SkylitDashboard({
                 spot={spot}
                 ticker={ticker}
                 viewMode={viewMode}
+                metric={metric}
                 onCellClick={handleCellClick}
                 onStrikeClick={handleStrikeClick}
                 density="full"

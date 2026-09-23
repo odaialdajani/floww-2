@@ -120,6 +120,12 @@ class OptionContract:
     gamma: float | None = None
     theta: float | None = None
     vega: float | None = None
+    # F03: source event times preserved separately; None = unknown (never now).
+    bid_timestamp: str | None = None
+    ask_timestamp: str | None = None
+    last_timestamp: str | None = None
+    greeks_source: str | None = None  # 'vendor' | 'local' | 'mixed' | None
+    oi_effective_date: str | None = None
 
     @property
     def mid(self) -> float | None:
@@ -150,6 +156,12 @@ class Order:
     created_at: str | None = None
     updated_at: str | None = None
     filled_at: str | None = None
+    # F27: lossless typed v2 fields; None when the venue omits them.
+    open_close: str | None = None          # OPEN | CLOSE | None
+    average_price: float | None = None
+    bracket_id: str | None = None
+    parent_order_id: str | None = None
+    legs: list[dict[str, Any]] = field(default_factory=list)
     raw: dict[str, Any] = field(default_factory=dict)
 
 
@@ -518,13 +530,17 @@ class PublicBroker:
         return resp.json()
 
     def _parse_option_contract(self, inst: dict[str, Any], quote_data: dict[str, Any]) -> OptionContract:
-        """Parse one option contract from the chain response into OptionContract."""
+        """Parse one option contract from the chain response into OptionContract.
+
+        F03: preserves bid/ask/last source timestamps separately (None = unknown).
+        F21: OSI root may contain digits/dots for adjusted series; strike kept as
+        exact decimal string then float for compat (Decimal identity upstream).
+        """
         sym = inst.get("symbol", "")
         otype = "CALL" if "C" in sym[-9:-8] else "PUT" if "P" in sym[-9:-8] else ""
-        # OSI format: SYMBOL + YYMMDD + C/P + 8-digit strike
-        # extract strike: last 8 chars before C/P
+        # OSI: root (A-Z, digits, dots for adjusted) + YYMMDD + C/P + 8-digit strike
         import re
-        m = re.match(r"([A-Z]+)(\d{6})([CP])(\d{8})", sym)
+        m = re.match(r"([A-Z0-9\.]+)(\d{6})([CP])(\d{8})", sym)
         strike = float(m.group(4)) / 1000 if m else 0.0
         exp_str = ""
         if m:
@@ -560,6 +576,12 @@ class PublicBroker:
             gamma=float(greeks.get("gamma")) if greeks.get("gamma") is not None else None,
             theta=float(greeks.get("theta")) if greeks.get("theta") is not None else None,
             vega=float(greeks.get("vega")) if greeks.get("vega") is not None else None,
+            bid_timestamp=quote_data.get("bidTimestamp") or quote_data.get("bid_timestamp"),
+            ask_timestamp=quote_data.get("askTimestamp") or quote_data.get("ask_timestamp"),
+            last_timestamp=quote_data.get("lastTimestamp") or quote_data.get("last_timestamp")
+                or quote_data.get("timestamp"),
+            greeks_source="vendor" if greeks else None,
+            oi_effective_date=quote_data.get("oiEffectiveDate") or quote_data.get("openInterestEffectiveDate"),
         )
 
     async def get_option_chain_parsed(
@@ -836,6 +858,8 @@ class PublicBroker:
         """Place a multi-leg spread option order.
 
         Path: POST /userapigateway/trading/{accountId}/order/multileg
+        Placement uses `type` (documented + SDK); preflight uses `orderType`.
+        F26: separate serializers — do not send orderType here.
         Each leg: {"instrument": {"symbol": "OSI_SYMBOL", "type": "OPTION"},
                    "side": "BUY"/"SELL",
                    "openCloseIndicator": "OPEN"/"CLOSE",
@@ -852,7 +876,7 @@ class PublicBroker:
 
         payload: dict[str, Any] = {
             "orderId": order_id,
-            "orderType": order_type,
+            "type": order_type,
             "expiration": expiration,
             "quantity": quantity,
             "legs": legs,
@@ -877,11 +901,86 @@ class PublicBroker:
     async def cancel_order(self, account_id: str, order_id: str) -> dict[str, Any]:
         """Cancel an open order.
 
-        Path: POST /userapigateway/trading/{accountId}/order/{orderId}/cancel
+        F25: documented transport is DELETE /trading/{accountId}/order/{orderId}
+        with empty success body (SDK matches). Tolerate empty body; pending
+        cancellation is NOT canceled — caller must confirm final order state.
         """
         await self._ensure_token()
-        url = f"{GW}/trading/{account_id}/order/{order_id}/cancel"
-        resp = await self._client.post(url, headers=self._auth_headers())
+        url = f"{GW}/trading/{account_id}/order/{order_id}"
+        resp = await self._client.delete(url, headers=self._auth_headers())
+        resp.raise_for_status()
+        try:
+            body = resp.text.strip() if hasattr(resp, "text") else ""
+            if not body:
+                return {"orderId": order_id, "status": "CANCEL_PENDING", "raw_empty": True}
+            return resp.json()
+        except Exception:
+            return {"orderId": order_id, "status": "CANCEL_PENDING", "raw_empty": True}
+
+    async def replace_order(
+        self, account_id: str, order_id: str, limit_price: float | None = None,
+        quantity: int | None = None, time_in_force: str | None = None,
+    ) -> dict[str, Any]:
+        """Replace a bracket-eligible closing leg price (quantity/type/expiry preserved).
+
+        Replacement of bracket entry legs is excluded per current docs — caller
+        must enforce closing-leg-only policy before invoking.
+        """
+        await self._ensure_token()
+        payload: dict[str, Any] = {}
+        if limit_price is not None:
+            payload["limitPrice"] = str(limit_price)
+        if quantity is not None:
+            payload["quantity"] = quantity
+        if time_in_force is not None:
+            payload["expiration"] = {"timeInForce": time_in_force}
+        url = f"{GW}/trading/{account_id}/order/{order_id}/replace"
+        resp = await self._client.post(url, json=payload or {}, headers=self._auth_headers())
+        resp.raise_for_status()
+        try:
+            return resp.json()
+        except Exception:
+            return {"orderId": order_id, "status": "REPLACE_PENDING", "raw_empty": True}
+
+    async def search_orders(
+        self, account_id: str, start: str | None = None, end: str | None = None,
+        limit: int = 100, next_token: str | None = None,
+    ) -> dict[str, Any]:
+        """Search recent orders (≤500 results, last 30 days per docs).
+
+        Split searches by known time ranges with overlap/dedup; detect the
+        500-result ceiling upstream.
+        """
+        await self._ensure_token()
+        params: dict[str, Any] = {"limit": limit}
+        if start:
+            params["start"] = start
+        if end:
+            params["end"] = end
+        if next_token:
+            params["nextToken"] = next_token
+        url = f"{GW}/trading/{account_id}/orders/search"
+        resp = await self._client.get(url, params=params, headers=self._auth_headers())
+        resp.raise_for_status()
+        return resp.json()
+
+    async def get_order_v2(self, account_id: str, order_id: str) -> dict[str, Any]:
+        """Richer typed order/leg/fill/bracket details (prefer over legacy)."""
+        await self._ensure_token()
+        url = f"{GW}/trading/{account_id}/order/{order_id}/v2"
+        resp = await self._client.get(url, headers=self._auth_headers())
+        resp.raise_for_status()
+        return resp.json()
+
+    async def get_strategy_quote(self, account_id: str, legs: list[dict[str, Any]]) -> dict[str, Any]:
+        """Combined strategy pricing for an exact shared leg definition.
+
+        Preserves debit/credit sign separately from displayed absolute premium.
+        UNKNOWN/UNDECIDED near zero → indeterminate; block ambiguous submission.
+        """
+        await self._ensure_token()
+        url = f"{GW}/option-details/{account_id}/strategy-quote"
+        resp = await self._client.post(url, json={"legs": legs}, headers=self._auth_headers())
         resp.raise_for_status()
         return resp.json()
 
@@ -945,9 +1044,19 @@ class PublicBroker:
 
     @staticmethod
     def _parse_order(data: dict[str, Any], account_id: str) -> Order:
-        """Parse an order response (from place-order, get-order, or portfolio)."""
+        """Parse an order response (from place-order, get-order, or portfolio).
+
+        F27: lossless typed v2 — bracket linkage, open/close, averagePrice
+        preserved; raw receipt retained. Totals reconcile from legs when present.
+        """
         o = data.get("order", data)  # some endpoints wrap in {"order": ...}
         inst = o.get("instrument", {})
+        legs = o.get("legs", o.get("orderLegs", [])) or []
+        avg = o.get("averagePrice", o.get("average_price", o.get("avgPrice")))
+        try:
+            avg_f = float(avg) if avg is not None else None
+        except (TypeError, ValueError):
+            avg_f = None
         return Order(
             order_id=o.get("orderId", o.get("id", "")),
             account_id=account_id,
@@ -964,8 +1073,31 @@ class PublicBroker:
             created_at=o.get("createdAt") or o.get("created_at"),
             updated_at=o.get("updatedAt") or o.get("updated_at"),
             filled_at=o.get("filledAt") or o.get("filled_at"),
+            open_close=o.get("openCloseIndicator", o.get("openClose", o.get("open_close"))),
+            average_price=avg_f,
+            bracket_id=o.get("bracketId", o.get("bracket_id", o.get("bracketGroupId"))),
+            parent_order_id=o.get("parentOrderId", o.get("parent_order_id")),
+            legs=list(legs) if isinstance(legs, list) else [],
             raw=data,
         )
+
+
+def resolve_public_instrument_type(symbol: str, operation: str = "chain") -> str:
+    """F06: explicit operation-aware instrument resolver (no silent EQUITY default).
+
+    - SPX/SPXW index options chain → UNDERLYING_SECURITY_FOR_INDEX_OPTION
+    - SPX/SPX index quote → INDEX
+    - Equities/ETFs (SPY/QQQ/AAPL…) → EQUITY for quotes, EQUITY for chain
+    Unknown symbols default to EQUITY only for backward compat, flagged by caller.
+    """
+    s = str(symbol or "").upper().replace("^", "")
+    is_index = s in ("SPX", "SPXW", "SPXW.OPT", "SPX.OPT", "NDX", "RUT", "VIX", "OEX", "XEO")
+    if operation == "quote":
+        return "INDEX" if is_index else "EQUITY"
+    # chain / expirations / greeks
+    if is_index:
+        return "UNDERLYING_SECURITY_FOR_INDEX_OPTION"
+    return "EQUITY"
 
 
 # ---------------------------------------------------------------------------

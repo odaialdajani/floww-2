@@ -63,8 +63,9 @@ async def run_turn(
         try:
             eid = ev_id(name, {"ticker": ticker, "horizon": horizon}, str(env.get("source", "")), str(env.get("as_of", "")))
             ledger[eid] = {"tool": name, "value": (env.get("data") if isinstance(env, dict) else env), "status": env.get("status", "ok") if isinstance(env, dict) else "ok", "source": env.get("source", "") if isinstance(env, dict) else ""}
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).debug("ledger record failed for %s (evidence preserved in events): %s", name, e)
         events.append({"type": "step", "tool": name, "phase": "done"})
 
     await asyncio.gather(*[_call(n) for n in STANDARD_BUNDLE])
@@ -127,8 +128,9 @@ async def run_turn(
         if db is not None:
             db["agent_turns"].insert_one({"turn_id": turn_id, "ticker": ticker, "horizon": horizon, "events": events, "verdict": verdict})
             db["agent_structure_snapshots"].insert_one({"ticker": ticker, "ts": __import__("datetime").datetime.now(__import__("zoneinfo").ZoneInfo("America/New_York")), "ledger_hash": verdict["ledger_hash"]})
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("agent turn persist failed (turn still returned): %s", e)
     return turn
 
 

@@ -15,12 +15,15 @@ from services.public_budget import PublicBudget
 
 
 def make_broker():
+    from datetime import UTC, datetime, timedelta
+    exp1 = (datetime.now(UTC).date() + timedelta(days=30)).isoformat()
+    exp2 = (datetime.now(UTC).date() + timedelta(days=60)).isoformat()
     broker = MagicMock()
     trading = MagicMock()
     trading.account_id = "acc-123"
     broker.get_trading_account.return_value = trading
     broker.get_option_expirations = AsyncMock(
-        return_value=["2026-09-18", "2026-10-16"]
+        return_value=[exp1, exp2]
     )
     quote = MagicMock()
     quote.mid_price = 520.50
@@ -31,21 +34,29 @@ def make_broker():
     call.symbol = "SPY260918C00530000"
     call.option_type = "CALL"
     call.strike = 530.0
-    call.expiration = "2026-09-18"
+    call.expiration = exp1
     call.iv = 0.15
     call.delta = 0.45
     call.open_interest = 1000
+    call.bid_timestamp = call.ask_timestamp = call.last_timestamp = None
+    call.greeks_source = "vendor"
+    call.oi_effective_date = None
     put = MagicMock()
     put.symbol = "SPY260918P00510000"
     put.option_type = "PUT"
     put.strike = 510.0
-    put.expiration = "2026-09-18"
+    put.expiration = exp1
     put.iv = 0.14
     put.delta = -0.40
     put.open_interest = 3000
-    broker.get_option_chain_parsed = AsyncMock(
-        return_value={"calls": [call], "puts": [put]}
-    )
+    put.bid_timestamp = put.ask_timestamp = put.last_timestamp = None
+    put.greeks_source = "vendor"
+    put.oi_effective_date = None
+    async def _chain(symbol, expiration, account_id, instrument_type=None):
+        if expiration == exp1:
+            return {"calls": [call], "puts": [put]}
+        return {"calls": [], "puts": []}
+    broker.get_option_chain_parsed = AsyncMock(side_effect=_chain)
     return broker
 
 

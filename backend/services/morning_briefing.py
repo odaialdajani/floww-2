@@ -155,8 +155,9 @@ async def _outcome_ledger_metrics(horizon: int = 2) -> dict[str, Any]:
                 if cal_doc:
                     from services.flow_calibration import calibration_status_blob
                     out["calibration"] = calibration_status_blob(cal_doc)
-            except Exception:
-                pass  # calibration enrichment is optional
+            except Exception as cal_e:
+                import logging
+                logging.getLogger(__name__).debug("calibration enrichment unavailable (optional): %s", cal_e)
         _outcome_cache[key] = (_time.time(), out)
         return out
     except Exception as e:
