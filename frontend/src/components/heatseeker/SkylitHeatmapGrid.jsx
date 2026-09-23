@@ -259,6 +259,16 @@ function SkylitHeatmapGrid({
                           color: has ? (bright ? "#000" : "#fff") : "#3a4566",
                         }}
                         onClick={() => has && onCellClick && onCellClick(strike, e, v)}
+                        onKeyDown={(ev) => {
+                          if (!has) return;
+                          if (ev.key === "Enter" || ev.key === " ") {
+                            ev.preventDefault();
+                            if (onCellClick) onCellClick(strike, e, v);
+                          }
+                        }}
+                        tabIndex={has ? 0 : -1}
+                        role="gridcell"
+                        aria-label={has ? `${strike} by ${e}, value ${fmtK(v) || "$0"}${isKing ? ", largest cell" : ""}` : `${strike} by ${e}, no data`}
                         title={has ? `${strike} · ${e} · ${fmtK(v) || "$0"} (largest cell ★ = max |cell|)` : `${strike} · ${e} · no data (not zero)`}
                       >
                         {pct != null && (

@@ -63,12 +63,33 @@ Environment: macOS `/Users/nav/Documents/GitHub/floww-2` (CLAUDE.md Windows cano
 - Routes: `/api/solstice/*` (snapshot, evidence, walls, regime, patterns,
   vanna, scout, capability, replay, manifest) — all read-only, no writes.
 
-## Verification (slice 2)
-- `backend/tests/solstice/`: 37 passed (foundation 14 + slice2 17 + exec 4 + routes 2).
-- Targeted backend total: 128 passed; silent-except gate OK (279 files).
+## Slice 3 — gap close + full-suite baseline (same branch, 23 Sep 2026)
+- F20: gex_aggregator VEX documented as VOMMA with `vomma_surface` alias +
+  `weight_basis` tag (short-DTE volume fillna opt-in, never silent); grid VEX
+  stays vanna. PLAN.md added (T00–T29 map).
+- T02/T09/T27: solstice_provenance.py — Greek pair classification
+  (vendor/vendor eligible; mixed/unknown blocked), volume-retraction quarantine
+  (1240→1180 = VOLUME_REBASE, never negative flow), sequential change
+  attribution (spot→IV/time→OI + residual/tol).
+- T27 canaries: 13 mutation tests (put sign, vendor gamma, timestamp
+  laundering, volume-as-OI, cross-symbol refusal, missing-source confidence,
+  same-observation fill, Decimal/multiplier, distances, float claim).
+- F23: full-universe off-screen landmarks (`metrics.offscreen_landmarks`);
+  grid cells keyboard-accessible (tabIndex/role/Enter/Space/aria-label).
+- Fixture repairs (expired hardcoded dates → future-relative + symbols):
+  test_public_advantage, test_public_budget_debit — 5 fixed.
+- Full backend suite: 5182+ passed; remaining 40 failed + 27 errors ALL in
+  untouched files (verified identical on stashed tree): llm/chart_emb/
+  autoformer/patchtst/charm_vec/microstructure/ml_realtime/verify_runner/
+  regime_thresholds/sweep_replay-fixture-path/bars/chaincache/order-router/
+  dash_ui(plotly missing)/yoptions. No new failures from this branch.
+- Full frontend suite: 576 passed / 2 failed; the 2 failures (Sidebar,
+  BlademapFlowView, AppShell suites) reproduce on stashed tree — inherited.
+
+## Verification (slice 3)
+- `backend/tests/solstice/`: 50 passed (incl. 13 canaries).
+- Targeted backend total: 128+ passed; silent-except gate OK (279 files).
 - Frontend heatseeker+slice: 24 suites / 92 tests passed.
-- Inherited failures unchanged (pre-existing on main): public data-router
-  order-path test, ChainCache/bars stale fixtures, dash_ui plotly collection.
 
 ## Next
 - T04–T07: wire vendor engine into build_heatmap behind flag + wall registry integration + full snapshot route; replay recorder (T09) start capture.

@@ -1339,6 +1339,17 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         sol_walls = discover_walls(strikes if exposure_basis == "OI" else vendor_rows, spot)
         metrics["walls"] = sol_walls
         metrics["nearest_walls"] = nearest_walls(sol_walls, spot)
+        # F23: off-screen landmarks from the FULL universe (pre-band vendor
+        # rows), so major walls outside the visible window stay navigable.
+        try:
+            universe_walls = discover_walls(vendor_rows, spot)
+            kept = {w["wall_id"] for w in sol_walls}
+            metrics["offscreen_landmarks"] = [
+                {**w, "offscreen": True} for w in universe_walls
+                if w["wall_id"] not in kept][:3]
+        except Exception as le:
+            log.debug("offscreen landmarks failed: %s", le)
+            metrics["offscreen_landmarks"] = []
     except Exception as me:
         log.debug("solstice metrics surfaces failed (non-fatal): %s", me)
         metrics["error"] = "METRICS_UNAVAILABLE"

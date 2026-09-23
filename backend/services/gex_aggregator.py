@@ -38,12 +38,19 @@ Dealer Positioning Convention
     Net GEX > 0: Dealer gamma exposure is net positive (stabilizing).
     Net GEX < 0: Dealer gamma exposure is net negative (destabilizing / "gamma squeeze" risk).
 
-Vomma Exposure (VEX)
---------------------
+Vomma Exposure (VOMMA — legacy key name "VEX" in this module)
+------------------------------------------------------------------
     VEX_per_unit = vomma * OI * 100 * spot^2 * 0.01
 
-Signed identically to GEX. VEX measures sensitivity of gamma to changes in
+Signed identically to GEX. Vomma measures sensitivity of gamma to changes in
 implied volatility — important for vol-of-vol and skew dynamics.
+
+F20 naming contract (gex.v2 registry): this module's "VEX" is VOMMA-based
+display scaling. The main Solstice grid's "VEX" is VANNA-based
+(``bs_vanna``, linear in spot). They are different Greeks with different
+units and must never be compared or substituted. Output carries both the
+legacy ``vex_surface`` key (compat) and the explicit ``vomma_surface`` /
+``vomma_1d`` aliases. Charm (dDelta/dElapsedTime) is neither.
 """
 
 import os
@@ -426,7 +433,13 @@ class GexAggregator:
             "expiries": unique_expiries.tolist(),
             "gex_surface": gex_surface.tolist(),
             "vex_surface": vex_surface.tolist(),
+            # F20 explicit aliases: this surface is VOMMA (not vanna).
+            "vomma_surface": vex_surface.tolist(),
             "gex_1d": gex_1d.tolist(),
+            # F13: weight basis explicit — short-DTE volume substitution is
+            # opt-in and tagged, never silently relabelled as OI.
+            "weight_basis": ("VOLUME_SHORT_DTE_WITH_OI_FILLNA"
+                             if _short_dte_volume_enabled() else "OI"),
             "total_gex": total_gex,
             "total_negative_gex": total_negative_gex,
             "net_gex": net_gex,

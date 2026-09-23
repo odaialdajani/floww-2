@@ -50,11 +50,15 @@ from tests.services.test_flow_alerts import _future_exp, _raw  # noqa: E402
 # ── adapter quote-truth ─────────────────────────────────────────────
 
 def _mock_oc(**over):
+    from datetime import UTC, datetime, timedelta
+    exp = (datetime.now(UTC).date() + timedelta(days=30)).isoformat()
     base = dict(
-        symbol="SPY260911C00760000", expiration="2026-09-11", strike=760.0,
+        symbol="SPY260911C00760000", expiration=exp, strike=760.0,
         open_interest=1200, iv=0.25, delta=0.4, gamma=0.01, theta=-0.5,
         vega=0.3, bid=2.5, ask=2.7, volume=800,
         last=2.65, bid_size=40, ask_size=35,
+        bid_timestamp=None, ask_timestamp=None, last_timestamp=None,
+        greeks_source="vendor", oi_effective_date=None,
     )
     base.update(over)
     oc = MagicMock()
@@ -66,14 +70,17 @@ def _mock_oc(**over):
 
 @pytest.mark.asyncio
 async def test_adapter_preserves_last_mid_and_sizes():
+    from datetime import UTC, datetime, timedelta
+
     from services.public_api_adapter import _fetch_chain_live
 
+    exp = (datetime.now(UTC).date() + timedelta(days=30)).isoformat()
     broker = MagicMock()
     broker.get_trading_account.return_value = MagicMock(account_id="acct")
-    broker.get_option_expirations = AsyncMock(return_value=["2026-09-11"])
-    broker.get_quotes = AsyncMock(return_value=[MagicMock(mid_price=760.0, last=760.5)])
+    broker.get_option_expirations = AsyncMock(return_value=[exp])
+    broker.get_quotes = AsyncMock(return_value=[MagicMock(mid_price=760.0, last=760.5, symbol="SPY")])
     broker.get_option_chain_parsed = AsyncMock(
-        return_value={"calls": [_mock_oc()], "puts": []}
+        return_value={"calls": [_mock_oc(expiration=exp)], "puts": []}
     )
     out = await _fetch_chain_live(broker, "SPY", max_expiries=1)
     assert out is not None and len(out["contracts"]) == 1
