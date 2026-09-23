@@ -1446,6 +1446,33 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     except Exception as se:
         log.debug("solstice session attach failed: %s", se)
     try:
+        # T07: observable interaction state per nearest wall. Single-snapshot
+        # observation is always a FIRST sighting (no continuity yet): touch
+        # counts, first-seen, persistence and migration stay unknown until the
+        # recorder holds repeat observations under unchanged scope.
+        from datetime import UTC as _UTC
+        from datetime import datetime as _dt
+
+        from services.wall_interaction import scenario_for, transition
+        now_iso = _dt.now(_UTC).isoformat()
+        interactions = []
+        scenarios = []
+        for w in (metrics.get("nearest_walls") or [])[:2]:
+            side = "below" if spot < float(w.get("low", spot)) else (
+                "above" if spot > float(w.get("high", spot)) else "inside")
+            tr = transition("unobserved", spot, w, last={"gap": False,
+                                                        "approach_side": side})
+            interactions.append({"wall_id": w.get("wall_id"), "state": tr.get("state"),
+                                 "event": tr.get("event"), "evidence": tr.get("evidence"),
+                                 "at": now_iso, "first_seen": True,
+                                 "taps": None, "taps_reason": "HISTORY_UNKNOWN",
+                                 "persistence": "unknown", "migration": "unknown"})
+            scenarios.extend(scenario_for(w, spot, side=side if side in ("below", "above") else "below"))
+        payload["interactions"] = interactions
+        payload["scenarios"] = scenarios[:4]
+    except Exception as ie:
+        log.debug("solstice interaction attach failed: %s", ie)
+    try:
         from services.solstice_regime import regime_at_spot
         payload["gamma_regime_v1"] = regime_at_spot(spot, raw["contracts"], ticker)
     except Exception as re:

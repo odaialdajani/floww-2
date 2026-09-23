@@ -99,3 +99,25 @@ def test_capture_scheduler_off_by_default_opt_in():
                   "FLOWW_SOLSTICE_CAPTURE_SEC"):
             os.environ.pop(k, None)
     assert server._solstice_capture_cfg() is None
+
+
+def test_evidence_packet_matches_ui_snapshot_identity():
+    # AI explanations must cite the EXACT snapshot the UI displays: the
+    # evidence packet id must equal the snapshot id for the same payload.
+    from services.heatmap_snapshot import build_snapshot_v2
+    from services.solstice_evidence import build_evidence_packet, validate_explainer_output
+    payload = {"ticker": "SPY", "spot": 500.0, "expiries_used": ["2030-01-15"],
+               "data_source": "public_api", "exposure_basis": "OI",
+               "formula_version": "gex.v2", "asof": "2030-01-02T00:00:00+00:00",
+               "nodes": {"regime": "positive"},
+               "quality": {"setupEligible": True, "reasonCodes": [],
+                           "trade_side_capability": "none"}}
+    snap = build_snapshot_v2(payload, query_key="SPY|4|day|None|False")
+    pkt = build_evidence_packet(snap, wall_id="w_x")
+    assert pkt["snapshot_id"] == snap["snapshotId"]
+    assert pkt["query_id"] == snap["queryKey"]
+    # Validator rejects a stale-snapshot explanation.
+    bad = dict(pkt)
+    out = {"snapshot_id": "snap_other", "query_id": pkt["query_id"],
+           "status": "Wait", "observations": []}
+    assert validate_explainer_output(out, bad) != []

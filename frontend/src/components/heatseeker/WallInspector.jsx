@@ -26,7 +26,7 @@ function fmtUsd(v) {
   return `${sign}$${a.toFixed(0)}`;
 }
 
-function WallInspector({ wall = null, metrics = null, grids = null, quality = null, scenario = null }) {
+function WallInspector({ wall = null, interaction = null, metrics = null, grids = null, quality = null, scenario = null }) {
   if (!wall) {
     return (
       <div className="skylit-metrics-section" data-testid="wall-inspector-empty">
@@ -73,7 +73,9 @@ function WallInspector({ wall = null, metrics = null, grids = null, quality = nu
       <Row k="Δ/Raw ratio" v={ratio != null ? Number(ratio).toFixed(3) : "—"} tip="delta gross / raw gross over the same set; undefined when the denominator is zero" />
       <Row k="Δ provenance" v={pairNote} tip="Vendor/vendor, local/local eligible; mixed pairs blocked without policy" />
       <Row k="OI eff. date" v="unavailable in snapshot" tip="OI effective date coverage comes from the recorder, not this snapshot" />
-      <Row k="Changed" v="see replay compare" tip="Wall-level change needs 2+ recorded snapshots" />
+      <Row k="Changed" v={interaction ? `${interaction.state}${interaction.event ? ` · ${interaction.event}` : ""} (first sighting — see replay compare)` : "see replay compare"} tip="Wall-level change needs 2+ recorded snapshots" />
+      <Row k="Interaction" v={interaction ? interaction.state : "unobserved"} tip="Time-debounced state machine; session/feed gaps break continuity" />
+      <Row k="Touches" v={interaction && interaction.taps != null ? String(interaction.taps) : "unknown — no history"} tip="Observed touches only; never a calibrated probability" />
       <Row k="Confirm" v={scenario?.confirmation || "reclaim and hold above zone"} />
       <Row k="Invalidates" v={scenario?.invalidation || "acceptance beyond zone"} />
       <Row k="Data" v={quality ? `${quality.state || "unknown"} · ${(quality.reasonCodes || []).join(", ") || "ok"}` : "unknown"} />
