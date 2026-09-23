@@ -47,9 +47,17 @@ UNAVAILABLE_IN_PUBLIC_ONLY = (
     "general macro/earnings calendar feed",
 )
 
+# Source boundary for the 27-operation inventory: official Public docs
+# navigation reviewed 23 Sep 2026 (S12–S27) + pinned SDK
+# PublicDotCom/publicdotcom-py@00dca7d6e5ec7043311b8eb1d83144835dc80ee0.
+# Documented capability ≠ commissioned account behavior (see COMMISSION.md).
+DOCS_BASE = "https://public.com/api/docs"
+REVIEWED_AT = "2026-09-23"
+
 
 def registry() -> dict[str, Any]:
     return {"operations": OPERATIONS, "count": len(OPERATIONS),
+            "docs_base": DOCS_BASE, "reviewed_at": REVIEWED_AT,
             "unavailable_in_public_only": list(UNAVAILABLE_IN_PUBLIC_ONLY),
             "entitlement": "per-account commissioning required; no live calls made here",
             "budget_baseline": "10 requests/second per account (changelog) with headroom; verify observed"}

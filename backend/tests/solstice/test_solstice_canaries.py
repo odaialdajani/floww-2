@@ -145,3 +145,36 @@ def test_max_pain_is_intrinsic_parity():
     out = classify_nodes(rows, 100.0)
     assert out["max_pain"] == 90.0
     assert out["max_pain_basis"] == "call_put_intrinsic_expiry_scoped"
+
+
+def test_reconciliation_rows_cells_sidebar_inspector():
+    # Same scope + basis (vendor gamma): row sum = cell sum = aggregate net;
+    # gross = call + put magnitudes; wallDiscovery gross matches scoped sum.
+    from domain.exposure_metrics import compute_raw_oi
+    from services.gex_core import compute_gex_by_strike_vendor, compute_gex_grid_vendor
+    from services.wall_structure import discover_walls
+    spot = 500.0
+    contracts = [
+        {"strike": 490.0, "type": "call", "gamma": 0.04, "oi": 1000,
+         "expiry": "2030-01-15", "multiplier": 100.0},
+        {"strike": 490.0, "type": "put", "gamma": 0.04, "oi": 500,
+         "expiry": "2030-01-15", "multiplier": 100.0},
+        {"strike": 510.0, "type": "call", "gamma": 0.03, "oi": 2000,
+         "expiry": "2030-02-15", "multiplier": 100.0},
+    ]
+    rows = compute_gex_by_strike_vendor(spot, contracts)
+    grid = compute_gex_grid_vendor(spot, contracts)
+    agg = compute_raw_oi(contracts, spot)
+    row_net = sum(r["gex"] for r in rows)
+    cell_net = sum(v for col in grid["grid"].values() for v in col.values())
+    assert abs(row_net - cell_net) < 1e-6
+    assert abs(row_net - agg.net) < 1e-6
+    assert abs(sum(abs(r["call_gex"]) + abs(r["put_gex"]) for r in rows) - agg.gross) < 1e-6
+    walls = discover_walls(rows, spot)
+    assert abs(sum(w["gross"] for w in walls) - agg.gross) < 1e-3 or not walls
+    # Per-expiry cells reconcile to expiry scope sums.
+    jan = sum(grid["grid"].get("2030-01-15", {}).values())
+    jan_rows = sum(r["gex"] for r in rows
+                   if any(c.get("expiry") == "2030-01-15" and c.get("strike") == r["strike"]
+                          for c in contracts))
+    assert abs(jan - jan_rows) < 1e-6

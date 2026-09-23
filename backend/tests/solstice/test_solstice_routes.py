@@ -79,3 +79,23 @@ def test_attribute_endpoint_needs_two_snapshots():
     assert hh.compare_snapshots(conn, "TST", "2030-01-02")["status"] == "history_unavailable"
     record_snapshot(conn, dict(base, asof="2030-01-02T01:00:00+00:00"), "q")
     assert hh.compare_snapshots(conn, "TST", "2030-01-02")["status"] == "ok"
+
+
+def test_capture_scheduler_off_by_default_opt_in():
+    import server
+    # Default: unset → None (no behavior change).
+    assert server._solstice_capture_cfg() is None
+    import os
+    os.environ["FLOWW_SOLSTICE_CAPTURE"] = "1"
+    os.environ["FLOWW_SOLSTICE_CAPTURE_TICKERS"] = "SPY, QQQ, EXTRA, X1, X2, X3, X4"
+    os.environ["FLOWW_SOLSTICE_CAPTURE_SEC"] = "5"
+    try:
+        cfg = server._solstice_capture_cfg()
+        assert cfg is not None
+        assert cfg["tickers"] == ["SPY", "QQQ", "EXTRA", "X1", "X2", "X3"]  # capped at 6
+        assert cfg["interval"] == 60  # floored at 60s
+    finally:
+        for k in ("FLOWW_SOLSTICE_CAPTURE", "FLOWW_SOLSTICE_CAPTURE_TICKERS",
+                  "FLOWW_SOLSTICE_CAPTURE_SEC"):
+            os.environ.pop(k, None)
+    assert server._solstice_capture_cfg() is None

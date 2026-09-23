@@ -203,6 +203,63 @@ function SkylitHeatmapGrid({
 
   const range = maxV - minV;
 
+  // §8 strike rail: gross-gamma concentration per strike from the payload's
+  // aggregated rows (gross = |call|+|put|, no net cancellation). Nearest-wall
+  // marker comes from the status strip + inspector; the rail shows magnitude.
+  const strikeGross = useMemo(() => {
+    const rows = data?.strikes || [];
+    const m = {};
+    for (const r of rows) {
+      const s = r?.strike;
+      if (s == null) continue;
+      const gross = Math.abs(r.call_gex || 0) + Math.abs(r.put_gex || 0) || Math.abs(r.gex || 0);
+      m[s] = gross;
+    }
+    return m;
+  }, [data]);
+  const maxStrikeGross = useMemo(
+    () => Math.max(0, ...Object.values(strikeGross)),
+    [strikeGross]
+  );
+
+  // §8 expiry header: exact expiry + calendar days left + column coverage.
+  // Exact per-series trading-time T lives in the snapshot, not the header.
+  const expMeta = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let matrixGross = 0;
+    const cols = {};
+    for (const e of expiries) {
+      const col = matrix[e] || {};
+      let gross = 0;
+      let n = 0;
+      for (const k in col) {
+        const v = col[k];
+        if (v == null || Number.isNaN(v)) continue;
+        gross += Math.abs(v);
+        n += 1;
+      }
+      cols[e] = { gross, n };
+      matrixGross += gross;
+    }
+    const meta = {};
+    for (const e of expiries) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(e);
+      let daysLeft = null;
+      if (m) {
+        const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+        daysLeft = Math.round((d - today) / 86400000);
+      }
+      const share = matrixGross > 0 ? cols[e].gross / matrixGross : null;
+      meta[e] = { ...cols[e], daysLeft, share };
+    }
+    return { meta, matrixGross };
+  }, [expiries, matrix]);
+  const zeroDte = useMemo(
+    () => expiries.filter((e) => expMeta.meta[e]?.daysLeft === 0),
+    [expiries, expMeta]
+  );
+
   // Windowing (2026-09-03): slice the RENDERED rows only — King, spot,
   // and the viridis scale above always use the full matrix.
   let shownStrikes = strikes;
@@ -220,26 +277,48 @@ function SkylitHeatmapGrid({
         <table className={`trin-grid-table${density === "full" ? " density-full" : ""}`}>
           <thead>
             <tr>
-              <th className="trin-th-strike">Strike</th>
-              {expiries.map((e) => (
-                <th key={e} className="trin-th-exp" title={e}>{fmtExpiry(e)}</th>
-              ))}
+              <th className="trin-th-strike" title="Strike rail — bar shows gross-gamma concentration (|call|+|put|, no cancellation)">Strike</th>
+              {expiries.map((e) => {
+                const meta = expMeta.meta[e] || {};
+                const dl = meta.daysLeft;
+                const dlTxt = dl == null ? "date unknown" : dl === 0 ? "0DTE (expires today)" : dl > 0 ? `${dl}d left` : "expired";
+                const shareTxt = meta.share != null ? ` · ${(meta.share * 100).toFixed(1)}% of matrix gross` : "";
+                return (
+                  <th
+                    key={e}
+                    className="trin-th-exp"
+                    title={`${e} · ${dlTxt} · ${meta.n ?? 0} strikes covered${shareTxt}`}
+                  >
+                    {fmtExpiry(e)}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
             {shownStrikes.map((strike) => {
               const isSpot = strike === spotStrike;
               const sk = strikeKey(strike);
+              const conc = strikeGross[strike] || 0;
+              const concPct = maxStrikeGross > 0 ? Math.round((conc / maxStrikeGross) * 100) : 0;
               return (
                 <tr key={strike} className="trin-row">
                   <td
                     className="trin-strike-cell"
                     onClick={() => onStrikeClick && onStrikeClick(strike)}
+                    title={conc > 0 ? `Gross concentration ${fmtK(conc)} (${concPct}% of max)` : "No aggregated exposure for this strike"}
                   >
                     {isSpot ? (
                       <span className="trin-spot-chip">{fmtStrike(strike)}</span>
                     ) : (
                       <span className="trin-strike">{fmtStrike(strike)}</span>
+                    )}
+                    {conc > 0 && (
+                      <span
+                        className="trin-conc-bar"
+                        data-testid="skylit-conc-bar"
+                        style={{ width: `${Math.max(concPct, 4)}%` }}
+                      />
                     )}
                   </td>
                   {expiries.map((e) => {
@@ -302,6 +381,19 @@ function SkylitHeatmapGrid({
         {shownStrikes.length < strikes.length && (
           <span className="trin-legend-window" data-testid="skylit-grid-window-note">
             Showing {shownStrikes.length} of {strikes.length} strikes · Expand for full grid
+          </span>
+        )}
+        {zeroDte.length > 0 && (
+          <span
+            className="trin-legend-0dte"
+            data-testid="skylit-grid-0dte"
+            title="Share of this matrix's gross exposure sitting in today-expiring columns (structural context, not a signal)"
+          >
+            0DTE {zeroDte.map((e) => fmtExpiry(e)).join(", ")}:{" "}
+            {zeroDte.map((e) => {
+              const share = expMeta.meta[e]?.share;
+              return `${fmtExpiry(e)} ${share != null ? (share * 100).toFixed(1) + "%" : "—"}`;
+            }).join(" · ")}
           </span>
         )}
       </div>
