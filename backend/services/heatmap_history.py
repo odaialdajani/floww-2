@@ -307,12 +307,36 @@ def compare_snapshots(conn, ticker: str, day: str) -> dict[str, Any]:
         deltas = [{"strike": k, "before": s0.get(k, 0.0), "after": v,
                    "delta": v - s0.get(k, 0.0)}
                   for k, v in sorted(s1.items()) if abs(v - s0.get(k, 0.0)) > 0]
+        # Window volume deltas per strike (cumulative-volume differences with
+        # rebase quarantine — a negative step invalidates the window, it is
+        # never negative flow).
+        from services.solstice_provenance import check_volume_window
+        v0 = {}
+        for s in (_parse(sj0) or []):
+            if isinstance(s, dict) and s.get("strike") is not None:
+                v0[float(s["strike"])] = s.get("total_volume", s.get("volume"))
+        v1 = {}
+        for s in (_parse(sj1) or []):
+            if isinstance(s, dict) and s.get("strike") is not None:
+                v1[float(s["strike"])] = s.get("total_volume", s.get("volume"))
+        volume_deltas = []
+        volume_rebased = []
+        for k in sorted(set(v0) | set(v1)):
+            chk = check_volume_window(v0.get(k), v1.get(k))
+            if chk["valid"]:
+                if chk["delta"] and chk["delta"] > 0:
+                    volume_deltas.append({"strike": k, "delta_volume": chk["delta"]})
+            elif chk["reason"] == "VOLUME_REBASE":
+                volume_rebased.append(k)
+        volume_deltas.sort(key=lambda d: d["delta_volume"], reverse=True)
         w0 = {w.get("wall_id") for w in (_parse(wj0) or []) if isinstance(w, dict)}
         w1 = {w.get("wall_id") for w in (_parse(wj1) or []) if isinstance(w, dict)}
         return {"ticker": ticker.upper(), "day": day, "status": "ok",
                 "from": {"id": _id0, "asof": _asof0, "spot": _spot0},
                 "to": {"id": _id1, "asof": _asof1, "spot": _spot1},
                 "strike_deltas": sorted(deltas, key=lambda d: abs(d["delta"]), reverse=True)[:20],
+                "volume_deltas": volume_deltas[:20],
+                "volume_rebased": volume_rebased,
                 "walls_added": sorted(w1 - w0), "walls_removed": sorted(w0 - w1),
                 "walls_retained": sorted(w0 & w1),
                 "note": "coarse wall-level comparison; use attribute_change for "

@@ -64,7 +64,12 @@ test("wall inspector + scenarios render for selected wall", () => {
 
 test("replay strip loads manifest", async () => {
   const axios = require("axios");
-  axios.get.mockImplementation(async () => ({ data: { snapshots: [{ id: "s1" }] } }));
+  axios.get.mockImplementation(async (url) => {
+    if (String(url).includes("/attribute/")) {
+      return { data: { status: "ok", strike_deltas: [{ strike: 500, delta: 1 }], walls_added: ["w_b"], walls_removed: [], volume_deltas: [], volume_rebased: [] } };
+    }
+    return { data: { snapshots: [{ id: "s1" }] } };
+  });
   await act(async () => {
     render(<ReplayStrip ticker="SPY" />);
   });
@@ -72,4 +77,8 @@ test("replay strip loads manifest", async () => {
     fireEvent.click(screen.getByTestId("solstice-replay-load"));
   });
   expect(screen.getByTestId("solstice-replay-count").textContent).toContain("1 snapshots");
+  await act(async () => {
+    fireEvent.click(screen.getByTestId("solstice-compare-btn"));
+  });
+  expect(screen.getByTestId("solstice-compare-result").textContent).toContain("1 strikes");
 });

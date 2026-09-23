@@ -178,3 +178,15 @@ def test_reconciliation_rows_cells_sidebar_inspector():
                    if any(c.get("expiry") == "2030-01-15" and c.get("strike") == r["strike"]
                           for c in contracts))
     assert abs(jan - jan_rows) < 1e-6
+
+
+def test_vanna_matches_vega_spot_derivative():
+    # Vanna = dVega/dSpot (per unit-vol): finite-difference cross-check pins
+    # the unit/sign convention and distinguishes it from vomma (dVega/dVol).
+    from bs_greeks import bs_vanna, bs_vega, bs_vomma
+    S, K, T, iv = 500.0, 500.0, 30 / 365, 0.2
+    h = 0.01
+    fd = (bs_vega(S + h, K, T, iv) - bs_vega(S - h, K, T, iv)) / (2 * h)
+    assert abs(bs_vanna(S, K, T, iv) - fd) < 1e-6
+    # Vomma is a different Greek with different units — must not coincide.
+    assert abs(bs_vomma(S, K, T, iv) - bs_vanna(S, K, T, iv)) > 1e-9

@@ -10,28 +10,35 @@ a correction state. Synthetic fixtures only — no vendor payloads.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 SCHEMA_VERSION = "1"
 
 
-def _parse_dt(value: Any) -> datetime | None:
+def _parse_dt(value: Any) -> tuple[datetime | None, bool]:
+    """Parse to datetime + naive flag. Naive inputs are UNKNOWN zone info —
+    callers must not silently compare them against aware timestamps."""
     if value is None:
-        return None
+        return None, False
     if isinstance(value, datetime):
-        return value
+        return value, value.tzinfo is None
     if not isinstance(value, str):
-        return None
+        return None, False
     text = value.strip()
     if not text:
-        return None
+        return None, False
     if text.endswith("Z"):
         text = text[:-1] + "+00:00"
     try:
-        return datetime.fromisoformat(text)
+        dt = datetime.fromisoformat(text)
     except ValueError:
-        return None
+        return None, False
+    return dt, dt.tzinfo is None
+
+
+def _as_utc(dt: datetime) -> datetime:
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
 def _parse_seq(value: Any) -> int | None:
@@ -67,16 +74,26 @@ def normalize_event(raw: Any, *, source: str | None = None,
         raw = {}
     flags: list[str] = []
 
-    event_dt = (_parse_dt(raw.get("event_time"))
-                or _parse_dt(raw.get("event_ts"))
-                or _parse_dt(raw.get("ts")))
+    def _first(*vals: Any) -> tuple[datetime | None, bool]:
+        for v in vals:
+            dt, naive = _parse_dt(v)
+            if dt is not None:
+                return dt, naive
+        return None, False
+
+    event_dt, event_naive = _first(raw.get("event_time"), raw.get("event_ts"), raw.get("ts"))
     if event_dt is None:
         flags.append("missing_event_time")
+    elif event_naive:
+        # Mixed naive/aware comparison raises; assume UTC explicitly and flag
+        # it so replay eligibility can distinguish assumed from known zones.
+        flags.append("naive_assumed_utc")
 
-    receive_dt = (_parse_dt(raw.get("receive_time"))
-                  or _parse_dt(raw.get("received_at"))
-                  or _parse_dt(raw.get("fetched_at"))
-                  or _parse_dt(received_at))
+    receive_dt, receive_naive = _first(raw.get("receive_time"),
+                                       raw.get("received_at"),
+                                       raw.get("fetched_at"), received_at)
+    if receive_naive and receive_dt is not None:
+        flags.append("naive_assumed_utc")
 
     sequence = (_parse_seq(raw.get("sequence"))
                 if raw.get("sequence") is not None
@@ -86,7 +103,7 @@ def normalize_event(raw: Any, *, source: str | None = None,
 
     delay_ms: int | None = None
     if event_dt is not None and receive_dt is not None:
-        delta = (receive_dt - event_dt).total_seconds() * 1000
+        delta = (_as_utc(receive_dt) - _as_utc(event_dt)).total_seconds() * 1000
         if delta < 0:
             flags.append("negative_delay")
         else:
