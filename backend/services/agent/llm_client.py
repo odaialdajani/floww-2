@@ -28,7 +28,9 @@ def breaker_open() -> bool:
             return True
         if (time.time() - float(_breaker["opened_at"])) >= 300:
             _breaker["failures"] = 0
-    except Exception:
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug("breaker state unreadable (fail-closed to closed): %s", e)
         return False
     return False
 
@@ -37,8 +39,9 @@ def _note_failure() -> None:
     try:
         _breaker["failures"] = int(_breaker.get("failures", 0)) + 1
         _breaker["opened_at"] = time.time()
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug("breaker update failed (non-fatal): %s", e)
 
 
 def tier_for(question_class: str | None, force: str | None = None) -> str:

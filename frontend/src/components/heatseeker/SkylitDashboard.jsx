@@ -92,46 +92,64 @@ function SkylitDashboard({
     return () => window.removeEventListener("keydown", onKey);
   }, [expanded]);
 
-  // Expanded view fetches its OWN wider band (2026-09-04): the in-frame
-  // grid is deliberately windowed to 21 rows around spot, so expanding the
-  // same payload could never show more strikes. swing mode widens the
-  // server band (±25%) with more expiries; failure falls back to the
-  // in-frame data so the overlay never blanks.
+  // Expanded view preserves analytical scope (F18): same mode/expiries as the
+  // in-frame grid by default; widening analysis is an explicit user action.
+  // expData is cleared on ticker/mode/expiries change with query-keyed guards
+  // so no stale/cross-symbol response is ever shown under a new heading.
   const [expData, setExpData] = useState(null);
   const [expLoading, setExpLoading] = useState(false);
+  const [expWidened, setExpWidened] = useState(false);
+  const expQueryKey = `${ticker}|${timeframe}|${expiries}`;
+  useEffect(() => {
+    setExpData(null);
+    setExpWidened(false);
+  }, [ticker, timeframe, expiries]);
   useEffect(() => {
     if (!expanded) return undefined;
     let cancelled = false;
     const ctrl = new AbortController();
+    const myKey = expQueryKey;
     setExpLoading(true);
+    const widen = expWidened ? "&expiries=8" : "";
+    // Preserve current scope: derive mode from timeframe selection instead of
+    // hardcoding swing; widen only on explicit action.
+    const modeParam = timeframe === "scalp" ? "scalp" : timeframe === "swing" ? "swing" : "day";
     axios
-      .get(`${BACKEND_API}/heatmap/${encodeURIComponent(ticker)}?mode=swing&expiries=8`, {
+      .get(`${BACKEND_API}/heatmap/${encodeURIComponent(ticker)}?mode=${modeParam}&expiries=${expWidened ? 8 : expiries}${widen && expWidened ? "" : ""}`, {
         timeout: 45000,
         signal: ctrl.signal,
       })
-      .then((r) => { if (!cancelled && r?.data?.strikes?.length) setExpData(r.data); })
+      .then((r) => {
+        if (!cancelled && myKey === expQueryKey && r?.data?.strikes?.length) setExpData(r.data);
+      })
       .catch(() => { /* fallback to in-frame data below */ })
-      .finally(() => { if (!cancelled) setExpLoading(false); });
+      .finally(() => { if (!cancelled && myKey === expQueryKey) setExpLoading(false); });
     return () => { cancelled = true; ctrl.abort(); };
-  }, [expanded, ticker]);
+  }, [expanded, ticker, timeframe, expiries, expWidened, expQueryKey]);
   const overlayData = expData || data;
   const overlayNote = (() => {
     const n = overlayData?.strikes?.length || 0;
     if (!n) return "";
-    if (expData) return `±25% band · ${n} strikes · 8 expiries`;
-    return expLoading ? "widening band…" : `${n} strikes`;
+    const scope = `${timeframe} · ${expWidened ? 8 : expiries} expiries`;
+    if (expData) return `${scope} · ${n} strikes`;
+    return expLoading ? "loading scope…" : `${scope} · ${n} strikes`;
   })();
 
   const handleCellClick = useCallback(
     (strike, colKey, value) => {
+      // F19: snapshot-linked inspector — value resolved from the displayed
+      // snapshot, never a stored number reused across refreshes.
+      const snap = { asof: (expData || data)?.asof || data?.asof || null, ticker };
       if (tradeMode && onCellClick) {
-        onCellClick(strike, colKey, value);
+        onCellClick(strike, colKey, value, snap);
       } else {
-        setSelectedCell({ strike, colKey, value });
+        setSelectedCell({ strike, colKey, value, ...snap });
       }
     },
-    [tradeMode, onCellClick]
+    [tradeMode, onCellClick, data, expData, ticker]
   );
+  // Clear ticker-dependent selection on symbol change (F18).
+  useEffect(() => { setSelectedCell(null); }, [ticker]);
 
   const handleStrikeClick = useCallback(
     (strike) => {
@@ -309,6 +327,14 @@ function SkylitDashboard({
               <span className="skylit-expanded-ticker">{ticker}</span>
               <span className="skylit-expanded-label">Full grid</span>
               {overlayNote && <span className="skylit-expanded-coverage">{overlayNote}</span>}
+              <button
+                className="skylit-trade-mode-btn"
+                onClick={() => setExpWidened((w) => !w)}
+                title="Widen analysis to 8 expiries (explicit scope change)"
+                data-testid="skylit-expand-widen"
+              >
+                {expWidened ? "Scope: wide (8)" : "Widen to 8"}
+              </button>
               <span className="skylit-expanded-hint">Esc to close</span>
             </div>
             <button

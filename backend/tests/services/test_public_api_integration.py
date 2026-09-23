@@ -55,11 +55,13 @@ def _quote(**kw):
 @pytest.fixture
 def mock_option_contract():
     """A single OptionContract that the adapter will flatten."""
+    from datetime import UTC, datetime, timedelta
+    exp1 = (datetime.now(UTC).date() + timedelta(days=30)).isoformat()
     c = MagicMock()
     c.symbol = "SPY260918C00520000"
     c.option_type = "CALL"
     c.strike = 520.0
-    c.expiration = "2026-09-18"
+    c.expiration = exp1
     c.last = 5.50
     c.bid = 5.20
     c.ask = 5.80
@@ -70,6 +72,12 @@ def mock_option_contract():
     c.gamma = 0.02
     c.theta = -0.03
     c.vega = 0.10
+    # F03: explicit unknown source times (str or None only)
+    c.bid_timestamp = None
+    c.ask_timestamp = None
+    c.last_timestamp = None
+    c.greeks_source = "vendor"
+    c.oi_effective_date = None
     return c
 
 
@@ -81,6 +89,9 @@ def mock_broker(mock_option_contract):
     calls get_trading_account() without await. The awaitable methods
     are AsyncMock attached to the sync broker.
     """
+    from datetime import UTC, datetime, timedelta
+    exp1 = (datetime.now(UTC).date() + timedelta(days=30)).isoformat()
+    exp2 = (datetime.now(UTC).date() + timedelta(days=60)).isoformat()
     broker = MagicMock()
 
     # Sync method — adapter calls without await
@@ -90,7 +101,7 @@ def mock_broker(mock_option_contract):
 
     # Async methods — adapter awaits these
     broker.get_option_expirations = AsyncMock(
-        return_value=["2026-09-18", "2026-10-16"]
+        return_value=[exp1, exp2]
     )
 
     quote = MagicMock()
@@ -99,32 +110,44 @@ def mock_broker(mock_option_contract):
     quote.symbol = "SPY"
     broker.get_quotes = AsyncMock(return_value=[quote])
 
-    # Return two calls + two puts for 2026-09-18 only
+    # Return two calls + two puts for exp1 only
     calls = [mock_option_contract, MagicMock()]
     calls[1].symbol = "SPY260918C00530000"
     calls[1].option_type = "CALL"
     calls[1].strike = 530.0
-    calls[1].expiration = "2026-09-18"
+    calls[1].expiration = exp1
     calls[1].iv = 0.15
     calls[1].delta = 0.45
+    calls[1].bid_timestamp = None
+    calls[1].ask_timestamp = None
+    calls[1].last_timestamp = None
+    calls[1].greeks_source = "vendor"
+    calls[1].oi_effective_date = None
 
     puts = [MagicMock()]
     puts[0].symbol = "SPY260918P00510000"
     puts[0].option_type = "PUT"
     puts[0].strike = 510.0
-    puts[0].expiration = "2026-09-18"
+    puts[0].expiration = exp1
     puts[0].iv = 0.14
     puts[0].delta = -0.40
     puts[0].open_interest = 3000
+    puts[0].bid_timestamp = None
+    puts[0].ask_timestamp = None
+    puts[0].last_timestamp = None
+    puts[0].greeks_source = "vendor"
+    puts[0].oi_effective_date = None
 
-    def _chain_side_effect(symbol, expiration, account_id):
-        if expiration == "2026-09-18":
+    def _chain_side_effect(symbol, expiration, account_id, instrument_type=None):
+        if expiration == exp1:
             return {"calls": calls, "puts": puts}
         return {"calls": [], "puts": []}
 
     broker.get_option_chain_parsed = AsyncMock(
         side_effect=_chain_side_effect
     )
+    broker._test_exp1 = exp1
+    broker._test_exp2 = exp2
 
     return broker
 
@@ -174,21 +197,21 @@ class TestFetchChainFromPublicApi:
                    new=AsyncMock(return_value=mock_broker)):
             result = await fetch_chain_from_public_api("SPY")
 
-        assert result["expiries"] == ["2026-09-18", "2026-10-16"]
+        assert result["expiries"] == [mock_broker._test_exp1, mock_broker._test_exp2]
 
     @pytest.mark.asyncio
     async def test_contracts_only_from_first_expiry(self, mock_broker):
-        """get_option_chain_parsed only returned data for 2026-09-18;
-        2026-10-16 should yield zero contracts."""
+        """get_option_chain_parsed only returned data for exp1;
+        exp2 should yield zero contracts."""
         from services.public_api_adapter import fetch_chain_from_public_api
 
         with patch("services.public_api_adapter._get_broker",
                    new=AsyncMock(return_value=mock_broker)):
             result = await fetch_chain_from_public_api("SPY")
 
-        # Only the 2026-09-18 contracts should be present
+        # Only the exp1 contracts should be present
         for c in result["contracts"]:
-            assert c["expiry"] == "2026-09-18"
+            assert c["expiry"] == mock_broker._test_exp1
 
     @pytest.mark.asyncio
     async def test_contract_shape_matches_cvserver(self, mock_broker):
@@ -229,7 +252,7 @@ class TestFetchChainFromPublicApi:
             result = await fetch_chain_from_public_api("SPY", max_expiries=1)
 
         assert len(result["expiries"]) == 1
-        assert result["expiries"][0] == "2026-09-18"
+        assert result["expiries"][0] == mock_broker._test_exp1
 
     @pytest.mark.asyncio
     async def test_normalizes_symbol(self, mock_broker):
@@ -240,8 +263,8 @@ class TestFetchChainFromPublicApi:
                    new=AsyncMock(return_value=mock_broker)):
             await fetch_chain_from_public_api("SPX^")
 
-        mock_broker.get_option_expirations.assert_called_once_with("SPX",
-                                                                   "acc-123")
+        args, kwargs = mock_broker.get_option_expirations.call_args
+        assert args[0] == "SPX" and args[1] == "acc-123"
 
 
 # ------------------------------------------------------------------

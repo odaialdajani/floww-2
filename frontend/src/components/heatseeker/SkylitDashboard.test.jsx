@@ -170,7 +170,7 @@ describe("SkylitDashboard", () => {
     expect(readout.textContent).toContain("2026-09-18");
   });
 
-  test("expand fetches a wider swing band for the overlay", async () => {    axios.get.mockImplementation(async (url) => ({
+  test("expand preserves scope by default; widen is explicit (F18)", async () => {    axios.get.mockImplementation(async (url) => ({
       data: {
         strikes: [{ strike: 100 }, { strike: 101 }],
         grid: {},
@@ -188,8 +188,19 @@ describe("SkylitDashboard", () => {
     await waitFor(() => {
       const calls = axios.get.mock.calls.filter((c) => String(c[0]).includes("/heatmap/"));
       expect(calls.length).toBeGreaterThan(0);
-      expect(calls[0][0]).toContain("mode=swing");
-      expect(calls[0][0]).toContain("expiries=8");
+      // Default preserves in-frame scope (day/4) — no silent swing/8 switch.
+      expect(calls[0][0]).toContain("mode=day");
+      expect(calls[0][0]).toContain("expiries=4");
+      expect(calls[0][0]).not.toContain("mode=swing");
+    });
+    // Explicit widen action requests 8 expiries.
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("skylit-expand-widen"));
+    });
+    await waitFor(() => {
+      const calls = axios.get.mock.calls.filter((c) => String(c[0]).includes("/heatmap/"));
+      const widened = calls.filter((c) => String(c[0]).includes("expiries=8"));
+      expect(widened.length).toBeGreaterThan(0);
     });
   });
 

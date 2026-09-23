@@ -1170,20 +1170,24 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         raw["contracts"] = filtered
         raw["expiries"] = sorted({c["expiry"] for c in raw["contracts"]})
 
-    # Choose GEX computation: volume-weighted for scalp, OI for normal
+    # F07: every supported mode produces a real 2D matrix. Scalp is a
+    # horizon/display/weighting combination — not an empty grid.
+    exposure_basis = "OI"
     if scalp:
         strikes = compute_gex_by_strike_volume(spot, raw["contracts"], ticker)
-        grid = {"expiries": raw["expiries"], "strikes": [], "grid": {}, "strike_totals": []}
+        from services.gex_core import compute_gex_grid_volume
+        grid = compute_gex_grid_volume(spot, raw["contracts"], ticker)
+        exposure_basis = "VOLUME_SCALP"
     else:
         strikes = compute_gex_by_strike(spot, raw["contracts"], ticker)
         grid = compute_gex_grid(spot, raw["contracts"], ticker)
         if not strikes and any((c.get("volume") or 0) > 0 for c in raw["contracts"]):
-            # Yahoo suppresses OI in certain windows (overnight/throttle) — all OI=0
-            # would blank the desk. Volume-weighted GEX keeps it alive; tagged so the
-            # UI can show the degraded source honestly.
+            # OI unavailable — volume-weighted grid keeps the desk alive but the
+            # basis is explicit (F13): never relabelled as raw OI GEX.
             from services.gex_core import compute_gex_grid_volume
             strikes = compute_gex_by_strike_volume(spot, raw["contracts"], ticker)
             grid = compute_gex_grid_volume(spot, raw["contracts"], ticker)
+            exposure_basis = "VOLUME_FALLBACK_OI_UNKNOWN"
             log.warning(f"build_heatmap: OI unavailable for {ticker} — volume-weighted GEX fallback (grid populated)")
 
     # Band: scalp=±2%, day=±15%, swing=±25%
@@ -1217,31 +1221,55 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                           key=lambda s: abs(s - spot))
     kept = _top_up_strike_set(band_set, full_ordered, MIN_GRID_STRIKES)
     strikes = [s for s in strikes if s["strike"] in kept]
-    if not scalp:
-        grid["strikes"] = [k for k in grid["strikes"] if k in kept]
-        grid["strike_totals"] = [s for s in grid["strike_totals"] if s["strike"] in kept]
+    grid["strikes"] = [k for k in grid.get("strikes", []) if k in kept]
+    grid["strike_totals"] = [s for s in grid.get("strike_totals", []) if s["strike"] in kept]
 
-    # Tag fresh/tested via tap counts
+    # F09/F10: taps are observed touches; unknown history stays unknown.
+    # No calibrated outcome probability is emitted here (tap_prob=None).
     tap_map: dict[float, int] = {}
+    taps_unknown = False
     if with_taps and not scalp:
-        tap_map = await tap_counts(ticker, [s["strike"] for s in strikes], days=5)
+        try:
+            tap_map = await tap_counts(ticker, [s["strike"] for s in strikes], days=5)
+        except Exception as e:
+            log.debug("tap_counts failed for %s (unknown history): %s", ticker, e)
+            taps_unknown = True
+    else:
+        taps_unknown = True
     for s in strikes:
         if scalp:
-            s["taps"] = 0
-            s["lifecycle"] = "live"
-            s["tap_prob"] = 1.0
+            s["taps"] = None
+            s["lifecycle"] = "unknown"
+            s["tap_prob"] = None
+            s["tap_reason"] = "SCALP_NO_HISTORY"
+        elif taps_unknown and not tap_map:
+            s["taps"] = None
+            s["lifecycle"] = "unknown"
+            s["tap_prob"] = None
+            s["tap_reason"] = "HISTORY_UNKNOWN"
         else:
-            tc = tap_map.get(s["strike"], 0)
-            s["taps"] = tc
-            if tc == 0:
+            tc = tap_map.get(s["strike"])
+            if tc is None:
+                s["taps"] = None
+                s["lifecycle"] = "unknown"
+                s["tap_prob"] = None
+                s["tap_reason"] = "HISTORY_UNKNOWN"
+            elif tc == 0:
                 s["lifecycle"] = "fresh"
+                s["taps"] = 0
+                s["tap_prob"] = None
             elif tc == 1:
                 s["lifecycle"] = "tested"
+                s["taps"] = 1
+                s["tap_prob"] = None
             elif tc == 2:
                 s["lifecycle"] = "delivered"
+                s["taps"] = 2
+                s["tap_prob"] = None
             else:
                 s["lifecycle"] = "decaying"
-            s["tap_prob"] = [0.80, 0.66, 0.33, 0.10][min(tc, 3)]
+                s["taps"] = tc
+                s["tap_prob"] = None
 
     # Per-strike traded volume for the Profile view's volume column. Engine-agnostic
     # rollup from the raw contracts (Public/cvserver/yfinance all carry volume),
@@ -1290,11 +1318,24 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         "patterns": patterns,
         "velocity": velocity,
         "tap_counts": {str(k): v for k, v in tap_map.items()},
-        # Contract fields read by the frontend (App.js / HeatseekerDashboard):
+        # F04: upstream age survives caches. stale_age_s is time since build
+        # here; source age comes from raw.received_at when present. Never reset
+        # upstream age to zero by rebuilding. data_fallback reflects actual
+        # provider switch, not a hardcoded False.
         "stale_age_s": 0.0,
-        "data_fallback": False,
-        "gex_regime": nodes.get("regime"),
+        "source_received_at": raw.get("received_at"),
+        "source_age_s": None,
+        "data_fallback": raw.get("data_source", "yfinance") != "public_api",
         "data_source": raw.get("data_source", "yfinance"),
+        "exposure_basis": exposure_basis,
+        "formula_version": "gex.v2",
+        "quality": {
+            "setup_eligible": exposure_basis == "OI",
+            "execution_eligible": False,
+            "reason_codes": [] if exposure_basis == "OI" else [exposure_basis],
+            "trade_side_capability": "none",
+        },
+        "gex_regime": nodes.get("regime"),
         "mode": mode,
         "asof": datetime.now(UTC).isoformat(),
         # New analytics

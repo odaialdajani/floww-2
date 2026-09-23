@@ -279,8 +279,8 @@ async def _fetch_king_node_history(ticker: str) -> list[dict[str, Any]]:
     Strategy: query last 30 minutes of spot snapshots from ``db.snapshots``.
     If a snapshot has a stored ``king_strike`` (the Mongo field written by
     ``save_snapshot``), use it to build a ``king_node_strike`` output entry;
-    otherwise leave the history empty (the pure function returns calm/0 in
-    that case). On
+    otherwise leave the history empty (the pure function returns unknown in
+    that case, F09). On
     any Mongo failure, return an empty list so the route still returns a
     well-formed payload.
     """
@@ -475,8 +475,7 @@ async def velocity_mode_route(ticker: str = "SPY"):
 
     History comes from Mongo ``db.snapshots`` (entries with a stored
     ``king_node_strike``). If Mongo is unavailable or no usable rows exist,
-    the pure function returns ``velocity=0, mode="calm", n_snapshots=0`` —
-    matching Wave 1's node-lifecycle fallback shape.
+    the pure function returns unknown (F09) — never fabricated calm/0.
     """
     try:
         from server import _sanitize
@@ -485,7 +484,7 @@ async def velocity_mode_route(ticker: str = "SPY"):
         return _sanitize({"ticker": ticker.upper(), **result})
     except Exception as e:
         logger.warning(f"velocity-mode route fail: {e}")
-        return {"ticker": ticker.upper() if isinstance(ticker, str) else "unknown", "velocity_strikes_per_min": 0.0, "mode": "calm", "n_snapshots": 0, "error": str(e), "status": "degraded"}
+        return {"ticker": ticker.upper() if isinstance(ticker, str) else "unknown", "velocity_strikes_per_min": None, "mode": "unknown", "n_snapshots": 0, "error": str(e), "status": "degraded"}
 
 
 @router.get("/trinity-confluence")

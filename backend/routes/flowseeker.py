@@ -2309,8 +2309,9 @@ async def _load_calibration() -> dict | None:
             blob = {k: v for k, v in doc.items() if k != "_id"}
             _calibration_blob = (_time.time(), blob)
             return blob
-    except Exception:
-        pass  # Mongo down — fire uncalibrated, never crash the scan
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug("calibration blob unavailable, firing uncalibrated: %s", e)
     return None
 
 
@@ -2359,8 +2360,9 @@ async def _load_outcomes(days: int, horizon: int) -> dict | None:
             stats.setdefault("source", "cron")
             _outcome_cache[key] = (_time.time(), stats)
             return stats
-    except Exception:
-        pass  # Mongo down — fall through to live compute
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug("outcome cron cache unavailable, live compute: %s", e)
     # 2. live compute fallback (cron cold — e.g. fresh deploy)
     try:
         alerts = fo.read_alert_history(duckdb_engine, days=days)

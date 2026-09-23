@@ -133,8 +133,9 @@ async def stream(turn_id: str, request: Request):
                     if doc:
                         _TURNS[turn_id] = {"turn_id": turn_id, "status": "done", "events": doc.get("events", []), "text": "", "verdict": doc.get("verdict", {})}
                         spec = _TURNS[turn_id]
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).debug("agent turn DB fallback failed (streaming error frame): %s", e)
         if spec is None:
             async def _nf():
                 yield _frame("error", {"error": "unknown-turn"}, "0")
@@ -166,7 +167,9 @@ async def stream(turn_id: str, request: Request):
             start = 0
             try:
                 start = int(last_id) if str(last_id).isdigit() else 0
-            except Exception:
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).debug("Last-Event-ID parse failed, starting at 0: %s", e)
                 start = 0
             eid = start
             for ev in events[start:]:
@@ -210,8 +213,9 @@ async def get_turn(turn_id: str, request: Request):
                 if doc:
                     doc.pop("_id", None)
                     return JSONResponse(status_code=200, content=doc, headers=_CORS)
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).debug("agent turn DB read failed (returning 404): %s", e)
         if turn is None:
             return JSONResponse(status_code=404, content={"error": "unknown-turn"}, headers=_CORS)
         safe = {k: v for k, v in turn.items() if k != "ledger"}
