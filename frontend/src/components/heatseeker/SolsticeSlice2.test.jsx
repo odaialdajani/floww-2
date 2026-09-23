@@ -40,6 +40,28 @@ test("metric switch renders and changes overlay basis", async () => {
   expect(screen.getByTestId("skylit-grid-basis").textContent).toContain("OI_DELTA_WEIGHTED");
 });
 
+test("scale lock freezes the legend scale until scope change", async () => {
+  const axios = require("axios");
+  axios.get.mockImplementation(async () => ({ data }));
+  await act(async () => {
+    render(<SkylitDashboard ticker="SPY" data={data} spot={500} />);
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByTestId("skylit-scale-lock"));
+  });
+  expect(screen.getByTestId("skylit-scale-lock").textContent).toContain("Scale locked");
+});
+
+test("spot chip carries exact spot + offset", async () => {
+  const axios = require("axios");
+  axios.get.mockImplementation(async () => ({ data }));
+  await act(async () => {
+    render(<SkylitDashboard ticker="SPY" data={data} spot={500.4} />);
+  });
+  const chip = screen.getByTestId("skylit-spot-chip");
+  expect(chip.title).toContain("500.40");
+});
+
 test("status strip shows Env/Loc/Setup/Data", () => {
   render(<SolsticeStatusStrip data={data} spot={501} ticker="SPY" isLive />);
   expect(screen.getByTestId("solstice-status-strip")).toBeInTheDocument();
