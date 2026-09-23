@@ -85,6 +85,28 @@ def test_t09_record_replay_available_at():
     assert cmp_["volume_rebased"] == []
 
 
+def test_ablation_ladder_gating():
+    from services.solstice_ablation import run_ladder
+    snap = {"spot": 500.0,
+            "strikes": [{"strike": 500.0, "gex": 1e6, "call_gex": 6e5, "put_gex": 4e5},
+                        {"strike": 510.0, "gex": 1e5, "call_gex": 1e5, "put_gex": 0.0}],
+            "metrics": {"magnitude_ratio_delta_over_raw": 0.45},
+            "volume_deltas": [{"strike": 500.0, "delta_volume": 300.0}]}
+    r = run_ladder(snap)
+    assert r["version"] == "abl.v1"
+    assert len(r["levels"]["L0_price_only"]["signals"]) == 1  # 500 touched
+    assert r["levels"]["L1_raw_wall"]["signals"]  # wall at/near spot
+    assert r["levels"]["L2_plus_delta"]["signals"]  # 0.45 >= 0.20
+    assert r["levels"]["L3_plus_activity"]["signals"]  # volume present
+    assert r["levels"]["L1_raw_wall"]["confirmation"].startswith("WEAK")
+    # No coverage → all abstain, never a fabricated signal.
+    e = run_ladder({"spot": 0, "strikes": []})
+    assert all(v["abstentions"] == 1 and not v["signals"] for v in e["levels"].values())
+    # Unknown delta share blocks L2 while L1 stands.
+    nod = dict(snap, metrics={})
+    assert not run_ladder(nod)["levels"]["L2_plus_delta"]["signals"]
+
+
 def test_t10_scout_side_first_and_rejections():
     from services.contract_scout import scout_candidates
     contracts = [_c(500, "call", 0.05, 1000, 0.5, 500), _c(500, "put", 0.05, 1000, -0.5, 500)]

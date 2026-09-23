@@ -23,6 +23,15 @@ remains disarmed by design.
   (INDEX-option-underlying SPX, INDEX-option-underlying SPXW, EQUITY SPX).
   SPX INDEX *quote* works, but index-option *chains* are not retrievable —
   SPX interpretation stays behind index-specific commissioning.
+- OI effective dating: measured 2026-09-23 over 2,296 SPY contracts across 6
+  expiries — `oi_effective_date` is None on ALL contracts, OI missing on none
+  (756 observed-zero). OI cadence is therefore unobservable from any vendor
+  field: OI is last-known with unknown effective date. Cross-day OI-change
+  ranking stays gated (the enrichment already skips undated comparisons);
+  reason code `OI_EFFECTIVE_UNKNOWN` registered.
+- Greek timestamps: vendor Greeks (100% of sampled contracts, all with bid
+  timestamps) carry NO Greek-specific timestamp. Quote age is the reported
+  proxy, kept separate from Greek-time certainty (`GREEK_TIME_UNKNOWN`).
 - OI publication cadence: single-session observation only; needs multi-day
   capture before asserting update times.
 - 429/Retry-After behavior: not observed (limits not probed by hammering).

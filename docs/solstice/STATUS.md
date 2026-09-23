@@ -118,6 +118,22 @@ Environment: macOS `/Users/nav/Documents/GitHub/floww-2` (CLAUDE.md Windows cano
   explicitly unprobed with reasons. Live capture: SPY 684 contracts/2 walls,
   QQQ 724/126/4, replay verified, compare honestly unavailable.
 
+## Slice 8 — user-gap closure (branch solstice/sweep8-close-gaps, 23 Sep 2026)
+- OI dating measured: 2,296 SPY contracts, `oi_effective_date` all None →
+  OI cadence unobservable via vendor field; `OI_EFFECTIVE_UNKNOWN` registered;
+  Greeks 100% vendor but timestamp-less → `GREEK_TIME_UNKNOWN`, quote-age proxy.
+- Comprehension harness: `scripts/solstice_comprehension.py` (selftest 15/15)
+  + frozen live scenarios (SPY/QQQ 2026-09-23 + synthetic stale) — the human
+  run is now a turnkey ~10-minute task with scoring.
+- Ablation ladder `solstice_ablation.py` (abl.v1): live smoke on SPY — L0 3
+  touches, L1 1 wall, L2 passes (delta share 0.41), L3 correctly abstains
+  (single snapshot). Engineering smoke only, NOT validation or edge.
+- SPX vendor follow-up drafted (SPX_FOLLOWUP.md): INDEX quote works, chain
+  400 on all shapes, exact questions for support.
+
+## Verification (slice 8)
+- Solstice suite: 56 passed. Ruff + silent gate clean (281 files).
+
 ## Slice 7 — display scale + spot precision (branch solstice/sweep7-scale-spot, 23 Sep 2026)
 - Display-scale control (§8/F15): Lock-scale button freezes the live auto
   range into a locked comparison scale for replay; auto-clears on any scope

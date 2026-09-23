@@ -11,7 +11,15 @@ from typing import Any
 
 REASON_CODES = ("SOURCE_TIME_UNKNOWN", "QUOTE_SKEW", "STALE_INPUT", "PARTIAL_CHAIN",
                 "UNKNOWN_EXPECTED_UNIVERSE", "GREEK_PAIR_MIXED", "VOLUME_REBASE",
-                "OI_REVISION", "THROTTLED", "PROVIDER_CHANGED", "CLOCK_UNCERTAIN")
+                "OI_REVISION", "THROTTLED", "PROVIDER_CHANGED", "CLOCK_UNCERTAIN",
+                # Measured 2026-09-23: vendor Greeks carry no own timestamp
+                # (2,296 SPY contracts, all None) — quote age is the proxy,
+                # reported separately from Greek-time certainty.
+                "GREEK_TIME_UNKNOWN",
+                # Measured 2026-09-23: oi_effective_date unavailable (all None)
+                # — OI is last-known with unknown effective date; cross-day OI
+                # comparisons stay gated until a dated source appears.
+                "OI_EFFECTIVE_UNKNOWN")
 
 _manifest: dict[str, Any] = {}
 
