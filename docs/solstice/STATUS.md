@@ -111,6 +111,12 @@ Environment: macOS `/Users/nav/Documents/GitHub/floww-2` (CLAUDE.md Windows cano
 - PR #13 (solstice/t00-t03-foundation → main): OPEN, MERGEABLE; CI `ruff`
   check PASSED on the PR head (16s). Live full-suite CI beyond lint not
   inferred — see baselines above.
+- Commissioning (COMMISSION.md, 23 Sep 2026, read-only, redacted): SPY path
+  commissioned (live quote w/ timestamps, 32 expiries incl. 0DTE, chain shape,
+  targeted Greeks, 252 bars, tick metadata); SPX/SPXW chain HTTP 400 on all
+  shapes (quote works) → index chain gated; OI cadence/429/history/brackets
+  explicitly unprobed with reasons. Live capture: SPY 684 contracts/2 walls,
+  QQQ 724/126/4, replay verified, compare honestly unavailable.
 
 ## Verification (slice 4)
 - `backend/tests/solstice/`: 52 passed (incl. max-pain parity canary).
