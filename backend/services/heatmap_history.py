@@ -16,7 +16,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -59,7 +58,8 @@ DDL = {
             snapshot_id VARCHAR PRIMARY KEY, ticker VARCHAR, query_key VARCHAR,
             expiries VARCHAR, spot DOUBLE, data_source VARCHAR, exposure_basis VARCHAR,
             formula_version VARCHAR, asof_ts VARCHAR, received_at VARCHAR,
-            n_contracts INTEGER, n_usable INTEGER, digest VARCHAR
+            n_contracts INTEGER, n_usable INTEGER, digest VARCHAR,
+            strikes_json VARCHAR, walls_json VARCHAR
         )
     """,
     "wall_events_v1": """
@@ -103,6 +103,12 @@ def ensure_tables(conn) -> None:
             conn.execute(ddl)
         except Exception as e:
             log.warning("heatmap_history ensure %s failed: %s", name, e)
+    # Additive migration for DBs created before strikes/walls capture.
+    for col in ("strikes_json", "walls_json"):
+        try:
+            conn.execute(f"ALTER TABLE heatmap_snapshots_v2 ADD COLUMN IF NOT EXISTS {col} VARCHAR")
+        except Exception as e:
+            log.warning("heatmap_history migrate %s failed: %s", col, e)
 
 
 def _esc(v: Any) -> str:
@@ -137,7 +143,10 @@ def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
         except Exception as dedup_e:
             log.debug("dedup check failed, proceeding to insert (idempotent PK): %s", dedup_e)
         contracts = payload.get("contracts") or []
-        # Heatmap payloads carry strikes/grid, not full contracts; record what exists.
+        # Heatmap payloads carry strike rows + grid + walls rather than full
+        # contracts; record those (contracts recorded when present).
+        strikes = payload.get("strikes") or []
+        walls = ((payload.get("metrics") or {}).get("walls")) or []
         usable = 0
         for c in contracts:
             if isinstance(c, dict) and c.get("strike"):
@@ -150,7 +159,9 @@ def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
                         _esc(payload.get("exposure_basis")), _esc(payload.get("formula_version")),
                         _esc(payload.get("asof")), _esc(payload.get("source_received_at")),
                         _esc(len(contracts)), _esc(usable),
-                        _esc(snapshot_digest(payload))]) + ")")
+                        _esc(snapshot_digest(payload)),
+                        _esc(json.dumps(strikes[:500], default=str)),
+                        _esc(json.dumps(walls, default=str))]) + ")")
         for c in contracts:
             if not isinstance(c, dict):
                 continue
@@ -227,8 +238,8 @@ def record_outcome(conn, decision_id: str, ticker: str, horizon_s: int,
 def replay_snapshot(conn, snapshot_id: str) -> dict[str, Any] | None:
     """Reconstruct exactly what was available at decision time (known-at join).
 
-    Returns snapshot row + contract rows as recorded; late-arriving revisions
-    are separate rows and never merged into this snapshot.
+    Returns snapshot row + strike rows + walls + contract rows as recorded;
+    late-arriving revisions are separate rows and never merged into this snapshot.
     """
     try:
         snap = conn.execute(
@@ -236,11 +247,23 @@ def replay_snapshot(conn, snapshot_id: str) -> dict[str, Any] | None:
             + _esc(snapshot_id)).fetchdf()
         if snap is None or len(snap) == 0:
             return None
+        row = snap.to_dict("records")[0]
         obs = conn.execute(
             "SELECT * FROM contract_observations_v2 WHERE snapshot_id = "
             + _esc(snapshot_id)).fetchdf()
+
+        def _parse(v: Any) -> Any:
+            if v is None:
+                return None
+            try:
+                return json.loads(v)
+            except (TypeError, ValueError):
+                return None
+
         return {
-            "snapshot": snap.to_dict("records")[0],
+            "snapshot": row,
+            "strikes": _parse(row.get("strikes_json")) or [],
+            "walls": _parse(row.get("walls_json")) or [],
             "contracts": obs.to_dict("records") if obs is not None else [],
             "replay_note": "available-at join: only rows with this snapshot_id; "
                            "later revisions excluded",
@@ -248,6 +271,55 @@ def replay_snapshot(conn, snapshot_id: str) -> dict[str, Any] | None:
     except Exception as e:
         log.warning("replay failed for %s: %s", snapshot_id, e)
         return None
+
+
+def compare_snapshots(conn, ticker: str, day: str) -> dict[str, Any]:
+    """Coarse wall-level change between the last two snapshots of a ticker/day.
+
+    Per-strike gross deltas + added/removed/retained wall identities. This is a
+    descriptive comparison, NOT the full spot/IV/time/OI counterfactual
+    (solstice_provenance.attribute_change) — that needs contract-level history.
+    Fewer than 2 snapshots → history_unavailable (never a one-point trend).
+    """
+    try:
+        ensure_tables(conn)
+        rows = conn.execute(
+            "SELECT snapshot_id, asof_ts, spot, strikes_json, walls_json "
+            "FROM heatmap_snapshots_v2 WHERE ticker = " + _esc(ticker.upper())
+            + " AND asof_ts LIKE " + _esc(day + "%")
+            + " ORDER BY asof_ts").fetchall()
+        if len(rows or []) < 2:
+            return {"ticker": ticker.upper(), "day": day, "status": "history_unavailable",
+                    "reason": "need 2+ recorded snapshots for comparison"}
+
+        def _parse(v: Any) -> Any:
+            try:
+                return json.loads(v) if v else None
+            except (TypeError, ValueError):
+                return None
+
+        (_id0, _asof0, _spot0, sj0, wj0) = rows[-2]
+        (_id1, _asof1, _spot1, sj1, wj1) = rows[-1]
+        s0 = {float(s.get("strike")): float(s.get("gex", 0) or 0)
+              for s in (_parse(sj0) or []) if isinstance(s, dict) and s.get("strike") is not None}
+        s1 = {float(s.get("strike")): float(s.get("gex", 0) or 0)
+              for s in (_parse(sj1) or []) if isinstance(s, dict) and s.get("strike") is not None}
+        deltas = [{"strike": k, "before": s0.get(k, 0.0), "after": v,
+                   "delta": v - s0.get(k, 0.0)}
+                  for k, v in sorted(s1.items()) if abs(v - s0.get(k, 0.0)) > 0]
+        w0 = {w.get("wall_id") for w in (_parse(wj0) or []) if isinstance(w, dict)}
+        w1 = {w.get("wall_id") for w in (_parse(wj1) or []) if isinstance(w, dict)}
+        return {"ticker": ticker.upper(), "day": day, "status": "ok",
+                "from": {"id": _id0, "asof": _asof0, "spot": _spot0},
+                "to": {"id": _id1, "asof": _asof1, "spot": _spot1},
+                "strike_deltas": sorted(deltas, key=lambda d: abs(d["delta"]), reverse=True)[:20],
+                "walls_added": sorted(w1 - w0), "walls_removed": sorted(w0 - w1),
+                "walls_retained": sorted(w0 & w1),
+                "note": "coarse wall-level comparison; use attribute_change for "
+                        "spot/IV/time/OI decomposition once contract history exists"}
+    except Exception as e:
+        log.warning("compare failed: %s", e)
+        return {"ticker": ticker.upper(), "day": day, "status": "error", "error": str(e)}
 
 
 def session_manifest(conn, ticker: str, day: str) -> dict[str, Any]:

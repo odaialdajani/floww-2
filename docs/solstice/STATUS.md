@@ -86,10 +86,33 @@ Environment: macOS `/Users/nav/Documents/GitHub/floww-2` (CLAUDE.md Windows cano
 - Full frontend suite: 576 passed / 2 failed; the 2 failures (Sidebar,
   BlademapFlowView, AppShell suites) reproduce on stashed tree — inherited.
 
-## Verification (slice 3)
-- `backend/tests/solstice/`: 50 passed (incl. 13 canaries).
-- Targeted backend total: 128+ passed; silent-except gate OK (279 files).
-- Frontend heatseeker+slice: 24 suites / 92 tests passed.
+## Slice 4 — correctness sweep + parity + full baselines (same branch, 23 Sep 2026)
+- Ruff clean on all branch files (E731/E702/B905/F401/F841/I001 fixed; CI pins
+  0.15.22, local 0.15.14 — same rule bar). Silent-except gate OK (280 files).
+- PARITY FIX: Rust `nodes.rs` max-pain still used old total-OI×distance while
+  Python moved to call/put intrinsic → would have diverged wherever the
+  extension is installed. Rust ported to intrinsic + `max_pain_basis` key in
+  bindings; new Rust unit test + Python canary pin 90.0 (28+1 Rust tests pass
+  under py3.12; py3.14 cannot build pyo3 0.22 — local runs use Python fallback
+  by design). Vendor-gamma engine stays Python-only (BS-path parity unaffected).
+- Recorder now stores strike rows + walls (`strikes_json`/`walls_json` with
+  additive migration); replay returns them; new `compare_snapshots` +
+  `/api/solstice/attribute/{ticker}` (coarse, history_unavailable <2 snaps).
+- Registry alias `window_delta_weighted_volume_v1` (§28.3 name, same state).
+- Inspector upgraded (§28.3): units/basis, call/put two-sided note, per-expiry
+  contributions from same-snapshot grids, Δ/raw ratio, Δ provenance counts,
+  OI-date coverage note.
+- Commissioning: `scripts/solstice_commission.py` — 6/6 offline checks pass;
+  account probes report BLOCKED (no PUBLIC_API_KEY, no approval) with exact list.
+- Full backend suite: 5182+ passed; remaining 40F/27E all in untouched files,
+  verified identical on stashed tree. Full frontend: 576/2, both inherited.
+- Branch stacks open PR #11 (base local main 5db4971a); PR opened for review,
+  NOT merged (needs separate authorization).
+
+## Verification (slice 4)
+- `backend/tests/solstice/`: 52 passed (incl. max-pain parity canary).
+- `cargo test` (rust/decoder-core, py3.12): 29 passed (incl. new intrinsic test).
+- Targeted backend + silent gate + frontend slice: all green (see above).
 
 ## Next
 - T04–T07: wire vendor engine into build_heatmap behind flag + wall registry integration + full snapshot route; replay recorder (T09) start capture.

@@ -9,7 +9,7 @@ never rounds up to one. No automatic risky fallback.
 from __future__ import annotations
 
 import math
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal
 from typing import Any
 
 
@@ -45,7 +45,8 @@ def breakeven_win_rate(win_net: float, loss_net: float) -> float | None:
 def stress_candidate(candidate: dict[str, Any], spreads: list[float] | None = None,
                      fees: float = 0.0, slippage: float = 0.0) -> dict[str, Any]:
     """Stress adverse fills / wider quotes / missed fills. No double-counted spread."""
-    bid = float(candidate.get("bid", 0) or 0); ask = float(candidate.get("ask", 0) or 0)
+    bid = float(candidate.get("bid", 0) or 0)
+    ask = float(candidate.get("ask", 0) or 0)
     mid = (bid + ask) / 2 if bid > 0 and ask >= bid else None
     base_spread = (ask - bid) if ask >= bid else None
     out = {"osi": candidate.get("osi"), "mid": mid, "base_spread": base_spread,

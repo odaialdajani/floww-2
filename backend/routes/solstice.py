@@ -121,6 +121,7 @@ async def replay(snapshot_id: str) -> dict[str, Any]:
 async def manifest(ticker: str, day: str = Query("")) -> dict[str, Any]:
     """Session completeness manifest for ticker/day (T09/T23 guided replay)."""
     from datetime import UTC, datetime
+
     from services.duckdb_engine import db as eng
     from services.heatmap_history import session_manifest
     conn = eng.conn if hasattr(eng, "conn") else None
@@ -128,3 +129,21 @@ async def manifest(ticker: str, day: str = Query("")) -> dict[str, Any]:
     if conn is None:
         return {"ticker": ticker.upper(), "day": day, "error": "recorder_unavailable"}
     return session_manifest(conn, ticker, day)
+
+
+@router.get("/attribute/{ticker}")
+async def attribute(ticker: str, day: str = Query("")) -> dict[str, Any]:
+    """Coarse wall-level change between the last two snapshots (T09).
+
+    Descriptive comparison only — not the spot/IV/time/OI counterfactual.
+    """
+    from datetime import UTC, datetime
+
+    from services.duckdb_engine import db as eng
+    from services.heatmap_history import compare_snapshots
+    conn = eng.conn if hasattr(eng, "conn") else None
+    day = day or datetime.now(UTC).date().isoformat()
+    if conn is None:
+        return {"ticker": ticker.upper(), "day": day, "status": "error",
+                "error": "recorder_unavailable"}
+    return compare_snapshots(conn, ticker, day)

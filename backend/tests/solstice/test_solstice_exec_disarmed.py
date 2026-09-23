@@ -2,6 +2,7 @@
 child lifecycle. No live calls — all transport mocked. Execution stays disarmed."""
 
 import sys
+
 sys.path.insert(0, "backend")
 
 from unittest.mock import AsyncMock, MagicMock

@@ -13,8 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.solstice_evidence import (build_evidence_packet, deterministic_fallback,
-                                        validate_explainer_output)
+from services.solstice_evidence import build_evidence_packet, deterministic_fallback, validate_explainer_output
 
 CORPUS_VERSION = "ai_eval.v1"
 

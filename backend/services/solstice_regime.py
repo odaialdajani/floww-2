@@ -78,7 +78,8 @@ def regime_at_spot(spot: float, contracts: list[dict[str, Any]], ticker: str = "
     vendor_total = 0.0
     for c in contracts:
         try:
-            g = float(c.get("gamma", 0) or 0); oi = float(c.get("oi", 0) or 0)
+            g = float(c.get("gamma", 0) or 0)
+            oi = float(c.get("oi", 0) or 0)
         except (TypeError, ValueError):
             continue
         if g < 0 or oi <= 0:

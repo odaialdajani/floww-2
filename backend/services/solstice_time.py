@@ -15,7 +15,7 @@ Rules:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, time as dtime
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 ET = ZoneInfo("America/New_York")

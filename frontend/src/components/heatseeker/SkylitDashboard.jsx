@@ -37,7 +37,7 @@ function SelectedWallBlock({ data, spot, selectedCell }) {
   ] : [];
   return (
     <>
-      <WallInspector wall={wall} quality={data.quality} scenario={scenarios[0]} />
+      <WallInspector wall={wall} metrics={data.metrics} grids={data.metrics?.grids} quality={data.quality} scenario={scenarios[0]} />
       <ScenarioStrip scenarios={scenarios} />
     </>
   );

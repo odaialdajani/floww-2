@@ -16,8 +16,6 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from bs_greeks import bs_gamma
-
 
 def greek_pair_provenance(gamma_source: str | None, delta_source: str | None) -> dict[str, Any]:
     """Classify (gamma, delta) source pair for delta-weighted metrics."""
@@ -60,18 +58,22 @@ def attribute_change(old: dict[str, Any], new: dict[str, Any], spot_new: float,
     never hidden.
     """
     try:
-        oi0 = float(old.get("oi", 0) or 0); oi1 = float(new.get("oi", 0) or 0)
+        oi0 = float(old.get("oi", 0) or 0)
+        oi1 = float(new.get("oi", 0) or 0)
         s0 = float(old.get("spot", spot_new) or spot_new)
-        g0 = float(old.get("gamma", 0) or 0); g1 = float(new.get("gamma", 0) or 0)
+        g0 = float(old.get("gamma", 0) or 0)
+        g1 = float(new.get("gamma", 0) or 0)
         m = float(old.get("multiplier", new.get("multiplier", 100.0)) or 100.0)
     except (TypeError, ValueError):
         return {"error": "INVALID_INPUTS", "residual": None}
-    u = lambda g, s: g * oi0 * m * s * s * 0.01
-    base = u(g0, s0)
-    s_spot = u(g0, spot_new) - base          # spot repricing
-    s_iv_time = u(g1, spot_new) - u(g0, spot_new)  # IV+time repricing (labeled combined)
+    def unit(g: float, s: float) -> float:
+        return g * oi0 * m * s * s * 0.01
+
+    base = unit(g0, s0)
+    s_spot = unit(g0, spot_new) - base          # spot repricing
+    s_iv_time = unit(g1, spot_new) - unit(g0, spot_new)  # IV+time repricing (labeled combined)
     actual_new = g1 * oi1 * m * spot_new * spot_new * 0.01
-    s_oi = actual_new - u(g1, spot_new)      # OI observation step
+    s_oi = actual_new - unit(g1, spot_new)      # OI observation step
     residual = actual_new - (base + s_spot + s_iv_time + s_oi)
     return {"order": ["spot", "iv_time", "oi"], "base": base,
             "spot": s_spot, "iv_time": s_iv_time, "oi": s_oi,

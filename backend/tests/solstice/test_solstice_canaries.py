@@ -7,6 +7,7 @@ and floating-point-claim corrections.
 """
 
 import sys
+
 sys.path.insert(0, "backend")
 
 
@@ -49,6 +50,7 @@ def test_canary_cross_symbol_late_response():
     # Contract: adapter refuses wrong-symbol substitution (fail closed).
     import asyncio
     from unittest.mock import AsyncMock, MagicMock, patch
+
     from services import public_api_adapter as ada
     broker = MagicMock()
     broker.get_trading_account.return_value = MagicMock(account_id="a")
@@ -80,6 +82,7 @@ def test_canary_same_observation_fill_blocked():
 
 def test_decimal_tick_and_multiplier():
     from decimal import Decimal
+
     from domain.exposure_metrics import decimal_strike
     assert decimal_strike("500.5") == Decimal("500.5")
     # Multiplier fixture (§28.5): m100/N200 + m40/N1000 at S=500,Γ=.03 → 4.5M
@@ -125,3 +128,20 @@ def test_change_attribution_reconciles():
     a = attribute_change(old, new, 505.0)
     assert a["within_tol"] is True
     assert abs(a["residual"]) < 1e-6
+
+
+def test_max_pain_is_intrinsic_parity():
+    # calls 200 @ 90, puts 100 @ 100, calls 100 @ 110 → intrinsic pain
+    # @90=1000, @100=2000, @110=4000 ⇒ 90 (mirrors the Rust parity test).
+    from services.gex_core import classify_nodes
+    rows = [
+        {"strike": 90.0, "gex": 2.0, "call_gex": 2.0, "put_gex": 0.0,
+         "call_oi": 200.0, "put_oi": 0.0, "total_oi": 200.0},
+        {"strike": 100.0, "gex": -1.0, "call_gex": 0.0, "put_gex": -1.0,
+         "call_oi": 0.0, "put_oi": 100.0, "total_oi": 100.0},
+        {"strike": 110.0, "gex": 1.0, "call_gex": 1.0, "put_gex": 0.0,
+         "call_oi": 100.0, "put_oi": 0.0, "total_oi": 100.0},
+    ]
+    out = classify_nodes(rows, 100.0)
+    assert out["max_pain"] == 90.0
+    assert out["max_pain_basis"] == "call_put_intrinsic_expiry_scoped"

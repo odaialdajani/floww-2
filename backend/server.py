@@ -1309,12 +1309,13 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     # unavailable (never zero-filled).
     metrics: dict[str, Any] = {"default_basis": exposure_basis}
     try:
-        from domain.exposure_metrics import (compute_delta_weighted_oi,
-                                             compute_raw_oi, compute_volume_gamma)
-        from services.gex_core import (compute_gex_by_strike_vendor,
-                                       compute_gex_grid_delta_weighted,
-                                       compute_gex_grid_vendor,
-                                       compute_gex_grid_volume)
+        from domain.exposure_metrics import compute_delta_weighted_oi, compute_raw_oi, compute_volume_gamma
+        from services.gex_core import (
+            compute_gex_by_strike_vendor,
+            compute_gex_grid_delta_weighted,
+            compute_gex_grid_vendor,
+            compute_gex_grid_volume,
+        )
         from services.wall_structure import discover_walls, nearest_walls
         raw_m = compute_raw_oi(raw["contracts"], spot)
         dw_m = compute_delta_weighted_oi(raw["contracts"], spot)
@@ -1330,6 +1331,8 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             "dadgex_usable": dw_m.usable, "dadgex_missing_delta": dw_m.missing_delta,
             "volume_gamma_gross": vol_m.gross, "volume_gamma_net": vol_m.net,
             "window_dadgex_v1": None, "window_dadgex_reason": "HISTORY_NOT_YET_RECORDED",
+            # §28.3 registry name alias (same unavailable state, both keys).
+            "window_delta_weighted_volume_v1": None,
             "magnitude_ratio_delta_over_raw": (dw_m.gross / raw_m.gross) if raw_m.gross > 0 else None,
             "vendor_rows": vendor_rows, "vendor_grid": vendor_grid,
             "grids": {"raw": None, "delta": delta_grid, "activity": activity_grid,
@@ -1492,7 +1495,9 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                          "formula_version": "gex.v2",
                                          "asof": payload.get("asof"),
                                          "source_received_at": payload.get("source_received_at"),
-                                         "contracts": raw.get("contracts", [])[:2000]},
+                                         "contracts": raw.get("contracts", [])[:2000],
+                                         "strikes": strikes,
+                                         "metrics": {"walls": metrics.get("walls", [])}},
                 f"{ticker}:{mode}:{dte}:{scalp}"))
             _background_tasks.add(_t2)
             _t2.add_done_callback(_background_tasks.discard)

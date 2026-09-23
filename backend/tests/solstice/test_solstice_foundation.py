@@ -1,6 +1,7 @@
 """Solstice foundation regression (T00–T03, T27 fixtures)."""
 
 import sys
+
 sys.path.insert(0, "backend")
 
 from domain.exposure_metrics import (
@@ -12,7 +13,7 @@ from domain.exposure_metrics import (
 
 
 def test_gamma_source_reconciliation_vendor_changes_output():
-    from services.gex_core import compute_gex_grid_vendor, compute_gex_by_strike_vendor
+    from services.gex_core import compute_gex_by_strike_vendor, compute_gex_grid_vendor
     spot = 100.0
     base = {"strike": 100.0, "type": "call", "oi": 1000, "expiry": "2026-09-23"}
     c1 = dict(base, gamma=0.01)
@@ -35,6 +36,7 @@ def test_delta_ranking_weighting_arithmetic():
     w = compute_delta_weighted_oi([a, b], spot)
     # raw: both 125M each side of the unit scale
     assert abs(a["gamma"] * m * spot * spot * 0.01 * a["oi"] - 125_000_000) < 1.0
+    assert abs(raw.gross - 250_000_000) < 1.0
     assert abs(w.gross - (56_250_000 + 12_500_000)) < 1.0
 
 
@@ -85,8 +87,9 @@ def test_decimal_strike_identity():
 
 def test_exact_clock_0dte_not_one_day():
     from datetime import UTC, datetime
-    from services.solstice_time import time_to_expiry_years
     from zoneinfo import ZoneInfo
+
+    from services.solstice_time import time_to_expiry_years
     et = ZoneInfo("America/New_York")
     # 10:00 ET on expiry day → ~6h remaining, not 1.0/365 full day
     now = datetime(2026, 9, 23, 10, 0, tzinfo=et)
@@ -98,8 +101,9 @@ def test_exact_clock_0dte_not_one_day():
 
 def test_exact_clock_expired_is_none():
     from datetime import UTC, datetime
-    from services.solstice_time import time_to_expiry_years
     from zoneinfo import ZoneInfo
+
+    from services.solstice_time import time_to_expiry_years
     et = ZoneInfo("America/New_York")
     now = datetime(2026, 9, 24, 10, 0, tzinfo=et)
     t, _, reason = time_to_expiry_years("2026-09-23", now=now, ticker="SPY")
@@ -132,6 +136,7 @@ def test_instrument_resolver_spx():
 
 def test_cancel_is_delete_tolerant_empty():
     import inspect
+
     from services import public_api
     src = inspect.getsource(public_api.PublicBroker.cancel_order)
     assert ".delete(" in src and "CANCEL_PENDING" in src
@@ -139,6 +144,7 @@ def test_cancel_is_delete_tolerant_empty():
 
 def test_multileg_uses_type_not_ordertype():
     import inspect
+
     from services import public_api
     src = inspect.getsource(public_api.PublicBroker.place_multileg_order)
     assert '"type": order_type' in src

@@ -3,6 +3,7 @@ T16 patterns, T17 vanna, T19 session, T20 sizing, T22 eval, T25 missed,
 T11 labels, T28 research, T18 registry, wall interaction, longevity."""
 
 import sys
+
 sys.path.insert(0, "backend")
 
 SPOT = 500.0
@@ -41,20 +42,45 @@ def test_t04_delta_missing_not_zero():
 
 def test_t09_record_replay_available_at():
     import duckdb
-    from services.heatmap_history import record_snapshot, replay_snapshot, session_manifest
+
+    from services.heatmap_history import (
+        compare_snapshots,
+        record_snapshot,
+        replay_snapshot,
+        session_manifest,
+    )
     conn = duckdb.connect(":memory:")
     payload = {"ticker": "TST", "expiries_used": ["2030-01-15"], "spot": SPOT,
                "data_source": "public_api", "exposure_basis": "OI",
                "formula_version": "gex.v2", "asof": "2030-01-02T00:00:00+00:00",
                "source_received_at": "2030-01-02T00:00:00+00:00",
-               "contracts": [_c(500, "call", 0.05, 1000)]}
+               "contracts": [_c(500, "call", 0.05, 1000)],
+               "strikes": [{"strike": 500, "gex": 1e6}],
+               "metrics": {"walls": [{"wall_id": "w_a", "low": 498, "high": 502,
+                                      "mid": 500, "gross": 1e6, "members": [500]}]}}
     sid = record_snapshot(conn, payload, "q")
     assert sid
     assert record_snapshot(conn, payload, "q") == sid  # idempotent, no duplicate event
     rep = replay_snapshot(conn, sid)
     assert rep and len(rep["contracts"]) == 1
+    assert rep["strikes"][0]["strike"] == 500
+    assert rep["walls"][0]["wall_id"] == "w_a"
     man = session_manifest(conn, "TST", "2030-01-02")
     assert man["n_snapshots"] == 1
+    # Single snapshot → comparison unavailable (never a one-point trend).
+    assert compare_snapshots(conn, "TST", "2030-01-02")["status"] == "history_unavailable"
+    payload2 = dict(payload, asof="2030-01-02T01:00:00+00:00",
+                    strikes=[{"strike": 500, "gex": 2e6}],
+                    metrics={"walls": [{"wall_id": "w_a", "low": 498, "high": 502,
+                                        "mid": 500, "gross": 2e6, "members": [500]},
+                                       {"wall_id": "w_b", "low": 510, "high": 514,
+                                        "mid": 512, "gross": 5e5, "members": [512]}]})
+    sid2 = record_snapshot(conn, payload2, "q")
+    assert sid2 != sid
+    cmp_ = compare_snapshots(conn, "TST", "2030-01-02")
+    assert cmp_["status"] == "ok"
+    assert cmp_["walls_added"] == ["w_b"] and cmp_["walls_retained"] == ["w_a"]
+    assert cmp_["strike_deltas"][0]["delta"] == 1e6
 
 
 def test_t10_scout_side_first_and_rejections():
@@ -158,6 +184,7 @@ def test_t18_registry_27_ops():
 
 def test_wall_interaction_time_debounced():
     from datetime import UTC, datetime, timedelta
+
     from services.wall_interaction import scenario_for, transition
     wall = {"low": 498.0, "high": 502.0}
     t0 = datetime(2030, 1, 2, 12, 0, tzinfo=UTC)

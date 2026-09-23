@@ -40,7 +40,8 @@ def transition(current: str, spot: float, wall: dict[str, Any],
                now: datetime | None = None, last: dict | None = None) -> dict[str, Any]:
     """One deterministic transition step. Returns {state, event, evidence}."""
     now_utc = now.astimezone(UTC) if isinstance(now, datetime) else datetime.now(UTC)
-    lo = float(wall.get("low", 0)); hi = float(wall.get("high", 0))
+    lo = float(wall.get("low", 0))
+    hi = float(wall.get("high", 0))
     if lo <= 0 or hi < lo or spot <= 0:
         return {"state": "unobserved", "event": None, "evidence": {"reason": "INVALID_WALL_OR_SPOT"}}
     if (last or {}).get("gap"):

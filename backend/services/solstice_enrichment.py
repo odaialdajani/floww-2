@@ -19,7 +19,8 @@ def moneyness_buckets(contracts: list[dict], spot: float) -> dict[str, Any]:
     for c in contracts or []:
         try:
             d = abs(float(c.get("delta"))) if c.get("delta") is not None else None
-            oi = float(c.get("oi", 0) or 0); vol = float(c.get("volume", 0) or 0)
+            oi = float(c.get("oi", 0) or 0)
+            vol = float(c.get("volume", 0) or 0)
         except (TypeError, ValueError):
             continue
         if d is None or not math.isfinite(d):
@@ -54,7 +55,8 @@ def oi_changes(current: list[dict], previous: list[dict]) -> dict[str, Any]:
             continue
         p = prev.get(key(c), {})
         try:
-            co = float(c.get("oi", 0) or 0); po = float(p.get("oi", 0) or 0)
+            co = float(c.get("oi", 0) or 0)
+            po = float(p.get("oi", 0) or 0)
         except (TypeError, ValueError):
             continue
         eff = c.get("oi_effective_date") or p.get("oi_effective_date")

@@ -23,8 +23,10 @@ def vanna_by_expiry(contracts: list[dict], spot: float, ticker: str = "") -> dic
     per: dict[str, dict[str, float]] = {}
     for c in contracts or []:
         try:
-            oi = float(c.get("oi", 0) or 0); strike = float(c.get("strike", 0) or 0)
-            iv = float(c.get("iv", 0) or 0); T = float(c.get("T", 0) or 0)
+            oi = float(c.get("oi", 0) or 0)
+            strike = float(c.get("strike", 0) or 0)
+            iv = float(c.get("iv", 0) or 0)
+            T = float(c.get("T", 0) or 0)
         except (TypeError, ValueError):
             continue
         if oi <= 0 or strike <= 0 or iv <= 0 or T <= 0 or spot <= 0:

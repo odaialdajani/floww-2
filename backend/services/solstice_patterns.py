@@ -8,7 +8,6 @@ complete-coverage guards. Failures retained. No dealer-intent labels.
 
 from __future__ import annotations
 
-import math
 from typing import Any
 
 VERSION = "patterns.v1"
@@ -56,7 +55,7 @@ def detect_patterns_v1(strike_rows: list[dict], spot: float, walls: list[dict] |
     if above and below:
         lo = max(below, key=lambda w: w.get("gross", 0))
         hi = max(above, key=lambda w: w.get("gross", 0))
-        interior = [g for r, g in zip(rows, grosses)
+        interior = [g for r, g in zip(rows, grosses, strict=True)
                     if float(lo.get("high", lo.get("mid"))) < float(r["strike"]) < float(hi.get("low", hi.get("mid")))]
         if interior and (sum(interior) / total) < 0.25:
             out.append({"pattern_id": "range_structure", "pattern_version": VERSION,
@@ -80,7 +79,7 @@ def detect_patterns_v1(strike_rows: list[dict], spot: float, walls: list[dict] |
                     "trigger_rule_id": "near_wall_rejection_or_acceptance",
                     "invalidation_rule_id": "none_presence_alone_predicts_nothing"})
     # Directional progression (trend): persistent side concentration + migration.
-    side_gross_above = sum(g for r, g in zip(rows, grosses) if float(r["strike"]) > spot)
+    side_gross_above = sum(g for r, g in zip(rows, grosses, strict=True) if float(r["strike"]) > spot)
     side_gross_below = total - side_gross_above
     if max(side_gross_above, side_gross_below) / total > 0.65:
         out.append({"pattern_id": "directional_progression", "pattern_version": VERSION,
@@ -94,7 +93,7 @@ def detect_patterns_v1(strike_rows: list[dict], spot: float, walls: list[dict] |
         lower = sorted([w for w in below], key=lambda w: float(w.get("mid", 0)))
         if lower:
             nearest = lower[-1]
-            corridor = [g for r, g in zip(rows, grosses)
+            corridor = [g for r, g in zip(rows, grosses, strict=True)
                         if float(nearest.get("low", 0)) - (spot * 0.02) <= float(r["strike"]) <= float(nearest.get("high", 0))]
             if corridor and sum(corridor) / total < 0.15:
                 out.append({"pattern_id": "downside_continuation_watch", "pattern_version": VERSION,

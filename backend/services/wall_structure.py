@@ -40,12 +40,11 @@ def discover_walls(strike_rows: list[dict[str, Any]], spot: float,
              or abs(float(r.get("gex", 0) or 0)) for r in rows]
     if not gross or max(gross) <= 0:
         return []
-    import statistics
     thresh = sorted(gross)[min(len(gross) - 1, int(len(gross) * pct_threshold))]
     thresh = max(thresh, min_support)
     walls: list[dict[str, Any]] = []
     run: list[dict[str, Any]] = []
-    for r, g in zip(rows, gross):
+    for r, g in zip(rows, gross, strict=True):
         if g >= thresh:
             run.append(r)
         else:
