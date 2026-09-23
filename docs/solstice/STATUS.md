@@ -118,9 +118,22 @@ Environment: macOS `/Users/nav/Documents/GitHub/floww-2` (CLAUDE.md Windows cano
   explicitly unprobed with reasons. Live capture: SPY 684 contracts/2 walls,
   QQQ 724/126/4, replay verified, compare honestly unavailable.
 
+## Slice 6 — verification hardening (branch solstice/sweep6-verify, 23 Sep 2026)
+- Envelope bug fixed: tuple `or`-chaining always returned the first parse
+  (breaking alternate keys); naive timestamps now UTC-normalized with an
+  explicit `naive_assumed_utc` flag (mixed naive/aware no longer raises).
+- Window Δvolume per strike in compare (rebase-quarantined); ReplayStrip
+  "Compare last two" control (session change window; 1m/5m/15m honestly
+  unavailable until intraday capture cadence exists).
+- Vanna = dVega/dSpot finite-difference cross-check + vomma distinction test.
+- Full-suite baselines unchanged (remaining failures verified pre-existing).
+
+## Verification (slice 6)
+- Solstice + envelope: 66 passed. Ruff + silent gate clean.
+- Frontend heatseeker+slice: 24 suites / 94 passed.
+
 ## Slice 5 — missed-items sweep (branch solstice/sweep5-missed-items, 23 Sep 2026)
-PR #14 (sweep5 → main): OPEN, MERGEABLE; CI `ruff` PASSED. Not merged
-(needs separate authorization).
+PR #14 (sweep5 → main): MERGED 23 Sep 2026.
 - §8 grid gaps closed: strike-rail gross-concentration bars (no cancellation),
   expiry headers with exact date + days-left + column coverage, 0DTE column
   share of matrix gross. All client-side from the same snapshot.

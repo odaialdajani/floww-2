@@ -55,7 +55,7 @@ def test_t09_record_replay_available_at():
                "formula_version": "gex.v2", "asof": "2030-01-02T00:00:00+00:00",
                "source_received_at": "2030-01-02T00:00:00+00:00",
                "contracts": [_c(500, "call", 0.05, 1000)],
-               "strikes": [{"strike": 500, "gex": 1e6}],
+               "strikes": [{"strike": 500, "gex": 1e6, "total_volume": 1000}],
                "metrics": {"walls": [{"wall_id": "w_a", "low": 498, "high": 502,
                                       "mid": 500, "gross": 1e6, "members": [500]}]}}
     sid = record_snapshot(conn, payload, "q")
@@ -70,7 +70,7 @@ def test_t09_record_replay_available_at():
     # Single snapshot → comparison unavailable (never a one-point trend).
     assert compare_snapshots(conn, "TST", "2030-01-02")["status"] == "history_unavailable"
     payload2 = dict(payload, asof="2030-01-02T01:00:00+00:00",
-                    strikes=[{"strike": 500, "gex": 2e6}],
+                    strikes=[{"strike": 500, "gex": 2e6, "total_volume": 1500}],
                     metrics={"walls": [{"wall_id": "w_a", "low": 498, "high": 502,
                                         "mid": 500, "gross": 2e6, "members": [500]},
                                        {"wall_id": "w_b", "low": 510, "high": 514,
@@ -81,6 +81,8 @@ def test_t09_record_replay_available_at():
     assert cmp_["status"] == "ok"
     assert cmp_["walls_added"] == ["w_b"] and cmp_["walls_retained"] == ["w_a"]
     assert cmp_["strike_deltas"][0]["delta"] == 1e6
+    assert cmp_["volume_deltas"] == [{"strike": 500.0, "delta_volume": 500.0}]
+    assert cmp_["volume_rebased"] == []
 
 
 def test_t10_scout_side_first_and_rejections():
