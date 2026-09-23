@@ -119,6 +119,8 @@ Environment: macOS `/Users/nav/Documents/GitHub/floww-2` (CLAUDE.md Windows cano
   QQQ 724/126/4, replay verified, compare honestly unavailable.
 
 ## Slice 5 — missed-items sweep (branch solstice/sweep5-missed-items, 23 Sep 2026)
+PR #14 (sweep5 → main): OPEN, MERGEABLE; CI `ruff` PASSED. Not merged
+(needs separate authorization).
 - §8 grid gaps closed: strike-rail gross-concentration bars (no cancellation),
   expiry headers with exact date + days-left + column coverage, 0DTE column
   share of matrix gross. All client-side from the same snapshot.
