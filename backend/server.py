@@ -1639,12 +1639,54 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         _scout_now = _scout_dt.now(_scout_UTC)
         _session_day = _scout_now.date().isoformat()
         _now_s = _scout_now.timestamp()
+        _scout_calls = scout_candidates(raw["contracts"], "CALLS", spot,
+                                        now_s=_now_s, session_date=_session_day)
+        _scout_puts = scout_candidates(raw["contracts"], "PUTS", spot,
+                                       now_s=_now_s, session_date=_session_day)
         payload["scout"] = {
-            "calls": scout_candidates(raw["contracts"], "CALLS", spot,
-                                      now_s=_now_s, session_date=_session_day)["n_eligible"],
-            "puts": scout_candidates(raw["contracts"], "PUTS", spot,
-                                     now_s=_now_s, session_date=_session_day)["n_eligible"],
+            "calls": _scout_calls["n_eligible"],
+            "puts": _scout_puts["n_eligible"],
+            "rejected": {k: ((_scout_calls["rejected"].get(k, 0)),
+                             (_scout_puts["rejected"].get(k, 0)))
+                         for k in set(_scout_calls["rejected"]) | set(_scout_puts["rejected"])},
         }
+        # R5-F: production decision producer — every build records one
+        # decision per scenario side, including abstentions (no-candidate is
+        # a valid result) with candidate quote evidence. Best-effort, never
+        # breaking the build; outcomes attach later via record_outcome.
+        try:
+            import contextlib as _ctxdec
+            with _ctxdec.suppress(Exception):
+                from services.duckdb_engine import db as _ddb_dec
+                from services.heatmap_history import record_decision
+                _dconn = getattr(_ddb_dec, "conn", None)
+                if _dconn is not None:
+                    for _side, _res in (("CALLS", _scout_calls), ("PUTS", _scout_puts)):
+                        _quotes = []
+                        for _c in (_res.get("candidates") or [])[:5]:
+                            _quotes.append({"osi": _c.get("osi"), "bid": _c.get("bid"),
+                                            "ask": _c.get("ask"),
+                                            "bid_ts": _c.get("bid_timestamp"),
+                                            "ask_ts": _c.get("ask_timestamp"),
+                                            "delta": _c.get("delta"),
+                                            "spread_ticks": None, "rejected": False,
+                                            "reject_reason": None})
+                        for _r in (_res.get("rejection_sample") or [])[:20]:
+                            _quotes.append({"osi": _r.get("osi"), "bid": None, "ask": None,
+                                            "bid_ts": None, "ask_ts": None, "delta": None,
+                                            "spread_ticks": None, "rejected": True,
+                                            "reject_reason": _r.get("reason")})
+                        record_decision(_dconn, {
+                            "ticker": ticker, "snapshot_id": payload.get("snapshotId", ""),
+                            "scenario": _side, "side": _side,
+                            "eligible": _res.get("n_eligible", 0) > 0,
+                            "reason_codes": sorted((_res.get("rejected") or {}).keys()),
+                            "features": {"spot": spot,
+                                         "quality": (payload.get("quality") or {}).get("state"),
+                                         "n_eligible": _res.get("n_eligible", 0)},
+                            "candidate_quotes": _quotes})
+        except Exception as _de:
+            log.debug("solstice decision record failed: %s", _de)
     except Exception as ce:
         log.debug("solstice scout attach failed: %s", ce)
     try:

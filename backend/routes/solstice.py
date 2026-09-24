@@ -182,10 +182,30 @@ async def scout(ticker: str, side: str = Query("CALLS"),
 
 @router.get("/capability")
 async def capability() -> dict[str, Any]:
-    """27-operation registry + measured manifest (T18/T26)."""
+    """27-operation registry + measured manifest (T18/T26, R5-F unified).
+
+    Registry (documented), in-memory measured manifest, and persisted
+    capability observations are returned together so documented support can
+    be reconciled against observed behavior in one place.
+    """
     from services.capability_manifest import get_manifest
     from services.public_capability import registry
-    return {"registry": registry(), "measured": get_manifest()}
+    observed: list[dict[str, Any]] = []
+    try:
+        from services.duckdb_engine import db as eng
+        conn = eng.conn if hasattr(eng, "conn") else None
+        if conn is not None:
+            rows = conn.execute(
+                "SELECT at_ts, ticker, operation, requested, returned, usable, truncated "
+                "FROM capability_observations_v1 ORDER BY at_ts DESC LIMIT 50").fetchall()
+            for r in rows or []:
+                observed.append({"at": r[0], "ticker": r[1], "operation": r[2],
+                                 "requested": r[3], "returned": r[4],
+                                 "usable": r[5], "truncated": bool(r[6])})
+    except Exception as e:
+        log.debug("capability observations unavailable: %s", e)
+    return {"registry": registry(), "measured": get_manifest(),
+            "observed": observed, "n_observed": len(observed)}
 
 
 @router.get("/replay/{snapshot_id}")
@@ -200,8 +220,13 @@ async def replay(snapshot_id: str) -> dict[str, Any]:
 
 
 @router.get("/manifest/{ticker}")
-async def manifest(ticker: str, day: str = Query("")) -> dict[str, Any]:
-    """Session completeness manifest for ticker/day (T09/T23 guided replay)."""
+async def manifest(ticker: str, day: str = Query(""),
+                   cadence_s: float = Query(300.0, gt=0)) -> dict[str, Any]:
+    """Session completeness manifest for ticker/day (T09/T23 guided replay).
+
+    R5-F: the expected capture cadence is explicit so gap detection runs;
+    without it every manifest would report snapshots without gaps.
+    """
     from datetime import UTC, datetime
 
     from services.duckdb_engine import db as eng
@@ -210,7 +235,7 @@ async def manifest(ticker: str, day: str = Query("")) -> dict[str, Any]:
     day = day or datetime.now(UTC).date().isoformat()
     if conn is None:
         return {"ticker": ticker.upper(), "day": day, "error": "recorder_unavailable"}
-    return session_manifest(conn, ticker, day)
+    return session_manifest(conn, ticker, day, expected_cadence_s=cadence_s)
 
 
 @router.get("/attribute/{ticker}")
@@ -229,3 +254,35 @@ async def attribute(ticker: str, day: str = Query("")) -> dict[str, Any]:
         return {"ticker": ticker.upper(), "day": day, "status": "error",
                 "error": "recorder_unavailable"}
     return compare_snapshots(conn, ticker, day)
+
+
+@router.get("/recorder_health")
+async def recorder_health() -> dict[str, Any]:
+    """Truthful recorder health (R5-F): durable mode, tables, latest write.
+
+    Memory fallback keeps analytics running but never claims durable capture.
+    Commissioning remains a separate final authorization.
+    """
+    import os as _os
+    from datetime import UTC, datetime
+
+    from services.duckdb_engine import db as eng
+    from services.heatmap_history import recorder_status
+
+    conn = eng.conn if hasattr(eng, "conn") else None
+    path = _os.environ.get("DUCKDB_PATH", ":memory:")
+    status = recorder_status(conn, path)
+    latest: dict[str, Any] = {}
+    try:
+        if conn is not None:
+            rows = conn.execute(
+                "SELECT snapshot_id, ticker, asof_ts FROM heatmap_snapshots_v2 "
+                "ORDER BY asof_ts DESC LIMIT 1").fetchall()
+            if rows:
+                latest = {"snapshot_id": rows[0][0], "ticker": rows[0][1],
+                          "asof": rows[0][2]}
+    except Exception as e:
+        log.debug("recorder health latest failed: %s", e)
+    status["latest_snapshot"] = latest
+    status["checked_at"] = datetime.now(UTC).isoformat()
+    return status
