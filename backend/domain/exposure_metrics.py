@@ -294,4 +294,9 @@ METRIC_REGISTRY = {
     "dadgex_net_v1": {"formula": "Σ c u N |δ|", "units": "USD/1% move", "basis": "OI_DELTA_WEIGHTED", "version": FORMULA_VERSION},
     "volume_gamma_v1": {"formula": "Σ c u V", "units": "USD/1% move", "basis": "VOLUME", "version": FORMULA_VERSION},
     "window_dadgex_v1": {"formula": "Σ c u |δ| ΔV(W)", "units": "USD/1% move", "basis": "VOLUME_WINDOW", "version": FORMULA_VERSION},
+    # Live-assembly alias of window_dadgex_v1 (double-d): same formula, units
+    # and basis. R5-B naming resolution — both keys always carry the same
+    # state; either may be read, neither silently substituted for raw grids.
+    "window_daddex_v1": {"formula": "Σ c u |δ| ΔV(W)", "units": "USD/1% move", "basis": "VOLUME_WINDOW", "version": FORMULA_VERSION,
+                         "alias_of": "window_dadgex_v1"},
 }

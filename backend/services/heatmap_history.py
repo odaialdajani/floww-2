@@ -15,12 +15,17 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from datetime import UTC, datetime
 from typing import Any
 
 log = logging.getLogger(__name__)
 
 SCHEMA_VERSION = "2"
+
+# Single-writer policy: concurrent recorders serialize on this lock (short
+# critical section). Readers never block.
+_RECORDER_LOCK = threading.Lock()
 
 
 def _now_iso() -> str:
@@ -37,6 +42,28 @@ def snapshot_digest(payload: dict[str, Any]) -> str:
     """
     from services.heatmap_snapshot import content_digest
     return content_digest(payload)
+
+
+def normalize_stored_contract(row: dict[str, Any]) -> dict[str, Any]:
+    """Lossless adapter: DB contract row → canonical contract identity (R5-B/R06).
+
+    The table stores side as `opt_type` and timestamps as `bid_ts/ask_ts/
+    last_ts`; producers use `type` and `bid_timestamp/...`. Without this
+    adapter record→replay→window matching silently yields zero comparable
+    rows. Strikes normalize to exact floats; provenance passes through.
+    """
+    if not isinstance(row, dict):
+        return {}
+    out = dict(row)
+    out["type"] = row.get("type") or row.get("opt_type")
+    out["bid_timestamp"] = row.get("bid_timestamp") or row.get("bid_ts")
+    out["ask_timestamp"] = row.get("ask_timestamp") or row.get("ask_ts")
+    out["last_timestamp"] = row.get("last_timestamp") or row.get("last_ts")
+    try:
+        out["strike"] = float(row.get("strike")) if row.get("strike") is not None else None
+    except (TypeError, ValueError):
+        out["strike"] = None
+    return out
 
 
 def observation_id_for(payload: dict[str, Any]) -> str:
@@ -129,7 +156,7 @@ def ensure_tables(conn) -> None:
         except Exception as e:
             log.warning("heatmap_history migrate %s failed: %s", col, e)
     for col in ("coverage_json", "quality_json", "scenarios_json",
-                "interactions_json", "grid_meta_json"):
+                "interactions_json", "grid_meta_json", "grids_json"):
         try:
             conn.execute(f"ALTER TABLE heatmap_snapshots_v2 ADD COLUMN IF NOT EXISTS {col} VARCHAR")
         except Exception as e:
@@ -193,15 +220,26 @@ def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
                     snapshot_id: str | None = None) -> str | None:
     """Record one heatmap payload + its contracts. Returns snapshot_id or None.
 
-    R4-13/P07 atomicity: header + contracts commit in one transaction; a
-    crash between them leaves no half-record. Retry of the same snapshot_id
-    completes missing contracts instead of skipping via dedup. Coverage
-    (requested/returned/usable/truncated) is explicit — no silent 2,000-row
-    truncation. Never stores repeated cache hits as new events: caller must
-    only invoke on fresh builds, not stale-serve paths.
+    R4-13/P07 + R5-B/R07 atomicity and truth: single-writer lock, one
+    transaction (BEGIN → dedup-verify → cleanup → header + contracts + full
+    cells → COMMIT). A failed COMMIT is never acknowledged: ROLLBACK runs
+    and None returns, so zero half-records exist. Retry of the same
+    observation ID completes missing contracts instead of skipping via
+    dedup. Coverage (requested/returned/usable/truncated) is explicit — no
+    silent 2,000-row truncation. Complete versioned cells persist (not just
+    metadata), plus quality/scenarios/interactions/grid-meta. Never stores
+    repeated cache hits as new events: caller must only invoke on fresh
+    builds, not stale-serve paths.
+
+    Concurrency policy: one module-level writer lock; concurrent recorders
+    serialize (short critical section). Readers never block.
     """
     try:
         ensure_tables(conn)
+    except Exception as e:
+        log.warning("heatmap_history record failed (non-fatal): %s", e)
+        return None
+    try:
         sid = snapshot_id or observation_id_for(payload)
         contracts = payload.get("contracts") or []
         # Heatmap payloads carry strike rows + grid + walls rather than full
@@ -215,35 +253,33 @@ def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
         truncated = bool(cov.get("truncated", False))
         coverage = {"requested": requested, "returned": returned,
                     "usable": usable, "truncated": truncated}
-        # Idempotent but verifying: header exists AND contracts complete →
-        # skip; header exists with missing contracts (crash) → rewrite.
-        try:
-            n = conn.execute(
-                "SELECT COUNT(*) FROM heatmap_snapshots_v2 WHERE snapshot_id = "
-                + _esc(sid)).fetchone()
-            if n and n[0] > 0:
-                try:
+    except Exception as e:
+        log.warning("heatmap_history record failed (non-fatal): %s", e)
+        return None
+    try:
+        with _RECORDER_LOCK:
+            conn.execute("BEGIN")
+            try:
+                # Idempotent but verifying: header exists AND contracts
+                # complete → COMMIT the read-only txn and return; header with
+                # missing contracts (crash) → rewrite inside this txn. A
+                # failed dedup read falls through to insert (PK guards dups).
+                n = conn.execute(
+                    "SELECT COUNT(*) FROM heatmap_snapshots_v2 WHERE snapshot_id = "
+                    + _esc(sid)).fetchone()
+                if n and n[0] > 0:
                     m = conn.execute(
                         "SELECT COUNT(*) FROM contract_observations_v2 WHERE snapshot_id = "
                         + _esc(sid)).fetchone()
                     if m and m[0] >= len(contracts):
+                        conn.execute("COMMIT")
                         return sid
-                except Exception:
-                    pass  # silent by design: count is an optimization; PK enforces idempotency below
-                # Partial record: remove header + partial contracts, re-insert below.
-                try:
                     conn.execute("DELETE FROM contract_observations_v2 WHERE snapshot_id = "
                                  + _esc(sid))
                     conn.execute("DELETE FROM heatmap_snapshots_v2 WHERE snapshot_id = "
                                  + _esc(sid))
-                except Exception as del_e:
-                    log.debug("partial cleanup failed: %s", del_e)
-        except Exception as dedup_e:
-            log.debug("dedup check failed, proceeding to insert (idempotent PK): %s", dedup_e)
-        import contextlib as _ctxlib
-        with _ctxlib.suppress(Exception):
-            conn.execute("BEGIN")
-        try:
+            except Exception as dedup_e:
+                log.debug("dedup check failed, proceeding to insert: %s", dedup_e)
             try:
                 cols = [d[1] for d in
                         conn.execute("PRAGMA table_info(heatmap_snapshots_v2)").fetchall()]
@@ -267,7 +303,8 @@ def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
                       "quality_json": json.dumps(payload.get("quality", {}), default=str),
                       "scenarios_json": json.dumps(payload.get("scenarios", [])[:12], default=str),
                       "interactions_json": json.dumps(payload.get("interactions", [])[:12], default=str),
-                      "grid_meta_json": json.dumps(grid_meta, default=str)}
+                      "grid_meta_json": json.dumps(grid_meta, default=str),
+                      "grids_json": json.dumps(_full_grids(payload), default=str)}
             _base_cols = ["snapshot_id", "ticker", "query_key", "expiries", "spot",
                           "data_source", "exposure_basis", "formula_version",
                           "asof_ts", "received_at", "n_contracts", "n_usable",
@@ -306,18 +343,42 @@ def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
                                 _esc(c.get("greeks_source")), _esc(c.get("oi_source", "public_api")),
                                 _esc(c.get("exposure_basis", payload.get("exposure_basis"))),
                                 _esc(payload.get("asof"))]) + ")")
-            import contextlib as _ctxlib2
-            with _ctxlib2.suppress(Exception):
-                conn.execute("COMMIT")
-        except Exception:
-            import contextlib as _ctxlib3
-            with _ctxlib3.suppress(Exception):
-                conn.execute("ROLLBACK")
-            raise
-        return sid
+            # Hard COMMIT: a failed commit is never acknowledged — control
+            # falls to ROLLBACK + None below, leaving zero half-records.
+            conn.execute("COMMIT")
+            return sid
     except Exception as e:
+        import contextlib as _ctxlib3
+        # silent by design: ROLLBACK is best-effort cleanup; the caller still
+        # gets None below, never a success ack for a failed write.
+        with _ctxlib3.suppress(Exception):
+            conn.execute("ROLLBACK")
         log.warning("heatmap_history record failed (non-fatal): %s", e)
         return None
+
+
+def _full_grids(payload: dict[str, Any]) -> dict[str, Any]:
+    """Complete versioned cell maps (R5-B/R05): main grid + metric grids.
+
+    Metadata alone (expiry names, cell counts) cannot reproduce the grid.
+    Cells persist as string-keyed maps exactly as served; replay returns
+    them verbatim for the same components to render.
+    """
+    out: dict[str, Any] = {}
+    main = payload.get("grid")
+    if isinstance(main, dict):
+        for k in ("grid", "charm_grid", "vex_grid", "vomma_grid"):
+            if isinstance(main.get(k), dict):
+                out[k] = main[k]
+    grids = ((payload.get("metrics") or {}).get("grids")) or {}
+    if isinstance(grids, dict):
+        for name, g in grids.items():
+            if isinstance(g, dict) and isinstance(g.get("grid"), dict):
+                out[str(name)] = {"grid": g["grid"],
+                                  "exposure_basis": g.get("exposure_basis"),
+                                  "status": g.get("status"),
+                                  "missing_delta": g.get("missing_delta")}
+    return out
 
 
 def record_wall_event(conn, wall_id: str, ticker: str, event: str,
@@ -434,12 +495,14 @@ def replay_snapshot(conn, snapshot_id: str) -> dict[str, Any] | None:
             "snapshot": row,
             "strikes": _parse(row.get("strikes_json")) or [],
             "walls": _parse(row.get("walls_json")) or [],
-            "contracts": obs.to_dict("records") if obs is not None else [],
+            "contracts": [normalize_stored_contract(r) for r in
+                          (obs.to_dict("records") if obs is not None else [])],
             "coverage": _parse(row.get("coverage_json")),
             "quality": _parse(row.get("quality_json")),
             "scenarios": _parse(row.get("scenarios_json")) or [],
             "interactions": _parse(row.get("interactions_json")) or [],
             "grid_meta": _parse(row.get("grid_meta_json")),
+            "grids": _parse(row.get("grids_json")) or {},
             "replay_note": "available-at join: only rows with this snapshot_id; "
                            "later revisions excluded",
         }

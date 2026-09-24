@@ -122,6 +122,9 @@ function SkylitDashboard({
   useEffect(() => { setReplaySnap(null); }, [ticker]);
   const displayData = replaySnap || data;
   const isReplay = Boolean(replaySnap);
+  // R5-B: replay renders recorded spot everywhere data renders; the control
+  // bar keeps the live spot. Live spot must never masquerade as replay.
+  const displaySpot = displayData?.spot ?? spot;
   // Grid zoom, in-frame only (2026-09-04): the expanded overlay keeps its
   // designed full density instead of compounding scale on scale.
   const [gridZoom, setGridZoom] = useState(1);
@@ -175,7 +178,7 @@ function SkylitDashboard({
   // Locked comparison scale never survives a scope change.
   useEffect(() => {
     setScaleLock(null);
-  }, [ticker, metric, viewMode, timeframe, expiries, expWidened]);
+  }, [ticker, metric, viewMode, timeframe, expiries, dte, expWidened, replaySnap]);
   useEffect(() => {
     if (!expanded) return undefined;
     let cancelled = false;
@@ -214,7 +217,7 @@ function SkylitDashboard({
       // P05 identity selection: store wall_id + strike at click time; values
       // always re-resolved from the current snapshot (never a stored number
       // reused across refreshes). Retains across asof/metric/expand.
-      const src = expData || data;
+      const src = overlayData;
       const snap = { asof: src?.asof || data?.asof || null, ticker };
       const walls = src?.metrics?.walls || data?.metrics?.walls || [];
       const s = Number(strike);
@@ -269,10 +272,11 @@ function SkylitDashboard({
       />
 
       {/* 2.4 Solstice status strip — Environment · Location · Setup state · Data status (T23) */}
-      <SolsticeStatusStrip data={displayData} spot={spot} ticker={ticker} isLive={isReplay ? false : isLive} />
+      <SolsticeStatusStrip data={displayData} spot={displaySpot} ticker={ticker} isLive={isReplay ? false : isLive} />
 
-      {/* 2.5 Exposure strip — live backend exposure-rule badges, hidden when none */}
-      <ExposureStrip ticker={ticker} />
+      {/* 2.5 Exposure strip — live backend exposure-rule badges, hidden when none.
+          Live-only: never rendered inside historical replay. */}
+      {!isReplay && <ExposureStrip ticker={ticker} />}
 
       {/* 2.6 Bottom replay strip — deterministic session replay + data status */}
       <ReplayStrip ticker={ticker} onReplay={setReplaySnap} />
@@ -282,8 +286,9 @@ function SkylitDashboard({
         </div>
       )}
 
-      {/* 2.6 Alert-engine strip — live detector badges (GAMMA_FLIP excluded; stays in exposure path) */}
-      <AlertEngineStrip ticker={ticker} />
+      {/* 2.6 Alert-engine strip — live detector badges (GAMMA_FLIP excluded; stays in exposure path).
+          Live-only: hidden in replay so live alerts cannot masquerade as history. */}
+      {!isReplay && <AlertEngineStrip ticker={ticker} />}
 
       {/* 2.5 Trade Mode bar */}
       <div className="skylit-col-bar">
@@ -388,7 +393,7 @@ function SkylitDashboard({
           )}
           <SkylitHeatmapGrid
             data={displayData}
-            spot={spot}
+            spot={displaySpot}
             ticker={ticker}
             viewMode={viewMode}
             metric={metric}
@@ -404,12 +409,12 @@ function SkylitDashboard({
         <div className="skylit-sidebar-area">
           <SkylitMetricsSidebar
             data={displayData}
-            spot={spot}
+            spot={displaySpot}
             viewMode={viewMode}
             regime={regime}
           />
           {/* T07/T23: selected-wall inspector + two-sided scenarios (deterministic) */}
-          <SelectedWallBlock data={displayData} spot={spot} selectedCell={selectedCell} />
+          <SelectedWallBlock data={displayData} spot={displaySpot} selectedCell={selectedCell} />
         </div>
       </div>
 
@@ -455,7 +460,7 @@ function SkylitDashboard({
             <div className="skylit-expanded-grid">
               <SkylitHeatmapGrid
                 data={overlayData}
-                spot={spot}
+                spot={displaySpot}
                 ticker={ticker}
                 viewMode={viewMode}
                 metric={metric}
@@ -468,7 +473,7 @@ function SkylitDashboard({
             <div className="skylit-expanded-sidebar">
               <SkylitMetricsSidebar
                 data={overlayData}
-                spot={spot}
+                spot={displaySpot}
                 viewMode={viewMode}
                 regime={regime}
               />

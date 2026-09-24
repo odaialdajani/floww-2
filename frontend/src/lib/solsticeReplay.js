@@ -28,20 +28,27 @@ export function shouldIgnoreLive(isReplayActive) {
 /**
  * Adapt a /replay snapshot payload into grid-display shape so the SAME
  * grid/inspector/evidence components render stored content (not counts).
+ * R5-B: recorded quality, scenarios, interactions and cell grids travel
+ * with the replay (never dropped for empty defaults); the caller-supplied
+ * ticker must match the stored snapshot ticker — a relabeled symbol is
+ * rejected (null) instead of rendering SPY data under a QQQ heading.
  */
 export function replayToDisplay(rep, ticker) {
   if (!rep || rep.error) return null;
   const snap = rep.snapshot || {};
+  if (ticker && snap.ticker && ticker !== snap.ticker) return null;
   const strikes = rep.strikes || [];
   const walls = rep.walls || [];
+  const grids = rep.grids || {};
   return {
-    ticker: ticker || snap.ticker || null,
+    ticker: snap.ticker || ticker || null,
     asof: snap.asof_ts || snap.asof || null,
     spot: snap.spot ?? null,
     strikes,
-    metrics: { walls, grids: {} },
-    interactions: [],
-    scenarios: [],
+    metrics: { walls, grids },
+    quality: rep.quality || undefined,
+    interactions: rep.interactions || [],
+    scenarios: rep.scenarios || [],
     replay: true,
     replay_note: rep.replay_note || "available-at replay",
     snapshot_id: snap.snapshot_id || null,
