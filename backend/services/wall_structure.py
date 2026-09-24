@@ -54,16 +54,19 @@ def discover_walls(strike_rows: list[dict[str, Any]], spot: float,
                    scope: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """Find gross-gamma concentrations; cluster adjacent strikes into zones.
 
-    R4-07/P03 contract: zero-mass rows are excluded from membership AND the
-    threshold population; gaps wider than 2.5x the median step break zones;
-    IDs bind symbol + scope + formula + boundaries. First-seen/persistence
-    live in the recorder (heatmap_history). Thresholds are research config.
+    R4-07/P03 + R5-C/R16 contract: zero-mass rows are excluded from membership
+    AND the threshold population; a zero-mass strike between supported strikes
+    BREAKS the zone (MAX_ZERO_BRIDGE = 0 — excluded rows are never proof of
+    continuous support). Gaps wider than 2.5x the median supported step break
+    zones; IDs bind symbol + scope + formula + boundaries. First-seen/
+    persistence live in the recorder (heatmap_history). Thresholds are
+    research config.
     """
     rows = _valid_rows(strike_rows)
     if not rows or not spot or spot <= 0:
         return []
-    supported = [(r, _gross_of(r)) for r in rows]
-    supported = [(r, g) for r, g in supported if g > 0]
+    masses = [(r, _gross_of(r)) for r in rows]
+    supported = [(r, g) for r, g in masses if g > 0]
     if not supported:
         return []
     gross = [g for _, g in supported]
@@ -76,12 +79,18 @@ def discover_walls(strike_rows: list[dict[str, Any]], spot: float,
     walls: list[dict[str, Any]] = []
     run: list[dict[str, Any]] = []
     prev_strike: float | None = None
-    for r, g in zip([r for r, _ in supported], gross, strict=True):
+    for r, g in masses:
         s = float(r.get("strike"))
         if prev_strike is not None and gap_break > 0 and (s - prev_strike) > gap_break and run:
             walls.append(_zone(run, spot, scope))
             run = []
         prev_strike = s
+        if g <= 0:
+            # Zero-mass strike: closes any open zone (no bridging).
+            if run:
+                walls.append(_zone(run, spot, scope))
+                run = []
+            continue
         if g >= thresh:
             run.append(r)
         elif run:

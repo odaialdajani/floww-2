@@ -32,6 +32,24 @@ HOLD_S = 60                 # hold at/inside zone for 60s
 ACCEPT_S = 120              # acceptance beyond boundary for 120s
 RETEST_TOL_PCT = 0.002
 
+# Adverse invalidation sides: a confirmed hold (support) is only invalidated
+# by sustained acceptance BELOW; a confirmed rejection (resistance) only by
+# sustained acceptance ABOVE. Favorable-side excursions never invalidate.
+ADVERSE_SIDE = {"holding": "below", "rejecting": "above"}
+
+# Feed-gap policy: no usable observation for this long breaks continuity.
+# 900s = 3x the 5-minute structural capture cadence; session-day rollover
+# and provider switches always break regardless of elapsed time.
+FEED_GAP_S = 900.0
+
+# Scope identity binds expiry dimensions (R5-C/R16): same strikes at a
+# different DTE/mode/expiry count are a different analytical scope.
+def scope_id_for(ticker: str, scope: dict[str, Any] | None) -> str:
+    scope = scope or {}
+    return "|".join(str(v) for v in (
+        str(ticker or ""), "gex.v2", scope.get("mode", "day"),
+        scope.get("dte"), scope.get("scalp", False), scope.get("expiries", 4)))
+
 # Minimal in-memory interaction store keyed by (ticker, scope, wall_id).
 # Non-durable by design: P07 hardens to DuckDB wall_events_v1 with restart/
 # gap receipts. Callers must mark durable=False when served from here.
@@ -127,6 +145,8 @@ def transition(current: str, spot: float, wall: dict[str, Any],
     inside_since = last.get("inside_since")
     beyond_since = last.get("beyond_since")
     beyond_side = last.get("beyond_side")
+    adverse_side = last.get("adverse_side")  # side whose acceptance invalidates
+    reclaim_state = last.get("reclaim_state")  # hold/reject to resume after favorable excursion
 
     def _base(state: str, event: Any, evidence: dict[str, Any]) -> dict[str, Any]:
         ev = dict(evidence or {})
@@ -138,7 +158,8 @@ def transition(current: str, spot: float, wall: dict[str, Any],
         out = {"state": state, "event": event, "evidence": ev, "at": now_iso,
                "continuity": True, "wall_position": wpos,
                "approach_side": approach, "inside_since": inside_since,
-               "beyond_since": beyond_since, "beyond_side": beyond_side}
+               "beyond_since": beyond_since, "beyond_side": beyond_side,
+               "adverse_side": adverse_side, "reclaim_state": reclaim_state}
         return out
 
     if last_state in ("unobserved",):
@@ -209,29 +230,51 @@ def transition(current: str, spot: float, wall: dict[str, Any],
             out["beyond_since"] = beyond_since
             out["beyond_side"] = beyond_side
             return out
+        # Leaving the zone clears inside dwell (R5-C/R10): a later return
+        # restarts the hold clock instead of confirming immediately.
+        inside_since = None
         out = _base("retesting", "left_zone", {"spot": s, "dwell_s": dwell_b,
                                                "beyond_side": cur_side})
+        out["inside_since"] = None
         out["beyond_since"] = beyond_since
         out["beyond_side"] = beyond_side
+        out["adverse_side"] = None
+        out["reclaim_state"] = None
         return out
     if last_state in ("holding", "rejecting"):
+        adverse = ADVERSE_SIDE[last_state]
         if above or below:
-            if beyond_since and (beyond_side is None or beyond_side == cur_side):
-                dwell_b = _dwell(now_utc, beyond_since)
-            else:
-                beyond_since = now_iso
-                beyond_side = cur_side
-                dwell_b = 0.0
-            if dwell_b >= ACCEPT_S:
-                out = _base("invalidated", "acceptance_beyond",
-                            {"spot": s, "dwell_s": dwell_b, "beyond_side": cur_side})
+            if cur_side == adverse:
+                if beyond_since and (beyond_side is None or beyond_side == cur_side):
+                    dwell_b = _dwell(now_utc, beyond_since)
+                else:
+                    beyond_since = now_iso
+                    beyond_side = cur_side
+                    dwell_b = 0.0
+                if dwell_b >= ACCEPT_S:
+                    out = _base("invalidated", "acceptance_beyond",
+                                {"spot": s, "dwell_s": dwell_b, "beyond_side": cur_side,
+                                 "adverse_side": adverse})
+                    out["beyond_since"] = beyond_since
+                    out["beyond_side"] = beyond_side
+                    return out
+                inside_since = None
+                out = _base("retesting", "probe_beyond",
+                            {"spot": s, "dwell_s": dwell_b,
+                             "beyond_side": cur_side, "adverse_side": adverse})
+                out["inside_since"] = None
                 out["beyond_since"] = beyond_since
                 out["beyond_side"] = beyond_side
+                out["adverse_side"] = adverse
+                out["reclaim_state"] = last_state
                 return out
-            out = _base("retesting", "probe_beyond", {"spot": s, "dwell_s": dwell_b,
-                                                      "beyond_side": cur_side})
-            out["beyond_since"] = beyond_since
-            out["beyond_side"] = beyond_side
+            # Favorable-side excursion: the confirmed hold/rejection stands;
+            # no invalidation clock runs on this side.
+            out = _base(last_state, None, {"spot": s, "excursion_side": cur_side})
+            out["beyond_since"] = None
+            out["beyond_side"] = None
+            out["adverse_side"] = adverse
+            out["reclaim_state"] = None
             return out
         out = _base(last_state, None, {"spot": s})
         out["beyond_since"] = None
@@ -248,14 +291,33 @@ def transition(current: str, spot: float, wall: dict[str, Any],
         return _base("accepted_beyond", None, {"spot": s})
     if last_state == "retesting":
         if inside:
+            if inside_since is None:
+                inside_since = now_iso
             dwell = _dwell(now_utc, inside_since, last.get("at"))
             if dwell >= HOLD_S:
                 out = _base("holding", "reclaim_hold",
                             {"spot": s, "dwell_s": dwell})
-                out["inside_since"] = inside_since or last.get("at")
+                out["inside_since"] = inside_since
+                out["adverse_side"] = None
+                out["reclaim_state"] = None
                 return out
             out = _base("retesting", None, {"spot": s, "dwell_s": dwell})
-            out["inside_since"] = inside_since or last.get("at") or now_iso
+            out["inside_since"] = inside_since
+            return out
+        # Outside while retesting: only the adverse side can invalidate. A
+        # favorable-side excursion resumes the pre-probe hold/rejection.
+        if adverse_side is not None and cur_side != adverse_side:
+            if reclaim_state in ("holding", "rejecting"):
+                out = _base(reclaim_state, "excursion_cleared", {"spot": s})
+                out["beyond_since"] = None
+                out["beyond_side"] = None
+                out["adverse_side"] = ADVERSE_SIDE[reclaim_state]
+                out["reclaim_state"] = None
+                return out
+            out = _base("retesting", None, {"spot": s, "dwell_s": 0.0,
+                                            "beyond_side": cur_side})
+            out["beyond_since"] = None
+            out["beyond_side"] = None
             return out
         if beyond_since and (beyond_side is None or beyond_side == cur_side):
             dwell_b = _dwell(now_utc, beyond_since)
@@ -276,6 +338,42 @@ def transition(current: str, spot: float, wall: dict[str, Any],
         return out
     return _base(last_state if last_state in STATES else "unobserved",
                  None, {"spot": s})
+
+
+def is_newer_state(a: dict[str, Any] | None, b: dict[str, Any] | None) -> bool:
+    """True when stored state a is strictly newer than b (R5-C newest-wins).
+
+    An event-only database row must not override more recent in-memory dwell
+    continuity. Unparseable timestamps lose (never treated as newer).
+    """
+    if a is None:
+        return False
+    if b is None:
+        return True
+    ta, tb = _parse_ts(a.get("at")), _parse_ts(b.get("at"))
+    if ta is None:
+        return False
+    if tb is None:
+        return True
+    return ta > tb
+
+
+def detect_wall_gap(last: dict[str, Any] | None, now: datetime,
+                    data_source: str | None) -> bool:
+    """Source-time gap detector (R5-C): session-day rollover, provider switch
+    or a feed gap beyond FEED_GAP_S breaks continuity."""
+    if not last or last.get("gap"):
+        return bool(last and last.get("gap"))
+    at = _parse_ts(last.get("at"))
+    if at is None:
+        return True  # unknown last observation time: continuity unprovable
+    now_utc = now.astimezone(UTC) if isinstance(now, datetime) else datetime.now(UTC)
+    if at.date() != now_utc.date():
+        return True
+    if data_source is not None and last.get("data_source") is not None:
+        if last.get("data_source") != data_source:
+            return True
+    return (now_utc - at).total_seconds() > FEED_GAP_S
 
 
 def scenario_for(wall: dict[str, Any], spot: float,
