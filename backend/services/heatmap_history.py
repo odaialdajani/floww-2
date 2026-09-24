@@ -195,6 +195,40 @@ def record_wall_event(conn, wall_id: str, ticker: str, event: str,
         log.warning("wall event record failed: %s", e)
 
 
+def latest_wall_state(conn, wall_id: str, ticker: str, scope: str = "") -> dict | None:
+    """Load the most recent interaction state for a scoped wall ID.
+
+    R4-06/P04 join key: (ticker, scope, wall_id). Returns the stored state
+    dict (state/at/approach_side/inside_since/beyond_since/beyond_side) or
+    None when no history exists. Never synthesizes across symbols/scopes.
+    """
+    try:
+        ensure_tables(conn)
+        rows = conn.execute(
+            "SELECT event, at_ts, evidence FROM wall_events_v1 WHERE wall_id = "
+            + _esc(wall_id) + " AND ticker = " + _esc(ticker)
+            + (" AND scope = " + _esc(scope) if scope else "")
+            + " ORDER BY at_ts DESC LIMIT 1").fetchall()
+        if not rows:
+            return None
+        event, at_ts, evidence = rows[0][0], rows[0][1], rows[0][2]
+        try:
+            ev = json.loads(evidence) if isinstance(evidence, str) else (evidence or {})
+        except Exception:
+            ev = {}
+        if not isinstance(ev, dict):
+            ev = {}
+        state = {"state": ev.get("state", event), "at": ev.get("at", at_ts),
+                 "approach_side": ev.get("approach_side"),
+                 "inside_since": ev.get("inside_since"),
+                 "beyond_since": ev.get("beyond_since"),
+                 "beyond_side": ev.get("beyond_side")}
+        return state
+    except Exception as e:
+        log.debug("latest_wall_state failed: %s", e)
+        return None
+
+
 def record_decision(conn, decision: dict[str, Any]) -> str:
     """Record scenario decision incl. no-trade with all features known then."""
     import uuid
