@@ -29,10 +29,25 @@ def q1_features(struct_units: float, turnover: float | None,
 
 
 def q2_timer(g: float, g_t_elapsed: float | None) -> dict[str, Any]:
-    """Local timer −G/G_t defined only when derivative usable and time in domain."""
+    """Local timer −G/G_t defined only when derivative usable and time in domain.
+
+    R4-16/P03: timer sign carries direction — with G>0, dG/dt>0 grows away
+    from zero (negative timer, root in the past) while dG/dt<0 approaches
+    zero (positive timer, root ahead under frozen inputs). Negative timers
+    are reported with away-interpretation, never silently dropped, and never
+    used to reject a valid opposite-sign crossing (verify forward root by
+    recomputation; shrink steps near expiry; never step across expiry).
+    """
     if g_t_elapsed is None or g_t_elapsed == 0 or g <= 0:
         return {"timer": None, "reason": "DERIVATIVE_UNUSABLE", "version": VERSION}
-    return {"timer": -g / g_t_elapsed, "version": VERSION,
+    t = -g / g_t_elapsed
+    if t < 0:
+        interp = ("moving away from zero — G and dG/dt share sign, "
+                  "zero-crossing lies in the past under frozen inputs")
+    else:
+        interp = ("approaching zero — G and dG/dt oppose, "
+                  "zero-crossing lies ahead under frozen inputs if domain holds")
+    return {"timer": t, "interpretation": interp, "version": VERSION,
             "note": "solver accuracy (a) is not realized value (b)"}
 
 
