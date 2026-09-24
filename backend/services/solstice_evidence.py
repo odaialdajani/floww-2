@@ -68,6 +68,34 @@ def build_evidence_packet(snapshot_v2: dict[str, Any], wall_id: str | None = Non
                           "value": {"low": w.get("low"), "high": w.get("high"),
                                     "gross": w.get("gross"), "net": w.get("net")},
                           "units": "USD-bounds/USD-per-1pct", "source_id": "obs-walls"})
+    # Selected-wall context (R5-E/R08): interaction state, conditional paths
+    # and data quality travel as typed facts so prose about the selected wall
+    # binds to evidence instead of floating free.
+    facts.append({"id": "fact-quality", "kind": "QUALITY",
+                  "value": {"state": quality.get("state"),
+                            "setupEligible": quality.get("setupEligible", False),
+                            "reasonCodes": list(quality.get("reasonCodes", []))},
+                  "units": "quality", "source_id": "obs-quality"})
+    _ixns = payload.get("interactions") or ((payload.get("metrics") or {}).get("interactions")) or []
+    for ix in _ixns:
+        if isinstance(ix, dict) and (wall_id is None or ix.get("wall_id") == wall_id):
+            if ix.get("wall_id"):
+                facts.append({"id": f"interaction-{ix['wall_id']}", "kind": "INTERACTION",
+                              "value": {"state": ix.get("state"), "event": ix.get("event")},
+                              "units": "state", "source_id": "obs-interaction"})
+    _scens = payload.get("scenarios") or ((payload.get("metrics") or {}).get("scenarios")) or []
+    _names = [s.get("name") for s in _scens
+              if isinstance(s, dict) and (wall_id is None or s.get("wall_id") == wall_id)
+              and s.get("name")]
+    if _names:
+        facts.append({"id": "fact-scenarios", "kind": "SCENARIO",
+                      "value": _names[:6], "units": "names", "source_id": "obs-scenarios"})
+    _metrics = payload.get("metrics") or {}
+    _win = _metrics.get("window_daddex_v1", _metrics.get("window_delta_weighted_volume_v1",
+          payload.get("window_daddex", payload.get("window_delta_weighted_volume_v1"))))
+    if isinstance(_win, (int, float)):
+        facts.append({"id": "fact-window", "kind": "WINDOW_ACTIVITY",
+                      "value": _win, "units": "USD-per-1pct", "source_id": "obs-window"})
     if user_text:
         facts.append({"id": "fact-user-text", "kind": "UNTRUSTED_USER_TEXT",
                       "value": user_text, "units": "text",
@@ -119,6 +147,53 @@ def _numbers_close(a: Any, b: Any) -> bool:
         return a == b
     denom = max(abs(fa), abs(fb), 1e-12)
     return abs(fa - fb) / denom <= _NUM_TOL
+
+
+def _fact_numbers(packet: dict[str, Any]) -> list[float]:
+    """All numeric leaves of trusted facts (R5-E/R08): prose numbers bind here."""
+    import math as _math
+    nums: list[float] = []
+
+    def _walk(v: Any) -> None:
+        if isinstance(v, bool):
+            return
+        if isinstance(v, (int, float)):
+            if _math.isfinite(v):
+                nums.append(float(v))
+            return
+        if isinstance(v, dict):
+            for x in v.values():
+                _walk(x)
+        elif isinstance(v, (list, tuple)):
+            for x in v:
+                _walk(x)
+
+    for f in packet.get("facts", []) or []:
+        if isinstance(f, dict) and f.get("kind") != "UNTRUSTED_USER_TEXT":
+            _walk(f.get("value"))
+    return nums
+
+
+_PROSE_NUM_RE = None
+
+
+def _prose_numbers(text: str) -> list[float]:
+    """Finite numbers appearing in free prose (R5-E/R08).
+
+    Word-boundaried: digits embedded in identifiers (NO_0DTE_LISTING,
+    evidence.v2, wall-bounds) are not numeric claims; standalone prices,
+    counts and percentages are.
+    """
+    global _PROSE_NUM_RE
+    import contextlib as _cx
+    import re as _re
+    if _PROSE_NUM_RE is None:
+        _PROSE_NUM_RE = _re.compile(r"(?<![\w.])-?\d+(?:,\d{3})*(?:\.\d+)?(?![\w.])")
+    out = []
+    for m in _PROSE_NUM_RE.finditer(str(text or "")):
+        with _cx.suppress(TypeError, ValueError):
+            out.append(float(m.group(0).replace(",", "")))
+    return out
 
 
 def validate_explainer_output(out: dict[str, Any], packet: dict[str, Any]) -> list[str]:
@@ -180,6 +255,22 @@ def validate_explainer_output(out: dict[str, Any], packet: dict[str, Any]) -> li
     for phrase in CERTAINTY_PHRASES:
         if phrase in low:
             errors.append(f"unsupported certainty phrase: {phrase!r}")
+    # Prose-number binding (R5-E/R08): every number in headline, observations,
+    # next condition and invalidation must resolve to a trusted fact value.
+    # Correct citations plus an optional values list do not license invented
+    # prices elsewhere in the prose.
+    _known = _fact_numbers(packet)
+    for _field, _txt in (("headline", out.get("headline", "")),
+                         ("next_condition", out.get("next_condition", "")),
+                         ("invalidation", out.get("invalidation", ""))):
+        for _n in _prose_numbers(_txt):
+            if not any(_numbers_close(_n, _k) for _k in _known):
+                errors.append(f"unsupported numeric claim in {_field}: {_n!r}")
+    for i, obs in enumerate(out.get("observations", []) or []):
+        if isinstance(obs, dict):
+            for _n in _prose_numbers(obs.get("text", "")):
+                if not any(_numbers_close(_n, _k) for _k in _known):
+                    errors.append(f"observation {i} unsupported numeric claim: {_n!r}")
     if out.get("status") == "Setup confirmed for review" and not packet.get("quality", {}).get("setupEligible", packet.get("quality", {}).get("setup_eligible", False)):
         errors.append("status promotion: Wait cannot become Setup confirmed")
     return errors
@@ -188,23 +279,44 @@ def validate_explainer_output(out: dict[str, Any], packet: dict[str, Any]) -> li
 def deterministic_fallback(packet: dict[str, Any], wall_id: str | None = None) -> dict[str, Any]:
     """Template rendered without any model — heatmap keeps working on outage.
 
-    A fallback render is a separate outcome from a model response: callers
-    must record which path produced the output (see ai_eval corpus runner).
+    R5-E: an outage still yields the useful five inspector blocks rendered
+    from typed facts (wall bounds, interaction state, quality blocker) — no
+    invented numbers, every clause cited and value-bound. A fallback render
+    is a separate outcome from a model response: callers must record which
+    path produced the output (see ai_eval corpus runner).
     """
     reasons = packet.get("quality", {}).get("reasonCodes", packet.get("quality", {}).get("reason_codes", []))
     blocker = "; ".join(reasons) if reasons else "trade-side unknown"
+    facts = {f.get("id"): f for f in packet.get("facts", []) if isinstance(f, dict)}
+    observations = []
+    wid = wall_id or packet.get("wall_id")
+    wall_fact = facts.get(f"wall-{wid}") if wid else None
+    if isinstance(wall_fact, dict):
+        bounds = wall_fact.get("value") or {}
+        observations.append({
+            "text": "Selected wall spans the recorded bounds with recorded gross exposure.",
+            "evidence_refs": [wall_fact["id"], "fact-quality"],
+            "values": [{"fact_id": wall_fact["id"], "value": bounds}],
+        })
+    ix_fact = facts.get(f"interaction-{wid}") if wid else None
+    if isinstance(ix_fact, dict):
+        observations.append({
+            "text": "Price interaction state is the recorded deterministic state.",
+            "evidence_refs": [ix_fact["id"]],
+            "values": [{"fact_id": ix_fact["id"], "value": ix_fact.get("value")}],
+        })
     return {
         "snapshot_id": packet.get("snapshot_id"),
         "query_id": packet.get("query_id"),
         "status": "Wait",
         "headline": f"WAIT — evidence pending ({blocker})",
-        "observations": [],
+        "observations": observations,
         "hypotheses": [],
         "conflicts": [],
         "next_condition": "Required evidence becomes available",
         "invalidation": "Not applicable",
         "candidate_refs": [],
         "evidence_refs": ["fact-spot", "fact-basis"],
-        "wall_id": wall_id,
+        "wall_id": wid,
         "origin": "deterministic_fallback",
     }
