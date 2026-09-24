@@ -204,6 +204,48 @@ describe("SkylitDashboard", () => {
     });
   });
 
+  test("closing expand drops expanded data; reopen never shows stale pixels", async () => {
+    // R5-B resweep: stale expanded scope must not drive inline clicks after
+    // close. Reopening refetches (loading state) instead of flashing old data.
+    let gate1 = null;
+    let gate2 = null;
+    let phase = 1;
+    axios.get.mockImplementation(async (url) => {
+      if (!String(url).includes("/heatmap/")) return { data: { strikes: [] } };
+      if (phase === 1) {
+        await new Promise((r) => { gate1 = r; });
+        return { data: { strikes: [{ strike: 100 }], asof: "EXP1", spot: 100 } };
+      }
+      await new Promise((r) => { gate2 = r; });
+      return { data: { strikes: [{ strike: 100 }, { strike: 101 }], asof: "EXP2", spot: 100 } };
+    });
+    await act(async () => {
+      render(<SkylitDashboard ticker="SPY" />);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("skylit-expand-btn"));
+    });
+    await act(async () => { gate1(); });
+    await waitFor(() => {
+      expect(document.querySelector(".skylit-expanded-coverage").textContent).toContain("1 strikes");
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("skylit-expand-close"));
+    });
+    expect(screen.queryByTestId("skylit-grid-expanded")).not.toBeInTheDocument();
+    phase = 2;
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("skylit-expand-btn"));
+    });
+    await waitFor(() => {
+      expect(document.querySelector(".skylit-expanded-coverage").textContent).toContain("loading");
+    });
+    await act(async () => { gate2(); });
+    await waitFor(() => {
+      expect(document.querySelector(".skylit-expanded-coverage").textContent).toContain("2 strikes");
+    });
+  });
+
   test("passes the full ticker universe to the bar and control bar (no fallback)", async () => {
     // 2026-09-12 regression: neither child received `tickers`, so the bar
     // fell back to 23 featured tickers and the arrows cycled 10 ("1/10")

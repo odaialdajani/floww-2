@@ -123,3 +123,62 @@ def test_evidence_packet_matches_ui_snapshot_identity():
     out = {"snapshot_id": "snap_other", "query_id": pkt["query_id"],
            "status": "Wait", "observations": []}
     assert validate_explainer_output(out, bad) != []
+
+
+def _record_r5t_snapshot():
+    """Record one R5T snapshot into the shared engine DB (unique IDs)."""
+    from services.duckdb_engine import db as eng
+    from services.heatmap_history import record_snapshot
+    conn = eng.conn
+    payload = {"ticker": "R5T", "expiries_used": ["2030-01-15"], "spot": 500.0,
+               "mode": "day", "dte": None, "scalp": False,
+               "data_source": "public_api", "exposure_basis": "OI",
+               "formula_version": "gex.v2",
+               "asof": "2030-01-02T14:00:00+00:00",
+               "source_received_at": "2030-01-02T14:00:01+00:00",
+               "contracts": [], "strikes": [{"strike": 500, "gex": 1e6}],
+               "grid": {"grid": {"2030-01-15": {"500": 1e6}}},
+               "metrics": {"walls": [{"wall_id": "w_r5", "low": 498, "high": 502,
+                                      "gross": 1e6, "net": 1e5}]},
+               "quality": {"state": "usable", "reasonCodes": [],
+                           "setupEligible": False, "executionEligible": False,
+                           "tradeSideCapability": "none"},
+               "scenarios": [{"wall_id": "w_r5", "name": "Bounce watch"}],
+               "interactions": [{"wall_id": "w_r5", "state": "testing"}]}
+    return record_snapshot(conn, payload, "R5T:day:None:False", snapshot_id="snap_r5t_replay")
+
+
+def test_evidence_replay_validates_ticker_and_wall():
+    from fastapi.testclient import TestClient
+
+    import server
+    _record_r5t_snapshot()
+    c = TestClient(server.app)
+    bad_t = c.get("/api/solstice/evidence/WRONG", params={"snapshot_id": "snap_r5t_replay"})
+    assert bad_t.json()["error"] == "ticker_mismatch"
+    bad_w = c.get("/api/solstice/evidence/R5T",
+                  params={"snapshot_id": "snap_r5t_replay", "wall_id": "w_nope"})
+    assert bad_w.json()["error"] == "unknown_wall"
+    good = c.get("/api/solstice/evidence/R5T",
+                 params={"snapshot_id": "snap_r5t_replay", "wall_id": "w_r5"}).json()
+    pkt = good["packet"]
+    assert pkt["replay_of"] == "snap_r5t_replay"
+    assert pkt["wall_id"] == "w_r5"
+    kinds = {f["kind"] for f in pkt["facts"]}
+    assert {"WALL", "INTERACTION", "SCENARIO", "QUALITY"} <= kinds
+
+
+def test_recorder_health_truthful_and_unified_capability():
+    from fastapi.testclient import TestClient
+
+    import server
+    _record_r5t_snapshot()
+    c = TestClient(server.app)
+    health = c.get("/api/solstice/recorder_health").json()
+    assert health["durable"] is False  # :memory: never claims durable
+    assert health["mode"] == "memory"
+    cap = c.get("/api/solstice/capability").json()
+    assert cap["registry"]["count"] == 27
+    assert isinstance(cap["observed"], list)
+    man = c.get("/api/solstice/manifest/R5T", params={"day": "2030-01-02"}).json()
+    assert man["n_snapshots"] >= 1 and "gaps" in man
