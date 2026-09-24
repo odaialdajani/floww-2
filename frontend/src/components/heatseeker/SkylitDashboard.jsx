@@ -12,33 +12,44 @@ import ExposureStrip from "./ExposureStrip";
 import ReplayStrip from "./ReplayStrip";
 import AlertEngineStrip from "../flowseeker/AlertEngineStrip";
 
+import { resolveSelectedWall, wallPositionOf } from "../../lib/solsticeSelection";
+
 /**
- * SelectedWallBlock — resolves the selected cell to its wall by identity from
- * the CURRENT snapshot (T06/T21 reuse). Stale asof/ticker selections render
- * nothing rather than a wrong wall.
+ * SelectedWallBlock — identity selection resolved against the CURRENT
+ * snapshot (P05/R4-06). Retains by wall_id across compatible refreshes
+ * (asof/metric/expand); cross-symbol clears; missing walls explain
+ * WALL_GONE instead of substituting the nearest different wall.
  */
 function SelectedWallBlock({ data, spot, selectedCell }) {
-  if (!selectedCell || !data) return null;
-  if (selectedCell.ticker && data.ticker && selectedCell.ticker !== data.ticker) return null;
-  if (selectedCell.asof && data.asof && selectedCell.asof !== data.asof) return null;
-  const walls = data.metrics?.walls || [];
-  const strike = Number(selectedCell.strike);
-  const wall = walls.find((w) => strike >= Number(w.low) && strike <= Number(w.high))
-    || (walls.length ? [...walls].sort((a, b) =>
-      Math.abs(Number(a.mid) - strike) - Math.abs(Number(b.mid) - strike))[0] : null);
-  // Interactions + scenarios come from the SAME snapshot when the backend
-  // attached them; the client-side pair below is a compat fallback only.
-  const interaction = (data.interactions || []).find((i) => i.wall_id === wall?.wall_id) || null;
-  const serverScenarios = data.scenarios || [];
-  const side = spot != null && wall ? (spot < Number(wall.low) ? "below" : "above") : "below";
-  const scenarios = serverScenarios.length ? serverScenarios : (wall ? [
-    { name: side === "below" ? "Bounce watch" : "Rejection watch", type: "reversal_watch",
-      confirmation: `reclaim and hold ${side === "below" ? "above " + wall.low : "below " + wall.high}`,
-      invalidation: `sustained acceptance ${side === "below" ? "below " + wall.low : "above " + wall.high}` },
-    { name: side === "below" ? "Breakdown continuation" : "Breakout continuation", type: "continuation",
-      confirmation: "acceptance beyond zone + follow-through/retest",
-      invalidation: `reclaim and hold ${side === "below" ? "above " + wall.low : "below " + wall.high}` },
-  ] : []);
+  const res = resolveSelectedWall(data, selectedCell);
+  if (res.status === "empty" || res.status === "cleared") return null;
+  if (res.status === "gone") {
+    return (
+      <>
+        <WallInspector wall={null} interaction={null} metrics={data?.metrics} grids={data?.metrics?.grids} quality={data?.quality} scenario={null} goneReason={res.reason} lastWallId={res.lastWallId} />
+        <ScenarioStrip scenarios={[]} />
+      </>
+    );
+  }
+  const { wall, interaction } = res;
+  let scenarios = res.scenarios && res.scenarios.length ? res.scenarios : [];
+  if (!scenarios.length && wall) {
+    // Compat fallback only (backend now attaches scoped scenarios): derive
+    // from wall position (wall below spot = support/bounce, wall above =
+    // resistance/rejection). Never scenarios[0] of a different wall.
+    const wpos = wallPositionOf(wall, spot);
+    const side = wpos === "inside" ? "below" : wpos;
+    scenarios = [
+      { wall_id: wall.wall_id, wall_position: wpos,
+        name: side === "below" ? "Bounce watch" : "Rejection watch", type: "reversal_watch",
+        confirmation: `reclaim and hold ${side === "below" ? "above " + wall.low : "below " + wall.high}`,
+        invalidation: `sustained acceptance ${side === "below" ? "below " + wall.low : "above " + wall.high}` },
+      { wall_id: wall.wall_id, wall_position: wpos,
+        name: side === "below" ? "Breakdown continuation" : "Breakout continuation", type: "continuation",
+        confirmation: "acceptance beyond zone + follow-through/retest",
+        invalidation: `reclaim and hold ${side === "below" ? "above " + wall.low : "below " + wall.high}` },
+    ];
+  }
   return (
     <>
       <WallInspector wall={wall} interaction={interaction} metrics={data.metrics} grids={data.metrics?.grids} quality={data.quality} scenario={scenarios[0]} />
@@ -191,13 +202,19 @@ function SkylitDashboard({
 
   const handleCellClick = useCallback(
     (strike, colKey, value) => {
-      // F19: snapshot-linked inspector — value resolved from the displayed
-      // snapshot, never a stored number reused across refreshes.
-      const snap = { asof: (expData || data)?.asof || data?.asof || null, ticker };
+      // P05 identity selection: store wall_id + strike at click time; values
+      // always re-resolved from the current snapshot (never a stored number
+      // reused across refreshes). Retains across asof/metric/expand.
+      const src = expData || data;
+      const snap = { asof: src?.asof || data?.asof || null, ticker };
+      const walls = src?.metrics?.walls || data?.metrics?.walls || [];
+      const s = Number(strike);
+      const hit = walls.find((w) => s >= Number(w.low) && s <= Number(w.high)) || null;
+      const sel = { strike, colKey, value, ...snap, wall_id: hit?.wall_id || null };
       if (tradeMode && onCellClick) {
-        onCellClick(strike, colKey, value, snap);
+        onCellClick(strike, colKey, value, sel);
       } else {
-        setSelectedCell({ strike, colKey, value, ...snap });
+        setSelectedCell(sel);
       }
     },
     [tradeMode, onCellClick, data, expData, ticker]

@@ -26,8 +26,16 @@ function fmtUsd(v) {
   return `${sign}$${a.toFixed(0)}`;
 }
 
-function WallInspector({ wall = null, interaction = null, metrics = null, grids = null, quality = null, scenario = null }) {
+function WallInspector({ wall = null, interaction = null, metrics = null, grids = null, quality = null, scenario = null, goneReason = null, lastWallId = null }) {
   if (!wall) {
+    if (goneReason === "WALL_GONE") {
+      return (
+        <div className="skylit-metrics-section" data-testid="wall-inspector-gone">
+          <div className="skylit-section-title">Selected wall · gone</div>
+          <div style={{ fontSize: 12, color: "#94a3b8" }}>Wall {lastWallId || ""} is not in this snapshot — no nearby substitute selected. Last observation retained in history.</div>
+        </div>
+      );
+    }
     return (
       <div className="skylit-metrics-section" data-testid="wall-inspector-empty">
         <div className="skylit-section-title">Selected wall</div>
@@ -70,7 +78,7 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
       {perExpiry.length > 0 && (
         <Row k="Per-expiry" v={perExpiry.slice(0, 6).map((p) => `${p.grid}:${p.expiry.slice(5)}=${fmtUsd(p.value)}`).join(" · ")} tip="Same-snapshot per-expiry contributions for member strikes" />
       )}
-      <Row k="Δ/Raw ratio" v={ratio != null ? Number(ratio).toFixed(3) : "—"} tip="delta gross / raw gross over the same set; undefined when the denominator is zero" />
+      <Row k="Δ/Raw (scope)" v={ratio != null ? Number(ratio).toFixed(3) : "—"} tip="Scope-wide delta gross / raw gross over the same snapshot set — not the selected wall. Wall-local ratio needs same-wall delta + raw grids." />
       <Row k="Δ provenance" v={pairNote} tip="Vendor/vendor, local/local eligible; mixed pairs blocked without policy" />
       <Row k="OI eff. date" v="unavailable in snapshot" tip="OI effective date coverage comes from the recorder, not this snapshot" />
       <Row k="Changed" v={interaction ? `${interaction.state}${interaction.event ? ` · ${interaction.event}` : ""} (first sighting — see replay compare)` : "see replay compare"} tip="Wall-level change needs 2+ recorded snapshots" />

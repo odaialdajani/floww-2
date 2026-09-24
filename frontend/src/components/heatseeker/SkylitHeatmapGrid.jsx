@@ -234,23 +234,26 @@ function SkylitHeatmapGrid({
 
   // §8 expiry header: exact expiry + calendar days left + column coverage.
   // Exact per-series trading-time T lives in the snapshot, not the header.
+  // R4-15: per-expiry column mass here is |net cells| (absolute net-cell
+  // mass), NOT gross (|call|+|put|). Gross lives on the strike rail from
+  // aggregated rows. Names kept distinct so absolute-net is never labeled gross.
   const expMeta = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    let matrixGross = 0;
+    let matrixAbsNet = 0;
     const cols = {};
     for (const e of expiries) {
       const col = matrix[e] || {};
-      let gross = 0;
+      let absNet = 0;
       let n = 0;
       for (const k in col) {
         const v = col[k];
         if (v == null || Number.isNaN(v)) continue;
-        gross += Math.abs(v);
+        absNet += Math.abs(v);
         n += 1;
       }
-      cols[e] = { gross, n };
-      matrixGross += gross;
+      cols[e] = { gross: absNet, absNet, n };
+      matrixAbsNet += absNet;
     }
     const meta = {};
     for (const e of expiries) {
@@ -260,10 +263,10 @@ function SkylitHeatmapGrid({
         const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
         daysLeft = Math.round((d - today) / 86400000);
       }
-      const share = matrixGross > 0 ? cols[e].gross / matrixGross : null;
+      const share = matrixAbsNet > 0 ? cols[e].absNet / matrixAbsNet : null;
       meta[e] = { ...cols[e], daysLeft, share };
     }
-    return { meta, matrixGross };
+    return { meta, matrixGross: matrixAbsNet, matrixAbsNet };
   }, [expiries, matrix]);
   const zeroDte = useMemo(
     () => expiries.filter((e) => expMeta.meta[e]?.daysLeft === 0),
