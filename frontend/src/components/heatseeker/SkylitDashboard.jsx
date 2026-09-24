@@ -12,33 +12,44 @@ import ExposureStrip from "./ExposureStrip";
 import ReplayStrip from "./ReplayStrip";
 import AlertEngineStrip from "../flowseeker/AlertEngineStrip";
 
+import { resolveSelectedWall, wallPositionOf } from "../../lib/solsticeSelection";
+
 /**
- * SelectedWallBlock — resolves the selected cell to its wall by identity from
- * the CURRENT snapshot (T06/T21 reuse). Stale asof/ticker selections render
- * nothing rather than a wrong wall.
+ * SelectedWallBlock — identity selection resolved against the CURRENT
+ * snapshot (P05/R4-06). Retains by wall_id across compatible refreshes
+ * (asof/metric/expand); cross-symbol clears; missing walls explain
+ * WALL_GONE instead of substituting the nearest different wall.
  */
 function SelectedWallBlock({ data, spot, selectedCell }) {
-  if (!selectedCell || !data) return null;
-  if (selectedCell.ticker && data.ticker && selectedCell.ticker !== data.ticker) return null;
-  if (selectedCell.asof && data.asof && selectedCell.asof !== data.asof) return null;
-  const walls = data.metrics?.walls || [];
-  const strike = Number(selectedCell.strike);
-  const wall = walls.find((w) => strike >= Number(w.low) && strike <= Number(w.high))
-    || (walls.length ? [...walls].sort((a, b) =>
-      Math.abs(Number(a.mid) - strike) - Math.abs(Number(b.mid) - strike))[0] : null);
-  // Interactions + scenarios come from the SAME snapshot when the backend
-  // attached them; the client-side pair below is a compat fallback only.
-  const interaction = (data.interactions || []).find((i) => i.wall_id === wall?.wall_id) || null;
-  const serverScenarios = data.scenarios || [];
-  const side = spot != null && wall ? (spot < Number(wall.low) ? "below" : "above") : "below";
-  const scenarios = serverScenarios.length ? serverScenarios : (wall ? [
-    { name: side === "below" ? "Bounce watch" : "Rejection watch", type: "reversal_watch",
-      confirmation: `reclaim and hold ${side === "below" ? "above " + wall.low : "below " + wall.high}`,
-      invalidation: `sustained acceptance ${side === "below" ? "below " + wall.low : "above " + wall.high}` },
-    { name: side === "below" ? "Breakdown continuation" : "Breakout continuation", type: "continuation",
-      confirmation: "acceptance beyond zone + follow-through/retest",
-      invalidation: `reclaim and hold ${side === "below" ? "above " + wall.low : "below " + wall.high}` },
-  ] : []);
+  const res = resolveSelectedWall(data, selectedCell);
+  if (res.status === "empty" || res.status === "cleared") return null;
+  if (res.status === "gone") {
+    return (
+      <>
+        <WallInspector wall={null} interaction={null} metrics={data?.metrics} grids={data?.metrics?.grids} quality={data?.quality} scenario={null} goneReason={res.reason} lastWallId={res.lastWallId} />
+        <ScenarioStrip scenarios={[]} />
+      </>
+    );
+  }
+  const { wall, interaction } = res;
+  let scenarios = res.scenarios && res.scenarios.length ? res.scenarios : [];
+  if (!scenarios.length && wall) {
+    // Compat fallback only (backend now attaches scoped scenarios): derive
+    // from wall position (wall below spot = support/bounce, wall above =
+    // resistance/rejection). Never scenarios[0] of a different wall.
+    const wpos = wallPositionOf(wall, spot);
+    const side = wpos === "inside" ? "below" : wpos;
+    scenarios = [
+      { wall_id: wall.wall_id, wall_position: wpos,
+        name: side === "below" ? "Bounce watch" : "Rejection watch", type: "reversal_watch",
+        confirmation: `reclaim and hold ${side === "below" ? "above " + wall.low : "below " + wall.high}`,
+        invalidation: `sustained acceptance ${side === "below" ? "below " + wall.low : "above " + wall.high}` },
+      { wall_id: wall.wall_id, wall_position: wpos,
+        name: side === "below" ? "Breakdown continuation" : "Breakout continuation", type: "continuation",
+        confirmation: "acceptance beyond zone + follow-through/retest",
+        invalidation: `reclaim and hold ${side === "below" ? "above " + wall.low : "below " + wall.high}` },
+    ];
+  }
   return (
     <>
       <WallInspector wall={wall} interaction={interaction} metrics={data.metrics} grids={data.metrics?.grids} quality={data.quality} scenario={scenarios[0]} />
@@ -104,6 +115,13 @@ function SkylitDashboard({
   const handleScaleReady = useCallback((s) => {
     setLiveScale((prev) => (prev && prev.min === s.min && prev.max === s.max ? prev : s));
   }, []);
+  // P09 guided replay: stored snapshot replaces the SAME grid/inspector/
+  // evidence while active; live refresh is ignored; return to live is
+  // deliberate. Cleared on ticker change (no cross-symbol leakage).
+  const [replaySnap, setReplaySnap] = useState(null);
+  useEffect(() => { setReplaySnap(null); }, [ticker]);
+  const displayData = replaySnap || data;
+  const isReplay = Boolean(replaySnap);
   // Grid zoom, in-frame only (2026-09-04): the expanded overlay keeps its
   // designed full density instead of compounding scale on scale.
   const [gridZoom, setGridZoom] = useState(1);
@@ -149,11 +167,11 @@ function SkylitDashboard({
   const [expData, setExpData] = useState(null);
   const [expLoading, setExpLoading] = useState(false);
   const [expWidened, setExpWidened] = useState(false);
-  const expQueryKey = `${ticker}|${timeframe}|${expiries}`;
+  const expQueryKey = `${ticker}|${timeframe}|${expiries}|${dte ?? ""}|${expWidened ? "wide" : "same"}`;
   useEffect(() => {
     setExpData(null);
     setExpWidened(false);
-  }, [ticker, timeframe, expiries]);
+  }, [ticker, timeframe, expiries, dte]);
   // Locked comparison scale never survives a scope change.
   useEffect(() => {
     setScaleLock(null);
@@ -165,11 +183,13 @@ function SkylitDashboard({
     const myKey = expQueryKey;
     setExpLoading(true);
     const widen = expWidened ? "&expiries=8" : "";
-    // Preserve current scope: derive mode from timeframe selection instead of
-    // hardcoding swing; widen only on explicit action.
+    // Preserve full analytical scope (R4-15): mode + dte + scalp travel with
+    // the expand fetch; widening expiries is the only explicit scope change.
     const modeParam = timeframe === "scalp" ? "scalp" : timeframe === "swing" ? "swing" : "day";
+    const dteParam = dte != null ? `&dte=${encodeURIComponent(dte)}` : "";
+    const scalpParam = timeframe === "scalp" ? "&scalp=true" : "";
     axios
-      .get(`${BACKEND_API}/heatmap/${encodeURIComponent(ticker)}?mode=${modeParam}&expiries=${expWidened ? 8 : expiries}${widen && expWidened ? "" : ""}`, {
+      .get(`${BACKEND_API}/heatmap/${encodeURIComponent(ticker)}?mode=${modeParam}&expiries=${expWidened ? 8 : expiries}${dteParam}${scalpParam}${widen && expWidened ? "" : ""}`, {
         timeout: 45000,
         signal: ctrl.signal,
       })
@@ -179,8 +199,8 @@ function SkylitDashboard({
       .catch(() => { /* fallback to in-frame data below */ })
       .finally(() => { if (!cancelled && myKey === expQueryKey) setExpLoading(false); });
     return () => { cancelled = true; ctrl.abort(); };
-  }, [expanded, ticker, timeframe, expiries, expWidened, expQueryKey]);
-  const overlayData = expData || data;
+  }, [expanded, ticker, timeframe, expiries, dte, expWidened, expQueryKey]);
+  const overlayData = replaySnap || expData || data;
   const overlayNote = (() => {
     const n = overlayData?.strikes?.length || 0;
     if (!n) return "";
@@ -191,13 +211,19 @@ function SkylitDashboard({
 
   const handleCellClick = useCallback(
     (strike, colKey, value) => {
-      // F19: snapshot-linked inspector — value resolved from the displayed
-      // snapshot, never a stored number reused across refreshes.
-      const snap = { asof: (expData || data)?.asof || data?.asof || null, ticker };
+      // P05 identity selection: store wall_id + strike at click time; values
+      // always re-resolved from the current snapshot (never a stored number
+      // reused across refreshes). Retains across asof/metric/expand.
+      const src = expData || data;
+      const snap = { asof: src?.asof || data?.asof || null, ticker };
+      const walls = src?.metrics?.walls || data?.metrics?.walls || [];
+      const s = Number(strike);
+      const hit = walls.find((w) => s >= Number(w.low) && s <= Number(w.high)) || null;
+      const sel = { strike, colKey, value, ...snap, wall_id: hit?.wall_id || null };
       if (tradeMode && onCellClick) {
-        onCellClick(strike, colKey, value, snap);
+        onCellClick(strike, colKey, value, sel);
       } else {
-        setSelectedCell({ strike, colKey, value, ...snap });
+        setSelectedCell(sel);
       }
     },
     [tradeMode, onCellClick, data, expData, ticker]
@@ -243,13 +269,18 @@ function SkylitDashboard({
       />
 
       {/* 2.4 Solstice status strip — Environment · Location · Setup state · Data status (T23) */}
-      <SolsticeStatusStrip data={data} spot={spot} ticker={ticker} isLive={isLive} />
+      <SolsticeStatusStrip data={displayData} spot={spot} ticker={ticker} isLive={isReplay ? false : isLive} />
 
       {/* 2.5 Exposure strip — live backend exposure-rule badges, hidden when none */}
       <ExposureStrip ticker={ticker} />
 
       {/* 2.6 Bottom replay strip — deterministic session replay + data status */}
-      <ReplayStrip ticker={ticker} />
+      <ReplayStrip ticker={ticker} onReplay={setReplaySnap} />
+      {isReplay && (
+        <div data-testid="solstice-replay-banner" title="Replay mode — live refresh ignored">
+          REPLAY {replaySnap?.asof || ""} — live updates paused · select Live in the replay strip to return
+        </div>
+      )}
 
       {/* 2.6 Alert-engine strip — live detector badges (GAMMA_FLIP excluded; stays in exposure path) */}
       <AlertEngineStrip ticker={ticker} />
@@ -356,7 +387,7 @@ function SkylitDashboard({
             </div>
           )}
           <SkylitHeatmapGrid
-            data={data}
+            data={displayData}
             spot={spot}
             ticker={ticker}
             viewMode={viewMode}
@@ -372,13 +403,13 @@ function SkylitDashboard({
         {/* Metrics Sidebar */}
         <div className="skylit-sidebar-area">
           <SkylitMetricsSidebar
-            data={data}
+            data={displayData}
             spot={spot}
             viewMode={viewMode}
             regime={regime}
           />
           {/* T07/T23: selected-wall inspector + two-sided scenarios (deterministic) */}
-          <SelectedWallBlock data={data} spot={spot} selectedCell={selectedCell} />
+          <SelectedWallBlock data={displayData} spot={spot} selectedCell={selectedCell} />
         </div>
       </div>
 

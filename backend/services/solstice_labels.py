@@ -19,17 +19,53 @@ def label_touch(path: list[tuple[float, float]], zone: tuple[float, float],
                 horizon_s: float, target: float, stop: float) -> dict[str, Any]:
     """First-passage label over (t, price) path. Both-inside-same-bar → unknown order.
 
+    R4-11/P10 contract: outcomes start at a QUALIFYING ZONE ENCOUNTER —
+    a target hit before any encounter is not a target_hit. Event chronology
+    enforced (only hits at/after encounter count). Horizon coverage enforced:
+    paths shorter than horizon_s without a decision are censored (never
+    no_touch from incomplete observation). Touch search bounded by horizon.
+    Gaps (None/non-finite) censor. Both-inside-same-bar → unknown order.
+
     Returns {label, censored, detail}. Labels: target_hit | stop_hit | no_touch |
     indeterminate | data_gap | simultaneous_unknown.
     """
     lo, hi = zone
-    t0 = path[0][0] if path else 0
-    hit_t = hit_s = None
-    for t, p in path:
-        if t - t0 > horizon_s:
-            break
+    if not path:
+        return {"label": "data_gap", "censored": True, "version": LABEL_VERSION,
+                "detail": "empty path"}
+    t0 = path[0][0]
+    # Horizon-bounded observations only.
+    obs = [(t, p) for t, p in path if t - t0 <= horizon_s]
+    for _t, p in obs:
         if p is None or not math.isfinite(p):
             return {"label": "data_gap", "censored": True, "version": LABEL_VERSION}
+    # Qualifying encounter: first zone touch within horizon.
+    encounter_t = None
+    for _t, _p in obs:
+        if lo <= _p <= hi:
+            encounter_t = _t
+            break
+    # Same-observation dual-barrier hit blocks fills even without encounter
+    # (order unknown — never an assumed win). Preserves the fill canary.
+    raw_t = raw_s = None
+    for t, p in obs:
+        if raw_t is None and ((target >= hi and p >= target) or (target <= lo and p <= target)):
+            raw_t = t
+        if raw_s is None and ((stop >= hi and p >= stop) or (stop <= lo and p <= stop)):
+            raw_s = t
+    if raw_t is not None and raw_s is not None and raw_t == raw_s:
+        return {"label": "simultaneous_unknown", "censored": True, "version": LABEL_VERSION,
+                "detail": "both barriers inside same observation; order unknown"}
+    covered = (obs[-1][0] - t0) >= horizon_s if len(obs) >= 2 else False
+    if encounter_t is None:
+        if not covered:
+            return {"label": "indeterminate", "censored": True, "version": LABEL_VERSION,
+                    "detail": "HORIZON_INCOMPLETE_no_encounter"}
+        return {"label": "no_touch", "censored": False, "version": LABEL_VERSION}
+    hit_t = hit_s = None
+    for t, p in obs:
+        if t < encounter_t:
+            continue  # chronology: nothing before encounter counts
         if hit_t is None and ((target >= hi and p >= target) or (target <= lo and p <= target)):
             hit_t = t
         if hit_s is None and ((stop >= hi and p >= stop) or (stop <= lo and p <= stop)):
@@ -41,7 +77,10 @@ def label_touch(path: list[tuple[float, float]], zone: tuple[float, float],
         return {"label": "target_hit", "censored": False, "version": LABEL_VERSION}
     if hit_s is not None:
         return {"label": "stop_hit", "censored": False, "version": LABEL_VERSION}
-    touched = any(lo <= p <= hi for _, p in path if p is not None)
+    if not covered:
+        return {"label": "indeterminate", "censored": True, "version": LABEL_VERSION,
+                "detail": "HORIZON_INCOMPLETE_no_decision"}
+    touched = any(lo <= p <= hi for _, p in obs)
     return {"label": "no_touch" if not touched else "indeterminate",
             "censored": False, "version": LABEL_VERSION}
 

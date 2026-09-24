@@ -11,7 +11,11 @@ from __future__ import annotations
 from typing import Any
 
 #Saver: operation → {docs, wrapper, writes}
-OPERATIONS: list[dict[str, Any]] = [
+# Per-op classification axes (P11/R4-18, unknown-first):
+#   tests: contract test status (mocked_only | none)
+#   entitlement: commissioning_required (default) | verified
+#   observed: not_observed (default) | mocked_only | observed
+_OPERATIONS_BASE: list[dict[str, Any]] = [
     {"id": 1, "op": "create_token", "docs": "authorization/create-personal-access-token", "wrapper": "PublicBroker.auth", "writes": False},
     {"id": 2, "op": "get_accounts", "docs": "list-accounts/get-accounts", "wrapper": "PublicBroker.get_accounts", "writes": False},
     {"id": 3, "op": "get_portfolio_v2", "docs": "account-details/get-account-portfolio-v2", "wrapper": "PublicBroker.get_portfolio", "writes": False},
@@ -40,6 +44,17 @@ OPERATIONS: list[dict[str, Any]] = [
     {"id": 26, "op": "get_greeks", "docs": "option-details/get-option-greeks", "wrapper": "PublicBroker.get_option_greeks", "writes": False},
     {"id": 27, "op": "get_strategy_quote", "docs": "option-details/get-strategy-quote", "wrapper": "PublicBroker.get_strategy_quote", "writes": False},
 ]
+
+
+def _classified(op: dict[str, Any]) -> dict[str, Any]:
+    d = dict(op)
+    d.setdefault("tests", "mocked_only" if d.get("wrapper") else "none")
+    d.setdefault("entitlement", "commissioning_required")
+    d.setdefault("observed", "not_observed")
+    return d
+
+
+OPERATIONS: list[dict[str, Any]] = [_classified(o) for o in _OPERATIONS_BASE]
 
 UNAVAILABLE_IN_PUBLIC_ONLY = (
     "market-wide aggressor trade feed", "dealer inventory",

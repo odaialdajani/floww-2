@@ -1316,7 +1316,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             compute_gex_grid_vendor,
             compute_gex_grid_volume,
         )
-        from services.wall_structure import discover_walls, nearest_walls
+        from services.wall_structure import discover_walls, nearest_by_side, nearest_walls
         raw_m = compute_raw_oi(raw["contracts"], spot)
         dw_m = compute_delta_weighted_oi(raw["contracts"], spot)
         vol_m = compute_volume_gamma(raw["contracts"], spot)
@@ -1339,13 +1339,16 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                       "vendor": vendor_grid},
             "formula_version": "gex.v2",
         })
-        sol_walls = discover_walls(strikes if exposure_basis == "OI" else vendor_rows, spot)
+        sol_scope = {"symbol": ticker, "formula": "gex.v2"}
+        sol_walls = discover_walls(strikes if exposure_basis == "OI" else vendor_rows, spot,
+                                   scope=sol_scope)
         metrics["walls"] = sol_walls
         metrics["nearest_walls"] = nearest_walls(sol_walls, spot)
+        metrics["nearest_by_side"] = nearest_by_side(sol_walls, spot)
         # F23: off-screen landmarks from the FULL universe (pre-band vendor
         # rows), so major walls outside the visible window stay navigable.
         try:
-            universe_walls = discover_walls(vendor_rows, spot)
+            universe_walls = discover_walls(vendor_rows, spot, scope=sol_scope)
             kept = {w["wall_id"] for w in sol_walls}
             metrics["offscreen_landmarks"] = [
                 {**w, "offscreen": True} for w in universe_walls
@@ -1353,6 +1356,43 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         except Exception as le:
             log.debug("offscreen landmarks failed: %s", le)
             metrics["offscreen_landmarks"] = []
+        # R4-14/P13: live window delta-weighted activity from the recorder's
+        # previous snapshot (same ticker, same session day, same source).
+        # Same-contract, same-epoch only; rebase quarantines; otherwise the
+        # surface stays unavailable (never zero-filled, never raw fallback).
+        try:
+            import contextlib as _ctxw
+            with _ctxw.suppress(Exception):
+                from services.duckdb_engine import db as _ddb_win
+                from services.heatmap_history import replay_snapshot
+                _wconn = getattr(_ddb_win, "conn", None)
+                if _wconn is not None:
+                    _prev_rows = _wconn.execute(
+                        "SELECT snapshot_id, asof_ts FROM heatmap_snapshots_v2 WHERE ticker = '"
+                        + str(ticker).replace("'", "''") + "' ORDER BY asof_ts DESC LIMIT 1").fetchall()
+                    if _prev_rows:
+                        _pid = _prev_rows[0][0]
+                        _prep = replay_snapshot(_wconn, _pid)
+                        _pcontracts = (_prep or {}).get("contracts") or []
+                        _psnap = (_prep or {}).get("snapshot") or {}
+                        import datetime as _dtw
+                        _today = _dtw.datetime.now(_dtw.UTC).date().isoformat()
+                        _same_day = str(_psnap.get("asof_ts", ""))[:10] == _today
+                        if _pcontracts and _same_day:
+                            from services.solstice_enrichment import window_contract_activity
+                            _w = window_contract_activity(_pcontracts, raw["contracts"], spot)
+                            if _w.get("status") == "ok" and _w.get("contracts"):
+                                metrics["window_daddex_v1"] = sum(
+                                    c.get("window_daddex", 0) for c in _w["contracts"])
+                                metrics["window_delta_weighted_volume_v1"] = metrics["window_daddex_v1"]
+                                metrics["window_daddex_reason"] = None
+                                metrics["window_contracts"] = _w["contracts"][:20]
+                                metrics["window_missing_delta"] = _w.get("missing_delta", 0)
+                                metrics["window_mixed_pair"] = _w.get("mixed_pair", 0)
+                            elif _w.get("reason") == "VOLUME_REBASE":
+                                metrics["window_daddex_reason"] = "VOLUME_REBASE"
+        except Exception as we:
+            log.debug("window activity attach failed: %s", we)
     except Exception as me:
         log.debug("solstice metrics surfaces failed (non-fatal): %s", me)
         metrics["error"] = "METRICS_UNAVAILABLE"
@@ -1446,30 +1486,87 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     except Exception as se:
         log.debug("solstice session attach failed: %s", se)
     try:
-        # T07: observable interaction state per nearest wall. Single-snapshot
-        # observation is always a FIRST sighting (no continuity yet): touch
-        # counts, first-seen, persistence and migration stay unknown until the
-        # recorder holds repeat observations under unchanged scope.
+        # T07/R4-05/06: observable interaction state per side-specific wall.
+        # History joined by scoped wall ID (ticker + scope + wall_id); a wall
+        # with no history is first_seen=True, otherwise continuity comes from
+        # the stored state (never restarted at unobserved). approach_side is
+        # history-owned, never spot-relative. Scenarios carry the same scoped
+        # wall ID so grid/inspector/AI/recorder resolve one wall.
         from datetime import UTC as _UTC
         from datetime import datetime as _dt
 
-        from services.wall_interaction import scenario_for, transition
-        now_iso = _dt.now(_UTC).isoformat()
+        from services.wall_interaction import (
+            load_last,
+            save_last,
+            scenario_for,
+            transition,
+            wall_position,
+        )
+        now_dt = _dt.now(_UTC)
+        now_iso = now_dt.isoformat()
+        scope_id = f"{ticker}:gex.v2"
+        sides = metrics.get("nearest_by_side") or {}
+        ordered = [sides.get("below"), sides.get("inside"), sides.get("above")]
+        walls_iter = [w for w in ordered if isinstance(w, dict)]
+        if not walls_iter:
+            walls_iter = (metrics.get("nearest_walls") or [])[:2]
         interactions = []
         scenarios = []
-        for w in (metrics.get("nearest_walls") or [])[:2]:
-            side = "below" if spot < float(w.get("low", spot)) else (
-                "above" if spot > float(w.get("high", spot)) else "inside")
-            tr = transition("unobserved", spot, w, last={"gap": False,
-                                                        "approach_side": side})
-            interactions.append({"wall_id": w.get("wall_id"), "state": tr.get("state"),
+        for w in walls_iter:
+            wid = w.get("wall_id")
+            wpos = wall_position(w, spot)
+            last = load_last(ticker, scope_id, wid or "") or None
+            durable = False
+            try:
+                from services.duckdb_engine import db as _ddb_hist
+                from services.heatmap_history import latest_wall_state
+                _hconn = getattr(_ddb_hist, "conn", None)
+                if _hconn is not None and wid:
+                    db_last = latest_wall_state(_hconn, wid, ticker, scope_id)
+                    if db_last:
+                        last = db_last
+                        durable = True
+            except Exception:
+                pass  # silent by design: history is best-effort; heatmap builds without it (durable=False)
+            start_state = (last or {}).get("state", "unobserved")
+            tr = transition(start_state, spot, w, now=now_dt,
+                            last=last if last is not None else {"gap": False})
+            first_seen = last is None
+            interactions.append({"wall_id": wid, "scope": scope_id,
+                                 "wall_position": wpos,
+                                 "state": tr.get("state"),
                                  "event": tr.get("event"), "evidence": tr.get("evidence"),
-                                 "at": now_iso, "first_seen": True,
+                                 "at": now_iso, "first_seen": first_seen,
+                                 "durable": durable,
                                  "taps": None, "taps_reason": "HISTORY_UNKNOWN",
-                                 "persistence": "unknown", "migration": "unknown"})
-            scenarios.extend(scenario_for(w, spot, side=side if side in ("below", "above") else "below"))
+                                 "persistence": "unknown", "migration": "unknown",
+                                 "continuity": tr.get("continuity", True)})
+            import contextlib as _ctxlib
+            with _ctxlib.suppress(Exception):
+                save_last(ticker, scope_id, wid or "",
+                          {"state": tr.get("state"), "at": tr.get("at", now_iso),
+                           "approach_side": tr.get("approach_side"),
+                           "inside_since": tr.get("inside_since"),
+                           "beyond_since": tr.get("beyond_since"),
+                           "beyond_side": tr.get("beyond_side")})
+            with _ctxlib.suppress(Exception):
+                from services.duckdb_engine import db as _ddb_rec
+                from services.heatmap_history import record_wall_event
+                _hconn2 = getattr(_ddb_rec, "conn", None)
+                if _hconn2 is not None and wid and tr.get("event"):
+                    record_wall_event(_hconn2, wid, ticker, tr.get("event"),
+                                      payload.get("snapshotId", ""),
+                                      {"state": tr.get("state"), "at": tr.get("at", now_iso),
+                                       "approach_side": tr.get("approach_side"),
+                                       "inside_since": tr.get("inside_since"),
+                                       "beyond_since": tr.get("beyond_since"),
+                                       "beyond_side": tr.get("beyond_side"),
+                                       "wall_position": wpos},
+                                      scope_id)
+            scenarios.extend(scenario_for(w, spot, wall_position=wpos,
+                                          wall_id=wid, scope=scope_id))
         payload["interactions"] = interactions
-        payload["scenarios"] = scenarios[:4]
+        payload["scenarios"] = scenarios[:6]
     except Exception as ie:
         log.debug("solstice interaction attach failed: %s", ie)
     try:
@@ -1507,12 +1604,18 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     _t = asyncio.create_task(_logged_task(save_snapshot(ticker, payload), f"save_snapshot:{ticker}"))
     _background_tasks.add(_t)
     _t.add_done_callback(_background_tasks.discard)
-    # T09: record fresh builds to immutable research history (never stale-serves).
+    # T09/R4-13/18: record fresh builds to immutable research history
+    # (never stale-serves) with explicit coverage + capability observation.
+    # The 2,000-contract cap is declared (truncated=True) — never silent.
     try:
         from services.duckdb_engine import db as _ddb
-        from services.heatmap_history import record_snapshot
+        from services.heatmap_history import record_capability, record_snapshot
         _conn = getattr(_ddb, "conn", None)
         if _conn is not None:
+            _all = raw.get("contracts", []) or []
+            _kept = _all[:2000]
+            _cov = {"requested": len(_all), "returned": len(_kept),
+                    "truncated": len(_all) > len(_kept)}
             _t2 = asyncio.create_task(asyncio.to_thread(
                 record_snapshot, _conn, {"ticker": ticker,
                                          "expiries_used": payload.get("expiries_used"),
@@ -1522,12 +1625,23 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                          "formula_version": "gex.v2",
                                          "asof": payload.get("asof"),
                                          "source_received_at": payload.get("source_received_at"),
-                                         "contracts": raw.get("contracts", [])[:2000],
+                                         "contracts": _kept,
                                          "strikes": strikes,
-                                         "metrics": {"walls": metrics.get("walls", [])}},
+                                         "metrics": {"walls": metrics.get("walls", [])},
+                                         "coverage": _cov,
+                                         "quality": payload.get("quality", {}),
+                                         "scenarios": payload.get("scenarios", [])[:12],
+                                         "interactions": payload.get("interactions", [])[:12]},
                 f"{ticker}:{mode}:{dte}:{scalp}"))
             _background_tasks.add(_t2)
             _t2.add_done_callback(_background_tasks.discard)
+            import contextlib as _ctxlib2
+            with _ctxlib2.suppress(Exception):
+                record_capability(_conn, ticker, "heatmap_build",
+                                  requested=len(_all), returned=len(_kept),
+                                  usable=len(_kept), truncated=_cov["truncated"],
+                                  detail={"mode": mode, "dte": dte, "scalp": scalp,
+                                          "exposure_basis": exposure_basis})
     except Exception as rh:
         log.debug("heatmap_history record skipped: %s", rh)
     sanitized = _sanitize(payload)

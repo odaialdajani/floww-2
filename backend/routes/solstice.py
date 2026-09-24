@@ -76,15 +76,27 @@ async def evidence(ticker: str, wall_id: str | None = None,
 
 
 @router.get("/walls/{ticker}")
-async def walls(ticker: str, expiries: int = Query(4, ge=1, le=12)) -> dict[str, Any]:
-    """Wall registry for the current snapshot (T05)."""
+async def walls(ticker: str, expiries: int = Query(4, ge=1, le=12),
+                mode: str = Query("day", pattern="^(day|swing|scalp)$"),
+                dte: int | None = Query(None, ge=0, le=30),
+                scalp: bool = Query(False)) -> dict[str, Any]:
+    """Wall registry for the current snapshot (T05, P08/R4-03).
+
+    Same full scope (expiries/mode/dte/scalp) and identical query-key format
+    as /snapshot; scoped wall IDs (symbol+formula) so grid/inspector/AI/
+    recorder resolve one wall.
+    """
     from server import build_heatmap
-    from services.wall_structure import discover_walls, nearest_walls
-    payload = await build_heatmap(ticker.strip().upper(), expiries)
+    from services.wall_structure import discover_walls, nearest_by_side, nearest_walls
+    t = ticker.strip().upper()
+    payload = await build_heatmap(t, expiries, True, mode, dte, scalp)
     spot = payload.get("spot", 0)
-    w = discover_walls(payload.get("strikes", []), spot)
+    scope = {"symbol": t, "formula": "gex.v2"}
+    w = discover_walls(payload.get("strikes", []), spot, scope=scope)
     return {"walls": w, "nearest": nearest_walls(w, spot),
-            "spot": spot, "asof": payload.get("asof")}
+            "nearest_by_side": nearest_by_side(w, spot),
+            "spot": spot, "asof": payload.get("asof"),
+            "scope": scope, "queryKey": f"{t}|{expiries}|{mode}|{dte}|{scalp}"}
 
 
 @router.get("/regime/{ticker}")
@@ -97,16 +109,22 @@ async def regime(ticker: str, expiries: int = Query(4, ge=1, le=12)) -> dict[str
 
 
 @router.get("/patterns/{ticker}")
-async def patterns(ticker: str, expiries: int = Query(4, ge=1, le=12)) -> dict[str, Any]:
-    """Numeric pattern records (T16)."""
+async def patterns(ticker: str, expiries: int = Query(4, ge=1, le=12),
+                   mode: str = Query("day", pattern="^(day|swing|scalp)$"),
+                   dte: int | None = Query(None, ge=0, le=30),
+                   scalp: bool = Query(False)) -> dict[str, Any]:
+    """Numeric pattern records (T16, P08/R4-03: same scope + queryKey)."""
     from server import build_heatmap
     from services.solstice_patterns import detect_patterns_v1
     from services.wall_structure import discover_walls
-    payload = await build_heatmap(ticker.strip().upper(), expiries)
+    t = ticker.strip().upper()
+    payload = await build_heatmap(t, expiries, True, mode, dte, scalp)
     spot = payload.get("spot", 0)
-    w = discover_walls(payload.get("strikes", []), spot)
+    scope = {"symbol": t, "formula": "gex.v2"}
+    w = discover_walls(payload.get("strikes", []), spot, scope=scope)
     return {"patterns": detect_patterns_v1(payload.get("strikes", []), spot, w),
-            "asof": payload.get("asof")}
+            "asof": payload.get("asof"),
+            "scope": scope, "queryKey": f"{t}|{expiries}|{mode}|{dte}|{scalp}"}
 
 
 @router.get("/vanna/{ticker}")
