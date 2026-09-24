@@ -142,11 +142,15 @@ async def vanna(ticker: str, expiries: int = Query(4, ge=1, le=12)) -> dict[str,
 @router.get("/scout/{ticker}")
 async def scout(ticker: str, side: str = Query("CALLS"),
                 expiries: int = Query(4, ge=1, le=12)) -> dict[str, Any]:
-    """Read-only 0DTE scout with rejection reasons (T10)."""
+    """Read-only 0DTE scout with rejection reasons (T10, R5-D strict context)."""
+    from datetime import UTC, datetime
+
     from server import fetch_spot_and_chains_merged
     from services.contract_scout import scout_candidates
     raw = await fetch_spot_and_chains_merged(ticker.strip().upper(), expiries)
-    return scout_candidates(raw.get("contracts", []), side, float(raw.get("spot", 0) or 0))
+    _now = datetime.now(UTC)
+    return scout_candidates(raw.get("contracts", []), side, float(raw.get("spot", 0) or 0),
+                            now_s=_now.timestamp(), session_date=_now.date().isoformat())
 
 
 @router.get("/capability")

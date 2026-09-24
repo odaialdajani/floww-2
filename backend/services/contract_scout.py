@@ -55,6 +55,10 @@ def scout_candidates(contracts: list[dict[str, Any]], scenario_side: str,
     side = str(scenario_side or "").upper()  # CALLS | PUTS
     want_call = side in ("CALL", "CALLS", "BULLISH", "UP")
     want_put = side in ("PUT", "PUTS", "BEARISH", "DOWN")
+    # Strict production context: session_date supplied means real session
+    # evaluation — unknown quote age is not fresh (R5-D/R12). Fixture mode
+    # (session_date None) keeps backward-compat for synthetic tests.
+    strict = session_date is not None
     eligible: list[dict[str, Any]] = []
     rejected: dict[str, int] = {}
     reasons: list[dict[str, str]] = []
@@ -100,10 +104,16 @@ def scout_candidates(contracts: list[dict[str, Any]], scenario_side: str,
                 reject(osi, "SPREAD_TOO_WIDE")
             continue
         # Freshness on every candidate (not only-when-invalid): stale ordinary
-        # quotes never rank. Missing timestamps pass here for legacy fixtures;
-        # callers needing strictness pass session_date + require fresh quotes.
+        # quotes never rank. Strict production context rejects unknown age;
+        # fixture mode allows missing timestamps for synthetic tests.
         bid_age = _age_s(c.get("bid_timestamp"), now_s)
         ask_age = _age_s(c.get("ask_timestamp"), now_s)
+        if strict and bid_age is None:
+            reject(osi, "STALE_BID")
+            continue
+        if strict and ask_age is None:
+            reject(osi, "STALE_ASK")
+            continue
         if bid_age is not None and bid_age > max_stale_s:
             reject(osi, "STALE_BID")
             continue
