@@ -421,7 +421,10 @@ def latest_wall_state(conn, wall_id: str, ticker: str, scope: str = "") -> dict 
                  "approach_side": ev.get("approach_side"),
                  "inside_since": ev.get("inside_since"),
                  "beyond_since": ev.get("beyond_since"),
-                 "beyond_side": ev.get("beyond_side")}
+                 "beyond_side": ev.get("beyond_side"),
+                 "adverse_side": ev.get("adverse_side"),
+                 "reclaim_state": ev.get("reclaim_state"),
+                 "data_source": ev.get("data_source")}
         return state
     except Exception as e:
         log.debug("latest_wall_state failed: %s", e)

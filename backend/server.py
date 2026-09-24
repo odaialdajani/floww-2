@@ -1514,15 +1514,22 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         from datetime import datetime as _dt
 
         from services.wall_interaction import (
+            detect_wall_gap,
+            is_newer_state,
             load_last,
             save_last,
             scenario_for,
+            scope_id_for,
             transition,
             wall_position,
         )
         now_dt = _dt.now(_UTC)
         now_iso = now_dt.isoformat()
-        scope_id = f"{ticker}:gex.v2"
+        # R5-C: scope binds expiry dimensions — same strikes at another DTE/
+        # mode/expiry count are a different analytical scope (fresh lifecycle).
+        scope_id = scope_id_for(ticker, {"mode": mode, "dte": dte,
+                                         "scalp": scalp, "expiries": max_expiries})
+        _data_source = raw.get("data_source", "yfinance")
         sides = metrics.get("nearest_by_side") or {}
         ordered = [sides.get("below"), sides.get("inside"), sides.get("above")]
         walls_iter = [w for w in ordered if isinstance(w, dict)]
@@ -1533,23 +1540,35 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         for w in walls_iter:
             wid = w.get("wall_id")
             wpos = wall_position(w, spot)
-            last = load_last(ticker, scope_id, wid or "") or None
+            mem_last = load_last(ticker, scope_id, wid or "") or None
+            last = mem_last
             durable = False
             try:
                 from services.duckdb_engine import db as _ddb_hist
-                from services.heatmap_history import latest_wall_state
+                from services.heatmap_history import latest_wall_state, recorder_status
                 _hconn = getattr(_ddb_hist, "conn", None)
                 if _hconn is not None and wid:
                     db_last = latest_wall_state(_hconn, wid, ticker, scope_id)
-                    if db_last:
+                    # Newest-wins: an event-only DB row must not override more
+                    # recent in-memory dwell continuity.
+                    if db_last and is_newer_state(db_last, mem_last):
                         last = db_last
+                    # Durable only on a real file-backed recorder, never on
+                    # :memory: fallback.
+                    import os as _os
+                    if last is not None and recorder_status(
+                            _hconn, _os.environ.get("DUCKDB_PATH", ":memory:"))["durable"]:
                         durable = True
             except Exception:
                 pass  # silent by design: history is best-effort; heatmap builds without it (durable=False)
+            # Source-time gap detector: session-day rollover, provider switch
+            # or a feed gap beyond FEED_GAP_S breaks continuity (unobserved).
+            if last is not None and detect_wall_gap(last, now_dt, _data_source):
+                last = {"gap": True}
             start_state = (last or {}).get("state", "unobserved")
             tr = transition(start_state, spot, w, now=now_dt,
                             last=last if last is not None else {"gap": False})
-            first_seen = last is None
+            first_seen = last is None or bool((last or {}).get("gap"))
             interactions.append({"wall_id": wid, "scope": scope_id,
                                  "wall_position": wpos,
                                  "state": tr.get("state"),
@@ -1566,7 +1585,10 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                            "approach_side": tr.get("approach_side"),
                            "inside_since": tr.get("inside_since"),
                            "beyond_since": tr.get("beyond_since"),
-                           "beyond_side": tr.get("beyond_side")})
+                           "beyond_side": tr.get("beyond_side"),
+                           "adverse_side": tr.get("adverse_side"),
+                           "reclaim_state": tr.get("reclaim_state"),
+                           "data_source": _data_source})
             with _ctxlib.suppress(Exception):
                 from services.duckdb_engine import db as _ddb_rec
                 from services.heatmap_history import record_wall_event
@@ -1579,6 +1601,8 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                        "inside_since": tr.get("inside_since"),
                                        "beyond_since": tr.get("beyond_since"),
                                        "beyond_side": tr.get("beyond_side"),
+                                       "adverse_side": tr.get("adverse_side"),
+                                       "reclaim_state": tr.get("reclaim_state"),
                                        "wall_position": wpos},
                                       scope_id)
             scenarios.extend(scenario_for(w, spot, wall_position=wpos,
@@ -3446,7 +3470,7 @@ _mock_feed_task: asyncio.Task | None = None
 
 @app.on_event("startup")
 async def startup_ingestion():
-    """Launch ingestion pipeline with mock feed on startup."""
+    """Launch ingestion pipeline. Mock feed is opt-in via FLOWW_ENABLE_MOCK_FEED=1."""
     global _ingestion_pipeline, _mock_feed, _mock_feed_task
     try:
         _ingestion_pipeline = IngestionPipeline(
@@ -3459,17 +3483,20 @@ async def startup_ingestion():
         # Synthetic dev tick generator. Live market data comes from the
         # Public.com API (fetch_spot_and_chains_merged → public_api_adapter);
         # Schwab is retired (2026-09-03) and this feed is never a live source.
-        _mock_feed = MockSchwabFeed(rate=100.0, symbols=["SPY", "QQQ"], seed=42)
-        _mock_feed.on_tick(_ingestion_pipeline.enqueue_tick)
-        _mock_feed.on_chain(_ingestion_pipeline.enqueue_chain)
-        _mock_feed.on_lob(_ingestion_pipeline.enqueue_lob)
-        _mock_feed.on_lob_depth(_ingestion_pipeline.enqueue_lob_depth)
+        if os.getenv("FLOWW_ENABLE_MOCK_FEED") == "1":
+            _mock_feed = MockSchwabFeed(rate=100.0, symbols=["SPY", "QQQ"], seed=42)
+            _mock_feed.on_tick(_ingestion_pipeline.enqueue_tick)
+            _mock_feed.on_chain(_ingestion_pipeline.enqueue_chain)
+            _mock_feed.on_lob(_ingestion_pipeline.enqueue_lob)
+            _mock_feed.on_lob_depth(_ingestion_pipeline.enqueue_lob_depth)
 
-        # Run mock feed in background with tracked task
-        _mock_feed_task = asyncio.create_task(_mock_feed.start())
-        _background_tasks.add(_mock_feed_task)
-        _mock_feed_task.add_done_callback(_background_tasks.discard)
-        log.info("Ingestion pipeline + mock feed started")
+            # Run mock feed in background with tracked task
+            _mock_feed_task = asyncio.create_task(_mock_feed.start())
+            _background_tasks.add(_mock_feed_task)
+            _mock_feed_task.add_done_callback(_background_tasks.discard)
+            log.info("Ingestion pipeline + mock feed started")
+        else:
+            log.info("Ingestion pipeline started (mock feed disabled)")
     except Exception as e:
         log.warning(f"Ingestion startup failed (non-fatal): {e}")
 
