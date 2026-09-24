@@ -1022,11 +1022,14 @@ def compute_gex_by_strike_vendor(spot: float, contracts: list[dict[str, Any]]) -
 
     Same dollar convention (u=Γ·m·S²×0.01) and sign as heatseeker._gex_per_strike.
     Unknown/missing gamma or OI → skipped with counts; never BS-recomputed here.
+    Adjusted/nonstandard contracts are quarantined (skipped), never forced to 100 (R4-16).
     """
     if spot <= 0 or not contracts:
         return []
     agg: dict[float, dict[str, float]] = {}
     for c in contracts:
+        if c.get("adjusted") or c.get("nonstandard"):
+            continue
         oi = safe_float_or_none(c.get("oi", c.get("open_interest")))
         if oi is None or oi <= 0:
             continue
@@ -1058,12 +1061,18 @@ def compute_gex_by_strike_vendor(spot: float, contracts: list[dict[str, Any]]) -
 
 
 def compute_gex_grid_vendor(spot: float, contracts: list[dict[str, Any]]) -> dict[str, Any]:
-    """F02 canonical: 2D grid from SUPPLIED vendor gamma (same scope as compute_gex_grid)."""
+    """F02 canonical: 2D grid from SUPPLIED vendor gamma (same scope as compute_gex_grid).
+
+    Adjusted/nonstandard contracts quarantined (R4-16). Missing/zero gamma →
+    skipped (zero mass never forms walls); never BS-recomputed here.
+    """
     if spot <= 0 or not contracts:
         return {"expiries": [], "strikes": [], "grid": {}, "exposure_basis": "OI_VENDOR"}
     grid: dict[str, dict[float, float]] = {}
     totals: dict[float, float] = {}
     for c in contracts:
+        if c.get("adjusted") or c.get("nonstandard"):
+            continue
         oi = safe_float_or_none(c.get("oi", c.get("open_interest")))
         if oi is None or oi <= 0:
             continue
@@ -1110,14 +1119,22 @@ def compute_gex_grid_delta_weighted(spot: float, contracts: list[dict[str, Any]]
 
     Missing delta → contribution unavailable (skipped, counted). Same units
     and sign convention as the vendor grid; walls stay raw-locked.
+    R4-14/P03: when no cell is computable the surface is UNAVAILABLE —
+    callers must hatch/mark unavailable, never substitute raw values under
+    an active delta/activity control. Adjusted/nonstandard quarantined.
     """
     if spot <= 0 or not contracts:
         return {"expiries": [], "strikes": [], "grid": {}, "exposure_basis": "OI_DELTA_WEIGHTED",
-                "missing_delta": 0, "formula_version": "gex.v2"}
+                "missing_delta": 0, "formula_version": "gex.v2",
+                "status": "unavailable", "reason": "NO_COVERAGE"}
     grid: dict[str, dict[float, float]] = {}
     totals: dict[float, float] = {}
     missing = 0
+    quarantined = 0
     for c in contracts:
+        if c.get("adjusted") or c.get("nonstandard"):
+            quarantined += 1
+            continue
         oi = safe_float_or_none(c.get("oi", c.get("open_interest")))
         if oi is None or oi <= 0:
             continue
@@ -1164,7 +1181,10 @@ def compute_gex_grid_delta_weighted(spot: float, contracts: list[dict[str, Any]]
         "strike_totals": [{"strike": k, "gex": v} for k, v in sorted(totals.items())],
         "exposure_basis": "OI_DELTA_WEIGHTED",
         "missing_delta": missing,
+        "quarantined": quarantined,
         "formula_version": "gex.v2",
+        "status": "ok" if expiries else "unavailable",
+        "reason": None if expiries else ("DELTA_UNKNOWN" if missing else "NO_COVERAGE"),
     }
 
 
