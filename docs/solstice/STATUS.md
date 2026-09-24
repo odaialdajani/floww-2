@@ -211,3 +211,42 @@ PR #14 (sweep5 → main): MERGED 23 Sep 2026.
 - T04–T07: wire vendor engine into build_heatmap behind flag + wall registry integration + full snapshot route; replay recorder (T09) start capture.
 - Rerun full backend pytest + frontend jest + CI at this head before merge; reconcile with origin/main drift.
 - No merges, deploys, credential changes, or live trades performed.
+
+## Revision 5 — R5-A–R5-F (24 Sep 2026, merged #31–#35 + R5-F pending)
+
+Model: Muse Spark (muse-spark-1.3-contributor-free). Base per package: R5-A
+`0340de86`, R5-B `58f2e478`, R5-C `a660180d`, R5-D `fc58edbf`, R5-E `6b94c3aa`.
+Environment: macOS `/Users/nav/Documents/GitHub/floww-2`, python3.14.
+Unrelated PRs #3/#4/#5/#12 and `kanban/BOTTLENECK_ALERTS.md` preserved.
+
+- R5-A (G1): idempotent quality adapter, null source time, observation IDs
+  distinct from content digests, canonical mounted payload + snapshotId linkage.
+- R5-B (G2): full versioned cells persisted; lossless stored-contract adapter;
+  epoch/scope-bound window baselines; single-writer lock with hard COMMIT
+  (failed commit → None, zero half-records); registry alias resolved; replay
+  adapter carries quality/scenarios/interactions/grids, rejects relabel;
+  dashboard renders recorded spot, hides live-only strips in replay, guards
+  manifest/fetch/exit races, resets scale on DTE + replay.
+- R5-C (G4): inside-dwell reset on zone exit; direction-aware invalidation
+  (adverse_side/reclaim_state); scope IDs bind mode/dte/scalp/expiries;
+  zero-mass breaks zones (MAX_ZERO_BRIDGE=0); gap detector (day/provider/
+  FEED_GAP_S 900s); newest-wins history join; durable only when file-backed.
+- R5-D (G5): strict scout context enforced by both production callers;
+  unknown quote age rejected in strict mode; pre-open blocked; data
+  eligibility gates session entry. Holidays/half-days + AM/PM series cutoffs
+  remain series-metadata owned (stated limit).
+- R5-E (G6): prose numbers bound to trusted facts in every text field;
+  INTERACTION/SCENARIO/QUALITY/WINDOW facts; replay evidence validates
+  ticker + wall and restores recorded scope/quality/scenarios; five-block
+  cited fallback on outage; direction-aware study scoring with hidden bounds,
+  latency, anti-coaching; selftest 15/15.
+- R5-F (G7): encounter-anchored outcome horizons; observation-gap censoring;
+  live decision producer (both sides, abstentions, candidate quotes);
+  manifest cadence param; unified capability surface; recorder-health
+  endpoint; `COMMISSIONING_PACKAGE.md` (draft, NOT approved).
+
+Verification (R5-F head): `backend/tests/solstice/` 131 passed;
+`scripts/solstice_comprehension.py --selftest` 15/15; Jest query/selection/
+replay/grid 24 passed; ruff + silent-except gate clean (282 files).
+Inherited on base (stash-verified): 5 test_public_api_only (bars/cache),
+test_regime_thresholds flow-detector, Dashboard CSS-import suite.

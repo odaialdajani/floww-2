@@ -23,10 +23,15 @@ def test_r4_11_horizon_coverage_censored():
 
 def test_r4_11_touch_search_bounded_by_horizon():
     from services.solstice_labels import label_touch
-    # Zone touched only AFTER horizon (full 60s covered clean) -> no_touch.
-    path = [(0, 490.0), (60, 490.0), (120, 500.0)]
+    # Full 120s coverage, never touches the zone -> no_touch.
+    path = [(0, 490.0), (60, 490.0), (120, 490.0)]
     r = label_touch(path, (498, 502), 60, 505.0, 485.0)
     assert r["label"] == "no_touch", r
+    # Touch at the final bar starts an encounter episode whose window is
+    # uncovered -> censored, never a decision from an incomplete episode.
+    path2 = [(0, 490.0), (60, 490.0), (120, 500.0)]
+    r2 = label_touch(path2, (498, 502), 60, 505.0, 485.0)
+    assert r2["censored"] is True and r2["label"] == "indeterminate", r2
 
 
 def test_r4_17_single_frozen_touch_pct():

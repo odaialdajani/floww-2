@@ -79,3 +79,22 @@ All 27 addressed in code with tests, except F22 (execution adapter stays
 disarmed by scope) and the SPX half of F06 (externally blocked, ticket open
 with vendor). F12 Mongo display cache: typed ts + compat; research history
 is DuckDB (file-backed when DUCKDB_PATH set).
+
+## Revision 5 — R5-A–R5-F reconciliation (24 Sep 2026, main #31–#35 + R5-F)
+
+Scope key: ✅ implemented + verified · 🔶 implemented, validation needs
+sessions/time/user · ⬜ incomplete (no code) · ⛔ externally blocked.
+
+| Package | Verdict | Evidence |
+|---|---|---|
+| R5-A observation contract | ✅ | idempotent quality, null source time, observation IDs, canonical payload + snapshotId (test_r5_a_red, 4) |
+| R5-B recording/replay | ✅ | full cells, lossless adapter, epoch scope, tx truth, registry alias, replay isolation (test_r5_b_red, 3; Jest replay +4) |
+| R5-C wall lifecycle | ✅ | dwell reset, adverse invalidation, scoped IDs, zero-break, gaps, newest-wins (test_r5_c_red, 6) |
+| R5-D 0DTE context | ✅ | strict age/expiry, production callers, pre-open, eligibility gate (test_r5_d_red, 3) |
+| R5-E explanation/study | ✅ code / 🔶 user | prose binding, wall facts, replay checks, fallback blocks, direction-aware scoring + selftest 15/15 (test_r5_e_red, 3). Actual participant study needs the user |
+| R5-F research/ops | ✅ code / 🔶 data | encounter horizons, gap model, live decisions, cadence manifest, capability unity, health endpoint, COMMISSIONING_PACKAGE.md draft (test_r5_f_red, 4). Outcomes/sessions/commissioning need time + approval |
+
+Remaining external/user items (unchanged): SPX entitlement probe, participant
+comprehension study, deployment audience/data rights, durable-service
+commissioning approval, 30–60 representative sessions. None blocks R5-A–R5-F
+engineering, and none is claimed complete here.
