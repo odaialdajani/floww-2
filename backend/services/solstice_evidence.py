@@ -129,6 +129,15 @@ def validate_explainer_output(out: dict[str, Any], packet: dict[str, Any]) -> li
     for key in REQUIRED_OUTPUT_KEYS:
         if key not in out:
             errors.append(f"missing required key: {key}")
+    # Tool boundary: the explainer owns prose, never tools/orders. Any tool
+    # request, function call, or action outside ALLOWED_ACTIONS is rejected.
+    for tk in ("tool_calls", "tool_requests", "function_calls", "actions", "order"):
+        if out.get(tk):
+            errors.append(f"unauthorized tool request: {tk}")
+    allowed = set(ALLOWED_ACTIONS)
+    for a in out.get("allowed_actions", []) or []:
+        if a not in allowed:
+            errors.append(f"action not allowed: {a!r}")
     if out.get("snapshot_id") != packet.get("snapshot_id"):
         errors.append("snapshot_id mismatch (stale explanation)")
     if out.get("query_id") != packet.get("query_id"):
