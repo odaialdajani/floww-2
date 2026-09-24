@@ -1567,12 +1567,18 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     _t = asyncio.create_task(_logged_task(save_snapshot(ticker, payload), f"save_snapshot:{ticker}"))
     _background_tasks.add(_t)
     _t.add_done_callback(_background_tasks.discard)
-    # T09: record fresh builds to immutable research history (never stale-serves).
+    # T09/R4-13/18: record fresh builds to immutable research history
+    # (never stale-serves) with explicit coverage + capability observation.
+    # The 2,000-contract cap is declared (truncated=True) — never silent.
     try:
         from services.duckdb_engine import db as _ddb
-        from services.heatmap_history import record_snapshot
+        from services.heatmap_history import record_capability, record_snapshot
         _conn = getattr(_ddb, "conn", None)
         if _conn is not None:
+            _all = raw.get("contracts", []) or []
+            _kept = _all[:2000]
+            _cov = {"requested": len(_all), "returned": len(_kept),
+                    "truncated": len(_all) > len(_kept)}
             _t2 = asyncio.create_task(asyncio.to_thread(
                 record_snapshot, _conn, {"ticker": ticker,
                                          "expiries_used": payload.get("expiries_used"),
@@ -1582,12 +1588,20 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                          "formula_version": "gex.v2",
                                          "asof": payload.get("asof"),
                                          "source_received_at": payload.get("source_received_at"),
-                                         "contracts": raw.get("contracts", [])[:2000],
+                                         "contracts": _kept,
                                          "strikes": strikes,
-                                         "metrics": {"walls": metrics.get("walls", [])}},
+                                         "metrics": {"walls": metrics.get("walls", [])},
+                                         "coverage": _cov},
                 f"{ticker}:{mode}:{dte}:{scalp}"))
             _background_tasks.add(_t2)
             _t2.add_done_callback(_background_tasks.discard)
+            import contextlib as _ctxlib2
+            with _ctxlib2.suppress(Exception):
+                record_capability(_conn, ticker, "heatmap_build",
+                                  requested=len(_all), returned=len(_kept),
+                                  usable=len(_kept), truncated=_cov["truncated"],
+                                  detail={"mode": mode, "dte": dte, "scalp": scalp,
+                                          "exposure_basis": exposure_basis})
     except Exception as rh:
         log.debug("heatmap_history record skipped: %s", rh)
     sanitized = _sanitize(payload)

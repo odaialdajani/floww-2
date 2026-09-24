@@ -92,6 +92,13 @@ DDL = {
             label_version VARCHAR, at_ts VARCHAR, censored BOOLEAN, detail VARCHAR
         )
     """,
+    "capability_observations_v1": """
+        CREATE TABLE IF NOT EXISTS capability_observations_v1 (
+            at_ts VARCHAR, ticker VARCHAR, operation VARCHAR,
+            requested INTEGER, returned INTEGER, usable INTEGER,
+            truncated BOOLEAN, detail VARCHAR
+        )
+    """,
 }
 
 
@@ -107,6 +114,52 @@ def ensure_tables(conn) -> None:
             conn.execute(f"ALTER TABLE heatmap_snapshots_v2 ADD COLUMN IF NOT EXISTS {col} VARCHAR")
         except Exception as e:
             log.warning("heatmap_history migrate %s failed: %s", col, e)
+    try:
+        conn.execute("ALTER TABLE heatmap_snapshots_v2 ADD COLUMN IF NOT EXISTS coverage_json VARCHAR")
+    except Exception as e:
+        log.warning("heatmap_history migrate coverage_json failed: %s", e)
+
+
+def recorder_status(conn, path: str | None = None) -> dict[str, Any]:
+    """Honest durability status (R4-13/P07): :memory: is never durable.
+
+    Disk failure / unusable path must never claim durable recording.
+    """
+    try:
+        import os as _os
+        p = path if path is not None else _os.environ.get("DUCKDB_PATH", ":memory:")
+        durable = bool(p) and p != ":memory:"
+        tables: list[str] = []
+        if conn is not None:
+            try:
+                rows = conn.execute("SHOW TABLES").fetchall()
+                tables = [str(r[0]) for r in (rows or [])]
+            except Exception:
+                tables = []
+        else:
+            durable = False
+        return {"durable": durable and len(tables) > 0,
+                "mode": "file" if durable else "memory",
+                "path": p, "tables": tables,
+                "note": "memory mode is not crash-safe durable storage"}
+    except Exception as e:
+        return {"durable": False, "mode": "unknown", "error": str(e)}
+
+
+def record_capability(conn, ticker: str, operation: str,
+                      requested: int | None = None, returned: int | None = None,
+                      usable: int | None = None, truncated: bool = False,
+                      detail: dict | None = None) -> None:
+    """Production capability/coverage writer (R4-18/P07): nonzero linked records."""
+    try:
+        ensure_tables(conn)
+        conn.execute("INSERT INTO capability_observations_v1 VALUES ("
+                     + ",".join([_esc(_now_iso()), _esc(ticker), _esc(operation),
+                                 _esc(requested), _esc(returned), _esc(usable),
+                                 _esc(1 if truncated else 0),
+                                 _esc(json.dumps(detail or {}, default=str))]) + ")")
+    except Exception as e:
+        log.warning("capability record failed: %s", e)
 
 
 def _esc(v: Any) -> str:
@@ -124,58 +177,111 @@ def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
                     snapshot_id: str | None = None) -> str | None:
     """Record one heatmap payload + its contracts. Returns snapshot_id or None.
 
-    Deduplicates provider repeats (same digest → skip contract re-insert, keep
-    first observation timing). Never stores repeated cache hits as new events:
-    caller must only invoke on fresh builds, not stale-serve paths.
+    R4-13/P07 atomicity: header + contracts commit in one transaction; a
+    crash between them leaves no half-record. Retry of the same snapshot_id
+    completes missing contracts instead of skipping via dedup. Coverage
+    (requested/returned/usable/truncated) is explicit — no silent 2,000-row
+    truncation. Never stores repeated cache hits as new events: caller must
+    only invoke on fresh builds, not stale-serve paths.
     """
     try:
         ensure_tables(conn)
         sid = snapshot_id or f"snap_{snapshot_digest(payload)}"
-        # Idempotent: skip if this exact snapshot already recorded.
-        try:
-            n = conn.execute(
-                "SELECT COUNT(*) FROM heatmap_snapshots_v2 WHERE snapshot_id = "
-                + _esc(sid)).fetchone()
-            if n and n[0] > 0:
-                return sid
-        except Exception as dedup_e:
-            log.debug("dedup check failed, proceeding to insert (idempotent PK): %s", dedup_e)
         contracts = payload.get("contracts") or []
         # Heatmap payloads carry strike rows + grid + walls rather than full
         # contracts; record those (contracts recorded when present).
         strikes = payload.get("strikes") or []
         walls = ((payload.get("metrics") or {}).get("walls")) or []
-        usable = 0
-        for c in contracts:
-            if isinstance(c, dict) and c.get("strike"):
-                usable += 1
-        conn.execute(
-            "INSERT INTO heatmap_snapshots_v2 VALUES ("
-            + ",".join([_esc(sid), _esc(payload.get("ticker")), _esc(query_key),
-                        _esc(json.dumps(payload.get("expiries_used", []))),
-                        _esc(payload.get("spot")), _esc(payload.get("data_source")),
-                        _esc(payload.get("exposure_basis")), _esc(payload.get("formula_version")),
-                        _esc(payload.get("asof")), _esc(payload.get("source_received_at")),
-                        _esc(len(contracts)), _esc(usable),
-                        _esc(snapshot_digest(payload)),
-                        _esc(json.dumps(strikes[:500], default=str)),
-                        _esc(json.dumps(walls, default=str))]) + ")")
-        for c in contracts:
-            if not isinstance(c, dict):
-                continue
-            conn.execute(
-                "INSERT INTO contract_observations_v2 VALUES ("
-                + ",".join([_esc(sid), _esc(payload.get("ticker")), _esc(c.get("osi")),
-                            _esc(c.get("expiry")), _esc(c.get("strike")), _esc(c.get("type")),
-                            _esc(c.get("multiplier", 100.0)), _esc(c.get("bid")), _esc(c.get("ask")),
-                            _esc(c.get("last")), _esc(c.get("bid_timestamp")),
-                            _esc(c.get("ask_timestamp")), _esc(c.get("last_timestamp")),
-                            _esc(c.get("received_at")), _esc(c.get("volume")), _esc(c.get("oi")),
-                            _esc(c.get("oi_effective_date")), _esc(c.get("iv")), _esc(c.get("delta")),
-                            _esc(c.get("gamma")), _esc(c.get("theta")), _esc(c.get("vega")),
-                            _esc(c.get("greeks_source")), _esc(c.get("oi_source", "public_api")),
-                            _esc(c.get("exposure_basis", payload.get("exposure_basis"))),
-                            _esc(payload.get("asof"))]) + ")")
+        usable = sum(1 for c in contracts if isinstance(c, dict) and c.get("strike"))
+        cov = payload.get("coverage") or {}
+        requested = cov.get("requested", len(contracts))
+        returned = cov.get("returned", len(contracts))
+        truncated = bool(cov.get("truncated", False))
+        coverage = {"requested": requested, "returned": returned,
+                    "usable": usable, "truncated": truncated}
+        # Idempotent but verifying: header exists AND contracts complete →
+        # skip; header exists with missing contracts (crash) → rewrite.
+        try:
+            n = conn.execute(
+                "SELECT COUNT(*) FROM heatmap_snapshots_v2 WHERE snapshot_id = "
+                + _esc(sid)).fetchone()
+            if n and n[0] > 0:
+                try:
+                    m = conn.execute(
+                        "SELECT COUNT(*) FROM contract_observations_v2 WHERE snapshot_id = "
+                        + _esc(sid)).fetchone()
+                    if m and m[0] >= len(contracts):
+                        return sid
+                except Exception:
+                    pass
+                # Partial record: remove header + partial contracts, re-insert below.
+                try:
+                    conn.execute("DELETE FROM contract_observations_v2 WHERE snapshot_id = "
+                                 + _esc(sid))
+                    conn.execute("DELETE FROM heatmap_snapshots_v2 WHERE snapshot_id = "
+                                 + _esc(sid))
+                except Exception as del_e:
+                    log.debug("partial cleanup failed: %s", del_e)
+        except Exception as dedup_e:
+            log.debug("dedup check failed, proceeding to insert (idempotent PK): %s", dedup_e)
+        import contextlib as _ctxlib
+        with _ctxlib.suppress(Exception):
+            conn.execute("BEGIN")
+        try:
+            try:
+                cols = [d[1] for d in
+                        conn.execute("PRAGMA table_info(heatmap_snapshots_v2)").fetchall()]
+            except Exception:
+                cols = []
+            if "coverage_json" in cols:
+                conn.execute(
+                    "INSERT INTO heatmap_snapshots_v2 VALUES ("
+                    + ",".join([_esc(sid), _esc(payload.get("ticker")), _esc(query_key),
+                                _esc(json.dumps(payload.get("expiries_used", []))),
+                                _esc(payload.get("spot")), _esc(payload.get("data_source")),
+                                _esc(payload.get("exposure_basis")), _esc(payload.get("formula_version")),
+                                _esc(payload.get("asof")), _esc(payload.get("source_received_at")),
+                                _esc(len(contracts)), _esc(usable),
+                                _esc(snapshot_digest(payload)),
+                                _esc(json.dumps(strikes[:500], default=str)),
+                                _esc(json.dumps(walls, default=str)),
+                                _esc(json.dumps(coverage, default=str))]) + ")")
+            else:
+                conn.execute(
+                    "INSERT INTO heatmap_snapshots_v2 VALUES ("
+                    + ",".join([_esc(sid), _esc(payload.get("ticker")), _esc(query_key),
+                                _esc(json.dumps(payload.get("expiries_used", []))),
+                                _esc(payload.get("spot")), _esc(payload.get("data_source")),
+                                _esc(payload.get("exposure_basis")), _esc(payload.get("formula_version")),
+                                _esc(payload.get("asof")), _esc(payload.get("source_received_at")),
+                                _esc(len(contracts)), _esc(usable),
+                                _esc(snapshot_digest(payload)),
+                                _esc(json.dumps(strikes[:500], default=str)),
+                                _esc(json.dumps(walls, default=str))]) + ")")
+            for c in contracts:
+                if not isinstance(c, dict):
+                    continue
+                conn.execute(
+                    "INSERT INTO contract_observations_v2 VALUES ("
+                    + ",".join([_esc(sid), _esc(payload.get("ticker")), _esc(c.get("osi")),
+                                _esc(c.get("expiry")), _esc(c.get("strike")), _esc(c.get("type")),
+                                _esc(c.get("multiplier", 100.0)), _esc(c.get("bid")), _esc(c.get("ask")),
+                                _esc(c.get("last")), _esc(c.get("bid_timestamp")),
+                                _esc(c.get("ask_timestamp")), _esc(c.get("last_timestamp")),
+                                _esc(c.get("received_at")), _esc(c.get("volume")), _esc(c.get("oi")),
+                                _esc(c.get("oi_effective_date")), _esc(c.get("iv")), _esc(c.get("delta")),
+                                _esc(c.get("gamma")), _esc(c.get("theta")), _esc(c.get("vega")),
+                                _esc(c.get("greeks_source")), _esc(c.get("oi_source", "public_api")),
+                                _esc(c.get("exposure_basis", payload.get("exposure_basis"))),
+                                _esc(payload.get("asof"))]) + ")")
+            import contextlib as _ctxlib2
+            with _ctxlib2.suppress(Exception):
+                conn.execute("COMMIT")
+        except Exception:
+            import contextlib as _ctxlib3
+            with _ctxlib3.suppress(Exception):
+                conn.execute("ROLLBACK")
+            raise
         return sid
     except Exception as e:
         log.warning("heatmap_history record failed (non-fatal): %s", e)
@@ -378,16 +484,50 @@ def compare_snapshots(conn, ticker: str, day: str) -> dict[str, Any]:
         return {"ticker": ticker.upper(), "day": day, "status": "error", "error": str(e)}
 
 
-def session_manifest(conn, ticker: str, day: str) -> dict[str, Any]:
-    """Completeness report for a ticker/day: snapshots, gaps, coverage."""
+def session_manifest(conn, ticker: str, day: str,
+                     expected_cadence_s: float | None = None) -> dict[str, Any]:
+    """Completeness report for a ticker/day: snapshots, gaps, coverage.
+
+    R4-13/P07: heartbeat (first/last asof) plus gap receipts — any interval
+    beyond 1.5x the expected cadence is an explicit gap (never silently
+    interpolated). Research readiness cannot be claimed from snapshot counts
+    alone without gap accounting.
+    """
     try:
         rows = conn.execute(
             "SELECT snapshot_id, asof_ts, n_contracts FROM heatmap_snapshots_v2 "
             "WHERE ticker = " + _esc(ticker.upper())
             + " AND asof_ts LIKE " + _esc(day + "%")
             + " ORDER BY asof_ts").fetchall()
-        return {"ticker": ticker.upper(), "day": day, "n_snapshots": len(rows or []),
-                "snapshots": [{"id": r[0], "asof": r[1], "n": r[2]} for r in (rows or [])]}
+        snaps = [{"id": r[0], "asof": r[1], "n": r[2]} for r in (rows or [])]
+        gaps: list[dict[str, Any]] = []
+        if expected_cadence_s and len(snaps) >= 2:
+            from datetime import UTC as _UTC
+            from datetime import datetime as _dt
+
+            def _ts(v: Any) -> float | None:
+                try:
+                    d = _dt.fromisoformat(str(v).replace("Z", "+00:00"))
+                    if d.tzinfo is None:
+                        d = d.replace(tzinfo=_UTC)
+                    return d.timestamp()
+                except (TypeError, ValueError):
+                    return None
+
+            for a, b in zip(snaps, snaps[1:], strict=False):
+                ta, tb = _ts(a["asof"]), _ts(b["asof"])
+                if ta is None or tb is None:
+                    continue
+                gap_s = tb - ta
+                if gap_s > expected_cadence_s * 1.5:
+                    gaps.append({"from": a["asof"], "to": b["asof"],
+                                 "gap_s": round(gap_s, 1),
+                                 "missing_beats": max(0, round(gap_s / expected_cadence_s) - 1)})
+        return {"ticker": ticker.upper(), "day": day, "n_snapshots": len(snaps),
+                "snapshots": snaps, "gaps": gaps,
+                "heartbeat": {"first": snaps[0]["asof"] if snaps else None,
+                              "last": snaps[-1]["asof"] if snaps else None,
+                              "expected_cadence_s": expected_cadence_s}}
     except Exception as e:
         log.warning("manifest failed: %s", e)
         return {"ticker": ticker.upper(), "day": day, "n_snapshots": 0, "error": str(e)}
