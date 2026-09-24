@@ -165,6 +165,21 @@ test("inspector candidate section is read-only and optional (R6-3)", () => {
   c5();
 });
 
+test("mounted explainer renders five deterministic blocks (R6-4)", () => {
+  const React = require("react");
+  const { render: r6, screen: s6 } = require("@testing-library/react");
+  const WI4 = require("./WallInspector").default;
+  r6(React.createElement(WI4, {
+    wall: { ...data.metrics.walls[0], gross: 2000000, net: 1000000 },
+    snapshotId: "s9", metric: "raw", replay: false,
+    interaction: { wall_id: "w_abc", state: "testing", first_seen: true },
+    quality: data.quality,
+  }));
+  expect(s6.getByTestId("wall-explainer")).toBeInTheDocument();
+  expect(s6.getByText("Why this wall.")).toBeInTheDocument();
+  expect(s6.getByText("What limits the reading.")).toBeInTheDocument();
+});
+
 test("wall inspector shows OI dates and persistent sightings honestly", () => {
   const React = require("react");
   const { render: r3, screen: s3, cleanup: c3 } = require("@testing-library/react");

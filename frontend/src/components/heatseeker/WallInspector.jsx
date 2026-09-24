@@ -1,4 +1,5 @@
 import React, { memo } from "react";
+import { explainWall } from "../../lib/solsticeExplain";
 
 /**
  * WallInspector — selected-wall inspector (T07 §28.3): Now / Changed /
@@ -27,7 +28,8 @@ function fmtUsd(v) {
 }
 
 function WallInspector({ wall = null, interaction = null, metrics = null, grids = null, quality = null, scenario = null, goneReason = null, lastWallId = null,
-  scout = null, patterns = null, regime = null, vanna = null, moneyness = null }) {
+  scout = null, patterns = null, regime = null, vanna = null, moneyness = null,
+  metric = "raw", snapshotId = null, replay = false }) {
   if (!wall) {
     if (goneReason === "WALL_GONE") {
       return (
@@ -108,14 +110,48 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
       <Row k="Confirm" v={scenario?.confirmation || "reclaim and hold above zone"} />
       <Row k="Invalidates" v={scenario?.invalidation || "acceptance beyond zone"} />
       <Row k="Data" v={quality ? `${quality.state || "unknown"} · ${(quality.reasonCodes || []).join(", ") || "ok"}` : "unknown"} />
+      <ExplainThisWall
+        snapshotId={snapshotId} wall={wall} metric={metric} replay={replay}
+        interaction={interaction} scenarios={scenario ? [scenario] : []} quality={quality}
+        wallWindow={wallWin || null} windowReason={winReason || null}
+      />
       <ContextSections scout={scout} patterns={patterns} regime={regime} vanna={vanna} moneyness={moneyness} />
     </div>
   );
 }
 
 
-function ScoutSummary({ scout }) {
-  if (!scout) return null;
+/**
+ * ExplainThisWall — R6-4 mounted deterministic explainer. Optional detail
+ * block rendered from typed snapshot fields (no model). Keyed by
+ * snapshot+wall+metric+mode so a stale explanation unmounts instead of
+ * lingering after selection/scope/mode changes.
+ */
+function ExplainThisWall({ snapshotId, wall, metric, replay,
+                           interaction, scenarios, quality,
+                           wallWindow, windowReason }) {
+  const out = explainWall({
+    snapshotId, wall, metric, mode: replay ? "replay" : "live",
+    interaction, scenarios, quality, wallWindow, windowReason,
+  });
+  if (!out) return null;
+  const key = `${out.snapshotId || "?"}:${out.wallId || "?"}:${out.metric}:${out.mode}`;
+  return (
+    <details key={key} data-testid="wall-explainer">
+      <summary>Explain this wall (deterministic{replay ? ", replay" : ""})</summary>
+      <div style={{ fontSize: 12, color: "#94a3b8" }}>
+        {out.blocks.map((b) => (
+          <div key={b.id} style={{ marginTop: 4 }}>
+            <strong>{b.title}.</strong> {b.text}
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
+
+
+function ScoutSummary({ scout }) {  if (!scout) return null;
   const rej = scout.rejected || {};
   const top = Object.entries(rej)
     .map(([reason, pair]) => ({ reason, n: (Array.isArray(pair) ? pair[0] + pair[1] : Number(pair) || 0) }))

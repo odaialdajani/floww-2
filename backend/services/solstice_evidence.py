@@ -175,6 +175,7 @@ def _fact_numbers(packet: dict[str, Any]) -> list[float]:
 
 
 _PROSE_NUM_RE = None
+_SUFFIX_NUM_RE = None
 
 
 def _prose_numbers(text: str) -> list[float]:
@@ -194,6 +195,49 @@ def _prose_numbers(text: str) -> list[float]:
         with _cx.suppress(TypeError, ValueError):
             out.append(float(m.group(0).replace(",", "")))
     return out
+
+
+def _suffixed_numbers(text: str) -> list[str]:
+    """Number+letter tokens (R6-4/B06): 999999M, 50%, 12k — invented scale
+    that numeric parsing drops. Any such token in model prose is rejected."""
+    global _SUFFIX_NUM_RE
+    import re as _re
+    if _SUFFIX_NUM_RE is None:
+        _SUFFIX_NUM_RE = _re.compile(r"(?<![\w.])-?\d+(?:,\d{3})*(?:\.\d+)?\s?(?:[a-zA-Z%])")
+    return [m.group(0) for m in _SUFFIX_NUM_RE.finditer(str(text or ""))]
+
+
+# Deterministic clause templates (R6-4): model-selectable template IDs whose
+# text is interpolated from cited facts by code — never authored with free
+# numbers. An observation declaring a template must match its rendering
+# exactly; tampering (even appending) fails validation.
+def _template_facts(packet: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {f.get("id"): f for f in packet.get("facts", []) if isinstance(f, dict)}
+
+
+def render_clause(template_id: str, packet: dict[str, Any],
+                  wall_id: str | None = None) -> str | None:
+    """Render a deterministic clause from packet facts. None when refs missing."""
+    facts = _template_facts(packet)
+    if template_id == "spot_state":
+        f = facts.get("fact-spot")
+        if not isinstance(f, dict):
+            return None
+        return f"Spot is {f.get('value')} (USD)."
+    if template_id == "wall_bounds":
+        wid = wall_id or packet.get("wall_id")
+        f = facts.get(f"wall-{wid}") if wid else None
+        if not isinstance(f, dict) or not isinstance(f.get("value"), dict):
+            return None
+        v = f["value"]
+        return f"Wall {v.get('low')}–{v.get('high')}."
+    if template_id == "quality_blocker":
+        f = facts.get("fact-quality")
+        if not isinstance(f, dict) or not isinstance(f.get("value"), dict):
+            return None
+        reasons = f["value"].get("reasonCodes") or []
+        return f"Blocked: {', '.join(reasons) if reasons else 'trade-side unknown'}."
+    return None
 
 
 def validate_explainer_output(out: dict[str, Any], packet: dict[str, Any]) -> list[str]:
@@ -276,8 +320,35 @@ def validate_explainer_output(out: dict[str, Any], packet: dict[str, Any]) -> li
             for _n in _prose_numbers(obs.get("text", "")):
                 if not any(_numbers_close(_n, _k) for _k in _known):
                     errors.append(f"observation {i} unsupported numeric claim: {_n!r}")
-    if out.get("status") == "Setup confirmed for review" and not packet.get("quality", {}).get("setupEligible", packet.get("quality", {}).get("setup_eligible", False)):
-        errors.append("status promotion: Wait cannot become Setup confirmed")
+            for _tok in _suffixed_numbers(obs.get("text", "")):
+                errors.append(f"observation {i} suffixed numeric token: {_tok!r}")
+            # Template-bound observations must match deterministic rendering.
+            if obs.get("template") is not None:
+                _rendered = render_clause(obs.get("template"), packet,
+                                          obs.get("wall_id", packet.get("wall_id")))
+                if _rendered is None:
+                    errors.append(f"observation {i} template {obs.get('template')!r} "
+                                  f"has unresolvable refs")
+                elif obs.get("text", "") != _rendered:
+                    errors.append(f"observation {i} text does not match "
+                                  f"template {obs.get('template')!r} rendering")
+    for _field, _txt in (("headline", out.get("headline", "")),
+                         ("next_condition", out.get("next_condition", "")),
+                         ("invalidation", out.get("invalidation", ""))):
+        for _tok in _suffixed_numbers(_txt):
+            errors.append(f"unsupported suffixed numeric token in {_field}: {_tok!r}")
+    if out.get("status") == "Setup confirmed for review":
+        _q = packet.get("quality", {})
+        if not _q.get("setupEligible", _q.get("setup_eligible", False)):
+            errors.append("status promotion: Wait cannot become Setup confirmed")
+        else:
+            # Quality alone never confirms: only a confirmed hold/rejection
+            # interaction state in the same packet permits promotion (R6-4).
+            _ix_states = [f.get("value", {}).get("state")
+                          for f in packet.get("facts", [])
+                          if isinstance(f, dict) and f.get("kind") == "INTERACTION"]
+            if not any(s in ("holding", "rejecting") for s in _ix_states):
+                errors.append("status promotion: no confirmed hold/reject interaction")
     return errors
 
 

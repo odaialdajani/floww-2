@@ -44,7 +44,7 @@ function SelectedCellReadout({ selectedCell, displayData, metric, viewMode }) {
  * (asof/metric/expand); cross-symbol clears; missing walls explain
  * WALL_GONE instead of substituting the nearest different wall.
  */
-function SelectedWallBlock({ data, spot, selectedCell }) {
+function SelectedWallBlock({ data, spot, selectedCell, metric = "raw", replay = false }) {
   const res = resolveSelectedWall(data, selectedCell);
   if (res.status === "empty" || res.status === "cleared") return null;
   if (res.status === "gone") {
@@ -80,7 +80,8 @@ function SelectedWallBlock({ data, spot, selectedCell }) {
         wall={wall} interaction={interaction} metrics={data.metrics} grids={data.metrics?.grids}
         quality={data.quality} scenario={scenarios[0]}
         scout={data.scout} patterns={data.patterns_v1} regime={data.gamma_regime_v1}
-        vanna={data.vanna_v1} moneyness={data.moneyness}
+        vanna={data.vanna_v1} moneyness={data.moneyness} metric={metric}
+        snapshotId={data.snapshotId || null} replay={replay}
       />
       <ScenarioStrip scenarios={scenarios} />
     </>
@@ -459,7 +460,7 @@ function SkylitDashboard({
             regime={regime}
           />
           {/* T07/T23: selected-wall inspector + two-sided scenarios (deterministic) */}
-          <SelectedWallBlock data={displayData} spot={displaySpot} selectedCell={selectedCell} />
+          <SelectedWallBlock data={displayData} spot={displaySpot} selectedCell={selectedCell} metric={metric} replay={isReplay} />
         </div>
       </div>
 
@@ -524,7 +525,7 @@ function SkylitDashboard({
                 regime={regime}
               />
               {/* R6-1 expanded inspector parity: same wall/scenarios as inline. */}
-              <SelectedWallBlock data={overlayData} spot={displaySpot} selectedCell={selectedCell} />
+              <SelectedWallBlock data={overlayData} spot={displaySpot} selectedCell={selectedCell} metric={metric} replay={isReplay} />
             </div>
           </div>
         </div>
