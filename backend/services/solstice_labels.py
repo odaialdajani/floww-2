@@ -20,14 +20,17 @@ def label_touch(path: list[tuple[float, float]], zone: tuple[float, float],
                 max_gap_s: float | None = None) -> dict[str, Any]:
     """First-passage label over (t, price) path. Both-inside-same-bar → unknown order.
 
-    R5-F/R14 contract: the outcome horizon starts at the QUALIFYING ZONE
-    ENCOUNTER, not at the first supplied path point — an observation window
-    [encounter_t, encounter_t + horizon_s] decides. A target hit before any
-    encounter is not a target_hit. Event chronology enforced (only hits
-    at/after encounter count). A consecutive observation gap longer than
-    max_gap_s (default: horizon_s) censors the label — widely separated
-    endpoints cannot prove first-passage order. Paths without a decision and
-    without full window coverage are censored indeterminate, never no_touch.
+    R5-F/R14 + R6-5/B10-B11 contract: the outcome horizon starts at the
+    QUALIFYING ZONE ENCOUNTER — the decision window is
+    [encounter_t, encounter_t + horizon_s]. Labels are CAUSALLY PREFIX
+    STABLE: the scan proceeds forward and the first terminal event decides;
+    later points (missing prices, later touches, opposing barrier) can never
+    rewrite a decided label. A target hit before any encounter is not a
+    target_hit. An observed touch with no barrier hit inside a fully covered
+    window is indeterminate (a touch is not a decision), never no_touch.
+    A consecutive observation gap longer than max_gap_s (default: horizon_s)
+    censors the label — widely separated endpoints cannot prove first
+    passage order.
 
     Returns {label, censored, detail}. Labels: target_hit | stop_hit | no_touch |
     indeterminate | data_gap | simultaneous_unknown.
@@ -36,60 +39,147 @@ def label_touch(path: list[tuple[float, float]], zone: tuple[float, float],
     if not path:
         return {"label": "data_gap", "censored": True, "version": LABEL_VERSION,
                 "detail": "empty path"}
+    gap_cap = horizon_s if max_gap_s is None else max_gap_s
     t0 = path[0][0]
-    for _t, p in path:
+
+    def _hit(price: float | None) -> tuple[bool, bool]:
+        if price is None or not math.isfinite(price):
+            return False, False
+        _ht = (target >= hi and price >= target) or (target <= lo and price <= target)
+        _hs = (stop >= hi and price >= stop) or (stop <= lo and price <= stop)
+        return _ht, _hs
+
+    # Phase 1 — encounter search over the arrival prefix. A corrupt point at
+    # or before the encounter censors (continuity unprovable); points after
+    # the encounter belong to phase 2 and never affect this step.
+    encounter_t = None
+    for t, p in path:
         if p is None or not math.isfinite(p):
             return {"label": "data_gap", "censored": True, "version": LABEL_VERSION}
-    gap_cap = horizon_s if max_gap_s is None else max_gap_s
-    # Same-observation dual-barrier hit blocks fills even without encounter
-    # (order unknown — never an assumed win). Preserves the fill canary.
-    raw_t = raw_s = None
-    for t, p in path:
-        if raw_t is None and ((target >= hi and p >= target) or (target <= lo and p <= target)):
-            raw_t = t
-        if raw_s is None and ((stop >= hi and p >= stop) or (stop <= lo and p <= stop)):
-            raw_s = t
-    if raw_t is not None and raw_s is not None and raw_t == raw_s:
-        return {"label": "simultaneous_unknown", "censored": True, "version": LABEL_VERSION,
-                "detail": "both barriers inside same observation; order unknown"}
-    # Qualifying encounter: first zone touch anywhere in the supplied path.
-    encounter_t = None
-    for _t, _p in path:
-        if lo <= _p <= hi:
-            encounter_t = _t
+        if lo <= p <= hi:
+            encounter_t = t
             break
     duration = path[-1][0] - t0
     if encounter_t is None:
+        # Same-timestamp dual-barrier contact without any zone encounter:
+        # order unknown, never an assumed win (fill canary).
+        _rt = _rs = None
+        for t, p in path:
+            _ht, _hs = _hit(p)
+            if _rt is None and _ht:
+                _rt = t
+            if _rs is None and _hs:
+                _rs = t
+        if _rt is not None and _rs is not None and _rt == _rs:
+            return {"label": "simultaneous_unknown", "censored": True, "version": LABEL_VERSION,
+                    "detail": "both barriers inside same observation; order unknown"}
         if duration >= horizon_s:
             return {"label": "no_touch", "censored": False, "version": LABEL_VERSION}
         return {"label": "indeterminate", "censored": True, "version": LABEL_VERSION,
                 "detail": "HORIZON_INCOMPLETE_no_encounter"}
     window_end = encounter_t + horizon_s
-    # Gap model over the decision window: an unobserved stretch longer than
-    # the cap means first passage may have happened unseen.
-    for (ta, _), (tb, _) in zip(path, path[1:], strict=False):
-        if ta >= encounter_t and ta < window_end and (tb - ta) > gap_cap:
+    # Phase 2 — single forward pass over the path. Gap spans are measured on
+    # consecutive observations whenever the earlier point lies inside the
+    # window (even if the later point falls beyond its edge). Points sharing
+    # one timestamp form a single coarse observation. The first terminal event
+    # decides; everything after it is causally irrelevant, so the scan stops.
+    _prev: float | None = None
+    _i = 0
+    _n = len(path)
+    while _i < _n:
+        _t = path[_i][0]
+        if _t < encounter_t:
+            _i += 1
+            continue
+        if _t > window_end:
+            break
+        _group = []
+        while _i < _n and path[_i][0] == _t:
+            _group.append(path[_i][1])
+            _i += 1
+        for _p in _group:
+            if _p is None or not math.isfinite(_p):
+                return {"label": "data_gap", "censored": True, "version": LABEL_VERSION}
+        if _prev is not None and (_t - _prev) > gap_cap:
             return {"label": "indeterminate", "censored": True, "version": LABEL_VERSION,
                     "detail": "OBSERVATION_GAP"}
-    hit_t = hit_s = None
-    for t, p in path:
-        if t < encounter_t or t > window_end:
-            continue  # chronology + horizon: only post-encounter window counts
-        if hit_t is None and ((target >= hi and p >= target) or (target <= lo and p <= target)):
-            hit_t = t
-        if hit_s is None and ((stop >= hi and p >= stop) or (stop <= lo and p <= stop)):
-            hit_s = t
-    if hit_t is not None and hit_s is not None and hit_t == hit_s:
-        return {"label": "simultaneous_unknown", "censored": True, "version": LABEL_VERSION,
-                "detail": "both barriers inside same observation; order unknown"}
-    if hit_t is not None and (hit_s is None or hit_t < hit_s):
-        return {"label": "target_hit", "censored": False, "version": LABEL_VERSION}
-    if hit_s is not None:
-        return {"label": "stop_hit", "censored": False, "version": LABEL_VERSION}
+        _prev = _t
+        _hits = [_hit(_p) for _p in _group]
+        if any(h for h, _ in _hits) and any(s for _, s in _hits):
+            return {"label": "simultaneous_unknown", "censored": True, "version": LABEL_VERSION,
+                    "detail": "both barriers inside same observation; order unknown"}
+        if any(h for h, _ in _hits):
+            return {"label": "target_hit", "censored": False, "version": LABEL_VERSION}
+        if any(s for _, s in _hits):
+            return {"label": "stop_hit", "censored": False, "version": LABEL_VERSION}
+    # A consecutive pair straddling the window edge still censors: first
+    # passage may have happened unseen in the unobserved span.
+    for (_ta, _), (_tb, _) in zip(path, path[1:], strict=False):
+        if _ta >= encounter_t and _ta < window_end and (_tb - _ta) > gap_cap:
+            return {"label": "indeterminate", "censored": True, "version": LABEL_VERSION,
+                    "detail": "OBSERVATION_GAP"}
     if path[-1][0] >= window_end:
-        return {"label": "no_touch", "censored": False, "version": LABEL_VERSION}
+        # Fully covered window. The encounter proves a touch happened, but no
+        # barrier was hit: an undecided episode, never no_touch.
+        return {"label": "indeterminate", "censored": False, "version": LABEL_VERSION,
+                "detail": "TOUCH_NO_BARRIER"}
     return {"label": "indeterminate", "censored": True, "version": LABEL_VERSION,
             "detail": "HORIZON_INCOMPLETE_no_decision"}
+
+
+def close_episodes(conn, paths_by_decision: dict[str, list],
+                   default_horizon_s: float = 300) -> dict[str, Any]:
+    """Deterministic pending→complete/censored outcome job (R6-5/B11).
+
+    For each decision WITHOUT a recorded outcome, label its price path using
+    the episode stored in decision features (zone/target/stop/horizon) and
+    record the outcome. Idempotent across restart/catch-up: decisions that
+    already have an outcome row are skipped and reported separately.
+    Appending irrelevant future data cannot change an already recorded
+    result (labels are prefix-stable; re-runs find the existing row first).
+    Returns {closed, skipped_idempotent, results}.
+    """
+    from services.heatmap_history import record_outcome
+    closed: list[str] = []
+    skipped: list[str] = []
+    results: dict[str, Any] = {}
+    for did, path in (paths_by_decision or {}).items():
+        try:
+            existing = conn.execute(
+                "SELECT COUNT(*) FROM outcome_labels_v1 WHERE decision_id = "
+                f"'{str(did).replace(chr(39), chr(39) * 2)}'").fetchone()
+            if existing and existing[0] > 0:
+                skipped.append(did)
+                continue
+            dec = conn.execute(
+                "SELECT ticker, features FROM scenario_decisions_v1 WHERE decision_id = "
+                f"'{str(did).replace(chr(39), chr(39) * 2)}'").fetchall()
+            if not dec:
+                skipped.append(did)
+                continue
+            import json as _json
+            ticker, features = dec[0][0], dec[0][1]
+            try:
+                feat = _json.loads(features) if isinstance(features, str) else (features or {})
+            except (TypeError, ValueError):
+                feat = {}
+            if not isinstance(feat, dict):
+                feat = {}
+            zone = feat.get("zone") or [0, 0]
+            horizon = feat.get("horizon_s", default_horizon_s)
+            res = label_touch(
+                path or [], (float(zone[0]), float(zone[1])),
+                float(horizon), float(feat.get("target", 0)), float(feat.get("stop", 0)))
+            record_outcome(conn, did, ticker, int(horizon),
+                           res["label"], censored=bool(res.get("censored")),
+                           detail={"detail": res.get("detail"), "version": res.get("version")})
+            closed.append(did)
+            results[did] = res
+        except Exception as e:
+            import logging as _logging
+            _logging.getLogger(__name__).warning("close_episodes %s failed: %s", did, e)
+            skipped.append(did)
+    return {"closed": closed, "skipped_idempotent": skipped, "results": results}
 
 
 def walk_forward_splits(sessions: list[str], n_folds: int = 3, embargo: int = 1) -> list[dict]:

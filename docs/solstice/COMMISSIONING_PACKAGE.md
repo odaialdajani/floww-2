@@ -20,10 +20,11 @@ deployment change has been made.
 
 One heatmap build fans out to all UI consumers (single-flight per query key).
 Recorder writes: 1 snapshot row + N contract rows + capability row per fresh
-build (background thread, writer-lock serialized). At a 5-minute structural
-cadence for 2 symbols: ~576 snapshot rows/day; contracts dominate volume
-(~2,000 max per snapshot, declared truncation). Measure disk growth for one
-week before setting retention tiers.
+build (background thread, writer-lock serialized). At the 5-minute structural
+cadence across a regular 6.5-hour session: 6.5 × 60 / 5 = 78 scheduled
+snapshots per symbol (≈156 for two symbols) before endpoint/loop effects —
+NOT 576/day (that assumed 24 hours). Measure one week of disk growth before
+setting retention tiers.
 
 ## 3. Health view
 
