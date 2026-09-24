@@ -13,7 +13,6 @@ Tables:
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 from datetime import UTC, datetime
@@ -29,15 +28,14 @@ def _now_iso() -> str:
 
 
 def snapshot_digest(payload: dict[str, Any]) -> str:
-    core = {
-        "ticker": payload.get("ticker"),
-        "expiries": payload.get("expiries_used"),
-        "spot": payload.get("spot"),
-        "basis": payload.get("exposure_basis"),
-        "formula": payload.get("formula_version"),
-        "asof": payload.get("asof"),
-    }
-    return hashlib.sha256(json.dumps(core, sort_keys=True, default=str).encode()).hexdigest()[:16]
+    """Recorder identity = canonical content digest (P02/R4-01, R4-13).
+
+    Same content re-recorded is the same snapshot (idempotent); changed
+    exposure always digests differently. Observation time lives in the row,
+    not the digest.
+    """
+    from services.heatmap_snapshot import content_digest
+    return content_digest(payload)
 
 
 DDL = {

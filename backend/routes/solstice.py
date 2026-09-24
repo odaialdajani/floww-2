@@ -32,13 +32,46 @@ async def snapshot(ticker: str, expiries: int = Query(4, ge=1, le=12),
 @router.get("/evidence/{ticker}")
 async def evidence(ticker: str, wall_id: str | None = None,
                    expiries: int = Query(4, ge=1, le=12),
-                   mode: str = Query("day", pattern="^(day|swing|scalp)$")) -> dict[str, Any]:
-    """Read-only evidence packet for the selected wall (T21)."""
+                   mode: str = Query("day", pattern="^(day|swing|scalp)$"),
+                   dte: int | None = Query(None, ge=0, le=30),
+                   scalp: bool = Query(False),
+                   snapshot_id: str | None = Query(None)) -> dict[str, Any]:
+    """Read-only evidence packet for the selected wall (T21, P02/R4-03).
+
+    Two coherent modes, never a rebuilt different scope:
+    - snapshot_id given: packet is built from the RECORDED snapshot
+      (available-at replay — the exact scope the UI displayed).
+    - otherwise: rebuilds with the FULL scope (dte/scalp included) and the
+      identical query-key format as /snapshot, so IDs stay comparable.
+    """
     from server import build_heatmap
     from services.heatmap_snapshot import build_snapshot_v2
     from services.solstice_evidence import build_evidence_packet
-    payload = await build_heatmap(ticker.strip().upper(), expiries, True, mode, None, False)
-    snap = build_snapshot_v2(payload)
+    t = ticker.strip().upper()
+    if snapshot_id:
+        from services.duckdb_engine import db as eng
+        from services.heatmap_history import replay_snapshot
+        conn = eng.conn if hasattr(eng, "conn") else None
+        if conn is None:
+            return {"packet": None, "error": "recorder_unavailable"}
+        rep = replay_snapshot(conn, snapshot_id)
+        if rep is None:
+            return {"packet": None, "error": "snapshot_not_found"}
+        snap_row = rep.get("snapshot", {}) or {}
+        snap = build_snapshot_v2({
+            "ticker": snap_row.get("ticker", t),
+            "spot": snap_row.get("spot"),
+            "expiries_used": [], "data_source": "recorded",
+            "exposure_basis": "OI", "formula_version": "gex.v2",
+            "asof": snap_row.get("asof_ts"),
+            "strikes": rep.get("strikes", []),
+            "metrics": {"walls": rep.get("walls", [])},
+        }, query_key=f"replay|{snapshot_id}")
+        pkt = build_evidence_packet(snap, wall_id=wall_id, mode="replay")
+        pkt["replay_of"] = snapshot_id  # requested record; packet binds replayed content
+        return {"packet": pkt, "replay": True, "replay_note": rep.get("replay_note")}
+    payload = await build_heatmap(t, expiries, True, mode, dte, scalp)
+    snap = build_snapshot_v2(payload, query_key=f"{t}|{expiries}|{mode}|{dte}|{scalp}")
     return {"packet": build_evidence_packet(snap, wall_id=wall_id)}
 
 

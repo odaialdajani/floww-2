@@ -77,7 +77,9 @@ def test_attribute_endpoint_needs_two_snapshots():
             "metrics": {"walls": []}}
     record_snapshot(conn, dict(base, asof="2030-01-02T00:00:00+00:00"), "q")
     assert hh.compare_snapshots(conn, "TST", "2030-01-02")["status"] == "history_unavailable"
-    record_snapshot(conn, dict(base, asof="2030-01-02T01:00:00+00:00"), "q")
+    # A second observation must differ in content to be a distinct snapshot.
+    record_snapshot(conn, dict(base, asof="2030-01-02T01:00:00+00:00",
+                               strikes=[{"strike": 500, "gex": 2e6}]), "q")
     assert hh.compare_snapshots(conn, "TST", "2030-01-02")["status"] == "ok"
 
 
