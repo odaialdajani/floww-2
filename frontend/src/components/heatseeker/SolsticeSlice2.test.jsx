@@ -78,7 +78,8 @@ test("status strip shows WAIT on blocked setup", () => {
 test("wall inspector + scenarios render for selected wall", () => {
   render(<WallInspector wall={data.metrics.walls[0]} metrics={{ magnitude_ratio_delta_over_raw: 0.45, dadgex_usable: 10, dadgex_missing_delta: 2 }} grids={data.metrics.grids} quality={data.quality} />);
   expect(screen.getByTestId("wall-inspector")).toBeInTheDocument();
-  expect(screen.getByText("Δ/Raw ratio")).toBeInTheDocument();
+  // P05/R4-15: scope-wide ratio is labeled as scope-wide, never wall-local.
+  expect(screen.getByText("Δ/Raw (scope)")).toBeInTheDocument();
   expect(screen.getByText("Δ provenance")).toBeInTheDocument();
   render(<ScenarioStrip scenarios={[{ name: "Bounce watch", confirmation: "reclaim", invalidation: "acceptance" }]} />);
   expect(screen.getByTestId("scenario-strip")).toBeInTheDocument();
