@@ -68,6 +68,13 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
   const pairNote = metrics
     ? `Δ usable ${metrics.dadgex_usable ?? "—"}, missing ${metrics.dadgex_missing_delta ?? "—"}`
     : "—";
+  // Wall-local window activity comes from the live assembly when a recorded
+  // baseline exists; otherwise the row honestly reports unavailability.
+  const winVal = metrics?.window_daddex_v1;
+  const winReason = metrics?.window_daddex_reason;
+  const winNote = winVal != null ? `${fmtUsd(winVal)} (window Δ-weighted)`
+    : winReason === "VOLUME_REBASE" ? "unavailable — volume rebase, new baseline required"
+    : "unavailable — no recorded baseline yet";
   return (
     <div className="skylit-metrics-section" data-testid="wall-inspector">
       <div className="skylit-section-title">Selected wall · {wall.wall_id || `${wall.low}–${wall.high}`}</div>
@@ -79,6 +86,7 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
         <Row k="Per-expiry" v={perExpiry.slice(0, 6).map((p) => `${p.grid}:${p.expiry.slice(5)}=${fmtUsd(p.value)}`).join(" · ")} tip="Same-snapshot per-expiry contributions for member strikes" />
       )}
       <Row k="Δ/Raw (scope)" v={ratio != null ? Number(ratio).toFixed(3) : "—"} tip="Scope-wide delta gross / raw gross over the same snapshot set — not the selected wall. Wall-local ratio needs same-wall delta + raw grids." />
+      <Row k="Window activity" v={winNote} tip="Wall-local window delta-weighted activity from the recorded baseline; turnover, never buyer-minus-seller flow" />
       <Row k="Δ provenance" v={pairNote} tip="Vendor/vendor, local/local eligible; mixed pairs blocked without policy" />
       <Row k="OI eff. date" v="unavailable in snapshot" tip="OI effective date coverage comes from the recorder, not this snapshot" />
       <Row k="Changed" v={interaction ? `${interaction.state}${interaction.event ? ` · ${interaction.event}` : ""} (first sighting — see replay compare)` : "see replay compare"} tip="Wall-level change needs 2+ recorded snapshots" />

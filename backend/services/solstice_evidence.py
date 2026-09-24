@@ -217,6 +217,11 @@ def validate_explainer_output(out: dict[str, Any], packet: dict[str, Any]) -> li
         errors.append("snapshot_id mismatch (stale explanation)")
     if out.get("query_id") != packet.get("query_id"):
         errors.append("query_id mismatch")
+    # Wall staleness (R5 resweep): an explanation rendered for one wall must
+    # not be shown under another after a selection change.
+    if out.get("wall_id") is not None and packet.get("wall_id") is not None:
+        if out.get("wall_id") != packet.get("wall_id"):
+            errors.append("wall_id mismatch (stale wall explanation)")
     if out.get("status") not in ALLOWED_STATUS:
         errors.append(f"status not in allowed set: {out.get('status')!r}")
     facts = {f.get("id"): f for f in packet.get("facts", []) if isinstance(f, dict)}

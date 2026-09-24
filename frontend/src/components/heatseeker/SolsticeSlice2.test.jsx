@@ -85,6 +85,16 @@ test("wall inspector + scenarios render for selected wall", () => {
   expect(screen.getByTestId("scenario-strip")).toBeInTheDocument();
 });
 
+test("wall inspector shows window activity or honest unavailability", () => {
+  const { unmount } = render(<WallInspector wall={data.metrics.walls[0]} metrics={{}} />);
+  expect(screen.getByText("Window activity")).toBeInTheDocument();
+  expect(screen.getByText(/no recorded baseline/)).toBeInTheDocument();
+  unmount();
+  render(<WallInspector wall={data.metrics.walls[0]}
+    metrics={{ window_daddex_v1: 2500000, window_daddex_reason: null }} />);
+  expect(screen.getByText(/window Δ-weighted/)).toBeInTheDocument();
+});
+
 test("wall inspector shows interaction state and touches", () => {
   const React = require("react");
   const { render: r2, screen: s2 } = require("@testing-library/react");

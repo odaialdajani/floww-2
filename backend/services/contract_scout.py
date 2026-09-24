@@ -12,7 +12,7 @@ import math
 from typing import Any
 
 REJECT_REASONS = (
-    "NO_0DTE_LISTING", "WRONG_SIDE", "STALE_BID", "STALE_ASK", "GREEKS_MISSING",
+    "NO_0DTE_LISTING", "WRONG_SIDE", "UNKNOWN_SIDE", "STALE_BID", "STALE_ASK", "GREEKS_MISSING",
     "SPREAD_TOO_WIDE", "DELTA_OUTSIDE_BAND", "INSUFFICIENT_VOLUME",
     "INSUFFICIENT_TIME", "UNSUPPORTED_SERIES",
 )
@@ -47,7 +47,8 @@ def scout_candidates(contracts: list[dict[str, Any]], scenario_side: str,
     passes); quote age checked on every candidate when timestamps are
     present (never only-when-already-invalid); bid/ask skew checked;
     same-day (0DTE) membership enforced when session_date is supplied;
-    scenario side filtered before ranking. Missing timestamps are allowed
+    scenario side filtered before ranking (unknown side rejects everything);
+    adjusted/nonstandard contracts quarantined as UNSUPPORTED_SERIES. Missing timestamps are allowed
     for backward-compat fixtures but production callers should require them
     (pass session_date + fresh timestamps; unknown age fails closed when
     required by the caller via require path).
@@ -67,8 +68,27 @@ def scout_candidates(contracts: list[dict[str, Any]], scenario_side: str,
         rejected[reason] = rejected.get(reason, 0) + 1
         reasons.append({"osi": osi, "reason": reason})
 
+    if not want_call and not want_put:
+        # Unknown scenario side: nothing is eligible on either side (R5-D).
+        for c in contracts or []:
+            reject(str((c or {}).get("osi", (c or {}).get("symbol", ""))), "UNKNOWN_SIDE")
+        return {
+            "side": side,
+            "candidates": [],
+            "n_eligible": 0,
+            "rejected": rejected,
+            "rejection_sample": reasons[:20],
+            "delta_band": list(DELTA_BAND),
+            "no_candidate_is_valid": True,
+        }
+
     for c in contracts or []:
         osi = str(c.get("osi", c.get("symbol", "")))
+        # Adjusted/nonstandard contracts need deliverable/payoff metadata the
+        # scout does not price — quarantined, never silently ranked (R5-D).
+        if c.get("adjusted") or c.get("nonstandard"):
+            reject(osi, "UNSUPPORTED_SERIES")
+            continue
         is_call = str(c.get("type", "")).lower().startswith("c")
         if want_call and not is_call:
             reject(osi, "WRONG_SIDE")
