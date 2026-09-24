@@ -88,9 +88,17 @@ def oi_changes(current: list[dict], previous: list[dict]) -> dict[str, Any]:
 
 
 def _contract_key(c: dict) -> tuple:
+    # Canonical identity (R5-B resweep): strikes normalize through float so
+    # DB DOUBLE 500.0 and JSON int 500 join the same contract. Unparseable
+    # strikes fall back to raw strings (never silently merged).
+    try:
+        _s = c.get("strike")
+        strike = str(float(_s)) if _s is not None else ""
+    except (TypeError, ValueError):
+        strike = str(c.get("strike") or "")
     return (str(c.get("osi") or ""),
             str(c.get("expiry") or ""),
-            str(c.get("strike") or ""),
+            strike,
             str(c.get("type") or "").lower())
 
 
