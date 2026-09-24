@@ -176,6 +176,12 @@ function SkylitDashboard({
     setExpData(null);
     setExpWidened(false);
   }, [ticker, timeframe, expiries, dte]);
+  // R5-B resweep: closing the overlay drops expanded data so stale
+  // expanded scope can never drive inline clicks after close. Reopening
+  // refetches under the current scope (loading state, never old pixels).
+  useEffect(() => {
+    if (!expanded) setExpData(null);
+  }, [expanded]);
   // Locked comparison scale never survives a scope change.
   useEffect(() => {
     setScaleLock(null);
@@ -207,10 +213,13 @@ function SkylitDashboard({
   const overlayData = replaySnap || expData || data;
   const overlayNote = (() => {
     const n = overlayData?.strikes?.length || 0;
-    if (!n) return "";
     const scope = `${timeframe} · ${expWidened ? 8 : expiries} expiries`;
+    // Loading is explicit even with no rows yet: reopening after close must
+    // show a loading state, never stale pixels and never a blank header.
+    if (expLoading && !expData) return "loading scope…";
+    if (!n) return "";
     if (expData) return `${scope} · ${n} strikes`;
-    return expLoading ? "loading scope…" : `${scope} · ${n} strikes`;
+    return `${scope} · ${n} strikes`;
   })();
 
   const handleCellClick = useCallback(

@@ -250,3 +250,20 @@ Verification (R5-F head): `backend/tests/solstice/` 131 passed;
 replay/grid 24 passed; ruff + silent-except gate clean (282 files).
 Inherited on base (stash-verified): 5 test_public_api_only (bars/cache),
 test_regime_thresholds flow-detector, Dashboard CSS-import suite.
+
+## R5 resweep (post-#36, head 25cb1f72 → followup)
+
+- Full backend head-vs-base (worktree 0340de86): identical 35 pre-existing
+  failures, 0 R5 regressions (5269 passed).
+- Frontend via required `craco test` gate: 593/594; fixed 1 live-spot leak
+  from replay work (recorded spot is replay-only now) + 1 stale label test
+  from the deliberate P05 rename. Remaining 3 suites fail identically on
+  base (radix import breakage, Sidebar, Blademap — unrelated areas).
+- CSS-import "barrier" resolved as tooling: bare `npx jest` has no CSS
+  transform; the repo gate (`craco test`) handles it — Dashboard 7/7 there.
+- File-backed restart/replay parity test added (record/close/reopen/replay
+  identical + manifest + linked decision).
+- Replay evidence endpoint tests (ticker/wall validation, restored fields)
+  + recorder-health/capability/manifest route tests.
+- Expand-close drops expanded data; reopen shows loading, never stale
+  pixels (Dashboard test); overlay loading note fixed to render while empty.
