@@ -115,6 +115,13 @@ function SkylitDashboard({
   const handleScaleReady = useCallback((s) => {
     setLiveScale((prev) => (prev && prev.min === s.min && prev.max === s.max ? prev : s));
   }, []);
+  // P09 guided replay: stored snapshot replaces the SAME grid/inspector/
+  // evidence while active; live refresh is ignored; return to live is
+  // deliberate. Cleared on ticker change (no cross-symbol leakage).
+  const [replaySnap, setReplaySnap] = useState(null);
+  useEffect(() => { setReplaySnap(null); }, [ticker]);
+  const displayData = replaySnap || data;
+  const isReplay = Boolean(replaySnap);
   // Grid zoom, in-frame only (2026-09-04): the expanded overlay keeps its
   // designed full density instead of compounding scale on scale.
   const [gridZoom, setGridZoom] = useState(1);
@@ -191,7 +198,7 @@ function SkylitDashboard({
       .finally(() => { if (!cancelled && myKey === expQueryKey) setExpLoading(false); });
     return () => { cancelled = true; ctrl.abort(); };
   }, [expanded, ticker, timeframe, expiries, expWidened, expQueryKey]);
-  const overlayData = expData || data;
+  const overlayData = replaySnap || expData || data;
   const overlayNote = (() => {
     const n = overlayData?.strikes?.length || 0;
     if (!n) return "";
@@ -260,13 +267,18 @@ function SkylitDashboard({
       />
 
       {/* 2.4 Solstice status strip — Environment · Location · Setup state · Data status (T23) */}
-      <SolsticeStatusStrip data={data} spot={spot} ticker={ticker} isLive={isLive} />
+      <SolsticeStatusStrip data={displayData} spot={spot} ticker={ticker} isLive={isReplay ? false : isLive} />
 
       {/* 2.5 Exposure strip — live backend exposure-rule badges, hidden when none */}
       <ExposureStrip ticker={ticker} />
 
       {/* 2.6 Bottom replay strip — deterministic session replay + data status */}
-      <ReplayStrip ticker={ticker} />
+      <ReplayStrip ticker={ticker} onReplay={setReplaySnap} />
+      {isReplay && (
+        <div data-testid="solstice-replay-banner" title="Replay mode — live refresh ignored">
+          REPLAY {replaySnap?.asof || ""} — live updates paused · select Live in the replay strip to return
+        </div>
+      )}
 
       {/* 2.6 Alert-engine strip — live detector badges (GAMMA_FLIP excluded; stays in exposure path) */}
       <AlertEngineStrip ticker={ticker} />
@@ -373,7 +385,7 @@ function SkylitDashboard({
             </div>
           )}
           <SkylitHeatmapGrid
-            data={data}
+            data={displayData}
             spot={spot}
             ticker={ticker}
             viewMode={viewMode}
@@ -389,13 +401,13 @@ function SkylitDashboard({
         {/* Metrics Sidebar */}
         <div className="skylit-sidebar-area">
           <SkylitMetricsSidebar
-            data={data}
+            data={displayData}
             spot={spot}
             viewMode={viewMode}
             regime={regime}
           />
           {/* T07/T23: selected-wall inspector + two-sided scenarios (deterministic) */}
-          <SelectedWallBlock data={data} spot={spot} selectedCell={selectedCell} />
+          <SelectedWallBlock data={displayData} spot={spot} selectedCell={selectedCell} />
         </div>
       </div>
 
