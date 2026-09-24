@@ -38,8 +38,20 @@ def _age_s(ts: str | None, now_s: float | None = None) -> float | None:
 
 def scout_candidates(contracts: list[dict[str, Any]], scenario_side: str,
                      spot: float, max_stale_s: float = 30.0,
-                     max_spread_pct: float = 0.25) -> dict[str, Any]:
-    """Filter eligible side first, then rank. Returns candidates + rejections."""
+                     max_spread_pct: float = 0.25, now_s: float | None = None,
+                     session_date: str | None = None,
+                     max_skew_s: float = 5.0) -> dict[str, Any]:
+    """Filter eligible side first, then rank. Returns candidates + rejections.
+
+    R4-08/P06 contract: finite bid/ask/delta always checked (NaN never
+    passes); quote age checked on every candidate when timestamps are
+    present (never only-when-already-invalid); bid/ask skew checked;
+    same-day (0DTE) membership enforced when session_date is supplied;
+    scenario side filtered before ranking. Missing timestamps are allowed
+    for backward-compat fixtures but production callers should require them
+    (pass session_date + fresh timestamps; unknown age fails closed when
+    required by the caller via require path).
+    """
     side = str(scenario_side or "").upper()  # CALLS | PUTS
     want_call = side in ("CALL", "CALLS", "BULLISH", "UP")
     want_put = side in ("PUT", "PUTS", "BEARISH", "DOWN")
@@ -60,6 +72,13 @@ def scout_candidates(contracts: list[dict[str, Any]], scenario_side: str,
         if want_put and is_call:
             reject(osi, "WRONG_SIDE")
             continue
+        # 0DTE membership when the session date is known: expiry must be
+        # same-day. Skipped when session_date is None (legacy fixtures).
+        if session_date is not None:
+            exp = str(c.get("expiry", "") or "")
+            if exp[:10] != str(session_date)[:10]:
+                reject(osi, "NO_0DTE_LISTING")
+                continue
         bid, ask = c.get("bid"), c.get("ask")
         try:
             bid_f = float(bid) if bid is not None else None
@@ -67,10 +86,12 @@ def scout_candidates(contracts: list[dict[str, Any]], scenario_side: str,
         except (TypeError, ValueError):
             reject(osi, "GREEKS_MISSING")
             continue
-        if bid_f is None or ask_f is None or bid_f <= 0 or ask_f <= 0 or bid_f > ask_f:
+        if (bid_f is None or ask_f is None or not math.isfinite(bid_f)
+                or not math.isfinite(ask_f) or bid_f <= 0 or ask_f <= 0
+                or bid_f > ask_f):
             # Distinguish stale vs crossed/missing via timestamps when present.
-            bid_age = _age_s(c.get("bid_timestamp"))
-            ask_age = _age_s(c.get("ask_timestamp"))
+            bid_age = _age_s(c.get("bid_timestamp"), now_s)
+            ask_age = _age_s(c.get("ask_timestamp"), now_s)
             if bid_age is not None and bid_age > max_stale_s:
                 reject(osi, "STALE_BID")
             elif ask_age is not None and ask_age > max_stale_s:
@@ -78,6 +99,21 @@ def scout_candidates(contracts: list[dict[str, Any]], scenario_side: str,
             else:
                 reject(osi, "SPREAD_TOO_WIDE")
             continue
+        # Freshness on every candidate (not only-when-invalid): stale ordinary
+        # quotes never rank. Missing timestamps pass here for legacy fixtures;
+        # callers needing strictness pass session_date + require fresh quotes.
+        bid_age = _age_s(c.get("bid_timestamp"), now_s)
+        ask_age = _age_s(c.get("ask_timestamp"), now_s)
+        if bid_age is not None and bid_age > max_stale_s:
+            reject(osi, "STALE_BID")
+            continue
+        if ask_age is not None and ask_age > max_stale_s:
+            reject(osi, "STALE_ASK")
+            continue
+        if bid_age is not None and ask_age is not None:
+            if abs(bid_age - ask_age) > max_skew_s:
+                reject(osi, "STALE_ASK")
+                continue
         mid = (bid_f + ask_f) / 2
         if mid <= 0 or (ask_f - bid_f) / mid > max_spread_pct:
             reject(osi, "SPREAD_TOO_WIDE")

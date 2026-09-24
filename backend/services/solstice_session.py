@@ -19,7 +19,8 @@ REASONS = ("WARMUP_INCOMPLETE", "MODEL_SIGN_UNSTABLE", "PARTIAL_CHAIN",
            "EVENT_CONTEXT_UNAVAILABLE", "COST_EXCEEDS_POLICY", "NO_ELIGIBLE_SIDE",
            "RISK_BUDGET_EXHAUSTED", "ACCOUNT_STATE_STALE", "SERIES_CUTOFF_UNKNOWN",
            "ORDER_STATE_UNKNOWN", "PROTECTION_UNCONFIRMED", "RECONCILIATION_REQUIRED",
-           "NO_0DTE_LISTING", "STALE_BID", "STALE_ASK", "LATE_SESSION_CUTOFF")
+           "NO_0DTE_LISTING", "STALE_BID", "STALE_ASK", "LATE_SESSION_CUTOFF",
+           "MARKET_CLOSED", "QUALITY_UNKNOWN")
 
 # Versioned late-session policy: no new entries within 30 min of 16:00 ET.
 LATE_CUTOFF_MIN = 30
@@ -27,17 +28,29 @@ LATE_CUTOFF_MIN = 30
 
 def session_state(now: datetime | None = None, quality: dict | None = None,
                   positions_open: bool = False) -> dict[str, Any]:
-    """Return entry/management/data permissions + reasons + recovery."""
+    """Return entry/management/data permissions + reasons + recovery.
+
+    R4-09/P06: exchange calendar gate (Sat/Sun → MARKET_CLOSED, fail
+    closed); unknown quality fails closed (QUALITY_UNKNOWN); 16:00 ET is
+    the regular-session pricing horizon — series last-trade vs settlement
+    (AM/PM, half-days) remain series-metadata owned (see series cutoff).
+    Blocking entries never abandons positions.
+    """
     now_utc = now.astimezone(UTC) if isinstance(now, datetime) else datetime.now(UTC)
     et = now_utc.astimezone(ET)
     close = et.replace(hour=16, minute=0, second=0, microsecond=0)
     mins_left = (close - et).total_seconds() / 60.0
     reasons: list[str] = []
+    if et.weekday() >= 5:
+        reasons.append("MARKET_CLOSED")
     if mins_left < 0:
         reasons.append("SERIES_CUTOFF_UNKNOWN")
     elif mins_left < LATE_CUTOFF_MIN:
         reasons.append("LATE_SESSION_CUTOFF")
     q = quality or {}
+    qstate = q.get("state", "unknown")
+    if qstate not in ("usable", "partial"):
+        reasons.append("QUALITY_UNKNOWN")
     reasons.extend([r for r in q.get("reasonCodes", []) if r in REASONS])
     if "EVENT_CONTEXT_UNAVAILABLE" in reasons:
         # Configured dependency policy: optional context missing blocks only
