@@ -39,9 +39,16 @@ def session_state(now: datetime | None = None, quality: dict | None = None,
     now_utc = now.astimezone(UTC) if isinstance(now, datetime) else datetime.now(UTC)
     et = now_utc.astimezone(ET)
     close = et.replace(hour=16, minute=0, second=0, microsecond=0)
+    market_open = et.replace(hour=9, minute=30, second=0, microsecond=0)
     mins_left = (close - et).total_seconds() / 60.0
     reasons: list[str] = []
     if et.weekday() >= 5:
+        reasons.append("MARKET_CLOSED")
+    elif et < market_open:
+        # Pre-open: last trading time has not arrived today. Holidays,
+        # half-days (13:00 ET) and AM/PM series cutoffs remain series-metadata
+        # owned (solstice_time.last_trading_utc); without a calendar feed the
+        # regular 09:30 ET open is the fail-closed boundary.
         reasons.append("MARKET_CLOSED")
     if mins_left < 0:
         reasons.append("SERIES_CUTOFF_UNKNOWN")
@@ -51,6 +58,10 @@ def session_state(now: datetime | None = None, quality: dict | None = None,
     qstate = q.get("state", "unknown")
     if qstate not in ("usable", "partial"):
         reasons.append("QUALITY_UNKNOWN")
+    if not q.get("setupEligible", q.get("setup_eligible", True)):
+        # Data says no setup is eligible: session permission agrees (entry
+        # blocked, management never abandoned).
+        reasons.append("NO_ELIGIBLE_SIDE")
     reasons.extend([r for r in q.get("reasonCodes", []) if r in REASONS])
     if "EVENT_CONTEXT_UNAVAILABLE" in reasons:
         # Configured dependency policy: optional context missing blocks only

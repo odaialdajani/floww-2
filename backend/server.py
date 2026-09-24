@@ -1628,12 +1628,22 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     except Exception as ve:
         log.debug("solstice vanna attach failed: %s", ve)
     try:
+        from datetime import UTC as _scout_UTC
+        from datetime import datetime as _scout_dt
+
         from services.contract_scout import scout_candidates
         # Scout needs a scenario side; default reports both sides' eligibility
         # counts without selecting (no dwell without a scenario).
+        # R5-D: production callers pass enforced session context (as-of day +
+        # now) so unknown age, future expiry and nonfinite inputs are rejected.
+        _scout_now = _scout_dt.now(_scout_UTC)
+        _session_day = _scout_now.date().isoformat()
+        _now_s = _scout_now.timestamp()
         payload["scout"] = {
-            "calls": scout_candidates(raw["contracts"], "CALLS", spot)["n_eligible"],
-            "puts": scout_candidates(raw["contracts"], "PUTS", spot)["n_eligible"],
+            "calls": scout_candidates(raw["contracts"], "CALLS", spot,
+                                      now_s=_now_s, session_date=_session_day)["n_eligible"],
+            "puts": scout_candidates(raw["contracts"], "PUTS", spot,
+                                     now_s=_now_s, session_date=_session_day)["n_eligible"],
         }
     except Exception as ce:
         log.debug("solstice scout attach failed: %s", ce)
