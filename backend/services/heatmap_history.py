@@ -30,12 +30,26 @@ def _now_iso() -> str:
 def snapshot_digest(payload: dict[str, Any]) -> str:
     """Recorder identity = canonical content digest (P02/R4-01, R4-13).
 
-    Same content re-recorded is the same snapshot (idempotent); changed
-    exposure always digests differently. Observation time lives in the row,
-    not the digest.
+    Content-addressed storage deduplicates unchanged blobs; every distinct
+    usable OBSERVATION still gets its own row (see record_snapshot, which
+    keys rows by observation ID = content + asof + ticker). Observation time
+    lives in the row, not the digest.
     """
     from services.heatmap_snapshot import content_digest
     return content_digest(payload)
+
+
+def observation_id_for(payload: dict[str, Any]) -> str:
+    """One issued observation ID per usable observation (R5-A/R03).
+
+    Content digest + observation time + ticker: identical exposure observed
+    twice yields two observation rows (e.g. a volume-only update changes no
+    exposure blob but is a new observation with new clocks). A valid cache
+    hit reuses the same asof and therefore the same observation ID — it must
+    not invent a new market event.
+    """
+    from services.heatmap_snapshot import snapshot_id_for
+    return snapshot_id_for(payload)
 
 
 DDL = {
@@ -188,7 +202,7 @@ def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
     """
     try:
         ensure_tables(conn)
-        sid = snapshot_id or f"snap_{snapshot_digest(payload)}"
+        sid = snapshot_id or observation_id_for(payload)
         contracts = payload.get("contracts") or []
         # Heatmap payloads carry strike rows + grid + walls rather than full
         # contracts; record those (contracts recorded when present).

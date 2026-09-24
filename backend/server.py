@@ -1448,13 +1448,16 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         "exposure_basis": exposure_basis,
         "formula_version": "gex.v2",
         "quality": {
-            "setup_eligible": exposure_basis == "OI",
-            "execution_eligible": False,
-            "reason_codes": [] if exposure_basis == "OI" else [exposure_basis],
-            "trade_side_capability": "none",
+            "state": "usable" if exposure_basis == "OI" else "unavailable",
+            "reasonCodes": [] if exposure_basis == "OI" else [exposure_basis],
+            "setupEligible": exposure_basis == "OI",
+            "executionEligible": False,
+            "tradeSideCapability": "none",
         },
         "gex_regime": nodes.get("regime"),
         "mode": mode,
+        "dte": dte,
+        "scalp": scalp,
         "asof": datetime.now(UTC).isoformat(),
         # New analytics
         "implied_move": implied_move,
@@ -1476,6 +1479,15 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         # Solstice read-only desk (T04–T10/T15–T20, deterministic, no execution)
         "metrics": metrics,
     }
+    # R5-A: one issued observation ID for this build (content + asof + ticker).
+    # Interactions, scenarios, evidence and recorder rows all join on this ID;
+    # wall events must never be written with a blank snapshot link.
+    try:
+        from services.heatmap_snapshot import snapshot_id_for
+        payload["snapshotId"] = snapshot_id_for(payload)
+    except Exception as _sid_e:
+        log.debug("snapshotId issue failed: %s", _sid_e)
+        payload["snapshotId"] = ""
     # Attach session permission, corrected regime, patterns v1, vanna, scout,
     # enrichment — each best-effort, never breaking the core payload.
     try:
@@ -1620,6 +1632,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                 record_snapshot, _conn, {"ticker": ticker,
                                          "expiries_used": payload.get("expiries_used"),
                                          "spot": spot,
+                                         "mode": mode, "dte": dte, "scalp": scalp,
                                          "data_source": payload.get("data_source"),
                                          "exposure_basis": exposure_basis,
                                          "formula_version": "gex.v2",
@@ -1632,7 +1645,8 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                          "quality": payload.get("quality", {}),
                                          "scenarios": payload.get("scenarios", [])[:12],
                                          "interactions": payload.get("interactions", [])[:12]},
-                f"{ticker}:{mode}:{dte}:{scalp}"))
+                f"{ticker}:{mode}:{dte}:{scalp}",
+                payload.get("snapshotId") or None))
             _background_tasks.add(_t2)
             _t2.add_done_callback(_background_tasks.discard)
             import contextlib as _ctxlib2
