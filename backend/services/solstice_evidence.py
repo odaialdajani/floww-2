@@ -83,8 +83,8 @@ def build_evidence_packet(snapshot_v2: dict[str, Any], wall_id: str | None = Non
             "evidence": SCHEMA_VERSION,
         },
         "quality": {
-            "setup_eligible": quality.get("setupEligible", False),
-            "reason_codes": quality.get("reasonCodes", []),
+            "setupEligible": quality.get("setupEligible", False),
+            "reasonCodes": quality.get("reasonCodes", []),
         },
         "environment": {
             "spot": payload.get("spot"),
@@ -180,7 +180,7 @@ def validate_explainer_output(out: dict[str, Any], packet: dict[str, Any]) -> li
     for phrase in CERTAINTY_PHRASES:
         if phrase in low:
             errors.append(f"unsupported certainty phrase: {phrase!r}")
-    if out.get("status") == "Setup confirmed for review" and not packet.get("quality", {}).get("setup_eligible"):
+    if out.get("status") == "Setup confirmed for review" and not packet.get("quality", {}).get("setupEligible", packet.get("quality", {}).get("setup_eligible", False)):
         errors.append("status promotion: Wait cannot become Setup confirmed")
     return errors
 
@@ -191,7 +191,7 @@ def deterministic_fallback(packet: dict[str, Any], wall_id: str | None = None) -
     A fallback render is a separate outcome from a model response: callers
     must record which path produced the output (see ai_eval corpus runner).
     """
-    reasons = packet.get("quality", {}).get("reason_codes", [])
+    reasons = packet.get("quality", {}).get("reasonCodes", packet.get("quality", {}).get("reason_codes", []))
     blocker = "; ".join(reasons) if reasons else "trade-side unknown"
     return {
         "snapshot_id": packet.get("snapshot_id"),

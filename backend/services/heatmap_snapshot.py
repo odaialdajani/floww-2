@@ -95,7 +95,10 @@ def normalize_quality(server_quality: dict[str, Any] | None) -> dict[str, Any]:
         return {"state": "unavailable", "reasonCodes": ["QUALITY_UNKNOWN"],
                 "setupEligible": False, "executionEligible": False,
                 "tradeSideCapability": "none"}
-    eligible = bool(server_quality.get("setup_eligible", False))
+    # Canonical camelCase wins; snake_case accepted once for legacy producers.
+    # Normalization is idempotent: canonical input returns unchanged.
+    eligible = bool(server_quality.get("setupEligible",
+                                       server_quality.get("setup_eligible", False)))
     reasons = list(server_quality.get("reasonCodes") or server_quality.get("reason_codes") or [])
     state = server_quality.get("state")
     if not isinstance(state, str) or not state:
@@ -138,8 +141,8 @@ def build_snapshot_v2(payload: dict[str, Any], query_key: str = "") -> dict[str,
         "times": {
             "receivedAt": frozen.get("source_received_at"),
             "calculatedAt": frozen.get("asof", now),
-            "sourceMinAt": frozen.get("source_received_at"),
-            "sourceMaxAt": frozen.get("source_received_at"),
+            "sourceMinAt": frozen.get("source_min_at", frozen.get("sourceMinAt")),
+            "sourceMaxAt": frozen.get("source_max_at", frozen.get("sourceMaxAt")),
             "oiEffectiveDate": frozen.get("oi_effective_date"),
         },
         "quality": quality,
