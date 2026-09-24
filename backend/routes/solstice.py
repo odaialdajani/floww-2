@@ -58,14 +58,41 @@ async def evidence(ticker: str, wall_id: str | None = None,
         if rep is None:
             return {"packet": None, "error": "snapshot_not_found"}
         snap_row = rep.get("snapshot", {}) or {}
+        # R5-E: the requested ticker must match the stored snapshot ticker —
+        # never explain SPY evidence under a QQQ heading.
+        if snap_row.get("ticker") and snap_row.get("ticker") != t:
+            return {"packet": None, "error": "ticker_mismatch"}
+        # R5-E: the requested wall must be a member of the stored walls.
+        stored_walls = rep.get("walls", []) or []
+        if wall_id and not any(isinstance(w, dict) and w.get("wall_id") == wall_id
+                               for w in stored_walls):
+            return {"packet": None, "error": "unknown_wall"}
+        import json as _json
+
+        def _parse(v: Any) -> Any:
+            try:
+                return _json.loads(v) if isinstance(v, str) else v
+            except (TypeError, ValueError):
+                return None
+
         snap = build_snapshot_v2({
             "ticker": snap_row.get("ticker", t),
             "spot": snap_row.get("spot"),
-            "expiries_used": [], "data_source": "recorded",
-            "exposure_basis": "OI", "formula_version": "gex.v2",
+            "expiries_used": _parse(snap_row.get("expiries")) or [],
+            "data_source": snap_row.get("data_source") or "recorded",
+            "exposure_basis": snap_row.get("exposure_basis") or "OI",
+            "formula_version": snap_row.get("formula_version") or "gex.v2",
             "asof": snap_row.get("asof_ts"),
+            "source_received_at": snap_row.get("received_at"),
             "strikes": rep.get("strikes", []),
-            "metrics": {"walls": rep.get("walls", [])},
+            "grid": ((rep.get("grids") or {}).get("grid")) or {},
+            "metrics": {"walls": stored_walls, "grids": rep.get("grids") or {}},
+            "quality": rep.get("quality") or {"state": "unknown", "reasonCodes": [],
+                                              "setupEligible": False,
+                                              "executionEligible": False,
+                                              "tradeSideCapability": "none"},
+            "scenarios": rep.get("scenarios", []),
+            "interactions": rep.get("interactions", []),
         }, query_key=f"replay|{snapshot_id}")
         pkt = build_evidence_packet(snap, wall_id=wall_id, mode="replay")
         pkt["replay_of"] = snapshot_id  # requested record; packet binds replayed content

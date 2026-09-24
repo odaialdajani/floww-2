@@ -2,12 +2,18 @@
 """Solstice comprehension harness (T11/T23 ten-second gates, self-administered).
 
 Presents frozen blinded scenarios (no future information) and scores five
-interpretation tasks per scenario:
-  1. nearest wall above + below (bounds within tolerance)
-  2. OI structure vs activity (keyword)
-  3. confirmation condition (keywords)
-  4. invalidation (keywords)
-  5. why setup is withheld / blocker (reason code or WAIT vocabulary)
+interpretation tasks per scenario with direction-aware structured grading:
+  1. nearest wall below AND above (ordered pairs: first pair is below,
+     second is above; bounds within tolerance; swapped ranges fail)
+  2. OI structure vs activity (must say structure/OI, never activity-only)
+  3. confirmation condition (direction words must match the scenario side)
+  4. invalidation (direction words must match the opposite side)
+  5. why setup is withheld / blocker (reason code or WAIT vocabulary;
+     action language like "trade immediately" fails as false confidence)
+
+The CLI never prints wall bounds before asking (answers would be coached).
+Per-question latency is recorded; hidden answer keys are never shown to
+participants (selftest uses the key only as a CI regression gate).
 
 Usage:
     python3 scripts/solstice_comprehension.py --selftest   # CI: answer key scores 100%
@@ -38,14 +44,25 @@ def _has_all(text: str, words: list[str]) -> bool:
 
 
 def expected(sc: dict) -> dict:
-    """Deterministic answer key derived from frozen facts only."""
+    """Deterministic answer key derived from frozen facts only.
+
+    Direction-aware: the scenario side comes from spot vs the nearest walls
+    (spot above the lower wall = bounce side; spot below the upper wall =
+    rejection side). Confirmation names the hold side; invalidation names the
+    adverse side. Swapped sides fail.
+    """
     key: dict = {}
     b, a = sc.get("nearest_below"), sc.get("nearest_above")
-    key["walls"] = [b["low"], b["high"]] if b else []
-    key["walls"] += [a["low"], a["high"]] if a else []
+    key["below"] = [b["low"], b["high"]] if b else []
+    key["above"] = [a["low"], a["high"]] if a else []
+    key["walls"] = key["below"] + key["above"]
     key["level_kind"] = ["structure", "oi"]
     blocked = not (sc.get("quality") or {}).get("setupEligible", True)
     reasons = (sc.get("quality") or {}).get("reasonCodes", [])
+    # Direction from frozen geometry: spot holds above the lower wall
+    # (bounce) and below the upper wall (rejection).
+    key["confirm_side"] = "above" if b else "below"
+    key["invalidate_side"] = "below" if b else "above"
     if blocked:
         key["confirm"] = ["required", "evidence"]
         key["invalidate"] = ["not", "applicable"]
@@ -57,21 +74,38 @@ def expected(sc: dict) -> dict:
     return key
 
 
+def _pair_ok(got: list[float], exp: list[float]) -> bool:
+    return len(got) >= 2 and len(exp) >= 2 and all(
+        any(abs(g - e) <= NUM_TOL for g in got) for e in exp)
+
+
 def score(sc: dict, answers: dict[str, str]) -> dict:
     key = expected(sc)
     got = _nums(answers.get("walls", ""))
-    wall_ok = all(any(abs(g - e) <= NUM_TOL for g in got) for e in key["walls"]) if key["walls"] else True
+    # Ordered pairs: first pair claims BELOW, second claims ABOVE. Reversed
+    # ranges fail even when all four numbers are present.
+    if not key["below"] and not key["above"]:
+        wall_ok = len(got) == 0
+    else:
+        wall_ok = ((not key["below"] or _pair_ok(got[:2], key["below"]))
+                   and (not key["above"] or _pair_ok(got[2:4], key["above"])))
+    confirm_txt = (answers.get("confirm", "") or "").lower()
+    invalidate_txt = (answers.get("invalidate", "") or "").lower()
     r = {
         "walls": wall_ok,
-        "level_kind": _has_all(answers.get("level_kind", ""), key["level_kind"]) or
-                      ("activity" in (answers.get("level_kind", "").lower()) and False),
-        "confirm": _has_all(answers.get("confirm", ""), key["confirm"]),
-        "invalidate": _has_all(answers.get("invalidate", ""), key["invalidate"]),
+        "level_kind": False,
+        "confirm": _has_all(confirm_txt, key["confirm"]) and key["confirm_side"] in confirm_txt,
+        "invalidate": _has_all(invalidate_txt, key["invalidate"]) and key["invalidate_side"] in invalidate_txt,
         "blocker": any(w in (answers.get("blocker", "").lower()) for w in key["blocker"]),
     }
     # Q2 must say structure (activity alone is wrong: the frozen level is OI).
     txt = (answers.get("level_kind", "") or "").lower()
     r["level_kind"] = ("structure" in txt or "oi" in txt) and ("only activity" not in txt)
+    # Q5 action language ("trade immediately", "trade now") is false
+    # confidence, never a blocker answer.
+    btxt = (answers.get("blocker", "") or "").lower()
+    if "immediately" in btxt or "trade now" in btxt or "buy now" in btxt or "sell now" in btxt:
+        r["blocker"] = False
     r["total"] = sum(1 for v in r.values() if v is True)
     return r
 
@@ -86,30 +120,35 @@ QUESTIONS = [
 
 
 def run(interactive: bool = True, scripted: dict[str, dict] | None = None) -> dict:
+    import time as _time
     scenarios = json.load(open(FIXTURE))["scenarios"]
     report = {"scenarios": [], "total": 0, "possible": 0}
     for sc in scenarios:
+        # Never print wall bounds before asking: the participant must locate
+        # the walls from the frozen grid, not read them off the prompt.
         print(f"\n=== {sc['id']}  {sc['ticker']} spot {sc['spot']} "
               f"regime {sc['regime']} basis {sc['basis']} ===")
-        b, a = sc.get("nearest_below"), sc.get("nearest_above")
-        if b:
-            print(f"  wall below: zone [{b['low']}, {b['high']}] gross {b['gross']:.1f} net {b['net']:.1f}")
-        if a:
-            print(f"  wall above: zone [{a['low']}, {a['high']}] gross {a['gross']:.1f} net {a['net']:.1f}")
         q = sc.get("quality") or {}
+        print(f"  walls: below={'LOADED' if sc.get('nearest_below') else 'none'} "
+              f"above={'LOADED' if sc.get('nearest_above') else 'none'}")
         print(f"  quality: eligible={q.get('setupEligible')} reasons={q.get('reasonCodes')}")
         answers: dict[str, str] = {}
+        latencies: dict[str, float] = {}
         for key, prompt in QUESTIONS:
             if scripted is not None:
                 answers[key] = scripted.get(sc["id"], {}).get(key, "")
+                latencies[key] = 0.0
             elif interactive:
+                _t0 = _time.time()
                 try:
                     answers[key] = input(prompt)
                 except EOFError:
                     answers[key] = ""
+                latencies[key] = round(_time.time() - _t0, 2)
         s = score(sc, answers)
         print(f"  score {s['total']}/5 :: {s}")
-        report["scenarios"].append({"id": sc["id"], "score": s, "answers": answers})
+        report["scenarios"].append({"id": sc["id"], "score": s, "answers": answers,
+                                    "latency_s": latencies})
         report["total"] += s["total"]
         report["possible"] += 5
     print(f"\nTOTAL {report['total']}/{report['possible']}")
@@ -117,18 +156,22 @@ def run(interactive: bool = True, scripted: dict[str, dict] | None = None) -> di
 
 
 def selftest() -> int:
-    """Feed the answer key through the scorer — must be 100% (CI gate)."""
+    """Feed the answer key through the scorer — must be 100% (CI gate).
+
+    Answers are ordered (below pair first) and direction-correct, mirroring
+    what a participant who located the walls would write.
+    """
     scenarios = json.load(open(FIXTURE))["scenarios"]
     scripted = {}
     for sc in scenarios:
         key = expected(sc)
         scripted[sc["id"]] = {
-            "walls": " ".join(str(int(x)) for x in key["walls"]),
+            "walls": " ".join(str(int(x)) for x in (key["below"] + key["above"])),
             "level_kind": "OI structure",
-            "confirm": "reclaim and hold above the zone; required evidence first"
-            if "required" in key["confirm"] else "reclaim and hold above the zone",
-            "invalidate": "not applicable while waiting for required evidence"
-            if "not" in key["invalidate"] else "sustained acceptance above the zone",
+            "confirm": f"reclaim and hold {key['confirm_side']} the zone; required evidence first"
+            if "required" in key["confirm"] else f"reclaim and hold {key['confirm_side']} the zone",
+            "invalidate": f"not applicable {key['invalidate_side']} while waiting for required evidence"
+            if "not" in key["invalidate"] else f"sustained acceptance {key['invalidate_side']} the zone",
             "blocker": " ".join(key["blocker"]),
         }
     report = run(interactive=False, scripted=scripted)
