@@ -98,3 +98,13 @@ Remaining external/user items (unchanged): SPX entitlement probe, participant
 comprehension study, deployment audience/data rights, durable-service
 commissioning approval, 30–60 representative sessions. None blocks R5-A–R5-F
 engineering, and none is claimed complete here.
+
+## Revision 6 — R6-1–R6-5 (24 Sep 2026, PRs #41–#45, unmerged per packet)
+
+| Package | Verdict | Evidence |
+|---|---|---|
+| R6-1 display contract | ✅ | canonical vendor producer + declared fallback, versioned projection, hooks, hydration, sidebar metric, expanded parity (test_r6_1_red, 5; grid/sidebar/dashboard Jest) |
+| R6-2 wall workflow | ✅ | wall-local breakdown/aggregation, chips, comparison, wall-local window row (test_r6_2_red, 3; Slice2 chips/compare) |
+| R6-3 context + calendar | ✅ | pinned calendar dep, holiday/half-day gates, actual-backed health, writer locks, Why-wait/candidates/patterns/badge (test_r6_3_red, 4) |
+| R6-4 explainer binding | ✅ | suffix rejection, state-gated promotion, clause templates, mounted explainer (test_r6_4_red, 3; explain Jest) |
+| R6-5 study + outcomes | ✅ code / 🔶 user | prefix-stable labels, geometry oracle, frozen-grid study mode, outcome job, commissioning math (test_r6_5_red, 4; study Jest). Participant run needs the user; empirical outcomes need sessions |
