@@ -20,7 +20,7 @@ from __future__ import annotations
 from typing import Any
 
 VERSION = "abl.v1"
-TOUCH_PCT = 0.002
+TOUCH_PCT = 0.001
 NEAR_PCT = 0.003
 MIN_DELTA_SHARE = 0.20
 
@@ -62,15 +62,43 @@ def run_ladder(snapshot: dict[str, Any], cost_bps: float = 20.0) -> dict[str, An
         "confirmation": "WEAK_single_snapshot_no_path"}
 
     ratio = metrics.get("magnitude_ratio_delta_over_raw")
-    l2_sig = [w for w in l1_sig
-              if ratio is not None and ratio >= MIN_DELTA_SHARE]
+    wall_share = metrics.get("wall_delta_share") or {}
+    l2_sig = []
+    for w in l1_sig:
+        # Wall-local join first; scope-wide ratio is not wall evidence.
+        s = wall_share.get(w["wall_id"]) if isinstance(wall_share, dict) else None
+        if s is None:
+            s = ratio
+        if s is not None and s >= MIN_DELTA_SHARE:
+            l2_sig.append(w)
+    _l2_unknown = ratio is None and not wall_share
     out["levels"]["L2_plus_delta"] = {
-        "signals": [{"wall_id": w["wall_id"], "delta_share": ratio} for w in l2_sig],
+        "signals": [{"wall_id": w["wall_id"],
+                     "delta_share": (wall_share.get(w["wall_id"])
+                                     if isinstance(wall_share, dict) and w["wall_id"] in wall_share
+                                     else ratio),
+                     "wall_local": (w["wall_id"] in wall_share) if isinstance(wall_share, dict) else False}
+                    for w in l2_sig],
         "abstentions": 0 if l2_sig else 1,
-        "reason": None if l2_sig else ("DELTA_SHARE_BELOW_SUPPORT" if ratio is not None else "DELTA_UNKNOWN")}
+        "reason": None if l2_sig else ("DELTA_SHARE_BELOW_SUPPORT"
+                                       if (ratio is not None or wall_share) else "DELTA_UNKNOWN")}
 
     vol = snapshot.get("volume_deltas") or (metrics.get("volume_proxy") or [])
-    l3_sig = [w for w in l2_sig if vol]
+    vol_strikes = set()
+    for v in vol or []:
+        if isinstance(v, dict) and v.get("strike") is not None:
+            import contextlib as _cl1
+            with _cl1.suppress(TypeError, ValueError):
+                vol_strikes.add(float(v.get("strike")))
+    l3_sig = []
+    for w in l2_sig:
+        members = set()
+        for m in w.get("members", []) or []:
+            import contextlib as _cl2
+            with _cl2.suppress(TypeError, ValueError):
+                members.add(float(m))
+        if members & vol_strikes:
+            l3_sig.append(w)
     out["levels"]["L3_plus_activity"] = {
         "signals": [{"wall_id": w["wall_id"]} for w in l3_sig],
         "abstentions": 0 if l3_sig else 1,
