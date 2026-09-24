@@ -76,3 +76,42 @@ test('cell click reports strike, expiry, value', () => {
   expect(EXPS).toContain(expiry);
   expect(typeof value).toBe('number');
 });
+
+test('R6-1: empty→populated→unavailable never changes hook order', () => {
+  const empty = { asof: '2026-09-03T00:00:00Z', grid: { expiries: [], strikes: [], grid: {} } };
+  const { container, rerender } = render(
+    <SkylitHeatmapGrid data={empty} spot={650} ticker="SPY" />
+  );
+  expect(container.querySelector('.skylit-heatmap-empty')).not.toBeNull();
+  const full = mockData();
+  expect(() => {
+    rerender(<SkylitHeatmapGrid data={full} spot={650} ticker="SPY" />);
+  }).not.toThrow();
+  expect(container.querySelectorAll('tbody tr.trin-row').length).toBe(10);
+  expect(() => {
+    rerender(
+      <SkylitHeatmapGrid data={full} spot={650} ticker="SPY" metric="delta" />
+    );
+  }).not.toThrow();
+  // Missing delta surface: unavailable block, never raw values.
+  expect(screen.getByTestId('skylit-metric-unavailable')).toBeInTheDocument();
+  expect(screen.queryByText('660')).toBeNull();
+});
+
+test('R6-1: present delta overlay renders its own cells, not raw', () => {
+  const d = mockData();
+  d.metrics = {
+    grids: {
+      delta: {
+        grid: { [EXPS[0]]: { 650: 777 }, [EXPS[1]]: { 650: 888 } },
+        exposure_basis: 'OI_DELTA_WEIGHTED',
+      },
+    },
+  };
+  const { container } = render(
+    <SkylitHeatmapGrid data={d} spot={650} ticker="SPY" metric="delta" />
+  );
+  expect(screen.queryByTestId('skylit-metric-unavailable')).toBeNull();
+  expect(container.textContent).toContain('$0.8K');
+  expect(screen.getByTestId('skylit-grid-basis').textContent).toContain('OI_DELTA_WEIGHTED');
+});

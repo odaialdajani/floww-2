@@ -28,10 +28,12 @@ export function shouldIgnoreLive(isReplayActive) {
 /**
  * Adapt a /replay snapshot payload into grid-display shape so the SAME
  * grid/inspector/evidence components render stored content (not counts).
- * R5-B: recorded quality, scenarios, interactions and cell grids travel
- * with the replay (never dropped for empty defaults); the caller-supplied
- * ticker must match the stored snapshot ticker — a relabeled symbol is
- * rejected (null) instead of rendering SPY data under a QQQ heading.
+ * R5-B + R6-1 hydration: recorded quality, scenarios, interactions and FULL
+ * cell grids (with axes) travel with the replay; the main data.grid is
+ * rebuilt from the stored projection so raw AND delta render real cells.
+ * A caller-supplied ticker must match the stored snapshot ticker — a
+ * relabeled symbol is rejected (null) instead of rendering SPY data under
+ * a QQQ heading.
  */
 export function replayToDisplay(rep, ticker) {
   if (!rep || rep.error) return null;
@@ -40,12 +42,27 @@ export function replayToDisplay(rep, ticker) {
   const strikes = rep.strikes || [];
   const walls = rep.walls || [];
   const grids = rep.grids || {};
+  const main = grids.grid || {};
+  const dataGrid = {
+    expiries: main.expiries || Object.keys(main.grid || {}),
+    strikes: main.strikes || strikes.map((s) => s.strike),
+    grid: main.grid || {},
+    exposure_basis: main.exposure_basis || snap.exposure_basis || "OI",
+    formula_version: main.formula_version || "gex.v2",
+  };
+  const metricGrids = {};
+  for (const [name, section] of Object.entries(grids)) {
+    if (name === "grid" || name === "version") continue;
+    if (section && typeof section === "object" && section.grid) metricGrids[name] = section;
+  }
   return {
     ticker: snap.ticker || ticker || null,
     asof: snap.asof_ts || snap.asof || null,
     spot: snap.spot ?? null,
     strikes,
-    metrics: { walls, grids },
+    grid: dataGrid,
+    expiries_used: snap.expiries_used || dataGrid.expiries,
+    metrics: { walls, grids: metricGrids },
     quality: rep.quality || undefined,
     interactions: rep.interactions || [],
     scenarios: rep.scenarios || [],

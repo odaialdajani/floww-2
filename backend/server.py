@@ -48,7 +48,6 @@ from services.gex_core import (
     calc_probability_distribution,
     classify_nodes,
     compute_gex_by_strike,
-    compute_gex_by_strike_volume,
     compute_gex_grid,
     detect_opportunities,
     detect_patterns,
@@ -1021,6 +1020,59 @@ def _top_up_strike_set(shown: set, full_ordered: list, min_n: int) -> set:
     return kept
 
 
+def _display_surfaces(spot: float, contracts: list[dict[str, Any]], ticker: str,
+                      scalp: bool) -> tuple[str, str, list, dict]:
+    """Canonical display strikes/grid + basis + model provenance (R6-1).
+
+    Returns (exposure_basis, model_basis, strikes, grid). Vendor-supplied
+    Greeks first; declared local-BS fallback when no contract carries usable
+    vendor gamma (readable structure, model_basis local-bs-fallback);
+    explicit volume fallback when OI is unavailable. Pure function of its
+    inputs — unit-tested directly.
+    """
+    exposure_basis = "OI"
+    model_basis = "vendor-supplied-greeks"
+    if scalp:
+        from services.gex_core import (
+            compute_gex_by_strike_volume_vendor,
+            compute_gex_grid_volume_vendor,
+        )
+        strikes = compute_gex_by_strike_volume_vendor(spot, contracts)
+        grid = compute_gex_grid_volume_vendor(spot, contracts)
+        exposure_basis = "VOLUME_SCALP"
+        if not strikes:
+            from services.gex_core import compute_gex_by_strike_volume as _local_vrows
+            from services.gex_core import compute_gex_grid_volume as _local_vgrid
+            strikes = _local_vrows(spot, contracts, ticker)
+            grid = _local_vgrid(spot, contracts, ticker)
+            if strikes:
+                model_basis = "local-bs-fallback"
+        return exposure_basis, model_basis, strikes, grid
+    from services.gex_core import compute_gex_by_strike_vendor, compute_gex_grid_vendor
+    strikes = compute_gex_by_strike_vendor(spot, contracts)
+    grid = compute_gex_grid_vendor(spot, contracts)
+    if not strikes:
+        from services.gex_core import compute_gex_by_strike as _local_rows
+        from services.gex_core import compute_gex_grid as _local_grid
+        strikes = _local_rows(spot, contracts, ticker)
+        grid = _local_grid(spot, contracts, ticker)
+        if strikes:
+            model_basis = "local-bs-fallback"
+            log.warning("build_heatmap: no vendor gamma — local-BS fallback (read-only structure, not setup-eligible)")
+    if not strikes and any((c.get("volume") or 0) > 0 for c in contracts):
+        # OI unavailable — volume-weighted grid keeps the desk alive but the
+        # basis is explicit (F13): never relabelled as raw OI GEX.
+        from services.gex_core import (
+            compute_gex_by_strike_volume_vendor,
+            compute_gex_grid_volume_vendor,
+        )
+        strikes = compute_gex_by_strike_volume_vendor(spot, contracts)
+        grid = compute_gex_grid_volume_vendor(spot, contracts)
+        exposure_basis = "VOLUME_FALLBACK_OI_UNKNOWN"
+        log.warning("build_heatmap: OI unavailable — volume-weighted GEX fallback (grid populated)")
+    return exposure_basis, model_basis, strikes, grid
+
+
 async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: bool = True, mode: str = "day", dte: int | None = None, scalp: bool = False, max_strikes: int = 200) -> dict[str, Any]:
     log.info(f"build_heatmap: {ticker} expiries={max_expiries} mode={mode} max_strikes={max_strikes}")
     # Check cache first
@@ -1193,25 +1245,17 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         raw["contracts"] = filtered
         raw["expiries"] = sorted({c["expiry"] for c in raw["contracts"]})
 
+    # R6-1 canonical display policy: the mounted raw/volume surfaces derive
+    # from SUPPLIED vendor Greeks over one normalized contract population
+    # (gex.v2). When no contract carries a usable vendor gamma, a DECLARED
+    # local-Black-Scholes fallback keeps structural readability — labeled
+    # model_basis local-bs-fallback and never setup-eligible. Local Greeks
+    # otherwise feed charm/vex/vomma scenario overlays only — never silently
+    # mixed into raw structure, walls or replay.
     # F07: every supported mode produces a real 2D matrix. Scalp is a
     # horizon/display/weighting combination — not an empty grid.
-    exposure_basis = "OI"
-    if scalp:
-        strikes = compute_gex_by_strike_volume(spot, raw["contracts"], ticker)
-        from services.gex_core import compute_gex_grid_volume
-        grid = compute_gex_grid_volume(spot, raw["contracts"], ticker)
-        exposure_basis = "VOLUME_SCALP"
-    else:
-        strikes = compute_gex_by_strike(spot, raw["contracts"], ticker)
-        grid = compute_gex_grid(spot, raw["contracts"], ticker)
-        if not strikes and any((c.get("volume") or 0) > 0 for c in raw["contracts"]):
-            # OI unavailable — volume-weighted grid keeps the desk alive but the
-            # basis is explicit (F13): never relabelled as raw OI GEX.
-            from services.gex_core import compute_gex_grid_volume
-            strikes = compute_gex_by_strike_volume(spot, raw["contracts"], ticker)
-            grid = compute_gex_grid_volume(spot, raw["contracts"], ticker)
-            exposure_basis = "VOLUME_FALLBACK_OI_UNKNOWN"
-            log.warning(f"build_heatmap: OI unavailable for {ticker} — volume-weighted GEX fallback (grid populated)")
+    exposure_basis, model_basis, strikes, grid = _display_surfaces(
+        spot, raw["contracts"], ticker, scalp)
 
     # Band: scalp=±2%, day=±15%, swing=±25%
     # Dynamic band based on price level: wider bands for low-priced stocks
@@ -1314,7 +1358,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             compute_gex_by_strike_vendor,
             compute_gex_grid_delta_weighted,
             compute_gex_grid_vendor,
-            compute_gex_grid_volume,
+            compute_gex_grid_volume_vendor,
         )
         from services.wall_structure import discover_walls, nearest_by_side, nearest_walls
         raw_m = compute_raw_oi(raw["contracts"], spot)
@@ -1323,7 +1367,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         vendor_rows = compute_gex_by_strike_vendor(spot, raw["contracts"])
         vendor_grid = compute_gex_grid_vendor(spot, raw["contracts"])
         delta_grid = compute_gex_grid_delta_weighted(spot, raw["contracts"])
-        activity_grid = compute_gex_grid_volume(spot, raw["contracts"], ticker)
+        activity_grid = compute_gex_grid_volume_vendor(spot, raw["contracts"])
         metrics.update({
             "gex_gross_v1": raw_m.gross, "gex_net_v1": raw_m.net,
             "gex_call": raw_m.call, "gex_put": raw_m.put,
@@ -1453,10 +1497,22 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         "data_source": raw.get("data_source", "yfinance"),
         "exposure_basis": exposure_basis,
         "formula_version": "gex.v2",
+        # R6-1 canonical display policy: raw/volume strikes + grids derive
+        # from supplied vendor Greeks (model_basis vendor-supplied-greeks).
+        # Local Black-Scholes Greeks feed charm/vex/vomma scenario overlays
+        # only, under model_basis local-bs-v1 — never raw structure.
+        "model_basis": model_basis,
         "quality": {
-            "state": "usable" if exposure_basis == "OI" else "unavailable",
-            "reasonCodes": [] if exposure_basis == "OI" else [exposure_basis],
-            "setupEligible": exposure_basis == "OI",
+            # R6-1/B02: structural readability (grid renders) is separate from
+            # confirmed setup eligibility. Only vendor-supplied Greeks make a
+            # setup eligible; local-model fallback stays readable-but-waiting.
+            "state": ("usable" if exposure_basis == "OI" else "unavailable")
+            if model_basis == "vendor-supplied-greeks"
+            else ("partial" if strikes else "unavailable"),
+            "reasonCodes": [] if (exposure_basis == "OI"
+                                  and model_basis == "vendor-supplied-greeks")
+            else ([exposure_basis] if exposure_basis != "OI" else ["LOCAL_BS_FALLBACK"]),
+            "setupEligible": exposure_basis == "OI" and model_basis == "vendor-supplied-greeks",
             "executionEligible": False,
             "tradeSideCapability": "none",
         },

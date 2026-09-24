@@ -31,8 +31,10 @@ def test_r05_recorded_cells_reproduce_grid():
     conn = duckdb.connect(":memory:")
     sid = record_snapshot(conn, _payload(), "q")
     rep = replay_snapshot(conn, sid)
-    cells = (rep.get("grids") or {}).get("grid", {}).get("2030-01-15", {})
-    assert cells.get("500") == 1e6, rep.get("grids")
+    # R6-1 versioned projection: section carries axes + basis + cells.
+    section = (rep.get("grids") or {}).get("grid", {})
+    assert section["expiries"] == ["2030-01-15"] and section["strikes"] == [500]
+    assert section["grid"]["2030-01-15"]["500"] == 1e6, rep.get("grids")
 
 
 def test_r06_stored_contracts_match_window_identity():
@@ -104,7 +106,7 @@ def test_r05b_file_backed_restart_replay_parity(tmp_path):
     assert rep["strikes"] == _payload()["strikes"]
     assert rep["walls"][0]["wall_id"] == "w_1"
     assert len(rep["contracts"]) == 1
-    assert rep["grids"]["grid"]["2030-01-15"]["500"] == 1e6
+    assert rep["grids"]["grid"]["grid"]["2030-01-15"]["500"] == 1e6
     assert rep["quality"]["state"] == "usable"
     man = session_manifest(conn2, "SPY", "2030-01-02", expected_cadence_s=300)
     assert man["n_snapshots"] == 1

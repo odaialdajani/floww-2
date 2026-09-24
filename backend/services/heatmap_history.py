@@ -358,27 +358,67 @@ def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
 
 
 def _full_grids(payload: dict[str, Any]) -> dict[str, Any]:
-    """Complete versioned cell maps (R5-B/R05): main grid + metric grids.
+    """Complete versioned cell maps (R5-B/R05, R6-1 hydration): main grid +
+    metric grids WITH axes, basis and status.
 
-    Metadata alone (expiry names, cell counts) cannot reproduce the grid.
-    Cells persist as string-keyed maps exactly as served; replay returns
-    them verbatim for the same components to render.
+    Metadata alone (expiry names, cell counts) cannot reproduce the grid, and
+    axes stripped from cells cannot hydrate it. Cells persist as string-keyed
+    maps exactly as served; replay returns them verbatim for the same
+    components to render. Version key: grids.v1.
     """
-    out: dict[str, Any] = {}
+    out: dict[str, Any] = {"version": "grids.v1"}
     main = payload.get("grid")
     if isinstance(main, dict):
+        section: dict[str, Any] = {"exposure_basis": main.get("exposure_basis", "OI"),
+                                   "formula_version": main.get("formula_version", "gex.v2")}
         for k in ("grid", "charm_grid", "vex_grid", "vomma_grid"):
             if isinstance(main.get(k), dict):
-                out[k] = main[k]
+                section[k] = main[k]
+        _axes(section)
+        out["grid"] = section
     grids = ((payload.get("metrics") or {}).get("grids")) or {}
     if isinstance(grids, dict):
         for name, g in grids.items():
             if isinstance(g, dict) and isinstance(g.get("grid"), dict):
-                out[str(name)] = {"grid": g["grid"],
-                                  "exposure_basis": g.get("exposure_basis"),
-                                  "status": g.get("status"),
-                                  "missing_delta": g.get("missing_delta")}
+                section = {"grid": g["grid"],
+                           "exposure_basis": g.get("exposure_basis"),
+                           "formula_version": g.get("formula_version", "gex.v2"),
+                           "status": g.get("status"), "reason": g.get("reason"),
+                           "missing_delta": g.get("missing_delta"),
+                           "quarantined": g.get("quarantined")}
+                if isinstance(g.get("expiries"), list):
+                    section["expiries"] = g["expiries"]
+                if isinstance(g.get("strikes"), list):
+                    section["strikes"] = g["strikes"]
+                _axes(section)
+                out[str(name)] = section
     return out
+
+
+def _axes(section: dict[str, Any]) -> None:
+    """Derive missing expiry/strike axes from cell maps in place (R6-1).
+
+    Hydration must not depend on the producer remembering axes: expiry keys
+    are authoritative, strike keys parse back to numbers where possible.
+    """
+    cells = section.get("grid")
+    if not isinstance(cells, dict):
+        return
+    if "expiries" not in section:
+        section["expiries"] = sorted(cells.keys())
+    if "strikes" not in section:
+        seen: list[float] = []
+        for col in cells.values():
+            if not isinstance(col, dict):
+                continue
+            for k in col:
+                try:
+                    f = float(k)
+                except (TypeError, ValueError):
+                    continue
+                if f not in seen:
+                    seen.append(f)
+        section["strikes"] = sorted(seen)
 
 
 def record_wall_event(conn, wall_id: str, ticker: str, event: str,

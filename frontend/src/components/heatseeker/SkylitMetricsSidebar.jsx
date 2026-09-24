@@ -42,6 +42,10 @@ function SkylitMetricsSidebar({
   spot = null,
   viewMode = "gex",
   regime = null,
+  // R6-1: the active metric governs sidebar summaries. Raw uses the
+  // structural strike rows; delta/activity sum the same snapshot's overlay
+  // cells. Structural strongest-wall anchor never moves with the metric.
+  metric = "raw",
 }) {
   const nodes = data?.nodes || {};
   const kingNode = nodes.king;
@@ -51,15 +55,34 @@ function SkylitMetricsSidebar({
   // aggregate WALL (sidebar king), nearest relevant WALL. Sidebar respects the
   // active metric for its summary; grid king stays cell-scoped.
   const metricLabel = viewMode === "vex" ? "VEX" : viewMode === "charm" ? "Charm" : "GEX";
-  const exposureBasis = data?.exposure_basis || "OI";
+  const useOverlay = metric !== "raw" && (viewMode === "gex" || viewMode === "skylit");
+  const overlayCells = useOverlay ? ((data?.metrics?.grids || {})[metric] || {}).grid : null;
+  const overlayHasCells = !!overlayCells && Object.keys(overlayCells).length > 0;
+  const metricActive = !useOverlay || overlayHasCells;
+  const exposureBasis = useOverlay && overlayHasCells
+    ? (((data?.metrics?.grids || {})[metric] || {}).exposure_basis
+      || (metric === "delta" ? "OI_DELTA_WEIGHTED" : "VOLUME"))
+    : (data?.exposure_basis || "OI");
   // net GEX lives on nodes.total_gex; |GEX| is summed client-side because the
-  // heatmap payload never exports total_abs_gex; flip point from gamma_flip
-  const netGex = data?.net_gex_total ?? nodes?.total_gex;
-  const totalAbsGex =
-    data?.total_abs_gex ??
-    (data?.strikes?.length
-      ? data.strikes.reduce((acc, s) => acc + Math.abs(s.gex || 0), 0)
-      : null);
+  // heatmap payload never exports total_abs_gex; flip point from gamma_flip.
+  // R6-1: a missing metric surface renders unavailable (—), never raw totals
+  // under an active delta/activity control.
+  const sumCells = (cells, abs) => Object.values(cells).reduce(
+    (acc, col) => acc + Object.values(col || {}).reduce(
+      (a, v) => a + (abs ? Math.abs(v || 0) : (v || 0)), 0), 0);
+  const sumRows = () => (data?.strikes?.length
+    ? data.strikes.reduce((acc, s) => acc + Math.abs(s.gex || 0), 0)
+    : null);
+  const netGex = !metricActive
+    ? null
+    : (useOverlay && overlayHasCells
+      ? sumCells(overlayCells, false)
+      : (data?.net_gex_total ?? nodes?.total_gex));
+  const totalAbsGex = !metricActive
+    ? null
+    : (useOverlay && overlayHasCells
+      ? sumCells(overlayCells, true)
+      : (data?.total_abs_gex ?? sumRows()));
   const flipPoint = data?.flip_zones?.[0]?.price ?? data?.gamma_flip?.gamma_flip;
   const polarityLevel = nodes?.polarity_level;
   const gatekeeperCount = nodes?.gatekeepers?.length || 0;
@@ -84,7 +107,15 @@ function SkylitMetricsSidebar({
 
       {/* Key metrics */}
       <div className="skylit-metrics-section">
-        <div className="skylit-section-title">Key Levels · {metricLabel} · {exposureBasis}</div>
+        <div className="skylit-section-title">
+          Key Levels · {metricLabel}{useOverlay ? ` · ${metric}` : ""} · {exposureBasis}
+        </div>
+        {!metricActive && (
+          <div className="skylit-metric-row" data-testid="skylit-sidebar-unavailable">
+            <span className="skylit-metric-label">Metric unavailable</span>
+            <span className="skylit-metric-value">—</span>
+          </div>
+        )}
 
         <MetricRow
           label="STRONGEST WALL"
@@ -102,7 +133,7 @@ function SkylitMetricsSidebar({
         <MetricRow
           label="Net GEX"
           value={netGex != null ? (netGex >= 0 ? "+" : "") + fmtGex(netGex) : "—"}
-          color={netGex >= 0 ? "#34d399" : "#f87171"}
+          color={netGex == null ? "#c9d1d9" : (netGex >= 0 ? "#34d399" : "#f87171")}
         />
 
         <MetricRow

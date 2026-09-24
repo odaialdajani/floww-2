@@ -246,6 +246,30 @@ describe("SkylitDashboard", () => {
     });
   });
 
+  test("expanded overlay mounts the same inspector as inline (R6-1 parity)", async () => {
+    const data = {
+      ticker: "SPY", asof: "2026-09-03T00:00:00Z", spot: 650,
+      exposure_basis: "OI",
+      strikes: [{ strike: 650, gex: 1000, call_gex: 600, put_gex: 400 }],
+      metrics: { walls: [{ wall_id: "w_par", low: 640, high: 660, mid: 650, gross: 1000, net: 200, call: 600, put: 400 }] },
+      interactions: [],
+      scenarios: [],
+      quality: { state: "usable", reasonCodes: [], setupEligible: true },
+    };
+    await act(async () => {
+      render(<SkylitDashboard ticker="SPY" data={data} spot={650} />);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getAllByTestId("mock-heatmap-cell")[0]);
+    });
+    expect(screen.getAllByTestId("wall-inspector").length).toBe(1);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("skylit-expand-btn"));
+    });
+    // Same wall, same scenarios inline and expanded — never a lone grid.
+    expect(screen.getAllByTestId("wall-inspector").length).toBe(2);
+  });
+
   test("passes the full ticker universe to the bar and control bar (no fallback)", async () => {
     // 2026-09-12 regression: neither child received `tickers`, so the bar
     // fell back to 23 featured tickers and the arrows cycled 10 ("1/10")

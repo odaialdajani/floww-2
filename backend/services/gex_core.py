@@ -1199,6 +1199,114 @@ def compute_gex_grid_delta_weighted(spot: float, contracts: list[dict[str, Any]]
     }
 
 
+def _resolve_mult(c: dict[str, Any]) -> float:
+    try:
+        m_f = float(c.get("multiplier", 100.0) or 100.0)
+        if math.isfinite(m_f) and m_f > 0:
+            return m_f
+    except (TypeError, ValueError):
+        pass
+    return 100.0
+
+
+def compute_gex_by_strike_volume_vendor(spot: float, contracts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """R6-1: per-strike session-volume gamma from SUPPLIED vendor gamma.
+
+    cell = Σ c·u·V, u = Γ·m·S²×0.01 — the grid twin of
+    domain.compute_volume_gamma. Turnover, never positioning. Adjusted/
+    nonstandard quarantined; OI dates carried for structural context.
+    """
+    if spot <= 0 or not contracts:
+        return []
+    agg: dict[float, dict[str, float]] = {}
+    for c in contracts:
+        if c.get("adjusted") or c.get("nonstandard"):
+            continue
+        vol = safe_float_or_none(c.get("volume", c.get("V")))
+        if vol is None or vol <= 0:
+            continue
+        gamma = _vendor_gamma(c)
+        if gamma is None:
+            continue
+        strike = safe_float_or_none(c.get("strike"))
+        if strike is None or strike <= 0:
+            continue
+        mult = _resolve_mult(c)
+        sign = 1.0 if str(c.get("type", "")).lower().startswith("c") else -1.0
+        contrib = sign * gamma * mult * spot * spot * 0.01 * vol
+        bucket = agg.setdefault(strike, {"strike": strike, "gex": 0.0, "call_gex": 0.0,
+                                         "put_gex": 0.0, "total_vol": 0.0})
+        bucket["gex"] += contrib
+        if sign > 0:
+            bucket["call_gex"] += abs(contrib)
+        else:
+            bucket["put_gex"] += abs(contrib)
+        bucket["total_vol"] += vol
+        _oed = c.get("oi_effective_date") or c.get("oiEffectiveDate")
+        if _oed:
+            _dates = bucket.setdefault("oi_dates", [])
+            if _oed not in _dates and len(_dates) < 4:
+                _dates.append(_oed)
+                _dates.sort()
+    for _b in agg.values():
+        if "oi_dates" in _b:
+            _b["oi_dates"] = sorted(_b["oi_dates"])
+    return sorted(agg.values(), key=lambda r: r["strike"])
+
+
+def compute_gex_grid_volume_vendor(spot: float, contracts: list[dict[str, Any]]) -> dict[str, Any]:
+    """R6-1: 2D session-volume grid from SUPPLIED vendor gamma.
+
+    Same scope/shape as the vendor OI grid; explicit VOLUME basis. Empty
+    coverage is UNAVAILABLE (never raw fallback, never zero-fill).
+    """
+    if spot <= 0 or not contracts:
+        return {"expiries": [], "strikes": [], "grid": {}, "exposure_basis": "VOLUME",
+                "formula_version": "gex.v2", "status": "unavailable", "reason": "NO_COVERAGE"}
+    grid: dict[str, dict[float, float]] = {}
+    totals: dict[float, float] = {}
+    quarantined = 0
+    for c in contracts:
+        if c.get("adjusted") or c.get("nonstandard"):
+            quarantined += 1
+            continue
+        vol = safe_float_or_none(c.get("volume", c.get("V")))
+        if vol is None or vol <= 0:
+            continue
+        gamma = _vendor_gamma(c)
+        if gamma is None:
+            continue
+        strike = safe_float_or_none(c.get("strike"))
+        if strike is None or strike <= 0:
+            continue
+        expiry = c.get("expiry") or ""
+        if not expiry:
+            continue
+        mult = _resolve_mult(c)
+        sign = 1.0 if str(c.get("type", "")).lower().startswith("c") else -1.0
+        cell = sign * gamma * mult * spot * spot * 0.01 * vol
+        d = grid.setdefault(expiry, {})
+        d[strike] = d.get(strike, 0.0) + cell
+        totals[strike] = totals.get(strike, 0.0) + cell
+    expiries = sorted(grid.keys())
+    strikes = sorted(totals.keys())
+
+    def _k(x: float) -> str:
+        return str(int(x)) if float(x).is_integer() else str(x)
+
+    return {
+        "expiries": expiries,
+        "strikes": strikes,
+        "grid": {e: {_k(k): v for k, v in grid[e].items()} for e in expiries},
+        "strike_totals": [{"strike": k, "gex": v} for k, v in sorted(totals.items())],
+        "exposure_basis": "VOLUME",
+        "quarantined": quarantined,
+        "formula_version": "gex.v2",
+        "status": "ok" if expiries else "unavailable",
+        "reason": None if expiries else "NO_VOLUME_COVERAGE",
+    }
+
+
 def find_zero_crossings(spot: float, contracts: list[dict]) -> list[float]:
     """
     Find zero-gamma flip points by linear interpolation.

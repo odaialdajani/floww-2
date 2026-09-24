@@ -91,16 +91,30 @@ function SkylitHeatmapGrid({
   // grids regardless of metric. Basis shown in the legend.
   const useOverlay = metric !== "raw" && (viewMode === "gex" || viewMode === "skylit");
   const overlay = useOverlay ? (data?.metrics?.grids || {})[metric] : null;
-  const g = (overlay && overlay.grid ? overlay : data?.grid) || null;
+  // R6-1: a missing metric surface is UNAVAILABLE — never raw fallback.
+  // overlay.grid present (even empty) renders that surface's cells; absent
+  // overlay (old records, unknown metric) renders an unavailable state.
+  const overlayMissing = useOverlay && !(overlay && overlay.grid);
+  const g = (!useOverlay || (overlay && overlay.grid)) ? ((overlay && overlay.grid ? overlay : data?.grid) || null) : null;
+  const overlayReason = overlayMissing ? (overlay?.reason || "metric unavailable in this snapshot") : null;
   const metricBasis = useOverlay && overlay && overlay.grid
     ? (metric === "delta" ? "OI_DELTA_WEIGHTED" : (overlay.exposure_basis || "VOLUME"))
     : (data?.exposure_basis || "OI");
-  const expiries = useMemo(() => (g?.expiries ? [...g.expiries] : []), [g]);
+  const expiries = useMemo(
+    // R6-1 hydration: overlay sections carry their own axes; axis-less
+    // sections (old records) fall back to the same snapshot's main axes.
+    () => (g?.expiries?.length ? [...g.expiries] : [...((data?.grid || {}).expiries || [])]),
+    [g, data]
+  );
   const matrix = useMemo(() => (g?.[gridKey] || {}), [g, gridKey]);
 
   // Strikes descending. Prefer grid.strikes; fall back to data.strikes.
   const strikes = useMemo(() => {
-    const src = g?.strikes?.length ? g.strikes : (data?.strikes || []).map((s) => s.strike);
+    const src = g?.strikes?.length
+      ? g.strikes
+      : (((data?.grid || {}).strikes || []).length
+        ? data.grid.strikes
+        : (data?.strikes || []).map((s) => s.strike));
     return [...new Set(src)].filter((s) => s != null).sort((a, b) => b - a);
   }, [g, data]);
 
@@ -203,16 +217,6 @@ function SkylitHeatmapGrid({
     prevRef.current = { key: snapKey, asof: data.asof, matrix: snap };
   }, [expiries, matrix, snapKey, data]);
 
-  if (!expiries.length || !strikes.length) {
-    return (
-      <div className="skylit-heatmap-empty">
-        <span>No heatmap data available</span>
-      </div>
-    );
-  }
-
-  const range = maxV - minV;
-
   // §8 strike rail: gross-gamma concentration per strike from the payload's
   // aggregated rows (gross = |call|+|put|, no net cancellation). Nearest-wall
   // marker comes from the status strip + inspector; the rail shows magnitude.
@@ -273,7 +277,27 @@ function SkylitHeatmapGrid({
     [expiries, expMeta]
   );
 
-  // Windowing (2026-09-03): slice the RENDERED rows only — King, spot,
+  // R6-1 hook-order fix (U01): every hook above runs on every render; the
+  // empty / unavailable states return here, AFTER all hooks, so
+  // empty→populated (and populated→unavailable) transitions never change
+  // the hook count and never throw.
+  if ((!expiries.length || !strikes.length) && !overlayMissing) {
+    return (
+      <div className="skylit-heatmap-empty">
+        <span>No heatmap data available</span>
+      </div>
+    );
+  }
+
+  if (overlayMissing) {
+    return (
+      <div className="skylit-heatmap-empty" data-testid="skylit-metric-unavailable">
+        <span>Metric unavailable ({metric}) — {overlayReason}</span>
+      </div>
+    );
+  }
+
+  const range = maxV - minV;
   // and the viridis scale above always use the full matrix.
   let shownStrikes = strikes;
   if (windowRows != null && strikes.length > windowRows) {
