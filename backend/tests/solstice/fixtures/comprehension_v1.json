@@ -74,6 +74,44 @@
     "net": 1000000.0
    },
    "nearest_above": null
+  },
+  {
+   "id": "synthetic-inside",
+   "ticker": "SYNTH",
+   "spot": 500.0,
+   "regime": "UNKNOWN",
+   "basis": "OI",
+   "quality": {
+    "setupEligible": true,
+    "reasonCodes": [],
+    "state": "usable"
+   },
+   "asof": "2026-09-23T00:00:00+00:00",
+   "nearest_below": null,
+   "nearest_above": null,
+   "inside_wall": {
+    "low": 498,
+    "high": 502,
+    "gross": 15000000.0,
+    "net": 1000000.0
+   }
+  },
+  {
+   "id": "synthetic-missing",
+   "ticker": "SYNTH",
+   "spot": 500.0,
+   "regime": "UNKNOWN",
+   "basis": "OI",
+   "quality": {
+    "setupEligible": false,
+    "reasonCodes": [
+     "UNKNOWN_EXPECTED_UNIVERSE"
+    ],
+    "state": "unavailable"
+   },
+   "asof": "2026-09-23T00:00:00+00:00",
+   "nearest_below": null,
+   "nearest_above": null
   }
  ]
 }

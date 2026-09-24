@@ -1057,6 +1057,17 @@ def compute_gex_by_strike_vendor(spot: float, contracts: list[dict[str, Any]]) -
         else:
             bucket["put_gex"] += gex_unit
         bucket["total_oi"] += oi
+        # Per-strike OI effective dates (R5 holes): distinct, sorted, capped —
+        # provenance for wall-level OI-date status, never inferred direction.
+        _oed = c.get("oi_effective_date") or c.get("oiEffectiveDate")
+        if _oed:
+            _dates = bucket.setdefault("oi_dates", [])
+            if _oed not in _dates and len(_dates) < 4:
+                _dates.append(_oed)
+                _dates.sort()
+    for _b in agg.values():
+        if "oi_dates" in _b:
+            _b["oi_dates"] = sorted(_b["oi_dates"])
     return sorted(agg.values(), key=lambda r: r["strike"])
 
 

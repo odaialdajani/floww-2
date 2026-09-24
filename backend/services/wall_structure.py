@@ -119,7 +119,16 @@ def _zone(members: list[dict[str, Any]], spot: float,
     wid_hash = hashlib.sha256(
         f"wall:{_scope_key(scope)}:{wid}".encode()).hexdigest()[:12]
     dist = mid - spot
-    return {
+    # Wall-level OI effective dates (R5 holes): union of member-strike dates,
+    # distinct/sorted/capped. Absent when no member carries OI metadata —
+    # the inspector then renders unavailable instead of inventing a date.
+    _wall_dates: list[str] = []
+    for m in members:
+        for _d in m.get("oi_dates") or []:
+            if _d not in _wall_dates and len(_wall_dates) < 4:
+                _wall_dates.append(_d)
+    _wall_dates.sort()
+    zone: dict[str, Any] = {
         "wall_id": f"w_{wid_hash}",
         "low": lo,
         "high": hi,
@@ -134,6 +143,9 @@ def _zone(members: list[dict[str, Any]], spot: float,
         "exposure_basis": "OI",
         "formula_version": "gex.v2",
     }
+    if _wall_dates:
+        zone["oi_effective_dates"] = _wall_dates
+    return zone
 
 
 def nearest_walls(walls: list[dict[str, Any]], spot: float, n: int = 2) -> list[dict[str, Any]]:

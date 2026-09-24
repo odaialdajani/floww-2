@@ -95,6 +95,23 @@ test("wall inspector shows window activity or honest unavailability", () => {
   expect(screen.getByText(/window Δ-weighted/)).toBeInTheDocument();
 });
 
+test("wall inspector shows OI dates and persistent sightings honestly", () => {
+  const React = require("react");
+  const { render: r3, screen: s3, cleanup: c3 } = require("@testing-library/react");
+  const WI = require("./WallInspector").default;
+  const h1 = r3(React.createElement(WI, {
+    wall: { ...data.metrics.walls[0], oi_effective_dates: ["2030-01-01", "2030-01-02"] },
+    interaction: { wall_id: "w_abc", state: "holding", event: "holding_confirmed", first_seen: false },
+    quality: data.quality,
+  }));
+  expect(s3.getByText("2030-01-01, 2030-01-02")).toBeInTheDocument();
+  expect(s3.getByText(/persistent/)).toBeInTheDocument();
+  h1.unmount();
+  c3();
+  r3(React.createElement(WI, { wall: data.metrics.walls[0], quality: data.quality }));
+  expect(s3.getByText("unavailable in snapshot")).toBeInTheDocument();
+});
+
 test("wall inspector shows interaction state and touches", () => {
   const React = require("react");
   const { render: r2, screen: s2 } = require("@testing-library/react");
