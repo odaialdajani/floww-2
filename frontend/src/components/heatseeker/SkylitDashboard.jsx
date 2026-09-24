@@ -122,9 +122,10 @@ function SkylitDashboard({
   useEffect(() => { setReplaySnap(null); }, [ticker]);
   const displayData = replaySnap || data;
   const isReplay = Boolean(replaySnap);
-  // R5-B: replay renders recorded spot everywhere data renders; the control
-  // bar keeps the live spot. Live spot must never masquerade as replay.
-  const displaySpot = displayData?.spot ?? spot;
+  // R5-B: in replay every data view renders the RECORDED spot; live keeps
+  // the caller-supplied spot prop exactly (never the chain-build spot).
+  // Live spot must never masquerade as replay, nor replay as live.
+  const displaySpot = isReplay ? (displayData?.spot ?? spot) : spot;
   // Grid zoom, in-frame only (2026-09-04): the expanded overlay keeps its
   // designed full density instead of compounding scale on scale.
   const [gridZoom, setGridZoom] = useState(1);

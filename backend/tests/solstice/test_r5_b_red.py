@@ -76,3 +76,39 @@ def test_r07_commit_failure_not_acknowledged():
     assert sid is None
     n = inner.execute("SELECT COUNT(*) FROM heatmap_snapshots_v2").fetchone()[0]
     assert n == 0
+
+
+def test_r05b_file_backed_restart_replay_parity(tmp_path):
+    """R5-B milestone: file-backed DB survives close/reopen with the full
+    projection (strikes/walls/contracts/cells/quality/scenarios) intact."""
+    import duckdb
+
+    from services.heatmap_history import (
+        record_decision,
+        record_snapshot,
+        replay_snapshot,
+        session_manifest,
+    )
+    dbfile = str(tmp_path / "solstice.duckdb")
+    conn = duckdb.connect(dbfile)
+    sid = record_snapshot(conn, _payload(), "q")
+    did = record_decision(conn, {"ticker": "SPY", "snapshot_id": sid,
+                                 "scenario": "CALLS", "side": "CALLS",
+                                 "eligible": True, "reason_codes": [],
+                                 "features": {"spot": 500.0},
+                                 "candidate_quotes": []})
+    conn.close()
+    # Restart: reopen the same file and verify everything survived.
+    conn2 = duckdb.connect(dbfile)
+    rep = replay_snapshot(conn2, sid)
+    assert rep["strikes"] == _payload()["strikes"]
+    assert rep["walls"][0]["wall_id"] == "w_1"
+    assert len(rep["contracts"]) == 1
+    assert rep["grids"]["grid"]["2030-01-15"]["500"] == 1e6
+    assert rep["quality"]["state"] == "usable"
+    man = session_manifest(conn2, "SPY", "2030-01-02", expected_cadence_s=300)
+    assert man["n_snapshots"] == 1
+    n = conn2.execute("SELECT COUNT(*) FROM scenario_decisions_v1 WHERE decision_id = "
+                      f"'{did}'").fetchone()[0]
+    assert n == 1
+    conn2.close()
