@@ -30,6 +30,14 @@ def _gross(r: dict) -> float:
         return 0.0
 
 
+def _wid(w: dict) -> str:
+    try:
+        wid = w.get("wall_id") or f"{w.get('low')}-{w.get('high')}"
+        return f"wall:{wid}"
+    except (TypeError, AttributeError):
+        return "wall:unknown"
+
+
 def detect_patterns_v1(strike_rows: list[dict], spot: float, walls: list[dict] | None = None) -> list[dict[str, Any]]:
     """Return ranked compatible pattern records (small set, separate evidence)."""
     out: list[dict[str, Any]] = []
@@ -45,7 +53,7 @@ def detect_patterns_v1(strike_rows: list[dict], spot: float, walls: list[dict] |
     if top / total < 0.15:
         out.append({"pattern_id": "mixed_structure", "pattern_version": VERSION,
                     "state": "CANDIDATE", "observed_features": {"top_share": round(top / total, 4)},
-                    "evidence_ids": [], "contradictions": [],
+                    "evidence_ids": [f"scope:strikes:{len(rows)}"], "contradictions": [],
                     "trigger_rule_id": "overlap_swings_then_chop",
                     "invalidation_rule_id": "persistent_route_and_acceptance"})
     # Range structure (whipsaw): strong bounding walls + thin interior.
@@ -62,7 +70,7 @@ def detect_patterns_v1(strike_rows: list[dict], spot: float, walls: list[dict] |
                         "state": "CANDIDATE",
                         "observed_features": {"lower": [lo.get("low"), lo.get("high")],
                                               "upper": [hi.get("low"), hi.get("high")]},
-                        "evidence_ids": [], "contradictions": [],
+                        "evidence_ids": [_wid(lo), _wid(hi)], "contradictions": [],
                         "trigger_rule_id": "repeated_bounded_traversal",
                         "invalidation_rule_id": "sustained_acceptance_outside"})
     # Intermediate wall (gatekeeper): significant wall between spot and destination.
@@ -75,17 +83,19 @@ def detect_patterns_v1(strike_rows: list[dict], spot: float, walls: list[dict] |
         out.append({"pattern_id": "intermediate_wall", "pattern_version": VERSION,
                     "state": "CANDIDATE",
                     "observed_features": {"wall": [gk.get("low"), gk.get("high")], "destination": d_strike},
-                    "evidence_ids": [], "contradictions": [],
+                    "evidence_ids": [_wid(gk), f"strike:{d_strike:g}"], "contradictions": [],
                     "trigger_rule_id": "near_wall_rejection_or_acceptance",
                     "invalidation_rule_id": "none_presence_alone_predicts_nothing"})
     # Directional progression (trend): persistent side concentration + migration.
     side_gross_above = sum(g for r, g in zip(rows, grosses, strict=True) if float(r["strike"]) > spot)
     side_gross_below = total - side_gross_above
     if max(side_gross_above, side_gross_below) / total > 0.65:
+        leaders = sorted(walls, key=lambda x: float(x.get("gross", 0)), reverse=True)[:2]
         out.append({"pattern_id": "directional_progression", "pattern_version": VERSION,
                     "state": "CANDIDATE",
                     "observed_features": {"dominant_side": "above" if side_gross_above > side_gross_below else "below"},
-                    "evidence_ids": [], "contradictions": [],
+                    "evidence_ids": [_wid(w) for w in leaders] or [f"scope:strikes:{len(rows)}"],
+                    "contradictions": [],
                     "trigger_rule_id": "progression_pullback_hold_or_retest",
                     "invalidation_rule_id": "failed_progression_reclaim"})
     # Downside continuation watch (rug): overhead obstruction + thin lower corridor.
@@ -99,7 +109,7 @@ def detect_patterns_v1(strike_rows: list[dict], spot: float, walls: list[dict] |
                 out.append({"pattern_id": "downside_continuation_watch", "pattern_version": VERSION,
                             "state": "CANDIDATE",
                             "observed_features": {"overhead_gross_share": round(side_gross_above / total, 3)},
-                            "evidence_ids": [], "contradictions": [],
+                            "evidence_ids": [_wid(nearest)], "contradictions": [],
                             "trigger_rule_id": "rejection_support_loss_failed_reclaim",
                             "invalidation_rule_id": "reclaim_acceptance_above"})
     return out
