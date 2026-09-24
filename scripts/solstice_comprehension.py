@@ -53,16 +53,24 @@ def expected(sc: dict) -> dict:
     """
     key: dict = {}
     b, a = sc.get("nearest_below"), sc.get("nearest_above")
+    inside = sc.get("inside_wall")
     key["below"] = [b["low"], b["high"]] if b else []
     key["above"] = [a["low"], a["high"]] if a else []
-    key["walls"] = key["below"] + key["above"]
+    key["inside"] = [inside["low"], inside["high"]] if inside else []
+    key["walls"] = key["below"] + key["above"] + key["inside"]
     key["level_kind"] = ["structure", "oi"]
-    blocked = not (sc.get("quality") or {}).get("setupEligible", True)
-    reasons = (sc.get("quality") or {}).get("reasonCodes", [])
+    _q = sc.get("quality") or {}
+    blocked = not _q.get("setupEligible", _q.get("setup_eligible", True))
+    reasons = _q.get("reasonCodes", _q.get("reason_codes", []))
     # Direction from frozen geometry: spot holds above the lower wall
-    # (bounce) and below the upper wall (rejection).
-    key["confirm_side"] = "above" if b else "below"
-    key["invalidate_side"] = "below" if b else "above"
+    # (bounce) and below the upper wall (rejection); spot inside a wall
+    # watches the hold inside with acceptance beyond as invalidation.
+    if inside and not b and not a:
+        key["confirm_side"] = "inside"
+        key["invalidate_side"] = "beyond"
+    else:
+        key["confirm_side"] = "above" if b else "below"
+        key["invalidate_side"] = "below" if b else "above"
     if blocked:
         key["confirm"] = ["required", "evidence"]
         key["invalidate"] = ["not", "applicable"]
@@ -84,11 +92,12 @@ def score(sc: dict, answers: dict[str, str]) -> dict:
     got = _nums(answers.get("walls", ""))
     # Ordered pairs: first pair claims BELOW, second claims ABOVE. Reversed
     # ranges fail even when all four numbers are present.
-    if not key["below"] and not key["above"]:
+    if not key["below"] and not key["above"] and not key["inside"]:
         wall_ok = len(got) == 0
     else:
         wall_ok = ((not key["below"] or _pair_ok(got[:2], key["below"]))
-                   and (not key["above"] or _pair_ok(got[2:4], key["above"])))
+                   and (not key["above"] or _pair_ok(got[2:4], key["above"]))
+                   and (not key["inside"] or _pair_ok(got[:2], key["inside"])))
     confirm_txt = (answers.get("confirm", "") or "").lower()
     invalidate_txt = (answers.get("invalidate", "") or "").lower()
     r = {
@@ -166,7 +175,7 @@ def selftest() -> int:
     for sc in scenarios:
         key = expected(sc)
         scripted[sc["id"]] = {
-            "walls": " ".join(str(int(x)) for x in (key["below"] + key["above"])),
+            "walls": " ".join(str(int(x)) for x in (key["below"] + key["above"] + key["inside"])),
             "level_kind": "OI structure",
             "confirm": f"reclaim and hold {key['confirm_side']} the zone; required evidence first"
             if "required" in key["confirm"] else f"reclaim and hold {key['confirm_side']} the zone",

@@ -88,8 +88,8 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
       <Row k="Δ/Raw (scope)" v={ratio != null ? Number(ratio).toFixed(3) : "—"} tip="Scope-wide delta gross / raw gross over the same snapshot set — not the selected wall. Wall-local ratio needs same-wall delta + raw grids." />
       <Row k="Window activity" v={winNote} tip="Wall-local window delta-weighted activity from the recorded baseline; turnover, never buyer-minus-seller flow" />
       <Row k="Δ provenance" v={pairNote} tip="Vendor/vendor, local/local eligible; mixed pairs blocked without policy" />
-      <Row k="OI eff. date" v="unavailable in snapshot" tip="OI effective date coverage comes from the recorder, not this snapshot" />
-      <Row k="Changed" v={interaction ? `${interaction.state}${interaction.event ? ` · ${interaction.event}` : ""} (first sighting — see replay compare)` : "see replay compare"} tip="Wall-level change needs 2+ recorded snapshots" />
+      <Row k="OI eff. date" v={(wall.oi_effective_dates && wall.oi_effective_dates.length ? wall.oi_effective_dates.join(", ") : null) ?? "unavailable in snapshot"} tip="Per-wall OI effective dates from member-strike provenance; unavailable when no member carries OI metadata" />
+      <Row k="Changed" v={interaction ? `${interaction.state}${interaction.event ? ` · ${interaction.event}` : ""}${interaction.first_seen === false ? " · persistent" : " (first sighting — see replay compare)"}` : "see replay compare"} tip="Wall-level change needs 2+ recorded snapshots; persistent states carry continuity, first sightings do not" />
       <Row k="Interaction" v={interaction ? interaction.state : "unobserved"} tip="Time-debounced state machine; session/feed gaps break continuity" />
       <Row k="Touches" v={interaction && interaction.taps != null ? String(interaction.taps) : "unknown — no history"} tip="Observed touches only; never a calibrated probability" />
       <Row k="Confirm" v={scenario?.confirmation || "reclaim and hold above zone"} />

@@ -28,7 +28,7 @@ Conventions: `c × |δ|` everywhere delta-weighted; gross = `|call|+|put|`
 | Δ/Raw (scope) | `magnitude_ratio_delta_over_raw` (snapshot-wide) | Labeled scope-wide; wall-local needs same-wall grids |
 | **Window activity** | `window_contract_activity` over recorder baseline (epoch/scope-bound) | Value, `VOLUME_REBASE`, or no-baseline — never raw fallback |
 | Δ provenance | `dadgex_usable/missing` counts | Mixed pairs blocked without policy |
-| OI date | recorder (not yet per-wall) | Rendered unavailable until per-wall OI dates land |
+| OI date | per-strike `oi_dates` → wall union `oi_effective_dates` (capped 4) | `gex_core` buckets + `wall_structure._zone` | strike rows + wall record | strike rows + wall record | Inspector "OI eff. date" row (unavailable when no member metadata) |
 | What price did (state/touches) | `wall_interaction` + history join (scoped ID, dwell clocks, gaps) | `taps_reason` when unknown; polls never counted |
 | Two paths | `scenario_for` (scoped wall ID, direction-correct) | Filtered to selected wall, never `scenarios[0]` |
 | Limits (data) | canonical `quality` (state/reasonCodes) | Same object feeds status strip, session, evidence |
@@ -56,7 +56,6 @@ Conventions: `c × |δ|` everywhere delta-weighted; gross = `|call|+|put|`
 
 ## Known producer gaps (owned, scheduled)
 
-- Per-wall OI effective dates in the inspector (currently snapshot-unavailable).
 - Holiday/half-day calendar + AM/PM series cutoffs in `solstice_session`
   (series-metadata owned; regular-hours boundary enforced).
 - Outcome attachment awaits recorded price paths (labels + censoring ready).
