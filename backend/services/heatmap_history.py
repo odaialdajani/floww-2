@@ -114,10 +114,12 @@ def ensure_tables(conn) -> None:
             conn.execute(f"ALTER TABLE heatmap_snapshots_v2 ADD COLUMN IF NOT EXISTS {col} VARCHAR")
         except Exception as e:
             log.warning("heatmap_history migrate %s failed: %s", col, e)
-    try:
-        conn.execute("ALTER TABLE heatmap_snapshots_v2 ADD COLUMN IF NOT EXISTS coverage_json VARCHAR")
-    except Exception as e:
-        log.warning("heatmap_history migrate coverage_json failed: %s", e)
+    for col in ("coverage_json", "quality_json", "scenarios_json",
+                "interactions_json", "grid_meta_json"):
+        try:
+            conn.execute(f"ALTER TABLE heatmap_snapshots_v2 ADD COLUMN IF NOT EXISTS {col} VARCHAR")
+        except Exception as e:
+            log.warning("heatmap_history migrate %s failed: %s", col, e)
 
 
 def recorder_status(conn, path: str | None = None) -> dict[str, Any]:
@@ -213,7 +215,7 @@ def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
                     if m and m[0] >= len(contracts):
                         return sid
                 except Exception:
-                    pass
+                    pass  # silent by design: count is an optimization; PK enforces idempotency below
                 # Partial record: remove header + partial contracts, re-insert below.
                 try:
                     conn.execute("DELETE FROM contract_observations_v2 WHERE snapshot_id = "
@@ -233,31 +235,47 @@ def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
                         conn.execute("PRAGMA table_info(heatmap_snapshots_v2)").fetchall()]
             except Exception:
                 cols = []
-            if "coverage_json" in cols:
-                conn.execute(
-                    "INSERT INTO heatmap_snapshots_v2 VALUES ("
-                    + ",".join([_esc(sid), _esc(payload.get("ticker")), _esc(query_key),
-                                _esc(json.dumps(payload.get("expiries_used", []))),
-                                _esc(payload.get("spot")), _esc(payload.get("data_source")),
-                                _esc(payload.get("exposure_basis")), _esc(payload.get("formula_version")),
-                                _esc(payload.get("asof")), _esc(payload.get("source_received_at")),
-                                _esc(len(contracts)), _esc(usable),
-                                _esc(snapshot_digest(payload)),
-                                _esc(json.dumps(strikes[:500], default=str)),
-                                _esc(json.dumps(walls, default=str)),
-                                _esc(json.dumps(coverage, default=str))]) + ")")
-            else:
-                conn.execute(
-                    "INSERT INTO heatmap_snapshots_v2 VALUES ("
-                    + ",".join([_esc(sid), _esc(payload.get("ticker")), _esc(query_key),
-                                _esc(json.dumps(payload.get("expiries_used", []))),
-                                _esc(payload.get("spot")), _esc(payload.get("data_source")),
-                                _esc(payload.get("exposure_basis")), _esc(payload.get("formula_version")),
-                                _esc(payload.get("asof")), _esc(payload.get("source_received_at")),
-                                _esc(len(contracts)), _esc(usable),
-                                _esc(snapshot_digest(payload)),
-                                _esc(json.dumps(strikes[:500], default=str)),
-                                _esc(json.dumps(walls, default=str))]) + ")")
+            # Named-column insert: new payload columns (coverage/quality/
+            # scenarios/interactions/grid-meta) persist when the table has
+            # them, older DBs without the migration keep working.
+            grids = ((payload.get("metrics") or {}).get("grids")) or {}
+            grid_meta = {}
+            for _gn, _g in grids.items():
+                if isinstance(_g, dict):
+                    _grid = _g.get("grid") or {}
+                    grid_meta[str(_gn)] = {
+                        "expiries": sorted(_grid.keys()) if isinstance(_grid, dict) else [],
+                        "n_cells": sum(len(v) for v in _grid.values()) if isinstance(_grid, dict) else 0,
+                        "status": _g.get("status"), "reason": _g.get("reason"),
+                        "missing_delta": _g.get("missing_delta"),
+                        "exposure_basis": _g.get("exposure_basis")}
+            _extra = {"coverage_json": json.dumps(coverage, default=str),
+                      "quality_json": json.dumps(payload.get("quality", {}), default=str),
+                      "scenarios_json": json.dumps(payload.get("scenarios", [])[:12], default=str),
+                      "interactions_json": json.dumps(payload.get("interactions", [])[:12], default=str),
+                      "grid_meta_json": json.dumps(grid_meta, default=str)}
+            _base_cols = ["snapshot_id", "ticker", "query_key", "expiries", "spot",
+                          "data_source", "exposure_basis", "formula_version",
+                          "asof_ts", "received_at", "n_contracts", "n_usable",
+                          "digest", "strikes_json", "walls_json"]
+            _base_vals = [sid, payload.get("ticker"), query_key,
+                          json.dumps(payload.get("expiries_used", [])),
+                          payload.get("spot"), payload.get("data_source"),
+                          payload.get("exposure_basis"), payload.get("formula_version"),
+                          payload.get("asof"), payload.get("source_received_at"),
+                          len(contracts), usable,
+                          snapshot_digest(payload),
+                          json.dumps(strikes[:500], default=str),
+                          json.dumps(walls, default=str)]
+            _use_cols = list(_base_cols)
+            _use_vals = list(_base_vals)
+            for _k, _v in _extra.items():
+                if _k in cols:
+                    _use_cols.append(_k)
+                    _use_vals.append(_v)
+            conn.execute(
+                f"INSERT INTO heatmap_snapshots_v2 ({', '.join(_use_cols)}) VALUES ("
+                + ",".join(_esc(v) for v in _use_vals) + ")")
             for c in contracts:
                 if not isinstance(c, dict):
                     continue
@@ -403,6 +421,11 @@ def replay_snapshot(conn, snapshot_id: str) -> dict[str, Any] | None:
             "strikes": _parse(row.get("strikes_json")) or [],
             "walls": _parse(row.get("walls_json")) or [],
             "contracts": obs.to_dict("records") if obs is not None else [],
+            "coverage": _parse(row.get("coverage_json")),
+            "quality": _parse(row.get("quality_json")),
+            "scenarios": _parse(row.get("scenarios_json")) or [],
+            "interactions": _parse(row.get("interactions_json")) or [],
+            "grid_meta": _parse(row.get("grid_meta_json")),
             "replay_note": "available-at join: only rows with this snapshot_id; "
                            "later revisions excluded",
         }

@@ -167,11 +167,11 @@ function SkylitDashboard({
   const [expData, setExpData] = useState(null);
   const [expLoading, setExpLoading] = useState(false);
   const [expWidened, setExpWidened] = useState(false);
-  const expQueryKey = `${ticker}|${timeframe}|${expiries}`;
+  const expQueryKey = `${ticker}|${timeframe}|${expiries}|${dte ?? ""}|${expWidened ? "wide" : "same"}`;
   useEffect(() => {
     setExpData(null);
     setExpWidened(false);
-  }, [ticker, timeframe, expiries]);
+  }, [ticker, timeframe, expiries, dte]);
   // Locked comparison scale never survives a scope change.
   useEffect(() => {
     setScaleLock(null);
@@ -183,11 +183,13 @@ function SkylitDashboard({
     const myKey = expQueryKey;
     setExpLoading(true);
     const widen = expWidened ? "&expiries=8" : "";
-    // Preserve current scope: derive mode from timeframe selection instead of
-    // hardcoding swing; widen only on explicit action.
+    // Preserve full analytical scope (R4-15): mode + dte + scalp travel with
+    // the expand fetch; widening expiries is the only explicit scope change.
     const modeParam = timeframe === "scalp" ? "scalp" : timeframe === "swing" ? "swing" : "day";
+    const dteParam = dte != null ? `&dte=${encodeURIComponent(dte)}` : "";
+    const scalpParam = timeframe === "scalp" ? "&scalp=true" : "";
     axios
-      .get(`${BACKEND_API}/heatmap/${encodeURIComponent(ticker)}?mode=${modeParam}&expiries=${expWidened ? 8 : expiries}${widen && expWidened ? "" : ""}`, {
+      .get(`${BACKEND_API}/heatmap/${encodeURIComponent(ticker)}?mode=${modeParam}&expiries=${expWidened ? 8 : expiries}${dteParam}${scalpParam}${widen && expWidened ? "" : ""}`, {
         timeout: 45000,
         signal: ctrl.signal,
       })
@@ -197,7 +199,7 @@ function SkylitDashboard({
       .catch(() => { /* fallback to in-frame data below */ })
       .finally(() => { if (!cancelled && myKey === expQueryKey) setExpLoading(false); });
     return () => { cancelled = true; ctrl.abort(); };
-  }, [expanded, ticker, timeframe, expiries, expWidened, expQueryKey]);
+  }, [expanded, ticker, timeframe, expiries, dte, expWidened, expQueryKey]);
   const overlayData = replaySnap || expData || data;
   const overlayNote = (() => {
     const n = overlayData?.strikes?.length || 0;

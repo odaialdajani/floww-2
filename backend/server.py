@@ -1356,6 +1356,43 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         except Exception as le:
             log.debug("offscreen landmarks failed: %s", le)
             metrics["offscreen_landmarks"] = []
+        # R4-14/P13: live window delta-weighted activity from the recorder's
+        # previous snapshot (same ticker, same session day, same source).
+        # Same-contract, same-epoch only; rebase quarantines; otherwise the
+        # surface stays unavailable (never zero-filled, never raw fallback).
+        try:
+            import contextlib as _ctxw
+            with _ctxw.suppress(Exception):
+                from services.duckdb_engine import db as _ddb_win
+                from services.heatmap_history import replay_snapshot
+                _wconn = getattr(_ddb_win, "conn", None)
+                if _wconn is not None:
+                    _prev_rows = _wconn.execute(
+                        "SELECT snapshot_id, asof_ts FROM heatmap_snapshots_v2 WHERE ticker = '"
+                        + str(ticker).replace("'", "''") + "' ORDER BY asof_ts DESC LIMIT 1").fetchall()
+                    if _prev_rows:
+                        _pid = _prev_rows[0][0]
+                        _prep = replay_snapshot(_wconn, _pid)
+                        _pcontracts = (_prep or {}).get("contracts") or []
+                        _psnap = (_prep or {}).get("snapshot") or {}
+                        import datetime as _dtw
+                        _today = _dtw.datetime.now(_dtw.UTC).date().isoformat()
+                        _same_day = str(_psnap.get("asof_ts", ""))[:10] == _today
+                        if _pcontracts and _same_day:
+                            from services.solstice_enrichment import window_contract_activity
+                            _w = window_contract_activity(_pcontracts, raw["contracts"], spot)
+                            if _w.get("status") == "ok" and _w.get("contracts"):
+                                metrics["window_daddex_v1"] = sum(
+                                    c.get("window_daddex", 0) for c in _w["contracts"])
+                                metrics["window_delta_weighted_volume_v1"] = metrics["window_daddex_v1"]
+                                metrics["window_daddex_reason"] = None
+                                metrics["window_contracts"] = _w["contracts"][:20]
+                                metrics["window_missing_delta"] = _w.get("missing_delta", 0)
+                                metrics["window_mixed_pair"] = _w.get("mixed_pair", 0)
+                            elif _w.get("reason") == "VOLUME_REBASE":
+                                metrics["window_daddex_reason"] = "VOLUME_REBASE"
+        except Exception as we:
+            log.debug("window activity attach failed: %s", we)
     except Exception as me:
         log.debug("solstice metrics surfaces failed (non-fatal): %s", me)
         metrics["error"] = "METRICS_UNAVAILABLE"
@@ -1490,7 +1527,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                         last = db_last
                         durable = True
             except Exception:
-                pass
+                pass  # silent by design: history is best-effort; heatmap builds without it (durable=False)
             start_state = (last or {}).get("state", "unobserved")
             tr = transition(start_state, spot, w, now=now_dt,
                             last=last if last is not None else {"gap": False})
@@ -1591,7 +1628,10 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                          "contracts": _kept,
                                          "strikes": strikes,
                                          "metrics": {"walls": metrics.get("walls", [])},
-                                         "coverage": _cov},
+                                         "coverage": _cov,
+                                         "quality": payload.get("quality", {}),
+                                         "scenarios": payload.get("scenarios", [])[:12],
+                                         "interactions": payload.get("interactions", [])[:12]},
                 f"{ticker}:{mode}:{dte}:{scalp}"))
             _background_tasks.add(_t2)
             _t2.add_done_callback(_background_tasks.discard)
