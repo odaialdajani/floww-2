@@ -15,12 +15,25 @@ describe("solsticeReplay (P09/R4-15)", () => {
   });
   test("replay content replaces grid data (not counts)", () => {
     const rep = { snapshot: { snapshot_id: "a", ticker: "SPY", spot: 500, asof_ts: "t1" },
-      strikes: [{ strike: 500 }], walls: [{ wall_id: "w1" }], contracts: [{ osi: "X" }] };
+      strikes: [{ strike: 500 }], walls: [{ wall_id: "w1" }], contracts: [{ osi: "X" }],
+      quality: { state: "usable", reasonCodes: [] },
+      scenarios: [{ wall_id: "w1" }], interactions: [{ wall_id: "w1" }],
+      grids: { grid: { "2030-01-15": { 500: 1e6 } } } };
     const d = replayToDisplay(rep, "SPY");
     expect(d.replay).toBe(true);
     expect(d.strikes.length).toBe(1);
     expect(d.metrics.walls[0].wall_id).toBe("w1");
     expect(d.asof).toBe("t1");
+    expect(d.quality.state).toBe("usable");
+    expect(d.scenarios.length).toBe(1);
+    expect(d.interactions.length).toBe(1);
+    expect(d.metrics.grids.grid["2030-01-15"][500]).toBe(1e6);
     expect(replayToDisplay({ error: "not_found" }, "SPY")).toBeNull();
+  });
+  test("cross-ticker relabel rejected", () => {
+    const rep = { snapshot: { snapshot_id: "a", ticker: "SPY", spot: 500, asof_ts: "t1" },
+      strikes: [], walls: [] };
+    expect(replayToDisplay(rep, "QQQ")).toBeNull();
+    expect(replayToDisplay(rep, "SPY")).not.toBeNull();
   });
 });

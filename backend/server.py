@@ -1356,29 +1356,35 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         except Exception as le:
             log.debug("offscreen landmarks failed: %s", le)
             metrics["offscreen_landmarks"] = []
-        # R4-14/P13: live window delta-weighted activity from the recorder's
-        # previous snapshot (same ticker, same session day, same source).
-        # Same-contract, same-epoch only; rebase quarantines; otherwise the
-        # surface stays unavailable (never zero-filled, never raw fallback).
+        # R5-B: live window delta-weighted activity from the recorder's
+        # previous snapshot. Epoch/scope-bound: same query scope
+        # (ticker/mode/dte/scalp), same session day, same provider. Anything
+        # else is not a comparable epoch — the surface stays unavailable
+        # (never zero-filled, never raw fallback). Rebase quarantines.
         try:
             import contextlib as _ctxw
             with _ctxw.suppress(Exception):
                 from services.duckdb_engine import db as _ddb_win
-                from services.heatmap_history import replay_snapshot
+                from services.heatmap_history import normalize_stored_contract, replay_snapshot
                 _wconn = getattr(_ddb_win, "conn", None)
                 if _wconn is not None:
+                    _scope_key = f"{ticker}:{mode}:{dte}:{scalp}"
                     _prev_rows = _wconn.execute(
-                        "SELECT snapshot_id, asof_ts FROM heatmap_snapshots_v2 WHERE ticker = '"
-                        + str(ticker).replace("'", "''") + "' ORDER BY asof_ts DESC LIMIT 1").fetchall()
+                        "SELECT snapshot_id, asof_ts, data_source FROM heatmap_snapshots_v2 "
+                        "WHERE ticker = '" + str(ticker).replace("'", "''") + "' AND query_key = '"
+                        + _scope_key.replace("'", "''") + "' ORDER BY asof_ts DESC LIMIT 1").fetchall()
                     if _prev_rows:
                         _pid = _prev_rows[0][0]
                         _prep = replay_snapshot(_wconn, _pid)
-                        _pcontracts = (_prep or {}).get("contracts") or []
+                        _praw = (_prep or {}).get("contracts") or []
+                        _pcontracts = [normalize_stored_contract(r) for r in _praw]
                         _psnap = (_prep or {}).get("snapshot") or {}
                         import datetime as _dtw
                         _today = _dtw.datetime.now(_dtw.UTC).date().isoformat()
                         _same_day = str(_psnap.get("asof_ts", ""))[:10] == _today
-                        if _pcontracts and _same_day:
+                        _same_src = ((_psnap.get("data_source") or "")
+                                     == (raw.get("data_source", "yfinance") or ""))
+                        if _pcontracts and _same_day and _same_src:
                             from services.solstice_enrichment import window_contract_activity
                             _w = window_contract_activity(_pcontracts, raw["contracts"], spot)
                             if _w.get("status") == "ok" and _w.get("contracts"):
@@ -1640,7 +1646,8 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                          "source_received_at": payload.get("source_received_at"),
                                          "contracts": _kept,
                                          "strikes": strikes,
-                                         "metrics": {"walls": metrics.get("walls", [])},
+                                         "grid": payload.get("grid"),
+                                         "metrics": metrics,
                                          "coverage": _cov,
                                          "quality": payload.get("quality", {}),
                                          "scenarios": payload.get("scenarios", [])[:12],

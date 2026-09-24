@@ -1,14 +1,15 @@
-import React, { memo, useCallback, useState } from "react";
+import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { API as BACKEND_API } from "../../config/api";
 import { replayToDisplay, stepReplay } from "../../lib/solsticeReplay";
 
 /**
- * ReplayStrip — actual guided replay (P09/R4-15).
+ * ReplayStrip — actual guided replay (P09/R4-15, R5-B isolation).
  * Loads the manifest, steps chronologically through RECORDED snapshots, and
  * hands full snapshot content to the grid via onReplay (never counts-only).
- * Live refresh must be ignored while replay is active; return to live is
- * deliberate via onReplay(null).
+ * R5-B guards: requests are generation-checked + aborted; manifest, selection
+ * and in-flight work reset on ticker change; a response arriving after exit
+ * ("Live") or after a ticker switch is discarded, never rendered.
  */
 function ReplayStrip({ ticker = "SPY", onReplay = null }) {
   const [manifest, setManifest] = useState(null);
@@ -16,6 +17,16 @@ function ReplayStrip({ ticker = "SPY", onReplay = null }) {
   const [loading, setLoading] = useState(false);
   const [currentId, setCurrentId] = useState(null);
   const [replayAsOf, setReplayAsOf] = useState(null);
+  const genRef = useRef(0);
+  // Ticker switch clears replay state: no old-ticker snapshot may render
+  // under the new heading, and in-flight work is invalidated.
+  useEffect(() => {
+    genRef.current += 1;
+    setManifest(null);
+    setCompare(null);
+    setCurrentId(null);
+    setReplayAsOf(null);
+  }, [ticker]);
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -41,10 +52,15 @@ function ReplayStrip({ ticker = "SPY", onReplay = null }) {
   const snaps = manifest?.snapshots || [];
   const openSnap = useCallback(async (id) => {
     if (!id || !onReplay) return;
+    const myGen = ++genRef.current;
+    const myTicker = ticker;
+    const ctrl = new AbortController();
     setLoading(true);
     try {
-      const r = await axios.get(`${BACKEND_API}/solstice/replay/${encodeURIComponent(id)}`, { timeout: 15000 });
-      const disp = replayToDisplay(r.data, ticker);
+      const r = await axios.get(`${BACKEND_API}/solstice/replay/${encodeURIComponent(id)}`, { timeout: 15000, signal: ctrl.signal });
+      // Discard late responses: ticker switched or replay exited since request.
+      if (genRef.current !== myGen || myTicker !== ticker) return;
+      const disp = replayToDisplay(r.data, myTicker);
       if (disp) {
         setCurrentId(id);
         setReplayAsOf(disp.asof);
@@ -53,7 +69,7 @@ function ReplayStrip({ ticker = "SPY", onReplay = null }) {
     } catch (e) {
       /* replay unavailable — stay live, never partial grid */
     } finally {
-      setLoading(false);
+      if (genRef.current === myGen) setLoading(false);
     }
   }, [ticker, onReplay]);
   const step = useCallback((dir) => {
@@ -61,6 +77,9 @@ function ReplayStrip({ ticker = "SPY", onReplay = null }) {
     if (nxt) openSnap(nxt.id);
   }, [snaps, currentId, openSnap]);
   const exitReplay = useCallback(() => {
+    // Invalidate in-flight snapshot fetches so a late response can never
+    // re-enter replay after the user chose Live.
+    genRef.current += 1;
     setCurrentId(null);
     setReplayAsOf(null);
     if (onReplay) onReplay(null);
