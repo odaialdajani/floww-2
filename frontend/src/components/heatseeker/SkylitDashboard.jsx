@@ -307,7 +307,17 @@ function SkylitDashboard({
       />
 
       {/* 2.4 Solstice status strip — Environment · Location · Setup state · Data status (T23) */}
-      <SolsticeStatusStrip data={displayData} spot={displaySpot} ticker={ticker} isLive={isReplay ? false : isLive} />
+      <SolsticeStatusStrip
+        data={displayData} spot={displaySpot} ticker={ticker} isLive={isReplay ? false : isLive}
+        onSelectWall={(wall) => {
+          if (!wall) return;
+          setSelectedCell({
+            strike: wall.mid ?? wall.low, colKey: null, value: null,
+            asof: (displayData || data)?.asof || data?.asof || null,
+            ticker, wall_id: wall.wall_id || null,
+          });
+        }}
+      />
 
       {/* 2.5 Exposure strip — live backend exposure-rule badges, hidden when none.
           Live-only: never rendered inside historical replay. */}

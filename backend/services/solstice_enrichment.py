@@ -174,6 +174,54 @@ def window_contract_activity(prev: list[dict], cur: list[dict],
             "note": "turnover, not positioning"}
 
 
+def aggregate_window_by_wall(walls: list[dict], window_rows: list[dict]) -> dict[str, Any]:
+    """Aggregate window activity rows by wall membership (R6-2).
+
+    Each wall sums window_daddex over rows whose strike is a member strike.
+    Coverage reports member vs active strikes so a truncated contract sample
+    is never mistaken for a full population. Rows outside every wall feed
+    scope_total only — kept separately labeled, never shown as wall-local.
+    """
+    out: dict[str, Any] = {}
+    scope_total = 0.0
+    for w in walls or []:
+        if not isinstance(w, dict) or not w.get("wall_id"):
+            continue
+        try:
+            members = {float(m) for m in (w.get("members") or [])}
+        except (TypeError, ValueError):
+            members = set()
+        total = 0.0
+        active: set = set()
+        for r in window_rows or []:
+            if not isinstance(r, dict):
+                continue
+            try:
+                s = float(r.get("strike"))
+            except (TypeError, ValueError):
+                continue
+            try:
+                v = float(r.get("window_daddex", 0) or 0)
+            except (TypeError, ValueError):
+                continue
+            if s in members:
+                total += v
+                active.add(s)
+        out[str(w["wall_id"])] = {"window_daddex": total,
+                                  "coverage": {"member_strikes": len(members),
+                                               "active_strikes": len(active)}}
+    for r in window_rows or []:
+        if not isinstance(r, dict):
+            continue
+        import contextlib as _cx
+        # silent by design: non-numeric rows contribute nothing to the scope
+        # total; member aggregation above already skipped them the same way.
+        with _cx.suppress(TypeError, ValueError):
+            scope_total += float(r.get("window_daddex", 0) or 0)
+    out["scope_total"] = scope_total
+    return out
+
+
 def relative_volume(contracts: list[dict], baselines: dict[str, float]) -> dict[str, Any]:
     """Relative activity vs matched DTE/moneyness cohort baselines.
 

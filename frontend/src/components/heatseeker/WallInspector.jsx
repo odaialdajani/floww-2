@@ -68,13 +68,22 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
   const pairNote = metrics
     ? `Δ usable ${metrics.dadgex_usable ?? "—"}, missing ${metrics.dadgex_missing_delta ?? "—"}`
     : "—";
-  // Wall-local window activity comes from the live assembly when a recorded
-  // baseline exists; otherwise the row honestly reports unavailability.
-  const winVal = metrics?.window_daddex_v1;
+  // R6-2 wall-local window activity: aggregate over THIS wall's member
+  // strikes only (with member/active coverage). The whole-scope sum is never
+  // shown as wall-local; without a comparable baseline the row reports why.
+  const wallWin = (metrics?.wall_window || {})[wall.wall_id || ""];
   const winReason = metrics?.window_daddex_reason;
-  const winNote = winVal != null ? `${fmtUsd(winVal)} (window Δ-weighted)`
+  const winNote = wallWin
+    ? `${fmtUsd(wallWin.window_daddex)} (window Δ-weighted · ${wallWin.coverage.active_strikes}/${wallWin.coverage.member_strikes} strikes)`
     : winReason === "VOLUME_REBASE" ? "unavailable — volume rebase, new baseline required"
-    : "unavailable — no recorded baseline yet";
+    : "unavailable — no comparable window for this wall";
+  // R6-2 same-wall comparison: raw (wall record), delta-weighted and session
+  // activity (wall_metrics breakdown). Each declares its basis; unlike
+  // quantities are never blended and scope totals stay out of this table.
+  const wb = (metrics?.wall_metrics || {})[wall.wall_id || ""];
+  const compareNote = wb
+    ? `raw ${fmtUsd(wall.gross)}/${fmtUsd(wall.net)} (OI) · Δ ${fmtUsd(wb.daddex_gross)}/${fmtUsd(wb.daddex_net)} (OI Δ-weighted${wb.daddex_missing ? `, ${wb.daddex_missing} δ-missing` : ""}) · session ${fmtUsd(wb.volume_net)} (volume)`
+    : null;
   return (
     <div className="skylit-metrics-section" data-testid="wall-inspector">
       <div className="skylit-section-title">Selected wall · {wall.wall_id || `${wall.low}–${wall.high}`}</div>
@@ -86,7 +95,10 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
         <Row k="Per-expiry" v={perExpiry.slice(0, 6).map((p) => `${p.grid}:${p.expiry.slice(5)}=${fmtUsd(p.value)}`).join(" · ")} tip="Same-snapshot per-expiry contributions for member strikes" />
       )}
       <Row k="Δ/Raw (scope)" v={ratio != null ? Number(ratio).toFixed(3) : "—"} tip="Scope-wide delta gross / raw gross over the same snapshot set — not the selected wall. Wall-local ratio needs same-wall delta + raw grids." />
-      <Row k="Window activity" v={winNote} tip="Wall-local window delta-weighted activity from the recorded baseline; turnover, never buyer-minus-seller flow" />
+      {compareNote && (
+        <Row k="Same-wall compare" v={compareNote} tip="Same wall, same scope: raw OI structure vs delta-weighted structure vs session volume activity. Unlike quantities, separately labeled." />
+      )}
+      <Row k="Window activity" v={winNote} tip="This wall's member strikes only, with member/active-strike coverage; turnover, never buyer-minus-seller flow" />
       <Row k="Δ provenance" v={pairNote} tip="Vendor/vendor, local/local eligible; mixed pairs blocked without policy" />
       <Row k="OI eff. date" v={(wall.oi_effective_dates && wall.oi_effective_dates.length ? wall.oi_effective_dates.join(", ") : null) ?? "unavailable in snapshot"} tip="Per-wall OI effective dates from member-strike provenance; unavailable when no member carries OI metadata" />
       <Row k="Changed" v={interaction ? `${interaction.state}${interaction.event ? ` · ${interaction.event}` : ""}${interaction.first_seen === false ? " · persistent" : " (first sighting — see replay compare)"}` : "see replay compare"} tip="Wall-level change needs 2+ recorded snapshots; persistent states carry continuity, first sightings do not" />
