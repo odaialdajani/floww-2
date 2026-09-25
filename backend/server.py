@@ -1713,12 +1713,18 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                         now_s=_now_s, session_date=_session_day)
         _scout_puts = scout_candidates(raw["contracts"], "PUTS", spot,
                                        now_s=_now_s, session_date=_session_day)
+        from services.contract_scout import scout_shortlist_rows
         payload["scout"] = {
             "calls": _scout_calls["n_eligible"],
             "puts": _scout_puts["n_eligible"],
             "rejected": {k: ((_scout_calls["rejected"].get(k, 0)),
                              (_scout_puts["rejected"].get(k, 0)))
                          for k in set(_scout_calls["rejected"]) | set(_scout_puts["rejected"])},
+            # R7-05: bounded read-only review rows (3/side) with quote ages.
+            # No-candidate stays valid; wall linkage happens at review time
+            # (selection is UI state) — rows never silently switch walls.
+            "shortlist": {"CALLS": scout_shortlist_rows(_scout_calls, "CALLS", 3),
+                          "PUTS": scout_shortlist_rows(_scout_puts, "PUTS", 3)},
         }
         # R5-F: production decision producer — every build records one
         # decision per scenario side, including abstentions (no-candidate is

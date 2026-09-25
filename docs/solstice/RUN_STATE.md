@@ -40,7 +40,15 @@ target `movers.v2`, fixtures `comprehension_v1.json`.
   scope change); VEX pane ignores weighting controls; missing VEX is
   explicit. Active pane owns the readout; inspector stays raw-anchored.
   Same desk inline and expanded.
-- R7-05 review workflow: pending.
+- R7-05 review workflow: acceptance-tested. Inspector comparison string
+  replaced by a small table (raw/Δ/VEX/session/window + basis/coverage);
+  standalone window row removed (was duplicated). Observed interaction
+  timeline + deterministic readiness (Observe/Wait/Confirmed for
+  review/Invalidated) from the interaction record. Shortlist rows (3/side:
+  OSI/expiry/delta/bid×ask/spread/ages) tagged in/out of the selected wall;
+  no-candidate explains with reject counts. Advanced shows real per-expiry
+  vanna + moneyness distributions (contract-vanna units labeled, no "view
+  present"). Backend attaches shortlist rows; tick size honestly null.
 - R7-06 calendars/capability: pending. R7-07 episode policy/pending-final:
   pending (extends NEED_EPISODE). R7-08/09 study/gates/handoff: pending.
 
