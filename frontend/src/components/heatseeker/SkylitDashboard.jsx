@@ -218,6 +218,13 @@ function SkylitDashboard({
   const [activePane, setActivePane] = useState("gex");
   const [compareScales, setCompareScales] = useState({ gex: null, vex: null });
   const [compareLock, setCompareLock] = useState(null);
+  // R8-02: "Follow this wall" — keep the same wall_id selected across
+  // compatible live refreshes. Cleared on ticker change or scope change.
+  const [followWall, setFollowWall] = useState(false);
+  const [followWallId, setFollowWallId] = useState(null);
+  // R8-04: review journal state for the current snapshot's decision
+  const [reviewState, setReviewState] = useState(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
   const paneScaleReady = useCallback((pane, s) => {
     setCompareScales((prev) => {
       const cur = prev[pane];

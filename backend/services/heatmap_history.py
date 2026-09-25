@@ -168,6 +168,14 @@ def ensure_tables(conn) -> None:
             conn.execute(f"ALTER TABLE heatmap_snapshots_v2 ADD COLUMN IF NOT EXISTS {col} VARCHAR")
         except Exception as e:
             log.warning("heatmap_history migrate %s failed: %s", col, e)
+    # R8-04: decision reviews table (if not already present)
+    try:
+        conn.execute("""CREATE TABLE IF NOT EXISTS decision_reviews_v1 (
+            decision_id VARCHAR PRIMARY KEY, state VARCHAR,
+            reason VARCHAR, note VARCHAR, reviewed_at VARCHAR
+        )""")
+    except Exception as e:
+        log.debug("ensure_tables: decision_reviews_v1: %s", e)
 
 
 def recorder_status(conn, path: str | None = None) -> dict[str, Any]:
@@ -235,6 +243,51 @@ def _esc(v: Any) -> str:
         return str(v)
     s = str(v).replace("'", "''")
     return f"'{s}'"
+
+
+def attach_outcomes_to_decisions(conn, results: dict[str, dict[str, Any]]) -> None:
+    """After close_episodes, copy outcome labels into decision features.
+
+    R8-05: the review journal (`GET /{ticker}/decisions`) shows the frozen
+    episode layout PLUS the latest outcome label. Terminal outcomes are
+    idempotent; censored/indeterminate are overwritten on re-processing
+    (the close_episodes path already does this in outcome_labels_v1).
+    """
+    try:
+        for did, res in results.items():
+            label = res.get("label")
+            censored = res.get("censored", False)
+            detail = res.get("detail")
+            try:
+                with _RECORDER_LOCK:
+                    conn.execute("UPDATE scenario_decisions_v1 SET features = "
+                                 + _esc(json.dumps({
+                                     **(_parse_features(conn, did)),
+                                     "outcome_label": label,
+                                     "outcome_censored": censored,
+                                     "outcome_detail": detail,
+                                     "outcome_updated_at": _now_iso(),
+                                 }, default=str))
+                                 + " WHERE decision_id = " + _esc(did))
+            except Exception as _ue:
+                log.debug("attach outcome to %s: %s", did, _ue)
+    except Exception as e:
+        log.debug("attach_outcomes_to_decisions: %s", e)
+
+
+def _parse_features(conn, did: str) -> dict[str, Any]:
+    """Read the current features JSON for a decision."""
+    try:
+        rows = conn.execute("SELECT features FROM scenario_decisions_v1 "
+                            "WHERE decision_id = " + _esc(did)).fetchall()
+        if rows:
+            raw = rows[0][0]
+            if isinstance(raw, str):
+                return __import__("json").loads(raw)
+            return raw or {}
+    except Exception:
+        pass
+    return {}
 
 
 def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
@@ -721,3 +774,86 @@ def session_manifest(conn, ticker: str, day: str,
     except Exception as e:
         log.warning("manifest failed: %s", e)
         return {"ticker": ticker.upper(), "day": day, "n_snapshots": 0, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# R8-04: review journal — list and annotate saved scenario decisions.
+# ---------------------------------------------------------------------------
+
+def list_decisions(conn, ticker: str, limit: int = 50, state_filter: str | None = None) -> list[dict[str, Any]]:
+    """List saved scenario decisions for a ticker (R8-04 review journal).
+
+    Returns decision rows with frozen features, candidate quotes summary,
+    and any attached outcome labels. Read-only — never mutates storage.
+    """
+    try:
+        ensure_tables(conn)
+        q = ("SELECT d.decision_id, d.ticker, d.at_ts, d.snapshot_id, "
+             "d.scenario, d.side, d.eligible, d.reason_codes, d.features, "
+             "COUNT(DISTINCT c.osi) AS n_quotes, "
+             "GROUP_CONCAT(DISTINCT o.label) AS outcome_labels "
+             "FROM scenario_decisions_v1 d "
+             "LEFT JOIN candidate_quotes_v1 c ON c.decision_id = d.decision_id "
+             "LEFT JOIN outcome_labels_v1 o ON o.decision_id = d.decision_id "
+             "WHERE d.ticker = " + _esc(ticker) + " ")
+        if state_filter is not None:
+            q += 'AND d.features LIKE ' + _esc('%' + '"state": "' + state_filter + '%"') + ' '
+        q += "GROUP BY d.decision_id, d.ticker, d.at_ts, d.snapshot_id, "
+        q += "d.scenario, d.side, d.eligible, d.reason_codes, d.features "
+        q += "ORDER BY d.at_ts DESC LIMIT " + str(limit)
+        rows = conn.execute(q).fetchdf()
+        if rows is None or len(rows) == 0:
+            return []
+        out = []
+        for _, r in rows.iterrows():
+            feats = r.get("features")
+            if isinstance(feats, str):
+                try:
+                    feats = __import__("json").loads(feats)
+                except (TypeError, ValueError):
+                    feats = {}
+            out.append({
+                "decision_id": r.get("decision_id"),
+                "ticker": r.get("ticker"),
+                "at_ts": r.get("at_ts"),
+                "snapshot_id": r.get("snapshot_id"),
+                "scenario": r.get("scenario"),
+                "side": r.get("side"),
+                "eligible": bool(r.get("eligible", False)),
+                "reason_codes": feats.get("reason_codes", []) if isinstance(feats, dict) else [],
+                "features": feats if isinstance(feats, dict) else {},
+                "n_quotes": int(r.get("n_quotes", 0) or 0),
+                "outcome_labels": (feats.get("outcome_labels") if isinstance(feats, dict) and isinstance(feats.get("outcome_labels"), str)
+                                    else (r.get("outcome_labels") or "")),
+            })
+        return out
+    except Exception as e:
+        log.warning("list_decisions failed for %s: %s", ticker, e)
+        return []
+
+
+def save_decision_review(conn, decision_id: str, state: str,
+                         reason: str | None = None,
+                         note: str | None = None) -> str | None:
+    """Save a review state on a decision (R8-04).
+
+    States: pending | reviewed | waiting | skipped.
+    Persists through the real route/store.
+    """
+    try:
+        ensure_tables(conn)
+        with _RECORDER_LOCK:
+            conn.execute(
+                "INSERT OR REPLACE INTO decision_reviews_v1 VALUES ("
+                + _esc(decision_id) + ", "
+                + _esc(state) + ", "
+                + _esc(reason) + ", "
+                + _esc(note) + ", "
+                + _esc(_now_iso()) + ")")
+        return _now_iso()
+    except Exception as e:
+        log.warning("save_decision_review failed for %s: %s", decision_id, e)
+        return None
+
+
+

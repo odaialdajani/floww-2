@@ -1748,6 +1748,25 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                     _wid = _nw.get("wall_id")
                 except Exception:
                     _zw, _wid = None, None
+
+                def _build_research_features(spot, zone, ticker):
+                    """Build research-episode features from a decision encounter.
+
+                    R8-05: delegate to episode_policy.research_default_features
+                    so barriers are derived deterministically from the frozen
+                    zone/tick rather than hardcoded. Unknown zone → no
+                    numeric barriers; close_episodes then reports
+                    NEED_EPISODE and never invents a label.
+                    """
+                    from services.episode_policy import (
+                        research_default_features,
+                    )
+                    return research_default_features(
+                        zone=(None if zone is None else tuple(zone)),
+                        encounter_price=spot,
+                        underlying_tick=0.01 if ticker else None,
+                    )
+
                 if _dconn is not None:
                     for _side, _res in (("CALLS", _scout_calls), ("PUTS", _scout_puts)):
                         _quotes = []
@@ -1769,11 +1788,9 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                             "scenario": _side, "side": _side,
                             "eligible": _res.get("n_eligible", 0) > 0,
                             "reason_codes": sorted((_res.get("rejected") or {}).keys()),
-                            "features": {"spot": spot,
-                                         "quality": (payload.get("quality") or {}).get("state"),
-                                         "n_eligible": _res.get("n_eligible", 0),
-                                         "wall_id": _wid, "zone": _zw,
-                                         "horizon_s": 300, "horizon_default": True},
+                            "features": _build_research_features(
+                                spot=spot, zone=_zw, ticker=ticker,
+                            ),
                             "candidate_quotes": _quotes})
         except Exception as _de:
             log.debug("solstice decision record failed: %s", _de)
@@ -3383,6 +3400,10 @@ app.include_router(heatseeker_snapshots_router, prefix="/api/heatseeker", tags=[
 from routes.solstice import router as solstice_router
 
 app.include_router(solstice_router, tags=["solstice"])
+
+# R8-04: review journal routes (list decisions, save review state)
+from routes.solstice_review import register_review_routes
+register_review_routes(solstice_router)
 
 from routes.public_api import router as public_api_router
 
