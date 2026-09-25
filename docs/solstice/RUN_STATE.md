@@ -49,8 +49,15 @@ target `movers.v2`, fixtures `comprehension_v1.json`.
   no-candidate explains with reject counts. Advanced shows real per-expiry
   vanna + moneyness distributions (contract-vanna units labeled, no "view
   present"). Backend attaches shortlist rows; tick size honestly null.
-- R7-06 calendars/capability: pending. R7-07 episode policy/pending-final:
-  pending (extends NEED_EPISODE). R7-08/09 study/gates/handoff: pending.
+- R7-06 series clocks + capability: acceptance-tested. last_trading_utc is
+  now calendar-bound (clock.v2): expiry-day close (16:00/13:00 half-day),
+  closed expiries fall back to last open close, AM SPX monthly uses the
+  preceding open session 17:00 ET (settlement 09:30 never a deadline).
+  resolve_series derives SPX/SPXW/EQUITY from root+expiry (third-Friday);
+  adapter passes series into the clock and stores it on contracts.
+  /capability gains a per-symbol matrix from recorded observations only
+  (entitlement unobserved-by-default, no ticker substitution).
+- R7-07 episode policy/pending-final: pending (extends NEED_EPISODE).
 
 ## Before-fixtures (all reproduced 25 Sep 2026, main@7fed6012)
 

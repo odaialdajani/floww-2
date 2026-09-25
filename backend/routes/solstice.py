@@ -207,8 +207,10 @@ async def capability() -> dict[str, Any]:
                                  "usable": r[5], "truncated": bool(r[6])})
     except Exception as e:
         log.debug("capability observations unavailable: %s", e)
+    from services.public_capability import symbol_matrix
     return {"registry": registry(), "measured": get_manifest(),
-            "observed": observed, "n_observed": len(observed)}
+            "observed": observed, "n_observed": len(observed),
+            "symbols": symbol_matrix(observed)}
 
 
 @router.get("/replay/{snapshot_id}")
