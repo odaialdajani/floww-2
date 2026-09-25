@@ -116,3 +116,23 @@ def test_display_surfaces_policy_vendor_first_fallback_declared():
     assert grid2["grid"]
     basis3, model3, strikes3, __ = _display_surfaces(SPOT, [], "SPY", False)
     assert strikes3 == [] and model3 == "vendor-supplied-greeks"
+
+
+def _volume_only_contracts():
+    # yfinance fallback shape (observed ^SPX 2026-09-24): no OI, no supplied
+    # gamma, IV + session volume present.
+    return [
+        {"strike": 500, "type": "call", "oi": 0, "volume": 400, "iv": 0.2,
+         "T": 30 / 365, "multiplier": 100.0, "expiry": "2030-01-15"},
+        {"strike": 500, "type": "put", "oi": 0, "volume": 200, "iv": 0.2,
+         "T": 30 / 365, "multiplier": 100.0, "expiry": "2030-01-15"},
+    ]
+
+
+def test_display_surfaces_volume_fallback_without_vendor_gamma():
+    from server import _display_surfaces
+    basis, model, strikes, grid = _display_surfaces(
+        SPOT, _volume_only_contracts(), "^SPX", False)
+    assert basis == "VOLUME_FALLBACK_OI_UNKNOWN" and strikes
+    assert grid["grid"]
+    assert model == "local-bs-fallback"

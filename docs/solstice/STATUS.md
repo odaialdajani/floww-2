@@ -303,3 +303,16 @@ craco heatseeker suites green; ruff + silent-except gate (283 files) clean.
 Full backend suite head-vs-base: identical pre-existing failures only.
 Remaining external/user items: SPX entitlement, participant study run,
 deployment audience, commissioning approval, elapsed sessions.
+
+Follow-up 24 Sep 2026 (unmerged, on solstice/r6-5): verification found two
+issues. (1) R6-1 `_display_surfaces` volume fallback used vendor-only volume
+functions, so an OI-less/IV-bearing chain (live ^SPX via yfinance: 890
+contracts, oi>0 0, vol>0 839) rendered an empty grid — base rendered it via
+local-BS volume. Fixed with a declared local-BS volume fallback under
+VOLUME_FALLBACK_OI_UNKNOWN (model local-bs-fallback, never setup-eligible);
+new red test in test_r6_1_red.py (failed before, passes after);
+test_heatseeker_v2.py live 8/8 recovered. (2) Grid Jest 0DTE test built its
+fixture date with toISOString (UTC) while the grid compares local midnights —
+flaky after 20:00 ET. Test-only fix to local-calendar construction, same
+assertions. Gates now: solstice 162 passed; heatseeker_v2 8/8; craco
+heatseeker suites 40/40; selftest 25/25; ruff + silent-except clean.
