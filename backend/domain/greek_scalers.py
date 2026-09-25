@@ -89,9 +89,17 @@ def dollar_vex_per_1pct_vol_change(vanna: float, oi: float, spot: float) -> floa
     for Charm Flip / GDW / CAR calculations that combine vega
     exposure with vol surprise shock scenarios.
 
-    Returns: ``vanna * OI * 100 * spot * (1 - DOLLAR_MOVE_CONVENTION)``.
+    R7-F03 correction (units v1): a +1 volatility-point shock is
+    Δσ = 0.01, so the factor is DOLLAR_MOVE_CONVENTION (0.01) — the
+    same convention as dollar_vega_per_1pct_vol_change below. The
+    previous ``(1 - DOLLAR_MOVE_CONVENTION)`` = 0.99 factor described
+    a 99%-σ shock, contradicting the name/docstring (99× too large:
+    198,000 vs 2,000 for vanna .2 / OI 100 / spot 100). No production
+    caller existed; the pinning test is rewritten as an oracle below.
+
+    Returns: ``vanna * OI * 100 * spot * 0.01``.
     """
-    return vanna * oi * CONTRACT_MULTIPLIER * spot * (1.0 - DOLLAR_MOVE_CONVENTION)
+    return vanna * oi * CONTRACT_MULTIPLIER * spot * DOLLAR_MOVE_CONVENTION
 
 
 # ── Vega scaling ──────────────────────────────────────────────────────

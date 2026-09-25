@@ -11,9 +11,16 @@ target `movers.v2`, fixtures `comprehension_v1.json`.
   except kanban, env ok, counterexamples reproduced below).
 - R7-01 Top Movers: pending. Failing case: route emits `pct` unsorted +
   UI reads `change` + endless ellipsis on error.
-- R7-02 delta/VEX contract: pending. Failing cases: no `vex_grid` from
-  vendor path; `dollar_vex_per_1pct_vol_change` 99x (0.99 vs 0.01);
-  unknown-type/adjusted divergence grid-vs-registry.
+- R7-02 delta/VEX contract: acceptance-tested. Canonical vex_net/gross_1volpt
+  producers (local-bs-vanna.v1, signed vanna, coverage) wired into every
+  display path as data.grid.vex_grid+vex_meta; grid vex view renders
+  explicit unavailable (no blank-as-zero). Unknown option type rejected in
+  all gex_core aggregations (registry already strict) with invalid_type
+  accounting on grid dicts; adjusted quarantine unified. .99 helper fixed
+  to x0.01 with version note; tautological test rewritten as oracle.
+  NOTE: legacy local vex cells already used x0.01 numerically (naming
+  confusion only); Rust-bridge bool coercion still defaults call (Rust
+  inactive here — revisit on activation).
 - R7-03 display/replay/readout: pending (stale click value, GEX-under-VEX,
   replay Trade callback, snapshotId normalization).
 - R7-04 compare workspace: pending. R7-05 review workflow: pending.

@@ -994,6 +994,24 @@ def _display_surfaces(spot: float, contracts: list[dict[str, Any]], ticker: str,
     """
     exposure_basis = "OI"
     model_basis = "vendor-supplied-greeks"
+    # R7-02: canonical VEX surface rides every display path with its own
+    # basis/model/coverage (packet §5.1). Missing inputs make VEX
+    # unavailable — never zero-filled, never a raw fallback.
+    from services.gex_core import compute_vex_grid_local
+    _vg = compute_vex_grid_local(spot, contracts, ticker)
+    def _with_vex(grid: dict) -> dict:
+        try:
+            grid["vex_grid"] = _vg.get("grid", {})
+            grid["vex_meta"] = {"exposure_basis": _vg.get("exposure_basis"),
+                                "model": _vg.get("model"),
+                                "status": _vg.get("status"),
+                                "reason": _vg.get("reason"),
+                                "missing_vanna_inputs": _vg.get("missing_vanna_inputs", 0),
+                                "quarantined": _vg.get("quarantined", 0),
+                                "invalid_type": _vg.get("invalid_type", 0)}
+        except Exception:
+            pass
+        return grid
     if scalp:
         from services.gex_core import (
             compute_gex_by_strike_volume_vendor,
@@ -1009,7 +1027,7 @@ def _display_surfaces(spot: float, contracts: list[dict[str, Any]], ticker: str,
             grid = _local_vgrid(spot, contracts, ticker)
             if strikes:
                 model_basis = "local-bs-fallback"
-        return exposure_basis, model_basis, strikes, grid
+        return exposure_basis, model_basis, strikes, _with_vex(grid)
     from services.gex_core import compute_gex_by_strike_vendor, compute_gex_grid_vendor
     strikes = compute_gex_by_strike_vendor(spot, contracts)
     grid = compute_gex_grid_vendor(spot, contracts)
@@ -1043,7 +1061,7 @@ def _display_surfaces(spot: float, contracts: list[dict[str, Any]], ticker: str,
             if strikes:
                 model_basis = "local-bs-fallback"
         log.warning("build_heatmap: OI unavailable — volume-weighted GEX fallback (grid populated)")
-    return exposure_basis, model_basis, strikes, grid
+    return exposure_basis, model_basis, strikes, _with_vex(grid)
 
 
 async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: bool = True, mode: str = "day", dte: int | None = None, scalp: bool = False, max_strikes: int = 200) -> dict[str, Any]:
@@ -3304,8 +3322,11 @@ from routes.discord import router as discord_router
 
 app.include_router(discord_router, tags=["discord"])
 
+import sys
+
 from routes.analytics import router as analytics_router
 
+print(f"DEBUG analytics router: {type(analytics_router)}, routes: {len(analytics_router.routes)}", file=sys.stderr)
 app.include_router(analytics_router, prefix="/api", tags=["analytics"])
 
 from routes.briefing import router as briefing_router

@@ -97,6 +97,15 @@ function SkylitHeatmapGrid({
   const overlayMissing = useOverlay && !(overlay && overlay.grid);
   const g = (!useOverlay || (overlay && overlay.grid)) ? ((overlay && overlay.grid ? overlay : data?.grid) || null) : null;
   const overlayReason = overlayMissing ? (overlay?.reason || "metric unavailable in this snapshot") : null;
+  // R7-02: named VEX/Charm surfaces are explicit — an absent/empty surface
+  // renders unavailable with the backend reason, never blank-as-zero.
+  const namedSurface = !useOverlay && (viewMode === "vex" || viewMode === "charm") ? gridKey : null;
+  const namedCells = namedSurface ? ((data?.grid || {})[namedSurface] || {}) : null;
+  const surfaceMissing = !!namedSurface && !Object.keys(namedCells || {}).length;
+  const surfaceMeta = viewMode === "vex" ? (data?.grid?.vex_meta || null) : null;
+  const surfaceReason = surfaceMissing
+    ? (surfaceMeta?.reason || surfaceMeta?.status || "surface unavailable in this snapshot")
+    : null;
   const metricBasis = useOverlay && overlay && overlay.grid
     ? (metric === "delta" ? "OI_DELTA_WEIGHTED" : (overlay.exposure_basis || "VOLUME"))
     : (data?.exposure_basis || "OI");
@@ -293,6 +302,14 @@ function SkylitHeatmapGrid({
     return (
       <div className="skylit-heatmap-empty" data-testid="skylit-metric-unavailable">
         <span>Metric unavailable ({metric}) — {overlayReason}</span>
+      </div>
+    );
+  }
+
+  if (surfaceMissing) {
+    return (
+      <div className="skylit-heatmap-empty" data-testid="skylit-surface-unavailable">
+        <span>{viewMode.toUpperCase()} unavailable — {surfaceReason}</span>
       </div>
     );
   }
