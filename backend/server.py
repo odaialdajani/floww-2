@@ -1377,6 +1377,9 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             "window_dadgex_v1": None, "window_dadgex_reason": "HISTORY_NOT_YET_RECORDED",
             # §28.3 registry name alias (same unavailable state, both keys).
             "window_delta_weighted_volume_v1": None,
+            # R6-2: per-wall window aggregation lands here when a comparable
+            # baseline exists; absent means unavailable, never scope-total.
+            "wall_window": {},
             "magnitude_ratio_delta_over_raw": (dw_m.gross / raw_m.gross) if raw_m.gross > 0 else None,
             "vendor_rows": vendor_rows, "vendor_grid": vendor_grid,
             "grids": {"raw": None, "delta": delta_grid, "activity": activity_grid,
@@ -1389,6 +1392,15 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         metrics["walls"] = sol_walls
         metrics["nearest_walls"] = nearest_walls(sol_walls, spot)
         metrics["nearest_by_side"] = nearest_by_side(sol_walls, spot)
+        # R6-2: per-wall delta-weighted + session-volume breakdown over the
+        # same declared scope (wall-local comparison data for the inspector).
+        try:
+            from domain.exposure_metrics import wall_metric_breakdown
+            metrics["wall_metrics"] = wall_metric_breakdown(
+                sol_walls, raw["contracts"], spot)
+        except Exception as wme:
+            log.debug("wall metric breakdown failed: %s", wme)
+            metrics["wall_metrics"] = {}
         # F23: off-screen landmarks from the FULL universe (pre-band vendor
         # rows), so major walls outside the visible window stay navigable.
         try:
@@ -1429,18 +1441,29 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                         _same_src = ((_psnap.get("data_source") or "")
                                      == (raw.get("data_source", "yfinance") or ""))
                         if _pcontracts and _same_day and _same_src:
-                            from services.solstice_enrichment import window_contract_activity
+                            from services.solstice_enrichment import (
+                                aggregate_window_by_wall,
+                                window_contract_activity,
+                            )
                             _w = window_contract_activity(_pcontracts, raw["contracts"], spot)
                             if _w.get("status") == "ok" and _w.get("contracts"):
                                 metrics["window_daddex_v1"] = sum(
                                     c.get("window_daddex", 0) for c in _w["contracts"])
                                 metrics["window_delta_weighted_volume_v1"] = metrics["window_daddex_v1"]
+                                # Registry canonical name kept in sync (alias).
+                                metrics["window_dadgex_v1"] = metrics["window_daddex_v1"]
                                 metrics["window_daddex_reason"] = None
                                 metrics["window_contracts"] = _w["contracts"][:20]
                                 metrics["window_missing_delta"] = _w.get("missing_delta", 0)
                                 metrics["window_mixed_pair"] = _w.get("mixed_pair", 0)
+                                # R6-2: wall-local window aggregation over the
+                                # FULL row list (before the display cut above);
+                                # a truncated sample is not a population.
+                                metrics["wall_window"] = aggregate_window_by_wall(
+                                    sol_walls, _w["contracts"])
                             elif _w.get("reason") == "VOLUME_REBASE":
                                 metrics["window_daddex_reason"] = "VOLUME_REBASE"
+                                metrics["window_dadgex_reason"] = "VOLUME_REBASE"
         except Exception as we:
             log.debug("window activity attach failed: %s", we)
     except Exception as me:

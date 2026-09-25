@@ -287,6 +287,91 @@ def compute_volume_gamma(contracts: list[dict[str, Any]], spot: float) -> Exposu
     return r
 
 
+def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str, Any]],
+                          spot: float) -> dict[str, dict[str, Any]]:
+    """Per-wall delta-weighted + session-volume breakdown (R6-2).
+
+    Each wall aggregates ONLY its member strikes' contracts over the same
+    declared scope: daddex gross/net (Σ u·N·|δ|, Σ c·u·N·|δ|), session volume
+    net/gross (Σ c·u·V), usable/missing/invalid counts, member expiries.
+    Missing delta is counted per wall (never zero-filled). Scope-wide totals
+    stay separate — a wall-local row never shows a whole-scope sum.
+    """
+    out: dict[str, dict[str, Any]] = {}
+    for w in walls or []:
+        if not isinstance(w, dict) or not w.get("wall_id"):
+            continue
+        try:
+            members = {float(m) for m in (w.get("members") or [])}
+        except (TypeError, ValueError):
+            members = set()
+        dg = dn = vg = vn = 0.0
+        usable = missing = invalid = vn_n = 0
+        expiries: set = set()
+        n_contracts = 0
+        for c in contracts or []:
+            if not isinstance(c, dict):
+                continue
+            try:
+                s = float(c.get("strike"))
+            except (TypeError, ValueError):
+                continue
+            if s not in members:
+                continue
+            n_contracts += 1
+            if c.get("expiry"):
+                expiries.add(str(c.get("expiry")))
+            sign = option_type_sign(c.get("type"))
+            if sign is None:
+                invalid += 1
+                continue
+            mult = _resolve_mult(c)
+            if mult is None:
+                invalid += 1
+                continue
+            try:
+                g_f = float(c.get("gamma")) if c.get("gamma") is not None else None
+                oi_f = float(c.get("oi")) if c.get("oi") is not None else None
+            except (TypeError, ValueError):
+                g_f, oi_f = None, None
+            if g_f is None or oi_f is None or not math.isfinite(g_f) or not math.isfinite(oi_f):
+                invalid += 1
+                continue
+            if g_f < 0 or oi_f < 0:
+                invalid += 1
+                continue
+            if oi_f == 0:
+                continue
+            u = dollar_gamma_unit(g_f, mult, spot)
+            if u is None:
+                invalid += 1
+                continue
+            ad, _reason = abs_delta(c.get("delta", c.get("δ")))
+            if ad is None:
+                missing += 1
+            else:
+                dg += u * ad * oi_f
+                dn += sign * u * ad * oi_f
+                usable += 1
+            try:
+                v_f = float(c.get("volume", c.get("V"))) if c.get("volume", c.get("V")) is not None else None
+            except (TypeError, ValueError):
+                v_f = None
+            if v_f is not None and math.isfinite(v_f) and v_f > 0:
+                vg += u * v_f
+                vn += sign * u * v_f
+                vn_n += 1
+        out[str(w["wall_id"])] = {
+            "daddex_gross": dg, "daddex_net": dn,
+            "daddex_usable": usable, "daddex_missing": missing,
+            "volume_gross": vg, "volume_net": vn, "volume_n": vn_n,
+            "n_contracts": n_contracts, "invalid": invalid,
+            "expiries": sorted(expiries),
+            "basis": "OI_DELTA_WEIGHTED", "formula_version": FORMULA_VERSION,
+        }
+    return out
+
+
 METRIC_REGISTRY = {
     "gex_gross_v1": {"formula": "Σ u N", "units": "USD/1% move", "basis": "OI", "version": FORMULA_VERSION},
     "gex_net_v1": {"formula": "Σ c u N", "units": "USD/1% move", "basis": "OI", "version": FORMULA_VERSION},

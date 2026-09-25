@@ -75,6 +75,26 @@ test("status strip shows WAIT on blocked setup", () => {
   expect(screen.getByTestId("solstice-data").textContent).toContain("degraded");
 });
 
+test("status chips select below/inside/above walls without scope change (R6-2)", () => {
+  const onSelectWall = jest.fn();
+  const { unmount } = render(<SolsticeStatusStrip
+    data={{ ...data, metrics: { ...data.metrics,
+      nearest_by_side: {
+        below: { wall_id: "w_b", low: 490, high: 495 },
+        inside: null,
+        above: { wall_id: "w_a", low: 505, high: 510 },
+      } } }}
+    spot={500} ticker="SPY" isLive onSelectWall={onSelectWall} />);
+  fireEvent.click(screen.getByTestId("solstice-chip-below"));
+  expect(onSelectWall).toHaveBeenCalledWith(
+    expect.objectContaining({ wall_id: "w_b" }));
+  expect(screen.queryByTestId("solstice-chip-inside")).toBeNull();
+  fireEvent.click(screen.getByTestId("solstice-chip-above"));
+  expect(onSelectWall).toHaveBeenCalledWith(
+    expect.objectContaining({ wall_id: "w_a" }));
+  unmount();
+});
+
 test("wall inspector + scenarios render for selected wall", () => {
   render(<WallInspector wall={data.metrics.walls[0]} metrics={{ magnitude_ratio_delta_over_raw: 0.45, dadgex_usable: 10, dadgex_missing_delta: 2 }} grids={data.metrics.grids} quality={data.quality} />);
   expect(screen.getByTestId("wall-inspector")).toBeInTheDocument();
@@ -85,14 +105,40 @@ test("wall inspector + scenarios render for selected wall", () => {
   expect(screen.getByTestId("scenario-strip")).toBeInTheDocument();
 });
 
+test("same-wall compare differs between two unequal walls (R6-2)", () => {
+  const React = require("react");
+  const { render: r4, screen: s4, cleanup: c4 } = require("@testing-library/react");
+  const WI2 = require("./WallInspector").default;
+  const lo = { wall_id: "w_lo", low: 480, high: 482, gross: 1e6, net: 1e6, call: 1e6, put: 0 };
+  const hi = { wall_id: "w_hi", low: 518, high: 522, gross: 1e6, net: 1e6, call: 1e6, put: 0 };
+  const metrics = {
+    wall_metrics: {
+      w_lo: { daddex_gross: 500000, daddex_net: 500000, daddex_missing: 0, volume_net: 400000 },
+      w_hi: { daddex_gross: 50000, daddex_net: 50000, daddex_missing: 0, volume_net: 40000 },
+    },
+  };
+  r4(React.createElement(WI2, { wall: lo, metrics }));
+  expect(s4.getByText(/Same-wall compare/)).toBeInTheDocument();
+  const loText = s4.getByTestId("wall-inspector").textContent;
+  expect(loText).toContain("$500.0K");
+  c4();
+  r4(React.createElement(WI2, { wall: hi, metrics }));
+  expect(s4.getByTestId("wall-inspector").textContent).toContain("$50.0K");
+});
+
 test("wall inspector shows window activity or honest unavailability", () => {
   const { unmount } = render(<WallInspector wall={data.metrics.walls[0]} metrics={{}} />);
   expect(screen.getByText("Window activity")).toBeInTheDocument();
-  expect(screen.getByText(/no recorded baseline/)).toBeInTheDocument();
+  expect(screen.getByText(/no comparable window/)).toBeInTheDocument();
   unmount();
+  // R6-2: wall-local aggregation over member strikes — never the scope sum.
   render(<WallInspector wall={data.metrics.walls[0]}
-    metrics={{ window_daddex_v1: 2500000, window_daddex_reason: null }} />);
+    metrics={{ window_daddex_v1: 999999999, window_daddex_reason: null,
+      wall_window: { w_abc: { window_daddex: 2500000,
+        coverage: { member_strikes: 3, active_strikes: 2 } } } }} />);
   expect(screen.getByText(/window Δ-weighted/)).toBeInTheDocument();
+  expect(screen.getByText(/2\/3 strikes/)).toBeInTheDocument();
+  expect(screen.queryByText(/999999999|999,999,999/)).toBeNull();
 });
 
 test("wall inspector shows OI dates and persistent sightings honestly", () => {
