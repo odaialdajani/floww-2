@@ -57,7 +57,16 @@ target `movers.v2`, fixtures `comprehension_v1.json`.
   adapter passes series into the clock and stores it on contracts.
   /capability gains a per-symbol matrix from recorded observations only
   (entitlement unobserved-by-default, no ticker substitution).
-- R7-07 episode policy/pending-final: pending (extends NEED_EPISODE).
+- R7-07 episode policy/pending-final: acceptance-tested. label_touch
+  no_touch now requires gap-free coverage (pre-encounter gap > max_gap_s
+  censors as OBSERVATION_GAP instead of confident no_touch). close_episodes
+  re-processes censored/indeterminate outcomes when a longer path is
+  supplied (path_end_t dedup); terminal target_hit/stop_hit stay idempotent.
+  New episode_policy.py: research_barriers.v1 default symmetric barriers
+  d=max(zone_half_width, 2*underlying_tick) with policy_unavailable when
+  zone/tick unknown; setup_review.v1 read-only structural preview (no
+  invented target/stop); episode_status_from_outcome maps labels to
+  final_observed/pending lifecycle.
 
 ## Before-fixtures (all reproduced 25 Sep 2026, main@7fed6012)
 
