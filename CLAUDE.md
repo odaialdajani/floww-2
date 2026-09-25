@@ -1,5 +1,13 @@
 # CLAUDE.md — floww / Confluence Decoder
 
+> **Environment note (2026-09-25):** the Canonical-paths / launch-machinery
+> sections below were written for the Windows checkout
+> (`C:/Users/DARK HERO/Desktop/FLOWW2.0`). R6 work also ships from the macOS
+> checkout (`/Users/nav/Documents/GitHub/floww-2`, same `origin`). The
+> "STOP / DEAD path" rules are machine-specific: on any checkout, verify with
+> `git rev-parse --show-toplevel` and `git log origin/main` instead of halting
+> solely because `pwd` names a different machine's canonical path.
+
 > Auto-loaded by Claude Code on every session in this directory. Keep TIGHT — short × frequent = cost. Update only when something durably changes the way work should be done.
 
 ---

@@ -316,3 +316,15 @@ fixture date with toISOString (UTC) while the grid compares local midnights —
 flaky after 20:00 ET. Test-only fix to local-calendar construction, same
 assertions. Gates now: solstice 162 passed; heatseeker_v2 8/8; craco
 heatseeker suites 40/40; selftest 25/25; ruff + silent-except clean.
+
+Merge 25 Sep 2026 (authorized, main `2dbc5a58`): PRs #41–#45 merged in stack
+order (merge commits `f24d050d`, `d4939e8a`, `d3145726`, `6d4a7a70`,
+`2dbc5a58`). Pre-merge resweep at `57cb02d4`: solstice 162 passed, selftest
+25/25, craco heatseeker 40/40, heatseeker_v2 live 8/8, ruff + silent-except
+clean, full backend suite failure set byte-identical to base pre-existing set
+(35). Adversarial review: no execution/order/broker paths touched, no
+skips/xfails, study mode makes no network/order calls. Post-merge main gate:
+solstice 162 passed, selftest 25/25. Stacked branches deleted (local+remote).
+Unrelated PRs #3/#4/#5/#12 left open; kanban timestamp change left
+uncommitted. Rollback: `git revert` the merge commits in reverse order
+(#45 first).
