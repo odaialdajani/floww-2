@@ -1750,6 +1750,18 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                 from services.duckdb_engine import db as _ddb_dec
                 from services.heatmap_history import record_decision
                 _dconn = getattr(_ddb_dec, "conn", None)
+                # Wall linkage for the outcome job: nearest structural wall
+                # bounds + default horizon (flagged). Numeric target/stop
+                # barriers are NOT invented here — without them close_episodes
+                # reports NEED_EPISODE and never labels.
+                try:
+                    _nw = (metrics.get("nearest_walls") or [None])[0] or {}
+                    _zw = ([float(_nw["low"]), float(_nw["high"])]
+                           if _nw.get("low") is not None and _nw.get("high") is not None
+                           else None)
+                    _wid = _nw.get("wall_id")
+                except Exception:
+                    _zw, _wid = None, None
                 if _dconn is not None:
                     for _side, _res in (("CALLS", _scout_calls), ("PUTS", _scout_puts)):
                         _quotes = []
@@ -1773,7 +1785,9 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                             "reason_codes": sorted((_res.get("rejected") or {}).keys()),
                             "features": {"spot": spot,
                                          "quality": (payload.get("quality") or {}).get("state"),
-                                         "n_eligible": _res.get("n_eligible", 0)},
+                                         "n_eligible": _res.get("n_eligible", 0),
+                                         "wall_id": _wid, "zone": _zw,
+                                         "horizon_s": 300, "horizon_default": True},
                             "candidate_quotes": _quotes})
         except Exception as _de:
             log.debug("solstice decision record failed: %s", _de)

@@ -13,6 +13,7 @@ deployment change has been made.
 | Proposed durable path | `~/floww-data/solstice.duckdb` (local research only; backup below) |
 | Schema version | `heatmap_history.SCHEMA_VERSION = "2"` (additive migrations only) |
 | Capture cadence | Structural chain builds as today; session manifest `cadence_s=300` default |
+| Enable flag | None yet — capture runs wherever the backend runs; persistent activation = setting `DUCKDB_PATH` to the durable path + long-lived process (launchd/service file to be proposed in the approval request, not before) |
 | Request budget | Shared `public_budget` singleton; 10 req/s/account baseline with headroom |
 | Health endpoint | `GET /api/solstice/recorder_health` (durable flag, tables, latest write) |
 
@@ -31,6 +32,10 @@ setting retention tiers.
 - `GET /api/solstice/recorder_health` → `{durable, mode, tables, latest_snapshot, checked_at}`.
 - `GET /api/solstice/manifest/{ticker}?cadence_s=300` → snapshots + `gaps` + heartbeat.
 - `GET /api/solstice/capability` → registry + measured + persisted observations.
+- `POST /api/solstice/outcomes/close` → runs the outcome job over open
+  decisions (auth-gated, idempotent); episodeless decisions stay pending
+  (`NEED_EPISODE`), never labeled. Price paths are caller-supplied until a
+  scheduled price-path recorder is commissioned.
 - Alarm conditions: `durable == false` while `DUCKDB_PATH` set (disk failure);
   gap rate rising; `n_observed == 0` over a full session (producer stalled).
 
@@ -38,10 +43,14 @@ setting retention tiers.
 
 1. Unset `DUCKDB_PATH` (or stop the service) → recorder returns to `:memory:`;
    analytics keep running, `recorder_health.durable` reports false.
-2. Code rollback: revert to the pre-R5-F merge SHA; schema migrations are
+2. Backup/recovery: copy `~/floww-data/solstice.duckdb` while the writer is
+   stopped (single-writer lock, §writer policy in `heatmap_history`);
+   restore = replace file + restart + `manifest` gap check. No WAL replay
+   tooling is assumed — a mid-write copy is discarded, never repaired.
+3. Code rollback: revert to the pre-R5-F merge SHA; schema migrations are
    additive (`ADD COLUMN IF NOT EXISTS`) so old code reads new DBs; new
    columns are ignored by old readers.
-3. No data migration is required to roll back; to roll forward again,
+4. No data migration is required to roll back; to roll forward again,
    re-merge and restart.
 
 ## 5. Restart proof (required before approval)

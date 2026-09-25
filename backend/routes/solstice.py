@@ -1,8 +1,10 @@
 """
-backend/routes/solstice.py — versioned Solstice analytics endpoints (read-only).
+backend/routes/solstice.py — versioned Solstice analytics endpoints.
 
-All tools return typed data with NO broker write credentials. AI reads the
-same snapshot store as the UI. Execution stays disarmed elsewhere.
+Reads are typed data with NO broker write credentials. The single write
+endpoint (POST /outcomes/close) appends idempotent research outcome rows
+only — never orders, positions, or snapshots. AI reads the same snapshot
+store as the UI. Execution stays disarmed elsewhere.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Query
+from pydantic import BaseModel
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/solstice", tags=["solstice"])
@@ -286,3 +289,43 @@ async def recorder_health() -> dict[str, Any]:
     status["latest_snapshot"] = latest
     status["checked_at"] = datetime.now(UTC).isoformat()
     return status
+
+
+class _OutcomesCloseBody(BaseModel):
+    paths: dict[str, list] = {}
+
+
+@router.post("/outcomes/close")
+async def outcomes_close(body: _OutcomesCloseBody) -> dict[str, Any]:
+    """Run the deterministic outcome job over open decisions (R6-5/B11).
+
+    Research-write endpoint: appends idempotent outcome rows only — never
+    orders, positions, or snapshots. The caller supplies price paths per
+    open decision id (the scheduled price-path recorder is a commissioning
+    item; see COMMISSIONING_PACKAGE.md). Decisions without a complete
+    episode stay pending (NEED_EPISODE) and are never labeled.
+    """
+    from services.duckdb_engine import db as eng
+    from services.solstice_labels import close_episodes
+
+    conn = eng.conn if hasattr(eng, "conn") else None
+    if conn is None:
+        return {"closed": [], "skipped_idempotent": [], "skipped_pending": [],
+                "pending_reasons": {}, "results": {},
+                "error": "recorder_unavailable"}
+    paths: dict[str, list] = {}
+    for did, pts in (body.paths or {}).items():
+        clean: list = []
+        for pt in pts or []:
+            try:
+                t = float(pt[0])
+                p = None if pt[1] is None else float(pt[1])
+                if p is not None and not (p == p and abs(p) != float("inf")):
+                    p = None  # non-finite censors via data_gap, never a price
+                clean.append((t, p))
+            except (TypeError, ValueError, IndexError):
+                clean.append((0.0, None))  # corrupt point censors, never labels
+        paths[str(did)] = clean
+    out = close_episodes(conn, paths)
+    out["recorder"] = "ok"
+    return out
