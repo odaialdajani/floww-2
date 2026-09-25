@@ -328,3 +328,21 @@ solstice 162 passed, selftest 25/25. Stacked branches deleted (local+remote).
 Unrelated PRs #3/#4/#5/#12 left open; kanban timestamp change left
 uncommitted. Rollback: `git revert` the merge commits in reverse order
 (#45 first).
+
+Resweep 25 Sep 2026 (post-merge hole pass): production wiring audit found
+the outcome job had no production entry point AND silently mislabeled
+episodeless decisions (zero-default zone/target/stop "hit" on any positive
+price — proven with a production-shaped decision recording a confident
+garbage label). Fixed fail-closed: `close_episodes` requires zone hi>lo,
+finite distinct target/stop, positive horizon, else `skipped_pending` /
+`NEED_EPISODE` with no row written (2 new red tests, fail-before shown);
+new auth-gated `POST /api/solstice/outcomes/close` route + route tests
+(close + idempotent re-close + pending); producer now attaches wall_id/zone
++ flagged default horizon (numeric barriers never invented). Also: grid
+keyboard Enter/Space test (cells tabbable, empty cells inert); commissioning
+doc gains enable-flag naming + backup/recovery. Gates: solstice 165 passed;
+craco heatseeker 41/41; heatseeker_v2 live 8/8; ruff + silent-except clean.
+Remaining: numeric target/stop episode policy (research design — the job
+refuses to invent barriers), scheduled price-path recorder (commissioning),
+browser-pixel visual receipts (no browser in this environment), participant
+study run, SPX entitlement.

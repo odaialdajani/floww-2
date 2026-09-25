@@ -182,3 +182,43 @@ def test_recorder_health_truthful_and_unified_capability():
     assert isinstance(cap["observed"], list)
     man = c.get("/api/solstice/manifest/R5T", params={"day": "2030-01-02"}).json()
     assert man["n_snapshots"] >= 1 and "gaps" in man
+
+
+def test_outcomes_close_route_closes_linked_and_reports_pending():
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    import duckdb
+    from fastapi.testclient import TestClient
+
+    import server
+    from services.heatmap_history import record_decision
+    mem = duckdb.connect(":memory:")
+    did_full = record_decision(mem, {"ticker": "SPY", "snapshot_id": "s-route",
+                                     "scenario": "CALLS", "side": "CALLS",
+                                     "eligible": True, "reason_codes": [],
+                                     "features": {"spot": 500.0, "zone": [498, 502],
+                                                  "target": 505.0, "stop": 495.0,
+                                                  "horizon_s": 60}})
+    did_bare = record_decision(mem, {"ticker": "SPY", "snapshot_id": "s-route",
+                                     "scenario": "PUTS", "side": "PUTS",
+                                     "eligible": False, "reason_codes": ["NO_ELIGIBLE_SIDE"],
+                                     "features": {"spot": 500.0, "n_eligible": 0}})
+    c = TestClient(server.app)
+    hdr = {"X-API-Key": "test-secret-key"}  # mutating routes are auth-gated
+    body_paths = {"paths": {did_full: [[0, 490.0], [50, 500.0], [70, 505.0]],
+                             did_bare: [[0, 490.0], [50, 500.0]]}}
+    with patch("services.duckdb_engine.db", SimpleNamespace(conn=mem)):
+        r = c.post("/api/solstice/outcomes/close", json=body_paths, headers=hdr)
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["recorder"] == "ok"
+    assert out["closed"] == [did_full]
+    assert out["results"][did_full]["label"] == "target_hit"
+    assert out["skipped_pending"] == [did_bare]
+    assert out["pending_reasons"][did_bare] == "NEED_EPISODE"
+    with patch("services.duckdb_engine.db", SimpleNamespace(conn=mem)):
+        r2 = c.post("/api/solstice/outcomes/close", json=body_paths, headers=hdr)
+    out2 = r2.json()
+    assert out2["closed"] == [] and out2["skipped_idempotent"] == [did_full]
+    assert out2["skipped_pending"] == [did_bare]

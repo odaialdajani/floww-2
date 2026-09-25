@@ -81,6 +81,33 @@ test('cell click reports strike, expiry, value', () => {
   expect(typeof value).toBe('number');
 });
 
+test('keyboard Enter/Space on a cell selects it; empty cells ignore keys', () => {
+  const onCellClick = jest.fn();
+  const { container } = render(
+    <SkylitHeatmapGrid data={mockData()} spot={650} ticker="SPY" onCellClick={onCellClick} />
+  );
+  const cell = container.querySelector('tbody tr.trin-row td.trin-cell');
+  expect(cell.getAttribute('tabIndex')).toBe('0');
+  expect(cell.getAttribute('role')).toBe('gridcell');
+  fireEvent.keyDown(cell, { key: 'Enter' });
+  fireEvent.keyDown(cell, { key: ' ' });
+  expect(onCellClick).toHaveBeenCalledTimes(2);
+  // Unequal strike/expiry grid: an empty (no-data) cell is untabbable and
+  // keyboard-inert — focus never lands on missing data.
+  const sparse = { asof: '2026-09-03T00:00:00Z',
+    grid: { expiries: EXPS, strikes: [660, 650], grid: { [EXPS[0]]: { 650: 5 } } } };
+  const { container: c2 } = render(
+    <SkylitHeatmapGrid data={sparse} spot={650} ticker="SPY" onCellClick={onCellClick} />
+  );
+  const cells = c2.querySelectorAll('tbody tr.trin-row td.trin-cell');
+  expect(cells.length).toBeGreaterThan(0);
+  const inert = Array.from(cells).filter((td) => td.getAttribute('tabIndex') === '-1');
+  expect(inert.length).toBeGreaterThan(0);
+  const before = onCellClick.mock.calls.length;
+  inert.forEach((td) => fireEvent.keyDown(td, { key: 'Enter' }));
+  expect(onCellClick.mock.calls.length).toBe(before);
+});
+
 test('R6-1: empty→populated→unavailable never changes hook order', () => {
   const empty = { asof: '2026-09-03T00:00:00Z', grid: { expiries: [], strikes: [], grid: {} } };
   const { container, rerender } = render(

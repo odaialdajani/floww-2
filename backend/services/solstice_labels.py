@@ -137,11 +137,19 @@ def close_episodes(conn, paths_by_decision: dict[str, list],
     already have an outcome row are skipped and reported separately.
     Appending irrelevant future data cannot change an already recorded
     result (labels are prefix-stable; re-runs find the existing row first).
-    Returns {closed, skipped_idempotent, results}.
+    Fail-closed: a decision WITHOUT a complete episode (zone with high >
+    low, finite distinct target/stop, positive horizon) is NEVER labeled —
+    missing inputs are not zero (a zero-default zone/target/stop would
+    "hit" on any positive price). Such decisions are reported in
+    skipped_pending with reason NEED_EPISODE and no outcome row is written.
+    Returns {closed, skipped_idempotent, skipped_pending, pending_reasons,
+    results}.
     """
     from services.heatmap_history import record_outcome
     closed: list[str] = []
     skipped: list[str] = []
+    pending: list[str] = []
+    pending_reasons: dict[str, str] = {}
     results: dict[str, Any] = {}
     for did, path in (paths_by_decision or {}).items():
         try:
@@ -165,12 +173,23 @@ def close_episodes(conn, paths_by_decision: dict[str, list],
                 feat = {}
             if not isinstance(feat, dict):
                 feat = {}
-            zone = feat.get("zone") or [0, 0]
-            horizon = feat.get("horizon_s", default_horizon_s)
+            zone = feat.get("zone")
+            try:
+                _lo, _hi = float(zone[0]), float(zone[1])
+                _tgt, _stp = float(feat.get("target")), float(feat.get("stop"))
+                _hor = float(feat.get("horizon_s", default_horizon_s))
+            except (TypeError, ValueError, IndexError):
+                _lo = _hi = _tgt = _stp = float("nan")
+                _hor = float("nan")
+            if not (math.isfinite(_lo) and math.isfinite(_hi) and _hi > _lo
+                    and math.isfinite(_tgt) and math.isfinite(_stp)
+                    and _tgt != _stp and math.isfinite(_hor) and _hor > 0):
+                pending.append(did)
+                pending_reasons[did] = "NEED_EPISODE"
+                continue
             res = label_touch(
-                path or [], (float(zone[0]), float(zone[1])),
-                float(horizon), float(feat.get("target", 0)), float(feat.get("stop", 0)))
-            record_outcome(conn, did, ticker, int(horizon),
+                path or [], (_lo, _hi), _hor, _tgt, _stp)
+            record_outcome(conn, did, ticker, int(_hor),
                            res["label"], censored=bool(res.get("censored")),
                            detail={"detail": res.get("detail"), "version": res.get("version")})
             closed.append(did)
@@ -179,7 +198,9 @@ def close_episodes(conn, paths_by_decision: dict[str, list],
             import logging as _logging
             _logging.getLogger(__name__).warning("close_episodes %s failed: %s", did, e)
             skipped.append(did)
-    return {"closed": closed, "skipped_idempotent": skipped, "results": results}
+    return {"closed": closed, "skipped_idempotent": skipped,
+            "skipped_pending": pending, "pending_reasons": pending_reasons,
+            "results": results}
 
 
 def walk_forward_splits(sessions: list[str], n_folds: int = 3, embargo: int = 1) -> list[dict]:

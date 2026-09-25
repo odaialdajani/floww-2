@@ -64,3 +64,52 @@ def test_b11_outcome_job_idempotent_and_linked():
     n = conn.execute("SELECT COUNT(*) FROM outcome_labels_v1 WHERE decision_id = "
                      f"'{did}'").fetchone()[0]
     assert n == 1
+
+
+def test_b11_episodeless_decision_stays_pending_never_labeled():
+    import duckdb
+
+    from services.heatmap_history import record_decision
+    from services.solstice_labels import close_episodes
+    conn = duckdb.connect(":memory:")
+    # Production scout shape: no zone/target/stop/horizon. Missing inputs
+    # are not zero — the job must refuse to label, not record a confident
+    # garbage outcome (target=0/stop=0 would "hit" on any positive price).
+    did = record_decision(conn, {"ticker": "SPY", "snapshot_id": "s1",
+                                 "scenario": "CALLS", "side": "CALLS",
+                                 "eligible": True, "reason_codes": [],
+                                 "features": {"spot": 500.0,
+                                              "quality": "usable",
+                                              "n_eligible": 2}})
+    paths = {did: [(0, 490.0), (50, 500.0), (70, 505.0), (400, 501.0)]}
+    out = close_episodes(conn, paths)
+    assert out["closed"] == [] and out["skipped_pending"] == [did]
+    assert out["pending_reasons"][did] == "NEED_EPISODE"
+    n = conn.execute("SELECT COUNT(*) FROM outcome_labels_v1 WHERE decision_id = "
+                     f"'{did}'").fetchone()[0]
+    assert n == 0
+    again = close_episodes(conn, paths)
+    assert again["closed"] == [] and again["skipped_pending"] == [did]
+
+
+def test_b11_zone_without_barriers_stays_pending():
+    import duckdb
+
+    from services.heatmap_history import record_decision
+    from services.solstice_labels import close_episodes
+    conn = duckdb.connect(":memory:")
+    # Wall-linked production shape (zone + default horizon) but no numeric
+    # target/stop: barriers must never be invented, so the job stays pending.
+    did = record_decision(conn, {"ticker": "SPY", "snapshot_id": "s1",
+                                 "scenario": "CALLS", "side": "CALLS",
+                                 "eligible": True, "reason_codes": [],
+                                 "features": {"spot": 500.0, "wall_id": "w_x",
+                                              "zone": [498, 502],
+                                              "horizon_s": 300,
+                                              "horizon_default": True}})
+    out = close_episodes(conn, {did: [(0, 490.0), (50, 500.0), (70, 505.0)]})
+    assert out["closed"] == [] and out["skipped_pending"] == [did]
+    assert out["pending_reasons"][did] == "NEED_EPISODE"
+    n = conn.execute("SELECT COUNT(*) FROM outcome_labels_v1 WHERE decision_id = "
+                     f"'{did}'").fetchone()[0]
+    assert n == 0
