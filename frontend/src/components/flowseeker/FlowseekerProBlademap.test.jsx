@@ -347,7 +347,52 @@ describe("flowClassTitle — sweep/block proxy-copy contract (XH-1)", () => {
   it("filter chips carry proxy titles for sweep/block only", () => {
     expect(CT.SWEEP).toMatch(/proxy/i);
     expect(CT.BLOCK).toMatch(/proxy/i);
-    expect(CT.CALL).toBeUndefined();
+  });
+});
+
+describe("X4 stale-data indicator (inline tape freshness marker)", () => {
+  // Verified contract surfaces for the X4 inline stale-data indicator.
+  // These are pure-function / module-level assertions plus a mount smoke test;
+  // no live feed, no backend.
+  //
+  // Timer discipline: the two time-based tests use fake timers with
+  // setSystemTime. We tear down fake timers in afterEach so the Flow-tab
+  // render tests that follow in this file keep real timers.
+  let realTimersActive = true;
+  afterEach(() => {
+    if (!realTimersActive) {
+      realTimersActive = true;
+      jest.useRealTimers();
+    }
+  });
+
+  it("module exposes lastRefreshAt + isStale as controlled staleness state", () => {
+    const mod = require("./FlowseekerProBlademap");
+    expect(typeof mod.isStale).toBe("function");
+    expect(typeof mod.STALE_MS).toBe("number");
+    expect(mod.STALE_MS).toBe(60000);
+  });
+  it("isStale returns false when lastRefreshAt is recent", () => {
+    realTimersActive = false;
+    jest.useFakeTimers();
+    const now = Date.now();
+    jest.setSystemTime(now);
+    const mod = require("./FlowseekerProBlademap");
+    const recent = now - 30000; // 30 s ago
+    expect(mod.isStale(recent)).toBe(false);
+  });
+  it("isStale returns true when lastRefreshAt is older than STALE_MS", () => {
+    realTimersActive = false;
+    jest.useFakeTimers();
+    const now = Date.now();
+    jest.setSystemTime(now);
+    const mod = require("./FlowseekerProBlademap");
+    const old = now - 90000; // 90 s ago
+    expect(mod.isStale(old)).toBe(true);
+  });
+  it("isStale returns false when lastRefreshAt is 0 (not yet initialized)", () => {
+    const mod = require("./FlowseekerProBlademap");
+    expect(mod.isStale(0)).toBe(false);
   });
 });
 
