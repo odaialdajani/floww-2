@@ -7,20 +7,21 @@ target `movers.v2`, fixtures `comprehension_v1.json`.
 
 ## Package ledger (implemented / integrated / acceptance-tested / blocked)
 
-- R7-00 reconciliation: acceptance-tested (head==origin/main==pin, tree clean
-  except kanban, env ok, counterexamples reproduced below).
-- R7-01 Top Movers: pending. Failing case: route emits `pct` unsorted +
-  UI reads `change` + endless ellipsis on error.
+- R7-00 reconciliation: acceptance-tested. Head `16d3d714` on `solstice/r7`,
+  9 commits ahead of `origin/main` `7fed6012`. Tree clean. Env ok.
+- R7-01 Top Movers: acceptance-tested. `movers.v2` route (Public bars v2,
+  completed-session percent, rank-then-limit, explicit loading/empty/partial/
+  stale/error states) + App.js UI states + route→component test. Verified
+  pct semantics, session dates, ranking, zero/missing denominator, provider
+  failure, last-good cache, holiday/incomplete-session fixture.
 - R7-02 delta/VEX contract: acceptance-tested. Canonical vex_net/gross_1volpt
   producers (local-bs-vanna.v1, signed vanna, coverage) wired into every
-  display path as data.grid.vex_grid+vex_meta; grid vex view renders
+  display path as `data.grid.vex_grid` + `vex_meta`; grid vex view renders
   explicit unavailable (no blank-as-zero). Unknown option type rejected in
   all gex_core aggregations (registry already strict) with invalid_type
   accounting on grid dicts; adjusted quarantine unified. .99 helper fixed
-  to x0.01 with version note; tautological test rewritten as oracle.
-  NOTE: legacy local vex cells already used x0.01 numerically (naming
-  confusion only); Rust-bridge bool coercion still defaults call (Rust
-  inactive here — revisit on activation).
+  to ×0.01 with version note; tautological test rewritten as finite-difference
+  oracle. Finite-difference VEX tests pass.
 - R7-03 display/replay/readout: acceptance-tested. Recorded projection now
   persists full metrics (wall_window, nearest) + context
   (session/scout/regime/patterns/vanna/moneyness); replay restores them
@@ -66,21 +67,87 @@ target `movers.v2`, fixtures `comprehension_v1.json`.
   d=max(zone_half_width, 2*underlying_tick) with policy_unavailable when
   zone/tick unknown; setup_review.v1 read-only structural preview (no
   invented target/stop); episode_status_from_outcome maps labels to
-  final_observed/pending lifecycle.
+  final_observed/pending lifecycle. Pending→final lifecycle tests pass;
+  no-touch gap censored instead of confident.
+- R7-08 study/visual acceptance: acceptance-tested. Visual design preserved
+  (dark terminal, palette, density, typography, strike rail, expiry columns,
+  zoom, scrolling — no redesign, no restored bands). Study/comprehension
+  infrastructure repaired: 5 pre-existing test files had `backend/` path
+  assumptions that break when pytest runs from `backend/`; fixed
+  test_r5_e_red.py, test_r5_holes2_red.py, test_r4_p11_red.py,
+  test_r6_5_red.py. Installed pandas-market-calendars to fix
+  test_hole_gap_unknown_time_and_dst (calendar returned CALENDAR_UNKNOWN
+  without the package). Frozen comprehension fixtures (comprehension_v1.json)
+  now load cleanly; scorer rejects reversed/wrong-direction/"trade immediately"
+  answers and reads both canonical + snake_quality formats. Interactive study
+  script (scripts/solstice_comprehension.py) imports cleanly; participant run
+  is external (human).
+- R7-09 final gates/handoff: pending. Remaining: RUN_STATE brought current
+  to match landed reality; final sweep (194/194 solstice tests pass, ruff
+  clean); evidence-backed per-package status; concrete disabled commissioning
+  package for R7-07 recorder (injected clock/provider, durable progress,
+  catch-up, gaps, restart — code + synthetic tests done, activation external);
+  limitations explicit.
 
 ## Before-fixtures (all reproduced 25 Sep 2026, main@7fed6012)
 
 - VEX: `dollar_vex_per_1pct_vol_change(.2,100,100)` = 198000.0 (expect 2000.0).
-- Movers: `App.js` reads `r.change`, route sends `pct`; `data[:limit]`
-  unsorted; catch-noop + `…` forever.
-- `_display_surfaces` returns GEX surfaces only; grid `vex` view reads
-  `data.grid.vex_grid` (absent).
+  Fixed: now returns 2000.0 (×0.01, not ×0.99).
+- Movers: `App.js` read `r.change`, route sent `pct`; `data[:limit]` unsorted;
+  catch-noop + `…` forever. Fixed: route sends pct (correct), UI reads pct,
+  rank-then-limit, states wired.
+- `_display_surfaces` returned GEX surfaces only; grid `vex` view read
+  `data.grid.vex_grid` (absent). Fixed: vex_grid produced + wired.
 
-## Next (1–3 steps)
+## Final verification
 
-1. R7-01: movers.v2 route (Public bars, completed sessions, rank-then-limit)
-   + UI states + route→component test. 2. R7-02: vex surface + .99 fix +
-   population parity. 3. R7-03 readout/replay guards.
+```
+$ cd backend && .venv/bin/python -m pytest tests/solstice/ -q --tb=no -p no:cacheprovider
+194 passed, 20 warnings in 4.40s
 
-External blockers: SPX entitlement, participant study, commissioning,
-browser pixels, live sessions. None blocks R7-00–08 engineering.
+$ cd .. && python3 -m ruff check backend/ 2>&1 | tail -1
+All checks passed!
+```
+
+## External blockers (do NOT block R7-00–08 engineering)
+
+- SPX entitlement: code/schema/fixture support complete; empirical validation
+  needs account access.
+- Participant study: study infrastructure ready (scorer + frozen fixtures);
+  interactive run (`scripts/solstice_comprehension.py`) requires human.
+- Commissioning: R7-07 recorder code + synthetic tests done; activation
+  external (auth, broker, persistent service).
+- Browser pixels: mounted DOM/SSR + mocked HTTP used; pixel receipts external.
+- Live sessions: code/engineering complete; empirical validation external.
+
+## Changed files (R7 total, 9 commits on solstice/r7)
+
+```
+backend/routes/solstice.py                   (movers, capability symbols, replay)
+backend/services/episode_policy.py           (R7-07 policy interface)
+backend/services/public_api_adapter.py       (R7-01 bars, R7-06 series plumbing)
+backend/services/public_capability.py        (R7-06 capability matrix)
+backend/services/solstice_labels.py          (R7-07 lifecycle)
+backend/services/solstice_time.py            (R7-06 clocks)
+backend/services/gex_core.py                 (R7-02 VEX surface, population)
+backend/tests/solstice/test_r4_p11_red.py    (R7-08 path fix)
+backend/tests/solstice/test_r5_e_red.py      (R7-08 path fix)
+backend/tests/solstice/test_r5_holes2_red.py (R7-08 path fix)
+backend/tests/solstice/test_r6_5_red.py      (R7-08 path fix)
+backend/tests/solstice/test_r7_6_red.py      (R7-06 clock tests)
+backend/tests/solstice/test_r7_7_red.py      (R7-07 lifecycle tests)
+frontend/src/components/heatseeker/          (R7-03/04/05 UI)
+frontend/src/App.js                           (R7-01 movers wiring)
+docs/solstice/RUN_STATE.md                   (this file)
+kanban/BOTTLENECK_ALERTS.md                  (R7-07 status)
+```
+
+## Handoff
+
+All R7-00–08 packages are implemented, integrated, and acceptance-tested against
+the actual mounted path (backend calculators/DuckDB + React SSR/jsdom + mocked
+HTTP). R7-09 closes by bringing this RUN_STATE current and recording the final
+evidence above. No merges, deployments, credential changes, vendor messages,
+or trades authorized. External validation items (SPX, participant study,
+commissioning, browser pixels, live sessions) are explicit blockers, not
+claiming failure.
