@@ -17,6 +17,7 @@ function ReplayStrip({ ticker = "SPY", onReplay = null }) {
   const [loading, setLoading] = useState(false);
   const [currentId, setCurrentId] = useState(null);
   const [replayAsOf, setReplayAsOf] = useState(null);
+  const [health, setHealth] = useState(null);
   const genRef = useRef(0);
   // Ticker switch clears replay state: no old-ticker snapshot may render
   // under the new heading, and in-flight work is invalidated.
@@ -26,6 +27,7 @@ function ReplayStrip({ ticker = "SPY", onReplay = null }) {
     setCompare(null);
     setCurrentId(null);
     setReplayAsOf(null);
+    setHealth(null);
   }, [ticker]);
   const load = useCallback(async () => {
     setLoading(true);
@@ -36,6 +38,13 @@ function ReplayStrip({ ticker = "SPY", onReplay = null }) {
       setManifest({ error: "manifest_unavailable" });
     } finally {
       setLoading(false);
+    }
+    // R6-3 recorder badge: actual backing + durability, never path inference.
+    try {
+      const h = await axios.get(`${BACKEND_API}/solstice/recorder_health`, { timeout: 15000 });
+      setHealth(h.data);
+    } catch (e) {
+      setHealth({ error: "health_unavailable" });
     }
   }, [ticker]);
   const compareLastTwo = useCallback(async () => {
@@ -110,6 +119,14 @@ function ReplayStrip({ ticker = "SPY", onReplay = null }) {
         <span data-testid="solstice-replay-count" title="Recorded snapshots (gaps = missing capture, not missing market)">
           {snaps.length} snapshots{snaps.length === 0 ? " — no capture yet" : ""}
           {currentId ? ` · REPLAY ${replayAsOf || currentId}` : ""}
+        </span>
+      )}
+      {health && !health.error && (
+        <span
+          data-testid="solstice-recorder-badge"
+          title={health.durable ? "File-backed durable recorder" : "Memory fallback — analytics run, durable capture NOT claimed"}
+        >
+          REC {health.durable ? "● durable" : "○ memory"}
         </span>
       )}
       {manifest?.error && <span>replay unavailable</span>}

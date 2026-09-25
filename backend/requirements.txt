@@ -51,6 +51,11 @@ flake8>=7.0.0
 mypy>=1.8.0
 requests>=2.31.0
 pandas>=2.2.0
+# R6-3: maintained exchange/product calendar for session permission
+# (holidays, half-days, DST-safe ET rules). Pinned; validated against Cboe
+# 2026 Thanksgiving closure + Nov 27/Dec 24 half-days. Fail-closed when
+# unavailable — never silently treat a holiday as open.
+pandas-market-calendars==4.6.1
 numpy>=1.26.0
 jq>=1.6.0
 typer>=0.9.0

@@ -26,7 +26,8 @@ function fmtUsd(v) {
   return `${sign}$${a.toFixed(0)}`;
 }
 
-function WallInspector({ wall = null, interaction = null, metrics = null, grids = null, quality = null, scenario = null, goneReason = null, lastWallId = null }) {
+function WallInspector({ wall = null, interaction = null, metrics = null, grids = null, quality = null, scenario = null, goneReason = null, lastWallId = null,
+  scout = null, patterns = null, regime = null, vanna = null, moneyness = null }) {
   if (!wall) {
     if (goneReason === "WALL_GONE") {
       return (
@@ -107,6 +108,63 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
       <Row k="Confirm" v={scenario?.confirmation || "reclaim and hold above zone"} />
       <Row k="Invalidates" v={scenario?.invalidation || "acceptance beyond zone"} />
       <Row k="Data" v={quality ? `${quality.state || "unknown"} · ${(quality.reasonCodes || []).join(", ") || "ok"}` : "unknown"} />
+      <ContextSections scout={scout} patterns={patterns} regime={regime} vanna={vanna} moneyness={moneyness} />
+    </div>
+  );
+}
+
+
+function ScoutSummary({ scout }) {
+  if (!scout) return null;
+  const rej = scout.rejected || {};
+  const top = Object.entries(rej)
+    .map(([reason, pair]) => ({ reason, n: (Array.isArray(pair) ? pair[0] + pair[1] : Number(pair) || 0) }))
+    .sort((a, b) => b.n - a.n)
+    .slice(0, 5);
+  return (
+    <details>
+      <summary>0DTE candidates (read-only)</summary>
+      <div style={{ fontSize: 12, color: "#94a3b8" }}>
+        calls eligible: {scout.calls ?? "—"} · puts eligible: {scout.puts ?? "—"}
+        {top.length > 0 && (
+          <> · rejected: {top.map((r) => `${r.reason} ×${r.n}`).join(", ")}</>
+        )}
+        <br />
+        Eligibility is not a confirmed setup; zero candidates is valid. No order action.
+      </div>
+    </details>
+  );
+}
+
+
+function ContextSections({ scout, patterns, regime, vanna, moneyness }) {
+  const pats = Array.isArray(patterns) ? patterns
+    : (patterns && Array.isArray(patterns.patterns) ? patterns.patterns : null);
+  const regSign = regime?.sign;
+  const buckets = moneyness?.buckets;
+  const nBands = buckets && typeof buckets === "object" ? Object.keys(buckets).length : 0;
+  if (!scout && !pats && regSign == null && !vanna && !nBands) return null;
+  return (
+    <div style={{ marginTop: 6 }}>
+      <ScoutSummary scout={scout} />
+      {(pats || regSign != null) && (
+        <details>
+          <summary>Pattern + regime context</summary>
+          <div style={{ fontSize: 12, color: "#94a3b8" }}>
+            {regSign != null && <>regime: {String(regSign)} (context, not direction). </>}
+            {pats ? <>patterns: {pats.length ? pats.map((p) => `${p.pattern_id || p.id}(${p.state || "?"})`).join(", ") : "none"}. Candidates lack temporal evidence; names are not forecasts.</> : <>patterns: unavailable.</>}
+          </div>
+        </details>
+      )}
+      {(vanna || nBands > 0) && (
+        <details>
+          <summary>Advanced: vanna / moneyness</summary>
+          <div style={{ fontSize: 12, color: "#94a3b8" }}>
+            {nBands > 0 && <>moneyness bands: {nBands} (distribution only). </>}
+            {vanna && <>vanna view present (units/scope/provenance per payload; research only).</>}
+          </div>
+        </details>
+      )}
     </div>
   );
 }

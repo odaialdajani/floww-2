@@ -164,26 +164,35 @@ def ensure_tables(conn) -> None:
 
 
 def recorder_status(conn, path: str | None = None) -> dict[str, Any]:
-    """Honest durability status (R4-13/P07): :memory: is never durable.
+    """Honest durability status (R4-13/P07, R6-3/B04): inspect the ACTUAL
+    database backing — never infer health from a configured path string.
 
+    A :memory: connection (or a memory-backed file-looking path) reports
+    mode memory / durable False even when DUCKDB_PATH names a file. Only a
+    file-backed connection with tables present reports durable True.
     Disk failure / unusable path must never claim durable recording.
     """
     try:
         import os as _os
         p = path if path is not None else _os.environ.get("DUCKDB_PATH", ":memory:")
-        durable = bool(p) and p != ":memory:"
+        backing = "unknown"
         tables: list[str] = []
         if conn is not None:
+            try:
+                dblist = conn.execute("PRAGMA database_list").fetchall()
+                files = [str(r[2]) for r in (dblist or []) if len(r) > 2 and r[2]]
+                backing = "file" if files else "memory"
+            except Exception:
+                backing = "unknown"
             try:
                 rows = conn.execute("SHOW TABLES").fetchall()
                 tables = [str(r[0]) for r in (rows or [])]
             except Exception:
                 tables = []
-        else:
-            durable = False
-        return {"durable": durable and len(tables) > 0,
-                "mode": "file" if durable else "memory",
-                "path": p, "tables": tables,
+        durable = backing == "file" and len(tables) > 0
+        return {"durable": durable,
+                "mode": backing if backing != "unknown" else ("file" if p != ":memory:" else "memory"),
+                "backing": backing, "path": p, "tables": tables,
                 "note": "memory mode is not crash-safe durable storage"}
     except Exception as e:
         return {"durable": False, "mode": "unknown", "error": str(e)}
@@ -193,14 +202,19 @@ def record_capability(conn, ticker: str, operation: str,
                       requested: int | None = None, returned: int | None = None,
                       usable: int | None = None, truncated: bool = False,
                       detail: dict | None = None) -> None:
-    """Production capability/coverage writer (R4-18/P07): nonzero linked records."""
+    """Production capability/coverage writer (R4-18/P07): nonzero linked records.
+
+    R6-3/B04: serialized on the single-writer lock with snapshots, wall
+    events, decisions and outcomes — one writer owner for the connection.
+    """
     try:
         ensure_tables(conn)
-        conn.execute("INSERT INTO capability_observations_v1 VALUES ("
-                     + ",".join([_esc(_now_iso()), _esc(ticker), _esc(operation),
-                                 _esc(requested), _esc(returned), _esc(usable),
-                                 _esc(1 if truncated else 0),
-                                 _esc(json.dumps(detail or {}, default=str))]) + ")")
+        with _RECORDER_LOCK:
+            conn.execute("INSERT INTO capability_observations_v1 VALUES ("
+                         + ",".join([_esc(_now_iso()), _esc(ticker), _esc(operation),
+                                     _esc(requested), _esc(returned), _esc(usable),
+                                     _esc(1 if truncated else 0),
+                                     _esc(json.dumps(detail or {}, default=str))]) + ")")
     except Exception as e:
         log.warning("capability record failed: %s", e)
 
@@ -424,12 +438,14 @@ def _axes(section: dict[str, Any]) -> None:
 def record_wall_event(conn, wall_id: str, ticker: str, event: str,
                       snapshot_id: str, evidence: dict | None = None,
                       scope: str = "") -> None:
+    """R6-3/B04: serialized on the single-writer lock with snapshots."""
     try:
         ensure_tables(conn)
-        conn.execute("INSERT INTO wall_events_v1 VALUES ("
-                     + ",".join([_esc(wall_id), _esc(ticker), _esc(event), _esc(_now_iso()),
-                                 _esc(snapshot_id), _esc(json.dumps(evidence or {}, default=str)),
-                                 _esc(scope)]) + ")")
+        with _RECORDER_LOCK:
+            conn.execute("INSERT INTO wall_events_v1 VALUES ("
+                         + ",".join([_esc(wall_id), _esc(ticker), _esc(event), _esc(_now_iso()),
+                                     _esc(snapshot_id), _esc(json.dumps(evidence or {}, default=str)),
+                                     _esc(scope)]) + ")")
     except Exception as e:
         log.warning("wall event record failed: %s", e)
 
@@ -472,24 +488,28 @@ def latest_wall_state(conn, wall_id: str, ticker: str, scope: str = "") -> dict 
 
 
 def record_decision(conn, decision: dict[str, Any]) -> str:
-    """Record scenario decision incl. no-trade with all features known then."""
+    """Record scenario decision incl. no-trade with all features known then.
+
+    R6-3/B04: serialized on the single-writer lock with snapshots.
+    """
     import uuid
     did = decision.get("decision_id") or f"dec_{uuid.uuid4().hex[:12]}"
     try:
         ensure_tables(conn)
-        conn.execute("INSERT INTO scenario_decisions_v1 VALUES ("
-                     + ",".join([_esc(did), _esc(decision.get("ticker")), _esc(_now_iso()),
-                                 _esc(decision.get("snapshot_id")), _esc(decision.get("scenario")),
-                                 _esc(decision.get("side")), _esc(1 if decision.get("eligible") else 0),
-                                 _esc(json.dumps(decision.get("reason_codes", []))),
-                                 _esc(json.dumps(decision.get("features", {}), default=str))]) + ")")
-        for q in decision.get("candidate_quotes", []) or []:
-            conn.execute("INSERT INTO candidate_quotes_v1 VALUES ("
-                         + ",".join([_esc(did), _esc(q.get("osi")), _esc(q.get("bid")),
-                                     _esc(q.get("ask")), _esc(q.get("bid_ts")), _esc(q.get("ask_ts")),
-                                     _esc(q.get("delta")), _esc(q.get("spread_ticks")),
-                                     _esc(1 if q.get("rejected") else 0),
-                                     _esc(q.get("reject_reason")), _esc(_now_iso())]) + ")")
+        with _RECORDER_LOCK:
+            conn.execute("INSERT INTO scenario_decisions_v1 VALUES ("
+                         + ",".join([_esc(did), _esc(decision.get("ticker")), _esc(_now_iso()),
+                                     _esc(decision.get("snapshot_id")), _esc(decision.get("scenario")),
+                                     _esc(decision.get("side")), _esc(1 if decision.get("eligible") else 0),
+                                     _esc(json.dumps(decision.get("reason_codes", []))),
+                                     _esc(json.dumps(decision.get("features", {}), default=str))]) + ")")
+            for q in decision.get("candidate_quotes", []) or []:
+                conn.execute("INSERT INTO candidate_quotes_v1 VALUES ("
+                             + ",".join([_esc(did), _esc(q.get("osi")), _esc(q.get("bid")),
+                                         _esc(q.get("ask")), _esc(q.get("bid_ts")), _esc(q.get("ask_ts")),
+                                         _esc(q.get("delta")), _esc(q.get("spread_ticks")),
+                                         _esc(1 if q.get("rejected") else 0),
+                                         _esc(q.get("reject_reason")), _esc(_now_iso())]) + ")")
     except Exception as e:
         log.warning("decision record failed: %s", e)
     return did
@@ -498,13 +518,15 @@ def record_decision(conn, decision: dict[str, Any]) -> str:
 def record_outcome(conn, decision_id: str, ticker: str, horizon_s: int,
                    label: str, label_version: str = "outcome.v1",
                    censored: bool = False, detail: dict | None = None) -> None:
+    """R6-3/B04: serialized on the single-writer lock with snapshots."""
     try:
         ensure_tables(conn)
-        conn.execute("INSERT INTO outcome_labels_v1 VALUES ("
-                     + ",".join([_esc(decision_id), _esc(ticker), _esc(horizon_s),
-                                 _esc(label), _esc(label_version), _esc(_now_iso()),
-                                 _esc(1 if censored else 0),
-                                 _esc(json.dumps(detail or {}, default=str))]) + ")")
+        with _RECORDER_LOCK:
+            conn.execute("INSERT INTO outcome_labels_v1 VALUES ("
+                         + ",".join([_esc(decision_id), _esc(ticker), _esc(horizon_s),
+                                     _esc(label), _esc(label_version), _esc(_now_iso()),
+                                     _esc(1 if censored else 0),
+                                     _esc(json.dumps(detail or {}, default=str))]) + ")")
     except Exception as e:
         log.warning("outcome record failed: %s", e)
 

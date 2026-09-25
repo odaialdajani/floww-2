@@ -141,6 +141,30 @@ test("wall inspector shows window activity or honest unavailability", () => {
   expect(screen.queryByText(/999999999|999,999,999/)).toBeNull();
 });
 
+test("status shows session block with Why-wait detail (R6-3)", () => {
+  render(<SolsticeStatusStrip
+    data={{ ...data, session: { entry_allowed: false, reasons: ["MARKET_CLOSED"] } }}
+    spot={501} ticker="SPY" isLive />);
+  expect(screen.getByTestId("solstice-setup").textContent).toContain("MARKET_CLOSED");
+  expect(screen.getByTestId("solstice-setup").title).toContain("Why wait?");
+});
+
+test("inspector candidate section is read-only and optional (R6-3)", () => {
+  const React = require("react");
+  const { render: r5, screen: s5, cleanup: c5 } = require("@testing-library/react");
+  const WI3 = require("./WallInspector").default;
+  r5(React.createElement(WI3, {
+    wall: data.metrics.walls[0],
+    scout: { calls: 1, puts: 0, rejected: { STALE_ASK: [0, 2] } },
+    patterns: [{ pattern_id: "mixed_structure", state: "CANDIDATE" }],
+    regime: { sign: "POSITIVE" },
+  }));
+  expect(s5.getByText("0DTE candidates (read-only)")).toBeInTheDocument();
+  expect(s5.getByText(/STALE_ASK/)).toBeInTheDocument();
+  expect(s5.getByText("Pattern + regime context")).toBeInTheDocument();
+  c5();
+});
+
 test("wall inspector shows OI dates and persistent sightings honestly", () => {
   const React = require("react");
   const { render: r3, screen: s3, cleanup: c3 } = require("@testing-library/react");
@@ -190,4 +214,21 @@ test("replay strip loads manifest", async () => {
     fireEvent.click(screen.getByTestId("solstice-compare-btn"));
   });
   expect(screen.getByTestId("solstice-compare-result").textContent).toContain("1 strikes");
+});
+
+test("replay strip shows truthful recorder badge (R6-3)", async () => {
+  const axios = require("axios");
+  axios.get.mockImplementation(async (url) => {
+    if (String(url).includes("recorder_health")) {
+      return { data: { durable: false, mode: "memory", tables: [] } };
+    }
+    return { data: { snapshots: [{ id: "s1" }] } };
+  });
+  await act(async () => {
+    render(<ReplayStrip ticker="SPY" />);
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByTestId("solstice-replay-load"));
+  });
+  expect(screen.getByTestId("solstice-recorder-badge").textContent).toContain("memory");
 });
