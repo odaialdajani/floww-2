@@ -3,13 +3,14 @@ import axios from "axios";
 import "@/App.css";
 import { useAuth } from "./context/AuthContext";
 
-import { fmt, fmtAbs, pctClass, tagFor, TRIAD, DEFAULT_TICKERS } from "./lib/helpers";
+import { fmt, fmtAbs, tagFor, TRIAD, DEFAULT_TICKERS } from "./lib/helpers";
 import { buildHeatmapQuery } from "./lib/heatmapQuery";
 import GridHeatmap from "./components/GridHeatmap";
 import DomHeatmap from "./components/DomHeatmap";
 import MultiTickerHeatmap from "./components/MultiTickerHeatmap";
 import VolumeProfileGrid from "./components/VolumeProfileGrid";
 import HeatseekerDashboard from "./components/heatseeker/HeatseekerDashboard";
+import Movers from "./components/Movers";
 import GexStrikeTable from "./components/heatseeker/GexStrikeTable";
 import BarHeatmap from "./components/BarHeatmap";
 import PatternCard from "./components/PatternCard";
@@ -96,32 +97,8 @@ function VelocityGauge({ velocity }) {
 }
 
 // ============ Top Movers ============
-function Movers({ onPick }) {
-  const [rows, setRows] = useState([]);
-  useEffect(() => {
-    let mounted = true;
-    const f = async () => {
-      try { const res = await axios.get(`${API}/movers?limit=12`); if (mounted) setRows(res.data.results || []); } catch (e) { /* noop */ }
-    };
-    f();
-    const id = setInterval(f, 60000);
-    return () => { mounted = false; clearInterval(id); };
-  }, []);
-  return (
-    <div className="panel p-3" data-testid="movers-panel">
-      <div className="label mb-2">Top Movers (prev session %)</div>
-      <div className="flex flex-col gap-1 text-[12px]">
-        {rows.length === 0 && <div className="text-slate-500">…</div>}
-        {rows.map((r, i) => (
-          <div key={i} className="flex justify-between bar-row cursor-pointer" onClick={() => onPick && onPick(r.ticker)}>
-            <span className="mono text-amber-300 font-medium">{r.ticker}</span>
-            <span className={`${pctClass(r.change)} font-medium`}>{r.change > 0 ? "+" : ""}{r.change}%</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// Extracted to components/Movers.jsx (R7-01: v2 contract + explicit
+// loading/empty/error/stale states); same panel look and onPick contract.
 
 // ============ Nodes Table ============
 // ============ Ticker Search ============

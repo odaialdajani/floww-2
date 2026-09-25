@@ -1,0 +1,150 @@
+"""R7-01 red tests: Top Movers v2 contract (previous completed session %)."""
+
+import sys
+
+sys.path.insert(0, "backend")
+
+from datetime import UTC, datetime
+
+import pytest
+
+
+def _cal(open_days):
+    """Fake calendar: open_days maps YYYY-MM-DD -> close_et HH:MM."""
+    def day_info(d):
+        if d in open_days:
+            return {"date": d, "is_open": True, "open_et": "09:30",
+                    "close_et": open_days[d], "half_day": open_days[d] != "16:00",
+                    "reason": None, "version": "t", "calendar": "TEST"}
+        return {"date": d, "is_open": False, "open_et": None, "close_et": None,
+                "half_day": False, "reason": "EXCHANGE_HOLIDAY",
+                "version": "t", "calendar": "TEST"}
+    return day_info
+
+
+OPEN_WEEK = {"2026-09-21": "16:00", "2026-09-22": "16:00", "2026-09-23": "16:00",
+             "2026-09-24": "16:00", "2026-09-25": "16:00"}
+OPEN_TWO_WEEKS = {"2026-09-14": "16:00", "2026-09-15": "16:00", "2026-09-16": "16:00",
+                  "2026-09-17": "16:00", "2026-09-18": "16:00",
+                  **OPEN_WEEK}
+
+
+def _bars(closes):
+    """closes: {session_date: close} -> validated daily-bar rows (t noon ET)."""
+    rows = []
+    for day in sorted(closes):
+        rows.append({"t": f"{day}T12:00:00-04:00", "o": closes[day],
+                     "h": closes[day] * 1.01, "l": closes[day] * 0.99,
+                     "c": closes[day], "v": 1000})
+    return rows
+
+
+def _fetch(mapping):
+    async def go(sym, days=10):
+        if sym not in mapping:
+            return None
+        return _bars(mapping[sym])
+    return go
+
+
+def test_session_pair_skips_weekend_and_holiday():
+    from services.movers import completed_session_pair
+    # Saturday noon ET: last two completed are Fri + Thu.
+    now = datetime(2026, 9, 26, 12, 0, tzinfo=UTC)
+    assert completed_session_pair(now=now, day_info=_cal(OPEN_WEEK)) == ("2026-09-25", "2026-09-24")
+    # Wednesday holiday: Tuesday noon sees Mon + prior Fri... use Wed noon with Tue closed.
+    hol = dict(OPEN_TWO_WEEKS)
+    del hol["2026-09-22"]
+    now = datetime(2026, 9, 23, 12, 0, tzinfo=UTC)
+    assert completed_session_pair(now=now, day_info=_cal(hol)) == ("2026-09-21", "2026-09-18")
+    # Monday 10am ET (session open, incomplete): last = Fri, prior = Thu.
+    now = datetime(2026, 9, 21, 14, 0, tzinfo=UTC)
+    assert completed_session_pair(now=now, day_info=_cal(OPEN_TWO_WEEKS)) == ("2026-09-18", "2026-09-17")
+
+
+def test_ranking_percent_zero_missing_and_rank_before_limit():
+    import asyncio
+
+    from services.movers import compute_movers
+    mapping = {
+        "UP1": {"2026-09-24": 100.0, "2026-09-25": 101.0},     # +1%
+        "UP10": {"2026-09-24": 100.0, "2026-09-25": 110.0},    # +10%
+        "DOWN12": {"2026-09-24": 100.0, "2026-09-25": 88.0},   # -12%
+        "FLAT": {"2026-09-24": 100.0, "2026-09-25": 100.0},    # 0 (valid)
+        "NODATA": {"2026-09-24": 100.0},                        # missing last close
+        "ZERODEN": {"2026-09-24": 0.0, "2026-09-25": 5.0},      # invalid row
+        "GONE": None,                                           # provider miss
+    }
+    now = datetime(2026, 9, 26, 12, 0, tzinfo=UTC)  # Sat: sessions 09-25/09-24
+    out = asyncio.run(compute_movers(universe=list(mapping), fetch_daily=_fetch(mapping),
+                                     now=now, limit=20, day_info=_cal(OPEN_WEEK)))
+    assert out["schema_version"] == "movers.v2"
+    assert (out["session_date"], out["prior_session_date"]) == ("2026-09-25", "2026-09-24")
+    order = [r["ticker"] for r in out["results"]]
+    assert order == ["DOWN12", "UP10", "UP1", "FLAT"], order
+    # Full precision on the wire (formatting is the UI's job).
+    assert out["results"][0]["change_pct"] == pytest.approx(-12.0)
+    assert out["results"][1]["change_pct"] == pytest.approx(10.0)
+    assert out["coverage"] == {"requested": 7, "valid": 4, "excluded": 3}
+    assert out["status"] == "partial"
+    # Rank BEFORE limit: limit=2 keeps the two largest absolute moves.
+    out2 = asyncio.run(compute_movers(universe=list(mapping), fetch_daily=_fetch(mapping),
+                                      now=now, limit=2, day_info=_cal(OPEN_WEEK)))
+    assert [r["ticker"] for r in out2["results"]] == ["DOWN12", "UP10"]
+    # Legacy aliases kept deliberately for the mounted panel transition.
+    assert out2["results"][0]["pct"] == pytest.approx(-12.0)
+    assert out2["results"][0]["change"] == pytest.approx(-12.0)
+
+
+def test_today_mode_needs_quote_provider():
+    import asyncio
+
+    from services.movers import compute_movers
+    now = datetime(2026, 9, 26, 12, 0, tzinfo=UTC)
+    out = asyncio.run(compute_movers(universe=["UP1"], now=now, mode="today",
+                                     day_info=_cal(OPEN_WEEK),
+                                     fetch_daily=_fetch({"UP1": {"2026-09-25": 101.0}})))
+    assert out["status"] == "unavailable" and out["reason_codes"] == ["NO_QUOTE_PROVIDER"]
+    assert out["results"] == []
+
+    async def quote(sym):
+        return 102.0, "2026-09-26T11:00:00+00:00"
+    out2 = asyncio.run(compute_movers(universe=["UP1"], now=now, mode="today",
+                                      day_info=_cal(OPEN_WEEK),
+                                      fetch_daily=_fetch({"UP1": {"2026-09-25": 101.0}}),
+                                      fetch_quote=quote))
+    assert out2["status"] == "ok"
+    assert abs(out2["results"][0]["change_pct"] - 100.0 * (102 / 101 - 1)) < 1e-9
+
+
+def test_total_provider_failure_is_unavailable_then_stale():
+    import asyncio
+
+    from services import movers as movers_svc
+    now = datetime(2026, 9, 26, 12, 0, tzinfo=UTC)
+
+    async def boom(sym, days=10):
+        raise RuntimeError("provider down")
+
+    out = asyncio.run(movers_svc.compute_movers(universe=["A", "B"], fetch_daily=boom,
+                                                now=now, day_info=_cal(OPEN_WEEK)))
+    assert out["status"] == "unavailable" and out["results"] == []
+    # Stale last-good: seed the completed-session cache, fail again.
+    last, prior = movers_svc.completed_session_pair(now=now, day_info=_cal(OPEN_WEEK))
+    good = dict(out)
+    good.update({"status": "ok", "results": [{"ticker": "A", "change_pct": 1.0,
+                                              "close": 101.0, "previous_close": 100.0,
+                                              "status": "ok", "pct": 1.0, "change": 1.0}]})
+    movers_svc._CACHE[(last, prior, movers_svc.UNIVERSE_ID, "previous_completed_session")] = {
+        "ts": __import__("time").time(), "payload": good}
+    try:
+        stale = asyncio.run(movers_svc.get_movers(limit=5))
+        # get_movers uses the real clock/provider; only assert the stale path
+        # when the live session pair matches the seeded test pair.
+        live = movers_svc.completed_session_pair(now=datetime.now(UTC))
+        if live == (last, prior):
+            assert stale["status"] in ("stale", "ok", "partial")
+            assert stale["results"]
+    finally:
+        movers_svc._CACHE.pop(
+            (last, prior, movers_svc.UNIVERSE_ID, "previous_completed_session"), None)

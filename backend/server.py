@@ -809,20 +809,10 @@ DEFAULT_TICKERS = ["SPY", "QQQ", "^SPX", "IWM", "AAPL", "NVDA", "TSLA", "META", 
 _TICKER_CACHE: list[str] | None = None
 _TICKER_CACHE_TS: float | None = None
 CACHE_TTL_S = 1800  # 30 minutes
-POPULAR_UNIVERSE = [
-    # Mega Cap Tech
-    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "AMD", "AVGO", "NFLX",
-    "CRM", "INTC", "ORCL", "TXN", "ADBE", "SNAP", "PANW", "TEAM", "DOCU", "NOW",
-    # Growth & AI
-    "SMCI", "MU", "PLTR", "COIN", "MARA", "RIVN", "LCID", "HOOD", "SOFI", "UPWK",
-    "SQ", "PINS", "SHOP", "TWLO", "DDOG", "OKTA", "PSTG", "NET", "PATH", "VEEV",
-    # Financials & Industrials
-    "JPM", "GS", "MS", "WFC", "BAC", "C", "BLK", "SPGI", "BA", "LMT", "UNP", "UPS", "FDX",
-    # Energy & Materials
-    "XOM", "CVX", "COP", "SLB", "VLO", "MPC", "PSX", "APD", "NCLH", "GM", "F", "T",
-    # Consumer Staples
-    "KO", "PEP", "MCD", "WMT", "COST", "BABA", "MRNA", "BIDU", "JD", "PDD"
-]
+# Tracked-optionable universe lives in services.movers (single source for
+# the movers route + ticker universes); re-exported here for existing
+# `from server import POPULAR_UNIVERSE` consumers (routes/market_data).
+from services.movers import POPULAR_UNIVERSE as POPULAR_UNIVERSE
 
 PATTERN_GLOSSARY = {
     "gamma_flip": {"name": "Gamma Flip", "description": "The spot price level where total GEX flips from positive to negative."},
@@ -872,34 +862,6 @@ PATTERN_GLOSSARY = {
 
 
 _movers_cache: dict[str, Any] = {"ts": 0, "data": []}
-
-
-def _fetch_movers_sync() -> list[dict[str, Any]]:
-    """Use yfinance bulk download for prev-day movers (fast, no rate limit)."""
-    try:
-        df = yf.download(POPULAR_UNIVERSE, period="2d", interval="1d",
-                         group_by="ticker", progress=False, threads=True, auto_adjust=False)
-    except Exception as e:
-        log.warning(f"yfinance movers fail: {e}")
-        return []
-    out: list[dict[str, Any]] = []
-    for sym in POPULAR_UNIVERSE:
-        try:
-            sub = df[sym].dropna()
-            if len(sub) < 2:
-                continue
-            prev_close = float(sub["Close"].iloc[-2])
-            last_close = float(sub["Close"].iloc[-1])
-            day_open = float(sub["Open"].iloc[-1])
-            hi = float(sub["High"].iloc[-1])
-            lo = float(sub["Low"].iloc[-1])
-            vol = float(sub["Volume"].iloc[-1])
-            pct = ((last_close - prev_close) / prev_close * 100) if prev_close else 0
-            out.append({"ticker": sym, "open": day_open, "close": last_close, "pct": round(pct, 2),
-                        "volume": vol, "high": hi, "low": lo, "prev_close": prev_close})
-        except Exception:
-            continue
-    return out
 
 
 def _attach_strike_volumes(
