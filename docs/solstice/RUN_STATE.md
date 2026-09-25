@@ -32,7 +32,15 @@ target `movers.v2`, fixtures `comprehension_v1.json`.
   button); false eligibility with empty reasons shows a generic blocker.
   Also fixed a pre-existing broken replay-adapter test (stale fixture
   shape + assertion on an unused path).
-- R7-04 compare workspace: pending. R7-05 review workflow: pending.
+- R7-04 compare workspace: acceptance-tested. Single (default, unchanged) /
+  GEX+VEX toggle in the existing bar; two REAL grids over one
+  snapshot/request (GEX left, VEX right; stacked <900px). Shared
+  ticker/spot/scope/selection/live-replay; scroll synced by identity with
+  loop guard; independent per-pane scales with a joint lock (cleared on
+  scope change); VEX pane ignores weighting controls; missing VEX is
+  explicit. Active pane owns the readout; inspector stays raw-anchored.
+  Same desk inline and expanded.
+- R7-05 review workflow: pending.
 - R7-06 calendars/capability: pending. R7-07 episode policy/pending-final:
   pending (extends NEED_EPISODE). R7-08/09 study/gates/handoff: pending.
 

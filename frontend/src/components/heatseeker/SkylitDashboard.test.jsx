@@ -380,3 +380,71 @@ test("R7-03: replay clicks never reach the live Trade callback; Trade disabled i
   expect(screen.getByTestId("skylit-trade-btn")).toBeDisabled();
   expect(screen.getByTestId("skylit-selected-cell")).toBeInTheDocument();
 });
+
+test("R7-04: compare toggle mounts two real panes over one snapshot; back to one", async () => {
+  const data = {
+    ticker: "SPY", asof: "2026-09-03T00:00:00Z", spot: 650, exposure_basis: "OI",
+    strikes: [{ strike: 650, gex: 1000 }],
+    grid: { expiries: ["2026-09-18"], strikes: [650], grid: { "2026-09-18": { 650: 1000 } } },
+    metrics: { walls: [], grids: {} },
+    quality: { state: "usable", reasonCodes: [], setupEligible: true },
+  };
+  await act(async () => {
+    render(<SkylitDashboard ticker="SPY" data={data} spot={650} />);
+  });
+  expect(screen.queryAllByTestId("mock-heatmap").length).toBe(1);
+  await act(async () => { fireEvent.click(screen.getByTestId("skylit-compare-toggle")); });
+  expect(screen.getByTestId("skylit-compare-desk")).toBeInTheDocument();
+  expect(screen.queryAllByTestId("mock-heatmap").length).toBe(2);
+  expect(screen.getByTestId("skylit-pane-gex-header").textContent).toContain("GEX");
+  expect(screen.getByTestId("skylit-pane-vex-header").textContent).toContain("VEX");
+  await act(async () => { fireEvent.click(screen.getByTestId("skylit-compare-toggle")); });
+  expect(screen.queryAllByTestId("mock-heatmap").length).toBe(1);
+  expect(screen.queryByTestId("skylit-compare-desk")).not.toBeInTheDocument();
+});
+
+test("R7-04: clicking the VEX pane makes it own the readout; scroll syncs", async () => {
+  const data = {
+    ticker: "SPY", asof: "2026-09-03T00:00:00Z", spot: 650, exposure_basis: "OI",
+    strikes: [{ strike: 650, gex: 1000 }],
+    grid: { expiries: ["2026-09-18"], strikes: [650], grid: { "2026-09-18": { 650: 1000 } } },
+    metrics: { walls: [], grids: {} },
+    quality: { state: "usable", reasonCodes: [], setupEligible: true },
+  };
+  await act(async () => {
+    render(<SkylitDashboard ticker="SPY" data={data} spot={650} />);
+  });
+  await act(async () => { fireEvent.click(screen.getByTestId("skylit-compare-toggle")); });
+  const cells = screen.getAllByTestId("mock-heatmap-cell");
+  expect(cells.length).toBe(2);
+  await act(async () => { fireEvent.click(cells[0]); });
+  expect(screen.getByTestId("skylit-selected-cell").title).toContain("GEX pane");
+  await act(async () => { fireEvent.click(cells[1]); });
+  expect(screen.getByTestId("skylit-selected-cell").title).toContain("VEX pane");
+  const gex = screen.getByTestId("skylit-pane-gex");
+  const vex = screen.getByTestId("skylit-pane-vex");
+  await act(async () => {
+    gex.scrollTop = 42;
+    fireEvent.scroll(gex);
+  });
+  expect(vex.scrollTop).toBe(42);
+});
+
+test("R7-04: expanded overlay keeps the same compare workspace and scope", async () => {
+  const data = {
+    ticker: "SPY", asof: "2026-09-03T00:00:00Z", spot: 650, exposure_basis: "OI",
+    strikes: [{ strike: 650, gex: 1000 }],
+    grid: { expiries: ["2026-09-18"], strikes: [650], grid: { "2026-09-18": { 650: 1000 } } },
+    metrics: { walls: [], grids: {} },
+    quality: { state: "usable", reasonCodes: [], setupEligible: true },
+  };
+  await act(async () => {
+    render(<SkylitDashboard ticker="SPY" data={data} spot={650} />);
+  });
+  await act(async () => { fireEvent.click(screen.getByTestId("skylit-compare-toggle")); });
+  await act(async () => { fireEvent.click(screen.getByTestId("skylit-expand-btn")); });
+  const overlay = screen.getByTestId("skylit-grid-expanded");
+  const desks = overlay.querySelectorAll('[data-testid="skylit-compare-desk"]');
+  expect(desks.length).toBe(1);
+  expect(overlay.querySelectorAll('[data-testid="mock-heatmap"]').length).toBe(2);
+});

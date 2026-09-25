@@ -3170,6 +3170,48 @@ button, select, input {
   background: #0d1117;
 }
 
+/* ── R7-04 GEX+VEX compare workspace: two real grids, one snapshot. ── */
+.skylit-compare-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  gap: 6px;
+}
+
+.skylit-compare-pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 6px;
+  background: #0d1117;
+}
+
+.skylit-compare-pane-header {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+  padding: 4px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+@media (max-width: 900px) {
+  .skylit-compare-workspace {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .skylit-compare-pane {
+    min-height: 320px;
+  }
+}
+
 /* ── Loading Overlay ── */
 .skylit-loading-overlay {
   position: absolute;
