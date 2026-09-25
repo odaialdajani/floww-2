@@ -15,25 +15,28 @@ import AlertEngineStrip from "../flowseeker/AlertEngineStrip";
 import { resolveSelectedWall, wallPositionOf } from "../../lib/solsticeSelection";
 
 /**
- * SelectedCellReadout — R6-1: the banner resolves its value from the CURRENT
- * displayed snapshot's active surface (never the number stored at click time,
- * which goes stale across refreshes).
+ * SelectedCellReadout — R6-1 + R7-03: the banner resolves its value from the
+ * CURRENT displayed snapshot's ACTIVE surface (viewMode + metric identity).
+ * A cell that is absent there is unavailable — never the number stored at
+ * click time (stale across refreshes) and never another metric's value
+ * (GEX under a VEX view).
  */
 function SelectedCellReadout({ selectedCell, displayData, metric, viewMode }) {
+  const gridKey = { gex: "grid", vex: "vex_grid", charm: "charm_grid", skylit: "grid" }[viewMode] || "grid";
   const useOverlay = metric !== "raw" && (viewMode === "gex" || viewMode === "skylit");
   const overlay = useOverlay ? (displayData?.metrics?.grids || {})[metric] : null;
-  const surface = (overlay && overlay.grid ? overlay.grid : displayData?.grid?.grid) || {};
+  const surface = (overlay && overlay.grid ? overlay.grid : displayData?.grid?.[gridKey]) || {};
   const _sn = Number(selectedCell.strike);
   const sk = Number.isFinite(_sn) && Math.floor(_sn) === _sn ? String(Math.trunc(_sn)) : String(selectedCell.strike);
   const current = surface[selectedCell.colKey]?.[sk];
-  const value = current ?? selectedCell.value;
+  const value = typeof current === "number" && Number.isFinite(current) ? current : null;
   return (
     <span
       className="skylit-selected-cell-readout"
       data-testid="skylit-selected-cell"
-      title="Clicked cell (arm Trade to open Quick Trade)"
+      title="Selected cell — current snapshot value"
     >
-      {selectedCell.strike} · {selectedCell.colKey} · {typeof value === "number" ? value.toFixed(1) : value}
+      {selectedCell.strike} · {selectedCell.colKey} · {value == null ? "unavailable" : value.toFixed(1)}
     </span>
   );
 }
@@ -264,16 +267,22 @@ function SkylitDashboard({
       const s = Number(strike);
       const hit = walls.find((w) => s >= Number(w.low) && s <= Number(w.high)) || null;
       const sel = { strike, colKey, value, ...snap, wall_id: hit?.wall_id || null };
-      if (tradeMode && onCellClick) {
+      // R7-F12: historical/study clicks NEVER reach the live Trade handler.
+      // Both the call boundary (here) and the arming control (below) enforce
+      // it; entering replay also disarms an armed live session.
+      if (tradeMode && !isReplay && onCellClick) {
         onCellClick(strike, colKey, value, sel);
       } else {
         setSelectedCell(sel);
       }
     },
-    [tradeMode, onCellClick, data, expData, replaySnap, ticker]
+    [tradeMode, onCellClick, data, expData, replaySnap, ticker, isReplay]
   );
   // Clear ticker-dependent selection on symbol change (F18).
   useEffect(() => { setSelectedCell(null); }, [ticker]);
+  // R7-F12: entering replay disarms live Trade mode; returning to live does
+  // not re-arm it (deliberate user action required).
+  useEffect(() => { if (isReplay) setTradeMode(false); }, [isReplay]);
 
   const handleStrikeClick = useCallback(
     (strike) => {
@@ -393,8 +402,10 @@ function SkylitDashboard({
         </button>
         <button
           className={`skylit-trade-mode-btn${tradeMode ? " active" : ""}`}
-          onClick={() => setTradeMode(!tradeMode)}
-          title="Trade Mode: click any cell to open Quick Trade"
+          onClick={() => { if (!isReplay) setTradeMode(!tradeMode); }}
+          disabled={isReplay}
+          title={isReplay ? "Trade is disabled in replay (live-only action)" : "Trade Mode: click any cell to open Quick Trade"}
+          data-testid="skylit-trade-btn"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 2L2 7l10 5 10-5-10-5z" />

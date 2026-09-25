@@ -337,7 +337,7 @@ async def movers(
             _srv._movers_cache["ts"] = _time.time()
             _srv._movers_cache["data"] = out["results"]
         except Exception:
-            pass
+            pass  # silent by design: briefing compat cache only — the response above is unaffected
         return out
     except Exception as e:
         logger.warning(f"movers error: {e}")

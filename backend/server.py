@@ -1010,7 +1010,7 @@ def _display_surfaces(spot: float, contracts: list[dict[str, Any]], ticker: str,
                                 "quarantined": _vg.get("quarantined", 0),
                                 "invalid_type": _vg.get("invalid_type", 0)}
         except Exception:
-            pass
+            pass  # silent by design: VEX attach is additive metadata — GEX surfaces already computed
         return grid
     if scalp:
         from services.gex_core import (

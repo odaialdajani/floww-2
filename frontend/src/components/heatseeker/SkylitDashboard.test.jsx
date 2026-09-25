@@ -287,3 +287,96 @@ describe("SkylitDashboard", () => {
     );
   });
 });
+
+test("R7-03: vex readout resolves the vex surface, missing cell is unavailable", async () => {
+  const data = {
+    ticker: "SPY", asof: "2026-09-03T00:00:00Z", spot: 650, exposure_basis: "OI",
+    strikes: [{ strike: 650, gex: 1000 }],
+    grid: {
+      expiries: ["2026-09-18"], strikes: [650],
+      grid: { "2026-09-18": { 650: 9999 } },
+      vex_grid: { "2026-09-18": { 650: 2500 } },
+      vex_meta: { exposure_basis: "VEX_1VOLPT", status: "ok" },
+    },
+    metrics: { walls: [], grids: {} },
+    quality: { state: "usable", reasonCodes: [], setupEligible: true },
+  };
+  await act(async () => {
+    render(<SkylitDashboard ticker="SPY" data={data} spot={650} viewMode="vex" />);
+  });
+  await act(async () => {
+    fireEvent.click(screen.getAllByTestId("mock-heatmap-cell")[0]);
+  });
+  const readout = screen.getByTestId("skylit-selected-cell");
+  // VEX value (2500.0), never the GEX surface value (9999.0).
+  expect(readout.textContent).toContain("2500.0");
+  expect(readout.textContent).not.toContain("9999");
+});
+
+test("R7-03: readout for a cell absent from the current snapshot is unavailable", async () => {
+  const data = {
+    ticker: "SPY", asof: "2026-09-03T00:00:00Z", spot: 650, exposure_basis: "OI",
+    strikes: [], grid: { expiries: [], strikes: [], grid: {} },
+    metrics: { walls: [], grids: {} },
+    quality: { state: "usable", reasonCodes: [], setupEligible: true },
+  };
+  await act(async () => {
+    render(<SkylitDashboard ticker="SPY" data={data} spot={650} />);
+  });
+  await act(async () => {
+    fireEvent.click(screen.getAllByTestId("mock-heatmap-cell")[0]);
+  });
+  expect(screen.getByTestId("skylit-selected-cell").textContent).toContain("unavailable");
+});
+
+test("R7-03: false eligibility without reasons shows a generic blocker, not permission", async () => {
+  const data = {
+    ticker: "SPY", asof: "2026-09-03T00:00:00Z", spot: 650, exposure_basis: "OI",
+    strikes: [], grid: { expiries: [], strikes: [], grid: {} },
+    metrics: { walls: [], grids: {} },
+    quality: { state: "unavailable", reasonCodes: [], setupEligible: false },
+  };
+  await act(async () => {
+    render(<SkylitDashboard ticker="SPY" data={data} spot={650} />);
+  });
+  const setup = screen.getByTestId("solstice-setup");
+  expect(setup.textContent).toContain("Wait");
+  expect(setup.textContent).not.toContain("Observe");
+  expect(setup.title).not.toContain("No blockers");
+});
+
+test("R7-03: replay clicks never reach the live Trade callback; Trade disabled in replay", async () => {
+  const onCellClick = jest.fn();
+  axios.get.mockImplementation(async (url) => {
+    if (String(url).includes("/solstice/manifest/")) {
+      return { data: { snapshots: [{ id: "s1" }] } };
+    }
+    if (String(url).includes("/solstice/replay/")) {
+      return { data: {
+        snapshot: { ticker: "SPY", snapshot_id: "s1", asof_ts: "2026-09-03T14:00:00Z", spot: 650, exposure_basis: "OI" },
+        strikes: [{ strike: 650, gex: 1000 }],
+        walls: [{ wall_id: "w_r", low: 640, high: 660 }],
+        grids: { grid: { expiries: ["2026-09-18"], strikes: [650], grid: { "2026-09-18": { 650: 1111 } } } },
+        quality: { state: "usable", reasonCodes: [], setupEligible: false },
+        interactions: [], scenarios: [],
+      } };
+    }
+    if (String(url).includes("/solstice/recorder_health")) return { data: {} };
+    return { data: {} };
+  });
+  await act(async () => {
+    render(<SkylitDashboard ticker="SPY" data={null} spot={650} onCellClick={onCellClick} />);
+  });
+  // Arm Trade while LIVE, then enter replay (must disarm), then click.
+  await act(async () => { fireEvent.click(screen.getByTestId("skylit-trade-btn")); });
+  await act(async () => { fireEvent.click(screen.getByTestId("solstice-replay-load")); });
+  await act(async () => { fireEvent.click(screen.getByTestId("solstice-replay-next")); });
+  expect(screen.getByTestId("solstice-replay-banner")).toBeInTheDocument();
+  await act(async () => {
+    fireEvent.click(screen.getAllByTestId("mock-heatmap-cell")[0]);
+  });
+  // Historical click selected locally but never invoked the live callback.
+  expect(onCellClick).not.toHaveBeenCalled();
+  expect(screen.getByTestId("skylit-trade-btn")).toBeDisabled();
+  expect(screen.getByTestId("skylit-selected-cell")).toBeInTheDocument();
+});

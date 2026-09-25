@@ -21,10 +21,13 @@ function SolsticeStatusStrip({ data = null, spot = null, ticker = "", isLive = f
   const session = data?.session || null;
   // R6-3: session permission and data eligibility are separate states.
   // "Why wait?" names the blocking reasons (session and/or quality).
+  // R7-F11: explicit false eligibility is ALWAYS blocking — an empty reason
+  // list yields a truthful generic blocker, never implicit permission.
   const blockReasons = [
     ...((session && session.entry_allowed === false && session.reasons) || []),
     ...((setupBlocked && q.reasonCodes) || []),
   ].filter((r, i, arr) => r && arr.indexOf(r) === i);
+  if (setupBlocked && !blockReasons.length) blockReasons.push("setup blocked (reason unavailable)");
   const setup = blockReasons.length
     ? `Wait — ${blockReasons.join(", ")}`
     : "Observe — awaiting price confirmation";

@@ -18,7 +18,8 @@ describe("solsticeReplay (P09/R4-15)", () => {
       strikes: [{ strike: 500 }], walls: [{ wall_id: "w1" }], contracts: [{ osi: "X" }],
       quality: { state: "usable", reasonCodes: [] },
       scenarios: [{ wall_id: "w1" }], interactions: [{ wall_id: "w1" }],
-      grids: { grid: { "2030-01-15": { 500: 1e6 } } } };
+      grids: { grid: { expiries: ["2030-01-15"], strikes: [500],
+                       grid: { "2030-01-15": { 500: 1e6 } } } } };
     const d = replayToDisplay(rep, "SPY");
     expect(d.replay).toBe(true);
     expect(d.strikes.length).toBe(1);
@@ -27,7 +28,9 @@ describe("solsticeReplay (P09/R4-15)", () => {
     expect(d.quality.state).toBe("usable");
     expect(d.scenarios.length).toBe(1);
     expect(d.interactions.length).toBe(1);
-    expect(d.metrics.grids.grid["2030-01-15"][500]).toBe(1e6);
+    // Main grid renders from d.grid (no consumer reads metrics.grids.grid;
+    // the old assertion pinned an unused path).
+    expect(d.grid.grid["2030-01-15"][500]).toBe(1e6);
     expect(replayToDisplay({ error: "not_found" }, "SPY")).toBeNull();
   });
   test("cross-ticker relabel rejected", () => {
@@ -36,4 +39,32 @@ describe("solsticeReplay (P09/R4-15)", () => {
     expect(replayToDisplay(rep, "QQQ")).toBeNull();
     expect(replayToDisplay(rep, "SPY")).not.toBeNull();
   });
+});
+
+test("R7-03: context restore, dual ID spelling, projection status", () => {
+  const full = {
+    snapshot: { snapshot_id: "a", ticker: "SPY", spot: 500, asof_ts: "t1" },
+    strikes: [], walls: [{ wall_id: "w1" }],
+    quality: { state: "usable", reasonCodes: [] },
+    scenarios: [], interactions: [],
+    grids: { grid: { expiries: ["2030-01-15"], strikes: [500], grid: { "2030-01-15": { 500: 1e6 } } } },
+    metrics_full: { wall_window: { w1: { window_daddex: 42 } }, nearest_walls: [{ wall_id: "w1" }] },
+    context: { session: { entry_allowed: false, reasons: ["MARKET_CLOSED"] }, scout: { calls: 0 } },
+  };
+  const d = replayToDisplay(full, "SPY");
+  expect(d.snapshot_id).toBe("a");
+  expect(d.snapshotId).toBe("a");
+  expect(d.metrics.wall_window).toEqual({ w1: { window_daddex: 42 } });
+  expect(d.session).toEqual({ entry_allowed: false, reasons: ["MARKET_CLOSED"] });
+  expect(d.scout).toEqual({ calls: 0 });
+  expect(d.projection_status).toBe("complete");
+  expect(d.projection_missing).toEqual([]);
+  const legacy = replayToDisplay({
+    snapshot: { snapshot_id: "b", ticker: "SPY", spot: 500, asof_ts: "t1" },
+    strikes: [], walls: [], grids: {},
+  }, "SPY");
+  expect(legacy.snapshotId).toBe("b");
+  expect(legacy.projection_status).toBe("partial");
+  expect(legacy.projection_missing).toContain("metrics");
+  expect(legacy.projection_missing).toContain("context");
 });

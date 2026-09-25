@@ -161,6 +161,13 @@ def ensure_tables(conn) -> None:
             conn.execute(f"ALTER TABLE heatmap_snapshots_v2 ADD COLUMN IF NOT EXISTS {col} VARCHAR")
         except Exception as e:
             log.warning("heatmap_history migrate %s failed: %s", col, e)
+    # R7-03: full wall-local metrics + visible context (session/scout/regime/
+    # patterns/vanna/moneyness) so replay restores the inspector, not cells.
+    for col in ("metrics_full_json", "context_json"):
+        try:
+            conn.execute(f"ALTER TABLE heatmap_snapshots_v2 ADD COLUMN IF NOT EXISTS {col} VARCHAR")
+        except Exception as e:
+            log.warning("heatmap_history migrate %s failed: %s", col, e)
 
 
 def recorder_status(conn, path: str | None = None) -> dict[str, Any]:
@@ -318,7 +325,21 @@ def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
                       "scenarios_json": json.dumps(payload.get("scenarios", [])[:12], default=str),
                       "interactions_json": json.dumps(payload.get("interactions", [])[:12], default=str),
                       "grid_meta_json": json.dumps(grid_meta, default=str),
-                      "grids_json": json.dumps(_full_grids(payload), default=str)}
+                      "grids_json": json.dumps(_full_grids(payload), default=str),
+                      # R7-03: wall-local comparison inputs + visible context.
+                      # Full metrics (wall_window, wall_metrics, nearest) and
+                      # context (session/scout/regime/patterns/vanna/moneyness)
+                      # travel with the record so replay restores the
+                      # inspector, not just cells.
+                      "metrics_full_json": json.dumps(payload.get("metrics", {}), default=str),
+                      "context_json": json.dumps({
+                          "session": payload.get("session"),
+                          "playbook": payload.get("playbook"),
+                          "scout": payload.get("scout"),
+                          "gamma_regime_v1": payload.get("gamma_regime_v1"),
+                          "patterns_v1": payload.get("patterns_v1"),
+                          "vanna_v1": payload.get("vanna_v1"),
+                          "moneyness": payload.get("moneyness")}, default=str)}
             _base_cols = ["snapshot_id", "ticker", "query_key", "expiries", "spot",
                           "data_source", "exposure_basis", "formula_version",
                           "asof_ts", "received_at", "n_contracts", "n_usable",
@@ -568,6 +589,10 @@ def replay_snapshot(conn, snapshot_id: str) -> dict[str, Any] | None:
             "interactions": _parse(row.get("interactions_json")) or [],
             "grid_meta": _parse(row.get("grid_meta_json")),
             "grids": _parse(row.get("grids_json")) or {},
+            # R7-03: None on pre-migration records — the adapter marks those
+            # explicitly incomplete instead of reconstructing present-day truth.
+            "metrics_full": _parse(row.get("metrics_full_json")),
+            "context": _parse(row.get("context_json")),
             "replay_note": "available-at join: only rows with this snapshot_id; "
                            "later revisions excluded",
         }

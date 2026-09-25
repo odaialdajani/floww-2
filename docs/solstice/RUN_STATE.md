@@ -21,8 +21,17 @@ target `movers.v2`, fixtures `comprehension_v1.json`.
   NOTE: legacy local vex cells already used x0.01 numerically (naming
   confusion only); Rust-bridge bool coercion still defaults call (Rust
   inactive here — revisit on activation).
-- R7-03 display/replay/readout: pending (stale click value, GEX-under-VEX,
-  replay Trade callback, snapshotId normalization).
+- R7-03 display/replay/readout: acceptance-tested. Recorded projection now
+  persists full metrics (wall_window, nearest) + context
+  (session/scout/regime/patterns/vanna/moneyness); replay restores them
+  with dual snapshot_id/snapshotId spelling + complete/partial projection
+  status (legacy records explicit, never reconstructed). Readout resolves
+  the active viewMode+metric surface (missing = unavailable, never stale
+  click value or GEX-under-VEX). Replay clicks cannot reach the live Trade
+  handler (call boundary + armed-disarm on entering replay + disabled
+  button); false eligibility with empty reasons shows a generic blocker.
+  Also fixed a pre-existing broken replay-adapter test (stale fixture
+  shape + assertion on an unused path).
 - R7-04 compare workspace: pending. R7-05 review workflow: pending.
 - R7-06 calendars/capability: pending. R7-07 episode policy/pending-final:
   pending (extends NEED_EPISODE). R7-08/09 study/gates/handoff: pending.
