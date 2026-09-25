@@ -1,7 +1,9 @@
 """R5-E red tests: evidence-bound explanation (G6/R08,R18)."""
 
+import os
 import sys
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 sys.path.insert(0, "backend")
 
 
@@ -52,7 +54,7 @@ def test_r18_study_rejects_reversed_and_rushed_answers():
     import json
 
     from scripts.solstice_comprehension import expected, score
-    with open("backend/tests/solstice/fixtures/comprehension_v1.json") as fh:
+    with open("tests/solstice/fixtures/comprehension_v1.json") as fh:
         sc = json.load(fh)["scenarios"][0]
     key = expected(sc)
     rev = {"walls": " ".join(str(int(x)) for x in reversed(key["walls"])),

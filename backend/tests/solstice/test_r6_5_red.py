@@ -28,7 +28,7 @@ def test_b12_fixture_geometry_oracle():
     import json
 
     from services.wall_interaction import wall_position
-    with open("backend/tests/solstice/fixtures/comprehension_v1.json") as fh:
+    with open("tests/solstice/fixtures/comprehension_v1.json") as fh:
         scenarios = json.load(fh)["scenarios"]
     for sc in scenarios:
         spot = sc["spot"]

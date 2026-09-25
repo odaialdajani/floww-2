@@ -28,11 +28,11 @@ def test_p11_execution_disarmed():
     # Solstice boundary: explainer/evidence/scout/session/routes-solstice must
     # never reach a broker order method. (routes/public_brokerage.py is a
     # separate authenticated surface, out of Solstice scope — not touched here.)
-    scope = [pathlib.Path("backend/routes/solstice.py"),
-             pathlib.Path("backend/services/solstice_evidence.py"),
-             pathlib.Path("backend/services/solstice_ai_eval.py"),
-             pathlib.Path("backend/services/contract_scout.py")]
+    scope = [pathlib.Path("routes/solstice.py"),
+             pathlib.Path("services/solstice_evidence.py"),
+             pathlib.Path("services/solstice_ai_eval.py"),
+             pathlib.Path("services/contract_scout.py")]
     hits = [str(p) for p in scope if "place_order" in p.read_text()]
     assert hits == [], hits
-    adapter = pathlib.Path("backend/services/public_api_adapter.py").read_text()
+    adapter = pathlib.Path("services/public_api_adapter.py").read_text()
     assert "place_order" not in adapter and "place_limit_order" not in adapter
