@@ -15,6 +15,30 @@ import AlertEngineStrip from "../flowseeker/AlertEngineStrip";
 import { resolveSelectedWall, wallPositionOf } from "../../lib/solsticeSelection";
 
 /**
+ * SelectedCellReadout — R6-1: the banner resolves its value from the CURRENT
+ * displayed snapshot's active surface (never the number stored at click time,
+ * which goes stale across refreshes).
+ */
+function SelectedCellReadout({ selectedCell, displayData, metric, viewMode }) {
+  const useOverlay = metric !== "raw" && (viewMode === "gex" || viewMode === "skylit");
+  const overlay = useOverlay ? (displayData?.metrics?.grids || {})[metric] : null;
+  const surface = (overlay && overlay.grid ? overlay.grid : displayData?.grid?.grid) || {};
+  const _sn = Number(selectedCell.strike);
+  const sk = Number.isFinite(_sn) && Math.floor(_sn) === _sn ? String(Math.trunc(_sn)) : String(selectedCell.strike);
+  const current = surface[selectedCell.colKey]?.[sk];
+  const value = current ?? selectedCell.value;
+  return (
+    <span
+      className="skylit-selected-cell-readout"
+      data-testid="skylit-selected-cell"
+      title="Clicked cell (arm Trade to open Quick Trade)"
+    >
+      {selectedCell.strike} · {selectedCell.colKey} · {typeof value === "number" ? value.toFixed(1) : value}
+    </span>
+  );
+}
+
+/**
  * SelectedWallBlock — identity selection resolved against the CURRENT
  * snapshot (P05/R4-06). Retains by wall_id across compatible refreshes
  * (asof/metric/expand); cross-symbol clears; missing walls explain
@@ -224,9 +248,10 @@ function SkylitDashboard({
 
   const handleCellClick = useCallback(
     (strike, colKey, value) => {
-      // P05 identity selection: store wall_id + strike at click time; values
-      // always re-resolved from the current snapshot (never a stored number
-      // reused across refreshes). Retains across asof/metric/expand.
+      // P05 identity selection (R6-1: overlayData listed so replay-only
+      // updates cannot retain a stale selection source): store wall_id +
+      // strike at click time; values always re-resolved from the current
+      // snapshot (never a stored number reused across refreshes).
       const src = overlayData;
       const snap = { asof: src?.asof || data?.asof || null, ticker };
       const walls = src?.metrics?.walls || data?.metrics?.walls || [];
@@ -239,7 +264,7 @@ function SkylitDashboard({
         setSelectedCell(sel);
       }
     },
-    [tradeMode, onCellClick, data, expData, ticker]
+    [tradeMode, onCellClick, data, expData, replaySnap, ticker]
   );
   // Clear ticker-dependent selection on symbol change (F18).
   useEffect(() => { setSelectedCell(null); }, [ticker]);
@@ -304,13 +329,7 @@ function SkylitDashboard({
       <div className="skylit-col-bar">
         <div className="skylit-col-spacer" />
         {selectedCell && !tradeMode && (
-          <span
-            className="skylit-selected-cell-readout"
-            data-testid="skylit-selected-cell"
-            title="Clicked cell (arm Trade to open Quick Trade)"
-          >
-            {selectedCell.strike} · {selectedCell.colKey} · {typeof selectedCell.value === "number" ? selectedCell.value.toFixed(1) : selectedCell.value}
-          </span>
+          <SelectedCellReadout selectedCell={selectedCell} displayData={displayData} metric={metric} viewMode={viewMode} />
         )}
         <button
           className="skylit-trade-mode-btn"
@@ -421,6 +440,7 @@ function SkylitDashboard({
             data={displayData}
             spot={displaySpot}
             viewMode={viewMode}
+            metric={metric}
             regime={regime}
           />
           {/* T07/T23: selected-wall inspector + two-sided scenarios (deterministic) */}
@@ -485,8 +505,11 @@ function SkylitDashboard({
                 data={overlayData}
                 spot={displaySpot}
                 viewMode={viewMode}
+                metric={metric}
                 regime={regime}
               />
+              {/* R6-1 expanded inspector parity: same wall/scenarios as inline. */}
+              <SelectedWallBlock data={overlayData} spot={displaySpot} selectedCell={selectedCell} />
             </div>
           </div>
         </div>
