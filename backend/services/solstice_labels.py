@@ -73,6 +73,13 @@ def label_touch(path: list[tuple[float, float]], zone: tuple[float, float],
         if _rt is not None and _rs is not None and _rt == _rs:
             return {"label": "simultaneous_unknown", "censored": True, "version": LABEL_VERSION,
                     "detail": "both barriers inside same observation; order unknown"}
+        # R7-07: no_touch requires gap-free coverage. A large observation gap
+        # in the pre-encounter prefix censors — we cannot prove no touch
+        # happened during the unobserved span, even if duration >= horizon_s.
+        for (_ta, _), (_tb, _) in zip(path, path[1:], strict=False):
+            if (_tb - _ta) > gap_cap:
+                return {"label": "indeterminate", "censored": True,
+                        "version": LABEL_VERSION, "detail": "OBSERVATION_GAP"}
         if duration >= horizon_s:
             return {"label": "no_touch", "censored": False, "version": LABEL_VERSION}
         return {"label": "indeterminate", "censored": True, "version": LABEL_VERSION,
@@ -134,9 +141,14 @@ def close_episodes(conn, paths_by_decision: dict[str, list],
     For each decision WITHOUT a recorded outcome, label its price path using
     the episode stored in decision features (zone/target/stop/horizon) and
     record the outcome. Idempotent across restart/catch-up: decisions that
-    already have an outcome row are skipped and reported separately.
-    Appending irrelevant future data cannot change an already recorded
-    result (labels are prefix-stable; re-runs find the existing row first).
+    already have a TERMINAL (non-censored target_hit/stop_hit) outcome are
+    skipped and reported separately — irrelevant future data cannot rewrite
+    a decided label (labels are prefix-stable).
+
+    Censored/indeterminate outcomes are INCOMPLETE: they are re-processed
+    when a longer path is supplied, replacing the old censored result. A
+    re-run with the same (or shorter) path is skipped — no new data.
+
     Fail-closed: a decision WITHOUT a complete episode (zone with high >
     low, finite distinct target/stop, positive horizon) is NEVER labeled —
     missing inputs are not zero (a zero-default zone/target/stop would
@@ -154,11 +166,31 @@ def close_episodes(conn, paths_by_decision: dict[str, list],
     for did, path in (paths_by_decision or {}).items():
         try:
             existing = conn.execute(
-                "SELECT COUNT(*) FROM outcome_labels_v1 WHERE decision_id = "
-                f"'{str(did).replace(chr(39), chr(39) * 2)}'").fetchone()
-            if existing and existing[0] > 0:
-                skipped.append(did)
-                continue
+                "SELECT label, censored, detail FROM outcome_labels_v1 WHERE decision_id = "
+                f"'{str(did).replace(chr(39), chr(39) * 2)}'"
+                ).fetchone()
+            if existing:
+                _label, _censored = str(existing[0]), bool(existing[1])
+                if not _censored and _label in ("target_hit", "stop_hit"):
+                    skipped.append(did)
+                    continue
+                # R7-07: censored/indeterminate outcome — re-process only if
+                # the new path reaches further than the old censored result.
+                if _censored:
+                    _old_detail = {}
+                    try:
+                        import json as _json2
+                        _old_detail = _json2.loads(str(existing[2])) if existing[2] else {}
+                    except (TypeError, ValueError):
+                        pass
+                    _old_end = _old_detail.get("path_end_t", 0.0)
+                    _new_end = path[-1][0] if path else 0.0
+                    if _new_end <= _old_end:
+                        skipped.append(did)
+                        continue
+                    conn.execute(
+                        "DELETE FROM outcome_labels_v1 WHERE decision_id = "
+                        f"'{str(did).replace(chr(39), chr(39) * 2)}'")
             dec = conn.execute(
                 "SELECT ticker, features FROM scenario_decisions_v1 WHERE decision_id = "
                 f"'{str(did).replace(chr(39), chr(39) * 2)}'").fetchall()
@@ -189,9 +221,12 @@ def close_episodes(conn, paths_by_decision: dict[str, list],
                 continue
             res = label_touch(
                 path or [], (_lo, _hi), _hor, _tgt, _stp)
+            _detail = {"detail": res.get("detail"), "version": res.get("version")}
+            if path:
+                _detail["path_end_t"] = path[-1][0]
             record_outcome(conn, did, ticker, int(_hor),
                            res["label"], censored=bool(res.get("censored")),
-                           detail={"detail": res.get("detail"), "version": res.get("version")})
+                           detail=_detail)
             closed.append(did)
             results[did] = res
         except Exception as e:
