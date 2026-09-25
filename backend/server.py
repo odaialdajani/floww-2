@@ -1069,6 +1069,17 @@ def _display_surfaces(spot: float, contracts: list[dict[str, Any]], ticker: str,
         strikes = compute_gex_by_strike_volume_vendor(spot, contracts)
         grid = compute_gex_grid_volume_vendor(spot, contracts)
         exposure_basis = "VOLUME_FALLBACK_OI_UNKNOWN"
+        if not strikes:
+            # Greek-less fallback-provider shape (IV + volume, no OI/gamma,
+            # e.g. yfinance index chain): local-BS volume fallback keeps
+            # readability, declared and never setup-eligible — same policy
+            # as the scalp branch above.
+            from services.gex_core import compute_gex_by_strike_volume as _local_vrows
+            from services.gex_core import compute_gex_grid_volume as _local_vgrid
+            strikes = _local_vrows(spot, contracts, ticker)
+            grid = _local_vgrid(spot, contracts, ticker)
+            if strikes:
+                model_basis = "local-bs-fallback"
         log.warning("build_heatmap: OI unavailable — volume-weighted GEX fallback (grid populated)")
     return exposure_basis, model_basis, strikes, grid
 

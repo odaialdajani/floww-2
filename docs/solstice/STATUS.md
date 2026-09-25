@@ -267,3 +267,52 @@ test_regime_thresholds flow-detector, Dashboard CSS-import suite.
   + recorder-health/capability/manifest route tests.
 - Expand-close drops expanded data; reopen shows loading, never stale
   pixels (Dashboard test); overlay loading note fixed to render while empty.
+
+## Revision 6 — R6-1–R6-5 (24 Sep 2026, PRs #41–#45, unmerged per packet)
+
+Model: Muse Spark (muse-spark-1.3-contributor-free). Base 93fcd4b7 (post-#40).
+Stacked branches r6-1..r6-5; no merges, no deploys, no credential/trade changes.
+Unrelated PRs #3/#4/#5/#12 and kanban preserved.
+
+- R6-1 (display contract): vendor-supplied Greeks own mounted raw/volume
+  surfaces (new vendor-volume row/grid); declared local-BS fallback
+  (model_basis, readable, never setup-eligible); extractable _display_surfaces;
+  full versioned cell projection with derived axes; replay hydrates main grid;
+  missing metric renders unavailable; grid hooks all run before empty returns;
+  sidebar follows active metric; expanded overlay mounts the same inspector;
+  banner resolves current cell values. Heatseeker_v2 live 8/8 recovered.
+- R6-2 (wall workflow): per-wall delta/session breakdown; wall-local window
+  aggregation over full rows with coverage; Below/Inside/Above status chips;
+  same-wall comparison table; inspector window row is wall-local only.
+- R6-3 (context): pinned pandas-market-calendars 4.6.1; holiday/half-day/DST
+  session gates; PRAGMA-backed recorder health; single-writer lock on all
+  event writers; Why-wait detail; read-only candidates, pattern/regime,
+  vanna/moneyness collapsed sections; recorder badge.
+- R6-4 (explainer): suffix-token rejection; promotion requires confirmed
+  hold/reject; deterministic clause templates with exact-match validation;
+  mounted five-block explainer keyed by snapshot+wall+metric+mode.
+- R6-5 (study/outcomes): prefix-stable encounter-anchored labels; same-t
+  coarse-bar grouping; touch-without-barrier is indeterminate; gap model
+  covers window-edge spans; idempotent close_episodes job; fixture inside
+  walls corrected with geometry oracle; frozen-grid SolsticeStudyMode;
+  commissioning load fixed to 156 scheduled snapshots per 6.5h session.
+
+Verification (r6-5 head): `backend/tests/solstice/` 161 passed;
+`test_heatseeker_v2.py` live 8 passed; `comprehension --selftest` 25/25;
+craco heatseeker suites green; ruff + silent-except gate (283 files) clean.
+Full backend suite head-vs-base: identical pre-existing failures only.
+Remaining external/user items: SPX entitlement, participant study run,
+deployment audience, commissioning approval, elapsed sessions.
+
+Follow-up 24 Sep 2026 (unmerged, on solstice/r6-5): verification found two
+issues. (1) R6-1 `_display_surfaces` volume fallback used vendor-only volume
+functions, so an OI-less/IV-bearing chain (live ^SPX via yfinance: 890
+contracts, oi>0 0, vol>0 839) rendered an empty grid — base rendered it via
+local-BS volume. Fixed with a declared local-BS volume fallback under
+VOLUME_FALLBACK_OI_UNKNOWN (model local-bs-fallback, never setup-eligible);
+new red test in test_r6_1_red.py (failed before, passes after);
+test_heatseeker_v2.py live 8/8 recovered. (2) Grid Jest 0DTE test built its
+fixture date with toISOString (UTC) while the grid compares local midnights —
+flaky after 20:00 ET. Test-only fix to local-calendar construction, same
+assertions. Gates now: solstice 162 passed; heatseeker_v2 8/8; craco
+heatseeker suites 40/40; selftest 25/25; ruff + silent-except clean.

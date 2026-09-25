@@ -95,9 +95,16 @@ def score(sc: dict, answers: dict[str, str]) -> dict:
     if not key["below"] and not key["above"] and not key["inside"]:
         wall_ok = len(got) == 0
     else:
-        wall_ok = ((not key["below"] or _pair_ok(got[:2], key["below"]))
-                   and (not key["above"] or _pair_ok(got[2:4], key["above"]))
-                   and (not key["inside"] or _pair_ok(got[:2], key["inside"])))
+        # Ordered answer slots: below pair, then above pair, then inside
+        # pair. Each present zone must match its own slot; swapped ranges
+        # fail even when all numbers are present.
+        wall_ok = True
+        pos = 0
+        for slot in (key["below"], key["above"], key["inside"]):
+            if not slot:
+                continue
+            wall_ok = wall_ok and _pair_ok(got[pos:pos + 2], slot)
+            pos += 2
     confirm_txt = (answers.get("confirm", "") or "").lower()
     invalidate_txt = (answers.get("invalidate", "") or "").lower()
     r = {

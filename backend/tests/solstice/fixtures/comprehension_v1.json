@@ -20,7 +20,7 @@
     "gross": 311718668.2,
     "net": -241658656.5
    },
-   "nearest_above": {
+   "inside_wall": {
     "low": 757.0,
     "high": 783.0,
     "gross": 10933014417.7,
@@ -40,17 +40,17 @@
     "trade_side_capability": "none"
    },
    "asof": "2026-09-23T16:34:06.167225+00:00",
-   "nearest_below": {
-    "low": 725.0,
-    "high": 752.0,
-    "gross": 5670162314.6,
-    "net": -243613910.1
-   },
    "nearest_above": {
     "low": 754.0,
     "high": 755.0,
     "gross": 274195343.4,
     "net": 265912230.2
+   },
+   "inside_wall": {
+    "low": 725.0,
+    "high": 752.0,
+    "gross": 5670162314.6,
+    "net": -243613910.1
    }
   },
   {
@@ -67,13 +67,13 @@
     "state": "partial"
    },
    "asof": "2026-09-23T00:00:00+00:00",
-   "nearest_below": {
+   "nearest_above": null,
+   "inside_wall": {
     "low": 498,
     "high": 502,
     "gross": 15000000.0,
     "net": 1000000.0
-   },
-   "nearest_above": null
+   }
   },
   {
    "id": "synthetic-inside",

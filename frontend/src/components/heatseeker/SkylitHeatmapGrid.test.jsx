@@ -51,7 +51,11 @@ test('strike rail shows concentration bars from aggregated rows', () => {
 
 test('expiry headers carry coverage titles and 0DTE contribution shows', () => {
   const today = new Date();
-  const iso = (d) => d.toISOString().slice(0, 10);
+  // Local-calendar date: the grid compares local midnights (new Date(y, m, d)),
+  // so build the fixture the same way — toISOString() is UTC and drifts a day
+  // ahead of local time in western timezones after 20:00 ET.
+  const pad = (n) => String(n).padStart(2, '0');
+  const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const e0 = iso(today);
   const e1 = iso(new Date(today.getTime() + 86400000 * 7));
   const grid = { [e0]: { 650: 1000 }, [e1]: { 650: 3000 } };
