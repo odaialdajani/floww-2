@@ -384,4 +384,10 @@ METRIC_REGISTRY = {
     # state; either may be read, neither silently substituted for raw grids.
     "window_daddex_v1": {"formula": "Σ c u |δ| ΔV(W)", "units": "USD/1% move", "basis": "VOLUME_WINDOW", "version": FORMULA_VERSION,
                          "alias_of": "window_dadgex_v1"},
+    # R7-02 canonical VEX (vanna exposure, packet §5.1): local-BS vanna,
+    # signed contributions, gross = Σ|.|. Model, not vendor supply.
+    "vex_net_1volpt": {"formula": "Σ c m N S vanna 0.01", "units": "USD delta-notional/+1 vol pt",
+                       "basis": "VEX_1VOLPT", "version": FORMULA_VERSION, "model": "local-bs-vanna.v1"},
+    "vex_gross_1volpt": {"formula": "Σ |m N S vanna 0.01|", "units": "USD delta-notional/+1 vol pt",
+                         "basis": "VEX_1VOLPT", "version": FORMULA_VERSION, "model": "local-bs-vanna.v1"},
 }

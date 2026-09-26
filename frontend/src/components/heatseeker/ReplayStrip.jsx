@@ -11,7 +11,7 @@ import { replayToDisplay, stepReplay } from "../../lib/solsticeReplay";
  * and in-flight work reset on ticker change; a response arriving after exit
  * ("Live") or after a ticker switch is discarded, never rendered.
  */
-function ReplayStrip({ ticker = "SPY", onReplay = null }) {
+function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
   const [manifest, setManifest] = useState(null);
   const [compare, setCompare] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -30,32 +30,43 @@ function ReplayStrip({ ticker = "SPY", onReplay = null }) {
     setHealth(null);
   }, [ticker]);
   const load = useCallback(async () => {
+    const myGen = ++genRef.current;
+    const myTicker = ticker;
     setLoading(true);
     try {
       const r = await axios.get(`${BACKEND_API}/solstice/manifest/${encodeURIComponent(ticker)}`, { timeout: 15000 });
+      // Discard late manifest/health after a ticker switch or exit.
+      if (genRef.current !== myGen || myTicker !== ticker) return;
       setManifest(r.data);
     } catch (e) {
+      if (genRef.current !== myGen) return;
       setManifest({ error: "manifest_unavailable" });
     } finally {
-      setLoading(false);
+      if (genRef.current === myGen) setLoading(false);
     }
     // R6-3 recorder badge: actual backing + durability, never path inference.
     try {
       const h = await axios.get(`${BACKEND_API}/solstice/recorder_health`, { timeout: 15000 });
+      if (genRef.current !== myGen || myTicker !== ticker) return;
       setHealth(h.data);
     } catch (e) {
+      if (genRef.current !== myGen) return;
       setHealth({ error: "health_unavailable" });
     }
   }, [ticker]);
   const compareLastTwo = useCallback(async () => {
+    const myGen = ++genRef.current;
+    const myTicker = ticker;
     setLoading(true);
     try {
       const r = await axios.get(`${BACKEND_API}/solstice/attribute/${encodeURIComponent(ticker)}`, { timeout: 15000 });
+      if (genRef.current !== myGen || myTicker !== ticker) return;
       setCompare(r.data);
     } catch (e) {
+      if (genRef.current !== myGen) return;
       setCompare({ status: "error" });
     } finally {
-      setLoading(false);
+      if (genRef.current === myGen) setLoading(false);
     }
   }, [ticker]);
   const snaps = manifest?.snapshots || [];
@@ -93,6 +104,16 @@ function ReplayStrip({ ticker = "SPY", onReplay = null }) {
     setReplayAsOf(null);
     if (onReplay) onReplay(null);
   }, [onReplay]);
+  // R8-04: external replay jump (Next-to-review list). Same generation
+  // guards as stepping: ticker switches and exits invalidate the request.
+  const lastOpened = useRef(null);
+  useEffect(() => {
+    if (!openRequest || !openRequest.id) return;
+    const key = `${ticker}:${openRequest.id}:${openRequest.nonce ?? 0}`;
+    if (lastOpened.current === key) return;
+    lastOpened.current = key;
+    openSnap(openRequest.id);
+  }, [openRequest, openSnap, ticker]);
   return (
     <div className="skylit-replay-strip" data-testid="solstice-replay-strip"
       title="Deterministic replay — what was available at decision time">
@@ -132,8 +153,8 @@ function ReplayStrip({ ticker = "SPY", onReplay = null }) {
       {manifest?.error && <span>replay unavailable</span>}
       {compare && compare.status === "ok" && (
         <span data-testid="solstice-compare-result"
-          title="Coarse wall-level comparison; use the counterfactual for spot/IV/time/OI decomposition">
-          Δ {compare.strike_deltas?.length || 0} strikes · +{(compare.walls_added || []).length}/-{(compare.walls_removed || []).length} walls · vol Δ {compare.volume_deltas?.length || 0}{compare.volume_rebased?.length ? ` · rebased ${compare.volume_rebased.length}` : ""}
+          title={`Prior ${compare.from?.asof || "?"} → current ${compare.to?.asof || "?"}; coarse wall-level comparison; use the counterfactual for spot/IV/time/OI decomposition`}>
+          {(compare.from?.asof || "?").slice(11, 16)}→{(compare.to?.asof || "?").slice(11, 16)} · Δ {compare.strike_deltas?.length || 0} strikes · +{(compare.walls_added || []).length}/-{(compare.walls_removed || []).length} walls · vol Δ {compare.volume_deltas?.length || 0}{compare.volume_rebased?.length ? ` · rebased ${compare.volume_rebased.length}` : ""}
         </span>
       )}
       {compare && compare.status === "history_unavailable" && (

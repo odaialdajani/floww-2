@@ -76,3 +76,44 @@ def registry() -> dict[str, Any]:
             "unavailable_in_public_only": list(UNAVAILABLE_IN_PUBLIC_ONLY),
             "entitlement": "per-account commissioning required; no live calls made here",
             "budget_baseline": "10 requests/second per account (changelog) with headroom; verify observed"}
+
+
+def symbol_matrix(observations: list[dict[str, Any]]) -> dict[str, Any]:
+    """R7-06 per-symbol capability matrix from RECORDED observations only.
+
+    Groups capability_observations rows by ticker: operations seen, last
+    seen, usable totals. Entitlement is "unobserved" unless evidence says
+    otherwise — a symbol with no observations is never "denied", and no
+    other ticker's data ever substitutes (SPY cannot stand in for SPX).
+    VEX inputs stay "unknown" until a chain with usable Greeks is observed.
+    No live probing here: the matrix reports what was measured.
+    """
+    symbols: dict[str, Any] = {}
+    for r in observations or []:
+        t = str((r or {}).get("ticker") or "").upper()
+        if not t:
+            continue
+        op = str((r or {}).get("operation") or "unknown")
+        entry = symbols.setdefault(t, {"operations": {}, "last_seen": None,
+                                       "entitlement": "unobserved",
+                                       "vex_inputs": "unknown"})
+        o = entry["operations"].setdefault(op, {"requested": 0, "returned": 0,
+                                                "usable": 0, "last_at": None})
+        for k in ("requested", "returned", "usable"):
+            try:
+                v = (r or {}).get(k)
+                if v is not None:
+                    o[k] += int(v)
+            except (TypeError, ValueError):
+                continue
+        at = (r or {}).get("at") or (r or {}).get("at_ts")
+        if at and (o["last_at"] is None or str(at) > str(o["last_at"])):
+            o["last_at"] = at
+        if entry["last_seen"] is None or (at and str(at) > str(entry["last_seen"])):
+            entry["last_seen"] = at or entry["last_seen"]
+        chain_ops = {"chain", "option_chain", "get_option_chain", "expiries",
+                     "get_option_expirations"}
+        if op in chain_ops and o["usable"] > 0:
+            entry["vex_inputs"] = "derivable-if-iv"
+    return {"symbols": symbols, "n_symbols": len(symbols),
+            "note": "recorded observations only; unobserved symbols carry no claims"}

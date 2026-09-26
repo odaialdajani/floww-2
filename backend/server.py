@@ -809,20 +809,10 @@ DEFAULT_TICKERS = ["SPY", "QQQ", "^SPX", "IWM", "AAPL", "NVDA", "TSLA", "META", 
 _TICKER_CACHE: list[str] | None = None
 _TICKER_CACHE_TS: float | None = None
 CACHE_TTL_S = 1800  # 30 minutes
-POPULAR_UNIVERSE = [
-    # Mega Cap Tech
-    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "AMD", "AVGO", "NFLX",
-    "CRM", "INTC", "ORCL", "TXN", "ADBE", "SNAP", "PANW", "TEAM", "DOCU", "NOW",
-    # Growth & AI
-    "SMCI", "MU", "PLTR", "COIN", "MARA", "RIVN", "LCID", "HOOD", "SOFI", "UPWK",
-    "SQ", "PINS", "SHOP", "TWLO", "DDOG", "OKTA", "PSTG", "NET", "PATH", "VEEV",
-    # Financials & Industrials
-    "JPM", "GS", "MS", "WFC", "BAC", "C", "BLK", "SPGI", "BA", "LMT", "UNP", "UPS", "FDX",
-    # Energy & Materials
-    "XOM", "CVX", "COP", "SLB", "VLO", "MPC", "PSX", "APD", "NCLH", "GM", "F", "T",
-    # Consumer Staples
-    "KO", "PEP", "MCD", "WMT", "COST", "BABA", "MRNA", "BIDU", "JD", "PDD"
-]
+# Tracked-optionable universe lives in services.movers (single source for
+# the movers route + ticker universes); re-exported here for existing
+# `from server import POPULAR_UNIVERSE` consumers (routes/market_data).
+from services.movers import POPULAR_UNIVERSE as POPULAR_UNIVERSE
 
 PATTERN_GLOSSARY = {
     "gamma_flip": {"name": "Gamma Flip", "description": "The spot price level where total GEX flips from positive to negative."},
@@ -872,34 +862,6 @@ PATTERN_GLOSSARY = {
 
 
 _movers_cache: dict[str, Any] = {"ts": 0, "data": []}
-
-
-def _fetch_movers_sync() -> list[dict[str, Any]]:
-    """Use yfinance bulk download for prev-day movers (fast, no rate limit)."""
-    try:
-        df = yf.download(POPULAR_UNIVERSE, period="2d", interval="1d",
-                         group_by="ticker", progress=False, threads=True, auto_adjust=False)
-    except Exception as e:
-        log.warning(f"yfinance movers fail: {e}")
-        return []
-    out: list[dict[str, Any]] = []
-    for sym in POPULAR_UNIVERSE:
-        try:
-            sub = df[sym].dropna()
-            if len(sub) < 2:
-                continue
-            prev_close = float(sub["Close"].iloc[-2])
-            last_close = float(sub["Close"].iloc[-1])
-            day_open = float(sub["Open"].iloc[-1])
-            hi = float(sub["High"].iloc[-1])
-            lo = float(sub["Low"].iloc[-1])
-            vol = float(sub["Volume"].iloc[-1])
-            pct = ((last_close - prev_close) / prev_close * 100) if prev_close else 0
-            out.append({"ticker": sym, "open": day_open, "close": last_close, "pct": round(pct, 2),
-                        "volume": vol, "high": hi, "low": lo, "prev_close": prev_close})
-        except Exception:
-            continue
-    return out
 
 
 def _attach_strike_volumes(
@@ -1032,6 +994,24 @@ def _display_surfaces(spot: float, contracts: list[dict[str, Any]], ticker: str,
     """
     exposure_basis = "OI"
     model_basis = "vendor-supplied-greeks"
+    # R7-02: canonical VEX surface rides every display path with its own
+    # basis/model/coverage (packet §5.1). Missing inputs make VEX
+    # unavailable — never zero-filled, never a raw fallback.
+    from services.gex_core import compute_vex_grid_local
+    _vg = compute_vex_grid_local(spot, contracts, ticker)
+    def _with_vex(grid: dict) -> dict:
+        try:
+            grid["vex_grid"] = _vg.get("grid", {})
+            grid["vex_meta"] = {"exposure_basis": _vg.get("exposure_basis"),
+                                "model": _vg.get("model"),
+                                "status": _vg.get("status"),
+                                "reason": _vg.get("reason"),
+                                "missing_vanna_inputs": _vg.get("missing_vanna_inputs", 0),
+                                "quarantined": _vg.get("quarantined", 0),
+                                "invalid_type": _vg.get("invalid_type", 0)}
+        except Exception:
+            pass  # silent by design: VEX attach is additive metadata — GEX surfaces already computed
+        return grid
     if scalp:
         from services.gex_core import (
             compute_gex_by_strike_volume_vendor,
@@ -1047,7 +1027,7 @@ def _display_surfaces(spot: float, contracts: list[dict[str, Any]], ticker: str,
             grid = _local_vgrid(spot, contracts, ticker)
             if strikes:
                 model_basis = "local-bs-fallback"
-        return exposure_basis, model_basis, strikes, grid
+        return exposure_basis, model_basis, strikes, _with_vex(grid)
     from services.gex_core import compute_gex_by_strike_vendor, compute_gex_grid_vendor
     strikes = compute_gex_by_strike_vendor(spot, contracts)
     grid = compute_gex_grid_vendor(spot, contracts)
@@ -1081,7 +1061,35 @@ def _display_surfaces(spot: float, contracts: list[dict[str, Any]], ticker: str,
             if strikes:
                 model_basis = "local-bs-fallback"
         log.warning("build_heatmap: OI unavailable — volume-weighted GEX fallback (grid populated)")
-    return exposure_basis, model_basis, strikes, grid
+    return exposure_basis, model_basis, strikes, _with_vex(grid)
+
+
+def _display_quality(exposure_basis: str, model_basis: str, strikes: list) -> dict[str, Any]:
+    """Quality for the mounted payload (R6-1/B02 + R8-01).
+
+    Structural readability (grid renders) is separate from confirmed setup
+    eligibility. Only vendor-supplied Greeks make a setup eligible;
+    local-model fallback stays readable-but-waiting. Vendor Greeks carry
+    no observation timestamp, so the vendor path always reports
+    GREEK_TIME_UNKNOWN: it informs freshness interpretation without
+    blocking structure (eligibility stays driven by setupEligible).
+    """
+    vendor_ok = exposure_basis == "OI" and model_basis == "vendor-supplied-greeks"
+    if vendor_ok:
+        reasons = ["GREEK_TIME_UNKNOWN"]
+    elif exposure_basis != "OI":
+        reasons = [exposure_basis]
+    else:
+        reasons = ["LOCAL_BS_FALLBACK"]
+    return {
+        "state": ("usable" if exposure_basis == "OI" else "unavailable")
+        if model_basis == "vendor-supplied-greeks"
+        else ("partial" if strikes else "unavailable"),
+        "reasonCodes": reasons,
+        "setupEligible": exposure_basis == "OI" and model_basis == "vendor-supplied-greeks",
+        "executionEligible": False,
+        "tradeSideCapability": "none",
+    }
 
 
 async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: bool = True, mode: str = "day", dte: int | None = None, scalp: bool = False, max_strikes: int = 200) -> dict[str, Any]:
@@ -1536,20 +1544,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         # Local Black-Scholes Greeks feed charm/vex/vomma scenario overlays
         # only, under model_basis local-bs-v1 — never raw structure.
         "model_basis": model_basis,
-        "quality": {
-            # R6-1/B02: structural readability (grid renders) is separate from
-            # confirmed setup eligibility. Only vendor-supplied Greeks make a
-            # setup eligible; local-model fallback stays readable-but-waiting.
-            "state": ("usable" if exposure_basis == "OI" else "unavailable")
-            if model_basis == "vendor-supplied-greeks"
-            else ("partial" if strikes else "unavailable"),
-            "reasonCodes": [] if (exposure_basis == "OI"
-                                  and model_basis == "vendor-supplied-greeks")
-            else ([exposure_basis] if exposure_basis != "OI" else ["LOCAL_BS_FALLBACK"]),
-            "setupEligible": exposure_basis == "OI" and model_basis == "vendor-supplied-greeks",
-            "executionEligible": False,
-            "tradeSideCapability": "none",
-        },
+        "quality": _display_quality(exposure_basis, model_basis, strikes),
         "gex_regime": nodes.get("regime"),
         "mode": mode,
         "dte": dte,
@@ -1733,12 +1728,18 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                         now_s=_now_s, session_date=_session_day)
         _scout_puts = scout_candidates(raw["contracts"], "PUTS", spot,
                                        now_s=_now_s, session_date=_session_day)
+        from services.contract_scout import scout_shortlist_rows
         payload["scout"] = {
             "calls": _scout_calls["n_eligible"],
             "puts": _scout_puts["n_eligible"],
             "rejected": {k: ((_scout_calls["rejected"].get(k, 0)),
                              (_scout_puts["rejected"].get(k, 0)))
                          for k in set(_scout_calls["rejected"]) | set(_scout_puts["rejected"])},
+            # R7-05: bounded read-only review rows (3/side) with quote ages.
+            # No-candidate stays valid; wall linkage happens at review time
+            # (selection is UI state) — rows never silently switch walls.
+            "shortlist": {"CALLS": scout_shortlist_rows(_scout_calls, "CALLS", 3),
+                          "PUTS": scout_shortlist_rows(_scout_puts, "PUTS", 3)},
         }
         # R5-F: production decision producer — every build records one
         # decision per scenario side, including abstentions (no-candidate is
@@ -1762,6 +1763,25 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                     _wid = _nw.get("wall_id")
                 except Exception:
                     _zw, _wid = None, None
+
+                def _build_research_features(spot, zone, ticker):
+                    """Build research-episode features from a decision encounter.
+
+                    R8-05: delegate to episode_policy.research_default_features
+                    so barriers are derived deterministically from the frozen
+                    zone/tick rather than hardcoded. Unknown zone → no
+                    numeric barriers; close_episodes then reports
+                    NEED_EPISODE and never invents a label.
+                    """
+                    from services.episode_policy import (
+                        research_default_features,
+                    )
+                    return research_default_features(
+                        zone=(None if zone is None else tuple(zone)),
+                        encounter_price=spot,
+                        underlying_tick=0.01 if ticker else None,
+                    )
+
                 if _dconn is not None:
                     for _side, _res in (("CALLS", _scout_calls), ("PUTS", _scout_puts)):
                         _quotes = []
@@ -1783,11 +1803,9 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                             "scenario": _side, "side": _side,
                             "eligible": _res.get("n_eligible", 0) > 0,
                             "reason_codes": sorted((_res.get("rejected") or {}).keys()),
-                            "features": {"spot": spot,
-                                         "quality": (payload.get("quality") or {}).get("state"),
-                                         "n_eligible": _res.get("n_eligible", 0),
-                                         "wall_id": _wid, "zone": _zw,
-                                         "horizon_s": 300, "horizon_default": True},
+                            "features": _build_research_features(
+                                spot=spot, zone=_zw, ticker=ticker,
+                            ),
                             "candidate_quotes": _quotes})
         except Exception as _de:
             log.debug("solstice decision record failed: %s", _de)
@@ -2513,6 +2531,27 @@ async def _scheduler_loop():
                 log.warning(f"snapshot tick err: {e}")
         except Exception as e:
             log.warning(f"scheduler tick err: {e}")
+        # R8-05: outcome-worker tick — default DISABLED. Set
+        # SOLSTICE_OUTCOME_WORKER=1 to enable persistent closing of open
+        # decisions from stored price paths (commissioning item; the price
+        # recorder feeding price_paths_v1 is separate). Throttled to ~5min,
+        # budget-free (local DB only, no vendor calls).
+        global _last_outcome_tick_ts
+        try:
+            if os.environ.get("SOLSTICE_OUTCOME_WORKER") == "1" and (
+                    time.time() - globals().get("_last_outcome_tick_ts", 0) > 300):
+                _last_outcome_tick_ts = time.time()
+                from services.duckdb_engine import db as _ddb_outcome
+                from services.heatmap_history import outcome_close_tick
+                _oconn = getattr(_ddb_outcome, "conn", None)
+                if _oconn is not None:
+                    _ores = outcome_close_tick(_oconn)
+                    log.info("outcome worker tick: closed=%d pending=%d seen=%d",
+                             len(_ores.get("closed", [])),
+                             len(_ores.get("skipped_pending", [])),
+                             _ores.get("decisions_seen", 0))
+        except Exception as e:
+            log.warning(f"outcome tick err: {e}")
         await asyncio.sleep(60)
 
 
@@ -3342,8 +3381,11 @@ from routes.discord import router as discord_router
 
 app.include_router(discord_router, tags=["discord"])
 
+import sys
+
 from routes.analytics import router as analytics_router
 
+print(f"DEBUG analytics router: {type(analytics_router)}, routes: {len(analytics_router.routes)}", file=sys.stderr)
 app.include_router(analytics_router, prefix="/api", tags=["analytics"])
 
 from routes.briefing import router as briefing_router
@@ -3392,6 +3434,13 @@ from routes.heatseeker_snapshots_api import router as heatseeker_snapshots_route
 app.include_router(heatseeker_snapshots_router, prefix="/api/heatseeker", tags=["heatseeker-snapshots"])
 
 from routes.solstice import router as solstice_router
+
+# R8-04: review journal routes (list decisions, save review state).
+# Registered BEFORE include_router: Starlette snapshots routes at include
+# time, so anything added after would never mount on the app.
+from routes.solstice_review import register_review_routes
+
+register_review_routes(solstice_router)
 
 app.include_router(solstice_router, tags=["solstice"])
 

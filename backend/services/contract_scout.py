@@ -187,3 +187,40 @@ def scout_candidates(contracts: list[dict[str, Any]], scenario_side: str,
         "delta_band": list(DELTA_BAND),
         "no_candidate_is_valid": len(eligible) == 0,
     }
+
+
+def scout_shortlist_rows(scout_res: dict[str, Any], side: str, n: int = 3) -> list[dict[str, Any]]:
+    """R7-05: bounded read-only review rows from ranked eligible candidates.
+
+    Each row carries exactly what review needs (OSI, expiry, strike, side,
+    delta, bid/ask, spread %, quote ages). Tick size is NOT invented here:
+    tick_size is None with tick_unknown True until instrument tick
+    metadata is plumbed. No-candidate stays a valid empty list.
+    """
+    rows: list[dict[str, Any]] = []
+    for c in (scout_res or {}).get("candidates", [])[:max(0, n)]:
+        try:
+            bid = float(c.get("bid")) if c.get("bid") is not None else None
+            ask = float(c.get("ask")) if c.get("ask") is not None else None
+        except (TypeError, ValueError):
+            bid = ask = None
+        mid = c.get("_mid")
+        try:
+            mid = float(mid) if mid is not None else None
+        except (TypeError, ValueError):
+            mid = None
+        spread_pct = None
+        if bid is not None and ask is not None and mid:
+            try:
+                spread_pct = (ask - bid) / mid * 100.0
+            except (TypeError, ValueError, ZeroDivisionError):
+                spread_pct = None
+        rows.append({
+            "osi": c.get("osi") or c.get("symbol"),
+            "expiry": c.get("expiry"), "strike": c.get("strike"),
+            "side": str(side or "").upper(),
+            "delta": c.get("delta"), "bid": bid, "ask": ask,
+            "spread_pct": spread_pct, "tick_size": None, "tick_unknown": True,
+            "bid_ts": c.get("bid_timestamp"), "ask_ts": c.get("ask_timestamp"),
+        })
+    return rows

@@ -207,8 +207,10 @@ async def capability() -> dict[str, Any]:
                                  "usable": r[5], "truncated": bool(r[6])})
     except Exception as e:
         log.debug("capability observations unavailable: %s", e)
+    from services.public_capability import symbol_matrix
     return {"registry": registry(), "measured": get_manifest(),
-            "observed": observed, "n_observed": len(observed)}
+            "observed": observed, "n_observed": len(observed),
+            "symbols": symbol_matrix(observed)}
 
 
 @router.get("/replay/{snapshot_id}")
@@ -325,7 +327,20 @@ async def outcomes_close(body: _OutcomesCloseBody) -> dict[str, Any]:
                 clean.append((t, p))
             except (TypeError, ValueError, IndexError):
                 clean.append((0.0, None))  # corrupt point censors, never labels
-        paths[str(did)] = clean
+        paths[did] = clean
+
     out = close_episodes(conn, paths)
+
+    # R8-05: after closure, attach outcome labels to the decision features
+    # so the review journal shows the final outcome alongside the frozen
+    # episode layout. Terminal outcomes are idempotent; censored/indeterminate
+    # are overwritten on re-processing.
+    if out.get("closed"):
+        try:
+            from services.heatmap_history import attach_outcomes_to_decisions
+            attach_outcomes_to_decisions(conn, out["results"])
+        except Exception as _ae:
+            log.debug("attach outcomes to decisions: %s", _ae)
+
     out["recorder"] = "ok"
     return out

@@ -120,3 +120,34 @@ describe("AlertEngineStrip (XH-1 mounted consumer)", () => {
     expect(badge.getAttribute("aria-label").toLowerCase()).toContain("momentum");
   });
 });
+
+describe("AlertEngineStrip stale suppression (R8-04)", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test("withholds alerts older than 24h and shows the count", async () => {
+    const now = Date.now();
+    axios.get.mockResolvedValueOnce({
+      data: { alerts: [
+        { type: "GAMMA_SQUEEZE", priority: "HIGH", message: "fresh",
+          timestamp: new Date(now - 3600e3).toISOString() },
+        { type: "VOLUME_SPIKE", priority: "MEDIUM", message: "old",
+          timestamp: new Date(now - 25 * 3600e3).toISOString() },
+      ] },
+    });
+    render(<AlertEngineStrip ticker="SPY" />);
+    await waitFor(() => expect(screen.getByText("GAMMA SQUEEZE")).toBeInTheDocument());
+    expect(screen.queryByText("VOLUME SPIKE")).not.toBeInTheDocument();
+    expect(screen.getByTestId("skylit-ae-stale").textContent).toContain("+1 stale withheld");
+  });
+
+  test("missing timestamps stay visible (backend-shape drift is fail-open)", async () => {
+    axios.get.mockResolvedValueOnce({
+      data: { alerts: [{ type: "PIN_RISK", priority: "LOW", message: "snap" }] },
+    });
+    render(<AlertEngineStrip ticker="SPY" />);
+    await waitFor(() => expect(screen.getByText("PIN RISK")).toBeInTheDocument());
+    expect(screen.queryByTestId("skylit-ae-stale")).not.toBeInTheDocument();
+  });
+});

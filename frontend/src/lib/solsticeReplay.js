@@ -55,6 +55,17 @@ export function replayToDisplay(rep, ticker) {
     if (name === "grid" || name === "version") continue;
     if (section && typeof section === "object" && section.grid) metricGrids[name] = section;
   }
+  // R7-03: restore wall-local comparison inputs + visible context recorded
+  // alongside the cells (metrics_full/context); pre-migration records lack
+  // them and are marked explicitly incomplete — never reconstructed.
+  const metricsFull = rep.metrics_full && typeof rep.metrics_full === "object" ? rep.metrics_full : null;
+  const ctx = rep.context && typeof rep.context === "object" ? rep.context : null;
+  const missing = [];
+  if (!metricsFull) missing.push("metrics");
+  if (!ctx) missing.push("context");
+  else for (const k of ["session", "scout"]) if (ctx[k] == null) missing.push(`context.${k}`);
+  if (!Object.keys(metricGrids).length && !(main.grid && Object.keys(main.grid).length)) missing.push("grids");
+  const sid = snap.snapshot_id || null;
   return {
     ticker: snap.ticker || ticker || null,
     asof: snap.asof_ts || snap.asof || null,
@@ -62,12 +73,22 @@ export function replayToDisplay(rep, ticker) {
     strikes,
     grid: dataGrid,
     expiries_used: snap.expiries_used || dataGrid.expiries,
-    metrics: { walls, grids: metricGrids },
+    metrics: { ...(metricsFull || {}), walls, grids: metricGrids },
     quality: rep.quality || undefined,
     interactions: rep.interactions || [],
     scenarios: rep.scenarios || [],
+    session: ctx?.session ?? null,
+    playbook: ctx?.playbook ?? null,
+    scout: ctx?.scout ?? null,
+    gamma_regime_v1: ctx?.gamma_regime_v1 ?? null,
+    patterns_v1: ctx?.patterns_v1 ?? null,
+    vanna_v1: ctx?.vanna_v1 ?? null,
+    moneyness: ctx?.moneyness ?? null,
     replay: true,
     replay_note: rep.replay_note || "available-at replay",
-    snapshot_id: snap.snapshot_id || null,
+    snapshot_id: sid,
+    snapshotId: sid,
+    projection_status: missing.length ? "partial" : "complete",
+    projection_missing: missing,
   };
 }

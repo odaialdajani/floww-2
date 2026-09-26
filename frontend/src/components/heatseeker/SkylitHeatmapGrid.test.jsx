@@ -146,3 +146,25 @@ test('R6-1: present delta overlay renders its own cells, not raw', () => {
   expect(container.textContent).toContain('$0.8K');
   expect(screen.getByTestId('skylit-grid-basis').textContent).toContain('OI_DELTA_WEIGHTED');
 });
+
+test('R7-02: vex view without a surface is explicitly unavailable, not blank', () => {
+  const d = mockData();
+  const { container } = render(
+    <SkylitHeatmapGrid data={d} spot={650} ticker="SPY" viewMode="vex" />
+  );
+  expect(screen.getByTestId('skylit-surface-unavailable')).toBeInTheDocument();
+  expect(screen.getByTestId('skylit-surface-unavailable').textContent).toContain('VEX unavailable');
+  // No silent zero cells.
+  expect(container.querySelectorAll('td.trin-cell').length).toBe(0);
+});
+
+test('R7-02: vex view with a surface renders its cells', () => {
+  const d = mockData();
+  d.grid.vex_grid = { [EXPS[0]]: { 650: 2500 }, [EXPS[1]]: { 650: -1200 } };
+  d.grid.vex_meta = { exposure_basis: 'VEX_1VOLPT', model: 'local-bs-vanna.v1', status: 'ok', reason: null };
+  const { container } = render(
+    <SkylitHeatmapGrid data={d} spot={650} ticker="SPY" viewMode="vex" />
+  );
+  expect(screen.queryByTestId('skylit-surface-unavailable')).toBeNull();
+  expect(container.querySelectorAll('td.trin-cell').length).toBeGreaterThan(0);
+});

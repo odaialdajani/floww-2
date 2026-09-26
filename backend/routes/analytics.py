@@ -315,14 +315,39 @@ async def daily_checklist(
 @router.get("/movers")
 async def movers(
     limit: int = Query(default=20, ge=1, le=100, description="Max number of movers to return"),
+    mode: str = Query(default="previous_completed_session",
+                       description="previous_completed_session (default) or today"),
 ):
+    """Top Movers v2 (R7-01): rank-then-limit by completed-session % change.
+
+    Async end-to-end (no sync bulk download on the loop). Rows carry the
+    canonical change_pct plus legacy pct/change aliases. Explicit
+    loading-independent states come from the payload status field
+    (ok/partial/stale/unavailable), never from an empty list alone.
+    """
     try:
-        from server import _fetch_movers_sync
-        data = _fetch_movers_sync()
-        return {"results": data[:limit], "asof": datetime.now(UTC).isoformat()}
+        from services import movers as movers_svc
+        out = await movers_svc.get_movers(limit=limit, mode=mode)
+        out["results"] = (out.get("results") or [])[:max(0, limit)]
+        out["asof"] = datetime.now(UTC).isoformat()
+        try:
+            import time as _time
+
+            import server as _srv
+            _srv._movers_cache["ts"] = _time.time()
+            _srv._movers_cache["data"] = out["results"]
+        except Exception:
+            pass  # silent by design: briefing compat cache only — the response above is unaffected
+        return out
     except Exception as e:
         logger.warning(f"movers error: {e}")
-        return {"results": [], "status": "degraded", "reason": str(e), "asof": datetime.now(UTC).isoformat()}
+        return {"schema_version": "movers.v2", "mode": mode, "status": "unavailable",
+                "session_date": None, "prior_session_date": None,
+                "universe_id": "tracked-options.v1",
+                "coverage": {"requested": 0, "valid": 0, "excluded": 0},
+                "source": "market-bars", "computed_at": datetime.now(UTC).isoformat(),
+                "source_asof": None, "results": [], "reason_codes": ["ROUTE_FAIL"],
+                "asof": datetime.now(UTC).isoformat()}
 
 
 @router.get("/history/{ticker}")

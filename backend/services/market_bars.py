@@ -173,13 +173,31 @@ async def _upstream(ticker: str, period: str, aggregation: str,
     """Raw vendor fetch (no budget — the caller owns acquire/release).
 
     Returns bars or None. Raises on transport failure. Separated for tests.
+    R8-01: calls fetch_bars_from_public_api with its REAL signature
+    (timeframe/limit/sessions) and translates its canonical rows
+    ({date,open,high,low,close,volume,session}) into this module's
+    {t,o,h,l,c,v} shape. The previous call passed interval/period/
+    aggregation kwargs the adapter never accepted — every fetch raised
+    before touching the network.
     """
     from services.public_api_adapter import fetch_bars_from_public_api
 
-    return await fetch_bars_from_public_api(
-        ticker, interval="daily", period=period, aggregation=aggregation,
-        sessions=sessions,
+    timeframe = "1Min" if str(aggregation or "").upper() == "ONE_MINUTE" else "1Day"
+    rows = await fetch_bars_from_public_api(
+        ticker, timeframe=timeframe, limit=400, sessions=sessions,
     )
+    if not rows:
+        return None
+    out = []
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        out.append({"t": r.get("date", r.get("timestamp")),
+                    "o": r.get("open"), "h": r.get("high"),
+                    "l": r.get("low"), "c": r.get("close"),
+                    "v": r.get("volume", 0),
+                    **({"session": r["session"]} if r.get("session") else {})})
+    return out or None
 
 
 async def _get(kind: str, ticker: str, days: int, sessions: str = "regular") -> list[dict[str, Any]] | None:

@@ -83,15 +83,17 @@ class TestDoVexPerVolChange:
     / GDW / CAR when projecting a 1% rise in implied vol.
     """
 
-    def test_dollar_vex_per_1pct_vol_change_uses_one_minus_convention(self):
+    def test_dollar_vex_per_1pct_vol_change_uses_vol_point_convention(self):
+        # R7-F03: the old test mirrored the implementation's (1 - 0.01)
+        # factor — a tautology that pinned a 99x unit error. A +1 vol-point
+        # shock is Δσ = 0.01 (same convention as the vega helper below).
         from domain.greek_scalers import dollar_vex_per_1pct_vol_change
 
         vanna, oi, spot = 0.05, 100, 580.0
         got = dollar_vex_per_1pct_vol_change(vanna, oi, spot)
-        expected = (
-            vanna * oi * CONTRACT_MULTIPLIER * spot * (1.0 - DOLLAR_MOVE_CONVENTION)
-        )
-        assert got == pytest.approx(expected, abs=1e-9)
+        assert got == pytest.approx(vanna * oi * 100 * spot * 0.01, abs=1e-9)
+        # Audit numbers: vanna .2, OI 100, spot 100 -> 2,000 (was 198,000).
+        assert dollar_vex_per_1pct_vol_change(0.2, 100, 100.0) == pytest.approx(2000.0)
 
 
 # ────────────────────────────────────────────────────────────────────

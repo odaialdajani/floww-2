@@ -464,7 +464,7 @@ async def _fetch_chain_live(
     never volume-substituted; exposure_basis carried per contract.
     """
     from services.public_api import resolve_public_instrument_type
-    from services.solstice_time import time_to_expiry_years
+    from services.solstice_time import resolve_series, time_to_expiry_years
 
     trading = pb.get_trading_account()
     if trading is None:
@@ -530,8 +530,12 @@ async def _fetch_chain_live(
 
         for side in ("calls", "puts"):
             for oc in parsed.get(side, []):
+                # R7-06: series metadata reaches the clock (SPX monthly AM vs
+                # SPXW weekly PM vs equity) instead of a hardcoded 16:00 ET.
+                oc_series = resolve_series(ticker, oc.expiration or exp)
                 T, floored, t_reason = time_to_expiry_years(
-                    oc.expiration or exp, now=now_utc, ticker=ticker)
+                    oc.expiration or exp, now=now_utc, series=oc_series,
+                    ticker=ticker)
                 if T is None:
                     if t_reason == "EXPIRED":
                         n_expired_dropped += 1
@@ -549,6 +553,7 @@ async def _fetch_chain_live(
                 contracts.append({
                     "osi": oc.symbol,
                     "expiry": oc.expiration,
+                    "series": oc_series,
                     "T": T,
                     "T_floored": floored,
                     "T_model": "actual/365-exact",

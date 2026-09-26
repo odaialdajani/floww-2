@@ -1,7 +1,9 @@
 """R5 holes-batch-2 red tests: per-wall OI dates, scorer robustness."""
 
+import os
 import sys
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 sys.path.insert(0, "backend")
 
 
@@ -35,7 +37,6 @@ def test_oi_dates_absent_without_metadata():
 
 
 def test_scorer_reads_canonical_and_snake_quality():
-    sys.path.insert(0, ".")
     from scripts.solstice_comprehension import expected
     sc = {"nearest_below": {"low": 1, "high": 2}, "quality": {"setup_eligible": 0,
                                                               "reason_codes": ["STALE_ASK"]}}
