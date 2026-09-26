@@ -1,0 +1,30 @@
+{
+  "status": "pass",
+  "checks": [
+    "entry disabled without independent admission",
+    "same stage request returns original durable receipt",
+    "changed stage body refused",
+    "twelve concurrent identical fills change cash once",
+    "fresh request cannot claim an already recorded quote fill",
+    "fresh process recovers partial fill, reservation and cash",
+    "two partial entries and exits produce exact final cash 1067.40 and result 67.40",
+    "archive refused before immutable terminal history",
+    "late fill cannot recreate archived order",
+    "immutable journal versions and fill cash reconcile to saved account",
+    "quote mutated during await cannot change frozen fill price",
+    "at full valid event capacity, close stage and fill consume reserved space",
+    "replenishment refused while history pending",
+    "retained close cannot be hidden by replenishment",
+    "capacity replenishes only after history is durable and slot checks pass",
+    "different entry requests cannot both reserve the last buying power",
+    "saved clock watermark prevents retired quote size from returning"
+  ],
+  "count": 17,
+  "python": "3.11.15 (main, Jun 11 2026, 04:59:07) [MSC v.1944 64 bit (AMD64)]",
+  "production_admission": false,
+  "provider_calls": 0,
+  "broker_orders": 0,
+  "limitation": "Synthetic prepared single-leg long lifecycle; no production release or expiry acceptance",
+  "original_report": "paper-execution-20260926-2239.json",
+  "original_report_sha256": "fc9ab2bb2432019bd327c218d10e39b841d2683562fd76638fbb8b544e41777d"
+}

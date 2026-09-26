@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import TidehunterSettings from "./flowseeker/TidehunterSettings";
+import PaperSettings from "../agent/PaperSettings";
 
 const STORAGE_KEY = "floww_settings";
 
@@ -115,6 +116,9 @@ export function SettingsPanel({ refreshMs, onRefreshMsChange, defaultTicker, onD
           <div>
             <div className="label mb-0.5">Tidehunter Pro</div>
             <TidehunterSettings />
+          </div>
+          <div>
+            <PaperSettings />
           </div>
         </div>
       )}
