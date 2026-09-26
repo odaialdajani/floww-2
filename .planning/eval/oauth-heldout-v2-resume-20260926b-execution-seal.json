@@ -1,0 +1,32 @@
+{
+  "inputs_sha256": "444907d3abb2cd59965c2ff08cd17122d08760cb33994a62bafd952e627ff67d",
+  "python": "3.11.15",
+  "packages": {
+    "exchange-calendars": "4.13.2",
+    "numpy": "2.4.6",
+    "pandas": "3.0.5",
+    "scipy": "1.17.1",
+    "pydantic": "2.13.5",
+    "fastapi": "0.110.1",
+    "starlette": "0.37.2",
+    "motor": "3.3.1",
+    "pymongo": "4.6.3",
+    "httpx": "0.28.1"
+  },
+  "external_files": {
+    "backend/scripts/oauth_heldout_v2.py": "0aa977e3e9db2350e2acb6baaa48835eda8286f78be334e60beaf32b9c9597c4",
+    "backend/services/heatseeker.py": "e441d11e2cfb31374c973e82b7b6e604f6546f4dace714bdd47d4a98e57d1f60",
+    "backend/services/market_provenance.py": "04ee870ff134940c7d7099aa24d4ccc832fd68c03e72997ba067c5821c61cd73",
+    "backend/services/gex_core.py": "3497894804799e839195f86ea7179fd85fd116480213a482d4dc0282ab3d06f7",
+    "backend/services/realized_volatility.py": "adb505fd11b2682e889a4f6263ee47f946ce80d29513e0e6b3929b33dafe2f1c",
+    "backend/bs_greeks.py": "b7e1f07c29024be07108c7b39329cc30ac1e00e46034f0474b3165abfb617ba1",
+    "backend/auth.py": "69fcb3d1444989c48517696660a5003d95cbb79c24522566c62a7d3377529721",
+    "config/agent_weights_v1.json": "64be7c761a34a738c47924f2eefa22b24975ef7d91128d33007fe34c8ea6362b"
+  },
+  "codex_executable_sha256": "8cb0e69e99ff2a158c54815db82d0f2e524d8f301bc30184722cfd1ae5973574",
+  "storage": {
+    "data_uri": "mongodb://127.0.0.1:27017",
+    "usage_uri": "mongodb://127.0.0.1:27018",
+    "usage_database": "floww_public_research_acceptance"
+  }
+}

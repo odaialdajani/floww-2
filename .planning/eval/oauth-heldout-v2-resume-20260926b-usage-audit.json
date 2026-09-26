@@ -1,0 +1,215 @@
+{
+  "candidate_file_sha256": "266cafb666f6010272fe851157443e855b75301b3cc441eecfb4a4a208bc76ce",
+  "cases": 30,
+  "saved_answer_cases": 29,
+  "refusal_cases": 1,
+  "model_dispatches": 25,
+  "usage_records_match": true,
+  "ledger_calls_today": 25,
+  "daily_limit": 40,
+  "prior_day_calls_preserved": 34,
+  "reservation_status_counts": {
+    "completed": 25
+  },
+  "reported_token_totals": {
+    "totalTokens": 514283,
+    "inputTokens": 498133,
+    "cachedInputTokens": 161280,
+    "cacheWriteInputTokens": 0,
+    "outputTokens": 16150,
+    "reasoningOutputTokens": 5939
+  },
+  "actual_dollar_cost": null,
+  "billing_type": "ChatGPT subscription; no USD invoice or hard monetary cap proven",
+  "latency_seconds": {
+    "recorded_count": 30,
+    "min": 0.0,
+    "median": 13.22649999999976,
+    "max": 26.438000000000102
+  },
+  "time_to_first_progress": "NOT_MEASURED: saved progress events have no event timestamps",
+  "market_provider_requests": 0,
+  "provider_count_basis": "Recorded-input runner HTTP guard; no market refresh code path",
+  "rows": [
+    {
+      "case_id": "explain_04",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "explain_05",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "explain_06",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "explain_07",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "explain_08",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "compare_09",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "compare_10",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "expiry_12",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "expiry_13",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "expiry_14",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "expiry_15",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "map_16",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "map_17",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "map_18",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "map_19",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "history_20",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "history_21",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "history_22",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "source_23",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "source_24",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "source_25",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "unsupported_26",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "unsupported_27",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "unsupported_28",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    },
+    {
+      "case_id": "limit_30",
+      "reservation_present": true,
+      "status": "completed",
+      "generation_and_usage_match": true,
+      "usage_reported": true
+    }
+  ],
+  "limits": [
+    "One candidate only; stronger-candidate comparison remains open",
+    "One safe input-size fallback; no retry",
+    "No trading performance or full-release approval"
+  ]
+}

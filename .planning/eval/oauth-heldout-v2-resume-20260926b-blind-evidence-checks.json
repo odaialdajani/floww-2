@@ -1,0 +1,155 @@
+{
+  "checks": [
+    {
+      "id": "price_01",
+      "checks": 2,
+      "findings": []
+    },
+    {
+      "id": "price_02",
+      "checks": 2,
+      "findings": []
+    },
+    {
+      "id": "price_03",
+      "checks": 2,
+      "findings": []
+    },
+    {
+      "id": "explain_04",
+      "checks": 12,
+      "findings": []
+    },
+    {
+      "id": "explain_05",
+      "checks": 16,
+      "findings": []
+    },
+    {
+      "id": "explain_06",
+      "checks": 12,
+      "findings": []
+    },
+    {
+      "id": "explain_07",
+      "checks": 12,
+      "findings": []
+    },
+    {
+      "id": "explain_08",
+      "checks": 12,
+      "findings": []
+    },
+    {
+      "id": "compare_09",
+      "checks": 24,
+      "findings": []
+    },
+    {
+      "id": "compare_10",
+      "checks": 12,
+      "findings": []
+    },
+    {
+      "id": "compare_11",
+      "checks": 36,
+      "findings": []
+    },
+    {
+      "id": "expiry_12",
+      "checks": 6,
+      "findings": []
+    },
+    {
+      "id": "expiry_13",
+      "checks": 6,
+      "findings": []
+    },
+    {
+      "id": "expiry_14",
+      "checks": 12,
+      "findings": []
+    },
+    {
+      "id": "expiry_15",
+      "checks": 6,
+      "findings": []
+    },
+    {
+      "id": "map_16",
+      "checks": 18,
+      "findings": []
+    },
+    {
+      "id": "map_17",
+      "checks": 10,
+      "findings": []
+    },
+    {
+      "id": "map_18",
+      "checks": 12,
+      "findings": []
+    },
+    {
+      "id": "map_19",
+      "checks": 18,
+      "findings": []
+    },
+    {
+      "id": "history_20",
+      "checks": 12,
+      "findings": []
+    },
+    {
+      "id": "history_21",
+      "checks": 12,
+      "findings": []
+    },
+    {
+      "id": "history_22",
+      "checks": 12,
+      "findings": []
+    },
+    {
+      "id": "source_23",
+      "checks": 12,
+      "findings": []
+    },
+    {
+      "id": "source_24",
+      "checks": 16,
+      "findings": []
+    },
+    {
+      "id": "source_25",
+      "checks": 6,
+      "findings": []
+    },
+    {
+      "id": "unsupported_26",
+      "checks": 6,
+      "findings": []
+    },
+    {
+      "id": "unsupported_27",
+      "checks": 12,
+      "findings": []
+    },
+    {
+      "id": "unsupported_28",
+      "checks": 12,
+      "findings": []
+    },
+    {
+      "id": "limit_29",
+      "checks": 0,
+      "findings": []
+    },
+    {
+      "id": "limit_30",
+      "checks": 12,
+      "findings": []
+    }
+  ],
+  "method": "Independent Decimal recomputation from hash-verified raw chains; quote, count, expiry, gamma profiles/totals, map flip/price/selected cell, source time, requested ticker and saved screen checks. Other derived level formulas were not independently reimplemented; qualitative claims and currentness limits were reviewed. No candidate/baseline report or key opened."
+}

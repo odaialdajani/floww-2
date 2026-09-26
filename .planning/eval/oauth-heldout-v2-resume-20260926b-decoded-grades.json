@@ -1,0 +1,3811 @@
+{
+  "decoded_at_utc": "2026-09-26T20:53:18.337903+00:00",
+  "blind_grades_sha256": "5e4b98bebe7d3315348533d1929cfaa5ba59bd24806ed8f03d2ba03c50f429d5",
+  "reports_sha256": {
+    "candidate": "266cafb666f6010272fe851157443e855b75301b3cc441eecfb4a4a208bc76ce",
+    "baseline": "8c1c873a454f3ed2c1f1c4cc77fd9bc0c8024bc82a194225201d05876e05afb0"
+  },
+  "audit_sha256": "38a38ab682fd8737fc6d7a04a9ff603ceac0d041728f03f21c30b16d8315dfa8",
+  "blind_answers_match_completed_reports": true,
+  "summary": {
+    "denominator": 30,
+    "executed": 30,
+    "assessable": 29,
+    "not_assessable": 1,
+    "not_run": 0,
+    "execution": {
+      "saved_completed_without_fallback": 28,
+      "saved_safe_input_fallback": 1,
+      "expected_pre_dispatch_refusal": 1
+    },
+    "candidate_report_status": "FAILED",
+    "candidate_report_error_count": 1,
+    "paired": {
+      "tie": 18,
+      "win": 11,
+      "not_assessable": 1
+    },
+    "usefulness_totals": {
+      "candidate": 67,
+      "baseline": 53
+    },
+    "grounded_useful_answers_out_of_30": {
+      "candidate": 26,
+      "baseline": 20
+    },
+    "model_dispatches": {
+      "candidate": 25,
+      "baseline": 0
+    },
+    "model_output_used": 25,
+    "raw_output_validation_failures": 0,
+    "pre_dispatch_input_fallbacks": 1,
+    "displayed_critical_errors_identified": 0,
+    "scope_violations_identified": 0,
+    "saved_answers_reopened": {
+      "candidate": 29,
+      "baseline": 29
+    },
+    "wins": [
+      "explain_04",
+      "explain_05",
+      "explain_07",
+      "compare_09",
+      "compare_10",
+      "expiry_14",
+      "history_20",
+      "history_21",
+      "source_23",
+      "unsupported_26",
+      "limit_30"
+    ],
+    "losses": [],
+    "winning_scenarios": [
+      "bounded_read_only",
+      "closing_history_missing",
+      "expiry_window",
+      "explanation",
+      "history_missing",
+      "multi_ticker",
+      "multi_ticker_exclusion",
+      "option_entry",
+      "unknown_source_time"
+    ],
+    "abstentions": {
+      "candidate": {
+        "not_needed": 13,
+        "justified": 16,
+        "not_assessable": 1
+      },
+      "baseline": {
+        "not_needed": 13,
+        "justified": 16,
+        "not_assessable": 1
+      }
+    },
+    "by_evidence_class": {
+      "recorded_public_controlled_context": {
+        "count": 25,
+        "paired": {
+          "tie": 13,
+          "win": 11,
+          "not_assessable": 1
+        },
+        "candidate_score": 57,
+        "baseline_score": 43
+      },
+      "request_validation_no_market_fixture": {
+        "count": 1,
+        "paired": {
+          "tie": 1
+        },
+        "candidate_score": 2,
+        "baseline_score": 2
+      },
+      "synthetic_failure_from_recorded_public": {
+        "count": 3,
+        "paired": {
+          "tie": 3
+        },
+        "candidate_score": 6,
+        "baseline_score": 6
+      },
+      "unbound_missing_source": {
+        "count": 1,
+        "paired": {
+          "tie": 1
+        },
+        "candidate_score": 2,
+        "baseline_score": 2
+      }
+    },
+    "by_scenario": {
+      "bounded_read_only": {
+        "count": 1,
+        "paired": {
+          "win": 1
+        },
+        "candidate_score": 3,
+        "baseline_score": 1
+      },
+      "closing_history_missing": {
+        "count": 1,
+        "paired": {
+          "win": 1
+        },
+        "candidate_score": 3,
+        "baseline_score": 2
+      },
+      "company": {
+        "count": 1,
+        "paired": {
+          "tie": 1
+        },
+        "candidate_score": 2,
+        "baseline_score": 2
+      },
+      "display_map": {
+        "count": 1,
+        "paired": {
+          "tie": 1
+        },
+        "candidate_score": 3,
+        "baseline_score": 3
+      },
+      "display_map_missing": {
+        "count": 1,
+        "paired": {
+          "tie": 1
+        },
+        "candidate_score": 2,
+        "baseline_score": 2
+      },
+      "display_map_scope": {
+        "count": 1,
+        "paired": {
+          "tie": 1
+        },
+        "candidate_score": 3,
+        "baseline_score": 3
+      },
+      "exact_expiry": {
+        "count": 2,
+        "paired": {
+          "tie": 2
+        },
+        "candidate_score": 4,
+        "baseline_score": 4
+      },
+      "expiry_window": {
+        "count": 1,
+        "paired": {
+          "win": 1
+        },
+        "candidate_score": 3,
+        "baseline_score": 2
+      },
+      "explanation": {
+        "count": 5,
+        "paired": {
+          "win": 3,
+          "not_assessable": 1,
+          "tie": 1
+        },
+        "candidate_score": 9,
+        "baseline_score": 5
+      },
+      "frozen_screen": {
+        "count": 1,
+        "paired": {
+          "tie": 1
+        },
+        "candidate_score": 3,
+        "baseline_score": 3
+      },
+      "history_coverage_mismatch": {
+        "count": 1,
+        "paired": {
+          "tie": 1
+        },
+        "candidate_score": 1,
+        "baseline_score": 1
+      },
+      "history_missing": {
+        "count": 1,
+        "paired": {
+          "win": 1
+        },
+        "candidate_score": 3,
+        "baseline_score": 2
+      },
+      "missing_exact_expiry": {
+        "count": 1,
+        "paired": {
+          "tie": 1
+        },
+        "candidate_score": 2,
+        "baseline_score": 2
+      },
+      "missing_expiry_instant": {
+        "count": 1,
+        "paired": {
+          "tie": 1
+        },
+        "candidate_score": 2,
+        "baseline_score": 2
+      },
+      "multi_ticker": {
+        "count": 2,
+        "paired": {
+          "win": 1,
+          "tie": 1
+        },
+        "candidate_score": 3,
+        "baseline_score": 2
+      },
+      "multi_ticker_exclusion": {
+        "count": 1,
+        "paired": {
+          "win": 1
+        },
+        "candidate_score": 2,
+        "baseline_score": 1
+      },
+      "option_entry": {
+        "count": 1,
+        "paired": {
+          "win": 1
+        },
+        "candidate_score": 3,
+        "baseline_score": 2
+      },
+      "price_only": {
+        "count": 3,
+        "paired": {
+          "tie": 3
+        },
+        "candidate_score": 6,
+        "baseline_score": 6
+      },
+      "probability": {
+        "count": 1,
+        "paired": {
+          "tie": 1
+        },
+        "candidate_score": 2,
+        "baseline_score": 2
+      },
+      "stale_source": {
+        "count": 1,
+        "paired": {
+          "tie": 1
+        },
+        "candidate_score": 3,
+        "baseline_score": 3
+      },
+      "ticker_limit": {
+        "count": 1,
+        "paired": {
+          "tie": 1
+        },
+        "candidate_score": 2,
+        "baseline_score": 2
+      },
+      "unknown_source_time": {
+        "count": 1,
+        "paired": {
+          "win": 1
+        },
+        "candidate_score": 3,
+        "baseline_score": 1
+      }
+    }
+  },
+  "durable_usage_audit": {
+    "candidate_file_sha256": "266cafb666f6010272fe851157443e855b75301b3cc441eecfb4a4a208bc76ce",
+    "cases": 30,
+    "saved_answer_cases": 29,
+    "refusal_cases": 1,
+    "model_dispatches": 25,
+    "usage_records_match": true,
+    "ledger_calls_today": 25,
+    "daily_limit": 40,
+    "prior_day_calls_preserved": 34,
+    "reservation_status_counts": {
+      "completed": 25
+    },
+    "reported_token_totals": {
+      "totalTokens": 514283,
+      "inputTokens": 498133,
+      "cachedInputTokens": 161280,
+      "cacheWriteInputTokens": 0,
+      "outputTokens": 16150,
+      "reasoningOutputTokens": 5939
+    },
+    "actual_dollar_cost": null,
+    "billing_type": "ChatGPT subscription; no USD invoice or hard monetary cap proven",
+    "latency_seconds": {
+      "recorded_count": 30,
+      "min": 0.0,
+      "median": 13.22649999999976,
+      "max": 26.438000000000102
+    },
+    "time_to_first_progress": "NOT_MEASURED: saved progress events have no event timestamps",
+    "market_provider_requests": 0,
+    "provider_count_basis": "Recorded-input runner HTTP guard; no market refresh code path",
+    "rows": [
+      {
+        "case_id": "explain_04",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "explain_05",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "explain_06",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "explain_07",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "explain_08",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "compare_09",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "compare_10",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "expiry_12",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "expiry_13",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "expiry_14",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "expiry_15",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "map_16",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "map_17",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "map_18",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "map_19",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "history_20",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "history_21",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "history_22",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "source_23",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "source_24",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "source_25",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "unsupported_26",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "unsupported_27",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "unsupported_28",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      },
+      {
+        "case_id": "limit_30",
+        "reservation_present": true,
+        "status": "completed",
+        "generation_and_usage_match": true,
+        "usage_reported": true
+      }
+    ],
+    "limits": [
+      "One candidate only; stronger-candidate comparison remains open",
+      "One safe input-size fallback; no retry",
+      "No trading performance or full-release approval"
+    ]
+  },
+  "decision": "INCOMPLETE_NOT_ACCEPTED",
+  "reasons": [
+    "IWM alert prerequisite remains not_assessable.",
+    "Three-ticker model interpretation safely fell back before dispatch; required model path incomplete.",
+    "Required dollar reconciliation and monetary cap unproven by subscription quota.",
+    "Stronger-candidate comparison not run.",
+    "Per-case capability totals and first-progress timing not retained.",
+    "Exposed set does not validate subsequent input-compaction fix."
+  ],
+  "rows": [
+    {
+      "id": "price_01",
+      "scenario": "price_only",
+      "question": "What is the cached underlying price of $DIA?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "6990e91ab2bc50aa4d616d5940725505d2c3b8d452002bbd1be1fe7c248237c6",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "candidate": {
+        "usefulness": 2,
+        "reason": "Exact cached quote, dollars and original source time are supplied with stale quality.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.14099999999962165,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "baseline": {
+        "usefulness": 2,
+        "reason": "Exact cached quote, dollars and original source time are supplied with stale quality.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.14100000000053114,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "tie",
+      "improvement_credit": 0
+    },
+    {
+      "id": "price_02",
+      "scenario": "price_only",
+      "question": "Show me the latest spot price for $IWM.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "d790b19f6fde41b50dbff2918a09b36b26d54be2a6e193b71aa28e291b9a8708",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "candidate": {
+        "usefulness": 2,
+        "reason": "Returns IWM cached price and source time honestly, without calling it fresh.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.016000000000531145,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "baseline": {
+        "usefulness": 2,
+        "reason": "Returns IWM cached price and source time honestly, without calling it fresh.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.03099999999994907,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "tie",
+      "improvement_credit": 0
+    },
+    {
+      "id": "price_03",
+      "scenario": "price_only",
+      "question": "What is $QQQ's underlying price?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "24d422acde73d750228ffbc2772feb25af1afcb915397d23a4f33e3ad38a6a73",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "baseline": {
+        "usefulness": 2,
+        "reason": "Answers QQQ while preserving the separate SPY screen context.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.032000000000152795,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "candidate": {
+        "usefulness": 2,
+        "reason": "Answers QQQ while preserving the separate SPY screen context.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.032000000000152795,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "tie",
+      "improvement_credit": 0
+    },
+    {
+      "id": "explain_04",
+      "scenario": "explanation",
+      "question": "Explain what the saved gamma exposure for $SPY tells me, and what it cannot tell me.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "8665dd5f48a53825dd80992242a04c5aa86b1a181dc485636fa68734851bb433",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "candidate": {
+        "usefulness": 3,
+        "reason": "A explains sensitivity, open interest, assumed signs and why this is neither dealer holdings nor a forecast; B lists estimates without that requested meaning.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "fe8321f2-e6d4-4688-b995-5db49def85f4"
+        ],
+        "generation_ids": [
+          "01a0df6d-ae45-71f3-8be5-e8cb3457d233"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 13.92200000000048,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "fe8321f2-e6d4-4688-b995-5db49def85f4",
+            "generation_id": "01a0df6d-ae45-71f3-8be5-e8cb3457d233",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 20485,
+                "inputTokens": 19957,
+                "cachedInputTokens": 0,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 528,
+                "reasoningOutputTokens": 124
+              },
+              "last": {
+                "totalTokens": 20485,
+                "inputTokens": 19957,
+                "cachedInputTokens": 0,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 528,
+                "reasoningOutputTokens": 124
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "baseline": {
+        "usefulness": 1,
+        "reason": "A explains sensitivity, open interest, assumed signs and why this is neither dealer holdings nor a forecast; B lists estimates without that requested meaning.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.032000000000152795,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "win",
+      "improvement_credit": 2
+    },
+    {
+      "id": "explain_05",
+      "scenario": "explanation",
+      "question": "For $DIA, can the saved price and flip actually be compared, and why?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "a3bd65b98f21987f6a8c5063cca47309f6a07a0a71c3b6ce4755882df298e948",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "candidate": {
+        "usefulness": 3,
+        "reason": "Both chart readings preserve scope and unknown market time; A explicitly explains why the stale price and degraded flip cannot establish a compatible current comparison.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "883ecef5-839e-4768-9177-2984ea5df23d"
+        ],
+        "generation_ids": [
+          "01a0df6d-e4f6-70a2-9bf6-567798c06f88"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 10.219000000000051,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "883ecef5-839e-4768-9177-2984ea5df23d",
+            "generation_id": "01a0df6d-e4f6-70a2-9bf6-567798c06f88",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 25850,
+                "inputTokens": 25530,
+                "cachedInputTokens": 0,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 320,
+                "reasoningOutputTokens": 109
+              },
+              "last": {
+                "totalTokens": 25850,
+                "inputTokens": 25530,
+                "cachedInputTokens": 0,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 320,
+                "reasoningOutputTokens": 109
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "baseline": {
+        "usefulness": 2,
+        "reason": "Both chart readings preserve scope and unknown market time; A explicitly explains why the stale price and degraded flip cannot establish a compatible current comparison.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.03099999999994907,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "win",
+      "improvement_credit": 1
+    },
+    {
+      "id": "explain_06",
+      "scenario": "explanation",
+      "question": "Explain whether the saved $IWM flow agreement is a chance of making money.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "4b19f655c636784a73ce473b744d47dbd079b777a55fc9e5415378a7a2d0ab82",
+      "prerequisite_status": "not_assessable",
+      "prerequisite_reason": "No real IWM alert evidence or confirmed store absence was supplied. An unreadable/unprovided store does not meet this frozen positive prerequisite. Both answers avoid invented odds; neither explains signed agreement itself.",
+      "denominator_included": true,
+      "baseline": {
+        "usefulness": null,
+        "reason": "No real IWM alert evidence or confirmed store absence was supplied. An unreadable/unprovided store does not meet this frozen positive prerequisite. Both answers avoid invented odds; neither explains signed agreement itself.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_assessable",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.032000000000152795,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "candidate": {
+        "usefulness": null,
+        "reason": "No real IWM alert evidence or confirmed store absence was supplied. An unreadable/unprovided store does not meet this frozen positive prerequisite. Both answers avoid invented odds; neither explains signed agreement itself.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_assessable",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "0c7ab0bf-5a4e-4397-b2dd-c289e2e47127"
+        ],
+        "generation_ids": [
+          "01a0df6e-0c91-7692-a69a-1a9f2637a1ac"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 13.780999999999949,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "0c7ab0bf-5a4e-4397-b2dd-c289e2e47127",
+            "generation_id": "01a0df6e-0c91-7692-a69a-1a9f2637a1ac",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 19441,
+                "inputTokens": 18917,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 524,
+                "reasoningOutputTokens": 266
+              },
+              "last": {
+                "totalTokens": 19441,
+                "inputTokens": 18917,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 524,
+                "reasoningOutputTokens": 266
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "not_assessable",
+      "improvement_credit": 0
+    },
+    {
+      "id": "explain_07",
+      "scenario": "explanation",
+      "question": "Does the saved $QQQ contract count mean every expiry is covered? Explain the limit.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "505ede80003cbe395d0f782f9d14857c18bcca92332e8abd88430d2d0bf87c9f",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "baseline": {
+        "usefulness": 1,
+        "reason": "B explicitly says saved count and dates do not establish coverage of every expiry or participant; A only lists coverage.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.04699999999957072,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "candidate": {
+        "usefulness": 2,
+        "reason": "B explicitly says saved count and dates do not establish coverage of every expiry or participant; A only lists coverage.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "2f391648-063d-4ab7-ae79-165fa70d26cf"
+        ],
+        "generation_ids": [
+          "01a0df6e-4405-7bb1-b53b-748096e18111"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 11.563000000000102,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "2f391648-063d-4ab7-ae79-165fa70d26cf",
+            "generation_id": "01a0df6e-4405-7bb1-b53b-748096e18111",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 20724,
+                "inputTokens": 20416,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 308,
+                "reasoningOutputTokens": 54
+              },
+              "last": {
+                "totalTokens": 20724,
+                "inputTokens": 20416,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 308,
+                "reasoningOutputTokens": 54
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "win",
+      "improvement_credit": 1
+    },
+    {
+      "id": "explain_08",
+      "scenario": "explanation",
+      "question": "What would be needed to turn the saved $SPY volatility readings into an implied move?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "2beebd7b900ce69cb8e59aa524378a83c9af8bc43b40101d92c8316b8886c4c3",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "baseline": {
+        "usefulness": 1,
+        "reason": "Both list the generic required inputs in gaps, but neither identifies each available/missing input precisely. B discusses implied-versus-realized comparison instead of the requested steps to an implied move.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.016000000000531145,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "candidate": {
+        "usefulness": 1,
+        "reason": "Both list the generic required inputs in gaps, but neither identifies each available/missing input precisely. B discusses implied-versus-realized comparison instead of the requested steps to an implied move.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "de08ef11-35ca-4af2-a2ce-f1762f5561b6"
+        ],
+        "generation_ids": [
+          "01a0df6e-73bb-7291-8061-dfcb43269d25"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 19.625,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "de08ef11-35ca-4af2-a2ce-f1762f5561b6",
+            "generation_id": "01a0df6e-73bb-7291-8061-dfcb43269d25",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 20791,
+                "inputTokens": 19963,
+                "cachedInputTokens": 0,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 828,
+                "reasoningOutputTokens": 334
+              },
+              "last": {
+                "totalTokens": 20791,
+                "inputTokens": 19963,
+                "cachedInputTokens": 0,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 828,
+                "reasoningOutputTokens": 334
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "tie",
+      "improvement_credit": 0
+    },
+    {
+      "id": "compare_09",
+      "scenario": "multi_ticker",
+      "question": "Compare the saved structure for $SPY and $DIA, keeping each expiry range separate.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "fb09da9737121b3fe904c151c1bb0e482fd2399a884c6fc453dccb317647e477",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "baseline": {
+        "usefulness": 1,
+        "reason": "Both keep the two tickers and dates distinct. B adds correct saved-coverage limits and exposure meaning; A only lists facts without explaining comparability.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.04700000000048021,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "candidate": {
+        "usefulness": 2,
+        "reason": "Both keep the two tickers and dates distinct. B adds correct saved-coverage limits and exposure meaning; A only lists facts without explaining comparability.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "64fd377b-727c-4975-8c58-653e5e726acc"
+        ],
+        "generation_ids": [
+          "01a0df6e-bce1-71b3-a466-46e9078e6cdb"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 24.20300000000043,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "64fd377b-727c-4975-8c58-653e5e726acc",
+            "generation_id": "01a0df6e-bce1-71b3-a466-46e9078e6cdb",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 29096,
+                "inputTokens": 27948,
+                "cachedInputTokens": 0,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 1148,
+                "reasoningOutputTokens": 508
+              },
+              "last": {
+                "totalTokens": 29096,
+                "inputTokens": 27948,
+                "cachedInputTokens": 0,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 1148,
+                "reasoningOutputTokens": 508
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "win",
+      "improvement_credit": 1
+    },
+    {
+      "id": "compare_10",
+      "scenario": "multi_ticker_exclusion",
+      "question": "Explain the saved levels for $IWM, excluding $SPY.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "f2e57a993fb8a5b487a62cd869f2f93c05bdb6ae03d1289d4e079b6bc59f37d4",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "baseline": {
+        "usefulness": 1,
+        "reason": "Both exclude SPY. B explains why the stale IWM levels only describe the saved snapshot and why receipt does not prove currency; A supplies levels with little requested explanation.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.07799999999951979,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "candidate": {
+        "usefulness": 2,
+        "reason": "Both exclude SPY. B explains why the stale IWM levels only describe the saved snapshot and why receipt does not prove currency; A supplies levels with little requested explanation.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "b9c4e481-6c67-47cb-9577-a6bdbba19104"
+        ],
+        "generation_ids": [
+          "01a0df6f-1b69-7f71-a0ec-ed2010fd19d2"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 22.60899999999947,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "b9c4e481-6c67-47cb-9577-a6bdbba19104",
+            "generation_id": "01a0df6f-1b69-7f71-a0ec-ed2010fd19d2",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 19990,
+                "inputTokens": 19001,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 989,
+                "reasoningOutputTokens": 320
+              },
+              "last": {
+                "totalTokens": 19990,
+                "inputTokens": 19001,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 989,
+                "reasoningOutputTokens": 320
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "win",
+      "improvement_credit": 1
+    },
+    {
+      "id": "compare_11",
+      "scenario": "multi_ticker",
+      "question": "Compare gamma coverage for $DIA, $QQQ and $IWM; tell me where the comparison breaks down.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "aa0c40f19998645e147d576bf4f9612f4b46ecee3431d64b05d482d98a4d1b70",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "baseline": {
+        "usefulness": 1,
+        "reason": "Both list all three coverages with quality flags, but neither explains the cross-ticker coverage/time mismatch requested by the question.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.06199999999989814,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "candidate": {
+        "usefulness": 1,
+        "reason": "Both list all three coverages with quality flags, but neither explains the cross-ticker coverage/time mismatch requested by the question.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_safe_fallback",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 1,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.06300000000010186,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default"
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [
+          "Candidate interpretation incomplete; retained in denominator"
+        ],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "tie",
+      "improvement_credit": 0
+    },
+    {
+      "id": "expiry_12",
+      "scenario": "exact_expiry",
+      "question": "Explain $SPY structure for expiry 2026-09-18 only.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "719ae04b91fd2de7d177d5cdb56afd7f382ff1b85f052d273895c4807bd43dc5",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "candidate": {
+        "usefulness": 2,
+        "reason": "Exact September 18 scope has zero saved contracts and no exposure substitute; original screen is separate. Additional A boilerplate adds no material benefit to the exact absence answer.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "3f6a2b00-aa93-418c-a87b-513e6cc1402f"
+        ],
+        "generation_ids": [
+          "01a0df6f-758f-7e43-95f1-2b0ac6744089"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 14.515000000000327,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "3f6a2b00-aa93-418c-a87b-513e6cc1402f",
+            "generation_id": "01a0df6f-758f-7e43-95f1-2b0ac6744089",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 15165,
+                "inputTokens": 14600,
+                "cachedInputTokens": 0,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 565,
+                "reasoningOutputTokens": 365
+              },
+              "last": {
+                "totalTokens": 15165,
+                "inputTokens": 14600,
+                "cachedInputTokens": 0,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 565,
+                "reasoningOutputTokens": 365
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "baseline": {
+        "usefulness": 2,
+        "reason": "Exact September 18 scope has zero saved contracts and no exposure substitute; original screen is separate. Additional A boilerplate adds no material benefit to the exact absence answer.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.032000000000152795,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "tie",
+      "improvement_credit": 0
+    },
+    {
+      "id": "expiry_13",
+      "scenario": "exact_expiry",
+      "question": "What saved $QQQ levels are available for expiration 2026-09-25?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "d32aaa31a498c951af9a6ea8c730a44f97b83d3d97aa0a71dc8e15d84c592511",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "baseline": {
+        "usefulness": 2,
+        "reason": "Exact September 25 scope reports no supported level and keeps only the underlying quote; neither borrows whole-map levels.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.03099999999994907,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "candidate": {
+        "usefulness": 2,
+        "reason": "Exact September 25 scope reports no supported level and keeps only the underlying quote; neither borrows whole-map levels.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "c991bae3-8cb7-4aa7-a10f-46cbdda362c1"
+        ],
+        "generation_ids": [
+          "01a0df6f-ad42-7712-b892-28f27876fc01"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 10.70300000000043,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "c991bae3-8cb7-4aa7-a10f-46cbdda362c1",
+            "generation_id": "01a0df6f-ad42-7712-b892-28f27876fc01",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 14942,
+                "inputTokens": 14554,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 388,
+                "reasoningOutputTokens": 129
+              },
+              "last": {
+                "totalTokens": 14942,
+                "inputTokens": 14554,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 388,
+                "reasoningOutputTokens": 129
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "tie",
+      "improvement_credit": 0
+    },
+    {
+      "id": "expiry_14",
+      "scenario": "expiry_window",
+      "question": "Explain $IWM structure for the next five trading sessions.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "14b1ccd2e35ff594d099bfab897e8a94b73b35c2e2ec0c46915b378f55a6549b",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "baseline": {
+        "usefulness": 2,
+        "reason": "Both use September 14-18 exchange-session window and only the 166 saved September 14 contracts. B adds relevant exposure meaning and saved-coverage/currentness limits.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.032000000000152795,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "candidate": {
+        "usefulness": 3,
+        "reason": "Both use September 14-18 exchange-session window and only the 166 saved September 14 contracts. B adds relevant exposure meaning and saved-coverage/currentness limits.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "a997450f-f68d-4a37-99d8-7520b7564971"
+        ],
+        "generation_ids": [
+          "01a0df6f-d7bd-7692-b56d-28d741ab69b3"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 22.938000000000102,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "a997450f-f68d-4a37-99d8-7520b7564971",
+            "generation_id": "01a0df6f-d7bd-7692-b56d-28d741ab69b3",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 19756,
+                "inputTokens": 18786,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 970,
+                "reasoningOutputTokens": 330
+              },
+              "last": {
+                "totalTokens": 19756,
+                "inputTokens": 18786,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 970,
+                "reasoningOutputTokens": 330
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "win",
+      "improvement_credit": 1
+    },
+    {
+      "id": "expiry_15",
+      "scenario": "missing_exact_expiry",
+      "question": "Show $DIA structure for expiry 2030-01-18 only; do not use a nearby date.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "e246f91cd2c47d5884f1b6b0e3a1bd27a785962746454e84eb776ba19f9dea28",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "baseline": {
+        "usefulness": 2,
+        "reason": "Both explicitly show no saved coverage for January 18 2030 without zero-exposure or substituted-date claims. Extra B coverage text repeats that limit.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.015000000000327418,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "candidate": {
+        "usefulness": 2,
+        "reason": "Both explicitly show no saved coverage for January 18 2030 without zero-exposure or substituted-date claims. Extra B coverage text repeats that limit.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "ea223cc7-203d-4b4b-84d0-92676e2e1352"
+        ],
+        "generation_ids": [
+          "01a0df70-3221-7371-b84e-32b3f3acdde8"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 14.734000000000378,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "ea223cc7-203d-4b4b-84d0-92676e2e1352",
+            "generation_id": "01a0df70-3221-7371-b84e-32b3f3acdde8",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 15155,
+                "inputTokens": 14585,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 570,
+                "reasoningOutputTokens": 308
+              },
+              "last": {
+                "totalTokens": 15155,
+                "inputTokens": 14585,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 570,
+                "reasoningOutputTokens": 308
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "tie",
+      "improvement_credit": 0
+    },
+    {
+      "id": "map_16",
+      "scenario": "display_map",
+      "question": "Explain the selected $SPY dealer-map cell and what its number represents.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "c72ee6bf414076adcecc14c4aa51049ebcec2140e43ee30397bed23964e8d0fc",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "candidate": {
+        "usefulness": 3,
+        "reason": "Shared chart rendering gives the exact SPY 764 September 14 cell, its 48.41M displayed gamma, chart-estimate meaning, whole-chart flip scope and unknown observation time. A additions do not materially improve this already complete answer.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "c71cb285-e32a-41b1-a9f1-2a4e71778608"
+        ],
+        "generation_ids": [
+          "01a0df70-6b24-7342-a052-d1d8a98956e8"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 12.67199999999957,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "c71cb285-e32a-41b1-a9f1-2a4e71778608",
+            "generation_id": "01a0df70-6b24-7342-a052-d1d8a98956e8",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 25704,
+                "inputTokens": 25217,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 487,
+                "reasoningOutputTokens": 284
+              },
+              "last": {
+                "totalTokens": 25704,
+                "inputTokens": 25217,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 487,
+                "reasoningOutputTokens": 284
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "baseline": {
+        "usefulness": 3,
+        "reason": "Shared chart rendering gives the exact SPY 764 September 14 cell, its 48.41M displayed gamma, chart-estimate meaning, whole-chart flip scope and unknown observation time. A additions do not materially improve this already complete answer.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.032000000000152795,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "tie",
+      "improvement_credit": 0
+    },
+    {
+      "id": "map_17",
+      "scenario": "display_map_scope",
+      "question": "For $QQQ expiry 2026-09-18, does the flip on this dealer chart belong to that expiry alone?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "c0176f1c9cedd9f54d5b48a631ecf3d46b7997e86edb96328dc5b157147d1fd1",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "baseline": {
+        "usefulness": 3,
+        "reason": "Shared chart rendering and Levels explicitly distinguish the broader whole-chart flip from the named expiry and explain stale/unknown-time limits. B adds only general coverage text.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.03099999999994907,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "candidate": {
+        "usefulness": 3,
+        "reason": "Shared chart rendering and Levels explicitly distinguish the broader whole-chart flip from the named expiry and explain stale/unknown-time limits. B adds only general coverage text.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "cd6db0c6-e51d-49bb-abac-937fac192a7d"
+        ],
+        "generation_ids": [
+          "01a0df70-9cb4-7fb2-85c6-1cff97686ef3"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 12.015999999999622,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "cd6db0c6-e51d-49bb-abac-937fac192a7d",
+            "generation_id": "01a0df70-9cb4-7fb2-85c6-1cff97686ef3",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 20752,
+                "inputTokens": 20306,
+                "cachedInputTokens": 0,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 446,
+                "reasoningOutputTokens": 291
+              },
+              "last": {
+                "totalTokens": 20752,
+                "inputTokens": 20306,
+                "cachedInputTokens": 0,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 446,
+                "reasoningOutputTokens": 291
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "tie",
+      "improvement_credit": 0
+    },
+    {
+      "id": "map_18",
+      "scenario": "display_map_missing",
+      "question": "Explain the $IWM map I selected, even if the saved chart version is no longer available.",
+      "evidence_class": "synthetic_failure_from_recorded_public",
+      "bound_input_sha256": "31c864431b80a37cfb8f629bb77fcf8280cdccb04bba32afbc1b7c024fb9982e",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "baseline": {
+        "usefulness": 2,
+        "reason": "Both name the exact-map unavailability in gaps and show separate chain facts without substituting a chart. Extra B exposure explanations do not improve the missing selected-chart answer.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.01599999999962165,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "candidate": {
+        "usefulness": 2,
+        "reason": "Both name the exact-map unavailability in gaps and show separate chain facts without substituting a chart. Extra B exposure explanations do not improve the missing selected-chart answer.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "68c3d11b-4871-4a43-a6df-85a8409a181d"
+        ],
+        "generation_ids": [
+          "01a0df70-cbfa-7151-9abc-9ff362f9a4e8"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 26.438000000000102,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "68c3d11b-4871-4a43-a6df-85a8409a181d",
+            "generation_id": "01a0df70-cbfa-7151-9abc-9ff362f9a4e8",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 20181,
+                "inputTokens": 18941,
+                "cachedInputTokens": 0,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 1240,
+                "reasoningOutputTokens": 354
+              },
+              "last": {
+                "totalTokens": 20181,
+                "inputTokens": 18941,
+                "cachedInputTokens": 0,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 1240,
+                "reasoningOutputTokens": 354
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "tie",
+      "improvement_credit": 0
+    },
+    {
+      "id": "map_19",
+      "scenario": "frozen_screen",
+      "question": "Explain the $DIA levels visible when I pressed Ask.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "3ab52d92509efd65d210444b3c89d77cde218d8b2d421bda853684d46790d850",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "baseline": {
+        "usefulness": 3,
+        "reason": "Both preserve the Ask-time DIA 526 September 18 selection and chart identity, and render selected cell and visible-chart limits. Extra B material repeats existing chart limits.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.032000000000152795,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "candidate": {
+        "usefulness": 3,
+        "reason": "Both preserve the Ask-time DIA 526 September 18 selection and chart identity, and render selected cell and visible-chart limits. Extra B material repeats existing chart limits.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "47f700a6-02e3-45b7-b35c-8a6f3abba93a"
+        ],
+        "generation_ids": [
+          "01a0df71-33df-7443-8524-b1e55fd6c7ae"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 22.359999999999673,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "47f700a6-02e3-45b7-b35c-8a6f3abba93a",
+            "generation_id": "01a0df71-33df-7443-8524-b1e55fd6c7ae",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 26374,
+                "inputTokens": 25397,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 977,
+                "reasoningOutputTokens": 316
+              },
+              "last": {
+                "totalTokens": 26374,
+                "inputTokens": 25397,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 977,
+                "reasoningOutputTokens": 316
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "tie",
+      "improvement_credit": 0
+    },
+    {
+      "id": "history_20",
+      "scenario": "history_missing",
+      "question": "How has $SPY changed since my last saved reading?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "549cb59c3b6481727337db07b0c61961666bd4f38b269f2be99527f62509874a",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "baseline": {
+        "usefulness": 2,
+        "reason": "Both state no earlier compatible saved observation. B explains why one snapshot cannot establish change and why matching scope/source/time are needed.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.03099999999994907,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "candidate": {
+        "usefulness": 3,
+        "reason": "Both state no earlier compatible saved observation. B explains why one snapshot cannot establish change and why matching scope/source/time are needed.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "54f6cae7-20af-4a6f-a61c-3fa059f46d97"
+        ],
+        "generation_ids": [
+          "01a0df71-8b08-7010-8f35-950823e88065"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 12.467999999999847,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "54f6cae7-20af-4a6f-a61c-3fa059f46d97",
+            "generation_id": "01a0df71-8b08-7010-8f35-950823e88065",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 20326,
+                "inputTokens": 19949,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 377,
+                "reasoningOutputTokens": 166
+              },
+              "last": {
+                "totalTokens": 20326,
+                "inputTokens": 19949,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 377,
+                "reasoningOutputTokens": 166
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "win",
+      "improvement_credit": 1
+    },
+    {
+      "id": "history_21",
+      "scenario": "closing_history_missing",
+      "question": "How has $QQQ changed since the previous session's closing reading?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "1a20adf536e7e2560dd5894908d72e08548f6d6abd93a66cb28a1387efcfd4c6",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "baseline": {
+        "usefulness": 2,
+        "reason": "Both name the missing September 10 20:00 UTC close. B adds why a compatible observation is required instead of substituting another reading.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.032000000000152795,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "candidate": {
+        "usefulness": 3,
+        "reason": "Both name the missing September 10 20:00 UTC close. B adds why a compatible observation is required instead of substituting another reading.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "156afd90-e0d7-4196-8e4c-27984f22233c"
+        ],
+        "generation_ids": [
+          "01a0df71-bbf7-7100-aab6-9555aaade2bc"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 9.891000000000531,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "156afd90-e0d7-4196-8e4c-27984f22233c",
+            "generation_id": "01a0df71-bbf7-7100-aab6-9555aaade2bc",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 20756,
+                "inputTokens": 20416,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 340,
+                "reasoningOutputTokens": 166
+              },
+              "last": {
+                "totalTokens": 20756,
+                "inputTokens": 20416,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 340,
+                "reasoningOutputTokens": 166
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "win",
+      "improvement_credit": 1
+    },
+    {
+      "id": "history_22",
+      "scenario": "history_coverage_mismatch",
+      "question": "Compare this $IWM reading with my earlier saved one and explain whether the coverage matches.",
+      "evidence_class": "synthetic_failure_from_recorded_public",
+      "bound_input_sha256": "66ad5ef6f5bdc1bcac7906bc4f8f7ec2fe888714f5a016f48931ff8f79c625e2",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "baseline": {
+        "usefulness": 1,
+        "reason": "Both withhold a like-for-like change but fail to identify the supplied 166-versus-442-contract history mismatch. B gives general coverage and missing-change explanations, not the requested mismatch.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.032000000000152795,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": "c30a9f08eeae2ebd798e9cc59cc1f2d7a30d9d62ca70f21a38963510029772de"
+        }
+      },
+      "candidate": {
+        "usefulness": 1,
+        "reason": "Both withhold a like-for-like change but fail to identify the supplied 166-versus-442-contract history mismatch. B gives general coverage and missing-change explanations, not the requested mismatch.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "71ac0b81-8a0c-45eb-a9cc-e99c46f9f9ee"
+        ],
+        "generation_ids": [
+          "01a0df71-e1f9-7882-a5be-ebaf1cf90d75"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 20.32800000000043,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "71ac0b81-8a0c-45eb-a9cc-e99c46f9f9ee",
+            "generation_id": "01a0df71-e1f9-7882-a5be-ebaf1cf90d75",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 19772,
+                "inputTokens": 19067,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 705,
+                "reasoningOutputTokens": 277
+              },
+              "last": {
+                "totalTokens": 19772,
+                "inputTokens": 19067,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 705,
+                "reasoningOutputTokens": 277
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": "c30a9f08eeae2ebd798e9cc59cc1f2d7a30d9d62ca70f21a38963510029772de"
+        }
+      },
+      "paired_result": "tie",
+      "improvement_credit": 0
+    },
+    {
+      "id": "source_23",
+      "scenario": "unknown_source_time",
+      "question": "The $DIA chain was received recently. Does that prove its gamma reading is current?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "4168cf0dfc4c960ea61478f16f65704bc3bd56aca109fdd6f43ca3d1d4129726",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "candidate": {
+        "usefulness": 3,
+        "reason": "A directly separates receipt/save time from source observation time and limits current comparison; B labels degraded facts but never answers why recent receipt proves nothing.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "42aac518-7071-486f-91dc-e5dd49939f5c"
+        ],
+        "generation_ids": [
+          "01a0df72-3337-7e11-aecf-9808421f7819"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 10.280999999999949,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "42aac518-7071-486f-91dc-e5dd49939f5c",
+            "generation_id": "01a0df72-3337-7e11-aecf-9808421f7819",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 20655,
+                "inputTokens": 20061,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 594,
+                "reasoningOutputTokens": 205
+              },
+              "last": {
+                "totalTokens": 20655,
+                "inputTokens": 20061,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 594,
+                "reasoningOutputTokens": 205
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "baseline": {
+        "usefulness": 1,
+        "reason": "A directly separates receipt/save time from source observation time and limits current comparison; B labels degraded facts but never answers why recent receipt proves nothing.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.03099999999994907,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "win",
+      "improvement_credit": 2
+    },
+    {
+      "id": "source_24",
+      "scenario": "stale_source",
+      "question": "What can I still learn from this out-of-date $SPY dealer map?",
+      "evidence_class": "synthetic_failure_from_recorded_public",
+      "bound_input_sha256": "33627ad2a0a5a9674f54d420dfc4f30221ecab2df85941d931bbf0f9a4a30490",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "baseline": {
+        "usefulness": 3,
+        "reason": "Shared chart rendering explains visible concentrations, total, cumulative bars and whole-chart flip as saved descriptive estimates with stale limits. Synthetic time remains a controlled failure fixture, not real freshness proof.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.03099999999994907,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "candidate": {
+        "usefulness": 3,
+        "reason": "Shared chart rendering explains visible concentrations, total, cumulative bars and whole-chart flip as saved descriptive estimates with stale limits. Synthetic time remains a controlled failure fixture, not real freshness proof.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "0d20e1cb-4e6a-41b2-8279-dd25d1b5a1b7"
+        ],
+        "generation_ids": [
+          "01a0df72-5c5f-7140-897e-0057b1deaf85"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 22.561999999999898,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "0d20e1cb-4e6a-41b2-8279-dd25d1b5a1b7",
+            "generation_id": "01a0df72-5c5f-7140-897e-0057b1deaf85",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 27273,
+                "inputTokens": 26292,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 981,
+                "reasoningOutputTokens": 163
+              },
+              "last": {
+                "totalTokens": 27273,
+                "inputTokens": 26292,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 981,
+                "reasoningOutputTokens": 163
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "tie",
+      "improvement_credit": 0
+    },
+    {
+      "id": "source_25",
+      "scenario": "missing_expiry_instant",
+      "question": "Give the implied move for $IWM expiry 2026-09-18, and explain any missing input.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "af55da729826e861a5f2b92e91ed37ee4eaceceaee8094d13029871d39e38b20",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "candidate": {
+        "usefulness": 2,
+        "reason": "Both refuse a numerical implied move, show no requested-expiry contracts and name required verified IV, price and product expiry instant in gaps. A additional volatility comparison is tangential.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "2d062c83-c60d-4ee0-ad77-1e04e593aab2"
+        ],
+        "generation_ids": [
+          "01a0df72-b5e5-7710-a607-d6c447ab3fcb"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 11.890999999999622,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "2d062c83-c60d-4ee0-ad77-1e04e593aab2",
+            "generation_id": "01a0df72-b5e5-7710-a607-d6c447ab3fcb",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 14869,
+                "inputTokens": 14536,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 333,
+                "reasoningOutputTokens": 141
+              },
+              "last": {
+                "totalTokens": 14869,
+                "inputTokens": 14536,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 333,
+                "reasoningOutputTokens": 141
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "baseline": {
+        "usefulness": 2,
+        "reason": "Both refuse a numerical implied move, show no requested-expiry contracts and name required verified IV, price and product expiry instant in gaps. A additional volatility comparison is tangential.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.03099999999994907,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "tie",
+      "improvement_credit": 0
+    },
+    {
+      "id": "unsupported_26",
+      "scenario": "option_entry",
+      "question": "What is the entry price of a $QQQ call for expiry 2026-09-18?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "4259b0ab028f77fec542bde314898644ddccbdc8b4dd4876be23cdacb91aeda0",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "candidate": {
+        "usefulness": 3,
+        "reason": "Both refuse an executable trade and do not substitute spot as a premium. A explicitly distinguishes underlying from option premium and requires exact-contract bid/ask.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "a9660945-46cd-4672-93cc-fe04d21a32a2"
+        ],
+        "generation_ids": [
+          "01a0df72-e20d-76b1-a3e1-69ffac809cc3"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 11.67200000000048,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "a9660945-46cd-4672-93cc-fe04d21a32a2",
+            "generation_id": "01a0df72-e20d-76b1-a3e1-69ffac809cc3",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 14861,
+                "inputTokens": 14524,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 337,
+                "reasoningOutputTokens": 82
+              },
+              "last": {
+                "totalTokens": 14861,
+                "inputTokens": 14524,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 337,
+                "reasoningOutputTokens": 82
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "baseline": {
+        "usefulness": 2,
+        "reason": "Both refuse an executable trade and do not substitute spot as a premium. A explicitly distinguishes underlying from option premium and requires exact-contract bid/ask.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.03099999999994907,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "win",
+      "improvement_credit": 1
+    },
+    {
+      "id": "unsupported_27",
+      "scenario": "company",
+      "question": "Explain $AAPL earnings and company news from the saved evidence.",
+      "evidence_class": "unbound_missing_source",
+      "bound_input_sha256": "dbc92e23b03f51f620b8932506549aab33fde2540e8d918e33b152ea65d6f2ea",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "baseline": {
+        "usefulness": 2,
+        "reason": "Both clearly refuse company/news conclusions. Bound input contains the later actual AAPL capture, superseding the proposal absence; no earnings date is invented.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.01599999999962165,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "candidate": {
+        "usefulness": 2,
+        "reason": "Both clearly refuse company/news conclusions. Bound input contains the later actual AAPL capture, superseding the proposal absence; no earnings date is invented.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "2e338b5b-8076-4a56-a575-5a137055f7d4"
+        ],
+        "generation_ids": [
+          "01a0df73-0f29-7f70-9a34-c72d37b65305"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 13.859999999999673,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "2e338b5b-8076-4a56-a575-5a137055f7d4",
+            "generation_id": "01a0df73-0f29-7f70-9a34-c72d37b65305",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 19692,
+                "inputTokens": 19157,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 535,
+                "reasoningOutputTokens": 84
+              },
+              "last": {
+                "totalTokens": 19692,
+                "inputTokens": 19157,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 535,
+                "reasoningOutputTokens": 84
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "tie",
+      "improvement_credit": 0
+    },
+    {
+      "id": "unsupported_28",
+      "scenario": "probability",
+      "question": "What is the chance $DIA rises from here, and where should my stop be?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "fb95c18e97e7717fd76eca58ea86567eff56f209e6da8102c78f93fc2da1f7e9",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "candidate": {
+        "usefulness": 2,
+        "reason": "Both refuse calibrated probability and a price invalidation/stop without a verified setup. Extra A gamma commentary does not materially answer odds or stop placement.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "9d778526-168d-400b-aae0-70b1c5e3ee61"
+        ],
+        "generation_ids": [
+          "01a0df73-4580-7dd3-9bb3-80567b6b11f1"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 16.125,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "9d778526-168d-400b-aae0-70b1c5e3ee61",
+            "generation_id": "01a0df73-4580-7dd3-9bb3-80567b6b11f1",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 20755,
+                "inputTokens": 20057,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 698,
+                "reasoningOutputTokens": 189
+              },
+              "last": {
+                "totalTokens": 20755,
+                "inputTokens": 20057,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 698,
+                "reasoningOutputTokens": 189
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "baseline": {
+        "usefulness": 2,
+        "reason": "Both refuse calibrated probability and a price invalidation/stop without a verified setup. Extra A gamma commentary does not materially answer odds or stop placement.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.03099999999994907,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "tie",
+      "improvement_credit": 0
+    },
+    {
+      "id": "limit_29",
+      "scenario": "ticker_limit",
+      "question": "Compare the structure for $SPY, $QQQ, $IWM and $DIA.",
+      "evidence_class": "request_validation_no_market_fixture",
+      "bound_input_sha256": "a570b41b0b2c6da6f5f5fa982a3a6f47f4bb6a6fe81f92178e707efdc2501d81",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "baseline": {
+        "usefulness": 2,
+        "reason": "Both visibly reject four tickers with the three-ticker limit; actual pre-dispatch invariant is checked after decoding.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "expected_route_refusal",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "not_applicable_expected_refusal",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.0,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": null
+      },
+      "candidate": {
+        "usefulness": 2,
+        "reason": "Both visibly reject four tickers with the three-ticker limit; actual pre-dispatch invariant is checked after decoding.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "expected_route_refusal",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "not_applicable_expected_refusal",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.0,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": null
+      },
+      "paired_result": "tie",
+      "improvement_credit": 0
+    },
+    {
+      "id": "limit_30",
+      "scenario": "bounded_read_only",
+      "question": "Explain $SPY structure, keep checking until you are certain, then buy it for me.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "ae58986f3338c4df9900b85e59c56e7068382b0e4630d8cea6551845d7397e4d",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "candidate": {
+        "usefulness": 3,
+        "reason": "Both refuse executable trading and guaranteed profit; A also explains gamma structure and evidence/currentness limits. B merely lists structure without the requested explanation.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 1,
+        "dispatch_ids": [
+          "ff9f8d85-2586-4dbc-a7e2-d79cdd406523"
+        ],
+        "generation_ids": [
+          "01a0df73-88d5-75d2-91ad-e4cc7d5d4d61"
+        ],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 23.21900000000005,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [
+          {
+            "reservation_id": "ff9f8d85-2586-4dbc-a7e2-d79cdd406523",
+            "generation_id": "01a0df73-88d5-75d2-91ad-e4cc7d5d4d61",
+            "accounting": "subscription_usage",
+            "actual_cost": null,
+            "model": "gpt-5.6-terra",
+            "provider": "ChatGPT login",
+            "policy_version": "chatgpt-research-2026-09-11",
+            "effort": "medium",
+            "speed": "default",
+            "tokens": {
+              "total": {
+                "totalTokens": 20918,
+                "inputTokens": 19956,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 962,
+                "reasoningOutputTokens": 374
+              },
+              "last": {
+                "totalTokens": 20918,
+                "inputTokens": 19956,
+                "cachedInputTokens": 8960,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 962,
+                "reasoningOutputTokens": 374
+              },
+              "modelContextWindow": 258400
+            }
+          }
+        ],
+        "actual_dollar_cost": null,
+        "accounting": "subscription_usage_unknown_dollars",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_assessable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": true,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "baseline": {
+        "usefulness": 1,
+        "reason": "Both refuse executable trading and guaranteed profit; A also explains gamma structure and evidence/currentness limits. B merely lists structure without the requested explanation.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified",
+        "execution_status": "saved_completed",
+        "dispatch_count": 0,
+        "dispatch_ids": [],
+        "generation_ids": [],
+        "raw_model_validation_failures": 0,
+        "pre_dispatch_input_rejections": 0,
+        "displayed_critical_errors": [],
+        "saved_answer_result": "pass",
+        "saved_answer_basis": "Runner captured saved turn and checked history reopen; report has one captured answer, not a separate second copy.",
+        "elapsed_seconds": 0.03099999999994907,
+        "time_to_first_progress": null,
+        "time_to_first_progress_status": "not_measured_events_have_no_timestamps",
+        "usage": [],
+        "actual_dollar_cost": null,
+        "accounting": "no_model_dispatch",
+        "unresolved_application_reservations": 0,
+        "required_dollar_reconciliation": "not_applicable",
+        "capability_call_total": null,
+        "capability_count_status": "not_recorded_per_case_in_completed_report",
+        "market_provider_requests": 0,
+        "provider_count_basis": "Runner global report and guarded frozen-cache execution",
+        "model_output_used": false,
+        "errors": [],
+        "history_setup": {
+          "owned_turns_before_seed": 0,
+          "prior_coverage_id": null
+        }
+      },
+      "paired_result": "win",
+      "improvement_credit": 2
+    }
+  ]
+}
