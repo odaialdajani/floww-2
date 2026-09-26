@@ -1,7 +1,7 @@
 // Pure scanner math for Tidehunter Pro — no React, no fetch. Tested in scanLogic.test.js.
 
-export const fmtUSD = (v) => { const n = Math.abs(Number(v) || 0); if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`; if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`; if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}k`; return `$${Math.round(n)}`; };
-export const fmtK = (v) => { const n = Number(v) || 0; if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`; if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`; if (n >= 1e3) return `${(n / 1e3).toFixed(0)}k`; return String(Math.round(n)); };
+export const fmtUSD = (v) => { if (v == null || !Number.isFinite(Number(v))) return "Unknown"; const n = Math.abs(Number(v) || 0); if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`; if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`; if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}k`; return `$${Math.round(n)}`; };
+export const fmtK = (v) => { if (v == null || !Number.isFinite(Number(v))) return "Unknown"; const n = Number(v) || 0; if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`; if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`; if (n >= 1e3) return `${(n / 1e3).toFixed(0)}k`; return String(Math.round(n)); };
 // Local trading-day key (America/Eastern for a Philly desk) — first-seen and
 // the alert tape reset at local midnight so each session starts clean.
 export function sessionDay(now = Date.now()) {
@@ -472,7 +472,10 @@ export function tickerRollup(rows, top = 8) {
 // delta; regime (from the backend heatmap cache) feeds the score nudge.
 export function mkScanRow(under, type, strike, exp, vol, oi, iv, delta, spot = null, regime = null) {
   const stk = Number(strike) || 0;
-  const volOI = oi > 0 ? vol / oi : (vol > 0 ? 99 : 0);
+  oi = oi != null && Number.isFinite(Number(oi)) && Number(oi) >= 0 ? Number(oi) : null;
+  iv = iv != null && Number.isFinite(Number(iv)) && Number(iv) > 0 ? Number(iv) : null;
+  spot = spot != null && Number.isFinite(Number(spot)) && Number(spot) > 0 ? Number(spot) : null;
+  const volOI = oi > 0 ? vol / oi : null;
   const given = delta == null ? null : Number(delta);
   const est = given == null ? estimateDelta(stk, spot, type) : null;
   const r = {

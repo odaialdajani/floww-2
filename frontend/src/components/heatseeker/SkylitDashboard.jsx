@@ -1,3 +1,5 @@
+import StockDirectory from "./StockDirectory";
+import PriceNodeHistory from "./PriceNodeHistory";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { API as BACKEND_API } from "../../config/api";
@@ -351,6 +353,7 @@ function SkylitDashboard({
   }, [expanded, ticker, timeframe, expiries, dte, expWidened, expQueryKey, isReplay]);
   const overlayData = isReplay ? displayData : (expData?.ticker === ticker ? expData : baseData);
   const visibleData = expanded ? overlayData : displayData;
+  const [priceHistoryOpen, setPriceHistoryOpen] = useState(false);
   const activeView = compareMode ? activePane : viewMode;
   const activeMetric = ["gex", "skylit"].includes(activeView) ? metric : "raw";
   const activeSurface = useMemo(() => mapSurface(visibleData, activeView, activeMetric), [visibleData, activeView, activeMetric]);
@@ -368,12 +371,12 @@ function SkylitDashboard({
   }, [selectedCell,selectedReading]);
   useEffect(() => {
     publishScreenContext({page:"heatseeker",ticker,dte:dte==null?"all":dte===0?"0dte":`days:${dte}`,
-      metric:activeView,overlayMetric:activeMetric,displayMode:isReplay?"replay":"live",snapshotId:visibleData?.snapshotId || null,mode:timeframe,
-      expiries,selectedStrike:selectedReading?.strike ?? null,selectedExpiry:selectedReading?.colKey ?? null,
-      mapQuery:visibleData?.map_query || null,mapVersion:visibleData?.asof || null,
-      mapStrikes:shownMapStrikes(visibleData,displaySpot,expanded?null:fitRows,activeView,activeMetric),
-      mapExpiries:activeSurface.expiries,observedAt:visibleData?.event_time || visibleData?.observed_at || null});
-  }, [ticker,dte,activeView,activeMetric,isReplay,timeframe,expiries,selectedReading,visibleData,displaySpot,expanded,fitRows,activeSurface]);
+      metric:activeView,overlayMetric:activeMetric,displayMode:priceHistoryOpen?"price-history":isReplay?"replay":"live",snapshotId:priceHistoryOpen?null:visibleData?.snapshotId || null,mode:timeframe,
+      expiries,selectedStrike:priceHistoryOpen?null:selectedReading?.strike ?? null,selectedExpiry:priceHistoryOpen?null:selectedReading?.colKey ?? null,
+      mapQuery:priceHistoryOpen?null:visibleData?.map_query || null,mapVersion:priceHistoryOpen?null:visibleData?.asof || null,
+      mapStrikes:priceHistoryOpen?[]:shownMapStrikes(visibleData,displaySpot,expanded?null:fitRows,activeView,activeMetric),
+      mapExpiries:priceHistoryOpen?[]:activeSurface.expiries,observedAt:priceHistoryOpen?null:visibleData?.event_time || visibleData?.observed_at || null});
+  }, [priceHistoryOpen,ticker,dte,activeView,activeMetric,isReplay,timeframe,expiries,selectedReading,visibleData,displaySpot,expanded,fitRows,activeSurface]);
   useEffect(() => { setFollowWall(false); setFollowWallId(null); }, [ticker,timeframe,expiries,dte,expWidened]);
   const overlayNote = (() => {
     const n = overlayData?.strikes?.length || 0;
@@ -505,6 +508,9 @@ function SkylitDashboard({
         onTickerChange={onTickerChange}
         tickers={tickers}
       />
+
+      <StockDirectory onSelect={onTickerChange} />
+      <PriceNodeHistory ticker={ticker} open={priceHistoryOpen} onOpenChange={setPriceHistoryOpen} />
 
       {/* 2. Control Bar */}
       <SkylitControlBar

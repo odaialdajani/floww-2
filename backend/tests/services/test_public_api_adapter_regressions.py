@@ -185,7 +185,12 @@ async def test_transport_errors_recorded_not_429() -> None:
         response = FakeResp()
 
     with patch("services.public_budget.budget", b):
+        # A status-only object cannot establish which host was throttled.
         _note_public_429(Fake429())
+        assert b.total_429 == 0
+        request = httpx.Request("GET", "https://api.public.com/test")
+        response = httpx.Response(429, request=request)
+        _note_public_429(httpx.HTTPStatusError("throttled", request=request, response=response))
     assert b.total_429 == 1
 
 

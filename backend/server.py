@@ -3251,12 +3251,12 @@ async def _public_sweep_loop():
         log.info("public sweep disabled (FLOWW_PUBLIC_SWEEP=0)")
         return
     try:
-        rth_s = float(os.environ.get("FLOWW_PUBLIC_SWEEP_RTH_S", "45"))
+        rth_s = float(os.environ.get("FLOWW_PUBLIC_SWEEP_RTH_S", "1"))
         off_s = float(os.environ.get("FLOWW_PUBLIC_SWEEP_OFFH_S", "600"))
-        sl = int(os.environ.get("FLOWW_PUBLIC_SWEEP_SLICE", "8"))
+        sl = int(os.environ.get("FLOWW_PUBLIC_SWEEP_SLICE", "12"))
         mx = int(os.environ.get("FLOWW_PUBLIC_SWEEP_MAX_EXPIRES", "2"))
     except (TypeError, ValueError):
-        rth_s, off_s, sl, mx = 45.0, 600.0, 8, 2
+        rth_s, off_s, sl, mx = 1.0, 600.0, 12, 2
     log.info("public sweep loop started (rth=%ss offh=%ss slice=%d expiries=%d)",
              rth_s, off_s, sl, mx)
     # U1 provenance: every future sweep/alert mystery resolves to a process.
@@ -3268,7 +3268,8 @@ async def _public_sweep_loop():
         _root = str(pathlib.Path(__file__).resolve().parent.parent)
         _sha = subprocess.run(
             ["git", "-C", _root, "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, timeout=5).stdout.strip() or "unknown"
+            capture_output=True, text=True, timeout=5,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0).stdout.strip() or "unknown"
     except Exception:
         _sha = "unknown"
     log.info("public sweep identity: pid=%d tree=%s", os.getpid(), _sha)
@@ -3519,6 +3520,12 @@ app.include_router(preferences_router, tags=["preferences"])
 from routes.market_data import router as market_data_router
 
 app.include_router(market_data_router, prefix="/api", tags=["market_data"])
+
+from routes.market_catalog import router as market_catalog_router
+from routes.price_history import router as price_history_router
+
+app.include_router(market_catalog_router)
+app.include_router(price_history_router)
 
 from routes.ml_api import router as ml_api_router
 

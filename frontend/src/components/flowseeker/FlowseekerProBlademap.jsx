@@ -1,3 +1,5 @@
+import StockDirectory from "../heatseeker/StockDirectory";
+import MarketCoverage from "./MarketCoverage";
 /**
  * FlowseekerProBlademap.jsx — Tidehunter Pro v3: Blademap-matched insight pipeline.
  *
@@ -404,7 +406,7 @@ export default function FlowseekerProBlademap({ active = true }) {
           const regimes = d.regimes || {};
           const prevOI = d.prev_oi || {};
           const rows = d.rows.map((r) => {
-            const row = mkScanRow(r[0], r[2], r[3], r[4], Number(r[5]) || 0, Number(r[6]) || 0,
+            const row = mkScanRow(r[0], r[2], r[3], r[4], Number(r[5]) || 0, r[6],
               r[7], r[8], Number(r[9]) || null, regimes[r[0]] || null);
             row.osi = typeof r[1] === "string" ? r[1] : null;
             const quote = (d.quote_truth || {})[`${row.under}|${row.type}|${row.strike}|${row.exp}`];
@@ -1328,7 +1330,7 @@ export default function FlowseekerProBlademap({ active = true }) {
           {(r.oiChg.pct >= 0 ? "+" : "") + (r.oiChg.pct * 100).toFixed(0)}% {oiHeldLabel(r.oiChgPct)}
         </span>
       ) : <span className="lo">{r.oiTag?.expiring ? "Expiring - change withheld" : r.oiTag?.rollover ? "Rollover - change withheld" : "— no prior day"}</span>;
-      case "volOI": return r.volOI >= 99 ? "99+" : `${(r.volOI || 0).toFixed(1)}x`;
+      case "volOI": return r.volOI == null ? "Unknown" : r.volOI >= 99 ? "99+" : `${r.volOI.toFixed(1)}x`;
       case "premium": return <span title={r.premiumSource === "quote" ? "Premium from observed quote" : "Estimated premium — no quote feed on this data"}>{r.premiumSource === "quote" ? "" : "~"}{fmtUSD(r.premium)}</span>;
       case "notional": return fmtUSD(r.notional);
       case "iv": return fmtIV(r.iv);
@@ -1375,8 +1377,10 @@ export default function FlowseekerProBlademap({ active = true }) {
         </aside>
 
         <div className="th-content">
+          <MarketCoverage coverage={scanMeta.coverage} />
           <div className="th-topbar">
             <span className="th-pill">Market {marketSession?.session_state || "state unavailable"}</span>
+            <StockDirectory buttonClass="th-pill" onSelect={(symbol) => { setFocusTicker(symbol); setSelectedRow(null); setDrill(null); setDrillSel(null); setDrillRows([]); }} />
             <label className="th-pill" title="Focused ticker — drives the Dealers cell and Lattice">
               <span className="k">Ticker</span>
               <select

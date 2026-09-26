@@ -1,3 +1,4 @@
+jest.mock("./MarketCoverage", () => () => null);
 /**
  * X4 — poll interval persistence test for Blademap inline surfaces.
  *

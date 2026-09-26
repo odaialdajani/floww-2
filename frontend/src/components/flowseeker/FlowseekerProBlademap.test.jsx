@@ -1,3 +1,4 @@
+jest.mock("./MarketCoverage", () => () => null);
 /**
  * @jest-environment jsdom
  */
@@ -800,4 +801,15 @@ describe("Tidehunter Pro v3 — one page, zero page tabs", () => {
     expect(urls.some((u) => u.includes("/alerts/feed?"))).toBe(true);
     expect(urls.some((u) => u.includes("/api/vpin/"))).toBe(true);
   });
+});
+
+it("mounted Pulse keeps missing open interest and premium visibly unknown", async()=>{
+ mockBackend({scanOverrides:{rows:[["TEST","TESTCALL","call",100,"2026-10-30",3000,null,null,null,null]],prev_oi:{TESTCALL:1000}}});
+ render(<FlowseekerProBlademap active />);
+ const pulse=screen.getByTestId("pulse-table");
+ await waitFor(()=>expect(pulse.querySelectorAll("tbody tr")).toHaveLength(1));
+ const row=pulse.querySelector("tbody tr");
+ expect(row.textContent).toContain("TEST");
+ expect(row.textContent).toContain("Unknown");
+ expect(row.textContent).not.toMatch(/99+|0.0x|-100%/);
 });

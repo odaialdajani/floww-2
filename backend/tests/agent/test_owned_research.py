@@ -308,3 +308,54 @@ async def test_transport_starts_on_post_and_stream_replay_does_not_repeat(monkey
         cors = await client.options("/api/agent/ask", headers={"Access-Control-Request-Method": "POST"})
         assert cors.headers["access-control-allow-origin"] == "http://localhost:3000"
         assert cors.headers["access-control-allow-credentials"] == "true"
+
+
+@pytest.mark.asyncio
+async def test_saved_progress_times_survive_stream_replay_without_becoming_market_times(monkeypatch):
+    import json
+    from datetime import UTC, datetime, timedelta
+
+    from services.agent import repository as repository_module
+    from services.agent.local_access import COOKIE
+
+    monkeypatch.setenv("FLOWW_AGENT_DEPLOYMENT", "local")
+    repo, service = await setup()
+    now = [datetime.now(UTC)]
+    monkeypatch.setattr(repository_module, "utcnow", lambda: now[0])
+    owner, token = await repo.session()
+    doc, _ = await repo.admit(owner, identity(), {"ticker": "XLK", "question": "Describe saved data", "horizon": "all"})
+    now[0] += timedelta(seconds=2)
+    assert await repo.progress(owner, doc["turn_id"], "Checking saved data")
+    progress_time = now[0].isoformat()
+    now[0] += timedelta(seconds=3)
+    assert await repo.finish(owner, doc["turn_id"], "completed", answer={"facts": []})
+    saved = await repo.read(owner, doc["turn_id"])
+    assert saved["events"][0]["recorded_at"] == progress_time
+    assert saved["events"][-1]["recorded_at"] == now[0].isoformat()
+    assert saved["answer"] == {"facts": []}
+    assert not await repo.progress(owner, doc["turn_id"], "Late progress")
+
+    app = FastAPI()
+    app.include_router(router)
+    app.state.research_service = service
+    async with AsyncClient(transport=ASGITransport(app=app, client=("127.0.0.1", 123)),
+                           base_url="http://localhost:8000") as client:
+        client.cookies.set(COOKIE, token)
+        response = await client.get(f"/api/agent/stream/{doc['turn_id']}")
+        assert response.status_code == 200
+        events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")]
+        assert events == saved["events"]
+        assert (await repo.read(owner, doc["turn_id"]))["events"] == saved["events"]
+        # Old saved events remain readable; no timestamp is invented on replay.
+        legacy = [{k: v for k, v in event.items() if k != "recorded_at"} for event in saved["events"]]
+        await repo.turns.update_one({"turn_id": doc["turn_id"]}, {"$set": {"events": legacy}})
+        old_response = await client.get(f"/api/agent/stream/{doc['turn_id']}")
+        old_events = [json.loads(line[6:]) for line in old_response.text.splitlines() if line.startswith("data: ")]
+        assert old_events == legacy
+
+
+@pytest.mark.parametrize("display", ["price-history", "replay", "unknown", [], {}])
+def test_historical_or_unknown_display_cannot_start_live_research(display):
+    from services.agent.contracts import request_spec
+    with pytest.raises(ValueError, match="display is unavailable"):
+        request_spec({"question":"Explain SPY", "screen":{"ticker":"SPY", "displayMode":display}})

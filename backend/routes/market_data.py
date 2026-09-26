@@ -102,41 +102,15 @@ async def list_all_tickers(
     page: int = Query(1, ge=1, le=1000),
     refresh: bool = Query(False),
 ):
-    """Paged configured ticker universe; never claim a full exchange catalog."""
-    import os
-    import time as _time
+    """Provider stock/fund catalog; custom scan lists do not restrict browsing."""
+    from services.market_catalog import get_catalog
 
-    import server as _server_mod
-
-    now_s = _time.time()
-    configured = os.getenv("FLOWW_PUBLIC_UNIVERSE", "").strip()
-    if configured:
-        all_syms = sorted({s.strip().upper() for s in configured.split(",") if s.strip()})
-    elif (not refresh and _server_mod._TICKER_CACHE_TS
-            and (now_s - _server_mod._TICKER_CACHE_TS) < _server_mod.CACHE_TTL_S):
-        all_syms = _server_mod._TICKER_CACHE
-    else:
-        all_syms = sorted({str(s).strip().upper() for s in _server_mod.POPULAR_UNIVERSE if str(s).strip()})
-        _server_mod._TICKER_CACHE = all_syms
-        _server_mod._TICKER_CACHE_TS = now_s
-
-    total = len(all_syms)
+    catalog = await get_catalog(refresh=refresh)
+    symbols = [row["symbol"] for row in catalog["instruments"]]
     start = (page - 1) * limit
-    page_syms = all_syms[start: start + limit]
-    _now_dt = datetime.now(tz=UTC) if UTC is not None else datetime.utcnow()
-    return {
-        "tickers": page_syms,
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "has_more": start + limit < total,
-        "cached": not configured and not refresh and _server_mod._TICKER_CACHE_TS is not None,
-        "cached_age_s": (round(now_s - _server_mod._TICKER_CACHE_TS, 1)
-                         if not configured and _server_mod._TICKER_CACHE_TS else None),
-        "asof": _now_dt.isoformat(),
-        "source": "configured-universe" if configured else "featured-universe",
-        "complete_exchange_catalog": False,
-    }
+    return {**{k: v for k, v in catalog.items() if k != "instruments"},
+            "tickers": symbols[start:start + limit], "page": page, "limit": limit,
+            "has_more": start + limit < len(symbols), "cached": True}
 
 
 @router.get("/heatmap/{ticker}")

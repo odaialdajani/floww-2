@@ -22,6 +22,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import math
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -427,11 +428,21 @@ def _side_sign(track: dict) -> int:
     return 1
 
 
+def _whale_reading(value):
+    try:
+        if value is None or isinstance(value, bool):
+            return None
+        number = float(value)
+        return number if math.isfinite(number) and number >= 0 else None
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 def whale_state(track: dict, snap: dict) -> dict[str, Any]:
     """Pure state read: bookmark snapshot + live snapshot → state/pnl/reason."""
     try:
-        entry_spot = float(track.get("entry_spot") or 0)
-        spot = float(snap.get("spot") or 0)
+        entry_spot = _whale_reading(track.get("entry_spot")) or 0
+        spot = _whale_reading(snap.get("spot")) or 0
     except (TypeError, ValueError):
         entry_spot, spot = 0.0, 0.0
     pnl = None
@@ -445,14 +456,14 @@ def whale_state(track: dict, snap: dict) -> dict[str, Any]:
     if dte is not None and dte <= 0:
         return {"state": "EXPIRED", "pnl_underlying_pct": pnl,
                 "reason": "past expiry — position closed by time"}
-    try:
-        entry_oi = float(track.get("entry_oi") or 0)
-        oi = float(snap.get("oi") if snap.get("oi") is not None else entry_oi)
-    except (TypeError, ValueError):
-        entry_oi, oi = 0.0, 0.0
-    if entry_oi <= 0:
-        return {"state": "STILL_IN", "pnl_underlying_pct": pnl,
-                "reason": "no OI basis — held by default"}
+    entry_oi = _whale_reading(track.get("entry_oi"))
+    oi = _whale_reading(snap.get("oi"))
+    if entry_oi is None or oi is None:
+        return {"state": "UNKNOWN", "pnl_underlying_pct": pnl,
+                "reason": "Open interest unavailable; position change unknown"}
+    if entry_oi == 0:
+        return {"state": "UNKNOWN", "pnl_underlying_pct": pnl,
+                "reason": "Initial open interest was zero; relative position change cannot be calculated"}
     drop = 1.0 - oi / entry_oi
     try:
         entry_vol = float(track.get("entry_vol") or 0)
@@ -495,9 +506,10 @@ def bookmark_whale(engine, alert: dict, *, spot: float, oi: float, vol: float) -
                str(alert.get("type") or "call").lower(), str(alert.get("side") or "BUY"),
                str(alert.get("bias") or ""),
                float(alert.get("strike") or 0), str(alert.get("exp") or ""),
-               float(spot or 0), float(oi or 0), float(vol or 0),
-               float(spot or 0), float(oi or 0), float(vol or 0),
-               "STILL_IN", 0.0, "bookmarked — awaiting first update"]])
+               _whale_reading(spot), _whale_reading(oi), _whale_reading(vol),
+               _whale_reading(spot), _whale_reading(oi), _whale_reading(vol),
+               "STILL_IN" if (_whale_reading(oi) or 0) > 0 else "UNKNOWN",
+               0.0 if (_whale_reading(spot) or 0) > 0 else None, "bookmarked — awaiting first update"]])
         return 1
     except Exception as e:
         logger.debug(f"journal_store.bookmark_whale: {e}")
@@ -528,8 +540,8 @@ def update_whales(engine, snaps: dict) -> dict[str, dict]:
                     state = ?, pnl_underlying_pct = ?, reason = ?,
                     updated_ts = current_timestamp
                 WHERE asof_date = ? AND alert_key = ?
-            """, [[float(snap.get("spot") or 0), float(snap.get("oi") or 0),
-                   float(snap.get("vol") or 0), st["state"], st["pnl_underlying_pct"],
+            """, [[_whale_reading(snap.get("spot")), _whale_reading(snap.get("oi")),
+                   _whale_reading(snap.get("vol")), st["state"], st["pnl_underlying_pct"],
                    st["reason"], str(r.get("asof_date"))[:10], str(r.get("alert_key"))]])
         out[str(r.get("ckey"))] = st
     return out

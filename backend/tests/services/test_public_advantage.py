@@ -304,7 +304,8 @@ def test_dealer_context_walls_and_regime():
 def test_get_universe_env_override():
     import services.public_scanner as ps
 
-    assert "SNDK" in ps.get_universe() and len(ps.get_universe()) == 40
+    with patch("services.market_catalog.cached_scan_symbols", return_value=["SNDK", "XYZ"]):
+        assert ps.get_universe() == ["SNDK", "XYZ"]
     with patch.dict("os.environ", {"FLOWW_PUBLIC_UNIVERSE": "SPY, QQQ, SPY, SNDK"}):
         assert ps.get_universe() == ["SPY", "QQQ", "SNDK"]
 
@@ -317,7 +318,7 @@ def test_merge_slices_drops_stale_and_reports_coverage():
         "SPY": {"ts": now - 10, "rows": [["SPY", "O:1", "call", 1, "2026-09-18", 9, 1, 0.2, 0.5, 1]]},
         "QQQ": {"ts": now - 9999, "rows": [["QQQ", "O:2", "call", 1, "2026-09-18", 1, 1, 0.2, 0.5, 1]]},
     }
-    rows, xtras, cov = merge_slices(slices, now=now, ttl_s=600.0)
+    rows, xtras, cov = merge_slices(slices, now=now, ttl_s=600.0, universe=list(UNIVERSE))
     assert [r[0] for r in rows] == ["SPY"]
     assert cov["universe"] == len(UNIVERSE)
     assert cov["fresh"] == 1 and cov["stale_dropped"] == ["QQQ"]
@@ -575,7 +576,7 @@ async def test_public_chain_route_degrades():
         def release(self):
             return None
 
-    with patch("services.public_budget.budget", DeadBudget()):
+    with patch("services.public_budget.budget", DeadBudget()), patch.dict("os.environ", {"FLOWW_PUBLIC_UNIVERSE": "SPY"}):
         with pytest.raises(HTTPException) as e:
             await fs.public_chain_flat("SPY", expirations=4, expiration=None, fields=None)
         assert e.value.status_code == 503
@@ -708,6 +709,12 @@ async def test_sweep_once_skips_cleanly_on_spent_budget():
     from services.public_budget import BudgetExhausted
 
     class DeadBudget:
+        async def check_request_allowed(self, host="api.public.com"):
+            raise BudgetExhausted(retry_after=30)
+
+        async def peek_available(self):
+            return 0
+
         async def acquire(self, host="public"):
             raise BudgetExhausted(retry_after=30)
 
@@ -791,7 +798,7 @@ def test_get_universe_rejects_garbage_never_crashes():
         out = ps.get_universe()
     assert out == ["SPY", "OK-NAME.X"]
     with patch.dict("os.environ", {"FLOWW_PUBLIC_UNIVERSE": "!!!, ???"}):
-        assert ps.get_universe() == ps.UNIVERSE  # all rejected -> default
+        assert ps.get_universe() == []  # Invalid explicit list must not silently broaden.
 
 
 def test_extras_carry_rel_spread():

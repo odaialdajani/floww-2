@@ -1,0 +1,33 @@
+{
+  "reviewed_at": "2026-09-26T19:36:36.193188+00:00",
+  "scope": "Official documentation fingerprints only; no claim of account entitlement or complete app support.",
+  "documents": {
+    "/api/docs/changelog": "a11ed3b47b41067c3e9acf3eaa5b3e29e191db591ec5464a43788d330d3cc572",
+    "/api/docs/resources/account-details/get-account-portfolio-v2": "56c662868152afb01a6ca7f8ef53d50fb67ee9a8a24e60d012f83cfb7369fdf6",
+    "/api/docs/resources/account-details/get-history": "4fe42296d022df3dc2dd75bc9ecbf5a2b4ad2e0f20d96c44b4156988f915e346",
+    "/api/docs/resources/authorization/create-personal-access-token": "7600fbe31dcfb9d320dda6a523af462d058d8cdcffd21a8c73b1326d6794f9d3",
+    "/api/docs/resources/instrument-details/get-all-instruments": "ad79382fea076d7ab8e90af0efe7621d3691187873cc0df60b187572c2212246",
+    "/api/docs/resources/instrument-details/get-instrument": "a2a302f170a39aa64a38e58378e841c190f5bc6ee4c0e654f65795d9c0b972dd",
+    "/api/docs/resources/instrument-details/search-bonds": "6d54d0da5457cb848abc6f9732bce3d2b2027bc27f4ef61b16b22c040d9a8ebe",
+    "/api/docs/resources/list-accounts/get-accounts": "984cbef88bf8fb3067eaa201b742b5c3d4f5e2f64fea86816931616719db8471",
+    "/api/docs/resources/market-data/get-bars-v2": "a6aaff232e7bae35c7a4984d4920cfab4f4d5ca73f1c82910b2c3a1cb044cb9b",
+    "/api/docs/resources/market-data/get-bars-v2-with-aggregation": "72b49890b7e00683e0589050a60612c4d3ae8a45a598edf198939c6bfeb10569",
+    "/api/docs/resources/market-data/get-bond-details": "1d8729607f74647601f80eb42917dd4165c3628b4c7f6e0fe0772d21df6523bf",
+    "/api/docs/resources/market-data/get-option-chain": "3c0bdd9ca4dc58848ac6209a13c7e795e7eef733a66a2c8ae3b3620578965efa",
+    "/api/docs/resources/market-data/get-option-expirations": "f2bce8a0bcff7392e5002e830f5c37a15475ff035b2ec623c354640f09d89972",
+    "/api/docs/resources/market-data/get-quotes": "5822aeac70775fde342d1794cf3ad52130002d52f00a8f7b7bf6f44b6f7ae9a9",
+    "/api/docs/resources/option-details/get-option-greeks": "935e9d7346d8f868eeb135535586e3035780f79b4d70f99ebc4f5be2604afcbd",
+    "/api/docs/resources/option-details/get-strategy-quote": "2734139fed4de4db124661539db92938aa5eefc3a92ac0bc2678b9b2d0227581",
+    "/api/docs/resources/order-placement/cancel-order": "c7405d53196601d20d2259e3b77835eaace545b46424654365b6320bd169871d",
+    "/api/docs/resources/order-placement/get-order": "23ffaa03c979b2fffcefd2f4a14ff7c8d82cca6da21bbd214d274e164441db1c",
+    "/api/docs/resources/order-placement/place-multileg-order": "9ba7072106f73a21821e5be74483d32a48bf841a85dcf9eddd6f3175cb44944f",
+    "/api/docs/resources/order-placement/place-order": "4e10867db69cb42e63b0e59889c438c7440979b73516c96e922fca4e3da5b29e",
+    "/api/docs/resources/order-placement/preflight-multi-leg": "9688cfd7b0ad974123415591b52373eee1492fa43be6b4efab3b013c387d2690",
+    "/api/docs/resources/order-placement/preflight-single-leg": "ce7d058144ad77fd2054e4e179cf5a72d3b92ab3689ce5add619cc95643d4f77",
+    "/api/docs/resources/order-placement/replace-order": "6b21fb874c72012b221f28af6dfc010ebae222e2da04a3193e043369cadd0ffa",
+    "/api/docs/resources/order-placement/search-orders": "aaaeb0a025d3f0a3751b2050741e8f8094d256670b74ca5d1ed8087e1be6b9a6",
+    "/api/docs/resources/tax-lot-selling/get-unrealized-tax-lots": "4f1646b81c90f11c70ad6e74ec5f60eb89dcd474dbad61d30de48c484f243527",
+    "/api/docs/resources/tax-lot-selling/get-unrealized-tax-lots-csv": "87c648e4fd522143d6e8c0651d5cacc03fa149a4ba58bd3156a1b91ea1fbed76",
+    "/api/docs/resources/tax-lot-selling/get-unrealized-tax-lots-for-symbol": "b84cd814a074e076b114163d781aadd34ccd33ec5dfa4bc9a56f17015faacae5"
+  }
+}

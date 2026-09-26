@@ -57,7 +57,9 @@ import { useTheme } from "./context/ThemeContext";
 import { autoDecimate } from "./utils/dataDecimator";
 import { mutatingHeaders } from "./utils/appKey";
 import { PAGE_NAMES } from "./shell/navConfig";
-import { buildTickerUniverse, fetchFullUniverse, normalizeTicker } from "./components/heatseeker/tickerUniverse";
+import { buildTickerUniverse, normalizeTicker } from "./components/heatseeker/tickerUniverse";
+import useTickerDirectory from "./components/heatseeker/useTickerDirectory";
+import StockSearchNotice from "./components/heatseeker/StockSearchNotice";
 
 import ToxicityGauge from "./components/ToxicityGauge";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -488,7 +490,7 @@ export default function App() {
   const [expiries, setExpiries] = useState(4);
   const [trinityTab, setTrinityTab] = useState("gex");
   const [dte, setDte] = useState(null);
-  const [tickers, setTickers] = useState(null);
+  const { tickers, status: stockSearchStatus, retry: retryStockSearch } = useTickerDirectory(API);
   const [advancedLoading, setAdvancedLoading] = useState(true);
   const [advancedError, setAdvancedError] = useState(false);
   const wsGex = useWebSocketGex((page === "heatseeker" || page === "skylit") ? ticker : null);
@@ -509,32 +511,6 @@ export default function App() {
   const [err, setErr] = useScopedReading(readingScope);
   const [advanced, setAdvanced] = useScopedReading(JSON.stringify([ticker, debouncedExpiries]));
   const [ensembleData, setEnsembleData] = useScopedReading(ticker);
-
-  // Fetch tickers: featured sets first, then the full listed universe page by
-  // page (T2) so the scroller/search/arrows traverse every tradable name, not
-  // just featured ones. Same {trinity, default, popular} shape is retained —
-  // the full list rides in `popular` and the shared universe helper dedups.
-  useEffect(() => {
-    let on = true;
-    (async () => {
-      let base = null;
-      try {
-        const r = await axios.get(`${API}/tickers`);
-        base = r.data || null;
-        if (on && base) setTickers(base);
-      } catch (_) { /* offline: leave prior tickers */ }
-      try {
-        const full = await fetchFullUniverse((u) => axios.get(u), API);
-        if (!on || full.symbols.length === 0) return;
-        setTickers({
-          trinity: (base && base.trinity) || [],
-          default: (base && base.default) || [],
-          popular: full.symbols,
-        });
-      } catch (_) { /* full list failed: featured sets already set */ }
-    })();
-    return () => { on = false; };
-  }, []);
 
   // Flowseeker signal cards dispatch this to focus the desk ticker.
   useEffect(() => {
@@ -785,6 +761,9 @@ export default function App() {
           userEmail={userEmail}
           userTier={userTier}
         />
+
+        {["heatseeker", "trinity", "skylit", "ticker-analysis"].includes(page) &&
+          <StockSearchNotice status={stockSearchStatus} onRetry={retryStockSearch} />}
 
         {/* ===== DECODER PAGES ===== */}
 

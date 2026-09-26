@@ -52,13 +52,16 @@ export function searchUniverse(universe, query, limit = SUGGEST_CAP) {
  * the featured-only sets as fallback).
  */
 export const UNIVERSE_PAGE_LIMIT = 5000;
-export const UNIVERSE_MAX_SYMBOLS = 12000;
+export const UNIVERSE_MAX_SYMBOLS = 40000;
 export const UNIVERSE_MAX_PAGES = 8;
 
 export async function fetchFullUniverse(get, baseUrl) {
   const symbols = [];
   let pages = 0;
   let total = 0;
+  let complete = false;
+  let stale = false;
+  let generation;
   for (let page = 1; page <= UNIVERSE_MAX_PAGES; page += 1) {
     let data;
     try {
@@ -70,14 +73,20 @@ export async function fetchFullUniverse(get, baseUrl) {
       break; // transport failure: keep what we have (possibly nothing)
     }
     const batch = Array.isArray(data.tickers) ? data.tickers : [];
+    stale = stale || data.stale === true;
+    const pageTotal = Number(data.total) || 0;
+    const pageGeneration = data.asof || null;
+    if (pages && (pageTotal !== total || pageGeneration !== generation)) break;
     if (batch.length === 0) break;
     symbols.push(...batch);
     pages += 1;
-    total = Number(data.total) || total;
-    if (data.has_more !== true) break;
+    total = pageTotal;
+    generation = pageGeneration;
+    if (data.has_more !== true) { complete = data.complete_provider_catalog === true; break; }
     if (symbols.length >= UNIVERSE_MAX_SYMBOLS) break;
   }
-  return { symbols: symbols.slice(0, UNIVERSE_MAX_SYMBOLS), pages, total };
+  const unique = dedupePreserveOrder(symbols).slice(0, UNIVERSE_MAX_SYMBOLS);
+  return { symbols: unique, pages, total, stale, complete: complete && total > 0 && unique.length >= total };
 }
 
 /**

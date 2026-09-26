@@ -1,0 +1,270 @@
+{
+  "note": "Git blob IDs identify the staged source with repository line-ending rules; SHA256 identifies tested working bytes. No model or trading acceptance implied.",
+  "files": [
+    {
+      "path": "backend/routes/flowseeker.py",
+      "git_blob": "8670b19bd9d70b78784ae6041ae2884a0831e8f4",
+      "working_sha256": "e54e92858dbbf33f8337bd4f395e768e1a56f6e565f901eae9297715314ef55b"
+    },
+    {
+      "path": "backend/routes/market_catalog.py",
+      "git_blob": "6483093a4006bf9c28b270de3c89f115a4eed2dd",
+      "working_sha256": "7da6fcec76de1174706d3fbaa01f0a356c16f5dc72e8a278d49ded8dbb748aa6"
+    },
+    {
+      "path": "backend/routes/market_data.py",
+      "git_blob": "f5f451504815f2784cf3e4a83f8c24a5e4941111",
+      "working_sha256": "4dff6c4549e12ad040580dce4d55eaa740da2d16d7664d233d5436e4a520bd5e"
+    },
+    {
+      "path": "backend/routes/price_history.py",
+      "git_blob": "78b070bca2bf9e04d82924730e28adbf032d3616",
+      "working_sha256": "d34bd9ba7a09656b845cf8f5d05032303e6ae2af7ea10c0764ce88103c2d7921"
+    },
+    {
+      "path": "backend/server.py",
+      "git_blob": "d2757b755d8fa010b037363f35f5a46f096c98a3",
+      "working_sha256": "6999643ab995d03b20885dfdd3f35219d40eca2a7c6cf8cdc244705cc8e0422d"
+    },
+    {
+      "path": "backend/services/agent/contracts.py",
+      "git_blob": "68f186492ca0129bb3f85ad9c2264057ea7c1eae",
+      "working_sha256": "6ac9434175ae6b02101a628271710515dc0d08d2ba688d113f7ec7dd66402273"
+    },
+    {
+      "path": "backend/services/agent/repository.py",
+      "git_blob": "2d216369385bd8a739be6b0f675ec46522cb3669",
+      "working_sha256": "9ee5abff535f41e009256fb41d6279b1cd0d47a8311452fa21eaed98ac21d26f"
+    },
+    {
+      "path": "backend/services/flow_alerts.py",
+      "git_blob": "5f813d9a1dd9d3fae20063ceb013490609803d8b",
+      "working_sha256": "e00cb1debdaf562020ee6b19302c54a45fc25fb18fef5cdb53d16ec6604807ac"
+    },
+    {
+      "path": "backend/services/journal_store.py",
+      "git_blob": "3c45d339d7562bf82f9b728ab71955dda1ed94c1",
+      "working_sha256": "116c0346a712580f244d5655cd553d629aeaec704c8eacfb2d5dae1a524b841e"
+    },
+    {
+      "path": "backend/services/market_catalog.py",
+      "git_blob": "a8a77d47ed8f5f94a6e6004cdc8e30c199d950d2",
+      "working_sha256": "85b84ad07697a53d35b7aa564dbd60df35d8d83045c4335b1c75feb8fbfe3fed"
+    },
+    {
+      "path": "backend/services/price_node_history.py",
+      "git_blob": "fb611a7f292e5b73f3f3c817f2561866e4b734a8",
+      "working_sha256": "d46a881f5a7967e1662a658ba9789a67c72c4d1108ad7308bc57f1c5def317ac"
+    },
+    {
+      "path": "backend/services/public_api.py",
+      "git_blob": "11746f3d025c5357b53f1d274002eb9f8bab1670",
+      "working_sha256": "e470110e6cb4b6ab5b78230708d5f38b1e89f63297a522fc9e1633e582b7523c"
+    },
+    {
+      "path": "backend/services/public_api_adapter.py",
+      "git_blob": "3d372d81e14fe71d785c0b597f7e52d49c55aae2",
+      "working_sha256": "5b5117b51b96c9551a12527ea033f14e022a7a89d8123376fb3d1793ebd7c085"
+    },
+    {
+      "path": "backend/services/public_budget.py",
+      "git_blob": "9370d12327f33f1a098d4255e94344ce38d2f149",
+      "working_sha256": "a9973850c78cec0ee462bf48a06549d73ff36c88d10856de8582cc66d716575f"
+    },
+    {
+      "path": "backend/services/public_release_watch.py",
+      "git_blob": "4b2af0a8dd60d3907a9ecd46ef8e2f56260540b1",
+      "working_sha256": "fd9ca1484f7914e7c00addf69cc6049028551beb390e174b274444ebb77013c8"
+    },
+    {
+      "path": "backend/services/public_request_pacer.py",
+      "git_blob": "88fdddadadfcb071cee021d7eaf00e73420f6b6b",
+      "working_sha256": "0170c49660a81c02b1e902a35de155f9e101eb7ddbda353f2f6271ef1cfe6aff"
+    },
+    {
+      "path": "backend/services/public_scanner.py",
+      "git_blob": "3f39e9c0e928da07ebaef0175102fe5beb442580",
+      "working_sha256": "2512e6f65a6f07e731241cf7a6eb752227468bea9a968d36cab6c867652308e4"
+    },
+    {
+      "path": "backend/tests/agent/test_owned_research.py",
+      "git_blob": "ce66d3cd45cfd7c2bad9ae619e3168294e2616a7",
+      "working_sha256": "398530a40fec68945f79d47e58bfdd63e3303d959ce00332d0f49aca34db048a"
+    },
+    {
+      "path": "backend/tests/routes/test_tickers_all.py",
+      "git_blob": "6ed86c9871c6aabde4f118917c3a6cbabde45c5b",
+      "working_sha256": "8976fb4f5b5181e205b38f5ff8bb300fb847854253b764ecfb89f8d02930e687"
+    },
+    {
+      "path": "backend/tests/services/test_public_advantage.py",
+      "git_blob": "e03a589ec86553a827618f03368e6755179b6010",
+      "working_sha256": "963a285a0a78afa0626b915dc121dc35c66fbdfec7174f1f5b5223eee93fea51"
+    },
+    {
+      "path": "backend/tests/services/test_public_api_adapter_regressions.py",
+      "git_blob": "8f1fcab4b3c825daed2252ecad82c97d2a953f24",
+      "working_sha256": "81e955a088f21bc410ea548fe9457554b6dd2e28dd28d7e42bc038e8533ee676"
+    },
+    {
+      "path": "backend/tests/services/test_public_scanner_staleness.py",
+      "git_blob": "d861953034536520e7815c9f7a268c51cab070c1",
+      "working_sha256": "5185d0d61075b1a7a9e9ab533aa1c82e13d4e71bb0910b4cb122379c4b50edc2"
+    },
+    {
+      "path": "backend/tests/services/test_scan_missing_readings.py",
+      "git_blob": "474965219310376cf0bec5fe26b39eda96bc23fb",
+      "working_sha256": "1bb7cedfdc2087738e13d887742a70dfa2ab0d216de1b2a4789a35ff9e373313"
+    },
+    {
+      "path": "backend/tests/services/test_whale_tracker.py",
+      "git_blob": "37e5f9d85b226785aef27d614e7dd7eac2f3b46e",
+      "working_sha256": "ac79b089604d4ad02b9780467a609ff9719429c484a2731a2758a3b00e4c1167"
+    },
+    {
+      "path": "config/public_docs_reviewed.json",
+      "git_blob": "dc438bdcceb82699d68871ed38644ef8e6a88033",
+      "working_sha256": "76854fd8c9c43e9460778c946247706b69d16c56115ec32c4e53d89ab153fb9e"
+    },
+    {
+      "path": "frontend/src/App.js",
+      "git_blob": "41338a81744a1d0454301df684ae3687c48deaad",
+      "working_sha256": "cd6831b6f427fbfc414c622b55ac057c5355af8cc9045157702b3c17bb6e6755"
+    },
+    {
+      "path": "frontend/src/components/flowseeker/FlowseekerProBlademap.X4.test.js",
+      "git_blob": "c5af573c868479f3777a0f1d24572fb0d726b286",
+      "working_sha256": "7c18ab1b0b228b2122d9b7fd887ab6cbf69a33f9a31f1ec0f353df508cf51634"
+    },
+    {
+      "path": "frontend/src/components/flowseeker/FlowseekerProBlademap.jsx",
+      "git_blob": "02c793eac16e65566939330c7757f6de73ab90da",
+      "working_sha256": "09d347883b9a48d29c42ba8df7577857b26ac7a9e3bd1771f420f364852aeab7"
+    },
+    {
+      "path": "frontend/src/components/flowseeker/FlowseekerProBlademap.test.jsx",
+      "git_blob": "447e93447e781cd10f2230dd65bc023e7606b530",
+      "working_sha256": "3006a436ac94f938057cda8553417f147711a9340caaa794dea955d71cb63e25"
+    },
+    {
+      "path": "frontend/src/components/flowseeker/MarketCoverage.jsx",
+      "git_blob": "7e964a04dd2b456c3f553ed1fd7cca9c6af3e148",
+      "working_sha256": "cb6a1db2566747a7919767149a4f8043ab1f4fbbbf99f85777316faeceafc855"
+    },
+    {
+      "path": "frontend/src/components/flowseeker/MarketCoverage.test.jsx",
+      "git_blob": "5e708c94614d3acf3314935c370bbefdd6ca8c46",
+      "working_sha256": "6cd3296487e224c80f1587f99daf203b521552e3bbf43e62167143b4d5ee701e"
+    },
+    {
+      "path": "frontend/src/components/flowseeker/scanLogic.js",
+      "git_blob": "8afea3e96d7b6c9ef4786a4dc05a65c403c4f172",
+      "working_sha256": "93c741188002afc068d5d0fcf48b709762d31321be67822ee1b6990941371c2d"
+    },
+    {
+      "path": "frontend/src/components/flowseeker/scanLogic.test.js",
+      "git_blob": "b6c1771fab0487b5ed45a3a271429ba412ff524f",
+      "working_sha256": "4507bcd38aebb361c126db8dade7e4d1c32bd4effb913687a85add7ed6b4ef34"
+    },
+    {
+      "path": "frontend/src/components/heatseeker/PriceNodeHistory.jsx",
+      "git_blob": "80f7bad6cc0d2935253bff5733c6f41cde87f68b",
+      "working_sha256": "817508a76469b6d5b6b78261adf900c6f416d09b97fc580c0420a5e350c8fd74"
+    },
+    {
+      "path": "frontend/src/components/heatseeker/PriceNodeHistory.test.jsx",
+      "git_blob": "426970191b7e4e2b713409efae70b1e7e264e96b",
+      "working_sha256": "77be607d4fcba4c1365fa9fb21adafa17ef9b6d51ce74c1840992b54e9754bfa"
+    },
+    {
+      "path": "frontend/src/components/heatseeker/SkylitDashboard.jsx",
+      "git_blob": "6c3a97ae2325ea41e80034aff4e7dfa92caa9406",
+      "working_sha256": "65298a8fb6b03ff713069f52a4502ceb41cb173e4ca6c27af84f788d47eb668d"
+    },
+    {
+      "path": "frontend/src/components/heatseeker/SkylitDashboard.test.jsx",
+      "git_blob": "a6f65573ea60d75997ed4faea0b3faf1147089c8",
+      "working_sha256": "fbef1fb1481cf3a35cb820fe364c2612709edebb1f529e86e4b9477a59b409b4"
+    },
+    {
+      "path": "frontend/src/components/heatseeker/StockDirectory.jsx",
+      "git_blob": "b1d0a5cf45c562677dad1f9106639ea87ed190f6",
+      "working_sha256": "6d8ee1eed36dc762dab6d857ea57694f9b200d2fc1a6fc829290e5807eba394e"
+    },
+    {
+      "path": "frontend/src/components/heatseeker/StockDirectory.test.jsx",
+      "git_blob": "f2b47c4d2f6aa8a62189aefd81a3e8a9882c4c5d",
+      "working_sha256": "1b9d2d8c6efc2618017cb28c1b325f3f2d3e8529889b6466eb71b2fa614082f9"
+    },
+    {
+      "path": "frontend/src/components/heatseeker/StockSearchNotice.jsx",
+      "git_blob": "622f2dc34b257a37665c6549520473d31a67ddfd",
+      "working_sha256": "9baa62e0108d18ae507926e633a4fa07bd1350626b363ecd23f6f69e19b286e8"
+    },
+    {
+      "path": "frontend/src/components/heatseeker/StockSearchNotice.test.jsx",
+      "git_blob": "f4e339ec6356ae5089049a52376e8b9c8798bee5",
+      "working_sha256": "6bb5667038dbe62035bbada05721270a9816fb5d7119b0690094d69029489136"
+    },
+    {
+      "path": "frontend/src/components/heatseeker/priceNodeTraces.js",
+      "git_blob": "64fef5ee39a1760beb9bdb03b0311eef6dc7ef09",
+      "working_sha256": "68ab428bbf8ae9243036bce4821415d5c9b4e03a5fab67ca3bba12f71860b8f7"
+    },
+    {
+      "path": "frontend/src/components/heatseeker/priceNodeTraces.test.js",
+      "git_blob": "cf5181a4ff9b7fc18315d4b7d8a24b5672450e8c",
+      "working_sha256": "2849903df344e34b5dbbd24151d20ebd53a78b8472a6a329b411e71482806def"
+    },
+    {
+      "path": "frontend/src/components/heatseeker/tickerUniverse.js",
+      "git_blob": "91ffeef12ceac073907d58e33b6a0552e728c700",
+      "working_sha256": "943388ca4871ddfcdf10dda94e5744a31f23bbd5b72c8ad6940f5d10b02d5d53"
+    },
+    {
+      "path": "frontend/src/components/heatseeker/tickerUniverse.test.js",
+      "git_blob": "836e037b55e2ca46d877eab8749268fb0531629d",
+      "working_sha256": "45ea36c2950934de878c77bc81ceaec89de3d7ed0719145d14fd43f62b41a1a6"
+    },
+    {
+      "path": "frontend/src/components/heatseeker/useTickerDirectory.js",
+      "git_blob": "332903d108239770041f47955e567b15f4b64c4f",
+      "working_sha256": "ab77b13d53f4bdb4b3cc38b0ef289d072a2283fe8c5fde7dabafbb23307fc3a9"
+    },
+    {
+      "path": "tests/test_market_catalog.py",
+      "git_blob": "e31c90dee928b47eaf0ce90c71f5679049ea18cf",
+      "working_sha256": "9b85cc12950376c1422596b3dc1e6cf941be3dd1f84eef47a8060d4e5c3cf272"
+    },
+    {
+      "path": "tests/test_market_full_rotation.py",
+      "git_blob": "86a9e863cc32d6077e396a183f02356593637fb0",
+      "working_sha256": "fe1f6e85d41cf27b1cd891c5b265d728a70083d531ce078099f3a2e70774dc45"
+    },
+    {
+      "path": "tests/test_market_history_routes.py",
+      "git_blob": "eb9874b1f7c3270471f0f0b2947c581450cd3b94",
+      "working_sha256": "f6441dcc2c814d7a37f39853e96ace08819859d041260bcd81666cd4338106c9"
+    },
+    {
+      "path": "tests/test_market_integration.py",
+      "git_blob": "b11b39486056f6f0b5121e07455d038dbfe0ac61",
+      "working_sha256": "957fc58202e32585e9ba5e5e0222d55341a494b2310ffd03b4aa7ccb960b2701"
+    },
+    {
+      "path": "tests/test_price_node_history.py",
+      "git_blob": "98a95e3e3d61a61f3efdc5b4643f409b05af5d15",
+      "working_sha256": "d86e1cf9a3f8e2a2447b63768886fc0f778463b355569c0d71c16f53d76be3ef"
+    },
+    {
+      "path": "tests/test_public_release_watch.py",
+      "git_blob": "aa12fe68404bc437a647fce13b6e793b0f8681ee",
+      "working_sha256": "456c229ead89f7f30a67d23a35467701d44e71ea68cf3b72e4bd7d14b3808e7f"
+    },
+    {
+      "path": "tests/test_public_response_cooldown.py",
+      "git_blob": "aed34699a82fd0d453c8d58ae00ee50fbbc2c197",
+      "working_sha256": "99658d24bdc418695ba59cb95ecfb4a0b246684b0addc4421762bce0485cb440"
+    }
+  ]
+}

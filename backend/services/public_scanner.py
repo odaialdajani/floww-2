@@ -1,43 +1,8 @@
-"""
-backend/services/public_scanner.py
+"""Public options-snapshot scanner over the provider's option-enabled directory.
 
-Public-backed market-wide unusual-flow scanner (paid Advanced API).
-
-Why this exists: `/scan` rides ONE cvserver `screen` (20 upstream calls/hour,
-top-300 by raw day_volume). On a busy day mega-cap churn (SPY/QQQ/NVDA/SPX)
-fills all 300 slots — mid-cap institutional building (SNDK-type: 3-8k
-contracts laddered across strikes, each line score 70-85) never appears, and
-the hourly budget leaves the scanner STALE most of each hour.
-
-This scanner walks a UNIVERSE (index ETFs + megas + high-beta mid-caps,
-overridable via FLOWW_PUBLIC_UNIVERSE) through the paid Public chains on a
-rotating cursor: each call scans the next SLICE of tickers, merges into a TTL
-cache, and returns the full-universe view. Per-call upstream cost is bounded
-(slice × (2 + expiries) calls against the 60/min Public budget); full
-coverage refreshes every few minutes with no hourly cap and no STALE gaps —
-every slice carries its own age stamp.
-
-Two payloads come back per sweep, both from the SAME chains (zero extra
-upstream calls):
-
-  rows   — cvserver-shaped unusual list-rows (columns [underlying_ticker,
-           ticker, contract_type, strike_price, expiration_date, day_volume,
-           open_interest, implied_volatility, delta, underlying_price]) so
-           flow_alerts.norm_rows / eval_institutional and the frontend
-           mkScanRow consume them unchanged.
-  extras — quote-truth per contract keyed by ckey: NBBO side (last vs mid),
-           Lee-Ready signed_side/sign_method (A2: quote rule + tick test on
-           the previous sweep's mid), true premium (mid×vol×100, never a BS
-           estimate), per-contract volume velocity (contracts/min since the
-           previous sweep — arrival intensity is the institutional urgency
-           read), mid/last.
-  dealer — per-ticker dealer positioning from real gamma×OI: call/put walls,
-           max-OI strike, net dealer gamma + regime. The context an
-           institutional alert needs, computed from data already in hand.
-
-Pure helpers (advance_cursor, unusual_rows_from_chain, merge_slices,
-nbbo_side, dealer_context) are unit-testable without network; I/O lives in
-scan_slice().
+A rotating cursor visits all supported names. Results retain a one-minute
+freshness window, bounded rows and expiry depth; coverage reports distinguish
+unvisited, failed and fresh names. This is not an all-market trade tape.
 """
 
 from __future__ import annotations
@@ -82,7 +47,7 @@ UNIVERSE: list[str] = [
 
 def get_universe() -> list[str]:
     """Active scan universe — FLOWW_PUBLIC_UNIVERSE (comma-separated) wins,
-    else the curated default. Env override lets the desk reshape coverage
+    else the cached option-enabled provider catalog. Env override reshapes coverage
     without a deploy.
 
     Entries are uppercased, deduped, and validated (B7): anything that is
@@ -103,7 +68,10 @@ def get_universe() -> list[str]:
             log.warning("public scanner dropping invalid universe ticker %r", t)
             continue
         out.append(t)
-    return out or list(UNIVERSE)
+    if raw.strip():
+        return out
+    from services.market_catalog import cached_scan_symbols
+    return cached_scan_symbols()
 
 
 SCAN_COLUMNS: list[str] = [
@@ -122,7 +90,7 @@ MAX_ROWS_PER_TICKER = 60
 
 # Slice cache TTL: a slice older than this is dropped from the merged view
 # rather than served as if fresh (honesty over coverage).
-SLICE_TTL_S = 600.0
+SLICE_TTL_S = 60.0
 
 # Upstream fan-out per ticker chain fetch (B4): expirations + quotes +
 # one chain call per expiry. Debited per ticker so the 60/min assumption
@@ -267,6 +235,16 @@ def dealer_context(
     }
 
 
+def _nonnegative_reading(value):
+    try:
+        if value is None or isinstance(value, bool):
+            return None
+        number = float(value)
+        return number if math.isfinite(number) and number >= 0 else None
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 def unusual_rows_from_chain(
     chain: dict[str, Any],
     vol_marks: dict[str, tuple[float, float]] | None = None,
@@ -291,13 +269,7 @@ def unusual_rows_from_chain(
     if not isinstance(chain, dict):
         return [], {}
     under = str(chain.get("ticker") or "").upper()
-    spot = chain.get("spot") or 0
-    try:
-        spot_f = float(spot) or 0
-    except (TypeError, ValueError):
-        spot_f = 0
-    if not math.isfinite(spot_f):  # D3: float("nan") is truthy — never emit it
-        spot_f = 0
+    spot_f = _nonnegative_reading(chain.get("spot")) or None
     now = time.time() if now is None else now
     marks = vol_marks if vol_marks is not None else {}
     mids = mid_marks if mid_marks is not None else {}
@@ -307,12 +279,16 @@ def unusual_rows_from_chain(
         try:
             if not isinstance(c, dict):
                 continue
-            vol = int(float(c.get("volume") or 0))
-            oi = int(float(c.get("oi") or 0))
+            volume = _nonnegative_reading(c.get("volume"))
+            if volume is None:
+                continue
+            vol = int(volume)
+            oi_value = _nonnegative_reading(c.get("oi"))
+            oi = int(oi_value) if oi_value is not None else None
             if vol < MIN_VOL:
                 continue
-            vol_oi = (vol / oi) if oi > 0 else float(vol)
-            if vol_oi < MIN_VOL_OI and vol < BIG_VOL:
+            vol_oi = (vol / oi) if oi is not None and oi > 0 else None
+            if (vol_oi is None or vol_oi < MIN_VOL_OI) and vol < BIG_VOL:
                 continue
             strike = float(c.get("strike") or 0)
             if not math.isfinite(strike) or strike <= 0:  # D3: no nan/inf strikes
@@ -324,13 +300,7 @@ def unusual_rows_from_chain(
             exp = str(c.get("expiry") or "")[:10]
             if not exp:
                 continue
-            iv = c.get("iv") or 0
-            try:
-                iv_f = float(iv)
-            except (TypeError, ValueError):
-                iv_f = 0
-            if not math.isfinite(iv_f):  # D3: never emit nan/inf IV
-                iv_f = 0
+            iv_f = _nonnegative_reading(c.get("iv")) or None
             _delta = c.get("delta")
             if isinstance(_delta, float) and not math.isfinite(_delta):
                 _delta = None
@@ -346,7 +316,7 @@ def unusual_rows_from_chain(
                 _delta,
                 spot_f,
             ]
-            out.append((vol_oi, row))
+            out.append((vol_oi if vol_oi is not None else -1, row))
             # ── quote truth (paid feed only) ──
             bid = c.get("bid")
             ask = c.get("ask")
@@ -437,6 +407,7 @@ def merge_slices(
     slices: dict[str, dict],
     now: float | None = None,
     ttl_s: float = SLICE_TTL_S,
+    universe: list[str] | None = None,
 ) -> tuple[list[list], dict[str, dict[str, Any]], dict[str, Any]]:
     """Merge per-ticker slices into (rows, extras, coverage).
 
@@ -449,7 +420,10 @@ def merge_slices(
     fresh: list[str] = []
     stale_dropped: list[str] = []
     max_age: float = 0.0
+    allowed = set(slices if universe is None else universe)
     for ticker, entry in slices.items():
+        if ticker not in allowed:
+            continue
         age = now - float(entry.get("ts", 0))
         if age > ttl_s:
             stale_dropped.append(ticker)
@@ -467,7 +441,7 @@ def merge_slices(
             row_keys.add(ckey_of(r[0], r[2], r[3], r[4]))
     extras = {k: v for k, v in extras.items() if k in row_keys}
     coverage = {
-        "universe": len(get_universe()),
+        "universe": len(allowed),
         "fresh": len(fresh),
         "stale_dropped": stale_dropped,
         "max_age_s": round(max_age, 1),
@@ -479,6 +453,7 @@ def merge_slices(
 
 _slices: dict[str, dict] = {}   # ticker -> {ts, rows, extras, dealer}
 _cursor: int = 0
+_attempts: dict[str, dict] = {}
 _scan_lock = asyncio.Lock()
 _vol_marks: dict[str, tuple[float, float]] = {}  # osi -> (vol, ts)
 _mid_marks: dict[str, float] = {}  # osi -> last-seen mid (Lee-Ready tick anchor)
@@ -489,6 +464,7 @@ def _reset_state() -> None:
     """Tests only — clear slices + cursor + velocity/mid marks + rings."""
     global _cursor
     _slices.clear()
+    _attempts.clear()
     _cursor = 0
     _vol_marks.clear()
     _mid_marks.clear()
@@ -610,7 +586,9 @@ async def scan_slice(
             tick_rings = {o: _mid_rings[o] for o in tick_osis if o in _mid_rings}
             dealer["roll_spread"] = _roll_pooled_for(tick_rings)
             out[t] = {"rows": rows, "extras": extras, "dealer": dealer, "status": "ok", "received_ts": received_ts,
-                      "event_time": instant(chain.get("event_time"))}
+                      "event_time": instant(chain.get("event_time")),
+                      "expiries_checked": len(chain.get("expiries") or []),
+                      "rows_capped": len(rows) >= MAX_ROWS_PER_TICKER}
 
     await asyncio.gather(*(_one(t) for t in tickers))
     return out
@@ -632,11 +610,17 @@ async def scan_next(
     coverage degrades gracefully instead of stampeding upstream.
     """
     global _cursor
-    uni = universe or get_universe()
+    catalog = None
+    if universe is None and not os.environ.get("FLOWW_PUBLIC_UNIVERSE", "").strip():
+        from services.market_catalog import get_catalog
+        catalog = await get_catalog()
+    uni = list(dict.fromkeys(get_universe() if universe is None else universe))
     async with _scan_lock:
         from services.public_budget import BudgetExhausted
         from services.public_budget import budget as pub_budget
 
+        await pub_budget.check_request_allowed("api.public.com")
+        started = time.monotonic()
         per_ticker = chain_cost(max_expiries)
         try:
             affordable = max(0, int(await pub_budget.peek_available() // per_ticker))
@@ -660,7 +644,10 @@ async def scan_next(
         }
         if tickers:
             fresh = await scan_slice(tickers, max_expiries=max_expiries)
-            for t, pack in fresh.items():
+            for t in tickers:
+                pack = fresh.get(t, {"status": "failed"})
+                _attempts[t] = {"status": pack.get("status"), "at": time.time(),
+                                "expiries_checked": pack.get("expiries_checked", 0)}
                 # D3: a successful fresh read (even zero rows) replaces the
                 # slice — obsolete rows must not pose as current. Only a
                 # failed read keeps the prior slice with its age (merge
@@ -668,9 +655,38 @@ async def scan_next(
                 received_ts = pack.get("received_ts")
                 if pack.get("status") == "ok" and isinstance(received_ts, (float, int)) and math.isfinite(received_ts):
                     _slices[t] = {"ts": received_ts, "rows": pack["rows"], "event_time": pack.get("event_time"),
-                                  "extras": pack["extras"], "dealer": pack["dealer"]}
+                                  "extras": pack["extras"], "dealer": pack["dealer"],
+                                  "rows_capped": pack.get("rows_capped", False)}
                     dealer[t] = pack["dealer"]
-        rows, extras, coverage = merge_slices(_slices)
+        # Removed symbols must not remain in rows or count as scanned.
+        for old in set(_slices) - set(uni):
+            _slices.pop(old, None)
+        for old in set(_attempts) - set(uni):
+            _attempts.pop(old, None)
+        rows, extras, coverage = merge_slices(_slices, universe=uni)
+        # A full provider pass can contain thousands of names. Keep each
+        # expired name's last-check time, not its discarded contract payload.
+        for expired in coverage["stale_dropped"]:
+            _slices[expired] = {"ts": _slices[expired]["ts"], "rows": [],
+                                "extras": {}, "dealer": None,
+                                "event_time": _slices[expired].get("event_time")}
+        duration = max(0, time.monotonic() - started)
+        try:
+            pause = max(0.1, float(os.environ.get("FLOWW_PUBLIC_SWEEP_RTH_S", "1")))
+        except ValueError:
+            pause = 1.0
+        coverage.update(
+            source="public-instruments" if catalog is not None else "custom-universe",
+            catalog_stale=bool(catalog and catalog["stale"]),
+            catalog_available=bool(catalog["complete_provider_catalog"]) if catalog is not None else True,
+            attempted=len(_attempts), never_scanned=max(0, len(uni) - len(_attempts)),
+            latest_failed=sum(a["status"] != "ok" for a in _attempts.values()),
+            expiries_per_ticker=max_expiries, rows_per_ticker_cap=MAX_ROWS_PER_TICKER,
+            rows_capped=any(v.get("rows_capped") for v in _slices.values()),
+            fresh_window_seconds=SLICE_TTL_S, checked_at=time.time(),
+            estimated_pass_seconds=round(math.ceil(len(uni) / len(tickers)) * (duration + pause)) if tickers else None,
+            complete_realtime_market=False,
+        )
         # Dealer context only for tickers actually in the merged view —
         # a dropped stale slice must not keep contributing regime reads.
         fresh_unders = {r[0] for r in rows if r}
@@ -682,7 +698,7 @@ async def scan_next(
             "quote_truth": extras,
             "dealer": dealer,
             "coverage": coverage,
-            "tickers": sorted(_slices.keys()),
+            "tickers": sorted(uni),
         }
 
 
@@ -698,22 +714,12 @@ async def sweep_once(
     next tick), pipeline failures log and return the view anyway.
     """
     from services.public_budget import BudgetExhausted
-    from services.public_budget import budget as pub_budget
 
-    try:
-        await pub_budget.acquire("api.public.com")
-    except BudgetExhausted as e:
-        log.info(
-            "public sweep skipped — budget spent (retry in ~%ss)", e.retry_after)
-        return None
     try:
         view = await scan_next(slice_size=slice_size, max_expiries=max_expiries)
     except BudgetExhausted as e:
-        log.info("public sweep skipped — slice unaffordable (retry in ~%ss)",
-                 e.retry_after)
+        log.info("public sweep skipped (retry in ~%ss)", e.retry_after)
         return None
-    finally:
-        pub_budget.release()
     try:
         from routes.flowseeker import _record_scan_baseline, _run_institutional_alerts
 

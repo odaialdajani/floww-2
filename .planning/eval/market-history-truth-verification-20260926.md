@@ -1,0 +1,31 @@
+# Market catalog, recorded price history, and truth safeguards - 2026-09-26
+
+This is bounded integration evidence, not completion of the full AI/UI plan. No live orders, deployment, remote-main merge, fresh model acceptance, or historical-AI interpretation is certified.
+
+## Current behavior
+
+The Public-backed stock/fund directory is wired into both Solstice and Tidehunter. Automatic scanning rotates the provider's option-enabled catalog instead of silently substituting the featured list. Coverage states distinguish attempted, failed, waiting, fresh and old names, expiry depth, and returned-row limits. The process spaces Public requests at eight/second; that is not an account-wide lock across other processes. A response hook observes throttling across real broker endpoints, honors Retry-After up to one day, preserves the longest active wait, and avoids double counting when an adapter also catches the response. The separate directory carries completion/staleness and retry disclosure, including a catalog changing between pages.
+
+The recorded price/node chart is mounted in Solstice. The full directory is mounted in both dashboards; earlier wording claiming the history chart itself is in both was incorrect. Candles use only valid prices/times; invalid rows cannot create an available status or extend the history query. Nodes appear only from saved observations known at the candle timestamp; missing history remains a gap. Opening history clears live-map research identity immediately, throughout loading/scrubbing/refresh/ticker change; closing recomputes the current live or replay context. The backend refuses unsupported non-live research rather than using today's map for an old chart.
+
+Large-volume rows remain eligible independently when open interest is missing. Missing/invalid OI, volatility, and underlying price remain unknown; no volume/OI ratio is invented for absent or zero OI. Saving and alert generation retain those distinctions. Missing whale OI is saved as null with UNKNOWN status rather than claiming a position is held. Observed zero remains real zero. These are heuristic activity/position labels, not proof of specific investor holdings.
+
+Progress/final events now preserve their original recorded_at string through saving and stream replay. This measures the time immediately before a successful conditional write, not durability acknowledgment, browser receipt, or first paint. It is separate from market observation time; old events receive no invented timestamp. Actual per-case capability/read counts remain follow-up work.
+
+## Evidence
+
+- Full frontend: 97 suites,835 tests passed using the project's Craco test configuration. A direct react-scripts invocation failed one suite because it bypassed the project alias configuration; that invocation is not treated as product failure or a pass.
+- Production frontend build passed, then passed again after two provider-coverage wording corrections;5focused screen checks also passed. Existing bundle-size/deprecation notices remain.
+- Focused backend/research run:361 passed; later added six missing-volume/baseline cases passed in a20-test scan/whale run. The final isolated full backend run passed 5,946 tests with 39 skips and 142 warnings in 379.52 seconds; no failures. Skip identities and reasons are retained in [suite result](market-history-backend-suite-20260926.json). The first full run recorded5944passed,39skipped and one failed legacy fixture that supplied only status429 without a provider identity. That test now asserts anonymous responses are ignored and uses an actual httpx Public request/response for throttling. Two measured-zero wording issues found afterward were fixed with a red-to-green regression;69affected tests passed.
+- Root catalog/history/provider tests:34 passed. Separate full-catalog rotation test exercises8,786names; see concurrent task evidence for exact scope.
+- Independent frontend closure:3 actual-dashboard history transitions plus backend refusal checks passed; reviewed states include loading, loaded scrub, late live refresh, closing to newest map or existing replay, ticker change and unmount/remount.
+- Independent backend closure:48 passed (16new probes+32root checks), including MockTransport429 on bars/catalog/accounts/auth, hook+fallback idempotence, malformed Retry-After, nonPublichosts, baseline persistence, real in-memory DuckDB whale records, and invalid-candle windows.
+- Independent timestamp review:26 checks passed (11existing+15probes), including failed conditional writes, finalization retry, owner isolation, real route replay and old untimed events.
+
+Reviews: [backend](chart-catalog-backend-review-20260926.md), [frontend](chart-catalog-frontend-review-20260926.md), [timestamps](progress-timestamps-review-20260926.md). Raw logs/probes and screenshots stay local under output. Local source hashes accompany the reviews. Tests used controlled data and local stores; an offline guard blocked two missed mocked provider attempts during the first focused run. That fixture was corrected and the guarded rerun passed; no provider call escaped that run.
+
+## Limits retained
+
+This is rotating snapshot coverage across limited expiries, not every option trade or an always-fresh whole market. Live full-universe passage is being measured separately and is not yet complete. New provider documentation is detected for review, not automatically implemented as arbitrary future capabilities. Missing historic nodes are not reconstructed. Fresh stronger-model acceptance, monetary cost proof, broader research/proposals/paper/watches/forward work,39 older skipped prerequisites and production durability/startup evidence remain open in REMAINING_WORK.md.
+
+Final zero-wording review passed independently: observed OI0 stays a zero reading; whale zero-initial-basis remains UNKNOWN with an explicit zero-basis reason, separately from absent readings. Controlled headless browser checks from the directory thread exercised actual Skylit/Plotly, partial-directory retry, saved candle/node display, historical research isolation and closing back to the current map with0page errors. That page used fixture data and standalone styling; this is not whole-app visual certification.

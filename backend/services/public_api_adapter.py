@@ -429,7 +429,7 @@ async def fetch_chain_from_public_api(
         # The in-flight slot releases when this attempt settles.
         # Module-attribute access keeps the budget singleton patchable.
         try:
-            await _public_budget.budget.acquire_n(2 + max_expiries)
+            await _public_budget.budget.acquire_n(2 + max_expiries, "api.public.com")
             _debit_held = True
         except _public_budget.BudgetExhausted as exc:
             log.warning("Public budget refused %s chain fetch: %s", ticker, exc)
@@ -474,8 +474,8 @@ def _note_public_429(exc: BaseException) -> None:
     try:
         status = getattr(getattr(exc, "response", None), "status_code", None)
         if status == 429:
-            from services.public_budget import budget
-            budget.record_429("api.public.com")
+            from services.public_request_pacer import note_response
+            note_response(exc.response)
             return
         try:
             import httpx
@@ -1145,6 +1145,7 @@ async def fetch_bars_by_interval(
     try:
         raw = await pb.get_bars(symbol, eff_period, instrument_type, eff_agg)
     except Exception as e:
+        _note_public_429(e)
         log.warning("Public API bars fail for %s %s: %s", ticker, interval, e)
         return None
     bars = _extract_bars(raw, sessions=sessions)

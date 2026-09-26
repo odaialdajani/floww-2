@@ -135,13 +135,15 @@ def norm_rows(raw_rows, columns: list[str] | None = None) -> list[dict]:
             if typ is None:
                 continue
             vol = _f(raw[idx["day_volume"]]) or 0.0
-            oi = _f(raw[idx["open_interest"]]) or 0.0
+            oi = _f(raw[idx["open_interest"]])
+            if oi is not None and oi < 0:
+                oi = None
             iv = _norm_iv(raw[idx["implied_volatility"]])
             delta = _f(raw[idx["delta"]])
             spot = _f(raw[idx["underlying_price"]])
             exp = str(raw[idx["expiration_date"]] or "")[:10]
             dte = biz_dte(exp)
-            vol_oi = vol / oi if oi > 0 else vol
+            vol_oi = vol / oi if oi is not None and oi > 0 else None
             r = {
                 "under": under, "occ": str(raw[idx["ticker"]] or ""),
                 "type": typ, "strike": strike, "exp": exp, "dte": dte,
@@ -519,13 +521,15 @@ def build_context(r: dict, factors: dict) -> dict:
     else:
         dealer = "Dealer positioning unknown (no GEX context for ticker)"
     vol = r.get("vol") or 0
-    premium = r.get("premium") or 0
+    premium = r.get("premium")
+    premium_text = f"~${premium / 1e6:.2f}M estimated premium" if premium is not None else "premium unavailable"
     vol_oi = r.get("vol_oi") or 0
     oi = _f(r.get("oi"))
-    oi_text = f"{oi:,.0f} open interest ({vol_oi:.1f}x)" if oi is not None and oi > 0 else "open interest unavailable"
+    oi_text = (f"{oi:,.0f} open interest ({vol_oi:.1f}x)" if oi is not None and oi > 0
+               else "0 open interest (volume/OI unavailable)" if oi == 0 else "open interest unavailable")
     summary = (f"{r.get('type', 'call').capitalize()} session volume: {vol:,.0f} contracts "
                f"vs {oi_text}, "
-               f"~${premium / 1e6:.2f}M estimated premium, {r.get('dte')} DTE")
+               f"{premium_text}, {r.get('dte')} DTE")
     return {
         "activity_summary": summary,
         "institutional_indicators": indicators,
@@ -789,7 +793,9 @@ def eval_institutional(rows, baselines=None, prev_oi=None, regimes=None, opts=No
         score = r.get("_score") or 0
         if score >= o["min_score"]:
             rule = "SCORE"
-            why = f"score {score} â€” vol {r['vol_oi']:.1f}أ— OI, ~${(r.get('premium') or 0) / 1e6:.2f}M premium, {r.get('dte')} DTE"
+            ratio_text = f"vol {r['vol_oi']:.1f}x OI" if r.get("vol_oi") is not None else "volume/OI unavailable"
+            premium_text = "~$%0.2fM premium" % (r["premium"] / 1e6) if r.get("premium") is not None else "premium unavailable"
+            why = f"score {score} - {ratio_text}, {premium_text}, {r.get('dte')} DTE"
         elif (r.get("premium") or 0) >= o["whale_premium"]:
             rule = "WHALE"
             why = f"~${(r.get('premium') or 0) / 1e6:.1f}M estimated premium on a single line"

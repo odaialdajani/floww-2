@@ -142,3 +142,44 @@ describe("fetchFullUniverse (T2 paged universe)", () => {
     expect(out.pages).toBe(0);
   });
 });
+
+
+test("provider catalogs larger than twelve thousand remain complete", async () => {
+  const names = Array.from({ length: 13135 }, (_, i) => 'T' + i);
+  const get = async url => {
+    const page = Number(new URL(url).searchParams.get('page'));
+    return { data: { tickers: names.slice((page - 1) * 5000, page * 5000), total: names.length,
+      has_more: page * 5000 < names.length, complete_provider_catalog: true } };
+  };
+  const result = await fetchFullUniverse(get, 'http://x/api');
+  expect(result.symbols).toEqual(names);
+  expect(result.complete).toBe(true);
+});
+
+test("duplicates cannot masquerade as a complete directory", async () => {
+  const result = await fetchFullUniverse(async () => ({ data: {
+    tickers: ["SPY", "spy"], total: 2, has_more: false, complete_provider_catalog: true,
+  } }), "http://x/api");
+  expect(result.symbols).toEqual(["SPY"]);
+  expect(result.complete).toBe(false);
+});
+
+test("an unverified completeness claim remains incomplete", async () => {
+  const result = await fetchFullUniverse(async () => ({ data: {
+    tickers: ["SPY"], total: 1, has_more: false,
+  } }), "http://x/api");
+  expect(result.complete).toBe(false);
+});
+
+test.each([
+  { tickers: ["D"], total: 3, asof: "new" },
+  { tickers: ["C", "D"], total: 4, asof: "new" },
+  { tickers: ["D"], total: 3, asof: "old" },
+])("directory changes during paging cannot hide a missing name", async lastPage => {
+  const get = jest.fn()
+    .mockResolvedValueOnce({ data: { tickers: ["A", "B"], total: 4, asof: "old", has_more: true, complete_provider_catalog: true } })
+    .mockResolvedValueOnce({ data: { ...lastPage, has_more: false, complete_provider_catalog: true } });
+  const result = await fetchFullUniverse(get, "http://x/api");
+  expect(result.complete).toBe(false);
+  expect(result.symbols).toEqual(["A", "B"]);
+});

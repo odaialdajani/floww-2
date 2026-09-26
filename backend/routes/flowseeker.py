@@ -785,8 +785,8 @@ async def _record_scan_baseline(rows: list) -> None:
             # Per-contract OI (static intraday, so $max == the value). One doc
             # per contract per day; the OCC ticker r[1] is the exact join key.
             ckey = r[1]
-            oi = int(r[6] or 0)
-            if ckey and ckey not in seen_contracts:
+            oi = int(r[6]) if r[6] is not None else None
+            if oi is not None and oi >= 0 and ckey and ckey not in seen_contracts:
                 seen_contracts.add(ckey)
                 oi_ops.append(UpdateOne(
                     {"ticker": ckey, "date": today},
@@ -923,8 +923,8 @@ async def _run_institutional_alerts(
                 for a in fresh or []:
                     if a.get("rule") == "WHALE":
                         r0 = rows_by_ckey.get(a.get("ckey")) or {}
-                        bookmark_whale(weng, a, spot=r0.get("spot") or 0,
-                                       oi=r0.get("oi") or 0, vol=r0.get("vol") or 0)
+                        bookmark_whale(weng, a, spot=r0.get("spot"),
+                                       oi=r0.get("oi"), vol=r0.get("vol"))
                 snaps = {c: {"spot": r.get("spot"), "oi": r.get("oi"),
                              "vol": r.get("vol"), "dte": r.get("dte")}
                          for c, r in rows_by_ckey.items()}
@@ -1110,7 +1110,8 @@ async def _prev_contract_oi() -> dict[str, int]:
             async for doc in db.flow_scan_contract_oi.find(
                 {"date": pdate}, {"ticker": 1, "oi": 1}
             ).limit(20000):
-                out[doc["ticker"]] = doc.get("oi") or 0
+                if doc.get("oi") is not None:
+                    out[doc["ticker"]] = doc["oi"]
     except Exception as e:
         logger.debug(f"prev contract OI unavailable: {e}")
     _contract_oi_cache["ts"] = nowt
@@ -1505,21 +1506,10 @@ async def public_market_scan(
     from services.public_budget import budget as _pub_budget
 
     try:
-        await _pub_budget.acquire("api.public.com")
-    except BudgetExhausted as e:
-        raise HTTPException(
-            status_code=503,
-            detail={"error": "public budget exhausted", "retry_after": e.retry_after},
-        ) from e
-    try:
         view = await ps.scan_next(slice_size=slice_size, max_expiries=max_expiries)
     except BudgetExhausted as e:
-        raise HTTPException(
-            status_code=503,
-            detail={"error": "public slice unaffordable", "retry_after": e.retry_after},
-        ) from e
-    finally:
-        _pub_budget.release()
+        raise HTTPException(status_code=503,
+                            detail={"error": "public slice unaffordable", "retry_after": e.retry_after}) from e
 
     rows = view["rows"]
     extras = view.get("quote_truth", {})
@@ -1529,8 +1519,8 @@ async def public_market_scan(
     _spawn_bg(_run_institutional_alerts(rows, extras=extras, dealer=dealer))
     cov = view.get("coverage", {})
     # Honest freshness: slices carry their own ages — a merged view with
-    # dropped or aging slices must not claim stale:false.
-    is_stale = bool(cov.get("stale_dropped")) or (cov.get("max_age_s") or 0) > 300
+    # missing coverage is separate from the age of returned rows.
+    is_stale = (cov.get("max_age_s") or 0) > 120
     return {
         "columns": view["columns"],
         "rows": rows,

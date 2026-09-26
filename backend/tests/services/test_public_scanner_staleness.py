@@ -31,7 +31,8 @@ def fresh_budget():
 @pytest.fixture
 def clean_state():
     scanner._reset_state()
-    yield
+    with patch.object(scanner, "_get_adv", None):
+        yield
     scanner._reset_state()
 
 
@@ -51,7 +52,8 @@ async def test_stale_chain_cannot_reset_slice_or_marks(fresh_budget, clean_state
          patch.object(scanner, "_stamp_marks") as stamp:
         view = await scanner.scan_next(slice_size=1, universe=["T00"])
     assert scanner._slices["T00"]["ts"] == prior_time
-    assert view["coverage"]["max_age_s"] >= 100
+    assert "T00" in view["coverage"]["stale_dropped"]
+    assert view["rows"] == []
     stamp.assert_not_called()
 
 

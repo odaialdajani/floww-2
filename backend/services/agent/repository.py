@@ -184,12 +184,14 @@ class AgentRepository:
         if not doc or doc["status"] in TERMINAL or len(doc["events"]) >= 60:
             return False
         seq = len(doc["events"]) + 1
+        recorded_at = utcnow()
         result = await self.turns.update_one(
             {"owner": owner, "turn_id": turn_id, "status": {"$in": ["queued", "running"]}, "version": doc["version"]},
             {
-                "$set": {"status": "running", "updated_at": utcnow()},
+                "$set": {"status": "running", "updated_at": recorded_at},
                 "$inc": {"version": 1},
-                "$push": {"events": {"id": seq, "type": "progress", "message": message[:200]}},
+                "$push": {"events": {"id": seq, "type": "progress", "message": message[:200],
+                                     "recorded_at": recorded_at.isoformat()}},
             },
         )
         return result.modified_count == 1
@@ -230,7 +232,9 @@ class AgentRepository:
             parameters["issued_at"] = utcnow()
             claim_seed = rebuild_claim(**parameters)
             answer = {**answer, "claim_id": claim_seed["claim_id"], "claim_issued_at": claim_seed["issued_at"]}
-        event = dict(id=len(doc["events"]) + 1, type="done" if status == "completed" else "error", status=status)
+        recorded_at = utcnow()
+        event = dict(id=len(doc["events"]) + 1, type="done" if status == "completed" else "error",
+                     status=status, recorded_at=recorded_at.isoformat())
         result = await self.turns.update_one(
             {"owner": owner, "turn_id": turn_id, "status": {"$in": ["queued", "running"]}, "version": doc["version"]},
             {
@@ -240,7 +244,7 @@ class AgentRepository:
                     error=error,
                     claim_seed=claim_seed,
                     projection_pending=claim_seed is not None,
-                    updated_at=utcnow(),
+                    updated_at=recorded_at,
                 ),
                 "$inc": {"version": 1},
                 "$push": {"events": event},

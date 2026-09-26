@@ -790,3 +790,21 @@ test("activity selection and research share its own axes without raw fallback",(
  expect(screen.queryByTestId("skylit-selected-cell")).not.toBeInTheDocument();
  expect(JSON.parse(screen.getByTestId("research-selection").textContent).selectedStrike).toBeNull();
 });
+
+// The actual historical chart must never borrow a current map for research.
+jest.mock("react-plotly.js", () => () => <div data-testid="history-plot" />);
+test("open history blocks research through loading and live refresh; close uses latest map", async()=>{
+ axios.get.mockImplementation(()=>new Promise(()=>{}));
+ const mounted=render(<><SkylitDashboard ticker="SPY" data={selectionMap()} spot={650}/><ResearchSelection/></>);
+ fireEvent.click(screen.getByText("Price chart + historical nodes"));
+ let context=JSON.parse(screen.getByTestId("research-selection").textContent);
+ expect(context).toMatchObject({displayMode:"price-history",mapVersion:null,mapQuery:null,selectedStrike:null});
+ mounted.rerender(<><SkylitDashboard ticker="SPY" data={selectionMap(999,"LATEST")} spot={650}/><ResearchSelection/></>);
+ expect(JSON.parse(screen.getByTestId("research-selection").textContent).displayMode).toBe("price-history");
+ fireEvent.click(screen.getByText("Price chart + historical nodes"));
+ expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({displayMode:"live",mapVersion:"LATEST"});
+ fireEvent.click(screen.getByText("Price chart + historical nodes"));
+ mounted.rerender(<><SkylitDashboard ticker="QQQ" data={{...selectionMap(),ticker:"QQQ"}} spot={650}/><ResearchSelection/></>);
+ expect(screen.getByText("Price chart + historical nodes")).toHaveAttribute("aria-expanded","true");
+ expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({ticker:"QQQ",displayMode:"price-history",mapVersion:null});
+});

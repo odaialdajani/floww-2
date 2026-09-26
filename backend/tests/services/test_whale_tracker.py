@@ -72,9 +72,22 @@ def test_expired_past_expiry(fresh_engine):
     assert out["SPY|call|700|2026-09-18"]["state"] == "EXPIRED"
 
 
-def test_no_oi_basis_holds_with_honest_reason():
+def test_no_oi_basis_is_unknown():
     out = whale_state({"entry_spot": 770.0, "entry_oi": 0, "entry_vol": 0,
                        "side": "BUY", "type": "call"},
                       {"spot": 775.0, "oi": 4900, "vol": 8000, "dte": 9})
-    assert out["state"] == "STILL_IN"
-    assert "no OI basis" in out["reason"]
+    assert out["state"] == "UNKNOWN"
+    assert "Initial open interest was zero" in out["reason"]
+
+
+def test_unknown_readings_round_trip_without_zeroes_or_held_claim(fresh_engine):
+    alert = _alert(asof="2026-09-26T14:00:00")
+    assert bookmark_whale(fresh_engine, alert, spot=None, oi=None, vol=3000) == 1
+    row = read_whales(fresh_engine)[0]
+    assert row["entry_oi"] is None and row["entry_spot"] is None
+    assert row["state"] == "UNKNOWN"
+    update_whales(fresh_engine, {alert["ckey"]: {"spot":None, "oi":None, "vol":4000, "dte":10}})
+    row = read_whales(fresh_engine)[0]
+    assert row["last_oi"] is None and row["last_spot"] is None
+    assert row["state"] == "UNKNOWN"
+    assert row["pnl_underlying_pct"] is None
