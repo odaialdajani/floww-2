@@ -219,6 +219,10 @@ async def compute_movers(universe: list[str] | None = None,
     return {"schema_version": SCHEMA_VERSION, "mode": mode, "status": status,
             "session_date": last, "prior_session_date": prior,
             "universe_id": UNIVERSE_ID,
+            # Price return on vendor closes as returned (close-to-close).
+            # No split/dividend adjustment is applied — a corporate action
+            # can print as a large move; basis is declared, not corrected.
+            "price_basis": "vendor-close-as-returned-unadjusted",
             "coverage": {"requested": len(universe), "valid": len(rows),
                          "excluded": len(universe) - len(rows)},
             "source": provider, "computed_at": computed_at,

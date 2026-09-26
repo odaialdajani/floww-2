@@ -1,9 +1,24 @@
-# R7 RUN_STATE (sustained harness)
+# R8 RUN_STATE (continued from R7; same branch `solstice/r7`)
 
 Model: Muse Spark (muse-spark-1.3-contributor-free). Base `7fed6012` (post-#47).
-Branch: `solstice/r7`. Packet: R7-00–09, NO merges authorized.
-Env: macOS, python 3.14.6, node v24.14.1. Formula `gex.v2`, schema movers
-target `movers.v2`, fixtures `comprehension_v1.json`.
+Head `21c52325` (R8 commit on top of R7 `046a1357`): **11 commits ahead** of
+`origin/main` (10 R7 + 1 R8; receipt "ten vs nine" resolved from Git).
+Packet: R8-00–07, NO merges authorized.
+Env: macOS, python 3.14.6, node v24.14.1. Formula `gex.v2`.
+Dirty (preserved, in progress): heatmap_history.py (reviews DDL move +
+state_filter/review_state), test_r8_04_review_journal.py, App.css
+(follow/review styles), SkylitDashboard.jsx + test (follow re-resolve,
+review fetch), untracked test_r8_05_outcome_attach.py.
+Unrelated preserved: kanban/BOTTLENECK_ALERTS.md (dirty, untouched);
+PRs #3/#4/#5/#12 outside scope.
+
+## Package ledger
+
+- R8-00 reconciliation: acceptance-tested. Branch/head/base/ahead verified
+  from Git (not prose). 3 solstice failures from repo root are CWD path
+  artifacts — 207/207 pass from backend/. Dashboard 21/21, ruff + silent
+  gate clean after 2-line fixes (I001 blank line, _parse_features debug log).
+- R7 rows: reported → re-verified where R8 touches them; retained unchanged.
 
 ## Package ledger (implemented / integrated / acceptance-tested / blocked)
 

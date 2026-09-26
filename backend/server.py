@@ -2516,6 +2516,27 @@ async def _scheduler_loop():
                 log.warning(f"snapshot tick err: {e}")
         except Exception as e:
             log.warning(f"scheduler tick err: {e}")
+        # R8-05: outcome-worker tick — default DISABLED. Set
+        # SOLSTICE_OUTCOME_WORKER=1 to enable persistent closing of open
+        # decisions from stored price paths (commissioning item; the price
+        # recorder feeding price_paths_v1 is separate). Throttled to ~5min,
+        # budget-free (local DB only, no vendor calls).
+        global _last_outcome_tick_ts
+        try:
+            if os.environ.get("SOLSTICE_OUTCOME_WORKER") == "1" and (
+                    time.time() - globals().get("_last_outcome_tick_ts", 0) > 300):
+                _last_outcome_tick_ts = time.time()
+                from services.duckdb_engine import db as _ddb_outcome
+                from services.heatmap_history import outcome_close_tick
+                _oconn = getattr(_ddb_outcome, "conn", None)
+                if _oconn is not None:
+                    _ores = outcome_close_tick(_oconn)
+                    log.info("outcome worker tick: closed=%d pending=%d seen=%d",
+                             len(_ores.get("closed", [])),
+                             len(_ores.get("skipped_pending", [])),
+                             _ores.get("decisions_seen", 0))
+        except Exception as e:
+            log.warning(f"outcome tick err: {e}")
         await asyncio.sleep(60)
 
 
@@ -3399,11 +3420,14 @@ app.include_router(heatseeker_snapshots_router, prefix="/api/heatseeker", tags=[
 
 from routes.solstice import router as solstice_router
 
-app.include_router(solstice_router, tags=["solstice"])
-
-# R8-04: review journal routes (list decisions, save review state)
+# R8-04: review journal routes (list decisions, save review state).
+# Registered BEFORE include_router: Starlette snapshots routes at include
+# time, so anything added after would never mount on the app.
 from routes.solstice_review import register_review_routes
+
 register_review_routes(solstice_router)
+
+app.include_router(solstice_router, tags=["solstice"])
 
 from routes.public_api import router as public_api_router
 

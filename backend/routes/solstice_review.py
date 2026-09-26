@@ -72,9 +72,16 @@ def register_review_routes(router: APIRouter) -> None:
         Persists through the real route/store; never falls back to
         transient memory and claims durability.
         """
+        from fastapi import HTTPException
+
         from services.duckdb_engine import db as eng
         from services.heatmap_history import save_decision_review
 
+        allowed = ("pending", "reviewed", "waiting", "skipped")
+        if body.state not in allowed:
+            raise HTTPException(status_code=422, detail={
+                "error": "unknown review state",
+                "allowed": list(allowed)})
         conn = eng.conn if hasattr(eng, "conn") else None
         if conn is None:
             return {"decision_id": decision_id, "state": body.state,

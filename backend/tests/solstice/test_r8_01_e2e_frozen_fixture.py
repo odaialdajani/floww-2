@@ -12,16 +12,17 @@ at least two source observations, one missing-data contract.
 """
 
 import sys
+
 sys.path.insert(0, "backend")
 
 import json
-import pytest
-import duckdb
 
-from services.heatmap_snapshot import build_snapshot_v2, to_legacy_payload
-from services.heatmap_history import record_snapshot, record_decision, replay_snapshot
-from services.heatmap_history import ensure_tables
+import duckdb
+import pytest
+
 from services.episode_policy import research_default_features
+from services.heatmap_history import ensure_tables, record_decision, record_snapshot, replay_snapshot
+from services.heatmap_snapshot import build_snapshot_v2, to_legacy_payload
 
 
 def _frozen_contract(**kw):

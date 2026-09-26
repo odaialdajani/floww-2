@@ -218,7 +218,9 @@ test("replay strip loads manifest", async () => {
   const axios = require("axios");
   axios.get.mockImplementation(async (url) => {
     if (String(url).includes("/attribute/")) {
-      return { data: { status: "ok", strike_deltas: [{ strike: 500, delta: 1 }], walls_added: ["w_b"], walls_removed: [], volume_deltas: [], volume_rebased: [] } };
+      return { data: { status: "ok",
+        from: { id: "s0", asof: "2026-09-03T13:00:00Z" }, to: { id: "s1", asof: "2026-09-03T14:00:00Z" },
+        strike_deltas: [{ strike: 500, delta: 1 }], walls_added: ["w_b"], walls_removed: [], volume_deltas: [], volume_rebased: [] } };
     }
     return { data: { snapshots: [{ id: "s1" }] } };
   });
@@ -233,6 +235,8 @@ test("replay strip loads manifest", async () => {
     fireEvent.click(screen.getByTestId("solstice-compare-btn"));
   });
   expect(screen.getByTestId("solstice-compare-result").textContent).toContain("1 strikes");
+  // R8-03: both compared observations are named.
+  expect(screen.getByTestId("solstice-compare-result").textContent).toContain("13:00→14:00");
 });
 
 test("replay strip shows truthful recorder badge (R6-3)", async () => {

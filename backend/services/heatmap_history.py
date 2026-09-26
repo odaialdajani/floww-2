@@ -127,10 +127,23 @@ DDL = {
             venue VARCHAR, detail VARCHAR
         )
     """,
+    "decision_reviews_v1": """
+        CREATE TABLE IF NOT EXISTS decision_reviews_v1 (
+            decision_id VARCHAR PRIMARY KEY, state VARCHAR,
+            reason VARCHAR, note VARCHAR, reviewed_at VARCHAR
+        )
+    """,
     "outcome_labels_v1": """
         CREATE TABLE IF NOT EXISTS outcome_labels_v1 (
             decision_id VARCHAR, ticker VARCHAR, horizon_s INTEGER, label VARCHAR,
-            label_version VARCHAR, at_ts VARCHAR, censored BOOLEAN, detail VARCHAR
+            label_version VARCHAR, at_ts VARCHAR, censored BOOLEAN, detail VARCHAR,
+            policy_version VARCHAR
+        )
+    """,
+    "price_paths_v1": """
+        CREATE TABLE IF NOT EXISTS price_paths_v1 (
+            at_ts DOUBLE, ticker VARCHAR, price DOUBLE, source VARCHAR,
+            received_at VARCHAR
         )
     """,
     "capability_observations_v1": """
@@ -168,14 +181,13 @@ def ensure_tables(conn) -> None:
             conn.execute(f"ALTER TABLE heatmap_snapshots_v2 ADD COLUMN IF NOT EXISTS {col} VARCHAR")
         except Exception as e:
             log.warning("heatmap_history migrate %s failed: %s", col, e)
-    # R8-04: decision reviews table (if not already present)
-    try:
-        conn.execute("""CREATE TABLE IF NOT EXISTS decision_reviews_v1 (
-            decision_id VARCHAR PRIMARY KEY, state VARCHAR,
-            reason VARCHAR, note VARCHAR, reviewed_at VARCHAR
-        )""")
-    except Exception as e:
-        log.debug("ensure_tables: decision_reviews_v1: %s", e)
+    # R8-05: policy_version keys outcome idempotency (decision/horizon/
+    # policy/version); price_paths_v1 stores the worker's price observations.
+    for col in ("policy_version",):
+        try:
+            conn.execute(f"ALTER TABLE outcome_labels_v1 ADD COLUMN IF NOT EXISTS {col} VARCHAR")
+        except Exception as e:
+            log.warning("heatmap_history migrate %s failed: %s", col, e)
 
 
 def recorder_status(conn, path: str | None = None) -> dict[str, Any]:
@@ -252,21 +264,32 @@ def attach_outcomes_to_decisions(conn, results: dict[str, dict[str, Any]]) -> No
     episode layout PLUS the latest outcome label. Terminal outcomes are
     idempotent; censored/indeterminate are overwritten on re-processing
     (the close_episodes path already does this in outcome_labels_v1).
+    Scalar results keep the outcome_label keys; multi-horizon results
+    ({horizon: res}) are stored under outcome_labels.
     """
     try:
         for did, res in results.items():
-            label = res.get("label")
-            censored = res.get("censored", False)
-            detail = res.get("detail")
+            if isinstance(res, dict) and "label" not in res and res:
+                _labels = {str(h): {"label": r.get("label"),
+                                    "censored": bool(r.get("censored", False)),
+                                    "detail": r.get("detail")}
+                           for h, r in res.items() if isinstance(r, dict)}
+                _patch = {"outcome_labels": _labels,
+                          "outcome_updated_at": _now_iso()}
+            else:
+                label = res.get("label") if isinstance(res, dict) else None
+                censored = res.get("censored", False) if isinstance(res, dict) else False
+                detail = res.get("detail") if isinstance(res, dict) else None
+                _patch = {"outcome_label": label,
+                          "outcome_censored": censored,
+                          "outcome_detail": detail,
+                          "outcome_updated_at": _now_iso()}
             try:
                 with _RECORDER_LOCK:
                     conn.execute("UPDATE scenario_decisions_v1 SET features = "
                                  + _esc(json.dumps({
                                      **(_parse_features(conn, did)),
-                                     "outcome_label": label,
-                                     "outcome_censored": censored,
-                                     "outcome_detail": detail,
-                                     "outcome_updated_at": _now_iso(),
+                                     **_patch,
                                  }, default=str))
                                  + " WHERE decision_id = " + _esc(did))
             except Exception as _ue:
@@ -285,8 +308,8 @@ def _parse_features(conn, did: str) -> dict[str, Any]:
             if isinstance(raw, str):
                 return __import__("json").loads(raw)
             return raw or {}
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug("heatmap_history _parse_features failed for %s: %s", did, e)
     return {}
 
 
@@ -591,18 +614,119 @@ def record_decision(conn, decision: dict[str, Any]) -> str:
 
 def record_outcome(conn, decision_id: str, ticker: str, horizon_s: int,
                    label: str, label_version: str = "outcome.v1",
-                   censored: bool = False, detail: dict | None = None) -> None:
-    """R6-3/B04: serialized on the single-writer lock with snapshots."""
+                   censored: bool = False, detail: dict | None = None,
+                   policy_version: str | None = None) -> None:
+    """R6-3/B04 + R8-05: serialized on the single-writer lock with snapshots.
+
+    Named-column insert (schema-tolerant); policy_version participates in
+    the outcome idempotency key (decision/horizon/policy/version).
+    """
     try:
         ensure_tables(conn)
         with _RECORDER_LOCK:
-            conn.execute("INSERT INTO outcome_labels_v1 VALUES ("
+            conn.execute("INSERT INTO outcome_labels_v1 "
+                         "(decision_id, ticker, horizon_s, label, label_version, "
+                         "at_ts, censored, detail, policy_version) VALUES ("
                          + ",".join([_esc(decision_id), _esc(ticker), _esc(horizon_s),
                                      _esc(label), _esc(label_version), _esc(_now_iso()),
                                      _esc(1 if censored else 0),
-                                     _esc(json.dumps(detail or {}, default=str))]) + ")")
+                                     _esc(json.dumps(detail or {}, default=str)),
+                                     _esc(policy_version)]) + ")")
     except Exception as e:
         log.warning("outcome record failed: %s", e)
+
+
+def record_price_path(conn, ticker: str, at_ts: float, price: float,
+                      source: str = "synthetic",
+                      received_at: str | None = None) -> bool:
+    """Append one price observation for the outcome worker (R8-05).
+
+    Storage never drops points (no dedupe, no ohlc synthesis): ordering,
+    gap detection and available-at rules belong to the labeling layer.
+    Non-finite inputs are rejected (False). The production scheduled
+    recorder is a commissioning item; this is the tested storage seam.
+    """
+    try:
+        import math as _math
+        t, p = float(at_ts), float(price)
+        if not (_math.isfinite(t) and _math.isfinite(p)):
+            return False
+        ensure_tables(conn)
+        with _RECORDER_LOCK:
+            conn.execute("INSERT INTO price_paths_v1 VALUES ("
+                         + ",".join([_esc(t), _esc(str(ticker or "").upper()),
+                                     _esc(p), _esc(source),
+                                     _esc(received_at or _now_iso())]) + ")")
+        return True
+    except Exception as e:
+        log.debug("price path record failed for %s: %s", ticker, e)
+        return False
+
+
+def price_paths_since(conn, ticker: str, since_ts: float = 0.0,
+                      limit: int = 100000) -> list[tuple[float, float]]:
+    """Ordered finite (t, price) observations for a ticker (R8-05)."""
+    import math as _math
+    try:
+        ensure_tables(conn)
+        rows = conn.execute(
+            "SELECT at_ts, price FROM price_paths_v1 WHERE ticker = "
+            + _esc(str(ticker or "").upper()) + " AND at_ts >= " + str(float(since_ts))
+            + " ORDER BY at_ts ASC LIMIT " + str(max(1, int(limit)))).fetchall() or []
+        out = []
+        for r in rows:
+            try:
+                t, p = float(r[0]), float(r[1])
+            except (TypeError, ValueError):
+                continue
+            if _math.isfinite(t) and _math.isfinite(p):
+                out.append((t, p))
+        return out
+    except Exception as e:
+        log.debug("price paths read failed for %s: %s", ticker, e)
+        return []
+
+
+def outcome_close_tick(conn, ticker: str | None = None,
+                       default_horizon_s: float = 300) -> dict[str, Any]:
+    """One deterministic outcome-worker tick (R8-05).
+
+    Pure function of (conn, stored data): gathers open decisions, pulls
+    their stored price paths, runs close_episodes, attaches outcomes.
+    Restart catch-up falls out of DB state — no cursors to lose, no
+    background loop needed to test it. The scheduler hook is
+    default-disabled (SOLSTICE_OUTCOME_WORKER=1 to enable); the recorder
+    that feeds price_paths_v1 in production is a commissioning item.
+    Returns the close_episodes summary plus decisions_seen.
+    """
+    from services.solstice_labels import close_episodes
+    try:
+        ensure_tables(conn)
+        if ticker:
+            decs = conn.execute(
+                "SELECT decision_id, ticker FROM scenario_decisions_v1 WHERE ticker = "
+                + _esc(str(ticker).upper())).fetchall() or []
+        else:
+            decs = conn.execute(
+                "SELECT decision_id, ticker FROM scenario_decisions_v1").fetchall() or []
+    except Exception as e:
+        log.debug("outcome tick decision scan failed: %s", e)
+        return {"closed": [], "skipped_idempotent": [], "skipped_pending": [],
+                "pending_reasons": {}, "results": {}, "decisions_seen": 0,
+                "error": str(e)}
+    paths: dict[str, list] = {}
+    for did, tick in decs or []:
+        pts = price_paths_since(conn, str(tick))
+        if pts:
+            paths[str(did)] = pts
+    out = close_episodes(conn, paths, default_horizon_s=default_horizon_s)
+    if out.get("closed"):
+        try:
+            attach_outcomes_to_decisions(conn, out["results"])
+        except Exception as _ae:
+            log.debug("worker attach failed: %s", _ae)
+    out["decisions_seen"] = len(decs or [])
+    return out
 
 
 def replay_snapshot(conn, snapshot_id: str) -> dict[str, Any] | None:
@@ -791,13 +915,15 @@ def list_decisions(conn, ticker: str, limit: int = 50, state_filter: str | None 
         q = ("SELECT d.decision_id, d.ticker, d.at_ts, d.snapshot_id, "
              "d.scenario, d.side, d.eligible, d.reason_codes, d.features, "
              "COUNT(DISTINCT c.osi) AS n_quotes, "
-             "GROUP_CONCAT(DISTINCT o.label) AS outcome_labels "
+             "GROUP_CONCAT(DISTINCT o.label) AS outcome_labels, "
+             "MAX(r.state) AS review_state "
              "FROM scenario_decisions_v1 d "
              "LEFT JOIN candidate_quotes_v1 c ON c.decision_id = d.decision_id "
              "LEFT JOIN outcome_labels_v1 o ON o.decision_id = d.decision_id "
+             "LEFT JOIN decision_reviews_v1 r ON r.decision_id = d.decision_id "
              "WHERE d.ticker = " + _esc(ticker) + " ")
         if state_filter is not None:
-            q += 'AND d.features LIKE ' + _esc('%' + '"state": "' + state_filter + '%"') + ' '
+            q += "AND r.state = " + _esc(state_filter) + " "
         q += "GROUP BY d.decision_id, d.ticker, d.at_ts, d.snapshot_id, "
         q += "d.scenario, d.side, d.eligible, d.reason_codes, d.features "
         q += "ORDER BY d.at_ts DESC LIMIT " + str(limit)
@@ -825,6 +951,9 @@ def list_decisions(conn, ticker: str, limit: int = 50, state_filter: str | None 
                 "n_quotes": int(r.get("n_quotes", 0) or 0),
                 "outcome_labels": (feats.get("outcome_labels") if isinstance(feats, dict) and isinstance(feats.get("outcome_labels"), str)
                                     else (r.get("outcome_labels") or "")),
+                # R8-04: include the review state from decision_reviews_v1 so
+                # consumers (incl. the frontend) can display it without a second fetch.
+                "review_state": r.get("review_state") if r.get("review_state") is not None else None,
             })
         return out
     except Exception as e:

@@ -225,6 +225,20 @@ function SkylitDashboard({
   // R8-04: review journal state for the current snapshot's decision
   const [reviewState, setReviewState] = useState(null);
   const [reviewLoading, setReviewLoading] = useState(false);
+  // R8-02/R8-04: matched decision + next-to-review queue + save flow.
+  const [reviewDec, setReviewDec] = useState(null);
+  const [reviewQueue, setReviewQueue] = useState([]);
+  const [reviewReason, setReviewReason] = useState("");
+  const [reviewSaving, setReviewSaving] = useState(false);
+  const [reviewNonce, setReviewNonce] = useState(0);
+  // R8-04: replay jump requested from the next-to-review list.
+  const [replayOpenRequest, setReplayOpenRequest] = useState(null);
+
+  // R8-02: when followWall is on, persist the wall_id from the current
+  // selection so compatible live refreshes keep the same wall. Cleared on
+  // ticker change (no cross-symbol leakage) and when follow is turned off.
+  // The wall inspector uses effectiveWallId when follow is active.
+  const effectiveWallId = followWall && followWallId ? followWallId : null;
   const paneScaleReady = useCallback((pane, s) => {
     setCompareScales((prev) => {
       const cur = prev[pane];
@@ -351,10 +365,16 @@ function SkylitDashboard({
       // snapshot (never a stored number reused across refreshes).
       const src = overlayData;
       const snap = { asof: src?.asof || data?.asof || null, ticker };
+      // R8-02 deeper edge: when follow is active, prefer the followed wall
+      // over the struck wall so clicking near the followed zone keeps it
+      // selected instead of switching to a different wall.
       const walls = src?.metrics?.walls || data?.metrics?.walls || [];
       const s = Number(strike);
       const hit = walls.find((w) => s >= Number(w.low) && s <= Number(w.high)) || null;
-      const sel = { strike, colKey, value, ...snap, wall_id: hit?.wall_id || null };
+      const wall_id = followWall && followWallId
+        ? (hit?.wall_id === followWallId ? hit?.wall_id : followWallId)
+        : (hit?.wall_id || null);
+      const sel = { strike, colKey, value, ...snap, wall_id };
       // R7-F12: historical/study clicks NEVER reach the live Trade handler.
       // Both the call boundary (here) and the arming control (below) enforce
       // it; entering replay also disarms an armed live session.
@@ -384,6 +404,69 @@ function SkylitDashboard({
     setActivePane(pane);
     handleCellClick(strike, colKey, value);
   }, [handleCellClick]);
+
+  // R8-02 (deeper edge): when followWall is on and a new live snapshot
+  // arrives, re-resolve the followed wall_id against the new snapshot's
+  // walls. If it's still present, keep it selected; if it vanished, clear
+  // the follow so the next click picks a fresh wall instead of a ghost.
+  useEffect(() => {
+    if (!followWall || !followWallId || isReplay || !data) return;
+    const stillPresent = data.metrics?.walls?.some(
+      (w) => String(w.wall_id) === String(followWallId)
+    );
+    if (stillPresent === false) {
+      setFollowWallId(null);
+      setFollowWall(false);
+    }
+  }, [data?.metrics?.walls, followWall, followWallId, isReplay]);
+
+  // R8-04: fetch the review state for the current snapshot's decision.
+  // Only on live data (never during replay — outcomes/close owns that path).
+  // Also builds the next-to-review queue: unreviewed decisions, newest
+  // first, capped — evidence readiness via stored features, never returns.
+  useEffect(() => {
+    if (isReplay || !data || !data.snapshotId) return;
+    setReviewState(null);          // clear previous snapshot's state
+    setReviewDec(null);
+    setReviewQueue([]);
+    setReviewLoading(true);
+    const snapId = data.snapshotId;
+    let cancelled = false;
+    axios
+      .get(`${BACKEND_API}/solstice/${encodeURIComponent(ticker)}/decisions`)
+      .then((r) => {
+        if (cancelled) return;
+        const list = r?.data?.decisions || [];
+        const dec = list.find((d) => d.snapshot_id === snapId) || null;
+        const queue = list
+          .filter((d) => !d.review_state && d.snapshot_id !== snapId)
+          .sort((a, b) => String(b.at_ts || "") < String(a.at_ts || "") ? -1 : 1)
+          .slice(0, 5);
+        if (!cancelled) {
+          setReviewDec(dec);
+          setReviewState(dec ? dec.review_state : null);
+          setReviewQueue(queue);
+        }
+      })
+      .catch(() => { /* review journal not yet populated — leave null */ })
+      .finally(() => { if (!cancelled) setReviewLoading(false); });
+    return () => { cancelled = true; };
+  }, [data?.snapshotId, ticker, isReplay, reviewNonce]);
+
+  // R8-02: Save review freezes a coherent snapshot context (wall/metric/
+  // mode/snapshot) onto the decision's review — never a partial live screen.
+  const saveReview = useCallback((state) => {
+    if (isReplay || !reviewDec?.decision_id || reviewSaving) return;
+    setReviewSaving(true);
+    const note = `wall ${selectedCell?.wall_id || reviewDec?.features?.wall_id || "?"} ` +
+      `metric ${metric} view ${viewMode} mode live`;
+    axios
+      .post(`${BACKEND_API}/solstice/${encodeURIComponent(ticker)}/decisions/${encodeURIComponent(reviewDec.decision_id)}/review`,
+        { state, reason: reviewReason || null, note })
+      .then(() => setReviewNonce((n) => n + 1))
+      .catch(() => { /* save failed — pill keeps prior state, no false durable */ })
+      .finally(() => setReviewSaving(false));
+  }, [isReplay, reviewDec, reviewSaving, reviewReason, selectedCell, metric, viewMode, ticker]);
 
   return (
     <div className="skylit-full-dashboard">
@@ -433,7 +516,7 @@ function SkylitDashboard({
       {!isReplay && <ExposureStrip ticker={ticker} />}
 
       {/* 2.6 Bottom replay strip — deterministic session replay + data status */}
-      <ReplayStrip ticker={ticker} onReplay={setReplaySnap} />
+      <ReplayStrip ticker={ticker} onReplay={setReplaySnap} openRequest={replayOpenRequest} />
       {isReplay && (
         <div data-testid="solstice-replay-banner" title="Replay mode — live refresh ignored">
           REPLAY {replaySnap?.asof || ""} — live updates paused · select Live in the replay strip to return
@@ -497,6 +580,23 @@ function SkylitDashboard({
           data-testid="skylit-compare-toggle"
         >
           GEX+VEX
+        </button>
+        {/* R8-02: follow-wall toggle — keep the same wall_id across compatible
+            live refreshes. Toggled on/off; seeded from current selection. */}
+        <button
+          className={`skylit-trade-mode-btn${followWall ? " active" : ""}`}
+          onClick={() => {
+            const turningOn = !followWall;
+            setFollowWall((f) => !f);
+            if (turningOn && selectedCell?.wall_id) setFollowWallId(selectedCell.wall_id);
+          }}
+          title={followWall
+            ? "Stop following this wall (next selection picks a new one)"
+            : (selectedCell?.wall_id ? `Follow wall ${selectedCell.wall_id} across refreshes` : "Pick a wall first, then follow it")}
+          data-testid="skylit-follow-wall-toggle"
+          disabled={!selectedCell || isReplay}
+        >
+          {followWall ? (selectedCell?.wall_id ? `Following ${selectedCell.wall_id}` : "Follow") : (selectedCell?.wall_id ? "Follow this wall" : "Follow")}
         </button>
         <button
           className="skylit-trade-mode-btn"
@@ -597,8 +697,74 @@ function SkylitDashboard({
             regime={regime}
           />
           {/* T07/T23: selected-wall inspector + two-sided scenarios (deterministic) */}
-          <SelectedWallBlock data={displayData} spot={displaySpot} selectedCell={selectedCell} metric={metric} replay={isReplay} />
-        </div>
+          <SelectedWallBlock
+            data={displayData} spot={displaySpot}
+            selectedCell={followWall && effectiveWallId
+              ? { ...selectedCell, wall_id: effectiveWallId }
+              : selectedCell}
+            metric={metric} replay={isReplay}
+          />
+          {/* R8-04: review journal state for the current snapshot's decision */}
+          <div className="skylit-review-pill" data-testid="skylit-review-pill">
+            {reviewLoading && (
+              <span className="skylit-review-loading" data-testid="skylit-review-loading">
+                loading review…
+              </span>
+            )}
+            {!reviewLoading && reviewState !== null && (
+              <>
+                <span className="skylit-review-label">Decision:</span>
+                <span className={`skylit-review-state skylit-review-${reviewState}`}>
+                  {reviewState}
+                </span>
+              </>
+            )}
+            {!reviewLoading && reviewState === null && !isReplay && displayData?.snapshotId && (
+              <span className="skylit-review-pending" data-testid="skylit-review-pending">
+                No review yet
+              </span>
+            )}
+          </div>
+          {/* R8-02/R8-04: Save review + Next to review. Live only; read-only
+              controls never call brokerage routes (POST goes to the review
+              journal, which persists research rows, not orders). */}
+          {!isReplay && reviewDec && (
+            <div className="skylit-review-save" data-testid="skylit-review-save">
+              <span className="skylit-review-label">Save:</span>
+              {["reviewed", "waiting", "skipped"].map((s) => (
+                <button key={s} className="skylit-trade-mode-btn"
+                  data-testid={`skylit-review-save-${s}`}
+                  disabled={reviewSaving}
+                  title={`Mark this decision ${s} (frozen snapshot context)`}
+                  onClick={() => saveReview(s)}>
+                  {s}
+                </button>
+              ))}
+              <select data-testid="skylit-review-reason" value={reviewReason}
+                title="Reason recorded with the review"
+                onChange={(e) => setReviewReason(e.target.value)}>
+                <option value="">reason…</option>
+                {["CONFIRMED_SETUP", "NEEDS_MORE_EVIDENCE", "STALE_DATA", "WRONG_WALL", "TIME_EXPIRED"].map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {!isReplay && reviewQueue.length > 0 && (
+            <div className="skylit-review-queue" data-testid="skylit-review-queue"
+              title="Unreviewed decisions, newest first (max 5). Replay jump only — never live orders.">
+              <span className="skylit-review-label">Next to review:</span>
+              {reviewQueue.map((d) => (
+                <button key={d.decision_id} className="skylit-trade-mode-btn"
+                  data-testid={`skylit-review-open-${d.decision_id}`}
+                  title={`Replay snapshot ${d.snapshot_id || "?"} (${d.scenario || "?"} ${d.side || ""})`}
+                  onClick={() => d.snapshot_id && setReplayOpenRequest({ id: d.snapshot_id, nonce: Date.now() })}>
+                  {d.scenario || d.side || d.decision_id} · {String(d.at_ts || "").slice(11, 16)}
+                </button>
+              ))}
+            </div>
+          )}
+          </div>
       </div>
 
       {/* 3.5 Meridian & Velocity band REMOVED from Solstice (2026-09-03,

@@ -9,16 +9,21 @@ Proves the two new route/store paths are durable and filterable:
 """
 
 import sys
+
 sys.path.insert(0, "backend")
 
 import duckdb
 
+from services.episode_policy import research_default_features
 from services.heatmap_history import (
-    ensure_tables, record_snapshot, record_decision,
-    replay_snapshot, save_decision_review, list_decisions,
+    ensure_tables,
+    list_decisions,
+    record_decision,
+    record_snapshot,
+    replay_snapshot,
+    save_decision_review,
 )
 from services.heatmap_snapshot import build_snapshot_v2
-from services.episode_policy import research_default_features
 
 
 def _mini_contract(osi, strike, expiry="2030-01-15", **kw):
@@ -156,7 +161,7 @@ def test_r8_04_list_decisions_state_filter():
     snap = build_snapshot_v2(payload, query_key="r8-04-snap-2")
     sid = snap["snapshotId"]
     assert record_snapshot(conn, payload, "r8-04-snap-2", sid) == sid
-    did = record_decision(conn, {
+    _did = record_decision(conn, {
         "ticker": "SPY", "snapshot_id": sid, "scenario": "PUTS", "side": "PUTS",
         "eligible": False, "reason_codes": ["NO_ELIGIBLE_CONTRACTS"],
         "features": {"spot": 490.0, "zone": [498.0, 502.0], "wall_id": "W2",
@@ -233,3 +238,69 @@ def test_r8_04_review_journal_multiple_tickers():
     assert len(spy) == 1 and spy[0]["ticker"] == "SPY", spy
     assert len(qqq) == 1 and qqq[0]["ticker"] == "QQQ", qqq
     assert list_decisions(conn, "IWM") == []
+
+
+def test_r8_04_list_decisions_state_filter_uses_reviews_table():
+    """R8-04 (smarter architecture): state_filter joins decision_reviews_v1
+    instead of parsing features JSON — so a review state saved via
+    save_decision_review is filterable without re-recording the decision."""
+    conn = duckdb.connect(":memory:")
+    ensure_tables(conn)
+
+    payload = _mini_payload(sid="r8-04-filter", spot=490.0)
+    snap = build_snapshot_v2(payload, query_key="r8-04-filter")
+    sid = snap["snapshotId"]
+    assert record_snapshot(conn, payload, "r8-04-filter", sid) == sid
+    did = record_decision(conn, {
+        "ticker": "SPY", "snapshot_id": sid, "scenario": "CALLS", "side": "CALLS",
+        "eligible": True, "reason_codes": [],
+        "features": {"spot": 490.0, "zone": [498.0, 502.0], "wall_id": "W2",
+                      "quality": "usable", "n_eligible": 2},
+    })
+
+    # No review saved yet → filtered list is empty
+    assert list_decisions(conn, "SPY", state_filter="reviewed") == []
+
+    # Save a review — now the decision should appear when filtered by that state
+    from services.heatmap_history import save_decision_review
+    save_decision_review(conn, did, "reviewed", reason="confirmed", note="looks good")
+    filtered = list_decisions(conn, "SPY", state_filter="reviewed")
+    assert len(filtered) == 1 and filtered[0]["decision_id"] == did, filtered
+
+    # Filter by a state that has no decisions → empty
+    assert list_decisions(conn, "SPY", state_filter="skipped") == []
+
+
+def test_r8_04_save_review_route_roundtrip_and_422():
+    """R8-04 route: POST valid state persists (durable) and reloads via GET;
+    unknown state is 422, never stored."""
+    import uuid
+
+    from fastapi.testclient import TestClient
+
+    import server
+    from services.duckdb_engine import db as eng
+    from services.heatmap_history import record_decision
+
+    tag = uuid.uuid4().hex[:8]
+    did = record_decision(eng.conn, {
+        "ticker": "SPY", "snapshot_id": f"r8-04-route-{tag}",
+        "scenario": "CALLS", "side": "CALLS",
+        "eligible": True, "reason_codes": [],
+        "features": {"spot": 490.0, "zone": [498.0, 502.0], "wall_id": "W2",
+                      "quality": "usable", "n_eligible": 2},
+    })
+    c = TestClient(server.app)
+    hdr = {"X-API-Key": "test-secret-key"}  # mutating routes are auth-gated
+    bad = c.post(f"/api/solstice/SPY/decisions/{did}/review",
+                 json={"state": "approved", "reason": "x"}, headers=hdr)
+    assert bad.status_code == 422, bad.text[:200]
+    good = c.post(f"/api/solstice/SPY/decisions/{did}/review",
+                  json={"state": "reviewed", "reason": "confirmed W2",
+                        "note": "wall W2 metric raw mode live"}, headers=hdr)
+    assert good.status_code == 200, good.text[:200]
+    body = good.json()
+    assert body["durability"] == "durable" and body["state"] == "reviewed"
+    listed = c.get("/api/solstice/SPY/decisions").json()["decisions"]
+    mine = [d for d in listed if d["decision_id"] == did]
+    assert len(mine) == 1 and mine[0]["review_state"] == "reviewed"

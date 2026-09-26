@@ -136,18 +136,26 @@ def label_touch(path: list[tuple[float, float]], zone: tuple[float, float],
 
 def close_episodes(conn, paths_by_decision: dict[str, list],
                    default_horizon_s: float = 300) -> dict[str, Any]:
-    """Deterministic pending→complete/censored outcome job (R6-5/B11).
+    """Deterministic pending→complete/censored outcome job (R6-5/B11, R8-05).
 
     For each decision WITHOUT a recorded outcome, label its price path using
     the episode stored in decision features (zone/target/stop/horizon) and
-    record the outcome. Idempotent across restart/catch-up: decisions that
-    already have a TERMINAL (non-censored target_hit/stop_hit) outcome are
-    skipped and reported separately — irrelevant future data cannot rewrite
-    a decided label (labels are prefix-stable).
+    record the outcome. Idempotent across restart/catch-up: a decision with
+    a TERMINAL (non-censored target_hit/stop_hit) outcome for the same
+    (horizon, policy, label version) is skipped and reported separately —
+    irrelevant future data cannot rewrite a decided label (labels are
+    prefix-stable). Terminal means any NON-CENSORED label for its closed
+    window (hit, no-touch, or touch-without-barrier): later points outside
+    the window cannot change it, so re-runs skip without rewriting.
 
     Censored/indeterminate outcomes are INCOMPLETE: they are re-processed
     when a longer path is supplied, replacing the old censored result. A
     re-run with the same (or shorter) path is skipped — no new data.
+
+    Horizons expand: features may carry one horizon or a list (the research
+    policy emits all registered horizons). Each horizon closes and stores
+    independently; results[did] is the single result for scalar episodes
+    and {horizon: result} for lists (backward compatible).
 
     Fail-closed: a decision WITHOUT a complete episode (zone with high >
     low, finite distinct target/stop, positive horizon) is NEVER labeled —
@@ -163,34 +171,18 @@ def close_episodes(conn, paths_by_decision: dict[str, list],
     pending: list[str] = []
     pending_reasons: dict[str, str] = {}
     results: dict[str, Any] = {}
+
+    def _rows(did: str) -> list:
+        try:
+            return conn.execute(
+                "SELECT horizon_s, policy_version, label, censored, detail, label_version "
+                "FROM outcome_labels_v1 WHERE decision_id = "
+                f"'{str(did).replace(chr(39), chr(39) * 2)}'").fetchall() or []
+        except Exception:
+            return []
+
     for did, path in (paths_by_decision or {}).items():
         try:
-            existing = conn.execute(
-                "SELECT label, censored, detail FROM outcome_labels_v1 WHERE decision_id = "
-                f"'{str(did).replace(chr(39), chr(39) * 2)}'"
-                ).fetchone()
-            if existing:
-                _label, _censored = str(existing[0]), bool(existing[1])
-                if not _censored and _label in ("target_hit", "stop_hit"):
-                    skipped.append(did)
-                    continue
-                # R7-07: censored/indeterminate outcome — re-process only if
-                # the new path reaches further than the old censored result.
-                if _censored:
-                    _old_detail = {}
-                    try:
-                        import json as _json2
-                        _old_detail = _json2.loads(str(existing[2])) if existing[2] else {}
-                    except (TypeError, ValueError):
-                        pass
-                    _old_end = _old_detail.get("path_end_t", 0.0)
-                    _new_end = path[-1][0] if path else 0.0
-                    if _new_end <= _old_end:
-                        skipped.append(did)
-                        continue
-                    conn.execute(
-                        "DELETE FROM outcome_labels_v1 WHERE decision_id = "
-                        f"'{str(did).replace(chr(39), chr(39) * 2)}'")
             dec = conn.execute(
                 "SELECT ticker, features FROM scenario_decisions_v1 WHERE decision_id = "
                 f"'{str(did).replace(chr(39), chr(39) * 2)}'").fetchall()
@@ -209,26 +201,81 @@ def close_episodes(conn, paths_by_decision: dict[str, list],
             try:
                 _lo, _hi = float(zone[0]), float(zone[1])
                 _tgt, _stp = float(feat.get("target")), float(feat.get("stop"))
-                _hor = float(feat.get("horizon_s", default_horizon_s))
             except (TypeError, ValueError, IndexError):
                 _lo = _hi = _tgt = _stp = float("nan")
-                _hor = float("nan")
+            _raw_hor = feat.get("horizon_s", default_horizon_s)
+            _hors = list(_raw_hor) if isinstance(_raw_hor, (list, tuple)) else [_raw_hor]
+            _policy = str(feat.get("policy_version") or "legacy")
             if not (math.isfinite(_lo) and math.isfinite(_hi) and _hi > _lo
-                    and math.isfinite(_tgt) and math.isfinite(_stp)
-                    and _tgt != _stp and math.isfinite(_hor) and _hor > 0):
+                    and math.isfinite(_tgt) and math.isfinite(_stp) and _tgt != _stp):
                 pending.append(did)
                 pending_reasons[did] = "NEED_EPISODE"
                 continue
-            res = label_touch(
-                path or [], (_lo, _hi), _hor, _tgt, _stp)
-            _detail = {"detail": res.get("detail"), "version": res.get("version")}
-            if path:
-                _detail["path_end_t"] = path[-1][0]
-            record_outcome(conn, did, ticker, int(_hor),
-                           res["label"], censored=bool(res.get("censored")),
-                           detail=_detail)
-            closed.append(did)
-            results[did] = res
+            _valid_hors = []
+            for _h in _hors:
+                try:
+                    _hf = float(_h)
+                except (TypeError, ValueError):
+                    continue
+                if math.isfinite(_hf) and _hf > 0:
+                    _valid_hors.append(_hf)
+            if not _valid_hors:
+                pending.append(did)
+                pending_reasons[did] = "NEED_EPISODE"
+                continue
+            _existing = _rows(did)
+            _did_results: dict[str, Any] = {}
+            _did_closed = False
+            for _hor in _valid_hors:
+                _match = None
+                for r in _existing:
+                    try:
+                        _rh = float(r[0])
+                    except (TypeError, ValueError):
+                        continue
+                    if (_rh == _hor and str(r[1] or "legacy") == _policy
+                            and str(r[5] or "") == LABEL_VERSION):
+                        _match = r
+                        break
+                if _match is not None:
+                    _mlabel, _mcens = str(_match[2]), bool(_match[3])
+                    if not _mcens:
+                        # Terminal for its closed window (hit, no-touch, or
+                        # touch-without-barrier): later points fall outside
+                        # the window, so there is nothing to reprocess.
+                        continue
+                    _old_detail = {}
+                    try:
+                        import json as _json2
+                        _old_detail = _json2.loads(str(_match[4])) if _match[4] else {}
+                    except (TypeError, ValueError):
+                        pass
+                    _old_end = _old_detail.get("path_end_t", 0.0)
+                    _new_end = path[-1][0] if path else 0.0
+                    if _new_end <= _old_end:
+                        continue
+                    conn.execute(
+                        "DELETE FROM outcome_labels_v1 WHERE decision_id = "
+                        f"'{str(did).replace(chr(39), chr(39) * 2)}' AND horizon_s = {_hor} "
+                        f"AND COALESCE(policy_version, 'legacy') = '{_policy}'")
+                res = label_touch(path or [], (_lo, _hi), _hor, _tgt, _stp)
+                _detail = {"detail": res.get("detail"), "version": res.get("version")}
+                if path:
+                    _detail["path_end_t"] = path[-1][0]
+                record_outcome(conn, did, ticker, int(_hor),
+                               res["label"], censored=bool(res.get("censored")),
+                               detail=_detail, policy_version=_policy)
+                _did_results[str(_hor)] = res
+                _did_closed = True
+            if not _did_results:
+                skipped.append(did)
+                continue
+            if _did_closed and did not in closed:
+                closed.append(did)
+            if len(_valid_hors) == 1 and not isinstance(_raw_hor, (list, tuple)):
+                results[did] = _did_results[str(_valid_hors[0])]
+            else:
+                results[did] = _did_results
         except Exception as e:
             import logging as _logging
             _logging.getLogger(__name__).warning("close_episodes %s failed: %s", did, e)
