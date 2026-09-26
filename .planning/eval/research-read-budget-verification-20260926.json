@@ -1,0 +1,42 @@
+{
+  "verified_at": "2026-09-26T21:59:47.523Z",
+  "scope": "Read-budget repair only; no new model/provider calls or full-plan acceptance.",
+  "tests": {
+    "research_passed": 275,
+    "related_passed": 72,
+    "warnings": 27,
+    "skipped": 0,
+    "ruff": "pass",
+    "durable_reopen": "Two independent Python processes with isolated real local MongoDB; completed six-read state unchanged; other owner denied; unfinished reservation recovered interrupted_unknown."
+  },
+  "files": [
+    {
+      "path": "backend/services/agent/read_budget.py",
+      "sha256": "dac83653c5f73044b09521461589e9addfc090d8a0903f2ac4d2b550570441a4"
+    },
+    {
+      "path": "backend/services/agent/reads.py",
+      "sha256": "62f64457e3e53a3863b4800906eb6d1221fedf252f5cc6e6a7a23d4710847e60"
+    },
+    {
+      "path": "backend/services/agent/research.py",
+      "sha256": "e5370729bb4bbb3a56841157a68937143d81b1e05998d1c92de171ac9d8832bb"
+    },
+    {
+      "path": "backend/services/agent/repository.py",
+      "sha256": "c578fce82b95de61f9f232606825b32fb245a6ad0add2e013da9f01cc74d10b9"
+    },
+    {
+      "path": "backend/services/agent/loop.py",
+      "sha256": "2028f40f0cec2a816d8b780c0403ee8b428427034ecc7cd7192d4318caf9a9f0"
+    },
+    {
+      "path": "backend/tests/agent/test_read_budget.py",
+      "sha256": "5b879024913d23768a4d9191267f5f66d54b94ff816460835d95e5729ae0b67a"
+    },
+    {
+      "path": "backend/tests/agent/test_answer_sections.py",
+      "sha256": "c1c61dbd60723090113176b000757e81db7bb793767c440264d00b94a1f674a1"
+    }
+  ]
+}

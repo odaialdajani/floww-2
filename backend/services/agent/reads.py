@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import copy
 import hashlib
 from datetime import UTC, datetime
@@ -11,6 +10,14 @@ from services.agent.access.horizon import horizon_window, slice_expiries
 from services.agent.confluence import score
 from services.agent.contracts import canonical, fact, finite, instant
 from services.agent.display_map import display_facts
+from services.agent.read_budget import (
+    ReadActivityUnavailable,
+    ReadBudget,
+    ReadDenied,
+    budget_scope,
+    current_budget,
+    requested,
+)
 from services.agent.structure_reads import structure_facts
 from services.agent.volatility_reads import volatility_facts
 from services.heatseeker import _gex_per_strike, calc_flip_zones
@@ -24,40 +31,45 @@ class ResearchReads:
         self._read_alerts = read_alerts
         self._read_daily_bars = read_daily_bars
 
-    async def snapshot(self, ticker, horizon, *, selected_expiry=None, now=None, screen=None, price_only=False):
+    async def snapshot(self, ticker, horizon, **kwargs):
+        if current_budget() is None:
+            with budget_scope(ReadBudget()):
+                return await self._snapshot(ticker, horizon, **kwargs)
+        return await self._snapshot(ticker, horizon, **kwargs)
+
+    async def _snapshot(self, ticker, horizon, *, selected_expiry=None, now=None, screen=None, price_only=False):
         now = now or datetime.now(UTC)
         gaps = []
-        daily_bars = None
-        if not price_only and self._read_daily_bars is not None:
+        budget = current_budget()
+        scope = {"horizon": horizon, "selected_expiry": selected_expiry}
+
+        async def read(capability, callback, *args):
             try:
-                daily_bars = copy.deepcopy(await asyncio.wait_for(
-                    asyncio.to_thread(self._read_daily_bars, ticker), timeout=5))
-                canonical(daily_bars)
+                return copy.deepcopy(await budget.sync(capability, ticker, callback, *args, scope=scope))
+            except ReadActivityUnavailable:
+                raise
+            except ReadDenied as exc:
+                gaps.append(f"{ticker} {capability}: {exc}")
             except Exception:
+                gaps.append(f"{ticker} {capability} reading unavailable or timed out; no refresh was started")
+            return None
+
+        raw = await read("context", self._peek_chain, ticker, 6)
+        dealer = (await read("map", self._peek_map, ticker, screen["mapQuery"])
+                  if not price_only and requested("map") and screen and screen.get("mapQuery") else None)
+        alerts = (await read("flow", self._read_alerts, ticker)
+                  if not price_only and requested("flow") else [])
+        alerts_status = ("not_requested" if price_only or not requested("flow") else
+                         "error" if alerts is None else "ok")
+        alerts = alerts or []
+        daily_bars = (await read("daily_bars", self._read_daily_bars, ticker)
+                      if not price_only and requested("volatility") and self._read_daily_bars is not None else None)
+        if daily_bars is not None:
+            try:
+                canonical(daily_bars)
+            except (ValueError, TypeError):
                 daily_bars = None
-                gaps.append("Daily bar cache could not be read; research did not refresh it")
-        try:
-            raw = copy.deepcopy(self._peek_chain(ticker, 6))
-        except Exception:
-            raw = None
-            gaps.append("Chain cache could not be read")
-        try:
-            dealer = (
-                copy.deepcopy(self._peek_map(ticker, screen["mapQuery"]))
-                if not price_only and screen and screen.get("mapQuery")
-                else None
-            )
-        except Exception:
-            dealer = None
-            gaps.append("Dealer cache could not be read")
-        try:
-            alerts = (
-                [] if price_only else await asyncio.wait_for(asyncio.to_thread(self._read_alerts, ticker), timeout=5)
-            )
-            alerts_status = "not_requested" if price_only else "ok"
-        except Exception:
-            alerts, alerts_status = [], "error"
-            gaps.append("Alert storage could not be read")
+                gaps.append("Daily bar cache contains invalid readings")
         window = horizon_window(horizon, now=now, selected_expiry=selected_expiry)
         if raw is None:
             raw = {}
@@ -135,44 +147,21 @@ class ResearchReads:
         if not price_only:
             add("Available contracts", len(contracts), "contracts")
             add("Available expiry dates", sorted({str(contract["expiry"]) for contract in contracts}), "dates")
-        valid = [
-            c
-            for c in contracts
-            if not price_only
-            and finite(c.get("gamma"))
-            and c["gamma"] >= 0
-            and finite(c.get("open_interest", c.get("oi")))
-            and c.get("open_interest", c.get("oi")) >= 0
-            and finite(c.get("strike"))
-            and c["strike"] > 0
-            and str(c.get("type", "")).upper() in {"C", "P", "CALL", "PUT"}
-        ]
-        if valid and finite(spot) and spot > 0:
-            if len(valid) != len(contracts):
-                gaps.append("Exposure excludes contracts with missing inputs")
-                quality = "degraded"
-            profile = _gex_per_strike(spot, valid)
-            if len(profile) <= 512:
-                add("Gamma exposure strikes", sorted(profile), "USD")
-                add("Estimated gamma exposure", [profile[k] for k in sorted(profile)], "USD per 1% move")
-                add("Total estimated gamma exposure", sum(profile.values()), "USD per 1% move")
-            else:
-                gaps.append("Exposure series exceeds supported size")
-            flips = calc_flip_zones(spot, valid)
-            levels = [v.get("price", v.get("level")) for v in flips["flip_zones"]]
-            levels = [v for v in levels if finite(v)]
-            if levels:
-                add("Estimated flip levels", levels, "USD")
-        elif not price_only:
-            gaps.append("Exposure inputs are unavailable")
-        if not price_only:
-            context = dict(ticker=ticker, snapshot_id=snapshot_id, horizon=horizon, now=now)
-            extra, missing = structure_facts(contracts, facts, **context)
-            facts.extend(extra)
-            gaps.extend(missing)
-            extra, missing = volatility_facts(contracts, facts, daily_bars, **context)
-            facts.extend(extra)
-            gaps.extend(missing)
+        context = dict(ticker=ticker, snapshot_id=snapshot_id, horizon=horizon, now=now)
+        if not price_only and requested("structure"):
+            calculated = await read("structure", _structure_read, contracts, spot,
+                                    copy.deepcopy(facts), quality, raw, source_time, context)
+            if calculated:
+                extra, missing = calculated
+                facts.extend(extra)
+                gaps.extend(missing)
+        if not price_only and requested("volatility"):
+            calculated = await read("volatility", lambda: volatility_facts(
+                contracts, copy.deepcopy(facts), daily_bars, **context))
+            if calculated:
+                extra, missing = calculated
+                facts.extend(extra)
+                gaps.extend(missing)
         flow = []
         flow_times = []
         for alert in alerts[:200]:
@@ -206,7 +195,7 @@ class ResearchReads:
                     reason=None if coherent else "Combines recent alerts with different observation times",
                 )
             )
-        elif not price_only:
+        elif not price_only and requested("flow"):
             gaps.append("No eligible fresh directional alerts" if alerts_status == "ok" else "Flow reading unavailable")
         if source_time is None:
             gaps.append("Chain observation time is unknown")
@@ -229,7 +218,7 @@ class ResearchReads:
                     parents=[flow_fact["id"]],
                 )
             )
-        map_facts, map_gaps = ([], []) if price_only else display_facts(dealer, screen or {}, ticker, now)
+        map_facts, map_gaps = ([], []) if price_only or not requested("map") else display_facts(dealer, screen or {}, ticker, now)
         facts.extend(map_facts)
         gaps.extend(map_gaps)
         return dict(
@@ -256,3 +245,51 @@ class ResearchReads:
                 ).encode()
             ).hexdigest(),
         )
+
+
+def _structure_read(contracts, spot, input_facts, quality, raw, source_time, context):
+    # All mutations are local: a timed-out worker cannot change published facts.
+    facts = copy.deepcopy(input_facts)
+    gaps = []
+    price_only = False
+    def add(metric, value, unit, **kw):
+        facts.append(fact(metric, value, unit, ticker=context["ticker"],
+                          source=str(raw.get("source") or raw.get("data_source") or "cached chain"),
+                          snapshot_id=context["snapshot_id"], event_time=source_time,
+                          received_at=raw.get("fetched_at"), horizon=context["horizon"],
+                          status=quality, **kw))
+    valid = [
+        c
+        for c in contracts
+        if not price_only
+        and finite(c.get("gamma"))
+        and c["gamma"] >= 0
+        and finite(c.get("open_interest", c.get("oi")))
+        and c.get("open_interest", c.get("oi")) >= 0
+        and finite(c.get("strike"))
+        and c["strike"] > 0
+        and str(c.get("type", "")).upper() in {"C", "P", "CALL", "PUT"}
+    ]
+    if valid and finite(spot) and spot > 0:
+        if len(valid) != len(contracts):
+            gaps.append("Exposure excludes contracts with missing inputs")
+            quality = "degraded"
+        profile = _gex_per_strike(spot, valid)
+        if len(profile) <= 512:
+            add("Gamma exposure strikes", sorted(profile), "USD")
+            add("Estimated gamma exposure", [profile[k] for k in sorted(profile)], "USD per 1% move")
+            add("Total estimated gamma exposure", sum(profile.values()), "USD per 1% move")
+        else:
+            gaps.append("Exposure series exceeds supported size")
+        flips = calc_flip_zones(spot, valid)
+        levels = [v.get("price", v.get("level")) for v in flips["flip_zones"]]
+        levels = [v for v in levels if finite(v)]
+        if levels:
+            add("Estimated flip levels", levels, "USD")
+    elif not price_only:
+        gaps.append("Exposure inputs are unavailable")
+    if not price_only:
+        extra, missing = structure_facts(contracts, facts, **context)
+        facts.extend(extra)
+        gaps.extend(missing)
+    return facts[len(input_facts):], gaps

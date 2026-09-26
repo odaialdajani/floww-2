@@ -11,6 +11,7 @@ from services.agent.access.horizon import horizon_window
 from services.agent.answer_sections import build_answer_sections, merge_history_section
 from services.agent.contracts import INTERPRETATIONS, finite, validate_model_answer
 from services.agent.narrative import request_limit
+from services.agent.read_budget import ReadActivityUnavailable, ReadBudget, ReadDenied, budget_scope, current_budget
 from services.agent.saved_history import history_facts
 
 
@@ -62,6 +63,7 @@ class ResearchService:
         self._slots = asyncio.Semaphore(concurrent)
         self._admission = asyncio.Lock()
         self.tasks = {}
+        self._read_budgets = {}
         self.capacity = concurrent + queued
         self.timeout = timeout
         self._maintenance_lock = asyncio.Lock()
@@ -80,12 +82,31 @@ class ResearchService:
                 spec = {**spec, "ai_settings": existing["spec"]["ai_settings"]}
             doc, created = await self.repository.admit(owner, request_id, spec)
             if created:
+                self._read_budgets[doc["turn_id"]] = ReadBudget(
+                    save=lambda value: self.repository.save_read_activity(owner, doc["turn_id"], value),
+                    timeout=self.timeout,
+                )
                 task = asyncio.create_task(self._work(owner, doc["turn_id"], spec))
                 self.tasks[doc["turn_id"]] = task
-                task.add_done_callback(lambda completed, key=doc["turn_id"]: self.tasks.pop(key, None))
+                task.add_done_callback(lambda completed, key=doc["turn_id"]: self._forget_work(key))
             return doc
 
+    def _forget_work(self, turn_id):
+        self.tasks.pop(turn_id, None)
+        budget = self._read_budgets.pop(turn_id, None)
+        if budget is not None:
+            budget.close()
+
     async def _work(self, owner, turn_id, spec):
+        budget = self._read_budgets[turn_id]
+        try:
+            with budget_scope(budget, spec):
+                await self._run(owner, turn_id, spec, budget)
+        finally:
+            budget.close()
+            self._read_budgets.pop(turn_id, None)
+
+    async def _run(self, owner, turn_id, spec, budget):
         try:
             async with asyncio.timeout(self.timeout):
                 async with self._slots:
@@ -130,7 +151,7 @@ class ResearchService:
                             re.search(r"\b(?:yesterday|previous|prior)\b", spec["question"], re.IGNORECASE)
                         )
                         for snapshot in snapshots:
-                            more, note = await history_facts(
+                            more, note = await self._history(
                                 self.repository,
                                 owner,
                                 snapshot,
@@ -153,18 +174,40 @@ class ResearchService:
                     ):
                         try:
                             await self._interpret(owner, turn_id, spec, answer, snapshots)
+                        except ReadActivityUnavailable:
+                            raise
                         except Exception:
                             answer["model_status"] = "Interpretation unavailable; showing saved market readings"
-                    await self.repository.finish(owner, turn_id, "completed", answer=answer)
+                    await self.repository.finish(owner, turn_id, "completed", answer=answer,
+                                                 read_activity=budget.close())
         except asyncio.CancelledError:
             # Cancellation is saved first by cancel(); shutdown is interrupted.
-            await self.repository.finish(owner, turn_id, "interrupted", error="Work stopped; no automatic retry")
+            await self.repository.finish(owner, turn_id, "interrupted", error="Work stopped; no automatic retry",
+                                         read_activity=budget.close())
             raise
         except Exception:
             # Never publish exception text containing provider URLs or secrets.
             # Persistent running state is recovered as interrupted at startup.
             with contextlib.suppress(Exception):
-                await self.repository.finish(owner, turn_id, "failed", error="Research could not finish or be saved")
+                await self.repository.finish(owner, turn_id, "failed", error="Research could not finish or be saved",
+                                             read_activity=budget.close())
+
+    async def _history(self, repository, owner, snapshot, *, closing_only=False, previous_session=False):
+        budget = current_budget()
+        key = (snapshot["ticker"], snapshot["snapshot_id"], closing_only, previous_session)
+        try:
+            return await budget.async_call("history", snapshot["ticker"], history_facts,
+                repository, owner, snapshot, closing_only=closing_only, previous_session=previous_session,
+                memo_key=key, scope={"snapshot_id": snapshot["snapshot_id"],
+                                     "closing_only": closing_only, "previous_session": previous_session})
+        except ReadActivityUnavailable:
+            raise
+        except ReadDenied as exc:
+            result = ([], f"{snapshot['ticker']} history: {exc}")
+        except Exception:
+            result = ([], f"{snapshot['ticker']} saved history is unavailable or timed out")
+        budget.memo[key] = result
+        return result
 
     async def _interpret(self, owner, turn_id, spec, answer, snapshots):
         inspected = False
@@ -175,6 +218,9 @@ class ResearchService:
             if not await self.repository.progress(
                 owner, turn_id, "Checking an interpretation against the saved evidence"
             ):
+                return
+            # A permitted cancellation freezes new work before its final write.
+            if current_budget() is not None and current_budget().closed:
                 return
             result = await self.model.once(
                 spec["question"],
@@ -214,7 +260,7 @@ class ResearchService:
                     else:
                         inspected = True
                         snapshot = next(s for s in snapshots if s["ticker"] == requested["ticker"])
-                        more, history_note = await history_facts(
+                        more, history_note = await self._history(
                             self.repository,
                             owner,
                             snapshot,
@@ -261,7 +307,20 @@ class ResearchService:
         answer.setdefault("model_status", "Model work limit reached; showing the deterministic reading")
 
     async def cancel(self, owner, turn_id):
-        won = await self.repository.finish(owner, turn_id, "cancelled", error="Cancelled by you")
+        # A turn ID is not authority to stop its in-process work.
+        owned = await self.repository.read(owner, turn_id)
+        if owned is None or owned["status"] in {"completed", "failed", "cancelled", "interrupted"}:
+            return owned
+        budget = self._read_budgets.get(turn_id)
+        try:
+            won = await self.repository.finish(owner, turn_id, "cancelled", error="Cancelled by you",
+                                                read_activity=budget.close() if budget else None)
+        except (Exception, asyncio.CancelledError):
+            # Do not continue a partial answer after a permitted stop fails to save.
+            # The worker saves interrupted, or startup recovers its unfinished record.
+            if turn_id in self.tasks:
+                self.tasks[turn_id].cancel()
+            raise
         if won and turn_id in self.tasks:
             self.tasks[turn_id].cancel()
         return await self.repository.read(owner, turn_id)

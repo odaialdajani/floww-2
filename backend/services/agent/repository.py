@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import re
@@ -196,7 +197,14 @@ class AgentRepository:
         )
         return result.modified_count == 1
 
-    async def finish(self, owner, turn_id, status, *, answer=None, error=None, claim_seed=None):
+    async def save_read_activity(self, owner, turn_id, activity):
+        result = await self.turns.update_one(
+            {"owner": owner, "turn_id": turn_id, "status": {"$in": ["queued", "running"]}},
+            {"$set": {"read_activity": activity}, "$inc": {"version": 1}},
+        )
+        return result.matched_count == 1
+
+    async def finish(self, owner, turn_id, status, *, answer=None, error=None, claim_seed=None, read_activity=None):
         if status not in TERMINAL:
             raise ValueError("Invalid terminal state")
         if len(canonical(answer)) > 500000:
@@ -232,6 +240,14 @@ class AgentRepository:
             parameters["issued_at"] = utcnow()
             claim_seed = rebuild_claim(**parameters)
             answer = {**answer, "claim_id": claim_seed["claim_id"], "claim_issued_at": claim_seed["issued_at"]}
+        activity = copy.deepcopy(read_activity if read_activity is not None else doc.get("read_activity"))
+        if activity is not None and not activity.get("closed"):
+            activity["closed"] = True
+            activity["entry_count_complete"] = False
+            for attempt in activity.get("attempts", []):
+                if attempt["outcome"] in {"reserved", "running"}:
+                    attempt["outcome"] = "interrupted_unknown"
+                    attempt["worker_unresolved"] = True
         recorded_at = utcnow()
         event = dict(id=len(doc["events"]) + 1, type="done" if status == "completed" else "error",
                      status=status, recorded_at=recorded_at.isoformat())
@@ -245,13 +261,14 @@ class AgentRepository:
                     claim_seed=claim_seed,
                     projection_pending=claim_seed is not None,
                     updated_at=recorded_at,
+                    **({"read_activity": activity} if activity is not None else {}),
                 ),
                 "$inc": {"version": 1},
                 "$push": {"events": event},
             },
         )
         if result.modified_count == 0:
-            return await self.finish(owner, turn_id, status, answer=answer, error=error, claim_seed=claim_seed)
+            return await self.finish(owner, turn_id, status, answer=answer, error=error, claim_seed=claim_seed, read_activity=read_activity)
         return True
 
     async def history(self, owner):

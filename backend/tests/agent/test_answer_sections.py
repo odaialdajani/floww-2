@@ -121,7 +121,11 @@ async def test_model_history_inspection_replaces_the_missing_history_message(mon
 
     monkeypatch.setattr(research, "history_facts", history)
     service = research.ResearchService(Repository(), None, model=Model())
-    await service._interpret("owner", "turn", request, answer, [snap])
+    from services.agent.read_budget import ReadBudget, budget_scope
+
+    snap["snapshot_id"] = "fixture-snapshot"
+    with budget_scope(ReadBudget()):
+        await service._interpret("owner", "turn", request, answer, [snap])
     section = next(s for s in answer["sections"] if s["name"] == "What changed")
     assert "Price change: +3 USD" in section["text"]
     assert "No compatible earlier" not in section["text"]
