@@ -181,7 +181,9 @@ are unique (checked per file vs HEAD).
 
 R8-01 analytical path: pass with 3 repairs. (a) market_bars→Public bars
 seam was broken (wrong kwargs + wrong row shape — live movers 0/75 valid);
-fixed + live-verified (3/3 symbols ranked) + regression test. (b) Vendor
+fixed + live-verified (full universe: 64/75 valid in 8s, abs-ranked TWLO
+-7.96 first; 11 PROVIDER_UNAVAILABLE incl. one 401 — honest partial) +
+regression test. Movers concurrency 8→4 (documented 10/s ceiling headroom). (b) Vendor
 Greek timestamps don't exist → _display_quality reports GREEK_TIME_UNKNOWN
 on the vendor path (eligibility unchanged) + unit test. (c) Movers declares
 price_basis vendor-close-as-returned-unadjusted (splits unadjusted, honest).
@@ -192,8 +194,11 @@ R8-02/R8-04 review loop: pass. Save review UI (Reviewed/Waiting/Skipped +
 reason + frozen wall/metric/mode note) POSTs to the journal and refetches;
 Next-to-review queue (unreviewed, newest-first, cap 5) jumps to replay via
 a generation-guarded openRequest prop. Route rejects unknown states (422).
-Two real bugs fixed en route: review routes registered AFTER include_router
-(never mounted — 404) and list_decisions never selected r.state.
+Alerts: engine alerts carry timestamps — strip now suppresses >24h
+(withheld count shown) matching the backend's own window; missing
+timestamps stay visible. Two real bugs fixed en route: review routes
+registered AFTER include_router (never mounted — 404) and list_decisions
+never selected r.state.
 
 R8-03 compare gaps: pass. Manifest/compare/last-two requests carry the
 same generation guards as snapshot opens; compare result names both

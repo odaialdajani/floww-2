@@ -27,7 +27,7 @@ UNIVERSE_ID = "tracked-options.v1"
 VERSION = "movers.v1"
 ET = ZoneInfo("America/New_York")
 MODES = ("previous_completed_session", "today")
-_MAX_CONCURRENCY = 8
+_MAX_CONCURRENCY = 4
 _CACHE_TTL_S = 300.0
 
 log = logging.getLogger(__name__)
@@ -158,7 +158,9 @@ async def compute_movers(universe: list[str] | None = None,
                 "source": provider, "computed_at": computed_at, "source_asof": None,
                 "results": [], "reason_codes": ["NO_QUOTE_PROVIDER"]}
 
-    sem = asyncio.Semaphore(_MAX_CONCURRENCY)
+    sem = asyncio.Semaphore(_MAX_CONCURRENCY)  # R8-01: 4-way fanout stays
+    # under the documented 10 req/s account ceiling with headroom alongside
+    # heatseeker polling; the shared public_budget remains the governor.
     excluded: dict[str, int] = {}
 
     async def _one(sym: str) -> dict[str, Any] | None:
@@ -169,6 +171,13 @@ async def compute_movers(universe: list[str] | None = None,
                 log.debug("movers bars fail for %s: %s", sym, e)
                 excluded["PROVIDER_FAIL"] = excluded.get("PROVIDER_FAIL", 0) + 1
                 return None
+        if bars is None:
+            # R8-01: the fetch layer returns None on budget exhaustion,
+            # transport failure, or fully-quarantined rows — none of which
+            # is "the sessions have no closes". Report unavailability
+            # honestly so it isn't mistaken for missing market data.
+            excluded["PROVIDER_UNAVAILABLE"] = excluded.get("PROVIDER_UNAVAILABLE", 0) + 1
+            return None
         by_day: dict[str, float] = {}
         for b in bars or []:
             try:

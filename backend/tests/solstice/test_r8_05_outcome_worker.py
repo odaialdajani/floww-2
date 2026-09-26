@@ -139,3 +139,43 @@ def test_r8_05_worker_is_default_disabled_at_scheduler():
     src = inspect.getsource(server._scheduler_loop)
     assert 'os.environ.get("SOLSTICE_OUTCOME_WORKER") == "1"' in src
     assert "outcome_close_tick" in src
+
+
+def test_r8_05_replay_and_list_paths_never_write():
+    """R8-05 namespace separation: replay/list/GET paths are read-only —
+    decisions can only originate from the live build path (single
+    record_decision caller in server.py). Row counts must not move."""
+    import duckdb
+
+    from services.heatmap_history import (
+        ensure_tables,
+        list_decisions,
+        record_decision,
+        replay_snapshot,
+    )
+    conn = duckdb.connect(":memory:")
+    ensure_tables(conn)
+    did = record_decision(conn, {
+        "ticker": "SPY", "snapshot_id": "s-ns", "scenario": "CALLS",
+        "side": "CALLS", "eligible": True, "reason_codes": [],
+        "features": dict(EP)})
+    from services.heatmap_history import record_snapshot
+    sid = record_snapshot(conn, {
+        "ticker": "SPY", "snapshot_id": "s-ns",
+        "asof": "2030-01-02T14:00:00+00:00", "spot": 500.0,
+        "contracts": [], "strikes": [], "walls": [], "metrics": {},
+        "quality": {}, "scenarios": [], "interactions": [],
+        "coverage": {}, "expiries_used": [], "data_source": "t",
+        "exposure_basis": "OI", "formula_version": "gex.v2"}, "q", "s-ns")
+    before = {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+              for t in ("scenario_decisions_v1", "outcome_labels_v1",
+                        "heatmap_snapshots_v2", "price_paths_v1",
+                        "decision_reviews_v1")}
+    assert replay_snapshot(conn, "s-ns") is not None
+    assert len(list_decisions(conn, "SPY")) == 1
+    from services.heatmap_history import price_paths_since
+    assert price_paths_since(conn, "SPY") == []
+    after = {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+             for t in before}
+    assert before == after
+    assert did and sid
