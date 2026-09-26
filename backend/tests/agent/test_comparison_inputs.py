@@ -11,6 +11,7 @@ from scripts.research_comparison_inputs import (
     chain_oracle,
     check_clock,
     history_inputs,
+    prepare_case,
     synthetic_chain,
     verify_sources,
 )
@@ -144,3 +145,32 @@ def test_reserved_case_names_refuse_without_creating_output(tmp_path, name):
     with pytest.raises(ValueError, match='reserved'):
         build_bundle(ROOT, changed, output)
     assert not output.exists()
+
+
+def test_prospective_revision_prepares_all_inputs_but_not_acceptance(tmp_path):
+    path = ROOT / '.planning/eval/research-fresh-comparison-proposal-20260926-v3.json'
+    proposal = json.loads(path.read_text())
+    proposal['source_catalog'] = [r for r in proposal['source_catalog'] if r['id'] in {'archive_chains', 'archive_aapl', 'archive_maps'}]
+    unit = tmp_path / 'revision.json'
+    unit.write_text(json.dumps(proposal))
+    target = tmp_path / 'revised'
+    report = build_bundle(ROOT, unit, target)
+    assert len(report['cases']) == 32 and all(c['raw_inputs_present'] for c in report['cases'])
+    assert report['execution_ready'] is False
+    bracket = json.loads((target / 'synthetic_bracketing_levels.json').read_text())
+    assert [c['strike'] for c in bracket['chains']['AAPL']['contracts']] == [95, 105]
+    mapped = json.loads((target / 'synthetic_cached_map_price.json').read_text())
+    assert mapped['chains']['SPY']['spot'] == 103
+    assert mapped['maps']['SPY']['spot'] == 100
+    assert mapped['maps']['SPY']['gamma_flip']['gamma_flip'] == 101
+    assert len(proposal['unproven_real_positive_coverage']) == 4
+
+
+@pytest.mark.parametrize('field,value', [('mapStrikes', [100]), ('mapExpiries', ['2026-10-02']), ('selectedStrike', 110)])
+def test_explicit_map_axes_and_selection_must_match(field, value):
+    path = ROOT / '.planning/eval/research-fresh-comparison-proposal-20260926-v3.json'
+    proposal = json.loads(path.read_text())
+    case = next(c for c in proposal['cases'] if c['id'] == 'synthetic_cached_map_price')
+    case['body']['screen'][field] = value
+    with pytest.raises(ValueError, match='axes or selection'):
+        prepare_case(case, {})

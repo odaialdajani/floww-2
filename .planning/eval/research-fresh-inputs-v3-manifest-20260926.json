@@ -1,0 +1,528 @@
+{
+  "cases": [
+    {
+      "fixture": {
+        "path": "gamma_shared_inputs.json",
+        "sha256": "bffc24829933c888de16d8650ac817d84003f0b07b453a09e30d1acd98a1a879"
+      },
+      "history_store_proof": null,
+      "id": "gamma_shared_inputs",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "blank_charm_not_zero.json",
+        "sha256": "bb54672735781e892faf748c57a93a1a68d64f06eafd4eb1f2f9f2f63f392041"
+      },
+      "history_store_proof": null,
+      "id": "blank_charm_not_zero",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "derived_alert_source_time.json",
+        "sha256": "054aafe2215cf7ffa88cc6702becd9f6114875424a4a47247dd97405d4503f1d"
+      },
+      "history_store_proof": null,
+      "id": "derived_alert_source_time",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Actual isolated alert write/query proof: derived_alerts_unknown"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "controlled_empty_alert_scope.json",
+        "sha256": "ab4c9d1e47cb62a1cdccbbe159d422d433280d4490d8de2352b8a3383204010d"
+      },
+      "history_store_proof": null,
+      "id": "controlled_empty_alert_scope",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Actual isolated alert write/query proof: controlled_empty_alerts"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "alert_error_not_empty.json",
+        "sha256": "427f77a8b526ceb135c0fecb9b658f173ba4ec450d8a26946142ba60349a29a1"
+      },
+      "history_store_proof": null,
+      "id": "alert_error_not_empty",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Actual isolated alert write/query proof: controlled_alert_error"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "synthetic_mixed_flow.json",
+        "sha256": "01880ff6f544f75dd2a872514003805afec9481fb5f9079caac3e12ea497d212"
+      },
+      "history_store_proof": null,
+      "id": "synthetic_mixed_flow",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Actual isolated alert write/query proof: synthetic_alerts_positive"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "unpaired_iv.json",
+        "sha256": "5c7f0266788c62138137b464f5f9d9e08b0a87df97546572b9b2efb2d21cfaec"
+      },
+      "history_store_proof": null,
+      "id": "unpaired_iv",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "zero_and_missing_oi.json",
+        "sha256": "daebf88b2d02065869567f1ef2e1c47b84948b5c6ac0ff2b5b982cc079314fa4"
+      },
+      "history_store_proof": null,
+      "id": "zero_and_missing_oi",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "synthetic_bracketing_levels.json",
+        "sha256": "c10c317af9787e33834a0507367a0265ed68a5e2bee9a3908659b9ac633285fd"
+      },
+      "history_store_proof": null,
+      "id": "synthetic_bracketing_levels",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "synthetic_move_not_straddle.json",
+        "sha256": "71302e0e3d47ab595aa075213527fc104b351a3a098adb71b41a436150703bcf"
+      },
+      "history_store_proof": null,
+      "id": "synthetic_move_not_straddle",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "gamma_and_expected_moves.json",
+        "sha256": "3ef10d8c0f58fd9b28a0e7a7394174c2031fa9783df66b71c6422eb1caad4eee"
+      },
+      "history_store_proof": null,
+      "id": "gamma_and_expected_moves",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "map_missing_cell_total.json",
+        "sha256": "4bc6de0dfbc2e7a5e10ecabd58fa4bc1f55edd90c65afba7807abde23329f972"
+      },
+      "history_store_proof": null,
+      "id": "map_missing_cell_total",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "map_measured_zero.json",
+        "sha256": "c28d904013b9955f27741c1b5d10d847c7f54b0954abe1bf7058d46621b3d45a"
+      },
+      "history_store_proof": null,
+      "id": "map_measured_zero",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "vanna_display_units.json",
+        "sha256": "c259c49f4a24901c59d6f41e8ae4758918ec401d798efedd2ecab455e8f3e597"
+      },
+      "history_store_proof": null,
+      "id": "vanna_display_units",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "synthetic_cached_map_price.json",
+        "sha256": "8c3c2cd8f4b212181f6602bde05e685e07295dba5536e87c194969540edb9b17"
+      },
+      "history_store_proof": null,
+      "id": "synthetic_cached_map_price",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "closed_expiry_descriptive.json",
+        "sha256": "e77087700c118dcdf9328880d04e5c9a6aa2bb20d5f6452f9bf6884625712416"
+      },
+      "history_store_proof": null,
+      "id": "closed_expiry_descriptive",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "friday_next_session.json",
+        "sha256": "e22b51ceef59f5a66d50b79bda73494ef8baeaf39339723df469d6d464333b29"
+      },
+      "history_store_proof": null,
+      "id": "friday_next_session",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "month_partial_coverage.json",
+        "sha256": "32aab9ee1d6c20899a7d8de365ccb98effbc4e97fe48f671fe775857fb18f89b"
+      },
+      "history_store_proof": null,
+      "id": "month_partial_coverage",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "owned_price_change.json",
+        "sha256": "1be7844386979359ef02020dc72b55d34ddc1ffad5e7cdceb26a9c2a42db8f29"
+      },
+      "history_store_proof": null,
+      "id": "owned_price_change",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Actual isolated owner seed and history-read evidence",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "history_changed_selection.json",
+        "sha256": "1695272512eaf889e4e1d8757823fcc505a93db13ffdadded97552c950765192"
+      },
+      "history_store_proof": null,
+      "id": "history_changed_selection",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Actual isolated owner seed and history-read evidence",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "other_owner_history.json",
+        "sha256": "bf2bae6d5db7c0dd52fbccf584f5991990759b9116b578240775ed08bf57fa62"
+      },
+      "history_store_proof": null,
+      "id": "other_owner_history",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Actual isolated owner seed and history-read evidence",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "late_snapshot_not_close.json",
+        "sha256": "f60a1ff78eb4248625c566172a3ef5120e95092e4bd765d1d81df420568b534a"
+      },
+      "history_store_proof": null,
+      "id": "late_snapshot_not_close",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Actual isolated owner seed and history-read evidence",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "two_ticker_evidence_strength.json",
+        "sha256": "c3431d8232a52f83693049cb0647ba9f6d49ddb4b729b6404ae357dfaa35d305"
+      },
+      "history_store_proof": null,
+      "id": "two_ticker_evidence_strength",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "three_ticker_read_limit.json",
+        "sha256": "73c91d956b0f2a7737284cfa635c5bbdacf1cea03d090d649cab05b08a901d1a"
+      },
+      "history_store_proof": null,
+      "id": "three_ticker_read_limit",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Actual isolated alert write/query proof: controlled_empty_alerts"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "three_ticker_history_budget.json",
+        "sha256": "3c13976c03e7fee3698d7f7e869ffc665ce25e9a9bcf07a7d407ea7b82c65893"
+      },
+      "history_store_proof": null,
+      "id": "three_ticker_history_budget",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Actual isolated owner seed and history-read evidence",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "source_label_instructions.json",
+        "sha256": "b0c23f9d39d82dccc910ea1b612c106d9deb1e4b7f972d5ae84cc459940bbd58"
+      },
+      "history_store_proof": null,
+      "id": "source_label_instructions",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "guarantee_from_readings.json",
+        "sha256": "38f6201174ed32c30460a02c49d88ba0510d5aef50ffc7a07f1e30d0ccbca01b"
+      },
+      "history_store_proof": null,
+      "id": "guarantee_from_readings",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "synthetic_aligned_positive_flow.json",
+        "sha256": "29ecbc53f7c024a8a0039c144e95521e0df13d8123d999a484a2a7de7988f666"
+      },
+      "history_store_proof": null,
+      "id": "synthetic_aligned_positive_flow",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Actual isolated alert write/query proof: synthetic_alerts_positive"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "aapl_price_bypass.json",
+        "sha256": "ef502080e986e1502a4118c2cdb3c797c0d5649a7d3069c96ae74567c627439b"
+      },
+      "history_store_proof": null,
+      "id": "aapl_price_bypass",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "explicit_spy_price_over_map.json",
+        "sha256": "5116b448dd91297b8b56963369a413f5d9098330777aa0d8185586a889edce50"
+      },
+      "history_store_proof": null,
+      "id": "explicit_spy_price_over_map",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal",
+        "Explicit isolated alert-read behavior binding"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "historical_chart_refusal.json",
+        "sha256": "5694421fc0ef1e12b35e102c2aaa25ce09a93c90dddacf8b09a4b8e0a4a1966c"
+      },
+      "history_store_proof": null,
+      "id": "historical_chart_refusal",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    },
+    {
+      "fixture": {
+        "path": "activity_overlay_refusal.json",
+        "sha256": "2f2ffd59d92971e11ab2472fb3bb35229f5535c65367b33aa3bfe4a1aa1616f7"
+      },
+      "history_store_proof": null,
+      "id": "activity_overlay_refusal",
+      "pending": [
+        "Actual route, source-quality and request-scope checks",
+        "Independent semantic truth/criteria review",
+        "Execution seal"
+      ],
+      "raw_inputs_present": true,
+      "route_proof": null
+    }
+  ],
+  "critical_checks_executed": 0,
+  "execution_ready": false,
+  "limits": "No research answers, actual query evidence, route proofs, execution seal or acceptance. Source hashes are original-byte identities.",
+  "model_calls": 0,
+  "preparer_sha256": "bc0e456421ff9d29fac136eee7060b231936d7cdf62898c46487aefcd71b3a8d",
+  "proposal_sha256": "305a42af3a8d86ed8e39ad314a99c592ad2fb57ccab53faf575e507e3aa71c2b",
+  "provider_calls": 0,
+  "status": "RAW_INPUT_PREPARATION_ONLY",
+  "store_queries": 0
+}

@@ -110,6 +110,17 @@ def map_inputs(case, sources, recipe):
         screen.update(mapQuery=copy.deepcopy(raw['map_query']), mapVersion=raw['asof'],
                       mapStrikes=copy.deepcopy(strikes), mapExpiries=copy.deepcopy(expiries),
                       selectedStrike=strikes[len(strikes) // 2], selectedExpiry=expiries[0])
+    elif recipe['id'] == 'explicit_synthetic_map':
+        raw = copy.deepcopy(recipe['parameters']['raw'])
+        if raw.get('source') != 'SYNTHETIC_CONTRACT_TEST':
+            raise ValueError('Explicit test map must be labeled synthetic')
+        if raw.get('map_query') != screen['mapQuery'] or raw.get('asof') != screen['mapVersion']:
+            raise ValueError('Explicit test map identity differs')
+        grid = raw.get('grid', {})
+        if (grid.get('strikes') != screen['mapStrikes'] or grid.get('expiries') != screen['mapExpiries']
+                or screen.get('selectedStrike') not in grid.get('strikes', [])
+                or screen.get('selectedExpiry') not in grid.get('expiries', [])):
+            raise ValueError('Explicit test map axes or selection differ')
     else:
         raw = {'ticker': ticker, 'source': 'SYNTHETIC_CONTRACT_TEST', 'spot': 100,
                'spot_source': 'SYNTHETIC_CONTRACT_TEST', 'spot_event_time': STAMP,
@@ -206,7 +217,12 @@ def prepare_case(case, sources):
             result['chains'] = archive_inputs(case['tickers'], sources)
         elif name == 'synthetic_chain':
             result['chains'] = {ticker: synthetic_chain(ticker, params) for ticker in case['tickers']}
-        elif name in {'archive_map', 'synthetic_map'}:
+        elif name == 'explicit_synthetic_chain':
+            raw = copy.deepcopy(params['raw'])
+            if raw.get('source') != 'SYNTHETIC_CONTRACT_TEST' or case['tickers'] != [raw.get('ticker')]:
+                raise ValueError('Explicit test chain must have matching ticker and synthetic label')
+            result['chains'] = {raw['ticker']: raw}
+        elif name in {'archive_map', 'synthetic_map', 'explicit_synthetic_map'}:
             result['maps'], result['body']['screen'], result['oracles']['map'] = map_inputs(case, sources, recipe)
         elif name == 'synthetic_owned_history':
             result['history'] = history_inputs(result['chains'], params)
@@ -221,6 +237,8 @@ def prepare_case(case, sources):
             raise ValueError('Unsupported recipe: ' + name)
     if result['alerts']['mode'] == 'unbound' and result['chains']:
         result['pending'].append('Explicit isolated alert-read behavior binding')
+    if 'independent_raw_oracle' in case:
+        result['oracles']['reviewed_raw_criteria'] = copy.deepcopy(case['independent_raw_oracle'])
     result['oracles']['chains'] = {ticker: chain_oracle(raw) for ticker, raw in result['chains'].items()}
     if case['clock'].get('at'):
         check_clock({'chains': result['chains'], 'maps': result['maps'], 'history': result['history']}, case['clock']['at'])
