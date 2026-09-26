@@ -29,6 +29,9 @@ ET = ZoneInfo("America/New_York")
 MODES = ("previous_completed_session", "today")
 _MAX_CONCURRENCY = 4
 _CACHE_TTL_S = 300.0
+# R8-01: bound a cold full-universe scan so the route answers (partial if
+# needed) instead of blocking the async endpoint under throttling.
+_COMPUTE_TIMEOUT_S = 25.0
 
 log = logging.getLogger(__name__)
 
@@ -161,6 +164,9 @@ async def compute_movers(universe: list[str] | None = None,
     sem = asyncio.Semaphore(_MAX_CONCURRENCY)  # R8-01: 4-way fanout stays
     # under the documented 10 req/s account ceiling with headroom alongside
     # heatseeker polling; the shared public_budget remains the governor.
+    # R8-01: the whole-universe scan is bounded — under throttling the route
+    # answers partial with what completed instead of blocking minutes.
+    compute_timeout_s = float(_COMPUTE_TIMEOUT_S)
     excluded: dict[str, int] = {}
 
     async def _one(sym: str) -> dict[str, Any] | None:
@@ -215,7 +221,32 @@ async def compute_movers(universe: list[str] | None = None,
         return {"ticker": sym, "change_pct": pct, "close": last_c,
                 "previous_close": prior_c, "status": "ok"}
 
-    rows = [r for r in await asyncio.gather(*[_one(s) for s in universe]) if r]
+    # R8-01: bounded wait that KEEPS completed rows — under throttling the
+    # route answers partial with what resolved instead of blocking minutes
+    # (or dropping everything on a gather timeout).
+    tasks = {asyncio.ensure_future(_one(s)) for s in universe}
+    rows: list[dict[str, Any]] = []
+    timed_out = False
+    done: set = set()
+    pending: set = set(tasks)
+    try:
+        done, pending = await asyncio.wait(tasks, timeout=compute_timeout_s)
+        for t in done:
+            try:
+                r = t.result()
+            except Exception:
+                continue
+            if r:
+                rows.append(r)
+        timed_out = bool(pending)
+        for t in pending:
+            t.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+    finally:
+        for t in tasks:
+            if not t.done():
+                t.cancel()
     rows.sort(key=lambda r: (-abs(r["change_pct"]), r["ticker"]))
     limited = rows[:max(0, limit)]
     # Legacy aliases kept deliberately for the mounted panel transition
@@ -224,7 +255,9 @@ async def compute_movers(universe: list[str] | None = None,
         r["pct"] = r["change_pct"]
         r["change"] = r["change_pct"]
     reasons = sorted(excluded)
-    status = "ok" if not excluded else ("partial" if rows else "unavailable")
+    if timed_out:
+        reasons.append("COMPUTE_TIMEOUT")
+    status = "ok" if not excluded and not timed_out else ("partial" if rows else "unavailable")
     return {"schema_version": SCHEMA_VERSION, "mode": mode, "status": status,
             "session_date": last, "prior_session_date": prior,
             "universe_id": UNIVERSE_ID,

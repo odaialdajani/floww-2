@@ -196,3 +196,23 @@ def test_display_quality_greek_time_unknown_on_vendor_path():
     assert q2["reasonCodes"] == ["LOCAL_BS_FALLBACK"]
     q3 = _display_quality("VOLUME_FALLBACK_OI_UNKNOWN", "local-bs-fallback", [])
     assert q3["state"] == "unavailable" and q3["setupEligible"] is False
+
+
+def test_compute_timeout_keeps_completed_rows(monkeypatch):
+    import asyncio
+
+    from services import movers as movers_svc
+    monkeypatch.setattr(movers_svc, "_COMPUTE_TIMEOUT_S", 0.3)
+    now = datetime(2026, 9, 26, 12, 0, tzinfo=UTC)
+
+    async def fetch(sym, days=10):
+        if sym == "SLOW":
+            await asyncio.sleep(60)
+        return _bars({"2026-09-24": 100.0, "2026-09-25": 101.0})
+
+    out = asyncio.run(movers_svc.compute_movers(
+        universe=["FAST", "SLOW"], fetch_daily=fetch,
+        now=now, limit=5, day_info=_cal(OPEN_WEEK)))
+    assert out["status"] == "partial"
+    assert [r["ticker"] for r in out["results"]] == ["FAST"]
+    assert "COMPUTE_TIMEOUT" in out["reason_codes"]

@@ -221,8 +221,10 @@ attempt: kill-switch SW reloaded 127.0.0.1 dev sessions in a loop
 (loopback exclusion added), Movers used REACT_APP_API_URL instead of the
 app config (now imports API). Study rubric hardened: gibberish/negated/
 wrong-direction answers fail, stale fixture quality propagates unlaundered,
-confidence recorded (6/6 study tests). Gaps disclosed: shots show movers
-unavailable (bars seam fixed after capture — recapture next run); no
+confidence recorded (6/6 study tests). Movers-populated shot added after
+the bars-seam fix (MSFT +3.66%, 2/75 partial honest). Compute timeout
+added (25s, keeps completed rows, COMPUTE_TIMEOUT reason) so throttled
+cold scans answer partial fast; fanout 8→4 under the 10/s ceiling. No
 before/after pair (no pre-R8 baseline shots exist).
 
 Remaining external: SPX entitlement, participant study run, commissioning
