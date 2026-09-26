@@ -71,6 +71,7 @@ INSTRUCTIONS = (
     "Use only supplied fact IDs. Any status other than ok requires limited interpretation. "
     "For relationships select only exact objects in allowed_relationships; an empty list is valid. "
     "Select up to four IDs from explanation_menu that most directly answer the actual question. "
+    "For each menu entry, evidence_group names its exact ordered fact IDs in explanation_evidence. "
     "Prefer explanations of meaning or the exact missing prerequisite over a repeated list of availability labels. "
     "Do not select unrelated explanations just because they are available; an empty list is valid. "
     "Never compare degraded, stale, missing, time-unknown, mismatched-unit or mismatched-scope facts. "

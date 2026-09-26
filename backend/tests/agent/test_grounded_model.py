@@ -203,3 +203,70 @@ async def test_missing_usage_retains_reservation_and_records_generation():
     doc = await spend.collection.find_one({"_id": "openrouter"})
     assert doc["requests"][result["reservation_id"]]["generation_id"] == "gen-unknown"
     assert (await spend.state())["reserved_units"] > 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("over_limit", [False, True])
+async def test_final_provider_body_is_bounded_before_reservation(over_limit):
+    from decimal import Decimal
+    from unittest.mock import AsyncMock
+
+    from services.agent.contracts import canonical
+    from services.agent.model import INPUT_CEILING, MAX_BODY_BYTES, MAX_OUTPUT, OUTPUT_CEILING
+    from services.agent.spend import money_units
+
+    sent = []
+    spend = SpendLedger(AsyncMongoMockClient().test.budget)
+    await spend.initialize()
+
+    def send(request):
+        if request.method == "GET":
+            return httpx.Response(200, json={"data": {"endpoints": [ENDPOINT]}})
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json={"id": "sizing-only", "choices": []})
+
+    model = GroundedModel(spend, api_key="fixture", transport=httpx.MockTransport(send))
+    await model.once("", [], "measure")
+    final_base = len(canonical(sent[0]).encode("utf-8"))
+    spend.reserve = AsyncMock(return_value=False)
+    result = await model.once("x" * (MAX_BODY_BYTES - final_base + int(over_limit)), [], "boundary")
+    assert len(sent) == 1
+    if over_limit:
+        assert result["status"] == "unavailable"
+        assert result["reason"] == "Evidence exceeds the bounded model input"
+        spend.reserve.assert_not_awaited()
+    else:
+        assert result["status"] == "cost_limited"
+        spend.reserve.assert_awaited_once()
+        expected = money_units(Decimal(MAX_BODY_BYTES + 8192) * INPUT_CEILING + Decimal(MAX_OUTPUT) * OUTPUT_CEILING)
+        assert spend.reserve.await_args.args[1] == expected
+
+
+@pytest.mark.asyncio
+async def test_selected_provider_context_must_fit_final_body():
+    from unittest.mock import AsyncMock
+
+    from services.agent.contracts import canonical
+    from services.agent.model import MAX_OUTPUT
+
+    sent = []
+    endpoint = dict(ENDPOINT)
+    spend = SpendLedger(AsyncMongoMockClient().test.budget)
+    await spend.initialize()
+
+    def send(request):
+        if request.method == "GET":
+            return httpx.Response(200, json={"data": {"endpoints": [endpoint]}})
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json={"id": "sizing-only", "choices": []})
+
+    model = GroundedModel(spend, api_key="fixture", transport=httpx.MockTransport(send))
+    await model.once("", [], "measure")
+    body = sent[0]
+    del body["provider"]["only"]
+    endpoint["context_length"] = len(canonical(body).encode("utf-8")) + 8192 + MAX_OUTPUT
+    spend.reserve = AsyncMock(return_value=False)
+    result = await model.once("", [], "final-context")
+    assert result["status"] == "unavailable"
+    spend.reserve.assert_not_awaited()
+    assert len(sent) == 1

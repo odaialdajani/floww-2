@@ -57,3 +57,37 @@ def test_group_local_missing_claim_prints_its_scope():
     other={**sample("Cached map price"),"horizon":"map:other"}
     missing=next(x for x in explanation_menu([price,flip,other]) if x["kind"]=="missing_flip")
     assert "map:other" in missing["text"]
+
+
+@pytest.mark.parametrize('tickers', [('SPY',), ('SPY', 'QQQ', 'IWM')])
+def test_compact_menu_round_trips_every_citation_and_explanation(tickers):
+    import copy
+
+    from services.agent.explanations import compact_explanation_menu
+    facts = [sample(metric, ticker=ticker) for ticker in tickers
+             for metric in ('Underlying price', 'Available contracts', 'Total estimated gamma exposure')]
+    before = copy.deepcopy(facts)
+    original = explanation_menu(facts)
+    compact = compact_explanation_menu(facts)
+    restored = []
+    for item in compact['explanation_menu']:
+        restored.append({**{k: v for k, v in item.items() if k != 'evidence_group'},
+                         'fact_ids': compact['explanation_evidence'][item['evidence_group']]})
+    assert restored == original
+    assert facts == before
+    assert len(compact['explanation_evidence']) < len(original)
+    for item in original:
+        assert select_explanations([item['id']], facts) == [item]
+    assert compact == compact_explanation_menu(facts)
+
+
+def test_compact_menu_does_not_merge_distinct_tickers_or_scopes():
+    from services.agent.explanations import compact_explanation_menu
+    facts = [sample(ticker='SPY'), sample(ticker='QQQ'),
+             {**sample(ticker='SPY'), 'id': 'different-scope', 'horizon': 'week'}]
+    compact = compact_explanation_menu(facts)
+    for item in compact['explanation_menu']:
+        refs = compact['explanation_evidence'][item['evidence_group']]
+        assert all(f['ticker'] == item['ticker'] and f['horizon'] == item['horizon']
+                   for f in facts if f['id'] in refs)
+    assert compact_explanation_menu([]) == {'explanation_menu': [], 'explanation_evidence': {}}

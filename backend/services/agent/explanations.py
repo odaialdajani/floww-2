@@ -92,3 +92,24 @@ def select_explanations(ids, facts):
     if any(i not in available for i in ids):
         raise ValueError("Explanation is not supported by the supplied evidence")
     return [available[i] for i in ids]
+
+
+def compact_explanation_menu(facts):
+    """Lossless wire representation; answer IDs and server validation stay unchanged.
+
+    Several explanations cite exactly the same evidence. Send each ordered
+    citation list once, and point to it from every matching menu entry.
+    """
+    groups = {}
+    identities = {}
+    entries = []
+    for item in explanation_menu(facts):
+        refs = tuple(item['fact_ids'])
+        if refs not in identities:
+            group = f'evidence_{len(groups) + 1}'
+            identities[refs] = group
+            groups[group] = list(refs)
+        entry = {key: value for key, value in item.items() if key != 'fact_ids'}
+        entry['evidence_group'] = identities[refs]
+        entries.append(entry)
+    return {'explanation_menu': entries, 'explanation_evidence': groups}

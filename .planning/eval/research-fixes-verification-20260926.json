@@ -1,0 +1,42 @@
+{
+  "checked_at": "2026-09-26T20:53:03.124Z",
+  "status": "FOCUSED_CHECKS_PASS_NOT_RELEASE_ACCEPTANCE",
+  "source_sha256": {
+    "backend/scripts/oauth_heldout_v2.py": "0aa977e3e9db2350e2acb6baaa48835eda8286f78be334e60beaf32b9c9597c4",
+    "backend/services/agent/codex_bridge.py": "677b9c1db16202f5209c00f5a422ef8304d3c8a17570b97c2f7ce7c2eb68271f",
+    "backend/services/agent/codex_model.py": "e9d1d7c909c57c9d7c206a3d11cb833f0223252d1e5c391b473e9448a9fdf7d3",
+    "backend/services/agent/explanations.py": "c1f2b5fa216782bdf1e8b767517eb29dbcd790722874d66a98c58205c8f26031",
+    "backend/services/agent/model.py": "fccb7c068e400380bd5d012831422cf376e2df068e6f11b161dbe423f825f8a3",
+    "backend/tests/agent/test_codex_model.py": "d758a55ebd65471f8bec6280545221208ae8467db8e6efde2f925a77d0c8d4ca",
+    "backend/tests/agent/test_explanations.py": "a43b6893fba83984b48ce43bc25db7ec87de78737b86ae0d7d780e63dbce5525",
+    "backend/tests/agent/test_grounded_model.py": "902da42cbc858703cdc66a449e0e11c21b59d1fbc61f4246aaadfb0ff64a344a",
+    "backend/tests/agent/test_heldout_resumption.py": "b72f33f2eb0b778f247ed297b67d8e58f5ef7a4a37cb30618083d8b4da6acfbf"
+  },
+  "checks": [
+    {
+      "name": "all_agent_tests",
+      "passed": 239,
+      "failed": 0,
+      "skipped": 0,
+      "warnings": 27,
+      "seconds": 4.57,
+      "network": "blocked outside local test fixtures",
+      "command": "python -X utf8 -m pytest tests/agent --noconftest -p tests.offline_network -o addopts= -q"
+    },
+    {
+      "name": "ruff_owned_sources",
+      "status": "passed"
+    },
+    {
+      "name": "independent_compaction_and_admission",
+      "passed": 36,
+      "report": "model-evidence-compaction-review-20260926.md"
+    }
+  ],
+  "limits": [
+    "Candidate comparison ran before compaction; do not reuse it as fresh post-fix acceptance.",
+    "Entire backend suite was not repeated after these narrow changes; preceding integration result remains separately dated.",
+    "Concurrent stock/history changes belong to another task and are not included in this source commit.",
+    "No model quota or input cap increased."
+  ]
+}

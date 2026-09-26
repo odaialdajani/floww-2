@@ -17,11 +17,11 @@ from pymongo.errors import DuplicateKeyError
 
 from services.agent.codex_bridge import CodexBridge
 from services.agent.contracts import canonical, relationship_text
-from services.agent.explanations import explanation_menu
+from services.agent.explanations import compact_explanation_menu
 from services.agent.model import ANSWER_TOOL, MAX_BODY_BYTES
 
 DEFAULT_SETTINGS = {"model": "gpt-5.6-terra", "effort": "medium", "speed": "default"}
-POLICY_VERSION = "chatgpt-research-2026-09-11"
+POLICY_VERSION = "chatgpt-research-2026-09-26-compact-evidence"
 
 
 def allowed_relationships(facts):
@@ -165,7 +165,7 @@ class CodexModel:
         content = canonical(dict(
             question=question, facts=facts, history=history_note,
             allowed_relationships=allowed_relationships(facts),
-            explanation_menu=explanation_menu(facts),
+            **compact_explanation_menu(facts),
         ))
         if len(content.encode()) > MAX_BODY_BYTES:
             return dict(status="unavailable", reason="Evidence exceeds the bounded model input", **info)

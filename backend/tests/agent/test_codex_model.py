@@ -141,3 +141,70 @@ async def test_settings_owner_scoped_and_uncertain_work_never_repeated():
     await model.once("hello", [], "sample-turn", owner="alice", settings=DEFAULT_SETTINGS)
     assert FakeBridge.calls == 1
     assert (await model.spend.state())["calls"] == 1
+
+
+@pytest.mark.asyncio
+async def test_three_ticker_evidence_fits_without_dropping_facts():
+    from services.agent.codex_model import allowed_relationships
+    from services.agent.contracts import canonical, fact
+    from services.agent.explanations import explanation_menu
+    from services.agent.model import MAX_BODY_BYTES
+
+    facts = []
+    for ticker in ('SPY', 'QQQ', 'IWM'):
+        for metric, value, unit in (
+            ('Underlying price', 500, 'USD'),
+            ('Available contracts', 700, 'contracts'),
+            ('Available expiry dates', ['2026-10-02', '2026-10-09'], 'dates'),
+            ('Gamma exposure strikes', [400 + i for i in range(240)], 'USD'),
+            ('Estimated gamma exposure', [12345678.123456 + i for i in range(240)], 'USD per 1% move'),
+            ('Total estimated gamma exposure', 10000000, 'USD per 1% move'),
+            ('Estimated flip levels', [501, 510], 'USD'),
+            ('Maximum pain estimate', 500, 'USD'),
+            ('At-the-money implied volatility', 0.2, 'annualized fraction'),
+            ('Display scope', 'all', 'scope'),
+            ('Open interest coverage', 700, 'contracts'),
+        ):
+            facts.append(fact(metric, value, unit, ticker=ticker, source='recorded-public',
+                              snapshot_id='s'*64, horizon='all', status='degraded',
+                              event_time=None, reason='Source observation time is unavailable'))
+    old_content = canonical(dict(question='Compare the saved readings across these three tickers.', facts=facts,
+                                 history=None, allowed_relationships=allowed_relationships(facts),
+                                 explanation_menu=explanation_menu(facts)))
+    assert len(old_content.encode()) > MAX_BODY_BYTES
+    before = canonical(facts)
+    class CapturingBridge(FakeBridge):
+        captured = None
+        async def answer(self, content, settings, schema):
+            type(self).captured = json.loads(content)
+            return {'sections': [{'name': 'Structure', 'fact_ids': [facts[0]['id']],
+                                   'interpretation': 'limited'}]}, {}, 'thread', 'turn'
+    db = AsyncMongoMockClient().db
+    repo = AgentRepository(db)
+    await repo.initialize()
+    model = CodexModel(repo, db.usage, bridge_factory=CapturingBridge)
+    result = await model.once('Compare the saved readings across these three tickers.', facts,
+                              'three-ticker-size', owner='alice', settings=DEFAULT_SETTINGS)
+    assert result['status'] == 'ok'
+    assert CapturingBridge.captured['facts'] == facts
+    assert canonical(facts) == before
+    assert len(canonical(CapturingBridge.captured).encode()) <= MAX_BODY_BYTES
+    assert (await model.spend.state())['calls'] == 1
+
+
+@pytest.mark.asyncio
+async def test_genuinely_oversized_evidence_still_refuses_without_spending():
+    from services.agent.contracts import fact
+    from services.agent.model import MAX_BODY_BYTES
+    item = fact('Large recorded evidence', 'x' * (MAX_BODY_BYTES + 1), 'text',
+                ticker='SPY', source='recorded', snapshot_id='scope', horizon='all', status='degraded')
+    db = AsyncMongoMockClient().db
+    repo = AgentRepository(db)
+    await repo.initialize()
+    model = CodexModel(repo, db.usage, bridge_factory=FakeBridge)
+    model.validate_settings = AsyncMock(side_effect=AssertionError('Must refuse before transport'))
+    result = await model.once('Explain this evidence', [item], 'oversized', owner='alice', settings=DEFAULT_SETTINGS)
+    assert result['status'] == 'unavailable'
+    assert result['reason'] == 'Evidence exceeds the bounded model input'
+    model.validate_settings.assert_not_awaited()
+    assert (await model.spend.state())['calls'] == 0

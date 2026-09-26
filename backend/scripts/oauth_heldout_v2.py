@@ -17,6 +17,7 @@ import json
 import math
 import os
 import platform
+import re
 import time
 import uuid
 from datetime import UTC, datetime
@@ -42,6 +43,8 @@ PROPOSAL_HASH = "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd
 BOUND = EVAL / "oauth-heldout-v2-inputs.json"
 SEAL = EVAL / "oauth-heldout-v2-execution-seal.json"
 SHARED_USAGE_DB = "floww_public_research_acceptance"
+DATA_URI = "mongodb://127.0.0.1:27017"
+USAGE_URI = DATA_URI
 EXTERNAL_FILES = (
     "backend/scripts/oauth_heldout_v2.py", "backend/services/heatseeker.py",
     "backend/services/market_provenance.py", "backend/services/gex_core.py",
@@ -85,12 +88,51 @@ def execution_seal():
     return {"inputs_sha256": sha(BOUND), "python": platform.python_version(),
             "packages": {name: importlib.metadata.version(name) for name in PACKAGES},
             "external_files": {name: sha(ROOT / name) for name in EXTERNAL_FILES},
-            "codex_executable_sha256": sha(binary)}
+            "codex_executable_sha256": sha(binary),
+            "storage": {"data_uri": DATA_URI, "usage_uri": USAGE_URI, "usage_database": SHARED_USAGE_DB}}
 
 
 def seal():
     write_new(SEAL, execution_seal())
     return {"status": "execution_sealed", "model_calls": 0}
+
+
+def select_revision(revision, usage_uri):
+    """Select new artifact names; old frozen evidence is never overwritten."""
+    global BOUND, SEAL, USAGE_URI
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", revision):
+        raise ValueError("Revision must be a simple lowercase label")
+    if not re.fullmatch(r"mongodb://127\.0\.0\.1:(?:27017|27018)", usage_uri):
+        raise ValueError("Evaluation usage storage must be an explicit local endpoint")
+    BOUND = EVAL / f"oauth-heldout-v2-{revision}-inputs.json"
+    SEAL = EVAL / f"oauth-heldout-v2-{revision}-execution-seal.json"
+    USAGE_URI = usage_uri
+
+
+def refreeze():
+    """Preserve every question/source/criterion; bind updated executable code."""
+    original = EVAL / "oauth-heldout-v2-inputs.json"
+    old_seal = EVAL / "oauth-heldout-v2-execution-seal.json"
+    if original == BOUND or BOUND.exists() or SEAL.exists():
+        raise ValueError("A new unused revision is required")
+    prior = read(original)
+    if read(old_seal).get("inputs_sha256") != sha(original):
+        raise ValueError("Original prepared inputs differ from their preserved seal")
+    resolve(prior["proposal"])
+    refreshed = copy.deepcopy(prior)
+    refreshed["code"] = {name: sha(ROOT / name) for name in prior["code"]}
+    refreshed["resumption"] = {
+        "previous_inputs": reference(original), "previous_execution_seal": reference(old_seal),
+        "reason": "Main integration changed code; all original cases and sources retained",
+        "changed_code": {name: {"before": prior["code"][name], "after": current}
+                         for name, current in refreshed["code"].items() if current != prior["code"][name]},
+        "usage_anchor": {"_id": "day:2026-09-11", "minimum_calls": 34},
+    }
+    if len(refreshed["cases"]) != 30:
+        raise ValueError("All original cases must remain")
+    write_new(BOUND, refreshed)
+    seal()
+    return {"status": "RESUMPTION_SEALED", "cases": 30, "model_calls": 0}
 
 
 def prepare():
@@ -338,12 +380,31 @@ async def exercise(item, repository, model):
                 "history_reopen": not errors, "events": item["events"], "history_setup": history_setup}
 
 
+def validate_resumption(bound):
+    original = EVAL / "oauth-heldout-v2-inputs.json"
+    if original == BOUND:
+        return None
+    metadata = bound.get("resumption")
+    anchor = {"_id": "day:2026-09-11", "minimum_calls": 34}
+    if not isinstance(metadata, dict) or metadata.get("usage_anchor") != anchor:
+        raise ValueError("Revision requires the preserved usage anchor")
+    parent = resolve(metadata["previous_inputs"])
+    previous_seal = resolve(metadata["previous_execution_seal"])
+    if previous_seal.get("inputs_sha256") != metadata["previous_inputs"]["sha256"]:
+        raise ValueError("Original inputs do not match their preserved execution seal")
+    for key, value in parent.items():
+        if key != "code" and bound.get(key) != value:
+            raise ValueError(f"Resumption changed an original evaluation field: {key}")
+    return anchor
+
+
 async def execute(mode, output, baseline=None):
     if output.exists():
         raise ValueError("Run output exists; no repeat dispatch or overwrite")
     bound = read(BOUND)
     if read(SEAL) != execution_seal():
         raise ValueError("Execution code, dependencies or managed binary changed after sealing")
+    anchor = validate_resumption(bound)
     resolve(bound["proposal"])
     for name, expected in bound["code"].items():
         if sha(ROOT / name) != expected:
@@ -357,84 +418,104 @@ async def execute(mode, output, baseline=None):
     original_http = httpx.AsyncHTTPTransport.handle_async_request
     async def no_http(*_args, **_kwargs):
         raise RuntimeError("Recorded replay forbids external HTTP")
-    connection = AsyncIOMotorClient("mongodb://127.0.0.1:27017", tz_aware=True,
+    connection = AsyncIOMotorClient(DATA_URI, tz_aware=True,
                                     serverSelectionTimeoutMS=2000, socketTimeoutMS=5000)
-    database = "test_floww_v2_" + uuid.uuid4().hex
-    repository = AgentRepository(connection[database])
-    model = CodexModel(repository, connection[SHARED_USAGE_DB].agent_oauth_usage)
-    state = await model.spend.state()
-    baseline_rows = {}
-    if mode == "run":
-        if baseline is None:
-            raise ValueError("A passed frozen route baseline is required")
-        report = read(baseline)
-        if (report.get("status") != "ROUTE_CHECKS_PASSED" or report.get("inputs_sha256") != sha(BOUND)
-                or report.get("execution_seal_sha256") != sha(SEAL)):
-            raise ValueError("Baseline did not pass against these exact inputs")
-        if state["daily_limit"] - state["calls"] < bound["required_model_allowance"]:
-            connection.close()
-            raise ValueError("Insufficient existing daily allowance for the complete candidate; no calls made")
-        await model.validate_settings(bound["candidate"])
-        baseline_rows = {r["id"]: r for r in report["cases"]}
-    await repository.initialize()
-    results = {"mode": mode, "status": "RUNNING", "inputs_sha256": sha(BOUND),
-               "execution_seal_sha256": sha(SEAL),
-               "database": database, "started_at": datetime.now(UTC).isoformat(),
-               "candidate": bound["candidate"] if mode == "run" else None,
-               "quota_before": state, "cases": [], "provider_requests": 0,
-               "usefulness_assessment": "NOT_GRADED; requires independent frozen-rubric review"}
-    write_new(output, results)
-    def checkpoint():
-        temporary = output.with_suffix(".pending")
-        with temporary.open("w", encoding="utf-8", newline="\n") as stream:
-            json.dump(results, stream, indent=2, allow_nan=False, default=str)
-            stream.write("\n")
-        temporary.replace(output)
+    usage_connection = AsyncIOMotorClient(USAGE_URI, tz_aware=True,
+                                         serverSelectionTimeoutMS=2000, socketTimeoutMS=5000)
     try:
-        httpx.AsyncHTTPTransport.handle_async_request = no_http
-        with patch.dict(os.environ, {"FLOWW_AGENT_DEPLOYMENT": "local",
-                                     "FLOWW_AGENT_ORIGINS": "http://localhost:8000",
-                                     "FLOWW_AGENT_DISABLED": "0"}):
-            for item in bound["cases"]:
-                result = await exercise(item, repository, model if mode == "run" else None)
-                if mode == "run" and result.get("fact_hash") != baseline_rows[item["id"]].get("fact_hash"):
-                    result["errors"].append("Candidate and baseline facts differ")
-                answer = result.get("saved_turn", {}).get("answer", {})
-                uses = answer.get("usage", [])
-                if mode == "run" and item["route"] == "interpretation":
-                    if answer.get("mode") != "model-assisted" or not any(u.get("reservation_id") for u in uses):
-                        result["errors"].append("Candidate interpretation incomplete; retained in denominator")
-                    for use in uses:
-                        if any(use.get(k) != bound["candidate"][k] for k in ("model", "effort", "speed")):
-                            result["errors"].append("Candidate settings differ from frozen settings")
-                elif any(u.get("reservation_id") for u in uses):
-                    result["errors"].append("Unexpected model dispatch on bypass/rejection/baseline")
-                results["cases"].append(result)
-                checkpoint()
-        results["quota_after"] = await model.spend.state()
-        results["shared_quota_change"] = results["quota_after"]["calls"] - state["calls"]
-        reservations = {u["reservation_id"] for c in results["cases"]
-                        for u in c.get("saved_turn", {}).get("answer", {}).get("usage", [])
-                        if u.get("reservation_id")}
-        results["model_calls"] = len(reservations)
-        results["model_accounting"] = "Unique saved application dispatch reservations; not upstream attempt count or dollar cost"
-        results["errors"] = sum(len(c["errors"]) for c in results["cases"])
-        results["status"] = ("ROUTE_CHECKS_PASSED" if mode == "check" else "CANDIDATE_RECORDED_NOT_GRADED") if not results["errors"] else "FAILED"
-        checkpoint()
-        return {"status": results["status"], "cases": len(results["cases"]),
-                "errors": results["errors"], "model_calls": results["model_calls"]}
+        database = "test_floww_v2_" + uuid.uuid4().hex
+        repository = AgentRepository(connection[database])
+        usage_collection = usage_connection[SHARED_USAGE_DB].agent_oauth_usage
+        if anchor:
+            observed = await usage_collection.find_one({"_id": anchor["_id"]})
+            if not observed or observed.get("calls", 0) < anchor["minimum_calls"]:
+                raise ValueError("Preserved shared usage ledger was not found; no quota reset allowed")
+        model = CodexModel(repository, usage_collection)
+        state = await model.spend.state()
+        baseline_rows = {}
+        if mode == "run":
+            if baseline is None:
+                raise ValueError("A passed frozen route baseline is required")
+            report = read(baseline)
+            if (report.get("status") != "ROUTE_CHECKS_PASSED" or report.get("inputs_sha256") != sha(BOUND)
+                    or report.get("execution_seal_sha256") != sha(SEAL)):
+                raise ValueError("Baseline did not pass against these exact inputs")
+            if state["daily_limit"] - state["calls"] < bound["required_model_allowance"]:
+                raise ValueError("Insufficient existing daily allowance for the complete candidate; no calls made")
+            await model.validate_settings(bound["candidate"])
+            baseline_rows = {r["id"]: r for r in report["cases"]}
+        await repository.initialize()
+        results = {"mode": mode, "status": "RUNNING", "inputs_sha256": sha(BOUND),
+                   "execution_seal_sha256": sha(SEAL),
+                   "database": database, "started_at": datetime.now(UTC).isoformat(),
+                   "candidate": bound["candidate"] if mode == "run" else None,
+                   "quota_before": state, "cases": [], "provider_requests": 0,
+                   "usefulness_assessment": "NOT_GRADED; requires independent frozen-rubric review"}
+        write_new(output, results)
+        def checkpoint():
+            temporary = output.with_suffix(".pending")
+            with temporary.open("w", encoding="utf-8", newline="\n") as stream:
+                json.dump(results, stream, indent=2, allow_nan=False, default=str)
+                stream.write("\n")
+            temporary.replace(output)
+        try:
+            httpx.AsyncHTTPTransport.handle_async_request = no_http
+            with patch.dict(os.environ, {"FLOWW_AGENT_DEPLOYMENT": "local",
+                                         "FLOWW_AGENT_ORIGINS": "http://localhost:8000",
+                                         "FLOWW_AGENT_DISABLED": "0"}):
+                for item in bound["cases"]:
+                    result = await exercise(item, repository, model if mode == "run" else None)
+                    if mode == "run" and result.get("fact_hash") != baseline_rows[item["id"]].get("fact_hash"):
+                        result["errors"].append("Candidate and baseline facts differ")
+                    answer = result.get("saved_turn", {}).get("answer", {})
+                    uses = answer.get("usage", [])
+                    if mode == "run" and item["route"] == "interpretation":
+                        if answer.get("mode") != "model-assisted" or not any(u.get("reservation_id") for u in uses):
+                            result["errors"].append("Candidate interpretation incomplete; retained in denominator")
+                        for use in uses:
+                            if any(use.get(k) != bound["candidate"][k] for k in ("model", "effort", "speed")):
+                                result["errors"].append("Candidate settings differ from frozen settings")
+                    elif any(u.get("reservation_id") for u in uses):
+                        result["errors"].append("Unexpected model dispatch on bypass/rejection/baseline")
+                    results["cases"].append(result)
+                    checkpoint()
+            results["quota_after"] = await model.spend.state()
+            results["shared_quota_change"] = results["quota_after"]["calls"] - state["calls"]
+            reservations = {u["reservation_id"] for c in results["cases"]
+                            for u in c.get("saved_turn", {}).get("answer", {}).get("usage", [])
+                            if u.get("reservation_id")}
+            results["model_calls"] = len(reservations)
+            results["model_accounting"] = "Unique saved application dispatch reservations; not upstream attempt count or dollar cost"
+            results["errors"] = sum(len(c["errors"]) for c in results["cases"])
+            results["status"] = ("ROUTE_CHECKS_PASSED" if mode == "check" else "CANDIDATE_RECORDED_NOT_GRADED") if not results["errors"] else "FAILED"
+            checkpoint()
+            return {"status": results["status"], "cases": len(results["cases"]),
+                    "errors": results["errors"], "model_calls": results["model_calls"]}
+        finally:
+            httpx.AsyncHTTPTransport.handle_async_request = original_http
+
     finally:
-        httpx.AsyncHTTPTransport.handle_async_request = original_http
         connection.close()
+        usage_connection.close()
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("prepare", "seal", "check", "run"))
+    parser.add_argument("mode", choices=("prepare", "seal", "check", "run", "refreeze"))
     parser.add_argument("--output", type=Path)
     parser.add_argument("--baseline", type=Path)
+    parser.add_argument("--revision")
+    parser.add_argument("--usage-uri", default=DATA_URI)
     args = parser.parse_args()
-    if args.mode == "prepare":
+    if args.revision:
+        if args.mode in {"prepare", "seal"}:
+            parser.error("Revisions must use refreeze to preserve the original cases and usage anchor")
+        select_revision(args.revision, args.usage_uri)
+    elif args.mode == "refreeze" or args.usage_uri != DATA_URI:
+        parser.error("A new --revision is required for resumption or separate usage storage")
+    if args.mode == "refreeze":
+        result = refreeze()
+    elif args.mode == "prepare":
         result = prepare()
     elif args.mode == "seal":
         result = seal()
