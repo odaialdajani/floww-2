@@ -1,0 +1,27 @@
+{
+  "status": "pass",
+  "checks": [
+    "default observation admission disabled",
+    "another owner cannot observe account",
+    "twelve same requests save one value and leave holdings cash and exit reserves unchanged",
+    "same operation changed input refused",
+    "unchanged new request neither refreshes time nor consumes history capacity",
+    "fresh process reopens exact observation and safely projects pending history",
+    "a concurrent fill prevents old-book valuation commit",
+    "later fill retains its economics and makes earlier observation stale",
+    "input or checker mutation cannot change saved prices and cash",
+    "session close expires saved readiness and identical input saves the unknown transition",
+    "observation cannot consume reserved exit capacity",
+    "close stage and fill succeed at the cap using their previously reserved space",
+    "old recovery epoch cannot save an observation"
+  ],
+  "count": 13,
+  "python": "3.11.15 (main, Jun 11 2026, 04:59:07) [MSC v.1944 64 bit (AMD64)]",
+  "provider_calls": 0,
+  "model_calls": 0,
+  "broker_orders": 0,
+  "production_admission": false,
+  "limitation": "Synthetic verified-input observation preparation; no app mount or product lifecycle settlement",
+  "raw_report_sha256": "d658b284a0a9c1307ae35ee5581ba28f15beaf659ccc941eb8b59bc5e24b622a",
+  "redaction": "Only isolated database identifier omitted; checks and results unchanged."
+}

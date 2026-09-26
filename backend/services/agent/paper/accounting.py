@@ -120,7 +120,7 @@ def equity(cash, holdings):
     """Every holding must carry a known mark; unknowns cannot become zero."""
     with exact_context() as context:
         context.prec = ARITHMETIC_PRECISION
-        total = exact(cash)
+        total = derived(cash)
         for index, holding in enumerate(holdings):
             if index >= MAX_HOLDINGS:
                 raise ValueError("Marked holdings exceed the supported account limit")

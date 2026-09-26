@@ -1,0 +1,40 @@
+{
+  "lifecycle_boundary": {
+    "at_seconds_9_10_11": [
+      "current",
+      "stale",
+      "stale"
+    ],
+    "recomputed_equity": null
+  },
+  "same_frame_boundary_record": {
+    "saved": true,
+    "equity": null
+  },
+  "foreign_anchor": {
+    "rejected_mismatches": [
+      "owner",
+      "account_id",
+      "epoch",
+      "venue"
+    ]
+  },
+  "contradictory_metadata": {
+    "unknown_for": [
+      "cash_with_shares",
+      "physical_with_cash",
+      "wrong_currency"
+    ]
+  },
+  "negative_reservation": "rejected",
+  "unsupported_lots": {
+    "rejected_quantities": [
+      "-1",
+      "0",
+      "True",
+      "'1'",
+      "1.5"
+    ]
+  },
+  "derived_cash_edge": "preserved exactly beyond raw input digit limit"
+}

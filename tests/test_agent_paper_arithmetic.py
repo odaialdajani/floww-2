@@ -13,6 +13,13 @@ from services.agent.paper.repository import operation_id, operation_version, val
 
 
 class PaperArithmeticTests(unittest.TestCase):
+    def test_equity_accepts_an_exact_derived_cash_balance(self):
+        with localcontext() as context:
+            context.prec = 256
+            cash = Decimal("1e24") - Decimal("1e-24")
+        self.assertEqual(equity(str(cash), [{"quantity": 1, "premium_factor": 1, "mark": "1e-24"}]),
+                         Decimal("1e24"))
+
     def test_wide_derived_range_refuses_inexact_fee_instead_of_dropping_it(self):
         with self.assertRaisesRegex(ValueError, "exact supported precision"):
             fill_cash_change("1e24", "1e24", "1e24", "1e-200")
