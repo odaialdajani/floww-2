@@ -34,3 +34,16 @@ test('R6-1: missing metric surface renders unavailable, never raw totals', () =>
   expect(screen.getByTestId('skylit-sidebar-unavailable')).toBeInTheDocument();
   expect(screen.queryByText('+1.0M')).toBeNull();
 });
+
+test('R8: vex view labels structural anchors honestly, never VEX values', () => {
+  const data = {
+    exposure_basis: 'OI',
+    net_gex_total: 1000,
+    strikes: [{ strike: 500, gex: 1000 }],
+    nodes: { total_gex: 1000, king: { strike: 500 }, floors: [], ceilings: [] },
+    grid: { expiries: ['2030-01-15'], strikes: [500], grid: {},
+      vex_grid: { '2030-01-15': { 500: 25 } } },
+  };
+  render(<SkylitMetricsSidebar data={data} spot={500} viewMode="vex" metric="raw" />);
+  expect(screen.getByText('Key Levels · GEX structural · OI')).toBeInTheDocument();
+});

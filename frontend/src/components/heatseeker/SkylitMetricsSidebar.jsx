@@ -56,6 +56,13 @@ function SkylitMetricsSidebar({
   // active metric for its summary; grid king stays cell-scoped.
   const metricLabel = viewMode === "vex" ? "VEX" : viewMode === "charm" ? "Charm" : "GEX";
   const useOverlay = metric !== "raw" && (viewMode === "gex" || viewMode === "skylit");
+  // R8: without an overlay the summaries below are raw structural anchors
+  // (strongest wall, king cell, nodes) — never the active view's metric.
+  // Say so explicitly in VEX/Charm views so the header never implies VEX
+  // values; the GEX view keeps its established label.
+  const summaryLabel = useOverlay
+    ? metricLabel
+    : (viewMode === "vex" || viewMode === "charm" ? "GEX structural" : "GEX");
   const overlayCells = useOverlay ? ((data?.metrics?.grids || {})[metric] || {}).grid : null;
   const overlayHasCells = !!overlayCells && Object.keys(overlayCells).length > 0;
   const metricActive = !useOverlay || overlayHasCells;
@@ -108,7 +115,7 @@ function SkylitMetricsSidebar({
       {/* Key metrics */}
       <div className="skylit-metrics-section">
         <div className="skylit-section-title">
-          Key Levels · {metricLabel}{useOverlay ? ` · ${metric}` : ""} · {exposureBasis}
+          Key Levels · {summaryLabel}{useOverlay ? ` · ${metric}` : ""} · {exposureBasis}
         </div>
         {!metricActive && (
           <div className="skylit-metric-row" data-testid="skylit-sidebar-unavailable">
