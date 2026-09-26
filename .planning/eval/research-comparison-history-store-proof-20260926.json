@@ -1,0 +1,410 @@
+{
+  "status": "REAL_ISOLATED_HISTORY_FRESH_PROCESS_PASS",
+  "manifest_sha256": "b28a35f15ab4784cf4b7871b598771ca7663d3f4bc66adb5f80f2e5add224c42",
+  "records": [
+    {
+      "id": "owned_price_change",
+      "seed_receipts": [
+        {
+          "ticker": "IWM",
+          "variant": "matching_coverage",
+          "owner_relation": "asking_owner",
+          "raw_sha256": "204ed725d010c2a7bc94638adb31f1b2786c5dc33250c8e6e99306f854f9080e",
+          "snapshot_sha256": "54f892ccf3a399a18049be33b62d2ae50d22ebef83f038eb23fcab7a68f14f3b",
+          "snapshot_id": "11beb37d0dd5be6100cd5afea1e5a41acb39309b7ba55f1da33cb8f9e5cb1448",
+          "coverage_id": "0836eb92d65e31681dbf4ad293115f7ba95092ec79df9825b1b413c8caf19339",
+          "coverage": 2,
+          "source_time": "2026-09-28T14:25:00+00:00",
+          "synthetic_capture_time": "2026-09-28T14:25:01+00:00",
+          "anchor_kind": "observation",
+          "storage_round_trip": true,
+          "preparation_read_activity": {
+            "policy": "research-capabilities-1",
+            "limit": 8,
+            "reserved": 1,
+            "started": 1,
+            "attempts": [
+              {
+                "id": 1,
+                "capability": "context",
+                "ticker": "IWM",
+                "scope": {
+                  "horizon": "all",
+                  "selected_expiry": null
+                },
+                "reserved_at": "2026-09-26T23:36:19.774250+00:00",
+                "started_at": "2026-09-26T23:36:19.774250+00:00",
+                "ended_at": "2026-09-26T23:36:19.774250+00:00",
+                "outcome": "completed",
+                "worker_unresolved": false
+              }
+            ],
+            "denied": [],
+            "closed": true,
+            "entry_count_complete": true
+          },
+          "scope": "Pre-answer synthetic fixture preparation; not a research turn or its budget"
+        }
+      ],
+      "reopened_history": [
+        {
+          "ticker": "IWM",
+          "change": 2,
+          "note": "Compared with source observation at 2026-09-28T14:25:00+00:00",
+          "foreign_owner_refused": true
+        }
+      ]
+    },
+    {
+      "id": "history_changed_selection",
+      "seed_receipts": [
+        {
+          "ticker": "SPY",
+          "variant": "different_coverage_same_horizon",
+          "owner_relation": "asking_owner",
+          "raw_sha256": "3300af68bec806a89ed77f94d05b10ce1e97fb90be3e31b71512283dde38e51a",
+          "snapshot_sha256": "c39f848330aa66f6867931726d6e50daa716478bcc3d53f4f7e61bf97b8b2b5a",
+          "snapshot_id": "bcdd9ca4931e62bb1cf17cbb10caa292d8a80f8f41adf31dc210f726acd00461",
+          "coverage_id": "e082f9078866849c4e06b72bf7846e45f8b4288bf0dfb5ff03c1f6b813c3af0a",
+          "coverage": 4,
+          "source_time": "2026-09-28T14:25:00+00:00",
+          "synthetic_capture_time": "2026-09-28T14:25:01+00:00",
+          "anchor_kind": "observation",
+          "storage_round_trip": true,
+          "preparation_read_activity": {
+            "policy": "research-capabilities-1",
+            "limit": 8,
+            "reserved": 1,
+            "started": 1,
+            "attempts": [
+              {
+                "id": 1,
+                "capability": "context",
+                "ticker": "SPY",
+                "scope": {
+                  "horizon": "all",
+                  "selected_expiry": null
+                },
+                "reserved_at": "2026-09-26T23:36:19.895199+00:00",
+                "started_at": "2026-09-26T23:36:19.895199+00:00",
+                "ended_at": "2026-09-26T23:36:19.895199+00:00",
+                "outcome": "completed",
+                "worker_unresolved": false
+              }
+            ],
+            "denied": [],
+            "closed": true,
+            "entry_count_complete": true
+          },
+          "scope": "Pre-answer synthetic fixture preparation; not a research turn or its budget"
+        }
+      ],
+      "reopened_history": [
+        {
+          "ticker": "SPY",
+          "change": null,
+          "note": "Previous observation has different expiry or contract coverage; earlier saved coverage: 4 contracts; current saved coverage: 2 contracts. Earlier source observation: 2026-09-28T14:25:00+00:00; no price change was calculated.",
+          "foreign_owner_refused": true
+        }
+      ]
+    },
+    {
+      "id": "other_owner_history",
+      "seed_receipts": [
+        {
+          "ticker": "QQQ",
+          "variant": "prior_only_other_owner",
+          "owner_relation": "separate_owner",
+          "raw_sha256": "3ff414190f8e2acf730fe0e8483bbb94737a1bb10740ad5ea43824284ae3ee25",
+          "snapshot_sha256": "7815345d6d82a2568015e7a130396f6e835f369e687878fb08796d17ee3cc6e0",
+          "snapshot_id": "f56f6b2655a2cd9d53f9b289b2a0ab530099d53a7510960c5651329e0b13f3f6",
+          "coverage_id": "0836eb92d65e31681dbf4ad293115f7ba95092ec79df9825b1b413c8caf19339",
+          "coverage": 2,
+          "source_time": "2026-09-28T14:25:00+00:00",
+          "synthetic_capture_time": "2026-09-28T14:25:01+00:00",
+          "anchor_kind": "observation",
+          "storage_round_trip": true,
+          "preparation_read_activity": {
+            "policy": "research-capabilities-1",
+            "limit": 8,
+            "reserved": 1,
+            "started": 1,
+            "attempts": [
+              {
+                "id": 1,
+                "capability": "context",
+                "ticker": "QQQ",
+                "scope": {
+                  "horizon": "all",
+                  "selected_expiry": null
+                },
+                "reserved_at": "2026-09-26T23:36:19.899528+00:00",
+                "started_at": "2026-09-26T23:36:19.899528+00:00",
+                "ended_at": "2026-09-26T23:36:19.899528+00:00",
+                "outcome": "completed",
+                "worker_unresolved": false
+              }
+            ],
+            "denied": [],
+            "closed": true,
+            "entry_count_complete": true
+          },
+          "scope": "Pre-answer synthetic fixture preparation; not a research turn or its budget"
+        }
+      ],
+      "reopened_history": [
+        {
+          "ticker": "QQQ",
+          "change": null,
+          "note": "No earlier compatible source observation was saved",
+          "foreign_owner_refused": true
+        }
+      ]
+    },
+    {
+      "id": "late_snapshot_not_close",
+      "seed_receipts": [
+        {
+          "ticker": "DIA",
+          "variant": "late_evening_not_close",
+          "owner_relation": "asking_owner",
+          "raw_sha256": "68d1c14cb48e9f8b6e3ab72275b71a185af19e346c45f18747abbf023757d5a0",
+          "snapshot_sha256": "c63bb0c3d3e3fa35f04e763c640e33d327ae006b365e67568a441eb68c55ca99",
+          "snapshot_id": "b3bf80a769e208dc96e608a4caff4022daea09fdf342a2f441e539cd9d95c4e8",
+          "coverage_id": "0836eb92d65e31681dbf4ad293115f7ba95092ec79df9825b1b413c8caf19339",
+          "coverage": 2,
+          "source_time": "2026-09-28T21:00:00+00:00",
+          "synthetic_capture_time": "2026-09-28T21:00:01+00:00",
+          "anchor_kind": "intraday",
+          "storage_round_trip": true,
+          "preparation_read_activity": {
+            "policy": "research-capabilities-1",
+            "limit": 8,
+            "reserved": 1,
+            "started": 1,
+            "attempts": [
+              {
+                "id": 1,
+                "capability": "context",
+                "ticker": "DIA",
+                "scope": {
+                  "horizon": "all",
+                  "selected_expiry": null
+                },
+                "reserved_at": "2026-09-26T23:36:19.902818+00:00",
+                "started_at": "2026-09-26T23:36:19.902818+00:00",
+                "ended_at": "2026-09-26T23:36:19.902818+00:00",
+                "outcome": "completed",
+                "worker_unresolved": false
+              }
+            ],
+            "denied": [],
+            "closed": true,
+            "entry_count_complete": true
+          },
+          "scope": "Pre-answer synthetic fixture preparation; not a research turn or its budget"
+        }
+      ],
+      "reopened_history": [
+        {
+          "ticker": "DIA",
+          "change": null,
+          "note": "No verified closing observation was saved for 2026-09-28T20:00:00+00:00",
+          "foreign_owner_refused": true
+        }
+      ]
+    },
+    {
+      "id": "three_ticker_history_budget",
+      "seed_receipts": [
+        {
+          "ticker": "DIA",
+          "variant": "three_ticker_compatible_history",
+          "owner_relation": "asking_owner",
+          "raw_sha256": "512b989dfed6d669264cffbf54d2de3a864dc0917f6c75ab51ef479771456fb8",
+          "snapshot_sha256": "80fd79923bc60ca82f494663de5ab6b8501885d755d33ff3aeeb164509c2749e",
+          "snapshot_id": "ca51b88c1939bcf672e570be4464f90b476058639384b6d9bc491e511042a9a2",
+          "coverage_id": "0836eb92d65e31681dbf4ad293115f7ba95092ec79df9825b1b413c8caf19339",
+          "coverage": 2,
+          "source_time": "2026-09-28T14:25:00+00:00",
+          "synthetic_capture_time": "2026-09-28T14:25:01+00:00",
+          "anchor_kind": "observation",
+          "storage_round_trip": true,
+          "preparation_read_activity": {
+            "policy": "research-capabilities-1",
+            "limit": 8,
+            "reserved": 2,
+            "started": 2,
+            "attempts": [
+              {
+                "id": 1,
+                "capability": "context",
+                "ticker": "DIA",
+                "scope": {
+                  "horizon": "all",
+                  "selected_expiry": null
+                },
+                "reserved_at": "2026-09-26T23:36:19.907336+00:00",
+                "started_at": "2026-09-26T23:36:19.907336+00:00",
+                "ended_at": "2026-09-26T23:36:19.907336+00:00",
+                "outcome": "completed",
+                "worker_unresolved": false
+              },
+              {
+                "id": 2,
+                "capability": "structure",
+                "ticker": "DIA",
+                "scope": {
+                  "horizon": "all",
+                  "selected_expiry": null
+                },
+                "reserved_at": "2026-09-26T23:36:19.907336+00:00",
+                "started_at": "2026-09-26T23:36:19.907336+00:00",
+                "ended_at": "2026-09-26T23:36:19.908841+00:00",
+                "outcome": "completed",
+                "worker_unresolved": false
+              }
+            ],
+            "denied": [],
+            "closed": true,
+            "entry_count_complete": true
+          },
+          "scope": "Pre-answer synthetic fixture preparation; not a research turn or its budget"
+        },
+        {
+          "ticker": "IWM",
+          "variant": "three_ticker_compatible_history",
+          "owner_relation": "asking_owner",
+          "raw_sha256": "204ed725d010c2a7bc94638adb31f1b2786c5dc33250c8e6e99306f854f9080e",
+          "snapshot_sha256": "01813816fa8ddefd61aae1df094f69c40b62121867a06d0db3474a4afe192752",
+          "snapshot_id": "c329568106d7b1de391315213951cdb52ab48ba0f324681999a50525e3439017",
+          "coverage_id": "0836eb92d65e31681dbf4ad293115f7ba95092ec79df9825b1b413c8caf19339",
+          "coverage": 2,
+          "source_time": "2026-09-28T14:25:00+00:00",
+          "synthetic_capture_time": "2026-09-28T14:25:01+00:00",
+          "anchor_kind": "observation",
+          "storage_round_trip": true,
+          "preparation_read_activity": {
+            "policy": "research-capabilities-1",
+            "limit": 8,
+            "reserved": 2,
+            "started": 2,
+            "attempts": [
+              {
+                "id": 1,
+                "capability": "context",
+                "ticker": "IWM",
+                "scope": {
+                  "horizon": "all",
+                  "selected_expiry": null
+                },
+                "reserved_at": "2026-09-26T23:36:19.908841+00:00",
+                "started_at": "2026-09-26T23:36:19.908841+00:00",
+                "ended_at": "2026-09-26T23:36:19.908841+00:00",
+                "outcome": "completed",
+                "worker_unresolved": false
+              },
+              {
+                "id": 2,
+                "capability": "structure",
+                "ticker": "IWM",
+                "scope": {
+                  "horizon": "all",
+                  "selected_expiry": null
+                },
+                "reserved_at": "2026-09-26T23:36:19.909903+00:00",
+                "started_at": "2026-09-26T23:36:19.909903+00:00",
+                "ended_at": "2026-09-26T23:36:19.910902+00:00",
+                "outcome": "completed",
+                "worker_unresolved": false
+              }
+            ],
+            "denied": [],
+            "closed": true,
+            "entry_count_complete": true
+          },
+          "scope": "Pre-answer synthetic fixture preparation; not a research turn or its budget"
+        },
+        {
+          "ticker": "QQQ",
+          "variant": "three_ticker_compatible_history",
+          "owner_relation": "asking_owner",
+          "raw_sha256": "3ff414190f8e2acf730fe0e8483bbb94737a1bb10740ad5ea43824284ae3ee25",
+          "snapshot_sha256": "a2f72c0bc22c3f50d17d2ceb6a217dc173d46a2202d04ab445ab69f33cb31529",
+          "snapshot_id": "f56f6b2655a2cd9d53f9b289b2a0ab530099d53a7510960c5651329e0b13f3f6",
+          "coverage_id": "0836eb92d65e31681dbf4ad293115f7ba95092ec79df9825b1b413c8caf19339",
+          "coverage": 2,
+          "source_time": "2026-09-28T14:25:00+00:00",
+          "synthetic_capture_time": "2026-09-28T14:25:01+00:00",
+          "anchor_kind": "observation",
+          "storage_round_trip": true,
+          "preparation_read_activity": {
+            "policy": "research-capabilities-1",
+            "limit": 8,
+            "reserved": 2,
+            "started": 2,
+            "attempts": [
+              {
+                "id": 1,
+                "capability": "context",
+                "ticker": "QQQ",
+                "scope": {
+                  "horizon": "all",
+                  "selected_expiry": null
+                },
+                "reserved_at": "2026-09-26T23:36:19.911401+00:00",
+                "started_at": "2026-09-26T23:36:19.911401+00:00",
+                "ended_at": "2026-09-26T23:36:19.911401+00:00",
+                "outcome": "completed",
+                "worker_unresolved": false
+              },
+              {
+                "id": 2,
+                "capability": "structure",
+                "ticker": "QQQ",
+                "scope": {
+                  "horizon": "all",
+                  "selected_expiry": null
+                },
+                "reserved_at": "2026-09-26T23:36:19.911401+00:00",
+                "started_at": "2026-09-26T23:36:19.911401+00:00",
+                "ended_at": "2026-09-26T23:36:19.912899+00:00",
+                "outcome": "completed",
+                "worker_unresolved": false
+              }
+            ],
+            "denied": [],
+            "closed": true,
+            "entry_count_complete": true
+          },
+          "scope": "Pre-answer synthetic fixture preparation; not a research turn or its budget"
+        }
+      ],
+      "reopened_history": [
+        {
+          "ticker": "DIA",
+          "change": 2,
+          "note": "Compared with source observation at 2026-09-28T14:25:00+00:00",
+          "foreign_owner_refused": true
+        },
+        {
+          "ticker": "IWM",
+          "change": 2,
+          "note": "Compared with source observation at 2026-09-28T14:25:00+00:00",
+          "foreign_owner_refused": true
+        },
+        {
+          "ticker": "QQQ",
+          "change": 2,
+          "note": "Compared with source observation at 2026-09-28T14:25:00+00:00",
+          "foreign_owner_refused": true
+        }
+      ]
+    }
+  ],
+  "saved_anchors": 7,
+  "research_answers": 0,
+  "model_calls": 0,
+  "provider_calls": 0,
+  "scope": "Synthetic input preparation and real stored-anchor/history lookup, not research answer or production backup/crash proof."
+}

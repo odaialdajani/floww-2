@@ -1,0 +1,882 @@
+{
+  "status": "REAL_HTTP_AND_REAL_STORAGE_DEVELOPMENT_PASS",
+  "cases": [
+    {
+      "id": "development_transport_only",
+      "http_status": 200,
+      "errors": [],
+      "history_seed": [],
+      "measurement_origin": "After fixture/session setup, immediately before actual ask request",
+      "first_browser_display": "unmeasured; HTTP progress receipt is not paint",
+      "model_authorization": "Supplied by caller; this helper grants none",
+      "saved_turn": {
+        "turn_id": "af547b69-664b-43a2-b6a9-fc1472edf714",
+        "spec": {
+          "question": "What is the spot price of $SPY?",
+          "tickers": [
+            "SPY"
+          ],
+          "ticker": "SPY",
+          "horizon": "all",
+          "screen": {
+            "ticker": "SPY",
+            "page": "heatseeker",
+            "horizon": "all"
+          },
+          "context_conflict": false,
+          "question_scope": null,
+          "price_only": true
+        },
+        "ticker": "SPY",
+        "question": "What is the spot price of $SPY?",
+        "horizon": "all",
+        "status": "completed",
+        "created_at": "2026-09-26T23:40:35.607000+00:00",
+        "updated_at": "2026-09-26T23:40:35.733000+00:00",
+        "version": 6,
+        "events": [
+          {
+            "id": 1,
+            "type": "progress",
+            "message": "Reading available market observations",
+            "recorded_at": "2026-09-26T23:40:35.610126+00:00"
+          },
+          {
+            "id": 2,
+            "type": "progress",
+            "message": "Checking SPY coverage",
+            "recorded_at": "2026-09-26T23:40:35.612140+00:00"
+          },
+          {
+            "id": 3,
+            "type": "done",
+            "status": "completed",
+            "recorded_at": "2026-09-26T23:40:35.733108+00:00"
+          }
+        ],
+        "saved": true,
+        "read_activity": {
+          "policy": "research-capabilities-1",
+          "limit": 8,
+          "reserved": 1,
+          "started": 1,
+          "attempts": [
+            {
+              "id": 1,
+              "capability": "context",
+              "ticker": "SPY",
+              "scope": {
+                "horizon": "all",
+                "selected_expiry": null
+              },
+              "reserved_at": "2026-09-26T23:40:35.612140+00:00",
+              "started_at": "2026-09-26T23:40:35.613977+00:00",
+              "ended_at": "2026-09-26T23:40:35.613977+00:00",
+              "outcome": "completed",
+              "worker_unresolved": false
+            }
+          ],
+          "denied": [],
+          "closed": true,
+          "entry_count_complete": true
+        },
+        "answer": {
+          "summary": "SPY cached underlying price: 123.45 USD (ok; observed 2026-09-28T14:29:50+00:00).",
+          "sections": [
+            {
+              "name": "Structure",
+              "status": "available",
+              "entries": [
+                {
+                  "ticker": "SPY",
+                  "horizon": "all",
+                  "window": {
+                    "requested": "all",
+                    "start": null,
+                    "end": null,
+                    "session_state": "open",
+                    "is_session": true,
+                    "session_open": "2026-09-28T13:30:00+00:00",
+                    "session_close": "2026-09-28T20:00:00+00:00",
+                    "timezone": "America/New_York",
+                    "calendar": "XNYS",
+                    "calendar_version": "exchange-calendars-4.13.2"
+                  },
+                  "status": "available",
+                  "text": "SPY \u00b7 all: Underlying price: 123.5 USD (ok; observed 2026-09-28T14:29:50+00:00; scope all)",
+                  "source_gaps": [],
+                  "segments": [
+                    {
+                      "type": "fact_reference",
+                      "fact_id": "ev1b8f2f3b9293d8b32ab24f63843b2e13bcbd2dcafc50cb57c7195186f3e19acb",
+                      "ticker": "SPY",
+                      "horizon": "all"
+                    }
+                  ],
+                  "fact_ids": [
+                    "ev1b8f2f3b9293d8b32ab24f63843b2e13bcbd2dcafc50cb57c7195186f3e19acb"
+                  ],
+                  "claim_status": "non-gradeable"
+                }
+              ],
+              "text": "SPY \u00b7 all: Underlying price: 123.5 USD (ok; observed 2026-09-28T14:29:50+00:00; scope all)",
+              "segments": [
+                {
+                  "type": "fact_reference",
+                  "fact_id": "ev1b8f2f3b9293d8b32ab24f63843b2e13bcbd2dcafc50cb57c7195186f3e19acb",
+                  "ticker": "SPY",
+                  "horizon": "all"
+                }
+              ],
+              "fact_ids": [
+                "ev1b8f2f3b9293d8b32ab24f63843b2e13bcbd2dcafc50cb57c7195186f3e19acb"
+              ],
+              "claim_status": "non-gradeable"
+            }
+          ],
+          "facts": [
+            {
+              "metric": "Underlying price",
+              "value": 123.45,
+              "unit": "USD",
+              "ticker": "SPY",
+              "source": "SYNTHETIC_CONTRACT_TEST",
+              "snapshot_id": "3eb5e37ebcbcd585b9e663ee5053dcf2248ddee81676ea27b542c5fbcc9ae357",
+              "event_time": "2026-09-28T14:29:50+00:00",
+              "received_at": "2026-09-28T14:29:51+00:00",
+              "horizon": "all",
+              "contract": null,
+              "status": "ok",
+              "reason": null,
+              "version": "research-1",
+              "parents": [],
+              "id": "ev1b8f2f3b9293d8b32ab24f63843b2e13bcbd2dcafc50cb57c7195186f3e19acb"
+            }
+          ],
+          "gaps": [],
+          "mode": "deterministic",
+          "model_status": "Not requested: factual lookup",
+          "claim_status": "non-gradeable",
+          "claim_reason": "Descriptive research has no testable prediction",
+          "snapshots": [
+            {
+              "snapshot_id": "3eb5e37ebcbcd585b9e663ee5053dcf2248ddee81676ea27b542c5fbcc9ae357",
+              "ticker": "SPY",
+              "horizon": "all",
+              "window": {
+                "requested": "all",
+                "start": null,
+                "end": null,
+                "session_state": "open",
+                "is_session": true,
+                "session_open": "2026-09-28T13:30:00+00:00",
+                "session_close": "2026-09-28T20:00:00+00:00",
+                "timezone": "America/New_York",
+                "calendar": "XNYS",
+                "calendar_version": "exchange-calendars-4.13.2"
+              },
+              "facts": [
+                {
+                  "metric": "Underlying price",
+                  "value": 123.45,
+                  "unit": "USD",
+                  "ticker": "SPY",
+                  "source": "SYNTHETIC_CONTRACT_TEST",
+                  "snapshot_id": "3eb5e37ebcbcd585b9e663ee5053dcf2248ddee81676ea27b542c5fbcc9ae357",
+                  "event_time": "2026-09-28T14:29:50+00:00",
+                  "received_at": "2026-09-28T14:29:51+00:00",
+                  "horizon": "all",
+                  "contract": null,
+                  "status": "ok",
+                  "reason": null,
+                  "version": "research-1",
+                  "parents": [],
+                  "id": "ev1b8f2f3b9293d8b32ab24f63843b2e13bcbd2dcafc50cb57c7195186f3e19acb"
+                }
+              ],
+              "gaps": [],
+              "alerts_status": "not_requested",
+              "flow": [],
+              "observed_at": "2026-09-28T14:29:50+00:00",
+              "captured_at": "2026-09-28T14:30:00+00:00",
+              "anchor_kind": "observation",
+              "coverage": 2,
+              "agreement": {
+                "dimensions": {
+                  "flow": {
+                    "value": null,
+                    "contribution": null,
+                    "weight": 0.25,
+                    "inputs_status": "unavailable"
+                  },
+                  "structure": {
+                    "value": null,
+                    "contribution": null,
+                    "weight": 0.25,
+                    "inputs_status": "unavailable"
+                  },
+                  "microstructure": {
+                    "value": null,
+                    "contribution": null,
+                    "weight": 0.15,
+                    "inputs_status": "unavailable"
+                  },
+                  "ml": {
+                    "value": null,
+                    "contribution": null,
+                    "weight": 0.1,
+                    "inputs_status": "unavailable"
+                  },
+                  "vol": {
+                    "value": null,
+                    "contribution": null,
+                    "weight": 0.1,
+                    "inputs_status": "unavailable"
+                  },
+                  "time_delta": {
+                    "value": null,
+                    "contribution": null,
+                    "weight": 0.15,
+                    "inputs_status": "unavailable"
+                  }
+                },
+                "total": null,
+                "weights_version": "v1",
+                "coverage_weight": 0.0,
+                "missing_input_policy": "All declared dimensions required for a directional conclusion",
+                "direction": "insufficient_evidence"
+              },
+              "coverage_id": "0836eb92d65e31681dbf4ad293115f7ba95092ec79df9825b1b413c8caf19339"
+            }
+          ],
+          "context": {
+            "ticker": "SPY",
+            "page": "heatseeker",
+            "horizon": "all"
+          },
+          "requested_tickers": [
+            "SPY"
+          ]
+        },
+        "claim_seed": null,
+        "error": null,
+        "projection_pending": false
+      },
+      "saved_reopen_identical": true,
+      "private_history_present": true,
+      "other_owner_status": 404,
+      "read_metrics": {
+        "status": "measured",
+        "reserved": 1,
+        "started": 1,
+        "denied": 0,
+        "entry_count_complete": true,
+        "unresolved": 0,
+        "policy": "research-capabilities-1",
+        "limit": 8
+      },
+      "saved_progress": {
+        "first_progress_recorded_s": 0.003126,
+        "clock": "server wall clock; turn admission to pre-write timestamp of first saved progress event",
+        "limitation": "Not storage acknowledgment, event receipt, DOM visibility, or first paint"
+      },
+      "owned_turn_count": 1,
+      "trace": {
+        "version": 1,
+        "model_invocations": 0,
+        "model_invocations_lower_bound": 0,
+        "model_entry_count_complete": true,
+        "measurement_complete": true,
+        "measurement_failed": false,
+        "count_interpretation": "Saved counters are lower bounds until measurement_complete is true",
+        "model_outcomes": [],
+        "managed_turn_start_attempts": 0,
+        "managed_turn_start_pipe_writes": 0,
+        "managed_turn_start_acknowledgments": 0,
+        "timings_s": {
+          "request_started": 2.7600000976235606e-05,
+          "admission_received": 0.004458400000658003,
+          "first_stream_progress_received": 0.008880400000634836,
+          "terminal_stream_received": 0.6575860000011744,
+          "answer_lookup_started": 0.6588219000004756,
+          "saved_answer_received": 0.664592500001163,
+          "verification_finished": 0.6842145999999047
+        },
+        "upstream_model_requests": null,
+        "actual_cost_usd": null,
+        "first_browser_display_s": null,
+        "timing_origin": "evaluation case start; client monotonic clock",
+        "clock_resolution_s": 1e-07,
+        "model_count_scope": "App model method entries, managed turn attempts, completed pipe writes and acknowledgments are distinct"
+      },
+      "alert_query_receipts": [],
+      "alert_population": [],
+      "read_entry_evidence": {
+        "snapshot_entries": [
+          {
+            "ticker": "SPY"
+          }
+        ],
+        "source_callbacks": [
+          {
+            "kind": "context",
+            "ticker": "SPY"
+          }
+        ],
+        "scope": "Actual snapshot/source callback entries; calculation entries remain in the saved capability ledger"
+      }
+    },
+    {
+      "id": "development_history_only",
+      "http_status": 200,
+      "errors": [],
+      "history_seed": [
+        {
+          "ticker": "SPY",
+          "variant": "matching_coverage",
+          "owner_relation": "asking_owner",
+          "raw_sha256": "e5afe1722aaa51a04e7e3d70db64f39a2960bde2599545471fff3044df51e627",
+          "snapshot_sha256": "a772bfe44f82b2756e6363688e913b32d60ba3ca4df258270efa92955bbd7d38",
+          "snapshot_id": "dab27080bede9e55f1a67eec47943724b4b0d452034f4e5e62f216be814f4618",
+          "coverage_id": "0836eb92d65e31681dbf4ad293115f7ba95092ec79df9825b1b413c8caf19339",
+          "coverage": 2,
+          "source_time": "2026-09-28T14:25:00+00:00",
+          "synthetic_capture_time": "2026-09-28T14:25:01+00:00",
+          "anchor_kind": "observation",
+          "storage_round_trip": true,
+          "preparation_read_activity": {
+            "policy": "research-capabilities-1",
+            "limit": 8,
+            "reserved": 1,
+            "started": 1,
+            "attempts": [
+              {
+                "id": 1,
+                "capability": "context",
+                "ticker": "SPY",
+                "scope": {
+                  "horizon": "all",
+                  "selected_expiry": null
+                },
+                "reserved_at": "2026-09-26T23:40:36.512289+00:00",
+                "started_at": "2026-09-26T23:40:36.512289+00:00",
+                "ended_at": "2026-09-26T23:40:36.512289+00:00",
+                "outcome": "completed",
+                "worker_unresolved": false
+              }
+            ],
+            "denied": [],
+            "closed": true,
+            "entry_count_complete": true
+          },
+          "scope": "Pre-answer synthetic fixture preparation; not a research turn or its budget"
+        }
+      ],
+      "measurement_origin": "After fixture/session setup, immediately before actual ask request",
+      "first_browser_display": "unmeasured; HTTP progress receipt is not paint",
+      "model_authorization": "Supplied by caller; this helper grants none",
+      "saved_turn": {
+        "turn_id": "2b86c2c0-4c08-4249-b6ef-73d61f8f3023",
+        "spec": {
+          "question": "Since my prior $SPY observation, how much did its saved price change?",
+          "tickers": [
+            "SPY"
+          ],
+          "ticker": "SPY",
+          "horizon": "all",
+          "screen": {
+            "ticker": "SPY",
+            "page": "heatseeker",
+            "horizon": "all"
+          },
+          "context_conflict": false,
+          "question_scope": null,
+          "price_only": false
+        },
+        "ticker": "SPY",
+        "question": "Since my prior $SPY observation, how much did its saved price change?",
+        "horizon": "all",
+        "status": "completed",
+        "created_at": "2026-09-26T23:40:36.515000+00:00",
+        "updated_at": "2026-09-26T23:40:36.526000+00:00",
+        "version": 8,
+        "events": [
+          {
+            "id": 1,
+            "type": "progress",
+            "message": "Reading available market observations",
+            "recorded_at": "2026-09-26T23:40:36.517322+00:00"
+          },
+          {
+            "id": 2,
+            "type": "progress",
+            "message": "Checking SPY coverage",
+            "recorded_at": "2026-09-26T23:40:36.518834+00:00"
+          },
+          {
+            "id": 3,
+            "type": "done",
+            "status": "completed",
+            "recorded_at": "2026-09-26T23:40:36.526469+00:00"
+          }
+        ],
+        "saved": true,
+        "read_activity": {
+          "policy": "research-capabilities-1",
+          "limit": 8,
+          "reserved": 2,
+          "started": 2,
+          "attempts": [
+            {
+              "id": 1,
+              "capability": "context",
+              "ticker": "SPY",
+              "scope": {
+                "horizon": "all",
+                "selected_expiry": null
+              },
+              "reserved_at": "2026-09-26T23:40:36.519872+00:00",
+              "started_at": "2026-09-26T23:40:36.520376+00:00",
+              "ended_at": "2026-09-26T23:40:36.520376+00:00",
+              "outcome": "completed",
+              "worker_unresolved": false
+            },
+            {
+              "id": 2,
+              "capability": "history",
+              "ticker": "SPY",
+              "scope": {
+                "snapshot_id": "6ad07d8be830cbac4ebcd7f887f17b81819790ee2b95553bcc307144ff37e490",
+                "closing_only": false,
+                "previous_session": true
+              },
+              "reserved_at": "2026-09-26T23:40:36.523425+00:00",
+              "started_at": "2026-09-26T23:40:36.524483+00:00",
+              "ended_at": "2026-09-26T23:40:36.524986+00:00",
+              "outcome": "completed",
+              "worker_unresolved": false
+            }
+          ],
+          "denied": [],
+          "closed": true,
+          "entry_count_complete": true
+        },
+        "answer": {
+          "summary": "Available readings are shown below. Exposure estimates do not establish trade direction.",
+          "sections": [
+            {
+              "name": "What changed",
+              "status": "available",
+              "entries": [
+                {
+                  "ticker": "SPY",
+                  "horizon": "all",
+                  "window": {},
+                  "text": "SPY \u00b7 all: Compared with source observation at 2026-09-28T14:25:00+00:00. Price change: +4.45 USD.",
+                  "status": "available",
+                  "fact_ids": [
+                    "ev7d619c44519b34143730846f97b982022b4395d4d9403695e821e0831b901820",
+                    "ev6418d9c51df89b72b31e411809625d5a9629a76b34a64a5e1f3727ab67a46bf3"
+                  ],
+                  "segments": [
+                    {
+                      "type": "fact_reference",
+                      "fact_id": "ev7d619c44519b34143730846f97b982022b4395d4d9403695e821e0831b901820",
+                      "ticker": "SPY",
+                      "horizon": "all"
+                    },
+                    {
+                      "type": "fact_reference",
+                      "fact_id": "ev6418d9c51df89b72b31e411809625d5a9629a76b34a64a5e1f3727ab67a46bf3",
+                      "ticker": "SPY",
+                      "horizon": "all"
+                    },
+                    {
+                      "type": "text",
+                      "text": "Compared with source observation at 2026-09-28T14:25:00+00:00. Price change: +4.45 USD.",
+                      "claim_status": "non-gradeable"
+                    }
+                  ],
+                  "claim_status": "non-gradeable"
+                }
+              ],
+              "text": "SPY \u00b7 all: Compared with source observation at 2026-09-28T14:25:00+00:00. Price change: +4.45 USD.",
+              "segments": [
+                {
+                  "type": "fact_reference",
+                  "fact_id": "ev7d619c44519b34143730846f97b982022b4395d4d9403695e821e0831b901820",
+                  "ticker": "SPY",
+                  "horizon": "all"
+                },
+                {
+                  "type": "fact_reference",
+                  "fact_id": "ev6418d9c51df89b72b31e411809625d5a9629a76b34a64a5e1f3727ab67a46bf3",
+                  "ticker": "SPY",
+                  "horizon": "all"
+                },
+                {
+                  "type": "text",
+                  "text": "Compared with source observation at 2026-09-28T14:25:00+00:00. Price change: +4.45 USD.",
+                  "claim_status": "non-gradeable"
+                }
+              ],
+              "fact_ids": [
+                "ev7d619c44519b34143730846f97b982022b4395d4d9403695e821e0831b901820",
+                "ev6418d9c51df89b72b31e411809625d5a9629a76b34a64a5e1f3727ab67a46bf3"
+              ],
+              "claim_status": "non-gradeable"
+            }
+          ],
+          "facts": [
+            {
+              "metric": "Underlying price",
+              "value": 123.45,
+              "unit": "USD",
+              "ticker": "SPY",
+              "source": "SYNTHETIC_CONTRACT_TEST",
+              "snapshot_id": "6ad07d8be830cbac4ebcd7f887f17b81819790ee2b95553bcc307144ff37e490",
+              "event_time": "2026-09-28T14:29:50+00:00",
+              "received_at": "2026-09-28T14:29:51+00:00",
+              "horizon": "all",
+              "contract": null,
+              "status": "ok",
+              "reason": null,
+              "version": "research-1",
+              "parents": [],
+              "id": "ev7dcad0a9a47f0b185741645c42e6b35d6210d1806a5d09298cec361cc1ba42ba"
+            },
+            {
+              "metric": "Available contracts",
+              "value": 2,
+              "unit": "contracts",
+              "ticker": "SPY",
+              "source": "SYNTHETIC_CONTRACT_TEST",
+              "snapshot_id": "6ad07d8be830cbac4ebcd7f887f17b81819790ee2b95553bcc307144ff37e490",
+              "event_time": "2026-09-28T14:29:50+00:00",
+              "received_at": "2026-09-28T14:29:51+00:00",
+              "horizon": "all",
+              "contract": null,
+              "status": "ok",
+              "reason": null,
+              "version": "research-1",
+              "parents": [],
+              "id": "ev0df3fa5d859a253ffd5da3726cded9b994986354c576bb1379d1d548b5e690ab"
+            },
+            {
+              "metric": "Available expiry dates",
+              "value": [
+                "2026-10-02"
+              ],
+              "unit": "dates",
+              "ticker": "SPY",
+              "source": "SYNTHETIC_CONTRACT_TEST",
+              "snapshot_id": "6ad07d8be830cbac4ebcd7f887f17b81819790ee2b95553bcc307144ff37e490",
+              "event_time": "2026-09-28T14:29:50+00:00",
+              "received_at": "2026-09-28T14:29:51+00:00",
+              "horizon": "all",
+              "contract": null,
+              "status": "ok",
+              "reason": null,
+              "version": "research-1",
+              "parents": [],
+              "id": "ev40b5e48525d85b7b721175d0287c8cbee2a1ab99543d4076499077990f02c77c"
+            },
+            {
+              "metric": "Underlying price",
+              "value": 119,
+              "unit": "USD",
+              "ticker": "SPY",
+              "source": "SYNTHETIC_CONTRACT_TEST",
+              "snapshot_id": "dab27080bede9e55f1a67eec47943724b4b0d452034f4e5e62f216be814f4618",
+              "event_time": "2026-09-28T14:25:00+00:00",
+              "received_at": "2026-09-28T14:25:01+00:00",
+              "horizon": "all",
+              "contract": null,
+              "status": "ok",
+              "reason": null,
+              "version": "research-1",
+              "parents": [],
+              "id": "ev7d619c44519b34143730846f97b982022b4395d4d9403695e821e0831b901820"
+            },
+            {
+              "metric": "Price change since saved observation",
+              "value": 4.450000000000003,
+              "unit": "USD",
+              "ticker": "SPY",
+              "source": "compatible saved observations",
+              "snapshot_id": "6ad07d8be830cbac4ebcd7f887f17b81819790ee2b95553bcc307144ff37e490",
+              "event_time": "2026-09-28T14:29:50+00:00",
+              "received_at": null,
+              "horizon": "all",
+              "contract": null,
+              "status": "ok",
+              "reason": null,
+              "version": "research-1",
+              "parents": [
+                "ev7d619c44519b34143730846f97b982022b4395d4d9403695e821e0831b901820",
+                "ev7dcad0a9a47f0b185741645c42e6b35d6210d1806a5d09298cec361cc1ba42ba"
+              ],
+              "id": "ev6418d9c51df89b72b31e411809625d5a9629a76b34a64a5e1f3727ab67a46bf3"
+            }
+          ],
+          "gaps": [],
+          "mode": "deterministic",
+          "model_status": "Not requested: paid model policy is not yet verified",
+          "claim_status": "non-gradeable",
+          "claim_reason": "Descriptive research has no testable prediction",
+          "snapshots": [
+            {
+              "snapshot_id": "6ad07d8be830cbac4ebcd7f887f17b81819790ee2b95553bcc307144ff37e490",
+              "ticker": "SPY",
+              "horizon": "all",
+              "window": {
+                "requested": "all",
+                "start": null,
+                "end": null,
+                "session_state": "open",
+                "is_session": true,
+                "session_open": "2026-09-28T13:30:00+00:00",
+                "session_close": "2026-09-28T20:00:00+00:00",
+                "timezone": "America/New_York",
+                "calendar": "XNYS",
+                "calendar_version": "exchange-calendars-4.13.2"
+              },
+              "facts": [
+                {
+                  "metric": "Underlying price",
+                  "value": 123.45,
+                  "unit": "USD",
+                  "ticker": "SPY",
+                  "source": "SYNTHETIC_CONTRACT_TEST",
+                  "snapshot_id": "6ad07d8be830cbac4ebcd7f887f17b81819790ee2b95553bcc307144ff37e490",
+                  "event_time": "2026-09-28T14:29:50+00:00",
+                  "received_at": "2026-09-28T14:29:51+00:00",
+                  "horizon": "all",
+                  "contract": null,
+                  "status": "ok",
+                  "reason": null,
+                  "version": "research-1",
+                  "parents": [],
+                  "id": "ev7dcad0a9a47f0b185741645c42e6b35d6210d1806a5d09298cec361cc1ba42ba"
+                },
+                {
+                  "metric": "Available contracts",
+                  "value": 2,
+                  "unit": "contracts",
+                  "ticker": "SPY",
+                  "source": "SYNTHETIC_CONTRACT_TEST",
+                  "snapshot_id": "6ad07d8be830cbac4ebcd7f887f17b81819790ee2b95553bcc307144ff37e490",
+                  "event_time": "2026-09-28T14:29:50+00:00",
+                  "received_at": "2026-09-28T14:29:51+00:00",
+                  "horizon": "all",
+                  "contract": null,
+                  "status": "ok",
+                  "reason": null,
+                  "version": "research-1",
+                  "parents": [],
+                  "id": "ev0df3fa5d859a253ffd5da3726cded9b994986354c576bb1379d1d548b5e690ab"
+                },
+                {
+                  "metric": "Available expiry dates",
+                  "value": [
+                    "2026-10-02"
+                  ],
+                  "unit": "dates",
+                  "ticker": "SPY",
+                  "source": "SYNTHETIC_CONTRACT_TEST",
+                  "snapshot_id": "6ad07d8be830cbac4ebcd7f887f17b81819790ee2b95553bcc307144ff37e490",
+                  "event_time": "2026-09-28T14:29:50+00:00",
+                  "received_at": "2026-09-28T14:29:51+00:00",
+                  "horizon": "all",
+                  "contract": null,
+                  "status": "ok",
+                  "reason": null,
+                  "version": "research-1",
+                  "parents": [],
+                  "id": "ev40b5e48525d85b7b721175d0287c8cbee2a1ab99543d4076499077990f02c77c"
+                }
+              ],
+              "gaps": [],
+              "alerts_status": "not_requested",
+              "flow": [],
+              "observed_at": "2026-09-28T14:29:50+00:00",
+              "captured_at": "2026-09-28T14:30:00+00:00",
+              "anchor_kind": "observation",
+              "coverage": 2,
+              "agreement": {
+                "dimensions": {
+                  "flow": {
+                    "value": null,
+                    "contribution": null,
+                    "weight": 0.25,
+                    "inputs_status": "unavailable"
+                  },
+                  "structure": {
+                    "value": null,
+                    "contribution": null,
+                    "weight": 0.25,
+                    "inputs_status": "unavailable"
+                  },
+                  "microstructure": {
+                    "value": null,
+                    "contribution": null,
+                    "weight": 0.15,
+                    "inputs_status": "unavailable"
+                  },
+                  "ml": {
+                    "value": null,
+                    "contribution": null,
+                    "weight": 0.1,
+                    "inputs_status": "unavailable"
+                  },
+                  "vol": {
+                    "value": null,
+                    "contribution": null,
+                    "weight": 0.1,
+                    "inputs_status": "unavailable"
+                  },
+                  "time_delta": {
+                    "value": null,
+                    "contribution": null,
+                    "weight": 0.15,
+                    "inputs_status": "unavailable"
+                  }
+                },
+                "total": null,
+                "weights_version": "v1",
+                "coverage_weight": 0.0,
+                "missing_input_policy": "All declared dimensions required for a directional conclusion",
+                "direction": "insufficient_evidence"
+              },
+              "coverage_id": "0836eb92d65e31681dbf4ad293115f7ba95092ec79df9825b1b413c8caf19339"
+            }
+          ],
+          "context": {
+            "ticker": "SPY",
+            "page": "heatseeker",
+            "horizon": "all"
+          },
+          "requested_tickers": [
+            "SPY"
+          ],
+          "history_closing_only": false,
+          "history_previous_session": true
+        },
+        "claim_seed": null,
+        "error": null,
+        "projection_pending": false
+      },
+      "saved_reopen_identical": true,
+      "private_history_present": true,
+      "other_owner_status": 404,
+      "read_metrics": {
+        "status": "measured",
+        "reserved": 2,
+        "started": 2,
+        "denied": 0,
+        "entry_count_complete": true,
+        "unresolved": 0,
+        "policy": "research-capabilities-1",
+        "limit": 8
+      },
+      "saved_progress": {
+        "first_progress_recorded_s": 0.002322,
+        "clock": "server wall clock; turn admission to pre-write timestamp of first saved progress event",
+        "limitation": "Not storage acknowledgment, event receipt, DOM visibility, or first paint"
+      },
+      "owned_turn_count": 1,
+      "trace": {
+        "version": 1,
+        "model_invocations": 0,
+        "model_invocations_lower_bound": 0,
+        "model_entry_count_complete": true,
+        "measurement_complete": true,
+        "measurement_failed": false,
+        "count_interpretation": "Saved counters are lower bounds until measurement_complete is true",
+        "model_outcomes": [],
+        "managed_turn_start_attempts": 0,
+        "managed_turn_start_pipe_writes": 0,
+        "managed_turn_start_acknowledgments": 0,
+        "timings_s": {
+          "request_started": 1.8100001398124732e-05,
+          "admission_received": 0.0031635000013920944,
+          "first_stream_progress_received": 0.007105100001354003,
+          "terminal_stream_received": 0.5206556000011915,
+          "answer_lookup_started": 0.5212429000002885,
+          "saved_answer_received": 0.5257725000010396,
+          "verification_finished": 0.5450145000013435
+        },
+        "upstream_model_requests": null,
+        "actual_cost_usd": null,
+        "first_browser_display_s": null,
+        "timing_origin": "evaluation case start; client monotonic clock",
+        "clock_resolution_s": 1e-07,
+        "model_count_scope": "App model method entries, managed turn attempts, completed pipe writes and acknowledgments are distinct"
+      },
+      "alert_query_receipts": [],
+      "alert_population": [],
+      "read_entry_evidence": {
+        "snapshot_entries": [
+          {
+            "ticker": "SPY"
+          }
+        ],
+        "source_callbacks": [
+          {
+            "kind": "context",
+            "ticker": "SPY"
+          }
+        ],
+        "scope": "Actual snapshot/source callback entries; calculation entries remain in the saved capability ledger"
+      }
+    },
+    {
+      "id": "development_refusal_only",
+      "http_status": 422,
+      "errors": [],
+      "history_seed": [],
+      "measurement_origin": "After fixture/session setup, immediately before actual ask request",
+      "first_browser_display": "unmeasured; HTTP progress receipt is not paint",
+      "model_authorization": "Supplied by caller; this helper grants none",
+      "refusal": {
+        "detail": "Research for this display is unavailable; return to the live raw chart before asking"
+      },
+      "owned_turn_count": 0,
+      "trace": {
+        "version": 1,
+        "model_invocations": 0,
+        "model_invocations_lower_bound": 0,
+        "model_entry_count_complete": true,
+        "measurement_complete": true,
+        "measurement_failed": false,
+        "count_interpretation": "Saved counters are lower bounds until measurement_complete is true",
+        "model_outcomes": [],
+        "managed_turn_start_attempts": 0,
+        "managed_turn_start_pipe_writes": 0,
+        "managed_turn_start_acknowledgments": 0,
+        "timings_s": {
+          "request_started": 1.9600000086938962e-05,
+          "admission_received": 0.0018916999997600215,
+          "verification_finished": 0.0024764999998296844
+        },
+        "upstream_model_requests": null,
+        "actual_cost_usd": null,
+        "first_browser_display_s": null,
+        "timing_origin": "evaluation case start; client monotonic clock",
+        "clock_resolution_s": 1e-07,
+        "model_count_scope": "App model method entries, managed turn attempts, completed pipe writes and acknowledgments are distinct"
+      },
+      "alert_query_receipts": [],
+      "alert_population": [],
+      "read_entry_evidence": {
+        "snapshot_entries": [],
+        "source_callbacks": [],
+        "scope": "Actual snapshot/source callback entries; calculation entries remain in the saved capability ledger"
+      }
+    }
+  ],
+  "model_calls": 0,
+  "provider_calls": 0,
+  "fresh_comparison_cases_run": 0,
+  "scope": "Different development-only questions/operands; production research routes, real local TCP and isolated Mongo storage. Not frozen32case answers, browser paint or model comparison."
+}
