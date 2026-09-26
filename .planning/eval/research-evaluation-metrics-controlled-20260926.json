@@ -1,0 +1,53 @@
+{
+  "status": "CONTROLLED_TCP_MEASUREMENT_PASSED",
+  "trace": {
+    "version": 1,
+    "model_invocations": 0,
+    "model_invocations_lower_bound": 0,
+    "model_entry_count_complete": true,
+    "measurement_complete": true,
+    "measurement_failed": false,
+    "count_interpretation": "Saved counters are lower bounds until measurement_complete is true",
+    "model_outcomes": [],
+    "managed_turn_start_attempts": 0,
+    "managed_turn_start_pipe_writes": 0,
+    "managed_turn_start_acknowledgments": 0,
+    "timings_s": {
+      "request_started": 1.8999999156221747e-06,
+      "admission_received": 0.0038432000001193956,
+      "first_stream_progress_received": 0.005550099998799851,
+      "terminal_stream_received": 0.5204788999999437,
+      "answer_lookup_started": 0.5211117999988346,
+      "saved_answer_received": 0.5252940999998827,
+      "verification_finished": 0.5274872999998479
+    },
+    "upstream_model_requests": null,
+    "actual_cost_usd": null,
+    "first_browser_display_s": null,
+    "timing_origin": "evaluation case start; client monotonic clock",
+    "clock_resolution_s": 1e-07,
+    "model_count_scope": "App model method entries, managed turn attempts, completed pipe writes and acknowledgments are distinct"
+  },
+  "reads": {
+    "status": "measured",
+    "reserved": 1,
+    "started": 1,
+    "denied": 0,
+    "entry_count_complete": true,
+    "unresolved": 0,
+    "policy": "research-capabilities-1",
+    "limit": 8
+  },
+  "saved_progress": {
+    "first_progress_recorded_s": 0.000734,
+    "clock": "server wall clock; turn admission to pre-write timestamp of first saved progress event",
+    "limitation": "Not storage acknowledgment, event receipt, DOM visibility, or first paint"
+  },
+  "blocked_external_attempts": 0,
+  "fixture": "Synthetic delayed cached price; in-memory owned research store; actual production research routes",
+  "limitations": [
+    "No live model/provider request",
+    "Client event receipt is not browser display or first paint",
+    "Not fresh held-out acceptance"
+  ]
+}
