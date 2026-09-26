@@ -73,8 +73,9 @@ def explanation_menu(facts):
         implied = [f for f in items if "implied" in f["metric"].lower() and f.get("value") is not None]
         realized = [f for f in items if "realized" in f["metric"].lower() and f.get("value") is not None]
         if not implied or not realized:
-            absent = "implied and realized volatility inputs" if not implied and not realized else "implied volatility inputs" if not implied else "realized volatility inputs"
+            absent = "implied and realized volatility estimates" if not implied and not realized else "implied volatility estimates" if not implied else "realized volatility estimates"
             add("missing_volatility", f"The supplied evidence lacks usable {absent}. "
+                "Some raw inputs may be present; the listed source gaps explain what remains unverified. "
                 "An implied-versus-realized comparison cannot be calculated from price, gamma or alerts alone.")
         if not any(f["metric"] == "Price change since saved observation" for f in items):
             add("missing_change", "No validated price change from an earlier compatible observation is supplied. "

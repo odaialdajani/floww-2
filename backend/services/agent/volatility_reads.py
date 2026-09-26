@@ -20,7 +20,19 @@ def _implied(contracts, existing, context, now):
     by_name = {f["metric"]: f for f in existing}
     spot = by_name.get("Underlying price")
     coverage = by_name.get("Available contracts")
-    missing = "Implied move is unavailable: verified IV, price and an explicit product expiry instant are required"
+    positive_iv = sum(finite(c.get("iv")) and c["iv"] > 0 for c in contracts)
+    future_expiries = sum((expiry := exact_expiry(c)) is not None and expiry > now for c in contracts)
+    price_input = (f"saved underlying price is present ({spot.get('status', 'unknown')})"
+                   if spot and finite(spot.get("value")) and spot["value"] > 0
+                   else "usable saved underlying price is missing")
+    chain_time = instant((coverage or {}).get("event_time"))
+    timing = f"chain observation time is {chain_time}" if chain_time else "chain observation time is unknown"
+    missing = ("Implied move is unavailable: " + price_input
+               + f"; positive IV on {positive_iv} of {len(contracts)} saved contracts"
+               + f"; usable explicit future expiry time on {future_expiries} of {len(contracts)}; {timing}. "
+               + "These are separate input checks, not proof of a matched pair. A current verified price and "
+               + "one same-expiry at-the-money call and put need positive IV, aligned verified source times "
+               + "and an explicit product expiry instant. A calendar expiry date alone is insufficient.")
     if not spot or not coverage or any(p.get("status") != "ok" for p in (spot, coverage)):
         return [], [missing]
     if any(str(p.get("source") or "unknown") in {"unknown", "cached chain"} for p in (spot, coverage)):

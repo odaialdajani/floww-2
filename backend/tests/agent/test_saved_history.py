@@ -122,3 +122,46 @@ async def test_requested_previous_close_never_uses_an_older_close():
     await repo.save_anchor("alice", closing("10"))
     facts, note = await history_facts(repo, "alice", current, closing_only=True)
     assert facts[-1]["value"] == 5 and "2026-09-10" in note
+
+
+@pytest.mark.asyncio
+async def test_earlier_saved_question_displays_coverage_mismatch_without_a_price_change():
+    import asyncio
+    import copy
+
+    from services.agent.research import ResearchService
+
+    repo = AgentRepository(AsyncMongoMockClient().test)
+    await repo.initialize()
+    now = datetime(2026, 9, 11, 15, tzinfo=UTC)
+    raw = {"spot": 200, "source": "fixture", "event_time": "2026-09-11T14:59:00Z",
+           "contracts": [{"strike": 200, "type": "C", "gamma": .01, "open_interest": 10,
+                          "expiry": "2026-09-18"}]}
+    reads = ResearchReads(lambda *a: raw, lambda *a: None, lambda *a: [])
+    before = await reads.snapshot("DIA", "all", now=now)
+    await repo.save_anchor("alice", before)
+    raw["event_time"] = now.isoformat()
+    raw["contracts"].append({**raw["contracts"][0], "strike": 201})
+    after = await reads.snapshot("DIA", "all", now=now)
+
+    class Reads:
+        async def snapshot(self, *args, **kwargs):
+            return copy.deepcopy(after)
+
+    service = ResearchService(repo, Reads())
+    question = {"question": "Compare $DIA with my earlier saved reading; does the coverage match?",
+                "tickers": ["DIA"], "ticker": "DIA", "horizon": "all", "screen": {},
+                "context_conflict": False, "question_scope": None, "price_only": False}
+    import uuid
+    request_id = f"{int(datetime.now(UTC).timestamp() * 1000)}-{uuid.uuid4()}"
+    doc = await service.ask("alice", request_id, question)
+    await asyncio.gather(*list(service.tasks.values()))
+    saved = await repo.turns.find_one({"turn_id": doc["turn_id"]})
+    assert saved["status"] == "completed"
+    answer = saved["answer"]
+    section = next(s for s in answer["sections"] if s["name"] == "What changed")
+    assert "earlier saved coverage: 1 contracts; current saved coverage: 2 contracts" in section["text"]
+    assert any("different expiry or contract coverage" in g for g in answer["gaps"])
+    assert not any(f["metric"] == "Price change since saved observation" for f in answer["facts"])
+    assert (await history_facts(repo, "bob", after))[0] == []
+    assert "1 contracts" not in (await history_facts(repo, "bob", after))[1]

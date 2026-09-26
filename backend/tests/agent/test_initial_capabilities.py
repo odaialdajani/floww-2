@@ -326,3 +326,31 @@ async def test_older_iv_cannot_borrow_a_barely_fresh_chain_timestamp():
     assert "Implied move estimate" not in found
     assert found["Total model vanna exposure"]["status"] == "stale"
     assert found["Total model vanna exposure"]["event_time"] == observed
+
+
+@pytest.mark.asyncio
+async def test_unavailable_implied_move_distinguishes_present_inputs_from_missing_times():
+    raw = chain()
+    raw["event_time"] = None
+    raw["spot_event_time"] = (NOW - timedelta(hours=1)).isoformat()
+    for contract in raw["contracts"]:
+        contract.pop("expiry_instant")
+    snap = await snapshot(raw)
+    gap = next(g for g in snap["gaps"] if g.startswith("Implied move is unavailable"))
+    assert "saved underlying price is present (stale)" in gap
+    assert "positive IV on 2 of 2 saved contracts" in gap
+    assert "usable explicit future expiry time on 0 of 2" in gap
+    assert "chain observation time is unknown" in gap
+    assert "Implied move estimate" not in values(snap)
+
+
+@pytest.mark.asyncio
+async def test_unavailable_implied_move_does_not_claim_missing_iv_is_present():
+    raw = chain()
+    for contract in raw["contracts"]:
+        contract["iv"] = None
+    snap = await snapshot(raw)
+    gap = next(g for g in snap["gaps"] if g.startswith("Implied move is unavailable"))
+    assert "positive IV on 0 of 2 saved contracts" in gap
+    assert "usable explicit future expiry time on 2 of 2" in gap
+    assert "Implied move estimate" not in values(snap)

@@ -42,6 +42,7 @@ async def history_facts(repository, owner, current, *, closing_only=False, previ
     unavailable = "No earlier compatible source observation was saved"
     if closing_only:
         unavailable = f"No verified closing observation was saved for {close_time}"
+    coverage_note = None
     for previous in previous_snapshots:
         if closing_only and (
             previous.get("anchor_kind") != "close"
@@ -58,7 +59,13 @@ async def history_facts(repository, owner, current, *, closing_only=False, previ
         ):
             continue
         if previous.get("coverage_id") != current.get("coverage_id"):
-            unavailable = "Previous observation has different expiry or contract coverage"
+            if coverage_note is None:
+                coverage_note = "Previous observation has different expiry or contract coverage"
+                counts = [previous.get("coverage"), current.get("coverage")]
+                if all(isinstance(n, int) and not isinstance(n, bool) and n >= 0 for n in counts):
+                    coverage_note += (f"; earlier saved coverage: {counts[0]} contracts; "
+                                      f"current saved coverage: {counts[1]} contracts")
+                coverage_note += f". Earlier source observation: {price_time(previous)}; no price change was calculated."
             continue
         before = next((f for f in previous["facts"] if f["metric"] == "Underlying price"), None)
         after = next((f for f in current["facts"] if f["metric"] == "Underlying price"), None)
@@ -87,4 +94,4 @@ async def history_facts(repository, owner, current, *, closing_only=False, previ
             reason=after.get("reason"),
         )
         return [before, change], f"Compared with source observation at {price_time(previous)}"
-    return [], unavailable
+    return [], coverage_note or unavailable

@@ -119,7 +119,7 @@ class ResearchService:
                             await self.repository.watch_observations(owner, ticker, spec["horizon"], selected_expiry)
                     answer = deterministic_answer(snapshots, spec)
                     if re.search(
-                        r"\b(?:changed?|since|previous|prior|yesterday|closing|last close)\b",
+                        r"\b(?:changed?|since|earlier|previously|previous|prior|yesterday|closing|last close)\b",
                         spec["question"],
                         re.IGNORECASE,
                     ):
