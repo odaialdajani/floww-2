@@ -325,6 +325,11 @@ class TestTechnicalMath:
 # ---------------------------------------------------------------------------
 
 class TestChainCache:
+    @staticmethod
+    def _expiry(days=90):
+        from datetime import UTC, datetime, timedelta
+        return (datetime.now(UTC) + timedelta(days=days)).date().isoformat()
+
     @pytest.fixture(autouse=True)
     def _clean(self):
         import services.public_api_adapter as adapter
@@ -336,7 +341,7 @@ class TestChainCache:
         broker = MagicMock()
         broker.get_trading_account.return_value = MagicMock(account_id="TEST-ACCT")
         broker.get_option_expirations = AsyncMock(
-            return_value=expiries or ["2026-09-18", "2026-09-25"])
+            return_value=expiries or [self._expiry(), self._expiry(97)])
         # Match the requested symbol and expose real optional fields/properties;
         # unconstrained MagicMocks manufacture non-serializable quote values.
         async def quotes(symbols, account_id):
@@ -358,7 +363,7 @@ class TestChainCache:
             # with no parsed data is also None... so give it contracts via
             # parsed side effect below instead.
             broker.get_option_chain_parsed = AsyncMock(return_value={
-                "calls": [OptionContract(symbol="X", option_type="CALL", expiration="2026-09-18", strike=450,
+                "calls": [OptionContract(symbol="X", option_type="CALL", expiration=self._expiry(), strike=450,
                                     open_interest=10, iv=0.2, delta=0.5, gamma=0.01,
                                     theta=0, vega=0.1, bid=1.0, ask=1.2, volume=5)],
                 "puts": [],
@@ -388,7 +393,7 @@ class TestChainCache:
         import services.public_api_adapter as adapter
         broker = self._broker()
         broker.get_option_chain_parsed = AsyncMock(return_value={
-            "calls": [OptionContract(symbol="X", option_type="CALL", expiration="2026-09-18", strike=450,
+            "calls": [OptionContract(symbol="X", option_type="CALL", expiration=self._expiry(), strike=450,
                                 open_interest=10, iv=0.2, delta=0.5, gamma=0.01,
                                 theta=0, vega=0.1, bid=1.0, ask=1.2, volume=5)],
             "puts": [],

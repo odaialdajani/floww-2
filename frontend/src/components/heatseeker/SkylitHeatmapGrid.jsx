@@ -65,6 +65,9 @@ function SkylitHeatmapGrid({
   spot = null,
   ticker = "",
   viewMode = "gex",
+  // T04: metric overlay — raw | delta | activity. Same snapshot, same wall
+  // identity; walls stay raw-locked. VEX/Charm viewModes keep their grids.
+  metric = "raw",
   onCellClick,
   onStrikeClick,
   // Compact (default): tight rows for the in-frame view. "full": roomy
@@ -74,16 +77,54 @@ function SkylitHeatmapGrid({
   // the in-frame grid fits on screen instead of squeezing 100+ rows).
   // null = render every strike (expanded overlay).
   windowRows = null,
+  // F15: stable zero-anchor scale. `scale` null = legacy auto min/max
+  // (relative, labelled). `{min,max,locked:true}` = fixed comparison scale —
+  // unchanged values keep colors when an unrelated extreme moves.
+  scale = null,
+  // Reports the live auto min/max so a parent can freeze a locked scale.
+  onScaleReady,
 }) {
   const gridKey = GRID_BY_VIEW[viewMode] || "grid";
 
-  const g = data?.grid || null;
-  const expiries = useMemo(() => (g?.expiries ? [...g.expiries] : []), [g]);
+  // T04: metric overlay selects the per-cell surface from the SAME snapshot.
+  // Raw uses the main grid; delta/activity use payload metrics grids when
+  // present (same scope, no extra fetch). VEX/Charm views keep their own
+  // grids regardless of metric. Basis shown in the legend.
+  const useOverlay = metric !== "raw" && (viewMode === "gex" || viewMode === "skylit");
+  const overlay = useOverlay ? (data?.metrics?.grids || {})[metric] : null;
+  // R6-1: a missing metric surface is UNAVAILABLE — never raw fallback.
+  // overlay.grid present (even empty) renders that surface's cells; absent
+  // overlay (old records, unknown metric) renders an unavailable state.
+  const overlayMissing = useOverlay && !(overlay && overlay.grid);
+  const g = (!useOverlay || (overlay && overlay.grid)) ? ((overlay && overlay.grid ? overlay : data?.grid) || null) : null;
+  const overlayReason = overlayMissing ? (overlay?.reason || "metric unavailable in this snapshot") : null;
+  // R7-02: named VEX/Charm surfaces are explicit — an absent/empty surface
+  // renders unavailable with the backend reason, never blank-as-zero.
+  const namedSurface = !useOverlay && (viewMode === "vex" || viewMode === "charm") ? gridKey : null;
+  const namedCells = namedSurface ? ((data?.grid || {})[namedSurface] || {}) : null;
+  const surfaceMissing = !!namedSurface && !Object.keys(namedCells || {}).length;
+  const surfaceMeta = viewMode === "vex" ? (data?.grid?.vex_meta || null) : null;
+  const surfaceReason = surfaceMissing
+    ? (surfaceMeta?.reason || surfaceMeta?.status || "surface unavailable in this snapshot")
+    : null;
+  const metricBasis = useOverlay && overlay && overlay.grid
+    ? (metric === "delta" ? "OI_DELTA_WEIGHTED" : (overlay.exposure_basis || "VOLUME"))
+    : (data?.exposure_basis || "OI");
+  const expiries = useMemo(
+    // R6-1 hydration: overlay sections carry their own axes; axis-less
+    // sections (old records) fall back to the same snapshot's main axes.
+    () => (g?.expiries?.length ? [...g.expiries] : [...((data?.grid || {}).expiries || [])]),
+    [g, data]
+  );
   const matrix = useMemo(() => (g?.[gridKey] || {}), [g, gridKey]);
 
   // Strikes descending. Prefer grid.strikes; fall back to data.strikes.
   const strikes = useMemo(() => {
-    const src = g?.strikes?.length ? g.strikes : (data?.strikes || []).map((s) => s.strike);
+    const src = g?.strikes?.length
+      ? g.strikes
+      : (((data?.grid || {}).strikes || []).length
+        ? data.grid.strikes
+        : (data?.strikes || []).map((s) => s.strike));
     return [...new Set(src)].filter((s) => s != null).sort((a, b) => b - a);
   }, [g, data]);
 
@@ -94,28 +135,45 @@ function SkylitHeatmapGrid({
     return v === undefined ? null : v;
   };
 
-  // Signed min/max across the whole matrix for the viridis scale
-  const [minV, maxV] = useMemo(() => {
+  // Signed min/max across the whole matrix for the viridis scale.
+  // F15: zero-anchored by construction (lo<=0<=hi); locked `scale` prop
+  // freezes the range for replay comparison with an explicit rescale label.
+  const [minV, maxV, scaleMode] = useMemo(() => {
+    if (scale && Number.isFinite(scale.min) && Number.isFinite(scale.max) && scale.max > scale.min) {
+      return [Math.min(scale.min, 0), Math.max(scale.max, 0), scale.locked ? "locked" : "fixed"];
+    }
     let lo = 0, hi = 0;
     for (const e of expiries) {
       const col = matrix[e] || {};
       for (const k in col) {
         const v = col[k];
+        if (v == null || Number.isNaN(v)) continue; // missing ≠ zero
         if (v < lo) lo = v;
         if (v > hi) hi = v;
       }
     }
-    return [lo, hi];
-  }, [expiries, matrix]);
+    return [lo, hi, "relative"];
+  }, [expiries, matrix, scale]);
 
-  // King cell: max |value| across the matrix
+  // Publish the live auto range so a parent can freeze a locked scale.
+  // No-op when a locked scale is already applied (avoid feedback loop).
+  const scaleLocked = !!(scale && scale.locked);
+  useEffect(() => {
+    if (!onScaleReady || scaleLocked) return;
+    onScaleReady({ min: minV, max: maxV });
+  }, [minV, maxV, onScaleReady, scaleLocked]);
+
+  // King cell: max |value| across the matrix (F17: largest CELL — the
+  // sidebar owns strongest aggregate wall + nearest wall separately).
   const king = useMemo(() => {
     let best = null, bestAbs = 0;
     for (const e of expiries) {
       const col = matrix[e] || {};
       for (const k in col) {
-        const a = Math.abs(col[k]);
-        if (a > bestAbs) { bestAbs = a; best = { expiry: e, strikeKey: k }; }
+        const v = col[k];
+        if (v == null) continue;
+        const a = Math.abs(v);
+        if (a > bestAbs) { bestAbs = a; best = { expiry: e, strikeKey: k, scope: "cell" }; }
       }
     }
     return best;
@@ -135,8 +193,12 @@ function SkylitHeatmapGrid({
   // % change vs previous refresh, per (expiry, strike). Computed in the effect
   // (once per new asof) and HELD in state — computing it in a useMemo raced the
   // snapshot update, so badges flashed for one render then recomputed to empty.
+  // F16: keyed by ticker+view+metric+expiries scope (not ticker alone); any provider,
+  // basis, horizon or coverage change resets badges instead of diffing across
+  // incomparable scopes.
   const prevRef = useRef({ key: null, asof: null, matrix: null });
-  const snapKey = `${ticker}|${gridKey}`;
+  const scopeSig = `${(data?.expiries_used || []).join(",")}|${metricBasis}|${data?.mode || ""}|${data?.data_source || ""}`;
+  const snapKey = `${ticker}|${gridKey}|${metric}|${scopeSig}`;
   const [badges, setBadges] = useState({});
 
   useEffect(() => {
@@ -165,7 +227,71 @@ function SkylitHeatmapGrid({
     prevRef.current = { key: snapKey, asof: data.asof, matrix: snap };
   }, [expiries, matrix, snapKey, data]);
 
-  if (!expiries.length || !strikes.length) {
+  // §8 strike rail: gross-gamma concentration per strike from the payload's
+  // aggregated rows (gross = |call|+|put|, no net cancellation). Nearest-wall
+  // marker comes from the status strip + inspector; the rail shows magnitude.
+  const strikeGross = useMemo(() => {
+    const rows = data?.strikes || [];
+    const m = {};
+    for (const r of rows) {
+      const s = r?.strike;
+      if (s == null) continue;
+      const gross = Math.abs(r.call_gex || 0) + Math.abs(r.put_gex || 0) || Math.abs(r.gex || 0);
+      m[s] = gross;
+    }
+    return m;
+  }, [data]);
+  const maxStrikeGross = useMemo(
+    () => Math.max(0, ...Object.values(strikeGross)),
+    [strikeGross]
+  );
+
+  // §8 expiry header: exact expiry + calendar days left + column coverage.
+  // Exact per-series trading-time T lives in the snapshot, not the header.
+  // R4-15: per-expiry column mass here is |net cells| (absolute net-cell
+  // mass), NOT gross (|call|+|put|). Gross lives on the strike rail from
+  // aggregated rows. Names kept distinct so absolute-net is never labeled gross.
+  const expMeta = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let matrixAbsNet = 0;
+    const cols = {};
+    for (const e of expiries) {
+      const col = matrix[e] || {};
+      let absNet = 0;
+      let n = 0;
+      for (const k in col) {
+        const v = col[k];
+        if (v == null || Number.isNaN(v)) continue;
+        absNet += Math.abs(v);
+        n += 1;
+      }
+      cols[e] = { gross: absNet, absNet, n };
+      matrixAbsNet += absNet;
+    }
+    const meta = {};
+    for (const e of expiries) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(e);
+      let daysLeft = null;
+      if (m) {
+        const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+        daysLeft = Math.round((d - today) / 86400000);
+      }
+      const share = matrixAbsNet > 0 ? cols[e].absNet / matrixAbsNet : null;
+      meta[e] = { ...cols[e], daysLeft, share };
+    }
+    return { meta, matrixGross: matrixAbsNet, matrixAbsNet };
+  }, [expiries, matrix]);
+  const zeroDte = useMemo(
+    () => expiries.filter((e) => expMeta.meta[e]?.daysLeft === 0),
+    [expiries, expMeta]
+  );
+
+  // R6-1 hook-order fix (U01): every hook above runs on every render; the
+  // empty / unavailable states return here, AFTER all hooks, so
+  // empty→populated (and populated→unavailable) transitions never change
+  // the hook count and never throw.
+  if ((!expiries.length || !strikes.length) && !overlayMissing) {
     return (
       <div className="skylit-heatmap-empty">
         <span>No heatmap data available</span>
@@ -173,11 +299,25 @@ function SkylitHeatmapGrid({
     );
   }
 
-  const range = maxV - minV;
+  if (overlayMissing) {
+    return (
+      <div className="skylit-heatmap-empty" data-testid="skylit-metric-unavailable">
+        <span>Metric unavailable ({metric}) — {overlayReason}</span>
+      </div>
+    );
+  }
 
-  // Windowing (2026-09-03): slice the RENDERED rows only — King, spot,
+  if (surfaceMissing) {
+    return (
+      <div className="skylit-heatmap-empty" data-testid="skylit-surface-unavailable">
+        <span>{viewMode.toUpperCase()} unavailable — {surfaceReason}</span>
+      </div>
+    );
+  }
+
+  const range = maxV - minV;
   // and the viridis scale above always use the full matrix.
-  const shownStrikes = shownMapStrikes(data, spot, windowRows);
+  const shownStrikes = shownMapStrikes(data, spot, windowRows, viewMode, metric);
 
   return (
     <div className="skylit-heatmap-wrapper">
@@ -185,45 +325,84 @@ function SkylitHeatmapGrid({
         <table className={`trin-grid-table${density === "full" ? " density-full" : ""}`}>
           <thead>
             <tr>
-              <th className="trin-th-strike">Strike</th>
-              {expiries.map((e) => (
-                <th key={e} className="trin-th-exp" title={e}>{fmtExpiry(e)}</th>
-              ))}
+              <th className="trin-th-strike" title="Strike rail — bar shows gross-gamma concentration (|call|+|put|, no cancellation)">Strike</th>
+              {expiries.map((e) => {
+                const meta = expMeta.meta[e] || {};
+                const dl = meta.daysLeft;
+                const dlTxt = dl == null ? "date unknown" : dl === 0 ? "0DTE (expires today)" : dl > 0 ? `${dl}d left` : "expired";
+                const shareTxt = meta.share != null ? ` · ${(meta.share * 100).toFixed(1)}% of matrix gross` : "";
+                return (
+                  <th
+                    key={e}
+                    className="trin-th-exp"
+                    title={`${e} · ${dlTxt} · ${meta.n ?? 0} strikes covered${shareTxt}`}
+                  >
+                    {fmtExpiry(e)}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
             {shownStrikes.map((strike) => {
               const isSpot = strike === spotStrike;
               const sk = strikeKey(strike);
+              const conc = strikeGross[strike] || 0;
+              const concPct = maxStrikeGross > 0 ? Math.round((conc / maxStrikeGross) * 100) : 0;
+              // Exact spot line: the chip snaps to the nearest listed strike,
+              // so carry the exact spot + signed offset (never round silently).
+              const spotOffset = isSpot && spot != null ? Number(spot) - strike : null;
+              const spotTitle = isSpot && spot != null
+                ? `Spot ${Number(spot).toFixed(2)} · nearest listed ${fmtStrike(strike)} (${spotOffset >= 0 ? "+" : ""}${spotOffset.toFixed(2)})`
+                : null;
               return (
                 <tr key={strike} className="trin-row">
                   <td
                     className="trin-strike-cell"
                     onClick={() => onStrikeClick && onStrikeClick(strike)}
+                    title={conc > 0 ? `Gross concentration ${fmtK(conc)} (${concPct}% of max)` : "No aggregated exposure for this strike"}
                   >
                     {isSpot ? (
-                      <span className="trin-spot-chip">{fmtStrike(strike)}</span>
+                      <span className="trin-spot-chip" title={spotTitle || undefined} data-testid="skylit-spot-chip">{fmtStrike(strike)}</span>
                     ) : (
                       <span className="trin-strike">{fmtStrike(strike)}</span>
+                    )}
+                    {conc > 0 && (
+                      <span
+                        className="trin-conc-bar"
+                        data-testid="skylit-conc-bar"
+                        style={{ width: `${Math.max(concPct, 4)}%` }}
+                      />
                     )}
                   </td>
                   {expiries.map((e) => {
                     const v = cellVal(e, strike);
-                    const has = v != null;
+                    const has = v != null && !Number.isNaN(v);
+                    const isZero = has && v === 0;
                     const t = has && range > 0 ? (v - minV) / range : 0.5;
-                    const bright = has && t > 0.55;
+                    const bright = has && !isZero && t > 0.55;
                     const isKing = king && king.expiry === e && king.strikeKey === sk;
                     const pct = badges[`${e}|${sk}`];
                     return (
                       <td
                         key={e}
-                        className={`trin-cell${isKing ? " trin-king" : ""}`}
+                        className={`trin-cell${isKing ? " trin-king" : ""}${!has ? " trin-missing" : ""}${isZero ? " trin-zero" : ""}`}
                         style={{
-                          background: has ? viridis(t) : "rgba(13,17,23,0.85)",
+                          background: has ? (isZero ? "rgba(13,17,23,0.95)" : viridis(t)) : "rgba(13,17,23,0.85)",
                           color: has ? (bright ? "#000" : "#fff") : "#3a4566",
                         }}
-                        onClick={() => onCellClick && onCellClick(strike, e, v)}
-                        title={`${strike} · ${e} · ${fmtK(v) || "$0"}`}
+                        onClick={() => has && onCellClick && onCellClick(strike, e, v)}
+                        onKeyDown={(ev) => {
+                          if (!has) return;
+                          if (ev.key === "Enter" || ev.key === " ") {
+                            ev.preventDefault();
+                            if (onCellClick) onCellClick(strike, e, v);
+                          }
+                        }}
+                        tabIndex={has ? 0 : -1}
+                        role="gridcell"
+                        aria-label={has ? `${strike} by ${e}, value ${fmtK(v) || "$0"}${isKing ? ", largest cell" : ""}` : `${strike} by ${e}, no data`}
+                        title={has ? `${strike} · ${e} · ${fmtK(v) || "$0"} (largest cell ★ = max |cell|)` : `${strike} · ${e} · no data (not zero)`}
                       >
                         {pct != null && (
                           <span className={`trin-pct ${pct > 0 ? "up" : "down"}`}>
@@ -247,9 +426,28 @@ function SkylitHeatmapGrid({
         <span className="trin-legend-label">{fmtK(minV) || "$0"}</span>
         <div className="trin-legend-bar" />
         <span className="trin-legend-label">{fmtK(maxV) || "$0"}</span>
+        <span className="trin-legend-scale" title="Zero-anchored signed scale">
+          {scaleMode === "locked" ? "locked scale · 0 anchored" : scaleMode === "fixed" ? "fixed scale · 0 anchored" : "relative scale · 0 anchored"}
+        </span>
+        <span className="trin-legend-basis" data-testid="skylit-grid-basis" title="Exposure basis for this overlay">
+          {metricBasis}
+        </span>
         {shownStrikes.length < strikes.length && (
           <span className="trin-legend-window" data-testid="skylit-grid-window-note">
             Showing {shownStrikes.length} of {strikes.length} strikes · Expand for full grid
+          </span>
+        )}
+        {zeroDte.length > 0 && (
+          <span
+            className="trin-legend-0dte"
+            data-testid="skylit-grid-0dte"
+            title="Share of this matrix's gross exposure sitting in today-expiring columns (structural context, not a signal)"
+          >
+            0DTE {zeroDte.map((e) => fmtExpiry(e)).join(", ")}:{" "}
+            {zeroDte.map((e) => {
+              const share = expMeta.meta[e]?.share;
+              return `${fmtExpiry(e)} ${share != null ? (share * 100).toFixed(1) + "%" : "—"}`;
+            }).join(" · ")}
           </span>
         )}
       </div>

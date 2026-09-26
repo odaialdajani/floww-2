@@ -105,6 +105,8 @@ def request_spec(body):
     screen = copy.deepcopy(body.get("screen") or {})
     if not isinstance(screen, dict) or len(canonical(screen)) > 12000:
         raise ValueError("Invalid screen selection")
+    if screen.get("displayMode") == "replay" or screen.get("overlayMetric", "raw") != "raw":
+        raise ValueError("Research for this display is unavailable; return to the live raw chart before asking")
     explicit = re.findall(r"\$([A-Za-z][A-Za-z0-9.-]{0,9})\b", question)
     # Unambiguous uppercase symbols in a market question; ordinary short words excluded.
     if not explicit:

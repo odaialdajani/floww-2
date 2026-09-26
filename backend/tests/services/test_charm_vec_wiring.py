@@ -83,7 +83,9 @@ def test_wiring_uses_vec(monkeypatch):
         return real(*a, **k)
 
     monkeypatch.setattr(aa_mod, "bs_charm_vec", spy)
-    contracts = [{"strike": 100.0, "expiry": "2026-09-18", "T": 0.25,
+    from datetime import UTC, datetime, timedelta
+    expiry = (datetime.now(UTC) + timedelta(days=90)).date().isoformat()
+    contracts = [{"strike": 100.0, "expiry": expiry, "T": 0.25,
                   "type": "call", "oi": 100.0, "iv": 0.25, "volume": 10.0}]
     aa_mod.calc_charm_integral(100.0, contracts, "SPY")
     assert calls.get("n", 0) >= 1

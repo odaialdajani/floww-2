@@ -112,7 +112,7 @@ class TestCorsRuntimeImportRaises:
         }
 
         result = subprocess.run(
-            [sys.executable, "-W", "ignore", "-c",
+            [sys.executable, "-X", "utf8", "-W", "ignore", "-c",
              f"import os; "
              f"os.environ['ENVIRONMENT'] = {env_name!r}; "
              f"os.environ['ENV'] = {env_name!r}; "
@@ -123,6 +123,8 @@ class TestCorsRuntimeImportRaises:
              "import server"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             env=env,
             timeout=60,
             cwd=str(backend_dir),

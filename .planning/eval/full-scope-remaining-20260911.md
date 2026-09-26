@@ -1,3 +1,5 @@
+> September26 update: this is preserved historical scope. See [current handoff](../../REMAINING_WORK.md) and [integration evidence](integration-verification-20260926.md). The checklist failure is repaired; new full validation is recorded there. The old AI execution seal is stale after the merge. Broader requirements remain open.
+
 # Full requested scope and remaining work
 
 Publication handoff added23:40: [root remaining-work record](../../REMAINING_WORK.md)

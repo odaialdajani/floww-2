@@ -3170,6 +3170,48 @@ button, select, input {
   background: #0d1117;
 }
 
+/* ── R7-04 GEX+VEX compare workspace: two real grids, one snapshot. ── */
+.skylit-compare-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  gap: 6px;
+}
+
+.skylit-compare-pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 6px;
+  background: #0d1117;
+}
+
+.skylit-compare-pane-header {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+  padding: 4px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+@media (max-width: 900px) {
+  .skylit-compare-workspace {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .skylit-compare-pane {
+    min-height: 320px;
+  }
+}
+
 /* ── Loading Overlay ── */
 .skylit-loading-overlay {
   position: absolute;
@@ -3300,6 +3342,69 @@ button, select, input {
   background: rgba(34,197,94,0.1);
   border-color: rgba(34,197,94,0.3);
   box-shadow: 0 0 8px rgba(34,197,94,0.15);
+}
+
+/* R8-02: follow-wall toggle — same chrome as other trade-mode buttons */
+.skylit-follow-wall-toggle {
+  color: #94a3b8;
+  border: 1px solid rgba(148,163,184,0.25);
+  background: transparent;
+}
+
+.skylit-follow-wall-toggle:hover {
+  color: #e2e8f0;
+  border-color: rgba(255,255,255,0.15);
+}
+
+.skylit-follow-wall-toggle.active {
+  color: #3b82f6;
+  background: rgba(59,130,246,0.1);
+  border-color: rgba(59,130,246,0.3);
+  box-shadow: 0 0 8px rgba(59,130,246,0.15);
+}
+
+/* R8-04: review journal state pill — muted badge next to the wall inspector */
+.skylit-review-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(15,23,42,0.6);
+  border: 1px solid rgba(148,163,184,0.2);
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.skylit-review-label {
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 9px;
+}
+
+.skylit-review-state {
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(148,163,184,0.12);
+}
+
+.skylit-review-pending {
+  color: #f59e0b;
+}
+
+.skylit-review-reviewed {
+  color: #22c55e;
+}
+
+.skylit-review-waiting {
+  color: #3b82f6;
+}
+
+.skylit-review-skipped {
+  color: #ef4444;
 }
 
 .skylit-heatmap-table {
@@ -4179,3 +4284,30 @@ input[class*="bg-slate-800"], select[class*="bg-slate-800"], textarea[class*="bg
 .lodestar-model-settings select:focus-visible {outline:2px solid #7fc2ff;outline-offset:2px;}
 .lodestar-answer p {font-size:13px;line-height:1.6;margin:8px 0;}
 .lodestar-evidence pre {white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;}
+
+/* Recorded-view controls share the compact Solstice toolbar rhythm. */
+.skylit-status-strip,
+.skylit-replay-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #202936;
+  color: #a6b6ca;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.skylit-status-strip > span + span {
+  padding-left: 12px;
+  border-left: 1px solid #303c4e;
+}
+.skylit-replay-strip .skylit-trade-mode-btn { flex: 0 0 auto; }
+.skylit-replay-banner {
+  padding: 8px 12px;
+  border-bottom: 1px solid #725721;
+  background: #282215;
+  color: #f0ce7c;
+  font-size: 11px;
+  line-height: 1.5;
+}

@@ -173,14 +173,18 @@ class TestNodeLifecycle:
         ]
         result = calc_node_lifecycle(spot, contracts, history)
         nodes_by_strike = {n["strike"]: n for n in result["nodes"]}
+        # F09/F10 (corrected): taps are observed; outcome probability is NOT
+        # calibrated here — tap_probability stays None with legacy schedule kept
+        # only as explicitly uncalibrated compat.
         assert nodes_by_strike[95.0]["state"] == "fresh"
-        assert nodes_by_strike[95.0]["tap_probability"] == 80
+        assert nodes_by_strike[95.0]["taps"] == 0
+        assert nodes_by_strike[95.0]["tap_probability"] is None
         assert nodes_by_strike[100.0]["state"] == "tested"
-        assert nodes_by_strike[100.0]["tap_probability"] == 66
+        assert nodes_by_strike[100.0]["tap_probability"] is None
         assert nodes_by_strike[105.0]["state"] == "delivered"
-        assert nodes_by_strike[105.0]["tap_probability"] == 33
+        assert nodes_by_strike[105.0]["tap_probability"] is None
         assert nodes_by_strike[110.0]["state"] == "decaying"
-        assert nodes_by_strike[110.0]["tap_probability"] == 10
+        assert nodes_by_strike[110.0]["tap_probability"] is None
 
     def test_empty_contracts(self):
         """Empty contracts must return empty nodes."""
@@ -188,7 +192,7 @@ class TestNodeLifecycle:
         assert result["nodes"] == []
 
     def test_boundary_all_fresh_no_history(self):
-        """With empty history, every node is fresh and prob=80."""
+        """F09 (corrected): empty history → unknown, never fresh/80%."""
         spot = 100.0
         contracts = [
             _c(95.0, "P", 0.05, 1000),
@@ -196,11 +200,12 @@ class TestNodeLifecycle:
             _c(105.0, "C", 0.05, 600),
         ]
         result = calc_node_lifecycle(spot, contracts, history=[])
+        assert result["history_status"] == "unknown"
         assert len(result["nodes"]) == 3
         for n in result["nodes"]:
-            assert n["state"] == "fresh"
-            assert n["tap_probability"] == 80
-            assert n["taps"] == 0
+            assert n["state"] == "unknown"
+            assert n["tap_probability"] is None
+            assert n["taps"] is None
 
     def test_regression_top10_only_and_sorted_by_abs_gex(self):
         """
@@ -463,10 +468,10 @@ class TestVelocityMode:
         assert result["n_snapshots"] == 2
 
     def test_empty_history_returns_calm(self):
-        """Zero snapshots → velocity 0, mode 'calm'."""
+        """F09 (corrected): zero snapshots → unknown, never calm/0."""
         result = calc_velocity_mode([])
-        assert result["velocity_strikes_per_min"] == pytest.approx(0.0)
-        assert result["mode"] == "calm"
+        assert result["velocity_strikes_per_min"] is None
+        assert result["mode"] == "unknown"
         assert result["n_snapshots"] == 0
 
     def test_urgent_mode_high_velocity(self):
@@ -484,13 +489,13 @@ class TestVelocityMode:
         assert result["n_snapshots"] == 2
 
     def test_single_snapshot_returns_calm(self):
-        """One snapshot is not enough to compute velocity → velocity 0, calm."""
+        """F09 (corrected): one snapshot → unknown (insufficient history)."""
         history = [
             {"timestamp": "2026-05-18T13:30:00+00:00", "king_node_strike": 100.0, "spot": 100.0},
         ]
         result = calc_velocity_mode(history)
-        assert result["velocity_strikes_per_min"] == pytest.approx(0.0)
-        assert result["mode"] == "calm"
+        assert result["velocity_strikes_per_min"] is None
+        assert result["mode"] == "unknown"
         assert result["n_snapshots"] == 1
 
 
@@ -738,10 +743,10 @@ class TestClassifyNodes:
         Nodes with fading protection (put, OI decreasing) → 'hedge'.
         """
         nodes = [
-            {"strike": 100.0, "net_gex": 50000, "gamma_sign": "positive", "oi_trend": "growing", "taps": 0, "state": "fresh", "tap_probability": 80},
-            {"strike": 105.0, "net_gex": -30000, "gamma_sign": "negative", "oi_trend": "fading", "taps": 1, "state": "tested", "tap_probability": 66},
-            {"strike": 95.0, "net_gex": 20000, "gamma_sign": "positive", "oi_trend": "growing", "taps": 2, "state": "delivered", "tap_probability": 33},
-            {"strike": 110.0, "net_gex": -10000, "gamma_sign": "negative", "oi_trend": "fading", "taps": 3, "state": "decaying", "tap_probability": 10},
+            {"strike": 100.0, "net_gex": 50000, "gamma_sign": "positive", "oi_trend_source": "observed", "oi_trend": "growing", "taps": 0, "state": "fresh", "tap_probability": 80},
+            {"strike": 105.0, "net_gex": -30000, "gamma_sign": "negative", "oi_trend_source": "observed", "oi_trend": "fading", "taps": 1, "state": "tested", "tap_probability": 66},
+            {"strike": 95.0, "net_gex": 20000, "gamma_sign": "positive", "oi_trend_source": "observed", "oi_trend": "growing", "taps": 2, "state": "delivered", "tap_probability": 33},
+            {"strike": 110.0, "net_gex": -10000, "gamma_sign": "negative", "oi_trend_source": "observed", "oi_trend": "fading", "taps": 3, "state": "decaying", "tap_probability": 10},
         ]
         result = classify_nodes(nodes)
         classified = {n["strike"]: n for n in result["nodes"]}
@@ -760,7 +765,7 @@ class TestClassifyNodes:
     def test_real_when_positive_gamma_growing(self):
         """Positive gamma + growing OI → real (dealer positioning)."""
         nodes = [
-            {"strike": 100.0, "net_gex": 50000, "gamma_sign": "positive", "oi_trend": "growing", "taps": 0, "state": "fresh", "tap_probability": 80},
+            {"strike": 100.0, "net_gex": 50000, "gamma_sign": "positive", "oi_trend_source": "observed", "oi_trend": "growing", "taps": 0, "state": "fresh", "tap_probability": 80},
         ]
         result = classify_nodes(nodes)
         assert result["nodes"][0]["classification"] == "real"
@@ -770,7 +775,7 @@ class TestClassifyNodes:
     def test_hedge_when_negative_gamma_fading(self):
         """Negative gamma + fading OI → hedge (fading protection)."""
         nodes = [
-            {"strike": 100.0, "net_gex": -50000, "gamma_sign": "negative", "oi_trend": "fading", "taps": 0, "state": "fresh", "tap_probability": 80},
+            {"strike": 100.0, "net_gex": -50000, "gamma_sign": "negative", "oi_trend_source": "observed", "oi_trend": "fading", "taps": 0, "state": "fresh", "tap_probability": 80},
         ]
         result = classify_nodes(nodes)
         assert result["nodes"][0]["classification"] == "hedge"
@@ -780,7 +785,7 @@ class TestClassifyNodes:
     def test_unknown_when_oi_trend_flat(self):
         """Flat OI trend → classification is 'unknown'."""
         nodes = [
-            {"strike": 100.0, "net_gex": 50000, "gamma_sign": "positive", "oi_trend": "flat", "taps": 0, "state": "fresh", "tap_probability": 80},
+            {"strike": 100.0, "net_gex": 50000, "gamma_sign": "positive", "oi_trend_source": "observed", "oi_trend": "flat", "taps": 0, "state": "fresh", "tap_probability": 80},
         ]
         result = classify_nodes(nodes)
         assert result["nodes"][0]["classification"] == "unknown"

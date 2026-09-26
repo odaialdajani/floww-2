@@ -3,13 +3,14 @@ import axios from "axios";
 import "@/App.css";
 import { useAuth } from "./context/AuthContext";
 
-import { fmt, fmtAbs, pctClass, tagFor, TRIAD, DEFAULT_TICKERS } from "./lib/helpers";
+import { fmt, fmtAbs, tagFor, TRIAD, DEFAULT_TICKERS } from "./lib/helpers";
 import { buildHeatmapQuery } from "./lib/heatmapQuery";
 import GridHeatmap from "./components/GridHeatmap";
 import DomHeatmap from "./components/DomHeatmap";
 import MultiTickerHeatmap from "./components/MultiTickerHeatmap";
 import VolumeProfileGrid from "./components/VolumeProfileGrid";
 import HeatseekerDashboard from "./components/heatseeker/HeatseekerDashboard";
+import Movers from "./components/Movers";
 import GexStrikeTable from "./components/heatseeker/GexStrikeTable";
 import BarHeatmap from "./components/BarHeatmap";
 import PatternCard from "./components/PatternCard";
@@ -97,32 +98,8 @@ function VelocityGauge({ velocity }) {
 }
 
 // ============ Top Movers ============
-function Movers({ onPick }) {
-  const [rows, setRows] = useState([]);
-  useEffect(() => {
-    let mounted = true;
-    const f = async () => {
-      try { const res = await axios.get(`${API}/movers?limit=12`); if (mounted) setRows(res.data.results || []); } catch (e) { /* noop */ }
-    };
-    f();
-    const id = setInterval(f, 60000);
-    return () => { mounted = false; clearInterval(id); };
-  }, []);
-  return (
-    <div className="panel p-3" data-testid="movers-panel">
-      <div className="label mb-2">Top Movers (prev session %)</div>
-      <div className="flex flex-col gap-1 text-[12px]">
-        {rows.length === 0 && <div className="text-slate-500">…</div>}
-        {rows.map((r, i) => (
-          <div key={i} className="flex justify-between bar-row cursor-pointer" onClick={() => onPick && onPick(r.ticker)}>
-            <span className="mono text-amber-300 font-medium">{r.ticker}</span>
-            <span className={`${pctClass(r.change)} font-medium`}>{r.change > 0 ? "+" : ""}{r.change}%</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// Extracted to components/Movers.jsx (R7-01: v2 contract + explicit
+// loading/empty/error/stale states); same panel look and onPick contract.
 
 // ============ Nodes Table ============
 // ============ Ticker Search ============
@@ -517,6 +494,7 @@ export default function App() {
   const wsGex = useWebSocketGex((page === "heatseeker" || page === "skylit") ? ticker : null);
   const { theme, toggleTheme } = useTheme();
   const [tradeSelection, setTradeSelection] = useState(null);
+  const [heatmapReplay, setHeatmapReplay] = useState(false);
   // Use auth context for user info
   const userEmail = user?.email || null;
   const userTier = user?.tier || null;
@@ -566,15 +544,26 @@ export default function App() {
   }, []);
 
   const [loading, setLoading] = useState(false);
+  // F19: single-flight fetch — generation IDs + abort so a slow SPY response
+  // can never render under a new QQQ query (also guards manual refresh).
+  const fetchGen = useRef(0);
+  const fetchCtrl = useRef(null);
 
   // Fetch heatmap data
   const fetchData = useCallback(async () => {
+    const myGen = ++fetchGen.current;
+    if (fetchCtrl.current) { try { fetchCtrl.current.abort(); } catch (e) { /* noop */ } }
+    const ctrl = new AbortController();
+    fetchCtrl.current = ctrl;
     setLoading(true);
     try {
       const qs = buildHeatmapQuery({ expiries: debouncedExpiries, mode: debouncedMode, dte: debouncedDte });
-      const res = await axios.get(`${API}/heatmap/${ticker}?${qs}`, { timeout: 30000 });
+      const res = await axios.get(`${API}/heatmap/${ticker}?${qs}`, { timeout: 30000, signal: ctrl.signal });
+      if (fetchGen.current !== myGen) return; // superseded — never render stale
       setData(res.data); setErr(null);
     } catch (e) {
+      if (axios.isCancel?.(e)) return;
+      if (fetchGen.current !== myGen) return;
       let msg = "Failed to load data";
       if (e.code === "ECONNABORTED") {
         msg = "Request timed out. The server may be busy.";
@@ -589,7 +578,7 @@ export default function App() {
       }
       setErr(msg);
     } finally {
-      setLoading(false);
+      if (fetchGen.current === myGen) setLoading(false);
     }
   }, [ticker, debouncedExpiries, debouncedMode, debouncedDte]);
 
@@ -605,22 +594,25 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     let inFlight = false;
+    const ctrl = new AbortController();
     const doFetch = async () => {
       if (cancelled || inFlight) return;
       inFlight = true;
+      const myGen = ++fetchGen.current;
       try {
         // Same query as the manual /heatmap fetch — a naked poll here
         // overwrites the user's DTE/Expiries/mode selection with backend
         // defaults on every tick (Round-8 regression).
         const qs = buildHeatmapQuery({ expiries: debouncedExpiries, mode: debouncedMode, dte: debouncedDte });
-        const r = await axios.get(`${API}/data/${ticker}?${qs}`);
-        if (!cancelled) { setData(r.data); setErr(null); }
-      } catch (e) { if (!cancelled) setErr(e.message); }
-      finally { inFlight = false; }
+        const r = await axios.get(`${API}/data/${ticker}?${qs}`, { signal: ctrl.signal });
+        if (!cancelled && fetchGen.current === myGen) { setData(r.data); setErr(null); setLoading(false); }
+      } catch (e) {
+        if (!cancelled && fetchGen.current === myGen && !axios.isCancel?.(e)) { setErr(e.message); setLoading(false); }
+      } finally { inFlight = false; }
     };
     doFetch();
     const id = setInterval(doFetch, refreshMs);
-    return () => { cancelled = true; clearInterval(id); };
+    return () => { cancelled = true; ctrl.abort(); clearInterval(id); };
   }, [ticker, refreshMs, debouncedExpiries, debouncedMode, debouncedDte]);
 
   // Advanced analytics with in-flight guard
@@ -758,6 +750,21 @@ export default function App() {
     };
   }, [data]);
 
+  // F05: liveness is chain/Greek freshness, never socket/object presence.
+  // Independent spot / chain / history / flow status from the snapshot itself.
+  const heatLive = useMemo(() => {
+    if (!data?.asof || !data?.spot) return false;
+    const ageMs = Date.now() - new Date(data.asof).getTime();
+    if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > 120000) return false;
+    const q = data.quality;
+    if (q && q.setupEligible === false && (q.reasonCodes || []).length > 0) {
+      // Degraded setup eligibility still counts as live display; trade
+      // eligibility stays false. Only stale/unavailable kills liveness.
+      if (q.state === "stale" || q.state === "unavailable") return false;
+    }
+    return true;
+  }, [data]);
+
   return (
     <AppShell page={page} onNavigate={setPage} userEmail={userEmail} userTier={userTier}>
       <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: "100vh" }}>
@@ -866,7 +873,9 @@ export default function App() {
             <aside className={`heatseeker-sidebar-left ${showLeftSidebar ? 'open' : ''}`}>
               <div className="p-2 space-y-2">
                 {/* Ticker Summary */}
-                <div className="panel p-3">
+                {heatmapReplay ? <div className="panel p-3" data-testid="replay-summary">
+                  Recorded view · current quote and summary hidden during replay.
+                </div> : <div className="panel p-3">
                   <div className="flex justify-between items-baseline mb-2">
                     <div className="text-[13px] font-bold tracking-wider">{ticker.replace("^", "")}</div>
                     <div className={`text-[10px] uppercase tracking-widest ${regimeColor(data?.nodes?.regime)}`}>{data?.nodes?.regime || "—"} γ</div>
@@ -930,6 +939,7 @@ export default function App() {
                   )}
                 </div>
 
+                }
                 {/* Filters */}
                 <div className="panel p-3">
                   <div className="text-slate-500 mb-1 text-[10px]">View</div>
@@ -967,7 +977,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <Movers onPick={(t) => setTicker(t)} />
+                {!heatmapReplay && <Movers onPick={(t) => setTicker(t)} />}
                 <HistoryPanel ticker={ticker} />
                 <SettingsPanel
                   refreshMs={refreshMs}
@@ -992,6 +1002,7 @@ export default function App() {
                 </div>
               ) : view === "skylit" || view === "grid" ? (
                 <SkylitDashboard
+                  onReplayChange={setHeatmapReplay}
                   ticker={ticker}
                   spot={livespot?.spot ?? data?.spot}
                   change={livespot?.change ?? data?.change}
@@ -1009,6 +1020,7 @@ export default function App() {
                   expiries={expiries}
                   onExpiriesChange={setExpiries}
                   onTickerChange={setTicker}
+                  tickers={tickers}
                   onRefresh={() => { setErr(null); fetchData(); }}
                   onCellClick={async (strike, colKey, value) => {
                     const row = displayData?.strikes?.find(s => s.strike === strike);
@@ -1047,12 +1059,13 @@ export default function App() {
                     });
                   }}
                   onStrikeClick={(strike) => setTradeSelection({ ticker, strike, spot: livespot?.spot ?? data?.spot })}
-                  isLive={!!livespot}
+                  isLive={heatLive}
                   regime={data?.nodes?.regime}
                   loading={loading && !data}
                 />
               ) : (
                 <SkylitDashboard
+                  onReplayChange={setHeatmapReplay}
                   ticker={ticker}
                   spot={livespot?.spot ?? data?.spot}
                   change={livespot?.change ?? data?.change}
@@ -1070,6 +1083,7 @@ export default function App() {
                   expiries={expiries}
                   onExpiriesChange={setExpiries}
                   onTickerChange={setTicker}
+                  tickers={tickers}
                   onRefresh={() => { setErr(null); fetchData(); }}
                   onCellClick={async (strike, colKey, value) => {
                     const row = displayData?.strikes?.find(s => s.strike === strike);
@@ -1108,7 +1122,7 @@ export default function App() {
                     });
                   }}
                   onStrikeClick={(strike) => setTradeSelection({ ticker, strike, spot: livespot?.spot ?? data?.spot })}
-                  isLive={!!livespot}
+                  isLive={heatLive}
                   regime={data?.nodes?.regime}
                   loading={loading && !data}
                 />

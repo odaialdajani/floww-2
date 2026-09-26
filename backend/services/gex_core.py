@@ -38,6 +38,7 @@ from bs_greeks import (
     dollar_gex_per_contract,
     dollar_vex_per_contract,
 )
+from domain.exposure_metrics import option_type_sign
 
 # Dividend yields for Black-Scholes (moved from server.py)
 DIV_YIELD = {"SPY": 0.013, "QQQ": 0.006, "^SPX": 0.013, "IWM": 0.012}
@@ -66,6 +67,19 @@ def safe_float(v, default=0.0):
         return f
     except (TypeError, ValueError):
         return default
+
+
+def safe_float_or_none(v) -> float | None:
+    """F03/F13: unknown stays None (never 0-fill). NaN/Inf/invalid → None."""
+    if v is None:
+        return None
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(f) or math.isinf(f):
+        return None
+    return f
 
 
 def classify_nodes_rust(rows: list[dict[str, Any]], spot: float) -> dict[str, Any] | None:
@@ -115,6 +129,11 @@ def compute_gex_by_strike(spot: float, contracts: list[dict[str, Any]], ticker: 
         strike = safe_float(c.get("strike"))
         if strike <= 0:
             continue
+        # R7-F04: unknown option type is rejected (never default-put/call),
+        # same rule as domain.exposure_metrics.option_type_sign.
+        sign = option_type_sign(c.get("type"))
+        if sign is None:
+            continue
         try:
             gamma = float(bs_gamma(spot, strike, T, iv, q=q) or 0)
             vanna = float(bs_vanna(spot, strike, T, iv, q=q) or 0)
@@ -132,7 +151,6 @@ def compute_gex_by_strike(spot: float, contracts: list[dict[str, Any]], ticker: 
         charm_unit = dollar_charm_per_contract(charm, oi, spot)
         vomma_unit = vomma * oi * 100.0
         zomma_unit = zomma * oi * 100.0 * spot * 0.01
-        sign = 1.0 if c["type"] == "call" else -1.0
         bucket = agg.setdefault(c["strike"], {
             "strike": c["strike"], "gex": 0.0, "call_gex": 0.0, "put_gex": 0.0,
             "call_oi": 0.0, "put_oi": 0.0, "total_oi": 0.0,
@@ -212,8 +230,10 @@ def compute_gex_grid(spot: float, contracts: list[dict[str, Any]], ticker: str =
                     _g = bs_gamma(spot, _strike, _tt, _iv, q=q)
                     if _g <= 0:
                         continue
-                    _ct = _c.get("type") or "call"
-                    _sgn = 1.0 if _ct == "call" else -1.0
+                    _ct = _c.get("type")
+                    _sgn = option_type_sign(_ct)
+                    if _sgn is None:
+                        continue  # R7-F04: unknown type rejected, never default-call
                     _cell = _sgn * bs_vomma(spot, _strike, _tt, _iv, q=q) * _oi * 100.0
                     _row = vomma_sec.setdefault(_exp, {})
                     # Same strike-key encoding as the fallback return below
@@ -253,7 +273,11 @@ def compute_gex_grid(spot: float, contracts: list[dict[str, Any]], ticker: str =
         expiry = c.get("expiry") or ""
         if not expiry:
             continue
-        contract_type = c.get("type") or "call"
+        contract_type = c.get("type") or ""
+        # R7-F04: unknown option type is rejected (never default-put/call).
+        sign = option_type_sign(contract_type)
+        if sign is None:
+            continue
         gamma = bs_gamma(spot, strike, T, iv, q=q)
         charm = bs_charm(spot, strike, T, iv, q=q, kind=contract_type)
         vanna = bs_vanna(spot, strike, T, iv, q=q)
@@ -264,7 +288,6 @@ def compute_gex_grid(spot: float, contracts: list[dict[str, Any]], ticker: str =
         charm_unit = dollar_charm_per_contract(charm, oi, spot)
         vex_unit = dollar_vex_per_contract(vanna, oi, spot)
         vomma_unit = vomma * oi * 100.0  # contract-dollars of volga (cf. per-strike path)
-        sign = 1.0 if contract_type == "call" else -1.0
         cell = sign * gex_unit
         charm_cell = sign * charm_unit
         vex_cell = sign * vex_unit
@@ -365,7 +388,11 @@ def compute_gex_grid_volume(spot: float, contracts: list[dict[str, Any]],
         expiry = c.get("expiry") or ""
         if not expiry:
             continue
-        contract_type = c.get("type") or "call"
+        contract_type = c.get("type") or ""
+        # R7-F04: unknown option type is rejected (never default-put/call).
+        sign = option_type_sign(contract_type)
+        if sign is None:
+            continue
         gamma = bs_gamma(spot, strike, T, iv, q=q)
         charm = bs_charm(spot, strike, T, iv, q=q, kind=contract_type)
         vanna = bs_vanna(spot, strike, T, iv, q=q)
@@ -373,7 +400,6 @@ def compute_gex_grid_volume(spot: float, contracts: list[dict[str, Any]],
         gex_unit = gamma * vol * spot * 100.0
         charm_unit = abs(charm) * vol * spot * 100.0
         vex_unit = abs(vanna) * vol * spot * 100.0
-        sign = 1.0 if contract_type == "call" else -1.0
         cell = sign * gex_unit
         d = grid.setdefault(expiry, {})
         d[strike] = d.get(strike, 0.0) + cell
@@ -547,7 +573,10 @@ def calc_aggregate_gex_curve(spot: float, contracts: list[dict[str, Any]],
             if gamma <= 0:
                 continue
             gex = dollar_gex_per_contract(gamma, safe_float(c.get("oi")), price)
-            sign = 1.0 if c.get("type") == "call" else -1.0
+            # R7-F04: unknown option type is rejected (never default-put).
+            sign = option_type_sign(c.get("type"))
+            if sign is None:
+                continue
             total_gex += sign * gex
         curve.append({"price": round(price, 2), "gex": round(total_gex / 1e9, 4) if not (math.isnan(total_gex) or math.isinf(total_gex)) else 0.0})
         price += step
@@ -669,17 +698,25 @@ def classify_nodes(strikes: list[dict[str, Any]], spot: float) -> dict[str, Any]
         charm_flip = spot
 
     max_pain = None
+    max_pain_basis = "unavailable"
     if strikes:
+        # Proper max-pain: expiry-specific call intrinsic max(K-S,0)*call_OI +
+        # put intrinsic max(S-K,0)*put_OI, minimized over candidate settle S.
+        # The prior total-OI×|distance| statistic is retained as
+        # `oi_weighted_center` for compat but MUST NOT be presented as max pain.
         strike_range = sorted(set(s["strike"] for s in strikes))
         min_pain = float("inf")
         for test_strike in strike_range:
             pain = 0.0
             for s in strikes:
-                oi = s.get("total_oi", 0) or 0
-                pain += oi * abs(s["strike"] - test_strike)
+                call_oi = s.get("call_oi", 0) or 0
+                put_oi = s.get("put_oi", 0) or 0
+                pain += call_oi * max(test_strike - s["strike"], 0.0)
+                pain += put_oi * max(s["strike"] - test_strike, 0.0)
             if pain < min_pain:
                 min_pain = pain
                 max_pain = test_strike
+        max_pain_basis = "call_put_intrinsic_expiry_scoped" if max_pain is not None else "unavailable"
 
     total_call_oi = sum(s.get("call_oi", 0) or 0 for s in strikes)
     total_put_oi = sum(s.get("put_oi", 0) or 0 for s in strikes)
@@ -723,6 +760,7 @@ def classify_nodes(strikes: list[dict[str, Any]], spot: float) -> dict[str, Any]
         "total_zomma": round(total_zomma, 4),
         "charm_flip": round(charm_flip, 4),
         "max_pain": max_pain,
+        "max_pain_basis": max_pain_basis,
         "put_call_ratio": round(put_call_ratio, 4) if put_call_ratio is not None else None,
         "_spot": round(spot, 2),
         "risk_metrics": {
@@ -972,15 +1010,470 @@ def compute_gex_by_strike_volume(spot: float, contracts: list[dict[str, Any]], t
         if gamma <= 0:
             continue
         gex_unit = dollar_gex_per_contract(gamma, vol, spot)
-        sign = 1.0 if c.get("type") == "call" else -1.0
+        # R7-F04: unknown option type is rejected (never default-put).
+        sign = option_type_sign(c.get("type"))
+        if sign is None:
+            continue
         bucket = agg.setdefault(strike, {"strike": strike, "gex": 0.0, "call_gex": 0.0, "put_gex": 0.0, "total_vol": 0.0})
         bucket["gex"] += sign * gex_unit
         bucket["total_vol"] += vol
-        if c.get("type") == "call":
+        if sign > 0:
             bucket["call_gex"] += gex_unit
         else:
             bucket["put_gex"] += gex_unit
     return sorted(agg.values(), key=lambda r: r["strike"])
+
+
+# ── Solstice canonical vendor-gamma engine (F02) ──────────────────────────
+# Grid, row totals, sidebar and inspector MUST agree. Vendor gamma is the
+# default current-chain input when valid; local BS gamma is an explicitly
+# versioned scenario path. Changing supplied gamma MUST change the result.
+
+def _vendor_gamma(c: dict[str, Any]) -> float | None:
+    g = safe_float_or_none(c.get("gamma"))
+    if g is None or g < 0 or g == 0:
+        return None
+    return g
+
+
+def compute_gex_by_strike_vendor(spot: float, contracts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """F02 canonical: per-strike net GEX from SUPPLIED vendor gamma.
+
+    Same dollar convention (u=Γ·m·S²×0.01) and sign as heatseeker._gex_per_strike.
+    Unknown/missing gamma or OI → skipped with counts; never BS-recomputed here.
+    Adjusted/nonstandard contracts are quarantined (skipped), never forced to 100 (R4-16).
+    """
+    if spot <= 0 or not contracts:
+        return []
+    agg: dict[float, dict[str, float]] = {}
+    for c in contracts:
+        if c.get("adjusted") or c.get("nonstandard"):
+            continue
+        oi = safe_float_or_none(c.get("oi", c.get("open_interest")))
+        if oi is None or oi <= 0:
+            continue
+        gamma = _vendor_gamma(c)
+        if gamma is None:
+            continue
+        strike = safe_float_or_none(c.get("strike"))
+        if strike is None or strike <= 0:
+            continue
+        mult = 100.0
+        try:
+            m_raw = c.get("multiplier", 100.0)
+            m_f = float(m_raw) if m_raw is not None else 100.0
+            if math.isfinite(m_f) and m_f > 0:
+                mult = m_f
+        except (TypeError, ValueError):
+            pass
+        gex_unit = gamma * oi * mult * spot * spot * 0.01
+        # R7-F04: unknown option type is rejected (never default-put),
+        # same rule as domain.exposure_metrics.option_type_sign.
+        sign = option_type_sign(c.get("type"))
+        if sign is None:
+            continue
+        bucket = agg.setdefault(strike, {"strike": strike, "gex": 0.0, "call_gex": 0.0,
+                                         "put_gex": 0.0, "total_oi": 0.0})
+        bucket["gex"] += sign * gex_unit
+        if sign > 0:
+            bucket["call_gex"] += gex_unit
+        else:
+            bucket["put_gex"] += gex_unit
+        bucket["total_oi"] += oi
+        # Per-strike OI effective dates (R5 holes): distinct, sorted, capped —
+        # provenance for wall-level OI-date status, never inferred direction.
+        _oed = c.get("oi_effective_date") or c.get("oiEffectiveDate")
+        if _oed:
+            _dates = bucket.setdefault("oi_dates", [])
+            if _oed not in _dates and len(_dates) < 4:
+                _dates.append(_oed)
+                _dates.sort()
+    for _b in agg.values():
+        if "oi_dates" in _b:
+            _b["oi_dates"] = sorted(_b["oi_dates"])
+    return sorted(agg.values(), key=lambda r: r["strike"])
+
+
+def compute_gex_grid_vendor(spot: float, contracts: list[dict[str, Any]]) -> dict[str, Any]:
+    """F02 canonical: 2D grid from SUPPLIED vendor gamma (same scope as compute_gex_grid).
+
+    Adjusted/nonstandard contracts quarantined (R4-16). Missing/zero gamma →
+    skipped (zero mass never forms walls); never BS-recomputed here.
+    """
+    if spot <= 0 or not contracts:
+        return {"expiries": [], "strikes": [], "grid": {}, "exposure_basis": "OI_VENDOR"}
+    grid: dict[str, dict[float, float]] = {}
+    totals: dict[float, float] = {}
+    invalid_type = 0
+    for c in contracts:
+        if c.get("adjusted") or c.get("nonstandard"):
+            continue
+        oi = safe_float_or_none(c.get("oi", c.get("open_interest")))
+        if oi is None or oi <= 0:
+            continue
+        gamma = _vendor_gamma(c)
+        if gamma is None:
+            continue
+        strike = safe_float_or_none(c.get("strike"))
+        if strike is None or strike <= 0:
+            continue
+        expiry = c.get("expiry") or ""
+        if not expiry:
+            continue
+        mult = 100.0
+        try:
+            m_raw = c.get("multiplier", 100.0)
+            m_f = float(m_raw) if m_raw is not None else 100.0
+            if math.isfinite(m_f) and m_f > 0:
+                mult = m_f
+        except (TypeError, ValueError):
+            pass
+        # R7-F04: unknown option type is rejected (never default-put).
+        sign = option_type_sign(c.get("type"))
+        if sign is None:
+            invalid_type += 1
+            continue
+        cell = sign * gamma * oi * mult * spot * spot * 0.01
+        d = grid.setdefault(expiry, {})
+        d[strike] = d.get(strike, 0.0) + cell
+        totals[strike] = totals.get(strike, 0.0) + cell
+    expiries = sorted(grid.keys())
+    strikes = sorted(totals.keys())
+
+    def _k(x: float) -> str:
+        return str(int(x)) if float(x).is_integer() else str(x)
+
+    return {
+        "expiries": expiries,
+        "strikes": strikes,
+        "grid": {e: {_k(k): v for k, v in grid[e].items()} for e in expiries},
+        "strike_totals": [{"strike": k, "gex": v} for k, v in sorted(totals.items())],
+        "exposure_basis": "OI_VENDOR",
+        "invalid_type": invalid_type,
+        "formula_version": "gex.v2",
+    }
+
+
+def compute_gex_grid_delta_weighted(spot: float, contracts: list[dict[str, Any]]) -> dict[str, Any]:
+    """T04: per-cell Δ-weighted grid (Σ c·u·N·|δ|) over the same scope.
+
+    Missing delta → contribution unavailable (skipped, counted). Same units
+    and sign convention as the vendor grid; walls stay raw-locked.
+    R4-14/P03: when no cell is computable the surface is UNAVAILABLE —
+    callers must hatch/mark unavailable, never substitute raw values under
+    an active delta/activity control. Adjusted/nonstandard quarantined.
+    """
+    if spot <= 0 or not contracts:
+        return {"expiries": [], "strikes": [], "grid": {}, "exposure_basis": "OI_DELTA_WEIGHTED",
+                "missing_delta": 0, "formula_version": "gex.v2",
+                "status": "unavailable", "reason": "NO_COVERAGE"}
+    grid: dict[str, dict[float, float]] = {}
+    totals: dict[float, float] = {}
+    missing = 0
+    quarantined = 0
+    invalid_type = 0
+    for c in contracts:
+        if c.get("adjusted") or c.get("nonstandard"):
+            quarantined += 1
+            continue
+        oi = safe_float_or_none(c.get("oi", c.get("open_interest")))
+        if oi is None or oi <= 0:
+            continue
+        gamma = _vendor_gamma(c)
+        if gamma is None:
+            continue
+        d_raw = c.get("delta")
+        try:
+            ad = abs(float(d_raw)) if d_raw is not None else None
+        except (TypeError, ValueError):
+            ad = None
+        if ad is None or not math.isfinite(ad) or ad > 1.0 + 1e-9:
+            missing += 1
+            continue
+        ad = min(ad, 1.0)
+        strike = safe_float_or_none(c.get("strike"))
+        if strike is None or strike <= 0:
+            continue
+        expiry = c.get("expiry") or ""
+        if not expiry:
+            continue
+        mult = 100.0
+        try:
+            m_f = float(c.get("multiplier", 100.0) or 100.0)
+            if math.isfinite(m_f) and m_f > 0:
+                mult = m_f
+        except (TypeError, ValueError):
+            pass
+        # R7-F04: unknown option type is rejected (never default-put).
+        sign = option_type_sign(c.get("type"))
+        if sign is None:
+            invalid_type += 1
+            continue
+        cell = sign * gamma * mult * spot * spot * 0.01 * ad * oi
+        d = grid.setdefault(expiry, {})
+        d[strike] = d.get(strike, 0.0) + cell
+        totals[strike] = totals.get(strike, 0.0) + cell
+    expiries = sorted(grid.keys())
+    strikes = sorted(totals.keys())
+
+    def _k(x: float) -> str:
+        return str(int(x)) if float(x).is_integer() else str(x)
+
+    return {
+        "expiries": expiries,
+        "strikes": strikes,
+        "grid": {e: {_k(k): v for k, v in grid[e].items()} for e in expiries},
+        "strike_totals": [{"strike": k, "gex": v} for k, v in sorted(totals.items())],
+        "exposure_basis": "OI_DELTA_WEIGHTED",
+        "missing_delta": missing,
+        "quarantined": quarantined,
+        "invalid_type": invalid_type,
+        "formula_version": "gex.v2",
+        "status": "ok" if expiries else "unavailable",
+        "reason": None if expiries else ("DELTA_UNKNOWN" if missing else "NO_COVERAGE"),
+    }
+
+
+def _resolve_mult(c: dict[str, Any]) -> float:
+    try:
+        m_f = float(c.get("multiplier", 100.0) or 100.0)
+        if math.isfinite(m_f) and m_f > 0:
+            return m_f
+    except (TypeError, ValueError):
+        pass
+    return 100.0
+
+
+def compute_gex_by_strike_volume_vendor(spot: float, contracts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """R6-1: per-strike session-volume gamma from SUPPLIED vendor gamma.
+
+    cell = Σ c·u·V, u = Γ·m·S²×0.01 — the grid twin of
+    domain.compute_volume_gamma. Turnover, never positioning. Adjusted/
+    nonstandard quarantined; OI dates carried for structural context.
+    """
+    if spot <= 0 or not contracts:
+        return []
+    agg: dict[float, dict[str, float]] = {}
+    for c in contracts:
+        if c.get("adjusted") or c.get("nonstandard"):
+            continue
+        vol = safe_float_or_none(c.get("volume", c.get("V")))
+        if vol is None or vol <= 0:
+            continue
+        gamma = _vendor_gamma(c)
+        if gamma is None:
+            continue
+        strike = safe_float_or_none(c.get("strike"))
+        if strike is None or strike <= 0:
+            continue
+        mult = _resolve_mult(c)
+        # R7-F04: unknown option type is rejected (never default-put).
+        sign = option_type_sign(c.get("type"))
+        if sign is None:
+            continue
+        contrib = sign * gamma * mult * spot * spot * 0.01 * vol
+        bucket = agg.setdefault(strike, {"strike": strike, "gex": 0.0, "call_gex": 0.0,
+                                         "put_gex": 0.0, "total_vol": 0.0})
+        bucket["gex"] += contrib
+        if sign > 0:
+            bucket["call_gex"] += abs(contrib)
+        else:
+            bucket["put_gex"] += abs(contrib)
+        bucket["total_vol"] += vol
+        _oed = c.get("oi_effective_date") or c.get("oiEffectiveDate")
+        if _oed:
+            _dates = bucket.setdefault("oi_dates", [])
+            if _oed not in _dates and len(_dates) < 4:
+                _dates.append(_oed)
+                _dates.sort()
+    for _b in agg.values():
+        if "oi_dates" in _b:
+            _b["oi_dates"] = sorted(_b["oi_dates"])
+    return sorted(agg.values(), key=lambda r: r["strike"])
+
+
+def compute_gex_grid_volume_vendor(spot: float, contracts: list[dict[str, Any]]) -> dict[str, Any]:
+    """R6-1: 2D session-volume grid from SUPPLIED vendor gamma.
+
+    Same scope/shape as the vendor OI grid; explicit VOLUME basis. Empty
+    coverage is UNAVAILABLE (never raw fallback, never zero-fill).
+    """
+    if spot <= 0 or not contracts:
+        return {"expiries": [], "strikes": [], "grid": {}, "exposure_basis": "VOLUME",
+                "formula_version": "gex.v2", "status": "unavailable", "reason": "NO_COVERAGE"}
+    grid: dict[str, dict[float, float]] = {}
+    totals: dict[float, float] = {}
+    quarantined = 0
+    invalid_type = 0
+    for c in contracts:
+        if c.get("adjusted") or c.get("nonstandard"):
+            quarantined += 1
+            continue
+        vol = safe_float_or_none(c.get("volume", c.get("V")))
+        if vol is None or vol <= 0:
+            continue
+        gamma = _vendor_gamma(c)
+        if gamma is None:
+            continue
+        strike = safe_float_or_none(c.get("strike"))
+        if strike is None or strike <= 0:
+            continue
+        expiry = c.get("expiry") or ""
+        if not expiry:
+            continue
+        mult = _resolve_mult(c)
+        # R7-F04: unknown option type is rejected (never default-put).
+        sign = option_type_sign(c.get("type"))
+        if sign is None:
+            invalid_type += 1
+            continue
+        cell = sign * gamma * mult * spot * spot * 0.01 * vol
+        d = grid.setdefault(expiry, {})
+        d[strike] = d.get(strike, 0.0) + cell
+        totals[strike] = totals.get(strike, 0.0) + cell
+    expiries = sorted(grid.keys())
+    strikes = sorted(totals.keys())
+
+    def _k(x: float) -> str:
+        return str(int(x)) if float(x).is_integer() else str(x)
+
+    return {
+        "expiries": expiries,
+        "strikes": strikes,
+        "grid": {e: {_k(k): v for k, v in grid[e].items()} for e in expiries},
+        "strike_totals": [{"strike": k, "gex": v} for k, v in sorted(totals.items())],
+        "exposure_basis": "VOLUME",
+        "quarantined": quarantined,
+        "invalid_type": invalid_type,
+        "formula_version": "gex.v2",
+        "status": "ok" if expiries else "unavailable",
+        "reason": None if expiries else "NO_VOLUME_COVERAGE",
+    }
+
+
+VEX_MODEL_VERSION = "local-bs-vanna.v1"
+
+
+def compute_vex_by_strike_local(spot: float, contracts: list[dict[str, Any]],
+                                ticker: str = "") -> list[dict[str, Any]]:
+    """R7-02: per-strike VEX from LOCAL Black-Scholes vanna (packet §5.1).
+
+    vex_net_1volpt = Σ c·m·N·S·vanna·0.01 (Δσ = +1 vol point);
+    vex_gross_1volpt = Σ |m·N·S·vanna·0.01|. Signed vanna preserved;
+    unknown types rejected, adjusted quarantined, missing IV/T/OI counted
+    (that contract is unavailable, never zero-filled). European-BS
+    approximation: labeled for American single-name contracts via q/model
+    fields, never presented as vendor supply. Units: USD delta-notional
+    change per +1 vol point — not option P&L, not GEX dollars.
+    """
+    if spot <= 0 or not contracts:
+        return []
+    q = DIV_YIELD.get(ticker, 0.0)
+    agg: dict[float, dict[str, Any]] = {}
+    for c in contracts:
+        if c.get("adjusted") or c.get("nonstandard"):
+            continue
+        oi = safe_float_or_none(c.get("oi", c.get("open_interest")))
+        if oi is None or oi <= 0:
+            continue
+        iv = safe_float_or_none(c.get("iv"))
+        T = safe_float_or_none(c.get("T"))
+        if iv is None or iv <= 0 or T is None or T <= 0:
+            continue
+        strike = safe_float_or_none(c.get("strike"))
+        if strike is None or strike <= 0:
+            continue
+        sign = option_type_sign(c.get("type"))
+        if sign is None:
+            continue
+        mult = _resolve_mult(c)
+        v = bs_vanna(spot, strike, T, iv, q=q)
+        if not math.isfinite(v):
+            continue
+        contrib = sign * v * oi * mult * spot * 0.01
+        bucket = agg.setdefault(strike, {"strike": strike, "vex_net": 0.0,
+                                         "vex_gross": 0.0, "vex_call": 0.0,
+                                         "vex_put": 0.0, "oi": 0.0,
+                                         "model": VEX_MODEL_VERSION})
+        bucket["vex_net"] += contrib
+        bucket["vex_gross"] += abs(contrib)
+        if sign > 0:
+            bucket["vex_call"] += abs(contrib)
+        else:
+            bucket["vex_put"] += abs(contrib)
+        bucket["oi"] += oi
+    return sorted(agg.values(), key=lambda r: r["strike"])
+
+
+def compute_vex_grid_local(spot: float, contracts: list[dict[str, Any]],
+                           ticker: str = "") -> dict[str, Any]:
+    """R7-02: 2D VEX grid (same strike×expiry shape as the vendor OI grid).
+
+    Same population, units and model as compute_vex_by_strike_local.
+    Empty coverage is UNAVAILABLE (never zero-filled, never raw fallback).
+    """
+    if spot <= 0 or not contracts:
+        return {"expiries": [], "strikes": [], "grid": {}, "exposure_basis": "VEX_1VOLPT",
+                "formula_version": "gex.v2", "model": VEX_MODEL_VERSION,
+                "status": "unavailable", "reason": "NO_COVERAGE",
+                "missing_vanna_inputs": 0, "quarantined": 0, "invalid_type": 0}
+    q = DIV_YIELD.get(ticker, 0.0)
+    grid: dict[str, dict[float, float]] = {}
+    totals: dict[float, float] = {}
+    gross: dict[float, float] = {}
+    missing = quarantined = invalid_type = 0
+    for c in contracts:
+        if c.get("adjusted") or c.get("nonstandard"):
+            quarantined += 1
+            continue
+        oi = safe_float_or_none(c.get("oi", c.get("open_interest")))
+        iv = safe_float_or_none(c.get("iv"))
+        T = safe_float_or_none(c.get("T"))
+        strike = safe_float_or_none(c.get("strike"))
+        if (oi is None or oi <= 0 or iv is None or iv <= 0
+                or T is None or T <= 0 or strike is None or strike <= 0):
+            missing += 1
+            continue
+        expiry = c.get("expiry") or ""
+        if not expiry:
+            missing += 1
+            continue
+        sign = option_type_sign(c.get("type"))
+        if sign is None:
+            invalid_type += 1
+            continue
+        mult = _resolve_mult(c)
+        v = bs_vanna(spot, strike, T, iv, q=q)
+        if not math.isfinite(v):
+            missing += 1
+            continue
+        cell = sign * v * oi * mult * spot * 0.01
+        d = grid.setdefault(expiry, {})
+        d[strike] = d.get(strike, 0.0) + cell
+        totals[strike] = totals.get(strike, 0.0) + cell
+        gross[strike] = gross.get(strike, 0.0) + abs(cell)
+    expiries = sorted(grid.keys())
+    strikes = sorted(totals.keys())
+
+    def _k(x: float) -> str:
+        return str(int(x)) if float(x).is_integer() else str(x)
+
+    return {
+        "expiries": expiries,
+        "strikes": strikes,
+        "grid": {e: {_k(k): v for k, v in grid[e].items()} for e in expiries},
+        "strike_gross": [{"strike": k, "vex_gross": v} for k, v in sorted(gross.items())],
+        "exposure_basis": "VEX_1VOLPT",
+        "formula_version": "gex.v2",
+        "model": VEX_MODEL_VERSION,
+        "model_note": ("european-bs approx; vendor Greeks do not supply vanna; "
+                       "USD delta-notional per +1 vol point, not option P&L"),
+        "status": "ok" if expiries else "unavailable",
+        "reason": None if expiries else "NO_VEX_COVERAGE",
+        "missing_vanna_inputs": missing,
+        "quarantined": quarantined,
+        "invalid_type": invalid_type,
+    }
 
 
 def find_zero_crossings(spot: float, contracts: list[dict]) -> list[float]:

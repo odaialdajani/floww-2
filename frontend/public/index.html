@@ -44,8 +44,14 @@
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <script>
-      // Register service worker (only in production builds)
-      if ('serviceWorker' in navigator && window.location.hostname !== 'localhost') {
+      // Register service worker (only in production builds).
+      // R8-06: 127.0.0.1 and [::1] are the same machine as localhost — the
+      // kill-switch SW reloads every controlled page on activate, which
+      // turned local IP-literal dev sessions into a reload loop (aborted
+      // fetches, blank captures). Never register on loopback.
+      var __host = window.location.hostname;
+      var __isLoopback = (__host === 'localhost' || __host === '127.0.0.1' || __host === '[::1]');
+      if ('serviceWorker' in navigator && !__isLoopback) {
         window.addEventListener('load', function() {
           navigator.serviceWorker.register('/service-worker.js')
             .then(function(reg) {

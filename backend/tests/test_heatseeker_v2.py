@@ -11,6 +11,7 @@ def install_offline_market(monkeypatch):
 
     import routes.analytics as analytics
     import server
+    from services import movers
 
     async def chain(ticker, max_expiries=4, *args, **kwargs):
         now = datetime.now(UTC)
@@ -33,7 +34,7 @@ def install_offline_market(monkeypatch):
     monkeypatch.setattr(analytics._cache, "get_chain", chain)
     monkeypatch.setattr(server, "_BUILD_HEATMAP_CACHE", {})
     monkeypatch.setattr(server, "tap_counts", AsyncMock(return_value={}))
-    monkeypatch.setattr(server, "_fetch_movers_sync", lambda: [])
+    monkeypatch.setattr(movers, "get_movers", AsyncMock(return_value=movers._empty("TEST_NO_MOVERS")))
     monkeypatch.setattr(server, "calc_realized_volatility", lambda *a, **k: {})
     monkeypatch.setattr(server, "calc_iv_rank_percentile", lambda *a, **k: {})
     monkeypatch.setattr(server, "velocity_and_rolling", AsyncMock(return_value={}))

@@ -7,14 +7,17 @@ import {
   TRADE_NOW_FLOOR, SCAN_FACTS,
 } from "./tideFeed";
 
+beforeEach(() => { jest.spyOn(Date,"now").mockReturnValue(Date.parse("2026-09-07T15:00:00Z")); });
+afterEach(() => jest.restoreAllMocks());
+
 const dirAlert = (over = {}) => ({
   key: "oiconf|NVDA|call|182.5|2026-09-19",
   rule: "OICONF", tier: "GOLD", conviction: 94, bias: "BULLISH",
   under: "NVDA", type: "call", strike: 182.5, exp: "2026-09-19", dte: 14,
-  score: 94, premium: 18400000, under_price: 178.4, move_pct: 1.8, asof_ts: new Date().toISOString(),
+  score: 94, premium: 18400000, under_price: 178.4, move_pct: 1.8, asof_ts: new Date(Date.now()).toISOString(),
   key_levels_json: JSON.stringify({ entry: 178.4, invalidation: 173.94, target: 188.21 }),
   context_json: JSON.stringify({
-    source_event_time: new Date().toISOString(), source_quality: "ok",
+    source_event_time: new Date(Date.now()).toISOString(), source_quality: "ok",
     activity_summary: "Call print: 218,000 contracts",
     institutional_indicators: ["Top-decile composite score"],
     market_regime: "NEGATIVE_GAMMA",
@@ -26,7 +29,7 @@ const dirAlert = (over = {}) => ({
 const sigmaAlert = (over = {}) => ({
   key: "sigma|SPY", rule: "SIGMA", tier: "SILVER", conviction: 79,
   bias: "BEARISH", under: "SPY", type: null, strike: null, exp: null,
-  sigma: 4.6, move_pct: null, asof_ts: new Date().toISOString(),
+  sigma: 4.6, move_pct: null, asof_ts: new Date(Date.now()).toISOString(),
   key_levels_json: null, context_json: null, why: "volume 4.6σ",
   ...over,
 });

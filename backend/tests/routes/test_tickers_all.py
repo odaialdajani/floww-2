@@ -47,3 +47,34 @@ async def test_configured_symbols_are_deduplicated_and_changes_visible(monkeypat
     assert not result["cached"] and result["cached_age_s"] is None
     monkeypatch.setenv("FLOWW_PUBLIC_UNIVERSE", "IBM")
     assert (await list_all_tickers(limit=1000, page=1, refresh=False))["tickers"] == ["IBM"]
+
+
+def test_symbols_us_equities_unit(monkeypatch):
+    from services.finnhub_client import FinnhubClient
+
+    class Raw:
+        def stock_symbols(self, exchange):
+            assert exchange == "US"
+            return [{"symbol": "b"}, {"symbol": "A "}, {"symbol": "a"},
+                    {"symbol": ""}, {"symbol": "C"}]
+
+    c = FinnhubClient.__new__(FinnhubClient)
+    c._client = Raw()
+    assert c.symbols_us_equities() == ["A", "B", "C"]
+
+    c2 = FinnhubClient.__new__(FinnhubClient)
+    c2._client = None
+    assert c2.symbols_us_equities() is None
+
+
+@pytest.mark.asyncio
+async def test_missing_optional_provider_keeps_featured_universe(monkeypatch):
+    import sys
+
+    import server
+    monkeypatch.setitem(sys.modules, "services.finnhub_client", None)
+    monkeypatch.setattr(server, "POPULAR_UNIVERSE", ["SPY"])
+    out = await list_all_tickers(limit=1000, page=1, refresh=True)
+    assert out["tickers"] == ["SPY"]
+    assert out["source"] == "featured-universe"
+    assert not out["complete_exchange_catalog"]

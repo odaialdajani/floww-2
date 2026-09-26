@@ -48,7 +48,6 @@ from services.gex_core import (
     calc_probability_distribution,
     classify_nodes,
     compute_gex_by_strike,
-    compute_gex_by_strike_volume,
     compute_gex_grid,
     detect_opportunities,
     detect_patterns,
@@ -426,11 +425,29 @@ def cache_set(key: str, data: Any):
 
 
 
+def _snapshot_time(d: dict) -> float:
+    ts = d.get("ts")
+    if isinstance(ts, datetime):
+        t = ts if ts.tzinfo else ts.replace(tzinfo=UTC)
+        return t.timestamp()
+    iso = d.get("ts_iso") or (ts if isinstance(ts, str) else None)
+    try:
+        dt = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+        return (dt if dt.tzinfo else dt.replace(tzinfo=UTC)).timestamp()
+    except (TypeError, ValueError):
+        return 0.0
+
+
 async def save_snapshot(ticker: str, payload: dict[str, Any]):
     try:
+        # F12: typed UTC datetime for ts (ISO string kept as ts_iso for compat
+        # readers); research history lives in DuckDB (heatmap_history), this
+        # Mongo cache stays a short 50-row display buffer.
+        now = datetime.now(UTC)
         doc = {
             "ticker": ticker,
-            "ts": datetime.now(UTC).isoformat(),
+            "ts": now,
+            "ts_iso": now.isoformat(),
             "spot": payload["spot"],
             "king_strike": payload["nodes"]["king"]["strike"] if payload["nodes"].get("king") else None,
             "king_gex": payload["nodes"]["king"]["gex"] if payload["nodes"].get("king") else None,
@@ -441,8 +458,10 @@ async def save_snapshot(ticker: str, payload: dict[str, Any]):
         }
         await db.snapshots.insert_one(doc)
         # Keep last 50 per ticker
-        cursor = db.snapshots.find({"ticker": ticker}, {"_id": 1}).sort("ts", -1).skip(50)
-        ids = [d["_id"] async for d in cursor]
+        cursor = db.snapshots.find({"ticker": ticker}, {"_id": 1, "ts": 1, "ts_iso": 1})
+        retained = [d async for d in cursor]
+        retained.sort(key=_snapshot_time, reverse=True)
+        ids = [d["_id"] for d in retained[50:]]
         if ids:
             await db.snapshots.delete_many({"_id": {"$in": ids}})
     except Exception as e:
@@ -450,9 +469,18 @@ async def save_snapshot(ticker: str, payload: dict[str, Any]):
 
 
 async def velocity_and_rolling(ticker: str, current_nodes: dict[str, Any]) -> dict[str, Any]:
-    """Compute rate of change vs prior snapshot + rolling floor/ceiling sequence."""
-    cur = db.snapshots.find({"ticker": ticker}, {"_id": 0}).sort("ts", -1).limit(10)
+    """Compute rate of change vs prior snapshot + rolling floor/ceiling sequence.
+
+    F12 migration: ts may be datetime (new) or ISO string (legacy rows).
+    Normalizes in Python after fetch so mixed-type storage never misorders.
+    """
+    # This is the short display buffer (50 rows), not the research archive.
+    # Limit only after comparing real instants across legacy strings and dates.
+    cur = db.snapshots.find({"ticker": ticker}, {"_id": 0})
     history = [d async for d in cur]
+
+    history.sort(key=_snapshot_time, reverse=True)
+    history = history[:10]
     if len(history) < 1:
         return {"velocity_score": 0, "rolling_floor": "stable", "rolling_ceiling": "stable", "history": []}
 
@@ -790,20 +818,10 @@ DEFAULT_TICKERS = ["SPY", "QQQ", "^SPX", "IWM", "AAPL", "NVDA", "TSLA", "META", 
 _TICKER_CACHE: list[str] | None = None
 _TICKER_CACHE_TS: float | None = None
 CACHE_TTL_S = 1800  # 30 minutes
-POPULAR_UNIVERSE = [
-    # Mega Cap Tech
-    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "AMD", "AVGO", "NFLX",
-    "CRM", "INTC", "ORCL", "TXN", "ADBE", "SNAP", "PANW", "TEAM", "DOCU", "NOW",
-    # Growth & AI
-    "SMCI", "MU", "PLTR", "COIN", "MARA", "RIVN", "LCID", "HOOD", "SOFI", "UPWK",
-    "SQ", "PINS", "SHOP", "TWLO", "DDOG", "OKTA", "PSTG", "NET", "PATH", "VEEV",
-    # Financials & Industrials
-    "JPM", "GS", "MS", "WFC", "BAC", "C", "BLK", "SPGI", "BA", "LMT", "UNP", "UPS", "FDX",
-    # Energy & Materials
-    "XOM", "CVX", "COP", "SLB", "VLO", "MPC", "PSX", "APD", "NCLH", "GM", "F", "T",
-    # Consumer Staples
-    "KO", "PEP", "MCD", "WMT", "COST", "BABA", "MRNA", "BIDU", "JD", "PDD"
-]
+# Tracked-optionable universe lives in services.movers (single source for
+# the movers route + ticker universes); re-exported here for existing
+# `from server import POPULAR_UNIVERSE` consumers (routes/market_data).
+from services.movers import POPULAR_UNIVERSE as POPULAR_UNIVERSE
 
 PATTERN_GLOSSARY = {
     "gamma_flip": {"name": "Gamma Flip", "description": "The spot price level where total GEX flips from positive to negative."},
@@ -853,34 +871,6 @@ PATTERN_GLOSSARY = {
 
 
 _movers_cache: dict[str, Any] = {"ts": 0, "data": []}
-
-
-def _fetch_movers_sync() -> list[dict[str, Any]]:
-    """Use yfinance bulk download for prev-day movers (fast, no rate limit)."""
-    try:
-        df = yf.download(POPULAR_UNIVERSE, period="2d", interval="1d",
-                         group_by="ticker", progress=False, threads=True, auto_adjust=False)
-    except Exception as e:
-        log.warning(f"yfinance movers fail: {e}")
-        return []
-    out: list[dict[str, Any]] = []
-    for sym in POPULAR_UNIVERSE:
-        try:
-            sub = df[sym].dropna()
-            if len(sub) < 2:
-                continue
-            prev_close = float(sub["Close"].iloc[-2])
-            last_close = float(sub["Close"].iloc[-1])
-            day_open = float(sub["Open"].iloc[-1])
-            hi = float(sub["High"].iloc[-1])
-            lo = float(sub["Low"].iloc[-1])
-            vol = float(sub["Volume"].iloc[-1])
-            pct = ((last_close - prev_close) / prev_close * 100) if prev_close else 0
-            out.append({"ticker": sym, "open": day_open, "close": last_close, "pct": round(pct, 2),
-                        "volume": vol, "high": hi, "low": lo, "prev_close": prev_close})
-        except Exception:
-            continue
-    return out
 
 
 def _attach_strike_volumes(
@@ -998,6 +988,119 @@ def _top_up_strike_set(shown: set, full_ordered: list, min_n: int) -> set:
             break
         kept.add(strike)
     return kept
+
+
+def _display_surfaces(spot: float, contracts: list[dict[str, Any]], ticker: str,
+                      scalp: bool) -> tuple[str, str, list, dict]:
+    """Canonical display strikes/grid + basis + model provenance (R6-1).
+
+    Returns (exposure_basis, model_basis, strikes, grid). Vendor-supplied
+    Greeks first; declared local-BS fallback when no contract carries usable
+    vendor gamma (readable structure, model_basis local-bs-fallback);
+    explicit volume fallback when OI is unavailable. Pure function of its
+    inputs — unit-tested directly.
+    """
+    exposure_basis = "OI"
+    model_basis = "vendor-supplied-greeks"
+    # R7-02: canonical VEX surface rides every display path with its own
+    # basis/model/coverage (packet §5.1). Missing inputs make VEX
+    # unavailable — never zero-filled, never a raw fallback.
+    from services.gex_core import compute_vex_grid_local
+    _vg = compute_vex_grid_local(spot, contracts, ticker)
+    def _with_vex(grid: dict) -> dict:
+        try:
+            grid["vex_grid"] = _vg.get("grid", {})
+            grid["vex_meta"] = {"exposure_basis": _vg.get("exposure_basis"),
+                                "model": _vg.get("model"),
+                                "status": _vg.get("status"),
+                                "reason": _vg.get("reason"),
+                                "missing_vanna_inputs": _vg.get("missing_vanna_inputs", 0),
+                                "quarantined": _vg.get("quarantined", 0),
+                                "invalid_type": _vg.get("invalid_type", 0)}
+        except Exception:
+            pass  # silent by design: VEX attach is additive metadata — GEX surfaces already computed
+        return grid
+    if scalp:
+        from services.gex_core import (
+            compute_gex_by_strike_volume_vendor,
+            compute_gex_grid_volume_vendor,
+        )
+        strikes = compute_gex_by_strike_volume_vendor(spot, contracts)
+        grid = compute_gex_grid_volume_vendor(spot, contracts)
+        exposure_basis = "VOLUME_SCALP"
+        if not strikes:
+            from services.gex_core import compute_gex_by_strike_volume as _local_vrows
+            from services.gex_core import compute_gex_grid_volume as _local_vgrid
+            strikes = _local_vrows(spot, contracts, ticker)
+            grid = _local_vgrid(spot, contracts, ticker)
+            if strikes:
+                model_basis = "local-bs-fallback"
+        return exposure_basis, model_basis, strikes, _with_vex(grid)
+    from services.gex_core import compute_gex_by_strike_vendor, compute_gex_grid_vendor
+    strikes = compute_gex_by_strike_vendor(spot, contracts)
+    grid = compute_gex_grid_vendor(spot, contracts)
+    if not strikes:
+        from services.gex_core import compute_gex_by_strike as _local_rows
+        from services.gex_core import compute_gex_grid as _local_grid
+        strikes = _local_rows(spot, contracts, ticker)
+        grid = _local_grid(spot, contracts, ticker)
+        if strikes:
+            model_basis = "local-bs-fallback"
+            log.warning("build_heatmap: no vendor gamma — local-BS fallback (read-only structure, not setup-eligible)")
+    if not strikes and any((c.get("volume") or 0) > 0 for c in contracts):
+        # OI unavailable — volume-weighted grid keeps the desk alive but the
+        # basis is explicit (F13): never relabelled as raw OI GEX.
+        from services.gex_core import (
+            compute_gex_by_strike_volume_vendor,
+            compute_gex_grid_volume_vendor,
+        )
+        strikes = compute_gex_by_strike_volume_vendor(spot, contracts)
+        grid = compute_gex_grid_volume_vendor(spot, contracts)
+        exposure_basis = "VOLUME_FALLBACK_OI_UNKNOWN"
+        if not strikes:
+            # Greek-less fallback-provider shape (IV + volume, no OI/gamma,
+            # e.g. yfinance index chain): local-BS volume fallback keeps
+            # readability, declared and never setup-eligible — same policy
+            # as the scalp branch above.
+            from services.gex_core import compute_gex_by_strike_volume as _local_vrows
+            from services.gex_core import compute_gex_grid_volume as _local_vgrid
+            strikes = _local_vrows(spot, contracts, ticker)
+            grid = _local_vgrid(spot, contracts, ticker)
+            if strikes:
+                model_basis = "local-bs-fallback"
+        log.warning("build_heatmap: OI unavailable — volume-weighted GEX fallback (grid populated)")
+    return exposure_basis, model_basis, strikes, _with_vex(grid)
+
+
+def _display_quality(exposure_basis: str, model_basis: str, strikes: list) -> dict[str, Any]:
+    """Quality for the mounted payload (R6-1/B02 + R8-01).
+
+    Structural readability (grid renders) is separate from confirmed setup
+    eligibility. Only vendor-supplied Greeks make a setup eligible;
+    local-model fallback stays readable-but-waiting. Vendor Greeks carry
+    no observation timestamp, so the vendor path always reports
+    GREEK_TIME_UNKNOWN: it informs freshness interpretation without
+    blocking structure (eligibility stays driven by setupEligible).
+    """
+    if not strikes:
+        return {"state": "unavailable", "reasonCodes": ["NO_USABLE_CONTRACTS"],
+                "setupEligible": False, "executionEligible": False, "tradeSideCapability": "none"}
+    vendor_ok = exposure_basis == "OI" and model_basis == "vendor-supplied-greeks"
+    if vendor_ok:
+        reasons = ["GREEK_TIME_UNKNOWN"]
+    elif exposure_basis != "OI":
+        reasons = [exposure_basis]
+    else:
+        reasons = ["LOCAL_BS_FALLBACK"]
+    return {
+        "state": ("usable" if exposure_basis == "OI" else "unavailable")
+        if model_basis == "vendor-supplied-greeks"
+        else ("partial" if strikes else "unavailable"),
+        "reasonCodes": reasons,
+        "setupEligible": exposure_basis == "OI" and model_basis == "vendor-supplied-greeks",
+        "executionEligible": False,
+        "tradeSideCapability": "none",
+    }
 
 
 async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: bool = True, mode: str = "day", dte: int | None = None, scalp: bool = False, max_strikes: int = 200) -> dict[str, Any]:
@@ -1173,21 +1276,17 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         raw["contracts"] = filtered
         raw["expiries"] = sorted({c["expiry"] for c in raw["contracts"]})
 
-    # Choose GEX computation: volume-weighted for scalp, OI for normal
-    if scalp:
-        strikes = compute_gex_by_strike_volume(spot, raw["contracts"], ticker)
-        grid = {"expiries": raw["expiries"], "strikes": [], "grid": {}, "strike_totals": []}
-    else:
-        strikes = compute_gex_by_strike(spot, raw["contracts"], ticker)
-        grid = compute_gex_grid(spot, raw["contracts"], ticker)
-        if not strikes and any((c.get("volume") or 0) > 0 for c in raw["contracts"]):
-            # Yahoo suppresses OI in certain windows (overnight/throttle) — all OI=0
-            # would blank the desk. Volume-weighted GEX keeps it alive; tagged so the
-            # UI can show the degraded source honestly.
-            from services.gex_core import compute_gex_grid_volume
-            strikes = compute_gex_by_strike_volume(spot, raw["contracts"], ticker)
-            grid = compute_gex_grid_volume(spot, raw["contracts"], ticker)
-            log.warning(f"build_heatmap: OI unavailable for {ticker} — volume-weighted GEX fallback (grid populated)")
+    # R6-1 canonical display policy: the mounted raw/volume surfaces derive
+    # from SUPPLIED vendor Greeks over one normalized contract population
+    # (gex.v2). When no contract carries a usable vendor gamma, a DECLARED
+    # local-Black-Scholes fallback keeps structural readability — labeled
+    # model_basis local-bs-fallback and never setup-eligible. Local Greeks
+    # otherwise feed charm/vex/vomma scenario overlays only — never silently
+    # mixed into raw structure, walls or replay.
+    # F07: every supported mode produces a real 2D matrix. Scalp is a
+    # horizon/display/weighting combination — not an empty grid.
+    exposure_basis, model_basis, strikes, grid = _display_surfaces(
+        spot, raw["contracts"], ticker, scalp)
 
     # Band: scalp=±2%, day=±15%, swing=±25%
     # Dynamic band based on price level: wider bands for low-priced stocks
@@ -1220,31 +1319,55 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                           key=lambda s: abs(s - spot))
     kept = _top_up_strike_set(band_set, full_ordered, MIN_GRID_STRIKES)
     strikes = [s for s in strikes if s["strike"] in kept]
-    if not scalp:
-        grid["strikes"] = [k for k in grid["strikes"] if k in kept]
-        grid["strike_totals"] = [s for s in grid["strike_totals"] if s["strike"] in kept]
+    grid["strikes"] = [k for k in grid.get("strikes", []) if k in kept]
+    grid["strike_totals"] = [s for s in grid.get("strike_totals", []) if s["strike"] in kept]
 
-    # Tag fresh/tested via tap counts
+    # F09/F10: taps are observed touches; unknown history stays unknown.
+    # No calibrated outcome probability is emitted here (tap_prob=None).
     tap_map: dict[float, int] = {}
+    taps_unknown = False
     if with_taps and not scalp:
-        tap_map = await tap_counts(ticker, [s["strike"] for s in strikes], days=5)
+        try:
+            tap_map = await tap_counts(ticker, [s["strike"] for s in strikes], days=5)
+        except Exception as e:
+            log.debug("tap_counts failed for %s (unknown history): %s", ticker, e)
+            taps_unknown = True
+    else:
+        taps_unknown = True
     for s in strikes:
         if scalp:
-            s["taps"] = 0
-            s["lifecycle"] = "live"
-            s["tap_prob"] = 1.0
+            s["taps"] = None
+            s["lifecycle"] = "unknown"
+            s["tap_prob"] = None
+            s["tap_reason"] = "SCALP_NO_HISTORY"
+        elif taps_unknown and not tap_map:
+            s["taps"] = None
+            s["lifecycle"] = "unknown"
+            s["tap_prob"] = None
+            s["tap_reason"] = "HISTORY_UNKNOWN"
         else:
-            tc = tap_map.get(s["strike"], 0)
-            s["taps"] = tc
-            if tc == 0:
+            tc = tap_map.get(s["strike"])
+            if tc is None:
+                s["taps"] = None
+                s["lifecycle"] = "unknown"
+                s["tap_prob"] = None
+                s["tap_reason"] = "HISTORY_UNKNOWN"
+            elif tc == 0:
                 s["lifecycle"] = "fresh"
+                s["taps"] = 0
+                s["tap_prob"] = None
             elif tc == 1:
                 s["lifecycle"] = "tested"
+                s["taps"] = 1
+                s["tap_prob"] = None
             elif tc == 2:
                 s["lifecycle"] = "delivered"
+                s["taps"] = 2
+                s["tap_prob"] = None
             else:
                 s["lifecycle"] = "decaying"
-            s["tap_prob"] = [0.80, 0.66, 0.33, 0.10][min(tc, 3)]
+                s["taps"] = tc
+                s["tap_prob"] = None
 
     # Per-strike traded volume for the Profile view's volume column. Engine-agnostic
     # rollup from the raw contracts (Public/cvserver/yfinance all carry volume),
@@ -1253,6 +1376,131 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
 
     nodes = classify_nodes(strikes, spot)
     patterns = detect_patterns(strikes, nodes, spot)
+
+    # T04: distinct raw/delta/activity surfaces from the SAME normalized
+    # contracts (no extra upstream calls). Default strikes/grid stay compat;
+    # `metrics` carries all registered views with per-expiry contributions.
+    # Window volume-delta needs recorder history; until then it is explicitly
+    # unavailable (never zero-filled).
+    metrics: dict[str, Any] = {"default_basis": exposure_basis}
+    try:
+        from domain.exposure_metrics import compute_delta_weighted_oi, compute_raw_oi, compute_volume_gamma
+        from services.gex_core import (
+            compute_gex_by_strike_vendor,
+            compute_gex_grid_delta_weighted,
+            compute_gex_grid_vendor,
+            compute_gex_grid_volume_vendor,
+        )
+        from services.wall_structure import discover_walls, nearest_by_side, nearest_walls
+        raw_m = compute_raw_oi(raw["contracts"], spot)
+        dw_m = compute_delta_weighted_oi(raw["contracts"], spot)
+        vol_m = compute_volume_gamma(raw["contracts"], spot)
+        vendor_rows = compute_gex_by_strike_vendor(spot, raw["contracts"])
+        vendor_grid = compute_gex_grid_vendor(spot, raw["contracts"])
+        delta_grid = compute_gex_grid_delta_weighted(spot, raw["contracts"])
+        activity_grid = compute_gex_grid_volume_vendor(spot, raw["contracts"])
+        metrics.update({
+            "gex_gross_v1": raw_m.gross, "gex_net_v1": raw_m.net,
+            "gex_call": raw_m.call, "gex_put": raw_m.put,
+            "dadgex_gross_v1": dw_m.gross, "dadgex_net_v1": dw_m.net,
+            "dadgex_usable": dw_m.usable, "dadgex_missing_delta": dw_m.missing_delta,
+            "volume_gamma_gross": vol_m.gross, "volume_gamma_net": vol_m.net,
+            "window_dadgex_v1": None, "window_dadgex_reason": "HISTORY_NOT_YET_RECORDED",
+            # §28.3 registry name alias (same unavailable state, both keys).
+            "window_delta_weighted_volume_v1": None,
+            # R6-2: per-wall window aggregation lands here when a comparable
+            # baseline exists; absent means unavailable, never scope-total.
+            "wall_window": {},
+            "magnitude_ratio_delta_over_raw": (dw_m.gross / raw_m.gross) if raw_m.gross > 0 else None,
+            "vendor_rows": vendor_rows, "vendor_grid": vendor_grid,
+            "grids": {"raw": None, "delta": delta_grid, "activity": activity_grid,
+                      "vendor": vendor_grid},
+            "formula_version": "gex.v2",
+        })
+        sol_scope = {"symbol": ticker, "formula": "gex.v2"}
+        sol_walls = discover_walls(strikes if exposure_basis == "OI" else vendor_rows, spot,
+                                   scope=sol_scope)
+        metrics["walls"] = sol_walls
+        metrics["nearest_walls"] = nearest_walls(sol_walls, spot)
+        metrics["nearest_by_side"] = nearest_by_side(sol_walls, spot)
+        # R6-2: per-wall delta-weighted + session-volume breakdown over the
+        # same declared scope (wall-local comparison data for the inspector).
+        try:
+            from domain.exposure_metrics import wall_metric_breakdown
+            metrics["wall_metrics"] = wall_metric_breakdown(
+                sol_walls, raw["contracts"], spot)
+        except Exception as wme:
+            log.debug("wall metric breakdown failed: %s", wme)
+            metrics["wall_metrics"] = {}
+        # F23: off-screen landmarks from the FULL universe (pre-band vendor
+        # rows), so major walls outside the visible window stay navigable.
+        try:
+            universe_walls = discover_walls(vendor_rows, spot, scope=sol_scope)
+            kept = {w["wall_id"] for w in sol_walls}
+            metrics["offscreen_landmarks"] = [
+                {**w, "offscreen": True} for w in universe_walls
+                if w["wall_id"] not in kept][:3]
+        except Exception as le:
+            log.debug("offscreen landmarks failed: %s", le)
+            metrics["offscreen_landmarks"] = []
+        # R5-B: live window delta-weighted activity from the recorder's
+        # previous snapshot. Epoch/scope-bound: same query scope
+        # (ticker/mode/dte/scalp), same session day, same provider. Anything
+        # else is not a comparable epoch — the surface stays unavailable
+        # (never zero-filled, never raw fallback). Rebase quarantines.
+        try:
+            import contextlib as _ctxw
+            with _ctxw.suppress(Exception):
+                from services.duckdb_engine import db as _ddb_win
+                from services.heatmap_history import normalize_stored_contract, replay_snapshot
+                _wconn = getattr(_ddb_win, "conn", None)
+                if _wconn is not None:
+                    _scope_key = f"{ticker}:{mode}:{dte}:{scalp}"
+                    from services.connection_guard import query_rows
+                    _prev_rows = query_rows(_wconn,
+                        "SELECT snapshot_id, asof_ts, data_source FROM heatmap_snapshots_v2 "
+                        "WHERE ticker = '" + str(ticker).replace("'", "''") + "' AND query_key = '"
+                        + _scope_key.replace("'", "''") + "' ORDER BY asof_ts DESC LIMIT 1")
+                    if _prev_rows:
+                        _pid = _prev_rows[0][0]
+                        _prep = replay_snapshot(_wconn, _pid)
+                        _praw = (_prep or {}).get("contracts") or []
+                        _pcontracts = [normalize_stored_contract(r) for r in _praw]
+                        _psnap = (_prep or {}).get("snapshot") or {}
+                        import datetime as _dtw
+                        _today = _dtw.datetime.now(_dtw.UTC).date().isoformat()
+                        _same_day = str(_psnap.get("asof_ts", ""))[:10] == _today
+                        _same_src = ((_psnap.get("data_source") or "")
+                                     == (raw.get("data_source", "yfinance") or ""))
+                        if _pcontracts and _same_day and _same_src:
+                            from services.solstice_enrichment import (
+                                aggregate_window_by_wall,
+                                window_contract_activity,
+                            )
+                            _w = window_contract_activity(_pcontracts, raw["contracts"], spot)
+                            if _w.get("status") == "ok" and _w.get("contracts"):
+                                metrics["window_daddex_v1"] = sum(
+                                    c.get("window_daddex", 0) for c in _w["contracts"])
+                                metrics["window_delta_weighted_volume_v1"] = metrics["window_daddex_v1"]
+                                # Registry canonical name kept in sync (alias).
+                                metrics["window_dadgex_v1"] = metrics["window_daddex_v1"]
+                                metrics["window_daddex_reason"] = None
+                                metrics["window_contracts"] = _w["contracts"][:20]
+                                metrics["window_missing_delta"] = _w.get("missing_delta", 0)
+                                metrics["window_mixed_pair"] = _w.get("mixed_pair", 0)
+                                # R6-2: wall-local window aggregation over the
+                                # FULL row list (before the display cut above);
+                                # a truncated sample is not a population.
+                                metrics["wall_window"] = aggregate_window_by_wall(
+                                    sol_walls, _w["contracts"])
+                            elif _w.get("reason") == "VOLUME_REBASE":
+                                metrics["window_daddex_reason"] = "VOLUME_REBASE"
+                                metrics["window_dadgex_reason"] = "VOLUME_REBASE"
+        except Exception as we:
+            log.debug("window activity attach failed: %s", we)
+    except Exception as me:
+        log.debug("solstice metrics surfaces failed (non-fatal): %s", me)
+        metrics["error"] = "METRICS_UNAVAILABLE"
 
     # --- New analytics (from EzOptions + GEX-Dashboard) ---
     implied_move = calc_implied_move(spot, raw["contracts"])
@@ -1293,16 +1541,23 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         "patterns": patterns,
         "velocity": velocity,
         "tap_counts": {str(k): v for k, v in tap_map.items()},
-        # Contract fields read by the frontend (App.js / HeatseekerDashboard):
         "stale_age_s": raw.get("cache_age_s"),
         "stale": bool(raw.get("stale")),
         "data_fallback": bool(raw.get("stale") or raw.get("data_fallback")),
-        "gex_regime": nodes.get("regime"),
         "data_source": raw.get("data_source", "unknown"),
         **{key: raw.get(key) for key in ("spot_source", "spot_event_time", "spot_fetched_at")
            if key in raw},
+        "source_received_at": raw.get("received_at"),
+        "source_age_s": None,
+        "exposure_basis": exposure_basis,
+        "formula_version": "gex.v2",
+        "model_basis": model_basis,
+        "quality": _display_quality(exposure_basis, model_basis, strikes),
+        "gex_regime": nodes.get("regime"),
         "mode": mode,
         "map_query": requested_map_query,
+        "dte": dte,
+        "scalp": scalp,
         "asof": datetime.now(UTC).isoformat(),
         # Build time identifies the displayed version; only producer times establish freshness.
         "event_time": raw.get("event_time") or raw.get("observed_at"),
@@ -1324,11 +1579,302 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         "hedge_impulse": hedge_impulse,
         "pressure_cloud": pressure_cloud,
         "charm_integral": charm_integral,
+        # Solstice read-only desk (T04–T10/T15–T20, deterministic, no execution)
+        "metrics": metrics,
     }
+    # R5-A: one issued observation ID for this build (content + asof + ticker).
+    # Interactions, scenarios, evidence and recorder rows all join on this ID;
+    # wall events must never be written with a blank snapshot link.
+    try:
+        from services.heatmap_snapshot import snapshot_id_for
+        payload["snapshotId"] = snapshot_id_for(payload)
+    except Exception as _sid_e:
+        log.debug("snapshotId issue failed: %s", _sid_e)
+        payload["snapshotId"] = ""
+    # Attach session permission, corrected regime, patterns v1, vanna, scout,
+    # enrichment — each best-effort, never breaking the core payload.
+    try:
+        from services.solstice_session import playbook_for, session_state
+        payload["session"] = session_state(quality=payload.get("quality"))
+        top_wall = (metrics.get("nearest_walls") or [None])[0]
+        payload["playbook"] = playbook_for(top_wall, spot, payload.get("quality"))
+    except Exception as se:
+        log.debug("solstice session attach failed: %s", se)
+    try:
+        # T07/R4-05/06: observable interaction state per side-specific wall.
+        # History joined by scoped wall ID (ticker + scope + wall_id); a wall
+        # with no history is first_seen=True, otherwise continuity comes from
+        # the stored state (never restarted at unobserved). approach_side is
+        # history-owned, never spot-relative. Scenarios carry the same scoped
+        # wall ID so grid/inspector/AI/recorder resolve one wall.
+        from datetime import UTC as _UTC
+        from datetime import datetime as _dt
+
+        from services.wall_interaction import (
+            detect_wall_gap,
+            is_newer_state,
+            load_last,
+            save_last,
+            scenario_for,
+            scope_id_for,
+            transition,
+            wall_position,
+        )
+        now_dt = _dt.now(_UTC)
+        now_iso = now_dt.isoformat()
+        # R5-C: scope binds expiry dimensions — same strikes at another DTE/
+        # mode/expiry count are a different analytical scope (fresh lifecycle).
+        scope_id = scope_id_for(ticker, {"mode": mode, "dte": dte,
+                                         "scalp": scalp, "expiries": max_expiries})
+        _data_source = raw.get("data_source", "yfinance")
+        sides = metrics.get("nearest_by_side") or {}
+        ordered = [sides.get("below"), sides.get("inside"), sides.get("above")]
+        walls_iter = [w for w in ordered if isinstance(w, dict)]
+        if not walls_iter:
+            walls_iter = (metrics.get("nearest_walls") or [])[:2]
+        interactions = []
+        scenarios = []
+        for w in walls_iter:
+            wid = w.get("wall_id")
+            wpos = wall_position(w, spot)
+            mem_last = load_last(ticker, scope_id, wid or "") or None
+            last = mem_last
+            durable = False
+            try:
+                from services.duckdb_engine import db as _ddb_hist
+                from services.heatmap_history import latest_wall_state, recorder_status
+                _hconn = getattr(_ddb_hist, "conn", None)
+                if _hconn is not None and wid:
+                    db_last = latest_wall_state(_hconn, wid, ticker, scope_id)
+                    # Newest-wins: an event-only DB row must not override more
+                    # recent in-memory dwell continuity.
+                    if db_last and is_newer_state(db_last, mem_last):
+                        last = db_last
+                    # Durable only on a real file-backed recorder, never on
+                    # :memory: fallback.
+                    import os as _os
+                    if last is not None and recorder_status(
+                            _hconn, _os.environ.get("DUCKDB_PATH", ":memory:"))["durable"]:
+                        durable = True
+            except Exception:
+                pass  # silent by design: history is best-effort; heatmap builds without it (durable=False)
+            # Source-time gap detector: session-day rollover, provider switch
+            # or a feed gap beyond FEED_GAP_S breaks continuity (unobserved).
+            if last is not None and detect_wall_gap(last, now_dt, _data_source):
+                last = {"gap": True}
+            start_state = (last or {}).get("state", "unobserved")
+            tr = transition(start_state, spot, w, now=now_dt,
+                            last=last if last is not None else {"gap": False})
+            first_seen = last is None or bool((last or {}).get("gap"))
+            interactions.append({"wall_id": wid, "scope": scope_id,
+                                 "wall_position": wpos,
+                                 "state": tr.get("state"),
+                                 "event": tr.get("event"), "evidence": tr.get("evidence"),
+                                 "at": now_iso, "first_seen": first_seen,
+                                 "durable": durable,
+                                 "taps": None, "taps_reason": "HISTORY_UNKNOWN",
+                                 "persistence": "unknown", "migration": "unknown",
+                                 "continuity": tr.get("continuity", True)})
+            import contextlib as _ctxlib
+            with _ctxlib.suppress(Exception):
+                save_last(ticker, scope_id, wid or "",
+                          {"state": tr.get("state"), "at": tr.get("at", now_iso),
+                           "approach_side": tr.get("approach_side"),
+                           "inside_since": tr.get("inside_since"),
+                           "beyond_since": tr.get("beyond_since"),
+                           "beyond_side": tr.get("beyond_side"),
+                           "adverse_side": tr.get("adverse_side"),
+                           "reclaim_state": tr.get("reclaim_state"),
+                           "data_source": _data_source})
+            with _ctxlib.suppress(Exception):
+                from services.duckdb_engine import db as _ddb_rec
+                from services.heatmap_history import record_wall_event
+                _hconn2 = getattr(_ddb_rec, "conn", None)
+                if _hconn2 is not None and wid and tr.get("event"):
+                    record_wall_event(_hconn2, wid, ticker, tr.get("event"),
+                                      payload.get("snapshotId", ""),
+                                      {"state": tr.get("state"), "at": tr.get("at", now_iso),
+                                       "approach_side": tr.get("approach_side"),
+                                       "inside_since": tr.get("inside_since"),
+                                       "beyond_since": tr.get("beyond_since"),
+                                       "beyond_side": tr.get("beyond_side"),
+                                       "adverse_side": tr.get("adverse_side"),
+                                       "reclaim_state": tr.get("reclaim_state"),
+                                       "wall_position": wpos},
+                                      scope_id)
+            scenarios.extend(scenario_for(w, spot, wall_position=wpos,
+                                          wall_id=wid, scope=scope_id))
+        payload["interactions"] = interactions
+        payload["scenarios"] = scenarios[:6]
+    except Exception as ie:
+        log.debug("solstice interaction attach failed: %s", ie)
+    try:
+        from services.solstice_regime import regime_at_spot
+        payload["gamma_regime_v1"] = regime_at_spot(spot, raw["contracts"], ticker)
+    except Exception as re:
+        log.debug("solstice regime attach failed: %s", re)
+    try:
+        from services.solstice_patterns import detect_patterns_v1
+        payload["patterns_v1"] = detect_patterns_v1(
+            payload.get("strikes", []), spot, metrics.get("walls", []))
+    except Exception as pe:
+        log.debug("solstice patterns attach failed: %s", pe)
+    try:
+        from services.solstice_vanna import vanna_by_expiry
+        payload["vanna_v1"] = vanna_by_expiry(raw["contracts"], spot, ticker)
+    except Exception as ve:
+        log.debug("solstice vanna attach failed: %s", ve)
+    try:
+        from datetime import UTC as _scout_UTC
+        from datetime import datetime as _scout_dt
+
+        from services.contract_scout import scout_candidates
+        # Scout needs a scenario side; default reports both sides' eligibility
+        # counts without selecting (no dwell without a scenario).
+        # R5-D: production callers pass enforced session context (as-of day +
+        # now) so unknown age, future expiry and nonfinite inputs are rejected.
+        _scout_now = _scout_dt.now(_scout_UTC)
+        _session_day = _scout_now.date().isoformat()
+        _now_s = _scout_now.timestamp()
+        _scout_calls = scout_candidates(raw["contracts"], "CALLS", spot,
+                                        now_s=_now_s, session_date=_session_day)
+        _scout_puts = scout_candidates(raw["contracts"], "PUTS", spot,
+                                       now_s=_now_s, session_date=_session_day)
+        from services.contract_scout import scout_shortlist_rows
+        payload["scout"] = {
+            "calls": _scout_calls["n_eligible"],
+            "puts": _scout_puts["n_eligible"],
+            "rejected": {k: ((_scout_calls["rejected"].get(k, 0)),
+                             (_scout_puts["rejected"].get(k, 0)))
+                         for k in set(_scout_calls["rejected"]) | set(_scout_puts["rejected"])},
+            # R7-05: bounded read-only review rows (3/side) with quote ages.
+            # No-candidate stays valid; wall linkage happens at review time
+            # (selection is UI state) — rows never silently switch walls.
+            "shortlist": {"CALLS": scout_shortlist_rows(_scout_calls, "CALLS", 3),
+                          "PUTS": scout_shortlist_rows(_scout_puts, "PUTS", 3)},
+        }
+        # R5-F: production decision producer — every build records one
+        # decision per scenario side, including abstentions (no-candidate is
+        # a valid result) with candidate quote evidence. Best-effort, never
+        # breaking the build; outcomes attach later via record_outcome.
+        try:
+            import contextlib as _ctxdec
+            with _ctxdec.suppress(Exception):
+                from services.duckdb_engine import db as _ddb_dec
+                from services.heatmap_history import record_decision
+                _dconn = getattr(_ddb_dec, "conn", None)
+                # Wall linkage for the outcome job: nearest structural wall
+                # bounds + default horizon (flagged). Numeric target/stop
+                # barriers are NOT invented here — without them close_episodes
+                # reports NEED_EPISODE and never labels.
+                try:
+                    _nw = (metrics.get("nearest_walls") or [None])[0] or {}
+                    _zw = ([float(_nw["low"]), float(_nw["high"])]
+                           if _nw.get("low") is not None and _nw.get("high") is not None
+                           else None)
+                    _wid = _nw.get("wall_id")
+                except Exception:
+                    _zw, _wid = None, None
+
+                def _build_research_features(spot, zone, ticker):
+                    """Build research-episode features from a decision encounter.
+
+                    R8-05: delegate to episode_policy.research_default_features
+                    so barriers are derived deterministically from the frozen
+                    zone/tick rather than hardcoded. Unknown zone → no
+                    numeric barriers; close_episodes then reports
+                    NEED_EPISODE and never invents a label.
+                    """
+                    from services.episode_policy import (
+                        research_default_features,
+                    )
+                    return research_default_features(
+                        zone=(None if zone is None else tuple(zone)),
+                        encounter_price=spot,
+                        underlying_tick=0.01 if ticker else None,
+                    )
+
+                if _dconn is not None:
+                    for _side, _res in (("CALLS", _scout_calls), ("PUTS", _scout_puts)):
+                        _quotes = []
+                        for _c in (_res.get("candidates") or [])[:5]:
+                            _quotes.append({"osi": _c.get("osi"), "bid": _c.get("bid"),
+                                            "ask": _c.get("ask"),
+                                            "bid_ts": _c.get("bid_timestamp"),
+                                            "ask_ts": _c.get("ask_timestamp"),
+                                            "delta": _c.get("delta"),
+                                            "spread_ticks": None, "rejected": False,
+                                            "reject_reason": None})
+                        for _r in (_res.get("rejection_sample") or [])[:20]:
+                            _quotes.append({"osi": _r.get("osi"), "bid": None, "ask": None,
+                                            "bid_ts": None, "ask_ts": None, "delta": None,
+                                            "spread_ticks": None, "rejected": True,
+                                            "reject_reason": _r.get("reason")})
+                        record_decision(_dconn, {
+                            "ticker": ticker, "snapshot_id": payload.get("snapshotId", ""),
+                            "scenario": _side, "side": _side,
+                            "eligible": _res.get("n_eligible", 0) > 0,
+                            "reason_codes": sorted((_res.get("rejected") or {}).keys()),
+                            "features": _build_research_features(
+                                spot=spot, zone=_zw, ticker=ticker,
+                            ),
+                            "candidate_quotes": _quotes})
+        except Exception as _de:
+            log.debug("solstice decision record failed: %s", _de)
+    except Exception as ce:
+        log.debug("solstice scout attach failed: %s", ce)
+    try:
+        from services.solstice_enrichment import moneyness_buckets
+        payload["moneyness"] = moneyness_buckets(raw["contracts"], spot)
+    except Exception as ee:
+        log.debug("solstice enrichment attach failed: %s", ee)
 
     _t = asyncio.create_task(_logged_task(save_snapshot(ticker, payload), f"save_snapshot:{ticker}"))
     _background_tasks.add(_t)
     _t.add_done_callback(_background_tasks.discard)
+    # T09/R4-13/18: record fresh builds to immutable research history
+    # (never stale-serves) with explicit coverage + capability observation.
+    # The 2,000-contract cap is declared (truncated=True) — never silent.
+    try:
+        from services.duckdb_engine import db as _ddb
+        from services.heatmap_history import record_capability, record_snapshot
+        _conn = getattr(_ddb, "conn", None)
+        if _conn is not None:
+            _all = raw.get("contracts", []) or []
+            _kept = _all[:2000]
+            _cov = {"requested": len(_all), "returned": len(_kept),
+                    "truncated": len(_all) > len(_kept)}
+            _t2 = asyncio.create_task(asyncio.to_thread(
+                record_snapshot, _conn, {"ticker": ticker,
+                                         "expiries_used": payload.get("expiries_used"),
+                                         "spot": spot,
+                                         "mode": mode, "dte": dte, "scalp": scalp,
+                                         "data_source": payload.get("data_source"),
+                                         "exposure_basis": exposure_basis,
+                                         "formula_version": "gex.v2",
+                                         "asof": payload.get("asof"),
+                                         "source_received_at": payload.get("source_received_at"),
+                                         "contracts": _kept,
+                                         "strikes": strikes,
+                                         "grid": payload.get("grid"),
+                                         "metrics": metrics,
+                                         "coverage": _cov,
+                                         "quality": payload.get("quality", {}),
+                                         "scenarios": payload.get("scenarios", [])[:12],
+                                         "interactions": payload.get("interactions", [])[:12]},
+                f"{ticker}:{mode}:{dte}:{scalp}",
+                payload.get("snapshotId") or None))
+            _background_tasks.add(_t2)
+            _t2.add_done_callback(_background_tasks.discard)
+            import contextlib as _ctxlib2
+            with _ctxlib2.suppress(Exception):
+                record_capability(_conn, ticker, "heatmap_build",
+                                  requested=len(_all), returned=len(_kept),
+                                  usable=len(_kept), truncated=_cov["truncated"],
+                                  detail={"mode": mode, "dte": dte, "scalp": scalp,
+                                          "exposure_basis": exposure_basis})
+    except Exception as rh:
+        log.debug("heatmap_history record skipped: %s", rh)
     sanitized = _sanitize(payload)
     _BUILD_HEATMAP_CACHE[cache_key] = {"ts": time.time(), "data": sanitized}
     if len(_BUILD_HEATMAP_CACHE) > 200:
@@ -2002,6 +2548,27 @@ async def _scheduler_loop():
                 research.schedule_maintenance()
         except Exception as e:
             log.warning(f"scheduler tick err: {e}")
+        # R8-05: outcome-worker tick — default DISABLED. Set
+        # SOLSTICE_OUTCOME_WORKER=1 to enable persistent closing of open
+        # decisions from stored price paths (commissioning item; the price
+        # recorder feeding price_paths_v1 is separate). Throttled to ~5min,
+        # budget-free (local DB only, no vendor calls).
+        global _last_outcome_tick_ts
+        try:
+            if os.environ.get("SOLSTICE_OUTCOME_WORKER") == "1" and (
+                    time.time() - globals().get("_last_outcome_tick_ts", 0) > 300):
+                _last_outcome_tick_ts = time.time()
+                from services.duckdb_engine import db as _ddb_outcome
+                from services.heatmap_history import outcome_close_tick
+                _oconn = getattr(_ddb_outcome, "conn", None)
+                if _oconn is not None:
+                    _ores = outcome_close_tick(_oconn)
+                    log.info("outcome worker tick: closed=%d pending=%d seen=%d",
+                             len(_ores.get("closed", [])),
+                             len(_ores.get("skipped_pending", [])),
+                             _ores.get("decisions_seen", 0))
+        except Exception as e:
+            log.warning(f"outcome tick err: {e}")
         await asyncio.sleep(60)
 
 
@@ -2831,8 +3398,11 @@ from routes.discord import router as discord_router
 
 app.include_router(discord_router, tags=["discord"])
 
+import sys
+
 from routes.analytics import router as analytics_router
 
+print(f"DEBUG analytics router: {type(analytics_router)}, routes: {len(analytics_router.routes)}", file=sys.stderr)
 app.include_router(analytics_router, prefix="/api", tags=["analytics"])
 
 from routes.briefing import router as briefing_router
@@ -2879,6 +3449,17 @@ app.include_router(heatseeker_router, tags=["heatseeker"])
 from routes.heatseeker_snapshots_api import router as heatseeker_snapshots_router
 
 app.include_router(heatseeker_snapshots_router, prefix="/api/heatseeker", tags=["heatseeker-snapshots"])
+
+from routes.solstice import router as solstice_router
+
+# R8-04: review journal routes (list decisions, save review state).
+# Registered BEFORE include_router: Starlette snapshots routes at include
+# time, so anything added after would never mount on the app.
+from routes.solstice_review import register_review_routes
+
+register_review_routes(solstice_router)
+
+app.include_router(solstice_router, tags=["solstice"])
 
 from routes.public_api import router as public_api_router
 
@@ -3179,6 +3760,100 @@ async def shutdown_ingestion() -> None:
         log.info("Ingestion pipeline stopped")
     except Exception as e:
         log.warning(f"Ingestion shutdown error: {e}")
+
+# ============ Solstice background capture (T09, opt-in) ============
+# Tab-independent recording: when FLOWW_SOLSTICE_CAPTURE=1, a bounded loop
+# builds fresh heatmaps on cadence so the DuckDB research history grows even
+# with no browser open. Default OFF — no behavior change unless enabled.
+# Respects the shared Public budget (fresh builds debit fan-out; 429s back
+# off via the existing cooler). Market-hours guard skips nights/weekends.
+_solstice_capture_task: asyncio.Task | None = None
+_solstice_capture_running: bool = False
+
+
+def _solstice_capture_cfg() -> dict[str, Any] | None:
+    if os.getenv("FLOWW_SOLSTICE_CAPTURE", "").strip().lower() not in ("1", "true", "yes"):
+        return None
+    tickers = [t.strip().upper() for t in
+               os.getenv("FLOWW_SOLSTICE_CAPTURE_TICKERS", "SPY,QQQ").split(",") if t.strip()]
+    try:
+        interval = max(60, int(os.getenv("FLOWW_SOLSTICE_CAPTURE_SEC", "300")))
+    except (TypeError, ValueError):
+        interval = 300
+    hours_only = os.getenv("FLOWW_SOLSTICE_CAPTURE_HOURS_ONLY", "1").strip().lower() in ("1", "true", "yes")
+    return {"tickers": tickers[:6], "interval": interval, "hours_only": hours_only}
+
+
+def _solstice_in_hours(now: datetime | None = None) -> bool:
+    try:
+        from zoneinfo import ZoneInfo
+        et = (now.astimezone(ZoneInfo("America/New_York")) if now is not None
+              else datetime.now(ZoneInfo("America/New_York")))
+        return et.weekday() < 5 and (9, 0) <= (et.hour, et.minute) < (16, 30)
+    except Exception as e:
+        log.debug("capture hours check failed (capturing): %s", e)
+        return True
+
+
+async def _solstice_capture_loop(tickers: list[str], interval: int, hours_only: bool) -> None:
+    global _solstice_capture_running
+    while True:
+        try:
+            if hours_only and not _solstice_in_hours():
+                await asyncio.sleep(60)
+                continue
+            if _solstice_capture_running:
+                await asyncio.sleep(15)
+                continue
+            _solstice_capture_running = True
+            try:
+                for t in tickers:
+                    try:
+                        # Fresh impl (not the cache wrapper): guarantees a new
+                        # observation for the recorder; stale-serves never record.
+                        await _build_heatmap_impl(t, max_expiries=4)
+                    except Exception as e:
+                        log.debug("solstice capture %s failed (non-fatal): %s", t, e)
+                    await asyncio.sleep(5)  # pace tickers, share budget
+            finally:
+                _solstice_capture_running = False
+            await asyncio.sleep(interval)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.warning("solstice capture loop error (continuing): %s", e)
+            await asyncio.sleep(60)
+
+
+@app.on_event("startup")
+async def startup_solstice_capture() -> None:
+    """Start opt-in Solstice background capture (default off)."""
+    global _solstice_capture_task
+    try:
+        cfg = _solstice_capture_cfg()
+        if cfg is None:
+            return
+        _solstice_capture_task = asyncio.create_task(_solstice_capture_loop(**cfg))
+        _background_tasks.add(_solstice_capture_task)
+        _solstice_capture_task.add_done_callback(_background_tasks.discard)
+        log.info("Solstice background capture ON: %s every %ss",
+                 cfg["tickers"], cfg["interval"])
+    except Exception as e:
+        log.warning("Solstice capture startup failed (non-fatal): %s", e)
+
+
+@app.on_event("shutdown")
+async def shutdown_solstice_capture() -> None:
+    """Stop background capture on shutdown."""
+    global _solstice_capture_task
+    try:
+        if _solstice_capture_task and not _solstice_capture_task.done():
+            _solstice_capture_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await _solstice_capture_task
+    except Exception as e:
+        log.warning("Solstice capture shutdown error: %s", e)
+
 
 # ============ Paper Trading Engine ============
 from routes.paper_trading import set_paper_engine as _set_paper_engine

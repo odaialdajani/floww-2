@@ -47,12 +47,20 @@ class TestFallbackResponses:
         assert r.status_code in (200, 404)
 
     def test_movers_error_returns_200_with_empty_results(self, client):
-        with patch("server._fetch_movers_sync", side_effect=Exception("fail")):
+        from unittest.mock import AsyncMock
+
+        from services import movers as movers_svc
+        movers_svc._CACHE.clear()  # isolate from other tests' last-good entries
+
+        async def _boom(sym, days=10):
+            raise RuntimeError("provider down")
+        with patch("services.market_bars.get_daily_bars", new=_boom):
             r = client.get("/api/movers")
         assert r.status_code == 200
         d = r.json()
         assert d["results"] == []
-        assert d["status"] == "degraded"
+        assert d["status"] == "unavailable"
+        assert d["schema_version"] == "movers.v2"
 
     def test_history_error_returns_200_with_empty_snapshots(self, client):
         with patch("server.db") as mock_db:

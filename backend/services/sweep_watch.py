@@ -20,8 +20,9 @@ def note_sweep(ts: float | None = None) -> float:
         from services.observability import sweep_last_unixtime
 
         sweep_last_unixtime.set(_last_sweep_wall)
-    except Exception:
-        pass  # metrics must never break the sweep path
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug("sweep metric failed (sweep time kept): %s", e)
     return _last_sweep_wall
 
 

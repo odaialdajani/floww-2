@@ -1,5 +1,20 @@
 # Remaining work and handoff
 
+Updated 2026-09-26. **The full goal is not complete.** Current integration evidence: [September26 verification](.planning/eval/integration-verification-20260926.md), [backend review](.planning/eval/backend-integration-review-20260926.md), [frontend review](.planning/eval/frontend-integration-review-20260926.md), [open-PR review](.planning/eval/pr-backlog-review-20260926.md).
+
+## Current next work
+
+1. Finish the new immutable AI comparison freeze without replacing the old inputs, questions, rubric or seal. Check authoritative shared usage before26 candidate calls within the unchanged40/day limit; then independently grade the30-case comparison. Current merged code invalidates the old execution seal. A fresh temporary store cannot establish remaining account allowance.
+2. Continue the exact [AI implementation plan](.planning/unknowns/lodestar-plan-v4-review-draft.md) and [UI redesign plan](.planning/mockups/tidehunter-pro-2026-09-05/PLAN.md). Broader research, concrete proposals, durable paper lifecycle, private watches/briefs, forward outcomes/learning, and later-fill reconciliation remain unfinished. Slippage counted once is still awaiting the user's answer. Mobile stays paused; live trading requires separate written approval.
+3. Historical price/node chart lookback is part of this goal. Concurrent local work owns its stock catalog, history source, chart and mounting changes. Preserve those files and coordinate after this integration commit. Do not claim completion from standalone files or from recorded heatmap replay; verify the mounted chart against timestamped price and saved observations. It cannot establish causality or reconstruct absent past snapshots.
+4. Resolve missing test prerequisites and prior truth claims, production backup/restore/crash proof, full worker startup, production acquisition sharing, and remote identity only with evidence. Keep the prior incidents and older backlog obligations below visible. No deployment or remote-main merge is authorized by this branch push.
+
+The old checklist failure is now repaired with actual levels, ATM volatility, expected move and explicitly modeled hedge shares. Unsupported strategies, historical IV rank and missing wings remain unavailable. Replay isolation, mixed timestamp retention, query safety, shared-write locking, decision ownership, ticker paging, polling order and accepted expiry handling have bounded regression evidence in the current report. This does not close the broader plans or certify every incoming line. PR49's label correction and PR12's corrected paging behavior were ported; PR3/4/5 remain unmerged.
+
+## September11 historical handoff (preserved)
+
+The following is the earlier record, including its then-failing tests and dated usage. Its counts, code-state blockers and frozen-execution readiness are superseded by the September26 report above; its unfinished scope and retained evidence remain relevant.
+
 Updated 2026-09-11 23:40 UTC. This is the entry point for unfinished work after the AI/UI reconciliation. **The full goal is not complete.** Mobile optimization is paused. Publishing this branch does not approve a release, paper orders, live orders, extra model calls, or a merge into main.
 
 ## Resume here

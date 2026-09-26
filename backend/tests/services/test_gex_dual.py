@@ -40,8 +40,9 @@ def _make(strike: float, type_: str, oi: int, volume: int = 0) -> dict:
 
 def test_empty_input_returns_quiet():
     out = DualGexCalculator.compute(SPOT, [])
-    assert out["activity_badge"] == "quiet"
-    assert out["activity_ratio"] == 0.0
+    # F14: unknown stays unknown — empty input is not quiet structure.
+    assert out["activity_badge"] == "unknown"
+    assert out["activity_ratio"] is None
     assert out["net_gex_volume"] == 0.0
     assert out["net_gex_oi"] == 0.0
     assert out["strikes"] == []
@@ -52,18 +53,21 @@ def test_empty_input_returns_quiet():
 def test_invalid_spot_returns_quiet():
     contracts = [_make(SPOT, "call", 100, 50)]
     out = DualGexCalculator.compute(0.0, contracts)
-    assert out["activity_badge"] == "quiet"
+    assert out["activity_badge"] == "unknown"
     out2 = DualGexCalculator.compute(-5.0, contracts)
-    assert out2["activity_badge"] == "quiet"
+    assert out2["activity_badge"] == "unknown"
 
 
 def test_volume_falls_back_to_oi_when_missing():
-    c = _make(SPOT, "call", 1000)  # no volume key
-    c_no_vol = dict(c)
+    # F13 (corrected): missing volume is NOT OI-substituted. A contract with
+    # no volume key is excluded from the volume leg with missing coverage.
+    c_no_vol = _make(SPOT, "call", 1000)
     c_no_vol.pop("volume", None)
     out = DualGexCalculator.compute(SPOT, [c_no_vol])
-    # ratio should == 1.0 exactly because vol weighs = oi.
-    assert math.isclose(out["activity_ratio"], 1.0, rel_tol=1e-9)
+    assert out["volume_coverage"]["usable"] == 0
+    assert out["volume_coverage"]["missing"] == 1
+    assert out["activity_ratio"] is None
+    assert out["activity_badge"] == "unknown"
 
 
 def test_signs_call_put():
@@ -145,13 +149,15 @@ def test_activity_badge_helper():
     assert activity_badge_from_ratio(0.1) == "quiet"
     assert activity_badge_from_ratio(0.31) == "active"
     assert activity_badge_from_ratio(1.5) == "live"
-    assert activity_badge_from_ratio(0.1, vol_nonzero=False) == "quiet"
+    assert activity_badge_from_ratio(0.1, vol_nonzero=False) == "unknown"
+    assert activity_badge_from_ratio(None) == "unknown"
 
 
 def test_zero_oi_volumes_dont_crash():
     out = DualGexCalculator.compute(SPOT, [_make(SPOT, "call", 0, 0)])
-    assert out["activity_ratio"] == 0.0
-    assert out["activity_badge"] == "quiet"
+    # F14: zero denominator returns unknown, never zero/quiet.
+    assert out["activity_ratio"] is None
+    assert out["activity_badge"] == "unknown"
 
 
 @pytest.mark.parametrize("type_,expect_pos", [("call", True), ("put", False)])

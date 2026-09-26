@@ -234,7 +234,12 @@ import React from "react";
 import { render, screen, waitFor, within, fireEvent, act } from "@testing-library/react";
 import FlowseekerProBlademap from "./FlowseekerProBlademap";
 
-const NOW_ISO = new Date().toISOString();
+const NOW_ISO = "2026-09-07T15:00:00.000Z";
+const RealDate = Date;
+class FixtureDate extends RealDate {
+  constructor(...args) { super(...(args.length ? args : [Date.parse(NOW_ISO)])); }
+  static now() { return RealDate.parse(NOW_ISO); }
+}
 // Market observation time is separate from the later alert computation time.
 const SOURCE_ISO = new Date(Date.parse(NOW_ISO) - 2000).toISOString();
 const FEED_ALERTS = [
@@ -334,7 +339,10 @@ function mockBackend({alerts=FEED_ALERTS,scanOverrides={},heatOverrides={},regim
 beforeEach(() => {
   localStorage.clear();
   jest.restoreAllMocks();
+  global.Date = FixtureDate;
 });
+
+afterEach(() => { global.Date = RealDate; });
 
 describe("Tidehunter Pro v3 — one page, zero page tabs", () => {
   it("ignores browser visibility changes while the page is inactive", async () => {
@@ -500,7 +508,7 @@ describe("Tidehunter Pro v3 — one page, zero page tabs", () => {
       asof_ts: new Date().toISOString(),
       context_json: JSON.stringify({
         ...JSON.parse(FEED_ALERTS[0].context_json),
-        source_event_time: new Date(Date.now() - 16 * 60000).toISOString(),
+        source_event_time: new Date(Date.parse(NOW_ISO) - 16 * 60000).toISOString(),
       }),
     };
     mockBackend({alerts: [newlyComputed]});

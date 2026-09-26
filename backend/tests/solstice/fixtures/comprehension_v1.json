@@ -1,0 +1,117 @@
+{
+ "version": "comprehension.v1",
+ "scenarios": [
+  {
+   "id": "live-spy-2026-09-23",
+   "ticker": "SPY",
+   "spot": 768.5,
+   "regime": "POSITIVE",
+   "basis": "OI",
+   "quality": {
+    "setup_eligible": 1,
+    "execution_eligible": 0,
+    "reason_codes": [],
+    "trade_side_capability": "none"
+   },
+   "asof": "2026-09-23T16:33:58.752445+00:00",
+   "nearest_below": {
+    "low": 754.0,
+    "high": 755.0,
+    "gross": 311718668.2,
+    "net": -241658656.5
+   },
+   "inside_wall": {
+    "low": 757.0,
+    "high": 783.0,
+    "gross": 10933014417.7,
+    "net": 865413312.2
+   }
+  },
+  {
+   "id": "live-qqq-2026-09-23",
+   "ticker": "QQQ",
+   "spot": 740.65,
+   "regime": "NEGATIVE",
+   "basis": "OI",
+   "quality": {
+    "setup_eligible": 1,
+    "execution_eligible": 0,
+    "reason_codes": [],
+    "trade_side_capability": "none"
+   },
+   "asof": "2026-09-23T16:34:06.167225+00:00",
+   "nearest_above": {
+    "low": 754.0,
+    "high": 755.0,
+    "gross": 274195343.4,
+    "net": 265912230.2
+   },
+   "inside_wall": {
+    "low": 725.0,
+    "high": 752.0,
+    "gross": 5670162314.6,
+    "net": -243613910.1
+   }
+  },
+  {
+   "id": "synthetic-stale",
+   "ticker": "SYNTH",
+   "spot": 500.0,
+   "regime": "UNKNOWN",
+   "basis": "OI",
+   "quality": {
+    "setupEligible": false,
+    "reasonCodes": [
+     "STALE_ASK"
+    ],
+    "state": "partial"
+   },
+   "asof": "2026-09-23T00:00:00+00:00",
+   "nearest_above": null,
+   "inside_wall": {
+    "low": 498,
+    "high": 502,
+    "gross": 15000000.0,
+    "net": 1000000.0
+   }
+  },
+  {
+   "id": "synthetic-inside",
+   "ticker": "SYNTH",
+   "spot": 500.0,
+   "regime": "UNKNOWN",
+   "basis": "OI",
+   "quality": {
+    "setupEligible": true,
+    "reasonCodes": [],
+    "state": "usable"
+   },
+   "asof": "2026-09-23T00:00:00+00:00",
+   "nearest_below": null,
+   "nearest_above": null,
+   "inside_wall": {
+    "low": 498,
+    "high": 502,
+    "gross": 15000000.0,
+    "net": 1000000.0
+   }
+  },
+  {
+   "id": "synthetic-missing",
+   "ticker": "SYNTH",
+   "spot": 500.0,
+   "regime": "UNKNOWN",
+   "basis": "OI",
+   "quality": {
+    "setupEligible": false,
+    "reasonCodes": [
+     "UNKNOWN_EXPECTED_UNIVERSE"
+    ],
+    "state": "unavailable"
+   },
+   "asof": "2026-09-23T00:00:00+00:00",
+   "nearest_below": null,
+   "nearest_above": null
+  }
+ ]
+}

@@ -75,8 +75,14 @@ def env():
 
 
 @pytest.mark.asyncio
-async def test_expired_dropped_today_kept(env):
-    today = datetime.now(UTC).date()
+async def test_expired_dropped_today_kept(env, monkeypatch):
+    class TradingDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 9, 11, 15, tzinfo=UTC)
+
+    monkeypatch.setattr(adapter, "datetime", TradingDateTime)
+    today = TradingDateTime.now(UTC).date()
     yesterday = (today - timedelta(days=1)).isoformat()
     today_s = today.isoformat()
     broker = env

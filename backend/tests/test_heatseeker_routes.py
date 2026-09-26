@@ -264,7 +264,7 @@ def test_velocity_mode_route(client):
 
 
 def test_velocity_mode_empty_history(client):
-    """Mongo unavailable / empty history → calm, 0 snapshots."""
+    """F09 (corrected): Mongo unavailable / empty history → unknown (never calm)."""
     with patch(
         "routes.heatseeker._fetch_king_node_history",
         AsyncMock(return_value=[]),
@@ -272,9 +272,9 @@ def test_velocity_mode_empty_history(client):
         r = client.get("/api/heatseeker/velocity-mode?ticker=SPY")
     assert r.status_code == 200, r.text
     d = r.json()
-    assert d["mode"] == "calm"
+    assert d["mode"] == "unknown"
     assert d["n_snapshots"] == 0
-    assert d["velocity_strikes_per_min"] == 0.0
+    assert d["velocity_strikes_per_min"] is None
 
 
 def test_trinity_confluence_route(client):

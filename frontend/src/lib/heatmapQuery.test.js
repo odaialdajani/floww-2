@@ -1,4 +1,4 @@
-import { buildHeatmapQuery } from "./heatmapQuery";
+import { buildHeatmapQuery, heatmapQueryKey } from "./heatmapQuery";
 
 // Contract: the ONE query string used by BOTH the 25s /api/data poll and the
 // manual-refresh /api/heatmap fetch, so the DTE + Expiries + mode controls
@@ -51,5 +51,17 @@ describe("buildHeatmapQuery", () => {
 
   test("missing fields fall back to backend defaults (4, day)", () => {
     expect(buildHeatmapQuery({})).toBe("expiries=4&mode=day");
+  });
+});
+
+// P13/R4-03: query identity carries every scope dimension so refresh/expand
+// can never show a response under the wrong heading.
+describe("heatmapQueryKey", () => {
+  test("dte and scalp change the key (0DTE is distinct from All)", () => {
+    const a = heatmapQueryKey({ ticker: "SPY", expiries: 4, mode: "day", dte: null, scalp: false });
+    const b = heatmapQueryKey({ ticker: "SPY", expiries: 4, mode: "day", dte: 0, scalp: false });
+    const c = heatmapQueryKey({ ticker: "SPY", expiries: 4, mode: "day", dte: null, scalp: true });
+    const d = heatmapQueryKey({ ticker: "QQQ", expiries: 4, mode: "day", dte: null, scalp: false });
+    expect(new Set([a, b, c, d]).size).toBe(4);
   });
 });

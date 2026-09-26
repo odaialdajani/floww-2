@@ -133,7 +133,7 @@ jobs:
         # local install flow so CI matches dev.
         run: npm ci --legacy-peer-deps
 
-<      # No frontend lint step: linting is disabled on purpose. craco.config.js
+      # No frontend lint step: linting is disabled on purpose. craco.config.js
       # strips ESLintWebpackPlugin and eslint-loader from the webpack config and
       # there is no eslint config file, so package.json has no `lint` script.
       # Backend lint still gates (ruff, above). CRA production build compiles

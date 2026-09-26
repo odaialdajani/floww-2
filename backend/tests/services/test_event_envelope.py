@@ -45,9 +45,24 @@ class TestNormalizeEvent:
         assert env["sequence"] == 42
         assert env["correction"] == "unknown"
         assert env["delay_ms"] == 1000
-        assert env["quality_flags"] == []
+        # Naive fixture timestamps are explicitly flagged as assumed-UTC.
+        assert env["quality_flags"] == ["naive_assumed_utc", "naive_assumed_utc"]
         assert env["raw_class"] == "raw"
         assert is_point_in_time_complete(env) is True
+
+    def test_aware_timestamps_have_no_naive_flag(self):
+        env = normalize_event(_raw(event_time="2026-09-09T14:30:00+00:00",
+                                   receive_time="2026-09-09T14:30:01+00:00"))
+        assert env["delay_ms"] == 1000
+        assert "naive_assumed_utc" not in env["quality_flags"]
+
+    def test_mixed_naive_aware_never_raises(self):
+        """Mixed zones previously raised TypeError (violating never-raises);
+        now UTC-normalized with an explicit flag."""
+        env = normalize_event(_raw(event_time="2026-09-09T14:30:00",
+                                   receive_time="2026-09-09T14:30:01+00:00"))
+        assert env["delay_ms"] == 1000
+        assert "naive_assumed_utc" in env["quality_flags"]
 
     def test_missing_event_time_is_flagged_not_fabricated(self):
         """No timestamp fallback to now(): unknown stays unknown."""
@@ -98,3 +113,4 @@ class TestNormalizeEvent:
         assert env["receive_time"] == "2026-09-09T14:30:05"
         assert env["sequence"] == 7
         assert env["delay_ms"] == 5000
+        assert "naive_assumed_utc" in env["quality_flags"]

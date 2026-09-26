@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import threading
+import os
 from datetime import UTC, datetime
 from functools import wraps
 from typing import Any
@@ -26,6 +26,7 @@ import duckdb
 import numpy as np
 
 import services.observability as obs_metrics
+from services.connection_guard import connection_lock
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +133,7 @@ class DuckDBEngine:
         # vpin history route) all touch this one connection from different OS
         # threads. This lock serializes EVERY raw connection access — reads and
         # writes — so two threads never share the connection's pending result.
-        self._conn_lock = threading.Lock()
+        self._conn_lock = connection_lock(self._conn)
         self._tick_buffer: list[tuple] = []
         self._lob_buffer: list[tuple] = []
         self._flow_buffer: list[tuple] = []
@@ -346,9 +347,10 @@ class DuckDBEngine:
         and long pytest runs grind to a halt. Safe to call twice."""
         conn = getattr(self, '_conn', None)
         if conn is not None:
-            with contextlib.suppress(Exception):
-                conn.close()
-            self._conn = None
+            with self._conn_lock:
+                with contextlib.suppress(Exception):
+                    conn.close()
+                self._conn = None
 
     async def insert_tick(self, symbol: str, bid: float, ask: float, last: float,
                           volume: int, oi: int, delta: float, gamma: float,
@@ -544,7 +546,20 @@ class DuckDBEngine:
         return self._conn
 
 
-db = DuckDBEngine()
+def _open_shared_db() -> DuckDBEngine:
+    # T09 persistence: file-backed storage when DUCKDB_PATH is set so the
+    # research recorder survives restarts; default :memory: (no behavior
+    # change). An unusable path must never prevent startup — fall back.
+    path = os.environ.get("DUCKDB_PATH", ":memory:") or ":memory:"
+    if path != ":memory:":
+        try:
+            return DuckDBEngine(path)
+        except Exception as e:
+            logger.warning("DUCKDB_PATH=%s unusable (%s) — falling back to :memory:", path, e)
+    return DuckDBEngine()
+
+
+db = _open_shared_db()
 # Never let test teardown close the shared app singleton.
 db._is_shared_singleton = True
 DuckDBEngine._live_instances.remove(db)

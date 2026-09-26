@@ -219,7 +219,9 @@ def test_heatmap_dte_filter(client):
     d = r.json()
     # Controlled contracts begin seven days out; two days must not widen.
     assert d["strikes"] == []
-    assert d["grid"] == {}
+    assert d["grid"]["grid"] == {}
+    assert d["grid"]["strikes"] == []
+    assert d["grid"]["expiries"] == []
     assert d["expiries_used"] == []
     within_week = client.get("/api/heatmap/SPY?expiries=4&dte=8")
     assert within_week.status_code == 200

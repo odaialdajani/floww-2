@@ -44,8 +44,14 @@ async def test_all_rejected_expiry_does_not_leak_into_available_coverage():
 
 
 @pytest.mark.asyncio
-async def test_mixed_response_uses_actual_accepted_expiry_and_keeps_zero_dte():
-    today = datetime.now(UTC).date()
+async def test_mixed_response_uses_actual_accepted_expiry_and_keeps_zero_dte(monkeypatch):
+    class TradingDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 9, 11, 15, tzinfo=UTC)
+
+    monkeypatch.setattr(adapter, "datetime", TradingDateTime)
+    today = TradingDateTime.now(UTC).date()
     requested = (today + timedelta(days=7)).isoformat()
     actual = (today + timedelta(days=14)).isoformat()
     result = await fetch_mocked({requested: [
@@ -61,3 +67,27 @@ async def test_mixed_response_uses_actual_accepted_expiry_and_keeps_zero_dte():
 async def test_no_accepted_contracts_remains_unavailable():
     result = await fetch_mocked({"bad": [], "also-bad": [make_contract(expiration="invalid")]})
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_index_contract_uses_its_own_root_on_monthly_expiry(monkeypatch):
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 10, 16, 14, tzinfo=UTC)
+
+    monkeypatch.setattr(adapter, "datetime", FixedDateTime)
+    expiry = "2026-10-16"
+    broker = make_broker({expiry: [
+        make_contract(symbol="SPXW261016C06000000", expiration=expiry, strike=6000),
+        make_contract(symbol="SPX261016C06000000", expiration=expiry, strike=6000),
+    ]})
+    with patch.object(adapter, "_resolve_spot_observation", AsyncMock(return_value={
+        "price": 6000, "source": "public-mid", "event_time": None,
+        "fetched_at": FixedDateTime.now().isoformat(),
+    })):
+        result = await adapter._fetch_chain_live(broker, "^SPX", 1)
+    assert result is not None
+    assert [c["osi"] for c in result["contracts"]] == ["SPXW261016C06000000"]
+    assert result["contracts"][0]["series"] == "SPXW"
+    assert result["contracts"][0]["T"] == pytest.approx(6 / (24 * 365))

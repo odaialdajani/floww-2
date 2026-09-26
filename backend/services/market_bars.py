@@ -170,10 +170,7 @@ def _cache_stale(key: tuple) -> Any | None:
 
 async def _upstream(ticker: str, period: str, aggregation: str,
                   sessions: str = "regular") -> list[dict[str, Any]] | None:
-    """Raw vendor fetch (no budget — the caller owns acquire/release).
-
-    Returns bars or None. Raises on transport failure. Separated for tests.
-    """
+    """Fetch normalized bars, retaining the requested period and sessions."""
     from services.public_api_adapter import fetch_bars_by_interval
 
     return await fetch_bars_by_interval(

@@ -190,16 +190,16 @@ def test_trinity(client):
 
 
 def test_movers(client, monkeypatch):
-    from unittest.mock import Mock
+    from unittest.mock import AsyncMock
 
     rows = [{"ticker": ticker, "pct": 6-i, "close": 100+i}
             for i, ticker in enumerate(("SPY", "QQQ", "IWM", "AAPL", "NVDA", "DIA"))]
-    fetch = Mock(return_value=rows)
-    monkeypatch.setattr("server._fetch_movers_sync", fetch)
+    fetch = AsyncMock(return_value={"schema_version": "movers.v2", "status": "ok", "results": rows})
+    monkeypatch.setattr("services.movers.get_movers", fetch)
     r = client.get("/api/movers?limit=5")
     assert r.status_code == 200
     d = r.json()
     assert "results" in d
     assert isinstance(d["results"], list)
     assert d["results"] == rows[:5]
-    fetch.assert_called_once_with()
+    fetch.assert_awaited_once_with(limit=5, mode="previous_completed_session")

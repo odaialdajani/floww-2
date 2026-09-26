@@ -128,10 +128,12 @@ class Quarantine:
                 from services.observability import quarantine_total
 
                 quarantine_total.labels(source=source, reason=reason).inc()
-            except Exception:
-                pass  # metrics must never break the quarantine path
-        except Exception:
-            pass  # quarantine itself never raises
+            except Exception as m_e:
+                import logging
+                logging.getLogger(__name__).debug("quarantine metric failed (quarantine kept): %s", m_e)
+        except Exception as q_e:
+            import logging
+            logging.getLogger(__name__).warning("quarantine record failed (fail-closed, no raise): %s", q_e)
 
     def items(self) -> list[dict]:
         return list(self._items)

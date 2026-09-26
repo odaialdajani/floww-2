@@ -96,11 +96,9 @@ def _record_call(success: bool) -> None:
     try:
         from data_providers import _record_provider_call
         _record_provider_call("public_api", success)
-    except Exception:
-        # silent by design: telemetry only — a monitor import/registry error must
-        # never discard a payload we already fetched, nor mask the upstream
-        # failure the caller is about to handle. The outcome is logged above.
-        pass
+    except Exception as e:
+        log.debug("public_api telemetry record failed (non-fatal): %s", e)
+        # Telemetry only — never discard a fetched payload nor mask upstream failure.
 
 
 async def close_broker() -> None:
@@ -123,8 +121,8 @@ async def _get_broker() -> PublicBroker | None:
             ttl = max(0, BROKER._token_expires_at - time.time())
             if ttl < 300:
                 await BROKER._ensure_token()
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("PublicBroker token revalidation failed (using cached token): %s", e)
         return BROKER
 
     secret_key = os.environ.get("PUBLIC_API_KEY", "")
@@ -485,10 +483,10 @@ def _note_public_429(exc: BaseException) -> None:
             if isinstance(exc, httpx.TransportError):
                 from services.public_budget import budget
                 budget.record_error("api.public.com")
-        except Exception:
-            pass
-    except Exception:
-        pass
+        except Exception as obs_e:
+            log.debug("public 429/error observability failed (non-fatal): %s", obs_e)
+    except Exception as obs_outer:
+        log.debug("public 429 note failed (non-fatal): %s", obs_outer)
 
 
 async def _fetch_chain_live(
@@ -496,7 +494,15 @@ async def _fetch_chain_live(
     ticker: str,
     max_expiries: int = 4,
 ) -> dict[str, Any] | None:
-    """Uncached chain fetch (one call = ~2+N upstream Public calls)."""
+    """Uncached chain fetch (one call = ~2+N upstream Public calls).
+
+    F01/F03/F06: exact per-series expiry clock, preserved source timestamps,
+    explicit index instrument types. F13: missing OI stays None (unknown),
+    never volume-substituted; exposure_basis carried per contract.
+    """
+    from services.public_api import resolve_public_instrument_type
+    from services.solstice_time import resolve_series, time_to_expiry_years
+
     trading = pb.get_trading_account()
     if trading is None:
         log.warning("No trading account for Public API")
@@ -504,10 +510,17 @@ async def _fetch_chain_live(
 
     account_id = trading.account_id
     symbol = _normalize_symbol(ticker)
+    chain_type = resolve_public_instrument_type(ticker, "chain")
 
-    # 1. Get expirations
+    # 1. Get expirations (F06: explicit index-underlying type for SPX family)
     try:
-        expiries = await pb.get_option_expirations(symbol, account_id)
+        try:
+            expiries = await pb.get_option_expirations(symbol, account_id, instrument_type=chain_type)
+        except TypeError as te:
+            if "instrument_type" in str(te):
+                expiries = await pb.get_option_expirations(symbol, account_id)
+            else:
+                raise
     except Exception as e:
         _note_public_429(e)
         log.warning("Public API expirations fail for %s: %s", ticker, e)
@@ -528,61 +541,96 @@ async def _fetch_chain_live(
         return None
 
     # 3. Fetch chain for each expiry (up to max_expiries). Only expiries
-    # that actually return data are reported (D4: requested vs returned
-    # coverage distinguished). Expired contracts are dropped; 0DTE kept.
+    # that actually return data are reported (requested vs returned coverage
+    # distinguished). Expired contracts are dropped; 0DTE kept with exact T.
     contracts: list[dict[str, Any]] = []
     exp_dates = []
-    today = datetime.now(UTC).date()
+    now_utc = datetime.now(UTC)
+    received_at = now_utc.isoformat()
+    n_expired_dropped = 0
 
     for exp in expiries[:max_expiries]:
         try:
-            parsed = await pb.get_option_chain_parsed(symbol, exp, account_id)
+            try:
+                parsed = await pb.get_option_chain_parsed(symbol, exp, account_id, instrument_type=chain_type)
+            except TypeError as te:
+                # Backward compat with test doubles / older brokers lacking the
+                # explicit instrument_type kwarg (F06 resolver is new).
+                if "instrument_type" in str(te):
+                    parsed = await pb.get_option_chain_parsed(symbol, exp, account_id)
+                else:
+                    raise
         except Exception as e:
             _note_public_429(e)
             log.warning("Public API chain fail for %s %s: %s", ticker, exp, e)
             continue
         for side in ("calls", "puts"):
             for oc in parsed.get(side, []):
+                # R7-06: series metadata reaches the clock (SPX monthly AM vs
+                # SPXW weekly PM vs equity) instead of a hardcoded 16:00 ET.
+                expiry_text = str(oc.expiration or exp)
                 try:
-                    exp_d = datetime.strptime(oc.expiration, "%Y-%m-%d").date()
-                except (ValueError, TypeError):
+                    exp_d = datetime.strptime(expiry_text, "%Y-%m-%d").date()
+                except (TypeError, ValueError):
                     continue
-                if exp_d < today:  # D4: expired listing, not a position
+                # A monthly SPX request can return PM-settled SPXW contracts.
+                # The actual option root owns its clock, not the display ticker.
+                import re
+                root_match = re.fullmatch(r"(SPXW|SPX)\s*\d{6}[CP]\d{8}", str(oc.symbol).upper())
+                clock_ticker = root_match.group(1) if root_match else ticker
+                oc_series = resolve_series(clock_ticker, exp_d.isoformat())
+                T, floored, t_reason = time_to_expiry_years(
+                    oc.expiration or exp, now=now_utc, series=oc_series,
+                    ticker=ticker)
+                if T is None:
+                    if t_reason == "EXPIRED":
+                        n_expired_dropped += 1
                     continue
-                T = max((exp_d - today).days, 1) / 365.0
                 # NBBO mid from the paid feed — the executable-reference price.
-                # Downstream side inference (last vs mid) and premium math must
-                # use this instead of BS estimates whenever it exists.
                 mid = _finite(oc.mid)
                 strike = _finite(oc.strike)
-                if strike is None or strike <= 0:  # D4: unusable contract
+                if strike is None or strike <= 0:
                     continue
+                oi_raw = _finite(oc.open_interest)  # None = unknown, never 0-fill
+                # Preserve source timestamps only when they are real strings;
+                # MagicMock/test doubles without explicit attrs must stay None.
+                def _ts(v: Any) -> str | None:
+                    return v if isinstance(v, str) and v else None
                 contracts.append({
-                    "osi": oc.symbol,  # OSI symbol for order placement (e.g. SPY260904C00760000)
-                    "expiry": exp_d.isoformat(),
+                    "osi": oc.symbol,
+                    "expiry": oc.expiration,
+                    "series": oc_series,
                     "T": T,
-                    # cvserver convention: lowercase "call"/"put".
-                    # gex_core.py and analytics.py compare c["type"] == "call"
-                    # exactly — uppercase here would flip every GEX sign.
+                    "T_floored": floored,
+                    "T_model": "actual/365-exact",
                     "type": "call" if side == "calls" else "put",
                     "strike": strike,
-                    "oi": _finite(oc.open_interest, 0),
-                    "iv": _finite(oc.iv, 0.0),
+                    "strike_exact": str(oc.strike) if oc.strike is not None else None,
+                    "oi": oi_raw,
+                    "oi_effective_date": _ts(getattr(oc, "oi_effective_date", None)),
+                    "iv": _finite(oc.iv),
                     "delta": _finite(oc.delta),
                     "gamma": _finite(oc.gamma),
                     "theta": _finite(oc.theta),
                     "vega": _finite(oc.vega),
+                    "greeks_source": _ts(getattr(oc, "greeks_source", None)),
                     "bid": _finite(oc.bid),
                     "ask": _finite(oc.ask),
                     "mid": mid,
                     "last": _finite(oc.last),
+                    "bid_timestamp": _ts(getattr(oc, "bid_timestamp", None)),
+                    "ask_timestamp": _ts(getattr(oc, "ask_timestamp", None)),
+                    "last_timestamp": _ts(getattr(oc, "last_timestamp", None)),
+                    "received_at": received_at,
                     "bid_size": _finite(oc.bid_size),
                     "ask_size": _finite(oc.ask_size),
-                    "volume": _finite(oc.volume, 0),
+                    "volume": _finite(oc.volume),
                     "oi_source": "public_api",
                     "last_event_time": _timestamp_text(getattr(oc, "last_timestamp", None)),
                     "bid_event_time": _timestamp_text(getattr(oc, "bid_timestamp", None)),
                     "ask_event_time": _timestamp_text(getattr(oc, "ask_timestamp", None)),
+                    "exposure_basis": "OI" if oi_raw is not None else "OI_UNKNOWN",
+                    "chain_instrument_type": chain_type,
                 })
                 # Available coverage describes accepted contracts, not a
                 # successful empty request or contracts rejected above.
@@ -607,6 +655,9 @@ async def _fetch_chain_live(
         "expiries": exp_dates,
         "contracts": contracts,
         "data_source": "public_api",
+        "chain_instrument_type": chain_type,
+        "received_at": received_at,
+        "n_expired_dropped": n_expired_dropped,
     }
 
 
