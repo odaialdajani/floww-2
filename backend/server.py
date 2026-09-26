@@ -1064,6 +1064,34 @@ def _display_surfaces(spot: float, contracts: list[dict[str, Any]], ticker: str,
     return exposure_basis, model_basis, strikes, _with_vex(grid)
 
 
+def _display_quality(exposure_basis: str, model_basis: str, strikes: list) -> dict[str, Any]:
+    """Quality for the mounted payload (R6-1/B02 + R8-01).
+
+    Structural readability (grid renders) is separate from confirmed setup
+    eligibility. Only vendor-supplied Greeks make a setup eligible;
+    local-model fallback stays readable-but-waiting. Vendor Greeks carry
+    no observation timestamp, so the vendor path always reports
+    GREEK_TIME_UNKNOWN: it informs freshness interpretation without
+    blocking structure (eligibility stays driven by setupEligible).
+    """
+    vendor_ok = exposure_basis == "OI" and model_basis == "vendor-supplied-greeks"
+    if vendor_ok:
+        reasons = ["GREEK_TIME_UNKNOWN"]
+    elif exposure_basis != "OI":
+        reasons = [exposure_basis]
+    else:
+        reasons = ["LOCAL_BS_FALLBACK"]
+    return {
+        "state": ("usable" if exposure_basis == "OI" else "unavailable")
+        if model_basis == "vendor-supplied-greeks"
+        else ("partial" if strikes else "unavailable"),
+        "reasonCodes": reasons,
+        "setupEligible": exposure_basis == "OI" and model_basis == "vendor-supplied-greeks",
+        "executionEligible": False,
+        "tradeSideCapability": "none",
+    }
+
+
 async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: bool = True, mode: str = "day", dte: int | None = None, scalp: bool = False, max_strikes: int = 200) -> dict[str, Any]:
     log.info(f"build_heatmap: {ticker} expiries={max_expiries} mode={mode} max_strikes={max_strikes}")
     # Check cache first
@@ -1516,20 +1544,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         # Local Black-Scholes Greeks feed charm/vex/vomma scenario overlays
         # only, under model_basis local-bs-v1 — never raw structure.
         "model_basis": model_basis,
-        "quality": {
-            # R6-1/B02: structural readability (grid renders) is separate from
-            # confirmed setup eligibility. Only vendor-supplied Greeks make a
-            # setup eligible; local-model fallback stays readable-but-waiting.
-            "state": ("usable" if exposure_basis == "OI" else "unavailable")
-            if model_basis == "vendor-supplied-greeks"
-            else ("partial" if strikes else "unavailable"),
-            "reasonCodes": [] if (exposure_basis == "OI"
-                                  and model_basis == "vendor-supplied-greeks")
-            else ([exposure_basis] if exposure_basis != "OI" else ["LOCAL_BS_FALLBACK"]),
-            "setupEligible": exposure_basis == "OI" and model_basis == "vendor-supplied-greeks",
-            "executionEligible": False,
-            "tradeSideCapability": "none",
-        },
+        "quality": _display_quality(exposure_basis, model_basis, strikes),
         "gex_regime": nodes.get("regime"),
         "mode": mode,
         "dte": dte,

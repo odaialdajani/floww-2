@@ -148,3 +148,51 @@ def test_total_provider_failure_is_unavailable_then_stale():
     finally:
         movers_svc._CACHE.pop(
             (last, prior, movers_svc.UNIVERSE_ID, "previous_completed_session"), None)
+
+
+def test_upstream_seam_calls_real_adapter_signature_and_shape():
+    """R8-01: market_bars._upstream must call fetch_bars_from_public_api
+    with its real (timeframe/limit/sessions) signature and translate the
+    canonical {date,open,high,low,close,volume,session} rows. The previous
+    call passed interval/period/aggregation kwargs the adapter never
+    accepted — every fetch raised before touching the network (live
+    /api/movers showed 0/75 valid with correct session dates)."""
+    import asyncio
+    from unittest.mock import AsyncMock, patch
+
+    from services import market_bars
+
+    seen = {}
+
+    async def fake_fetch(ticker, timeframe="1Day", limit=100, sessions="regular"):
+        seen.update({"ticker": ticker, "timeframe": timeframe,
+                     "limit": limit, "sessions": sessions})
+        return [{"date": "2026-09-24T00:00:00-04:00", "open": 100.0,
+                 "high": 101.0, "low": 99.0, "close": 101.0, "volume": 10,
+                 "session": "regular"},
+                {"date": "2026-09-25T00:00:00-04:00", "open": 101.0,
+                 "high": 102.0, "low": 100.0, "close": 102.0, "volume": 11,
+                 "session": "regular"}]
+
+    async def go():
+        with patch("services.public_api_adapter.fetch_bars_from_public_api",
+                   new=AsyncMock(side_effect=fake_fetch)):
+            return await market_bars.get_daily_bars("SPY", days=10)
+    bars = asyncio.run(go())
+    assert seen["timeframe"] == "1Day"
+    assert bars is not None and len(bars) == 2
+    assert bars[-1] == {"t": "2026-09-25T00:00:00-04:00", "o": 101.0,
+                        "h": 102.0, "l": 100.0, "c": 102.0, "v": 11,
+                        "session": "regular"}
+
+
+def test_display_quality_greek_time_unknown_on_vendor_path():
+    from server import _display_quality
+    q = _display_quality("OI", "vendor-supplied-greeks", [{"strike": 500}])
+    assert q["state"] == "usable" and q["setupEligible"] is True
+    assert q["reasonCodes"] == ["GREEK_TIME_UNKNOWN"]
+    q2 = _display_quality("OI", "local-bs-fallback", [{"strike": 500}])
+    assert q2["setupEligible"] is False
+    assert q2["reasonCodes"] == ["LOCAL_BS_FALLBACK"]
+    q3 = _display_quality("VOLUME_FALLBACK_OI_UNKNOWN", "local-bs-fallback", [])
+    assert q3["state"] == "unavailable" and q3["setupEligible"] is False

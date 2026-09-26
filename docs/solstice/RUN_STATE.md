@@ -157,7 +157,7 @@ docs/solstice/RUN_STATE.md                   (this file)
 kanban/BOTTLENECK_ALERTS.md                  (R7-07 status)
 ```
 
-## Handoff
+## Handoff (R7, superseded by R8 ledger below)
 
 All R7-00–08 packages are implemented, integrated, and acceptance-tested against
 the actual mounted path (backend calculators/DuckDB + React SSR/jsdom + mocked
@@ -166,3 +166,59 @@ evidence above. No merges, deployments, credential changes, vendor messages,
 or trades authorized. External validation items (SPX, participant study,
 commissioning, browser pixels, live sessions) are explicit blockers, not
 claiming failure.
+
+## R8 ledger (branch solstice/r7, base 7fed6012, head 36872db7 + deltas)
+
+R8-00 reconciliation: pass. 12 commits ahead of origin/main (10 R7 + R8
+review-journal + this batch counted at commit). Earlier "ten vs nine"
+resolved from Git; a parallel session landed 36872db7 mid-run — overlapping
+areas verified identical-or-superset, no reverts, remaining deltas below
+are unique (checked per file vs HEAD).
+- Accepted repairs retained: R7 movers/delta/VEX/replay/compare/inspector/
+  clocks/outcomes all present at HEAD; dirty tree matched HEAD on overlap.
+- Test env note: 3 solstice failures from repo root are CWD path artifacts;
+  207/207 pass from backend/ (also true at HEAD).
+
+R8-01 analytical path: pass with 3 repairs. (a) market_bars→Public bars
+seam was broken (wrong kwargs + wrong row shape — live movers 0/75 valid);
+fixed + live-verified (3/3 symbols ranked) + regression test. (b) Vendor
+Greek timestamps don't exist → _display_quality reports GREEK_TIME_UNKNOWN
+on the vendor path (eligibility unchanged) + unit test. (c) Movers declares
+price_basis vendor-close-as-returned-unadjusted (splits unadjusted, honest).
+Metric switch verified fetch-free (local state); delta grids in payload;
+replay gen guards + compare observation times verified in Slice2 tests.
+
+R8-02/R8-04 review loop: pass. Save review UI (Reviewed/Waiting/Skipped +
+reason + frozen wall/metric/mode note) POSTs to the journal and refetches;
+Next-to-review queue (unreviewed, newest-first, cap 5) jumps to replay via
+a generation-guarded openRequest prop. Route rejects unknown states (422).
+Two real bugs fixed en route: review routes registered AFTER include_router
+(never mounted — 404) and list_decisions never selected r.state.
+
+R8-03 compare gaps: pass. Manifest/compare/last-two requests carry the
+same generation guards as snapshot opens; compare result names both
+observation times (13:00→14:00 style receipt).
+
+R8-05 worker/policy keys: pass. close_episodes expands list horizons and
+keys idempotency on (decision, horizon, policy, label version); terminal =
+any non-censored label (fixes duplicate-row rewrite); record_outcome +
+attach handle policy versions and nested results. price_paths_v1 store +
+outcome_close_tick worker (pure, restart-safe, synthetic-tested:
+pending→final, policy rerun, duplicates, multi-horizon). Scheduler hook
+exists but default-disabled (SOLSTICE_OUTCOME_WORKER=1); env default off
+verified by test.
+
+R8-06 browser + study: PARTIAL pass. Real Chromium capture works
+(end-to-end recipe in docs/solstice/capture-solstice.mjs): single,
+inspector, compare, narrow shots in docs/solstice/r8-shots/SHOTS.md
+(live data = layout receipts). Two genuine product fixes from the
+attempt: kill-switch SW reloaded 127.0.0.1 dev sessions in a loop
+(loopback exclusion added), Movers used REACT_APP_API_URL instead of the
+app config (now imports API). Study rubric hardened: gibberish/negated/
+wrong-direction answers fail, stale fixture quality propagates unlaundered,
+confidence recorded (6/6 study tests). Gaps disclosed: shots show movers
+unavailable (bars seam fixed after capture — recapture next run); no
+before/after pair (no pre-R8 baseline shots exist).
+
+Remaining external: SPX entitlement, participant study run, commissioning
+activation, empirical live sessions. No merges performed.

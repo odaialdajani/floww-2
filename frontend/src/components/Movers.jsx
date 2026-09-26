@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { API } from "../config/api";
 import { pctClass } from "../lib/helpers";
-
-const API = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 /**
  * Movers — Top Movers panel (R7-01). Reads the movers.v2 contract:

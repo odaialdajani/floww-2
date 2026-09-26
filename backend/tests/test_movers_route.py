@@ -47,6 +47,7 @@ def test_movers_v2_contract_ranked_and_limited(client):
     assert body["mode"] == "previous_completed_session"
     assert body["session_date"] and body["prior_session_date"]
     assert body["universe_id"] == "tracked-options.v1"
+    assert body["price_basis"] == "vendor-close-as-returned-unadjusted"
     assert body["coverage"]["requested"] >= 3
     assert "asof" in body
     got = body["results"]

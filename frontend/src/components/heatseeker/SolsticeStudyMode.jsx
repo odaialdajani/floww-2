@@ -38,7 +38,13 @@ export function fixtureToSnapshot(sc) {
     strikes,
     grid: { expiries: [STUDY_EXPIRY], strikes: strikes.map((r) => r.strike), grid: { [STUDY_EXPIRY]: cells } },
     metrics: { walls: walls.map((w, i) => ({ ...w, wall_id: w.wall_id || `study-w${i}` })) },
-    quality: { state: "usable", reasonCodes: [], setupEligible: true },
+    // R8-06: frozen displayed quality equals the fixture — a stale fixture
+    // stays stale/setup-ineligible in the study grid, never laundered usable.
+    quality: {
+      state: sc.quality?.state || "usable",
+      reasonCodes: sc.quality?.reasonCodes || [],
+      setupEligible: sc.quality?.setupEligible ?? true,
+    },
   };
 }
 
@@ -66,16 +72,28 @@ export function gradeStudy(scenario, answers, latencyS = {}) {
     }
   }
   const txt = (k) => String(answers[k] || "").toLowerCase();
-  const kindOk = (txt("kind").includes("structure") || txt("kind").includes("oi"))
-    && !txt("kind").includes("only activity");
+  // R8-06: negation-aware rubric. "not OI structure" / "never reclaim and
+  // hold" must fail even though the keywords appear. Gibberish blockers
+  // ("bananas") fail: a blocker needs a domain content word.
+  const negated = (t, kw) =>
+    new RegExp(`\\b(not|never|no|isn'?t|don't|dont|without)\\b[^.]{0,40}\\b${kw}`).test(t);
+  const kindTxt = txt("kind");
+  const kindOk = (kindTxt.includes("structure") || kindTxt.includes("oi"))
+    && !kindTxt.includes("only activity")
+    && !negated(kindTxt, "structure") && !negated(kindTxt, "oi");
   const side = b ? "above" : (a ? "below" : (inside ? "inside" : "above"));
-  const confirmOk = txt("confirm").includes("reclaim") && txt("confirm").includes("hold")
-    && txt("confirm").includes(side);
+  const confirmTxt = txt("confirm");
+  const confirmOk = confirmTxt.includes("reclaim") && confirmTxt.includes("hold")
+    && confirmTxt.includes(side)
+    && !negated(confirmTxt, "reclaim") && !negated(confirmTxt, "hold");
   const antiSide = side === "above" ? "below" : side === "below" ? "above" : "beyond";
-  void antiSide;
-  const invalidateOk = txt("invalidate").includes("acceptance");
+  const invTxt = txt("invalidate");
+  const invalidateOk = invTxt.includes("acceptance") && invTxt.includes(antiSide)
+    && !negated(invTxt, "acceptance");
   const blockerTxt = txt("blocker");
-  const blockerOk = blockerTxt.length > 0 && !/immediately|trade now|buy now|sell now/.test(blockerTxt);
+  const blockerOk = blockerTxt.length > 0
+    && !/immediately|trade now|buy now|sell now/.test(blockerTxt)
+    && /(unknown|stale|missing|wait|evidence|eligib|spread|quote|coverage|side|confirm|invalid|hold|accept|volume|data|quality|session|holiday|window|setup|block|reason|risk|time|expir|ask|bid|liquid)/.test(blockerTxt);
   const detail = { walls: wallOk, kind: kindOk, confirm: confirmOk, invalidate: invalidateOk, blocker: blockerOk };
   return { detail, total: Object.values(detail).filter(Boolean).length, latencyS };
 }
@@ -93,11 +111,13 @@ function SolsticeStudyMode({ scenario, onDone = null }) {
   const t0 = useRef(null);
   if (t0.current == null) t0.current = Date.now();
   const [answers, setAnswers] = useState({});
+  const [confidence, setConfidence] = useState("");
   const [result, setResult] = useState(null);
   if (!scenario) return null;
   const submit = () => {
     const latencyS = { total: Math.round((Date.now() - t0.current) / 100) / 10 };
     const graded = gradeStudy(scenario, answers, latencyS);
+    graded.confidence = ["low", "medium", "high"].includes(confidence) ? confidence : null;
     setResult(graded);
     if (onDone) onDone(graded);
   };
@@ -115,12 +135,24 @@ function SolsticeStudyMode({ scenario, onDone = null }) {
           />
         </label>
       ))}
+      <label style={{ display: "block", marginTop: 6, fontSize: 12 }}>
+        Confidence (recorded separately from accuracy):
+        <select data-testid="study-confidence" value={confidence}
+          onChange={(e) => setConfidence(e.target.value)}
+          style={{ display: "block" }}>
+          <option value="">—</option>
+          <option value="low">low</option>
+          <option value="medium">medium</option>
+          <option value="high">high</option>
+        </select>
+      </label>
       <button className="skylit-trade-mode-btn" data-testid="study-submit" onClick={submit}>
         Submit (read-only)
       </button>
       {result && (
         <div data-testid="study-result">
           Score {result.total}/5 · {result.latencyS.total}s
+          {result.confidence ? ` · confidence ${result.confidence}` : ""}
         </div>
       )}
     </div>
