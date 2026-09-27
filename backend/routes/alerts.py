@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
@@ -83,19 +83,50 @@ def broadcast_signal(payload: dict[str, Any]) -> None:
     `_signal_clients`, so the socket accepted connections and then waited
     forever for a push no code path could make.
 
+    FRAME SHAPE IS PART OF THE CONTRACT. The one real consumer,
+    frontend/src/components/AlertOverlay.js, discards any frame that fails
+    `data.type === 'signal' || data.signal`. A raw `alert.to_dict()` carries
+    `type: "GAMMA_FLIP"` and no `signal` key, so sending it verbatim moved
+    real bytes that the overlay silently threw away — the channel looked
+    wired and displayed nothing. So every frame is normalized to carry BOTH
+    `type: "signal"` (what the overlay matches on) and `signal` (the original
+    alert kind, which `addAlert` renders as the badge). The original alert
+    type is preserved under `alert_type` for anything that needs it.
+
     Dead-client policy: a send failure evicts that socket and continues.
     `_signal_clients` is a plain list mutated from both the reader loop and
     the detector, so one vanished client must never 500 the detector's
     request. Mutating a copy keeps the reader loop's own removal safe.
     """
     for client in list(_signal_clients):
+        frame = _signal_frame(payload)
         try:
             asyncio.get_running_loop().create_task(
-                _send_and_evict(client, payload)
+                _send_and_evict(client, frame)
             )
         except RuntimeError:
             # No running loop (sync context) — fall back to direct send.
-            _send_and_evict(client, payload)
+            _send_and_evict(client, frame)
+
+
+def _signal_frame(payload: dict[str, Any]) -> dict[str, Any]:
+    """Normalize any alert dict into a frame AlertOverlay will actually keep.
+
+    `payload` may be a raw `alert.to_dict()` (type='GAMMA_FLIP'), an already
+    normalized frame, or anything else a caller passes. The result always
+    satisfies the overlay's filter.
+    """
+    frame = dict(payload or {})
+    original = frame.get("type")
+    # `type` is the overlay's match key and must be the literal "signal".
+    frame["type"] = "signal"
+    # `signal` is the human-readable kind the overlay renders as a badge.
+    # Only default it when absent, so a caller-supplied value is respected.
+    frame.setdefault("signal", original if original and original != "signal" else "ALERT")
+    if original and original != "signal":
+        frame["alert_type"] = original
+    frame.setdefault("ts", datetime.now(UTC).isoformat())
+    return frame
 
 
 async def _send_and_evict(client: WebSocket, payload: dict[str, Any]) -> None:
