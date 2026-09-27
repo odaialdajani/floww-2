@@ -170,9 +170,9 @@ These steps are HARD (no `|| true`, no `continue-on-error`) and will fail the bu
 
 Only the mypy step is masked (`|| true`) — it is advisory.
 
-**Version skew trap:** CI installs its own Python; the Windows working environment is
-`backend/.venv313/Scripts/python.exe` (3.13.15, verified 2026-09-27). Never assume they match —
-read the live pin before using new syntax:
+**Version skew trap:** CI installs its own Python; the local working environment is
+`backend/.venv` (Python 3.14.6, newer than the 3.12 ship pin). Never assume they
+match — read the live pin before using new syntax:
 `grep -n "python-version" .github/workflows/ci.yml`
 
 ---
@@ -188,7 +188,7 @@ read the live pin before using new syntax:
   exists on this machine.)
 - **Test suite — reproduce, don't trust a remembered number:**
   - Backend: **4640 tests collect, 0 collection errors** —
-    Windows: `cd backend; ./.venv313/Scripts/python.exe -m pytest --collect-only -q`.
+    From the repo: `cd backend && .venv/bin/python -m pytest --collect-only -q`.
     POSIX: `cd backend && .venv/bin/python -m pytest --collect-only -q`.
     A *pass* count is deliberately not asserted here — see the MongoDB note below.
   - Frontend: **280 passed / 280 total across 44 suites** —
@@ -204,7 +204,7 @@ read the live pin before using new syntax:
   so with Mongo down the suite still collects and most tests still pass — what you actually get is a
   ~2 s server-selection timeout on each DB-touching test (a slow run) plus failures confined to the
   DB-dependent tests. It does **not** error out at startup. Start `mongod`, then:
-  Windows: `cd backend; ./.venv313/Scripts/python.exe -m pytest -q --tb=no`.
+  From the repo: `cd backend && .venv/bin/python -m pytest -q --tb=no`.
 - **The backend SHIPS ON PYTHON 3.12 — local dev is 3.13. All backend code must compile on 3.12.**
   `Dockerfile.backend` is `python:3.12-slim`; `.github/workflows/ci.yml` and `deploy.yml` pin 3.12.
   (Corrected 2026-09-27: this line used to say 3.11, but the Dockerfile, deploy
@@ -212,11 +212,11 @@ read the live pin before using new syntax:
   A 3.12-only nested-quote f-string in `routes/quant.py` once made a 3.11 CI gate fail at
   `import server` (fixed at `d29ae3f`; CI now pins 3.12 to match ship). Syntax oracle before
   you commit new backend code (must parse on the ship runtime AND the 3.11 floor):
-  `cd backend && ./.venv/Scripts/python.exe -c "import py_compile;py_compile.compile('<file>',doraise=True)"`
-  On Windows, `backend/.venv/Scripts/python.exe` is Python 3.11.15. It does have
-  pytest and ruff, but its FastAPI/Starlette versions are older than the current
-  requirements. Use it only for a deliberately labeled 3.11 compatibility check;
-  use `.venv313` for current local tests. Neither proves a Python 3.12 deployment run.
+  `cd backend && .venv/bin/python -c "import py_compile;py_compile.compile('<file>',doraise=True)"`
+  `backend/.venv` is the working interpreter for this checkout (Python 3.14.6).
+  It is newer than the shipped 3.12 pin, so it can accept syntax the image would
+  not; use a separate older environment only for a deliberately labelled
+  compatibility check, and treat the ship pins as the authority.
 - **Architecture decisions are binding:** `docs/adr/` holds 7 **Accepted** ADRs (model promotion
   policy, data-source policy, backtest equity, deploy CORS, test discipline, coupling, alert
   persistence). Read the
@@ -249,7 +249,7 @@ read the live pin before using new syntax:
 
 | Layer | Tech | Entry point |
 |---|---|---|
-| Backend | FastAPI · **Python 3.12** (ships in `Dockerfile.backend`, pinned in `ci.yml`/`deploy.yml`) | `backend/server.py`; Windows uses `backend/.venv313/Scripts/python.exe` |
+| Backend | FastAPI · **Python 3.12** (ships in `Dockerfile.backend`, pinned in `ci.yml`/`deploy.yml`) | `backend/server.py`; local venv `backend/.venv/bin/python` |
 | Async DB | Motor (MongoDB) | `from server import db` |
 | Tick DB | DuckDB | `backend/services/duckdb_engine.py` |
 | ML | sklearn gbm + walk-forward CV | `backend/services/ml/inference.py` (frozen), `health_monitor.py`, `backtest.py` |
@@ -257,30 +257,37 @@ read the live pin before using new syntax:
 | Embedded UI | Dash | `backend/services/dash_ui.py` (frozen) — embedded in React at `/dashboard/` |
 | Market data | Public.com adapter (cvserver / yfinance / Databento OI fallbacks) | `backend/services/public_api_adapter.py` |
 | Lint | ruff — config in `backend/pyproject.toml` | `cd backend && ruff check .` |
-| Tests | pytest (asyncio auto mode) | Windows: from `backend`, `./.venv313/Scripts/python.exe -m pytest -q` |
+| Tests | pytest (asyncio auto mode) | From `backend`, `.venv/bin/python -m pytest -q` |
 | Frontend tests | jest via craco | Set `CI=true`, then from `frontend`, `npx craco test --watchAll=false` |
 | Deploy | Caddy + docker-compose (free-tier ARM) | `deploy/free/README.md` |
 | CI | GitHub Actions | `.github/workflows/ci.yml` (also `lint.yml`, `deploy.yml`) |
 
-**Windows environments (queried 2026-09-27):**
+**Local environments (verified 2026-09-27 on this checkout):**
 
-- `backend/.venv313/Scripts/python.exe`: Python 3.13.15, pytest 9.1.1,
-  ruff 0.15.22, FastAPI 0.136.3, Starlette 1.3.1. Use for current local checks.
-- `backend/.venv/Scripts/python.exe`: Python 3.11.15, pytest 9.1.1,
-  ruff 0.15.22, FastAPI 0.110.1, Starlette 0.37.2. Older compatibility environment.
-- `backend/.venv/bin/python` does not exist on this Windows checkout. It is a
-  POSIX form; verify it on a POSIX machine rather than copying it into PowerShell.
-- Bare `python` resolves to `C:/Python313/python.exe`, without the project pytest
-  or ruff packages. Use the explicit project interpreter. Recheck versions after
-  environment changes; these observations do not replace the Python 3.12 ship pins.
+- `backend/.venv/bin/python` is the working interpreter: Python 3.14.6, with
+  pytest, uvicorn and the full dependency set. Prefer it for every command.
+  Note this is NEWER than the shipped 3.12 pin, so it can accept syntax the
+  image would not — keep `ruff` target-version and `requires-python` as the
+  authority for what may be committed.
+- `ruff` is NOT a venv module — `python -m ruff` fails. It is a standalone
+  binary at `/opt/homebrew/bin/ruff` (0.15.22). Run it as `ruff check .` from
+  `backend`, not through the venv.
+- There is no `backend/.venv313` directory, and `backend/.venv/Scripts/python.exe`
+  is a Windows form that does not exist here. An earlier version of this file
+  pointed at both and told readers to avoid `backend/.venv`, which is the
+  opposite of the truth. `tests/test_version_doc_consistency.py` now fails if a
+  runnable command references either.
+- Recheck versions after environment changes; these observations do not replace
+  the Python 3.12 ship pins in `Dockerfile.backend` / `ci.yml` / `deploy.yml`.
 
 **Ruff rules (real config, `backend/pyproject.toml`):** `select = ["E","F","W","I","B","UP","SIM"]`,
 `ignore = ["E501","SIM102","SIM108","SIM117"]`, `line-length = 120`, `target-version = "py311"`
 (must track `requires-python`; raising it makes ruff propose syntax the shipped
 interpreter cannot parse), `extend-exclude = [".venv","services/ml/inference.py","services/dash_ui.py","tests/conftest.py"]`,
 plus per-file-ignores. Note `E722` is NOT in `select` — it comes in via the `E` family.
-**Ruff 0.15.22 is installed in both Windows project environments.** Check with
-`./backend/.venv313/Scripts/python.exe -m ruff --version`; do not install globally.
+**Ruff is a standalone binary, not a venv module** — `python -m ruff` does not
+work here. Check with `ruff --version` (0.15.22, from Homebrew at
+`/opt/homebrew/bin/ruff`); do not install it into the venv or replace it globally.
 
 ---
 
@@ -295,8 +302,7 @@ claim that either server was started or that a live endpoint was verified.
 Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
 
 # Launch only when requested and the port is free; keep existing sessions running.
-$backendPython = (Resolve-Path "backend/.venv313/Scripts/python.exe").Path
-Start-Process -FilePath $backendPython `
+Start-Process -FilePath "backend/.venv/bin/python" `
   -ArgumentList "-m","uvicorn","server:app","--port","8000" `
   -WorkingDirectory "C:\Users\DARK HERO\Desktop\FLOWW2.0\backend" `
   -WindowStyle Hidden -RedirectStandardError "$env:TEMP\floww-uvicorn.err"
@@ -310,9 +316,9 @@ netstat -ano | Select-String ":8000\s.*LISTENING"
 ```powershell
 # From the repository root: backend checks (full tests need their configured services).
 Push-Location backend
-./.venv313/Scripts/python.exe -m pytest --collect-only -q
-./.venv313/Scripts/python.exe -m pytest tests/services/ -k "keyword" -v
-./.venv313/Scripts/python.exe -m ruff check .
+cd backend && .venv/bin/python -m pytest --collect-only -q
+cd backend && .venv/bin/python -m pytest tests/services/ -k "keyword" -v
+cd backend && .venv/bin/python -m ruff check .
 Pop-Location
 
 # Frontend tests: CI prevents an interactive watcher from keeping the command open.
