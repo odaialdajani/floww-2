@@ -136,7 +136,7 @@ async def scan_batch(
 
                 await _aio.sleep(max(0.0, float(pace_sec)))
             except Exception:
-                pass
+                pass  # silent by design: inter-ticker pacing sleep; a failed sleep must not abort the scan
     return {
         "schema_version": SCHEMA_VERSION,
         "rows": rows,

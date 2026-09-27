@@ -2562,7 +2562,7 @@ def _universe_scan_conviction(ticker: str, heat: dict | None, opp: dict | None):
             if _rows:
                 flow = {"conviction": _rows[0].get("conviction", 0), "key": _rows[0].get("key")}
         except Exception:
-            pass
+            pass  # silent by design: DuckDB alert feed optional; conviction falls back to unranked rather than failing the rank
         return _rank(ticker, flow=flow, opportunity=opp, confluence=None, ml=None,
                      snapshot_id=(heat or {}).get("snapshotId"), asof=(heat or {}).get("asof"))
     except Exception as e:
@@ -2602,7 +2602,7 @@ async def universe_scan(limit: int = Query(20, ge=1, le=40), max_expiries: int =
         for r in latest_leaderboard(_conn, limit=80):
             prior[r["ticker"]] = r.get("conviction", 0) or 0
     except Exception:
-        pass
+        pass  # silent by design: prior leaderboard optional; prefilter proceeds without history rather than failing
     flow_tickers: set = set()
     try:
         from services import flow_alerts as _fa
@@ -2610,7 +2610,7 @@ async def universe_scan(limit: int = Query(20, ge=1, le=40), max_expiries: int =
             if r.get("under"):
                 flow_tickers.add(str(r["under"]).upper())
     except Exception:
-        pass
+        pass  # silent by design: 2-day alert feed optional; prefilter narrows to the popular universe instead
     movers_map: dict = {}
     try:
         from services.movers import get_movers as _gm
@@ -2618,7 +2618,7 @@ async def universe_scan(limit: int = Query(20, ge=1, le=40), max_expiries: int =
         for r in (_mv or {}).get("results", []):
             movers_map[r["ticker"]] = r.get("change_pct", 0) or 0
     except Exception:
-        pass
+        pass  # silent by design: movers optional; prefilter ranks on prior conviction without it rather than failing
     pre = prefilter_universe(list(POPULAR_UNIVERSE), movers=movers_map, prior=prior,
                              flow_alert_tickers=flow_tickers, limit=limit)
     ordered = [r["ticker"] for r in pre["ordered"]]
