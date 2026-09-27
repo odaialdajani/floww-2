@@ -1,0 +1,10 @@
+{
+  "worktree": "C:/Users/DARK HERO/AppData/Local/Temp/floww-main-reconcile-20260927-1916",
+  "head": "8234f35d46b1e23252a1e1451f841eb20448131e",
+  "detached": true,
+  "deletion": {
+    "code": 0,
+    "stdout": "Deleted branch integrate/main-20260927 (was 8234f35d).\nDeleted branch safety/reconcile-before-20260926 (was dba50893).\nDeleted branch work/reconcile-ai-ui-20260911 (was ed6bce67).\n",
+    "stderr": ""
+  }
+}

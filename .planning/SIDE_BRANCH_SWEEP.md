@@ -1,6 +1,6 @@
 # Complete side-branch reconciliation - 2026-09-27
 
-Status: RECOVERY VERIFIED; publication and branch cleanup pending. Main starting point: ed6bce671bd4f58d195d2350b1d6bf2ba8715473.
+Status: COMPLETE - useful recovery validated and published; archived side branches deleted; only main remains. Rendered browser verification remains unavailable. Main starting point: ed6bce671bd4f58d195d2350b1d6bf2ba8715473.
 
 ## User outcome
 
@@ -43,3 +43,11 @@ Recovered command error/counter/help behavior, detailed account readings with re
 Unsafe pooled Roll/pin/drift displays, parity-breaking feature optimization, platform-only binary and obsolete external AlphaPod capture stay archived. AlphaPod capture is only an iframe into an old localhost3456 service, with no unique math/data; shared accessibility support survives. This implements the owner20:21 instruction allowing obsolete work to remain removed.
 
 Existing nonfinite Greek input handling and fractional order-list display are follow-up items, not claims of full application correctness. Retired test bytecode was preserved outside source to prevent a false presence failure.
+
+## Publication and branch cleanup completed
+
+Main was published at123dad305d7b7588e597520b3bf8a22efd78ea47. All276 reviewed remote side branches were deleted in12 successful atomic batches using exact expected-tip safeguards; all3 local side branches were deleted after detaching the clean integration copy. At2026-09-27T21:12:15Z, local and remote each have only main at that same commit, and the working tree is clean. This documentation-only completion receipt follows that code state.
+
+The verified recovery bundles and old working-copy backups remain intact. Every reviewed branch history is reachable from main; historical code remains recoverable even when obsolete behavior was intentionally not restored. Full deletion receipts are included beside the review evidence. No active application or existing work session was restarted.
+
+The user requested enabling browser access, but available browser tools still expose no browser. This terminal cannot enable the desktop browser surface; actual rendered checks remain pending a connected desktop browser. Automated frontend tests and build passed, which does not substitute for rendered verification.
