@@ -23,10 +23,18 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 APP_JS = REPO_ROOT / "frontend" / "src" / "App.js"
 NAV_CONFIG = REPO_ROOT / "frontend" / "src" / "shell" / "navConfig.js"
+BACKEND = REPO_ROOT / "backend"
+ADAPTER = BACKEND / "services" / "public_api_adapter.py"
 
 # The tabs the product is expected to ship. Renaming one is a deliberate
 # change that should update this list, not something to discover via a failure.
 REQUIRED_TABS = ("heatseeker", "trinity", "skylit", "portfolio", "journal", "public")
+
+# Providers that are retired or that only serve a non-market-data concern.
+# Alpaca remains only as the paper-order venue; Finnhub supplies the symbol
+# universe and news; Polygon/Alpha Vantage are not on the options path.
+# None of them may appear in the options market-data adapter.
+NON_MARKET_DATA_PROVIDERS = ("finnhub", "polygon", "alpha_vantage", "alpaca")
 
 
 def _nav_ids() -> list[str]:
@@ -80,3 +88,68 @@ def test_no_dangling_page_ids_in_widget_conditions():
         f"App.js references page id(s) {dangling} that no nav entry defines "
         "and nothing renders — dead conditions left behind by removed pages"
     )
+
+
+# ── "All Public" data-source contract ──────────────────────────────────────
+#
+# The product decision is that every market-data surface (Solstice heatmap,
+# Triad, Zenith) is Public.com. Alpaca survives only as the paper-order
+# venue; Finnhub supplies the symbol universe and news; Polygon and Alpha
+# Vantage are not on the options path. None of them may supply an options
+# chain, Greeks, spot or bars.
+#
+# This is a static text check, so it is deliberately narrow: it inspects the
+# Public adapter for any *call* to another provider's client, and ignores
+# comments (a comment may legitimately mention Alpaca to explain a naming
+# choice, which public_api_adapter.py:62 does).
+
+def test_public_adapter_calls_no_other_market_data_provider():
+    import ast
+
+    assert ADAPTER.exists(), f"missing {ADAPTER}"
+    # Check the SOURCE TEXT of executable code, not just identifiers: a
+    # provider leaks in as `from services.alpaca_client import AlpacaClient`
+    # or as a local named `alpaca_client.get_chain(...)`, and neither the
+    # method name ("get_chain") nor the attribute name ("get_chain") names
+    # the provider. Stripping comments and docstrings first is essential --
+    # public_api_adapter.py:62 legitimately mentions Alpaca in a comment to
+    # explain why the bar-timeframe keys use that vocabulary.
+    import io
+    import tokenize
+
+    code_only: list[str] = []
+    source = ADAPTER.read_text()
+    for tok in tokenize.generate_tokens(io.StringIO(source).readline):
+        if tok.type in (tokenize.COMMENT, tokenize.STRING):
+            continue
+        code_only.append(tok.string)
+    code_text = " ".join(code_only).lower()
+
+    offenders = sorted(p for p in NON_MARKET_DATA_PROVIDERS if p in code_text)
+    assert not offenders, (
+        f"the options market-data adapter calls {offenders}; the product "
+        "decision is that every options surface is Public.com"
+    )
+
+
+def test_schwab_is_absent_from_live_market_data_code():
+    """Schwab was retired 2026-09-03 and removed 2026-09-27.
+
+    Only comments and explicit retirement notes may still name it.
+    """
+    import ast
+
+    checked = 0
+    for path in (BACKEND / "services").rglob("*.py"):
+        if "tests" in path.parts:
+            continue
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module and "schwab" in node.module.lower():
+                pytest.fail(f"{path.name} imports {node.module}")
+            if isinstance(node, ast.Import):
+                for a in node.names:
+                    if "schwab" in a.name.lower():
+                        pytest.fail(f"{path.name} imports {a.name}")
+            checked += 1
+    assert checked > 0, "no backend service files were inspected"
