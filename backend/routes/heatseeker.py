@@ -220,7 +220,13 @@ async def node_lifecycle_route(
     lookback_mins: int = Query(default=60, ge=5, le=1440, description="Lookback window in minutes"),
     expiries: int = Query(default=4, ge=1, le=12),
 ):
-    """Top 10 |GEX| nodes classified Fresh/Tested/Delivered/Decaying."""
+    """Top 10 |GEX| nodes classified Fresh/Tested/Delivered/Decaying.
+
+    Build #1 durability badge: the heatseeker lifecycle ledger is
+    history-bound (unknown when no history); the persistent node tracker
+    (NodeLifecycleTracker, DuckDB node_lifecycle_v1) is joined here so the
+    panel can label itself durable vs memory-only after a restart.
+    """
     try:
         from server import _sanitize
         raw = await _fetch_chain(ticker, expiries)
@@ -230,12 +236,31 @@ async def node_lifecycle_route(
             raise HTTPException(404, "No options data for " + ticker)
         history = await _fetch_history(ticker.upper(), lookback_mins=lookback_mins)
         result = calc_node_lifecycle(spot, contracts, history)
-        return _sanitize({
-            "ticker": ticker.upper(),
-            "spot": spot,
-            "history_points": len(history),
-            **result,
-        })
+        # Durable-memory join (best-effort, never breaks the panel): does a
+        # persisted tracker snapshot exist for this ticker?
+        durable: bool | None = None
+        try:
+            import os as _os
+
+            from services.duckdb_engine import db as _duckdb
+            from services.heatmap_history import latest_node_lifecycle, recorder_status
+            _hconn = getattr(_duckdb, "_conn", getattr(_duckdb, "conn", None))
+            _stored = latest_node_lifecycle(_hconn, ticker.upper(), "microstructure") \
+                if _hconn is not None else None
+            if _stored:
+                durable = bool(recorder_status(
+                    _hconn, _os.environ.get("DUCKDB_PATH", ":memory:"))["durable"])
+            else:
+                durable = False
+        except Exception:
+            durable = None
+        out = {"ticker": ticker.upper(), "spot": spot,
+               "history_points": len(history), **result}
+        if durable is True:
+            out["durable"] = True
+        elif durable is False:
+            out["memory_only"] = True
+        return _sanitize(out)
     except HTTPException:
         raise
     except Exception as e:

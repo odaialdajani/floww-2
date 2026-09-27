@@ -11,6 +11,7 @@ import MultiTickerHeatmap from "./components/MultiTickerHeatmap";
 import VolumeProfileGrid from "./components/VolumeProfileGrid";
 import HeatseekerDashboard from "./components/heatseeker/HeatseekerDashboard";
 import Movers from "./components/Movers";
+import UniverseLeaderboard from "./components/UniverseLeaderboard";
 import GexStrikeTable from "./components/heatseeker/GexStrikeTable";
 import BarHeatmap from "./components/BarHeatmap";
 import PatternCard from "./components/PatternCard";
@@ -968,6 +969,7 @@ export default function App() {
                 </div>
 
                 <Movers onPick={(t) => setTicker(t)} />
+                <UniverseLeaderboard onPick={(t) => setTicker(t)} />
                 <HistoryPanel ticker={ticker} />
                 <SettingsPanel
                   refreshMs={refreshMs}

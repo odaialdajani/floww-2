@@ -2526,3 +2526,146 @@ async def alert_outcomes(
     stats.setdefault("sigma_k", sigma_k)
     stats["ok"] = True
     return stats
+
+
+# ── Universe scan scheduler + unified conviction leaderboard ─────────
+# Maximization builds #2 (scan) + #3 (fusion). The scan reuses the
+# rotating-cursor public scanner + heatmap builder + opportunity engine;
+# fusion reuses conviction_rank (no new scorer invented). Scheduler state
+# is module-level cursor + TTL cache (same pattern as scan-public).
+_UNIVERSE_SCAN_CACHE: dict = {"ts": 0.0, "payload": None}
+_UNIVERSE_SCAN_TTL_S = 300.0
+_UNIVERSE_CURSOR: int = 0
+
+
+def _universe_scan_opportunity(ticker: str, heat: dict | None):
+    try:
+        from services.regime_opportunity import compute as _opp
+        hmm = (heat or {}).get("hmm") or {}
+        return _opp({"hmm_state": hmm.get("state"), "hmm_confidence": hmm.get("confidence", 0.5),
+                     "rv_band": (heat or {}).get("rv_band"), "iv_rank": (heat or {}).get("iv_rank"),
+                     "gamma_sign": (heat or {}).get("gamma_sign"), "roc_5d": (heat or {}).get("roc_5d")})
+    except Exception as e:
+        return {"opportunity_score": 0.0, "opportunity_tier": "LOW", "direction": "NEUTRAL",
+                "trade_type": "no_trade", "invalidation": f"opportunity unavailable: {e}",
+                "components": {}, "warnings": [str(e)]}
+
+
+def _universe_scan_conviction(ticker: str, heat: dict | None, opp: dict | None):
+    try:
+        from services.conviction_rank import rank_one as _rank
+        flow = {"conviction": 0}
+        try:
+            from services import flow_alerts as _fa
+            from services.duckdb_engine import db as _ddb
+            _rows = _fa.read_alert_feed(_ddb, days=7, ticker=str(ticker).upper(), sort_by="conviction")
+            if _rows:
+                flow = {"conviction": _rows[0].get("conviction", 0), "key": _rows[0].get("key")}
+        except Exception:
+            pass
+        return _rank(ticker, flow=flow, opportunity=opp, confluence=None, ml=None,
+                     snapshot_id=(heat or {}).get("snapshotId"), asof=(heat or {}).get("asof"))
+    except Exception as e:
+        return {"ticker": str(ticker).upper(), "conviction": 0.0, "tier": "LOW",
+                "direction": "NEUTRAL", "trade_type": "no_trade",
+                "invalidation": f"conviction unavailable: {e}", "evidence": {}}
+
+
+@router.get("/universe/scan")
+async def universe_scan(limit: int = Query(20, ge=1, le=40), max_expiries: int = Query(2, ge=1, le=4),
+                        refresh: bool = Query(False)):
+    """Prefilter + batched heatmap builds + fused conviction leaderboard.
+    Rotating cursor: each call scans the NEXT slice (no budget stampede).
+    Cached 5 min; refresh=true forces a new sweep. Budget-unaffordable
+    tickers keep prior leaderboard rows with honest age (never dropped).
+    """
+    import time as _t
+    now = _t.time()
+    if not refresh and _UNIVERSE_SCAN_CACHE["payload"] is not None and (now - _UNIVERSE_SCAN_CACHE["ts"]) < _UNIVERSE_SCAN_TTL_S:
+        out = dict(_UNIVERSE_SCAN_CACHE["payload"])
+        out["cache"] = "hit"
+        return out
+    global _UNIVERSE_CURSOR
+    from services.conviction_rank import rank_many as _rank_many
+    from services.duckdb_engine import db as _ddb
+    from services.movers import POPULAR_UNIVERSE
+    from services.universe_scan import (
+        latest_leaderboard,
+        leaderboard_age_s,
+        prefilter_universe,
+        record_leaderboard,
+        scan_batch,
+    )
+    _conn = getattr(_ddb, "_conn", getattr(_ddb, "conn", None))
+    prior = {}
+    try:
+        for r in latest_leaderboard(_conn, limit=80):
+            prior[r["ticker"]] = r.get("conviction", 0) or 0
+    except Exception:
+        pass
+    flow_tickers: set = set()
+    try:
+        from services import flow_alerts as _fa
+        for r in _fa.read_alert_feed(_ddb, days=2, sort_by="conviction")[:20]:
+            if r.get("under"):
+                flow_tickers.add(str(r["under"]).upper())
+    except Exception:
+        pass
+    movers_map: dict = {}
+    try:
+        from services.movers import get_movers as _gm
+        _mv = await _gm(limit=80)
+        for r in (_mv or {}).get("results", []):
+            movers_map[r["ticker"]] = r.get("change_pct", 0) or 0
+    except Exception:
+        pass
+    pre = prefilter_universe(list(POPULAR_UNIVERSE), movers=movers_map, prior=prior,
+                             flow_alert_tickers=flow_tickers, limit=limit)
+    ordered = [r["ticker"] for r in pre["ordered"]]
+    n = len(ordered)
+    if n:
+        start = _UNIVERSE_CURSOR % n
+        take = min(len(ordered), max(1, int(limit)))
+        batch = [ordered[(start + k) % n] for k in range(take)]
+        _UNIVERSE_CURSOR = (start + take) % n
+    else:
+        batch = []
+    swept = await scan_batch(batch, opportunity_fn=_universe_scan_opportunity,
+                             conviction_fn=_universe_scan_conviction,
+                             max_expiries=max_expiries, pace_sec=0.0)
+    fused = _rank_many([{"ticker": r["ticker"], "opportunity": r.get("opportunity"),
+                         "conviction": r.get("conviction"), "snapshot_id": r.get("snapshot_id"),
+                         "asof": r.get("asof")} for r in swept["rows"]])
+    try:
+        record_leaderboard(_conn, fused)
+    except Exception as e:
+        logger.warning("universe scan persist failed: %s", e)
+    try:
+        board = latest_leaderboard(_conn, limit=limit)
+    except Exception:
+        board = fused
+    try:
+        age = leaderboard_age_s(_conn)
+    except Exception:
+        age = None
+    out = {"schema_version": "universe_scan.v1", "leaderboard": board, "fused": fused,
+           "prefilter": pre, "batch": {"tickers": batch, "coverage": swept["coverage"],
+           "skipped": swept["skipped"]}, "leaderboard_age_s": age, "cache": "miss",
+           "computed_at": datetime.now(UTC).isoformat()}
+    _UNIVERSE_SCAN_CACHE.update({"ts": now, "payload": out})
+    return out
+
+
+@router.get("/universe/leaderboard")
+async def universe_leaderboard(limit: int = Query(20, ge=1, le=80)):
+    """Last persisted fused leaderboard (no scan, no budget spend)."""
+    from services.duckdb_engine import db as _ddb
+    from services.universe_scan import latest_leaderboard, leaderboard_age_s
+    _conn = getattr(_ddb, "_conn", getattr(_ddb, "conn", None))
+    try:
+        board = latest_leaderboard(_conn, limit=limit)
+        age = leaderboard_age_s(_conn)
+    except Exception as e:
+        return {"leaderboard": [], "leaderboard_age_s": None, "error": str(e)}
+    return {"schema_version": "universe_scan.v1", "leaderboard": board,
+            "leaderboard_age_s": age, "count": len(board)}

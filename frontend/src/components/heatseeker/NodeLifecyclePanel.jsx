@@ -19,6 +19,12 @@ function stateClass(state) {
 export default function NodeLifecyclePanel({ ticker = "SPY" }) {
   const { data, loading, error } = useHeatseeker("node-lifecycle", { ticker });
   const nodes = (data?.nodes || []).slice(0, 25);
+  // Build #1 — durable memory: the badge tells whether node/wall state
+  // survived a restart (DuckDB) or is this process's memory only.
+  const durable = data?.durable;
+  const memNote = data?.memory_only === true || durable === false
+    ? "memory-only"
+    : durable === true ? "durable" : null;
 
   return (
     <div className="rounded-xl border border-slate-700/30 bg-slate-800/20 p-3" data-testid="hs-node-lifecycle">
@@ -26,6 +32,16 @@ export default function NodeLifecyclePanel({ ticker = "SPY" }) {
         <div className="flex items-center gap-2">
           <span className="text-sm">🔄</span>
           <span className="text-xs font-semibold text-slate-200">Node Lifecycle</span>
+          {memNote && (
+            <span
+              className="text-[9px] px-1.5 py-0.5 rounded border border-slate-600/50 text-slate-400"
+              title={durable === true
+                ? "Lifecycle state restored from DuckDB — survives restarts"
+                : "Lifecycle state is in-process memory only — lost on restart"}
+            >
+              {memNote === "durable" ? "durable · survives restart" : "memory-only"}
+            </span>
+          )}
         </div>
         <span className="text-[10px] text-slate-500">{nodes.length} of top-25</span>
       </div>

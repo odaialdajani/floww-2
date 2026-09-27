@@ -1630,13 +1630,21 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             durable = False
             try:
                 from services.duckdb_engine import db as _ddb_hist
-                from services.heatmap_history import latest_wall_state, recorder_status
-                _hconn = getattr(_ddb_hist, "conn", None)
+                from services.heatmap_history import (
+                    latest_wall_last_state,
+                    latest_wall_state,
+                    recorder_status,
+                )
+                _hconn = getattr(_ddb_hist, "_conn", getattr(_ddb_hist, "conn", None))
                 if _hconn is not None and wid:
                     db_last = latest_wall_state(_hconn, wid, ticker, scope_id)
-                    # Newest-wins: an event-only DB row must not override more
-                    # recent in-memory dwell continuity.
-                    if db_last and is_newer_state(db_last, mem_last):
+                    # Maximization #1: full dwell state (inside_since/beyond)
+                    # outlives restarts via wall_last_state_v1; the event log
+                    # alone cannot restore dwell continuity.
+                    db_full = latest_wall_last_state(_hconn, ticker, scope_id, wid)
+                    if db_full and is_newer_state(db_full, mem_last):
+                        last = db_full
+                    elif db_last and is_newer_state(db_last, mem_last):
                         last = db_last
                     # Durable only on a real file-backed recorder, never on
                     # :memory: fallback.
@@ -1665,19 +1673,27 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                  "continuity": tr.get("continuity", True)})
             import contextlib as _ctxlib
             with _ctxlib.suppress(Exception):
-                save_last(ticker, scope_id, wid or "",
-                          {"state": tr.get("state"), "at": tr.get("at", now_iso),
-                           "approach_side": tr.get("approach_side"),
-                           "inside_since": tr.get("inside_since"),
-                           "beyond_since": tr.get("beyond_since"),
-                           "beyond_side": tr.get("beyond_side"),
-                           "adverse_side": tr.get("adverse_side"),
-                           "reclaim_state": tr.get("reclaim_state"),
-                           "data_source": _data_source})
+                _wall_last_state = {"state": tr.get("state"), "at": tr.get("at", now_iso),
+                                    "approach_side": tr.get("approach_side"),
+                                    "inside_since": tr.get("inside_since"),
+                                    "beyond_since": tr.get("beyond_since"),
+                                    "beyond_side": tr.get("beyond_side"),
+                                    "adverse_side": tr.get("adverse_side"),
+                                    "reclaim_state": tr.get("reclaim_state"),
+                                    "wall_position": wpos,
+                                    "data_source": _data_source}
+                save_last(ticker, scope_id, wid or "", _wall_last_state)
+                with _ctxlib.suppress(Exception):
+                    from services.duckdb_engine import db as _ddb_last
+                    from services.heatmap_history import record_wall_last_state
+                    _hconn_last = getattr(_ddb_last, "conn", None)
+                    if _hconn_last is not None and wid:
+                        record_wall_last_state(_hconn_last, ticker, scope_id, wid,
+                                               _wall_last_state)
             with _ctxlib.suppress(Exception):
                 from services.duckdb_engine import db as _ddb_rec
-                from services.heatmap_history import record_wall_event
-                _hconn2 = getattr(_ddb_rec, "conn", None)
+                from services.heatmap_history import latest_wall_last_state, record_wall_event
+                _hconn2 = getattr(_ddb_rec, "_conn", getattr(_ddb_rec, "conn", None))
                 if _hconn2 is not None and wid and tr.get("event"):
                     record_wall_event(_hconn2, wid, ticker, tr.get("event"),
                                       payload.get("snapshotId", ""),
