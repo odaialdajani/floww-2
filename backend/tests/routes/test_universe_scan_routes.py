@@ -1,9 +1,13 @@
 """Universe scan + leaderboard routes: shape, cache, budget-honest."""
 from __future__ import annotations
+
 import asyncio
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
 from routes.flowseeker import router
+
 
 def _app():
     app = FastAPI()
@@ -19,7 +23,7 @@ def _seed_board(monkeypatch):
         rows = [{"ticker": t, "snapshot_id": "s-" + t, "asof": "a",
                  "opportunity": {"opportunity_score": 9.0 if t == "BBB" else 1.0,
                  "direction": "BEAR" if t == "BBB" else "NEUTRAL",
-                 "trade_type": "x", "invalidation": "i %s" % t},
+                 "trade_type": "x", "invalidation": f"i {t}"},
                  "conviction": {"conviction": 10}} for t in tickers]
         return {"rows": rows, "skipped": [], "coverage": {"requested": len(tickers), "scanned": len(tickers), "skipped": 0}}
     monkeypatch.setattr(U, "scan_batch", fake_batch)

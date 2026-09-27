@@ -1,10 +1,20 @@
 """Builds #2+#3: prefilter pure, budget take pure, fusion deterministic."""
 from __future__ import annotations
-import asyncio, duckdb
-from services.universe_scan import (affordable_take, latest_leaderboard, prefilter_universe,
-    record_leaderboard, scan_batch)
-from services.heatmap_history import ensure_tables
+
+import asyncio
+
+import duckdb
+
 from services.conviction_rank import rank_many, rank_one
+from services.heatmap_history import ensure_tables
+from services.universe_scan import (
+    affordable_take,
+    latest_leaderboard,
+    prefilter_universe,
+    record_leaderboard,
+    scan_batch,
+)
+
 
 def test_prefilter_orders_and_excludes():
     out = prefilter_universe(["SPY", "^VIX", "QQQ"], movers={"SPY": 5.0, "QQQ": 0.1},
@@ -20,8 +30,8 @@ def test_affordable_take_pure():
     assert affordable_take(0, 4, 20) == 0
 
 def test_scan_batch_yields_to_budget(monkeypatch):
-    import services.universe_scan as us
     import services.public_budget as pb
+    import services.universe_scan as us
     async def fake_peek():
         return 0.0
     monkeypatch.setattr(pb.budget, "peek_available", fake_peek)
@@ -32,8 +42,8 @@ def test_scan_batch_yields_to_budget(monkeypatch):
     assert all(s["reason"] == "BUDGET_UNAFFORDABLE" for s in out["skipped"])
 
 def test_scan_batch_builds_with_injected_fns(monkeypatch):
-    import services.universe_scan as us
     import services.public_budget as pb
+    import services.universe_scan as us
     async def rich():
         return 1000.0
     monkeypatch.setattr(pb.budget, "peek_available", rich)
@@ -60,7 +70,8 @@ def test_rank_many_sorts_and_ranks():
     assert out[0]["ticker"] == "BBB" and out[0]["rank"] == 1 and out[1]["rank"] == 2
 
 def test_leaderboard_round_trip():
-    conn = duckdb.connect(":memory:"); ensure_tables(conn)
+    conn = duckdb.connect(":memory:")
+    ensure_tables(conn)
     assert latest_leaderboard(conn) == []
     record_leaderboard(conn, [{"ticker": "SPY", "rank": 1, "conviction": 88.0, "tier": "HIGH", "direction": "BULL", "trade_type": "debit_spread", "invalidation": "lose 500", "snapshot_id": "s1", "asof": "a", "evidence": {"k": 1}}])
     got = latest_leaderboard(conn)
