@@ -1,14 +1,27 @@
 # Solstice STATUS — T00 baseline + T01–T03 foundation (living receipt)
 
 > **Current state, 27 Sep 2026 — supersedes the "open PR" lines below.**
-> All work described in this file is merged: #13, #19, #55, #56, #12, #5, #58, #54.
-> `origin/main` = `2333c5bf`. Cumulative verification on that tree:
-> **5446 backend passed / 0 failed** (55 skipped, 9 deselected; 5565 collected
-> before the three optional-dependency files are ignored), **83 frontend suites /
-> 680 tests passed**, silent-except gate OK (289 files, 27 gate self-tests pass),
-> ruff clean. Solstice 222 and 15 WebSocket regression tests pass on main.
-> #54 was merged as `2333c5bf` and added the first `AlertOverlay` coverage,
-> which is the 83rd suite.
+> All work described in this file is merged: #13, #19, #55, #56, #12, #5, #58,
+> #54, #59, #60, #61, #62, #63.
+> `origin/main` = `ba845699`. Cumulative verification on that tree:
+> **6360 backend passed / 0 failed** in CI (6291 locally, 38 skipped), **103
+> frontend suites / 910 tests passed**, silent-except gate OK (326 files scanned,
+> **54** gate self-tests pass: 27 for the silent-except gate plus 27 for
+> `truth_audit.sh`, which had none until #62 added 21), API docs up to date
+> (370 paths), truth audit 229/0, ruff clean. Solstice 273, R8 durability 5,
+> 26 WebSocket-regression tests pass on main.
+> #63 fixed the three failures that had main red on three consecutive heads.
+>
+> **Two earlier entries in this file are retracted, and the retraction is the
+> point.** #57 was recorded as blocked by a `setdefault("type", "signal")` no-op;
+> the other agent rebased, adopted main's `_signal_frame`, and the PR is now
+> MERGED. And the `SPY_rf_20260524_020801_meta.json` Sharpe-8.02 artifact was
+> recorded as "LIVE, not quarantined" — that was inferred from file location.
+> `ml_price_prediction.py` loads `{ticker}_direction_v1.0.joblib` from the
+> repo-root `models/`, and nothing globs `backend/models/*_rf_*`, so the artifact
+> is unreachable. The real defect is the coverage mismatch: the gate audited
+> `backend/models/` while the loader read root `models/`. #61 closed it.
+>
 > The historical sections below are preserved verbatim as the audit trail; where
 > they say a PR is OPEN, read this note instead.
 >
