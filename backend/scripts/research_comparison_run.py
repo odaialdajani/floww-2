@@ -66,6 +66,18 @@ def source_identity(root):
     return files
 
 
+DISPLAY_FILES = (
+    'src/agent/AgentPanelAnswer.jsx', 'src/agent/Evidence.jsx',
+    'src/agent/chartReading.js', 'src/agent/AgentModelSettings.jsx', 'src/config/api.js',
+    'src/agent/useAgentStream.js', 'src/agent/AgentProvider.jsx', 'src/agent/AgentConversation.jsx',
+    'scripts/render-comparison-packet.cjs', 'package.json', 'package-lock.json',
+)
+
+
+def display_identity(root):
+    return {'files': {name: digest((root / 'frontend' / name).read_bytes()) for name in DISPLAY_FILES}}
+
+
 def environment_identity(root):
     return {
         'source_files': source_identity(root),
@@ -79,6 +91,24 @@ def require_ids(rows, expected, label):
     ids = [row['id'] for row in rows]
     if ids != expected or len(set(ids)) != len(ids):
         raise ValueError(label + ' must preserve every case in order')
+
+
+def bind_request_specs(cases):
+    from services.agent.contracts import request_spec
+    specs = {}
+    for case in cases:
+        refused = case['expected']['model_route']['inexpensive'] == 'no_model_before_validation'
+        try:
+            spec = request_spec(case['body'])
+        except ValueError:
+            if not refused:
+                raise ValueError('An admitted comparison request is invalid') from None
+            spec = None
+        else:
+            if refused:
+                raise ValueError('A refused comparison request is unexpectedly valid')
+        specs[case['id']] = spec
+    return specs
 
 
 def prepare(proposal_path, bundle, oracle_path, grading_path, review_path, authority_path, root=ROOT):
@@ -118,6 +148,7 @@ def prepare(proposal_path, bundle, oracle_path, grading_path, review_path, autho
             raise ValueError('Original source changed: ' + row['id'])
         sources.append(ref)
     identity = environment_identity(root)
+    display = display_identity(root)
     blockers = []
     required_review = {'proposal': proposal_hash, 'oracle': refs['oracle']['sha256'],
                        'grading': refs['grading']['sha256'], 'manifest': refs['manifest']['sha256']}
@@ -164,8 +195,8 @@ def prepare(proposal_path, bundle, oracle_path, grading_path, review_path, autho
     if not authority.get('cost_user_choice'):
         blockers.append('Cost choice has no user reply recorded')
     result = dict(version=1, status='blocked' if blockers else 'prepared', blockers=blockers,
-                  artifacts=refs, fixtures=fixtures, original_sources=sources, attachments=attachments, environment=identity,
-                  settings=settings, functional_count=32, critical_count=14,
+                  artifacts=refs, fixtures=fixtures, original_sources=sources, attachments=attachments, environment=identity, expected_display=display,
+                  settings=settings, request_specs=bind_request_specs(proposal['cases']), functional_count=32, critical_count=14,
                   quota_rule='whole_arm_preflight_per_turn_atomic_40_no_cohort_lock',
                   maximum_reservations_per_candidate=32,
                   limits=['No acceptance or browser-paint proof from execution alone',
@@ -175,7 +206,7 @@ def prepare(proposal_path, bundle, oracle_path, grading_path, review_path, autho
     for ref in [*refs.values(), *fixtures, *sources, *attachments]:
         if digest(Path(ref['path']).read_bytes()) != ref['sha256']:
             raise ValueError('Input changed during preparation')
-    if environment_identity(root) != identity:
+    if environment_identity(root) != identity or display_identity(root) != display:
         raise ValueError('Source or environment changed during preparation')
     return result
 
@@ -209,7 +240,7 @@ def verify_seal(path, expected_hash, root=ROOT):
     for ref in [*sealed['artifacts'].values(), *sealed['fixtures'], *sealed['original_sources'], *sealed['attachments']]:
         if digest(Path(ref['path']).read_bytes()) != ref['sha256']:
             raise ValueError('Frozen source or input changed')
-    if environment_identity(root) != sealed['environment']:
+    if environment_identity(root) != sealed['environment'] or display_identity(root) != sealed['expected_display']:
         raise ValueError('Execution source or dependencies changed')
     from services.agent.codex_bridge import executable
     if reference(Path(executable())) != sealed['managed_executable']:

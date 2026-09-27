@@ -1,0 +1,16 @@
+{
+  "development_only": true,
+  "cases": 32,
+  "slots": 96,
+  "executed": 1,
+  "not_run": 95,
+  "html_case_elements": 32,
+  "html_arm_elements": 96,
+  "unrun_visible": 95,
+  "saved_price_visible": true,
+  "browser_display": null,
+  "packet_sha256": "b73c5ab9b498ec45c5ee65b2b545d3524e492d97c734b95a332537e5f234d00a",
+  "html_sha256": "4fd6c3fa9d3b36fcbf0faa4a5acec3f62df499d960852dc4007acaceb781b215",
+  "real_model_calls": 0,
+  "frozen_functional_answers": 0
+}

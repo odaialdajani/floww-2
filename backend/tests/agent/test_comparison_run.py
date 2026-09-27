@@ -14,13 +14,15 @@ def bundle(tmp_path, monkeypatch):
     (tmp_path / 'backend').mkdir()
     (tmp_path / 'backend' / 'development.py').write_text('DEVELOPMENT = True\n')
     monkeypatch.setattr(run, 'environment_identity', lambda root: {'source_files': run.source_identity(root)})
+    monkeypatch.setattr(run, 'display_identity', lambda root: {'files': {'development': 'display-only'}})
     ids = ['development_' + str(i) for i in range(32)]
     critical_ids = ['development_critical_' + str(i) for i in range(14)]
     files = tmp_path / 'inputs'
     files.mkdir()
     manifest = {'cases': []}
     oracle = {'cases': [], 'unresolved_cases': []}
-    proposal = {'cases': [{'id': i} for i in ids], 'critical_cases': [{'id': i} for i in critical_ids], 'source_catalog': []}
+    proposal = {'cases': [{'id': i, 'body': {'question': 'Explain $SPY', 'ticker': 'SPY'},
+                          'expected': {'model_route': {'inexpensive': 'eligible'}}} for i in ids], 'critical_cases': [{'id': i} for i in critical_ids], 'source_catalog': []}
     def save(name, obj):
         path = tmp_path / (name + '.json')
         path.write_bytes(json_bytes(obj))
@@ -237,3 +239,29 @@ def test_reference_hash_and_decode_use_identical_bytes(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, 'read_bytes', changing_read)
     assert run.read_reference(ref) == {'value': 1}
     assert len(reads) == 1
+
+
+def test_display_drift_invalidates_execution_identity(bundle, monkeypatch):
+    approve_development_fixture(bundle)
+    prepared = prepare(bundle)
+    exe = bundle[0] / 'development.exe'
+    exe.write_bytes(b'never executed')
+    monkeypatch.setattr('services.agent.codex_bridge.executable', lambda: str(exe))
+    path = bundle[0] / 'sealed.json'
+    run.seal(prepared, path)
+    monkeypatch.setattr(run, 'display_identity', lambda root: {'files': {'development': 'changed'}})
+    with pytest.raises(ValueError, match='source or dependencies'):
+        run.verify_seal(path, run.reference(path)['sha256'], root=bundle[0])
+
+
+def test_prospective_request_spec_binds_actual_scope_and_refusal():
+    cases = [dict(id='development_valid', body={'question': 'Explain $SPY next month', 'ticker': 'SPY'},
+                  expected={'model_route': {'inexpensive': 'eligible'}}),
+             dict(id='development_refused', body={'question': 'Compare $SPY $QQQ $IWM $AAPL'},
+                  expected={'model_route': {'inexpensive': 'no_model_before_validation'}})]
+    specs = run.bind_request_specs(cases)
+    assert specs['development_valid']['horizon'] == 'month'
+    assert specs['development_refused'] is None
+    cases[1]['expected']['model_route']['inexpensive'] = 'eligible'
+    with pytest.raises(ValueError, match='admitted comparison request is invalid'):
+        run.bind_request_specs(cases)

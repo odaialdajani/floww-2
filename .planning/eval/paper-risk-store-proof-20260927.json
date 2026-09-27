@@ -1,0 +1,17 @@
+{
+  "status": "pass",
+  "checks": [
+    "full policy and acceptance provenance saved atomically",
+    "twelve identical stage requests save one order and risk receipt",
+    "competing stage and fill preserve exactly one whole risk-checked state",
+    "stale expected version returns no candidate and leaves stored state exact",
+    "fresh process reopens exact policy trade evidence sampled peak and decision then projects history"
+  ],
+  "paper_enabled": false,
+  "limitations": [
+    "synthetic isolated accounts only",
+    "no production admission or write-time freshness enforcement",
+    "refused actual observations require future durable composition",
+    "no lifecycle implementation"
+  ]
+}
