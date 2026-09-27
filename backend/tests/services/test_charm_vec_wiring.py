@@ -72,7 +72,15 @@ def test_wiring_uses_vec(monkeypatch):
 
     Pre-swap the name doesn't exist on the module (AttributeError = RED).
     Post-swap the spy records real calls (GREEN only when actually wired).
+
+    The contract's `expiry` must be in the FUTURE. calc_charm_integral clamps
+    days_remaining to 0 and early-returns `empty_response` for an expired
+    contract, so a hardcoded date silently stops exercising the vectorized
+    path the day it passes — the test then fails for a reason that has
+    nothing to do with the wiring. Derive the date instead of pinning it.
     """
+    from datetime import UTC, datetime, timedelta
+
     import advanced_analytics as aa_mod
 
     real = aa_mod.bs_charm_vec  # AttributeError pre-swap
@@ -83,7 +91,11 @@ def test_wiring_uses_vec(monkeypatch):
         return real(*a, **k)
 
     monkeypatch.setattr(aa_mod, "bs_charm_vec", spy)
-    contracts = [{"strike": 100.0, "expiry": "2026-09-18", "T": 0.25,
+    future = (datetime.now(UTC).date() + timedelta(days=7)).isoformat()
+    contracts = [{"strike": 100.0, "expiry": future, "T": 0.25,
                   "type": "call", "oi": 100.0, "iv": 0.25, "volume": 10.0}]
     aa_mod.calc_charm_integral(100.0, contracts, "SPY")
-    assert calls.get("n", 0) >= 1
+    assert calls.get("n", 0) >= 1, (
+        "calc_charm_integral did not route through bs_charm_vec; a past-dated "
+        f"contract (expiry={future}) early-returns before the vec path"
+    )

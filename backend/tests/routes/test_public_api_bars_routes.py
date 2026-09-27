@@ -172,11 +172,22 @@ def test_public_quotes_resolves_caret_prefixed_symbol() -> None:
 
 
 def test_public_router_exposes_no_order_endpoint() -> None:
-    paths = {
+    """The DATA router must stay data-only — no order placement on it.
+
+    Scope by the router's tag, not by an `/api/public` path prefix. Order
+    placement lives on a SEPARATE, deliberately-mounted brokerage router
+    (`public_brokerage_router`, included at prefix `/api`, exposing
+    `/api/public/order/...`), which is a different trust boundary with its own
+    auth. A path-prefix scan cannot tell those two apart and therefore flags
+    the brokerage routes as if they were order endpoints bolted onto the data
+    router — a false positive that would pressure someone into deleting real
+    trading functionality. The tag is the actual discriminator.
+    """
+    data_paths = {
         route.path
         for route in app.routes
-        if getattr(route, "path", "").startswith("/api/public")
+        if "public_api" in getattr(route, "tags", [])
     }
-    assert "/api/public/bars/{ticker}" in paths
-    for path in paths:
+    assert "/api/public/bars/{ticker}" in data_paths
+    for path in data_paths:
         assert "order" not in path, f"{path} must not exist on the data router"
