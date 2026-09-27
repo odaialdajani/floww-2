@@ -17,6 +17,12 @@ POST /api/public/order — place a single-leg order.
 
 POST /api/public/order/{order_id}/cancel — cancel an open order.
 
+Auth: every endpoint requires the master key (X-API-Key, see auth.py).
+The two mutating endpoints additionally refuse with 403 unless the
+operator arms live trading with FLOWW_ENABLE_LIVE_PUBLIC=1 (fail-closed
+kill-switch; input validation still runs first so 422 contracts hold
+while disarmed).
+
 Paper trading mode by default — no live orders until the user explicitly
 connects a live account and generates a secret key at
 public.com/settings/security/api.
@@ -27,16 +33,34 @@ from routes/public_api.py.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from auth import require_api_key
 from services.public_api_adapter import _get_broker
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/public", tags=["public_brokerage"])
 __all__ = ["router"]
+
+
+def _require_live_trading_enabled() -> None:
+    """Fail-closed kill-switch for the live-money order paths.
+
+    POST /order and POST /cancel refuse with 403 unless the operator has
+    explicitly armed live trading with FLOWW_ENABLE_LIVE_PUBLIC=1.
+    """
+    if os.environ.get("FLOWW_ENABLE_LIVE_PUBLIC", "") != "1":
+        raise HTTPException(status_code=403, detail={
+            "error": "live_trading_disabled",
+            "message": (
+                "Live Public.com order submission is disabled. "
+                "Set FLOWW_ENABLE_LIVE_PUBLIC=1 on the backend to arm it."
+            ),
+        })
 
 
 # ---------------------------------------------------------------------------
@@ -78,7 +102,7 @@ def _parse_int(value: Any) -> int:
 # ---------------------------------------------------------------------------
 
 @router.get("/portfolio")
-async def get_portfolio() -> dict[str, Any]:
+async def get_portfolio(_: bool = Depends(require_api_key)) -> dict[str, Any]:
     """Return the authenticated Public.com account: portfolio positions,
     buying power, equity, cash, and account metadata.
 
@@ -216,7 +240,7 @@ async def get_portfolio() -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 @router.get("/orders")
-async def get_orders() -> dict[str, Any]:
+async def get_orders(_: bool = Depends(require_api_key)) -> dict[str, Any]:
     """Return open + recent filled orders from Public.com."""
     broker = await _get_broker()
     if broker is None:
@@ -286,7 +310,7 @@ async def get_orders() -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 @router.get("/account")
-async def get_account() -> dict[str, Any]:
+async def get_account(_: bool = Depends(require_api_key)) -> dict[str, Any]:
     """Return account-level metadata: id, status, buying power, margin, flags."""
     broker = await _get_broker()
     if broker is None:
@@ -340,7 +364,7 @@ async def get_account() -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 @router.post("/order")
-async def place_order(request: dict[str, Any]) -> dict[str, Any]:
+async def place_order(request: dict[str, Any], _: bool = Depends(require_api_key)) -> dict[str, Any]:
     """Place a single-leg order via Public.com.
 
     Body:
@@ -395,6 +419,9 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
         instrument_type = request.get("instrument_type", "EQUITY")
         equity_market_session = request.get("equity_market_session")
 
+        # Kill-switch AFTER validation so 422 contracts hold while disarmed.
+        _require_live_trading_enabled()
+
         order = await broker.place_order(
             account_id=account.account_id,
             symbol=symbol,
@@ -444,7 +471,7 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 @router.post("/order/{order_id}/cancel")
-async def cancel_order(order_id: str) -> dict[str, Any]:
+async def cancel_order(order_id: str, _: bool = Depends(require_api_key)) -> dict[str, Any]:
     """Cancel an open order by ID. Uses DELETE under the hood (Public API
     accepts DELETE to .../order/{id}; POST to .../cancel returns 404)."""
     broker = await _get_broker()
@@ -458,6 +485,9 @@ async def cancel_order(order_id: str) -> dict[str, Any]:
     if account is None:
         raise HTTPException(status_code=502, detail={"error": "no_account"})
 
+    # Kill-switch OUTSIDE the try below: the except converts everything to
+    # 502, which would mask the 403.
+    _require_live_trading_enabled()
     try:
         result = await broker.cancel_order(account.account_id, order_id)
         return {

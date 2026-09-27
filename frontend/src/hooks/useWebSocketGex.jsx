@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { BACKEND_URL } from "../config/api";
+import { withWsToken } from "../utils/appKey";
 
 const WS_URL = BACKEND_URL.replace("http", "ws");
 const INITIAL_RECONNECT_DELAY = 1000;
@@ -19,7 +20,7 @@ export function useWebSocketGex(ticker) {
     if (!ticker) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
-    const ws = new WebSocket(`${WS_URL}/ws/gex/${ticker}`);
+    const ws = new WebSocket(withWsToken(`${WS_URL}/ws/gex/${ticker}`));
     wsRef.current = ws;
 
     ws.onopen = () => {

@@ -192,10 +192,13 @@ read the live pin before using new syntax:
   ~2 s server-selection timeout on each DB-touching test (a slow run) plus failures confined to the
   DB-dependent tests. It does **not** error out at startup. Start `mongod`, then:
   `cd backend && ./.venv313/Scripts/python.exe -m pytest -q --tb=no`
-- **The backend SHIPS ON PYTHON 3.11 — local dev is 3.13. All backend code must compile on 3.11.**
-  `Dockerfile.backend` is `python:3.11-slim`; `.github/workflows/ci.yml` and `deploy.yml` pin 3.11.
-  A 3.12-only nested-quote f-string in `routes/quant.py` once made the shipped image fail at
-  `import server`. Syntax oracle before you commit new backend code:
+- **The backend SHIPS ON PYTHON 3.12 — local dev is 3.13. All backend code must compile on 3.12.**
+  `Dockerfile.backend` is `python:3.12-slim`; `.github/workflows/ci.yml` and `deploy.yml` pin 3.12.
+  (Corrected 2026-09-27: this line used to say 3.11, but the Dockerfile, deploy
+  workflow, and requirements closure have been 3.12.)
+  A 3.12-only nested-quote f-string in `routes/quant.py` once made a 3.11 CI gate fail at
+  `import server` (fixed at `d29ae3f`; CI now pins 3.12 to match ship). Syntax oracle before
+  you commit new backend code (must parse on the ship runtime AND the 3.11 floor):
   `cd backend && ./.venv/Scripts/python.exe -c "import py_compile;py_compile.compile('<file>',doraise=True)"`
   (`backend/.venv` is a bare Python 3.11.15 kept for exactly this check — it has no pytest.)
 - **Architecture decisions are binding:** `docs/adr/` holds 6 **Accepted** ADRs (model promotion

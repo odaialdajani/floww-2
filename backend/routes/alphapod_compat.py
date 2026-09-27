@@ -312,7 +312,18 @@ async def earnings_ticker_detail(ticker: str) -> dict[str, Any]:
 
 @router.post("/auth/dev-token")
 async def dev_token(body: dict[str, Any]) -> dict[str, Any]:
-    """Issue a local dev JWT for the React frontend sign-in page."""
+    """Issue a local dev JWT for the React frontend sign-in page.
+
+    Dev-only: refuses with 403 unless the operator opts in with
+    FLOWW_ALLOW_DEV_TOKENS=1. Never enable on a reachable deployment —
+    this mints 30-day tokens for arbitrary email/tier with no auth.
+    """
+    if os.environ.get("FLOWW_ALLOW_DEV_TOKENS", "") != "1":
+        raise HTTPException(status_code=403, detail={
+            "error": "dev_tokens_disabled",
+            "message": ("Dev-token minting is disabled. Set "
+                        "FLOWW_ALLOW_DEV_TOKENS=1 on a local dev backend only."),
+        })
     import base64
     import hashlib
     import hmac

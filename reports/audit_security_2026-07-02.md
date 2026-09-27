@@ -474,7 +474,7 @@ FILE:        backend/.env, line 3
 ```
 **Description:**  
 ```
-ALPHA_VANTAGE_KEY=cDNhZUJ5bXh0RE9WZ3JjU25nNkZxTVVwRUxibzF1QTl4T0pWUVdLZkw4Yz0
+ALPHA_VANTAGE_KEY=<REDACTED 2026-09-27 — was a live Base64-encoded key>
 ```
 Decoding this Base64 string reveals the actual API key. This is not encryption — it is trivially reversible. If this was done to "hide" the key from casual viewing, it provides no real protection and may create a false sense of security.
 

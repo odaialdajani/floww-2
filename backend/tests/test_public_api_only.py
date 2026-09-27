@@ -460,7 +460,7 @@ class TestBrokerageGuards:
     def test_portfolio_scalar_lastprice_no_500(self):
         import routes.public_brokerage as mod
         with patch.object(mod, "_get_broker", new=AsyncMock(return_value=_mock_brokerage())):
-            r = client.get("/api/public/portfolio")
+            r = client.get("/api/public/portfolio", headers={"X-API-Key": "test-secret-key"})
         assert r.status_code == 200, r.text
         d = r.json()
         assert d["ok"] is True

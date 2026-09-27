@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { API } from "../config/api";
+import { storedAppKeyHeaders } from "../utils/appKey";
 
 const fmtMoney = (v) => {
   if (v === null || v === undefined || Number.isNaN(Number(v))) return "—";
@@ -26,9 +27,14 @@ export default function PublicPanel() {
 
   const load = useCallback(async (signal) => {
     try {
+      // Brokerage reads require the backend master key. Never prompt here
+      // (this polls every 30s) — show the key-missing hint instead.
+      const headers = storedAppKeyHeaders();
+      if (!headers) throw new Error("APP_KEY_MISSING");
       const [a, p, o] = await Promise.all(
         ["account", "portfolio", "orders"].map((k) =>
-          fetch(`${API}/public/${k}`, { signal }).then((r) => {
+          fetch(`${API}/public/${k}`, { signal, headers }).then((r) => {
+            if (r.status === 401 || r.status === 503) throw new Error("APP_KEY_REJECTED");
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
             return r.json();
           })
@@ -56,7 +62,9 @@ export default function PublicPanel() {
       <div className="panel p-4" data-testid="public-panel-error">
         <div className="label">Public Broker</div>
         <div className="text-sm" style={{ color: "var(--neg)" }}>
-          Brokerage unreachable ({error}). Set PUBLIC_API_KEY on the backend, then retry.
+          {error === "APP_KEY_MISSING" || error === "APP_KEY_REJECTED"
+            ? "Backend key missing or rejected. Enter API_SECRET_KEY once (any mutating action prompts), then retry."
+            : `Brokerage unreachable (${error}). Set PUBLIC_API_KEY on the backend, then retry.`}
         </div>
         <button className="btn mt-2" onClick={() => load(new AbortController().signal)}>Retry</button>
       </div>

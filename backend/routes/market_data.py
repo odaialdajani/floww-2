@@ -85,14 +85,9 @@ async def tick_cache(ticker: str):
 
 # ── Existing routes (with DuckDB fallback on spot) ──────────────────
 
-@router.get("/tickers")
-async def list_tickers():
-    from server import DEFAULT_TICKERS, POPULAR_UNIVERSE, TRINITY
-    return {
-        "trinity": TRINITY,
-        "default": DEFAULT_TICKERS,
-        "popular": POPULAR_UNIVERSE,
-    }
+# NOTE: GET /tickers lived here too, but server.py registers /api/tickers
+# first (line ~1919 executes before this router is included), so this copy
+# was dead. Removed 2026-09-27; the live handler is server.list_tickers.
 
 
 @router.get("/tickers/all", response_model=None)
@@ -267,11 +262,19 @@ async def chain(
     if min_oi:
         contracts = [c for c in contracts if (c.get("oi", 0) or c.get("open_interest", 0)) >= min_oi]
     spot = raw["spot"]
+    from bs_greeks import dollar_gex_per_contract
+    from domain.exposure_metrics import option_type_sign
     rows = []
     for c in contracts:
         gamma = c.get("gamma", 0) or 0
         oi = c.get("oi", c.get("open_interest", 0)) or 0
-        gex = gamma * oi * 100 * spot * (1 if c["type"] == "call" else -1)
+        # Canonical display units (S2: USD per 1% spot move, +call/-put),
+        # matching the heatmap/aggregator surfaces. R7-F04: unknown option
+        # types are skipped, never default-signed.
+        sign = option_type_sign(c.get("type"))
+        if sign is None:
+            continue
+        gex = sign * dollar_gex_per_contract(gamma, oi, spot)
         # Compute T (time to expiry in years) from expiry date string
         expiry_str = c.get("expiry", "")
         T = 0.0
@@ -316,7 +319,8 @@ async def chain(
     # Apply DTE filter if specified
     if dte_max is not None:
         rows = [r for r in rows if r.get("dte", 0) <= dte_max]
-    return _sanitize({"ticker": t, "spot": raw["spot"], "expiries": raw.get("expiries", []), "rows": rows, "count": len(rows)})
+    return _sanitize({"ticker": t, "spot": raw["spot"], "expiries": raw.get("expiries", []), "rows": rows, "count": len(rows),
+                      "gex_unit": "USD per 1% spot move (sign*gamma*OI*100*spot^2*0.01; +call/-put)"})
 
 
 @router.get("/gex-timeframes/{ticker}")

@@ -517,26 +517,6 @@ async def contract_strike(
         return degraded_response("computation_error", str(e))
 
 
-@router.get("/flow/{ticker}")
-async def flow(
-    ticker: str,
-    days: int = Query(default=7, ge=1, le=30),
-):
-    try:
-        from datetime import timedelta
-
-        from server import db as mongo_db
-        cutoff = datetime.now(UTC) - timedelta(days=days)
-        cursor = mongo_db.flow.find(
-            {"ticker": ticker.upper(), "ts": {"$gte": cutoff}},
-            {"_id": 0},
-        ).sort("ts", -1).limit(500)
-        return await cursor.to_list(length=500)
-    except Exception as e:
-        logger.warning(f"flow error for {ticker}: {e}")
-        return []
-
-
 @router.get("/surface/{ticker}")
 async def surface(
     ticker: str,
