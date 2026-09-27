@@ -16,7 +16,7 @@ Institutional-grade options analytics terminal. Replicates and extends skylit.ai
 
 ## Tech Stack
 
-- **Backend:** FastAPI + Python 3.11
+- **Backend:** FastAPI + Python 3.12
 - **Frontend:** React 19 + Tailwind CSS + Recharts
 - **Database:** MongoDB (snapshots, alerts, portfolio)
 - **Data:** Databento (OPRA OI), yfinance (IV/chains), Polygon (aggregates)
@@ -25,7 +25,7 @@ Institutional-grade options analytics terminal. Replicates and extends skylit.ai
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.12+
 - Node.js 20+
 - MongoDB running locally
 - Databento API key (Historical access)

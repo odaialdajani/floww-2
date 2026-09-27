@@ -2,7 +2,7 @@
 backend/tests/integration/test_network_resilience.py
 
 Integration tests for network partition resilience.
-Verifies the system survives Schwab WebSocket disconnections,
+Verifies the system survives feed interruptions,
 switches to cached data, reconnects with exponential backoff,
 and preserves DuckDB data integrity.
 
@@ -33,10 +33,8 @@ os.environ.setdefault("TESTING", "1")
 
 import contextlib
 
-from services.data_fallback import DataFallbackHandler, DataSource, FallbackConfig
 from services.duckdb_engine import DuckDBEngine
-from services.mock_schwab_feed import MockSchwabFeed
-from services.schwab_streamer import SchwabStreamer
+from services.mock_synthetic_feed import MockSyntheticFeed
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -50,13 +48,7 @@ def engine():
 @pytest.fixture
 def feed():
     """Mock feed for testing."""
-    return MockSchwabFeed(rate=50, symbols=["SPY"], seed=42)
-
-
-@pytest.fixture
-def streamer():
-    """Schwab streamer instance."""
-    return SchwabStreamer()
+    return MockSyntheticFeed(rate=50, symbols=["SPY"], seed=42)
 
 
 # ── Test: Offline Mode Activation ─────────────────────────────────────────
@@ -84,11 +76,6 @@ async def test_offline_mode_activates_on_connection_loss(engine, feed):
     feed_task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await feed_task
-
-    # Verify streamer health reflects disconnection
-    streamer = SchwabStreamer()
-    health = streamer.get_health()
-    assert health["connected"] is False, "Health should show disconnected"
 
     # Verify engine still functional (offline mode)
     rows = engine.query("SELECT COUNT(*) as cnt FROM ticks")
@@ -157,7 +144,7 @@ async def test_data_integrity_during_partition(engine, feed):
         await feed_task
 
     # Recover
-    feed2 = MockSchwabFeed(rate=50, symbols=["SPY"], seed=99)
+    feed2 = MockSyntheticFeed(rate=50, symbols=["SPY"], seed=99)
 
     async def db_writer(tick):
         await engine.insert_tick(
@@ -258,74 +245,6 @@ async def test_graceful_degradation_during_partition(engine, feed):
 
 
 @pytest.mark.asyncio
-async def test_fallback_handler_enters_safe_mode_on_partition():
-    """DataFallbackHandler should enter safe mode when all sources lose connection."""
-    config = FallbackConfig(max_consecutive_errors=3)
-    handler = DataFallbackHandler(config=config)
-
-    # Configure sources that fail (simulating network partition)
-    async def failing_fetch(symbol):
-        raise ConnectionError("Network unreachable")
-
-    handler.configure_source(DataSource.SCHWAB, failing_fetch)
-    handler.configure_source(DataSource.YFINANCE, failing_fetch)
-    handler.configure_source(DataSource.POLYGON, failing_fetch)
-
-    data = await handler.get_data("SPY")
-
-    assert data is None, "Should return None when all sources unreachable"
-    assert handler.is_safe_mode, "Should enter safe mode"
-
-    health = await handler.check_health()
-    assert health["is_safe_mode"] is True
-    assert health["state"] == "safe_mode"
-
-
-# ── Test: Health Endpoint Reflects Partition ─────────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_streamer_health_reflects_partition():
-    """SchwabStreamer health should accurately reflect partition state."""
-    streamer = SchwabStreamer()
-
-    # Initial state — not connected
-    health = streamer.get_health()
-    assert health["connected"] is False
-    assert health["last_message_at"] is None
-
-    # Simulate connection
-    streamer._health["connected"] = True
-    streamer._health["last_message_at"] = datetime.now(UTC).isoformat()
-
-    # Internal health dict should reflect connection
-    assert streamer._health["connected"] is True
-    assert streamer._health["last_message_at"] is not None
-
-    # Simulate partition (connection loss)
-    streamer._health["connected"] = False
-    assert streamer._health["connected"] is False
-
-
-@pytest.mark.asyncio
-async def test_streamer_metrics_track_reconnects():
-    """SchwabStreamer metrics should track reconnection attempts."""
-    streamer = SchwabStreamer()
-
-    # Initial metrics
-    metrics = streamer.get_metrics()
-    assert metrics["messages_received"] == 0
-    assert metrics["reconnects"] == 0
-
-    # Simulate activity
-    streamer._metrics["messages_received"] = 500
-    streamer._metrics["reconnects"] = 3
-
-    metrics = streamer.get_metrics()
-    assert metrics["messages_received"] == 500
-    assert metrics["reconnects"] == 3
-
-
 # ── Test: Multi-Symbol Partition Resilience ──────────────────────────────
 
 
@@ -335,7 +254,7 @@ async def test_multi_symbol_partition_resilience():
     engine = DuckDBEngine(db_path=":memory:")
     await engine.start()
 
-    feed = MockSchwabFeed(rate=50, symbols=["SPY", "QQQ", "DIA"], seed=42)
+    feed = MockSyntheticFeed(rate=50, symbols=["SPY", "QQQ", "DIA"], seed=42)
 
     symbols_received = set()
 
@@ -357,7 +276,7 @@ async def test_multi_symbol_partition_resilience():
         await feed_task
 
     # Recover with new feed
-    feed2 = MockSchwabFeed(rate=50, symbols=["SPY", "QQQ", "DIA"], seed=99)
+    feed2 = MockSyntheticFeed(rate=50, symbols=["SPY", "QQQ", "DIA"], seed=99)
     feed2.on_tick(handler)
     feed_task2 = asyncio.create_task(feed2.start())
     await asyncio.sleep(0.5)
@@ -372,36 +291,6 @@ async def test_multi_symbol_partition_resilience():
         await feed_task2
 
     await engine.stop()
-
-
-# ── Test: Exponential Backoff ────────────────────────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_exponential_backoff_reconnection(streamer):
-    """Reconnection uses exponential backoff: 1s, 2s, 4s, 8s, ..."""
-    assert streamer.initial_reconnect_delay == 1.0
-    assert streamer.max_reconnect_delay == 60.0
-
-    delay = streamer.initial_reconnect_delay
-    delays = []
-    for _ in range(10):
-        delays.append(delay)
-        if delay >= streamer.max_reconnect_delay:
-            break
-        delay = min(delay * 2, streamer.max_reconnect_delay)
-
-    assert delays[0] == 1.0
-    assert delays[1] == 2.0
-    assert delays[2] == 4.0
-    assert delays[3] == 8.0
-    assert delays[4] == 16.0
-    assert delays[5] == 32.0
-    assert delays[6] == 60.0
-
-    for i in range(1, len(delays) - 1):
-        ratio = delays[i] / delays[i - 1]
-        assert ratio >= 1.9, f"Backoff ratio at step {i} is {ratio}, expected >= 1.9"
 
 
 # ── Test: Recovery Within 30 Seconds ─────────────────────────────────────
@@ -438,7 +327,7 @@ async def test_recovery_within_30_seconds(engine, feed):
     reconnect_start = time.monotonic()
     partition_active = False
 
-    feed2 = MockSchwabFeed(rate=50, symbols=["SPY"], seed=99)
+    feed2 = MockSyntheticFeed(rate=50, symbols=["SPY"], seed=99)
     feed2.on_tick(handler)
     feed_task2 = asyncio.create_task(feed2.start())
 

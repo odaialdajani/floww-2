@@ -13,13 +13,14 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
-          # 3.11 = the shipped runtime (Dockerfile.backend:1 python:3.11-slim,
-          # deploy.yml:25 python-version "3.11"). ruff itself is a standalone
-          # binary and reads its target-version from backend/pyproject.toml, so
-          # this pin does not affect lint results — but the silent-except gate
-          # below is a Python script, and it should run on the version that
-          # ships.
-          python-version: '3.11'
+          # 3.12 = the shipped runtime (Dockerfile.backend:1
+          # python:3.12-slim, deploy.yml:52 python-version "3.12",
+          # ci.yml:48 python-version "3.12"; backend/pyproject.toml:3-12
+          # records the same correction). ruff itself is a standalone binary
+          # and reads its target-version from backend/pyproject.toml, so this
+          # pin does not affect lint results — but the silent-except gate below
+          # is a Python script, and it must run on the version that ships.
+          python-version: '3.12'
       - name: Install ruff
         run: pip install "ruff==0.15.22"
       - name: Check F841 (unused variables)
@@ -47,12 +48,20 @@ jobs:
         # on live backend source. That suite runs in the backend-tests job of
         # ci.yml, not here.
         #
-        # KNOWN RED on 3.11: the gate parses every in-scope file and fails
-        # closed on one it cannot parse. backend/routes/quant.py:187 uses a
-        # PEP 701 f-string (3.12+ only), so on the shipped 3.11 runtime this
-        # step prints
-        #   backend/routes/quant.py:187: SyntaxError - cannot audit (...)
-        # and exits 1. That is a true report of a real defect — the same file
-        # cannot be imported inside python:3.11-slim either. Fix quant.py:187;
-        # do not raise the python-version pin above to hide it.
+        # PATH: this step deliberately has NO working-directory (the two ruff
+        # steps above do). The script lives at repo-root qc/audit/, not under
+        # backend/, so running it from backend/ - as this step used to - died
+        # with "can't open file .../backend/qc/audit/check_silent_excepts.py"
+        # and exit 2 on every push and PR. The gate never once ran.
         run: python3 qc/audit/check_silent_excepts.py
+      - name: Gate — API docs match the app
+        # docs/api/openapi.json + docs/api/README.md are generated from the
+        # live FastAPI app. They shipped stale (156 paths vs 369 real routes,
+        # and every README row missing its path), so this step fails the build
+        # when a route is added or removed without regenerating them.
+        # Needs the backend on sys.path because the generator imports
+        # `server.app` to read app.openapi().
+        working-directory: backend
+        run: |
+          pip install -r requirements.txt
+          python ../qc/audit/generate_api_docs.py --check

@@ -9,11 +9,26 @@ embedded Dash UI.
 
 ## The Four Pillars
 
-### 1. No-Polling WebSocket Ingestion
-All market data enters via persistent WebSocket connections (`schwab_streamer.py`,
-`websocket_streamer.py`). There are no polling loops. Data flows through
-`ingestion_pipeline.py` which normalizes feeds from Schwab, Databento, and
-yfinance into a unified tick format before writing to DuckDB.
+### 1. REST Market-Data Ingestion
+Market data enters through the **Public.com adapter**
+(`services/public_api_adapter.py` → `fetch_spot_and_chains_merged` in
+`server.py`), which cascades Public.com → cvserver → yfinance, with
+Databento supplying open interest. Chain data is then written to DuckDB.
+
+**There is no WebSocket market-data feed.** `websocket_streamer.py` is
+unrelated to market data — it is the *client-push* manager that broadcasts
+computed results to the browser, and it is live.
+
+Schwab was a data source until 2026-09-03 and has since been **fully removed**:
+the streamer, the source-failover handler, their test suites, the Grafana
+panels that queried Schwab metrics, and the token-expiry alert are all gone.
+Nothing named schwab remains in live code.
+
+`ingestion_pipeline.py` remains for the DuckDB tick/LOB write path and is
+driven in development by `mock_synthetic_feed.py` — a purely synthetic GBM
+generator behind `FLOWW_ENABLE_MOCK_FEED=1`. It opens no socket and reads no
+credential. (It was called `mock_schwab_feed.py` until 2026-09-27; the old
+name was the only Schwab thing about it, and it was misleading.)
 
 ### 2. DuckDB OLAP Engine
 `duckdb_engine.py` provides a columnar analytical store for tick data, options
@@ -34,9 +49,10 @@ with backpressure. Route handlers are fully async.
 ## Data Flow
 
 ```
-Schwab Stream  ──┐
-Databento Feed ──┼──→ ingestion_pipeline.py ──→ DuckDB (ticks, chains)
-yfinance API  ───┘                                      │
+Public.com API ──┐        (primary chain + spot source)
+cvserver       ──┼──→ public_api_adapter.py ──→ DuckDB (chains, ticks)
+yfinance       ──┘
+Databento OI   ───→ (open-interest overlay only)
                                                         ▼
                                               ┌─── services/*
                                               │
@@ -65,8 +81,9 @@ yfinance API  ───┘                                      │
 |---------|------|---------|
 | Ingestion Pipeline | `ingestion_pipeline.py` | Normalize and route market data |
 | DuckDB Engine | `duckdb_engine.py` | Columnar OLAP storage |
-| WebSocket Streamer | `websocket_streamer.py` | Persistent WS connections |
-| Schwab Streamer | `schwab_streamer.py` | Schwab-specific feed handler |
+| Client-Push Manager | `websocket_streamer.py` | Pushes computed results to the browser over WS (not market data) |
+| Public API Adapter | `public_api_adapter.py` | The live market-data source (Public.com → cvserver → yfinance) |
+| Schwab (REMOVED) | — | Retired 2026-09-03. Streamer, failover handler, tests, dashboards and alert all deleted 2026-09-27. |
 
 ### Phase 2 — Microstructure Analytics
 | Service | File | Purpose |
@@ -136,7 +153,7 @@ graph TD
     R[services/ingestion_pipeline.py] --> C
     R --> D
 
-    S[services/schwab_streamer.py] --> R
+    S[services/public_api_adapter.py] --> R
     T[services/ml/*] --> C
     T --> U[services/ml/features.py]
 ```

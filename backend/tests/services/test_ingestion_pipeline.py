@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from services.duckdb_engine import DuckDBEngine
 from services.ingestion_pipeline import IngestionPipeline
-from services.mock_schwab_feed import MockSchwabFeed
+from services.mock_synthetic_feed import MockSyntheticFeed
 
 # =============================================================================
 # Fixtures
@@ -45,7 +45,7 @@ def pipeline(db):
 @pytest.fixture
 def mock_feed():
     """Fresh mock feed for each test."""
-    return MockSchwabFeed(rate=100.0, symbols=["SPY", "QQQ"], seed=42)
+    return MockSyntheticFeed(rate=100.0, symbols=["SPY", "QQQ"], seed=42)
 
 
 @pytest.fixture
@@ -336,7 +336,7 @@ class TestMockFeedRate:
     async def test_feed_rate_approximation(self):
         """Feed should generate approximately the configured rate."""
         collected = []
-        feed = MockSchwabFeed(rate=50.0, symbols=["SPY"], seed=42)
+        feed = MockSyntheticFeed(rate=50.0, symbols=["SPY"], seed=42)
         feed.on_tick(lambda t: collected.append(t))
 
         # Run for 0.5 seconds
@@ -351,7 +351,7 @@ class TestMockFeedRate:
     async def test_feed_gbm_dynamics(self):
         """Feed should produce realistic GBM price paths (no negative prices)."""
         collected = []
-        feed = MockSchwabFeed(rate=100.0, symbols=["SPY"], seed=42)
+        feed = MockSyntheticFeed(rate=100.0, symbols=["SPY"], seed=42)
         feed.on_tick(lambda t: collected.append(t))
 
         _task = asyncio.create_task(feed.start())

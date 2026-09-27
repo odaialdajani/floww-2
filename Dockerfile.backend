@@ -3,10 +3,23 @@ FROM python:3.12-slim AS production
 WORKDIR /app
 
 # Install dependencies.
-# torch is ONLY used by backend/tests/* (never imported by server.py or any
-# service at runtime) and adds ~1GB+ to the image for zero runtime benefit.
-# Exclude it from the production image; local dev/test venvs still install it
-# from requirements.txt directly.
+# torch is NOT imported at module scope by any runtime module, so the image
+# starts and serves without it. It is still referenced at runtime by five
+# modules, all of which guard the import and degrade instead of crashing:
+#   services/anomaly_detector.py      (top-level `try: import torch / except ImportError`)
+#   services/ml_ensemble.py           (lazy, inside functions)
+#   routes/anomaly.py                 (lazy, inside functions)
+#   routes/llm.py                     (lazy, `except ImportError`)
+#   services/memory/chart_embeddings.py (lazy, inside functions)
+# So the effect of excluding it is that those ML-backed features report
+# themselves unavailable in production — they do not take down the process.
+# A previous version of this comment claimed torch was "ONLY used by
+# backend/tests/*", which was false; that claim is what would have let
+# someone "fix" a guarded import by deleting the guard. Keep this list
+# honest if the set of importing modules changes.
+#
+# Excluding torch saves ~1GB+ in the image. Local dev/test venvs still
+# install it from requirements.txt directly.
 COPY backend/requirements.txt .
 RUN grep -Ev '^\s*torch' requirements.txt > /tmp/req.prod.txt \
     && pip install --no-cache-dir -r /tmp/req.prod.txt \

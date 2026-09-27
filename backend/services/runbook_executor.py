@@ -150,35 +150,38 @@ class RunbookRegistry:
         ])
 
         # ── Ingestion Stall Runbook ───────────────────────────────────
+        # Schwab steps removed 2026-09-27. They called
+        # /api/auth/schwab/status and "restart the Schwab streamer" — routes
+        # and a module that no longer exist, so the runbook could only ever
+        # print the fallback string. The real ingestion path is Public.com.
         self.register("ingestion_stall", [
             RunbookStep(
-                name="check_schwab_token",
-                action="Check Schwab OAuth token status",
-                command="curl -s http://localhost:8000/api/auth/schwab/status 2>/dev/null | python3 -m json.tool 2>/dev/null || echo 'Token status endpoint not available'",
-                timeout=10,
-            ),
-            RunbookStep(
-                name="check_ws_connection",
-                action="Check WebSocket connection to Schwab",
-                command="curl -s http://localhost:8000/api/ws/status 2>/dev/null || echo 'WS status not available'",
+                name="check_data_budget",
+                action="Check Public.com token budget and lane health",
+                command="curl -s http://localhost:8000/api/public/budget 2>/dev/null | python3 -m json.tool 2>/dev/null || echo 'budget endpoint not available'",
                 timeout=10,
             ),
             RunbookStep(
                 name="check_databento",
-                action="Check Databento API reachability",
+                action="Check Databento API reachability (open-interest overlay)",
                 command="curl -s -o /dev/null -w '%{http_code}' --max-time 5 'https://hist.databento.com/v0/mds/mbp/SPY' 2>/dev/null || echo 'unreachable'",
                 timeout=15,
             ),
             RunbookStep(
-                name="restart_streamer",
-                action="Restart Schwab streamer if WS disconnected",
+                name="check_upstream_health",
+                action="Check backend data-provider health",
+                command="curl -s http://localhost:8000/api/data/health 2>/dev/null | python3 -m json.tool 2>/dev/null || echo 'health endpoint not available'",
+                timeout=10,
+            ),
+            RunbookStep(
+                name="restart_backend",
+                action="Restart the backend if the feed is wedged",
                 command=(
-                    "WS=$(curl -s http://localhost:8000/api/ws/status 2>/dev/null | python3 -c \"import sys,json;logger.info(json.load(sys.stdin).get('active',-1))\" 2>/dev/null); "
-                    "if [ \"$WS\" = '0' ] || [ \"$WS\" = 'False' ]; then "
-                    "  echo 'WS inactive, restarting streamer...'; "
-                    "  docker compose -f /Users/nav/GitHub/floww/docker-compose.yml restart backend 2>/dev/null || echo 'Manual restart required'; "
+                    "if ! curl -sf --max-time 5 http://localhost:8000/health >/dev/null 2>&1; then "
+                    "  echo 'backend unhealthy, restarting...'; "
+                    "  docker compose restart backend 2>/dev/null || echo 'Manual restart required'; "
                     "else "
-                    "  echo 'WS appears active'; "
+                    "  echo 'backend healthy'; "
                     "fi"
                 ),
                 timeout=20,

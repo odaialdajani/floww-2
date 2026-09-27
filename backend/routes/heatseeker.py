@@ -657,7 +657,7 @@ async def node_confluence_route(
     switching tabs).
 
     Honesty contract, preserved from the pure service: a dimension with no
-    real per-strike input is reported `missing` and contributes 0.0, and
+    real per-strike input is reported `missing` and remains unknown, and
     `structure` is reported `context_only` because gamma magnitude is not a
     direction. A thin tape yields `microstructure: missing`, not a lean.
     """
@@ -706,8 +706,10 @@ async def node_confluence_route(
                 from services.duckdb_engine import db as _ddb
                 from services.flow_alerts import read_alert_feed
                 flow_rows = await asyncio.to_thread(
-                    read_alert_feed, _ddb, days=2, ticker=t, sort_by="conviction"
+                    read_alert_feed, _ddb, days=2, ticker=t, sort_by="conviction", raise_on_error=True
                 )
+                selected_expiries = {str(c.get("expiry")) for c in contracts if c.get("expiry")}
+                flow_rows = [r for r in flow_rows if str(r.get("expiry") or r.get("exp") or "") in selected_expiries]
                 flow_status = "ok" if flow_rows else "no_prints"
             except Exception as e:
                 logger.warning("node-confluence flow read failed: %s", e)

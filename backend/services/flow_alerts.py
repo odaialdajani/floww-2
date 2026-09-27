@@ -1324,7 +1324,7 @@ def horizon_moves(engine, asof_date: str, key: str,
 
 def read_alert_feed(engine, days: int = 7, min_tier: str | None = None,
                     ticker: str | None = None, min_conviction: int | None = None,
-                    sort_by: str = "tier") -> list[dict]:
+                    sort_by: str = "tier", *, raise_on_error: bool = False) -> list[dict]:
     """The institutional feed.
 
     sort_by="tier" (legacy): tier buckets then most recent.
@@ -1359,4 +1359,6 @@ def read_alert_feed(engine, days: int = 7, min_tier: str | None = None,
         return engine.query(sql, params)
     except Exception as e:
         logger.warning(f"flow_alerts.read_alert_feed: {e}")
+        if raise_on_error:
+            raise
         return []

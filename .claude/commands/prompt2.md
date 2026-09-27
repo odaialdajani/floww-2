@@ -297,9 +297,12 @@ The rules that most often apply:
   `clean -fd`.
 - 🔴 **MONEY PATH — paper only, with a concrete enforcement point.**
   `backend/services/order_router.py` refuses to submit a real order unless
-  `FLOWW_ENABLE_LIVE_SCHWAB == "1"` (`backend/routes/live_trading.py` is the route surface,
-  `backend/tests/services/test_order_router_gate.py` pins it). Any prompt that could lead an agent to
-  remove, invert, default-on, or bypass that check must say so explicitly in Out of Scope. Never
+  `backend/services/order_router.py` refuses MARKET orders unless `ALLOW_MARKET_ORDERS` is True
+  (it is `False` at module scope) or the caller passes `allow_market=True`;
+  `backend/routes/live_trading.py` is the route surface, and
+  `backend/tests/services/test_order_router_gate.py` pins the default-deny posture. Any prompt
+  that could lead an agent to remove, invert, default-on, or bypass that check must say so
+  explicitly in Out of Scope. Never describe it as leftover provider code.
   describe it as dead Schwab code.
 - 🔴 **Real live path only.** No synthetic/demo/fake data. `qc/audit/truth_audit.sh` runs first in CI
   with 12 rules keyed to the **commit message** — its `np.random.` rule greps only `backend/ml*.py`,

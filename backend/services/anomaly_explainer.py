@@ -56,7 +56,7 @@ ANOMALY_PATTERNS = {
         },
     },
     "ingestion_stall": {
-        "triggers": ["Schwab token expiry", "Databento rate limit",
+        "triggers": ["Databento rate limit",
                      "network partition", "API key rotation"],
         "context_hints": {
             "token_expiring": "OAuth token within 5 minutes of expiry",

@@ -26,7 +26,7 @@ Heatseeker is a real-time options flow analytics and automated trading system. I
 │  ┌──────────┐    ┌──────────────┐    ┌──────────┐    ┌──────────┐ │
 │  │ Alpha    │───▶│ Ingestion    │───▶│  DuckDB  │───▶│ Snapshot │ │
 │  │ Vantage  │    │ Pipeline     │    │  Engine  │    │ Manager  │ │
-│  │ /Schwab  │    │ (normalize,  │    │ (batch   │    │ (50ms    │ │
+│  │ /Public   │    │ (normalize,  │    │ (batch   │    │ (50ms    │ │
 │  │ WebSocket│    │  validate)   │    │  flush)  │    │  window) │ │
 │  └──────────┘    └──────────────┘    └──────────┘    └──────────┘ │
 │       │                │                  │               │        │
@@ -53,7 +53,8 @@ Heatseeker is a real-time options flow analytics and automated trading system. I
 ```
 
 ### 2.1 Ingestion Layer
-- **Source**: Alpha Vantage REST (5/min free tier) or Schwab WebSocket (preferred)
+- **Source**: Public.com REST (primary), yfinance (fallback), Databento for open interest.
+  There is no Schwab WebSocket and no Alpha Vantage call anywhere in the live path.
 - **Normalization**: All ticks normalized to canonical format (price, volume, timestamp, symbol)
 - **Validation**: NaN guards (I-8) — reject ticks with NaN price/volume before DuckDB write
 - **Batch buffer**: 50ms flush window, async write to DuckDB
@@ -86,8 +87,7 @@ Heatseeker is a real-time options flow analytics and automated trading system. I
 ```mermaid
 graph TB
     subgraph "Data Layer"
-        AV[Alpha Vantage Provider]
-        SCHWAB[Schwab WebSocket]
+        PUBLIC[Public.com API]
         IP[Ingestion Pipeline]
         DUCKDB[(DuckDB)]
     end
@@ -120,8 +120,7 @@ graph TB
         SEC[Security Audit]
     end
 
-    AV --> IP
-    SCHWAB --> IP
+    PUBLIC --> IP
     IP --> DUCKDB
     DUCKDB --> VPIN
     DUCKDB --> GEX
@@ -160,7 +159,7 @@ graph TB
 ## 4. Key Round 7 Technical Decisions
 
 ### I-8: NaN Guards
-- **Problem**: Alpha Vantage occasionally returns NaN for price/volume fields
+- **Problem**: Upstream option chains occasionally return NaN for price/volume fields
 - **Solution**: Validation layer in ingestion pipeline rejects NaN ticks before DuckDB write
 - **Impact**: Prevents cascade failures in VPIN/GEX calculations that propagate NaN through the entire pipeline
 - **Tests**: 12 new tests covering NaN price, NaN volume, NaN timestamp, all-NaN tick
@@ -243,7 +242,7 @@ graph TB
 │  └──────────────────────────────────┘   │
 │                                         │
 │  ┌──────────────────────────────────┐   │
-│  │     Alpha Vantage / Schwab       │   │
+│  │        Public.com API           │   │
 │  │        (External APIs)           │   │
 │  └──────────────────────────────────┘   │
 └─────────────────────────────────────────┘
@@ -256,7 +255,8 @@ graph TB
 Based on Round 7 completion, the following are natural next steps:
 
 1. **Clear test debt**: 36 errors in 3 files (test_heatseeker_v2, test_portfolio, test_v3_costsave)
-2. **Live data integration**: Connect real Schwab WS (currently mock feed)
+2. **Synthetic feed coverage**: `mock_synthetic_feed.py` (FLOWW_ENABLE_MOCK_FEED=1) is a GBM
+   generator with no broker connection; the real feed is Public.com via `public_api_adapter.py`
 3. **OLAP path optimization**: Extend I-3 materialized views to 1-second granularity
 4. **NaN guard hardening**: Extend I-8 to handle edge cases (Infinity, negative prices)
 5. **SwarmSPX integration**: Full end-to-end test of iframe + backend

@@ -31,16 +31,6 @@ groups:
           summary: "Flow toxicity anomaly detected"
           description: "Anomaly detector triggered in the last 60 seconds. Check VPIN and QI z-score."
 
-      - alert: SchwabTokenExpiring
-        expr: floww_schwab_token_expires_in_seconds < 300
-        for: 1m
-        labels:
-          severity: warning
-          category: SchwabTokenExpiring
-        annotations:
-          summary: "Schwab OAuth token expiring soon"
-          description: "Token TTL is {{ $value }}s (threshold: 300s). Re-authenticate via /api/schwab/auth."
-
       - alert: APIErrorRateHigh
         expr: rate(floww_api_request_duration_seconds_count{status=~"5.."}[5m]) > 0.1
         for: 5m

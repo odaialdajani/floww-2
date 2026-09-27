@@ -431,14 +431,47 @@ function TrinityPanel({ ticker, data, viewMode, gexVexMode, loading: panelLoadin
   }, [gexVexMode]);
 
   const handleRowClick = useCallback((row) => {
-    const base = { ticker, strike: row.strike, spot, gex: row.gex, call_gex: row.call_gex, put_gex: row.put_gex, iv: row.iv, oi: row.total_oi, delta: row.delta };
+    // NOTE on `iv` / `delta` / `expiry`: these are NOT on the /api/data
+    // heatmap strike rows. That payload's rows carry only 27 aggregate keys
+    // (strike, gex, call_gex, put_gex, vex, charm, vomma, zomma, *_oi,
+    // *_volume, *_vega, lifecycle, taps, tap_prob) — verified by calling the
+    // route and reading the emitted keys. Reading row.iv / row.delta here
+    // therefore always yielded undefined, which:
+    //   * passed iv:undefined and delta:undefined into QuickTradePanel, so the
+    //     trade panel opened with no IV and no delta to show or size against;
+    //   * fell through to `row.expiry || expiries[0]`, so the contract
+    //     enrichment usually requested the WRONG expiry whenever the row was
+    //     not the front one.
+    // The real per-strike IV/delta/expiry live on /api/chain/{ticker}, which
+    // emits them per contract row. The enrichment call below fetches that
+    // contract anyway, so we populate the panel from its response instead of
+    // from a field that was never there.
+    const base = {
+      ticker,
+      strike: row.strike,
+      spot,
+      gex: row.gex,
+      call_gex: row.call_gex,
+      put_gex: row.put_gex,
+      oi: row.total_oi,
+    };
     if (onTradeSelect) onTradeSelect(base);
     // Enrich with live Public.com contract data (OSI + bid/ask/last) so the
     // QuickTradePanel can submit a real order via /api/public/order.
     // Fire-and-forget upgrade: the base selection opens the panel instantly,
     // then we re-emit once Public data arrives (same strike → panel keeps
     // state and just fills in prices). Failure keeps the base selection.
-    const front = row.expiry || expiries[0];
+    //
+    // `expiries` is derived from Object.keys(data.grid.grid) — the grid is
+    // keyed BY expiry, so its first (sorted) key is the nearest listed expiry.
+    // That is the right default for a row that carries no expiry of its own.
+    // Fall back to the payload's expiries_used when the grid is absent, so a
+    // row click still enriches instead of silently doing nothing.
+    const front =
+      row.expiry ||
+      expiries[0] ||
+      (Array.isArray(data?.expiries_used) ? data.expiries_used[0] : null) ||
+      null;
     if (onTradeSelect && front) {
       axios.get(
         `${API}/contract/${encodeURIComponent(ticker)}/${row.strike}/${front}`,
@@ -460,7 +493,7 @@ function TrinityPanel({ ticker, data, viewMode, gexVexMode, loading: panelLoadin
         });
       }).catch(() => { /* base selection stands */ });
     }
-  }, [ticker, spot, expiries, onTradeSelect]);
+  }, [ticker, spot, expiries, data, onTradeSelect]);
 
   const displayName = ticker.replace("^", "");
   const regime = nodes?.regime || "—";
@@ -523,7 +556,7 @@ function DOMView({ rows, domCols, spotIdx, kingStrike, flipStrike, tags, maxAbs,
   let pocF = null, pocA = 0, pocRI = -1, pocCK = null;
   rows.forEach((r, i) => { for (const c of domCols) { const v = Math.abs(r[c.field] || 0); if (v > pocA) { pocA = v; pocRI = i; pocCK = c.key; } } });
   return (
-    <div className="trinity-dom-scroll"><table className="trinity-dom-table"><thead><tr className="trinity-dom-header"><th className="trinity-dom-th-price">Strike</th>{domCols.map(c=>(<th key={c.field} className="trinity-dom-th">{c.label}</th>))}<th className="trinity-dom-th">OI</th><th className="trinity-dom-th">IV</th><th className="trinity-dom-th-tags">Tags</th></tr></thead><tbody>
+    <div className="trinity-dom-scroll"><table className="trinity-dom-table"><thead><tr className="trinity-dom-header"><th className="trinity-dom-th-price">Strike</th>{domCols.map(c=>(<th key={c.field} className="trinity-dom-th">{c.label}</th>))}<th className="trinity-dom-th">OI</th><th className="trinity-dom-th">Vol</th><th className="trinity-dom-th-tags">Tags</th></tr></thead><tbody>
       {rows.map((row, i) => {
         const isC = i === spotIdx, isK = row.strike === kingStrike, isF = flipStrike != null && Math.abs(row.strike - flipStrike) <= (rows[0]?.strike - rows[1]?.strike || 5) / 2, isPR = i === pocRI;
         const rc = rowColors(row.gex, maxAbs);
@@ -531,7 +564,7 @@ function DOMView({ rows, domCols, spotIdx, kingStrike, flipStrike, tags, maxAbs,
           <td className={`trinity-dom-price${isC?" trinity-price-current":""}`}>{isC&&<span className="trinity-price-arrow" />}{(isK || row._isTopGex) && <span className="trinity-king-star">★</span>}{fmt(row.strike, row.strike >= 1000 ? 0 : 1)}</td>
           {domCols.map(c => { const val = row[c.field] || 0; const cc = rowColors(val, colMaxAbs[c.field]); const isPC = pocCK === c.key && isPR; const pct = pctOfMax(val, colMaxAbs[c.field]); return (<td key={c.field} className={`trinity-dom-cell${isPC?" trinity-grid-poc":""}`} style={{background:isPC?"rgba(251,191,36,0.35)":cc.bg,color:isPC?"#0b1121":cc.text}}>{fmtGex(val)}{pct > 40 && <span className={`trinity-cell-pct${val >= 0 ? " trinity-cell-pct-pos" : " trinity-cell-pct-neg"}`}>{val >= 0 ? "+" : ""}{pct.toFixed(0)}%</span>}</td>); })}
           <td className="trinity-dom-cell trinity-dom-oi">{fmtOi(row.total_oi)}</td>
-          <td className="trinity-dom-cell trinity-dom-iv">{row.iv != null ? `${(row.iv * 100).toFixed(1)}%` : "—"}</td>
+          <td className="trinity-dom-cell trinity-dom-iv">{row.total_volume != null ? fmtOi(row.total_volume) : "—"}</td>
           <td className="trinity-dom-tags">{tags.map(t=>(<span key={t} className={`trinity-tag trinity-tag-${t.toLowerCase()}`}>{t}</span>))}</td>
         </tr>);
       })}
@@ -540,7 +573,7 @@ function DOMView({ rows, domCols, spotIdx, kingStrike, flipStrike, tags, maxAbs,
 }
 
 function ChainView({ rows, spotIdx, kingStrike, flipStrike, onRowClick, ma }) {
-  return (<div className="trinity-chain-scroll"><table className="trinity-chain-table"><thead><tr className="trinity-chain-header"><th className="trinity-chain-th">Strike</th><th className="trinity-chain-th">GEX</th><th className="trinity-chain-th">Call</th><th className="trinity-chain-th">Put</th><th className="trinity-chain-th">OI</th><th className="trinity-chain-th">VEX</th><th className="trinity-chain-th">IV</th><th className="trinity-chain-th">Δ</th><th className="trinity-chain-th">Charm</th></tr></thead><tbody>
+  return (<div className="trinity-chain-scroll"><table className="trinity-chain-table"><thead><tr className="trinity-chain-header"><th className="trinity-chain-th">Strike</th><th className="trinity-chain-th">GEX</th><th className="trinity-chain-th">Call</th><th className="trinity-chain-th">Put</th><th className="trinity-chain-th">OI</th><th className="trinity-chain-th">VEX</th><th className="trinity-chain-th">Vol</th><th className="trinity-chain-th">Charm Δ</th><th className="trinity-chain-th">Charm</th></tr></thead><tbody>
     {rows.map((row, i) => {
       const isC = i === spotIdx, isK = row.strike === kingStrike, isF = flipStrike != null && Math.abs(row.strike - flipStrike) <= (rows[0]?.strike - rows[1]?.strike || 5) / 2;
       const rc = rowColors(row.gex, ma);
@@ -551,8 +584,8 @@ function ChainView({ rows, spotIdx, kingStrike, flipStrike, onRowClick, ma }) {
         <td className="trinity-chain-cell" style={{color:"#c4b5fd"}}>{fmtGex(row.put_gex)}</td>
         <td className="trinity-chain-cell trinity-chain-oi">{fmtOi(row.total_oi)}</td>
         <td className="trinity-chain-cell" style={{color:row.vex>=0?"#6ee7b7":"#c4b5fd"}}>{fmtGex(row.vex)}</td>
-        <td className="trinity-chain-cell trinity-chain-iv">{row.iv!=null?`${(row.iv*100).toFixed(1)}%`:"—"}</td>
-        <td className="trinity-chain-cell">{row.delta!=null?row.delta.toFixed(2):"—"}</td>
+        <td className="trinity-chain-cell trinity-chain-iv">{row.total_volume!=null?fmtOi(row.total_volume):"—"}</td>
+        <td className="trinity-chain-cell">{row.call_charm!=null?fmtGex(row.call_charm):"—"}</td>
         <td className="trinity-chain-cell" style={{color:row.charm>=0?"#6ee7b7":"#c4b5fd"}}>{fmtGex(row.charm)}</td>
       </tr>);
     })}
@@ -592,7 +625,7 @@ function ListView({ rows, maxAbs, spotIdx, kingStrike, flipStrike, onRowClick })
         <span className="trinity-row-pct">{pctV > 15 && (<span className={`trinity-pct-badge${gex>=0?" trinity-pct-pos":" trinity-pct-neg"}`}>{gex>=0?"+":""}{pctV.toFixed(0)}%</span>)}</span>
         <span className="trinity-row-value" style={{color:rc.text}}>{fmtGex(gex)}</span>
         {row.total_oi > 0 && <span className="trinity-row-oi">{fmtOi(row.total_oi)}</span>}
-        {row.iv != null && <span className="trinity-row-iv">{(row.iv * 100).toFixed(1)}%</span>}
+        {row.total_volume != null && <span className="trinity-row-iv">{fmtOi(row.total_volume)}</span>}
         {rc.badge && <span className={`trinity-badge ${rc.badge.cls}`}>{rc.badge.text}</span>}
       </div>);
     })}

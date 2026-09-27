@@ -3,9 +3,11 @@ backend/services/paper_trader.py
 
 VPIN_HFT Paper Trading Execution Adapter.
 
-Connects trading signals (from trading_signals.py) to the Schwab Paper
-Trading API via the SchwabClient. Tracks positions, P&L, and logs all
-trades to MongoDB.
+Connects trading signals (from trading_signals.py) to the Alpaca paper
+trading API. Tracks positions, P&L, and logs all trades to MongoDB.
+
+(These docstrings said "Schwab Paper Trading API via SchwabClient" until
+2026-09-27. Schwab was deleted 2026-09-06; the code has always been Alpaca.)
 
 Features:
 - Signal-driven order execution (BUY/SELL from VPIN_HFT strategy)
@@ -119,7 +121,7 @@ class PaperTrader:
     """Paper trading execution adapter for VPIN_HFT strategy.
 
     Executes BUY/SELL signals against a simulated paper account.
-    In production, connects to Schwab Paper Trading API via SchwabClient.
+    In production, connects to the Alpaca paper trading API.
 
     Parameters
     ----------

@@ -36,7 +36,7 @@ test("renders a level with its fused score and direction", () => {
   expect(screen.getByTestId("hs-node-confluence")).toBeInTheDocument();
   expect(screen.getByTestId("hs-confluence-row-500")).toBeInTheDocument();
   expect(screen.getByTestId("hs-confluence-row-500")).toHaveTextContent("+12.1 neutral");
-  expect(screen.getByTestId("hs-confluence-row-500")).toHaveTextContent("prints");
+  expect(screen.getByTestId("hs-confluence-row-500")).toHaveTextContent("alerts");
 });
 
 test("marks missing dimensions as unknown rather than as zero", () => {
@@ -63,8 +63,8 @@ test("shows no-tape honestly when microstructure input is missing", () => {
   });
   render(<NodeConfluencePanel ticker="SPY" />);
   const row = screen.getByTestId("hs-confluence-row-500");
-  expect(row).toHaveTextContent("no tape");
-  expect(row).toHaveTextContent("no prints");
+  expect(row).toHaveTextContent("volume unknown");
+  expect(row).toHaveTextContent("no alerts");
 });
 
 test("surfaces the degraded state instead of rendering an empty board as healthy", () => {
@@ -76,11 +76,22 @@ test("surfaces the degraded state instead of rendering an empty board as healthy
 test("explains a neutral score rather than implying a fault", () => {
   mockHook({ ticker: "SPY", rows: [ROW], flow_status: "ok" });
   render(<NodeConfluencePanel ticker="SPY" />);
-  expect(screen.getByText(/honest, not broken/i)).toBeInTheDocument();
+  expect(screen.getByText(new RegExp("Call/put activity does not prove direction", "i"))).toBeInTheDocument();
 });
 
 test("empty level list is distinct from an error", () => {
   mockHook({ ticker: "SPY", rows: [], strikes_considered: 0, flow_status: "no_prints" });
   render(<NodeConfluencePanel ticker="SPY" />);
   expect(screen.getByText(/no levels with open interest/i)).toBeInTheDocument();
+});
+
+
+test("retains negative gamma and does not color call volume as bullish", () => {
+  mockHook({ rows: [{ ...ROW, gex: -123, microstructure_status: "context_only",
+    confluence: { total: null, direction: "insufficient_evidence", dimensions: {} } }] });
+  render(<NodeConfluencePanel />);
+  const row = screen.getByTestId("hs-confluence-row-500");
+  expect(row).toHaveTextContent("GEX -1.23e+2");
+  expect(row).toHaveTextContent("not enough evidence");
+  expect(screen.getByText("call/put +0.67")).toHaveClass("text-slate-500");
 });

@@ -14,15 +14,17 @@ already exists:
 
 Honesty rules, both load-bearing:
   * A dimension with no real input is reported as "missing" and
-    contributes 0.0 — never a default that reads as signal.
+    remains unknown — never a default that reads as signal.
   * structure is a MAGNITUDE (how big is this strike's gamma). It is not
     a direction, so it is passed as unsigned context, never folded into
     the signed total as if it implied buying. Direction comes from
-    microstructure (put/call volume skew) and flow only.
+    fresh declared alert bias only; put/call volume skew is context.
 """
 
 from __future__ import annotations
 
+import json
+from datetime import UTC, datetime
 from typing import Any
 
 SCHEMA_VERSION = "node_confluence.v1"
@@ -37,6 +39,8 @@ MIN_VOLUME_FOR_SKEW = 50.0
 
 
 def _safe_f(v: Any, default: float = 0.0) -> float:
+    if isinstance(v, bool):
+        return default
     try:
         f = float(v)
     except (TypeError, ValueError):
@@ -75,14 +79,15 @@ def structure_magnitude(strikes: list[dict[str, Any]]) -> tuple[float, str]:
 def microstructure_skew(strike_row: dict[str, Any]) -> tuple[float, str]:
     """Signed volume skew in [-1,1]: call-heavy positive, put-heavy negative.
 
-    (call_volume - put_volume) / total_volume. This is the ONLY strike
-    dimension that carries direction, and it is a tape observation, not a
-    dealer-positioning claim.
+    (call_volume - put_volume) / total_volume is an option-type activity
+    balance only. It does not reveal buys, sells, or price direction.
     """
     if not isinstance(strike_row, dict):
         return 0.0, "missing"
-    call_v = _safe_f(strike_row.get("call_volume"))
-    put_v = _safe_f(strike_row.get("put_volume"))
+    call_v = _safe_f(strike_row.get("call_volume"), -1)
+    put_v = _safe_f(strike_row.get("put_volume"), -1)
+    if call_v < 0 or put_v < 0:
+        return 0.0, "missing"
     total = call_v + put_v
     if total < MIN_VOLUME_FOR_SKEW:
         # Thin tape: report missing, never a fabricated lean.
@@ -107,61 +112,73 @@ def _near_strikes(strikes: list[dict[str, Any]], strike: float,
 
 def flow_at_strike(flow_rows: list[dict[str, Any]] | None, strike: float,
                    tol: float = NEAR_STRIKE_TOL) -> dict[str, Any]:
-    """Flow prints near a strike — roadmap #5, the flow-at-node entry point.
+    """Match saved alert records by contract strike, never option price/premium.
 
-    Flow rows carry their own price field under several historical names;
-    a row with no usable price is returned in `unpriced` rather than being
-    silently assigned to the selected level.
+    These records are alerts, not executions. Only fresh, explicitly directional
+    alert bias contributes to the separate alert-agreement reading. Cumulative
+    snapshots, unknown times and unclassified sides cannot imply neutral flow.
     """
-    def _row_price(r: dict[str, Any]) -> float | None:
-        """First usable price-like field, or None. Historic field names only."""
-        for key in ("price", "strike", "price_usd", "premium", "level"):
-            if r.get(key) is None:
-                continue
-            try:
-                p = float(r[key])
-            except (TypeError, ValueError):
-                continue
-            if p == p and p not in (float("inf"), float("-inf")):
-                return p
-        return None
-
     rows: list[dict[str, Any]] = []
     unpriced = 0
     for r in flow_rows or []:
         if not isinstance(r, dict):
             continue
-        price = _row_price(r)
-        if price is None:
+        price = _safe_f(r.get("strike"), -1)
+        if price <= 0:
             unpriced += 1
             continue
         if abs(price - float(strike)) <= tol:
             rows.append(r)
-    call_like = sum(1 for r in rows
-                    if str(r.get("side", "")).lower() in ("call", "buy", "bullish"))
-    put_like = sum(1 for r in rows
-                   if str(r.get("side", "")).lower() in ("put", "sell", "bearish"))
-    direction_net = call_like - put_like
+    call_like = sum(str(r.get("type", "")).lower() in {"call", "c"} for r in rows)
+    put_like = sum(str(r.get("type", "")).lower() in {"put", "p"} for r in rows)
+    directional: list[float] = []
+    direction_signs: list[int] = []
+    now = datetime.now(UTC)
+    for r in rows:
+        context = r.get("context") or r.get("context_json") or {}
+        if isinstance(context, str):
+            try:
+                context = json.loads(context)
+            except (TypeError, ValueError):
+                context = {}
+        if not isinstance(context, dict):
+            context = {}
+        if (r.get("activity_basis") == "cumulative_snapshot"
+                or context.get("activity_basis") == "cumulative_snapshot"
+                or str(r.get("side", "")).upper() in {"FLOW", "STRATEGY"}):
+            continue
+        bias = str(r.get("bias") or "").lower()
+        conviction = _safe_f(r.get("conviction"), -1)
+        if bias not in {"bullish", "bearish"} or not 0 <= conviction <= 100:
+            continue
+        try:
+            at = datetime.fromisoformat(str(r.get("asof_ts") or "").replace("Z", "+00:00"))
+            if at.tzinfo is None or not 0 <= (now - at).total_seconds() <= 900:
+                continue
+        except (ValueError, TypeError):
+            continue
+        sign = 1 if bias == "bullish" else -1
+        direction_signs.append(sign)
+        directional.append(sign * conviction / 100)
     return {
-        "strike": float(strike),
-        "window": tol,
-        "count": len(rows),
-        "call_side": call_like,
-        "put_side": put_like,
-        "direction_net": direction_net,
-        "prints": rows[:50],
+        "strike": float(strike), "window": tol,
+        "count": len(rows), "call_side": call_like, "put_side": put_like,
+        "direction_net": sum(direction_signs) if directional else None,
+        "direction_status": "ok" if directional else "unavailable",
+        "direction_basis": "fresh_alert_bias",
+        "directional_count": len(directional),
+        "signed_alert_bias": sum(directional) / len(directional) if directional else None,
+        "prints": rows[:50],  # legacy key; these are explicitly alert records
+        "records": rows[:50], "record_basis": "saved_alerts",
         "unpriced_rows": unpriced,
         "status": "ok" if rows else "no_prints",
     }
 
 
 def _flow_skew(flow_summary: dict[str, Any]) -> tuple[float, str]:
-    if flow_summary.get("status") != "ok":
+    if flow_summary.get("direction_status") != "ok":
         return 0.0, "missing"
-    n = int(flow_summary.get("count") or 0)
-    if n <= 0:
-        return 0.0, "missing"
-    return _clamp(flow_summary["direction_net"] / float(n)), "ok"
+    return _clamp(flow_summary["signed_alert_bias"]), "ok"
 
 
 def node_brief(ticker: str, strikes: list[dict[str, Any]], *,
@@ -192,6 +209,8 @@ def node_brief(ticker: str, strikes: list[dict[str, Any]], *,
     for s in rows[: max(1, int(limit))]:
         strike = _safe_f(s.get("strike"))
         micro_v, micro_status = microstructure_skew(s)
+        if micro_status == "ok":
+            micro_status = "context_only"
         flow_sum = flow_at_strike(flow_rows, strike)
         flow_v, flow_status = _flow_skew(flow_sum)
 
@@ -214,8 +233,8 @@ def node_brief(ticker: str, strikes: list[dict[str, Any]], *,
         fused = confluence_score({**inputs, "inputs_status": inputs_status})
         out_rows.append({
             "strike": strike,
-            "gex": _safe_f(s.get("gex")),
-            "total_oi": _safe_f(s.get("total_oi")),
+            "gex": _safe_f(s.get("gex"), None),
+            "total_oi": _safe_f(s.get("total_oi"), None),
             "lifecycle": s.get("lifecycle"),
             "taps": s.get("taps"),
             "tap_prob": s.get("tap_prob"),
@@ -233,6 +252,6 @@ def node_brief(ticker: str, strikes: list[dict[str, Any]], *,
         "notes": [
             "structure is unsigned context: gamma magnitude, not direction",
             "dimensions with no real per-strike input are reported "
-            "missing and contribute 0.0",
+            "missing; call/put volume is context, and flow uses only fresh declared alert bias",
         ],
     }

@@ -73,14 +73,25 @@ near execution — an earlier version of this section claimed there was only one
 `ALPACA_BASE_URL = "https://paper-api.alpaca.markets"` — Alpaca's paper endpoint. No live money can
 leave through it. **Changing that constant to a live host is forbidden without Nav's approval.**
 
-**2. `OrderRouter` — GATED, fail-closed, but currently guards nothing reachable.**
-`backend/services/order_router.py` → `OrderRouter.submit_order()` runs
-`if os.getenv("FLOWW_ENABLE_LIVE_SCHWAB") != "1":` before any outbound Schwab order POST and returns
-`{"status": "error", "reason": "live order submission requires FLOWW_ENABLE_LIVE_SCHWAB=1 ..."}`.
-Env unset = **refuse**. Pinned by `backend/tests/services/test_order_router_gate.py` — **13 collected
-tests** (6 test functions, one parametrized over 6 env values).
-**`OrderRouter` has no callers outside its own module and its tests**, so today this gate protects a
-path nothing can reach. Do not read "the gate exists" as "the app is gated".
+**2. `OrderRouter` — GATED, fail-closed, and reachable from the Discord bot.**
+`backend/services/order_router.py` → `OrderRouter.submit_order()` submits **Alpaca paper**
+orders only. The Schwab live path was removed entirely, and
+`backend/tests/services/test_order_router_gate.py::test_no_schwab_imports_remain`
+now *asserts* that `schwabapi.com`, `SchwabTokenManager` and the old
+`FLOWW_ENABLE_LIVE_SCHWAB` env gate are all absent from the module — that test
+guards the removal, so the env-var gate described here no longer exists.
+
+The live safety control is per-call: `submit_order(..., allow_market: bool = False)`
+is default-deny, and market orders require an explicit `allow_market=True`.
+
+**This path IS reachable.** `backend/discord_bot.py:77-80` builds
+`OrderRouter("discord-paper")` for its trade commands, and that router is the
+only paper-order path in the app. (An earlier version of this file claimed the
+router "has no callers outside its own module and its tests" — that was false
+and is exactly the kind of sentence that lets someone weaken a live gate.)
+No live caller passes `allow_market=True`, so MARKET orders are refused today;
+that default-deny is enforced by `order_router.py:117` and is the control to
+preserve.
 Note: `backend/routes/live_trading.py` is **not** this route surface — its handlers call
 `get_live_policy` / `update_live_policy` / `stop_live_tape` in `server.py` and never touch
 `OrderRouter`.
@@ -129,7 +140,7 @@ Brief explanation of what + why.
 Verification:
 $ curl -s 'http://localhost:8000/api/heatseeker/flip-zones?ticker=SPY' | python3 -c "..."
 OK
-$ cd backend && ./.venv313/Scripts/python.exe -m pytest tests/services/test_fetch_spot_and_chains_present.py -v 2>&1 | tail -1
+$ cd backend && .venv/bin/python -m pytest tests/services/test_fetch_spot_and_chains_present.py -v 2>&1 | tail -1
 2 passed
 EOF
 )"
@@ -176,7 +187,7 @@ read the live pin before using new syntax:
   exists on this machine.)
 - **Test suite — reproduce, don't trust a remembered number:**
   - Backend: **4640 tests collect, 0 collection errors** —
-    `cd backend && ./.venv313/Scripts/python.exe -m pytest --collect-only -q`
+    `cd backend && .venv/bin/python -m pytest --collect-only -q`
     A *pass* count is deliberately not asserted here — see the MongoDB note below.
   - Frontend: **280 passed / 280 total across 44 suites** —
     `cd frontend && CI=true npx craco test --watchAll=false`
@@ -191,7 +202,7 @@ read the live pin before using new syntax:
   so with Mongo down the suite still collects and most tests still pass — what you actually get is a
   ~2 s server-selection timeout on each DB-touching test (a slow run) plus failures confined to the
   DB-dependent tests. It does **not** error out at startup. Start `mongod`, then:
-  `cd backend && ./.venv313/Scripts/python.exe -m pytest -q --tb=no`
+  `cd backend && .venv/bin/python -m pytest -q --tb=no`
 - **The backend SHIPS ON PYTHON 3.12 — local dev is 3.13. All backend code must compile on 3.12.**
   `Dockerfile.backend` is `python:3.12-slim`; `.github/workflows/ci.yml` and `deploy.yml` pin 3.12.
   (Corrected 2026-09-27: this line used to say 3.11, but the Dockerfile, deploy
@@ -233,30 +244,35 @@ read the live pin before using new syntax:
 
 | Layer | Tech | Entry point |
 |---|---|---|
-| Backend | FastAPI · Python 3.13.15 local (CI pin: see `ci.yml`) | `backend/server.py` → `./.venv313/Scripts/python.exe -m uvicorn server:app --port 8000` |
+| Backend | FastAPI · **Python 3.12** (ships in `Dockerfile.backend`, pinned in `ci.yml`/`deploy.yml`) | `backend/server.py` → `backend/.venv/bin/python -m uvicorn server:app --port 8000` |
 | Async DB | Motor (MongoDB) | `from server import db` |
 | Tick DB | DuckDB | `backend/services/duckdb_engine.py` |
 | ML | sklearn gbm + walk-forward CV | `backend/services/ml/inference.py` (frozen), `health_monitor.py`, `backtest.py` |
-| Frontend | React 18 · create-react-app · craco · Jest | `frontend/src/` → `npm start` |
+| Frontend | **React 19** · create-react-app · craco · Jest | `frontend/src/` → `npm start` |
 | Embedded UI | Dash | `backend/services/dash_ui.py` (frozen) — embedded in React at `/dashboard/` |
-| Streamer | Schwab WebSocket | `backend/services/schwab_streamer.py` |
-| Lint | ruff — config in `backend/pyproject.toml` | `cd backend && ./.venv313/Scripts/python.exe -m ruff check .` |
-| Tests | pytest (asyncio auto mode) | `cd backend && ./.venv313/Scripts/python.exe -m pytest -q` |
+| Market data | Public.com adapter (cvserver / yfinance / Databento OI fallbacks) | `backend/services/public_api_adapter.py` |
+| Lint | ruff — config in `backend/pyproject.toml` | `cd backend && ruff check .` |
+| Tests | pytest (asyncio auto mode) | `cd backend && .venv/bin/python -m pytest -q` |
 | Frontend tests | jest via craco | `cd frontend && npx craco test --watchAll=false` |
 | Deploy | Caddy + docker-compose (free-tier ARM) | `deploy/free/README.md` |
 | CI | GitHub Actions | `.github/workflows/ci.yml` (also `lint.yml`, `deploy.yml`) |
 
-**Venv:** `backend/.venv313/Scripts/python.exe` (Python 3.13.15). Always use this — never the system
-Python, and **never `backend/.venv`**: that is a bare Python 3.11.15 with no pytest and no ruff, and
-it fails with `No module named pytest`. There is no `backend/.venv/bin/python3` on this machine —
-that is a POSIX path on a Windows box.
+**Venv:** `backend/.venv/bin/python` is the working interpreter — it has pytest, ruff and the
+full dependency set. Use it from the repo: `cd backend && .venv/bin/python -m pytest -q`.
+
+This section previously told you to run `backend/.venv313/Scripts/python.exe`
+and explicitly forbade `backend/.venv`. Both were wrong for this checkout: no
+`.venv313` directory exists, the path is a Windows `Scripts/*.exe` form on a
+POSIX repo, and `backend/.venv` is the venv that actually has the toolchain.
+Following the old text sent you to a missing binary.
 
 **Ruff rules (real config, `backend/pyproject.toml`):** `select = ["E","F","W","I","B","UP","SIM"]`,
-`ignore = ["E501","SIM102","SIM108","SIM117"]`, `line-length = 120`, `target-version = "py313"`,
-`extend-exclude = [".venv","services/ml/inference.py","services/dash_ui.py","tests/conftest.py"]`,
+`ignore = ["E501","SIM102","SIM108","SIM117"]`, `line-length = 120`, `target-version = "py311"`
+(must track `requires-python`; raising it makes ruff propose syntax the shipped
+interpreter cannot parse), `extend-exclude = [".venv","services/ml/inference.py","services/dash_ui.py","tests/conftest.py"]`,
 plus per-file-ignores. Note `E722` is NOT in `select` — it comes in via the `E` family.
 **ruff is not installed locally.** Install it at CI's exact pin before you lint:
-`cd backend && ./.venv313/Scripts/python.exe -m pip install "ruff==0.15.22"`.
+`cd backend && .venv/bin/python -m pip install "ruff==0.15.22"`.
 
 ---
 
@@ -267,7 +283,7 @@ verified to run on this machine — the macOS forms (`lsof`, `nohup`, `open -a`)
 
 ```powershell
 # Launch backend (background, detached) — verified: HTTP 200 on /api/health ~6s after start
-Start-Process -FilePath "C:\Users\DARK HERO\Desktop\FLOWW2.0\backend\.venv313\Scripts\python.exe" `
+Start-Process -FilePath "backend/.venv/bin/python" `
   -ArgumentList "-m","uvicorn","server:app","--port","8000" `
   -WorkingDirectory "C:\Users\DARK HERO\Desktop\FLOWW2.0\backend" `
   -WindowStyle Hidden -RedirectStandardError "$env:TEMP\floww-uvicorn.err"
@@ -289,18 +305,18 @@ cd frontend && BROWSER=none npm start
 # stop it: Get-NetTCPConnection -LocalPort 3000 -State Listen | ForEach-Object { taskkill /PID $_.OwningProcess /F /T }
 
 # Pytest sweeps  (a PASS run needs MongoDB on localhost:27017; collection does not)
-cd backend && ./.venv313/Scripts/python.exe -m pytest --collect-only -q 2>&1 | tail -3   # collection
-cd backend && ./.venv313/Scripts/python.exe -m pytest -q --tb=no 2>&1 | tail -5          # pass count
-cd backend && ./.venv313/Scripts/python.exe -m pytest tests/services/ -k <kw> -v         # targeted
+cd backend && .venv/bin/python -m pytest --collect-only -q 2>&1 | tail -3   # collection
+cd backend && .venv/bin/python -m pytest -q --tb=no 2>&1 | tail -5          # pass count
+cd backend && .venv/bin/python -m pytest tests/services/ -k <kw> -v         # targeted
 
 # Frontend tests
 cd frontend && CI=true npx craco test --watchAll=false
 
 # Lint — ruff is NOT installed locally; install CI's exact pin first
-cd backend && ./.venv313/Scripts/python.exe -m pip install "ruff==0.15.22"
-cd backend && ./.venv313/Scripts/python.exe -m ruff check .                  # rules from pyproject.toml
-cd backend && ./.venv313/Scripts/python.exe -m ruff check --select E722 .    # bare excepts only
-cd backend && ./.venv313/Scripts/python.exe -m ruff check --fix .            # auto-fix safe issues
+cd backend && .venv/bin/python -m pip install "ruff==0.15.22"
+cd backend && .venv/bin/python -m ruff check .                  # rules from pyproject.toml
+cd backend && .venv/bin/python -m ruff check --select E722 .    # bare excepts only
+cd backend && .venv/bin/python -m ruff check --fix .            # auto-fix safe issues
 
 # Origin verify (anti-skip gate)
 git fetch origin && git log origin/main --oneline -1 | grep '<commit subject>'
@@ -431,19 +447,20 @@ What Claude drives: shell, git, pytest, ruff, npm, file edits, docs, agent promp
 
 ## Dev Environment
 
-**This machine (Windows 11, verified 2026-09-04):**
-- Python **3.13.15** at `backend/.venv313/Scripts/python.exe` (pytest 9.1.1, uvicorn 0.52.4)
-- Node **v24.11.1** / npm **11.12.1**; `frontend/node_modules` installed
-- cargo **1.94.1** (`rust/decoder-core` is a real crate)
-- git **2.49.0.windows.1**; shells: PowerShell 7 (primary) + Git Bash
-- **NOT present / NOT on PATH:** `ruff`, `mongod`, `docker`, `brew`, `lsof`. MongoDB is not
-  listening on 27017 by default — start it before any backend pytest run.
+**What the project targets (these are the versions that matter — the
+per-machine details that used to live here described a different, retired
+Windows box and sent people looking for binaries this repo does not have):**
+- Python **3.12** — `Dockerfile.backend:1`, `ci.yml`, `deploy.yml`. Interpreter: `backend/.venv/bin/python`
+- Node **20** — `Dockerfile.frontend`, `ci.yml`, `deploy.yml`
+- Backend deps: `backend/requirements.txt`; frontend: `npm ci --legacy-peer-deps`
+- Some suites need MongoDB on 27017; others (DuckDB-backed) do not. If a test
+  fails on a connection, check whether it actually requires Mongo first.
 
 <details>
 <summary>Historical: retired macOS box (2026-07-28) — none of this applies on Windows</summary>
 
 **Homebrew:** 296 formulae, 13 casks. Key tools available globally:
-- **Runtimes:** Python 3.12+3.14, Node 26, Go 1.26.4, Rust 1.96
+- **Runtimes:** Python 3.12 (ship) / 3.14 (local interpreter), Node 20, Go 1.26.4, Rust 1.96
 - **Editors:** neovim 0.12.3, helix 25.01
 - **Terminal:** tmux 3.6b, zellij 0.44.3, starship, atuin, fzf, zoxide
 - **Git:** delta, difftastic, lazygit, tig, gitui, diff-so-fancy

@@ -136,13 +136,14 @@ message**. Each agent hunts, with file+line+snippet for every hit:
   `calc_*` function to exist; rules 9-12 fail any model meta JSON with empty baselines, Sharpe > 5,
   < 50 samples, feature/sample ratio > 0.2, or accuracy > 0.95. Real live path only regardless.
 - **MONEY PATH — paper only, and it has a concrete enforcement point.**
-  `backend/services/order_router.py` refuses to submit a real order unless
-  `FLOWW_ENABLE_LIVE_SCHWAB == "1"`; `backend/routes/live_trading.py` is the route surface and
-  `backend/tests/services/test_order_router_gate.py` pins the behaviour (`backend/tests/conftest.py`
-  sets the flag to `"1"` for the suite). **Any change that removes, inverts, defaults-on, or bypasses
-  that check is a HIGH finding.** Never delete it as "dead Schwab code".
-- **Schwab as a data feed is out.** `backend/services/schwab_streamer.py` has no live key — mock-only.
-  Do not "fix" it toward a live feed. This does **not** mean the live-execution path is dead code —
+  `backend/services/order_router.py` refuses MARKET orders unless
+  `ALLOW_MARKET_ORDERS` is True (it is `False` at module scope) or the caller passes
+  `allow_market=True`; `backend/routes/live_trading.py` is the route surface and
+  `backend/tests/services/test_order_router_gate.py` pins the default-deny posture.
+  **Any change that removes, inverts, defaults-on, or bypasses that
+  check is a HIGH finding.** Never delete it as leftover provider code.
+- **Schwab is gone.** Fully removed from the tree on 2026-09-27.
+  The former mock feed is `services/mock_synthetic_feed.py`.
   see MONEY PATH above.
 - A control that renders but mutates nothing; a tab or button with no reachable route.
 

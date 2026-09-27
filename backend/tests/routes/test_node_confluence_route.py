@@ -76,7 +76,7 @@ def test_node_confluence_route_carries_honest_dimension_status(_stub_chain):
         assert dims[dim]["inputs_status"] == "missing", (
             f"{dim} has no per-strike input and must be reported missing"
         )
-        assert dims[dim]["contribution"] == 0.0
+        assert dims[dim]["contribution"] is None
 
 
 def test_node_confluence_route_flags_flow_disabled_honestly(_stub_chain):
@@ -115,3 +115,15 @@ def test_route_is_registered():
     assert "/api/heatseeker/node-confluence" in paths, (
         f"routes seen: {sorted(p for p in paths if 'node' in p)}"
     )
+
+
+def test_real_stored_exp_column_is_used_for_selected_expiry(monkeypatch):
+    from services import flow_alerts
+    async def fetch(ticker, expiries):
+        return {"spot": 500, "contracts": [{**_contract(500, True), "expiry": "2030-01-18"}]}
+    monkeypatch.setattr(H, "_fetch_chain", fetch)
+    monkeypatch.setattr(flow_alerts, "read_alert_feed", lambda *a, **kw: [
+        {"strike": 500, "exp": "2030-01-18", "type": "put", "side": "FLOW"},
+        {"strike": 500, "exp": "2030-02-15", "type": "put", "side": "FLOW"}])
+    body = TestClient(_app()).get("/api/heatseeker/node-confluence?ticker=SPY").json()
+    assert body["rows"][0]["flow"]["count"] == 1

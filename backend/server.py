@@ -1028,9 +1028,18 @@ def _display_surfaces(spot: float, contracts: list[dict[str, Any]], ticker: str,
     # R7-02: canonical VEX surface rides every display path with its own
     # basis/model/coverage (packet §5.1). Missing inputs make VEX
     # unavailable — never zero-filled, never a raw fallback.
-    from services.gex_core import compute_vex_grid_local
+    from services.gex_core import compute_charm_grid_local, compute_vex_grid_local
     _vg = compute_vex_grid_local(spot, contracts, ticker)
+    # The Charm view (SkylitHeatmapGrid GRID_BY_VIEW.charm) reads
+    # grid.charm_grid, which the vendor-greek path never emitted, so the tab
+    # always rendered "surface unavailable". Same honesty rule as VEX: attach
+    # the surface with its own status, never zero-fill, never fall back to raw.
     def _with_vex(grid: dict) -> dict:
+        _cg = compute_charm_grid_local(spot, contracts, ticker,
+                                       weight_key="volume" if exposure_basis != "OI" else "oi")
+        grid["charm_grid"] = _cg["grid"]
+        grid["charm_meta"] = {key: value for key, value in _cg.items()
+                              if key not in {"grid", "expiries", "strikes"}}
         try:
             grid["vex_grid"] = _vg.get("grid", {})
             grid["vex_strike_gross"] = _vg.get("strike_gross", [])
@@ -1437,6 +1446,17 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             "wall_window": {},
             "magnitude_ratio_delta_over_raw": (dw_m.gross / raw_m.gross) if raw_m.gross > 0 else None,
             "vendor_rows": vendor_rows, "vendor_grid": vendor_grid,
+            # `grids` is a map of the OVERLAY surfaces (delta/activity/vendor).
+            # "raw" is deliberately None: the raw surface is the payload's own
+            # `grid`, not an entry here. Both consumers guard on
+            # `metric !== "raw"` (SkylitHeatmapGrid.jsx, SkylitMetricsSidebar.jsx)
+            # so raw correctly falls through to data.grid.
+            #
+            # Do NOT "fix" this by populating grids.raw. It is a different
+            # payload from a different code path; filling it would let a raw
+            # view silently read a delta-weighted or activity grid, which is
+            # the same class of bug as the VEX/charm surfaces reading keys the
+            # vendor path never emitted.
             "grids": {"raw": None, "delta": delta_grid, "activity": activity_grid,
                       "vendor": vendor_grid},
             "formula_version": "gex.v2",
@@ -1683,7 +1703,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                     db_full = latest_wall_last_state(_hconn, ticker, scope_id, wid)
                     if db_full and is_newer_state(db_full, mem_last):
                         last = db_full
-                    elif db_last and is_newer_state(db_last, mem_last):
+                    if db_last and is_newer_state(db_last, last):
                         last = db_last
                     # Durable only on a real file-backed recorder, never on
                     # :memory: fallback.

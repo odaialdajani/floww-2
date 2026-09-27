@@ -7,14 +7,14 @@ import { useHeatseeker } from "../../hooks/useHeatseeker";
  *
  * `services/agent/confluence.py::score` existed with zero production
  * callers; this panel is its first mounted consumer. It shows the fused
- * score per major level alongside the flow prints sitting at that level,
+ * score per major level alongside the saved alerts sitting at that level,
  * so a trader can confirm a wall without tab-switching.
  *
  * Honesty is the point of this component. A dimension with no real
  * per-strike input is rendered as "—" with a tooltip, never as a zero
  * that reads as "neutral on purpose". `structure` is labelled unsigned
  * context because gamma magnitude is not a direction. A strike with thin
- * tape shows "no tape" rather than a lean.
+ * tape shows "volume unknown" rather than a lean.
  */
 
 const TONE = {
@@ -24,9 +24,9 @@ const TONE = {
 };
 
 const DIM_LABELS = {
-  flow: "flow",
+  flow: "alert bias",
   structure: "structure",
-  microstructure: "tape",
+  microstructure: "activity",
   ml: "ml",
   vol: "vol",
   time_delta: "time",
@@ -39,7 +39,7 @@ function DimStatus({ name, dim }) {
 
   if (status === "context_only") {
     return (
-      <span className="text-slate-500" title="Gamma magnitude is unsigned context — it is not a direction and does not tilt the score.">
+      <span className="text-slate-500" title="Option activity and gamma size are context; neither establishes price direction.">
         {label} ·ctx
       </span>
     );
@@ -80,12 +80,12 @@ export default function NodeConfluencePanel({ ticker = "SPY", limit = 8 }) {
             className="text-[9px] px-1.5 py-0.5 rounded border border-slate-600/50 text-slate-400"
             title={
               data.flow_status === "ok"
-                ? "Flow prints matched to levels from the alert feed"
+                ? "Saved alerts matched to contract strikes"
                 : data.flow_status === "no_prints"
-                ? "No flow prints near these levels in the window — absence of flow, not a bearish read"
+                ? "No saved alerts near these levels; this is not a bearish reading"
                 : data.flow_status === "disabled"
                 ? "Flow read disabled for this request"
-                : "Flow feed unavailable"
+                : "Saved alert feed unavailable"
             }
           >
             flow:{data.flow_status}
@@ -127,34 +127,34 @@ export default function NodeConfluencePanel({ ticker = "SPY", limit = 8 }) {
                     <span className="font-bold text-slate-100">{r.strike}</span>
                     <span className={`font-semibold ${TONE[c.direction] || TONE.neutral}`} title="Fused confluence score. Only dimensions with real per-strike input contribute.">
                       {c.total > 0 ? "+" : ""}
-                      {c.total?.toFixed?.(1) ?? "—"} {c.direction || "neutral"}
+                      {c.total?.toFixed?.(1) ?? "—"} {c.direction === "insufficient_evidence" ? "not enough evidence" : c.direction || "unknown"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2 text-slate-500">
-                    <span title="Signed dealer dollar-gamma at this strike (calls +, puts −).">
-                      GEX {Math.abs(r.gex || 0).toExponential(2)}
+                    <span title="Assumed dollar-gamma at this strike: calls positive, puts negative; actual dealer holdings are unknown.">
+                      GEX {typeof r.gex === "number" && Number.isFinite(r.gex) ? r.gex.toExponential(2) : "—"}
                     </span>
                     <span
-                      className={r.microstructure_status === "ok" ? (r.microstructure_skew > 0 ? "text-emerald-400/70" : "text-rose-400/70") : "text-slate-600"}
+                      className="text-slate-500"
                       title={
-                        r.microstructure_status === "ok"
-                          ? "Call/put volume skew at this strike — a tape observation, not a dealer-positioning claim"
-                          : "Thin or missing tape: skew reported unknown, not zero"
+                        ["ok", "context_only"].includes(r.microstructure_status)
+                          ? "Call/put volume balance at this strike; buy/sell direction is unknown"
+                          : "Thin or missing volume: balance is unknown, not zero"
                       }
                     >
-                      {r.microstructure_status === "ok"
-                        ? `skew ${r.microstructure_skew > 0 ? "+" : ""}${r.microstructure_skew?.toFixed?.(2)}`
-                        : "no tape"}
+                      {["ok", "context_only"].includes(r.microstructure_status)
+                        ? `call/put ${r.microstructure_skew > 0 ? "+" : ""}${r.microstructure_skew?.toFixed?.(2)}`
+                        : "volume unknown"}
                     </span>
                     <span
                       className={flow.count > 0 ? "text-slate-300" : "text-slate-600"}
                       title={
                         flow.count > 0
-                          ? `${flow.count} flow print(s) within ${flow.window} of this strike (${flow.call_side} call-side, ${flow.put_side} put-side)`
-                          : `No flow prints within ${flow.window} of this strike`
+                          ? `${flow.count} saved alert(s) within ${flow.window} of this strike (${flow.call_side} call-side, ${flow.put_side} put-side)`
+                          : `No saved alerts within ${flow.window} of this strike`
                       }
                     >
-                      {flow.count > 0 ? `${flow.count} print${flow.count === 1 ? "" : "s"}` : "no prints"}
+                      {flow.count > 0 ? `${flow.count} alert${flow.count === 1 ? "" : "s"}` : "no alerts"}
                     </span>
                   </div>
                   <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] text-slate-500">
@@ -167,8 +167,8 @@ export default function NodeConfluencePanel({ ticker = "SPY", limit = 8 }) {
             })}
           </div>
           <p className="mt-1.5 text-[9px] leading-tight text-slate-600">
-            A small or neutral score here is honest, not broken: most confluence dimensions have no
-            per-strike input, so only tape and flow can move it. Dashed dims are unknown, not zero.
+            Only fresh declared alert bias contributes. Call/put activity does not prove direction.
+            Missing readings stay unknown; this is not a trading probability.
           </p>
         </>
       )}

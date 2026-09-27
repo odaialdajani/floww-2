@@ -5,7 +5,7 @@ Bounded asyncio.Queue + batching writer for WebSocket market data.
 Drains queue every 50ms, bulk INSERTs into DuckDB.
 
 Architecture:
-  WS streamer harness (or MockSchwabFeed test double)
+  WS streamer harness (or MockSyntheticFeed test double)
     -> handlers push to bounded asyncio.Queue
     -> batching writer coroutine drains queue
     -> bulk INSERT into DuckDB tables (ticks, chains, lob_snapshots)

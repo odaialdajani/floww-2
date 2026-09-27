@@ -47,7 +47,11 @@ export default function MultiTimeframeGEXPanel({ ticker }) {
                   <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[9px]">
                     <div className="flex justify-between"><span className="text-slate-500">Calls</span><span className="text-teal-400 mono">{fmtAbs(v.call_gex)}</span></div>
                     <div className="flex justify-between"><span className="text-slate-500">Puts</span><span className="text-purple-400 mono">{fmtAbs(v.put_gex)}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">Net Γ</span><span className="mono">{fmtAbs(v.net_gamma)}</span></div>
+                    {/* services/gex_history.py:341 returns `net_gex`. This row
+                        read `net_gamma`, which no endpoint emits, so the Net Γ
+                        cell was permanently blank. The ?? alias keeps it correct
+                        if either name ever comes back. */}
+                    <div className="flex justify-between"><span className="text-slate-500">Net Γ</span><span className="mono">{fmtAbs(v.net_gex ?? v.net_gamma)}</span></div>
                     <div className="flex justify-between"><span className="text-slate-500">Contracts</span><span className="text-slate-400 mono">{v.contract_count || "—"}</span></div>
                   </div>
                 ) : (

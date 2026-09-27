@@ -72,6 +72,13 @@ services:
     restart: unless-stopped
     expose:
       - "9090"
+    # prometheus/prometheus.yml scrapes host.docker.internal:8000, which on
+    # Linux does not resolve inside a container without this mapping. Without
+    # it the target is unresolvable and the backend is never scraped, so
+    # alerting silently covers nothing. docker-compose.observability.yml
+    # already had this; the prod stack did not.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./prometheus/alerts:/etc/prometheus/alerts:ro

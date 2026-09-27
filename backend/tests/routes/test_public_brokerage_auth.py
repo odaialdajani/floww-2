@@ -1,8 +1,8 @@
 """Public.com brokerage route auth tests (audit V2, Critical #2/#3).
 
 Every /api/public/* brokerage endpoint requires the master key
-(X-API-Key). The two mutating endpoints (POST /order, POST /cancel)
-additionally refuse with 403 unless FLOWW_ENABLE_LIVE_PUBLIC=1
+(X-API-Key). New orders additionally refuse with 403 unless FLOWW_ENABLE_LIVE_PUBLIC=1;
+authenticated cancellations remain available while entries are disabled.
 (fail-closed kill-switch; validation still runs first so 422
 contracts hold while disarmed).
 
@@ -95,14 +95,13 @@ class TestOrderKillSwitch:
         assert r.status_code == 200, r.text
         broker.place_order.assert_called_once()
 
-    def test_cancel_disarmed_403(self, monkeypatch):
+    def test_cancel_disarmed_remains_available(self, monkeypatch):
         monkeypatch.delenv("FLOWW_ENABLE_LIVE_PUBLIC", raising=False)
         broker = _broker()
         with _patched_broker(broker):
             r = client.post("/api/public/order/oid-1/cancel", headers=KEY)
-        assert r.status_code == 403, r.text
-        assert "live_trading_disabled" in r.json()["error"]
-        broker.cancel_order.assert_not_called()
+        assert r.status_code == 200, r.text
+        broker.cancel_order.assert_awaited_once()
 
     def test_cancel_armed_proceeds(self, monkeypatch):
         monkeypatch.setenv("FLOWW_ENABLE_LIVE_PUBLIC", "1")

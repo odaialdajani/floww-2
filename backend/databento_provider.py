@@ -115,14 +115,24 @@ OSI_RE = re.compile(r'^([A-Z]+)\s*(\d{2})(\d{2})(\d{2})([CP])(\d{8})$')
 
 
 def parse_osi(raw: str) -> dict[str, Any] | None:
-    """Parse OPRA OSI symbol like 'SPY   260612C00500000'"""
+    """Parse OPRA OSI symbol like 'SPY   260612C00500000'
+
+    OSI_RE captures SIX groups -- underlying, YY, MM, DD, C/P, and the
+    8-digit strike -- but this function used to unpack them into four names
+    (`und, ymd, typ, strike = m.groups()`), so every single call raised
+    `ValueError: too many values to unpack (expected 4, got 6)`. That made
+    the whole Databento OI overlay fail closed, and the circuit breaker then
+    kept it disabled, so the live OI path was wired but never returned data.
+
+    Unpack by index so a future regex change cannot silently shift fields.
+    """
     m = OSI_RE.match(raw.strip())
     if not m:
         return None
-    und, ymd, typ, strike = m.groups()
+    und, yy, mm, dd, typ, strike = m.groups()
     return {
         "underlying": und,
-        "expiry": f"20{ymd[:2]}-{ymd[2:4]}-{ymd[4:6]}",
+        "expiry": f"20{yy}-{mm}-{dd}",
         "type": "call" if typ == "C" else "put",
         "strike": int(strike) / 1000.0,
     }

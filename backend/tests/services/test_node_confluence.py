@@ -48,8 +48,8 @@ def test_microstructure_skew_signed_and_thin_tape_is_missing():
     put_heavy = {"call_volume": 100.0, "put_volume": 900.0}
     call_val, call_status = microstructure_skew(call_heavy)
     put_val, put_status = microstructure_skew(put_heavy)
-    assert call_val > 0 and call_status == "ok", "call-heavy is bullish skew"
-    assert put_val < 0 and put_status == "ok", "put-heavy is bearish skew"
+    assert call_val > 0 and call_status == "ok", "call-heavy activity balance"
+    assert put_val < 0 and put_status == "ok", "put-heavy activity balance"
     # thin tape: absence of flow is not flow
     thin_val, thin_status = microstructure_skew({"call_volume": 1.0, "put_volume": 1.0})
     assert thin_val == 0.0 and thin_status == "missing"
@@ -57,19 +57,19 @@ def test_microstructure_skew_signed_and_thin_tape_is_missing():
 
 def test_flow_at_strike_finds_prints_in_window():
     flow = [
-        {"price": 500.0, "side": "call", "size": 100},
-        {"price": 501.0, "side": "put", "size": 50},   # inside tolerance
-        {"price": 520.0, "side": "call", "size": 10},   # outside — must not count
+        {"strike": 500.0, "type": "call", "size": 100},
+        {"strike": 501.0, "type": "put", "size": 50},   # inside tolerance
+        {"strike": 520.0, "type": "call", "size": 10},   # outside — must not count
     ]
     got = flow_at_strike(flow, 500.0)
     assert got["count"] == 2, "only prints within the window count"
     assert got["call_side"] == 1 and got["put_side"] == 1
-    assert got["direction_net"] == 0
+    assert got["direction_net"] is None
     assert got["status"] == "ok"
 
 
 def test_flow_at_strike_surfaces_unpriced_rows():
-    flow = [{"price": 500.0, "side": "call"}, {"note": "no price here"}]
+    flow = [{"strike": 500.0, "type": "call"}, {"note": "no price here"}]
     got = flow_at_strike(flow, 500.0)
     assert got["count"] == 1
     assert got["unpriced_rows"] == 1, "unpriced rows are surfaced, not assigned"
@@ -95,16 +95,16 @@ def test_node_brief_confluence_has_honest_status_map():
     row = got["rows"][0]  # the 500 strike, call-heavy
     dims = row["confluence"]["dimensions"]
     # Only microstructure has a real per-strike input here.
-    assert dims["microstructure"]["inputs_status"] == "ok"
+    assert dims["microstructure"]["inputs_status"] == "context_only"
     # These have no per-strike input — they must be reported, not faked.
     assert dims["ml"]["inputs_status"] == "missing"
     assert dims["vol"]["inputs_status"] == "missing"
     assert dims["time_delta"]["inputs_status"] == "missing"
     # structure is unsigned context, never a direction claim
     assert dims["structure"]["inputs_status"] == "context_only"
-    # missing dimensions contribute 0.0
-    assert dims["ml"]["contribution"] == 0.0
-    assert dims["ml"]["value"] == 0.0
+    # Missing dimensions remain unknown, never fabricated zero.
+    assert dims["ml"]["contribution"] is None
+    assert dims["ml"]["value"] is None
 
 
 def test_node_brief_never_fabricates_direction_on_thin_tape():
@@ -115,8 +115,8 @@ def test_node_brief_never_fabricates_direction_on_thin_tape():
     got = node_brief("SPY", thin, limit=1)
     row = got["rows"][0]
     assert row["microstructure_status"] == "missing"
-    assert row["confluence"]["direction"] == "neutral", "no lean without evidence"
-    assert row["confluence"]["total"] == 0.0
+    assert row["confluence"]["direction"] == "insufficient_evidence", "no lean without evidence"
+    assert row["confluence"]["total"] is None
 
 
 def test_node_brief_handles_empty_payload():

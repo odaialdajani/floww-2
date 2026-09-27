@@ -206,12 +206,12 @@ ML-specific:
 
 MONEY PATH (the paper-only law's concrete enforcement point):
   [ ] backend/services/order_router.py refuses to submit a real order unless
-      FLOWW_ENABLE_LIVE_SCHWAB == "1". backend/routes/live_trading.py is the route surface;
+  [x] Schwab fully removed from the tree (2026-09-27) — no module, route, test, dashboard or alert remains.
       backend/tests/services/test_order_router_gate.py pins the behaviour; and
       backend/tests/conftest.py sets the flag to "1" for the whole suite.
   [ ] Treat ANY change that removes, inverts, defaults-on, or bypasses that check as HIGH.
-      Never dismiss this path as dead Schwab code — the data feed is mock-only, the
-      execution gate is live and load-bearing.
+      Never dismiss this path as leftover provider code — the execution gate is
+      live and load-bearing (default-deny on MARKET orders).
 
 DO NOT FLAG THESE — intentional by design:
   [ ] Dual GEX scale. services/gex_aggregator.py is dollar-GEX (spot^2, for display);
@@ -223,7 +223,7 @@ DO NOT FLAG THESE — intentional by design:
   [ ] No React Router in use. Routing is deliberately a `page` string in App.js with a
       hard-coded ?page= whitelist. react-router-dom sits in package.json but is imported
       nowhere in src/. App.js and package.json are frozen — do not modernise, do not prune.
-  [ ] schwab_streamer.py has no live key and is mock-only — Schwab as a DATA FEED is out.
+  [x] Schwab removed entirely from the tree — nothing named schwab remains.
       This says nothing about the execution gate; see MONEY PATH above, which is live.
   [ ] Frontend linting is disabled on purpose: craco.config.js strips ESLintWebpackPlugin
       and eslint-loader and there is no eslint config file, so the eslint devDependencies

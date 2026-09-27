@@ -1409,6 +1409,95 @@ def compute_vex_by_strike_local(spot: float, contracts: list[dict[str, Any]],
     return sorted(agg.values(), key=lambda r: r["strike"])
 
 
+CHARM_MODEL_VERSION = "vendor-charm.v2"
+
+
+def compute_charm_grid_local(spot: float, contracts: list[dict[str, Any]],
+                             ticker: str = "", *, weight_key: str = "oi") -> dict[str, Any]:
+    """Canonical dollar Charm surface, in the existing annual-time convention.
+
+    Vendor charm is usable only with an explicit time unit. Otherwise use the
+    existing local BS calculation when IV/expiry time are available. Never sum
+    unscaled Greeks into dollar cells or erase known local-model coverage.
+    """
+    grid: dict[str, dict[str, float]] = {}
+    blocked: set[tuple[str, str]] = set()
+    missing = invalid_type = usable = quarantined = 0
+    models: set[str] = set()
+
+    def number(value):
+        if isinstance(value, bool):
+            return None
+        return safe_float_or_none(value)
+
+    price = number(spot)
+    for c in contracts or []:
+        if c.get("adjusted") or c.get("nonstandard"):
+            quarantined += 1
+            continue
+        strike = number(c.get("strike"))
+        expiry = c.get("expiry")
+        sign = option_type_sign(c.get("type"))
+        if strike is None or strike <= 0 or not isinstance(expiry, str) or not expiry or sign is None:
+            invalid_type += 1
+            continue
+        key = str(int(strike)) if strike.is_integer() else str(strike)
+        weight = number(c.get(weight_key, c.get("open_interest" if weight_key == "oi" else "V")))
+        mult = number(c.get("multiplier", 100.0))
+        value = None
+        model = None
+        if price is not None and price > 0 and weight is not None and weight >= 0 and mult is not None and mult > 0:
+            if weight == 0:
+                value = 0.0
+            else:
+                raw = number(c.get("charm"))
+                unit = c.get("charm_unit")
+                if raw is not None and unit in {"per_year", "per_day"}:
+                    charm = raw * (365.0 if unit == "per_day" else 1.0)
+                    model = CHARM_MODEL_VERSION
+                else:
+                    iv, time = number(c.get("iv")), number(c.get("T"))
+                    charm = None
+                    if iv is not None and iv > 0 and time is not None and time > 0:
+                        charm = bs_charm(price, strike, time, iv, q=DIV_YIELD.get(ticker, 0.0),
+                                         kind="call" if sign > 0 else "put")
+                        model = "local-bs-charm.v1"
+                if charm is not None:
+                    value = sign * charm * weight * mult * price * 0.01
+        if value is None or not math.isfinite(value):
+            missing += 1
+            blocked.add((expiry, key))
+            continue
+        usable += 1
+        if model:
+            models.add(model)
+        col = grid.setdefault(expiry, {})
+        col[key] = col.get(key, 0.0) + value
+        if not math.isfinite(col[key]):
+            blocked.add((expiry, key))
+            missing += 1
+    for expiry, key in blocked:
+        grid.get(expiry, {}).pop(key, None)
+    grid = {expiry: col for expiry, col in sorted(grid.items()) if col}
+    status = "unavailable" if not grid else "partial" if missing or invalid_type or quarantined else "ok"
+    return {
+        "expiries": list(grid),
+        "strikes": sorted({float(k) for col in grid.values() for k in col}),
+        "grid": grid,
+        "exposure_basis": "CHARM",
+        "weight_basis": "VOLUME" if weight_key == "volume" else "OI",
+        "unit": "dollar_charm_1pct_per_year",
+        "formula_version": "gex.v2",
+        "model": "+".join(sorted(models)) or CHARM_MODEL_VERSION,
+        "status": status,
+        "reason": "NO_CHARM_INPUT" if status == "unavailable" else "PARTIAL_CHARM_COVERAGE" if status == "partial" else None,
+        "missing_charm_inputs": missing,
+        "usable_charm_inputs": usable,
+        "quarantined": quarantined,
+        "invalid_type": invalid_type,
+    }
+
+
 def compute_vex_grid_local(spot: float, contracts: list[dict[str, Any]],
                            ticker: str = "") -> dict[str, Any]:
     """R7-02: 2D VEX grid (same strike×expiry shape as the vendor OI grid).

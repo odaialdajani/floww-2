@@ -16,7 +16,7 @@ import pytest_asyncio
 # tests/stateful/test_ingestion_state_machine.py and
 # tests/test_scipy_reference.py.
 discord = pytest.importorskip("discord", reason="optional discord.py extra not installed")
-commands = discord.ext.commands
+from discord.ext import commands  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 

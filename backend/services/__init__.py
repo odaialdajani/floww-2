@@ -1,7 +1,7 @@
 """backend/services — service-layer modules.
 
 Contains async-aware classes wrapping external dependencies
-(MongoDB, DuckDB, Alpha Vantage, Schwab, etc.) and domain
+(MongoDB, DuckDB, Public.com, etc.) and domain
 operations (paper trading, ML inference, GEX history).
 
 This file exists primarily to make pytest's full-suite collection

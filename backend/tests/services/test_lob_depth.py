@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from services.duckdb_engine import DuckDBEngine
 from services.ingestion_pipeline import IngestionPipeline
-from services.mock_schwab_feed import MockSchwabFeed
+from services.mock_synthetic_feed import MockSyntheticFeed
 
 
 class TestLobDepthSchema:
@@ -48,7 +48,7 @@ class TestMockFeedLobDepth:
     @pytest.mark.asyncio
     async def test_feed_generates_lob_depth(self):
         collected = []
-        feed = MockSchwabFeed(rate=100.0, symbols=["SPY"], seed=42)
+        feed = MockSyntheticFeed(rate=100.0, symbols=["SPY"], seed=42)
         feed.on_lob_depth(lambda d: collected.append(d))
         await feed._generate_lob_depth()
         # 5 levels per symbol
@@ -57,7 +57,7 @@ class TestMockFeedLobDepth:
     @pytest.mark.asyncio
     async def test_lob_depth_has_required_fields(self):
         collected = []
-        feed = MockSchwabFeed(rate=100.0, symbols=["SPY"], seed=42)
+        feed = MockSyntheticFeed(rate=100.0, symbols=["SPY"], seed=42)
         feed.on_lob_depth(lambda d: collected.append(d))
         await feed._generate_lob_depth()
         required = [
@@ -70,7 +70,7 @@ class TestMockFeedLobDepth:
     @pytest.mark.asyncio
     async def test_lob_depth_levels_sequential(self):
         collected = []
-        feed = MockSchwabFeed(rate=100.0, symbols=["SPY"], seed=42)
+        feed = MockSyntheticFeed(rate=100.0, symbols=["SPY"], seed=42)
         feed.on_lob_depth(lambda d: collected.append(d))
         await feed._generate_lob_depth()
         levels = [d["level"] for d in collected]
@@ -79,7 +79,7 @@ class TestMockFeedLobDepth:
     @pytest.mark.asyncio
     async def test_lob_depth_bid_less_than_ask(self):
         collected = []
-        feed = MockSchwabFeed(rate=100.0, symbols=["SPY"], seed=42)
+        feed = MockSyntheticFeed(rate=100.0, symbols=["SPY"], seed=42)
         feed.on_lob_depth(lambda d: collected.append(d))
         await feed._generate_lob_depth()
         for d in collected:
@@ -90,7 +90,7 @@ class TestMockFeedLobDepth:
     @pytest.mark.asyncio
     async def test_lob_depth_sizes_positive(self):
         collected = []
-        feed = MockSchwabFeed(rate=100.0, symbols=["SPY"], seed=42)
+        feed = MockSyntheticFeed(rate=100.0, symbols=["SPY"], seed=42)
         feed.on_lob_depth(lambda d: collected.append(d))
         await feed._generate_lob_depth()
         for d in collected:
@@ -101,7 +101,7 @@ class TestMockFeedLobDepth:
     async def test_lob_depth_deeper_levels_smaller(self):
         """Deeper levels should have smaller sizes (liquidity thins)."""
         collected = []
-        feed = MockSchwabFeed(rate=100.0, symbols=["SPY"], seed=42)
+        feed = MockSyntheticFeed(rate=100.0, symbols=["SPY"], seed=42)
         feed.on_lob_depth(lambda d: collected.append(d))
         await feed._generate_lob_depth()
         # Level 0 should have larger sizes on average than level 4

@@ -1,6 +1,7 @@
 """API routes for the alert system."""
 
 import asyncio
+import contextlib
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -172,6 +173,34 @@ async def websocket_signals(websocket: WebSocket):
         logger.error(f"Signal WebSocket error: {e}")
         if websocket in _signal_clients:
             _signal_clients.remove(websocket)
+
+
+async def broadcast_signal_and_wait(payload: dict[str, Any]) -> int:
+    """Push one signal frame to every connected client. Returns the fanout count.
+
+    This endpoint had clients but no producer: `_signal_clients` was appended
+    to on connect and never read, so AlertOverlay connected successfully,
+    sat silent forever, and showed no alerts. The channel was "live" in the
+    sense that nothing crashed, which is worse than an obvious failure --
+    it looked wired and delivered nothing.
+
+    Callers must pass a payload carrying `type` (and optionally `signal`),
+    which is exactly what the frontend's onmessage filter looks for.
+    Dead or wedged clients are dropped rather than allowed to block the
+    fanout, so one bad socket cannot silence the channel for everyone.
+    """
+    frame = _signal_frame(payload)
+    delivered = 0
+    for client in list(_signal_clients):
+        try:
+            await client.send_json(frame)
+            delivered += 1
+        except Exception as exc:  # noqa: BLE001 - one bad socket must not stop the rest
+            logger.warning("Dropping dead signal client: %s", exc)
+            with contextlib.suppress(ValueError):
+                _signal_clients.remove(client)
+    return delivered
+
 
 @router.get("/summary")
 async def get_alerts_summary():
