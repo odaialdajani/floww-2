@@ -1417,6 +1417,17 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             "wall_window": {},
             "magnitude_ratio_delta_over_raw": (dw_m.gross / raw_m.gross) if raw_m.gross > 0 else None,
             "vendor_rows": vendor_rows, "vendor_grid": vendor_grid,
+            # `grids` is a map of the OVERLAY surfaces (delta/activity/vendor).
+            # "raw" is deliberately None: the raw surface is the payload's own
+            # `grid`, not an entry here. Both consumers guard on
+            # `metric !== "raw"` (SkylitHeatmapGrid.jsx, SkylitMetricsSidebar.jsx)
+            # so raw correctly falls through to data.grid.
+            #
+            # Do NOT "fix" this by populating grids.raw. It is a different
+            # payload from a different code path; filling it would let a raw
+            # view silently read a delta-weighted or activity grid, which is
+            # the same class of bug as the VEX/charm surfaces reading keys the
+            # vendor path never emitted.
             "grids": {"raw": None, "delta": delta_grid, "activity": activity_grid,
                       "vendor": vendor_grid},
             "formula_version": "gex.v2",
