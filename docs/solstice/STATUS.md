@@ -1,5 +1,35 @@
 # Solstice STATUS — T00 baseline + T01–T03 foundation (living receipt)
 
+> **Current state, 27 Sep 2026 — supersedes the "open PR" lines below.**
+> All work described in this file is merged: #13, #19, #55, #56, #12, #5.
+> `origin/main` = `1eefd864`. Cumulative verification on that tree:
+> **5503 backend passed / 0 failed**, **82 frontend suites / 675 tests passed**,
+> silent-except gate OK (289 files), ruff clean.
+> The historical sections below are preserved verbatim as the audit trail; where
+> they say a PR is OPEN, read this note instead.
+>
+> **Still open, deliberately not merged:**
+> - **#57** (other agent, `fix/audit-2026-09`, actively being worked) — CONFLICTING
+>   on `backend/routes/alerts.py`. Its producer still uses
+>   `setdefault("type", "signal")`, which cannot replace an existing
+>   `GAMMA_FLIP` type, and it lacks the `add_api_websocket_route("/ws/signals")`
+>   registration. Merging it as-is would regress the signal channel fixed in #56.
+> - **#54** — partially superseded. Its SSE switch is justified by "the legacy
+>   /ws/signals socket had no server producer", which was true when written and
+>   is now false. Its other two changes are still net-positive: it *adds*
+>   `AlertOverlay.test.jsx` (absent on main) and deletes `useSolsticeSnapshot.js`,
+>   which is dead code (defined, never imported, untested). Recommend rebasing
+>   and keeping the WebSocket, not closing wholesale.
+> - **#4** — do NOT merge. Its `fetched_at` falls back to
+>   `datetime.now(UTC)`, fabricating source time when none exists. Main already
+>   does this correctly at `server.py:1536` via
+>   `"source_received_at": raw.get("received_at")` with the comment "Never
+>   reset". Merging #4 reintroduces the defect the master plan names.
+> - **#3** — do NOT bulk merge. It deletes `frontend/src/utils/appKey.js`, which
+>   main has six live consumers for (`AlertOverlay.js`, `App.js`,
+>   `PublicPanel.jsx`, `useWebSocketGex.jsx`, and its own tests). It also
+>   conflicts on `scripts/walkforward_backtest_spy.py`. Extract narrow fixes only.
+
 Base: local `main` 5db4971a (includes open-PR #11 retry-404 work) stacked on
 origin/main 61d17917276b92913ff64339f9824b8a19d9b36a (12 Sep 2026).
 Work branch: `solstice/t00-t03-foundation` (from local main; includes #11, avoids duplicating it).
