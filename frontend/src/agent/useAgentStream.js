@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { API } from "../config/api";
+import {requestFailureText} from "./requestFailure";
 const terminal = new Set(["completed", "done", "failed", "error", "cancelled", "interrupted"]);
 function requestIdentity() {
  const bytes=crypto.getRandomValues(new Uint8Array(16)); bytes[6]=(bytes[6]&15)|64; bytes[8]=(bytes[8]&63)|128;
@@ -11,11 +12,11 @@ export default function useAgentStream({onEvent}={}) {
  const callback=useRef(onEvent); callback.current=onEvent;
  const observer=useRef(null);
  const emit=useCallback((kind,payload)=>callback.current?.(kind,payload),[]);
- const stop=useCallback(()=>{const w=observer.current;if(w){w.stopped=true;w.source?.close();}observer.current=null;},[]);
+ const stop=useCallback(()=>{const w=observer.current;if(w){w.stopped=true;w.source?.close();w.releaseRejected?.();}observer.current=null;},[]);
  useEffect(()=>stop,[stop]);
  const finish=useCallback((watch,turn)=>{
   if(watch.stopped || observer.current!==watch)return;
-  watch.stopped=true;watch.source?.close();setState(turn.status);
+  watch.stopped=true;watch.source?.close();watch.releaseRejected?.();setState(turn.status);
   emit(turn.status==="completed" || turn.status==="done" ? "done":"error",turn);
  },[emit]);
  const cancelKnown=useCallback(async watch=>{
@@ -43,8 +44,34 @@ export default function useAgentStream({onEvent}={}) {
    if(!session.ok)throw new Error("Local session unavailable");
    if(watch.cancelRequested){finish(watch,{status:"cancelled",error:"Cancelled before research started"});return null;}
    const request_id=requestIdentity();
-   const response=await fetch(`${API}/agent/ask`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({...body,request_id})});
-   if(!response.ok)throw new Error("Research request could not start");
+   const requestController=new AbortController();
+   const response=await fetch(`${API}/agent/ask`,{signal:requestController.signal,method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({...body,request_id})});
+   if(!response.ok){
+    let failure;
+    if(response.status===422){
+     // The response has rejected admission. Only now may cancellation or the
+     // bounded message read abort this request without hiding a running turn.
+     if(watch.stopped || watch.cancelRequested){
+      requestController.abort();
+      finish(watch,{status:"cancelled",error:"Cancelled before research started"});
+      return null;
+     }
+     failure=await new Promise(resolve=>{
+      let settled=false;
+      const settle=(value,abort=false)=>{
+       if(settled)return;
+       settled=true;clearTimeout(timer);watch.releaseRejected=null;
+       if(abort)requestController.abort();
+       resolve(value);
+      };
+      const timer=setTimeout(()=>settle(undefined,true),3000);
+      watch.releaseRejected=()=>settle(undefined,true);
+      Promise.resolve().then(()=>response.json()).then(value=>settle(value),()=>settle());
+     });
+     if(watch.stopped)return null;
+    }
+    throw new Error(requestFailureText(response.status,failure));
+   }
    const {turn_id}=await response.json();watch.id=turn_id;
    if(watch.stopped)return turn_id;
    if(watch.cancelRequested){await cancelKnown(watch);if(watch.stopped)return turn_id;}
@@ -79,8 +106,9 @@ export default function useAgentStream({onEvent}={}) {
  const cancel=useCallback(async()=>{
   const watch=observer.current;if(!watch || watch.stopped)return;
   watch.cancelRequested=true;setState("cancelling");
-  if(watch.id)await cancelKnown(watch);
- },[cancelKnown]);
+  if(watch.releaseRejected){finish(watch,{status:"cancelled",error:"Cancelled before research started"});}
+  else if(watch.id)await cancelKnown(watch);
+ },[cancelKnown,finish]);
  const disconnect=useCallback(()=>{stop();setState("idle");},[stop]);
  return {state,ask,cancel,disconnect};
 }

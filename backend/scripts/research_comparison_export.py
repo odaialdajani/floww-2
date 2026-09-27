@@ -116,10 +116,9 @@ def export_packet(seal_path, seal_hash, directories):
                     # The two frozen refusal cases use a plain visible detail string.
                     if not isinstance(detail, str) or not detail:
                         raise ValueError('Unsupported refusal display; bind actual UI behavior first')
-                    # useAgentStream currently discards server detail on failed ask.
-                    # Preserve the actual visible limitation, rather than granting
-                    # usefulness to text the trader never sees.
-                    answer['refusal'] = 'Research request could not start'
+                    # The renderer and live request path share the same display
+                    # function; retain the actual response for that function.
+                    answer['refusal'] = {'status': result['http_status'], 'body': refusal}
                 else:
                     turn = result.get('saved_turn')
                     if (result.get('http_status') != 200 or not isinstance(turn, dict)

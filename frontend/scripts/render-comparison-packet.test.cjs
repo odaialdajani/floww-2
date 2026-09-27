@@ -11,7 +11,7 @@ const root = path.resolve(__dirname, '..');
 const displayPaths = ['src/agent/AgentPanelAnswer.jsx', 'src/agent/Evidence.jsx',
   'src/agent/chartReading.js', 'src/agent/AgentModelSettings.jsx', 'src/config/api.js',
   'scripts/render-comparison-packet.cjs', 'package.json', 'package-lock.json',
-  'src/agent/useAgentStream.js', 'src/agent/AgentProvider.jsx', 'src/agent/AgentConversation.jsx'];
+  'src/agent/requestFailure.js', 'src/agent/useAgentStream.js', 'src/agent/AgentProvider.jsx', 'src/agent/AgentConversation.jsx'];
 function comparisonFixture() {
   const base = fixture();
   return {mode: 'comparison', cases: Array.from({length: 32}, (_, i) => ({...structuredClone(base.cases[0]), id: `synthetic_${i}`})),
@@ -140,7 +140,7 @@ test('failed, unknown, and unrun answers remain explicit; refusal text stays esc
   let document = new JSDOM(renderPacket(input).html).window.document;
   assert.equal(document.querySelectorAll('article.lodestar-answer').length, 0);
   for (const answer of input.cases[0].answers) assert.ok(document.body.textContent.includes('No completed answer: ' + answer.status.replaceAll('_', ' ')));
-  input.cases[0].answers[0] = {label: 'arm_a', status: 'executed_not_graded', refusal: '<script>declined</script>'};
+  input.cases[0].answers[0] = {label: 'arm_a', status: 'executed_not_graded', refusal: {status:422,body:{detail:'<script>declined</script>'}}};
   document = new JSDOM(renderPacket(input).html).window.document;
   assert.equal(document.querySelectorAll('script').length, 0);
   assert.equal(document.querySelector('[role="alert"]').textContent, '<script>declined</script>');
@@ -191,4 +191,20 @@ test('real offline command writes inspectable output and refuses overwrite', () 
     assert.ok(path.basename(temp).startsWith('floww-display-review-'));
     fs.rmSync(temp, {recursive: true});
   }
+});
+
+
+test('refusal display shares live request rules and rejects the old free-text adapter', () => {
+  const input=fixture();
+  input.cases[0].answers[0]={label:'arm_a',status:'executed_not_graded',refusal:{status:422,body:{detail:'Choose at most three valid tickers'}}};
+  input.cases[0].answers[1]={label:'arm_b',status:'executed_not_graded',refusal:{status:500,body:{detail:'Private server failure'}}};
+  input.cases[0].answers[2]={label:'arm_c',status:'executed_not_graded',refusal:{status:422,body:{detail:['invalid shape']}}};
+  const result=renderPacket(input);
+  const document=new JSDOM(result.html).window.document;
+  assert.deepEqual([...document.querySelectorAll('[role="alert"]')].map(el=>el.textContent),[
+    'Choose at most three valid tickers','Research request could not start','Research request could not start']);
+  assert.ok(result.receipt.source_files['src/agent/requestFailure.js']);
+  assert.ok(!result.html.includes('Private server failure'));
+  input.cases[0].answers[0].refusal='Invented display text';
+  assert.throws(()=>renderPacket(input),/Invalid refused-request display/);
 });

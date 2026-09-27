@@ -73,7 +73,8 @@ function loadAnswerComponent() {
   try {
     require.extensions['.js'] = compile;
     require.extensions['.jsx'] = compile;
-    return require('../src/agent/AgentPanelAnswer.jsx').default;
+    return {Answer: require('../src/agent/AgentPanelAnswer.jsx').default,
+      requestFailureText: require('../src/agent/requestFailure.js').requestFailureText};
   } finally {
     require.extensions['.js'] = originalJs;
     if (originalJsx) require.extensions['.jsx'] = originalJsx;
@@ -107,7 +108,7 @@ function renderPacket(packet) {
   if (packet.mode === 'comparison' || packet.expected_display !== undefined) checkDisplayFiles(expected);
   const caseIds = packet.cases.map(c => c.id);
   if (new Set(caseIds).size !== caseIds.length) throw Error('Duplicate case identity');
-  const Answer = loadAnswerComponent();
+  const {Answer, requestFailureText} = loadAnswerComponent();
   const identities = displayFiles();
   checkDisplayFiles(identities);
   if (expected) checkExactDisplay(expected, identities);
@@ -128,8 +129,10 @@ function renderPacket(packet) {
           if (a.turn || a.refusal) throw Error('Unfinished outcome cannot contain a successful answer');
           content = h('p', {role: 'status'}, 'No completed answer: ' + a.status.replaceAll('_', ' '));
         } else if (a.refusal) {
-          if (a.turn || typeof a.refusal !== 'string') throw Error('Invalid refused-request display');
-          content = h('p', {role: 'alert'}, a.refusal);
+          if (a.turn || typeof a.refusal !== 'object' || Array.isArray(a.refusal)
+              || !Number.isInteger(a.refusal.status) || a.refusal.status < 400 || a.refusal.status > 599
+              || !Object.hasOwn(a.refusal, 'body')) throw Error('Invalid refused-request display');
+          content = h('p', {role: 'alert'}, requestFailureText(a.refusal.status, a.refusal.body));
         } else {
           if (a.turn?.status !== 'completed') throw Error('Executed answer must be a completed saved turn');
           content = h(Answer, {turn: maskedTurn(a.turn)});

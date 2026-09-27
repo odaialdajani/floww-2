@@ -1,0 +1,117 @@
+{
+  "time": "2026-09-27T00:53:30.956Z",
+  "scope": "Rejected research requests only; no acceptance answers or model calls",
+  "source_files": {
+    "backend/scripts/research_comparison_export.py": "33b579a2e751142a5bf2e69a12cca730e5ec0d23130f719962139f6dbe831056",
+    "backend/scripts/research_comparison_run.py": "4b4a885cdeff46258bb1494e950277e22786b4a24579f8cc3149c0ff32cf757b",
+    "backend/tests/agent/test_comparison_export.py": "7424d4f698369bce1ea585ae39f078010cb872f73cc80e39c1210910c7d9b6e1",
+    "frontend/scripts/render-comparison-packet.cjs": "ef4d5b3debbeecb1195526e8cacb1bb75ea7aa666f25bc17d3ec59769ac819c7",
+    "frontend/scripts/render-comparison-packet.test.cjs": "5cd9177d3f528196685acb9c12debfa7bee4004a0d2b9c6e97ab0d7bdbd759df",
+    "frontend/src/agent/useAgentStream.js": "19583af4aa4f506712629a69ce957bde579429181973434815c6b43f15dda85a",
+    "frontend/src/agent/useAgentStream.test.js": "3c5bed356de3c13e21ff81dd320d1ee10e1ae4a18e25930015666856e54bdafd",
+    "frontend/src/agent/AgentConversation.test.jsx": "0fd16e4a6acd5dad4b687c39e2fae2ac24da74959a0ec9a41fbc36ab6ae00c34",
+    "frontend/src/agent/requestFailure.js": "9ea2d199048dec651ad24c9ac2e3c91190499d82c45dab2dd99aa62bb08ae10e"
+  },
+  "checks": {
+    "focused": {
+      "passed": 20,
+      "exit_code": 0
+    },
+    "frontend": {
+      "suites": 99,
+      "passed": 861,
+      "exit_code": 0
+    },
+    "build": {
+      "exit_code": 0,
+      "output": "output/research-refusal-build-final-20260927"
+    },
+    "renderer": {
+      "passed": 13
+    },
+    "backend_export_controls": {
+      "passed": 35
+    },
+    "ruff": "passed",
+    "independent": {
+      "passed": 54,
+      "independent_probes": 21,
+      "existing_focused": 20,
+      "renderer": 13,
+      "review": ".planning/eval/research-request-refusal-review-20260927.md"
+    }
+  },
+  "development_http": {
+    "browser_display": null,
+    "development_only": true,
+    "expected_display": {
+      "files": {
+        "package-lock.json": "52fde7e36a30985dbf7cd3127694a6c839492a9d7daaa2c9016eaadab994c3cc",
+        "package.json": "28e06db891b5850a36ec4e045899622be2796a30538478f9f5432f8e2e9bcf95",
+        "scripts/render-comparison-packet.cjs": "ef4d5b3debbeecb1195526e8cacb1bb75ea7aa666f25bc17d3ec59769ac819c7",
+        "src/agent/AgentConversation.jsx": "f5312c951cd47674b1bf1a16f691eb9854b634dc561e9ff572ea1099153166ba",
+        "src/agent/AgentModelSettings.jsx": "609949a63f34489d232cac5074945b2ca4acbc769f1ef773d88e9776f5eab7cf",
+        "src/agent/AgentPanelAnswer.jsx": "b6d551d2da629c18b8eae94f7c31935a24c06cbe6d6183c0c7a3140e8fdb47e4",
+        "src/agent/AgentProvider.jsx": "00a3f4489d386ba11dd5e8e04cab53656db5401baebbeaed841b3c089415c55f",
+        "src/agent/Evidence.jsx": "2607afa45399216ff7d8f3df4f5da40669567edfcf74a8c11ab9a4143099e367",
+        "src/agent/chartReading.js": "823642f348f9a16ec0faac2c60ad2c6f01347cd9d5bc882bb8c2d090e488906f",
+        "src/agent/requestFailure.js": "9ea2d199048dec651ad24c9ac2e3c91190499d82c45dab2dd99aa62bb08ae10e",
+        "src/agent/useAgentStream.js": "19583af4aa4f506712629a69ce957bde579429181973434815c6b43f15dda85a",
+        "src/config/api.js": "228ead5144e070970d8ddab45b37d97b6973f77deb16885b0ebc45fb8e5f1836"
+      }
+    },
+    "model_calls": 0,
+    "provider_calls": 0,
+    "read_entries": 0,
+    "rejected": 3,
+    "requests": 3,
+    "stored_turns": 0
+  },
+  "display": {
+    "mode": "development",
+    "cases": 3,
+    "source_files": {
+      "src/agent/AgentPanelAnswer.jsx": "b6d551d2da629c18b8eae94f7c31935a24c06cbe6d6183c0c7a3140e8fdb47e4",
+      "src/agent/Evidence.jsx": "2607afa45399216ff7d8f3df4f5da40669567edfcf74a8c11ab9a4143099e367",
+      "src/agent/AgentModelSettings.jsx": "609949a63f34489d232cac5074945b2ca4acbc769f1ef773d88e9776f5eab7cf",
+      "src/config/api.js": "228ead5144e070970d8ddab45b37d97b6973f77deb16885b0ebc45fb8e5f1836",
+      "src/agent/chartReading.js": "823642f348f9a16ec0faac2c60ad2c6f01347cd9d5bc882bb8c2d090e488906f",
+      "src/agent/requestFailure.js": "9ea2d199048dec651ad24c9ac2e3c91190499d82c45dab2dd99aa62bb08ae10e"
+    },
+    "display_files": {
+      "src/agent/AgentPanelAnswer.jsx": "b6d551d2da629c18b8eae94f7c31935a24c06cbe6d6183c0c7a3140e8fdb47e4",
+      "src/agent/Evidence.jsx": "2607afa45399216ff7d8f3df4f5da40669567edfcf74a8c11ab9a4143099e367",
+      "src/agent/AgentModelSettings.jsx": "609949a63f34489d232cac5074945b2ca4acbc769f1ef773d88e9776f5eab7cf",
+      "src/config/api.js": "228ead5144e070970d8ddab45b37d97b6973f77deb16885b0ebc45fb8e5f1836",
+      "src/agent/chartReading.js": "823642f348f9a16ec0faac2c60ad2c6f01347cd9d5bc882bb8c2d090e488906f",
+      "src/agent/requestFailure.js": "9ea2d199048dec651ad24c9ac2e3c91190499d82c45dab2dd99aa62bb08ae10e",
+      "scripts/render-comparison-packet.cjs": "ef4d5b3debbeecb1195526e8cacb1bb75ea7aa666f25bc17d3ec59769ac819c7",
+      "package.json": "28e06db891b5850a36ec4e045899622be2796a30538478f9f5432f8e2e9bcf95",
+      "package-lock.json": "52fde7e36a30985dbf7cd3127694a6c839492a9d7daaa2c9016eaadab994c3cc",
+      "src/agent/useAgentStream.js": "19583af4aa4f506712629a69ce957bde579429181973434815c6b43f15dda85a",
+      "src/agent/AgentProvider.jsx": "00a3f4489d386ba11dd5e8e04cab53656db5401baebbeaed841b3c089415c55f",
+      "src/agent/AgentConversation.jsx": "f5312c951cd47674b1bf1a16f691eb9854b634dc561e9ff572ea1099153166ba"
+    },
+    "react_version": "19.2.8",
+    "node_version": "v24.11.1",
+    "html_sha256": "4328df47e9d9bed8ea04beb2f723b618449e6fe7722501f93efd5f3c1512aac9",
+    "renderer_sha256": "ef4d5b3debbeecb1195526e8cacb1bb75ea7aa666f25bc17d3ec59769ac819c7",
+    "input_sha256": "0ae609bcc8c8f8601ffc6d666d8967e725e29dc0570447932034497487d08bf2",
+    "first_browser_display": null,
+    "usefulness": "not_graded",
+    "surface": "Actual saved-answer React component rendered offline; provider/status metadata masked; review styling only",
+    "input_file_sha256": "714c5179e60cb67c2e4f3afd7e5cfecf5c5c4245043476396cf9dfa37c808468"
+  },
+  "display_assertions": {
+    "all_actual_reasons_present": true,
+    "alerts": 3,
+    "slots": 9
+  },
+  "comparison_preparation": [
+    "Critical receipt is incomplete or uses different source",
+    "Earlier stronger-model choice is unanswered",
+    "Earlier unknown-dollar-cost choice is unanswered",
+    "Cost choice has no user reply recorded"
+  ],
+  "browser_paint": null
+}

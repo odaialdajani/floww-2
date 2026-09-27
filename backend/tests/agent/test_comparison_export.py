@@ -114,7 +114,7 @@ def test_failed_outcome_stays_failed_without_success_content(saved):
     assert packet['cases'][0]['answers'][1] == {'label': 'arm_b', 'status': 'failed'}
 
 
-def test_refusal_uses_actual_generic_ui_message_not_hidden_server_detail(saved):
+def test_refusal_preserves_actual_response_for_shared_ui_message_function(saved):
     import json
     root, seal_path, _, directory, save, result, final = saved
     proposal = json.loads((root / 'proposal.json').read_bytes())
@@ -130,8 +130,8 @@ def test_refusal_uses_actual_generic_ui_message_not_hidden_server_detail(saved):
     final['cases'][0]['result'] = save(directory / 'development_0.json', result)
     save(directory / 'final.json', final)
     packet, _ = export_packet(seal_path, seal_hash, {'deterministic': directory})
-    assert packet['cases'][0]['answers'][1]['refusal'] == 'Research request could not start'
-    assert 'Private server restriction explanation' not in str(packet)
+    assert packet['cases'][0]['answers'][1]['refusal'] == {
+        'status': 422, 'body': {'detail': 'Private server restriction explanation'}}
 
 
 @pytest.mark.parametrize('field,value', [('question', 'Foreign question'), ('turn_id', 'foreign-turn'),

@@ -69,7 +69,7 @@ def source_identity(root):
 DISPLAY_FILES = (
     'src/agent/AgentPanelAnswer.jsx', 'src/agent/Evidence.jsx',
     'src/agent/chartReading.js', 'src/agent/AgentModelSettings.jsx', 'src/config/api.js',
-    'src/agent/useAgentStream.js', 'src/agent/AgentProvider.jsx', 'src/agent/AgentConversation.jsx',
+    'src/agent/requestFailure.js', 'src/agent/useAgentStream.js', 'src/agent/AgentProvider.jsx', 'src/agent/AgentConversation.jsx',
     'scripts/render-comparison-packet.cjs', 'package.json', 'package-lock.json',
 )
 
