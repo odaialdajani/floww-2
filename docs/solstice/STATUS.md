@@ -2,20 +2,18 @@
 
 > **Current state, 27 Sep 2026 — supersedes the "open PR" lines below.**
 > All work described in this file is merged: #13, #19, #55, #56, #12, #5, #58,
-> #54, #59, #60, #61, #62, #63.
-> `origin/main` = `ba845699`. Cumulative verification on that tree:
-> **6360 backend passed / 0 failed** in CI (6291 locally, 38 skipped), **103
-> frontend suites / 910 tests passed**, silent-except gate OK (326 files scanned,
+> #54, #59, #60, #61, #62, #63, #64, #65 (and #3, #4, #57 — see below).
+> `origin/main` = `ac2b8ef9`. Cumulative verification on that tree:
+> **6467 backend passed / 0 failed** in CI, **103
+> frontend suites / 910 tests passed**, silent-except gate OK (330 files scanned,
 > **54** gate self-tests pass: 27 for the silent-except gate plus 27 for
 > `truth_audit.sh`, which had none until #62 added 21), API docs up to date
-> (370 paths), truth audit 229/0, ruff clean. Solstice 273, R8 durability 5,
+> (370 paths), truth audit 227/0, ruff clean. Solstice 273, R8 durability 5,
 > 26 WebSocket-regression tests pass on main.
 > #63 fixed the three failures that had main red on three consecutive heads.
 >
-> **Two earlier entries in this file are retracted, and the retraction is the
-> point.** #57 was recorded as blocked by a `setdefault("type", "signal")` no-op;
-> the other agent rebased, adopted main's `_signal_frame`, and the PR is now
-> MERGED. And the `SPY_rf_20260524_020801_meta.json` Sharpe-8.02 artifact was
+> **One earlier entry is retracted, and the retraction is the point.** The
+> `SPY_rf_20260524_020801_meta.json` Sharpe-8.02 artifact was
 > recorded as "LIVE, not quarantined" — that was inferred from file location.
 > `ml_price_prediction.py` loads `{ticker}_direction_v1.0.joblib` from the
 > repo-root `models/`, and nothing globs `backend/models/*_rf_*`, so the artifact
@@ -25,7 +23,26 @@
 > The historical sections below are preserved verbatim as the audit trail; where
 > they say a PR is OPEN, read this note instead.
 >
-> **Still open, deliberately not merged:**
+> **RESOLVED — the three "do NOT merge" verdicts below are all now stale.**
+> #57 is MERGED (the other agent rebased, adopted main's `_signal_frame`, and
+> added the `add_api_websocket_route("/ws/signals")` registration — both defects
+> I recorded are gone, and the branch test-merges onto main cleanly). #3 and #4
+> are also MERGED, at 2026-09-27T21:07:12Z, after the conflicts were reconciled
+> rather than forced. Checked on the merged tree, not assumed:
+>
+>   - #3's reason was that it deletes `frontend/src/utils/appKey.js`. On main it
+>     EXISTS with all five consumers intact (`App.js`, `AlertOverlay.js`,
+>     `AlertOverlay.test.jsx`, `PublicPanel.jsx`, `useWebSocketGex.jsx`). The
+>     deletion did not survive the merge.
+>   - #4's reason was a fabricated source timestamp. Main still carries the
+>     correct form at `backend/routes/market_data.py:204`:
+>     `"fetched_at": observation["received_at"]`. The `datetime.now()` calls that
+>     remain are response-assembly stamps, not source-time claims.
+>
+> The verdicts were right when written and were resolved by other work rather
+> than overruled. Kept below as the audit trail.
+
+> **Superseded open-PR verdicts (kept for the record):**
 > - **#57** (other agent, `fix/audit-2026-09`, actively being worked) — CONFLICTING
 >   on `backend/routes/alerts.py`. Its producer still uses
 >   `setdefault("type", "signal")`, which cannot replace an existing
