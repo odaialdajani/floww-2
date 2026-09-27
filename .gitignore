@@ -128,9 +128,29 @@ backend/debug_cache.py
 deploy/free/.env.prod
 deploy/free/deploy_key_ed25519
 
-# Runtime DuckDB stores (journal etc.) — local state, never commit
+# Runtime stores: local state, never commit. There are TWO data/ directories —
+# repo-root data/ (research_kg.duckdb, journal.duckdb) and backend/data/
+# (gflows.duckdb, scan_observations.sqlite3) — so both need patterns.
+# `data/*.duckdb` matches only the repo-root one: a pattern containing a slash
+# is anchored to the .gitignore's directory, so it never reached backend/data.
+# The -wal/-shm sidecars appear while the server holds the store open, so simply
+# running the backend used to leave untracked files in a dirty tree.
 data/*.duckdb
 data/*.duckdb.wal
+data/*.duckdb.tmp
+data/*.sqlite3
+data/*.sqlite3-wal
+data/*.sqlite3-shm
+
+backend/data/*.duckdb
+backend/data/*.duckdb.wal
+backend/data/*.duckdb.tmp
+backend/data/*.sqlite3
+backend/data/*.sqlite3-wal
+backend/data/*.sqlite3-shm
+backend/data/*.db
+backend/data/*.db-wal
+backend/data/*.db-shm
 
 # Private local proof stores, generated previews, and raw session records.
 # Preserved on disk; sanitized review/verification artifacts are committed.
