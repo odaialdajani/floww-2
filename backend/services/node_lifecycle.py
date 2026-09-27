@@ -31,6 +31,16 @@ class NodeState(Enum):
     EXPIRED = "expired"
 
 
+def _parse_dt(v: Any) -> datetime | None:
+    if not v:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(v))
+        return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+    except (ValueError, TypeError):
+        return None
+
+
 class Node:
     """Represents a single King Node in the lifecycle."""
 
@@ -88,17 +98,66 @@ class Node:
             if abs(spot - self.strike) <= extended_threshold:
                 self.state = NodeState.ACTIVE
 
+    @property
+    def tap_probability_basis(self) -> str:
+        return "heuristic"
+
+    @property
+    def tap_probability(self) -> float:
+        """Deterministic tap-probability heuristic band.
+
+        HEURISTIC (not a calibrated model): fresh nodes hold most often,
+        repeated taps weaken the level. Bands mirror the desk convention
+        (Fresh .80 / Tested-once .66 / Tested-twice .50 / Decaying .33 /
+        Expired .10). Always surfaced with tap_probability_basis so no
+        consumer mistakes it for a measured probability.
+        """
+        if self.state == NodeState.EXPIRED:
+            return 0.10
+        if self.state == NodeState.DECAYING or self.tap_count >= 3:
+            return 0.33
+        if self.tap_count == 2:
+            return 0.50
+        if self.tap_count == 1:
+            return 0.66
+        return 0.80
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "strike": self.strike,
             "gex_value": round(self.gex_value, 2),
+            "spot_at_formation": self.spot_at_formation,
+            "tap_threshold_pct": self.tap_threshold_pct,
+            "max_taps": self.max_taps,
             "state": self.state.value,
             "tap_count": self.tap_count,
             "structural_weight": round(self.structural_weight, 4),
             "opacity": round(self.opacity, 4),
             "formation_time": self.formation_time.isoformat(),
             "last_tap_time": self.last_tap_time.isoformat() if self.last_tap_time else None,
+            "tap_times": [t.isoformat() for t in self.tap_times],
+            "tap_probability": self.tap_probability,
+            "tap_probability_basis": self.tap_probability_basis,
         }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Node:
+        """Rehydrate a Node from to_dict output (persistence round-trip)."""
+        node = cls(
+            strike=float(d["strike"]),
+            gex_value=float(d.get("gex_value", 0.0)),
+            spot_at_formation=float(d.get("spot_at_formation", d["strike"])),
+            tap_threshold_pct=float(d.get("tap_threshold_pct", 0.003)),
+            max_taps=int(d.get("max_taps", 5)),
+        )
+        node.state = NodeState(str(d.get("state", "formed")))
+        node.tap_count = int(d.get("tap_count", 0))
+        node.structural_weight = float(d.get("structural_weight", 1.0))
+        node.opacity = float(d.get("opacity", 1.0))
+        node.formation_time = _parse_dt(d.get("formation_time")) or datetime.now(UTC)
+        node.last_tap_time = _parse_dt(d.get("last_tap_time"))
+        node.tap_times = [t for t in (_parse_dt(x) for x in d.get("tap_times", [])) if t]
+        return node
 
 
 class NodeLifecycleTracker:
@@ -181,3 +240,29 @@ class NodeLifecycleTracker:
             "total_nodes": len(self._nodes),
             "history_length": len(self._history),
         }
+
+    def to_dict(self) -> dict[str, Any]:
+        """Full tracker snapshot for durable storage."""
+        return {
+            "tap_threshold_pct": self.tap_threshold_pct,
+            "max_taps": self.max_taps,
+            "max_nodes": self.max_nodes,
+            "nodes": [n.to_dict() for n in self._nodes.values()],
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any] | None) -> NodeLifecycleTracker:
+        """Rehydrate a tracker (restart recovery). None/empty -> fresh."""
+        d = d or {}
+        t = cls(
+            tap_threshold_pct=float(d.get("tap_threshold_pct", 0.003)),
+            max_taps=int(d.get("max_taps", 5)),
+            max_nodes=int(d.get("max_nodes", 20)),
+        )
+        for nd in d.get("nodes", []):
+            try:
+                node = Node.from_dict(nd)
+                t._nodes[node.strike] = node
+            except (KeyError, ValueError, TypeError):
+                continue
+        return t

@@ -107,6 +107,17 @@ DDL = {
             snapshot_id VARCHAR, evidence VARCHAR, scope VARCHAR
         )
     """,
+    "node_lifecycle_v1": """
+        CREATE TABLE IF NOT EXISTS node_lifecycle_v1 (
+            ticker VARCHAR, scope VARCHAR, state_json VARCHAR, updated_at VARCHAR
+        )
+    """,
+    "wall_last_state_v1": """
+        CREATE TABLE IF NOT EXISTS wall_last_state_v1 (
+            ticker VARCHAR, scope VARCHAR, wall_id VARCHAR,
+            state_json VARCHAR, updated_at VARCHAR
+        )
+    """,
     "scenario_decisions_v1": """
         CREATE TABLE IF NOT EXISTS scenario_decisions_v1 (
             decision_id VARCHAR, ticker VARCHAR, at_ts VARCHAR, snapshot_id VARCHAR,
@@ -581,6 +592,96 @@ def latest_wall_state(conn, wall_id: str, ticker: str, scope: str = "") -> dict 
         return state
     except Exception as e:
         log.debug("latest_wall_state failed: %s", e)
+        return None
+
+
+def record_node_lifecycle(conn, ticker: str, scope: str, tracker_dict: dict) -> None:
+    """Persist a NodeLifecycleTracker snapshot (one row per ticker+scope).
+
+    Maximization build #1: node tap history survives restarts. Upsert via
+    DELETE+INSERT under the single-writer lock (portable across DuckDB
+    versions without ON CONFLICT). Best-effort: failures warn, never raise
+    into the request path.
+    """
+    try:
+        ensure_tables(conn)
+        with _RECORDER_LOCK:
+            conn.execute("DELETE FROM node_lifecycle_v1 WHERE ticker = "
+                         + _esc(ticker) + " AND scope = " + _esc(scope))
+            conn.execute("INSERT INTO node_lifecycle_v1 VALUES ("
+                         + ",".join([_esc(ticker), _esc(scope),
+                                     _esc(json.dumps(tracker_dict or {}, default=str)),
+                                     _esc(_now_iso())]) + ")")
+    except Exception as e:
+        log.warning("node lifecycle record failed: %s", e)
+
+
+def latest_node_lifecycle(conn, ticker: str, scope: str) -> dict | None:
+    """Load the most recent tracker snapshot for ticker+scope, or None.
+
+    feeds NodeLifecycleTracker.from_dict on restart recovery. Never
+    synthesizes across symbols/scopes.
+    """
+    try:
+        ensure_tables(conn)
+        rows = conn.execute(
+            "SELECT state_json FROM node_lifecycle_v1 WHERE ticker = "
+            + _esc(ticker) + " AND scope = " + _esc(scope)
+            + " ORDER BY updated_at DESC LIMIT 1").fetchall()
+        if not rows:
+            return None
+        raw = rows[0][0]
+        try:
+            state = json.loads(raw) if isinstance(raw, str) else (raw or {})
+        except Exception:
+            return None
+        return state if isinstance(state, dict) else None
+    except Exception as e:
+        log.debug("latest_node_lifecycle failed: %s", e)
+        return None
+
+
+def record_wall_last_state(conn, ticker: str, scope: str, wall_id: str,
+                           state: dict) -> None:
+    """Persist a wall's last interaction state (one row per ticker+scope+wall).
+
+    Covers the INTERACTION_STORE memory gap: wall EVENTS were already durable
+    (wall_events_v1) but the last-state dict died on restart. Same upsert +
+    best-effort contract as record_node_lifecycle.
+    """
+    try:
+        ensure_tables(conn)
+        with _RECORDER_LOCK:
+            conn.execute("DELETE FROM wall_last_state_v1 WHERE ticker = "
+                         + _esc(ticker) + " AND scope = " + _esc(scope)
+                         + " AND wall_id = " + _esc(wall_id))
+            conn.execute("INSERT INTO wall_last_state_v1 VALUES ("
+                         + ",".join([_esc(ticker), _esc(scope), _esc(wall_id),
+                                     _esc(json.dumps(state or {}, default=str)),
+                                     _esc(_now_iso())]) + ")")
+    except Exception as e:
+        log.warning("wall last-state record failed: %s", e)
+
+
+def latest_wall_last_state(conn, ticker: str, scope: str, wall_id: str) -> dict | None:
+    """Load a wall's last interaction state, or None when never recorded."""
+    try:
+        ensure_tables(conn)
+        rows = conn.execute(
+            "SELECT state_json FROM wall_last_state_v1 WHERE ticker = "
+            + _esc(ticker) + " AND scope = " + _esc(scope)
+            + " AND wall_id = " + _esc(wall_id)
+            + " ORDER BY updated_at DESC LIMIT 1").fetchall()
+        if not rows:
+            return None
+        raw = rows[0][0]
+        try:
+            state = json.loads(raw) if isinstance(raw, str) else (raw or {})
+        except Exception:
+            return None
+        return state if isinstance(state, dict) else None
+    except Exception as e:
+        log.debug("latest_wall_last_state failed: %s", e)
         return None
 
 

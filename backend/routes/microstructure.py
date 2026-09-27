@@ -89,8 +89,32 @@ def _get_trinity_index():
 def _get_node_tracker(ticker: str):
     if ticker not in _node_trackers:
         from services.node_lifecycle import NodeLifecycleTracker
-        _node_trackers[ticker] = NodeLifecycleTracker()
+        tracker = NodeLifecycleTracker()
+        # Restart recovery (maximization #1): hydrate tap history from the
+        # durable store. Best-effort — any failure keeps a fresh tracker.
+        try:
+            from services.duckdb_engine import db as _duckdb
+            from services.heatmap_history import latest_node_lifecycle
+            stored = latest_node_lifecycle(_duckdb._conn, ticker, "microstructure")
+            if stored:
+                tracker = NodeLifecycleTracker.from_dict(stored)
+        except Exception as e:
+            logger.debug("node tracker hydrate failed for %s: %s", ticker, e)
+        _node_trackers[ticker] = tracker
     return _node_trackers[ticker]
+
+
+def _persist_node_tracker(ticker: str) -> None:
+    """Best-effort durable write of a tracker's state (never raises)."""
+    try:
+        tracker = _node_trackers.get(ticker)
+        if tracker is None:
+            return
+        from services.duckdb_engine import db as _duckdb
+        from services.heatmap_history import record_node_lifecycle
+        record_node_lifecycle(_duckdb._conn, ticker, "microstructure", tracker.to_dict())
+    except Exception as e:
+        logger.debug("node tracker persist failed for %s: %s", ticker, e)
 
 
 def _get_fragility_index():
@@ -296,6 +320,7 @@ async def nodes_endpoint(ticker: str, expiries: int = Query(5, ge=1, le=20)):
         result = tracker.update(spot, king_nodes)
         result["ticker"] = ticker.upper()
         result["status"] = "ok"
+        _persist_node_tracker(ticker.upper())
         return result
     except Exception as e:
         logger.error(f"Nodes error for {ticker}: {e}")
