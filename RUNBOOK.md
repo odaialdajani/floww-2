@@ -46,10 +46,9 @@ curl -s http://localhost:3000/api/health
 
 | Alert | Severity | Condition | First Response |
 |:------|:---------|:----------|:---------------|
-| `IngestionStalled` | WARNING | No messages for 5min during market hours | Check Schwab WebSocket connection; restart `ingestion_pipeline` |
+| `IngestionStalled` | WARNING | No messages for 5min during market hours | Check the Public.com feed and `ingestion_pipeline` (there is no Schwab WebSocket — Schwab is retired) |
 | `QueueBackpressure` | CRITICAL | DuckDB queue > 9000 for 1min | Check DuckDB writer thread; may need to restart `duckdb_engine` |
 | `AnomalyDetected` | CRITICAL | Anomaly threshold breached in last 60s | Check VPIN/QI z-score; review flow toxicity |
-| `SchwabTokenExpiring` | WARNING | Token TTL < 300s | Re-authenticate via `/api/schwab/auth` |
 | `APIErrorRateHigh` | CRITICAL | 5xx rate > 0.1/s for 5min | Check server logs; may need to restart `server.py` |
 | `Budget80Percent` | WARNING | Any cost metric > 80% of budget | Review spend in Cost dashboard; consider throttling |
 | `Budget95Percent` | CRITICAL | Any cost metric > 95% of budget | **Phone alert fires** — immediately review and pause non-essential spend |

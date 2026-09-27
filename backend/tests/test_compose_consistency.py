@@ -232,3 +232,118 @@ def test_alert_files_are_valid_yaml():
     for path in files:
         assert isinstance(yaml.safe_load(path.read_text()), dict), path
 
+
+# ── Schwab is retired. It must not come back as a data source. ─────────────
+#
+# Schwab was retired as a data feed on 2026-09-03. All market data is
+# Public.com (with cvserver / yfinance / Databento fallbacks). What remains is
+# dead weight that reads like a live integration:
+#
+#   * `services/schwab_streamer.py` — zero importers, no key, unreachable
+#     host baked in. Its `__init__` even documents that the brokerage account
+#     is deleted and a token_manager "MUST be injected (tests pass a mock)".
+#   * `services/mock_schwab_feed.py` — synthetic fixture, live-imported by
+#     server.py but gated behind FLOWW_ENABLE_MOCK_FEED=1. Legacy name only.
+#   * Prometheus rules, ARCHITECTURE.md, and several dispatch docs that
+#     described Schwab as a primary data source.
+#
+# These tests pin the retirement so a future change cannot quietly reintroduce
+# a Schwab credential or endpoint on the live path.
+
+SCHWAB = "schwab"
+RETIRED_PROVIDERS = (SCHWAB, "alphavantage")
+
+
+def _non_test_backend_files() -> list[Path]:
+    out = []
+    for py in sorted((REPO_ROOT / "backend").rglob("*.py")):
+        parts = py.parts
+        if ".venv" in parts or "tests" in parts or "test" in py.stem:
+            continue
+        out.append(py)
+    return out
+
+
+def test_no_schwab_endpoint_or_credential_in_live_backend_code():
+    """No Schwab URL, env var, or token handling may reach the live path."""
+    banned = (
+        "schwab.com",           # api/streamer host
+        "SCHWAB_API_KEY",
+        "SCHWAB_APP_KEY",
+        "SCHWAB_SECRET",
+        "SCHWAB_ACCESS_TOKEN",
+        "SCHWAB_REFRESH_TOKEN",
+    )
+    offenders: list[str] = []
+    for py in _non_test_backend_files():
+        if py.name == "schwab_streamer.py":
+            continue  # the dead module itself, asserted separately below
+        text = py.read_text(errors="ignore")
+        for needle in banned:
+            if needle in text:
+                offenders.append(f"{py.relative_to(REPO_ROOT)}: {needle}")
+    assert not offenders, f"Schwab integration points in live code: {offenders}"
+
+
+def test_schwab_streamer_stays_unreferenced():
+    """If something starts importing it, that is a regression to investigate.
+
+    It is not deleted in this branch (it has a reconnect-chaos test suite);
+    it is quarantined. The point is that any new importer surfaces here.
+    """
+    streamer = REPO_ROOT / "backend" / "services" / "schwab_streamer.py"
+    if not streamer.exists():
+        pytest.skip("schwab_streamer.py has been removed")
+    importers = []
+    for py in _non_test_backend_files():
+        if py == streamer:
+            continue
+        if "schwab_streamer" in py.read_text(errors="ignore"):
+            importers.append(str(py.relative_to(REPO_ROOT)))
+    assert not importers, (
+        f"{streamer.name} is retired but is now imported by {importers} — if "
+        "that is intentional, re-open the retirement decision deliberately"
+    )
+
+
+def test_frontend_has_no_schwab_references():
+    """The browser must never talk to, or name, a retired provider."""
+    src = REPO_ROOT / "frontend" / "src"
+    offenders = [
+        str(p.relative_to(REPO_ROOT))
+        for p in src.rglob("*")
+        if p.is_file()
+        and p.suffix in {".js", ".jsx", ".ts", ".tsx"}
+        and SCHWAB in p.read_text(errors="ignore").lower()
+    ]
+    assert not offenders, f"frontend references Schwab: {offenders}"
+
+
+def test_retired_providers_are_not_declared_as_live_config():
+    """Nothing should read credentials for a retired provider."""
+    for name in RETIRED_PROVIDERS:
+        for py in _non_test_backend_files():
+            if py.name == "schwab_streamer.py":
+                continue
+            text = py.read_text(errors="ignore")
+            assert f"{name.upper()}_API_KEY" not in text, (
+                f"{py.relative_to(REPO_ROOT)} reads a {name.upper()}_API_KEY, "
+                "but that provider is retired"
+            )
+
+
+def test_docs_do_not_describe_a_retired_provider_as_the_data_source():
+    """ARCHITECTURE.md previously showed Schwab feeding the pipeline."""
+    arch = (REPO_ROOT / "ARCHITECTURE.md").read_text().lower()
+    for line in arch.splitlines():
+        if SCHWAB in line and "|" in line:
+            assert "dead" in line or "retired" in line, (
+                f"ARCHITECTURE.md lists Schwab as an active service: {line.strip()!r}"
+            )
+    for phrase in ("all market data enters via", "schwab stream  ─", "schwab stream ─"):
+        if phrase in arch:
+            window = arch[max(0, arch.find(phrase) - 100):arch.find(phrase) + 300]
+            assert "dead" in window or "retired" in window, (
+                f"ARCHITECTURE.md still describes Schwab as a live data source: {phrase!r}"
+            )
+

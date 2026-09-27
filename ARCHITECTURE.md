@@ -9,11 +9,22 @@ embedded Dash UI.
 
 ## The Four Pillars
 
-### 1. No-Polling WebSocket Ingestion
-All market data enters via persistent WebSocket connections (`schwab_streamer.py`,
-`websocket_streamer.py`). There are no polling loops. Data flows through
-`ingestion_pipeline.py` which normalizes feeds from Schwab, Databento, and
-yfinance into a unified tick format before writing to DuckDB.
+### 1. REST Market-Data Ingestion
+Market data enters through the **Public.com adapter**
+(`services/public_api_adapter.py` → `fetch_spot_and_chains_merged` in
+`server.py`), which cascades Public.com → cvserver → yfinance, with
+Databento supplying open interest. Chain data is then written to DuckDB.
+
+**There is no WebSocket market-data feed.** `schwab_streamer.py` is dead code
+from a retired provider (retired 2026-09-03; it has no live key and nothing
+imports it). `websocket_streamer.py` is unrelated to market data — it is the
+*client-push* manager that broadcasts computed results to the browser, and it
+is live.
+
+`ingestion_pipeline.py` remains for the DuckDB tick/LOB write path and is
+driven in development by `mock_schwab_feed.py`, an explicitly synthetic feed
+behind `FLOWW_ENABLE_MOCK_FEED=1`. That module is a test fixture that happens
+to carry a legacy name; it is not a Schwab connection.
 
 ### 2. DuckDB OLAP Engine
 `duckdb_engine.py` provides a columnar analytical store for tick data, options
@@ -34,9 +45,10 @@ with backpressure. Route handlers are fully async.
 ## Data Flow
 
 ```
-Schwab Stream  ──┐
-Databento Feed ──┼──→ ingestion_pipeline.py ──→ DuckDB (ticks, chains)
-yfinance API  ───┘                                      │
+Public.com API ──┐        (primary chain + spot source)
+cvserver       ──┼──→ public_api_adapter.py ──→ DuckDB (chains, ticks)
+yfinance       ──┘
+Databento OI   ───→ (open-interest overlay only)
                                                         ▼
                                               ┌─── services/*
                                               │
@@ -65,8 +77,9 @@ yfinance API  ───┘                                      │
 |---------|------|---------|
 | Ingestion Pipeline | `ingestion_pipeline.py` | Normalize and route market data |
 | DuckDB Engine | `duckdb_engine.py` | Columnar OLAP storage |
-| WebSocket Streamer | `websocket_streamer.py` | Persistent WS connections |
-| Schwab Streamer | `schwab_streamer.py` | Schwab-specific feed handler |
+| Client-Push Manager | `websocket_streamer.py` | Pushes computed results to the browser over WS (not market data) |
+| Public API Adapter | `public_api_adapter.py` | The live market-data source (Public.com → cvserver → yfinance) |
+| Schwab Streamer | `schwab_streamer.py` | **DEAD** — retired provider, no key, zero importers. Safe to delete. |
 
 ### Phase 2 — Microstructure Analytics
 | Service | File | Purpose |
@@ -136,7 +149,7 @@ graph TD
     R[services/ingestion_pipeline.py] --> C
     R --> D
 
-    S[services/schwab_streamer.py] --> R
+    S[services/public_api_adapter.py] --> R
     T[services/ml/*] --> C
     T --> U[services/ml/features.py]
 ```

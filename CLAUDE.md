@@ -74,11 +74,16 @@ near execution — an earlier version of this section claimed there was only one
 leave through it. **Changing that constant to a live host is forbidden without Nav's approval.**
 
 **2. `OrderRouter` — GATED, fail-closed, but currently guards nothing reachable.**
-`backend/services/order_router.py` → `OrderRouter.submit_order()` runs
-`if os.getenv("FLOWW_ENABLE_LIVE_SCHWAB") != "1":` before any outbound Schwab order POST and returns
-`{"status": "error", "reason": "live order submission requires FLOWW_ENABLE_LIVE_SCHWAB=1 ..."}`.
-Env unset = **refuse**. Pinned by `backend/tests/services/test_order_router_gate.py` — **13 collected
-tests** (6 test functions, one parametrized over 6 env values).
+`backend/services/order_router.py` → `OrderRouter.submit_order()` submits **Alpaca paper**
+orders only. The Schwab live path was removed entirely, and
+`backend/tests/services/test_order_router_gate.py::test_no_schwab_imports_remain`
+now *asserts* that `schwabapi.com`, `SchwabTokenManager` and the old
+`FLOWW_ENABLE_LIVE_SCHWAB` env gate are all absent from the module — that test
+guards the removal, so the env-var gate described here no longer exists.
+
+The live safety control is per-call: `submit_order(..., allow_market: bool = False)`
+is default-deny, and market orders require an explicit `allow_market=True` from
+the Discord `!approve`/`!buy` path.
 **`OrderRouter` has no callers outside its own module and its tests**, so today this gate protects a
 path nothing can reach. Do not read "the gate exists" as "the app is gated".
 Note: `backend/routes/live_trading.py` is **not** this route surface — its handlers call
@@ -238,7 +243,7 @@ read the live pin before using new syntax:
 | ML | sklearn gbm + walk-forward CV | `backend/services/ml/inference.py` (frozen), `health_monitor.py`, `backtest.py` |
 | Frontend | **React 19** · create-react-app · craco · Jest | `frontend/src/` → `npm start` |
 | Embedded UI | Dash | `backend/services/dash_ui.py` (frozen) — embedded in React at `/dashboard/` |
-| Streamer | Schwab WebSocket | `backend/services/schwab_streamer.py` |
+| Market data | Public.com adapter (cvserver / yfinance / Databento OI fallbacks) | `backend/services/public_api_adapter.py` |
 | Lint | ruff — config in `backend/pyproject.toml` | `cd backend && ruff check .` |
 | Tests | pytest (asyncio auto mode) | `cd backend && .venv/bin/python -m pytest -q` |
 | Frontend tests | jest via craco | `cd frontend && npx craco test --watchAll=false` |
