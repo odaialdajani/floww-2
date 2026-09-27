@@ -233,3 +233,46 @@ node capture-solstice.mjs   # needs playwright-core + a local Chrome binary
    `API_SECRET_KEY`, so mutating routes there are deliberately disabled (503) and
    the frontend `.catch()` swallows it without claiming success. That is the
    auth design working.
+
+## Post-audit corrections — 2026-09-27, head `bc47b8d5`
+
+This ledger was written against `main@71f83625`. Three later defects were found
+and fixed on `feat/node-confluence-overlay`. None of them touch the R8 rows
+above, but they change what "verified" means for this branch, so they are
+recorded here rather than left implicit.
+
+**R8 rows are unaffected.** Re-verified on `bc47b8d5`:
+`tests/solstice/` = 222 passed, `test_r8_04_restart_durability.py` = 5 passed.
+The only frontend change since `71f83625` is `NodeConfluencePanel`, which none
+of the screenshots capture. No re-capture required.
+
+**Three WebSocket defects were live and green.** All shipped in this branch and
+all had passing tests at the time:
+
+1. `6aaa7dea` — `broadcast_signal` emitted `alert.to_dict()`, whose
+   `type: "GAMMA_FLIP"` frame `AlertOverlay.js` discards. Six tests asserted a
+   frame reached `send_json`; none checked the consumer.
+2. `1c471b20` — `routes/alerts.py` uses `APIRouter(prefix="/api/alerts")`, so
+   `@router.websocket("/ws/signals")` registered at `/api/alerts/ws/signals`,
+   a path no client opens. The client's `/ws/signals` matched `server.py`'s
+   greedy `/ws/{topic}` and landed in `websocket_streamer`. The channel had
+   never delivered anything. Every test mounted `A.router` on a bare FastAPI
+   app, which never includes `server.py`, so the prefix and ordering were
+   invisible to all of them.
+3. `bc47b8d5` — `websocket_gex`'s error branch sent its payload on a socket
+   that had just failed, raising `LocalProtocolError` and logging every routine
+   browser disconnect as a FATAL error.
+
+**Method note.** The common cause is that a test on an isolated router cannot
+see a defect that exists only on the assembled app, and an assertion on the
+socket cannot see a defect in the consumer. Both blind spots produced green
+suites. Assert route identity on the real `app`, and assert the consumer's
+filter against a real frame.
+
+**CI on `bc47b8d5`: success.** lint ✓, frontend-build ✓ (2m5s),
+backend-tests ✓ (8m28s) — `5469 passed, 74 skipped, 9 deselected`. The six new
+regression tests above are all confirmed PASSED in that run by name.
+
+**Still not claimed.** PR #56 is open, not merged. `Empirically validated`
+remains `not_required` on every row: these are behavioral and durability
+results, never profitability.
