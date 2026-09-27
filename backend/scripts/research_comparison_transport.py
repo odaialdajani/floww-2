@@ -135,10 +135,13 @@ async def local_server(service):
         sock.close()
 
 
-async def exercise(item, repository, *, expected_status=200, model_factory=None, trace_sink=None):
+async def exercise(item, repository, *, expected_status=200, model_factory=None, trace_sink=None, owner_settings=None, admission_sink=None):
     """One fresh owner/case. No source refresh, fallback store, or implicit model."""
     if expected_status not in {200, 422}:
         raise ValueError('Comparison supports admitted or pre-admission refusal cases')
+    if owner_settings is not None and (model_factory is None or set(owner_settings) != {'model', 'effort', 'speed'}
+            or not all(isinstance(v, str) and v for v in owner_settings.values())):
+        raise ValueError('Explicit owner settings require a model and complete selected values')
     with AlertFixture(item) as alerts:
         reads = FixtureReads(item, alerts)
         service = ResearchService(repository, reads)
@@ -151,12 +154,18 @@ async def exercise(item, repository, *, expected_status=200, model_factory=None,
                 owner = await repository.owner(client.cookies.get(COOKIE))
                 if not owner or await repository.turns.count_documents({'owner': owner}):
                     raise RuntimeError('Expected a new empty isolated owner')
+                if owner_settings is not None:
+                    await repository.save_preferences(owner, {'ai_settings': copy.deepcopy(owner_settings)})
+                    if (await repository.get_preferences(owner)).get('ai_settings') != owner_settings:
+                        raise ValueError('Selected settings did not persist for this owner')
                 history_seed = await seed_history(repository, owner, item) if item.get('history') else []
                 trace = CaseTrace(sink=trace_sink)
                 if model_factory is not None:
                     service.model = MeasuredModel(model_factory(trace), trace)
                 body = copy.deepcopy(item['body'])
                 body['request_id'] = f'{int(time.time()*1000)}-{uuid.uuid4()}'
+                if admission_sink is not None:
+                    admission_sink({'stage': 'before_request', 'owner': owner, 'request_id': body['request_id']})
                 trace.mark('request_started')
                 admitted = await client.post('/api/agent/ask', json=body)
                 trace.mark('admission_received')
@@ -177,6 +186,8 @@ async def exercise(item, repository, *, expected_status=200, model_factory=None,
                     result.update(refusal=admitted.json(), owned_turn_count=count)
                 else:
                     turn_id = admitted.json()['turn_id']
+                    if admission_sink is not None:
+                        admission_sink({'stage': 'admitted', 'owner': owner, 'request_id': body['request_id'], 'turn_id': turn_id})
                     terminal = await observe_progress_stream(client, turn_id, trace, timeout=130)
                     trace.mark('answer_lookup_started')
                     response = await client.get('/api/agent/turn/' + turn_id)

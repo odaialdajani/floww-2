@@ -1,0 +1,26 @@
+{
+  "price": {
+    "cash_before_and_after_stage": "1000",
+    "stage_reservation": "421.30",
+    "cash_after_one_fill": "794.35",
+    "remaining_reservation": "210.65",
+    "marked_equity": "984.35",
+    "available_cash": "583.70"
+  },
+  "cash": {
+    "cash_before_and_after_stage": "1000",
+    "stage_reservation": "431.30",
+    "cash_after_one_fill": "794.35",
+    "remaining_reservation": "215.65",
+    "marked_equity": "984.35",
+    "available_cash": "578.70"
+  },
+  "exit_fee_stress": {
+    "synthetic_note": "Deliberately exaggerated valid fee, not a proposed policy",
+    "cash_before_close": "794.35",
+    "close_cash_shortfall_reserved": "820.00",
+    "close_was_staged": true,
+    "cash_after_close": "-15.65",
+    "meaning": "Existing mechanical close path is not a verified fee-cash or debt policy"
+  }
+}

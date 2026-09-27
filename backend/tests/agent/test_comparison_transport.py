@@ -172,3 +172,34 @@ async def test_cancel_during_listener_shutdown_waits_for_exit():
     with pytest.raises(asyncio.CancelledError):
         await owner
     assert not [task for task in asyncio.all_tasks() - before if not task.done()]
+
+
+@pytest.mark.asyncio
+async def test_selected_settings_and_request_identity_are_saved_before_work():
+    repo = AgentRepository(AsyncMongoMockClient(tz_aware=True).test)
+    await repo.initialize()
+    settings = {'model': 'DEVELOPMENT_ONLY', 'effort': 'medium', 'speed': 'default'}
+    identities = []
+    class SelectedModel(ForbiddenModel):
+        async def settings_for(self, owner):
+            return (await repo.get_preferences(owner))['ai_settings']
+    result = await exercise(development_item(), repo, model_factory=lambda _: SelectedModel(),
+                            owner_settings=settings, admission_sink=identities.append)
+    assert result['errors'] == [] and result['trace']['model_invocations'] == 0
+    assert [i['stage'] for i in identities] == ['before_request', 'admitted']
+    assert identities[0]['request_id'] == identities[1]['request_id']
+    assert identities[0]['owner'] == identities[1]['owner']
+    private = await repo.read(identities[0]['owner'], identities[1]['turn_id'])
+    assert (await repo.get_preferences(identities[0]['owner']))['ai_settings'] == settings
+    assert private['request_id'] == identities[0]['request_id']
+
+
+@pytest.mark.asyncio
+async def test_identity_save_failure_prevents_request_admission():
+    repo = AgentRepository(AsyncMongoMockClient(tz_aware=True).test)
+    await repo.initialize()
+    def fail(_):
+        raise OSError('development disk failure')
+    with pytest.raises(OSError, match='disk failure'):
+        await exercise(development_item(), repo, admission_sink=fail)
+    assert await repo.turns.count_documents({}) == 0
