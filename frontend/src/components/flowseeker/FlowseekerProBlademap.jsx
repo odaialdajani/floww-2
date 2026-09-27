@@ -25,6 +25,15 @@ import "./FlowseekerProBlademap.css";
 
 const API = `${BACKEND_URL}/api/flowseeker`;
 const NOISE_FLOOR = 5; // ignore day-volume deltas below this many contracts
+// Shared freshness contract for Scanner-tab inline tape surfaces. These only
+// refresh via manual forceRefresh (X4 partial fix) — the poll timer does NOT
+// auto-refresh them on the Scanner tab. Module-level so other surfaces can
+// render the same staleness marker from the same constant + pure helper.
+export const STALE_MS = 60 * 1000; // 60 s — aligns with the poll cadence on the Flow tab
+// Pure helper for test contracts pinning the staleness threshold.
+export function isStale(lastRefreshAt) {
+  return lastRefreshAt > 0 && Date.now() - lastRefreshAt > STALE_MS;
+}
 // Desk noise budget: max tape-visible alerts per rule per hour. The eval
 // engines still count EVERY hit (deltas + ⚡badge stay truthful); this only
 // caps what reaches the tape. 0 = unlimited (kept for parity with the old
@@ -397,8 +406,15 @@ export default function FlowseekerProBlademap({ active = true, onTrade = null })
   const [notify, setNotify] = useState(!!prefs.notify);
   const [forcing, setForcing] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
-  // Outcomes/model refresh — declared here because refreshTick is declared
-  // above this line (TDZ-safe; the hook reads it in its dependency array).
+  // Staleness tracking for the Scanner-tab inline tape surfaces (overview
+  // rollup + print-buffer pulse rows + filter chips). These surfaces only
+  // refresh via manual forceRefresh (X4 partial fix); the poll timer does NOT
+  // auto-refresh them on the Scanner tab. When they go past the freshness
+  // window without a refreshTick bump, show a small staleness marker so the
+  // reader knows the tape is snapshot-old, not live.
+  const STALE_MS = 60 * 1000; // 60 s — aligns with the poll cadence on Flow tab
+  const [lastRefreshAt, setLastRefreshAt] = useState(Date.now());
+  const isStale = lastRefreshAt > 0 && Date.now() - lastRefreshAt > STALE_MS;
   useEffect(() => { if (active) loadOutcomes(); }, [active, loadOutcomes, refreshTick]);
   // ── Keyboard navigation: j/k cursor, Enter focus, / search, r refresh ──
   const [kbIdx, setKbIdx] = useState(-1);
@@ -537,6 +553,9 @@ export default function FlowseekerProBlademap({ active = true, onTrade = null })
       // chain poll; on Scanner tab this re-runs existing queued prints through
       // the tape filters without a new chain fetch.
       setRefreshTick((t) => t + 1);
++     // Mark the inline surfaces fresh so the staleness marker (rendered
++     // beside the ⟳ button and in the conviction sidebar) clears.
++     setLastRefreshAt(Date.now());
     } catch (e) {
       if (e.name !== "AbortError") { /* GET below will serve cache */ }
     }
@@ -1289,8 +1308,13 @@ export default function FlowseekerProBlademap({ active = true, onTrade = null })
           <span>{clock}</span>
           <button type="button" className="fsb-ctrl" title="Refresh now"
                   onClick={forceRefresh} disabled={forcing}>
-            {forcing ? "…" : "↻"}
-          </button>
+                    {forcing ? "…" : "⟳ Force"}
+                  </button>
+                  {isStale && !forcing && (
+                    <span className="fsb-stale-chip" title="Inline surfaces haven't refreshed in a while — tap ⟳ for fresh data">
+                      stale
+                    </span>
+                  )}
           <div className="fsb-ctrl-wrap">
             <button type="button"
                     className={`fsb-ctrl${(minScoreQF > 0 || dteRange[0] != null || dteRange[1] != null) ? " fsb-ctrl-active" : ""}`}
@@ -2017,6 +2041,7 @@ export default function FlowseekerProBlademap({ active = true, onTrade = null })
                 <div className="fsb-sigh">
                   <span className="fsb-sigh-t">◈ Top Conviction</span>
                   <span className="fsb-sigh-s">feed unavailable (backend /alerts/feed) — tape below is live</span>
+                  {isStale && <span className="fsb-sigh-s" style={{ opacity: 0.7 }}>inline tape stale · tap ⟳ for fresh</span>}
                   <button className="fsb-chip fsb-chip-sm" onClick={() => { setConvFeedState("loading"); setRefreshTick((t) => t + 1); }}>Retry</button>
                 </div>
               </div>
