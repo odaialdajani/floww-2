@@ -140,9 +140,59 @@ async def predict_direction(
             meta = json.load(f)
         model_feature_names = meta.get("feature_names", feature_names)
 
-    # Build vector, using 0.0 for any missing features
+    # Schema drift must FAIL LOUD, not silently zero-fill.
+    #
+    # This used to be:
+    #     X = np.array([[features.get(name, 0.0) for name in model_feature_names]])
+    # Any feature the serve path did not produce became 0.0, which is a
+    # perfectly ordinary value for most of these features. A model trained on
+    # 44 features and served with 14 therefore returned a confident
+    # UP/HOLD/DOWN built partly from fabricated zeros, with nothing logged and
+    # no error raised -- the worst failure mode for a scoring surface, because
+    # the caller cannot distinguish a real prediction from a broken one.
+    #
+    # A missing feature now returns 409 naming the offenders, so a
+    # retrain/serve mismatch surfaces at the call site instead of being
+    # laundered into a number.
+    missing = [name for name in model_feature_names if name not in features]
+    if missing:
+        logger.error(
+            "ML feature schema mismatch for %s: model expects %d features, "
+            "%d absent from the serve path: %s",
+            ticker, len(model_feature_names), len(missing), missing[:10],
+        )
+        raise HTTPException(
+            409,
+            detail={
+                "error": "feature_schema_mismatch",
+                "message": (
+                    f"Model for {ticker} expects {len(model_feature_names)} features "
+                    f"but the serve path is missing {len(missing)}. Refusing to "
+                    "zero-fill: a fabricated feature yields a confident wrong "
+                    "prediction. Retrain the model or fix the feature builder."
+                ),
+                "missing_features": missing,
+                "missing_count": len(missing),
+                "expected_count": len(model_feature_names),
+            },
+        )
+
     import numpy as np
-    X = np.array([[features.get(name, 0.0) for name in model_feature_names]])
+    X = np.array([[features[name] for name in model_feature_names]], dtype=float)
+    if not np.isfinite(X).all():
+        non_finite = [
+            name for name, val in zip(model_feature_names, X[0], strict=False)
+            if not np.isfinite(val)
+        ]
+        logger.error("Non-finite ML features for %s: %s", ticker, non_finite[:10])
+        raise HTTPException(
+            409,
+            detail={
+                "error": "non_finite_features",
+                "message": f"Features for {ticker} contain NaN/inf; refusing to predict.",
+                "features": non_finite,
+            },
+        )
 
     if scaler is not None:
         X = scaler.transform(X)
