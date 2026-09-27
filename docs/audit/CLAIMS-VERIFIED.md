@@ -160,6 +160,25 @@ them would have caused harm.
   unset key degrades the paper broker, not live money. The "mismatch" was
   between docs that used different spellings for the same variable.
 
+### A fourth flaky failure that was neither mine nor a defect
+
+A final full-suite run showed **14** failures instead of 13. The extra one was
+`tests/solstice/test_r8_05_outcome_worker.py::test_r8_05_worker_is_default_disabled_at_scheduler`,
+which asserts on `inspect.getsource(server._scheduler_loop)`. It failed with
+the source of a *different function* (`_prefetch_paid_oi`).
+
+Cause: `inspect.getsource` resolves a function to source text using the code
+object's line number against the file on disk. A stale `__pycache__/server.*.pyc`
+compiled against a different `server.py` layout made the lookup land on the
+wrong lines. Clearing `__pycache__` and re-running passes. It passes in
+isolation, and it also fails intermittently on pristine `main`, where a
+different test (`test_anomaly_training`) flakes instead — both are the same
+order/cache sensitivity, not code defects.
+
+**This is a testing-hygiene trap, not a product bug.** A test that asserts on
+`getsource(...)` of a large module is coupled to that module's line numbering
+and to bytecode cache state. Nothing in it verifies behaviour.
+
 ### Lesson recorded
 
 Three of my own fixes in this branch were caught being wrong by the guards
