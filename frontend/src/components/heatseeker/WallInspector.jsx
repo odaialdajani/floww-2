@@ -18,7 +18,7 @@ function Row({ k, v, tip }) {
 }
 
 function fmtUsd(v) {
-  if (v === null || v === undefined || Number.isNaN(v)) return "—";
+  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
   const a = Math.abs(v);
   const sign = v < 0 ? "-" : "";
   if (a >= 1e9) return `${sign}$${(a / 1e9).toFixed(2)}B`;
@@ -27,7 +27,16 @@ function fmtUsd(v) {
   return `${sign}$${a.toFixed(0)}`;
 }
 
-function WallInspector({ wall = null, interaction = null, metrics = null, grids = null, quality = null, scenario = null, goneReason = null, lastWallId = null,
+function memberStrikes(wall) {
+  return [...new Set((Array.isArray(wall?.members) ? wall.members : [])
+    .filter(s=>typeof s==="number" || (typeof s==="string" && s.trim()!==""))
+    .map(Number).filter(s=>Number.isFinite(s) && s>0))];
+}
+function usableCount(value) {
+  return typeof value==="number" && Number.isSafeInteger(value) && value>=0 ? value : null;
+}
+
+function WallInspector({ wall = null, interaction = null, metrics = null, grids = null, displayGrid = null, quality = null, scenario = null, goneReason = null, lastWallId = null,
   scout = null, patterns = null, regime = null, vanna = null, moneyness = null,
   metric = "raw", snapshotId = null, replay = false }) {
   if (!wall) {
@@ -46,7 +55,7 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
       </div>
     );
   }
-  const members = wall.members || [];
+  const members = memberStrikes(wall);
   // Per-expiry contributions for member strikes from the same snapshot grids.
   const perExpiry = [];
   if (grids) {
@@ -58,7 +67,7 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
         let hit = false;
         for (const s of members) {
           const k = Number.isInteger(s) ? String(s) : String(s);
-          if (col[k] != null) { sum += col[k]; hit = true; }
+          if (typeof col?.[k] === "number" && Number.isFinite(col[k])) { sum += col[k]; hit = true; }
         }
         if (hit && !seen.has(`${name}|${exp}`)) {
           seen.add(`${name}|${exp}`);
@@ -68,6 +77,16 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
     }
   }
   const ratio = metrics?.magnitude_ratio_delta_over_raw;
+  // R8-06 blend: group by grid surface when uniform so the row reads
+  // "delta 09-28 $1.1M · 09-29 $2.2M" instead of repeating the prefix.
+  const perExpiryGroups = (() => {
+    const shown = perExpiry.slice(0, 6);
+    const names = [...new Set(shown.map((p) => p.grid))];
+    if (names.length === 1) {
+      return `${names[0]} ` + shown.map((p) => `${p.expiry.slice(5)} ${fmtUsd(p.value)}`).join(" · ");
+    }
+    return shown.map((p) => `${p.grid}:${p.expiry.slice(5)}=${fmtUsd(p.value)}`).join(" · ");
+  })();
   const pairNote = metrics
     ? `Δ usable ${metrics.dadgex_usable ?? "—"}, missing ${metrics.dadgex_missing_delta ?? "—"}`
     : "—";
@@ -89,10 +108,10 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
       <Row k="Call / Put" v={`${fmtUsd(wall.call)} / ${fmtUsd(wall.put)}`} tip="Call-plus vs put-minus components; high gross + near-zero net is two-sided concentration" />
       <Row k="Distance" v={wall.distance != null ? `${Number(wall.distance).toFixed(2)} (${(Number(wall.distance_pct) * 100).toFixed(2)}%)` : "—"} />
       {perExpiry.length > 0 && (
-        <Row k="Per-expiry" v={perExpiry.slice(0, 6).map((p) => `${p.grid}:${p.expiry.slice(5)}=${fmtUsd(p.value)}`).join(" · ")} tip="Same-snapshot per-expiry contributions for member strikes" />
+        <Row k="Per-expiry" v={perExpiryGroups} tip="Same-snapshot per-expiry contributions for member strikes" />
       )}
       <Row k="Δ/Raw (scope)" v={ratio != null ? Number(ratio).toFixed(3) : "—"} tip="Scope-wide delta gross / raw gross over the same snapshot set — not the selected wall. Wall-local ratio needs same-wall delta + raw grids." />
-      <CompareTable wall={wall} metrics={metrics} grids={grids} />
+      <CompareTable wall={wall} metrics={metrics} displayGrid={displayGrid} />
       <Row k="Δ provenance" v={pairNote} tip="Vendor/vendor, local/local eligible; mixed pairs blocked without policy" />
       <Row k="OI eff. date" v={(wall.oi_effective_dates && wall.oi_effective_dates.length ? wall.oi_effective_dates.join(", ") : null) ?? "unavailable in snapshot"} tip="Per-wall OI effective dates from member-strike provenance; unavailable when no member carries OI metadata" />
       <Row k="Changed" v={interaction ? `${interaction.state}${interaction.event ? ` · ${interaction.event}` : ""}${interaction.first_seen === false ? " · persistent" : " (first sighting — see replay compare)"}` : "see replay compare"} tip="Wall-level change needs 2+ recorded snapshots; persistent states carry continuity, first sightings do not" />
@@ -120,15 +139,16 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
  * session activity and recent-window activity. Same member contracts and
  * snapshot; each row declares basis/coverage; missing is "—", never zero.
  */
-function CompareTable({ wall, metrics, grids }) {
-  const members = wall.members || [];
+function CompareTable({ wall, metrics, displayGrid }) {
+  const members = memberStrikes(wall);
   const wb = (metrics?.wall_metrics || {})[wall.wall_id || ""];
   const wallWin = (metrics?.wall_window || {})[wall.wall_id || ""];
   // Wall-local VEX from the canonical surface (same members, same snapshot).
   let vexNet = null;
   let vexGross = null;
   let vexHit = 0;
-  const vexSection = grids && grids.grid ? grids.grid.vex_grid : null;
+  const vexSection = displayGrid?.vex_grid;
+  const vexMembers = new Set();
   if (vexSection && members.length) {
     vexNet = 0;
     vexGross = 0;
@@ -138,7 +158,7 @@ function CompareTable({ wall, metrics, grids }) {
         const v = col ? col[k] : null;
         if (typeof v === "number" && Number.isFinite(v)) {
           vexNet += v;
-          vexGross += Math.abs(v);
+          vexMembers.add(Number(s));
           vexHit += 1;
         }
       }
@@ -148,6 +168,23 @@ function CompareTable({ wall, metrics, grids }) {
       vexGross = null;
     }
   }
+  // Gross is the sum of absolute CONTRACT contributions, not absolute net
+  // cells (calls and puts can offset within one cell). Older snapshots may
+  // retain net cells only; their gross stays explicitly unavailable.
+  vexGross = null;
+  if(vexHit && Array.isArray(displayGrid?.vex_strike_gross)) {
+    const grossByStrike = new Map();
+    const duplicate = new Set();
+    for(const r of displayGrid.vex_strike_gross) {
+      const strike = Number(r?.strike);
+      if(grossByStrike.has(strike))duplicate.add(strike);
+      grossByStrike.set(strike,r?.vex_gross);
+    }
+    if([...vexMembers].every(s=>!duplicate.has(s) && typeof grossByStrike.get(s)==="number"
+       && Number.isFinite(grossByStrike.get(s)) && grossByStrike.get(s)>=0)) {
+      vexGross=[...vexMembers].reduce((sum,s)=>sum+grossByStrike.get(s),0);
+    }
+  }
   const winCov = (wallWin && wallWin.coverage) || {};
   const winNote = wallWin
     ? `${fmtUsd(wallWin.window_daddex)} · ${winCov.active_strikes ?? "—"}/${winCov.member_strikes ?? "—"} strikes`
@@ -155,24 +192,46 @@ function CompareTable({ wall, metrics, grids }) {
       ? "unavailable — volume rebase"
       : "unavailable — no comparable window");
   const cell = (v) => (v == null ? "—" : fmtUsd(v));
+  // R8-06: a zero with no usable inputs is missing data, not a measured
+  // zero — show "—" with the reason instead of $0.
+  const dUsable = usableCount(wb?.daddex_usable);
+  const dMissing = usableCount(wb?.daddex_missing);
+  const dVal = !wb ? "—"
+    : dUsable > 0 ? `${cell(wb.daddex_gross)} / ${cell(wb.daddex_net)}`
+    : dMissing > 0 ? `— (${dMissing} δ-missing)` : "—";
+  const vN = usableCount(Object.hasOwn(wb || {},"volume_usable") ? wb.volume_usable : wb?.volume_n);
+  const vMissing=usableCount(wb?.volume_missing);
+  const vInvalid=usableCount(wb?.volume_invalid);
+  const vVal = !wb ? "—"
+    : vN > 0 ? `${cell(wb.volume_gross)} / ${cell(wb.volume_net)}` : "—";
+  const vexScope = displayGrid?.vex_meta;
+  const scopeNotes = [
+    ["missing_vanna_inputs", "missing inputs"],
+    ["quarantined", "quarantined"], ["invalid_type", "invalid types"],
+  ].filter(([key])=>usableCount(vexScope?.[key])>0)
+    .map(([key,label])=>String(vexScope[key])+" "+label);
+  const vexBasis = vexHit
+    ? "local-bs-vanna.v1 · "+vexMembers.size+"/"+members.length+" member strikes · "+vexHit+
+      " cells · USD delta-notional/+1 vol point"+(vexGross == null ? " · gross unavailable" : "")+
+      (scopeNotes.length ? " · scope: "+scopeNotes.join(", ") : "")
+    : "no VEX coverage at members";
   const rows = [
     ["Raw gross / net", `${cell(wall.gross)} / ${cell(wall.net)}`, "OI · gex.v2"],
-    ["Δ gross / net", wb ? `${cell(wb.daddex_gross)} / ${cell(wb.daddex_net)}` : "—",
-      wb ? `OI Δ-weighted${wb.daddex_missing ? ` · ${wb.daddex_missing} δ-missing` : ""}` : "no wall breakdown"],
-    ["VEX gross / net", vexGross == null ? "—" : `${cell(vexGross)} / ${cell(vexNet)}`,
-      vexGross == null ? "no VEX coverage at members" : `local-bs-vanna.v1 · ${vexHit} cells`],
-    ["Session activity", wb ? `${cell(wb.volume_gross)} / ${cell(wb.volume_net)}` : "—",
-      wb ? `session volume · ${wb.volume_n ?? "—"} contracts` : "no wall breakdown"],
+    ["Δ gross / net", dVal,
+      wb ? `OI Δ-weighted · ${dUsable ?? "unknown"} usable${dMissing ? ` · ${dMissing} δ-missing` : ""}${wb.invalid ? ` · ${wb.invalid} invalid` : ""}` : "no wall breakdown"],
+    ["VEX gross / net", vexNet == null ? "—" : `${cell(vexGross)} / ${cell(vexNet)}`,
+      vexBasis],
+    ["Session activity", vVal,
+      wb ? `session volume · ${vN ?? "unknown"} usable contracts${vMissing ? ` · ${vMissing} volume missing` : ""}${vInvalid ? ` · ${vInvalid} invalid` : ""}${vMissing == null || vInvalid == null ? " · coverage details unavailable" : ""}` : "no wall breakdown"],
     ["Recent window", winNote, "window Δ-weighted · member coverage"],
   ];
   return (
-    <table data-testid="wall-compare-table" style={{ fontSize: 12, color: "#94a3b8", marginTop: 4, borderCollapse: "collapse" }}>
+    <table data-testid="wall-compare-table" className="skylit-compare-table">
       <tbody>
         {rows.map(([k, v, basis]) => (
-          <tr key={k}>
-            <td style={{ paddingRight: 8, whiteSpace: "nowrap" }}>{k}</td>
-            <td style={{ paddingRight: 8 }}>{v}</td>
-            <td style={{ opacity: 0.75 }}>{basis}</td>
+          <tr key={k} title={basis}>
+            <th scope="row"><span>{k}</span><small className="skylit-compare-basis">{basis}</small></th>
+            <td>{v}</td>
           </tr>
         ))}
       </tbody>
@@ -197,7 +256,7 @@ function InteractionTimeline({ interaction }) {
   if (interaction.beyond_since) items.push(["accepted beyond", `${interaction.beyond_side || "?"} · ${String(interaction.beyond_since).slice(0, 16).replace("T", " ")}`]);
   if (!items.length) return null;
   return (
-    <div data-testid="wall-timeline" style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
+    <div data-testid="wall-timeline" className="skylit-inspector-note">
       {items.map(([k, v], i) => (
         <div key={`${k}-${i}`}>· {k}{v ? `: ${v}` : ""}</div>
       ))}
@@ -234,7 +293,7 @@ function Readiness({ interaction, quality, scenario }) {
   const [label, reason] = readinessOf(interaction, quality, scenario);
   return (
     <div data-testid="wall-readiness" title="Deterministic readiness (not an order)"
-      style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
+      className="skylit-inspector-note">
       Readiness: <strong>{label}</strong> — {reason}
     </div>
   );
@@ -300,15 +359,15 @@ function ScoutSummary({ scout, members = [] }) {
             <div data-testid={`shortlist-${s.toLowerCase()}`}>
               {s} shortlist ({short[s].filter((r) => memberSet.has(Number(r.strike))).length}/{short[s].length} in this wall):
             </div>
-            <table style={{ borderCollapse: "collapse" }}>
+            <table className="skylit-shortlist-table">
               <tbody>
                 {short[s].map((r) => (
                   <tr key={`${s}-${r.osi}`} data-testid="shortlist-row">
-                    <td style={{ paddingRight: 6 }}>{memberSet.has(Number(r.strike)) ? "●" : "○"}</td>
-                    <td style={{ paddingRight: 6 }}>{r.osi}</td>
-                    <td style={{ paddingRight: 6 }}>{r.expiry} · Δ {r.delta}</td>
-                    <td style={{ paddingRight: 6 }}>{r.bid}×{r.ask}{r.spread_pct != null ? ` (${r.spread_pct.toFixed(1)}%)` : ""}</td>
-                    <td style={{ opacity: 0.75 }}>q {age(r.bid_ts)}/{age(r.ask_ts)}{r.tick_unknown ? " · tick unknown" : ""}</td>
+                    <td>{memberSet.has(Number(r.strike)) ? "●" : "○"}</td>
+                    <td>{r.osi}</td>
+                    <td>{r.expiry} · Δ {r.delta}</td>
+                    <td>{r.bid}×{r.ask}{r.spread_pct != null ? ` (${r.spread_pct.toFixed(1)}%)` : ""}</td>
+                    <td>q {age(r.bid_ts)}/{age(r.ask_ts)}{r.tick_unknown ? " · tick unknown" : ""}</td>
                   </tr>
                 ))}
               </tbody>

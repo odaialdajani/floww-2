@@ -3395,6 +3395,87 @@ button, select, input {
   color: #f59e0b;
 }
 
+/* R8-06 blend: save/queue rows wrap like the rest of the sidebar chrome
+   instead of stacking as full-width strangers. */
+.skylit-review-save,
+.skylit-review-queue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+/* R8-06 blend: native <select> renders as a white OS control without this —
+   match the dark terminal buttons. color-scheme keeps the popup dark too. */
+.skylit-review-select {
+  color-scheme: dark;
+  background: #0d1117;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  color: #94a3b8;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  padding: 3px 6px;
+  cursor: pointer;
+  max-width: 100%;
+}
+
+.skylit-review-select:hover {
+  color: #e2e8f0;
+  border-color: rgba(255,255,255,0.15);
+}
+
+.skylit-review-select option {
+  background: #0d1117;
+  color: #94a3b8;
+}
+
+/* R8-06 blend: inspector comparison/shortlist tables use the sidebar's
+   own typography instead of browser-default table chrome. */
+.skylit-compare-table {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 4px;
+  border-collapse: collapse;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.skylit-compare-table th,
+.skylit-compare-table td {
+  padding: 1px 8px 1px 0;
+  vertical-align: top;
+}
+
+.skylit-compare-table th {
+  font-weight: 400;
+  text-align: left;
+  width: 52%;
+  overflow-wrap: anywhere;
+}
+.skylit-compare-table td {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.skylit-compare-table td:last-child { padding-right: 0; }
+.skylit-compare-basis {
+  display: block;
+  font-size: 10px;
+  color: #8b9aaf;
+  line-height: 1.4;
+  margin-top: 2px;
+}
+.skylit-compare-table tr + tr > * { padding-top: 7px; }
+
+.skylit-inspector-note {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
 .skylit-review-reviewed {
   color: #22c55e;
 }
@@ -3592,8 +3673,9 @@ button, select, input {
 
 .skylit-metric-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 8px;
   padding: 3px 0;
 }
 
@@ -3603,12 +3685,17 @@ button, select, input {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: #64748b;
+  flex-shrink: 0;
+  padding-top: 1px;
 }
 
 .skylit-metric-value {
   font-size: 11px;
   font-weight: 700;
   font-family: "JetBrains Mono", ui-monospace, monospace;
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .skylit-metric-sub {
@@ -3616,6 +3703,44 @@ button, select, input {
   color: #475569;
   margin-left: 4px;
 }
+
+/* Keep summary prices intact; supporting totals get their own line. */
+.skylit-metrics-sidebar .skylit-metric-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+  row-gap: 0;
+}
+.skylit-metrics-sidebar .skylit-metric-value { white-space: nowrap; }
+.skylit-metrics-sidebar .skylit-metric-sub {
+  grid-column: 2;
+  text-align: right;
+  margin-left: 0;
+}
+
+/* Contract details must fit the narrow inspector without lost columns. */
+.skylit-shortlist-table {
+  width: 100%;
+  margin-top: 4px;
+  border-collapse: collapse;
+  font-size: 11px;
+  color: #94a3b8;
+}
+.skylit-shortlist-table tr {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  column-gap: 4px;
+  padding: 6px 0;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.skylit-shortlist-table td {
+  grid-column: 2;
+  min-width: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+  padding: 0;
+}
+.skylit-shortlist-table td:first-child { grid-column: 1; grid-row: 1 / 5; }
 
 .skylit-spot-box {
   margin-top: auto;

@@ -490,9 +490,11 @@ def _full_grids(payload: dict[str, Any]) -> dict[str, Any]:
     if isinstance(main, dict):
         section: dict[str, Any] = {"exposure_basis": main.get("exposure_basis", "OI"),
                                    "formula_version": main.get("formula_version", "gex.v2")}
-        for k in ("grid", "charm_grid", "vex_grid", "vomma_grid"):
+        for k in ("grid", "charm_grid", "vex_grid", "vomma_grid", "vex_meta"):
             if isinstance(main.get(k), dict):
                 section[k] = main[k]
+        if isinstance(main.get("vex_strike_gross"), list):
+            section["vex_strike_gross"] = main["vex_strike_gross"]
         _axes(section)
         out["grid"] = section
     grids = ((payload.get("metrics") or {}).get("grids")) or {}

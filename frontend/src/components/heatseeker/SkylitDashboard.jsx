@@ -81,7 +81,7 @@ function SelectedWallBlock({ data, spot, selectedCell, metric = "raw", replay = 
   return (
     <>
       <WallInspector
-        wall={wall} interaction={interaction} metrics={data.metrics} grids={data.metrics?.grids}
+        wall={wall} interaction={interaction} metrics={data.metrics} grids={data.metrics?.grids} displayGrid={data.grid}
         quality={data.quality} scenario={scenarios[0]}
         scout={data.scout} patterns={data.patterns_v1} regime={data.gamma_regime_v1}
         vanna={data.vanna_v1} moneyness={data.moneyness} metric={metric}
@@ -776,6 +776,7 @@ function SkylitDashboard({
                 </button>
               ))}
               <select data-testid="skylit-review-reason" value={reviewReason}
+                className="skylit-review-select"
                 title="Reason recorded with the review"
                 onChange={(e) => setReviewReason(e.target.value)}>
                 <option value="">reason…</option>

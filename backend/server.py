@@ -1010,6 +1010,7 @@ def _display_surfaces(spot: float, contracts: list[dict[str, Any]], ticker: str,
     def _with_vex(grid: dict) -> dict:
         try:
             grid["vex_grid"] = _vg.get("grid", {})
+            grid["vex_strike_gross"] = _vg.get("strike_gross", [])
             grid["vex_meta"] = {"exposure_basis": _vg.get("exposure_basis"),
                                 "model": _vg.get("model"),
                                 "status": _vg.get("status"),

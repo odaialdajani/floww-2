@@ -808,3 +808,21 @@ test("open history blocks research through loading and live refresh; close uses 
  expect(screen.getByText("Price chart + historical nodes")).toHaveAttribute("aria-expanded","true");
  expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({ticker:"QQQ",displayMode:"price-history",mapVersion:null});
 });
+
+
+test('selected wall receives the current VEX surface and separate contract gross',async()=>{
+ const base=selectionMap();
+ const payload={...base,grid:{...base.grid,vex_grid:{'2026-09-18':{'650':0}},
+    vex_strike_gross:[{strike:650,vex_gross:400}],vex_meta:{status:'ok'}},
+   metrics:{walls:[{wall_id:'selected',low:650,high:650,members:[650],gross:1000,net:1000}],grids:{}}};
+ const mounted=render(<SkylitDashboard ticker="SPY" data={payload} spot={650}/>);
+ fireEvent.click(screen.getByTestId('mock-heatmap-cell'));
+ expect(screen.getByText('VEX gross / net').closest('tr').textContent).toContain('$400 / $0');
+ const next={...payload,grid:{...payload.grid,vex_grid:{'2026-09-18':{'650':25}},vex_strike_gross:[{strike:650,vex_gross:525}]}};
+ mounted.rerender(<SkylitDashboard ticker="SPY" data={next} spot={650}/>);
+ expect(screen.getByText('VEX gross / net').closest('tr').textContent).toContain('$525 / $25');
+ const old={...payload,grid:{...payload.grid}};delete old.grid.vex_strike_gross;
+ mounted.rerender(<SkylitDashboard ticker="SPY" data={old} spot={650}/>);
+ expect(screen.getByText('VEX gross / net').closest('tr').textContent).toContain('— / $0');
+ await act(async()=>{});
+});
