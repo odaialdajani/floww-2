@@ -99,6 +99,27 @@ One assertion in the first draft was wrong, not the code: it expected
 (`return []` plus a log line) — correct, since a journal read must never 500
 the request path. The test now pins the real contract.
 
+**Second gap, found by mutation testing after this ledger was written.** The
+restart tests above bind their own `duckdb.connect` to a temp file, so they
+exercise the *store* — not the engine production actually uses. Replacing
+
+```python
+path = os.environ.get("DUCKDB_PATH", ":memory:") or ":memory:"
+```
+
+in `services/duckdb_engine.py::_open_shared_db` with `path = ":memory:"`, so the
+configured path is ignored and every save silently becomes non-durable, left the
+**full** backend suite green (5467 passed, 68 skipped). Nothing guarded the one
+switch that decides whether a saved review survives a restart, which is exactly
+the property this row claims.
+
+Closed by `backend/tests/services/test_duckdb_engine_durability.py` (9 tests),
+asserted behaviorally because `DuckDBEngine` exposes no `path` attribute — a
+file on disk after `CHECKPOINT` is the only observable proof a path was honored.
+9 pass unmutated; 4 fail with `DUCKDB_PATH` ignored. The unusable-path branch
+also asserts the fallback is **logged**, because a silent durability downgrade is
+the failure mode this release exists to prevent.
+
 Mounted-path check, against a throwaway instance on `:8010` with
 `API_SECRET_KEY` set (the running `:8000` has none):
 
