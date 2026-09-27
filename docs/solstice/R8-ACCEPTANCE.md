@@ -139,9 +139,12 @@ page yields near-uniform images) and by direct inspection. Dark styling, single
 grid, palette, density, strike rail, expiry columns and controls are unchanged,
 as the brief requires.
 
-Note: the `movers-populated.png`, `prod-gex.png`, `prod-vex.png`,
-`solstice-desktop.png` and `blend-inspector.png` files are older captures and
-are NOT evidence for this head.
+Note: five older captures (`solstice-desktop.png`, `prod-gex.png`,
+`prod-vex.png`, `movers-populated.png`, `blend-inspector.png`) were moved to
+`docs/solstice/r8-shots/older-heads/` on 2026-09-27. They are NOT evidence for
+this head and must not be cited for any acceptance claim. They were kept rather
+than deleted because `RECONCILIATION.md` cites `prod-gex`/`prod-vex` as the
+live-pixel verification for PR #50.
 
 ## What this release does not claim
 
@@ -164,11 +167,13 @@ node capture-solstice.mjs   # needs playwright-core + a local Chrome binary
 
 ## Open items
 
-1. `docs/solstice/SHOTS.md` still cites head `36872db7` and references a
-   `RUN_STATE` file that does not exist. This ledger supersedes it; the header
-   should be updated to point here rather than at a stale head.
-2. The five older captures listed above should be dropped or re-shot so the
-   directory does not imply they belong to this head.
+1. ~~`SHOTS.md` cites a stale head and a nonexistent `RUN_STATE`~~ — RESOLVED
+   2026-09-27: `r8-shots/SHOTS.md` rewritten to name `main@71f83625`, point at
+   this ledger, and point at the capture command. The dangling `RUN_STATE`
+   reference is gone.
+2. ~~Older captures could be read as current~~ — RESOLVED 2026-09-27: moved to
+   `r8-shots/older-heads/` with a README stating they are not evidence for this
+   head. Re-shooting them remains optional.
 3. `API_SECRET_KEY` is unset locally, so the in-browser Save control cannot
    round-trip until a key is configured for the local stack. Verified working
    with a key; not verified in the running `:8000` UI, which has none.

@@ -32,11 +32,14 @@ repo dependency changes. The script uses CDP `Page.captureScreenshot` because
 | inspector-desktop.png | 1600×900 | Grid cell selected, full app with sidebar + status strip | yes |
 | compare-desktop.png | 1600×900 | GEX+VEX compare desk, independent panes and scales | yes |
 | single-narrow.png | 390×844 | Single grid stacked, readable, no overlap | yes |
-| solstice-desktop.png | 1600×900 | Solstice single grid, live SPY chain | **no — older head** |
-| prod-gex.png | 1600×900 | Production stack, GEX tab | **no — older head** |
-| prod-vex.png | 1600×900 | Production stack, VEX tab | **no — older head** |
-| movers-populated.png | 1600×900 | Top Movers populated live | **no — older head** |
-| blend-inspector.png | 1600×900 | Inspector blend pass | **no — older head** |
+| older-heads/solstice-desktop.png | 1600×900 | Solstice single grid, live SPY chain | **no — older head** |
+| older-heads/prod-gex.png | 1600×900 | Production stack, GEX tab | **no — older head** |
+| older-heads/prod-vex.png | 1600×900 | Production stack, VEX tab | **no — older head** |
+| older-heads/movers-populated.png | 1600×900 | Top Movers populated live | **no — older head** |
+| older-heads/blend-inspector.png | 1600×900 | Inspector blend pass | **no — older head** |
+
+The five `older-heads/` files were moved out of this directory on 2026-09-27 so
+they cannot be mistaken for current-head evidence. See their README.
 
 Data is live vendor chain, so cell values are layout receipts, not reproducible
 fixtures. Mounted jsdom tests pin values; these pin layout, density and
