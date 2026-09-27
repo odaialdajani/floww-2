@@ -12,7 +12,9 @@ docker compose -f docker-compose.observability.yml up -d
 This starts:
 - **Prometheus** — http://localhost:9090 (metrics storage + alerting)
 - **Alertmanager** — http://localhost:9093 (alert routing to webhooks)
-- **Grafana** — http://localhost:3000 (dashboards, admin/admin)
+- **Grafana** — http://localhost:3001 (dashboards, admin/admin)
+  (host 3001, not 3000: `docker-compose.yml` already publishes the dev frontend
+  on 3000, and this stack is meant to run alongside it)
 
 ### Verify the stack is healthy
 

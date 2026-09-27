@@ -1,4 +1,12 @@
 version: "3.9"
+# Volume paths are relative to THIS compose file, which lives at the repo
+# root. These six mounts previously used `../prometheus/` and `../grafana/`,
+# pointing at the repo's PARENT directory, where neither directory exists --
+# so every one of them resolved to a directory docker would silently create
+# empty, and Prometheus/Grafana started with no config at all. The other two
+# stacks in this repo already used repo-relative paths; this one was the only
+# outlier. `docker compose config` is the check that would have caught it.
+
 
 services:
   prometheus:
@@ -7,8 +15,8 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ../prometheus/alerts:/etc/prometheus/alerts:ro
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts:/etc/prometheus/alerts:ro
       - prometheus-data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -24,7 +32,7 @@ services:
     ports:
       - "9093:9093"
     volumes:
-      - ../prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - alertmanager-data:/alertmanager
     command:
       - "--config.file=/etc/alertmanager/alertmanager.yml"
@@ -37,16 +45,21 @@ services:
     image: grafana/grafana:11.6.0
     container_name: floww-grafana
     ports:
-      - "3000:3000"
+      # Host 3001, not 3000. docker-compose.yml publishes the dev frontend on
+      # 3000, and RUNBOOK.md tells you to bring this stack up alongside the
+      # app, so Grafana on 3000 made the second `up` fail to bind. The
+      # in-container port stays 3000 (Grafana's default); only the host side
+      # moves. 3001 was free across all three stacks.
+      - "3001:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana-data:/var/lib/grafana
-      - ../grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
-      - ../grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     restart: unless-stopped
     depends_on:
       - prometheus
