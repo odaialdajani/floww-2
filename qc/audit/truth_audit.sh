@@ -153,9 +153,16 @@ fi
 # every real production model unchecked, while printing PASS.
 #
 # Discover BOTH trees and BOTH naming conventions, once, here.
+# `*_manifest.json` is a THIRD convention actually present in this repo and was
+# missing here, which left 76 of 84 descriptors uninspected -- including
+# models/SPY_gbm_production_manifest.json (53 features / 167 samples, ratio
+# 0.3174) in the directory the live loader actually reads. The metric extractor
+# below already handles this schema: n_samples and n_features are top-level, and
+# `first()` picks them up without a fold_details block.
 MODEL_METAS=$(
     find models backend/models -maxdepth 2 -type f \
-        \( -name '*_meta_*.json' -o -name '*_meta.json' -o -name 'meta_*.json' \) \
+        \( -name '*_meta_*.json' -o -name '*_meta.json' -o -name 'meta_*.json' \
+        -o -name '*_manifest.json' \) \
         2>/dev/null | grep -v '_quarantine' || true
 )
 if [ -z "$MODEL_METAS" ]; then
