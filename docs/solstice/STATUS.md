@@ -2,9 +2,9 @@
 
 > **Current state, 27 Sep 2026 — supersedes the "open PR" lines below.**
 > All work described in this file is merged: #13, #19, #55, #56, #12, #5, #58,
-> #54, #59, #60, #61, #62, #63, #64, #65, #66, #67, #68, #70 (and #3, #4, #57
-> — see below). Zero open PRs.
-> `origin/main` = `70265385`. Cumulative verification on that tree:
+> #54, #59, #60, #61, #62, #63, #64, #65, #66, #67, #68, #69, #70 (and #3, #4,
+> #57 — see below). Zero open PRs.
+> `origin/main` = `5dcb8774`. Cumulative verification on that tree:
 > **6500 backend passed / 0 failed** in CI (6467 before `91c7c032` added 28 and
 > #70 added 5),
 > **105
@@ -42,8 +42,12 @@
 > #68 added the missing `pytest-rerunfailures`, which had left
 > `@pytest.mark.flaky` inert on 8 tests, and seeded the one test that actually
 > flaked: `test_overfit_small_dataset` cleared its 0.01 loss threshold in only
-> 119 of 120 unseeded runs. Verified in CI — the wheel resolves and all
-> 6467 tests pass with the plugin active.
+> 119 of 120 unseeded runs. Verified in CI — the wheel resolves and the suite
+> passes with the plugin active.
+> #69 is this file's own refresh: it corrected the truth-audit count (which is
+> checkout-dependent, see above), the silent-except file count after
+> `91c7c032`, the frontend and backend test totals, and the frozen-file
+> re-check on the merge.
 > Concurrent with #67/#68, `91c7c032` (market-data closed-session prices and
 > option readings) landed on main via merge `1398fa45`. The frozen-file guard
 > was re-checked on that tree: the `skylit` allowlist in `frontend/src/App.js`
