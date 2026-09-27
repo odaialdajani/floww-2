@@ -2,11 +2,14 @@
 
 > **Current state, 27 Sep 2026 — supersedes the "open PR" lines below.**
 > All work described in this file is merged: #13, #19, #55, #56, #12, #5, #58,
-> #54, #59, #60, #61, #62, #63, #64, #65, #66, #67, #68 (and #3, #4, #57 — see
-> below). Zero open PRs.
-> `origin/main` = `1398fa45`. Cumulative verification on that tree:
-> **6467 backend passed / 0 failed** in CI, **103
-> frontend suites / 910 tests passed**, silent-except gate OK (**332** files
+> #54, #59, #60, #61, #62, #63, #64, #65, #66, #67, #68, #70 (and #3, #4, #57
+> — see below). Zero open PRs.
+> `origin/main` = `70265385`. Cumulative verification on that tree:
+> **6500 backend passed / 0 failed** in CI (6467 before `91c7c032` added 28 and
+> #70 added 5),
+> **105
+> frontend suites / 918 tests passed** (was 103/910 until `91c7c032` added
+> frontend tests), silent-except gate OK (**332** files
 > scanned; **54** gate self-tests pass: 27 for the silent-except gate plus 27 for
 > `truth_audit.sh`, which had none until #62 added 21; the file count moved from
 > 330 to 332 because `91c7c032` added two service modules), API docs up to date
@@ -31,6 +34,11 @@
 > #67 extended the DuckDB ignore rules to the SQLite runtime stores under
 > `backend/data/`, which the repo-root-anchored `data/*.duckdb` patterns had
 > never matched.
+> #70 mutation-proved that half of the completed-session bar guard in
+> `services/public_session_close.py` (`0 < bar['l']` and `bar['v'] >= 0`) was
+> unpinned: weakening `0 < bar['l']` left all 26 tests in
+> `tests/services/test_live_app_repairs.py` green. Now covered by
+> `test_implausible_bar_fields_fail_closed`.
 > #68 added the missing `pytest-rerunfailures`, which had left
 > `@pytest.mark.flaky` inert on 8 tests, and seeded the one test that actually
 > flaked: `test_overfit_small_dataset` cleared its 0.01 loss threshold in only
