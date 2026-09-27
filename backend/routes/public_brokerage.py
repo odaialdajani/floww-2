@@ -28,6 +28,7 @@ from routes/public_api.py.
 from __future__ import annotations
 
 import logging
+import math
 import os
 from typing import Any
 
@@ -75,6 +76,25 @@ def _parse_money(value: Any) -> float:
         except (ValueError, TypeError):
             return 0.0
     return 0.0
+
+
+def _optional_number(value: Any) -> float | None:
+    """Preserve unavailable amounts and fractional quantities in account reads."""
+    if value is None or isinstance(value, bool) or (isinstance(value, str) and not value.strip()):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _first_present(*values):
+    return next((value for value in values if value is not None), None)
+
+
+def _mapping(value):
+    return value if isinstance(value, dict) else {}
 
 
 def _parse_int(value: Any) -> int:
@@ -131,90 +151,47 @@ async def get_portfolio(_: bool = Depends(require_api_key)) -> dict[str, Any]:
             "message": f"Public.com API error: {exc}",
         }) from exc
 
-    # Flatten positions into a clean list the frontend can render directly.
-    # The adapter returns raw objects with string fields — normalize to numbers.
+    # Preserve the broker's unknown values; never fabricate a zero holding or gain.
     positions: list[dict[str, Any]] = []
     for pos in (portfolio.positions or []):
-        try:
-            raw = getattr(pos, "raw", {}) or {}
-            if not isinstance(raw, dict):
-                raw = {}
-            instrument = getattr(pos, "instrument", {}) or {}
-            if not isinstance(instrument, dict):
-                instrument = {}
+        raw = _mapping(getattr(pos, "raw", None))
+        instrument = _mapping(getattr(pos, "instrument", None))
+        cost_basis = _optional_number(_first_present(
+            getattr(pos, "total_cost", None), getattr(pos, "cost_basis", None), _mapping(raw.get("costBasis")).get("totalCost"),
+            _mapping(instrument.get("costBasis")).get("totalCost")))
+        current_value = _optional_number(_first_present(
+            getattr(pos, "market_value", None), getattr(pos, "current_value", None), raw.get("currentValue"), instrument.get("currentValue")))
+        pnl = current_value - cost_basis if current_value is not None and cost_basis is not None else None
+        pnl = _optional_number(_first_present(getattr(pos, "pnl", None), pnl))
+        day_gain = _first_present(getattr(pos, "position_daily_gain", None), raw.get("positionDailyGain"))
+        day_gain_pct = _optional_number(_first_present(getattr(pos, "day_gain_pct", None), day_gain.get("gainPercentage") if isinstance(day_gain, dict) else day_gain))
+        total_gain_pct = _optional_number(pnl / cost_basis * 100) if pnl is not None and cost_basis else None
+        total_gain_pct = _optional_number(_first_present(getattr(pos, "pnl_pct", None), total_gain_pct))
+        positions.append({
+            "symbol": getattr(pos, "symbol", "") or instrument.get("symbol", ""),
+            "name": getattr(pos, "name", "") or instrument.get("name", ""),
+            "quantity": _optional_number(_first_present(
+                getattr(pos, "quantity", None), raw.get("quantity"), instrument.get("quantity"))),
+            "current_price": _optional_number(_first_present(
+                getattr(pos, "last_price", None), raw.get("lastPrice"),
+                _mapping(instrument.get("lastPrice")).get("lastPrice"))),
+            "market_value": current_value,
+            "cost_basis": cost_basis,
+            "day_gain_pct": day_gain_pct,
+            "total_gain_pct": total_gain_pct,
+            "pnl": pnl,
+            "asset_type": getattr(pos, "instrument_type", None) or instrument.get("type") or "UNKNOWN",
+            "bid": _optional_number(raw.get("bid")),
+            "ask": _optional_number(raw.get("ask")),
+        })
 
-            cost_basis = _parse_money(
-                getattr(pos, "cost_basis", None)
-                or (raw.get("costBasis", {}) or {}).get("totalCost")
-                or (instrument.get("costBasis", {}) or {}).get("totalCost")
-            )
-            current_value = _parse_money(
-                getattr(pos, "current_value", None)
-                or raw.get("currentValue")
-                or (instrument.get("currentValue") if isinstance(instrument, dict) else None)
-            )
-            pnl = current_value - cost_basis
-
-            day_gain_raw = (
-                getattr(pos, "position_daily_gain", None)
-                or raw.get("positionDailyGain")
-                or {}
-            )
-            if isinstance(day_gain_raw, dict):
-                day_gain_pct = _parse_money(day_gain_raw.get("gainPercentage"))
-            else:
-                day_gain_pct = _parse_money(day_gain_raw)
-
-            instrument_type = (
-                instrument.get("type", "EQUITY") if isinstance(instrument, dict) else "EQUITY"
-            )
-
-            positions.append({
-                "symbol": (
-                    getattr(pos, "symbol", "")
-                    or (instrument.get("symbol") if isinstance(instrument, dict) else "")
-                ),
-                "name": (
-                    getattr(pos, "name", "")
-                    or (instrument.get("name") if isinstance(instrument, dict) else "")
-                ),
-                "quantity": _parse_int(
-                    getattr(pos, "quantity", None)
-                    or raw.get("quantity")
-                    or (instrument.get("quantity") if isinstance(instrument, dict) else None)
-                ),
-                "current_price": _parse_money(
-                    getattr(pos, "last_price", None)
-                    or (raw.get("lastPrice") if isinstance(raw, dict) else None)
-                    or ((instrument.get("lastPrice") or {}).get("lastPrice") if isinstance(instrument, dict) else None)
-                ),
-                "market_value": current_value,
-                "cost_basis": cost_basis,
-                "day_gain_pct": day_gain_pct,
-                "total_gain_pct": (pnl / cost_basis * 100) if cost_basis else 0,
-                "pnl": pnl,
-                "asset_type": instrument_type,
-                "bid": _parse_money(
-                    getattr(pos, "current_price", None)
-                    or (raw.get("bid") if isinstance(raw, dict) else None)
-                ),
-                "ask": _parse_money(
-                    getattr(pos, "current_price", None)
-                    or (raw.get("ask") if isinstance(raw, dict) else None)
-                ),
-            })
-        except Exception as pos_exc:
-            log.debug("Skipping malformed position: %s (%s)", pos, pos_exc)
-            continue
-
-    positions.sort(key=lambda p: abs(p["market_value"]), reverse=True)
+    positions.sort(key=lambda p: (p["market_value"] is not None, abs(p["market_value"] or 0)), reverse=True)
 
     # Account-level money fields live on Portfolio, not Account.
-    # Account is just identity (account_id, permissions, etc.).
-    buying_power = _parse_money(getattr(portfolio, "buying_power", 0))
-    cash = _parse_money(getattr(portfolio, "cash", 0))
-    options_buying_power = _parse_money(getattr(portfolio, "options_buying_power", 0))
-    total_account_value = _parse_money(getattr(portfolio, "total_account_value", 0))
+    buying_power = _optional_number(getattr(portfolio, "buying_power", None))
+    cash = _optional_number(getattr(portfolio, "cash", None))
+    options_buying_power = _optional_number(getattr(portfolio, "options_buying_power", None))
+    total_account_value = _optional_number(getattr(portfolio, "total_account_value", None))
 
     return {
         "ok": True,
@@ -222,8 +199,8 @@ async def get_portfolio(_: bool = Depends(require_api_key)) -> dict[str, Any]:
         "buying_power": buying_power,
         "options_buying_power": options_buying_power,
         "cash": cash,
-        "initial_margin": _parse_money(getattr(account, "initial_margin", 0)),
-        "maintenance_margin": _parse_money(getattr(account, "maintenance_margin", 0)),
+        "initial_margin": _optional_number(getattr(account, "initial_margin", None)),
+        "maintenance_margin": _optional_number(getattr(account, "maintenance_margin", None)),
         "portfolio_value": total_account_value,
         "positions": positions,
         "position_count": len(positions),

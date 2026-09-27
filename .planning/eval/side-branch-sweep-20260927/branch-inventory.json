@@ -1,0 +1,1120 @@
+{
+  "remoteBranches": [
+    {
+      "sha": "8ed71c2857030fc2e132c160e4b65763d175379d",
+      "ref": "refs/heads/a3/alert-engine-badges"
+    },
+    {
+      "sha": "9eb5e7d567f56180a25723bb07b363a0562149a5",
+      "ref": "refs/heads/a3/alert-surfacing"
+    },
+    {
+      "sha": "f7bc499eaa2a7f39837f74d839ebfb1dac976bdf",
+      "ref": "refs/heads/a3/pr48-semantic-fixes"
+    },
+    {
+      "sha": "7d3d75c58c9baa254922770177fdf27c88e23aee",
+      "ref": "refs/heads/a3/xh1-proxy-labels"
+    },
+    {
+      "sha": "77bb638952cc0e3b7cb7c6e8b6e2f52863204be4",
+      "ref": "refs/heads/agent1/head-freeze-rule"
+    },
+    {
+      "sha": "e4872d241db8bc550dafee1b0df4ff872782a08b",
+      "ref": "refs/heads/agent1/prompt-refine-v5"
+    },
+    {
+      "sha": "b361ad3e9e62f1330aa73bb698252df913e51349",
+      "ref": "refs/heads/agent1/review-receipts"
+    },
+    {
+      "sha": "306f1e604bdb52448a4b78f266bbca8c2532d4f9",
+      "ref": "refs/heads/agent2/calib-registry"
+    },
+    {
+      "sha": "d8af97bb481fe39ce0cc3d415de36709523c9fdf",
+      "ref": "refs/heads/agent2/composite-truth"
+    },
+    {
+      "sha": "a364128155c2b1db06af6ce84ffa87aa21140c2b",
+      "ref": "refs/heads/agent2/data-contract"
+    },
+    {
+      "sha": "eba1ee979f4473c9b3228adbe92a8d948f8635b1",
+      "ref": "refs/heads/agent2/eval-harness"
+    },
+    {
+      "sha": "f489bf5f03614505422289f36470a3439566de97",
+      "ref": "refs/heads/agent2/exec-recon"
+    },
+    {
+      "sha": "7068e1cd2847c564e206fd5af586439ae6bd2c18",
+      "ref": "refs/heads/agent2/fetched-at-pipeline"
+    },
+    {
+      "sha": "008e31b95f7076e1fe1da143055918ecc854b658",
+      "ref": "refs/heads/agent2/fetched-at-pipeline-v2"
+    },
+    {
+      "sha": "e65111b1abee90f9d174183e12aa2024bf8544d8",
+      "ref": "refs/heads/agent2/vex-parity"
+    },
+    {
+      "sha": "11283188225668fa5ed76ab4e86f2755d2a609ba",
+      "ref": "refs/heads/agent2/wave1"
+    },
+    {
+      "sha": "8e30a600f1a5b6d6f8232d10acfe7274130a0de0",
+      "ref": "refs/heads/agent3/t1-scroller-fix"
+    },
+    {
+      "sha": "9289775681cf9c8b93e5e7f8895c1d6366af0952",
+      "ref": "refs/heads/agent3/t1-scroller-fix-v2"
+    },
+    {
+      "sha": "c724d2644a2b3b93028633eecff65fce8d180bf4",
+      "ref": "refs/heads/architect/20260906-recovery-control-plane-v2"
+    },
+    {
+      "sha": "14041afcdc3986918428287793e56bbd0fb4d606",
+      "ref": "refs/heads/architect/20260908-evidence-control-v3"
+    },
+    {
+      "sha": "a35d9a45552b8678ec47d8b2eec84c6b4b7a5ff5",
+      "ref": "refs/heads/architect/20260910-recovery-harness-v5"
+    },
+    {
+      "sha": "f7bb35f6cccb5cd523ca2cede3acfa2ece547f7c",
+      "ref": "refs/heads/architect/dependency-p2-v1"
+    },
+    {
+      "sha": "c4970a53c5f93079f81e279e74d3ecee48f88b77",
+      "ref": "refs/heads/architect/order-safety-v1"
+    },
+    {
+      "sha": "7481f727cdbf826145190a6ada2668666c34a191",
+      "ref": "refs/heads/architect/pr48-semantic-main-v1"
+    },
+    {
+      "sha": "b5f9ae5d99a4d502efdaf1d0c4d8386c2fa9b0d0",
+      "ref": "refs/heads/archive/20260907-g1-recovery"
+    },
+    {
+      "sha": "0fed14a3713690729f7284b63fbb9aada1f00238",
+      "ref": "refs/heads/archive/floww-final-sync/audit/gex-gamma-correctness"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/chore/mypy-consolidate-overrides"
+    },
+    {
+      "sha": "0bb6ffc178c4f84560716a35dabbd04f4cab0226",
+      "ref": "refs/heads/archive/floww-final-sync/feat/skylit-absorb-heatseeker-panels"
+    },
+    {
+      "sha": "3fc6d41f9f6d5a270261b350b2a3b3a716e5997d",
+      "ref": "refs/heads/archive/floww-final-sync/feature/ml-real-data-spy"
+    },
+    {
+      "sha": "ada23412f3902557500bce822f6707d73a32a73a",
+      "ref": "refs/heads/archive/floww-final-sync/fix/skylit-panel-bugs"
+    },
+    {
+      "sha": "ef360ef7b9fca36508df2c0898fe14b9de5e05b7",
+      "ref": "refs/heads/archive/floww-final-sync/main"
+    },
+    {
+      "sha": "948ddd2e00cbb94fb95224aaa30fb74929fd1937",
+      "ref": "refs/heads/archive/floww-final-sync/ml/v5-real-data-training"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/backend-databento_provider"
+    },
+    {
+      "sha": "f1df8a728c8e198f31ddc0e566a780358dbbd6b9",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/scripts-16-error-batch"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/scripts-17-error-batch"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/scripts-20-batch"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/scripts-3-more-small"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/scripts-4-error-batch"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/scripts-5-error-batch"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/scripts-5-more-small"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/scripts-backfill_yfinance"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/scripts-consolidate_memory_daily"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/scripts-load_test_dashboard"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/scripts-predict_throughput"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/scripts-prune_trading_memory"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/scripts-train_production"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/scripts-train_spy_regime_enhanced"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/scripts-walkforward_backtest_spy"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/services-alert_dispatcher"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/services-circuit_breaker"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/services-execution_engine"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/services-flowseeker"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/services-hawkes_process"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/services-liquidity_metrics"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/services-node_lifecycle"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/services-numba_greeks"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/services-slo_tracker"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/services-stochastic_vol"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/services-trinity_alignment"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-final-sync/mypy/services-vpin_engine"
+    },
+    {
+      "sha": "0fed14a3713690729f7284b63fbb9aada1f00238",
+      "ref": "refs/heads/archive/floww-local/audit/gex-gamma-correctness"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/chore/mypy-consolidate-overrides"
+    },
+    {
+      "sha": "0bb6ffc178c4f84560716a35dabbd04f4cab0226",
+      "ref": "refs/heads/archive/floww-local/feat/skylit-absorb-heatseeker-panels"
+    },
+    {
+      "sha": "3fc6d41f9f6d5a270261b350b2a3b3a716e5997d",
+      "ref": "refs/heads/archive/floww-local/feature/ml-real-data-spy"
+    },
+    {
+      "sha": "ada23412f3902557500bce822f6707d73a32a73a",
+      "ref": "refs/heads/archive/floww-local/fix/skylit-panel-bugs"
+    },
+    {
+      "sha": "948ddd2e00cbb94fb95224aaa30fb74929fd1937",
+      "ref": "refs/heads/archive/floww-local/ml/v5-real-data-training"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/backend-databento_provider"
+    },
+    {
+      "sha": "f1df8a728c8e198f31ddc0e566a780358dbbd6b9",
+      "ref": "refs/heads/archive/floww-local/mypy/scripts-16-error-batch"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/scripts-17-error-batch"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/scripts-20-batch"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/scripts-3-more-small"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/scripts-4-error-batch"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/scripts-5-error-batch"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/scripts-5-more-small"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/scripts-backfill_yfinance"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/scripts-consolidate_memory_daily"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/scripts-load_test_dashboard"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/scripts-predict_throughput"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/scripts-prune_trading_memory"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/scripts-train_production"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/scripts-train_spy_regime_enhanced"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/scripts-walkforward_backtest_spy"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/services-alert_dispatcher"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/services-circuit_breaker"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/services-execution_engine"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/services-flowseeker"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/services-hawkes_process"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/services-liquidity_metrics"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/services-node_lifecycle"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/services-numba_greeks"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/services-slo_tracker"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/services-stochastic_vol"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/services-trinity_alignment"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/archive/floww-local/mypy/services-vpin_engine"
+    },
+    {
+      "sha": "87c628316977b2c6c33f722348cbd1b65d181894",
+      "ref": "refs/heads/archive/origin/phase9/agent2-flowseeker"
+    },
+    {
+      "sha": "a81a04c3a0dc8c37b0941fd1748fe66ee9584ca3",
+      "ref": "refs/heads/astra/a3-clean"
+    },
+    {
+      "sha": "a4952dc69ed9e9d535566bfc526d0fc17251abe9",
+      "ref": "refs/heads/astra/a3-conviction-wiring"
+    },
+    {
+      "sha": "b1fad090a86355e391378ae7fc807c7ca160ef59",
+      "ref": "refs/heads/astra/agent2-signal-truth"
+    },
+    {
+      "sha": "99128631341cd51af016802495a4d9ad8200b00c",
+      "ref": "refs/heads/astra/bugfix-gex-expiry"
+    },
+    {
+      "sha": "65760c13963b71535377ad69813c287ff5bf62c1",
+      "ref": "refs/heads/astra/c4-doc-hygiene"
+    },
+    {
+      "sha": "06dfd2e29b7dd903f1f9599faf33f7060898ecc6",
+      "ref": "refs/heads/astra/cleanup-dead-code"
+    },
+    {
+      "sha": "19b4f17debabae5f69693375dfdcbbe66b8df1cd",
+      "ref": "refs/heads/astra/d7-clean"
+    },
+    {
+      "sha": "6b408204b3e578bd0ad25bf4a295e8004a976fc4",
+      "ref": "refs/heads/astra/d7-contract-parity"
+    },
+    {
+      "sha": "3e5bbd4df03262a5a676fba30b86930533ca5302",
+      "ref": "refs/heads/astra/f0-honesty-backend"
+    },
+    {
+      "sha": "bffa5deb78259b9c2c9598480f1eb05012215ed2",
+      "ref": "refs/heads/astra/g3-paper-loop"
+    },
+    {
+      "sha": "cb5952a1c5cba1e431f1b76f16265c5ef93b6855",
+      "ref": "refs/heads/astra/gamma-flip-alerts"
+    },
+    {
+      "sha": "a6b2aa0a45720e88a9c71ae87fd32bb7bf3910ba",
+      "ref": "refs/heads/astra/gamma-vanna-vec"
+    },
+    {
+      "sha": "a09e040733c3107937542d6308d973e13f699b05",
+      "ref": "refs/heads/astra/h1-strike-truth"
+    },
+    {
+      "sha": "bd060069b8951e19ff0a3b5d4f66ae6d096dba96",
+      "ref": "refs/heads/astra/h2-provider-cost"
+    },
+    {
+      "sha": "967aa0a5b26ca6f777fc2062faa99caf1817a469",
+      "ref": "refs/heads/astra/honesty-citations"
+    },
+    {
+      "sha": "a009e6faba8979d151b474d458cedf64bb606a36",
+      "ref": "refs/heads/astra/honesty-labels"
+    },
+    {
+      "sha": "65a952e8bc6c0e6c2d12ffdf0e12f36d24e4df06",
+      "ref": "refs/heads/astra/numba-greeks"
+    },
+    {
+      "sha": "377dfa5822472f8e43029d5c8dbcc3984a420cea",
+      "ref": "refs/heads/astra/p1-clean"
+    },
+    {
+      "sha": "53b076cbe978db58ed9cd0af51242467c506272e",
+      "ref": "refs/heads/astra/p1-silent-except"
+    },
+    {
+      "sha": "830c8424d510121153a36d29a1c68f53f88e4ea9",
+      "ref": "refs/heads/astra/sparse-chain-public"
+    },
+    {
+      "sha": "d0de8c08af548deba3af739106217d819c1a102b",
+      "ref": "refs/heads/astra/sparse-chain-v2"
+    },
+    {
+      "sha": "c82856f093124eac1c86c94a0c0da08abbd36523",
+      "ref": "refs/heads/astra/t1-only"
+    },
+    {
+      "sha": "9482ac6b39dd02480f98fe156cd2bfcc10739b5d",
+      "ref": "refs/heads/astra/t1-scroller-v1"
+    },
+    {
+      "sha": "88b9b9b98c8c7e6085e8c1358d05fa1d7bf7c7ec",
+      "ref": "refs/heads/astra/toxic-flow-alerts"
+    },
+    {
+      "sha": "d015aecf6a8559dbba00164a07f30b53816cb354",
+      "ref": "refs/heads/astra/trade-fire"
+    },
+    {
+      "sha": "15b924893d514407e63874a0828429e4a64951bb",
+      "ref": "refs/heads/astra/vomma-walls"
+    },
+    {
+      "sha": "568de16a3d2da32c218660e1007ad89b2d97228f",
+      "ref": "refs/heads/astra/x1-clean"
+    },
+    {
+      "sha": "a66845e67047449deb6e742859f4d442cc04b3dc",
+      "ref": "refs/heads/astra/x1-tradeentry-journal"
+    },
+    {
+      "sha": "c7ebd44934c5a3812ed10dab6288df6b74ee0391",
+      "ref": "refs/heads/audit/gex-gamma-correctness"
+    },
+    {
+      "sha": "ddd8870ca059fc630a78a84e81f4dae999626e3e",
+      "ref": "refs/heads/backup/deepseek-bulletproof-20260525-111707"
+    },
+    {
+      "sha": "7b6c6d3120b5d2a15182a1f4716c260da2c13ef5",
+      "ref": "refs/heads/backup/deepseek-r8-20260524-154032"
+    },
+    {
+      "sha": "59009206599811c92bc9c6cdd906719db350e460",
+      "ref": "refs/heads/backup/deepseek-v4-20260525-100030"
+    },
+    {
+      "sha": "a72b517fe1b1cef01f5a3d4b557ac6170a843088",
+      "ref": "refs/heads/backup/deepseek-v4-deep-20260525-102536"
+    },
+    {
+      "sha": "24690400a0f7f9150d0e41257cd4df0526fad28c",
+      "ref": "refs/heads/backup/foundation_20260602-232239"
+    },
+    {
+      "sha": "a95823bcb1c7377223e306e22a15560a964f2c2e",
+      "ref": "refs/heads/backup/hermes-b-20260524-111312"
+    },
+    {
+      "sha": "11dd0fbc21526933e071d65912bc0908d82dc0ef",
+      "ref": "refs/heads/backup/hermes-r8-A-20260524-215655"
+    },
+    {
+      "sha": "7d405b33075a76a997ed6f72668090eed234c6af",
+      "ref": "refs/heads/backup/pre-recovery-20260524-063733"
+    },
+    {
+      "sha": "b5872e216aaf706f330dc8932caf87f1aee8f707",
+      "ref": "refs/heads/backup/pre-recovery-20260524-083902"
+    },
+    {
+      "sha": "b5872e216aaf706f330dc8932caf87f1aee8f707",
+      "ref": "refs/heads/backup/prompt-a-20260524-105545"
+    },
+    {
+      "sha": "44e1438fd0b7e72a8bf990566d6f580be064f36b",
+      "ref": "refs/heads/backup/r10_A1_20260526-221702"
+    },
+    {
+      "sha": "1c5b79207549d6fdbcfc6db378bfda379f26b372",
+      "ref": "refs/heads/backup/r10_H16_20260525-223916"
+    },
+    {
+      "sha": "1c5b79207549d6fdbcfc6db378bfda379f26b372",
+      "ref": "refs/heads/backup/r10_H17_20260525-223945"
+    },
+    {
+      "sha": "7eccafaae7fd45d297d3ef01d7247953071b80fa",
+      "ref": "refs/heads/backup/r10_H18_20260525-225500"
+    },
+    {
+      "sha": "7eccafaae7fd45d297d3ef01d7247953071b80fa",
+      "ref": "refs/heads/backup/r10_H19_20260525-224712"
+    },
+    {
+      "sha": "1c5b79207549d6fdbcfc6db378bfda379f26b372",
+      "ref": "refs/heads/backup/r10_H20_20260525-224037"
+    },
+    {
+      "sha": "7eccafaae7fd45d297d3ef01d7247953071b80fa",
+      "ref": "refs/heads/backup/r10_H21_20260525-224606"
+    },
+    {
+      "sha": "7eccafaae7fd45d297d3ef01d7247953071b80fa",
+      "ref": "refs/heads/backup/r10_H22_20260525-224537"
+    },
+    {
+      "sha": "7eccafaae7fd45d297d3ef01d7247953071b80fa",
+      "ref": "refs/heads/backup/r10_H23_20260525-224659"
+    },
+    {
+      "sha": "7eccafaae7fd45d297d3ef01d7247953071b80fa",
+      "ref": "refs/heads/backup/r10_H24_20260525-224625"
+    },
+    {
+      "sha": "f59487a89760f2e344f57e5516ea40c3d1e30cd3",
+      "ref": "refs/heads/backup/r12-wip-20260531-070635"
+    },
+    {
+      "sha": "1c5b79207549d6fdbcfc6db378bfda379f26b372",
+      "ref": "refs/heads/backup/r21_H21_20260525-224222"
+    },
+    {
+      "sha": "638aec0723298ee6db85c7fccd4c313fd38e0721",
+      "ref": "refs/heads/backup/r9_DSFLASH_20260525-154220"
+    },
+    {
+      "sha": "638aec0723298ee6db85c7fccd4c313fd38e0721",
+      "ref": "refs/heads/backup/r9_GLM_20260525-154249"
+    },
+    {
+      "sha": "ec6e963111b0c8935d999173fef1d69b9b31075a",
+      "ref": "refs/heads/backup/r9_H10_20260525-215633"
+    },
+    {
+      "sha": "1c5b79207549d6fdbcfc6db378bfda379f26b372",
+      "ref": "refs/heads/backup/r9_H10_20260525-223152"
+    },
+    {
+      "sha": "ec6e963111b0c8935d999173fef1d69b9b31075a",
+      "ref": "refs/heads/backup/r9_H11_20260525-215620"
+    },
+    {
+      "sha": "ec6e963111b0c8935d999173fef1d69b9b31075a",
+      "ref": "refs/heads/backup/r9_H13_20260525-215718"
+    },
+    {
+      "sha": "ec6e963111b0c8935d999173fef1d69b9b31075a",
+      "ref": "refs/heads/backup/r9_H14_20260525-215742"
+    },
+    {
+      "sha": "ec6e963111b0c8935d999173fef1d69b9b31075a",
+      "ref": "refs/heads/backup/r9_H15_20260525-215954"
+    },
+    {
+      "sha": "638aec0723298ee6db85c7fccd4c313fd38e0721",
+      "ref": "refs/heads/backup/r9_H1PRO_20260525-153800"
+    },
+    {
+      "sha": "ba4e2a9b7d0f2bb71894738feeb90c33cb42f18d",
+      "ref": "refs/heads/backup/r9_H6_20260525-215307"
+    },
+    {
+      "sha": "ec6e963111b0c8935d999173fef1d69b9b31075a",
+      "ref": "refs/heads/backup/r9_H7_20260525-215429"
+    },
+    {
+      "sha": "ec6e963111b0c8935d999173fef1d69b9b31075a",
+      "ref": "refs/heads/backup/r9_H8_20260525-215521"
+    },
+    {
+      "sha": "1c5b79207549d6fdbcfc6db378bfda379f26b372",
+      "ref": "refs/heads/backup/r9_H8_20260525-223312"
+    },
+    {
+      "sha": "1c5b79207549d6fdbcfc6db378bfda379f26b372",
+      "ref": "refs/heads/backup/r9_H8_20260525-223648"
+    },
+    {
+      "sha": "ec6e963111b0c8935d999173fef1d69b9b31075a",
+      "ref": "refs/heads/backup/r9_H9_20260525-215714"
+    },
+    {
+      "sha": "ec6e963111b0c8935d999173fef1d69b9b31075a",
+      "ref": "refs/heads/backup/r9_L1_20260525-215950"
+    },
+    {
+      "sha": "04afffdcacb540575113619d673ed930e59d39cc",
+      "ref": "refs/heads/backup/r9_PRO_20260525-220621"
+    },
+    {
+      "sha": "2f3ff8f7ac2bcad68ff21c76bcee5da90af41aed",
+      "ref": "refs/heads/backup/tidehunter-main-20260904"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/chore/finish-alphapod-removal"
+    },
+    {
+      "sha": "040c06496dc6a804df98ef78016f8359e3517729",
+      "ref": "refs/heads/chore/floww2-canonical"
+    },
+    {
+      "sha": "6996982f078398adc9b381e4cfc8975796ef6bd7",
+      "ref": "refs/heads/chore/mypy-consolidate-overrides"
+    },
+    {
+      "sha": "56cfff2ec909313c81fbe616a3595c937238037a",
+      "ref": "refs/heads/codex/signal-truth-repair"
+    },
+    {
+      "sha": "f9965cb96f626e37e8cc1e546bdc6786a55f457d",
+      "ref": "refs/heads/docs/migration-note"
+    },
+    {
+      "sha": "206de221019cf7f9712ef8c7302d55dd452c2302",
+      "ref": "refs/heads/docs/model-audit-2026-09"
+    },
+    {
+      "sha": "415ce5c88cc0f0d4d1bc3c22e8eafdc243478579",
+      "ref": "refs/heads/docs/park-issue8"
+    },
+    {
+      "sha": "24c0b3717def36a95c87cbbdf62e952ac50843eb",
+      "ref": "refs/heads/docs/post-merge-state"
+    },
+    {
+      "sha": "fd0e7835c66679494dd216f707932e2b74b48cd9",
+      "ref": "refs/heads/docs/status-refresh-final"
+    },
+    {
+      "sha": "bca9c28bbba1ee63b8a0056ec548c50075e25223",
+      "ref": "refs/heads/docs/status-verified-conflicts"
+    },
+    {
+      "sha": "822c0e8af823e82b9703a28227754fb110c39434",
+      "ref": "refs/heads/feat/flowseeker-tab"
+    },
+    {
+      "sha": "c1bb04dcd5d1d577bc73d4d8b0de3b0677b16995",
+      "ref": "refs/heads/feat/flowseeker-tab-wip"
+    },
+    {
+      "sha": "687a3cd1bc6ea19ba07680ea61b22833a4bcb251",
+      "ref": "refs/heads/feat/lifecycle-persistence"
+    },
+    {
+      "sha": "c8471a14015c2e9d25028d928e32b24e777c58e0",
+      "ref": "refs/heads/feat/node-confluence-overlay"
+    },
+    {
+      "sha": "c296de83d77a1e93f72f019691bcc7573bc59569",
+      "ref": "refs/heads/feat/skylit-absorb-heatseeker-panels"
+    },
+    {
+      "sha": "2f7013f13cb862df0a0729e0b5eb1597dfcb2d7a",
+      "ref": "refs/heads/feat/ticker-az-paging"
+    },
+    {
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e",
+      "ref": "refs/heads/feature/ml-real-data-spy"
+    },
+    {
+      "sha": "d1f5699f49a01f857fbfeb81c566ef99c96c108b",
+      "ref": "refs/heads/fix/agent-settle-guard"
+    },
+    {
+      "sha": "c0fee43baf1bfd8189dfdc8a3d9aee7aad1c7e69",
+      "ref": "refs/heads/fix/appshell-compile-typo"
+    },
+    {
+      "sha": "577345c4a7d6cd7e6bea6e330c417b07c90c8a77",
+      "ref": "refs/heads/fix/audit-2026-09"
+    },
+    {
+      "sha": "56502f5f026d873ec3729df11913ea8dc99c4b94",
+      "ref": "refs/heads/fix/endless-ticker-scroller"
+    },
+    {
+      "sha": "6d44add0587ca5b6372099c2fcc24a573fb1354e",
+      "ref": "refs/heads/fix/r8-audit-v2-clean"
+    },
+    {
+      "sha": "5f13958d2cd4b852effd3ed1cdeaa5cf437367d2",
+      "ref": "refs/heads/fix/r8-finish-sweep"
+    },
+    {
+      "sha": "857e2067a50aa9a443f0165957481c3b3f200847",
+      "ref": "refs/heads/fix/r8-ui-blend"
+    },
+    {
+      "sha": "5db4971a297164023547911991c9984ed5193ef2",
+      "ref": "refs/heads/fix/retry-404-no-autoretry"
+    },
+    {
+      "sha": "3a989e44435c7f63b2309af81737b11aaeba4518",
+      "ref": "refs/heads/fix/security-routes-hardening"
+    },
+    {
+      "sha": "ca255571c3e2dae059567fba3f74d180750b1e38",
+      "ref": "refs/heads/fix/skylit-panel-bugs"
+    },
+    {
+      "sha": "0f43e03e594dc976692b97377664a7e8680ed8cf",
+      "ref": "refs/heads/fix/skylit-tab-restore"
+    },
+    {
+      "sha": "3179874c9dac5371c57799aaecf994716bab9776",
+      "ref": "refs/heads/fix/ticker-universe-restore"
+    },
+    {
+      "sha": "917fea5db1f6a655b58c5289717879a03ca2aabb",
+      "ref": "refs/heads/fix/trade-ready-wires"
+    },
+    {
+      "sha": "f9275c57fafab5273b681637a0e038e55e47fb0c",
+      "ref": "refs/heads/fix/truth-audit-manifest-coverage"
+    },
+    {
+      "sha": "e65c44e2f24b5d569c9104576c7e29cc44929da8",
+      "ref": "refs/heads/fix/v3-budget-honesty"
+    },
+    {
+      "sha": "d9371e22ce0644a8c42316137d347a44701eda01",
+      "ref": "refs/heads/fix/vex-sidebar-label"
+    },
+    {
+      "sha": "18a81be96f3b867d88cbe1c6893d8411d52555e4",
+      "ref": "refs/heads/gsd/010-exposure-alerts"
+    },
+    {
+      "sha": "f20493caa97e3dbabb77f86350d8f1bbf70e749b",
+      "ref": "refs/heads/gsd/011-silent-excepts"
+    },
+    {
+      "sha": "ba84569927bf1776d628d43c5e33b3aadc4725c3",
+      "ref": "refs/heads/main"
+    },
+    {
+      "sha": "fd1a8d8cd21cd0f3c6d71b922c44eec7efe2ddb7",
+      "ref": "refs/heads/ml/v5-real-data-training"
+    },
+    {
+      "sha": "74120ac3c5ee445d7ffeef4cf1ada948e0b23442",
+      "ref": "refs/heads/mypy/backend-databento_provider"
+    },
+    {
+      "sha": "44db6d350468733b0e73bc669eed661fd33c742b",
+      "ref": "refs/heads/mypy/scripts-16-error-batch"
+    },
+    {
+      "sha": "ed44d81025ae2f46f23202fc30691a1527c89faa",
+      "ref": "refs/heads/mypy/scripts-17-error-batch"
+    },
+    {
+      "sha": "b844b4b0eb72f8adfa2bff2ad5b69a523e9558a5",
+      "ref": "refs/heads/mypy/scripts-20-batch"
+    },
+    {
+      "sha": "0488d66d0389e574ff931fee8ef69d1467ae594f",
+      "ref": "refs/heads/mypy/scripts-3-more-small"
+    },
+    {
+      "sha": "88cd7e932e9c2a4b128703507a22e10565bf902d",
+      "ref": "refs/heads/mypy/scripts-4-error-batch"
+    },
+    {
+      "sha": "8021805cd30062c6e322996f59bd77d1515d476d",
+      "ref": "refs/heads/mypy/scripts-5-error-batch"
+    },
+    {
+      "sha": "f560e9b4707d86d709b4f126ffba2dace7aea52c",
+      "ref": "refs/heads/mypy/scripts-5-more-small"
+    },
+    {
+      "sha": "7b4c40250c3c3d29ab3fb81c2272c80ac29ef3d1",
+      "ref": "refs/heads/mypy/scripts-backfill_yfinance"
+    },
+    {
+      "sha": "dc95305e9a5ff0fc66eeb9dd674d1a5ea11e2dd9",
+      "ref": "refs/heads/mypy/scripts-consolidate_memory_daily"
+    },
+    {
+      "sha": "0e5f7348908cce2a8bca5034b1e7f00ab0cd3d3e",
+      "ref": "refs/heads/mypy/scripts-load_test_dashboard"
+    },
+    {
+      "sha": "7c76611c4796e7f6f4fcd949ec49f2c17b013cef",
+      "ref": "refs/heads/mypy/scripts-predict_throughput"
+    },
+    {
+      "sha": "8a0c97f8ea3c0cd6ca0b2f6695c123a8d6813ac2",
+      "ref": "refs/heads/mypy/scripts-prune_trading_memory"
+    },
+    {
+      "sha": "5c4fc26a2a9c97256e96e07ed1eb0f99b11a6a25",
+      "ref": "refs/heads/mypy/scripts-train_production"
+    },
+    {
+      "sha": "8161e2748b4dc4a47d5b2597564b6792dd218172",
+      "ref": "refs/heads/mypy/scripts-train_spy_regime_enhanced"
+    },
+    {
+      "sha": "b61d78bf988396e9fa77c440f2c300380d9d46b0",
+      "ref": "refs/heads/mypy/scripts-walkforward_backtest_spy"
+    },
+    {
+      "sha": "933cfb58b5d31bed3e11cb93e5aab30f57a9cda4",
+      "ref": "refs/heads/mypy/services-alert_dispatcher"
+    },
+    {
+      "sha": "67db18b3d4353b56d41601670fba0c9f85d26fb8",
+      "ref": "refs/heads/mypy/services-circuit_breaker"
+    },
+    {
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e",
+      "ref": "refs/heads/mypy/services-execution_engine"
+    },
+    {
+      "sha": "959eddbbbc84d604d50f030d20f16f653581150f",
+      "ref": "refs/heads/mypy/services-flowseeker"
+    },
+    {
+      "sha": "f0e0e5c9c0c6d0b661630cafa55490211abb2534",
+      "ref": "refs/heads/mypy/services-hawkes_process"
+    },
+    {
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e",
+      "ref": "refs/heads/mypy/services-liquidity_metrics"
+    },
+    {
+      "sha": "3c0a7cd0a0215cc27b0cb2a3b6e79ab8c879f91e",
+      "ref": "refs/heads/mypy/services-node_lifecycle"
+    },
+    {
+      "sha": "11e64911f4cd8223a72cd5758d7bd1e05828e01c",
+      "ref": "refs/heads/mypy/services-numba_greeks"
+    },
+    {
+      "sha": "f804c702756a07a553d86d3b1f511d50579d4a51",
+      "ref": "refs/heads/mypy/services-slo_tracker"
+    },
+    {
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e",
+      "ref": "refs/heads/mypy/services-stochastic_vol"
+    },
+    {
+      "sha": "cfca3dcc424dfa7d30313e7ebf9da34dc73509d9",
+      "ref": "refs/heads/mypy/services-trinity_alignment"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/mypy/services-uoa"
+    },
+    {
+      "sha": "286d6a257425864ece3b4c62fc4a6ac9a6b921ae",
+      "ref": "refs/heads/mypy/services-volume_clock"
+    },
+    {
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e",
+      "ref": "refs/heads/mypy/services-vpin_engine"
+    },
+    {
+      "sha": "3835c3f07e0988b3cb98075bceecc6ab1c6677e6",
+      "ref": "refs/heads/phase9/agent1-architect"
+    },
+    {
+      "sha": "3088262db1b005a0955f8554931bb914e5c5aeca",
+      "ref": "refs/heads/phase9/agent2-flowseeker"
+    },
+    {
+      "sha": "5ab259fb1e8cb1f7decb7e449fdeca28d5840295",
+      "ref": "refs/heads/phase9/agent2-flowseeker-ticket"
+    },
+    {
+      "sha": "987c0ea9cde515051098a8728c892df827b7e931",
+      "ref": "refs/heads/phase9/agent4-eval"
+    },
+    {
+      "sha": "2ff4a2e682f9408d1560a9b6b623c7a306dbc7c9",
+      "ref": "refs/heads/phase9/g1-reads-witness"
+    },
+    {
+      "sha": "7625fc5e5a66ccab0bfff241143013d25e7357ff",
+      "ref": "refs/heads/phase9/g3-paper-loop"
+    },
+    {
+      "sha": "a9068c9a33a1c7362065fc42c082448c3e5abc7d",
+      "ref": "refs/heads/phase9/heatmap-agent5"
+    },
+    {
+      "sha": "89a4756979b9ad65e9b19cbcd3cf288e39c8b47e",
+      "ref": "refs/heads/phase9/other-lanes-artifacts"
+    },
+    {
+      "sha": "18b10b5601ef0bc0dd27a083d66f2d8ad164665a",
+      "ref": "refs/heads/pr28-verify"
+    },
+    {
+      "sha": "568de16a3d2da32c218660e1007ad89b2d97228f",
+      "ref": "refs/heads/pr29-verify"
+    },
+    {
+      "sha": "377dfa5822472f8e43029d5c8dbcc3984a420cea",
+      "ref": "refs/heads/pr30-verify"
+    },
+    {
+      "sha": "06b75020dddb7b6ecc1d9c220b9fffac6fc0575b",
+      "ref": "refs/heads/pr30/head"
+    },
+    {
+      "sha": "a81a04c3a0dc8c37b0941fd1748fe66ee9584ca3",
+      "ref": "refs/heads/pr31-verify"
+    },
+    {
+      "sha": "41cbc9cc66fa503c04dfeb30ca0304589d1fb8b9",
+      "ref": "refs/heads/pr64-retrigger"
+    },
+    {
+      "sha": "d96d80499d37af3ed93bf2e9fd4cf613f71c7e70",
+      "ref": "refs/heads/pr66-catchup"
+    },
+    {
+      "sha": "11ad05f3e2df695e1ee7757bfe64eacf6e986e6f",
+      "ref": "refs/heads/preserve/agent4-pr48-49-50-wip"
+    },
+    {
+      "sha": "be475d953bd1bf60e7f44868aebfeff09c612179",
+      "ref": "refs/heads/preserve/pr48-v81255-wip"
+    },
+    {
+      "sha": "2f1a0e05c19fa679866231746757c0829d01a6d1",
+      "ref": "refs/heads/preserve/pr50-merge-check-wip"
+    },
+    {
+      "sha": "bfc90d63be447758debce6be031d3942b4f8c261",
+      "ref": "refs/heads/rootcause-test"
+    },
+    {
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e",
+      "ref": "refs/heads/round11/agent-01-paper"
+    },
+    {
+      "sha": "6bebdc759423a27abb1be462d1c6fe7376c06f9f",
+      "ref": "refs/heads/round11/agent-02-alerts"
+    },
+    {
+      "sha": "31dc80b5f9243d68f5a44c9a34316a266416ed8f",
+      "ref": "refs/heads/round11/agent-03-ml-pipeline"
+    },
+    {
+      "sha": "ec72ae841d86d1c3c48af214b3ebbed72536ed48",
+      "ref": "refs/heads/round11/agent-03-mlfeat"
+    },
+    {
+      "sha": "295f3bc2e63f721d05b3ba611800c38980a1f83d",
+      "ref": "refs/heads/round11/agent-04-mlinfra"
+    },
+    {
+      "sha": "9177f80a6dfda2ebc6a82737df42ba4a3cbd9577",
+      "ref": "refs/heads/round11/agent-05-stream"
+    },
+    {
+      "sha": "1920d592a043890819d436b8ea7260ced0ac9d20",
+      "ref": "refs/heads/round11/agent-06-kgraph"
+    },
+    {
+      "sha": "600f56edcb2745af503240d8da7ffef5c817a0b4",
+      "ref": "refs/heads/round11/agent-07-kanban"
+    },
+    {
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e",
+      "ref": "refs/heads/round11/agent-08-hub"
+    },
+    {
+      "sha": "8ef439c6ea443d19ec5ae9e7c06406f35b0c6b7d",
+      "ref": "refs/heads/round11/agent-09-memory"
+    },
+    {
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e",
+      "ref": "refs/heads/round11/agent-10-causal"
+    },
+    {
+      "sha": "7ae678e85413b0cda0935aa7632653945d615d3a",
+      "ref": "refs/heads/round11/ml-retrain"
+    },
+    {
+      "sha": "f157a22073dde0b89b0c9820104f113a56fc7402",
+      "ref": "refs/heads/round11/test-salvage"
+    },
+    {
+      "sha": "5b9d9a96a29951e548e883d108a806b93c2d11a9",
+      "ref": "refs/heads/run/20260906-data"
+    },
+    {
+      "sha": "5b9d9a96a29951e548e883d108a806b93c2d11a9",
+      "ref": "refs/heads/run/20260906-experience"
+    },
+    {
+      "sha": "3f7bfa57966281acc8202ffb529b79a340f427b9",
+      "ref": "refs/heads/run/20260906-platform"
+    },
+    {
+      "sha": "5b9d9a96a29951e548e883d108a806b93c2d11a9",
+      "ref": "refs/heads/run/20260906-proof"
+    },
+    {
+      "sha": "87800f47c843bcddfedecf527c893d1f6ca83a33",
+      "ref": "refs/heads/solstice/sweep5-missed-items"
+    },
+    {
+      "sha": "cb1cba76dda15d817cab26254c2c66158ae013c5",
+      "ref": "refs/heads/solstice/sweep6-verify"
+    },
+    {
+      "sha": "f75e7170faaff0c1072d937d5b417bd5e65da042",
+      "ref": "refs/heads/solstice/sweep7-scale-spot"
+    },
+    {
+      "sha": "b05559a2c17ef35a07baecdbca703a8ea24fa48f",
+      "ref": "refs/heads/solstice/sweep8-close-gaps"
+    },
+    {
+      "sha": "ccfca76b63524daa053cb4ade969a9fad17f7561",
+      "ref": "refs/heads/solstice/sweep9-followup"
+    },
+    {
+      "sha": "158629439342bc7cc00fa011260fdf66d6ffb84f",
+      "ref": "refs/heads/solstice/t00-t03-foundation"
+    },
+    {
+      "sha": "1b7ddf6a5cec8e9d1794201c2b822867d854f6e3",
+      "ref": "refs/heads/sync/floww-into-floww2"
+    },
+    {
+      "sha": "4f38567875f5c9da5a096deb0fbb4ed909013199",
+      "ref": "refs/heads/test-tree-push"
+    },
+    {
+      "sha": "e9db2910ebddc476d3a2e946aab0bdf5b0893b98",
+      "ref": "refs/heads/test/truth-audit-self-test"
+    },
+    {
+      "sha": "ed6bce671bd4f58d195d2350b1d6bf2ba8715473",
+      "ref": "refs/heads/work/reconcile-ai-ui-20260911"
+    }
+  ],
+  "localBranches": [
+    "refs/heads/integrate/main-20260927 8234f35d46b1e23252a1e1451f841eb20448131e",
+    "refs/heads/main ba84569927bf1776d628d43c5e33b3aadc4725c3",
+    "refs/heads/safety/reconcile-before-20260926 dba50893403922a2f82e2be7c5a2671ea8d37780",
+    "refs/heads/work/reconcile-ai-ui-20260911 ed6bce671bd4f58d195d2350b1d6bf2ba8715473"
+  ],
+  "beforeBundle": "output/side-branch-sweep-20260927/before-sweep.bundle",
+  "dirtyCopyProof": "output/side-branch-sweep-20260927/old-working-copy-review.json"
+}

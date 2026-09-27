@@ -24,6 +24,51 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 
+@pytest.mark.parametrize("values", [[], [1.0], [1.0, 2.0], [1.0, 2.0, 3.0], [7.0] * 8])
+def test_kurtosis_short_and_constant_inputs(values):
+    from services.ml_realtime_features import _kurtosis
+    assert _kurtosis(values) == 0.0
+
+
+@pytest.mark.parametrize("helper", ["compute_gex_features", "compute_oi_features", "compute_iv_features"])
+def test_empty_feature_chain_is_finite(helper):
+    from services import ml_realtime_features as features
+    result = getattr(features, helper)({"spot": 100.0, "contracts": []})
+    assert result
+    assert all(value == 0.0 for value in result.values())
+
+
+@pytest.mark.parametrize("helper", ["compute_gex_features", "compute_oi_features", "compute_iv_features"])
+def test_full_option_type_names_match_short_names(helper, synthetic_chain):
+    from services import ml_realtime_features as features
+    expanded = {**synthetic_chain, "contracts": [
+        {**contract, "type": {"C": "CALL", "P": "PUT"}[contract["type"]]}
+        for contract in synthetic_chain["contracts"]
+    ]}
+    original = getattr(features, helper)(synthetic_chain)
+    actual = getattr(features, helper)(expanded)
+    assert actual == pytest.approx(original)
+    assert all(np.isfinite(value) for value in actual.values())
+
+
+@pytest.mark.parametrize("helper", ["compute_oi_features", "compute_iv_features"])
+def test_zero_spot_keeps_oi_and_iv_features_finite(helper, synthetic_chain):
+    from services import ml_realtime_features as features
+    result = getattr(features, helper)({**synthetic_chain, "spot": 0.0})
+    assert all(np.isfinite(value) for value in result.values())
+    assert all(value == 0.0 for key, value in result.items() if key.startswith("atm_"))
+
+
+def test_no_positive_iv_returns_existing_zero_feature_contract(synthetic_chain):
+    from services.ml_realtime_features import compute_iv_features
+    chain = {**synthetic_chain, "contracts": [
+        {**contract, "iv": 0.0} for contract in synthetic_chain["contracts"]
+    ]}
+    result = compute_iv_features(chain)
+    assert len(result) == 11
+    assert all(value == 0.0 for value in result.values())
+
+
 # ────────────────────────────────────────────────────────────────────
 # Synthetic chain anchored to hand-derived values
 # ────────────────────────────────────────────────────────────────────

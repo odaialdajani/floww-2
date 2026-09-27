@@ -1,0 +1,38 @@
+{
+  "result": "PASS",
+  "scope": [
+    "services/backtest/duckdb_logger.py",
+    "services/discord_notifier.py",
+    "services/position_alerts.py",
+    "tests/services/backtest/test_duckdb_logger.py",
+    "tests/services/test_discord_notifier.py",
+    "tests/services/test_position_alerts.py"
+  ],
+  "sha256": {
+    "services/backtest/duckdb_logger.py": "06fd07def83f33a53347796092c4a3a9e2d68a5df59e2b8f31d3abbdcc9670cc",
+    "services/discord_notifier.py": "6ddfc2ea2f7213394477a083cf302425fdf2192dd0b542e8b27ba06513491c5c",
+    "services/position_alerts.py": "d07a9ea4583f9381e03cf31d1e176a3ab675b3dbea2affad507dd63e43ad1d8c",
+    "tests/services/backtest/test_duckdb_logger.py": "b994c53e566e8f09c5453153889ef33512dd70f60df67d60407ea5449d7006c2",
+    "tests/services/test_discord_notifier.py": "d890eb361cc9bb8258e9dc2c16902cfc8d14bfc8f2b2515c3a2c1e50f5a920f2",
+    "tests/services/test_position_alerts.py": "6fc9ea8d13e544f2668de8ad5402c30020ac3430a27c6733d3a6612c3129a7d3"
+  },
+  "dedicated_tests": "31 passed;26 existing deprecation warnings; rerun after notifier transport edit",
+  "adversarial_checks": [
+    "Late transaction failure after first two table writes restores all three tables and unrelated exact run IDs.",
+    "Mixed known/unknown profit produces NULL total and average, preserving known count.",
+    "Single-fold replacement preserves sibling fold.",
+    "Same-symbol distinct contracts retain exact marks, explicit factors, opposite sides and elapsed minutes.",
+    "Missing exact quote stays unavailable while independent hold-duration alert still fires.",
+    "Constructor, payload formatting and position evaluation ran with socket.connect blocked.",
+    "Explicit MockTransport redirect response returns false and creates exactly one request."
+  ],
+  "findings": [],
+  "limits": [
+    "Pure helpers only; no caller wiring or live delivery expected or exercised.",
+    "Quote freshness and lifecycle-unique position IDs remain caller responsibilities.",
+    "No Python3.12 deployment run."
+  ],
+  "code_changes": false,
+  "real_network_calls": false,
+  "concurrent_change": "Notifier moved from client injection to transport injection during probe; tests and redirect probe rerun successfully against final content."
+}

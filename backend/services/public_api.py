@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import os
 import time
 from dataclasses import dataclass, field
@@ -95,13 +96,16 @@ class Quote:
 class Position:
     symbol: str
     instrument_type: str
-    quantity: float
+    quantity: float | None
     average_cost: float | None = None
     market_value: float | None = None
     total_cost: float | None = None
     pnl: float | None = None
     pnl_pct: float | None = None
     value: float | None = None
+    name: str = ""
+    last_price: float | None = None
+    day_gain_pct: float | None = None
 
 
 @dataclass
@@ -170,11 +174,11 @@ class Order:
 @dataclass
 class Portfolio:
     account_id: str
-    cash: float = 0.0
-    total_account_value: float = 0.0
-    buying_power: float = 0.0
-    options_buying_power: float = 0.0
-    available_to_withdraw: float = 0.0
+    cash: float | None = None
+    total_account_value: float | None = None
+    buying_power: float | None = None
+    options_buying_power: float | None = None
+    available_to_withdraw: float | None = None
     equity: list[dict[str, Any]] = field(default_factory=list)
     positions: list[Position] = field(default_factory=list)
     orders: list[Order] = field(default_factory=list)
@@ -327,20 +331,43 @@ class PublicBroker:
         return portfolio
 
     def _parse_portfolio(self, data: dict[str, Any], account_id: str) -> Portfolio:
+        def number(value):
+            if value is None or isinstance(value, bool) or (isinstance(value, str) and not value.strip()):
+                return None
+            try:
+                value = float(value)
+            except (TypeError, ValueError, OverflowError):
+                return None
+            return value if math.isfinite(value) else None
+
+        def mapping(value):
+            return value if isinstance(value, dict) else {}
+
+        def first(*values):
+            return next((value for value in values if value is not None), None)
+
         positions = []
         for p in data.get("positions", []):
-            pos = Position(
-                symbol=p.get("instrument", {}).get("symbol", p.get("symbol", "")),
-                instrument_type=p.get("instrument", {}).get("type", ""),
-                quantity=float(p.get("quantity", 0)),
-                average_cost=float(p["averageCost"]) if p.get("averageCost") else None,
-                market_value=float(p["marketValue"]) if p.get("marketValue") else None,
-                total_cost=float(p["totalCost"]) if p.get("totalCost") else None,
-                pnl=float(p["totalGainLoss"]) if p.get("totalGainLoss") else None,
-                pnl_pct=float(p["totalGainLossPercentage"]) if p.get("totalGainLossPercentage") else None,
-                value=float(p["value"]) if p.get("value") else None,
-            )
-            positions.append(pos)
+            if not isinstance(p, dict):
+                raise ValueError("Portfolio contains an unreadable position")
+            instrument = mapping(p.get("instrument"))
+            cost = mapping(p.get("costBasis"))
+            last = mapping(p.get("lastPrice"))
+            daily = mapping(p.get("positionDailyGain"))
+            positions.append(Position(
+                symbol=instrument.get("symbol", p.get("symbol", "")),
+                instrument_type=instrument.get("type") or "UNKNOWN",
+                quantity=number(p.get("quantity")),
+                average_cost=number(first(cost.get("unitCost"), p.get("averageCost"))),
+                market_value=number(first(p.get("currentValue"), p.get("marketValue"))),
+                total_cost=number(first(cost.get("totalCost"), p.get("totalCost"))),
+                pnl=number(first(cost.get("gainValue"), p.get("totalGainLoss"))),
+                pnl_pct=number(first(cost.get("gainPercentage"), p.get("totalGainLossPercentage"))),
+                value=number(p.get("value")),
+                name=instrument.get("name") or "",
+                last_price=number(last.get("lastPrice")),
+                day_gain_pct=number(daily.get("gainPercentage")),
+            ))
 
         orders = []
         for o in data.get("orders", []):
@@ -366,11 +393,11 @@ class PublicBroker:
 
         return Portfolio(
             account_id=account_id,
-            cash=float(data.get("cash", 0)),
-            total_account_value=float(data.get("totalAccountValue", data.get("total_account_value", 0))),
-            buying_power=float(data.get("buyingPower", {}).get("buyingPower", 0)),
-            options_buying_power=float(data.get("buyingPower", {}).get("optionsBuyingPower", 0)),
-            available_to_withdraw=float(data.get("availableToWithdraw", {}).get("availableToWithdraw", 0)),
+            cash=number(data.get("cash")),
+            total_account_value=number(first(data.get("totalAccountValue"), data.get("total_account_value"))),
+            buying_power=number(mapping(data.get("buyingPower")).get("buyingPower")),
+            options_buying_power=number(mapping(data.get("buyingPower")).get("optionsBuyingPower")),
+            available_to_withdraw=number(mapping(data.get("availableToWithdraw")).get("availableToWithdraw")),
             equity=data.get("equity", []),
             positions=positions,
             orders=orders,
@@ -1154,10 +1181,10 @@ if __name__ == "__main__":
             # Portfolio
             portfolio = await pb.get_portfolio(trading.account_id)
             print("\nPortfolio:")
-            print(f"  Cash: ${portfolio.cash:.2f}")
-            print(f"  Total value: ${portfolio.total_account_value:.2f}")
-            print(f"  Buying power: ${portfolio.buying_power:.2f}")
-            print(f"  Options BP: ${portfolio.options_buying_power:.2f}")
+            print("  Cash: " + ("Unavailable" if portfolio.cash is None else f"${portfolio.cash:.2f}"))
+            print("  Total value: " + ("Unavailable" if portfolio.total_account_value is None else f"${portfolio.total_account_value:.2f}"))
+            print("  Buying power: " + ("Unavailable" if portfolio.buying_power is None else f"${portfolio.buying_power:.2f}"))
+            print("  Options BP: " + ("Unavailable" if portfolio.options_buying_power is None else f"${portfolio.options_buying_power:.2f}"))
             print(f"  Positions: {len(portfolio.positions)}")
             for p in portfolio.positions:
                 print(f"    {p.symbol:8s}  qty={p.quantity}  "

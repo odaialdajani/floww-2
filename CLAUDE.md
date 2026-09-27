@@ -170,7 +170,8 @@ These steps are HARD (no `|| true`, no `continue-on-error`) and will fail the bu
 
 Only the mypy step is masked (`|| true`) — it is advisory.
 
-**Version skew trap:** CI installs its own Python; local is 3.13.15. Never assume they match —
+**Version skew trap:** CI installs its own Python; the Windows working environment is
+`backend/.venv313/Scripts/python.exe` (3.13.15, verified 2026-09-27). Never assume they match —
 read the live pin before using new syntax:
 `grep -n "python-version" .github/workflows/ci.yml`
 
@@ -187,7 +188,8 @@ read the live pin before using new syntax:
   exists on this machine.)
 - **Test suite — reproduce, don't trust a remembered number:**
   - Backend: **4640 tests collect, 0 collection errors** —
-    `cd backend && .venv/bin/python -m pytest --collect-only -q`
+    Windows: `cd backend; ./.venv313/Scripts/python.exe -m pytest --collect-only -q`.
+    POSIX: `cd backend && .venv/bin/python -m pytest --collect-only -q`.
     A *pass* count is deliberately not asserted here — see the MongoDB note below.
   - Frontend: **280 passed / 280 total across 44 suites** —
     `cd frontend && CI=true npx craco test --watchAll=false`
@@ -202,7 +204,7 @@ read the live pin before using new syntax:
   so with Mongo down the suite still collects and most tests still pass — what you actually get is a
   ~2 s server-selection timeout on each DB-touching test (a slow run) plus failures confined to the
   DB-dependent tests. It does **not** error out at startup. Start `mongod`, then:
-  `cd backend && .venv/bin/python -m pytest -q --tb=no`
+  Windows: `cd backend; ./.venv313/Scripts/python.exe -m pytest -q --tb=no`.
 - **The backend SHIPS ON PYTHON 3.12 — local dev is 3.13. All backend code must compile on 3.12.**
   `Dockerfile.backend` is `python:3.12-slim`; `.github/workflows/ci.yml` and `deploy.yml` pin 3.12.
   (Corrected 2026-09-27: this line used to say 3.11, but the Dockerfile, deploy
@@ -211,7 +213,10 @@ read the live pin before using new syntax:
   `import server` (fixed at `d29ae3f`; CI now pins 3.12 to match ship). Syntax oracle before
   you commit new backend code (must parse on the ship runtime AND the 3.11 floor):
   `cd backend && ./.venv/Scripts/python.exe -c "import py_compile;py_compile.compile('<file>',doraise=True)"`
-  (`backend/.venv` is a bare Python 3.11.15 kept for exactly this check — it has no pytest.)
+  On Windows, `backend/.venv/Scripts/python.exe` is Python 3.11.15. It does have
+  pytest and ruff, but its FastAPI/Starlette versions are older than the current
+  requirements. Use it only for a deliberately labeled 3.11 compatibility check;
+  use `.venv313` for current local tests. Neither proves a Python 3.12 deployment run.
 - **Architecture decisions are binding:** `docs/adr/` holds 7 **Accepted** ADRs (model promotion
   policy, data-source policy, backtest equity, deploy CORS, test discipline, coupling, alert
   persistence). Read the
@@ -244,7 +249,7 @@ read the live pin before using new syntax:
 
 | Layer | Tech | Entry point |
 |---|---|---|
-| Backend | FastAPI · **Python 3.12** (ships in `Dockerfile.backend`, pinned in `ci.yml`/`deploy.yml`) | `backend/server.py` → `backend/.venv/bin/python -m uvicorn server:app --port 8000` |
+| Backend | FastAPI · **Python 3.12** (ships in `Dockerfile.backend`, pinned in `ci.yml`/`deploy.yml`) | `backend/server.py`; Windows uses `backend/.venv313/Scripts/python.exe` |
 | Async DB | Motor (MongoDB) | `from server import db` |
 | Tick DB | DuckDB | `backend/services/duckdb_engine.py` |
 | ML | sklearn gbm + walk-forward CV | `backend/services/ml/inference.py` (frozen), `health_monitor.py`, `backtest.py` |
@@ -252,79 +257,85 @@ read the live pin before using new syntax:
 | Embedded UI | Dash | `backend/services/dash_ui.py` (frozen) — embedded in React at `/dashboard/` |
 | Market data | Public.com adapter (cvserver / yfinance / Databento OI fallbacks) | `backend/services/public_api_adapter.py` |
 | Lint | ruff — config in `backend/pyproject.toml` | `cd backend && ruff check .` |
-| Tests | pytest (asyncio auto mode) | `cd backend && .venv/bin/python -m pytest -q` |
-| Frontend tests | jest via craco | `cd frontend && npx craco test --watchAll=false` |
+| Tests | pytest (asyncio auto mode) | Windows: from `backend`, `./.venv313/Scripts/python.exe -m pytest -q` |
+| Frontend tests | jest via craco | Set `CI=true`, then from `frontend`, `npx craco test --watchAll=false` |
 | Deploy | Caddy + docker-compose (free-tier ARM) | `deploy/free/README.md` |
 | CI | GitHub Actions | `.github/workflows/ci.yml` (also `lint.yml`, `deploy.yml`) |
 
-**Venv:** `backend/.venv/bin/python` is the working interpreter — it has pytest, ruff and the
-full dependency set. Use it from the repo: `cd backend && .venv/bin/python -m pytest -q`.
+**Windows environments (queried 2026-09-27):**
 
-This section previously told you to run `backend/.venv313/Scripts/python.exe`
-and explicitly forbade `backend/.venv`. Both were wrong for this checkout: no
-`.venv313` directory exists, the path is a Windows `Scripts/*.exe` form on a
-POSIX repo, and `backend/.venv` is the venv that actually has the toolchain.
-Following the old text sent you to a missing binary.
+- `backend/.venv313/Scripts/python.exe`: Python 3.13.15, pytest 9.1.1,
+  ruff 0.15.22, FastAPI 0.136.3, Starlette 1.3.1. Use for current local checks.
+- `backend/.venv/Scripts/python.exe`: Python 3.11.15, pytest 9.1.1,
+  ruff 0.15.22, FastAPI 0.110.1, Starlette 0.37.2. Older compatibility environment.
+- `backend/.venv/bin/python` does not exist on this Windows checkout. It is a
+  POSIX form; verify it on a POSIX machine rather than copying it into PowerShell.
+- Bare `python` resolves to `C:/Python313/python.exe`, without the project pytest
+  or ruff packages. Use the explicit project interpreter. Recheck versions after
+  environment changes; these observations do not replace the Python 3.12 ship pins.
 
 **Ruff rules (real config, `backend/pyproject.toml`):** `select = ["E","F","W","I","B","UP","SIM"]`,
 `ignore = ["E501","SIM102","SIM108","SIM117"]`, `line-length = 120`, `target-version = "py311"`
 (must track `requires-python`; raising it makes ruff propose syntax the shipped
 interpreter cannot parse), `extend-exclude = [".venv","services/ml/inference.py","services/dash_ui.py","tests/conftest.py"]`,
 plus per-file-ignores. Note `E722` is NOT in `select` — it comes in via the `E` family.
-**ruff is not installed locally.** Install it at CI's exact pin before you lint:
-`cd backend && .venv/bin/python -m pip install "ruff==0.15.22"`.
+**Ruff 0.15.22 is installed in both Windows project environments.** Check with
+`./backend/.venv313/Scripts/python.exe -m ruff --version`; do not install globally.
 
 ---
 
 ## Common command snippets
 
-Windows 11. PowerShell is the primary shell; Git Bash is available for POSIX scripts. These are
-verified to run on this machine — the macOS forms (`lsof`, `nohup`, `open -a`) are not.
+Windows 11. PowerShell is the primary shell; Git Bash is available for POSIX scripts.
+Interpreter paths were checked on this machine. Launch examples below are not a
+claim that either server was started or that a live endpoint was verified.
 
 ```powershell
-# Launch backend (background, detached) — verified: HTTP 200 on /api/health ~6s after start
-Start-Process -FilePath "backend/.venv/bin/python" `
+# Inspect an existing listener before deciding whether a launch is needed.
+Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
+
+# Launch only when requested and the port is free; keep existing sessions running.
+$backendPython = (Resolve-Path "backend/.venv313/Scripts/python.exe").Path
+Start-Process -FilePath $backendPython `
   -ArgumentList "-m","uvicorn","server:app","--port","8000" `
   -WorkingDirectory "C:\Users\DARK HERO\Desktop\FLOWW2.0\backend" `
   -WindowStyle Hidden -RedirectStandardError "$env:TEMP\floww-uvicorn.err"
-Start-Sleep -Seconds 8
 Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/health" -UseBasicParsing | Select-Object StatusCode
-
-# Free port 8000 (if backend stuck) — the lsof/xargs equivalent
-Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue |
-  ForEach-Object { taskkill /PID $_.OwningProcess /F }
 
 # See what's holding a port
 netstat -ano | Select-String ":8000\s.*LISTENING"
+# Do not kill an existing process to free a port without explicit authorization.
 ```
 
-```bash
-# Launch frontend (Git Bash) — verified: "Compiled successfully!" + HTTP 200 on :3000
-cd frontend && BROWSER=none npm start
-# then open http://localhost:3000 in a browser (no PWA on this machine)
-# stop it: Get-NetTCPConnection -LocalPort 3000 -State Listen | ForEach-Object { taskkill /PID $_.OwningProcess /F /T }
+```powershell
+# From the repository root: backend checks (full tests need their configured services).
+Push-Location backend
+./.venv313/Scripts/python.exe -m pytest --collect-only -q
+./.venv313/Scripts/python.exe -m pytest tests/services/ -k "keyword" -v
+./.venv313/Scripts/python.exe -m ruff check .
+Pop-Location
 
-# Pytest sweeps  (a PASS run needs MongoDB on localhost:27017; collection does not)
-cd backend && .venv/bin/python -m pytest --collect-only -q 2>&1 | tail -3   # collection
-cd backend && .venv/bin/python -m pytest -q --tb=no 2>&1 | tail -5          # pass count
-cd backend && .venv/bin/python -m pytest tests/services/ -k <kw> -v         # targeted
+# Frontend tests: CI prevents an interactive watcher from keeping the command open.
+Push-Location frontend
+$env:CI = "true"
+npx craco test --watchAll=false
+Pop-Location
 
-# Frontend tests
-cd frontend && CI=true npx craco test --watchAll=false
+# Optional frontend launch, only when requested and no existing UI uses the port.
+# For a separate dev server, see frontend/.env.example for the backend address.
+Push-Location frontend
+$env:BROWSER = "none"
+npm start
+Pop-Location
 
-# Lint — ruff is NOT installed locally; install CI's exact pin first
-cd backend && .venv/bin/python -m pip install "ruff==0.15.22"
-cd backend && .venv/bin/python -m ruff check .                  # rules from pyproject.toml
-cd backend && .venv/bin/python -m ruff check --select E722 .    # bare excepts only
-cd backend && .venv/bin/python -m ruff check --fix .            # auto-fix safe issues
-
-# Origin verify (anti-skip gate)
-git fetch origin && git log origin/main --oneline -1 | grep '<commit subject>'
+# Verify remote history without inventing a commit identifier.
+git fetch origin
+git log origin/main --oneline -1
 ```
 
-**MongoDB prerequisite:** `mongod` is not on PATH and no MongoDB service is registered on this box.
-Confirm it's up before a full backend run — `netstat -ano | Select-String ":27017\s.*LISTENING"`.
-Empty output means the pytest suite will error out on the Motor fixture in `tests/conftest.py`.
+**MongoDB prerequisite:** inspect the configured `MONGO_URL` before database-dependent tests.
+For a local instance, `netstat -ano | Select-String ":27017\s.*LISTENING"` checks the listener.
+No listener does not prevent collection; tests that access Mongo can fail or time out.
 
 ---
 

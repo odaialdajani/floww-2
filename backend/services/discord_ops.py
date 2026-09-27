@@ -341,20 +341,20 @@ HELP_TEXT = (
     "`!bracket <buy|sell> <qty> <SYM> <tp%> <sl%>` — entry + TP/SL legs\n"
     "`!approve <alert-key> [qty]` — trade a posted alert (journaled)\n"
     "`!close <SYM>` · `!holdings` · `!orders` · `!pnl` · `!risk`\n"
-    "`!journal [n]` · `!alerts [n]` · `!help [solstice|trading|portfolio]`\n"
+    "`!journal [n]` · `!alerts [n]` · `!help [solstice|trading|portfolio|ops]`\n"
     "Trading commands require allowlist membership."
 )
 
 
-def fetch_recent_alerts(engine, limit: int = 10, min_tier: str = "GOLD") -> list[dict]:
-    """Recent alerts for `!alerts` / `!approve` resolution. Never raises."""
+def fetch_recent_alerts(engine, limit: int = 10, min_tier: str = "GOLD") -> list[dict] | None:
+    """Recent alerts; None means unavailable, [] means a successful empty read."""
     try:
         from services.flow_alerts import read_alert_feed
 
-        return read_alert_feed(engine, days=2, min_tier=min_tier)[: max(1, int(limit))]
+        return read_alert_feed(engine, days=2, min_tier=min_tier, raise_on_error=True)[: max(1, int(limit))]
     except Exception as e:
         logger.warning("discord recent-alerts unavailable: %s", e)
-        return []
+        return None
 
 
 async def execute_approve(alert_key: str, qty: int | None, engine, router) -> dict[str, Any]:

@@ -278,3 +278,17 @@ async def test_holdings_unavailable_vs_empty(desk, alpaca, positions):
         assert "No open" not in replies(ctx)
     else:
         assert "No open paper positions" in replies(ctx)
+
+
+@pytest.mark.asyncio
+async def test_prefix_alias_and_natural_language_requests_share_audit_counts(desk, monkeypatch):
+    import collections
+
+    bot, ctx, _ = desk
+    monkeypatch.setattr(gateway, "_AUDIT", collections.deque(maxlen=200))
+    await bot.on_message(message(ctx, "!hm SPY"))
+    gateway._COOLDOWNS.clear()
+    await bot.on_message(message(ctx, "SPY heatmap"))
+    assert gateway.usage_counts() == {"heatmap": 2}
+    await bot.on_message(message(ctx, "!not-a-command"))
+    assert gateway.usage_counts() == {"heatmap": 2}

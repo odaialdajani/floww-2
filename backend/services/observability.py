@@ -148,7 +148,7 @@ def get_metrics_content_type() -> str:
 # ---------------------------------------------------------------------------
 class _MetricsNamespace:
     """Simple namespace that exposes all metric objects as attributes."""
-    def __init__(self):
+    def __init__(self) -> None:
         # Copy all module-level metric objects into this namespace
         import sys
         mod = sys.modules[__name__]

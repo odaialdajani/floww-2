@@ -24,30 +24,27 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
-from pymongo import MongoClient
 from dotenv import load_dotenv
+from pymongo import MongoClient
 
 load_dotenv(Path(__file__).resolve().parent.parent / "backend" / ".env")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
 from services.ml import DegenerateModelError
+from services.ml.gate import (
+    compute_trading_sharpe,
+)
 from services.ml.quality import (
     assert_class_balance,
     assert_feature_variance,
     assert_prediction_distribution,
-)
-from services.ml.gate import (
-    DEFAULT_MAX_SHARPE as MAX_PLAUSIBLE_DAILY_SHARPE,
-    compute_trading_sharpe,
-    evaluate_baselines,
-    evaluate_ship_verdict,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -60,9 +57,9 @@ MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
 FEATURE_VERSION = "v1.0"
 
 
-def load_features(ticker: str, version: str = None) -> pd.DataFrame:
+def load_features(ticker: str, version: str | None = None) -> pd.DataFrame:
     """Load feature matrix from MongoDB."""
-    client = MongoClient(MONGO_URL)
+    client: Any = MongoClient(MONGO_URL)
     db = client[DB_NAME]
     query = {"ticker": ticker}
     if version:
@@ -80,7 +77,7 @@ def load_features(ticker: str, version: str = None) -> pd.DataFrame:
     return df
 
 
-def prepare_data(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, List[str]]:
+def prepare_data(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, list[str]]:
     """Extract feature matrix X and target y from dataframe."""
     # Target: directional_move (-1, 0, +1) → convert to binary (0, 1)
     # We'll predict: 1 if directional_move > 0, 0 otherwise
@@ -109,10 +106,9 @@ def walk_forward_splits(
     train_size: int = 100,
     test_size: int = 20,
     embargo: int = 2,
-) -> List[Tuple[np.ndarray, np.ndarray]]:
+) -> list[tuple[np.ndarray, np.ndarray]]:
     """Generate walk-forward train/test splits."""
     splits = []
-    min_required = train_size + test_size + embargo
 
     for i in range(n_splits):
         test_start = n_samples - (n_splits - i) * test_size
@@ -131,10 +127,10 @@ def walk_forward_splits(
 
 
 def compute_baselines(
-    X: np.ndarray, y: np.ndarray, splits: List[Tuple[np.ndarray, np.ndarray]]
-) -> Dict[str, List[float]]:
+    X: np.ndarray, y: np.ndarray, splits: list[tuple[np.ndarray, np.ndarray]]
+) -> dict[str, list[float]]:
     """Compute baseline predictions."""
-    baselines = {
+    baselines: dict[str, list[Any]] = {
         "majority": [],
         "persistence": [],
         "logistic": [],
@@ -142,7 +138,6 @@ def compute_baselines(
 
     for train_idx, test_idx in splits:
         y_train = y[train_idx]
-        y_test = y[test_idx]
         X_train = X[train_idx]
         X_test = X[test_idx]
 
@@ -182,9 +177,9 @@ def compute_baselines(
 def train_model(
     X: np.ndarray,
     y: np.ndarray,
-    splits: List[Tuple[np.ndarray, np.ndarray]],
+    splits: list[tuple[np.ndarray, np.ndarray]],
     model_type: str = "xgboost",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Train a model with walk-forward CV."""
     from sklearn.preprocessing import StandardScaler
 
@@ -321,7 +316,7 @@ def train_model(
 # call sites continue to work. The function definition lives there now.
 
 
-def run_training(ticker: str, dry_run: bool = False) -> Dict[str, Any]:
+def run_training(ticker: str, dry_run: bool = False) -> dict[str, Any]:
     """Full training pipeline."""
     log.info(f"Starting training pipeline for {ticker}")
 
@@ -370,7 +365,7 @@ def run_training(ticker: str, dry_run: bool = False) -> Dict[str, Any]:
             test_actuals = r.get("actuals")
             break
 
-    baseline_metrics: Dict[str, Dict[str, float]] = {}
+    baseline_metrics: dict[str, dict[str, float]] = {}
     if test_actuals is not None:
         actuals_arr = np.array(test_actuals)
         for name, preds in baselines.items():
@@ -444,9 +439,9 @@ def run_training(ticker: str, dry_run: bool = False) -> Dict[str, Any]:
             best_model = model_type
 
     # Generate report
-    report = {
+    report: dict[str, Any] = {
         "ticker": ticker,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "data": {
             "n_samples": len(y),
             "n_features": X.shape[1],
@@ -474,9 +469,9 @@ def run_training(ticker: str, dry_run: bool = False) -> Dict[str, Any]:
         report["best_model"] = best_model
 
         # Save the best model trained on all available data
-        from sklearn.preprocessing import StandardScaler
-        from sklearn.ensemble import GradientBoostingClassifier
         import joblib
+        from sklearn.ensemble import GradientBoostingClassifier
+        from sklearn.preprocessing import StandardScaler
 
         # Remove constant features
         feature_stds = np.std(X, axis=0)
@@ -513,7 +508,7 @@ def run_training(ticker: str, dry_run: bool = False) -> Dict[str, Any]:
             "metrics": results[best_model]["metrics"],
             "sharpe": results[best_model].get("sharpe", 0),
             "beats_baselines": True,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
         with open(meta_path, "w") as f:
             json.dump(meta, f, indent=2)
@@ -539,7 +534,7 @@ def run_training(ticker: str, dry_run: bool = False) -> Dict[str, Any]:
     return report
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Train SPY direction model")
     parser.add_argument("--ticker", default="SPY")
     parser.add_argument("--dry-run", action="store_true")

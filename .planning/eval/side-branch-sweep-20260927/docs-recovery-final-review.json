@@ -1,0 +1,48 @@
+{
+  "reviewed_at": "2026-09-27T20:56:00Z",
+  "head": "ba84569927bf1776d628d43c5e33b3aadc4725c3",
+  "owned_files": [
+    "CLAUDE.md",
+    "backend/requirements.txt"
+  ],
+  "result": "PASS_WITH_DEPLOYMENT_LIMIT",
+  "changes": [
+    "Corrected Windows interpreter paths and current local tool versions.",
+    "Removed unsafe process-kill examples and unsupported claims that launch examples were verified.",
+    "Recovered exact cryptography==50.0.1 security pin."
+  ],
+  "checks": {
+    "git_diff_check": "PASS (line-ending warnings only)",
+    "python313": "3.13.15; pytest9.1.1; ruff0.15.22; FastAPI0.136.3; Starlette1.3.1; cryptography50.0.1",
+    "python311": "3.11.15; pytest9.1.1; ruff0.15.22; FastAPI0.110.1; Starlette0.37.2; cryptography50.0.1",
+    "python313_pip_check": "No broken requirements found.",
+    "python313_fernet_encrypt_decrypt": "PASS",
+    "pypi_requires_python": "!=3.9.0,!=3.9.1,>=3.9",
+    "python312_compatible_published_wheels": {
+      "windows_x64": [
+        "cryptography-50.0.1-cp311-abi3-win_amd64.whl",
+        "cryptography-50.0.1-cp39-abi3-win_amd64.whl"
+      ],
+      "linux_x64": [
+        "cryptography-50.0.1-cp311-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+        "cryptography-50.0.1-cp39-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl"
+      ],
+      "linux_arm64": [
+        "cryptography-50.0.1-cp311-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.whl",
+        "cryptography-50.0.1-cp39-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.whl"
+      ]
+    }
+  },
+  "sources": [
+    "https://pypi.org/pypi/cryptography/50.0.1/json",
+    "https://cryptography.io/en/latest/changelog/"
+  ],
+  "security_rationale": "50.0.0 fixes PKCS7 recipient-key unwrap error/timing exposure; 50.0.1 wheels update OpenSSL to4.0.2.",
+  "limits": [
+    "No Python3.12 interpreter execution or deployment was performed; wheel tag compatibility is metadata evidence only.",
+    "No full dependency reinstall or full application test is claimed.",
+    "Documentation test counts predate this bounded review and were not rerun."
+  ],
+  "historical_documents": "Existing documents-history-index.json retains exact historical retrieval pointers; no historical text was promoted into current authority by this final review.",
+  "commits_created": false
+}

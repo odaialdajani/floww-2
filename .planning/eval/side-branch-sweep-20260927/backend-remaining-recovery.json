@@ -1,0 +1,366 @@
+{
+  "status": "complete_with_recorded_limits",
+  "scope": [
+    "backend/tests/services/test_numba_greeks.py",
+    "backend/tests/services/test_ml_realtime_features.py",
+    "backend/scripts/train_real_data_ml.py",
+    "backend/scripts/train_spy_5y.py",
+    "backend/pyproject.toml"
+  ],
+  "vectorization": [
+    {
+      "fixture": "smooth",
+      "rows": 120,
+      "changedColumns": {
+        "atr_14": 13,
+        "volume_sma_5": 4,
+        "volume_sma_21": 20,
+        "relative_volume": 20,
+        "realized_vol_5d": 1,
+        "realized_vol_10d": 1,
+        "realized_vol_21d": 1,
+        "realized_vol_60d": 1,
+        "rsi_14": 12,
+        "rsi_overbought": 2,
+        "rsi_oversold": 1,
+        "bb_position": 18,
+        "vol_ratio_5_21": 20,
+        "vol_ratio_5_60": 59,
+        "sma_5_21_diff": 15,
+        "sma_5_21_cross": 15,
+        "sma_10_50_diff": 39,
+        "vol_spike": 20
+      },
+      "addedColumns": [
+        "bb_lower",
+        "bb_upper"
+      ],
+      "targetsChanged": 0
+    },
+    {
+      "fixture": "flat",
+      "rows": 120,
+      "changedColumns": {
+        "atr_14": 13,
+        "volume_sma_5": 4,
+        "volume_sma_21": 20,
+        "relative_volume": 20,
+        "rsi_oversold": 13,
+        "vol_ratio_5_21": 20,
+        "vol_ratio_5_60": 59
+      },
+      "addedColumns": [
+        "bb_lower",
+        "bb_upper"
+      ],
+      "targetsChanged": 0
+    },
+    {
+      "fixture": "zero_price",
+      "rows": 120,
+      "changedColumns": {
+        "atr_14": 13,
+        "volume_sma_5": 4,
+        "volume_sma_21": 20,
+        "relative_volume": 20,
+        "realized_vol_5d": 7,
+        "realized_vol_10d": 12,
+        "realized_vol_21d": 23,
+        "realized_vol_60d": 41,
+        "rsi_14": 12,
+        "rsi_overbought": 2,
+        "rsi_oversold": 1,
+        "bb_position": 18,
+        "vol_ratio_5_21": 20,
+        "vol_ratio_5_60": 59,
+        "sma_5_21_diff": 15,
+        "sma_5_21_cross": 15,
+        "sma_10_50_diff": 39,
+        "vol_spike": 42,
+        "gap_large": 1,
+        "target_3class": 1
+      },
+      "addedColumns": [
+        "bb_lower",
+        "bb_upper"
+      ],
+      "targetsChanged": 1
+    },
+    {
+      "fixture": "zero_volume",
+      "rows": 120,
+      "changedColumns": {
+        "atr_14": 13,
+        "realized_vol_5d": 1,
+        "realized_vol_10d": 1,
+        "realized_vol_21d": 1,
+        "realized_vol_60d": 1,
+        "rsi_14": 12,
+        "rsi_overbought": 2,
+        "rsi_oversold": 1,
+        "bb_position": 18,
+        "sma_5_21_diff": 15,
+        "sma_5_21_cross": 15,
+        "sma_10_50_diff": 39,
+        "vol_spike": 20
+      },
+      "addedColumns": [
+        "bb_lower",
+        "bb_upper"
+      ],
+      "targetsChanged": 0
+    }
+  ],
+  "vectorizationDecision": "Do not port: deterministic same-input output parity fails, including warmup windows and zero-price targets. Optimization cannot silently redefine model inputs.",
+  "finiteInputProbe": [
+    {
+      "field": "spot",
+      "input": "nan",
+      "nonfiniteGreeks": [
+        "delta",
+        "gamma",
+        "theta",
+        "vega",
+        "vanna",
+        "charm",
+        "vomma",
+        "zomma"
+      ]
+    },
+    {
+      "field": "spot",
+      "input": "inf",
+      "nonfiniteGreeks": [
+        "theta",
+        "vega",
+        "vanna",
+        "charm",
+        "vomma",
+        "zomma"
+      ]
+    },
+    {
+      "field": "strike",
+      "input": "nan",
+      "nonfiniteGreeks": [
+        "delta",
+        "gamma",
+        "theta",
+        "vega",
+        "vanna",
+        "charm",
+        "vomma",
+        "zomma"
+      ]
+    },
+    {
+      "field": "strike",
+      "input": "inf",
+      "nonfiniteGreeks": [
+        "theta",
+        "vanna",
+        "charm",
+        "vomma",
+        "zomma"
+      ]
+    },
+    {
+      "field": "expiry",
+      "input": "nan",
+      "nonfiniteGreeks": [
+        "delta",
+        "gamma",
+        "theta",
+        "vega",
+        "vanna",
+        "charm",
+        "vomma",
+        "zomma"
+      ]
+    },
+    {
+      "field": "expiry",
+      "input": "inf",
+      "nonfiniteGreeks": [
+        "delta",
+        "gamma",
+        "theta",
+        "vega",
+        "vanna",
+        "charm",
+        "vomma",
+        "zomma"
+      ]
+    },
+    {
+      "field": "iv",
+      "input": "nan",
+      "nonfiniteGreeks": [
+        "delta",
+        "gamma",
+        "theta",
+        "vega",
+        "vanna",
+        "charm",
+        "vomma",
+        "zomma"
+      ]
+    },
+    {
+      "field": "iv",
+      "input": "inf",
+      "nonfiniteGreeks": [
+        "delta",
+        "gamma",
+        "theta",
+        "vega",
+        "vanna",
+        "charm",
+        "vomma",
+        "zomma"
+      ]
+    }
+  ],
+  "cliChecks": [
+    {
+      "args": [],
+      "called": [
+        "SPY"
+      ],
+      "exitCode": 0,
+      "passed": true
+    },
+    {
+      "args": [
+        "--ticker",
+        "QQQ",
+        "--period",
+        "2y",
+        "--quick",
+        "--target",
+        "2class"
+      ],
+      "called": [
+        "QQQ"
+      ],
+      "exitCode": 0,
+      "passed": true
+    },
+    {
+      "args": [
+        "--all-tickers",
+        "--quick"
+      ],
+      "called": [
+        "SPY",
+        "QQQ",
+        "DIA",
+        "IWM",
+        "TLT"
+      ],
+      "exitCode": 0,
+      "passed": true
+    },
+    {
+      "args": [
+        "--all-tickers"
+      ],
+      "called": [
+        "SPY",
+        "QQQ",
+        "DIA",
+        "IWM",
+        "TLT"
+      ],
+      "exitCode": 1,
+      "passed": true
+    },
+    {
+      "args": [
+        "--ticker",
+        "QQQ",
+        "--all-tickers"
+      ],
+      "rejectedBeforeTraining": true,
+      "passed": true
+    }
+  ],
+  "trainingFunctionsUnchanged": true,
+  "completedAt": "2026-09-27T20:54:32.581140+00:00",
+  "dispositions": [
+    {
+      "commit": "2f21c323",
+      "decision": "Recovered 13 pure current-interface tests: empty/single/large shape, finite valid values, sign bounds, zero/negative inputs and neighboring element isolation, dividend-aware call-put delta parity, shared Greeks and noncontiguous array parity. Platform-specific AOT artifacts not restored. Nonfinite-input gap reproduced separately, not hidden by zero assertions."
+    },
+    {
+      "commit": "cc7528b3",
+      "decision": "Recovered 14 nonduplicate edge tests for short/constant kurtosis, empty chains, uppercase CALL/PUT equivalence, finite valid outputs, zero spot in OI/IV helpers and no-positive-IV existing feature contract. Existing stronger hand calculations and SciPy cross-checks retained."
+    },
+    {
+      "commit": "418c7232",
+      "decision": "Not ported: same-input parity fails across four deterministic synthetic frames. Smooth data changes 18 existing columns; zero-price case changes the target. No training or provider calls were made."
+    },
+    {
+      "commit": "594df99c",
+      "decision": "Recovered opt-in --all-tickers sequential loop over SPY/QQQ/DIA/IWM/TLT using existing train unchanged. Default/single-name report structure remains unchanged. Batch records failures, continues remaining names, returns nonzero on any failure. Mutually exclusive ticker arguments reject ambiguity before training. No automatic activation or training run."
+    },
+    {
+      "commit": "2e67af29",
+      "decision": "Recovered minimal node lifecycle annotations and four strict module overrides after isolated mypy tool became available. Strict four-module check passes under local Python3.13 target; project target retained3.11. See strictRecovery validation limit."
+    }
+  ],
+  "validation": [
+    {
+      "command": "backend/.venv313/Scripts/python.exe -m pytest --noconftest backend/tests/services/test_numba_greeks.py backend/tests/services/test_numba_greeks_delta_r.py backend/tests/services/test_ml_realtime_features.py -q",
+      "environment": "PYTHONPATH=backend; Python 3.13.15",
+      "result": "52 passed in 2.76s",
+      "newTests": 27
+    },
+    {
+      "command": "backend/.venv313/Scripts/python.exe -m ruff check backend/tests/services/test_numba_greeks.py backend/tests/services/test_ml_realtime_features.py backend/scripts/train_spy_5y.py",
+      "result": "All checks passed"
+    },
+    {
+      "command": "Mocked actual main() calls; provider download patched to raise, train replaced with deterministic stub, reports written only to temporary output directory",
+      "result": "5 scenarios passed: default single ticker, custom single ticker forwarded parameters, full batch, partial batch failure with remaining names retained, conflicting arguments rejected. AST comparison confirms train/download/features/selection/cross-validation unchanged."
+    },
+    {
+      "command": "Isolated historical and current compute_features bodies with identical patched data download",
+      "result": "Four 120-row fixtures demonstrate failed parity; detailed changed-column counts retained."
+    },
+    {
+      "command": "git diff --check -- backend/tests/services/test_ml_realtime_features.py backend/scripts/train_spy_5y.py",
+      "result": "Passed; only normal CRLF warnings"
+    }
+  ],
+  "changedFiles": [
+    "backend/tests/services/test_numba_greeks.py",
+    "backend/tests/services/test_ml_realtime_features.py",
+    "backend/scripts/train_spy_5y.py",
+    "backend/services/node_lifecycle.py",
+    "backend/pyproject.toml"
+  ],
+  "unchangedFiles": [
+    "backend/scripts/train_real_data_ml.py"
+  ],
+  "limits": [
+    "No training, model creation/promotion, provider requests, live service changes or commits.",
+    "Existing Greeks fail finite-input handling for NaN/infinity. Parent requested recording rather than broad math changes.",
+    "These checks do not validate trading profitability or historical model quality.",
+    "Strict verification uses local Python3.13 override because installed NumPy2.4 stubs cannot parse under3.11; project target remains3.11."
+  ],
+  "strictRecovery": {
+    "decision": "Recovered after isolated mypy tool became available. Added None returns to Node.tap/Node.update and dict element type to history deque; enabled four historical strict module overrides.",
+    "modules": [
+      "services.node_lifecycle",
+      "services.execution_engine",
+      "services.trinity_alignment",
+      "services.slo_tracker"
+    ],
+    "command": "PYTHONPATH=output/side-branch-sweep-20260927/mypy-tool backend/.venv313/Scripts/python.exe -m mypy --python-version 3.13 --strict --follow-imports=skip --ignore-missing-imports [four modules]",
+    "result": "Success: no issues found in 4 source files",
+    "behaviorParity": "AST equal after erasing annotations; Python 3.11 syntax parse passed; project mypy target remains 3.11 and ruff py311.",
+    "tests": "6 node lifecycle persistence tests passed in 0.15s; node_lifecycle ruff clean",
+    "limitation": "3.13 checker override is local validation only; default3.11 checker cannot parse installed NumPy2.4 PEP695 stubs."
+  }
+}

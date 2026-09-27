@@ -35,7 +35,7 @@ from __future__ import annotations
 import math
 import time
 from collections import deque
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -119,7 +119,7 @@ class VpinEngine:
     @staticmethod
     def _norm_cdf(x: np.ndarray) -> np.ndarray:
         """Standard normal CDF: Phi(x) = 0.5 * (1 + erf(x / sqrt(2)))."""
-        return 0.5 * (1.0 + np.vectorize(math.erf)(x / math.sqrt(2.0)))
+        return cast(np.ndarray, 0.5 * (1.0 + np.vectorize(math.erf)(x / math.sqrt(2.0))))
 
     @classmethod
     def classify_volume(
@@ -266,7 +266,7 @@ class VpinEngine:
             avg_pc = last.avg_price_change
 
         # Store metadata
-        meta = {
+        meta: dict[str, Any] = {
             "bucket_id": self._clock.num_finalized - 1,
             "start_time": self._bucket_start_time,
             "end_time": self._bucket_end_time,

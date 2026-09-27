@@ -13,10 +13,10 @@ Usage:
 
 import argparse
 import json
-import sys
 from collections import defaultdict
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -28,7 +28,7 @@ REPORT_FILE = KANBAN_DIR / "CAPACITY_REPORT.md"
 HISTORY_FILE = KANBAN_DIR / "throughput_history.json"
 
 
-def load_all_cards() -> list[dict]:
+def load_all_cards() -> list[dict[str, Any]]:
     cards = []
     for f in sorted(CARDS_DIR.glob("*.md")):
         if f.name.startswith("tagging_") or f.name.startswith("folder_") or f.name.startswith("agent9_"):
@@ -65,16 +65,16 @@ def load_all_cards() -> list[dict]:
     return cards
 
 
-def get_week_bounds(week_str: str = None) -> tuple[datetime, datetime]:
+def get_week_bounds(week_str: str | None = None) -> tuple[datetime, datetime]:
     """Return (start, end) for the given ISO week or current week."""
     if week_str:
         # Parse YYYY-WNN
         parts = week_str.split("-W")
         year = int(parts[0])
         week = int(parts[1])
-        start = datetime.strptime(f"{year}-W{week:02d}-1", "%Y-W%W-%w").replace(tzinfo=timezone.utc)
+        start = datetime.strptime(f"{year}-W{week:02d}-1", "%Y-W%W-%w").replace(tzinfo=UTC)
     else:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         start = now - timedelta(days=now.weekday())
         start = start.replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -82,7 +82,7 @@ def get_week_bounds(week_str: str = None) -> tuple[datetime, datetime]:
     return start, end
 
 
-def filter_cards_by_week(cards: list[dict], start: datetime, end: datetime) -> list[dict]:
+def filter_cards_by_week(cards: list[dict[str, Any]], start: datetime, end: datetime) -> list[dict[str, Any]]:
     """Filter cards updated within the week window."""
     result = []
     for card in cards:
@@ -97,7 +97,7 @@ def filter_cards_by_week(cards: list[dict], start: datetime, end: datetime) -> l
     return result
 
 
-def compute_weekly_stats(cards: list[dict]) -> dict:
+def compute_weekly_stats(cards: list[dict[str, Any]]) -> dict[str, Any]:
     stats = {
         "total_cards": len(cards),
         "done": 0,
@@ -139,7 +139,7 @@ def compute_weekly_stats(cards: list[dict]) -> dict:
     return stats
 
 
-def generate_report(week_str: str = None) -> str:
+def generate_report(week_str: str | None = None) -> str:
     start, end = get_week_bounds(week_str)
     week_label = start.strftime("%Y-W%W")
 
@@ -157,18 +157,18 @@ def generate_report(week_str: str = None) -> str:
                 delta = stats["done"] - prev_done
                 sign = "+" if delta >= 0 else ""
                 prev_comparison = f" ({sign}{delta} vs last week)"
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             pass
 
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
     lines = [
         f"# Weekly Capacity Report — {week_label}",
         f"Generated: {now}",
         "",
         "## Summary",
         "",
-        f"| Metric | Value |",
-        f"|--------|-------|",
+        "| Metric | Value |",
+        "|--------|-------|",
         f"| Total cards touched | {stats['total_cards']} |",
         f"| Completed | {stats['done']}{prev_comparison} |",
         f"| In progress | {stats['in_progress']} |",
@@ -188,8 +188,8 @@ def generate_report(week_str: str = None) -> str:
         lines.extend([
             "## Completion Times",
             "",
-            f"| Stat | Hours |",
-            f"|------|-------|",
+            "| Stat | Hours |",
+            "|------|-------|",
             f"| Average | {avg:.1f} |",
             f"| Median | {median:.1f} |",
             f"| P90 | {p90:.1f} |",
@@ -202,8 +202,8 @@ def generate_report(week_str: str = None) -> str:
     lines.extend([
         "## Per-Agent Throughput",
         "",
-        f"| Agent | Done | In Progress | Total | Completion Rate |",
-        f"|-------|------|-------------|-------|-----------------|",
+        "| Agent | Done | In Progress | Total | Completion Rate |",
+        "|-------|------|-------------|-------|-----------------|",
     ])
     for agent in sorted(stats["by_agent"].keys()):
         s = stats["by_agent"][agent]
@@ -281,7 +281,7 @@ def generate_report(week_str: str = None) -> str:
     return "\n".join(lines)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Weekly capacity report")
     parser.add_argument("--week", type=str, default=None, help="ISO week (e.g. 2026-W21)")
     args = parser.parse_args()

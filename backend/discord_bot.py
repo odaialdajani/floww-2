@@ -20,9 +20,10 @@ import collections
 import copy
 import logging
 import os
-import re
 import sys
 import time as _time
+
+from services import discord_harness as _harness
 
 try:
     from dotenv import load_dotenv
@@ -38,28 +39,22 @@ log = logging.getLogger("discord_bot")
 # Prompt harness: per-user cooldowns on heavy commands (heatmap builds hit
 # paid chains — 20s/user keeps one enthusiastic thumb inside budget) and an
 # audit ring so allowlisted users can see who ran what.
-_COOLDOWNS: dict[tuple[str, str], float] = {}
-_COOLDOWN_S = {"heatmap": 20.0, "vanna": 20.0, "walls": 5.0}
-_AUDIT: collections.deque = collections.deque(maxlen=200)
-_NL_READ = re.compile(r"^([A-Za-z][A-Za-z0-9.\-]{0,9})\s+(heatmap|hm|walls|w|vanna|v|gex|flip)$",
-                      re.IGNORECASE)
+_COOLDOWNS: dict[tuple[str, str], float] = _harness.new_cooldowns()
+_COOLDOWN_S = dict(_harness.COOLDOWN_S)
+_AUDIT: collections.deque = _harness.new_audit_ring()
+_NL_READ = _harness.NL_READ
 
 
 def _cool_ok(user_id, cmd: str) -> tuple[bool, float]:
-    wait = _COOLDOWN_S.get(cmd, 0)
-    if not wait:
-        return True, 0.0
-    now = _time.monotonic()
-    key = (str(user_id), cmd)
-    last = _COOLDOWNS.get(key, 0.0)
-    if now - last < wait:
-        return False, wait - (now - last)
-    _COOLDOWNS[key] = now
-    return True, 0.0
+    return _harness.cool_check(_COOLDOWNS, _COOLDOWN_S, user_id, cmd, _time.monotonic())
 
 
 def _audit(user_id, cmd: str) -> None:
-    _AUDIT.append({"t": _time.time(), "user": str(user_id), "cmd": cmd})
+    _harness.audit_append(_AUDIT, user_id, cmd, _time.time())
+
+
+def usage_counts() -> dict:
+    return _harness.audit_counts(_AUDIT)
 
 
 def _commands():
@@ -70,6 +65,13 @@ def _commands():
     intents = __import__("discord").Intents.default()
     intents.message_content = True  # enable in Developer Portal too
     bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
+
+    @bot.before_invoke
+    async def audit_request(ctx):
+        # Count parsed invocations, not successful trades or provider responses.
+        args = str(getattr(getattr(ctx, "message", None), "content", "")).partition(" ")[2]
+        _audit(getattr(getattr(ctx, "author", None), "id", "?"),
+               f"{ctx.command.name} {args}".strip())
 
     def _deny(ctx) -> bool:
         return ops.is_trading_allowed(getattr(getattr(ctx, "author", None), "id", None))
@@ -84,9 +86,6 @@ def _commands():
 
         return duckdb_engine
 
-    _ALIASES = {"h": "help", "pos": "holdings", "positions": "holdings",
-                "a": "alerts", "hm": "heatmap", "w": "walls", "v": "vanna",
-                "j": "journal", "p": "positions"}
     _TOPICS = {
         "solstice": ("**Solstice (gamma desk)**\n"
                      "`!heatmap <T>` GEX ladder picture · `!vanna <T>` VEX picture · "
@@ -100,7 +99,7 @@ def _commands():
                       "orders · `!pnl` day P&L · `!risk` buying power · `!journal [n]` "
                       "recent journaled trades"),
         "ops": ("**Ops**\n`!status` desk health · `!clock` market hours · `!audit [n]` command log "
-                "(allowlisted) · `!cancel <order-id>` · cooldowns: heatmap/vanna 20s per user"),
+                f"(allowlisted) · `!cancel <order-id>` · cooldowns: {_harness.cooldown_line(_COOLDOWN_S)} per user"),
     }
 
     @bot.command(name="help", aliases=["h"])
@@ -109,8 +108,9 @@ def _commands():
         if t in _TOPICS:
             await ctx.send(_TOPICS[t])
             return
+        aliases = sorted({a for c in bot.walk_commands() for a in c.aliases})
         await ctx.send(ops.HELP_TEXT + "\n`!help <solstice|trading|portfolio|ops>` for topics. "
-                       "Aliases: h pos a hm w v j p.")
+                       "Aliases: " + " ".join(aliases) + ".")
 
     @bot.command(name="holdings", aliases=["pos", "positions", "p"])
     async def holdings_cmd(ctx):
@@ -174,6 +174,9 @@ def _commands():
     @bot.command(name="alerts", aliases=["a"])
     async def alerts_cmd(ctx, n: int = 5):
         rows = ops.fetch_recent_alerts(_engine(), limit=n)
+        if rows is None:
+            await ctx.send("Recent alerts unavailable — feed state unknown.")
+            return
         if not rows:
             await ctx.send("No recent alerts.")
             return
@@ -187,7 +190,6 @@ def _commands():
         if not _deny(ctx):
             await ctx.send("Trading commands are allowlisted (DISCORD_ALLOWED_USER_IDS).")
             return
-        _audit(getattr(getattr(ctx, "author", None), "id", "?"), f"{side} {qty} {symbol}")
         import time
 
         router = _router()
@@ -354,6 +356,9 @@ def _commands():
             from services import heatmap_image as hi
 
             norm = await hi.get_heatmap_data(ticker)
+            if norm is None:
+                await ctx.send(f"Heatmap unavailable for {ticker.upper()} — chain state unknown.")
+                return
             png = hi.render_gex_png(norm)
             if not png:
                 await ctx.send(f"No exposure data for {ticker.upper()} right now.")
@@ -383,6 +388,9 @@ def _commands():
             from services import heatmap_image as hi
 
             norm = await hi.get_vex_data(ticker)
+            if norm is None:
+                await ctx.send(f"Vanna unavailable for {ticker.upper()} — chain state unknown.")
+                return
             png = hi.render_vex_png(norm)
             if not png:
                 await ctx.send(f"No vol-exposure data for {ticker.upper()} right now "
@@ -412,6 +420,9 @@ def _commands():
             from services import heatmap_image as hi
 
             norm = await hi.get_heatmap_data(ticker)
+            if norm is None:
+                await ctx.send(f"Walls unavailable for {ticker.upper()} — chain state unknown.")
+                return
             await ctx.send(hi.walls_text(norm) if norm else
                            f"No wall data for {ticker.upper()} right now.")
         except Exception as e:
@@ -429,7 +440,6 @@ def _commands():
             from alpaca_client import AlpacaClient
 
             ok = await AlpacaClient().cancel_order(order_id)
-            _audit(getattr(getattr(ctx, "author", None), "id", "?"), f"cancel {order_id}")
             await ctx.send(f"Cancel `{order_id}`: {'confirmed' if ok else 'failed / already gone'}.")
         except Exception as e:
             await ctx.send(f"cancel failed: {e}")
@@ -478,7 +488,8 @@ def _commands():
             return
         import datetime as _dt
         lines = [f"{_dt.datetime.fromtimestamp(r['t']).strftime('%H:%M:%S')} <@{r['user']}> `{r['cmd']}`" for r in rows]
-        await ctx.send("**Command audit**\n" + "\n".join(lines))
+        use = " ".join(f"{k}×{v}" for k, v in sorted(usage_counts().items()))
+        await ctx.send("**Command audit**\n" + "\n".join(lines) + (f"\n_requests: {use}_" if use else ""))
 
     @bot.event
     async def on_message(message):
@@ -488,17 +499,12 @@ def _commands():
                 or author == bot.user):
             return
         text = str(getattr(message, "content", "") or "").strip()
-        m = _NL_READ.fullmatch(text)
+        parsed = _harness.parse_nl(text)
         command_text = None
-        if m:
-            ticker, word = m.group(1).upper(), m.group(2).lower()
-            cmd = {"hm": "heatmap", "w": "walls", "v": "vanna",
-                   "gex": "heatmap", "flip": "walls"}.get(word, word)
-            command_text = f"{cmd} {ticker}"
-        elif text.lower() in {"status", "clock"}:
-            command_text = text.lower()
+        if parsed:
+            cmd, ticker = parsed
+            command_text = f"{cmd} {ticker}" if ticker else cmd
         if command_text:
-            _audit(getattr(author, "id", "?"), f"{command_text} (nl)")
             # Preserve the original event and use the normal parser, checks,
             # invocation hooks, callbacks, cooldowns, and error dispatch.
             message = copy.copy(message)
@@ -507,15 +513,13 @@ def _commands():
 
     @bot.event
     async def on_command_error(ctx, error):
-        import difflib
-
         from discord.ext import commands as _cmds
 
         if isinstance(error, _cmds.CommandNotFound):
             typed = str(getattr(ctx, "invoked_with", "") or "")
             known = [c.name for c in bot.commands] + ["pos", "h", "a", "hm", "w", "v", "j", "p", "x"]
-            guess = difflib.get_close_matches(typed, known, n=1, cutoff=0.6)
-            hint = f" Did you mean `!{guess[0]}`?" if guess else ""
+            guess = _harness.fuzzy_hint(typed, known)
+            hint = f" Did you mean `!{guess}`?" if guess else ""
             await ctx.send(f"Unknown command `!{typed}`.{hint} Try `!help`.")
             return
         await ctx.send(f"Command error: {type(error).__name__}. Try `!help`.")

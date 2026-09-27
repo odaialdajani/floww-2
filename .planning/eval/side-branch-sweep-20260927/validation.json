@@ -1,0 +1,61 @@
+{
+  "backend": {
+    "python": "3.13.15",
+    "passed": 364,
+    "failed": 0,
+    "skipped": 0,
+    "scope": [
+      "tests/routes/test_public_portfolio_values.py",
+      "tests/routes/test_skylit_recovered_contracts.py",
+      "tests/services/test_discord_g1_alerts_honesty.py",
+      "tests/services/test_discord_g1_chain_honesty.py",
+      "tests/services/test_discord_g1_contract.py",
+      "tests/services/test_discord_g1_counters.py",
+      "tests/services/test_discord_g1_help_honesty.py",
+      "tests/services/test_discord_g3_paper_loop.py",
+      "tests/services/test_discord_gateway.py",
+      "tests/services/test_discord_harness.py",
+      "tests/services/test_discord_notifier.py",
+      "tests/services/test_discord_ops.py",
+      "tests/agent/test_settlement_failure_path.py",
+      "tests/test_compose_consistency.py",
+      "tests/services/test_public_api_client.py",
+      "tests/services/test_public_api_partial_data.py",
+      "tests/routes/test_public_brokerage_auth.py",
+      "tests/routes/test_public_brokerage_gate.py",
+      "tests/services/test_stochastic_vol.py",
+      "tests/services/test_vpin_cdf.py",
+      "tests/services/test_vpin_volume_clock.py",
+      "tests/services/test_ml_realtime_features.py",
+      "tests/services/test_numba_greeks.py",
+      "tests/services/test_position_alerts.py",
+      "tests/services/backtest/test_duckdb_logger.py",
+      "tests/services/test_node_lifecycle_persistence.py"
+    ],
+    "externalNetwork": "blocked by tests.offline_network",
+    "log": "output/side-branch-sweep-20260927/combined-recovery-verified.log"
+  },
+  "frontend": {
+    "suites": 104,
+    "passed": 914,
+    "build": "passed",
+    "log": "output/side-branch-sweep-20260927/frontend-final-sweep.log",
+    "productionBuildLog": "output/side-branch-sweep-20260927/frontend-build-sweep.log"
+  },
+  "browser": {
+    "status": "UNAVAILABLE",
+    "attempts": [
+      "iab unavailable",
+      "listBrowsers returned []",
+      "chrome unavailable"
+    ],
+    "claim": "No rendered screen verification completed for this sweep."
+  },
+  "typing": {
+    "modules": 4,
+    "result": "pass with local3.13 override",
+    "python311Limit": "installed NumPy stubs require newer syntax",
+    "sourceVersion": "3.11 supported annotations preserved"
+  },
+  "codeDrift": []
+}

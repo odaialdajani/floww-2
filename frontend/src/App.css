@@ -2880,10 +2880,11 @@ button, select, input {
 
 .skylit-ticker-scroll {
   overflow-x: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: #475569 #0d1117;
 }
-.skylit-ticker-scroll::-webkit-scrollbar { display: none; }
+.skylit-ticker-scroll::-webkit-scrollbar { height: 6px; }
+.skylit-ticker-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
 
 .skylit-ticker-inner {
   display: flex;

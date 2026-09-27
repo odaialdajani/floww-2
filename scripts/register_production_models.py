@@ -15,11 +15,12 @@ import json
 import os
 import sys
 from pathlib import Path
-from datetime import datetime, timezone
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "backend"))
 
 from dotenv import load_dotenv
+
 load_dotenv(Path(__file__).resolve().parent / "backend" / ".env")
 
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -30,7 +31,7 @@ MODELS_DIR = REPO_ROOT / "models"
 REPORTS_DIR = REPO_ROOT / "reports"
 
 # Map of ticker -> manifest file + model artifact paths
-MODEL_SPECS = {
+MODEL_SPECS: dict[str, dict[str, Any]] = {
     "IWM": {
         "manifest": MODELS_DIR / "IWM_gbm_production_manifest.json",
         "model_id": "IWM_direction_v1.0_gbm",
@@ -58,14 +59,14 @@ MODEL_SPECS = {
 }
 
 
-def load_manifest(path: Path) -> dict:
+def load_manifest(path: Path | None) -> dict[str, Any]:
     if path and path.exists():
         with open(path) as f:
             return json.load(f)
     return {}
 
 
-def build_metrics_summary(ticker: str, manifest: dict) -> dict:
+def build_metrics_summary(ticker: str, manifest: dict[str, Any]) -> dict[str, Any]:
     """Build metrics_summary for the registry from manifest + known results."""
     # Known results from ML_RESULTS_SUMMARY.md
     known = {
@@ -119,7 +120,7 @@ def build_metrics_summary(ticker: str, manifest: dict) -> dict:
     return base
 
 
-async def register_all(dry_run: bool = True, promote: list = None):
+async def register_all(dry_run: bool = True, promote: list[str] | None = None) -> None:
     mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
     db_name = os.environ.get("DB_NAME", "confluence_decoder")
     client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
@@ -150,7 +151,7 @@ async def register_all(dry_run: bool = True, promote: list = None):
             continue
 
         if dry_run:
-            print(f"  DRY RUN — would register as shadow")
+            print("  DRY RUN — would register as shadow")
             results.append((ticker, "dry_run", "would register"))
             continue
 
@@ -170,7 +171,7 @@ async def register_all(dry_run: bool = True, promote: list = None):
         # Promote if requested and passes gate
         if ticker in promote:
             if not metrics.get("beats_baselines", False):
-                print(f"  PROMOTE SKIP: beats_baselines=False, would fail gate")
+                print("  PROMOTE SKIP: beats_baselines=False, would fail gate")
                 results.append((ticker, "promote_skip", "beats_baselines=False"))
             else:
                 result = await registry.promote_model(spec["model_id"])

@@ -52,7 +52,8 @@ uvicorn server:app --host 0.0.0.0 --port 8000
 cd frontend
 npm install
 
-# Development
+# Development (separate local backend on port 8000)
+cp .env.example .env.development.local
 npm start
 
 # Production build

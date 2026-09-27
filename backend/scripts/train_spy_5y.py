@@ -19,6 +19,7 @@ Usage:
     cd backend && .venv/bin/python3 -m scripts.train_spy_5y
     cd backend && .venv/bin/python3 -m scripts.train_spy_5y --ticker SPY --period 5y
     cd backend && .venv/bin/python3 -m scripts.train_spy_5y --quick
+    cd backend && .venv/bin/python3 -m scripts.train_spy_5y --all-tickers --quick
 """
 from __future__ import annotations
 
@@ -44,6 +45,7 @@ log = logging.getLogger("train_spy_5y")
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 REPORTS_DIR = REPO_ROOT / "reports"
 MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
+ALL_TICKERS = ("SPY", "QQQ", "DIA", "IWM", "TLT")
 
 # ── Feature Engineering ─────────────────────────────────────────────────
 
@@ -387,12 +389,27 @@ def train(ticker: str, period: str = "5y", quick: bool = False, target_type: str
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ticker", default="SPY")
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--ticker", default="SPY")
+    selection.add_argument("--all-tickers", action="store_true",
+                           help="Run the existing training separately for SPY, QQQ, DIA, IWM and TLT")
     parser.add_argument("--period", default="5y")
     parser.add_argument("--quick", action="store_true")
     parser.add_argument("--target", choices=["2class","3class","both"], default="both")
     args = parser.parse_args()
-    results = train(args.ticker, args.period, args.quick, args.target)
+    failed = False
+    if args.all_tickers:
+        results = {}
+        for ticker in ALL_TICKERS:
+            try:
+                results[ticker] = train(ticker, args.period, args.quick, args.target)
+            except Exception as exc:
+                log.exception("Training failed for %s", ticker)
+                results[ticker] = {"error": str(exc)}
+                failed = True
+    else:
+        # Keep the original single-name report and failure behavior.
+        results = train(args.ticker, args.period, args.quick, args.target)
 
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -404,6 +421,19 @@ def main():
     print("\n" + "="*60)
     print("RESULTS SUMMARY")
     print("="*60)
+    if args.all_tickers:
+        for ticker, result in results.items():
+            print(f"\n{ticker}:")
+            if "error" in result:
+                print(f"  ERROR: {result['error']}")
+            else:
+                _print_summary(result)
+    else:
+        _print_summary(results)
+    return 1 if failed else 0
+
+
+def _print_summary(results):
     for tname in ["2class", "3class"]:
         if tname in results:
             r = results[tname]
@@ -418,4 +448,4 @@ def main():
             print(f"  Features: {r['n_features']}")
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

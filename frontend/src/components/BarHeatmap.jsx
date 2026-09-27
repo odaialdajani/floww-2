@@ -1,7 +1,17 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { fmt } from "../lib/helpers";
 
 export default function BarHeatmap({ data, filters, compact = true, viewMode = "gex" }) {
+  const scrollRef = useRef(null);
+  const centeredScope = useRef(null);
+  useEffect(() => {
+    const box = scrollRef.current;
+    const target = box?.querySelector('[data-spot-nearest="true"]');
+    const scope = data?.ticker || data?.symbol || "current";
+    if (!box || !target || centeredScope.current === scope) return;
+    box.scrollTop = Math.max(0, target.offsetTop - box.clientHeight / 2 + target.offsetHeight / 2);
+    centeredScope.current = scope;
+  });
   if (!data?.strikes) return null;
   const { spot, strikes, nodes } = data;
   const key = viewMode === "vex" ? "vex" : viewMode === "charm" ? "charm" : "gex";
@@ -28,6 +38,7 @@ export default function BarHeatmap({ data, filters, compact = true, viewMode = "
   });
   if (!filtered.length) return <div className="text-slate-500 text-xs p-4">No strikes match filters.</div>;
   const sorted = [...filtered].sort((a, b) => b.strike - a.strike);
+  const nearest = finite(spot) ? sorted.reduce((best, row) => Math.abs(row.strike - spot) < Math.abs(best.strike - spot) ? row : best, sorted[0]).strike : null;
   const maxAbs = Math.max(...filtered.map(s => Math.abs(s.selectedValue ?? 0)), 1);
   const king = key === "gex" ? nodes?.king?.strike : null;
   const fSet = new Set((key === "gex" ? nodes?.floors || [] : []).map(f => f.strike));
@@ -39,7 +50,7 @@ export default function BarHeatmap({ data, filters, compact = true, viewMode = "
   const kingColorNeg = viewMode === "vex" ? "rgba(219, 39, 119, 0.85)" : viewMode === "charm" ? "rgba(168, 85, 247, 0.85)" : "rgba(232, 121, 249, 0.85)";
 
   return (
-    <div className="relative" style={{ paddingTop: 4, paddingBottom: 4 }}>
+    <div ref={scrollRef} className="relative" tabIndex={0} aria-label="Strike exposure bars" style={{ paddingTop: 4, paddingBottom: 4, overflowY: "auto", minHeight: 0, flex: 1 }}>
       {sorted.map((s, i) => {
         const isKing = s.strike === king;
         const isF = fSet.has(s.strike);
@@ -58,7 +69,7 @@ export default function BarHeatmap({ data, filters, compact = true, viewMode = "
                 <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(94,234,212,0.85), transparent)" }} />
               </div>
             )}
-            <div className="bar-row flex items-center text-[10px] mono px-1" style={{ height: rowH }} aria-label={`${s.strike} ${key.toUpperCase()}: ${val === null ? "unavailable" : val}`} title={`${key.toUpperCase()}: ${val === null ? "Unavailable for the selected scope" : val}`}>
+            <div data-spot-nearest={s.strike === nearest ? "true" : undefined} className="bar-row flex items-center text-[10px] mono px-1" style={{ height: rowH }} aria-label={`${s.strike} ${key.toUpperCase()}: ${val === null ? "unavailable" : val}`} title={`${key.toUpperCase()}: ${val === null ? "Unavailable for the selected scope" : val}`}>
               <div className="flex-1 flex justify-end pr-1">
                 {val !== null && val < 0 && <div style={{ width: `${w}%`, height: 10, borderRadius: 2, background: isKing ? kingColorNeg : barColorNeg }} />}
               </div>

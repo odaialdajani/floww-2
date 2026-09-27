@@ -1,0 +1,16 @@
+{
+  "discord": "Restored pure command helper, cooldown/help/counters/error states with optional-dependency tests; latest auth/trading gates retained.",
+  "account": "Restored market value/cost basis/day and total gain/asset-group totals; fixed nested real Position cost/gain shape, fractional quantities, zero/missing distinction and nullable diagnostic prints.",
+  "frontend": "Restored visible scrollbars, development-only URL example, one-time spot focus, inline empty-filter actions and contract-scoped manual checklist. Full suite104/914 and production build passed; browser unavailable.",
+  "typing": "Five scripts, stochastic volatility and VPIN annotations restored; strict node lifecycle/execution/trinity/SLO rules with annotation-only changes and four-module check.",
+  "research": "Isolated backtest storage, explicit notifier and pure supplied-snapshot position evaluator restored without automatic polling/routes/sends; edge Greek/features tests and opt-in five-ticker command added.",
+  "routeTests": "Recovered10 fixed-chain shape/cross-panel/outage/recovery/missing-chain route checks; existing snapshot and breaker suites retain storage/resilience coverage.",
+  "rejected": "Historical pooled-roll statistic changes under input reorder; pin display lacks same-day/full-coverage inputs; quote-drift display invents quote observations; vectorized model inputs fail parity. Platform-specific old binary, unguarded polling/socket routes, bad cross-validation/return-ratio formulas and old auto-promoting scripts remain archived.",
+  "security": "Restored cryptography50.0.1 pin, checked official compatibility and installed local encrypt/decrypt behavior.",
+  "limits": [
+    "Browser control unavailable (no enabled browsers); actual rendered verification not completed. No claim of visual validation.",
+    "No actual Python3.12 local run; current dependency checks use Python3.13, earlier testsPython3.11.",
+    "Existing nonfinite-input Greek handling and fractional order display remain recorded follow-up issues, unrelated to recovered behavior.",
+    "Measurement upgrade plan is preserved proposal; this sweep does not implement it or claim trading profitability."
+  ]
+}

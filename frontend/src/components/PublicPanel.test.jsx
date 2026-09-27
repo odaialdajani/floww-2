@@ -55,3 +55,30 @@ test('shows the error tile when the backend is unreachable', async () => {
   await act(async () => { render(<PublicPanel />); });
   await waitFor(() => expect(screen.getByTestId('public-panel-error')).toBeInTheDocument());
 });
+
+
+test('restores position detail and complete asset totals without hiding later rows', async () => {
+  window.localStorage.setItem('floww_app_key', 'test-key');
+  const positions = Array.from({length: 26}, (_, i) => ({symbol: 'S'+i, quantity: 1.5, current_price: 80,
+    market_value: 120, cost_basis: 100, pnl: 20, day_gain_pct: 2.5, total_gain_pct: 20, asset_type: 'EQUITY'}));
+  mockFetchOnce(ACCOUNT, {...PORTFOLIO, positions, position_count: 26});
+  await act(async () => { render(<PublicPanel />); });
+  expect(screen.getByText('S25')).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', {name: 'Market value'})).toBeInTheDocument();
+  expect(screen.getAllByText('2.50%')).toHaveLength(26);
+  expect(screen.getAllByText('20.00%')).toHaveLength(26);
+  expect(screen.getByLabelText('EQUITY total market value')).toHaveTextContent('$3,120.00');
+  expect(screen.getByLabelText('EQUITY total cost')).toHaveTextContent('$2,600.00');
+});
+
+test('unknown position values make asset totals unavailable, while true zero remains zero', async () => {
+  window.localStorage.setItem('floww_app_key', 'test-key');
+  mockFetchOnce(ACCOUNT, {...PORTFOLIO, positions: [
+    {symbol: 'KNOWN', market_value: 10, cost_basis: 10, pnl: 0, asset_type: 'EQUITY'},
+    {symbol: 'MISSING', market_value: null, cost_basis: null, pnl: null, asset_type: 'EQUITY'},
+  ]});
+  await act(async () => { render(<PublicPanel />); });
+  expect(screen.getByLabelText('EQUITY total market value')).toHaveTextContent('Unavailable');
+  expect(screen.getByLabelText('EQUITY total cost')).toHaveTextContent('Unavailable');
+  expect(screen.getAllByText('$0.00').length).toBeGreaterThan(0);
+});

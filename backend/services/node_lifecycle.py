@@ -65,7 +65,7 @@ class Node:
         threshold = self.strike * self.tap_threshold_pct
         return abs(spot - self.strike) <= threshold
 
-    def tap(self):
+    def tap(self) -> None:
         """Record a tap on this node."""
         now = datetime.now(UTC)
         self.tap_count += 1
@@ -85,7 +85,7 @@ class Node:
         else:
             self.state = NodeState.TAPPED
 
-    def update(self, spot: float):
+    def update(self, spot: float) -> None:
         """Update node state based on current spot price."""
         if self.state == NodeState.EXPIRED:
             return
@@ -169,7 +169,7 @@ class NodeLifecycleTracker:
         self.max_taps = max_taps
         self.max_nodes = max_nodes
         self._nodes: dict[float, Node] = {}  # strike -> Node
-        self._history: deque = deque(maxlen=1000)
+        self._history: deque[dict[str, Any]] = deque(maxlen=1000)
 
     def update(self, spot: float, king_nodes: list[tuple[float, float]]) -> dict[str, Any]:
         """Update all nodes with current spot and detected king nodes.

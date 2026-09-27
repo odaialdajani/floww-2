@@ -1,0 +1,55 @@
+{
+  "reviewedAt": "2026-09-27T20:56:45.842944+00:00",
+  "base": "ba84569927bf1776d628d43c5e33b3aadc4725c3",
+  "status": "no_substantive_source_defects_found_with_publication_and_visual_limits",
+  "scope": [
+    "frontend/src/components/flowseeker/ContractReview.jsx",
+    "frontend/src/components/flowseeker/FlowseekerProBlademap.jsx (recovered inline changes only)",
+    "frontend/src/components/BarHeatmap.jsx (centering/scroll changes only)",
+    "frontend/src/components/PublicPanel.jsx (recovered account detail and unknown handling only)",
+    "README.md",
+    "frontend/.env.example",
+    "backend/tests/routes/test_skylit_recovered_contracts.py"
+  ],
+  "findings": [],
+  "publicationActions": [
+    {
+      "path": "frontend/.env.example",
+      "status": "required_before_commit",
+      "evidence": "git check-ignore -v reports .gitignore:89:.env.*; git ls-files returns no file. README now directs users to copy this file.",
+      "action": "Force-add the nonsecret example explicitly or add an exact ignore exception, then verify tracked contents."
+    }
+  ],
+  "checks": [
+    {
+      "kind": "frontend",
+      "command": "node node_modules/@craco/craco/dist/bin/craco.js test --watchAll=false --runInBand --runTestsByPath src/components/flowseeker/ContractReview.test.jsx src/components/flowseeker/FlowseekerProBlademap.test.jsx src/components/BarHeatmap.test.jsx src/components/PublicPanel.test.jsx",
+      "cwd": "frontend",
+      "result": "4 suites passed, 77 tests passed, 5.356s",
+      "warnings": [
+        "Existing fake-timer clearInterval warning; no test failures."
+      ]
+    },
+    {
+      "kind": "backend",
+      "command": "backend/.venv313/Scripts/python.exe -m pytest --noconftest backend/tests/routes/test_skylit_recovered_contracts.py -q",
+      "environment": "PYTHONPATH=backend",
+      "result": "10 passed in 1.64s",
+      "warnings": [
+        "FastAPI TestClient deprecation warning for httpx; no test failures."
+      ]
+    }
+  ],
+  "sourceReview": [
+    "Manual review state is keyed by selected contract, explicitly temporary, and does not enable trades. Inline clear controls match the existing clear-filter handler and broader screen uses the existing all-screen key.",
+    "BarHeatmap ref is placed on the scrolling flex child of the existing constrained flex parent; center target offset is relative to the positioned chart container. Data refresh does not reset manual scrolling for the same ticker.",
+    "PublicPanel keeps unknown values separate from zero, does not substitute account values when the received portfolio explicitly lacks them, exposes all positions, and withholds group totals if any amount is unavailable.",
+    "Development environment example targets the existing backend-origin setting and is scoped to .env.development.local, leaving production same-origin defaults intact.",
+    "Recovered route tests use a fixed chain, mocked history, patched server sanitizer and disabled recorder connection; source outage and empty-chain states are asserted separately."
+  ],
+  "limitations": [
+    "No real-browser layout/interaction proof. Parent reports browser control unavailable and is handling the user decision. Unit DOM tests do not validate actual geometry.",
+    "No claims concerning unrelated existing account/order behavior or financial-model accuracy.",
+    "No source edits, staging, commits, provider calls or service restarts performed by this reviewer."
+  ]
+}

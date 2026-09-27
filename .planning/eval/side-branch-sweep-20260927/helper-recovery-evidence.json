@@ -1,0 +1,61 @@
+{
+  "status": "IMPLEMENTED_FOCUSED_CHECKS_PASS",
+  "utc": "2026-09-27T21:00:00Z",
+  "sources": {
+    "logger": "999cda0e",
+    "position_alerts": "a3a2e62b",
+    "notifier": "a5e7369a"
+  },
+  "ownership": [
+    "backend/services/backtest/duckdb_logger.py",
+    "backend/tests/services/backtest/test_duckdb_logger.py",
+    "backend/services/discord_notifier.py",
+    "backend/tests/services/test_discord_notifier.py",
+    "backend/services/position_alerts.py",
+    "backend/tests/services/test_position_alerts.py"
+  ],
+  "environment": "backend/.venv313/Scripts/python.exe, Python3.13; current installed application dependencies",
+  "red": "All3 missing-module import errors observed with new behavioral tests before implementation.",
+  "green": "34passed,26warnings,0.87s under tests.offline_network; ruff6files all checks passed.",
+  "test_command": "API_SECRET_KEY=test-secret-key backend/.venv313/Scripts/python.exe -m pytest tests/services/backtest/test_duckdb_logger.py tests/services/test_discord_notifier.py tests/services/test_position_alerts.py -p tests.offline_network -q --tb=short --disable-warnings",
+  "safety": "No singleton/background/startup/route wiring; no external sends/network/brokers in tests. Notifier sends only explicit methods with explicit URL; tests use MockTransport. Logger defaults memory and file tests use temporary directories.",
+  "repairs": {
+    "logger": [
+      "Exact run matching (no LIKE wildcard collision)",
+      "Atomic idempotent run/fold replacement",
+      "Distinct fold metrics, no invented combined curve/Sharpe",
+      "NULL absent/nonfinite metrics/drawdown; incomplete trade totals remain unknown",
+      "Readback persistence/rollback tested"
+    ],
+    "position_alerts": [
+      "Pure typed input snapshots; quotes keyed exact position ID",
+      "Explicit premium_factor; valid fractional quantity/zero mark",
+      "Missing/invalid prices or factor remain unavailable, no entry-price fallback",
+      "Finite validated limits; zero/negative hold rejected",
+      "Timezone-aware hold checks; stable IDs/dedup/history/ack",
+      "Only explicit portfolio values; sampled drawdown separate from unrealized PnL"
+    ],
+    "notifier": [
+      "No environment activation/global singleton",
+      "Unknown amounts formatted Unavailable; percentages explicit units",
+      "Mention suppression and total embed text budget",
+      "No response-body/exception URL logging; public transport avoids AsyncClient INFO URL leak",
+      "No auto retries, redirects, monitor/dispatcher coupling"
+    ]
+  },
+  "limits": [
+    "Isolated helper recovery only, deliberately not mounted/wired or activated",
+    "Position caller owns snapshot completeness and quote freshness; service history is in-memory and one instance per account",
+    "Logger stores supplied results/metrics; does not validate strategy edge or recompute missing metrics",
+    "Existing historical DB layouts are not migrated; this recovered helper uses explicit fold tables",
+    "Independent reviewer requested from parent; not self-certified beyond focused checks"
+  ],
+  "file_sha256": {
+    "backend/services/backtest/duckdb_logger.py": "06fd07def83f33a53347796092c4a3a9e2d68a5df59e2b8f31d3abbdcc9670cc",
+    "backend/tests/services/backtest/test_duckdb_logger.py": "b994c53e566e8f09c5453153889ef33512dd70f60df67d60407ea5449d7006c2",
+    "backend/services/discord_notifier.py": "6ddfc2ea2f7213394477a083cf302425fdf2192dd0b542e8b27ba06513491c5c",
+    "backend/tests/services/test_discord_notifier.py": "d890eb361cc9bb8258e9dc2c16902cfc8d14bfc8f2b2515c3a2c1e50f5a920f2",
+    "backend/services/position_alerts.py": "d07a9ea4583f9381e03cf31d1e176a3ab675b3dbea2affad507dd63e43ad1d8c",
+    "backend/tests/services/test_position_alerts.py": "6fc9ea8d13e544f2668de8ad5402c30020ac3430a27c6733d3a6612c3129a7d3"
+  }
+}

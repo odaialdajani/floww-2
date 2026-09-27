@@ -1,0 +1,14 @@
+[
+  {
+    "name": "anomaly_detector_v1.pt",
+    "sha256": "6f64b2216c77a0cdd2092b14966eac5a8d9eaa259da562d28b474b773f23ab35"
+  },
+  {
+    "name": "meta_anomaly_v1.pt",
+    "sha256": "47cc4d537357e0d6242617e827de569880905b569daa22aed7f35858da732f4b"
+  },
+  {
+    "name": "patchtst_vpin_v1.pt",
+    "sha256": "b9736c01fe8e61a8e14443e8ba5d34ef3f51f478d83c879de2735cabb7784f9c"
+  }
+]

@@ -16,18 +16,18 @@ Usage:
 import argparse
 import json
 import logging
-import os
 import sys
 import warnings
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import joblib
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 warnings.filterwarnings("ignore")
 
@@ -37,8 +37,9 @@ BACKEND_ROOT = PROJECT_ROOT / "backend"
 sys.path.insert(0, str(BACKEND_ROOT))
 
 from services.ml.quality import (
-    assert_class_balance, assert_feature_variance,
-    assert_prediction_distribution, DegenerateModelError,
+    DegenerateModelError,
+    assert_class_balance,
+    assert_feature_variance,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -78,7 +79,7 @@ STEP_SIZE = 63
 EMBARGO = 5
 
 
-def load_and_prepare(ticker):
+def load_and_prepare(ticker: str) -> tuple[Any, Any, list[str], list[Any], Any]:
     path = TICKER_FILES.get(ticker)
     if path is None or not path.exists():
         raise FileNotFoundError(f"No cached data for {ticker}: {path}")
@@ -93,7 +94,7 @@ def load_and_prepare(ticker):
     return X, y, feature_names, dates, df
 
 
-def walk_forward_evaluate(X, y, feature_names, dates):
+def walk_forward_evaluate(X: Any, y: Any, feature_names: list[str], dates: list[Any]) -> dict[str, Any] | None:
     """Walk-forward evaluation with expanding window."""
     n = len(y)
     if n < MIN_TRAIN + STEP_SIZE:
@@ -185,7 +186,7 @@ def walk_forward_evaluate(X, y, feature_names, dates):
     final_model.fit(X_s, y)
 
     importances = final_model.feature_importances_
-    top_features = sorted(zip(valid_names, importances), key=lambda x: -x[1])[:15]
+    top_features = sorted(zip(valid_names, importances, strict=True), key=lambda x: -x[1])[:15]
 
     return {
         "n_total": n,
@@ -203,13 +204,13 @@ def walk_forward_evaluate(X, y, feature_names, dates):
     }
 
 
-def save_model(ticker, result, dry_run=False):
+def save_model(ticker: str, result: dict[str, Any], dry_run: bool = False) -> dict[str, Any] | None:
     """Save model artifact and manifest."""
     if dry_run:
         logger.info(f"[DRY RUN] Would save model for {ticker}: acc={result['overall_accuracy']}")
-        return
+        return None
 
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     model_id = f"{ticker}_gbm_wf_{ts}"
     model_path = MODELS_DIR / f"{model_id}.joblib"
     scaler_path = MODELS_DIR / f"{model_id}_scaler.joblib"
@@ -236,7 +237,7 @@ def save_model(ticker, result, dry_run=False):
         },
         "top_features": result["top_features"],
         "fold_summary": result["fold_metrics"][-3:] if len(result["fold_metrics"]) >= 3 else result["fold_metrics"],
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "model_path": str(model_path),
         "scaler_path": str(scaler_path),
         "verdict": "SHIP" if result["overall_accuracy"] > result["baseline_accuracy"] else "HOLD",
@@ -249,7 +250,7 @@ def save_model(ticker, result, dry_run=False):
     return manifest
 
 
-def retrain_ticker(ticker, dry_run=False):
+def retrain_ticker(ticker: str, dry_run: bool = False) -> dict[str, Any] | None:
     """Retrain a single ticker."""
     logger.info(f"=== Retraining {ticker} ===")
     try:
@@ -282,7 +283,7 @@ def retrain_ticker(ticker, dry_run=False):
     return manifest
 
 
-def main():
+def main() -> dict[str, Any]:
     parser = argparse.ArgumentParser(description="Daily ML retraining pipeline")
     parser.add_argument("--ticker", type=str, help="Retrain specific ticker")
     parser.add_argument("--dry-run", action="store_true", help="Evaluate only, don't save")

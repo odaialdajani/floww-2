@@ -114,3 +114,19 @@ strict = true
 [[tool.mypy.overrides]]
 module = "services.numba_greeks"
 strict = true
+
+[[tool.mypy.overrides]]
+module = "services.execution_engine"
+strict = true
+
+[[tool.mypy.overrides]]
+module = "services.trinity_alignment"
+strict = true
+
+[[tool.mypy.overrides]]
+module = "services.slo_tracker"
+strict = true
+
+[[tool.mypy.overrides]]
+module = "services.node_lifecycle"
+strict = true

@@ -38,6 +38,7 @@ import {
 } from "./tideFeed";
 import { persistJournalSeeds } from "./journalPlans";
 import OutcomeLedger from "./OutcomeLedger";
+import ContractReview from "./ContractReview";
 import TidehunterSettings, { loadTide, saveSettings as saveTide } from "./TidehunterSettings";
 import "./FlowseekerProBlademap.css";
 import { usePublishScreenContext } from "../../agent/useScreenContext";
@@ -1755,7 +1756,12 @@ export default function FlowseekerProBlademap({ active = true }) {
                           {scanMeta.retry ? ` Next slot in ${elapsedClock(scanMeta.retry)}.` : ""}
                         </div>
                       ) : screenedScans.length === 0 ? (
-                        <div className="th-empty">No contracts pass this screen.</div>
+                        <div className="th-empty">No contracts pass this screen.
+                          <div>
+                            <button type="button" className="th-chipb" onClick={() => { setKnobType("all"); setKnobMinVol(0); setKnobMinScore(0); setKnobQ(""); setKnobDteMin(null); setKnobDteMax(null); setUniverseOnly(false); }}>Clear filters</button>
+                            <button type="button" className="th-chipb" onClick={() => setScreenId("all")}>Choose broader screen</button>
+                          </div>
+                        </div>
                       ) : (
                         <table className="th-stab">
                           <thead><tr>
@@ -1924,6 +1930,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                             <span> classification {drillSel.classification} · vol/OI {Number(drillSel.vol_oi_ratio || 0).toFixed(1)}x · est. notional {fmtMoney(drillSel.premium)}</span>
                           </div>
                         )}
+                        <ContractReview contractKey={contractIdentity(drillSel)} />
                         <div className="th-micro">
                           <span>VPIN {vpin?.vpin != null ? Number(vpin.vpin).toFixed(3) : "— no feed"}</span>
                           <span>Order imbalance — unavailable</span>

@@ -45,7 +45,7 @@ References:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from scipy.interpolate import RectBivariateSpline
@@ -70,7 +70,7 @@ class SABRModel:
         beta: float = 0.5,
         rho: float = -0.3,
         nu: float = 0.4,
-    ):
+    ) -> None:
         """
         Initialize SABR model parameters.
 
@@ -180,7 +180,7 @@ class SABRModel:
                 )
                 if not np.all(np.isfinite(model_vols)):
                     return 1e10
-                return np.sum((model_vols - market_vols) ** 2)
+                return float(np.sum((model_vols - market_vols) ** 2))
             except (ValueError, ZeroDivisionError, OverflowError):
                 return 1e10
 
@@ -254,7 +254,7 @@ class SVIProfile:
         rho: float = -0.7,
         m: float = 0.0,
         sigma: float = 0.1,
-    ):
+    ) -> None:
         """
         Initialize SVI parameters.
 
@@ -304,7 +304,7 @@ class SVIProfile:
         w = self.total_variance(k)
         # Ensure non-negative before sqrt
         w = np.maximum(w, 0.0)
-        return np.sqrt(w / T)
+        return cast(np.ndarray, np.sqrt(w / T))
 
     def fit(
         self,
@@ -368,7 +368,7 @@ class SVIProfile:
             w = a + b * (rho * dm + np.sqrt(dm ** 2 + sigma ** 2))
             if np.any(w < 0):
                 return 1e10
-            return np.sum((w - market_total_var) ** 2)
+            return float(np.sum((w - market_total_var) ** 2))
 
         # Bounds: a >= 0, b >= 0, rho in (-1,1), m unbounded, sigma > 0
         bounds = [
@@ -435,7 +435,7 @@ class VolSurfaceConstructor:
     - 25-delta butterfly term structure
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the VolSurfaceConstructor."""
         self.sabr_model = SABRModel()
         self.svi_profiles: dict[float, SVIProfile] = {}
@@ -491,7 +491,7 @@ class VolSurfaceConstructor:
             return self._empty_surface()
 
         # Group by expiry
-        expiries_map: dict[float, list[dict]] = {}
+        expiries_map: dict[float, list[dict[str, Any]]] = {}
         for c in valid_contracts:
             T = c["expiry"]
             if T not in expiries_map:
@@ -598,8 +598,8 @@ class VolSurfaceConstructor:
         self,
         spot: float,
         expiries: list[float],
-        expiries_map: dict[float, list[dict]],
-        svi_params_by_expiry: dict[float, dict],
+        expiries_map: dict[float, list[dict[str, Any]]],
+        svi_params_by_expiry: dict[float, dict[str, float]],
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Build a 2D IV grid from per-expiry SVI fits.

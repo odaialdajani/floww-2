@@ -39,3 +39,26 @@ test('selected measurement retains expiry columns absent from raw GEX axes',()=>
  render(<BarHeatmap data={data} viewMode='vex'/>);
  expect(screen.getByLabelText('100 VEX: -150')).toBeInTheDocument();
 });
+
+
+test('centers the chart after data arrives without resetting a manual scroll on refresh', () => {
+ const height = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight');
+ const top = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetTop');
+ Object.defineProperty(HTMLElement.prototype, 'clientHeight', {configurable:true,get(){return 200;}});
+ Object.defineProperty(HTMLElement.prototype, 'offsetTop', {configurable:true,get(){return this.dataset.spotNearest === 'true' ? 430 : 0;}});
+ try {
+  const {rerender}=render(<BarHeatmap data={null}/>);
+  const data={ticker:'SPY',spot:100,strikes:[{strike:101,gex:10},{strike:100,gex:20},{strike:99,gex:-10}]};
+  rerender(<BarHeatmap data={data}/>);
+  const chart=screen.getByLabelText('Strike exposure bars');
+  expect(chart.scrollTop).toBe(330);
+  chart.scrollTop=50;
+  rerender(<BarHeatmap data={{...data}}/>);
+  expect(chart.scrollTop).toBe(50);
+  rerender(<BarHeatmap data={{...data,ticker:'QQQ'}}/>);
+  expect(chart.scrollTop).toBe(330);
+ } finally {
+  if(height) Object.defineProperty(HTMLElement.prototype,'clientHeight',height); else delete HTMLElement.prototype.clientHeight;
+  if(top) Object.defineProperty(HTMLElement.prototype,'offsetTop',top); else delete HTMLElement.prototype.offsetTop;
+ }
+});

@@ -17,10 +17,10 @@ Usage:
 
 import argparse
 import json
-import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TAXONOMY_PATH = REPO_ROOT / "memory" / "_tag_taxonomy.yaml"
@@ -31,15 +31,16 @@ AUTO_APPLY_THRESHOLD = 0.8
 K_NEAREST = 5
 
 
-def get_mem0_client():
+def get_mem0_client() -> Any:
     """Initialize mem0 MemoryClient from config."""
-    cfg = json.load(open(CONFIG_PATH))
+    with open(CONFIG_PATH) as config_file:
+        cfg = json.load(config_file)
     api_key = cfg.get("platform", {}).get("api_key")
     from mem0 import MemoryClient
     return MemoryClient(api_key=api_key)
 
 
-def load_taxonomy() -> dict:
+def load_taxonomy() -> dict[str, Any]:
     """Load tag taxonomy from YAML."""
     if not TAXONOMY_PATH.exists():
         # Create default taxonomy
@@ -94,7 +95,7 @@ def text_similarity(a: str, b: str) -> float:
     return difflib.SequenceMatcher(None, a.lower().strip(), b.lower().strip()).ratio()
 
 
-def propose_tags(memory_text: str, taxonomy: dict, client, user_id: str) -> list[tuple[str, float]]:
+def propose_tags(memory_text: str, taxonomy: dict[str, Any], client: Any, user_id: str) -> list[tuple[str, float]]:
     """Propose tags for a memory entry based on similarity to existing tags and content."""
     tags = taxonomy.get("tags", [])
     tag_scores = []
@@ -106,7 +107,7 @@ def propose_tags(memory_text: str, taxonomy: dict, client, user_id: str) -> list
 
         # Check similarity against tag name components
         name_parts = tag_name.replace(":", " ").replace("-", " ").split()
-        max_sim = 0
+        max_sim: float = 0.0
         for part in name_parts:
             if len(part) > 2:
                 sim = text_similarity(memory_text, part)
@@ -128,13 +129,13 @@ def propose_tags(memory_text: str, taxonomy: dict, client, user_id: str) -> list
     return tag_scores[:3]
 
 
-def queue_for_review(memory_text: str, proposed_tags: list[tuple[str, float]]):
+def queue_for_review(memory_text: str, proposed_tags: list[tuple[str, float]]) -> None:
     """Queue low-confidence tagging for human review."""
-    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    date_str = datetime.now(UTC).strftime("%Y-%m-%d")
     review_path = KANBAN_TAGGING_PATH / f"tagging_{date_str}.md"
 
     entry = f"""
-## {datetime.now(timezone.utc).strftime('%H:%M UTC')} — Pending Tag Review
+## {datetime.now(UTC).strftime('%H:%M UTC')} — Pending Tag Review
 
 **Memory:** {memory_text[:200]}
 
@@ -150,7 +151,7 @@ def queue_for_review(memory_text: str, proposed_tags: list[tuple[str, float]]):
         f.write(entry)
 
 
-def apply_tags_to_memory(client, memory_id: str, tags: list[str]):
+def apply_tags_to_memory(client: Any, memory_id: str, tags: list[str]) -> bool:
     """Apply tags to a mem0 memory entry via metadata."""
     try:
         client.update(memory_id=memory_id, metadata={"tags": tags})
@@ -160,7 +161,7 @@ def apply_tags_to_memory(client, memory_id: str, tags: list[str]):
         return False
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Auto-tag memory entries")
     parser.add_argument("text", nargs="?", help="Memory text to tag")
     parser.add_argument("--file", help="Read memory text from file")
@@ -188,7 +189,7 @@ def main():
 
     # Propose tags
     proposed = propose_tags(memory_text, taxonomy, client, args.user_id)
-    print(f"[auto_tag] Proposed tags:")
+    print("[auto_tag] Proposed tags:")
     for tag, score in proposed:
         print(f"  {tag}: {score:.2f}")
 
