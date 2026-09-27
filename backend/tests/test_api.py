@@ -232,6 +232,34 @@ def test_chain_filter_expiry(client, patched_chain):
         assert r2.status_code == 200
 
 
+def test_chain_gex_canonical_display_units(client, patched_chain):
+    # Fixture: gamma=0.04, oi=1500, spot=500 → ±0.04*1500*100*500²*0.01.
+    r = client.get("/api/chain/SPY?min_oi=100")
+    assert r.status_code == 200
+    d = r.json()
+    assert "gex_unit" in d
+    rows = [x for x in d["rows"] if x["strike"] == 500.0]
+    calls = [x["gex"] for x in rows if x["type"] == "call"]
+    puts = [x["gex"] for x in rows if x["type"] == "put"]
+    assert calls and puts
+    assert calls[0] == pytest.approx(15_000_000.0, rel=1e-9)
+    assert puts[0] == pytest.approx(-15_000_000.0, rel=1e-9)
+
+
+def test_chain_gex_skips_unknown_type(client, patched_chain):
+    from unittest.mock import patch as _patch
+    fake = _fake_chain()
+    fake["contracts"] = [dict(fake["contracts"][0], type="weird")]
+
+    async def _fake_fetch(t, expiries=None):
+        return fake
+
+    with _patch("server.fetch_spot_and_chains_merged", _fake_fetch):
+        r = client.get("/api/chain/SPY")
+    assert r.status_code == 200
+    assert r.json()["count"] == 0  # unknown type rejected, never default-signed
+
+
 def test_advanced_spy(client, patched_chain):
     r = client.get("/api/advanced/SPY?expiries=4")
     assert r.status_code == 200

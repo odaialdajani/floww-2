@@ -29,6 +29,11 @@ services:
         condition: service_healthy
 
   # ── FastAPI backend ─────────────────────────────────────────────────────────
+  # NOTE: this stack provisions NO mongo service — MONGO_URL must point at an
+  # external MongoDB (Atlas) with this host allowlisted, or add a mongo
+  # service (see deploy/free/docker-compose.yml for a local-mongo example).
+  # When MONGO_URL is unset the backend defaults to mongodb://localhost:27017,
+  # which inside this container is the backend itself — always set MONGO_URL.
   backend:
     build:
       context: .

@@ -40,12 +40,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          # MUST stay 3.11 — that is the runtime that actually ships:
-          #   Dockerfile.backend:1        FROM python:3.11-slim AS production
-          #   .github/workflows/deploy.yml:25   python-version: "3.11"
+          # MUST stay 3.12 — that is the runtime that actually ships:
+          #   Dockerfile.backend:1        FROM python:3.12-slim AS production
+          #   .github/workflows/deploy.yml:52   python-version: "3.12"
           # Testing on any other version validates code that production never
-          # runs. quant.py:187 PEP-701 defect fixed (d29ae3f), so 3.11 is green.
-          python-version: "3.11"
+          # runs. (Corrected 2026-09-27: the pin was 3.11 while ship was 3.12.)
+          python-version: "3.12"
           cache: "pip"
           cache-dependency-path: backend/requirements.txt
 

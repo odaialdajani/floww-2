@@ -136,15 +136,20 @@ class Position:
             price = K * math.exp(-r * T) * norm.cdf(-d2) - S * math.exp(-q * T) * norm.cdf(-d1)
 
         sign = 1 if self.is_long else -1
+        # NOTE: quantity is SIGNED (negative for short) but is_long is the
+        # authoritative direction flag everywhere else in this file (pnl,
+        # add_position, server aggregations all use abs(quantity) * sign).
+        # Multiplying by both double-flips shorts — use abs + sign here too.
+        aq = abs(self.quantity)
         return {
-            "delta": delta * self.quantity * sign * 100,
-            "gamma": gamma * self.quantity * sign * 100,
-            "vega": vega * self.quantity * sign * 100,
-            "theta": theta * self.quantity * sign * 100,
-            "vanna": vanna * self.quantity * sign * 100,
-            "charm": charm * self.quantity * sign * 100,
-            "vomma": vomma * self.quantity * sign * 100,
-            "zomma": zomma * self.quantity * sign * 100,
+            "delta": delta * aq * sign * 100,
+            "gamma": gamma * aq * sign * 100,
+            "vega": vega * aq * sign * 100,
+            "theta": theta * aq * sign * 100,
+            "vanna": vanna * aq * sign * 100,
+            "charm": charm * aq * sign * 100,
+            "vomma": vomma * aq * sign * 100,
+            "zomma": zomma * aq * sign * 100,
             "price": price,
         }
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, memo } from 'react';
 import { BACKEND_URL } from "../config/api";
+import { withWsToken } from "../utils/appKey";
 
 const SIGNAL_STYLES = {
   BUY: 'toast-buy',
@@ -147,7 +148,7 @@ export default function AlertOverlay({ onSignalClick, maxVisible = 3 }) {
     try {
       // BACKEND_URL imported from config/api.js
       const WS_URL = BACKEND_URL.replace('http', 'ws');
-      const ws = new WebSocket(`${WS_URL}/ws/signals`);
+      const ws = new WebSocket(withWsToken(`${WS_URL}/ws/signals`));
       wsRef.current = ws;   // track immediately (CONNECTING) so re-entrant connect() bails
 
       ws.onopen = () => {

@@ -21,9 +21,10 @@ function mockFetchOnce(account = ACCOUNT, portfolio = PORTFOLIO, orders = ORDERS
   });
 }
 
-afterEach(() => { jest.restoreAllMocks(); });
+afterEach(() => { jest.restoreAllMocks(); window.localStorage.clear(); });
 
 test('renders account, positions, and orders from the brokerage endpoints', async () => {
+  window.localStorage.setItem('floww_app_key', 'test-key');
   mockFetchOnce();
   await act(async () => { render(<PublicPanel />); });
   await waitFor(() => expect(screen.getByTestId('public-panel')).toBeInTheDocument());
@@ -34,6 +35,19 @@ test('renders account, positions, and orders from the brokerage endpoints', asyn
   expect(urls).toContain('/api/public/account');
   expect(urls).toContain('/api/public/portfolio');
   expect(urls).toContain('/api/public/orders');
+  for (const c of global.fetch.mock.calls) {
+    expect(c[1].headers).toEqual({ 'X-API-Key': 'test-key' });
+  }
+});
+
+test('shows the key hint without prompting when no key is stored', async () => {
+  const prompt = jest.spyOn(window, 'prompt').mockReturnValue('x');
+  global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({}) }));
+  await act(async () => { render(<PublicPanel />); });
+  await waitFor(() => expect(screen.getByTestId('public-panel-error')).toBeInTheDocument());
+  expect(screen.getByText('Backend key missing or rejected', { exact: false })).toBeInTheDocument();
+  expect(global.fetch).not.toHaveBeenCalled();
+  expect(prompt).not.toHaveBeenCalled();
 });
 
 test('shows the error tile when the backend is unreachable', async () => {

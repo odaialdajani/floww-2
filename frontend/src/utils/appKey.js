@@ -56,3 +56,34 @@ export function mutatingHeaders(extra) {
   if (!k) return null;
   return { "X-API-Key": k, ...(extra || {}) };
 }
+
+/**
+ * Raw stored key (no prompt). For transports that cannot take headers
+ * (WebSocket URLs) — callers append ?token= when non-empty.
+ */
+export function storedAppKey() {
+  return readStored().trim();
+}
+
+/**
+ * Headers for authenticated read calls (e.g. brokerage panels).
+ * Never prompts: returns null when no key is stored yet, so polling
+ * surfaces must not trigger a prompt loop. Callers show a key-missing
+ * hint instead.
+ */
+export function storedAppKeyHeaders(extra) {
+  const k = readStored().trim();
+  if (!k) return null;
+  return { "X-API-Key": k, ...(extra || {}) };
+}
+
+/**
+ * Append ?token= to a WebSocket URL when a backend key is stored.
+ * No prompt (sockets reconnect silently). Returns the URL unchanged
+ * when no key is stored — the backend allows that in dev mode.
+ */
+export function withWsToken(url) {
+  const t = storedAppKey();
+  if (!t) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}token=${encodeURIComponent(t)}`;
+}

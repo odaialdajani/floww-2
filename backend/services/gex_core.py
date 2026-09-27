@@ -396,10 +396,14 @@ def compute_gex_grid_volume(spot: float, contracts: list[dict[str, Any]],
         gamma = bs_gamma(spot, strike, T, iv, q=q)
         charm = bs_charm(spot, strike, T, iv, q=q, kind=contract_type)
         vanna = bs_vanna(spot, strike, T, iv, q=q)
-        # Weight by volume directly (contracts traded) rather than OI.
-        gex_unit = gamma * vol * spot * 100.0
-        charm_unit = abs(charm) * vol * spot * 100.0
-        vex_unit = abs(vanna) * vol * spot * 100.0
+        # Weight by volume directly (contracts traded) rather than OI, but in
+        # the SAME canonical units as the OI path (dollar_*_per_contract:
+        # GEX per 1%-spot-move, VEX/Charm per 1%-move, signed Greeks — no
+        # abs(), which destroyed vanna/charm's natural sign and disagreed
+        # with the per-strike sibling compute_gex_by_strike_volume).
+        gex_unit = dollar_gex_per_contract(gamma, vol, spot)
+        charm_unit = dollar_charm_per_contract(charm, vol, spot)
+        vex_unit = dollar_vex_per_contract(vanna, vol, spot)
         cell = sign * gex_unit
         d = grid.setdefault(expiry, {})
         d[strike] = d.get(strike, 0.0) + cell

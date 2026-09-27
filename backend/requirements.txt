@@ -17,8 +17,8 @@
 # returns only the /docs routes), which fails 5 route-contract tests in
 # tests/routes/test_steal_three_routes.py + test_public_api_bars_routes.py.
 # Do not go past 0.136.x until those tests are rewritten against router.routes.
-# Both need Python >=3.10; the shipped runtime is python:3.11-slim and the whole
-# dependency closure resolves as cp311/py3 wheels.
+# Both need Python >=3.10; the shipped runtime is python:3.12-slim and the whole
+# dependency closure resolves as cp312/py3 wheels.
 # starlette is pinned EXPLICITLY (not left transitive) so a future resolve
 # cannot silently drift back under the old cap.
 fastapi==0.136.3

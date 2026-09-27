@@ -95,15 +95,15 @@
 
 ### Working
 - [x] Finnhub: <REDACTED — see backend/.env; rotate this key, it was committed>
-- [x] Alpha Vantage: 5RZUH1L9369493X8
-- [x] Polygon.io: LYlNC8d907kAZEpNrIIZK48s1GmBYP2B
-- [x] FlashAlpha: wq0ZTRntxMsWwlL1O1XXcFT4YSjBFDvciQYLHnHy
-- [x] Alpaca: PKTEX672DYLUZD2Q4DIZPYHVTT / 2Lq89Z1NhFHcctKbSyegEegn6BYVrUdrJ11YZ3Xntp1P
-- [x] Gemini: AIzaSyDmkOeu0XZuj_lJgf52rL19_Ni8yp5Bzvs (quota exhausted, student pack coming)
-- [x] MongoDB Atlas: hermesterminal / fwBdadhctVpkG9TN
-- [x] Databento: db-PBRQ7ia8dQ8wi6Yj7imWDfxXxGFrN
+- [x] Alpha Vantage: set via `ALPHA_VANTAGE_KEY` env (redacted 2026-09-27; rotate in vendor dashboard)
+- [x] Polygon.io: set via `POLYGON_API_KEY` env (redacted 2026-09-27; rotate in vendor dashboard)
+- [x] FlashAlpha: set via `FLASHALPHA_API_KEY` env (redacted 2026-09-27; rotate in vendor dashboard)
+- [x] Alpaca: key/secret via `APCA_API_KEY_ID` / `APCA_API_SECRET_KEY` env (redacted 2026-09-27; rotate in vendor dashboard)
+- [x] Gemini: set via `GEMINI_API_KEY` env (redacted 2026-09-27; rotate in vendor dashboard)
+- [x] MongoDB Atlas: user via env, password via `MONGODB_PASSWORD` env (redacted 2026-09-27; rotate in vendor dashboard)
+- [x] Databento: set via `DATABENTO_API_KEY` env (redacted 2026-09-27; rotate in vendor dashboard)
 
-- [x] MarketStack: 2936a82c56aaab09794b1889b5e8147d
+- [x] MarketStack: set via `MARKETSTACK_API_KEY` env (redacted 2026-09-27; rotate in vendor dashboard)
 
 ### Pending
 - [ ] Barchart OnDemand API key (need to sign up at barchartondemand.com)

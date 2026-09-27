@@ -6,6 +6,8 @@ LLM analysis routes — OpenRouter, Gemini, and turboQuantDC KV cache compressio
 from __future__ import annotations
 
 import logging
+import os
+import re
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -13,6 +15,38 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Models the turboquant endpoint may load without operator opt-in.
+# Anything else requires FLOWW_LLM_MODEL_ALLOWLIST=org/name,org2/name2.
+_TURBOQUANT_DEFAULT_MODEL = "Qwen/Qwen2.5-3B-Instruct"
+_MODEL_ID_RE = re.compile(r"[A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+")
+
+
+def _allowed_turboquant_models() -> set[str]:
+    raw = os.environ.get("FLOWW_LLM_MODEL_ALLOWLIST", "")
+    names = {m.strip() for m in raw.split(",") if m.strip()}
+    names.add(_TURBOQUANT_DEFAULT_MODEL)
+    return names
+
+
+def _validate_turboquant_model(model_name: str) -> None:
+    """Fail-closed model gate: well-formed HF id AND allowlisted.
+
+    Runs before any heavy import so rejection is testable offline.
+    trust_remote_code stays False at the load site, so even an
+    allowlisted model cannot execute remote custom code.
+    """
+    if not model_name or not _MODEL_ID_RE.fullmatch(model_name):
+        raise HTTPException(status_code=422, detail={
+            "error": "bad_model_name",
+            "message": "model_name must be a HuggingFace id like org/name.",
+        })
+    if model_name not in _allowed_turboquant_models():
+        raise HTTPException(status_code=403, detail={
+            "error": "model_not_allowlisted",
+            "message": ("Model is not allowlisted. Add it to "
+                        "FLOWW_LLM_MODEL_ALLOWLIST to enable it."),
+        })
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +174,8 @@ async def turboquant_generate(request: TurboQuantGenerateRequest):
 
     Requires: turboquantdc, transformers, accelerate, and optionally bitsandbytes.
     """
+    # Model gate first: no allowlist hit, no downloads, no imports.
+    _validate_turboquant_model(request.model_name)
     try:
         from services.turboquant_cache import get_turboquant_service
         service = get_turboquant_service()
@@ -160,15 +196,15 @@ async def turboquant_generate(request: TurboQuantGenerateRequest):
         cache_key = request.model_name
         if cache_key not in _MODEL_CACHE:
             tokenizer = AutoTokenizer.from_pretrained(
-                request.model_name, trust_remote_code=True,
+                request.model_name, trust_remote_code=False,
                 revision="main",  # noqa: B615
             )
             model = AutoModelForCausalLM.from_pretrained(
                 request.model_name,
                 torch_dtype=torch.float16,
                 device_map="auto",
-                trust_remote_code=True,
-                revision="main",  # noqa: B615 — user-supplied model name
+                trust_remote_code=False,
+                revision="main",  # noqa: B615 — allowlisted model name only
             )
             _MODEL_CACHE[cache_key] = (model, tokenizer)
         model, tokenizer = _MODEL_CACHE[cache_key]

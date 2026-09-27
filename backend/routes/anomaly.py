@@ -31,6 +31,37 @@ _ensembles: dict[str, Any] = {}
 # Path to trained model checkpoints
 MODEL_BASE_PATH = Path(__file__).resolve().parents[2] / "project_oracle" / "models"
 
+# Checkpoint suffixes the /load endpoint will serve. Anything else is
+# rejected before any deserialization is attempted.
+MODEL_SUFFIXES = frozenset({".pt", ".pth", ".bin", ".ckpt"})
+
+
+def _resolve_checkpoint(model_path: str) -> Path:
+    """Resolve a /load model_path inside MODEL_BASE_PATH (fail-closed).
+
+    Relative paths resolve against MODEL_BASE_PATH; absolute paths must
+    already live under it. Traversal outside the dir → 403, disallowed
+    suffix → 422. Pure pathlib — no torch needed, so input validation
+    runs before the availability check.
+    """
+    base = MODEL_BASE_PATH.resolve()
+    raw = Path(model_path) if model_path else base / "anomaly_detector_v1.pt"
+    candidate = raw if raw.is_absolute() else base / raw
+    resolved = candidate.resolve()
+    if resolved != base and base not in resolved.parents:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "path_outside_model_dir",
+                    "message": "Checkpoints must live under the model directory."},
+        )
+    if resolved.suffix.lower() not in MODEL_SUFFIXES:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "bad_checkpoint_suffix",
+                    "message": f"Checkpoint suffix must be one of {sorted(MODEL_SUFFIXES)}."},
+        )
+    return resolved
+
 
 def _get_detector(ticker: str, seq_len: int = 50, latent_dim: int = 8, device: str = "cpu"):
     """Get or create an anomaly detector for the given ticker."""
@@ -44,7 +75,7 @@ def _get_detector(ticker: str, seq_len: int = 50, latent_dim: int = 8, device: s
         if ckpt_path.exists() and HAS_TORCH:
             try:
                 import torch
-                checkpoint = torch.load(str(ckpt_path), map_location=device)
+                checkpoint = torch.load(str(ckpt_path), map_location=device, weights_only=True)
                 _detectors[ticker].load_checkpoint(checkpoint)
                 logger.info(f"Loaded trained checkpoint for {ticker}: {ckpt_path}")
             except Exception as e:
@@ -134,19 +165,23 @@ async def load_trained_model(
 ):
     """Load a trained checkpoint for the given ticker."""
     t = ticker.upper()
+
+    # Validate the requested path BEFORE the torch-availability check so
+    # traversal/suffix rejection is testable without torch installed.
+    ckpt_path = _resolve_checkpoint(model_path)
+
     from services.anomaly_detector import HAS_TORCH
     if not HAS_TORCH:
         raise HTTPException(503, "PyTorch not available")
 
     import torch
 
-    ckpt_path = Path(model_path) if model_path else MODEL_BASE_PATH / "anomaly_detector_v1.pt"
     if not ckpt_path.exists():
         raise HTTPException(404, f"Checkpoint not found: {ckpt_path}")
 
     detector = _get_detector(t)
     try:
-        checkpoint = torch.load(str(ckpt_path), map_location=device)
+        checkpoint = torch.load(str(ckpt_path), map_location=device, weights_only=True)
         detector.load_checkpoint(checkpoint)
         return {"status": "loaded", "ticker": t, "path": str(ckpt_path)}
     except Exception as e:

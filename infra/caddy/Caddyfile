@@ -1,6 +1,8 @@
 # infra/caddy/Caddyfile
 # Production reverse proxy for Floww
 # Auto-HTTPS via Let's Encrypt, HSTS, CSP
+# NOTE: upstream is backend:8000 (the compose service name on floww_prod).
+# localhost:8000 would loop back to the Caddy container itself.
 
 {
     email {$ADMIN_EMAIL}
@@ -24,12 +26,12 @@
 
     # API routes → FastAPI backend
     handle /api/* {
-        reverse_proxy localhost:8000
+        reverse_proxy backend:8000
     }
 
     # WebSocket routes → FastAPI backend
     handle /ws/* {
-        reverse_proxy localhost:8000 {
+        reverse_proxy backend:8000 {
             transport http {
                 read_buffer 8192
             }
@@ -38,7 +40,7 @@
 
     # Dash UI → FastAPI backend (WSGI)
     handle /dashboard/* {
-        reverse_proxy localhost:8000
+        reverse_proxy backend:8000
     }
 
     # Static files (frontend build)
@@ -51,7 +53,7 @@
 
     # Health check
     handle /health {
-        reverse_proxy localhost:8000
+        reverse_proxy backend:8000
     }
 
     # Default → frontend
@@ -72,6 +74,6 @@
 # ── Health endpoint (no HTTPS for load balancer probes) ───────────────────────
 :80 {
     handle /health {
-        reverse_proxy localhost:8000
+        reverse_proxy backend:8000
     }
 }

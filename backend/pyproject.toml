@@ -1,11 +1,14 @@
 [project]
 name = "floww-backend"
 version = "0.1.0"
-# 3.11 is the runtime this project actually ships and tests on:
-#   Dockerfile.backend:1              FROM python:3.11-slim AS production
-#   .github/workflows/deploy.yml:25   python-version: "3.11"
-#   .github/workflows/ci.yml          python-version: "3.11"
-# The previous ">=3.12" floor did not match any of those.
+# 3.12 is the runtime this project ships and CIs on (corrected 2026-09-27;
+# the old comment claimed 3.11 but Dockerfile.backend:1 and deploy.yml:52
+# have been 3.12):
+#   Dockerfile.backend:1              FROM python:3.12-slim AS production
+#   .github/workflows/deploy.yml:52   python-version: "3.12"
+#   .github/workflows/ci.yml          python-version: "3.12"
+# The ">=3.11" floor stays: it is the minimum supported local-dev version,
+# and ruff target py311 below keeps new code parseable there too.
 requires-python = ">=3.11"
 
 [tool.ruff]
