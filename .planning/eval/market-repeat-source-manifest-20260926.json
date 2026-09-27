@@ -1,0 +1,74 @@
+{
+  "created_at": "2026-09-26T23:57:42.185Z",
+  "scope": "Repeat observation history and cumulative daily-volume truth; final source identity",
+  "files": [
+    {
+      "path": "backend/services/public_scanner.py",
+      "sha256": "efab105e0145ba302c2f4811ccb239ee7157e035f52dceb0ace767b180d6e6db"
+    },
+    {
+      "path": "backend/services/flow_desk.py",
+      "sha256": "9f6d5fabaca0477f57a642e226eadace06ca87e5a7c4d2b80382c62c7f00bd38"
+    },
+    {
+      "path": "backend/services/flow_alerts.py",
+      "sha256": "b29cd5e12c5c576186c95c8b01ca3943f9938413808f240517160aabd85346ab"
+    },
+    {
+      "path": "backend/tests/services/test_flow_desk.py",
+      "sha256": "5e45655a707f5496a65c0cfbad6f1d76e403c72f02309695ae0827c8f48209e9"
+    },
+    {
+      "path": "backend/tests/services/test_public_advantage.py",
+      "sha256": "9a9a774fcdbce8d375814832712b59fb4489c427bbc391819cbb808707d81775"
+    },
+    {
+      "path": "backend/tests/services/test_flow_alerts.py",
+      "sha256": "dc6e078311fd15b2fc7eaff80724eec834315ad268c5dc54ceae0aa484ee700e"
+    },
+    {
+      "path": "backend/tests/services/test_flow_quality.py",
+      "sha256": "6747f5c29a789610841dce6d590c49f49af228d0be2ca3ed4872a196438e1d66"
+    },
+    {
+      "path": "backend/services/scan_observations.py",
+      "sha256": "c781b69902f962a699a2cf67403f70fc1154ebeae53c60566436328f465ab8a6"
+    },
+    {
+      "path": "backend/tests/services/test_public_snapshot_truth.py",
+      "sha256": "4243b414ea23c3e7b7b42298db39adce881a36b7f9c9bdad5a28f037f2aaa77f"
+    },
+    {
+      "path": "tests/test_public_scan_observations.py",
+      "sha256": "7f6eacb6a801ef8c1246b2bf4159f2bde08e07722afd496b281e717a4aba4e48"
+    },
+    {
+      "path": "backend/tests/services/test_blademap_conviction.py",
+      "sha256": "59a7691fe5d98ddb91bafc4a6155a9d3b5ccba2371e8f90738bc3f6e96afa090"
+    },
+    {
+      "path": "frontend/src/components/flowseeker/FlowseekerProBlademap.jsx",
+      "sha256": "2c6ef90158eef3a9f590a79104ef931f2d3c694f3a81ad690df69a8679478ebb"
+    },
+    {
+      "path": "frontend/src/components/flowseeker/FlowseekerProBlademap.css",
+      "sha256": "6de839b3a92acc0602ad90faef7716291974749d870b1b370f21f3d7ef68c6fb"
+    },
+    {
+      "path": "frontend/src/components/flowseeker/MarketCoverage.jsx",
+      "sha256": "4ba4d397dccbc61626b5337c25f227b9e91630cee52066671a0dc2f1790cbc2c"
+    },
+    {
+      "path": "frontend/src/components/flowseeker/MarketCoverage.test.jsx",
+      "sha256": "9cdf32b2f811231548c71788a98eda47083d7931cab697851ce020d6c4c710ba"
+    },
+    {
+      "path": "frontend/src/components/flowseeker/tideFeed.js",
+      "sha256": "1ae0d3010751d8f75090627878d17a074833d38568c6e176c829d4677690ff35"
+    },
+    {
+      "path": "frontend/src/components/flowseeker/tideFeed.test.js",
+      "sha256": "b1f078e745e3fb3264206ec8d56d0189ce33dca66104230a230120a2490fc9b4"
+    }
+  ]
+}

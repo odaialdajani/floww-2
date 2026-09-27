@@ -25,6 +25,15 @@ from services.flow_alerts import (
     persist_alerts,
     update_moves,
 )
+from services.flow_quality import (
+    bh_fdr,
+    cluster_biases,
+    cw_iv_spread,
+    detect_spreads,
+    is_prime,
+    sigma_pvalue,
+)
+from tests.services.test_flow_alerts import _future_exp, _raw
 
 
 def test_default_gate_matches_noise_pass():
@@ -42,15 +51,14 @@ def test_default_gate_matches_noise_pass():
     assert DEFAULT_EVAL_OPTS["zero_dte_score"] == 85
     assert DEFAULT_EVAL_OPTS["zero_dte_vol_oi"] == 2.0
     assert DEFAULT_EVAL_OPTS["sigma_min"] == 6.0
-from services.flow_quality import (
-    bh_fdr,
-    cluster_biases,
-    cw_iv_spread,
-    detect_spreads,
-    is_prime,
-    sigma_pvalue,
-)
-from tests.services.test_flow_alerts import _future_exp, _raw
+
+
+def _individual_trade_fixture(raw_rows):
+    """Explicit synthetic signed trades for downstream directional math only."""
+    rows = norm_rows(raw_rows)
+    for row in rows:
+        row.update(activity_basis="individual_trade_fixture", signed_side="ASK")
+    return rows
 
 
 def _rows(*specs):
@@ -150,6 +158,9 @@ def test_three_same_bias_contracts_cluster():
     )
     for r in rows:
         r["_score"] = 80
+    assert "NVDA" not in cluster_biases(rows)  # Daily volume has no trade direction.
+    for row in rows:
+        row.update(activity_basis="individual_trade_fixture", signed_side="ASK")
     assert "NVDA" in cluster_biases(rows)
     assert cluster_biases(rows)["NVDA"] == "BULLISH"
 
@@ -248,7 +259,7 @@ def test_eval_cluster_and_cw_lift_tier():
     # pairing) + a strike-matched put whose IV sits 20 vols under the call
     # (Cremers-Weinbaum bullish confirmation).
     exp = _future_exp(10)
-    rows = norm_rows([
+    rows = _individual_trade_fixture([
         _raw(under="PLTR", occ="O:1", strike=138.0, exp=exp, vol=60000, oi=1500, delta=0.35, iv=0.70),
         _raw(under="PLTR", occ="O:2", strike=142.0, exp=_future_exp(15), vol=55000, oi=1300, delta=0.30, iv=0.70),
         _raw(under="PLTR", occ="O:3", strike=145.0, exp=_future_exp(20), vol=50000, oi=1200, delta=0.25, iv=0.70),
@@ -264,7 +275,7 @@ def test_eval_stamps_cluster_field_per_ticker():
     # cluster_biases is per-ticker: any PLTR alert fired in the snapshot
     # should carry cluster=True once ≥3 same-bias laddering rows qualify.
     exp = _future_exp(10)
-    rows = norm_rows([
+    rows = _individual_trade_fixture([
         _raw(under="PLTR", occ="O:1", strike=138.0, exp=exp, vol=60000, oi=1500, delta=0.35),
         _raw(under="PLTR", occ="O:2", strike=142.0, exp=_future_exp(15), vol=55000, oi=1300, delta=0.30),
         _raw(under="PLTR", occ="O:3", strike=145.0, exp=_future_exp(20), vol=50000, oi=1200, delta=0.25),
@@ -307,7 +318,7 @@ def test_preflight_three_factor_cluster_cw_prime_stack_to_gold():
     exp_a = _future_exp(10)
     exp_b = _future_exp(15)
     exp_c = _future_exp(20)
-    rows = norm_rows([
+    rows = _individual_trade_fixture([
         _raw(under="PLTR", occ="O:PF_1", strike=138.0, exp=exp_a,
              vol=60000, oi=1500, iv=0.70, delta=0.35, spot=133.0),
         _raw(under="PLTR", occ="O:PF_2", strike=142.0, exp=exp_b,
@@ -410,7 +421,7 @@ def fresh_engine():
 def test_alert_quality_hit_rate_round_trip(fresh_engine):
     # BULLISH alert at spot 133 → spot moves to 138.2 (+3.9%) = a hit.
     init_flow_alert_tables(fresh_engine)
-    rows = norm_rows([_raw(vol=60000, oi=1500, delta=0.25, spot=133.0)])
+    rows = _individual_trade_fixture([_raw(vol=60000, oi=1500, delta=0.25, spot=133.0)])
     persist_alerts(fresh_engine, eval_institutional(rows))
     update_moves(fresh_engine, {"PLTR": 138.2})
     q = alert_quality(fresh_engine, days=3)
@@ -436,7 +447,7 @@ def test_alert_quality_wins_is_bit_exact_with_mixed_outcomes(fresh_engine):
     # integer -- the SUM column is what the frontend's summarizeQuality
     # prefers over the float-round fallback.
     init_flow_alert_tables(fresh_engine)
-    rows = norm_rows([
+    rows = _individual_trade_fixture([
         _raw(under="T_HIT",  occ="O:HIT_1234567",    strike=133.0, vol=60000, oi=1500, delta=0.25, spot=133.0),  # hits (133->138.2 = +3.9%)
         _raw(under="T_MISS", occ="O:MISS_A0123456",  strike=200.0, vol=60000, oi=1500, delta=0.25, spot=200.0),  # miss (200->195 = -2.5%)
         _raw(under="T_MISS2", occ="O:MISS_B0123456", strike=200.0, vol=60000, oi=1500, delta=0.25, spot=200.0),  # miss
@@ -506,7 +517,7 @@ def test_init_flow_alert_tables_migrates_legacy_table_to_v2_3(fresh_engine):
         f"wins column must be exactly BIGINT (got {data_type})"
     # Round-trip alert_quality() MUST NOT throw "column wins does not exist"
     # on the migrated table -- the canary passes iff the SQL succeeds.
-    rows = norm_rows([_raw(under="T_LEGACY", vol=60000, oi=1500, delta=0.25, spot=100.0)])
+    rows = _individual_trade_fixture([_raw(under="T_LEGACY", vol=60000, oi=1500, delta=0.25, spot=100.0)])
     persist_alerts(fresh_engine, eval_institutional(rows))
     update_moves(fresh_engine, {"T_LEGACY": 104.0})  # +4% BULLISH hit
     q = alert_quality(fresh_engine, days=3)
@@ -574,7 +585,7 @@ def test_alert_quality_daily_returns_one_row_per_day_per_tier(fresh_engine):
     init_flow_alert_tables(fresh_engine)
     from datetime import date, timedelta
     today = date.today()
-    rows = norm_rows([
+    rows = _individual_trade_fixture([
         _raw(under="PLTR",  occ="O:D_PLTR",  strike=140.0, vol=60000, oi=1500, iv=0.70, delta=0.30, spot=140.0, exp=_future_exp(10)),
         _raw(under="NVDA",  occ="O:D_NVDA",  strike=1300.0, vol=45000, oi=3000, iv=0.55, delta=0.30, spot=1300.0, exp=_future_exp(20)),
         _raw(under="AAPL",  occ="O:D_AAPL",  strike=200.0, vol=60000, oi=2500, iv=0.45, delta=0.30, spot=200.0, exp=_future_exp(25)),
@@ -637,7 +648,7 @@ def test_alert_quality_daily_missing_dates_not_backfilled_with_zeros(fresh_engin
     from datetime import date, timedelta
     today = date.today()
     # Only D1 has a row, D2 and D3 have nothing in the table.
-    rows = norm_rows([_raw(under="TSLA", occ="O:T1", strike=260.0, vol=55000, oi=2000, delta=0.30, spot=260.0)])
+    rows = _individual_trade_fixture([_raw(under="TSLA", occ="O:T1", strike=260.0, vol=55000, oi=2000, delta=0.30, spot=260.0)])
     alerts = eval_institutional(rows)
     persist_alerts(fresh_engine, alerts, snapshot_date=(today - timedelta(days=2)).isoformat())
     update_moves(fresh_engine, {"TSLA": 265.2})  # +2% BULLISH hit
@@ -722,7 +733,7 @@ def test_alert_quality_daily_tier_filter_returns_subset(fresh_engine):
     init_flow_alert_tables(fresh_engine)
     from datetime import date, timedelta
     today = date.today()
-    rows = norm_rows([
+    rows = _individual_trade_fixture([
         _raw(under="X", occ="O:X1", strike=100.0, vol=60000, oi=2000, delta=0.30, spot=100.0),
     ])
     alerts = eval_institutional(rows, opts={"min_score": 80})
@@ -745,7 +756,7 @@ def test_alert_quality_daily_date_is_serialized_to_iso(fresh_engine):
     init_flow_alert_tables(fresh_engine)
     from datetime import date, timedelta
     today = date.today()
-    rows = norm_rows([_raw(under="QQ", occ="O:Q1", strike=90.0, vol=30000, oi=2000, delta=0.25, spot=90.0)])
+    rows = _individual_trade_fixture([_raw(under="QQ", occ="O:Q1", strike=90.0, vol=30000, oi=2000, delta=0.25, spot=90.0)])
     alerts = eval_institutional(rows, opts={"min_score": 80})
     persist_alerts(fresh_engine, alerts, snapshot_date=(today - timedelta(days=1)).isoformat())
     update_moves(fresh_engine, {"QQ": 91.0})  # +1.1% BULLISH hit

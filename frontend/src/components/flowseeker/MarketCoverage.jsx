@@ -28,6 +28,13 @@ export default function MarketCoverage({ coverage }) {
       {" "}Results show unusual activity from available snapshots; this is not a live feed of every trade.
       {coverage.estimated_pass_seconds > 0 && ` A full pass at the last scan's pace takes about ${Math.ceil(coverage.estimated_pass_seconds / 60)} minutes of scanning.`}
       {coverage.rows_capped && " Some stocks reached the per-stock results limit."}
+      {coverage.conflicting_contracts_excluded > 0 && ` ${Number(coverage.conflicting_contracts_excluded).toLocaleString()} conflicting contract readings were excluded.`}
+      {coverage.history_contract_limit > 0 && <>
+        {" "}Keeps earlier readings for up to {coverage.history_contract_limit} contracts per stock.
+        {" "}Changes between snapshots do not prove when trades happened.
+        {coverage.history_unavailable > 0 && ` Saved comparisons are unavailable for ${Number(coverage.history_unavailable).toLocaleString()} stocks.`}
+        {coverage.history_capped > 0 && ` ${Number(coverage.history_capped).toLocaleString()} stocks reached the saved-comparison limit.`}
+      </>}
     </> : "Automatic scan coverage is not available yet."}
     <br />
     {release?.status === "current" && checkIsRecent ? "Provider release check: no changes since the last review."

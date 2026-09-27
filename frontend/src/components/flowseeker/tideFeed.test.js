@@ -1,6 +1,6 @@
 // tideFeed.test.js — pure helper contracts for Tidehunter Pro v3.
 import {
-  parseAlert, parseFeedAlerts, isContextual, isDirectional, stageOf,
+  parseAlert, parseFeedAlerts, applyScanEvidence, isContextual, isDirectional, stageOf,
   formatMovePct, targetTravelPct, directionOf, tradeNowOf, feedBodyOf,
   verdictWithheld, scanFreshness, oiHeldLabel, moneynessPct, applyScreenToScans,
   applyScreenToAlerts, testCondition, matchCustomScan, BUILTIN_SCREENS,
@@ -9,6 +9,28 @@ import {
 
 beforeEach(() => { jest.spyOn(Date,"now").mockReturnValue(Date.parse("2026-09-07T15:00:00Z")); });
 afterEach(() => jest.restoreAllMocks());
+
+test("snapshot estimates and last-trade side cannot become whole-day direction", () => {
+  const row = applyScanEvidence({ premium: 1 }, { premium_true: 200000, activity_basis: "cumulative_snapshot",
+    premium_basis: "snapshot_volume_x_quote", nbbo_side: "ASK", signed_side: "ASK", sign_method: "quote", last_trade_side: "ASK" });
+  expect(row.premiumSource).toBe("quote_estimate");
+  expect(row.premium).toBe(200000);
+  expect(row.lastTradeSide).toBe("ASK");
+  expect(row.signedSide).toBeNull();
+  expect(row.bias).toBeNull();
+});
+
+test("saved and streamed snapshot scope keeps feed direction and levels unknown", () => {
+  for (const evidence of [{ activity_basis: "cumulative_snapshot" },
+    { context_json: JSON.stringify({ activity_basis: "cumulative_snapshot" }) }]) {
+    const alert = parseAlert({ ...dirAlert(), ...evidence });
+    expect(isDirectional(alert)).toBe(false);
+    expect(directionOf(alert).word).toBe("NO DIRECTION");
+    expect(alert.levels).toBeNull();
+    expect(alert.premium_truth).toBe(false);
+    expect(tradeNowOf([alert])).toBeNull();
+  }
+});
 
 const dirAlert = (over = {}) => ({
   key: "oiconf|NVDA|call|182.5|2026-09-19",

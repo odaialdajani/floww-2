@@ -98,10 +98,37 @@ export function parseAlert(a) {
   } : null;
   return {
     ...a,
+    ...((a.activity_basis || context?.activity_basis) === "cumulative_snapshot"
+      ? { side: "FLOW", bias: null, premium_truth: false } : {}),
     why: readableAlertText(a.why),
-    levels,
+    levels: (a.activity_basis || context?.activity_basis) === "cumulative_snapshot" ? null : levels,
     context,
   };
+}
+
+export function applyScanEvidence(row, quote) {
+  row.premiumSource = "estimate";
+  if (!quote) return row;
+  row.activityBasis = quote.activity_basis || null;
+  row.premiumBasis = quote.premium_basis || null;
+  if (Number.isFinite(quote.premium_true) && quote.premium_true >= 0) {
+    row.premium = quote.premium_true;
+    row.premiumSource = "quote_estimate";
+  }
+  if (row.activityBasis === "cumulative_snapshot") {
+    row.lastTradeSide = ["ASK", "BID"].includes(quote.last_trade_side) ? quote.last_trade_side : null;
+    row.nbbo = null;
+    row.signedSide = null;
+    row.signMethod = null;
+    row.side = "FLOW";
+    row.bias = null;
+  } else {
+    if (["ASK", "BID"].includes(quote.nbbo_side)) row.nbbo = quote.nbbo_side;
+    if (["ASK", "BID"].includes(quote.signed_side)) row.signedSide = quote.signed_side;
+    if (["quote", "tick"].includes(quote.sign_method)) row.signMethod = quote.sign_method;
+  }
+  if (Number.isFinite(quote.velocity_per_min)) row.velocity = quote.velocity_per_min;
+  return row;
 }
 export function parseFeedAlerts(alerts) {
   return (alerts || []).map(parseAlert);

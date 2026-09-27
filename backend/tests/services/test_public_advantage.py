@@ -15,7 +15,6 @@ import asyncio
 import os
 import sys
 import time
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -128,10 +127,10 @@ def test_unusual_rows_filters_sorts_and_caps():
     from services.public_scanner import MAX_ROWS_PER_TICKER, unusual_rows_from_chain
 
     chain = {"ticker": "SNDK", "spot": 50.0, "contracts": [
-        _chain_contract(osi="O:small", volume=100, oi=10000),          # below floor
+        _chain_contract(osi="O:small", strike=99, volume=100, oi=10000),          # below floor
         _chain_contract(osi="O:thin", volume=300, oi=100),             # 3x -> keep
-        _chain_contract(osi="O:big", volume=5000, oi=50000),           # big vol -> keep
-        _chain_contract(osi="O:churn", volume=300, oi=10000),          # 0.03x, small -> drop
+        _chain_contract(osi="O:big", strike=101, volume=5000, oi=50000),           # big vol -> keep
+        _chain_contract(osi="O:churn", strike=102, volume=300, oi=10000),          # 0.03x, small -> drop
         {"bogus": True},                                               # malformed -> drop
     ]}
     rows, xtras = unusual_rows_from_chain(chain)
@@ -144,7 +143,7 @@ def test_unusual_rows_filters_sorts_and_caps():
     # cvserver column order parity
     assert rows[0][0] == "SNDK" and rows[0][2] == "call" and rows[0][9] == 50.0
     # extras keyed by ckey for the emitted rows only
-    assert set(xtras) == {"SNDK|call|100|2026-09-18"}
+    assert set(xtras) == {"SNDK|call|100|2026-09-18", "SNDK|call|101|2026-09-18"}
     x = xtras["SNDK|call|100|2026-09-18"]
     assert x["premium_true"] is None  # no bid/ask/last in fixture
     assert x["side"] == "FLOW" and x["bias"] is None
@@ -181,10 +180,10 @@ def test_mid_rings_feed_ticker_roll_read():
         chain = {"ticker": "SNDK", "spot": 50.0, "contracts": [
             {"osi": "O:R1", "expiry": "2026-09-18", "type": "call", "strike": 50.0,
              "volume": 500, "oi": 100, "iv": 0.4, "delta": 0.5,
-             "bid": 1.0, "ask": 1.2, "mid": 1.1, "last": 1.2},
+             "bid": 1.0, "ask": 1.2, "mid": 1.1, "last": 1.2, "bid_timestamp": 1000, "ask_timestamp": 1000},
             {"osi": "O:R2", "expiry": "2026-09-18", "type": "put", "strike": 50.0,
              "volume": 400, "oi": 100, "iv": 0.4, "delta": -0.5,
-             "bid": 1.0, "ask": 1.2, "mid": 1.1, "last": 1.0},
+             "bid": 1.0, "ask": 1.2, "mid": 1.1, "last": 1.0, "bid_timestamp": 1000, "ask_timestamp": 1000},
         ]}
         out = ps.unusual_rows_from_chain(
             chain, vol_marks=ps._vol_marks, mid_marks=ps._mid_marks, now=1000.0)[0]
@@ -218,17 +217,21 @@ def test_velocity_marks_turn_cumulative_into_arrival():
 
     def chain_with(vol):
         return {"ticker": "SNDK", "spot": 50.0, "contracts": [
-            _chain_contract(osi="O:V", volume=vol, oi=100, bid=1.0, ask=1.2, last=1.2),
+            _chain_contract(osi="O:V", volume=vol, oi=100, bid=1.0, ask=1.2, last=1.2,
+                            volume_timestamp=1000 if vol == 1000 else 1060,
+                            bid_timestamp=1060, ask_timestamp=1060, last_timestamp=1060),
         ]}
     marks: dict = {}
     rows1, x1 = unusual_rows_from_chain(chain_with(1000), vol_marks=marks, now=1000.0)
     assert x1["SNDK|call|100|2026-09-18"]["velocity_per_min"] is None
     marks["O:V"] = (1000.0, 1000.0)  # what _stamp_marks would record
-    rows2, x2 = unusual_rows_from_chain(chain_with(1600), vol_marks=marks, now=1060.0)
+    rows2, x2 = unusual_rows_from_chain(chain_with(1600), vol_marks=marks, now=1060.0,
+                                          observations={"O:V": {"volume": 1000, "received_at": 1000, "volume_timestamp": 1000}})
     x = x2["SNDK|call|100|2026-09-18"]
     assert x["vol_delta"] == 600.0
     assert x["velocity_per_min"] == pytest.approx(600.0)
-    assert x["side"] == "BUY" and x["bias"] == "BULLISH"  # last lifted at ask
+    assert x["side"] == "FLOW" and x["bias"] is None  # one print cannot classify the whole day
+    assert x["last_trade_side"] == "ASK"
     assert x["premium_true"] == pytest.approx(1600 * 100 * 1.1)
 
 
@@ -238,7 +241,8 @@ def test_lee_ready_signing_rides_sweep_mids():
 
     def chain_with(**over):
         base = dict(osi="O:LR", expiry="2026-09-18", type="call", strike=100.0,
-                    volume=1000, oi=100, iv=0.4, delta=0.4)
+                    volume=1000, oi=100, iv=0.4, delta=0.4,
+                    bid_timestamp=1000, ask_timestamp=1000, last_timestamp=1000)
         base.update(over)
         return {"ticker": "SNDK", "spot": 50.0, "contracts": [base]}
 
@@ -249,8 +253,9 @@ def test_lee_ready_signing_rides_sweep_mids():
     assert x["signed_side"] == "ASK" and x["sign_method"] == "quote"
     # Mid-print with rising sweep mid -> tick ASK.
     _, x2 = unusual_rows_from_chain(
-        chain_with(bid=1.0, ask=1.2, last=1.1, mid=1.1),
-        mid_marks={"O:LR": 1.0}, now=1060.0)
+        chain_with(bid=1.0, ask=1.2, last=1.1, mid=1.1,
+                   bid_timestamp=1060, ask_timestamp=1060, last_timestamp=1060),
+        observations={"O:LR": {"mid": 1.0, "received_at": 1001, "quote_timestamp": 1000}}, now=1060.0)
     x = x2["SNDK|call|100|2026-09-18"]
     assert x["signed_side"] == "ASK" and x["sign_method"] == "tick"
     # Mid-print, no lag anchor -> signed honestly absent (None, not UNKNOWN).
@@ -270,6 +275,8 @@ def test_engine_prefers_signed_over_touch_and_grades_conviction():
     )
 
     rows = norm_rows([["SNDK", "O:S", "call", 50.0, "2026-09-18", 3000, 500, 0.5, 0.4, 49.0]])
+    # This isolated positive fixture represents individual trades, not day volume.
+    rows[0]["activity_basis"] = "individual_trade_fixture"
     extras = {"SNDK|call|50|2026-09-18": {
         "premium_true": 600000.0, "nbbo_side": "ASK",
         "signed_side": "BID", "sign_method": "quote",
@@ -396,6 +403,9 @@ def test_cluster_fires_on_ladder_with_no_single_line_qualifying():
         _raw(under="PLTR", occ="O:3", strike=145.0, exp=_future_exp(9),
              vol=3000, oi=1200, iv=0.05, delta=0.30),
     ])
+    assert eval_institutional(rows) == []  # Daily snapshots do not prove a directional ladder.
+    for row in rows:
+        row.update(activity_basis="individual_trade_fixture", signed_side="ASK")
     alerts = eval_institutional(rows)
     assert len(alerts) == 1, f"expected only CLUSTER, got {[a['rule'] for a in alerts]}"
     a = alerts[0]
@@ -456,13 +466,13 @@ def test_apply_quote_truth_overlays_premium_side_velocity():
         "velocity_per_min": 450.0, "side": "SELL", "bias": "BEARISH"}}
     apply_quote_truth(rows, extras)
     r = rows[0]
-    assert r["premium"] == 600000.0 and r.get("premium_truth") is True
+    assert r["premium"] == 600000.0 and r.get("premium_truth") is False
     assert r["velocity_per_min"] == 450.0
-    assert infer_side_bias(r) == ("SELL", "BEARISH")  # NBBO truth beats proxy
-    # no extras -> untouched vol/OI-proxy behavior
+    assert infer_side_bias(r) == ("FLOW", None)  # Last trade is not whole-day direction
+    # No extras still means cumulative daily volume, not known initiation.
     rows2 = norm_rows([["SNDK", "O:S", "call", 50.0, "2026-09-18", 3000, 500, 0.5, 0.4, 49.0]])
     apply_quote_truth(rows2, None)
-    assert infer_side_bias(rows2[0]) == ("BUY", "BULLISH")
+    assert infer_side_bias(rows2[0]) == ("FLOW", None)
 
 
 def test_ticker_keyed_gex_context_drives_confluence_and_levels():
@@ -479,6 +489,8 @@ def test_ticker_keyed_gex_context_drives_confluence_and_levels():
                        60000, 1500, 0.7, -0.4, 133.0]])
     ctx = {"PLTR": {"gamma_imbalance": {"gamma_imbalance_pct": -2.0,
                                         "regime": "negative_gamma"}}}
+    assert not _common_factors(rows[0], {}, set(), {}, {}, gex_context=ctx)["gex_confluent"]
+    rows[0].update(activity_basis="individual_trade_fixture", signed_side="ASK")
     f = _common_factors(rows[0], {}, set(), {}, {}, gex_context=ctx)
     assert f["gex_confluent"] is True and f["gex_regime"] == "negative"
     # regime propagates to wider bearish targets (5.5% vs 3.5%)
@@ -500,7 +512,7 @@ def test_conviction_rewards_measured_urgency_only():
     r["velocity_per_min"] = 1200.0
     r["nbbo_side"] = "ASK"
     boosted = score_conviction(r, {})
-    assert boosted == base + 6  # +4 velocity, +2 known initiation
+    assert boosted == base + 4  # Known volume timing, but no whole-day initiation bonus
     assert boosted <= 100
 
 

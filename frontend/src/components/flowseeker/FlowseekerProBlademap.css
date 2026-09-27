@@ -109,7 +109,7 @@ button.th-pill:hover { border-color: var(--th-acc); }
 .th-ans .f { font-size: 10.5px; color: var(--th-xlo); letter-spacing: 0.03em; }
 
 .th-screens { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.th-screens .th-segbar { flex: 1; }
+.th-screens .th-segbar { flex: 1; min-width: 0; flex-wrap: wrap; }
 .th-screens .th-segbar button { padding: 8px 14px 10px; font-size: 11px; }
 .th-chipb { padding: 6px 11px; border-radius: 999px; border: 1px solid var(--th-line2); font: 500 10.5px/1 var(--th-sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--th-lo); }
 .th-chipb:hover { color: var(--th-hi); }

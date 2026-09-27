@@ -149,6 +149,9 @@ def norm_rows(raw_rows, columns: list[str] | None = None) -> list[dict]:
                 "type": typ, "strike": strike, "exp": exp, "dte": dte,
                 "vol": vol, "oi": oi, "iv": iv, "delta": delta, "spot": spot,
                 "vol_oi": vol_oi,
+                "activity_basis": "cumulative_snapshot",
+                "premium_basis": "snapshot_volume_x_model_price",
+                "premium_truth": False,
                 "notional": vol * 100 * strike,
                 "ckey": f"{under}|{typ}|{strike:g}|{exp}",
             }
@@ -232,6 +235,8 @@ def infer_side_bias(r: dict) -> tuple[str, str | None]:
     no tick fallback) is the fallback. ASK = buyer lifted, BID = seller
     hit, with the desk's direction matrix.
     """
+    if r.get("activity_basis") == "cumulative_snapshot":
+        return "FLOW", None
     signed = (r.get("signed_side") or "").upper()
     if signed in ("ASK", "BID"):
         from services.public_scanner import side_bias as _side_bias
@@ -251,25 +256,33 @@ def apply_quote_truth(
     rows: list[dict],
     extras: dict[str, dict] | None,
 ) -> list[dict]:
-    """Overlay paid-feed quote truth onto normalized rows (in place).
+    """Overlay source evidence without turning daily snapshots into executions.
 
-    extras is {ckey: {premium_true, nbbo_side, signed_side, sign_method,
-    velocity_per_min, ...}} from the Public scanner. True premium replaces
-    the BS estimate for the PRIME/WHALE money gates; signed/NBBO side
-    upgrades bias inference; velocity feeds conviction. Missing keys leave
-    the row untouched â€” cvserver rows without extras score exactly as before.
+    Public snapshot dollar size remains an estimate. A last-trade side does
+    not establish the direction of cumulative day volume. Legacy execution
+    extras retain their existing interpretation when no snapshot scope is set.
     """
     if not extras:
         return rows
     for r in rows or []:
         x = (extras or {}).get(r.get("ckey", "")) or {}
+        snapshot = x.get("activity_basis") == "cumulative_snapshot" or r.get("activity_basis") == "cumulative_snapshot"
+        if snapshot:
+            r["activity_basis"] = "cumulative_snapshot"
+            r["premium_basis"] = x.get("premium_basis") or r.get("premium_basis")
+            r["premium_truth"] = False
+            r["last_trade_side"] = x.get("last_trade_side") or x.get("signed_side") or x.get("nbbo_side")
+            for field in ("nbbo_side", "signed_side", "sign_method"):
+                r.pop(field, None)
         pt = x.get("premium_true")
         if pt is not None and pt > 0:
             r["premium"] = pt
-            r["premium_truth"] = True
-        if x.get("nbbo_side") in ("ASK", "BID"):
+            r["premium_truth"] = not snapshot
+            if snapshot:
+                r["premium_basis"] = "snapshot_volume_x_quote"
+        if not snapshot and x.get("nbbo_side") in ("ASK", "BID"):
             r["nbbo_side"] = x["nbbo_side"]
-        if x.get("signed_side") in ("ASK", "BID"):
+        if not snapshot and x.get("signed_side") in ("ASK", "BID"):
             r["signed_side"] = x["signed_side"]
             if x.get("sign_method") in ("quote", "tick"):
                 r["sign_method"] = x["sign_method"]
@@ -279,6 +292,9 @@ def apply_quote_truth(
                 r["rel_spread"] = float(rs)
         except (TypeError, ValueError):
             pass
+        for name in ("snapshot_volume_change", "snapshot_elapsed_seconds", "volume_change_basis", "volume_data_received_at"):
+            if name in x:
+                r[name] = x[name]
         v = x.get("velocity_per_min")
         if v is not None and v >= 0:
             r["velocity_per_min"] = v
@@ -446,7 +462,9 @@ def score_conviction(r: dict, factors: dict | None = None,
     # Known initiation: quote-rule reads full weight, tick-fallback half â€”
     # a sweep-mid tick is evidence, not proof.
     _method = r.get("sign_method")
-    if r.get("signed_side") in ("ASK", "BID"):
+    if r.get("activity_basis") == "cumulative_snapshot":
+        know_bonus = 0
+    elif r.get("signed_side") in ("ASK", "BID"):
         know_bonus = 2 if _method == "quote" else 1
     else:
         know_bonus = 2 if r.get("nbbo_side") in ("ASK", "BID") else 0
@@ -497,7 +515,7 @@ _INDICATOR_LABELS = (
     ("sigma_ticker", "دƒ spike (BH-FDR surviving)"),
     ("informed_band", "Informed-positioning band (7â€“90 DTE tenor heuristic)"),
     ("regime_confluent", "Regime-confluent tenor"),
-    ("prime", "Prime print (â‰¥$250k, â‰¥5أ— OI)"),
+    ("prime", "Large daily activity (â‰¥$250k, â‰¥5أ— OI)"),
     ("cluster", "Same-bias cluster (â‰¥3 contracts)"),
     ("cw_confirm", "Cremers-Weinbaum IV spread confirms"),
     ("gex_confluent", "Dealer gamma confluency (خ“IB proxy)"),
@@ -596,6 +614,12 @@ def _mk_alert(r: dict, rule: str, extra: dict, factors: dict, asof: str) -> dict
         # Feature freeze (2026-09-02): intraday context frozen at fire time.
         "mins_since_open": minutes_since_open_now(),
     }
+    if r.get("activity_basis") == "cumulative_snapshot":
+        evidence = {key: r.get(key) for key in ("activity_basis", "premium_basis", "last_trade_side")}
+        a.update(evidence)
+        a["context"].update(evidence)
+        a["context"]["premium_truth"] = False
+        a["why"] = (a["why"] or "") + " | Cumulative daily snapshot; dollar size is estimated and trade direction is unknown."
     return a
 
 

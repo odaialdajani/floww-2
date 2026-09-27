@@ -67,12 +67,12 @@ def test_delta_is_new_volume_since_last_mark(fresh_engine):
     assert d[rows2[0]["ckey"]] == 4500
 
 
-def test_session_rollover_resets_to_full_volume(fresh_engine):
+def test_volume_drop_is_unknown_not_invented_fresh_volume(fresh_engine):
     rows = norm_rows([_raw(vol=30000)])
     mark_vol_deltas(fresh_engine, rows)
     rows2 = norm_rows([_raw(vol=2000)])               # new day: cumulative reset
     d = mark_vol_deltas(fresh_engine, rows2)
-    assert d[rows2[0]["ckey"]] == 2000
+    assert d[rows2[0]["ckey"]] is None
 
 
 # ── FRESH GATE ──────────────────────────────────────────────────────
@@ -176,3 +176,49 @@ def test_desk_pass_composes_and_returns_alert_list(fresh_engine):
     assert isinstance(out, list) and out               # first sight: nothing gated
     out2 = desk_pass(fresh_engine, rows, eval_institutional(rows))
     assert out2 == []                                  # same cumulative vol: stale
+
+
+@pytest.mark.parametrize('values', [[2000,None],[None,2000],[2000,3000],[3000,2000]])
+def test_conflicting_batch_cannot_return_or_save_fresh_interest(fresh_engine, values):
+    mark_vol_deltas(fresh_engine, [{'ckey':'X','vol':1000}], now=1000)
+    assert mark_vol_deltas(fresh_engine, [{'ckey':'X','vol':v} for v in values], now=1060) == {'X':None}
+    assert fresh_engine.query_strict('SELECT * FROM flow_vol_marks WHERE ckey=?',['X']) == []
+    assert mark_vol_deltas(fresh_engine, [{'ckey':'X','vol':4000}], now=1120) == {'X':None}
+
+@pytest.mark.parametrize('value', [None,True,-1,float('nan'),float('inf'),'bad'])
+def test_invalid_volume_breaks_comparison_chain(fresh_engine, value):
+    mark_vol_deltas(fresh_engine, [{'ckey':'X','vol':1000}], now=1000)
+    assert mark_vol_deltas(fresh_engine, [{'ckey':'X','vol':value}], now=1060) == {'X':None}
+    assert mark_vol_deltas(fresh_engine, [{'ckey':'X','vol':2000}], now=1120) == {'X':None}
+
+
+def test_cached_receipt_does_not_advance_or_replace_baseline(fresh_engine):
+    row = {'ckey':'X','vol':1000,'volume_data_received_at':1000}
+    mark_vol_deltas(fresh_engine,[row],now=1000)
+    assert mark_vol_deltas(fresh_engine,[{**row,'vol':2000}],now=1060) == {'X':None}
+    saved = fresh_engine.query_strict('SELECT * FROM flow_vol_marks WHERE ckey=?',['X'])[0]
+    assert saved['vol']==1000 and saved['ts']==1000
+
+
+def test_midnight_reset_cannot_count_full_day_as_new_interest(fresh_engine):
+    mark_vol_deltas(fresh_engine,[{'ckey':'X','vol':1000}],now=1000)
+    assert mark_vol_deltas(fresh_engine,[{'ckey':'X','vol':2000}],now=87400)=={'X':None}
+
+
+def test_unknown_scanner_change_is_not_recreated_from_local_marks(fresh_engine):
+    mark_vol_deltas(fresh_engine,[{'ckey':'X','vol':1000}],now=1000)
+    row={'ckey':'X','vol':2000,'snapshot_volume_change':None,'volume_data_received_at':1060}
+    assert mark_vol_deltas(fresh_engine,[row],now=1060)=={'X':None}
+
+
+def test_write_failure_returns_unknown(fresh_engine,monkeypatch):
+    mark_vol_deltas(fresh_engine,[{'ckey':'X','vol':1000}],now=1000)
+    def failed(*args,**kwargs):
+        raise OSError('unavailable')
+    monkeypatch.setattr(fresh_engine,'execute_write',failed)
+    assert mark_vol_deltas(fresh_engine,[{'ckey':'X','vol':2000}],now=1060)=={'X':None}
+
+
+def test_unknown_change_has_plain_reason():
+    a=_alert()
+    assert 'timing unknown' in fresh_gate([a],{})[0]['why']

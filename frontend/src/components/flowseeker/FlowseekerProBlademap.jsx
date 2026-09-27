@@ -30,7 +30,7 @@ import {
 import {
   FEED_DAYS, FEED_MIN_CONVICTION, TRADE_NOW_FLOOR, LEVELS_LABEL,
   BUILTIN_SCREENS, PULSE_COLUMNS, PULSE_DEFAULT_COLS,
-  parseFeedAlerts, isContextual, stageOf, formatMovePct, targetTravelPct,
+  parseFeedAlerts, applyScanEvidence, isContextual, stageOf, formatMovePct, targetTravelPct,
   directionOf, ageOf, tradeNowOf, feedBodyOf, oiHeldLabel,
   scanFreshness, hasFreshAlertSource, screenDefaultSort,
   moneynessPct, applyScreenToScans, applyScreenToAlerts,
@@ -410,17 +410,7 @@ export default function FlowseekerProBlademap({ active = true }) {
               r[7], r[8], Number(r[9]) || null, regimes[r[0]] || null);
             row.osi = typeof r[1] === "string" ? r[1] : null;
             const quote = (d.quote_truth || {})[`${row.under}|${row.type}|${row.strike}|${row.exp}`];
-            row.premiumSource = "estimate";
-            if (quote) {
-              if (Number.isFinite(quote.premium_true) && quote.premium_true >= 0) {
-                row.premium = quote.premium_true;
-                row.premiumSource = "quote";
-              }
-              if (["ASK", "BID"].includes(quote.nbbo_side)) row.nbbo = quote.nbbo_side;
-              if (["ASK", "BID"].includes(quote.signed_side)) row.signedSide = quote.signed_side;
-              if (["quote", "tick"].includes(quote.sign_method)) row.signMethod = quote.sign_method;
-              if (Number.isFinite(quote.velocity_per_min)) row.velocity = quote.velocity_per_min;
-            }
+            applyScanEvidence(row, quote);
             row.oiTag = (d.oi_tags || {})[r[1]] || (row.exp && row.exp <= sessionDay() ? { expiring: true } : null);
             row.oiChg = row.oiTag?.expiring || row.oiTag?.rollover ? null : oiChange(row.oi, prevOI[r[1]]);
             if (row.oiChg && row.oiTag) row.oiChg.tag = row.oiTag;
@@ -1248,7 +1238,7 @@ export default function FlowseekerProBlademap({ active = true }) {
             : <span className={`dir ${dir.cls}`}>{dir.arrow} {dir.word}</span>}
         </td>
         <td className="l">
-          <span className="stage" title={a.rule === "OICONF" ? "Overnight OI held" : a.rule === "FOLLOW" || a.rule === "SIGMA" ? "Repeated days or σ spike" : "Fresh print"}>
+          <span className="stage" title={a.rule === "OICONF" ? "Overnight OI held" : a.rule === "FOLLOW" || a.rule === "SIGMA" ? "Repeated days or σ spike" : "Daily activity"}>
             <span className="d">
               {[1, 2, 3].map((i) => (
                 <React.Fragment key={i}>
@@ -1331,7 +1321,7 @@ export default function FlowseekerProBlademap({ active = true }) {
         </span>
       ) : <span className="lo">{r.oiTag?.expiring ? "Expiring - change withheld" : r.oiTag?.rollover ? "Rollover - change withheld" : "— no prior day"}</span>;
       case "volOI": return r.volOI == null ? "Unknown" : r.volOI >= 99 ? "99+" : `${r.volOI.toFixed(1)}x`;
-      case "premium": return <span title={r.premiumSource === "quote" ? "Premium from observed quote" : "Estimated premium — no quote feed on this data"}>{r.premiumSource === "quote" ? "" : "~"}{fmtUSD(r.premium)}</span>;
+      case "premium": return <span title={r.premiumSource === "quote_estimate" ? "Estimated daily value: session volume times a quote, not actual traded dollars" : "Estimated premium — no quote feed on this data"}>~{fmtUSD(r.premium)}</span>;
       case "notional": return fmtUSD(r.notional);
       case "iv": return fmtIV(r.iv);
       case "delta": return r.delta == null ? "—" : `${r.deltaEst ? "~" : ""}${Number(r.delta).toFixed(2)}`;
@@ -1713,7 +1703,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                         </table>
                       )}
                       <div className="th-tblfoot">
-                        <span>Stage: Early = fresh print · Building = FOLLOW/SIGMA · Confirmed = OICONF</span>
+                        <span>Stage: Early = daily activity · Building = FOLLOW/SIGMA · Confirmed = OICONF</span>
                         <span>{LEVELS_LABEL} — edit before you plan</span>
                         <span>Plan writes a journal note only · nothing is sent to a broker</span>
                       </div>
