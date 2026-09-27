@@ -174,6 +174,41 @@ node capture-solstice.mjs   # needs playwright-core + a local Chrome binary
 2. ~~Older captures could be read as current~~ — RESOLVED 2026-09-27: moved to
    `r8-shots/older-heads/` with a README stating they are not evidence for this
    head. Re-shooting them remains optional.
-3. `API_SECRET_KEY` is unset locally, so the in-browser Save control cannot
-   round-trip until a key is configured for the local stack. Verified working
-   with a key; not verified in the running `:8000` UI, which has none.
+3. ~~`API_SECRET_KEY` unset locally blocks the in-browser Save~~ — RESOLVED
+   2026-09-27. A real browser click on `skylit-review-save-waiting` was driven
+   against a keyed, **file-backed** instance
+   (`DUCKDB_PATH=…/r8-restart-proof.duckdb API_SECRET_KEY=… uvicorn :8012`),
+   with only the review POST proxied to it. The app built the correct payload
+   itself:
+
+   ```
+   POST /api/solstice/SPY/decisions/dec_ddfdbbf38732/review
+   body {"state":"waiting","reason":"CONFIRMED_SETUP",
+         "note":"wall w_a527fe306350 … metric raw view gex mode live"}
+   -> 200 {"state":"waiting","durability":"durable"}
+   ```
+
+   The process was then **killed and restarted** against the same file, and the
+   row read back by a separate process:
+
+   ```
+   REVIEWS SURVIVING THE RESTART: 1
+   id=dec_ddfdbbf38732 state=waiting reason=CONFIRMED_SETUP
+   reviewed_at=2026-09-27T06:44:31.262665+00:00
+   ```
+
+   This is the R8-04 acceptance clause satisfied over the real mounted path, not
+   only in a unit test. Screenshot: `r8-shots/r8-03-review-roundtrip.png`.
+
+   Two corrections to the earlier draft of this section, both now fixed:
+   - The first keyed probe reported `durability: durable` from an instance with
+     **no `DUCKDB_PATH`**, i.e. `:memory:`. That proved the auth gate and the
+     request path, but NOT durability. Re-run with a real file.
+   - `DUCKDB_PATH` defaults to `:memory:`, so a "durable" response from a
+     default-configured instance is not evidence. Check the env before trusting
+     the flag.
+
+   Remaining local-config note, not a defect: the running `:8000` has no
+   `API_SECRET_KEY`, so mutating routes there are deliberately disabled (503) and
+   the frontend `.catch()` swallows it without claiming success. That is the
+   auth design working.

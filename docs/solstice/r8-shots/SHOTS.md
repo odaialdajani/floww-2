@@ -29,6 +29,7 @@ repo dependency changes. The script uses CDP `Page.captureScreenshot` because
 |---|---|---|---|
 | r8-01-selected-wall.png | 1600×1100 (element) | SELECTED WALL inspector element, full 1089px height — NOW / CHANGED / CONFIRM / INVALIDATES / DATA all visible, not folded | yes |
 | r8-02-review-saved.png | 1600×900 | Review save surface mounted, state pill rendered | yes |
+| r8-03-review-roundtrip.png | 1600×900 | Real click on the Save control; POST observed returning `200 {"durability":"durable"}` against a keyed, file-backed instance | yes |
 | inspector-desktop.png | 1600×900 | Grid cell selected, full app with sidebar + status strip | yes |
 | compare-desktop.png | 1600×900 | GEX+VEX compare desk, independent panes and scales | yes |
 | single-narrow.png | 390×844 | Single grid stacked, readable, no overlap | yes |
