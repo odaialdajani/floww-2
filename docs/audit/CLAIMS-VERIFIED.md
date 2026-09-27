@@ -117,3 +117,53 @@ wrong on the first attempt. Every deletion in this series was gated on a real
 is what caught the `React.lazy` import that the analysis missed.
 
 **A static claim that disagrees with a build is a bug in the analysis.**
+
+---
+
+## Fan-out audit outcome (4 parallel subagents, 2026-09-27)
+
+Four audits ran against disjoint areas: Triad, documentation, Solstice
+backend↔frontend contracts, and dead-ends/broken-wires. Findings are
+separated by whether acting on them was correct.
+
+### Real defects, fixed
+
+| Area | Defect | Fix |
+|---|---|---|
+| Solstice | Charm tab read `grid.charm_grid`, which the **vendor-greek** path never emitted — always "surface unavailable" | `compute_charm_grid_local` + `server.py` wiring, with honest `PARTIAL_CHARM_COVERAGE` |
+| Solstice | `WallInspector` read `grids.grid.vex_grid`; `metrics.grids` is a **map of named overlays**, so `grids.grid` was always undefined | read `grid.vex_grid`; dashboard passes the real `grid` |
+| Solstice | The test fixture for the above **encoded the same bug**, so it passed while broken | fixture corrected to the real shape |
+| Triad | IV / Delta / per-row expiry read from the heatmap payload, which has **none of them** (27 aggregate keys, verified by calling the route) | repointed at fields that exist |
+| Triad | `row.expiry \|\| expiries[0]` requested the **wrong contract expiry** on row click | expiry resolution from grid keys / `expiries_used` |
+| Triad | `handleRowClick` `useCallback` omitted `data` — a real staleness bug | dep added |
+| Docs | `CLAUDE.md` claimed `OrderRouter` "has no callers", so its MARKET gate "protects nothing" — `discord_bot.py` builds it | corrected |
+| Docs | `RUNBOOK.md` pointed operators at `:3000` for Grafana after it moved to `:3001` (my own regression) | fixed, with a guard |
+| Docs | `HEATSEEKER_ARCHITECTURE.md` still presented Schwab/Alpha Vantage as the ingestion source in 6 places (my own regression) | corrected |
+
+### Reported, then DISPROVED — deliberately not "fixed"
+
+These were raised as defects and turned out to be correct designs. Acting on
+them would have caused harm.
+
+- **`sweep_watch.note_sweep()` is never called.** The health endpoint reports
+  `age_s: None` with the note "pending B hook" rather than a fabricated zero
+  (`routes/health.py:69-70`). That is the app's honesty rule working: unknown
+  is not zero. Wiring the hook would require a sweep loop that does not exist.
+- **`/api/agent/claims` always returns `[]`.** It returns `[]` with a
+  `"note": "no db"` when there is no database, and a 503 with a real message
+  on failure (`routes/agent.py:243-257`). Nothing is fabricated.
+- **DUCKDB_PATH is never set.** The code defaults to `:memory:` and reports
+  `durable: false` rather than claiming a save. That is honest; the real gap
+  was that the switch was undocumented, now fixed in the RUNBOOK with a test.
+- **Alpaca env vars are set by no file.** Alpaca is **paper trading only**
+  (`alpaca_client.py` hardcodes `https://paper-api.alpaca.markets`), so an
+  unset key degrades the paper broker, not live money. The "mismatch" was
+  between docs that used different spellings for the same variable.
+
+### Lesson recorded
+
+Three of my own fixes in this branch were caught being wrong by the guards
+added for earlier fixes: an incomplete Grafana port rename, a partial Schwab
+removal, and a provider test that matched method names instead of the client
+variable and so passed with a real violation injected. A guard that has never
+failed is not evidence of anything.
