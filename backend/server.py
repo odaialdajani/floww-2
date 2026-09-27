@@ -997,9 +997,25 @@ def _display_surfaces(spot: float, contracts: list[dict[str, Any]], ticker: str,
     # R7-02: canonical VEX surface rides every display path with its own
     # basis/model/coverage (packet §5.1). Missing inputs make VEX
     # unavailable — never zero-filled, never a raw fallback.
-    from services.gex_core import compute_vex_grid_local
+    from services.gex_core import compute_charm_grid_local, compute_vex_grid_local
     _vg = compute_vex_grid_local(spot, contracts, ticker)
+    # The Charm view (SkylitHeatmapGrid GRID_BY_VIEW.charm) reads
+    # grid.charm_grid, which the vendor-greek path never emitted, so the tab
+    # always rendered "surface unavailable". Same honesty rule as VEX: attach
+    # the surface with its own status, never zero-fill, never fall back to raw.
+    _cg = compute_charm_grid_local(spot, contracts, ticker)
     def _with_vex(grid: dict) -> dict:
+        try:
+            grid["charm_grid"] = _cg.get("grid", {})
+            grid["charm_meta"] = {"exposure_basis": _cg.get("exposure_basis"),
+                                  "model": _cg.get("model"),
+                                  "status": _cg.get("status"),
+                                  "reason": _cg.get("reason"),
+                                  "missing_charm_inputs": _cg.get("missing_charm_inputs", 0),
+                                  "quarantined": _cg.get("quarantined", 0),
+                                  "invalid_type": _cg.get("invalid_type", 0)}
+        except Exception:
+            pass  # silent by design: charm attach is additive metadata
         try:
             grid["vex_grid"] = _vg.get("grid", {})
             grid["vex_meta"] = {"exposure_basis": _vg.get("exposure_basis"),

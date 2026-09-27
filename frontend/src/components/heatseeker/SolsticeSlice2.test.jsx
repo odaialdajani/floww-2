@@ -268,7 +268,14 @@ test("R7-05: same-wall comparison table shows both walls' own values", () => {
       wall_metrics: { [id]: { daddex_gross: dd, daddex_net: dd / 2, daddex_missing: 0, daddex_usable: 2, volume_gross: 7, volume_net: 7, volume_n: 2 } },
       wall_window: { [id]: { window_daddex: 3, coverage: { active_strikes: 2, member_strikes: 2 } } },
     },
-    grids: { grid: { vex_grid: { "2030-01-15": { [low]: 11, [low + 2]: 22 } }, vex_meta: { status: "ok" } } },
+    // VEX lives on the payload's own `grid`, NOT inside metrics.grids.
+    // metrics.grids is a map of named OVERLAY surfaces {raw, delta, activity,
+    // vendor} (server.py:1404), so `grids.grid` was always undefined and this
+    // fixture used to encode that same mistake -- which is why the VEX row
+    // rendered "no VEX coverage at members" in the running app. The shape
+    // here now matches what the backend actually emits.
+    grid: { vex_grid: { "2030-01-15": { [low]: 11, [low + 2]: 22 } }, vex_meta: { status: "ok" } },
+    grids: {},
   });
   const a = mk("w_a", 490, 2000000, 900000);
   r7(React.createElement(WI, { ...a, quality: data.quality }));

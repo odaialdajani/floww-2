@@ -1409,6 +1409,92 @@ def compute_vex_by_strike_local(spot: float, contracts: list[dict[str, Any]],
     return sorted(agg.values(), key=lambda r: r["strike"])
 
 
+CHARM_MODEL_VERSION = "vendor-charm.v1"
+
+
+def compute_charm_grid_local(spot: float, contracts: list[dict[str, Any]],
+                             ticker: str = "") -> dict[str, Any]:
+    """Per-expiry x per-strike charm surface, mirroring compute_vex_grid_local.
+
+    The Charm tab in the Solstice grid reads `grid.charm_grid`
+    (SkylitHeatmapGrid.jsx GRID_BY_VIEW.charm), but only the local
+    Black-Scholes path in compute_gex_grid emitted it. The vendor-greek path
+    -- which is what actually serves the app when the provider supplies
+    Greeks -- returned no charm_grid at all, so selecting Charm always
+    rendered "surface unavailable in this snapshot" on a perfectly healthy
+    payload. That is the same bug class as a field the UI reads but the
+    backend never sends.
+
+    Charm is delta's time sensitivity. Where the vendor supplied it we use
+    their value; where they did not, we do NOT fabricate one -- the cell is
+    reported missing, and the surface reports an explicit status. The
+    app's honesty rule is that an absent Greek is unknown, not zero.
+    """
+    expiries: list[str] = []
+    grid: dict[str, dict[str, float]] = {}
+    missing = 0
+    invalid_type = 0
+    seen: set[str] = set()
+
+    for c in contracts or []:
+        strike = c.get("strike")
+        expiry = c.get("expiry") or ""
+        try:
+            strike = float(strike)
+        except (TypeError, ValueError):
+            invalid_type += 1
+            continue
+        if not expiry or strike <= 0:
+            invalid_type += 1
+            continue
+        # Same R7-F04 rule as every other surface: an unknown option type is
+        # rejected, never default-signed as a put.
+        if option_type_sign(c.get("type")) is None:
+            invalid_type += 1
+            continue
+
+        raw = c.get("charm")
+        if raw is None:
+            missing += 1
+            continue
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            missing += 1
+            continue
+        if value != value or value in (float("inf"), float("-inf")):
+            missing += 1
+            continue
+
+        if expiry not in seen:
+            seen.add(expiry)
+            expiries.append(expiry)
+        d = grid.setdefault(expiry, {})
+        d[strike] = d.get(strike, 0.0) + value
+
+    expiries.sort()
+    if not expiries:
+        return {"expiries": [], "strikes": [], "grid": {},
+                "exposure_basis": "CHARM", "formula_version": "gex.v2",
+                "model": CHARM_MODEL_VERSION, "status": "unavailable",
+                "reason": "NO_CHARM_INPUT", "missing_charm_inputs": missing,
+                "quarantined": 0, "invalid_type": invalid_type}
+
+    return {
+        "expiries": expiries,
+        "strikes": sorted({k for e in grid for k in grid[e]}),
+        "grid": {e: dict(sorted(grid[e].items())) for e in expiries},
+        "exposure_basis": "CHARM",
+        "formula_version": "gex.v2",
+        "model": CHARM_MODEL_VERSION,
+        "status": "ok" if not missing else "partial",
+        "reason": None if not missing else "PARTIAL_CHARM_COVERAGE",
+        "missing_charm_inputs": missing,
+        "quarantined": 0,
+        "invalid_type": invalid_type,
+    }
+
+
 def compute_vex_grid_local(spot: float, contracts: list[dict[str, Any]],
                            ticker: str = "") -> dict[str, Any]:
     """R7-02: 2D VEX grid (same strike×expiry shape as the vendor OI grid).

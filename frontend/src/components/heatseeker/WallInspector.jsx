@@ -29,7 +29,7 @@ function fmtUsd(v) {
 
 function WallInspector({ wall = null, interaction = null, metrics = null, grids = null, quality = null, scenario = null, goneReason = null, lastWallId = null,
   scout = null, patterns = null, regime = null, vanna = null, moneyness = null,
-  metric = "raw", snapshotId = null, replay = false }) {
+  metric = "raw", snapshotId = null, replay = false , grid}) {
   if (!wall) {
     if (goneReason === "WALL_GONE") {
       return (
@@ -102,7 +102,7 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
         <Row k="Per-expiry" v={perExpiryGroups} tip="Same-snapshot per-expiry contributions for member strikes" />
       )}
       <Row k="Δ/Raw (scope)" v={ratio != null ? Number(ratio).toFixed(3) : "—"} tip="Scope-wide delta gross / raw gross over the same snapshot set — not the selected wall. Wall-local ratio needs same-wall delta + raw grids." />
-      <CompareTable wall={wall} metrics={metrics} grids={grids} />
+      <CompareTable wall={wall} metrics={metrics} grids={grids} grid={grid} />
       <Row k="Δ provenance" v={pairNote} tip="Vendor/vendor, local/local eligible; mixed pairs blocked without policy" />
       <Row k="OI eff. date" v={(wall.oi_effective_dates && wall.oi_effective_dates.length ? wall.oi_effective_dates.join(", ") : null) ?? "unavailable in snapshot"} tip="Per-wall OI effective dates from member-strike provenance; unavailable when no member carries OI metadata" />
       <Row k="Changed" v={interaction ? `${interaction.state}${interaction.event ? ` · ${interaction.event}` : ""}${interaction.first_seen === false ? " · persistent" : " (first sighting — see replay compare)"}` : "see replay compare"} tip="Wall-level change needs 2+ recorded snapshots; persistent states carry continuity, first sightings do not" />
@@ -130,7 +130,7 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
  * session activity and recent-window activity. Same member contracts and
  * snapshot; each row declares basis/coverage; missing is "—", never zero.
  */
-function CompareTable({ wall, metrics, grids }) {
+function CompareTable({ wall, metrics, grids, grid }) {
   const members = wall.members || [];
   const wb = (metrics?.wall_metrics || {})[wall.wall_id || ""];
   const wallWin = (metrics?.wall_window || {})[wall.wall_id || ""];
@@ -138,7 +138,12 @@ function CompareTable({ wall, metrics, grids }) {
   let vexNet = null;
   let vexGross = null;
   let vexHit = 0;
-  const vexSection = grids && grids.grid ? grids.grid.vex_grid : null;
+  // `grids` is metrics.grids, a MAP of named overlay surfaces
+  // {raw, delta, activity, vendor} -- so `grids.grid` was always undefined and
+  // this row rendered "no VEX coverage" permanently. The VEX surface is emitted
+  // one level up, on the payload's own `grid.vex_grid` (server.py:1004), which
+  // the dashboard now passes as `grid`.
+  const vexSection = grid?.vex_grid || null;
   if (vexSection && members.length) {
     vexNet = 0;
     vexGross = 0;
