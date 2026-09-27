@@ -76,21 +76,38 @@ def env():
 
 @pytest.mark.asyncio
 async def test_expired_dropped_today_kept(env):
+    """An expired expiry is dropped; a still-trading one is kept.
+
+    The live/today expiries must be real TRADING days. `time_to_expiry_years`
+    resolves each expiry against the current session clock, so an expiry dated
+    on a weekend or a past holiday is correctly classified EXPIRED (today's
+    session has closed) and dropped. Building the fixture from
+    `datetime.now().date()` alone assumed every calendar day is a session, which
+    silently broke the test on non-trading days.
+
+    So: the "expired" leg is dated in the past, and the "kept" leg is dated on
+    the next weekday at least a day out, where the contract is unambiguously
+    still trading.
+    """
     today = datetime.now(UTC).date()
     yesterday = (today - timedelta(days=1)).isoformat()
-    today_s = today.isoformat()
+    # Next weekday strictly after today — guaranteed to be a future session.
+    future = today + timedelta(days=1)
+    while future.weekday() >= 5:  # Sat=5, Sun=6
+        future += timedelta(days=1)
+    future_s = future.isoformat()
     broker = env
-    broker.get_option_expirations = AsyncMock(return_value=[yesterday, today_s])
+    broker.get_option_expirations = AsyncMock(return_value=[yesterday, future_s])
     old = make_contract(symbol="SPYOLD", expiration=yesterday)
-    new = make_contract(symbol="SPYNEW", expiration=today_s)
+    new = make_contract(symbol="SPYNEW", expiration=future_s)
     broker.get_option_chain_parsed = AsyncMock(
         side_effect=lambda s, e, a: {"calls": [old] if e == yesterday else [new], "puts": []}
     )
     result = await adapter.fetch_chain_from_public_api("SPY", max_expiries=2)
     assert result is not None
     osis = [c["osi"] for c in result["contracts"]]
-    assert "SPYOLD" not in osis
-    assert "SPYNEW" in osis
+    assert "SPYOLD" not in osis, "an expired expiry must be dropped"
+    assert "SPYNEW" in osis, "a still-trading expiry must be kept"
 
 
 @pytest.mark.asyncio

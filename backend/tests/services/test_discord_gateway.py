@@ -6,7 +6,17 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
-from discord.ext import commands
+
+# discord.py is an optional runtime extra and is deliberately NOT in
+# requirements.txt — the gateway is not part of the shipped backend. A
+# bare `from discord.ext import commands` made this module uncollectable,
+# and pytest aborts the ENTIRE run on a collection error, so one missing
+# optional dep was taking down all 5539 backend tests in CI rather than
+# skipping the handful that need it. Same guard the repo already uses in
+# tests/stateful/test_ingestion_state_machine.py and
+# tests/test_scipy_reference.py.
+discord = pytest.importorskip("discord", reason="optional discord.py extra not installed")
+commands = discord.ext.commands
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 

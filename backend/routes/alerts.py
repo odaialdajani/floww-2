@@ -1,7 +1,8 @@
 """API routes for the alert system."""
 
+import asyncio
 import logging
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
@@ -74,13 +75,86 @@ def get_alert_engine():
 _signal_clients: list[WebSocket] = []
 
 
+def broadcast_signal(payload: dict[str, Any]) -> None:
+    """Push one signal payload to every connected client.
+
+    The missing producer: detection already ran (POST /snapshot) and its
+    result used to be returned to the caller and dropped — nothing read
+    `_signal_clients`, so the socket accepted connections and then waited
+    forever for a push no code path could make.
+
+    FRAME SHAPE IS PART OF THE CONTRACT. The one real consumer,
+    frontend/src/components/AlertOverlay.js, discards any frame that fails
+    `data.type === 'signal' || data.signal`. A raw `alert.to_dict()` carries
+    `type: "GAMMA_FLIP"` and no `signal` key, so sending it verbatim moved
+    real bytes that the overlay silently threw away — the channel looked
+    wired and displayed nothing. So every frame is normalized to carry BOTH
+    `type: "signal"` (what the overlay matches on) and `signal` (the original
+    alert kind, which `addAlert` renders as the badge). The original alert
+    type is preserved under `alert_type` for anything that needs it.
+
+    Dead-client policy: a send failure evicts that socket and continues.
+    `_signal_clients` is a plain list mutated from both the reader loop and
+    the detector, so one vanished client must never 500 the detector's
+    request. Mutating a copy keeps the reader loop's own removal safe.
+    """
+    for client in list(_signal_clients):
+        frame = _signal_frame(payload)
+        try:
+            asyncio.get_running_loop().create_task(
+                _send_and_evict(client, frame)
+            )
+        except RuntimeError:
+            # No running loop (sync context) — fall back to direct send.
+            _send_and_evict(client, frame)
+
+
+def _signal_frame(payload: dict[str, Any]) -> dict[str, Any]:
+    """Normalize any alert dict into a frame AlertOverlay will actually keep.
+
+    `payload` may be a raw `alert.to_dict()` (type='GAMMA_FLIP'), an already
+    normalized frame, or anything else a caller passes. The result always
+    satisfies the overlay's filter.
+    """
+    frame = dict(payload or {})
+    original = frame.get("type")
+    # `type` is the overlay's match key and must be the literal "signal".
+    frame["type"] = "signal"
+    # `signal` is the human-readable kind the overlay renders as a badge.
+    # Only default it when absent, so a caller-supplied value is respected.
+    frame.setdefault("signal", original if original and original != "signal" else "ALERT")
+    if original and original != "signal":
+        frame["alert_type"] = original
+    frame.setdefault("ts", datetime.now(UTC).isoformat())
+    return frame
+
+
+async def _send_and_evict(client: WebSocket, payload: dict[str, Any]) -> None:
+    try:
+        await client.send_json(payload)
+    except Exception as e:
+        logger.debug("signal client evicted after send failure: %s", e)
+        if client in _signal_clients:
+            _signal_clients.remove(client)
+
+
 @router.websocket("/ws/signals")
 async def websocket_signals(websocket: WebSocket):
     """WebSocket endpoint for real-time trading signal streaming.
 
     Clients connect here to receive BUY/SELL signals pushed from
     trading_signals.py or the alert engine.
+
+    Token-gated exactly like /ws/gex/{ticker}: a live signal stream is a
+    higher-value surface than a read-only GEX stream, so leaving it open
+    while the other closed was a hole, not a feature.
     """
+    from auth import verify_ws_token
+
+    if not await verify_ws_token(websocket):
+        await websocket.close(code=4001, reason="Unauthorized")
+        return
+
     await websocket.accept()
     _signal_clients.append(websocket)
     logger.info(f"Signal client connected. Total: {len(_signal_clients)}")
@@ -91,7 +165,8 @@ async def websocket_signals(websocket: WebSocket):
             if data == "ping":
                 await websocket.send_text("pong")
     except WebSocketDisconnect:
-        _signal_clients.remove(websocket)
+        if websocket in _signal_clients:
+            _signal_clients.remove(websocket)
         logger.info(f"Signal client disconnected. Total: {len(_signal_clients)}")
     except Exception as e:
         logger.error(f"Signal WebSocket error: {e}")
@@ -243,6 +318,14 @@ async def add_snapshot(snapshot: dict[str, Any]):
         # Detect alerts
         momentum = _parse_momentum_score(snapshot.get("momentum_score", 50))
         alerts = engine.detect_alerts(snap.ticker, momentum_score=momentum)
+
+        # Push to connected /ws/signals clients. Before this, the result was
+        # returned to the caller and dropped: `_signal_clients` was appended
+        # to but never read, so the socket had no producer at all. Silence
+        # when there are no alerts is deliberate — an overlay that toasts on
+        # every snapshot poll is worse than one that stays quiet.
+        for alert in alerts or []:
+            broadcast_signal(alert.to_dict())
 
         return {
             "status": "ok",

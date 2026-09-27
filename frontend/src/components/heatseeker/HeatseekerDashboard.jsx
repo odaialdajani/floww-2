@@ -140,6 +140,7 @@ function GammaRegimeBanner({ data }) {
 
 import FlipZonesPanelBase from "./FlipZonesPanel";
 import NodeLifecyclePanel from "./NodeLifecyclePanel";
+import NodeConfluencePanel from "./NodeConfluencePanel";
 import AirPocketsPanel from "./AirPocketsPanel";
 import BeachBallIndicator from "./BeachBallIndicator";
 import ReverseRugIndicator from "./ReverseRugIndicator";
@@ -279,6 +280,9 @@ export default function HeatseekerDashboard({
           <FlipZonesPanel ticker={normalizedTicker} spot={spot} />
           <NodeLifecyclePanel ticker={normalizedTicker} />
           <AirPocketsPanel ticker={normalizedTicker} />
+        </div>
+        <div className="mt-3">
+          <NodeConfluencePanel ticker={normalizedTicker} />
         </div>
       </div>
 
