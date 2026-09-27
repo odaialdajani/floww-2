@@ -1126,28 +1126,6 @@
     "/api/agent/claims": {
       "get": {
         "operationId": "get_api_agent_claims",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "ticker",
-            "required": false,
-            "schema": {
-              "default": "",
-              "title": "Ticker",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 50,
-              "title": "Limit",
-              "type": "integer"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "content": {
@@ -1156,19 +1134,49 @@
               }
             },
             "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
           }
         },
         "summary": "Claims",
+        "tags": [
+          "agent",
+          "agent"
+        ]
+      }
+    },
+    "/api/agent/history": {
+      "get": {
+        "operationId": "get_api_agent_history",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "History",
+        "tags": [
+          "agent",
+          "agent"
+        ]
+      }
+    },
+    "/api/agent/models": {
+      "get": {
+        "operationId": "get_api_agent_models",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Models",
         "tags": [
           "agent",
           "agent"
@@ -1188,7 +1196,7 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Get Prefs",
+        "summary": "Prefs",
         "tags": [
           "agent",
           "agent"
@@ -1228,7 +1236,109 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Put Prefs",
+        "summary": "Save Prefs",
+        "tags": [
+          "agent",
+          "agent"
+        ]
+      }
+    },
+    "/api/agent/session": {
+      "post": {
+        "operationId": "post_api_agent_session",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Session",
+        "tags": [
+          "agent",
+          "agent"
+        ]
+      }
+    },
+    "/api/agent/session/logout": {
+      "post": {
+        "operationId": "post_api_agent_session_logout",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Logout Session",
+        "tags": [
+          "agent",
+          "agent"
+        ]
+      }
+    },
+    "/api/agent/session/recover": {
+      "post": {
+        "operationId": "post_api_agent_session_recover",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Recover Session",
+        "tags": [
+          "agent",
+          "agent"
+        ]
+      }
+    },
+    "/api/agent/session/rotate": {
+      "post": {
+        "operationId": "post_api_agent_session_rotate",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Rotate Session",
         "tags": [
           "agent",
           "agent"
@@ -6965,6 +7075,26 @@
         ]
       }
     },
+    "/api/flowseeker/market-session": {
+      "get": {
+        "operationId": "get_api_flowseeker_market-session",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Market Session",
+        "tags": [
+          "flowseeker",
+          "flowseeker"
+        ]
+      }
+    },
     "/api/flowseeker/model": {
       "get": {
         "description": "Calibrated P(move) status + coefficients.\n\nThe server computes p_move and attaches it to rows/alerts \u2014 this endpoint\nexposes WHICH model, its stage ladder position, and its provenance so the\ndesk can see whether the probability on the tape is measured or honest-\nuncalibrated. Structural parity: the frontend never recomputes p.",
@@ -7077,7 +7207,7 @@
     },
     "/api/flowseeker/outcomes/refresh": {
       "post": {
-        "description": "In-process outcome recompute \u2014 the nightly cron's actual workhorse.\n\nWhy in-process: DuckDBEngine is a per-process :memory: singleton, so the\nledger (flow_alerts_daily) only exists inside THIS server process \u2014 a\nseparate cron process reads its own empty DB and can never see the\nalerts. The cron therefore triggers this endpoint (fail-closed behind\nX-API-Key) and the result is written to Mongo flow_outcome_cache, where\nthe brief's outcome section reads it.\n\nAlways 200 with a status field: cold ledger (no_alerts) and missing\nbars (no_bars) are normal nightly states, not errors.",
+        "description": "In-process outcome recompute \u2014 the nightly cron's actual workhorse.\n\nWhy in-process: DuckDBEngine is a per-process :memory: singleton, so the\nledger (flow_alerts_daily) only exists inside THIS server process \u2014 a\nseparate cron process reads its own empty DB and can never see the\nalerts. The cron therefore triggers this endpoint (fail-closed behind\nX-API-Key) and the result is written to Mongo flow_outcome_cache, where\nthe brief's outcome section reads it.\n\nWhen legacy sources are enabled, cold ledger (no_alerts) and missing\nbars (no_bars) return 200 with a status. Public-only mode refuses with 503.",
         "operationId": "post_api_flowseeker_outcomes_refresh",
         "parameters": [
           {
@@ -7672,6 +7802,118 @@
           }
         },
         "summary": "Screen Options",
+        "tags": [
+          "flowseeker",
+          "flowseeker"
+        ]
+      }
+    },
+    "/api/flowseeker/universe/leaderboard": {
+      "get": {
+        "description": "Last persisted fused leaderboard (no scan, no budget spend).",
+        "operationId": "get_api_flowseeker_universe_leaderboard",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 80,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Universe Leaderboard",
+        "tags": [
+          "flowseeker",
+          "flowseeker"
+        ]
+      }
+    },
+    "/api/flowseeker/universe/scan": {
+      "get": {
+        "description": "Prefilter + batched heatmap builds + fused conviction leaderboard.\nRotating cursor: each call scans the NEXT slice (no budget stampede).\nCached 5 min; refresh=true forces a new sweep. Budget-unaffordable\ntickers keep prior leaderboard rows with honest age (never dropped).",
+        "operationId": "get_api_flowseeker_universe_scan",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 40,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_expiries",
+            "required": false,
+            "schema": {
+              "default": 2,
+              "maximum": 4,
+              "minimum": 1,
+              "title": "Max Expiries",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Refresh",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Universe Scan",
         "tags": [
           "flowseeker",
           "flowseeker"
@@ -8595,9 +8837,85 @@
         ]
       }
     },
+    "/api/heatseeker/node-confluence": {
+      "get": {
+        "description": "Per-strike confluence overlay + flow-at-node (roadmap #4 and #5).\n\nWires two scorers that already existed but had no mounted consumer:\n`services.agent.confluence.score` (deterministic, zero production\ncallers) and the strike-scoped flow read (previously only reachable by\nswitching tabs).\n\nHonesty contract, preserved from the pure service: a dimension with no\nreal per-strike input is reported `missing` and remains unknown, and\n`structure` is reported `context_only` because gamma magnitude is not a\ndirection. A thin tape yields `microstructure: missing`, not a lean.",
+        "operationId": "get_api_heatseeker_node-confluence",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "title": "Ticker",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expiries",
+            "required": false,
+            "schema": {
+              "default": 2,
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Expiries",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 12,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_flow",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Include Flow",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Node Confluence Route",
+        "tags": [
+          "heatseeker",
+          "heatseeker"
+        ]
+      }
+    },
     "/api/heatseeker/node-lifecycle": {
       "get": {
-        "description": "Top 10 |GEX| nodes classified Fresh/Tested/Delivered/Decaying.",
+        "description": "Top 10 |GEX| nodes classified Fresh/Tested/Delivered/Decaying.\n\nBuild #1 durability badge: the heatseeker lifecycle ledger is\nhistory-bound (unknown when no history); the persistent node tracker\n(NodeLifecycleTracker, DuckDB node_lifecycle_v1) is joined here so the\npanel can label itself durable vs memory-only after a restart.",
         "operationId": "get_api_heatseeker_node-lifecycle",
         "parameters": [
           {
@@ -8661,6 +8979,75 @@
         "tags": [
           "heatseeker",
           "heatseeker"
+        ]
+      }
+    },
+    "/api/heatseeker/price-history/{ticker}": {
+      "get": {
+        "operationId": "get_api_heatseeker_price-history_ticker",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "title": "Ticker",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "query_key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Query Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Price History",
+        "tags": [
+          "price-node-history"
         ]
       }
     },
@@ -10208,6 +10595,100 @@
         "summary": "Llm Providers",
         "tags": [
           "llm"
+        ]
+      }
+    },
+    "/api/market/catalog": {
+      "get": {
+        "operationId": "get_api_market_catalog",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 5000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 40,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "options_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Options Only",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Catalog Page",
+        "tags": [
+          "market-directory"
+        ]
+      }
+    },
+    "/api/market/provider-updates": {
+      "get": {
+        "operationId": "get_api_market_provider-updates",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Provider Updates",
+        "tags": [
+          "market-directory"
         ]
       }
     },
@@ -17105,7 +17586,7 @@
     },
     "/api/tickers/all": {
       "get": {
-        "description": "Full Finnhub symbol universe, paged (T2).\n\nReturns the sorted deduped symbol list; the frontend pages through it\n(``has_more``) to build the full scroller universe instead of the\nfeatured-only sets above. Cached in memory for 30 minutes;\n``?refresh=true`` forces a fresh fetch. Empty list when Finnhub is not\nconfigured (callers fall back to the featured sets).",
+        "description": "Provider stock/fund catalog; custom scan lists do not restrict browsing.",
         "operationId": "get_api_tickers_all",
         "parameters": [
           {

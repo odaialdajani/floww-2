@@ -211,6 +211,12 @@ class GroundedModel:
                     await self.spend.settle(request_id, money_units(actual), generation_id)
                     accounted = True
                 except Exception:
+                    # silent by design: a failed settlement must not fail the
+                    # request. The cost stays reserved and `accounted` stays
+                    # False, so the result reports accounting="reserved" and
+                    # actual_cost=None rather than claiming it was billed.
+                    # reconcile() later looks the generation up by id via
+                    # GET /generation, which never repeats the paid request.
                     pass
             with contextlib.suppress(Exception):
                 await self.spend.project_terminal()

@@ -22,6 +22,7 @@ These are checked statically so CI catches them without a docker daemon.
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -62,9 +63,35 @@ def test_no_bind_mount_escapes_the_repo_root(name):
     assert not offenders, f"{name} bind-mounts outside the repo: {offenders}"
 
 
+def _is_ignored_build_output(src: str) -> bool:
+    """True when git ignores the path, i.e. it is a build artifact.
+
+    Uses git's own ignore rules rather than a hardcoded list of directory
+    names, so a new build output is exempt automatically while a genuinely
+    misspelled mount (never ignored) is still caught.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "check-ignore", "-q", src],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return False
+    return result.returncode == 0
+
+
 @pytest.mark.parametrize("name", COMPOSE_FILES)
 def test_every_bind_mount_source_exists(name):
-    """A relative bind source must resolve to a real path in the repo."""
+    """A relative bind source must resolve to a real path in the repo.
+
+    Build outputs are exempt. `frontend/build` is gitignored and is created by
+    the frontend job, which runs on a separate runner with its own filesystem --
+    so it is absent here by design, not a broken mount. A `needs:` edge would not
+    fix that; only sharing a workspace or uploading an artifact would, and
+    neither is warranted for a path the build recreates.
+    """
     doc = _load(name)
     missing: list[str] = []
     for svc, cfg in (doc.get("services") or {}).items():
@@ -76,6 +103,8 @@ def test_every_bind_mount_source_exists(name):
                 continue  # named volume
             if any(ch in src for ch in "{}*$"):
                 continue  # templated / glob, not checkable statically
+            if _is_ignored_build_output(src):
+                continue
             if not (REPO_ROOT / src).exists():
                 missing.append(f"{name}:{svc} -> {src}")
     assert not missing, f"bind-mount sources that do not exist: {missing}"
