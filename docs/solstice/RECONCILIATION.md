@@ -108,3 +108,13 @@ engineering, and none is claimed complete here.
 | R6-3 context + calendar | ✅ | pinned calendar dep, holiday/half-day gates, actual-backed health, writer locks, Why-wait/candidates/patterns/badge (test_r6_3_red, 4) |
 | R6-4 explainer binding | ✅ | suffix rejection, state-gated promotion, clause templates, mounted explainer (test_r6_4_red, 3; explain Jest) |
 | R6-5 study + outcomes | ✅ code / 🔶 user | prefix-stable labels, geometry oracle, frozen-grid study mode, outcome job, commissioning math (test_r6_5_red, 4; study Jest). Participant run needs the user; empirical outcomes need sessions |
+
+## Post-R8 merges + audit-V2 batch (27 Sep 2026, PRs #49–#51 merged)
+
+| Package | Verdict | Evidence |
+|---|---|---|
+| #49 VEX sidebar label | ✅ | "GEX structural" header in VEX/Charm views; honesty copy; ruff green |
+| #50 R8 UI blend | ✅ | status strip / dark select / table/typography styles; live pixels re-verified (prod-gex/prod-vex); ruff green |
+| #51 audit-V2 remediation | ✅ code / 🔶 user | secrets out of tree (scan CLEAN), brokerage reads key-gated, order kill-switch (403), anomaly/llm/dev-token guards, WS ?token=, portfolio sign fix, volume/chain canonical units, dead route dupes removed, Caddy backend:8000, CI 3.12. Rotation + BFG purge need the user (vendor dashboards) |
+| Frontend suite green | ✅ | Blademap DTE time-bomb fixed (date-relative fixture, test-only); AppShell radix resolution fixed (jest mapper, test-env-only). 78/78 suites, 653/653 tests, prod build compiles |
+| Rejected audit claims | ✅ | axios IS used (no mass dep uninstall); ARCHITECTURE.md files differ + referenced (no delete); GEX dual-scale intentional/model-locked (no unification); paper_trading load-bearing (kept) |

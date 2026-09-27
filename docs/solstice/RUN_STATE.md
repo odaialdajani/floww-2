@@ -229,3 +229,18 @@ before/after pair (no pre-R8 baseline shots exist).
 
 Remaining external: SPX entitlement, participant study run, commissioning
 activation, empirical live sessions. No merges performed.
+
+## 2026-09-27 post-R8: PRs #49/#50/#51 merged to main (dbbc66f4)
+
+Main gate at merge head: backend targeted 316 passed / 5 pre-existing fails
+(bars x3, chain-cache x2 — fail on base too); ruff clean; secret scan CLEAN.
+Frontend full suite now 78/78 suites, 653/653 tests (was 651+1 pre-existing
+fail): BlademapFlowView DTE test fixed with date-relative fixture (test-only,
+component behavior was correct); AppShell radix failure fixed with a
+test-env-only jest mapper in craco.config.js (production build compiles;
+node/webpack were never affected).
+
+Remaining user-only: credential rotation + history purge, SPX entitlement,
+participant study run, commissioning activation, ML unification, dep
+doctrine, product name. Mass dead-code/dep deletion declined with evidence
+(audit lists proven wrong: axios used, ARCHITECTURE.md differs+referenced).

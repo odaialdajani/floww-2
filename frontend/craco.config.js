@@ -35,6 +35,12 @@ const config = {
       moduleNameMapper: {
         "^@/(.*)$": "<rootDir>/src/$1",
         "\\.(css|less|scss|sass)$": "identity-obj-proxy",
+        // jest-resolve (v27, via react-scripts 5) cannot resolve the
+        // conditional "./is-development" export of @radix-ui/primitive
+        // (node/webpack resolve it fine — production build unaffected).
+        // Pin tests to the production variant: radix dev-warnings off.
+        "^@radix-ui/primitive/is-development$":
+          "<rootDir>/node_modules/@radix-ui/primitive/dist/internal/is-development.false.js",
       },
     },
   },
