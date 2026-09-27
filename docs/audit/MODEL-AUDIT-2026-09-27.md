@@ -24,7 +24,7 @@ bash qc/audit/truth_audit.sh
 
 ## Findings: 6 violations across 24 audited models
 
-All six models are in `backend/models/` and **live, not quarantined**. All were
+All six models are in `backend/models/`, outside `_quarantine/`, and all were
 trained 2026-05-24.
 
 | Model | Finding |
@@ -40,6 +40,38 @@ trained 2026-05-24.
 direction. Its `sharpe`, `n_train`, `trained_at` and `ticker` fields are
 `null` — the values above come from the walk-forward schema
 (`avg_test_sharpe` / `fold_details[].n_train`).
+
+## Reachability: these models are NOT on the live inference path
+
+An earlier draft called these models "live". That was wrong, and wrong in the
+direction that overstates the risk. Checked:
+
+- The only non-test `joblib.load` inference path,
+  `backend/ml_price_prediction.py:210-218`, resolves
+  `os.path.join(os.path.dirname(__file__), "..", "models")` — the **repo-root**
+  `models/` — and loads a fixed name:
+
+      model_path  = f"{ticker}_direction_v1.0.joblib"
+      scaler_path = f"{ticker}_scaler_v1.0.joblib"
+
+  It returns `{"status": "no_model"}` when that file is absent, and asserts
+  `"_quarantine" not in model_path` before loading.
+
+- The six flagged artifacts are named `{ticker}_rf_20260524_*` under
+  `backend/models/`. **No code path globs that directory**, and nothing
+  references those filenames outside a `register_model.py` usage example. The
+  live loader cannot reach them.
+
+- For SPY, `models/SPY_direction_v1.0.joblib` is **absent** at the root and
+  exists only at `models/_quarantine/SPY_direction_v1.0.joblib`, which the
+  assertion would refuse. `predict("SPY")` therefore returns `no_model`.
+
+The directory the loader actually reads is repo-root `models/`, holding a
+different generation (`DIA_direction_v1.0`, `IWM_gbm_production`,
+`QQQ_logistic_offline_20260524_022311`, plus quarantined SPY/TLT/IWM
+`*_direction_v1.0`). Those are the artifacts that can reach a decision — and
+`truth_audit.sh` audits `backend/models/`, so **the gate audits a directory the
+live path does not read.** That mismatch is the more actionable finding here.
 
 ## What this is and is not
 
@@ -64,4 +96,6 @@ explained.
 
 Open question, deliberately not actioned. Retraining or quarantining a model is
 a judgment about which artifacts to trust, and that is not a call to make
-silently inside a docs commit.
+silently inside a docs commit. The directory mismatch between the audit and
+the live loader is a real defect in the gate's coverage and is the more
+tractable of the two to fix.
