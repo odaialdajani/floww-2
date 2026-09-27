@@ -1,15 +1,32 @@
 """
 Unit tests for the D-gate secret scanner (Agent D, D5/D7).
 The scanner flags pasted secrets; the gate test scans the tree.
+
+PATH NOTE: this file used to hardcode `/Users/nav/Documents/GitHub/floww`
+(one developer's machine, a DIFFERENT repo from this one) for both the
+sys.path insert and the tree scan. Two consequences:
+
+  * The gate test passed while scanning a stale clone, so it never actually
+    gated THIS repository's shipped code. It could not have caught a pasted
+    credential committed here.
+  * On CI, or in any worktree, that path does not exist at all.
+
+Everything below is now derived from __file__, so the gate scans the tree it
+actually ships in.
 """
 from __future__ import annotations
 
 import sys
+from pathlib import Path
+
+# backend/tests/chaos/ -> repo root is three parents up.
+REPO_ROOT = Path(__file__).resolve().parents[3]
+BACKEND_ROOT = REPO_ROOT / "backend"
 
 
 def _ensure_imports():
     if "tests.chaos.secret_scan" not in sys.modules:
-        sys.path.insert(0, "/Users/nav/Documents/GitHub/floww/backend")
+        sys.path.insert(0, str(BACKEND_ROOT))
 
 
 _ensure_imports()
@@ -41,14 +58,34 @@ def test_regression_prose_and_enums_ignored_live_substrings_flagged():
 
 
 def test_gate_shipped_tree_clean():
-    import os
-
     from tests.chaos.secret_scan import scan_tree
 
-    root = "/Users/nav/Documents/GitHub/floww"
+    # Scan THIS repo, not a hardcoded path on someone's machine.
+    assert REPO_ROOT.is_dir(), f"repo root not found: {REPO_ROOT}"
     findings = []
-    for sub in ("backend", "frontend", "scripts"):
-        findings += scan_tree(os.path.join(root, sub))
+    for sub in ("backend", "frontend", "scripts", ".github", "docs"):
+        target = REPO_ROOT / sub
+        if target.is_dir():
+            findings += scan_tree(str(target))
     # Self-exclusion: the scanner's own test corpus holds fake vectors.
     findings = [f for f in findings if not f["path"].endswith("test_secret_scan.py")]
     assert findings == [], f"gate: pasted secrets in shipped code: {findings[:5]}"
+
+
+def test_gate_scans_the_repo_it_ships_in():
+    """Guard the guard: the scan root must be inside this repository.
+
+    Deliberately does NOT assert a fixed directory name — a git worktree or a
+    CI checkout can be called anything. What matters is that the path is
+    derived from this file, so it can never point at some other clone the way
+    the old hardcoded `/Users/nav/Documents/GitHub/floww` did.
+    """
+    here = Path(__file__).resolve()
+    assert REPO_ROOT in here.parents, "scan root must be an ancestor of this test file"
+    assert (REPO_ROOT / "backend" / "tests" / "chaos").is_dir(), (
+        f"scan root {REPO_ROOT} does not look like this repo"
+    )
+    # The old bug: a path under a sibling repo, not this one.
+    assert REPO_ROOT != Path("/Users/nav/Documents/GitHub/floww"), (
+        "hardcoded sibling-clone path regressed"
+    )
