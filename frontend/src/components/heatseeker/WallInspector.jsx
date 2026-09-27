@@ -68,6 +68,16 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
     }
   }
   const ratio = metrics?.magnitude_ratio_delta_over_raw;
+  // R8-06 blend: group by grid surface when uniform so the row reads
+  // "delta 09-28 $1.1M · 09-29 $2.2M" instead of repeating the prefix.
+  const perExpiryGroups = (() => {
+    const shown = perExpiry.slice(0, 6);
+    const names = [...new Set(shown.map((p) => p.grid))];
+    if (names.length === 1) {
+      return `${names[0]} ` + shown.map((p) => `${p.expiry.slice(5)} ${fmtUsd(p.value)}`).join(" · ");
+    }
+    return shown.map((p) => `${p.grid}:${p.expiry.slice(5)}=${fmtUsd(p.value)}`).join(" · ");
+  })();
   const pairNote = metrics
     ? `Δ usable ${metrics.dadgex_usable ?? "—"}, missing ${metrics.dadgex_missing_delta ?? "—"}`
     : "—";
@@ -89,7 +99,7 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
       <Row k="Call / Put" v={`${fmtUsd(wall.call)} / ${fmtUsd(wall.put)}`} tip="Call-plus vs put-minus components; high gross + near-zero net is two-sided concentration" />
       <Row k="Distance" v={wall.distance != null ? `${Number(wall.distance).toFixed(2)} (${(Number(wall.distance_pct) * 100).toFixed(2)}%)` : "—"} />
       {perExpiry.length > 0 && (
-        <Row k="Per-expiry" v={perExpiry.slice(0, 6).map((p) => `${p.grid}:${p.expiry.slice(5)}=${fmtUsd(p.value)}`).join(" · ")} tip="Same-snapshot per-expiry contributions for member strikes" />
+        <Row k="Per-expiry" v={perExpiryGroups} tip="Same-snapshot per-expiry contributions for member strikes" />
       )}
       <Row k="Δ/Raw (scope)" v={ratio != null ? Number(ratio).toFixed(3) : "—"} tip="Scope-wide delta gross / raw gross over the same snapshot set — not the selected wall. Wall-local ratio needs same-wall delta + raw grids." />
       <CompareTable wall={wall} metrics={metrics} grids={grids} />
@@ -155,24 +165,33 @@ function CompareTable({ wall, metrics, grids }) {
       ? "unavailable — volume rebase"
       : "unavailable — no comparable window");
   const cell = (v) => (v == null ? "—" : fmtUsd(v));
+  // R8-06: a zero with no usable inputs is missing data, not a measured
+  // zero — show "—" with the reason instead of $0.
+  const dUsable = wb ? (wb.daddex_usable ?? 0) : 0;
+  const dMissing = wb ? (wb.daddex_missing ?? 0) : 0;
+  const dVal = !wb ? "—"
+    : dUsable > 0 ? `${cell(wb.daddex_gross)} / ${cell(wb.daddex_net)}`
+    : dMissing > 0 ? `— (${dMissing} δ-missing)` : "—";
+  const vN = wb ? (wb.volume_n ?? 0) : 0;
+  const vVal = !wb ? "—"
+    : vN > 0 ? `${cell(wb.volume_gross)} / ${cell(wb.volume_net)}` : "—";
   const rows = [
     ["Raw gross / net", `${cell(wall.gross)} / ${cell(wall.net)}`, "OI · gex.v2"],
-    ["Δ gross / net", wb ? `${cell(wb.daddex_gross)} / ${cell(wb.daddex_net)}` : "—",
-      wb ? `OI Δ-weighted${wb.daddex_missing ? ` · ${wb.daddex_missing} δ-missing` : ""}` : "no wall breakdown"],
+    ["Δ gross / net", dVal,
+      wb ? `OI Δ-weighted${dMissing ? ` · ${dMissing} δ-missing` : ""}` : "no wall breakdown"],
     ["VEX gross / net", vexGross == null ? "—" : `${cell(vexGross)} / ${cell(vexNet)}`,
       vexGross == null ? "no VEX coverage at members" : `local-bs-vanna.v1 · ${vexHit} cells`],
-    ["Session activity", wb ? `${cell(wb.volume_gross)} / ${cell(wb.volume_net)}` : "—",
-      wb ? `session volume · ${wb.volume_n ?? "—"} contracts` : "no wall breakdown"],
+    ["Session activity", vVal,
+      wb ? `session volume · ${vN} contracts` : "no wall breakdown"],
     ["Recent window", winNote, "window Δ-weighted · member coverage"],
   ];
   return (
-    <table data-testid="wall-compare-table" style={{ fontSize: 12, color: "#94a3b8", marginTop: 4, borderCollapse: "collapse" }}>
+    <table data-testid="wall-compare-table" className="skylit-compare-table">
       <tbody>
         {rows.map(([k, v, basis]) => (
-          <tr key={k}>
-            <td style={{ paddingRight: 8, whiteSpace: "nowrap" }}>{k}</td>
-            <td style={{ paddingRight: 8 }}>{v}</td>
-            <td style={{ opacity: 0.75 }}>{basis}</td>
+          <tr key={k} title={basis}>
+            <td style={{ whiteSpace: "nowrap" }}>{k}</td>
+            <td style={{ textAlign: "right" }}>{v}</td>
           </tr>
         ))}
       </tbody>
@@ -197,7 +216,7 @@ function InteractionTimeline({ interaction }) {
   if (interaction.beyond_since) items.push(["accepted beyond", `${interaction.beyond_side || "?"} · ${String(interaction.beyond_since).slice(0, 16).replace("T", " ")}`]);
   if (!items.length) return null;
   return (
-    <div data-testid="wall-timeline" style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
+    <div data-testid="wall-timeline" className="skylit-inspector-note">
       {items.map(([k, v], i) => (
         <div key={`${k}-${i}`}>· {k}{v ? `: ${v}` : ""}</div>
       ))}
@@ -234,7 +253,7 @@ function Readiness({ interaction, quality, scenario }) {
   const [label, reason] = readinessOf(interaction, quality, scenario);
   return (
     <div data-testid="wall-readiness" title="Deterministic readiness (not an order)"
-      style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
+      className="skylit-inspector-note">
       Readiness: <strong>{label}</strong> — {reason}
     </div>
   );
@@ -300,15 +319,15 @@ function ScoutSummary({ scout, members = [] }) {
             <div data-testid={`shortlist-${s.toLowerCase()}`}>
               {s} shortlist ({short[s].filter((r) => memberSet.has(Number(r.strike))).length}/{short[s].length} in this wall):
             </div>
-            <table style={{ borderCollapse: "collapse" }}>
+            <table className="skylit-compare-table">
               <tbody>
                 {short[s].map((r) => (
                   <tr key={`${s}-${r.osi}`} data-testid="shortlist-row">
-                    <td style={{ paddingRight: 6 }}>{memberSet.has(Number(r.strike)) ? "●" : "○"}</td>
-                    <td style={{ paddingRight: 6 }}>{r.osi}</td>
-                    <td style={{ paddingRight: 6 }}>{r.expiry} · Δ {r.delta}</td>
-                    <td style={{ paddingRight: 6 }}>{r.bid}×{r.ask}{r.spread_pct != null ? ` (${r.spread_pct.toFixed(1)}%)` : ""}</td>
-                    <td style={{ opacity: 0.75 }}>q {age(r.bid_ts)}/{age(r.ask_ts)}{r.tick_unknown ? " · tick unknown" : ""}</td>
+                    <td>{memberSet.has(Number(r.strike)) ? "●" : "○"}</td>
+                    <td>{r.osi}</td>
+                    <td>{r.expiry} · Δ {r.delta}</td>
+                    <td>{r.bid}×{r.ask}{r.spread_pct != null ? ` (${r.spread_pct.toFixed(1)}%)` : ""}</td>
+                    <td>q {age(r.bid_ts)}/{age(r.ask_ts)}{r.tick_unknown ? " · tick unknown" : ""}</td>
                   </tr>
                 ))}
               </tbody>

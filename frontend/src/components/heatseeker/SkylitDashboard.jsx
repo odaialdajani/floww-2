@@ -741,6 +741,7 @@ function SkylitDashboard({
                 </button>
               ))}
               <select data-testid="skylit-review-reason" value={reviewReason}
+                className="skylit-review-select"
                 title="Reason recorded with the review"
                 onChange={(e) => setReviewReason(e.target.value)}>
                 <option value="">reason…</option>
