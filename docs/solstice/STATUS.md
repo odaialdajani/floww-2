@@ -2,15 +2,52 @@
 
 > **Current state, 27 Sep 2026 — supersedes the "open PR" lines below.**
 > All work described in this file is merged: #13, #19, #55, #56, #12, #5, #58,
-> #54, #59, #60, #61, #62, #63, #64, #65 (and #3, #4, #57 — see below).
-> `origin/main` = `ac2b8ef9`. Cumulative verification on that tree:
-> **6467 backend passed / 0 failed** in CI, **103
-> frontend suites / 910 tests passed**, silent-except gate OK (330 files scanned,
-> **54** gate self-tests pass: 27 for the silent-except gate plus 27 for
-> `truth_audit.sh`, which had none until #62 added 21), API docs up to date
-> (370 paths), truth audit 227/0, ruff clean. Solstice 273, R8 durability 5,
+> #54, #59, #60, #61, #62, #63, #64, #65, #66, #67, #68, #70 (and #3, #4, #57
+> — see below). Zero open PRs.
+> `origin/main` = `70265385`. Cumulative verification on that tree:
+> **6500 backend passed / 0 failed** in CI (6467 before `91c7c032` added 28 and
+> #70 added 5),
+> **105
+> frontend suites / 918 tests passed** (was 103/910 until `91c7c032` added
+> frontend tests), silent-except gate OK (**332** files
+> scanned; **54** gate self-tests pass: 27 for the silent-except gate plus 27 for
+> `truth_audit.sh`, which had none until #62 added 21; the file count moved from
+> 330 to 332 because `91c7c032` added two service modules), API docs up to date
+> (370 paths), truth audit 0 failed, ruff clean.
+
+> **The truth-audit claim count is a function of the checked-out commit, not a
+> fixed number.** `qc/audit/truth_audit.sh` reads `git log -1 --pretty=%B` and
+> only runs its ML and CI rules when that message matches
+> `ml|model|train|synthetic|data.*gen` and `ci|audit` respectively. So the same
+> tree reports 228 checks at a commit whose message contains those keywords and
+> 226 at a bare `Merge remote-tracking branch 'origin/main'` — the two missing
+> rows are `ML commit contains no np.random data generation` and
+> `CI commit: qc/audit/truth_audit.sh exists and is executable`. Verified by
+> running the audit on both SHAs in a throwaway worktree: 228 on `29bddf85`,
+> 226 on `1398fa45`, each stable across repeated runs. **Quoting one bare count
+> is misleading; the invariant to check is 0 failed.** The 84 discovered model
+> descriptors are identical on both.
+> Solstice 273, R8 durability 5,
 > 26 WebSocket-regression tests pass on main.
 > #63 fixed the three failures that had main red on three consecutive heads.
+> #66 corrected this file's own record of #3/#4/#57 and three stale counts.
+> #67 extended the DuckDB ignore rules to the SQLite runtime stores under
+> `backend/data/`, which the repo-root-anchored `data/*.duckdb` patterns had
+> never matched.
+> #70 mutation-proved that half of the completed-session bar guard in
+> `services/public_session_close.py` (`0 < bar['l']` and `bar['v'] >= 0`) was
+> unpinned: weakening `0 < bar['l']` left all 26 tests in
+> `tests/services/test_live_app_repairs.py` green. Now covered by
+> `test_implausible_bar_fields_fail_closed`.
+> #68 added the missing `pytest-rerunfailures`, which had left
+> `@pytest.mark.flaky` inert on 8 tests, and seeded the one test that actually
+> flaked: `test_overfit_small_dataset` cleared its 0.01 loss threshold in only
+> 119 of 120 unseeded runs. Verified in CI — the wheel resolves and all
+> 6467 tests pass with the plugin active.
+> Concurrent with #67/#68, `91c7c032` (market-data closed-session prices and
+> option readings) landed on main via merge `1398fa45`. The frozen-file guard
+> was re-checked on that tree: the `skylit` allowlist in `frontend/src/App.js`
+> is intact at line 476.
 >
 > **One earlier entry is retracted, and the retraction is the point.** The
 > `SPY_rf_20260524_020801_meta.json` Sharpe-8.02 artifact was
