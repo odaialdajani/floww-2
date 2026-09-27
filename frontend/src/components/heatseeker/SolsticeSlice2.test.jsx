@@ -113,8 +113,8 @@ test("same-wall compare differs between two unequal walls (R6-2)", () => {
   const hi = { wall_id: "w_hi", low: 518, high: 522, gross: 1e6, net: 1e6, call: 1e6, put: 0 };
   const metrics = {
     wall_metrics: {
-      w_lo: { daddex_gross: 500000, daddex_net: 500000, daddex_missing: 0, volume_net: 400000 },
-      w_hi: { daddex_gross: 50000, daddex_net: 50000, daddex_missing: 0, volume_net: 40000 },
+      w_lo: { daddex_gross: 500000, daddex_net: 500000, daddex_missing: 0, daddex_usable: 2, volume_net: 400000, volume_n: 2 },
+      w_hi: { daddex_gross: 50000, daddex_net: 50000, daddex_missing: 0, daddex_usable: 2, volume_net: 40000, volume_n: 1 },
     },
   };
   r4(React.createElement(WI2, { wall: lo, metrics }));
@@ -136,12 +136,14 @@ test("wall inspector shows window activity or honest unavailability", () => {
   expect(table).toContain("no comparable window");
   unmount();
   // R6-2: wall-local aggregation over member strikes — never the scope sum.
+  // R8-06: basis lives in row titles (narrow sidebar), values stay readable.
   render(<WallInspector wall={data.metrics.walls[0]}
     metrics={{ window_daddex_v1: 999999999, window_daddex_reason: null,
       wall_window: { w_abc: { window_daddex: 2500000,
         coverage: { member_strikes: 3, active_strikes: 2 } } } }} />);
-  expect(screen.getByText(/window Δ-weighted/)).toBeInTheDocument();
-  expect(screen.getByText(/2\/3 strikes/)).toBeInTheDocument();
+  const winRow = screen.getByText("Recent window").closest("tr");
+  expect(winRow.textContent).toContain("2/3 strikes");
+  expect(winRow.getAttribute("title")).toContain("window Δ-weighted");
   expect(screen.queryByText(/999999999|999,999,999/)).toBeNull();
 });
 
@@ -263,7 +265,7 @@ test("R7-05: same-wall comparison table shows both walls' own values", () => {
   const mk = (id, low, gross, dd) => ({
     wall: { wall_id: id, low, high: low + 4, gross, net: gross / 2, call: gross, put: 0, members: [low, low + 2] },
     metrics: {
-      wall_metrics: { [id]: { daddex_gross: dd, daddex_net: dd / 2, daddex_missing: 0, volume_gross: 7, volume_net: 7, volume_n: 2 } },
+      wall_metrics: { [id]: { daddex_gross: dd, daddex_net: dd / 2, daddex_missing: 0, daddex_usable: 2, volume_gross: 7, volume_net: 7, volume_n: 2 } },
       wall_window: { [id]: { window_daddex: 3, coverage: { active_strikes: 2, member_strikes: 2 } } },
     },
     grids: { grid: { vex_grid: { "2030-01-15": { [low]: 11, [low + 2]: 22 } }, vex_meta: { status: "ok" } } },
@@ -280,7 +282,9 @@ test("R7-05: same-wall comparison table shows both walls' own values", () => {
   expect(t2).toContain("$500.0K");
   expect(t2).toContain("$100.0K");
   expect(t2).not.toContain("$2.0M");
-  expect(t2).toContain("local-bs-vanna.v1");
+  // Basis lives in row titles (narrow sidebar), values stay readable.
+  const vexRow = s7.getByText("VEX gross / net").closest("tr");
+  expect(vexRow.getAttribute("title")).toContain("local-bs-vanna.v1");
   c7();
 });
 
@@ -365,4 +369,20 @@ test("R7-05: advanced shows real vanna and moneyness values, not placeholders", 
   expect(adv).toContain("call_atm");
   expect(adv).not.toContain("view present");
   c7();
+});
+
+test("R8-06: zero with no usable inputs renders missing, never $0", () => {
+  const React = require("react");
+  const { render: r8, screen: s8, cleanup: c8 } = require("@testing-library/react");
+  const WI = require("./WallInspector").default;
+  r8(React.createElement(WI, {
+    wall: data.metrics.walls[0],
+    metrics: { wall_metrics: { w_abc: { daddex_gross: 0, daddex_net: 0,
+      daddex_missing: 2, daddex_usable: 0, volume_gross: 0, volume_net: 0, volume_n: 0 } } },
+    quality: data.quality,
+  }));
+  const t = s8.getByTestId("wall-compare-table").textContent;
+  expect(t).not.toContain("$0");
+  expect(t).toContain("2 δ-missing");
+  c8();
 });
