@@ -86,6 +86,5 @@ def test_gate_scans_the_repo_it_ships_in():
         f"scan root {REPO_ROOT} does not look like this repo"
     )
     # The old bug: a path under a sibling repo, not this one.
-    assert REPO_ROOT != Path("/Users/nav/Documents/GitHub/floww"), (
-        "hardcoded sibling-clone path regressed"
-    )
+    stale_clone = Path("/Users/nav/Documents/GitHub/floww")
+    assert stale_clone != REPO_ROOT, "hardcoded sibling-clone path regressed"
