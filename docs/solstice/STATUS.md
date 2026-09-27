@@ -3,9 +3,10 @@
 > **Current state, 27 Sep 2026 — supersedes the "open PR" lines below.**
 > All work described in this file is merged: #13, #19, #55, #56, #12, #5, #58, #54.
 > `origin/main` = `2333c5bf`. Cumulative verification on that tree:
-> **5503 backend passed / 0 failed**, **83 frontend suites / 680 tests passed**,
-> silent-except gate OK (289 files), ruff clean. Re-verified after the merge
-> batch: 222 Solstice tests and 15 WebSocket regression tests pass on main.
+> **5446 backend passed / 0 failed** (55 skipped, 9 deselected; 5565 collected
+> before the three optional-dependency files are ignored), **83 frontend suites /
+> 680 tests passed**, silent-except gate OK (289 files, 27 gate self-tests pass),
+> ruff clean. Solstice 222 and 15 WebSocket regression tests pass on main.
 > #54 was merged as `2333c5bf` and added the first `AlertOverlay` coverage,
 > which is the 83rd suite.
 > The historical sections below are preserved verbatim as the audit trail; where
