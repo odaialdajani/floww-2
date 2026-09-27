@@ -170,7 +170,7 @@ function ApHeader({ page, ticker, onTickerChange, tickers, data, onSignOut, user
         {/* Right side actions */}
         <div className="ap-header-actions">
           {/* Ticker search for relevant pages */}
-          {tickers && (page === "heatseeker" || page === "trinity" || page === "skylit" || page === "ticker-analysis") && (
+          {tickers && (page === "heatseeker" || page === "trinity" || page === "skylit") && (
             <TickerSearch
               tickers={buildTickerUniverse(tickers)}
               value={ticker}
