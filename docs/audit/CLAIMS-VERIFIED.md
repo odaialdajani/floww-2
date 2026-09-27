@@ -47,6 +47,33 @@ components.
 | `CLAUDE.md` told readers to run a nonexistent Windows venv and to **never** use the one that works | `CLAUDE.md`, `README.md` |
 | 13 dead frontend modules (verified by build + full jest run) | commit `c2fa3288` |
 
+## Schwab retirement — mapped, not deleted
+
+Schwab was retired as a data feed on **2026-09-03**. All market data is
+**Public.com**, with cvserver / yfinance / Databento-OI as fallbacks. This
+branch corrected the documentation and added guards, but deliberately did
+**not** delete the code, because each piece is load-bearing for something:
+
+| Artifact | Status | Why it stays |
+|---|---|---|
+| `services/schwab_streamer.py` | dead — 0 importers, no key | has a reconnect-chaos test suite (`tests/schwab/`); deleting means deciding what to do with those tests |
+| `services/data_fallback.py` | dead — tests only | has a 37-reference test file; same trade |
+| `services/data_quality.py::compare_gex_sources` | dead method on a **live** class | the live route correctly compares cvserver vs yfinance; removing the method touches a mounted router |
+| `services/mock_schwab_feed.py` | **not dead** | synthetic tick generator behind `FLOWW_ENABLE_MOCK_FEED=1`, imported by `server.py`. The name is legacy; it makes no Schwab connection. Renaming is behaviour-neutral but deserves its own commit. |
+| `prometheus/alerts` SchwabTokenExpiring | **deleted here** | watched a metric nothing emits, pointed at a route that does not exist |
+| `ARCHITECTURE.md`, `CLAUDE.md`, `RUNBOOK.md` | **corrected here** | all three described Schwab as a live data source |
+
+The guards now in `test_compose_consistency.py` fail if a Schwab host,
+credential or env var reappears in live backend code, if `schwab_streamer.py`
+gains an importer, if the frontend names Schwab, if a retired provider
+declares an API key, or if ARCHITECTURE.md lists it as active. So the
+quarantine is enforced, not merely intended.
+
+**Follow-up worth doing separately:** delete `schwab_streamer.py` +
+`data_fallback.py` together with their test suites, and rename
+`mock_schwab_feed.py` → `mock_synthetic_feed.py`. That is one coherent
+"finish the retirement" commit, and it is mechanical once agreed.
+
 ## Still open — needs a human, not a code change
 
 - **Secret rotation.** Anything ever committed (`db-PBRQ…` and others) is in
