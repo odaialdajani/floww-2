@@ -44,15 +44,28 @@ function SkylitTickerBar({
   }, [tickers]);
 
   const active = normalizeTicker(activeTicker);
-  // Rendered window: first RENDER_CAP plus the active ticker when it falls
-  // beyond the cap, so selection and buttons never disagree.
+  // Paged A-Z window: 500-button slices of the full universe with prev/next
+  // controls, so every symbol is reachable by scrolling. The page follows the
+  // active ticker (keyboard/control-bar steps through the full universe).
+  const totalPages = Math.max(1, Math.ceil(universe.length / RENDER_CAP));
+  const pageFor = (t) => Math.max(0, Math.floor(universe.indexOf(t) / RENDER_CAP));
+  const [page, setPage] = useState(() => (active ? pageFor(active) : 0));
+  useEffect(() => {
+    if (active && universe.includes(active)) {
+      const p = Math.min(pageFor(active), totalPages - 1);
+      setPage((prev) => (prev === p ? prev : p));
+    }
+  }, [active, universe, totalPages]);
+  const safePage = Math.min(page, totalPages - 1);
+  // Rendered window: the current page slice plus the active ticker when it
+  // falls outside (transition safety), so selection and buttons never disagree.
   const visible = useMemo(() => {
-    const win = universe.slice(0, RENDER_CAP);
+    const win = universe.slice(safePage * RENDER_CAP, safePage * RENDER_CAP + RENDER_CAP);
     if (active && universe.includes(active) && !win.includes(active)) {
       win.push(active);
     }
     return win;
-  }, [universe, active]);
+  }, [universe, active, safePage]);
 
   const [query, setQuery] = useState("");
   const { matches: suggestions, total: suggestTotal } = useMemo(
@@ -85,9 +98,31 @@ function SkylitTickerBar({
         <div className="skylit-ticker-inner">
           <span className="skylit-ticker-count" data-testid="skylit-ticker-count">
             {universe.length > RENDER_CAP
-              ? `showing ${visible.length} of ${universe.length} tickers`
+              ? `showing ${visible.length} of ${universe.length} · page ${safePage + 1}/${totalPages}`
               : `${universe.length} tickers`}
           </span>
+          {totalPages > 1 && (
+            <>
+              <button
+                className="skylit-ticker-btn"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={safePage <= 0}
+                title="Previous 500"
+                data-testid="skylit-ticker-page-prev"
+              >
+                ‹
+              </button>
+              <button
+                className="skylit-ticker-btn"
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={safePage >= totalPages - 1}
+                title="Next 500"
+                data-testid="skylit-ticker-page-next"
+              >
+                ›
+              </button>
+            </>
+          )}
           <span className="skylit-ticker-sep">|</span>
           <input
             value={query}
