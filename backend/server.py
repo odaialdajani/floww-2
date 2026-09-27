@@ -3494,6 +3494,24 @@ from routes.alerts import router as alerts_router
 
 app.include_router(alerts_router, tags=["alerts"])
 
+# The alerts websocket MUST also be reachable at the path the frontend
+# actually opens. `router` carries prefix="/api/alerts", so
+# `@router.websocket("/ws/signals")` registers at /api/alerts/ws/signals —
+# a path nothing connects to. AlertOverlay.js opens
+# `${WS_URL}/ws/signals`, which resolved to server.py's greedy
+# `/ws/{topic}` with topic="signals" (ws_manager), so every client landed
+# in the generic streamer and the alerts producer's _signal_clients list
+# was never read. The channel was dead on every commit that shipped it.
+#
+# Registered here, before /ws/{topic} below, so Starlette's first-match
+# ordering hands the exact path to the alerts handler. Both paths are
+# served: the prefixed one for direct API use, this one for the client.
+from routes.alerts import websocket_signals as _alerts_websocket_signals
+
+app.add_api_websocket_route(
+    "/ws/signals", _alerts_websocket_signals, name="alerts_ws_signals_frontend"
+)
+
 # Preferences & theme sync
 from routes.preferences import router as preferences_router
 
