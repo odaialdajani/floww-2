@@ -10,13 +10,27 @@ import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import FlowseekerProBlademap from './FlowseekerProBlademap';
+import { bizDTE } from './scanLogic';
 
 jest.setTimeout(30000);
 
-// Fixture expiries land ~13 trading days out (mid-September 2026).
+// Fixture expiry is computed relative to today: bizDTE must sit in 8-21D.
+// (The old hardcoded 2026-09-18 expiry time-bombed once wall-clock passed it:
+// bizDTE returned 0 and the contract fell in the 0D band.)
+function expiryWithDteIn(lo, hi) {
+  const d = new Date();
+  for (let i = 1; i <= 60; i++) {
+    d.setDate(d.getDate() + 1);
+    const s = d.toISOString().slice(0, 10);
+    const b = bizDTE(s);
+    if (b !== null && b >= lo && b <= hi) return s;
+  }
+  throw new Error('no fixture expiry found in 8-21D window');
+}
+const EXPIRY = expiryWithDteIn(8, 21);
 const contracts = [
-  { strike: 450, type: 'call', expiry: '2026-09-18', volume: 500, oi: 500, iv: 0.2, bid: 4, ask: 4.2, last: 4.1 },
-  { strike: 450, type: 'put', expiry: '2026-09-18', volume: 600, oi: 600, iv: 0.25, bid: 3.9, ask: 4.1, last: 4.0 },
+  { strike: 450, type: 'call', expiry: EXPIRY, volume: 500, oi: 500, iv: 0.2, bid: 4, ask: 4.2, last: 4.1 },
+  { strike: 450, type: 'put', expiry: EXPIRY, volume: 600, oi: 600, iv: 0.25, bid: 3.9, ask: 4.1, last: 4.0 },
 ];
 
 beforeEach(() => {
