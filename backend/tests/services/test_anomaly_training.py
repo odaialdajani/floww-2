@@ -161,6 +161,13 @@ class TestTraining:
         import torch
         import torch.nn.functional as F
 
+        # Seed both the input draw and the model init. Without this the 100-step
+        # Adam run meets final_loss < 0.01 only some of the time, which is what
+        # the flaky marker was papering over: a retry passes by luck rather than
+        # by anything being fixed. Deterministic init makes the assertion mean
+        # the same thing on every run.
+        torch.manual_seed(0)
+
         # Create a single sequence repeated
         x = torch.randn(1, 2, 50) * 0.1
         x = x.repeat(10, 1, 1)

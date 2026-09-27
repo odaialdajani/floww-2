@@ -48,6 +48,11 @@ pytest>=8.0.0
 # Enforces the per-test ceiling in pytest.ini. Without it pytest silently ignores
 # the `timeout` setting, and a hung test stalls the whole run instead of failing.
 pytest-timeout>=2.3.1
+# Backs `@pytest.mark.flaky` in pytest.ini. Without it that marker is inert:
+# 8 tests across test_anomaly_training, test_greeks_api, test_heatseeker_v2 and
+# test_v3_costsave carry @pytest.mark.flaky(reruns=2) and were being reported as
+# plain failures with no retry, in CI as well as locally.
+pytest-rerunfailures>=14.0
 black>=24.1.1
 isort>=5.13.2
 flake8>=7.0.0
