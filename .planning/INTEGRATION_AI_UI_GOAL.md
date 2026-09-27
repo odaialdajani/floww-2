@@ -1,3 +1,7 @@
+## Narrowed critical accuracy pass closed - 2026-09-27 02:28 UTC
+
+The user's 01:45 and 01:58 scope decisions supersede the original full-roadmap objective shown by the goal tool. Five reproduced material accuracy/use defects have been corrected, independently checked and verified in mounted components/browser fixtures. Final105suites/916tests and build pass; backend44focused calculations and independent arithmetic pass. Existing reviewed main integration is current. Evidence and known limits: eval/critical-accuracy-verification-20260927.md. The broader roadmap and optional acceptance/operations work remain explicitly deferred, not falsely marked delivered. Follow-up GEX question is an assessment only; existing conventional sign method is unchanged.
+
 ## User priority update - 2026-09-27 01:58 UTC
 
 The user explicitly stopped further shutdown/minor-hardening work and asked to focus on how the app works and its accuracy: substantial data, calculation, research-answer and core-use failures only. Additional shutdown, full-startup and backup experiments are deferred and are NOT completion blockers for this narrowed accuracy pass. Commit/push preservation remains required. Already made changes are retained; do not label unfinished independent checks as passed.

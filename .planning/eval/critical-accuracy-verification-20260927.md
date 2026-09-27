@@ -1,3 +1,17 @@
+# Final scoped accuracy result - 2026-09-27 02:28 UTC
+
+All five reproduced critical defects from this pass are corrected: model coverage/sign, departed-screen research context, chain controls/ticker transitions, selected-metric bars, and missing-data Profile interpretation. This closes the user's narrowed substantive accuracy pass; it does not complete the deferred AI/UI roadmap or certify arbitrary provider data.
+
+Final combined evidence: 105 desktop suites / 916 tests passed and exited 0; production build exited 0. Backend calculation change remains at the independently reviewed identity with 44 focused tests and scoped Ruff passing. Browser reviewer captured actual current components in Chrome; root inspected screenshots. Independent BarHeatmap review caught and then verified a selected-expiry omission using actual producer output. Profile source-shaped red/green proof used the actual pure grid producer. Latest fetch contains all origin/main changes (49 ahead, 0 behind before this final save).
+
+Bars now retain true zero, refuse missing selected values, include selected-metric expiries missing from the GEX axes, and avoid applying GEX node colors to other measurements. Profile no longer invents zero/AIR from absent cells or partial expiry coverage. See barheatmap-selected-metric-review-20260927.md, critical-profile-coverage-review-20260927.md and current-accuracy-browser-review-20260927.md.
+
+Limits: browser responses were synthetic and isolated; no live services or user apps were restarted. Finite source cells can still omit contracts that the source did not deliver; these frontend checks cannot establish unseen source completeness. Dealer holdings are not known: existing raw GEX remains the declared call-positive/put-negative conventional estimate, not measured dealer inventory. The user's follow-up question about best GEX methods is research/explanation only; no replacement formula, paid data subscription, or predictive capability was enabled.
+
+Earlier three-fix detail follows for provenance; its pending browser/two-chart statements are superseded by this final result.
+
+---
+
 # Critical accuracy corrections - 2026-09-27
 
 ## Delivered

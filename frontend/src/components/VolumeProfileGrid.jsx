@@ -1,6 +1,8 @@
 import React, { useMemo } from "react";
 import { fmt, fmtAbs, expFmt, cellColor } from "../lib/helpers";
 
+const reading = value => typeof value === "number" && Number.isFinite(value) ? value : null;
+
 /**
  * VolumeProfileGrid — GEX Profile View
  *
@@ -31,16 +33,23 @@ export default function VolumeProfileGrid({ data, spot }) {
         // derive strikes from grid keys
         const s = new Set();
         for (const col of Object.values(g.grid)) {
-          for (const k of Object.keys(col)) s.add(Number(k));
+          for (const k of Object.keys(col || {})) s.add(Number(k));
         }
         sts = [...s].sort((a, b) => b - a);
       }
       // Totals per strike (for footer bar)
       const totals = {};
+      const cells = Object.fromEntries(exps.map(e => [e, {}]));
       for (const s of sts) {
-        let t = 0;
-        for (const e of exps) t += (g.grid?.[e]?.[String(s)] || 0);
-        totals[s] = t;
+        const values = exps.map(e => {
+          const value = reading(g.grid?.[e]?.[String(s)]);
+          cells[e][String(s)] = value;
+          return value;
+        });
+        // Sparse cells can mean absent contracts or unavailable inputs; neither
+        // establishes a measured zero or a complete low-pressure strike.
+        totals[s] = values.length && values.every(v => v !== null)
+          ? reading(values.reduce((sum, v) => sum + v, 0)) : null;
       }
       // Volume per strike comes from the flat strikes array the backend
       // attaches alongside the grid (total_volume rollup, 2026-09-03).
@@ -52,7 +61,7 @@ export default function VolumeProfileGrid({ data, spot }) {
           }
         }
       }
-      return { expiries: exps, strikes: sts, grid: g.grid || {}, totalByStrike: totals, volByStrike: vols, nodes: data.nodes || null };
+      return { expiries: exps, strikes: sts, grid: cells, totalByStrike: totals, volByStrike: vols, nodes: data.nodes || null };
     }
 
     // Shape 2: flat strikes array with gex per strike
@@ -65,7 +74,7 @@ export default function VolumeProfileGrid({ data, spot }) {
       const vols = {};
       for (const r of data.strikes) {
         if (typeof r === "object" && r.strike != null) {
-          byStrike[r.strike] = r.gex ?? r.total_gex ?? 0;
+          byStrike[r.strike] = reading(Object.prototype.hasOwnProperty.call(r, "gex") ? r.gex : r.total_gex);
           vols[r.strike] = r.total_volume ?? r.volume ?? 0;
         }
       }
@@ -149,11 +158,14 @@ export default function VolumeProfileGrid({ data, spot }) {
   const airStrikes = useMemo(() => {
     const out = [];
     for (const s of strikes) {
-      const v = isSingleCol ? (totalByStrike[s] || 0) : expiries.reduce((a, e) => a + Math.abs(grid[e]?.[String(s)] || 0), 0);
-      if (Math.abs(v) < maxAbs * 0.08) out.push(s);
+      if (reading(totalByStrike[s]) === null) continue;
+      const v = isSingleCol ? totalByStrike[s] : expiries.reduce((a, e) => a + Math.abs(grid[e][String(s)]), 0);
+      if (Number.isFinite(v) && Math.abs(v) < maxAbs * 0.08) out.push(s);
     }
     return out;
   }, [strikes, totalByStrike, grid, expiries, maxAbs, isSingleCol]);
+  const airSet = useMemo(() => new Set(airStrikes), [airStrikes]);
+  const incomplete = strikes.some(s => reading(totalByStrike[s]) === null);
 
   if (!hasData) {
     return (
@@ -181,6 +193,8 @@ export default function VolumeProfileGrid({ data, spot }) {
           </span>
         )}
       </div>
+
+      {incomplete && <div className="volume-profile-meta" role="status">Some readings are unavailable. Incomplete rows are not marked AIR.</div>}
 
       {nodePills.length > 0 && (
         <div className="volume-profile-nodes" data-testid="volume-profile-nodes">
@@ -212,8 +226,8 @@ export default function VolumeProfileGrid({ data, spot }) {
           <tbody>
             {strikes.map((s, i) => {
               const isSpot = i === spotIdx;
-              const total = totalByStrike[s] || 0;
-              const isAir = Math.abs(isSingleCol ? total : expiries.reduce((a, e) => a + Math.abs(grid[e]?.[String(s)] || 0), 0)) < maxAbs * 0.08;
+              const total = reading(totalByStrike[s]);
+              const isAir = airSet.has(s);
               return (
                 <tr key={s} className={isSpot ? "volume-profile-row-spot" : undefined}>
                   <td className={`volume-profile-strike${isSpot ? " is-spot" : ""}${isAir ? " is-air" : ""}`}>
@@ -232,7 +246,7 @@ export default function VolumeProfileGrid({ data, spot }) {
                     })()
                   ) : (
                     expiries.map((e) => {
-                      const v = grid[e]?.[String(s)] || 0;
+                      const v = grid[e]?.[String(s)] ?? null;
                       const col = cellColor(v, maxAbs);
                       return (
                         <td key={e} className="volume-profile-cell" style={{ background: col.bg, color: col.text }} title={`strike ${s} · exp ${e} · gex ${fmtAbs(v)}`}>

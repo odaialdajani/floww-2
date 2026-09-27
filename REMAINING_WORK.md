@@ -1,3 +1,11 @@
+# Current narrowed accuracy pass complete - 2026-09-27 02:28 UTC
+
+Five reproduced critical defects are corrected and independently reviewed: model coverage/sign; current-screen research identity; chain selection; selected-metric bars; missing-data Profile interpretation. Final 105 desktop suites / 916 tests and production build pass. Backend calculation checks: 44 pass. Actual Chrome fixture checks pass; source-shaped proofs and limits are recorded in .planning/eval/critical-accuracy-verification-20260927.md. All source/handoff work is being preserved on the existing branch; no user app was restarted.
+
+No further confirmed defect remains open from this bounded pass. Broader AI/UI roadmap, additional provider/model acceptance, per-contract source-completeness guarantees, actual dealer inventory inference, new capabilities and previously deferred operational experiments remain outside the user's narrowed request. Raw GEX is still an explicitly assumed positioning map. The user asked about optimal GEX methodology; that answer does not authorize a formula redesign or data purchase.
+
+Older remaining-work sections below are preserved history and do not reopen deferred scope.
+
 # Latest accuracy corrections - 2026-09-27 02:19 UTC
 
 Three confirmed critical defects are corrected and checked: incomplete model inputs no longer publish false signs/zero levels; new research cannot inherit a departed screen's ticker/map; chain filters now apply to both sources and ticker changes discard old rows/expiry. Final desktop checks: 901 passed; final build passed. See .planning/eval/critical-accuracy-verification-20260927.md for exact evidence and limits. Browser check remains in progress. Bars metric fallback and Profile missing-cell behavior remain to inspect; no whole-product accuracy claim.
