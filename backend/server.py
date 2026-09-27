@@ -2982,7 +2982,20 @@ async def websocket_gex(websocket: WebSocket, ticker: str):
             except Exception as e:
                 consecutive_errors += 1
                 log.warning(f"WebSocket error for {t}: {e} (consecutive: {consecutive_errors})")
-                await websocket.send_json({"error": str(e), "ticker": t})
+                # The socket that just failed is usually already unusable --
+                # this exception is very often itself a send failure, or the
+                # peer has gone away. Sending here raised LocalProtocolError
+                # ("Can't send data when our state is ERROR"), which escaped to
+                # the outer handler and logged every ordinary browser
+                # disconnect as a FATAL error. Reporting is best-effort.
+                try:
+                    await websocket.send_json({"error": str(e), "ticker": t})
+                except Exception as send_err:
+                    log.debug(
+                        f"Could not deliver error payload to {t} "
+                        f"(socket already closed): {send_err}"
+                    )
+                    break
                 if consecutive_errors >= max_errors:
                     log.error(f"Too many consecutive errors for {t}, closing WebSocket")
                     await websocket.close(code=1011, reason="Too many errors")
