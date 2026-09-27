@@ -387,14 +387,26 @@ async def contract(
     try:
         from server import _sanitize
         raw = await _cache.get_chain(ticker, expiries, max_age_seconds, _coordinator)
+        if isinstance(raw, dict) and raw.get("status") == "degraded":
+            # Honest degradation: budget exhaustion / fetch failure is not
+            # "no options data" (404). Pass the structured marker through
+            # with a retryable status instead of lying about coverage.
+            from fastapi.responses import JSONResponse
+            code = 429 if raw.get("reason") == "budget_exhausted" else 503
+            return JSONResponse(status_code=code, content=_sanitize(raw))
         _check_chain(raw, ticker)
         contracts = raw["contracts"]
         if expiry:
             contracts = [c for c in contracts if c.get("expiry") == expiry]
         spot = raw["spot"]
-        from bs_greeks import bs_gamma
+        from bs_greeks import bs_gamma, dollar_gex_per_contract
+        from domain.exposure_metrics import option_type_sign
         rows = []
         for c in contracts:
+            # R7-F04: unknown option types are skipped, never default-signed.
+            sign = option_type_sign(c.get("type"))
+            if sign is None:
+                continue
             gamma = c.get("gamma")
             if not gamma:
                 _k, _T, _iv = float(c.get("strike") or 0), float(c.get("T") or 0), float(c.get("iv") or 0)
@@ -402,7 +414,8 @@ async def contract(
             leg = _map_contract_leg(c)
             leg["gamma"] = gamma
             oi = leg["open_interest"]
-            leg["gex"] = gamma * oi * 100 * spot * (1 if c["type"] == "call" else -1)
+            # Canonical display units (S2), matching /api/chain + heatmap.
+            leg["gex"] = sign * dollar_gex_per_contract(gamma, oi, spot)
             rows.append(leg)
         return _sanitize({"ticker": ticker.strip().upper(), "spot": spot, "rows": rows, "count": len(rows), "spot_source": raw.get("spot_source")})
     except HTTPException:
@@ -499,6 +512,10 @@ async def contract_strike(
     try:
         from server import _sanitize
         raw = await _cache.get_chain(ticker, expiries, max_age_seconds, _coordinator)
+        if isinstance(raw, dict) and raw.get("status") == "degraded":
+            from fastapi.responses import JSONResponse
+            code = 429 if raw.get("reason") == "budget_exhausted" else 503
+            return JSONResponse(status_code=code, content=_sanitize(raw))
         _check_chain(raw, ticker)
         contracts = contracts_for_strike_expiry(raw.get("contracts", []), strike, expiry)
         return _sanitize({

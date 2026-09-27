@@ -12,6 +12,21 @@ import pytest
 pytestmark = pytest.mark.asyncio
 
 
+@pytest.fixture(autouse=True)
+def _reset_shared_public_budget():
+    """Isolate the process-global Public token bucket between tests.
+
+    Trinity/movers fan-outs drain shared tokens + trip host cooldowns; without
+    a reset, later chain tests inherit an exhausted bucket and 404 on empty
+    fetches (order-dependent failure, also seen on unmodified main). The
+    dollar budget meter under test here is a separate system, unaffected.
+    """
+    from services.public_budget import budget as _pub_budget
+    _pub_budget.reset()
+    yield
+    _pub_budget.reset()
+
+
 # --- /api/databento/usage shape ---
 async def test_databento_usage_v3_shape(aclient):
     r = await aclient.get("/api/databento/usage")

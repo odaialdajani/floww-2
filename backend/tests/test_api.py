@@ -260,6 +260,47 @@ def test_chain_gex_skips_unknown_type(client, patched_chain):
     assert r.json()["count"] == 0  # unknown type rejected, never default-signed
 
 
+def test_contract_gex_canonical_display_units(client):
+    import routes.analytics as _analytics
+    fake = _fake_chain()
+    with patch.object(_analytics, "_cache") as cache:
+        cache.get_chain = AsyncMock(return_value=fake)
+        r = client.get("/api/contract/SPY")
+    assert r.status_code == 200, r.text
+    d = r.json()
+    rows = [x for x in d["rows"] if x["strike"] == 500.0]
+    calls = [x["gex"] for x in rows if x["type"] == "call"]
+    puts = [x["gex"] for x in rows if x["type"] == "put"]
+    assert calls and puts
+    assert calls[0] == pytest.approx(15_000_000.0, rel=1e-9)
+    assert puts[0] == pytest.approx(-15_000_000.0, rel=1e-9)
+
+
+def test_contract_budget_exhaustion_is_429_not_404(client):
+    import routes.analytics as _analytics
+    degraded = {"status": "degraded", "reason": "budget_exhausted",
+                "detail": "bucket empty", "retry_after": 5,
+                "stale": True, "asof": 0.0, "data": None,
+                "contracts": [], "spot": None}
+    with patch.object(_analytics, "_cache") as cache:
+        cache.get_chain = AsyncMock(return_value=degraded)
+        r = client.get("/api/contract/SPY")
+    assert r.status_code == 429, r.text
+    assert r.json()["reason"] == "budget_exhausted"
+
+
+def test_contract_fetch_error_is_503_not_404(client):
+    import routes.analytics as _analytics
+    degraded = {"status": "degraded", "reason": "fetch_error",
+                "detail": "boom", "retry_after": 15,
+                "stale": True, "asof": 0.0, "data": None,
+                "contracts": [], "spot": None}
+    with patch.object(_analytics, "_cache") as cache:
+        cache.get_chain = AsyncMock(return_value=degraded)
+        r = client.get("/api/contract/SPY")
+    assert r.status_code == 503, r.text
+
+
 def test_advanced_spy(client, patched_chain):
     r = client.get("/api/advanced/SPY?expiries=4")
     assert r.status_code == 200
