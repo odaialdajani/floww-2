@@ -316,7 +316,7 @@ async def dev_token(body: dict[str, Any]) -> dict[str, Any]:
 
     Dev-only: refuses with 403 unless the operator opts in with
     FLOWW_ALLOW_DEV_TOKENS=1. Never enable on a reachable deployment —
-    this mints 30-day tokens for arbitrary email/tier with no auth.
+    this mints 24-hour tokens for arbitrary email/tier with no auth.
     """
     if os.environ.get("FLOWW_ALLOW_DEV_TOKENS", "") != "1":
         raise HTTPException(status_code=403, detail={
@@ -341,7 +341,10 @@ async def dev_token(body: dict[str, Any]) -> dict[str, Any]:
             "sub": email,
             "tier": tier,
             "iat": int(time.time()),
-            "exp": int(time.time()) + 86400 * 30,
+            # 24h, not 30d: dev tokens are convenience credentials for local
+            # sign-in; a month-long pro-tier JWT is an unnecessary blast
+            # radius if one leaks (endpoint itself is env-gated above).
+            "exp": int(time.time()) + 86400,
             "iss": "floww-dev",
         }).encode()
     ).rstrip(b"=").decode()
