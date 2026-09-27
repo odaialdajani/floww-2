@@ -441,3 +441,50 @@ def test_current_docs_do_not_present_retired_providers_as_live(doc_rel: str):
         "current-facing docs present a retired provider as a live source:\n  "
         + "\n  ".join(offenders)
     )
+
+
+# ── Durability must never be claimed falsely ───────────────────────────────
+#
+# The heatmap/research history is DuckDB. It defaults to :memory:, so every
+# restart loses it -- and the API must say so. The invariant is narrow and
+# important: nothing may report a wall or a review as durable unless the
+# recorder is genuinely file-backed. A false "durable" is the worst kind of
+# lie in this app: it tells the user a save happened that did not.
+
+def test_memory_duckdb_is_never_reported_as_durable():
+    """recorder_status must say durable=False for an in-memory database."""
+    import duckdb  # noqa: PLC0415
+
+    from services import heatmap_history as hh
+
+    conn = duckdb.connect(":memory:")
+    try:
+        status = hh.recorder_status(conn, ":memory:")
+        assert status["durable"] is False, (
+            f"an in-memory recorder reported durable={status['durable']!r}; "
+            "every restart would silently discard recorded history"
+        )
+    finally:
+        conn.close()
+
+
+def test_duckdb_path_is_the_only_durability_switch():
+    """Changing the durability source of truth means changing one constant."""
+    backend = REPO_ROOT / "backend"
+    engine = (backend / "services" / "duckdb_engine.py").read_text()
+    server = (backend / "server.py").read_text()
+    # Every place that decides durability must read the same env var.
+    assert 'os.environ.get("DUCKDB_PATH", ":memory:")' in engine
+    assert 'os.environ.get("DUCKDB_PATH", ":memory:")' in server, (
+        "server.py decides durability from a different source than "
+        "duckdb_engine.py; the two can disagree and one will be wrong"
+    )
+
+
+def test_durability_env_var_is_documented():
+    """An operator must be able to find how to make history survive."""
+    runbook = (REPO_ROOT / "RUNBOOK.md").read_text()
+    assert "DUCKDB_PATH" in runbook, (
+        "DUCKDB_PATH is the switch that makes the recorder durable and it is "
+        "documented nowhere; no .env.example exists either"
+    )

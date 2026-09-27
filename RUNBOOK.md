@@ -40,6 +40,32 @@ curl -s http://localhost:3001/api/health
 
 ---
 
+## Durable research storage (DUCKDB_PATH)
+
+The heatmap/research history lives in DuckDB. **By default it is in-memory**
+(`DUCKDB_PATH` unset -> `:memory:`), which means:
+
+* every backend restart loses recorded wall history, and
+* the API reports `durable: false` rather than pretending the data is saved.
+
+That is deliberate and honest — `server.py` only reports a wall as durable when
+the recorder is actually file-backed, so nothing claims a save that did not
+happen. To make history survive a restart, point it at a file:
+
+```bash
+# in your backend environment
+export DUCKDB_PATH=./data/floww.duckdb
+```
+
+`duckdb_engine.py:545` reads it and falls back to `:memory:` with a logged
+warning if the path is unusable, so a bad value can never block startup.
+
+This variable is currently read by `backend/services/duckdb_engine.py` and
+`backend/server.py` and is set by NO file in the repository — there is no
+`.env.example`, so it must be set by hand or in your deployment environment.
+
+---
+
 ## Alert Reference
 
 ### Alert Rules
