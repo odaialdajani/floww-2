@@ -1,0 +1,408 @@
+{
+  "preHistoryTree": "2f8ec0e003a2f1b925d431299935dd060103d66e",
+  "afterHistoryTree": "2f8ec0e003a2f1b925d431299935dd060103d66e",
+  "equal": true,
+  "unmerged": "",
+  "refs": [
+    {
+      "ref": "refs/remotes/origin/a3/pr48-semantic-fixes",
+      "sha": "f7bc499eaa2a7f39837f74d839ebfb1dac976bdf"
+    },
+    {
+      "ref": "refs/remotes/origin/a3/xh1-proxy-labels",
+      "sha": "7d3d75c58c9baa254922770177fdf27c88e23aee"
+    },
+    {
+      "ref": "refs/remotes/origin/agent2/exec-recon",
+      "sha": "f489bf5f03614505422289f36470a3439566de97"
+    },
+    {
+      "ref": "refs/remotes/origin/agent2/fetched-at-pipeline",
+      "sha": "7068e1cd2847c564e206fd5af586439ae6bd2c18"
+    },
+    {
+      "ref": "refs/remotes/origin/agent2/fetched-at-pipeline-v2",
+      "sha": "008e31b95f7076e1fe1da143055918ecc854b658"
+    },
+    {
+      "ref": "refs/remotes/origin/agent3/t1-scroller-fix",
+      "sha": "8e30a600f1a5b6d6f8232d10acfe7274130a0de0"
+    },
+    {
+      "ref": "refs/remotes/origin/agent3/t1-scroller-fix-v2",
+      "sha": "9289775681cf9c8b93e5e7f8895c1d6366af0952"
+    },
+    {
+      "ref": "refs/remotes/origin/architect/20260906-recovery-control-plane-v2",
+      "sha": "c724d2644a2b3b93028633eecff65fce8d180bf4"
+    },
+    {
+      "ref": "refs/remotes/origin/architect/20260908-evidence-control-v3",
+      "sha": "14041afcdc3986918428287793e56bbd0fb4d606"
+    },
+    {
+      "ref": "refs/remotes/origin/architect/20260910-recovery-harness-v5",
+      "sha": "a35d9a45552b8678ec47d8b2eec84c6b4b7a5ff5"
+    },
+    {
+      "ref": "refs/remotes/origin/archive/20260907-g1-recovery",
+      "sha": "b5f9ae5d99a4d502efdaf1d0c4d8386c2fa9b0d0"
+    },
+    {
+      "ref": "refs/remotes/origin/archive/floww-final-sync/fix/skylit-panel-bugs",
+      "sha": "ada23412f3902557500bce822f6707d73a32a73a"
+    },
+    {
+      "ref": "refs/remotes/origin/archive/floww-final-sync/main",
+      "sha": "ef360ef7b9fca36508df2c0898fe14b9de5e05b7"
+    },
+    {
+      "ref": "refs/remotes/origin/archive/floww-final-sync/ml/v5-real-data-training",
+      "sha": "948ddd2e00cbb94fb95224aaa30fb74929fd1937"
+    },
+    {
+      "ref": "refs/remotes/origin/archive/floww-final-sync/mypy/scripts-16-error-batch",
+      "sha": "f1df8a728c8e198f31ddc0e566a780358dbbd6b9"
+    },
+    {
+      "ref": "refs/remotes/origin/archive/floww-local/fix/skylit-panel-bugs",
+      "sha": "ada23412f3902557500bce822f6707d73a32a73a"
+    },
+    {
+      "ref": "refs/remotes/origin/archive/floww-local/ml/v5-real-data-training",
+      "sha": "948ddd2e00cbb94fb95224aaa30fb74929fd1937"
+    },
+    {
+      "ref": "refs/remotes/origin/archive/floww-local/mypy/scripts-16-error-batch",
+      "sha": "f1df8a728c8e198f31ddc0e566a780358dbbd6b9"
+    },
+    {
+      "ref": "refs/remotes/origin/astra/a3-conviction-wiring",
+      "sha": "a4952dc69ed9e9d535566bfc526d0fc17251abe9"
+    },
+    {
+      "ref": "refs/remotes/origin/astra/c4-doc-hygiene",
+      "sha": "65760c13963b71535377ad69813c287ff5bf62c1"
+    },
+    {
+      "ref": "refs/remotes/origin/astra/d7-contract-parity",
+      "sha": "6b408204b3e578bd0ad25bf4a295e8004a976fc4"
+    },
+    {
+      "ref": "refs/remotes/origin/astra/p1-silent-except",
+      "sha": "53b076cbe978db58ed9cd0af51242467c506272e"
+    },
+    {
+      "ref": "refs/remotes/origin/astra/t1-scroller-v1",
+      "sha": "9482ac6b39dd02480f98fe156cd2bfcc10739b5d"
+    },
+    {
+      "ref": "refs/remotes/origin/astra/x1-tradeentry-journal",
+      "sha": "a66845e67047449deb6e742859f4d442cc04b3dc"
+    },
+    {
+      "ref": "refs/remotes/origin/audit/gex-gamma-correctness",
+      "sha": "c7ebd44934c5a3812ed10dab6288df6b74ee0391"
+    },
+    {
+      "ref": "refs/remotes/origin/backup/deepseek-r8-20260524-154032",
+      "sha": "7b6c6d3120b5d2a15182a1f4716c260da2c13ef5"
+    },
+    {
+      "ref": "refs/remotes/origin/backup/hermes-b-20260524-111312",
+      "sha": "a95823bcb1c7377223e306e22a15560a964f2c2e"
+    },
+    {
+      "ref": "refs/remotes/origin/backup/hermes-r8-A-20260524-215655",
+      "sha": "11dd0fbc21526933e071d65912bc0908d82dc0ef"
+    },
+    {
+      "ref": "refs/remotes/origin/backup/pre-recovery-20260524-083902",
+      "sha": "b5872e216aaf706f330dc8932caf87f1aee8f707"
+    },
+    {
+      "ref": "refs/remotes/origin/backup/prompt-a-20260524-105545",
+      "sha": "b5872e216aaf706f330dc8932caf87f1aee8f707"
+    },
+    {
+      "ref": "refs/remotes/origin/backup/r12-wip-20260531-070635",
+      "sha": "f59487a89760f2e344f57e5516ea40c3d1e30cd3"
+    },
+    {
+      "ref": "refs/remotes/origin/backup/tidehunter-main-20260904",
+      "sha": "2f3ff8f7ac2bcad68ff21c76bcee5da90af41aed"
+    },
+    {
+      "ref": "refs/remotes/origin/chore/mypy-consolidate-overrides",
+      "sha": "6996982f078398adc9b381e4cfc8975796ef6bd7"
+    },
+    {
+      "ref": "refs/remotes/origin/docs/post-merge-state",
+      "sha": "24c0b3717def36a95c87cbbdf62e952ac50843eb"
+    },
+    {
+      "ref": "refs/remotes/origin/docs/status-verified-conflicts",
+      "sha": "bca9c28bbba1ee63b8a0056ec548c50075e25223"
+    },
+    {
+      "ref": "refs/remotes/origin/feat/lifecycle-persistence",
+      "sha": "687a3cd1bc6ea19ba07680ea61b22833a4bcb251"
+    },
+    {
+      "ref": "refs/remotes/origin/feat/node-confluence-overlay",
+      "sha": "c8471a14015c2e9d25028d928e32b24e777c58e0"
+    },
+    {
+      "ref": "refs/remotes/origin/feat/skylit-absorb-heatseeker-panels",
+      "sha": "c296de83d77a1e93f72f019691bcc7573bc59569"
+    },
+    {
+      "ref": "refs/remotes/origin/feat/ticker-az-paging",
+      "sha": "2f7013f13cb862df0a0729e0b5eb1597dfcb2d7a"
+    },
+    {
+      "ref": "refs/remotes/origin/feature/ml-real-data-spy",
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e"
+    },
+    {
+      "ref": "refs/remotes/origin/fix/agent-settle-guard",
+      "sha": "d1f5699f49a01f857fbfeb81c566ef99c96c108b"
+    },
+    {
+      "ref": "refs/remotes/origin/fix/skylit-panel-bugs",
+      "sha": "ca255571c3e2dae059567fba3f74d180750b1e38"
+    },
+    {
+      "ref": "refs/remotes/origin/fix/skylit-tab-restore",
+      "sha": "0f43e03e594dc976692b97377664a7e8680ed8cf"
+    },
+    {
+      "ref": "refs/remotes/origin/fix/trade-ready-wires",
+      "sha": "917fea5db1f6a655b58c5289717879a03ca2aabb"
+    },
+    {
+      "ref": "refs/remotes/origin/gsd/010-exposure-alerts",
+      "sha": "18a81be96f3b867d88cbe1c6893d8411d52555e4"
+    },
+    {
+      "ref": "refs/remotes/origin/ml/v5-real-data-training",
+      "sha": "fd1a8d8cd21cd0f3c6d71b922c44eec7efe2ddb7"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/backend-databento_provider",
+      "sha": "74120ac3c5ee445d7ffeef4cf1ada948e0b23442"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-16-error-batch",
+      "sha": "44db6d350468733b0e73bc669eed661fd33c742b"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-17-error-batch",
+      "sha": "ed44d81025ae2f46f23202fc30691a1527c89faa"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-20-batch",
+      "sha": "b844b4b0eb72f8adfa2bff2ad5b69a523e9558a5"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-3-more-small",
+      "sha": "0488d66d0389e574ff931fee8ef69d1467ae594f"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-4-error-batch",
+      "sha": "88cd7e932e9c2a4b128703507a22e10565bf902d"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-5-error-batch",
+      "sha": "8021805cd30062c6e322996f59bd77d1515d476d"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-5-more-small",
+      "sha": "f560e9b4707d86d709b4f126ffba2dace7aea52c"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-backfill_yfinance",
+      "sha": "7b4c40250c3c3d29ab3fb81c2272c80ac29ef3d1"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-consolidate_memory_daily",
+      "sha": "dc95305e9a5ff0fc66eeb9dd674d1a5ea11e2dd9"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-load_test_dashboard",
+      "sha": "0e5f7348908cce2a8bca5034b1e7f00ab0cd3d3e"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-predict_throughput",
+      "sha": "7c76611c4796e7f6f4fcd949ec49f2c17b013cef"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-prune_trading_memory",
+      "sha": "8a0c97f8ea3c0cd6ca0b2f6695c123a8d6813ac2"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-train_production",
+      "sha": "5c4fc26a2a9c97256e96e07ed1eb0f99b11a6a25"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-train_spy_regime_enhanced",
+      "sha": "8161e2748b4dc4a47d5b2597564b6792dd218172"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/scripts-walkforward_backtest_spy",
+      "sha": "b61d78bf988396e9fa77c440f2c300380d9d46b0"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-alert_dispatcher",
+      "sha": "933cfb58b5d31bed3e11cb93e5aab30f57a9cda4"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-circuit_breaker",
+      "sha": "67db18b3d4353b56d41601670fba0c9f85d26fb8"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-execution_engine",
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-flowseeker",
+      "sha": "959eddbbbc84d604d50f030d20f16f653581150f"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-hawkes_process",
+      "sha": "f0e0e5c9c0c6d0b661630cafa55490211abb2534"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-liquidity_metrics",
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-node_lifecycle",
+      "sha": "3c0a7cd0a0215cc27b0cb2a3b6e79ab8c879f91e"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-numba_greeks",
+      "sha": "11e64911f4cd8223a72cd5758d7bd1e05828e01c"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-slo_tracker",
+      "sha": "f804c702756a07a553d86d3b1f511d50579d4a51"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-stochastic_vol",
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-trinity_alignment",
+      "sha": "cfca3dcc424dfa7d30313e7ebf9da34dc73509d9"
+    },
+    {
+      "ref": "refs/remotes/origin/mypy/services-vpin_engine",
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e"
+    },
+    {
+      "ref": "refs/remotes/origin/phase9/agent1-architect",
+      "sha": "3835c3f07e0988b3cb98075bceecc6ab1c6677e6"
+    },
+    {
+      "ref": "refs/remotes/origin/phase9/agent4-eval",
+      "sha": "987c0ea9cde515051098a8728c892df827b7e931"
+    },
+    {
+      "ref": "refs/remotes/origin/phase9/g1-reads-witness",
+      "sha": "2ff4a2e682f9408d1560a9b6b623c7a306dbc7c9"
+    },
+    {
+      "ref": "refs/remotes/origin/phase9/g3-paper-loop",
+      "sha": "7625fc5e5a66ccab0bfff241143013d25e7357ff"
+    },
+    {
+      "ref": "refs/remotes/origin/phase9/heatmap-agent5",
+      "sha": "a9068c9a33a1c7362065fc42c082448c3e5abc7d"
+    },
+    {
+      "ref": "refs/remotes/origin/phase9/other-lanes-artifacts",
+      "sha": "89a4756979b9ad65e9b19cbcd3cf288e39c8b47e"
+    },
+    {
+      "ref": "refs/remotes/origin/pr64-retrigger",
+      "sha": "41cbc9cc66fa503c04dfeb30ca0304589d1fb8b9"
+    },
+    {
+      "ref": "refs/remotes/origin/preserve/agent4-pr48-49-50-wip",
+      "sha": "11ad05f3e2df695e1ee7757bfe64eacf6e986e6f"
+    },
+    {
+      "ref": "refs/remotes/origin/preserve/pr48-v81255-wip",
+      "sha": "be475d953bd1bf60e7f44868aebfeff09c612179"
+    },
+    {
+      "ref": "refs/remotes/origin/preserve/pr50-merge-check-wip",
+      "sha": "2f1a0e05c19fa679866231746757c0829d01a6d1"
+    },
+    {
+      "ref": "refs/remotes/origin/rootcause-test",
+      "sha": "bfc90d63be447758debce6be031d3942b4f8c261"
+    },
+    {
+      "ref": "refs/remotes/origin/round11/agent-01-paper",
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e"
+    },
+    {
+      "ref": "refs/remotes/origin/round11/agent-02-alerts",
+      "sha": "6bebdc759423a27abb1be462d1c6fe7376c06f9f"
+    },
+    {
+      "ref": "refs/remotes/origin/round11/agent-03-ml-pipeline",
+      "sha": "31dc80b5f9243d68f5a44c9a34316a266416ed8f"
+    },
+    {
+      "ref": "refs/remotes/origin/round11/agent-03-mlfeat",
+      "sha": "ec72ae841d86d1c3c48af214b3ebbed72536ed48"
+    },
+    {
+      "ref": "refs/remotes/origin/round11/agent-04-mlinfra",
+      "sha": "295f3bc2e63f721d05b3ba611800c38980a1f83d"
+    },
+    {
+      "ref": "refs/remotes/origin/round11/agent-05-stream",
+      "sha": "9177f80a6dfda2ebc6a82737df42ba4a3cbd9577"
+    },
+    {
+      "ref": "refs/remotes/origin/round11/agent-06-kgraph",
+      "sha": "1920d592a043890819d436b8ea7260ced0ac9d20"
+    },
+    {
+      "ref": "refs/remotes/origin/round11/agent-07-kanban",
+      "sha": "600f56edcb2745af503240d8da7ffef5c817a0b4"
+    },
+    {
+      "ref": "refs/remotes/origin/round11/agent-08-hub",
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e"
+    },
+    {
+      "ref": "refs/remotes/origin/round11/agent-09-memory",
+      "sha": "8ef439c6ea443d19ec5ae9e7c06406f35b0c6b7d"
+    },
+    {
+      "ref": "refs/remotes/origin/round11/agent-10-causal",
+      "sha": "4d8582e1aaa0148dfc97464d79ccc127bf93dc5e"
+    },
+    {
+      "ref": "refs/remotes/origin/round11/ml-retrain",
+      "sha": "7ae678e85413b0cda0935aa7632653945d615d3a"
+    },
+    {
+      "ref": "refs/remotes/origin/round11/test-salvage",
+      "sha": "f157a22073dde0b89b0c9820104f113a56fc7402"
+    },
+    {
+      "ref": "refs/remotes/origin/run/20260906-platform",
+      "sha": "3f7bfa57966281acc8202ffb529b79a340f427b9"
+    },
+    {
+      "ref": "refs/remotes/origin/test-tree-push",
+      "sha": "4f38567875f5c9da5a096deb0fbb4ed909013199"
+    }
+  ]
+}

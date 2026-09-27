@@ -1,0 +1,10 @@
+{
+  "bundle": "output/side-branch-sweep-20260927/cleanup-recovery.bundle",
+  "sha256": "237207a94cd91b6759a9c91db7bfd206ae1a14dcf6d228a7ed3fda1b9f9656e7",
+  "bytes": 142335235,
+  "verified": true,
+  "remoteHeadsCovered": 277,
+  "missing": [],
+  "dirtyFilesPreserved": 209,
+  "stagedVersionsReviewed": 196
+}
