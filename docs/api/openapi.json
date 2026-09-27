@@ -412,7 +412,7 @@
     "/": {
       "get": {
         "description": "Root health probe \u2014 responds to HEAD and GET for iframe reachability checks.",
-        "operationId": "root_head__get",
+        "operationId": "get_root",
         "responses": {
           "200": {
             "content": {
@@ -427,7 +427,7 @@
       },
       "head": {
         "description": "Root health probe \u2014 responds to HEAD and GET for iframe reachability checks.",
-        "operationId": "root_head__get",
+        "operationId": "head_root",
         "responses": {
           "200": {
             "content": {
@@ -443,7 +443,7 @@
     },
     "/api/": {
       "get": {
-        "operationId": "api_root_api__get",
+        "operationId": "get_api",
         "responses": {
           "200": {
             "content": {
@@ -460,7 +460,7 @@
     "/api/admin/rate-limits": {
       "get": {
         "description": "Return Alpha Vantage API rate limit status.",
-        "operationId": "get_rate_limits_api_admin_rate_limits_get",
+        "operationId": "get_api_admin_rate-limits",
         "responses": {
           "200": {
             "content": {
@@ -480,7 +480,7 @@
     "/api/admin/trading/circuit-breaker/log": {
       "get": {
         "description": "Return circuit breaker trip log.",
-        "operationId": "circuit_breaker_log_api_admin_trading_circuit_breaker_log_get",
+        "operationId": "get_api_admin_trading_circuit-breaker_log",
         "responses": {
           "200": {
             "content": {
@@ -500,7 +500,7 @@
     "/api/admin/trading/circuit-breaker/reset": {
       "post": {
         "description": "Manually reset the circuit breaker (requires admin auth).",
-        "operationId": "circuit_breaker_reset_api_admin_trading_circuit_breaker_reset_post",
+        "operationId": "post_api_admin_trading_circuit-breaker_reset",
         "requestBody": {
           "content": {
             "application/json": {
@@ -548,7 +548,7 @@
     "/api/admin/trading/circuit-breaker/trip": {
       "post": {
         "description": "Manually trip the circuit breaker (emergency stop).",
-        "operationId": "circuit_breaker_trip_api_admin_trading_circuit_breaker_trip_post",
+        "operationId": "post_api_admin_trading_circuit-breaker_trip",
         "requestBody": {
           "content": {
             "application/json": {
@@ -596,7 +596,7 @@
     "/api/admin/trading/status": {
       "get": {
         "description": "Return current trading state, circuit breaker status, and SLO summary.",
-        "operationId": "trading_status_api_admin_trading_status_get",
+        "operationId": "get_api_admin_trading_status",
         "responses": {
           "200": {
             "content": {
@@ -616,7 +616,7 @@
     "/api/admin/trading/transition": {
       "post": {
         "description": "Request a trading state transition.\nRequires 2FA: totp_code + email_code in request body.",
-        "operationId": "trading_transition_api_admin_trading_transition_post",
+        "operationId": "post_api_admin_trading_transition",
         "requestBody": {
           "content": {
             "application/json": {
@@ -657,7 +657,7 @@
     },
     "/api/advanced/{ticker}": {
       "get": {
-        "operationId": "advanced_analytics_api_advanced__ticker__get",
+        "operationId": "get_api_advanced_ticker",
         "parameters": [
           {
             "in": "path",
@@ -722,7 +722,7 @@
     "/api/agent-hub/archetypes": {
       "get": {
         "description": "List all agent archetypes.",
-        "operationId": "list_archetypes_api_agent_hub_archetypes_get",
+        "operationId": "get_api_agent-hub_archetypes",
         "responses": {
           "200": {
             "content": {
@@ -741,7 +741,7 @@
       },
       "post": {
         "description": "Create a new agent archetype.",
-        "operationId": "create_archetype_api_agent_hub_archetypes_post",
+        "operationId": "post_api_agent-hub_archetypes",
         "requestBody": {
           "content": {
             "application/json": {
@@ -784,7 +784,7 @@
     "/api/agent-hub/archetypes/{name}": {
       "delete": {
         "description": "Delete an archetype.",
-        "operationId": "delete_archetype_api_agent_hub_archetypes__name__delete",
+        "operationId": "delete_api_agent-hub_archetypes_name",
         "parameters": [
           {
             "in": "path",
@@ -824,7 +824,7 @@
       },
       "get": {
         "description": "Get a specific archetype by name.",
-        "operationId": "get_archetype_api_agent_hub_archetypes__name__get",
+        "operationId": "get_api_agent-hub_archetypes_name",
         "parameters": [
           {
             "in": "path",
@@ -864,7 +864,7 @@
       },
       "put": {
         "description": "Update an existing archetype.",
-        "operationId": "update_archetype_api_agent_hub_archetypes__name__put",
+        "operationId": "put_api_agent-hub_archetypes_name",
         "parameters": [
           {
             "in": "path",
@@ -918,7 +918,7 @@
     "/api/agent-hub/archetypes/{name}/disable": {
       "post": {
         "description": "Disable an archetype.",
-        "operationId": "disable_archetype_api_agent_hub_archetypes__name__disable_post",
+        "operationId": "post_api_agent-hub_archetypes_name_disable",
         "parameters": [
           {
             "in": "path",
@@ -960,7 +960,7 @@
     "/api/agent-hub/archetypes/{name}/enable": {
       "post": {
         "description": "Enable an archetype.",
-        "operationId": "enable_archetype_api_agent_hub_archetypes__name__enable_post",
+        "operationId": "post_api_agent-hub_archetypes_name_enable",
         "parameters": [
           {
             "in": "path",
@@ -1002,7 +1002,7 @@
     "/api/agent-hub/status": {
       "get": {
         "description": "Get Agent Hub runtime status.",
-        "operationId": "hub_status_api_agent_hub_status_get",
+        "operationId": "get_api_agent-hub_status",
         "responses": {
           "200": {
             "content": {
@@ -1022,7 +1022,7 @@
     },
     "/api/agent/ask": {
       "post": {
-        "operationId": "ask_api_agent_ask_post",
+        "operationId": "post_api_agent_ask",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1064,7 +1064,7 @@
     },
     "/api/agent/budget": {
       "get": {
-        "operationId": "budget_api_agent_budget_get",
+        "operationId": "get_api_agent_budget",
         "responses": {
           "200": {
             "content": {
@@ -1084,7 +1084,7 @@
     },
     "/api/agent/cancel/{turn_id}": {
       "post": {
-        "operationId": "cancel_api_agent_cancel__turn_id__post",
+        "operationId": "post_api_agent_cancel_turn_id",
         "parameters": [
           {
             "in": "path",
@@ -1125,7 +1125,7 @@
     },
     "/api/agent/claims": {
       "get": {
-        "operationId": "claims_api_agent_claims_get",
+        "operationId": "get_api_agent_claims",
         "parameters": [
           {
             "in": "query",
@@ -1177,7 +1177,7 @@
     },
     "/api/agent/prefs": {
       "get": {
-        "operationId": "get_prefs_api_agent_prefs_get",
+        "operationId": "get_api_agent_prefs",
         "responses": {
           "200": {
             "content": {
@@ -1195,7 +1195,7 @@
         ]
       },
       "put": {
-        "operationId": "put_prefs_api_agent_prefs_put",
+        "operationId": "put_api_agent_prefs",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1237,7 +1237,7 @@
     },
     "/api/agent/stream/{turn_id}": {
       "get": {
-        "operationId": "stream_api_agent_stream__turn_id__get",
+        "operationId": "get_api_agent_stream_turn_id",
         "parameters": [
           {
             "in": "path",
@@ -1278,7 +1278,7 @@
     },
     "/api/agent/turn/{turn_id}": {
       "get": {
-        "operationId": "get_turn_api_agent_turn__turn_id__get",
+        "operationId": "get_api_agent_turn_turn_id",
         "parameters": [
           {
             "in": "path",
@@ -1320,7 +1320,7 @@
     "/api/ai/analyze-regime": {
       "post": {
         "description": "AI analysis of current market regime.",
-        "operationId": "analyze_regime_api_ai_analyze_regime_post",
+        "operationId": "post_api_ai_analyze-regime",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1363,7 +1363,7 @@
     "/api/ai/analyze-trade": {
       "post": {
         "description": "AI analysis of a trade from the journal.",
-        "operationId": "analyze_trade_api_ai_analyze_trade_post",
+        "operationId": "post_api_ai_analyze-trade",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1404,7 +1404,7 @@
     "/api/ai/explain-signal": {
       "post": {
         "description": "AI explanation of an options flow signal.",
-        "operationId": "explain_signal_api_ai_explain_signal_post",
+        "operationId": "post_api_ai_explain-signal",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1447,7 +1447,7 @@
     "/api/ai/status": {
       "get": {
         "description": "Get AI service status.",
-        "operationId": "get_ai_status_api_ai_status_get",
+        "operationId": "get_api_ai_status",
         "responses": {
           "200": {
             "content": {
@@ -1468,7 +1468,7 @@
     "/api/ai/summarize-day": {
       "post": {
         "description": "AI end-of-day trading summary.",
-        "operationId": "summarize_day_api_ai_summarize_day_post",
+        "operationId": "post_api_ai_summarize-day",
         "parameters": [
           {
             "in": "query",
@@ -1536,7 +1536,7 @@
     "/api/alert-quality": {
       "get": {
         "description": "Return per-rule per-tier alert quality scores.\n\nAggregates triggered alert history into (rule, tier, count, last_triggered)\nbuckets so the UI and backtest gating can see which alerts are actually\nfiring vs. sitting dormant.",
-        "operationId": "alert_quality_api_alert_quality_get",
+        "operationId": "get_api_alert-quality",
         "responses": {
           "200": {
             "content": {
@@ -1553,7 +1553,7 @@
     "/api/alerts": {
       "get": {
         "description": "List alert rules + AlphaPod-shape flow alerts.\n\nReturns BOTH the legacy `rules`/`count` payload (consumed by tests and the\nlegacy CRA UI) AND the AlphaPod-shape `alerts`/`page`/`page_size`/`total`\npayload (consumed by the AlphaPod SPA). The AlphaPod alerts list is shaped\nfrom triggered alert history; when no triggers exist, rules are reshaped\nas placeholders so the UI has something to render.",
-        "operationId": "list_alerts_api_alerts_get",
+        "operationId": "get_api_alerts",
         "parameters": [
           {
             "in": "query",
@@ -1606,7 +1606,7 @@
       },
       "post": {
         "description": "Create a new GEX alert rule. Persisted to MongoDB for durability across restarts.",
-        "operationId": "create_alert_api_alerts_post",
+        "operationId": "post_api_alerts",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1643,7 +1643,7 @@
     "/api/alerts/check/{ticker}": {
       "get": {
         "description": "Check all alert rules against current data. Returns triggered alerts.",
-        "operationId": "check_alerts_api_alerts_check__ticker__get",
+        "operationId": "get_api_alerts_check_ticker",
         "parameters": [
           {
             "in": "path",
@@ -1681,7 +1681,7 @@
     "/api/alerts/snapshot": {
       "post": {
         "description": "Add a GEX snapshot for alert detection.",
-        "operationId": "add_snapshot_api_alerts_snapshot_post",
+        "operationId": "post_api_alerts_snapshot",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1724,7 +1724,7 @@
     "/api/alerts/status": {
       "get": {
         "description": "Get alert system status.",
-        "operationId": "get_alert_status_api_alerts_status_get",
+        "operationId": "get_api_alerts_status",
         "responses": {
           "200": {
             "content": {
@@ -1745,7 +1745,7 @@
     "/api/alerts/summary": {
       "get": {
         "description": "Get aggregated alert summary across all monitored tickers.\n\nReturns:\n    JSON with total, critical, warning, info counts and last_24h breakdown.",
-        "operationId": "get_alerts_summary_api_alerts_summary_get",
+        "operationId": "get_api_alerts_summary",
         "responses": {
           "200": {
             "content": {
@@ -1766,7 +1766,7 @@
     "/api/alerts/types": {
       "get": {
         "description": "List all available alert types.\n\nDerived from the AlertEngine's own detection methods (single source of\ntruth) instead of a hand-maintained list that drifts when alert types\nare added/removed in alert_engine.py.",
-        "operationId": "list_alert_types_api_alerts_types_get",
+        "operationId": "get_api_alerts_types",
         "responses": {
           "200": {
             "content": {
@@ -1783,7 +1783,7 @@
     "/api/alerts/whales": {
       "get": {
         "description": "P1-7 whale-tracker badge read (Agent C): bookmarked whale alerts with\nlive STILL_IN/PARTIAL/EXITED/EXPIRED state + underlying-leg P&L proxy.\nDeclared before /{ticker} so 'whales' never matches the catch-all.",
-        "operationId": "get_whale_tracks_api_alerts_whales_get",
+        "operationId": "get_api_alerts_whales",
         "parameters": [
           {
             "in": "query",
@@ -1844,7 +1844,7 @@
     "/api/alerts/{alert_id}": {
       "delete": {
         "description": "Delete an alert rule. Removed from both in-memory store and MongoDB.",
-        "operationId": "delete_alert_api_alerts__alert_id__delete",
+        "operationId": "delete_api_alerts_alert_id",
         "parameters": [
           {
             "in": "path",
@@ -1882,7 +1882,7 @@
     "/api/alerts/{ticker}": {
       "get": {
         "description": "Get current alerts for a ticker.",
-        "operationId": "get_alerts_api_alerts__ticker__get",
+        "operationId": "get_api_alerts_ticker",
         "parameters": [
           {
             "in": "path",
@@ -1936,7 +1936,7 @@
     "/api/alpaca/account": {
       "get": {
         "description": "Get Alpaca account info.",
-        "operationId": "get_account_api_alpaca_account_get",
+        "operationId": "get_api_alpaca_account",
         "responses": {
           "200": {
             "content": {
@@ -1957,7 +1957,7 @@
     "/api/alpaca/bars/{ticker}": {
       "get": {
         "description": "Get price bars for a ticker.",
-        "operationId": "get_bars_api_alpaca_bars__ticker__get",
+        "operationId": "get_api_alpaca_bars_ticker",
         "parameters": [
           {
             "in": "path",
@@ -2019,7 +2019,7 @@
     "/api/alpaca/clock": {
       "get": {
         "description": "Get market clock.",
-        "operationId": "get_clock_api_alpaca_clock_get",
+        "operationId": "get_api_alpaca_clock",
         "responses": {
           "200": {
             "content": {
@@ -2040,7 +2040,7 @@
     "/api/alpaca/order": {
       "post": {
         "description": "Place a stock order (Alpaca paper). Successful fills are journaled\nas equity seeds (fail-open) so click-to-trade lands in position memory.",
-        "operationId": "place_order_api_alpaca_order_post",
+        "operationId": "post_api_alpaca_order",
         "parameters": [
           {
             "in": "query",
@@ -2121,7 +2121,7 @@
     "/api/alpaca/order/option": {
       "post": {
         "description": "Place an OPTION order on Alpaca PAPER (OCC symbol, e.g. SPY260904C00760000).\n\nRequires options approval on the paper account \u2014 Alpaca 403s otherwise\nand the error surfaces honestly. Successful fills journal as option\nseeds (fail-open) so click-to-trade lands in position memory.",
-        "operationId": "place_option_order_api_alpaca_order_option_post",
+        "operationId": "post_api_alpaca_order_option",
         "parameters": [
           {
             "in": "query",
@@ -2203,7 +2203,7 @@
     "/api/alpaca/orders": {
       "get": {
         "description": "Get orders.",
-        "operationId": "get_orders_api_alpaca_orders_get",
+        "operationId": "get_api_alpaca_orders",
         "parameters": [
           {
             "in": "query",
@@ -2256,7 +2256,7 @@
     "/api/alpaca/position-journal-drift/{symbol}": {
       "get": {
         "description": "Read-only venue-vs-journal quantity check for one symbol.",
-        "operationId": "position_journal_drift_api_alpaca_position_journal_drift__symbol__get",
+        "operationId": "get_api_alpaca_position-journal-drift_symbol",
         "parameters": [
           {
             "in": "path",
@@ -2298,7 +2298,7 @@
     "/api/alpaca/position/{symbol}": {
       "delete": {
         "description": "Close a position.\n\nOpen journal cards are closed only after the venue reports a confirmed\nfill with a usable average price. Accepted/pending close orders leave\njournal P&L open rather than substituting a market bar for execution.",
-        "operationId": "close_position_api_alpaca_position__symbol__delete",
+        "operationId": "delete_api_alpaca_position_symbol",
         "parameters": [
           {
             "in": "path",
@@ -2340,7 +2340,7 @@
     "/api/alpaca/positions": {
       "get": {
         "description": "Get all open positions.",
-        "operationId": "get_positions_api_alpaca_positions_get",
+        "operationId": "get_api_alpaca_positions",
         "responses": {
           "200": {
             "content": {
@@ -2361,7 +2361,7 @@
     "/api/alpaca/reconcile-close": {
       "post": {
         "description": "Reconcile a pending paper-close order. Body: {symbol, order_id}.",
-        "operationId": "reconcile_close_api_alpaca_reconcile_close_post",
+        "operationId": "post_api_alpaca_reconcile-close",
         "requestBody": {
           "content": {
             "application/json": {
@@ -2404,7 +2404,7 @@
     "/api/alpaca/reconciliation-exceptions": {
       "get": {
         "description": "Expose unresolved attribution explicitly; never synthesize a fill.",
-        "operationId": "get_reconciliation_exceptions_api_alpaca_reconciliation_exceptions_get",
+        "operationId": "get_api_alpaca_reconciliation-exceptions",
         "responses": {
           "200": {
             "content": {
@@ -2425,7 +2425,7 @@
     "/api/alpaca/status": {
       "get": {
         "description": "Get Alpaca connection status.",
-        "operationId": "get_status_api_alpaca_status_get",
+        "operationId": "get_api_alpaca_status",
         "responses": {
           "200": {
             "content": {
@@ -2446,7 +2446,7 @@
     "/api/alpha-flow": {
       "get": {
         "description": "Daily top-flow summary. Maps floww flowseeker output to AlphaPod schema.",
-        "operationId": "alpha_flow_api_alpha_flow_get",
+        "operationId": "get_api_alpha-flow",
         "parameters": [
           {
             "in": "query",
@@ -2499,7 +2499,7 @@
     "/api/alpha-flow/dates": {
       "get": {
         "description": "List of historical session dates available. Stub: trailing 30 weekdays.",
-        "operationId": "alpha_flow_dates_api_alpha_flow_dates_get",
+        "operationId": "get_api_alpha-flow_dates",
         "responses": {
           "200": {
             "content": {
@@ -2524,7 +2524,7 @@
     "/api/alpha/crypto/{symbol}": {
       "get": {
         "description": "Retired shim \u2014 crypto spot via Public API quotes.",
-        "operationId": "get_crypto_price_api_alpha_crypto__symbol__get",
+        "operationId": "get_api_alpha_crypto_symbol",
         "parameters": [
           {
             "in": "path",
@@ -2576,7 +2576,7 @@
     "/api/alpha/earnings/{ticker}": {
       "get": {
         "description": "Retired \u2014 earnings calendar lives on Finnhub; no AV call.",
-        "operationId": "get_earnings_api_alpha_earnings__ticker__get",
+        "operationId": "get_api_alpha_earnings_ticker",
         "parameters": [
           {
             "in": "path",
@@ -2618,7 +2618,7 @@
     "/api/alpha/forex/{from_currency}/{to_currency}": {
       "get": {
         "description": "Retired \u2014 forex is quoted via Public API instruments; no AV call.",
-        "operationId": "get_forex_rate_api_alpha_forex__from_currency___to_currency__get",
+        "operationId": "get_api_alpha_forex_from_currency_to_currency",
         "parameters": [
           {
             "in": "path",
@@ -2669,7 +2669,7 @@
     "/api/alpha/historical/{ticker}": {
       "get": {
         "description": "Retired shim \u2014 OHLCV history from Public API bars.",
-        "operationId": "get_historical_api_alpha_historical__ticker__get",
+        "operationId": "get_api_alpha_historical_ticker",
         "parameters": [
           {
             "in": "path",
@@ -2733,7 +2733,7 @@
     "/api/alpha/intraday/{ticker}": {
       "get": {
         "description": "Retired shim \u2014 intraday bars from Public API.",
-        "operationId": "get_intraday_api_alpha_intraday__ticker__get",
+        "operationId": "get_api_alpha_intraday_ticker",
         "parameters": [
           {
             "in": "path",
@@ -2797,7 +2797,7 @@
     "/api/alpha/market-status": {
       "get": {
         "description": "Retired \u2014 no AV call.",
-        "operationId": "get_market_status_api_alpha_market_status_get",
+        "operationId": "get_api_alpha_market-status",
         "responses": {
           "200": {
             "content": {
@@ -2818,7 +2818,7 @@
     "/api/alpha/news": {
       "get": {
         "description": "Retired \u2014 news lives on Finnhub; no AV call.",
-        "operationId": "get_news_api_alpha_news_get",
+        "operationId": "get_api_alpha_news",
         "parameters": [
           {
             "description": "Comma-separated tickers",
@@ -2899,7 +2899,7 @@
     "/api/alpha/options/{ticker}": {
       "get": {
         "description": "Retired shim \u2014 served live from Public API chain.",
-        "operationId": "get_options_chain_api_alpha_options__ticker__get",
+        "operationId": "get_api_alpha_options_ticker",
         "parameters": [
           {
             "in": "path",
@@ -2959,7 +2959,7 @@
     "/api/alpha/overview/{ticker}": {
       "get": {
         "description": "Retired \u2014 fundamentals are not a Public API surface; see replacement.",
-        "operationId": "get_company_overview_api_alpha_overview__ticker__get",
+        "operationId": "get_api_alpha_overview_ticker",
         "parameters": [
           {
             "in": "path",
@@ -3001,7 +3001,7 @@
     "/api/alpha/quote/{ticker}": {
       "get": {
         "description": "Retired shim \u2014 served live from Public API quotes.",
-        "operationId": "get_quote_api_alpha_quote__ticker__get",
+        "operationId": "get_api_alpha_quote_ticker",
         "parameters": [
           {
             "in": "path",
@@ -3043,7 +3043,7 @@
     "/api/alpha/technical/{ticker}/{indicator}": {
       "get": {
         "description": "Retired shim \u2014 technicals computed from Public API bars.\n\nSupported indicators: SMA, EMA, RSI, MACD, BBANDS, STOCH, ADX, CCI, AROON, OBV, WILLR, MFI, TEMA, TRIMA, KAMA, MAMA, VWAP, HT_TRENDLINE, HT_SINE, HT_TRENDMODE, HT_DCPERIOD, HT_DCPHASE, HT_PHASOR",
-        "operationId": "get_technical_indicator_api_alpha_technical__ticker___indicator__get",
+        "operationId": "get_api_alpha_technical_ticker_indicator",
         "parameters": [
           {
             "in": "path",
@@ -3128,7 +3128,7 @@
     "/api/alpha/top-gainers-losers": {
       "get": {
         "description": "Retired \u2014 no AV call.",
-        "operationId": "get_top_gainers_losers_api_alpha_top_gainers_losers_get",
+        "operationId": "get_api_alpha_top-gainers-losers",
         "responses": {
           "200": {
             "content": {
@@ -3149,7 +3149,7 @@
     "/api/anomaly/ensemble": {
       "get": {
         "description": "Get ensemble toxicity prediction for a given horizon.\nReturns P(toxic flow in next N minutes) from the calibrated ensemble.",
-        "operationId": "get_ensemble_prediction_api_anomaly_ensemble_get",
+        "operationId": "get_api_anomaly_ensemble",
         "parameters": [
           {
             "in": "query",
@@ -3203,7 +3203,7 @@
     "/api/anomaly/ensemble/state": {
       "get": {
         "description": "Get full ensemble state including calibration and history.",
-        "operationId": "get_ensemble_state_api_anomaly_ensemble_state_get",
+        "operationId": "get_api_anomaly_ensemble_state",
         "parameters": [
           {
             "in": "query",
@@ -3245,7 +3245,7 @@
     "/api/anomaly/ensemble/update": {
       "post": {
         "description": "Feed VPIN + QI to the ensemble and get multi-horizon toxicity probs.\n\nReturns P(toxic flow) for 1, 5, 15, and 60-minute horizons,\nplus component scores from CNN-AE, statistical, and forecast detectors.",
-        "operationId": "update_ensemble_api_anomaly_ensemble_update_post",
+        "operationId": "post_api_anomaly_ensemble_update",
         "parameters": [
           {
             "in": "query",
@@ -3305,7 +3305,7 @@
     "/api/anomaly/{ticker}": {
       "get": {
         "description": "Return the current anomaly detection state.",
-        "operationId": "get_anomaly_state_api_anomaly__ticker__get",
+        "operationId": "get_api_anomaly_ticker",
         "parameters": [
           {
             "in": "path",
@@ -3347,7 +3347,7 @@
     "/api/anomaly/{ticker}/load": {
       "post": {
         "description": "Load a trained checkpoint for the given ticker.",
-        "operationId": "load_trained_model_api_anomaly__ticker__load_post",
+        "operationId": "post_api_anomaly_ticker_load",
         "parameters": [
           {
             "in": "path",
@@ -3411,7 +3411,7 @@
     "/api/anomaly/{ticker}/status": {
       "get": {
         "description": "Return model configuration and buffer status.",
-        "operationId": "get_detector_status_api_anomaly__ticker__status_get",
+        "operationId": "get_api_anomaly_ticker_status",
         "parameters": [
           {
             "in": "path",
@@ -3453,7 +3453,7 @@
     "/api/anomaly/{ticker}/update": {
       "post": {
         "description": "Feed a new (VPIN, QI) observation and get anomaly score.",
-        "operationId": "update_anomaly_api_anomaly__ticker__update_post",
+        "operationId": "post_api_anomaly_ticker_update",
         "parameters": [
           {
             "in": "path",
@@ -3513,7 +3513,7 @@
     "/api/auth/dev-token": {
       "post": {
         "description": "Issue a local dev JWT for the React frontend sign-in page.\n\nDev-only: refuses with 403 unless the operator opts in with\nFLOWW_ALLOW_DEV_TOKENS=1. Never enable on a reachable deployment \u2014\nthis mints 24-hour tokens for arbitrary email/tier with no auth.",
-        "operationId": "dev_token_api_auth_dev_token_post",
+        "operationId": "post_api_auth_dev-token",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3560,7 +3560,7 @@
     "/api/backtest/is-oos": {
       "post": {
         "description": "Run 70/30 in-sample / out-of-sample temporal split.\n\nReturns both train and test results for comparison.",
-        "operationId": "run_is_oos_api_backtest_is_oos_post",
+        "operationId": "post_api_backtest_is-oos",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3607,7 +3607,7 @@
     "/api/backtest/monte-carlo": {
       "post": {
         "description": "Run Monte Carlo bootstrap evaluation.\n\nBody:\n    ticker, snapshots, bars\n    n_iterations: int (default 1000)\n    block_size: int (default 21)\n    seed: int (default 42)\n    config: dict",
-        "operationId": "run_monte_carlo_api_backtest_monte_carlo_post",
+        "operationId": "post_api_backtest_monte-carlo",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3654,7 +3654,7 @@
     "/api/backtest/report/{ticker}": {
       "get": {
         "description": "Retrieve the last /run report for a ticker (case-insensitive).\n\nReturns ``{\"status\": \"not_found\", \"ticker\": ...}`` (HTTP 200 \u2014 honest\nempty, not an error) when no run has been stored yet.",
-        "operationId": "get_backtest_report_api_backtest_report__ticker__get",
+        "operationId": "get_api_backtest_report_ticker",
         "parameters": [
           {
             "in": "path",
@@ -3700,7 +3700,7 @@
     "/api/backtest/run": {
       "post": {
         "description": "Run a single backtest over aligned snapshot + bar data.\n\nBody:\n    ticker: str\n    snapshots: list[dict]  \u2014 GEX snapshot per bar\n    bars: list[dict]       \u2014 OHLCV bar per bar (must match snapshots length)\n    config: dict           \u2014 optional EngineConfig overrides",
-        "operationId": "run_backtest_api_backtest_run_post",
+        "operationId": "post_api_backtest_run",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3747,7 +3747,7 @@
     "/api/backtest/walk-forward": {
       "post": {
         "description": "Run walk-forward cross-validation.\n\nBody:\n    ticker, snapshots, bars\n    n_splits: int (default 5)\n    min_train_size: int (default 50)\n    config: dict",
-        "operationId": "run_walk_forward_api_backtest_walk_forward_post",
+        "operationId": "post_api_backtest_walk-forward",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3794,7 +3794,7 @@
     "/api/briefing/{ticker}": {
       "get": {
         "description": "Generate a morning briefing for the given ticker.\n\nReturns JSON with regime, narrative, timestamp, and supporting metrics.\nResults are cached for 15 minutes per ticker.",
-        "operationId": "get_briefing_api_briefing__ticker__get",
+        "operationId": "get_api_briefing_ticker",
         "parameters": [
           {
             "in": "path",
@@ -3837,7 +3837,7 @@
     "/api/briefing/{ticker}/html": {
       "get": {
         "description": "Return the briefing as a simple HTML page for quick viewing.",
-        "operationId": "get_briefing_html_api_briefing__ticker__html_get",
+        "operationId": "get_api_briefing_ticker_html",
         "parameters": [
           {
             "in": "path",
@@ -3882,7 +3882,7 @@
     "/api/briefing/{ticker}/send": {
       "get": {
         "description": "Send briefing (stub \u2014 future: email/webhook delivery).",
-        "operationId": "briefing_send_api_briefing__ticker__send_get",
+        "operationId": "get_api_briefing_ticker_send",
         "parameters": [
           {
             "in": "path",
@@ -3935,7 +3935,7 @@
     "/api/chain": {
       "get": {
         "description": "Return options chain data for a given ticker.",
-        "operationId": "get_chain_api_chain_get",
+        "operationId": "get_api_chain",
         "parameters": [
           {
             "in": "query",
@@ -3979,7 +3979,7 @@
     },
     "/api/chain/{ticker}": {
       "get": {
-        "operationId": "chain_api_chain__ticker__get",
+        "operationId": "get_api_chain_ticker",
         "parameters": [
           {
             "in": "path",
@@ -4077,7 +4077,7 @@
     "/api/chain_consensus/{ticker}": {
       "get": {
         "description": "Per-expiry OI-weighted (strike +/- premium) consensus price + overall.\n\nconsensus_price = SUM((strike+premium)*call_OI + (strike-premium)*put_OI) / SUM(all_OI)\nSee backend/services/consensus_pricing.py for the algorithm spec + 16-case pytest.\nDrift tracking deferred (.md #6 PARTIAL block).",
-        "operationId": "chain_consensus_route_api_chain_consensus__ticker__get",
+        "operationId": "get_api_chain_consensus_ticker",
         "parameters": [
           {
             "in": "path",
@@ -4135,7 +4135,7 @@
     },
     "/api/charm-integral/{ticker}": {
       "get": {
-        "operationId": "charm_integral_endpoint_api_charm_integral__ticker__get",
+        "operationId": "get_api_charm-integral_ticker",
         "parameters": [
           {
             "in": "path",
@@ -4199,7 +4199,7 @@
     },
     "/api/compare": {
       "get": {
-        "operationId": "compare_api_compare_get",
+        "operationId": "get_api_compare",
         "parameters": [
           {
             "description": "Comma-separated ticker symbols",
@@ -4242,7 +4242,7 @@
     "/api/consensus_drift/{ticker}": {
       "get": {
         "description": "Consensus Drift \u2014 accumulated daily snapshots + drift analytics.\n\n``accumulate=true`` writes TODAY's snapshot into DuckDB before running\nthe pure-logic analytics; ``accumulate=false`` (default) is a pure\nread so cron jobs can poll without Write-Amp.\n\nStandard cron workflow:\n  1. /api/consensus_drift/SPY?accumulate=true&days=14&expiry=2026-08-15\n  2. Frontend polls /api/consensus_drift/SPY?accumulate=false&days=14\n     every minute for the live drift readout.",
-        "operationId": "consensus_drift_endpoint_api_consensus_drift__ticker__get",
+        "operationId": "get_api_consensus_drift_ticker",
         "parameters": [
           {
             "in": "path",
@@ -4318,7 +4318,7 @@
     },
     "/api/contract/{ticker}": {
       "get": {
-        "operationId": "contract_api_contract__ticker__get",
+        "operationId": "get_api_contract_ticker",
         "parameters": [
           {
             "in": "path",
@@ -4399,7 +4399,7 @@
     "/api/contract/{ticker}/{strike}/{expiry}": {
       "get": {
         "description": "Single-strike enrichment for QuickTradePanel (TrinityView row click).\n\nAlias over the same chain cache as GET /contract/{ticker}; returns\n``{ticker, strike, expiry, spot, contracts}`` in the shape the panel\nalready parses. Empty ``contracts`` (200) when the strike/expiry is\nabsent \u2014 the panel keeps its base selection.",
-        "operationId": "contract_strike_api_contract__ticker___strike___expiry__get",
+        "operationId": "get_api_contract_ticker_strike_expiry",
         "parameters": [
           {
             "in": "path",
@@ -4481,7 +4481,7 @@
     },
     "/api/correlation": {
       "get": {
-        "operationId": "correlation_api_correlation_get",
+        "operationId": "get_api_correlation",
         "parameters": [
           {
             "description": "Comma-separated ticker symbols",
@@ -4535,7 +4535,7 @@
     },
     "/api/daily-checklist/{ticker}": {
       "get": {
-        "operationId": "daily_checklist_api_daily_checklist__ticker__get",
+        "operationId": "get_api_daily-checklist_ticker",
         "parameters": [
           {
             "in": "path",
@@ -4600,7 +4600,7 @@
     "/api/data-quality/history": {
       "get": {
         "description": "Recent cross-source consistency checks (per-process).",
-        "operationId": "data_quality_history_api_data_quality_history_get",
+        "operationId": "get_api_data-quality_history",
         "parameters": [
           {
             "in": "query",
@@ -4648,7 +4648,7 @@
     "/api/data-quality/{ticker}": {
       "get": {
         "description": "Cross-source GEX consistency for a ticker (cvserver vs yfinance).\n\nRead-only monitoring; does not gate any data path. Repeated calls\nbuild a per-process history queryable via /data-quality/history.",
-        "operationId": "data_quality_api_data_quality__ticker__get",
+        "operationId": "get_api_data-quality_ticker",
         "parameters": [
           {
             "in": "path",
@@ -4705,7 +4705,7 @@
     "/api/data/full/{ticker}": {
       "get": {
         "description": "Get full aggregated data for a ticker (spot + news + earnings + technicals).",
-        "operationId": "get_full_data_api_data_full__ticker__get",
+        "operationId": "get_api_data_full_ticker",
         "parameters": [
           {
             "in": "path",
@@ -4767,7 +4767,7 @@
     "/api/data/health": {
       "get": {
         "description": "Get detailed health metrics for all data providers including success rates and alerts.",
-        "operationId": "get_data_health_api_data_health_get",
+        "operationId": "get_api_data_health",
         "responses": {
           "200": {
             "content": {
@@ -4788,7 +4788,7 @@
     "/api/data/news/{ticker}": {
       "get": {
         "description": "Get news for a ticker from Finnhub.",
-        "operationId": "get_news_api_data_news__ticker__get",
+        "operationId": "get_api_data_news_ticker",
         "parameters": [
           {
             "in": "path",
@@ -4842,7 +4842,7 @@
     "/api/data/quote/{ticker}": {
       "get": {
         "description": "Get spot price \u2014 Public API first, emergency fallbacks after.",
-        "operationId": "get_quote_api_data_quote__ticker__get",
+        "operationId": "get_api_data_quote_ticker",
         "parameters": [
           {
             "in": "path",
@@ -4884,7 +4884,7 @@
     "/api/data/status": {
       "get": {
         "description": "Get status of all data providers.",
-        "operationId": "get_data_status_api_data_status_get",
+        "operationId": "get_api_data_status",
         "responses": {
           "200": {
             "content": {
@@ -4905,7 +4905,7 @@
     "/api/data/{ticker}": {
       "get": {
         "description": "Get full heatmap data for a ticker (compatible with frontend data fetch).",
-        "operationId": "get_ticker_data_api_data__ticker__get",
+        "operationId": "get_api_data_ticker",
         "parameters": [
           {
             "in": "path",
@@ -5020,7 +5020,7 @@
     "/api/databento/breaker/status": {
       "get": {
         "description": "Per-parent databento circuit breaker snapshot.\n\nOperators use this to check whether databento is reachable for each OPRA\nparent (SPY/QQQ/IWM/DIA/TLT/SPXW) after a vendor incident. The\n`databento_provider.py:_on_failure` / `_on_success` state machine drives\nthe underlying state; this route simply exposes `snapshot_circuits()` over\nHTTP.\n\nResponse shape: `{ts, providers: [{parent, state, consecutive_failures,\nclose_attempts, opened_at, ttl_remaining_s}], open_count, half_open_count,\nclosed_count}`. Sort order: OPENs first by ttl_remaining ascending (closest\nto half-open probe), then half-open, then closed.\n\nTest pinning: `backend/tests/services/test_databento_snapshot.py` covers the\nsnapshot shape; `backend/tests/routes/test_databento_breaker_status.py`\ncovers route auth + graceful degradation when cache is unavailable.",
-        "operationId": "databento_breaker_status_api_databento_breaker_status_get",
+        "operationId": "get_api_databento_breaker_status",
         "responses": {
           "200": {
             "content": {
@@ -5039,7 +5039,7 @@
     },
     "/api/databento/usage": {
       "get": {
-        "operationId": "databento_usage_api_databento_usage_get",
+        "operationId": "get_api_databento_usage",
         "responses": {
           "200": {
             "content": {
@@ -5059,7 +5059,7 @@
     "/api/deep-dive/{ticker}": {
       "get": {
         "description": "Per-ticker deep dive. Combines chain + advanced analytics.",
-        "operationId": "deep_dive_api_deep_dive__ticker__get",
+        "operationId": "get_api_deep-dive_ticker",
         "parameters": [
           {
             "in": "path",
@@ -5105,7 +5105,7 @@
     "/api/discord/status": {
       "get": {
         "description": "Show Discord wiring state. Booleans only \u2014 tokens never leave env.",
-        "operationId": "discord_status_api_discord_status_get",
+        "operationId": "get_api_discord_status",
         "responses": {
           "200": {
             "content": {
@@ -5126,7 +5126,7 @@
     "/api/discord/test": {
       "post": {
         "description": "Post a test ping to the webhook (proves wiring end-to-end).",
-        "operationId": "discord_test_api_discord_test_post",
+        "operationId": "post_api_discord_test",
         "responses": {
           "200": {
             "content": {
@@ -5146,7 +5146,7 @@
     },
     "/api/dual_gex/{ticker}": {
       "get": {
-        "operationId": "dual_gex_api_dual_gex__ticker__get",
+        "operationId": "get_api_dual_gex_ticker",
         "parameters": [
           {
             "in": "path",
@@ -5191,7 +5191,7 @@
     "/api/earnings": {
       "get": {
         "description": "Earnings calendar. Stub \u2014 floww has no native earnings data source.",
-        "operationId": "earnings_api_earnings_get",
+        "operationId": "get_api_earnings",
         "responses": {
           "200": {
             "content": {
@@ -5216,7 +5216,7 @@
     "/api/earnings/ticker/{ticker}/detail": {
       "get": {
         "description": "Per-ticker earnings detail. Stub.",
-        "operationId": "earnings_ticker_detail_api_earnings_ticker__ticker__detail_get",
+        "operationId": "get_api_earnings_ticker_ticker_detail",
         "parameters": [
           {
             "in": "path",
@@ -5262,7 +5262,7 @@
     "/api/earnings/week": {
       "get": {
         "description": "Weekly earnings. Stub.",
-        "operationId": "earnings_week_api_earnings_week_get",
+        "operationId": "get_api_earnings_week",
         "responses": {
           "200": {
             "content": {
@@ -5287,7 +5287,7 @@
     "/api/ensemble/state": {
       "get": {
         "description": "Get full ensemble state including calibration and history.",
-        "operationId": "get_ensemble_state_api_ensemble_state_get",
+        "operationId": "get_api_ensemble_state",
         "parameters": [
           {
             "in": "query",
@@ -5329,7 +5329,7 @@
     "/api/ensemble/update": {
       "post": {
         "description": "Feed VPIN + QI to the ensemble and get multi-horizon toxicity probs.\n\nReturns P(toxic flow) for 1, 5, 15, and 60-minute horizons,\nplus component scores from CNN-AE, statistical, and forecast detectors.",
-        "operationId": "update_ensemble_api_ensemble_update_post",
+        "operationId": "post_api_ensemble_update",
         "parameters": [
           {
             "in": "query",
@@ -5388,7 +5388,7 @@
     },
     "/api/errors/clear": {
       "post": {
-        "operationId": "errors_clear_api_errors_clear_post",
+        "operationId": "post_api_errors_clear",
         "responses": {
           "200": {
             "content": {
@@ -5407,7 +5407,7 @@
     },
     "/api/errors/summary": {
       "get": {
-        "operationId": "errors_summary_api_errors_summary_get",
+        "operationId": "get_api_errors_summary",
         "responses": {
           "200": {
             "content": {
@@ -5427,7 +5427,7 @@
     "/api/exposure_profile/{ticker}": {
       "get": {
         "description": "Compute + (optionally) persist the spot-shifted exposure profile.",
-        "operationId": "exposure_profile_endpoint_api_exposure_profile__ticker__get",
+        "operationId": "get_api_exposure_profile_ticker",
         "parameters": [
           {
             "in": "path",
@@ -5493,7 +5493,7 @@
     "/api/flashalpha/dashboard/{symbol}": {
       "get": {
         "description": "Get full dashboard (exposure + flow + earnings + max pain + volatility).",
-        "operationId": "get_dashboard_api_flashalpha_dashboard__symbol__get",
+        "operationId": "get_api_flashalpha_dashboard_symbol",
         "parameters": [
           {
             "in": "path",
@@ -5535,7 +5535,7 @@
     "/api/flashalpha/earnings-vrp/{symbol}": {
       "get": {
         "description": "Get Variance Risk Premium for earnings.",
-        "operationId": "get_earnings_vrp_api_flashalpha_earnings_vrp__symbol__get",
+        "operationId": "get_api_flashalpha_earnings-vrp_symbol",
         "parameters": [
           {
             "in": "path",
@@ -5577,7 +5577,7 @@
     "/api/flashalpha/exposure/{symbol}": {
       "get": {
         "description": "Get full exposure data (GEX, DEX, VEX, CHEX).",
-        "operationId": "get_exposure_api_flashalpha_exposure__symbol__get",
+        "operationId": "get_api_flashalpha_exposure_symbol",
         "parameters": [
           {
             "in": "path",
@@ -5619,7 +5619,7 @@
     "/api/flashalpha/flow-blocks/{symbol}": {
       "get": {
         "description": "Get flow blocks (large trades).",
-        "operationId": "get_flow_blocks_api_flashalpha_flow_blocks__symbol__get",
+        "operationId": "get_api_flashalpha_flow-blocks_symbol",
         "parameters": [
           {
             "in": "path",
@@ -5661,7 +5661,7 @@
     "/api/flashalpha/flow-live/{symbol}": {
       "get": {
         "description": "Get live options flow.",
-        "operationId": "get_flow_live_api_flashalpha_flow_live__symbol__get",
+        "operationId": "get_api_flashalpha_flow-live_symbol",
         "parameters": [
           {
             "in": "path",
@@ -5703,7 +5703,7 @@
     "/api/flashalpha/flow/{symbol}": {
       "get": {
         "description": "Get options flow data.",
-        "operationId": "get_flow_api_flashalpha_flow__symbol__get",
+        "operationId": "get_api_flashalpha_flow_symbol",
         "parameters": [
           {
             "in": "path",
@@ -5745,7 +5745,7 @@
     "/api/flashalpha/gex/{symbol}": {
       "get": {
         "description": "Get Gamma Exposure data.",
-        "operationId": "get_gex_api_flashalpha_gex__symbol__get",
+        "operationId": "get_api_flashalpha_gex_symbol",
         "parameters": [
           {
             "in": "path",
@@ -5787,7 +5787,7 @@
     "/api/flashalpha/max-pain/{symbol}": {
       "get": {
         "description": "Get max pain data.",
-        "operationId": "get_max_pain_api_flashalpha_max_pain__symbol__get",
+        "operationId": "get_api_flashalpha_max-pain_symbol",
         "parameters": [
           {
             "in": "path",
@@ -5829,7 +5829,7 @@
     "/api/flashalpha/narrative/{symbol}": {
       "get": {
         "description": "Get AI-generated exposure narrative.",
-        "operationId": "get_narrative_api_flashalpha_narrative__symbol__get",
+        "operationId": "get_api_flashalpha_narrative_symbol",
         "parameters": [
           {
             "in": "path",
@@ -5871,7 +5871,7 @@
     "/api/flashalpha/status": {
       "get": {
         "description": "Get FlashAlpha connection status.",
-        "operationId": "get_status_api_flashalpha_status_get",
+        "operationId": "get_api_flashalpha_status",
         "responses": {
           "200": {
             "content": {
@@ -5892,7 +5892,7 @@
     "/api/flashalpha/volatility/{symbol}": {
       "get": {
         "description": "Get volatility data.",
-        "operationId": "get_volatility_api_flashalpha_volatility__symbol__get",
+        "operationId": "get_api_flashalpha_volatility_symbol",
         "parameters": [
           {
             "in": "path",
@@ -5934,7 +5934,7 @@
     "/api/flashalpha/zero-dte/{symbol}": {
       "get": {
         "description": "Get 0DTE exposure data.",
-        "operationId": "get_zero_dte_api_flashalpha_zero_dte__symbol__get",
+        "operationId": "get_api_flashalpha_zero-dte_symbol",
         "parameters": [
           {
             "in": "path",
@@ -5976,7 +5976,7 @@
     "/api/flow-alerts": {
       "get": {
         "description": "AlphaPod-shape flow alerts. Backed by floww alert history.",
-        "operationId": "flow_alerts_api_flow_alerts_get",
+        "operationId": "get_api_flow-alerts",
         "parameters": [
           {
             "in": "query",
@@ -6052,7 +6052,7 @@
     "/api/flow-digest": {
       "get": {
         "description": "Daily digest. Wraps briefing if available.",
-        "operationId": "flow_digest_api_flow_digest_get",
+        "operationId": "get_api_flow-digest",
         "parameters": [
           {
             "in": "query",
@@ -6105,7 +6105,7 @@
     "/api/flow/{ticker}": {
       "get": {
         "description": "SSE flow endpoint for real-time options flow with paid-ticker and window enforcement.",
-        "operationId": "flow_sse_api_flow__ticker__get",
+        "operationId": "get_api_flow_ticker",
         "parameters": [
           {
             "in": "path",
@@ -6165,7 +6165,7 @@
     "/api/flowseeker/alerts/feed": {
       "get": {
         "description": "Persisted institutional alert feed from the server-side engine.\n\nDeclared BEFORE the /alerts/{symbol} catch-all (route-ordering\nconvention, cf. /api/news/article). Tier filter is a minimum:\ntier=silver returns GOLD + SILVER. Rows carry side/bias, BS entry\nprice, conviction tier, and move-since-alert.\n\nBlademap v3: sort_by=conviction ranks by weighted score DESC (a\n92-conviction SILVER above a 61-conviction GOLD); min_conviction is\nthe hard floor (Blademap alerts at >75).",
-        "operationId": "institutional_alert_feed_api_flowseeker_alerts_feed_get",
+        "operationId": "get_api_flowseeker_alerts_feed",
         "parameters": [
           {
             "in": "query",
@@ -6272,7 +6272,7 @@
     "/api/flowseeker/alerts/quality": {
       "get": {
         "description": "Per rule \u00d7 tier precision from realized moves (Conviction v2's\ncalibration loop). Declared before the /alerts/{symbol} catch-all.\n\nOne DuckDB query per window \u2014 the underlying /scan baseline table is\nmuch smaller than the FULL unfiltered feed, so a single batched call\nthat aggregates 3 windows still costs one DB connection and is cheap\nvs. 3 separate frontend fetches (each would carry its own poll slot\nand cache key).",
-        "operationId": "institutional_alert_quality_api_flowseeker_alerts_quality_get",
+        "operationId": "get_api_flowseeker_alerts_quality",
         "parameters": [
           {
             "description": "Comma-separated window sizes in days; e.g. '7,14,30'. A single value keeps the legacy response shape; multiple values return a per-window map for trend sparklines.",
@@ -6317,7 +6317,7 @@
     "/api/flowseeker/alerts/stream": {
       "get": {
         "description": "SSE push for the Blademap v3 conviction feed \u2014 replaces frontend\npolling. Emits an `alerts` event whenever the top-of-book conviction\nchanges (new alert or conviction re-rank), plus heartbeats. Auto-ends\nafter max_seconds so connections don't leak; the client EventSource\nauto-reconnects.",
-        "operationId": "institutional_alert_stream_api_flowseeker_alerts_stream_get",
+        "operationId": "get_api_flowseeker_alerts_stream",
         "parameters": [
           {
             "in": "query",
@@ -6392,7 +6392,7 @@
     "/api/flowseeker/alerts/{symbol}": {
       "get": {
         "description": "Unusual activity alerts for a symbol's options chain.\n\nIdentifies unusual activity based on option chain snapshots:\n- **high_volume**: day_volume / open_interest ratio above threshold (near money only)\n- **high_iv**: IV in top 25% for near-money options, EITHER side (min OI 500)\n- **oi_spike**: open interest > 2x average for near-money options (min OI 500)\n- **delta_extreme**: deep ITM (|delta| > 0.6) with high OI (>200), either side\n- **premium_concentration**: per-side mid \u00d7 that side's OI \u00d7 100 > $250K (min total OI 500)\n\nEach alert includes confidence scoring and human-readable factors.",
-        "operationId": "unusual_activity_alerts_api_flowseeker_alerts__symbol__get",
+        "operationId": "get_api_flowseeker_alerts_symbol",
         "parameters": [
           {
             "in": "path",
@@ -6479,7 +6479,7 @@
     "/api/flowseeker/auto-trade/execute": {
       "post": {
         "description": "Execute the previewed trades through the paper-trading engine and\nreturn journal seed entries for the frontend to persist into\nfloww_trades_v2. Requires ?confirm=true (two-step arm/fire).",
-        "operationId": "auto_trade_execute_api_flowseeker_auto_trade_execute_post",
+        "operationId": "post_api_flowseeker_auto-trade_execute",
         "parameters": [
           {
             "in": "query",
@@ -6568,7 +6568,7 @@
     "/api/flowseeker/auto-trade/preview": {
       "get": {
         "description": "Preview which current institutional alerts would become paper trades.\nRead-only \u2014 no orders placed. Gates: tier floor, BUY-side directional\nclaims only, DTE >= min_dte (skips 0DTE), one trade per contract.",
-        "operationId": "auto_trade_preview_api_flowseeker_auto_trade_preview_get",
+        "operationId": "get_api_flowseeker_auto-trade_preview",
         "parameters": [
           {
             "in": "query",
@@ -6647,7 +6647,7 @@
     "/api/flowseeker/auto-trade/risk-reset": {
       "post": {
         "description": "Manually reset the auto-trade kill switch (requires human review\nper risk policy \u2014 this endpoint IS the manual reset).",
-        "operationId": "auto_trade_risk_reset_api_flowseeker_auto_trade_risk_reset_post",
+        "operationId": "post_api_flowseeker_auto-trade_risk-reset",
         "responses": {
           "200": {
             "content": {
@@ -6668,7 +6668,7 @@
     "/api/flowseeker/chain/{symbol}": {
       "get": {
         "description": "Options chain \u2014 Public Advanced API first (paid, real quotes/greeks),\nCVForge second, yfinance last resort. Cached for 600s.\n\nOWNERSHIP (institutional loop firewall): this file is split \u2014\nB-REGION = chain/scan/budget/baseline sections (Agent B);\nC-REGION = alerts pipeline below (_run_institutional_alerts,\n_cached/_merged_gex_context, /alerts/*, journal/outcomes) (Agent C).\nNo cross-region edits without owner sign-off in LEDGER.md.",
-        "operationId": "options_chain_api_flowseeker_chain__symbol__get",
+        "operationId": "get_api_flowseeker_chain_symbol",
         "parameters": [
           {
             "in": "path",
@@ -6710,7 +6710,7 @@
     "/api/flowseeker/drilldown/{symbol}": {
       "get": {
         "description": "Contract-level drilldown.",
-        "operationId": "drilldown_api_flowseeker_drilldown__symbol__get",
+        "operationId": "get_api_flowseeker_drilldown_symbol",
         "parameters": [
           {
             "in": "path",
@@ -6752,7 +6752,7 @@
     "/api/flowseeker/journal/close": {
       "post": {
         "description": "Close a journaled trade: body {key, exit_price, exit_date} where key\nis the journalSeedKey() composite. Used by the paper-engine close-out\nsync and by the journal UI when the server store is the source.",
-        "operationId": "journal_close_api_flowseeker_journal_close_post",
+        "operationId": "post_api_flowseeker_journal_close",
         "requestBody": {
           "content": {
             "application/json": {
@@ -6795,7 +6795,7 @@
     "/api/flowseeker/journal/stats": {
       "get": {
         "description": "Per-setup win-rate stats over closed journaled trades: overall,\ngrouped by setup label, and split by GEX regime.",
-        "operationId": "journal_stats_api_flowseeker_journal_stats_get",
+        "operationId": "get_api_flowseeker_journal_stats",
         "parameters": [
           {
             "in": "query",
@@ -6840,7 +6840,7 @@
     "/api/flowseeker/journal/trades": {
       "get": {
         "description": "Server-persisted auto-journal entries (survives localStorage clears).\nShaped as floww_trades_v2 entries + provenance so the frontend can\nmerge them into its offline store.",
-        "operationId": "journal_trades_api_flowseeker_journal_trades_get",
+        "operationId": "get_api_flowseeker_journal_trades",
         "parameters": [
           {
             "in": "query",
@@ -6896,7 +6896,7 @@
     "/api/flowseeker/live": {
       "get": {
         "description": "Live institutional options flow with classification. Surfaces\ndegraded=true + reason when the provider is down \u2014 the frontend can\ndistinguish 'no flow today' from 'feed broken'.",
-        "operationId": "live_flow_api_flowseeker_live_get",
+        "operationId": "get_api_flowseeker_live",
         "parameters": [
           {
             "in": "query",
@@ -6968,7 +6968,7 @@
     "/api/flowseeker/model": {
       "get": {
         "description": "Calibrated P(move) status + coefficients.\n\nThe server computes p_move and attaches it to rows/alerts \u2014 this endpoint\nexposes WHICH model, its stage ladder position, and its provenance so the\ndesk can see whether the probability on the tape is measured or honest-\nuncalibrated. Structural parity: the frontend never recomputes p.",
-        "operationId": "calibration_model_api_flowseeker_model_get",
+        "operationId": "get_api_flowseeker_model",
         "responses": {
           "200": {
             "content": {
@@ -6989,7 +6989,7 @@
     "/api/flowseeker/outcomes": {
       "get": {
         "description": "Control-matched per-rule precision/lift for the alert ledger.\n\nJoins flow_alerts_daily (DuckDB, read-only) to yfinance daily bars and\nVIX (free \u2014 zero cvforge budget), labels each alert hit/miss against the\nvol-scaled forward move, builds a matched control cohort from non-alert\nticker-days, and reports precision, control rate, lift, Wilson CI,\ncluster-bootstrap lift CI, and MFE/MAE payoff stats per rule.\n\nRules below min_alerts measured alerts report precision=null +\nuncalibrated=true \u2014 the dashboard shows 'uncalibrated: n=k', never a\nfabricated small-n number. Serves the nightly cron's precomputed snapshot\n(Mongo flow_outcome_cache) when present; falls back to live compute.\nThis endpoint is the source of truth the alert thresholds eventually get\ntuned from (replaces hand-picked defaults with measured hit rates).",
-        "operationId": "alert_outcomes_api_flowseeker_outcomes_get",
+        "operationId": "get_api_flowseeker_outcomes",
         "parameters": [
           {
             "description": "Alert-history lookback window",
@@ -7078,7 +7078,7 @@
     "/api/flowseeker/outcomes/refresh": {
       "post": {
         "description": "In-process outcome recompute \u2014 the nightly cron's actual workhorse.\n\nWhy in-process: DuckDBEngine is a per-process :memory: singleton, so the\nledger (flow_alerts_daily) only exists inside THIS server process \u2014 a\nseparate cron process reads its own empty DB and can never see the\nalerts. The cron therefore triggers this endpoint (fail-closed behind\nX-API-Key) and the result is written to Mongo flow_outcome_cache, where\nthe brief's outcome section reads it.\n\nAlways 200 with a status field: cold ledger (no_alerts) and missing\nbars (no_bars) are normal nightly states, not errors.",
-        "operationId": "alert_outcomes_refresh_api_flowseeker_outcomes_refresh_post",
+        "operationId": "post_api_flowseeker_outcomes_refresh",
         "parameters": [
           {
             "in": "query",
@@ -7135,7 +7135,7 @@
     "/api/flowseeker/public/chain/{ticker}": {
       "get": {
         "description": "Smart-Order-Flow chain from the paid Public Advanced API (flat shape).\n\nThis is the route the Tidehunter Pro flow tab polls first\n(`/api/flowseeker/public/chain/{t}?expirations=4&fields=...`); without it\nevery poll 404s and the tab silently degrades to the 20/hour cvserver\nbudget. Flat contract list with TRUE bid/ask/last/volume/OI/IV/greeks \u2014\nno BS premium estimates, no vol/OI side proxy.\n\nBudget-gated via services.public_budget (60/min token bucket); on\nexhaustion returns 503 with retry_after so the tab falls through to\ncvserver instead of hammering upstream. The adapter's 60s cache +\ncoalescing means steady-state polling costs ~1 token/ticker/min.",
-        "operationId": "public_chain_flat_api_flowseeker_public_chain__ticker__get",
+        "operationId": "get_api_flowseeker_public_chain_ticker",
         "parameters": [
           {
             "in": "path",
@@ -7221,7 +7221,7 @@
     "/api/flowseeker/regime/{ticker}": {
       "get": {
         "description": "Live market regime for the Blademap pill, derived from the same GEX\nstructure the heatmap already computes (60s-cached build_heatmap \u2014 the\nargument tuple matches the frontend's own /api/heatmap call, so at the 6s\npoll this is a cache hit, no extra chain fetches).",
-        "operationId": "regime_api_flowseeker_regime__ticker__get",
+        "operationId": "get_api_flowseeker_regime_ticker",
         "parameters": [
           {
             "in": "path",
@@ -7263,7 +7263,7 @@
     "/api/flowseeker/risk/killswitch": {
       "get": {
         "description": "Current kill-switch status. equity is the current account equity used\nto seed start_day() on first call of a new day.",
-        "operationId": "risk_killswitch_status_api_flowseeker_risk_killswitch_get",
+        "operationId": "get_api_flowseeker_risk_killswitch",
         "parameters": [
           {
             "in": "query",
@@ -7307,7 +7307,7 @@
     "/api/flowseeker/risk/killswitch/reset": {
       "post": {
         "description": "Manual reset (human review required per risk policy).",
-        "operationId": "risk_killswitch_reset_api_flowseeker_risk_killswitch_reset_post",
+        "operationId": "post_api_flowseeker_risk_killswitch_reset",
         "responses": {
           "200": {
             "content": {
@@ -7328,7 +7328,7 @@
     "/api/flowseeker/risk/killswitch/trip": {
       "post": {
         "description": "Manually trip the kill switch for testing. Returns the new status.",
-        "operationId": "risk_killswitch_trip_api_flowseeker_risk_killswitch_trip_post",
+        "operationId": "post_api_flowseeker_risk_killswitch_trip",
         "parameters": [
           {
             "in": "query",
@@ -7372,7 +7372,7 @@
     "/api/flowseeker/scan": {
       "get": {
         "description": "Cross-symbol options flow scan (day_volume vs OI).\n60s-cached; on upstream 429 backs off exponentially and serves the last\ngood result marked stale=true rather than collapsing to a client fallback.\nUse ?force=true to bypass cache and backoff (debounced server-side).",
-        "operationId": "market_scan_api_flowseeker_scan_get",
+        "operationId": "get_api_flowseeker_scan",
         "parameters": [
           {
             "in": "query",
@@ -7438,7 +7438,7 @@
     "/api/flowseeker/scan-public": {
       "get": {
         "description": "Market-wide unusual-flow scan over the PAID Public Advanced API.\n\nRotating-cursor sweep of a fixed 40-name universe (index ETFs + megas +\nhigh-beta mid-caps like SNDK/DVN): each call scans the next slice and\nreturns the merged universe view. No hourly cap (60/min Public budget),\nno top-300-by-volume cutoff \u2014 mid-cap laddered building is included by\nconstruction, not crowded out by SPY/QQQ churn.\n\nRow/column shape is IDENTICAL to /scan so the frontend scanner and\neval_institutional consume it unchanged. Fresh slices also feed the\ninstitutional alert pipeline (same _record_scan_baseline +\n_run_institutional_alerts background tasks as /scan).",
-        "operationId": "public_market_scan_api_flowseeker_scan_public_get",
+        "operationId": "get_api_flowseeker_scan-public",
         "parameters": [
           {
             "in": "query",
@@ -7495,7 +7495,7 @@
     "/api/flowseeker/scan/history": {
       "get": {
         "description": "Per-ticker daily options-volume history from the scan baseline collector\n(flow_scan_daily: total/call/put volume per ticker per day). Powers the\nscanner's rollup sparklines and multi-day persistence streaks \u2014 the\n\"what are they following across sessions\" read. Mongo-only, no upstream.",
-        "operationId": "scan_history_api_flowseeker_scan_history_get",
+        "operationId": "get_api_flowseeker_scan_history",
         "parameters": [
           {
             "in": "query",
@@ -7540,7 +7540,7 @@
     "/api/flowseeker/scan/refresh": {
       "post": {
         "description": "Force refresh the market scan \u2014 bypasses cache and backoff.\nDebounced: ignores if last force refresh was < 10s ago.",
-        "operationId": "force_refresh_scan_api_flowseeker_scan_refresh_post",
+        "operationId": "post_api_flowseeker_scan_refresh",
         "parameters": [
           {
             "in": "query",
@@ -7596,7 +7596,7 @@
     "/api/flowseeker/screen": {
       "get": {
         "description": "Screen options \u2014 uses CVForge screen API if available, else cached chain.",
-        "operationId": "screen_options_api_flowseeker_screen_get",
+        "operationId": "get_api_flowseeker_screen",
         "parameters": [
           {
             "in": "query",
@@ -7680,7 +7680,7 @@
     },
     "/api/gamma-flip/{ticker}": {
       "get": {
-        "operationId": "gamma_flip_api_gamma_flip__ticker__get",
+        "operationId": "get_api_gamma-flip_ticker",
         "parameters": [
           {
             "in": "path",
@@ -7744,7 +7744,7 @@
     },
     "/api/gex-timeframes/{ticker}": {
       "get": {
-        "operationId": "gex_timeframes_api_gex_timeframes__ticker__get",
+        "operationId": "get_api_gex-timeframes_ticker",
         "parameters": [
           {
             "in": "path",
@@ -7797,7 +7797,7 @@
     "/api/gex/spx": {
       "get": {
         "description": "SPX GEX snapshot in AlphaPod shape.",
-        "operationId": "gex_spx_api_gex_spx_get",
+        "operationId": "get_api_gex_spx",
         "responses": {
           "200": {
             "content": {
@@ -7822,7 +7822,7 @@
     "/api/greeks/profile/{ticker}": {
       "get": {
         "description": "Get aggregated Greeks profile for a ticker.\n\nReturns per-strike aggregated Greeks (delta_absolute, gamma_total,\nvanna, charm) from the gflows_greeks DuckDB table.\n\nPath Parameters:\n    ticker: any symbol (case-insensitive). Seeded tickers return rows;\n    unseeded tickers return 404.\n\nReturns:\n    JSON with ticker, strikes array, and Greek arrays.",
-        "operationId": "get_greeks_profile_api_greeks_profile__ticker__get",
+        "operationId": "get_api_greeks_profile_ticker",
         "parameters": [
           {
             "in": "path",
@@ -7863,7 +7863,7 @@
     "/api/hawkes/{ticker}/fit": {
       "post": {
         "description": "Fit Hawkes process parameters to observed event times.",
-        "operationId": "fit_hawkes_api_hawkes__ticker__fit_post",
+        "operationId": "post_api_hawkes_ticker_fit",
         "parameters": [
           {
             "in": "path",
@@ -7919,7 +7919,7 @@
     "/api/hawkes/{ticker}/intensity": {
       "get": {
         "description": "Compute conditional intensity at the latest event time.",
-        "operationId": "get_intensity_api_hawkes__ticker__intensity_get",
+        "operationId": "get_api_hawkes_ticker_intensity",
         "parameters": [
           {
             "in": "path",
@@ -7974,7 +7974,7 @@
     "/api/hawkes/{ticker}/simulate": {
       "post": {
         "description": "Simulate event times using Ogata's thinning algorithm.",
-        "operationId": "simulate_hawkes_api_hawkes__ticker__simulate_post",
+        "operationId": "post_api_hawkes_ticker_simulate",
         "parameters": [
           {
             "in": "path",
@@ -8036,7 +8036,7 @@
     "/api/hawkes/{ticker}/state": {
       "get": {
         "description": "Return full Hawkes process state.",
-        "operationId": "get_hawkes_state_api_hawkes__ticker__state_get",
+        "operationId": "get_api_hawkes_ticker_state",
         "parameters": [
           {
             "in": "path",
@@ -8078,7 +8078,7 @@
     "/api/health": {
       "get": {
         "description": "Check status of all dependencies.\n\nReturns:\n    {\n        \"status\": \"healthy\" | \"degraded\",\n        \"timestamp\": \"<ISO8601 UTC>\",\n        \"checks\": {\n            \"duckdb\": {\"status\": \"healthy\"},\n            \"public_api\": {\"status\": \"healthy\"} | {\"status\": \"unhealthy\", \"error\": \"...\"},\n            \"alpha_vantage\": {\"status\": \"disabled\", \"deprecated\": True, ...},\n            \"websocket\": {\"status\": \"healthy\", \"active_connections\": 0}\n        }\n    }",
-        "operationId": "health_check_api_health_get",
+        "operationId": "get_api_health",
         "responses": {
           "200": {
             "content": {
@@ -8097,7 +8097,7 @@
     },
     "/api/heatmap/{ticker}": {
       "get": {
-        "operationId": "heatmap_api_heatmap__ticker__get",
+        "operationId": "get_api_heatmap_ticker",
         "parameters": [
           {
             "in": "path",
@@ -8211,7 +8211,7 @@
     "/api/heatseeker/air-pockets": {
       "get": {
         "description": "Contiguous strike ranges with |GEX| below 20% of the local median.",
-        "operationId": "air_pockets_route_api_heatseeker_air_pockets_get",
+        "operationId": "get_api_heatseeker_air-pockets",
         "parameters": [
           {
             "in": "query",
@@ -8278,7 +8278,7 @@
     "/api/heatseeker/beach-ball": {
       "get": {
         "description": "Beach Ball: spot stretched past the King Node (overshoot/reversion).",
-        "operationId": "beach_ball_route_api_heatseeker_beach_ball_get",
+        "operationId": "get_api_heatseeker_beach-ball",
         "parameters": [
           {
             "in": "query",
@@ -8333,7 +8333,7 @@
     "/api/heatseeker/flip-zones": {
       "get": {
         "description": "All cumulative-GEX sign changes within +/-window_pct of spot.",
-        "operationId": "flip_zones_route_api_heatseeker_flip_zones_get",
+        "operationId": "get_api_heatseeker_flip-zones",
         "parameters": [
           {
             "in": "query",
@@ -8412,7 +8412,7 @@
     "/api/heatseeker/history/{ticker}": {
       "get": {
         "description": "Return time series for a specific contract.\n\nResponse shape:\n{\n    \"ticker\": \"SPY\",\n    \"expiry\": \"2026-07-24\",\n    \"strike\": 500.0,\n    \"type\": \"C\",\n    \"n_points\": 42,\n    \"history\": [\n        {\n            \"timestamp\": \"2026-07-23T10:00:00\",\n            \"oi\": 800,\n            \"volume\": 400,\n            \"iv\": 0.15,\n            \"delta_val\": 0.5,\n            \"gamma_val\": 0.02\n        },\n        ...\n    ]\n}",
-        "operationId": "get_history_api_heatseeker_history__ticker__get",
+        "operationId": "get_api_heatseeker_history_ticker",
         "parameters": [
           {
             "in": "path",
@@ -8502,7 +8502,7 @@
     "/api/heatseeker/latest/{ticker}": {
       "get": {
         "description": "Return the most recent snapshot for a ticker.\n\nResponse shape:\n{\n    \"ticker\": \"SPY\",\n    \"n_contracts\": 150,\n    \"contracts\": [...]\n}",
-        "operationId": "get_latest_api_heatseeker_latest__ticker__get",
+        "operationId": "get_api_heatseeker_latest_ticker",
         "parameters": [
           {
             "in": "path",
@@ -8544,7 +8544,7 @@
     "/api/heatseeker/node-classification": {
       "get": {
         "description": "Classify nodes as real (growing intent) vs hedge (fading protection).\n\nBuilds the top-|GEX| nodes from the current chain, attaches a\n``gamma_sign`` (positive/negative based on signed net GEX) and an\n``oi_trend`` (growing/fading based on 24h OI history when available),\nthen runs ``classify_nodes`` to assign real/hedge/unknown labels.",
-        "operationId": "node_classification_route_api_heatseeker_node_classification_get",
+        "operationId": "get_api_heatseeker_node-classification",
         "parameters": [
           {
             "in": "query",
@@ -8598,7 +8598,7 @@
     "/api/heatseeker/node-lifecycle": {
       "get": {
         "description": "Top 10 |GEX| nodes classified Fresh/Tested/Delivered/Decaying.",
-        "operationId": "node_lifecycle_route_api_heatseeker_node_lifecycle_get",
+        "operationId": "get_api_heatseeker_node-lifecycle",
         "parameters": [
           {
             "in": "query",
@@ -8667,7 +8667,7 @@
     "/api/heatseeker/rainbow-road": {
       "get": {
         "description": "Rainbow Road: no dominant structure \u2014 chaos, sit out.",
-        "operationId": "rainbow_road_route_api_heatseeker_rainbow_road_get",
+        "operationId": "get_api_heatseeker_rainbow-road",
         "parameters": [
           {
             "in": "query",
@@ -8734,7 +8734,7 @@
     "/api/heatseeker/reverse-rug": {
       "get": {
         "description": "Reverse Rug: positive floor below + negative ceiling above.",
-        "operationId": "reverse_rug_route_api_heatseeker_reverse_rug_get",
+        "operationId": "get_api_heatseeker_reverse-rug",
         "parameters": [
           {
             "in": "query",
@@ -8789,7 +8789,7 @@
     "/api/heatseeker/rolling-floors-ceilings": {
       "get": {
         "description": "Rolling floors/ceilings tracker \u2014 F11: reads real aligned history.\n\nSingle-current-chain input cannot produce a rolling series; with fewer\nthan 2 historical snapshots the route returns history_unavailable (never\na one-element trend).",
-        "operationId": "rolling_floors_ceilings_route_api_heatseeker_rolling_floors_ceilings_get",
+        "operationId": "get_api_heatseeker_rolling-floors-ceilings",
         "parameters": [
           {
             "in": "query",
@@ -8855,7 +8855,7 @@
     "/api/heatseeker/snapshot/{ticker}": {
       "post": {
         "description": "Trigger a live snapshot of the options chain.\n\nFetches the current chain from the data source and inserts into the\nshared DuckDB connection so that top-movers, history, and latest endpoints\ncan read the data (previously wrote to a throwaway :memory: DB).\n\nThis is an admin/debug endpoint. In production, snapshots are triggered\nby the scheduler/cron.",
-        "operationId": "trigger_snapshot_api_heatseeker_snapshot__ticker__post",
+        "operationId": "post_api_heatseeker_snapshot_ticker",
         "parameters": [
           {
             "in": "path",
@@ -8921,7 +8921,7 @@
     "/api/heatseeker/stacked-nodes": {
       "get": {
         "description": "Detect stacked nodes \u2014 both call+put GEX significant at same strike.",
-        "operationId": "stacked_nodes_route_api_heatseeker_stacked_nodes_get",
+        "operationId": "get_api_heatseeker_stacked-nodes",
         "parameters": [
           {
             "in": "query",
@@ -8987,7 +8987,7 @@
     "/api/heatseeker/top-movers/{ticker}": {
       "get": {
         "description": "Return top N contracts by OI delta for the given ticker.\n\nComputes the delta between the two most recent snapshots in DuckDB.\nReturns contracts ranked by absolute OI change, with volume delta as tiebreaker.\n\nResponse shape:\n{\n    \"ticker\": \"SPY\",\n    \"asof\": \"2026-07-23T...\",\n    \"n_contracts\": 10,\n    \"movers\": [\n        {\n            \"ticker\": \"SPY\",\n            \"expiry\": \"2026-07-24\",\n            \"strike\": 500.0,\n            \"type\": \"C\",\n            \"oi\": 1000,\n            \"volume\": 500,\n            \"iv\": 0.15,\n            \"delta\": 0.5,\n            \"gamma\": 0.02,\n            \"oi_delta\": 200,\n            \"oi_delta_pct\": 0.25,\n            \"volume_delta\": 100,\n            \"score\": 210.0\n        },\n        ...\n    ]\n}",
-        "operationId": "get_top_movers_api_heatseeker_top_movers__ticker__get",
+        "operationId": "get_api_heatseeker_top-movers_ticker",
         "parameters": [
           {
             "in": "path",
@@ -9043,7 +9043,7 @@
     "/api/heatseeker/trinity-confluence": {
       "get": {
         "description": "Trinity Confluence: SPX/SPY/QQQ alignment, 0\u2013100.\n\nAlways queries the three tickers; if any individual snapshot fails to\nload, that dimension is recorded as ``\"missing\"`` rather than crashing\nthe request.",
-        "operationId": "trinity_confluence_route_api_heatseeker_trinity_confluence_get",
+        "operationId": "get_api_heatseeker_trinity-confluence",
         "parameters": [
           {
             "in": "query",
@@ -9088,7 +9088,7 @@
     "/api/heatseeker/tug-of-war": {
       "get": {
         "description": "Detect tug-of-war zones \u2014 positive/negative GEX conflict near spot.",
-        "operationId": "tug_of_war_route_api_heatseeker_tug_of_war_get",
+        "operationId": "get_api_heatseeker_tug-of-war",
         "parameters": [
           {
             "in": "query",
@@ -9142,7 +9142,7 @@
     "/api/heatseeker/velocity-mode": {
       "get": {
         "description": "Velocity Mode: rate of King Node drift over the last ~30 minutes.\n\nHistory comes from Mongo ``db.snapshots`` (entries with a stored\n``king_node_strike``). If Mongo is unavailable or no usable rows exist,\nthe pure function returns unknown (F09) \u2014 never fabricated calm/0.",
-        "operationId": "velocity_mode_route_api_heatseeker_velocity_mode_get",
+        "operationId": "get_api_heatseeker_velocity-mode",
         "parameters": [
           {
             "in": "query",
@@ -9184,7 +9184,7 @@
     },
     "/api/hedge-impulse/{ticker}": {
       "get": {
-        "operationId": "hedge_impulse_api_hedge_impulse__ticker__get",
+        "operationId": "get_api_hedge-impulse_ticker",
         "parameters": [
           {
             "in": "path",
@@ -9248,7 +9248,7 @@
     },
     "/api/history/{ticker}": {
       "get": {
-        "operationId": "history_api_history__ticker__get",
+        "operationId": "get_api_history_ticker",
         "parameters": [
           {
             "in": "path",
@@ -9302,7 +9302,7 @@
     },
     "/api/implied-pdf/{ticker}": {
       "get": {
-        "operationId": "implied_pdf_api_implied_pdf__ticker__get",
+        "operationId": "get_api_implied-pdf_ticker",
         "parameters": [
           {
             "in": "path",
@@ -9371,7 +9371,7 @@
     "/api/insider/latest": {
       "get": {
         "description": "Finviz market-wide latest insider trades (PURE-READ).\n\nGET must be safe per RFC-7231 \u00a74.2.1. ``accumulate=true`` is\ndeprecated and ignored; use ``POST /api/insider/latest/accumulate``\nfor the cron-write workflow.",
-        "operationId": "insider_latest_endpoint_api_insider_latest_get",
+        "operationId": "get_api_insider_latest",
         "parameters": [
           {
             "in": "query",
@@ -9425,7 +9425,7 @@
     "/api/insider/latest/accumulate": {
       "post": {
         "description": "Write today's Finviz latest-insider snapshot into DuckDB.\n\nPOST is the right verb for write side effects per RFC-7231 \u00a74.2.2.\nReturns ``{rows, summary, source, written_n_rows, warnings}``.\nIdempotent: UPSERT by (snapshot_date, ticker, transaction_date,\ninsider_name); safe to re-fire within the same trading day.",
-        "operationId": "insider_latest_accumulate_endpoint_api_insider_latest_accumulate_post",
+        "operationId": "post_api_insider_latest_accumulate",
         "parameters": [
           {
             "in": "query",
@@ -9469,7 +9469,7 @@
     "/api/insider/top": {
       "get": {
         "description": "Finviz top insider trades ranked by transaction value (PURE-READ).\n\nGET must be safe per RFC-7231 \u00a74.2.1 \u2014 no side effects beyond\nretrieval. The legacy ``accumulate=true`` query param is accepted\nfor backward compat but *ignored* with a deprecation warning\nreturned in the ``warnings`` key \u2014 use\n``POST /api/insider/top/accumulate`` to write today's snapshot.\nDefaults mirror the upstream Buzzfund filter\n(?or=-10&tv=100000&tc=7&o=-transactionValue).",
-        "operationId": "insider_top_endpoint_api_insider_top_get",
+        "operationId": "get_api_insider_top",
         "parameters": [
           {
             "in": "query",
@@ -9543,7 +9543,7 @@
     "/api/insider/top/accumulate": {
       "post": {
         "description": "Write today's Finviz top insider snapshot into DuckDB.\n\nPOST is the right verb for write side effects per RFC-7231 \u00a74.2.2.\nSchedule this once per trading day from the cron \u2014 the GET endpoint\nstays safe to poll repeatedly.\n\nReturns ``{rows, summary, source, written_n_rows, warnings}``.\n``written_n_rows`` reports the count of rows that passed the\npre-write filter (ticker/insider_name/transaction_date present),\nmatching the contract that ``accumulate_today`` returns in\n``backend/services/insider_scraper.py``.\n\nIdempotent: UPSERT by (snapshot_date, ticker, transaction_date,\ninsider_name); safe to re-fire within the same trading day.",
-        "operationId": "insider_top_accumulate_endpoint_api_insider_top_accumulate_post",
+        "operationId": "post_api_insider_top_accumulate",
         "parameters": [
           {
             "in": "query",
@@ -9611,7 +9611,7 @@
     "/api/insider/{ticker}": {
       "get": {
         "description": "Per-ticker Finviz insider trades + Flowseeker-badge summary (PURE-READ).\n\nGET must be safe per RFC-7231 \u00a74.2.1. ``accumulate=true`` is\ndeprecated and ignored; use ``POST /api/insider/{ticker}/accumulate``\nfor the cron-write workflow.",
-        "operationId": "insider_ticker_endpoint_api_insider__ticker__get",
+        "operationId": "get_api_insider_ticker",
         "parameters": [
           {
             "in": "path",
@@ -9674,7 +9674,7 @@
     "/api/insider/{ticker}/accumulate": {
       "post": {
         "description": "Write today's per-ticker Finviz insider snapshot into DuckDB.\n\nPOST is the right verb for write side effects per RFC-7231 \u00a74.2.2.\nReturns ``{ticker, rows, summary, source, written_n_rows, warnings}``.\nIdempotent: UPSERT by (snapshot_date, ticker, transaction_date,\ninsider_name); safe to re-fire within the same trading day.",
-        "operationId": "insider_ticker_accumulate_endpoint_api_insider__ticker__accumulate_post",
+        "operationId": "post_api_insider_ticker_accumulate",
         "parameters": [
           {
             "in": "path",
@@ -9726,7 +9726,7 @@
     },
     "/api/iv_mid/{ticker}": {
       "get": {
-        "operationId": "iv_mid_api_iv_mid__ticker__get",
+        "operationId": "get_api_iv_mid_ticker",
         "parameters": [
           {
             "in": "path",
@@ -9785,7 +9785,7 @@
     "/api/liquidity/{ticker}": {
       "get": {
         "description": "Return all liquidity metrics for a ticker.",
-        "operationId": "get_liquidity_metrics_api_liquidity__ticker__get",
+        "operationId": "get_api_liquidity_ticker",
         "parameters": [
           {
             "in": "path",
@@ -9827,7 +9827,7 @@
     "/api/liquidity/{ticker}/amihud": {
       "post": {
         "description": "Update Amihud Illiquidity with a new observation.",
-        "operationId": "update_amihud_api_liquidity__ticker__amihud_post",
+        "operationId": "post_api_liquidity_ticker_amihud",
         "parameters": [
           {
             "in": "path",
@@ -9896,7 +9896,7 @@
     "/api/liquidity/{ticker}/fragility": {
       "get": {
         "description": "Compute Market Fragility Index.",
-        "operationId": "get_fragility_api_liquidity__ticker__fragility_get",
+        "operationId": "get_api_liquidity_ticker_fragility",
         "parameters": [
           {
             "in": "path",
@@ -9968,7 +9968,7 @@
     "/api/liquidity/{ticker}/kyle": {
       "post": {
         "description": "Update Kyle's Lambda with a new trade observation.",
-        "operationId": "update_kyle_api_liquidity__ticker__kyle_post",
+        "operationId": "post_api_liquidity_ticker_kyle",
         "parameters": [
           {
             "in": "path",
@@ -10036,7 +10036,7 @@
     },
     "/api/live/policy": {
       "get": {
-        "operationId": "live_policy_api_live_policy_get",
+        "operationId": "get_api_live_policy",
         "responses": {
           "200": {
             "content": {
@@ -10053,7 +10053,7 @@
         ]
       },
       "post": {
-        "operationId": "live_policy_update_api_live_policy_post",
+        "operationId": "post_api_live_policy",
         "requestBody": {
           "content": {
             "application/json": {
@@ -10094,7 +10094,7 @@
     },
     "/api/live/tape/stop": {
       "post": {
-        "operationId": "live_tape_stop_api_live_tape_stop_post",
+        "operationId": "post_api_live_tape_stop",
         "responses": {
           "200": {
             "content": {
@@ -10114,7 +10114,7 @@
     "/api/llm/analyze-trade": {
       "post": {
         "description": "Analyze a trade opportunity using the configured LLM provider.",
-        "operationId": "llm_analyze_trade_api_llm_analyze_trade_post",
+        "operationId": "post_api_llm_analyze-trade",
         "requestBody": {
           "content": {
             "application/json": {
@@ -10154,7 +10154,7 @@
     "/api/llm/generate": {
       "post": {
         "description": "Generate text using the configured LLM provider (OpenRouter by default).",
-        "operationId": "llm_generate_api_llm_generate_post",
+        "operationId": "post_api_llm_generate",
         "requestBody": {
           "content": {
             "application/json": {
@@ -10194,7 +10194,7 @@
     "/api/llm/providers": {
       "get": {
         "description": "List available LLM providers and their configuration status.",
-        "operationId": "llm_providers_api_llm_providers_get",
+        "operationId": "get_api_llm_providers",
         "responses": {
           "200": {
             "content": {
@@ -10214,7 +10214,7 @@
     "/api/max_pain/{ticker}": {
       "get": {
         "description": "Per-expiry max-pain strike plus an overall pin number.\n\nMax pain = the strike where total intrinsic-loss-to-option-holders at\nexpiry is MINIMIZED (= the strike where option writers are most\nexposed = the pin magnet). Distinct from the GEX King node (which is\n*gamma*-based). Daily-drift snapshot into DuckDB is intentionally\ndeferred (see ``docs/reports/2026-07-11-steal-list-integration-roadmap.md``\n#9 PARTIAL block).",
-        "operationId": "max_pain_route_api_max_pain__ticker__get",
+        "operationId": "get_api_max_pain_ticker",
         "parameters": [
           {
             "in": "path",
@@ -10273,7 +10273,7 @@
     "/api/max_pain_drift/{ticker}": {
       "get": {
         "description": "Max-Pain Drift \u2014 accumulated daily snapshots + drift analytics.\n\n``accumulate=true`` writes TODAY's per-expiry max-pain snapshots into\nDuckDB before running the analytics; ``accumulate=false`` (default)\nis a pure read so cron jobs can poll without Write-Amp. Standard\ncron workflow:\n  1. /api/max_pain_drift/SPY?accumulate=true&days=30     # after EOD\n  2. Frontend polls /api/max_pain_drift/SPY?accumulate=false&days=30\n     every minute for the live drift readout.",
-        "operationId": "max_pain_drift_endpoint_api_max_pain_drift__ticker__get",
+        "operationId": "get_api_max_pain_drift_ticker",
         "parameters": [
           {
             "in": "path",
@@ -10334,7 +10334,7 @@
     "/api/max_pain_drift/{ticker}/per_expiry_history": {
       "get": {
         "description": "Per-expiry max-pain-strike trajectory over the last ``days`` days.\n\nReturns a list of one entry per listed expiry, sorted ASC by ISO\nexpiry date, each containing a chronological ``history`` array of\n{date, strike, spot} points for the rendering polyline.\n\nDefensive degrade: any upstream failure (DB exception, missing\nrows) returns an empty ``expiries`` array + a warning rather than\ncrashing the route \u2014 mirrors the established steal-three\ndefensive-degrade signature.",
-        "operationId": "max_pain_drift_per_expiry_history_endpoint_api_max_pain_drift__ticker__per_expiry_history_get",
+        "operationId": "get_api_max_pain_drift_ticker_per_expiry_history",
         "parameters": [
           {
             "in": "path",
@@ -10388,7 +10388,7 @@
     },
     "/api/memory/gex": {
       "post": {
-        "operationId": "memory_gex_api_memory_gex_post",
+        "operationId": "post_api_memory_gex",
         "requestBody": {
           "content": {
             "application/json": {
@@ -10429,7 +10429,7 @@
     },
     "/api/memory/recall/{ticker}": {
       "get": {
-        "operationId": "memory_recall_api_memory_recall__ticker__get",
+        "operationId": "get_api_memory_recall_ticker",
         "parameters": [
           {
             "in": "path",
@@ -10479,7 +10479,7 @@
     },
     "/api/memory/summary/{ticker}": {
       "get": {
-        "operationId": "memory_summary_api_memory_summary__ticker__get",
+        "operationId": "get_api_memory_summary_ticker",
         "parameters": [
           {
             "in": "path",
@@ -10519,7 +10519,7 @@
     },
     "/api/memory/trade": {
       "post": {
-        "operationId": "memory_trade_api_memory_trade_post",
+        "operationId": "post_api_memory_trade",
         "requestBody": {
           "content": {
             "application/json": {
@@ -10561,7 +10561,7 @@
     "/api/microstructure/anomaly/{ticker}": {
       "get": {
         "description": "Get flow toxicity anomaly detection status.",
-        "operationId": "anomaly_endpoint_api_microstructure_anomaly__ticker__get",
+        "operationId": "get_api_microstructure_anomaly_ticker",
         "parameters": [
           {
             "in": "path",
@@ -10603,7 +10603,7 @@
     "/api/microstructure/gex-surface/{ticker}": {
       "get": {
         "description": "Compute GEX surface (strike x expiry) for a ticker.",
-        "operationId": "gex_surface_endpoint_api_microstructure_gex_surface__ticker__get",
+        "operationId": "get_api_microstructure_gex-surface_ticker",
         "parameters": [
           {
             "in": "path",
@@ -10657,7 +10657,7 @@
     "/api/microstructure/hawkes/{ticker}": {
       "get": {
         "description": "Fit Hawkes process to recent trade arrivals.",
-        "operationId": "hawkes_endpoint_api_microstructure_hawkes__ticker__get",
+        "operationId": "get_api_microstructure_hawkes_ticker",
         "parameters": [
           {
             "in": "path",
@@ -10699,7 +10699,7 @@
     "/api/microstructure/liquidity/{ticker}": {
       "get": {
         "description": "Compute Kyle's Lambda, Amihud Illiquidity, and Market Fragility.",
-        "operationId": "liquidity_endpoint_api_microstructure_liquidity__ticker__get",
+        "operationId": "get_api_microstructure_liquidity_ticker",
         "parameters": [
           {
             "in": "path",
@@ -10741,7 +10741,7 @@
     "/api/microstructure/nodes/{ticker}": {
       "get": {
         "description": "Get node lifecycle status for a ticker.",
-        "operationId": "nodes_endpoint_api_microstructure_nodes__ticker__get",
+        "operationId": "get_api_microstructure_nodes_ticker",
         "parameters": [
           {
             "in": "path",
@@ -10795,7 +10795,7 @@
     "/api/microstructure/toxicity-dashboard": {
       "get": {
         "description": "Combined toxicity dashboard data.",
-        "operationId": "toxicity_dashboard_api_microstructure_toxicity_dashboard_get",
+        "operationId": "get_api_microstructure_toxicity-dashboard",
         "responses": {
           "200": {
             "content": {
@@ -10816,7 +10816,7 @@
     "/api/microstructure/trinity": {
       "get": {
         "description": "Compute Trinity Alignment Index across SPY, QQQ, SPX.",
-        "operationId": "trinity_endpoint_api_microstructure_trinity_get",
+        "operationId": "get_api_microstructure_trinity",
         "parameters": [
           {
             "in": "query",
@@ -10879,7 +10879,7 @@
     "/api/microstructure/vol-surface/{ticker}": {
       "get": {
         "description": "Build full IV surface using SABR and SVI.",
-        "operationId": "vol_surface_endpoint_api_microstructure_vol_surface__ticker__get",
+        "operationId": "get_api_microstructure_vol-surface_ticker",
         "parameters": [
           {
             "in": "path",
@@ -10933,7 +10933,7 @@
     "/api/microstructure/vpin/{ticker}": {
       "get": {
         "description": "Compute VPIN and toxicity signals for a ticker.",
-        "operationId": "vpin_endpoint_api_microstructure_vpin__ticker__get",
+        "operationId": "get_api_microstructure_vpin_ticker",
         "parameters": [
           {
             "in": "path",
@@ -10975,7 +10975,7 @@
     "/api/ml/attach-outcomes": {
       "post": {
         "description": "Attach realized outcomes to predictions that don't have them yet.\n\nProcesses up to batch_size predictions per call.\nIdempotent \u2014 already-attached predictions are skipped.",
-        "operationId": "attach_outcomes_api_ml_attach_outcomes_post",
+        "operationId": "post_api_ml_attach-outcomes",
         "parameters": [
           {
             "in": "query",
@@ -11022,7 +11022,7 @@
     "/api/ml/batch-predict": {
       "post": {
         "description": "Get predictions for multiple tickers at once.\n\nIf no tickers specified, predicts all registered models.",
-        "operationId": "batch_predict_api_ml_batch_predict_post",
+        "operationId": "post_api_ml_batch-predict",
         "parameters": [
           {
             "in": "query",
@@ -11078,7 +11078,7 @@
     "/api/ml/briefing/{ticker}": {
       "get": {
         "description": "Unified ML briefing \u2014 combines prediction, model info, regime,\nrolling accuracy, and feature importance into one response for the\nMlDashboard frontend component.\n\nOBSERVABILITY CONTRACT \u2014 Phase 6 Task 10 Decision Queue #1:\nThe briefing envelope is a 5-section aggregate (prediction, model\ninfo, drift, rolling accuracy, combined signal).  Each section's\n`try/except Exception:` block MUST follow the same shape used by\nDecision Queue #4 (commit 72b00c8) for routes/admin.py:\n\n    except Exception as e:\n        logger.error(f\"ml_briefing: <section name> failed: {e}\")\n        result[\"<section>_error\"] = f\"<section name> failed: {e}\"\n\nThe session-key pattern is `<section>_error` (e.g. `model_error`,\n`drift_error`, `rolling_accuracy_error`) so monitoring agents can\nattribute the failure to the specific section via response shape,\nwithout needing log access.  A happy-path caller sees no `<*_error>`\nkeys; a degraded caller sees ONLY the failed-section keys (preserving\nthe HTTP-200 + partial-data design intent of this endpoint).\n\nTests in `backend/tests/services/test_ml_api_silent_error_observability.py`\npin the contract per section \u2014 add a parallel test for any new section.",
-        "operationId": "ml_briefing_api_ml_briefing__ticker__get",
+        "operationId": "get_api_ml_briefing_ticker",
         "parameters": [
           {
             "in": "path",
@@ -11124,7 +11124,7 @@
     "/api/ml/calibration": {
       "get": {
         "description": "Get prediction confidence calibration for a ticker (query-param variant).",
-        "operationId": "get_calibration_default_api_ml_calibration_get",
+        "operationId": "get_api_ml_calibration",
         "parameters": [
           {
             "in": "query",
@@ -11179,7 +11179,7 @@
     "/api/ml/calibration/{ticker}": {
       "get": {
         "description": "Get prediction confidence calibration for a ticker.\n\nBinds predictions into confidence buckets and computes actual\naccuracy per bucket. Well-calibrated model should have\naccuracy \u2248 confidence in each bucket.\n\nQuery params:\n    window: Number of recent predictions to analyze (default 30, max 90)",
-        "operationId": "get_calibration_api_ml_calibration__ticker__get",
+        "operationId": "get_api_ml_calibration_ticker",
         "parameters": [
           {
             "in": "path",
@@ -11233,7 +11233,7 @@
     "/api/ml/compare": {
       "get": {
         "description": "Compare ML model predictions across all 5 tickers.\n\nReturns a dict keyed by ticker with:\n  - model_id: active model identifier\n  - prediction_label: \"up\"|\"hold\"|\"down\"\n  - confidence: prediction confidence (0-1)\n  - sharpe_90d: Sharpe ratio from realized outcomes over last 90 days\n  - last_retrain_date: ISO date of last model retrain\n\nIf a ticker has no data, its value is null.\n\nQuery params:\n    tickers: Comma-separated list (default: SPY,QQQ,DIA,IWM,TLT)",
-        "operationId": "ml_compare_api_ml_compare_get",
+        "operationId": "get_api_ml_compare",
         "parameters": [
           {
             "description": "Comma-separated tickers (default: SPY,QQQ,DIA,IWM,TLT)",
@@ -11288,7 +11288,7 @@
     "/api/ml/dashboard": {
       "get": {
         "description": "Get the full ML model health dashboard.\n\nReturns predictions, rolling accuracy, drift status, and freshness\nfor all deployed models.",
-        "operationId": "ml_dashboard_api_ml_dashboard_get",
+        "operationId": "get_api_ml_dashboard",
         "responses": {
           "200": {
             "content": {
@@ -11313,7 +11313,7 @@
     "/api/ml/dashboard/{ticker}": {
       "get": {
         "description": "Full ML dashboard data for a ticker.\n\nReturns regime, ML prediction, combined signal, and supporting data.",
-        "operationId": "ml_dashboard_api_ml_dashboard__ticker__get",
+        "operationId": "get_api_ml_dashboard_ticker",
         "parameters": [
           {
             "in": "path",
@@ -11359,7 +11359,7 @@
     "/api/ml/drift/{ticker}": {
       "get": {
         "description": "Get the PSI drift report for a ticker's active model.",
-        "operationId": "drift_report_api_ml_drift__ticker__get",
+        "operationId": "get_api_ml_drift_ticker",
         "parameters": [
           {
             "in": "path",
@@ -11405,7 +11405,7 @@
     "/api/ml/ensemble": {
       "get": {
         "description": "Run inference on all registered models and return combined signal.\n\nCombines predictions from SPY, QQQ, TLT, IWM into a single ensemble signal.\nEach ticker is weighted by its model confidence.\n\nResponse:\n{\n    \"ensemble_signal\": \"BULLISH\" | \"BEARISH\" | \"MIXED\",\n    \"ensemble_confidence\": 0.72,\n    \"n_models\": 4,\n    \"n_bullish\": 3,\n    \"n_bearish\": 1,\n    \"tickers\": {\n        \"SPY\": {\"prediction\": \"UP\", \"confidence\": 0.68, \"probabilities\": {...}},\n        \"QQQ\": {\"prediction\": \"UP\", \"confidence\": 0.71, \"probabilities\": {...}},\n        ...\n    },\n    \"computed_at\": \"2026-05-24T...\"\n}",
-        "operationId": "ensemble_prediction_api_ml_ensemble_get",
+        "operationId": "get_api_ml_ensemble",
         "parameters": [
           {
             "description": "Comma-separated tickers",
@@ -11462,7 +11462,7 @@
     "/api/ml/ensemble/{ticker}": {
       "get": {
         "description": "Get ensemble toxicity score combining multiple detectors.\n\nCombines:\n  (a) 1D-CNN AE reconstruction error\n  (b) Statistical detector\n  (c) ML model prediction probability\n\nReturns: P(toxic flow), per-component scores, final verdict",
-        "operationId": "get_ensemble_api_ml_ensemble__ticker__get",
+        "operationId": "get_api_ml_ensemble_ticker",
         "parameters": [
           {
             "in": "path",
@@ -11518,7 +11518,7 @@
     "/api/ml/features/{ticker}": {
       "get": {
         "description": "Get latest computed features for a ticker.",
-        "operationId": "get_features_api_ml_features__ticker__get",
+        "operationId": "get_api_ml_features_ticker",
         "parameters": [
           {
             "in": "path",
@@ -11564,7 +11564,7 @@
     "/api/ml/health": {
       "get": {
         "description": "Get health assessment for all active ML models.",
-        "operationId": "ml_health_all_api_ml_health_get",
+        "operationId": "get_api_ml_health",
         "responses": {
           "200": {
             "content": {
@@ -11589,7 +11589,7 @@
     "/api/ml/health/{ticker}": {
       "get": {
         "description": "Get ML model health assessment for a ticker.",
-        "operationId": "ml_health_check_api_ml_health__ticker__get",
+        "operationId": "get_api_ml_health_ticker",
         "parameters": [
           {
             "in": "path",
@@ -11635,7 +11635,7 @@
     "/api/ml/model-info/{ticker}": {
       "get": {
         "description": "Get information about the trained model for a ticker.",
-        "operationId": "model_info_api_ml_model_info__ticker__get",
+        "operationId": "get_api_ml_model-info_ticker",
         "parameters": [
           {
             "in": "path",
@@ -11677,7 +11677,7 @@
     "/api/ml/models": {
       "get": {
         "description": "List all models, optionally filtered by ticker and/or status.",
-        "operationId": "list_models_api_ml_models_get",
+        "operationId": "get_api_ml_models",
         "parameters": [
           {
             "in": "query",
@@ -11746,7 +11746,7 @@
     "/api/ml/models/{ticker}": {
       "get": {
         "description": "Get detailed model info for a ticker.",
-        "operationId": "get_model_info_api_ml_models__ticker__get",
+        "operationId": "get_api_ml_models_ticker",
         "parameters": [
           {
             "in": "path",
@@ -11792,7 +11792,7 @@
     "/api/ml/outcome/accuracy": {
       "get": {
         "description": "Get prediction accuracy statistics.\n\nOverall, per-class, per-ticker, and calibration.",
-        "operationId": "get_accuracy_api_ml_outcome_accuracy_get",
+        "operationId": "get_api_ml_outcome_accuracy",
         "parameters": [
           {
             "in": "query",
@@ -11869,7 +11869,7 @@
     "/api/ml/outcome/batch-record": {
       "post": {
         "description": "Record predictions for multiple tickers (or all registered models).",
-        "operationId": "batch_record_api_ml_outcome_batch_record_post",
+        "operationId": "post_api_ml_outcome_batch-record",
         "parameters": [
           {
             "in": "query",
@@ -11921,7 +11921,7 @@
     "/api/ml/outcome/compute": {
       "post": {
         "description": "Fill in realized outcomes for past predictions.\n\nFor each prediction where outcome_date has passed:\n1. Fetch actual next-day return\n2. Compute realized 3-class outcome\n3. Mark accuracy",
-        "operationId": "compute_outcomes_api_ml_outcome_compute_post",
+        "operationId": "post_api_ml_outcome_compute",
         "responses": {
           "200": {
             "content": {
@@ -11942,7 +11942,7 @@
     "/api/ml/outcome/recent": {
       "get": {
         "description": "Get recent predictions, optionally filtered to those with outcomes.",
-        "operationId": "get_recent_api_ml_outcome_recent_get",
+        "operationId": "get_api_ml_outcome_recent",
         "parameters": [
           {
             "in": "query",
@@ -12013,7 +12013,7 @@
     "/api/ml/outcome/record": {
       "post": {
         "description": "Record a live prediction for outcome tracking.\n\nFetches current features, runs inference, stores prediction in MongoDB.\nThe outcome will be filled in later when next-day return is known.",
-        "operationId": "record_prediction_api_ml_outcome_record_post",
+        "operationId": "post_api_ml_outcome_record",
         "parameters": [
           {
             "description": "Ticker symbol",
@@ -12075,7 +12075,7 @@
     "/api/ml/predict/{ticker}": {
       "get": {
         "description": "Predict SPY direction using live data + trained model.\n\nFetches the current options chain, computes GEX/OI/IV features,\ncombines with technical indicators, and runs the trained model.\n\nResponse:\n{\n    \"ticker\": \"SPY\",\n    \"prediction\": \"UP\" | \"DOWN\",\n    \"confidence\": 0.65,\n    \"probabilities\": {\"down\": 0.35, \"up\": 0.65},\n    \"spot\": 528.50,\n    \"model_id\": \"SPY_gbm_v1.0\",\n    \"features\": {\n        \"chain_available\": true,\n        \"net_gex\": 1.2e9,\n        \"gex_regime\": \"positive\",\n        \"king_distance_pct\": -0.01,\n        \"rsi_14\": 62.3,\n        ...\n    },\n    \"chain_meta\": {...},\n    \"computed_at\": \"2026-05-23T...\"\n}",
-        "operationId": "predict_direction_api_ml_predict__ticker__get",
+        "operationId": "get_api_ml_predict_ticker",
         "parameters": [
           {
             "in": "path",
@@ -12127,7 +12127,7 @@
       },
       "post": {
         "description": "Get a live prediction for a ticker.\n\nDownloads recent market data, computes features in real-time,\nand runs inference using the pre-trained model.\n\nReturns prediction (2=UP, 1=HOLD, 0=DOWN), confidence, 3-way probabilities,\nand GEX regime signal.",
-        "operationId": "predict_api_ml_predict__ticker__post",
+        "operationId": "post_api_ml_predict_ticker",
         "parameters": [
           {
             "in": "path",
@@ -12173,7 +12173,7 @@
     "/api/ml/promote/{model_id}": {
       "post": {
         "description": "Promote a shadow model to active.",
-        "operationId": "promote_model_api_ml_promote__model_id__post",
+        "operationId": "post_api_ml_promote_model_id",
         "parameters": [
           {
             "in": "path",
@@ -12219,7 +12219,7 @@
     "/api/ml/regime/{ticker}": {
       "get": {
         "description": "Get the current volatility regime and anomaly threshold for a ticker.\n\nUses 30-day realized vol percentile:\n  - calm   (vol < 33rd pct)  \u2192 99th-pct reconstruction error threshold\n  - active (33rd\u201395th)       \u2192 95th-pct\n  - urgent (vol > 95th pct)  \u2192 90th-pct\n\nReturns: regime, vol_30d, vol_percentile, threshold_used, is_anomaly",
-        "operationId": "get_regime_api_ml_regime__ticker__get",
+        "operationId": "get_api_ml_regime_ticker",
         "parameters": [
           {
             "in": "path",
@@ -12265,7 +12265,7 @@
     "/api/ml/register": {
       "post": {
         "description": "Register a new model from training artifact paths.\n\nExpected body:\n    model_id: str          \u2014 Unique identifier (e.g. \"SPY_direction_v2.0\")\n    ticker: str            \u2014 Ticker symbol\n    artifact_path: str     \u2014 Absolute path to .joblib model file\n    feature_version: str   \u2014 Feature version (default: \"v1.0\")\n    metrics_summary: dict  \u2014 Keys: holdout_sharpe, beats_baselines, etc.\n    training_window: str   \u2014 Description of training window\n    status: str            \u2014 Initial status (default: \"shadow\")",
-        "operationId": "register_model_api_ml_register_post",
+        "operationId": "post_api_ml_register",
         "requestBody": {
           "content": {
             "application/json": {
@@ -12312,7 +12312,7 @@
     "/api/ml/reload/{ticker}": {
       "post": {
         "description": "Reload model from disk (useful after retraining).",
-        "operationId": "ml_reload_model_api_ml_reload__ticker__post",
+        "operationId": "post_api_ml_reload_ticker",
         "parameters": [
           {
             "in": "path",
@@ -12358,7 +12358,7 @@
     "/api/ml/retrain-status/{ticker}": {
       "get": {
         "description": "Get the retrain history for a ticker.",
-        "operationId": "retrain_status_api_ml_retrain_status__ticker__get",
+        "operationId": "get_api_ml_retrain-status_ticker",
         "parameters": [
           {
             "in": "path",
@@ -12404,7 +12404,7 @@
     "/api/ml/retrain/{ticker}": {
       "post": {
         "description": "Trigger an automated retraining job for a ticker.\n\nChecks drift first. Only triggers retraining if:\n  - Drift is detected\n  - No retrain is already in-flight\n  - Cooldown period (24h) has expired since last retrain",
-        "operationId": "trigger_retrain_api_ml_retrain__ticker__post",
+        "operationId": "post_api_ml_retrain_ticker",
         "parameters": [
           {
             "in": "path",
@@ -12450,7 +12450,7 @@
     "/api/ml/rolling-accuracy/{ticker}": {
       "get": {
         "description": "Get rolling prediction accuracy for a ticker over the given window.\n\nReturns accuracy, n_predictions, n_with_outcomes, avg_return_pct.",
-        "operationId": "rolling_accuracy_api_ml_rolling_accuracy__ticker__get",
+        "operationId": "get_api_ml_rolling-accuracy_ticker",
         "parameters": [
           {
             "in": "path",
@@ -12506,7 +12506,7 @@
     "/api/ml/train": {
       "post": {
         "description": "Trigger model retraining on latest data.\n\nRuns asynchronously \u2014 returns immediately with a job ID.",
-        "operationId": "trigger_training_api_ml_train_post",
+        "operationId": "post_api_ml_train",
         "parameters": [
           {
             "in": "query",
@@ -12573,7 +12573,7 @@
     "/api/movers": {
       "get": {
         "description": "Top Movers v2 (R7-01): rank-then-limit by completed-session % change.\n\nAsync end-to-end (no sync bulk download on the loop). Rows carry the\ncanonical change_pct plus legacy pct/change aliases. Explicit\nloading-independent states come from the payload status field\n(ok/partial/stale/unavailable), never from an empty list alone.",
-        "operationId": "movers_api_movers_get",
+        "operationId": "get_api_movers",
         "parameters": [
           {
             "description": "Max number of movers to return",
@@ -12631,7 +12631,7 @@
     "/api/news/article": {
       "get": {
         "description": "Follow a news URL and extract its body paragraphs.\n\nReturns ``{url, paragraphs, warnings}``. Empty paragraphs + warning\nindicates a paywall / malformed page / network failure.",
-        "operationId": "news_article_endpoint_api_news_article_get",
+        "operationId": "get_api_news_article",
         "parameters": [
           {
             "description": "Article URL to scrape (URL-encoded)",
@@ -12686,7 +12686,7 @@
     "/api/news/{ticker}": {
       "get": {
         "description": "Zero-cost Yahoo Finance headline scraper per ticker.\n\nReturns ``{ticker, headlines, source, warnings}``. Headlines are\n``[{ticker, title, url, publisher, scraped_at}]``. ``accumulate=true``\nalso writes today's snapshot into DuckDB before responding\n(standard cron pattern, mirrors /api/occ_volume shape).",
-        "operationId": "news_ticker_endpoint_api_news__ticker__get",
+        "operationId": "get_api_news_ticker",
         "parameters": [
           {
             "in": "path",
@@ -12749,7 +12749,7 @@
     "/api/news/{ticker}/history": {
       "get": {
         "description": "Multi-day news history + summary from DuckDB.\n\n``accumulate=true`` writes today's snapshot into DuckDB before\nresponding (standard cron pattern); default is pure read.\nMirrors /api/max_pain_drift + /api/insider shape.",
-        "operationId": "news_history_endpoint_api_news__ticker__history_get",
+        "operationId": "get_api_news_ticker_history",
         "parameters": [
           {
             "in": "path",
@@ -12812,7 +12812,7 @@
     "/api/nexus/comments": {
       "get": {
         "description": "Get comment thread. Optionally filtered by ticker.",
-        "operationId": "get_comments_api_nexus_comments_get",
+        "operationId": "get_api_nexus_comments",
         "parameters": [
           {
             "in": "query",
@@ -12852,7 +12852,7 @@
       },
       "post": {
         "description": "Post a new comment (scaffold \u2014 no auth yet).",
-        "operationId": "post_comment_api_nexus_comments_post",
+        "operationId": "post_api_nexus_comments",
         "requestBody": {
           "content": {
             "application/json": {
@@ -12895,7 +12895,7 @@
     "/api/nexus/leaderboard": {
       "get": {
         "description": "Get the social trading leaderboard.",
-        "operationId": "get_leaderboard_api_nexus_leaderboard_get",
+        "operationId": "get_api_nexus_leaderboard",
         "responses": {
           "200": {
             "content": {
@@ -12916,7 +12916,7 @@
     "/api/nexus/status": {
       "get": {
         "description": "Get Nexus status.",
-        "operationId": "nexus_status_api_nexus_status_get",
+        "operationId": "get_api_nexus_status",
         "responses": {
           "200": {
             "content": {
@@ -12937,7 +12937,7 @@
     "/api/nexus/waitlist": {
       "post": {
         "description": "Join the Nexus private beta waitlist.",
-        "operationId": "join_waitlist_api_nexus_waitlist_post",
+        "operationId": "post_api_nexus_waitlist",
         "requestBody": {
           "content": {
             "application/json": {
@@ -12979,7 +12979,7 @@
     },
     "/api/occ_volume/{ticker}": {
       "get": {
-        "operationId": "occ_volume_endpoint_api_occ_volume__ticker__get",
+        "operationId": "get_api_occ_volume_ticker",
         "parameters": [
           {
             "in": "path",
@@ -13040,7 +13040,7 @@
     "/api/opportunity/{ticker}": {
       "get": {
         "description": "Opportunity Engine \u2014 pure-sync to keep FastAPI's threadpool happy.",
-        "operationId": "opportunity_endpoint_api_opportunity__ticker__get",
+        "operationId": "get_api_opportunity_ticker",
         "parameters": [
           {
             "in": "path",
@@ -13187,7 +13187,7 @@
     "/api/paper-trading/attribution": {
       "get": {
         "description": "P&L attribution by ticker (Phase 6.5, 2026-09-05).\n\nQuery params:\n  tickers: optional comma-separated symbols to fetch live marks for\n    unrealized P&L (via the merged chain fetcher). Omitted tickers\n    report unrealized_pnl=null (unknown, never mark-to-model).",
-        "operationId": "pnl_attribution_api_paper_trading_attribution_get",
+        "operationId": "get_api_paper-trading_attribution",
         "parameters": [
           {
             "in": "query",
@@ -13235,7 +13235,7 @@
     "/api/paper-trading/estimate-cost": {
       "post": {
         "description": "Estimate execution cost before trading.",
-        "operationId": "estimate_execution_cost_api_paper_trading_estimate_cost_post",
+        "operationId": "post_api_paper-trading_estimate-cost",
         "requestBody": {
           "content": {
             "application/json": {
@@ -13277,7 +13277,7 @@
     "/api/paper-trading/execute": {
       "post": {
         "description": "Execute a paper trade immediately with simulated market impact.",
-        "operationId": "execute_paper_order_api_paper_trading_execute_post",
+        "operationId": "post_api_paper-trading_execute",
         "requestBody": {
           "content": {
             "application/json": {
@@ -13319,7 +13319,7 @@
     "/api/paper-trading/history": {
       "get": {
         "description": "Get trade history.",
-        "operationId": "trade_history_api_paper_trading_history_get",
+        "operationId": "get_api_paper-trading_history",
         "parameters": [
           {
             "in": "query",
@@ -13363,7 +13363,7 @@
     "/api/paper-trading/portfolio": {
       "get": {
         "description": "Get current portfolio summary.",
-        "operationId": "portfolio_summary_api_paper_trading_portfolio_get",
+        "operationId": "get_api_paper-trading_portfolio",
         "responses": {
           "200": {
             "content": {
@@ -13383,7 +13383,7 @@
     "/api/paper-trading/status": {
       "get": {
         "description": "Get paper trading engine status.",
-        "operationId": "paper_trading_status_api_paper_trading_status_get",
+        "operationId": "get_api_paper-trading_status",
         "responses": {
           "200": {
             "content": {
@@ -13403,7 +13403,7 @@
     "/api/paper-trading/submit": {
       "post": {
         "description": "Submit a paper trade order.\n\nRequest body:\n{\n    \"symbol\": \"SPY\",\n    \"side\": \"buy\",\n    \"quantity\": 10,\n    \"order_type\": \"almgren_chriss\",\n    \"urgency\": 0.5,\n    \"limit_price\": 0.0\n}",
-        "operationId": "submit_paper_order_api_paper_trading_submit_post",
+        "operationId": "post_api_paper-trading_submit",
         "requestBody": {
           "content": {
             "application/json": {
@@ -13444,7 +13444,7 @@
     },
     "/api/patterns/glossary": {
       "get": {
-        "operationId": "patterns_glossary_api_patterns_glossary_get",
+        "operationId": "get_api_patterns_glossary",
         "responses": {
           "200": {
             "content": {
@@ -13463,7 +13463,7 @@
     },
     "/api/performance/stats": {
       "get": {
-        "operationId": "performance_stats_api_performance_stats_get",
+        "operationId": "get_api_performance_stats",
         "responses": {
           "200": {
             "content": {
@@ -13482,7 +13482,7 @@
     },
     "/api/portfolio/{name}": {
       "get": {
-        "operationId": "get_portfolio_api_portfolio__name__get",
+        "operationId": "get_api_portfolio_name",
         "parameters": [
           {
             "in": "path",
@@ -13542,7 +13542,7 @@
     },
     "/api/portfolio/{name}/hedge": {
       "post": {
-        "operationId": "hedge_api_portfolio__name__hedge_post",
+        "operationId": "post_api_portfolio_name_hedge",
         "parameters": [
           {
             "in": "path",
@@ -13594,7 +13594,7 @@
     },
     "/api/portfolio/{name}/position": {
       "post": {
-        "operationId": "add_position_api_portfolio__name__position_post",
+        "operationId": "post_api_portfolio_name_position",
         "parameters": [
           {
             "in": "path",
@@ -13646,7 +13646,7 @@
     },
     "/api/portfolio/{name}/position/{index}": {
       "delete": {
-        "operationId": "remove_position_api_portfolio__name__position__index__delete",
+        "operationId": "delete_api_portfolio_name_position_index",
         "parameters": [
           {
             "in": "path",
@@ -13696,7 +13696,7 @@
     },
     "/api/portfolio/{name}/scenario": {
       "get": {
-        "operationId": "scenario_api_portfolio__name__scenario_get",
+        "operationId": "get_api_portfolio_name_scenario",
         "parameters": [
           {
             "in": "path",
@@ -13756,7 +13756,7 @@
     },
     "/api/position-size": {
       "post": {
-        "operationId": "position_size_api_position_size_post",
+        "operationId": "post_api_position-size",
         "parameters": [
           {
             "in": "query",
@@ -13828,7 +13828,7 @@
     "/api/position-sizing": {
       "get": {
         "description": "Calculate optimal position size using fractional Kelly criterion.\n\nQuery parameters:\n    account:        Total account equity (> 0)\n    win_rate:       Historical win rate, 0.0 to 1.0\n    payoff:         Average win divided by average loss (> 0)\n    kelly_fraction: Kelly fraction multiplier, default 0.5 (half-Kelly)\n    contract_value: Dollar value per contract for max_contracts calc\n\nReturns JSON:\n    kelly_fraction:     Raw Kelly fraction (before fractional scaling)\n    adjusted_fraction:  After Kelly multiplier (before clamp)\n    kelly_pct:          Final % of account to allocate (clamped to 0.25)\n    dollar_allocation:  Dollar amount to allocate\n    max_contracts:      Maximum whole contracts\n    capped:             Whether the raw value exceeded the 25% cap",
-        "operationId": "position_sizing_api_position_sizing_get",
+        "operationId": "get_api_position-sizing",
         "parameters": [
           {
             "description": "Account size in dollars",
@@ -13924,7 +13924,7 @@
     "/api/predictive/alerts": {
       "get": {
         "description": "Return active predictive alerts (metrics forecast to breach).",
-        "operationId": "get_predictive_alerts_api_predictive_alerts_get",
+        "operationId": "get_api_predictive_alerts",
         "responses": {
           "200": {
             "content": {
@@ -13945,7 +13945,7 @@
     "/api/predictive/chaos": {
       "get": {
         "description": "List all available chaos scenarios.",
-        "operationId": "list_chaos_scenarios_api_predictive_chaos_get",
+        "operationId": "get_api_predictive_chaos",
         "responses": {
           "200": {
             "content": {
@@ -13966,7 +13966,7 @@
     "/api/predictive/chaos/run": {
       "post": {
         "description": "Run a chaos scenario simulation against current metrics.",
-        "operationId": "run_chaos_scenario_api_predictive_chaos_run_post",
+        "operationId": "post_api_predictive_chaos_run",
         "parameters": [
           {
             "in": "query",
@@ -14008,7 +14008,7 @@
     "/api/predictive/forecasts": {
       "get": {
         "description": "Return current forecasts for all tracked metrics.",
-        "operationId": "get_forecasts_api_predictive_forecasts_get",
+        "operationId": "get_api_predictive_forecasts",
         "responses": {
           "200": {
             "content": {
@@ -14029,7 +14029,7 @@
     "/api/preferences/": {
       "get": {
         "description": "Get all user preferences.",
-        "operationId": "get_preferences_api_preferences__get",
+        "operationId": "get_api_preferences",
         "responses": {
           "200": {
             "content": {
@@ -14048,7 +14048,7 @@
       },
       "post": {
         "description": "Set arbitrary preferences.",
-        "operationId": "set_preferences_api_preferences__post",
+        "operationId": "post_api_preferences",
         "requestBody": {
           "content": {
             "application/json": {
@@ -14091,7 +14091,7 @@
     "/api/preferences/theme": {
       "post": {
         "description": "Set theme preference.",
-        "operationId": "set_theme_api_preferences_theme_post",
+        "operationId": "post_api_preferences_theme",
         "requestBody": {
           "content": {
             "application/json": {
@@ -14135,7 +14135,7 @@
     },
     "/api/pressure-cloud/{ticker}": {
       "get": {
-        "operationId": "pressure_cloud_api_pressure_cloud__ticker__get",
+        "operationId": "get_api_pressure-cloud_ticker",
         "parameters": [
           {
             "in": "path",
@@ -14200,7 +14200,7 @@
     "/api/provider-health": {
       "get": {
         "description": "Return data provider health from the DataProviderMonitor.\n\nExposes rolling success rates, window calls, seconds since last success,\nand active alerts per provider. Useful for ops dashboards and the deploy\nrunbook's yfinance-429 fallback check.",
-        "operationId": "provider_health_api_provider_health_get",
+        "operationId": "get_api_provider-health",
         "responses": {
           "200": {
             "content": {
@@ -14217,7 +14217,7 @@
     "/api/public/account": {
       "get": {
         "description": "Return account-level metadata: id, status, buying power, margin, flags.",
-        "operationId": "get_account_api_public_account_get",
+        "operationId": "get_api_public_account",
         "responses": {
           "200": {
             "content": {
@@ -14242,7 +14242,7 @@
     "/api/public/bars/{ticker}": {
       "get": {
         "description": "Return OHLCV price bars from Public API for a given ticker.\n\nRows use floww's canonical bar shape (date/open/high/low/close/volume) plus a\n'session' label \u2014 the same shape routes/backtest.py and the underlying_bars\nstore already read.\n\nExtended-hours bars are EXCLUDED by default. Mixing them into the same series\nwould let an intraday request near the close return extended-hours prints that\nlook identical to regular-session bars.",
-        "operationId": "get_public_bars_api_public_bars__ticker__get",
+        "operationId": "get_api_public_bars_ticker",
         "parameters": [
           {
             "in": "path",
@@ -14323,7 +14323,7 @@
     "/api/public/chain/{ticker}": {
       "get": {
         "description": "Return options chain data from Public API for a given ticker.\n\nUses PUBLIC_API_KEY to authenticate against the Public.com Trading API.\nReturns the same shape as /api/chain but with data_source=\"public_api\".",
-        "operationId": "get_public_chain_api_public_chain__ticker__get",
+        "operationId": "get_api_public_chain_ticker",
         "parameters": [
           {
             "in": "path",
@@ -14397,7 +14397,7 @@
     "/api/public/expirations/{ticker}": {
       "get": {
         "description": "Listed option expirations from Public API.",
-        "operationId": "get_public_expirations_api_public_expirations__ticker__get",
+        "operationId": "get_api_public_expirations_ticker",
         "parameters": [
           {
             "in": "path",
@@ -14439,7 +14439,7 @@
     "/api/public/history/{ticker}": {
       "get": {
         "description": "OHLCV history from Public API (replaces alpha historical).",
-        "operationId": "get_public_history_api_public_history__ticker__get",
+        "operationId": "get_api_public_history_ticker",
         "parameters": [
           {
             "in": "path",
@@ -14493,7 +14493,7 @@
     "/api/public/order": {
       "post": {
         "description": "Place a single-leg order via Public.com.\n\nBody:\n    symbol:             OSI symbol for options (SPY260904C00760000), ticker for equity\n    side:               BUY or SELL\n    order_type:         MARKET, LIMIT, STOP, STOP_LIMIT\n    quantity:           number of contracts/shares\n    limit_price:        required for LIMIT/STOP_LIMIT\n    stop_price:         required for STOP/STOP_LIMIT\n    time_in_force:      DAY, GTC, etc.\n    instrument_type:    EQUITY, OPTION, CRYPTO, BOND\n    equity_market_session: optional for EQUITY",
-        "operationId": "place_order_api_public_order_post",
+        "operationId": "post_api_public_order",
         "requestBody": {
           "content": {
             "application/json": {
@@ -14540,7 +14540,7 @@
     "/api/public/order/{order_id}/cancel": {
       "post": {
         "description": "Cancel an open order by ID. Uses DELETE under the hood (Public API\naccepts DELETE to .../order/{id}; POST to .../cancel returns 404).",
-        "operationId": "cancel_order_api_public_order__order_id__cancel_post",
+        "operationId": "post_api_public_order_order_id_cancel",
         "parameters": [
           {
             "in": "path",
@@ -14586,7 +14586,7 @@
     "/api/public/orders": {
       "get": {
         "description": "Return open + recent filled orders from Public.com.",
-        "operationId": "get_orders_api_public_orders_get",
+        "operationId": "get_api_public_orders",
         "responses": {
           "200": {
             "content": {
@@ -14611,7 +14611,7 @@
     "/api/public/portfolio": {
       "get": {
         "description": "Return the authenticated Public.com account: portfolio positions,\nbuying power, equity, cash, and account metadata.\n\nReturns 502 when PUBLIC_API_KEY is not set, invalid, or API is unreachable.",
-        "operationId": "get_portfolio_api_public_portfolio_get",
+        "operationId": "get_api_public_portfolio",
         "responses": {
           "200": {
             "content": {
@@ -14636,7 +14636,7 @@
     "/api/public/portfolio/raw": {
       "get": {
         "description": "Return the raw authenticated Public.com paper-trading portfolio.\n\nNOTE: the canonical UI-facing portfolio (flattened positions, money\nfields) lives at GET /api/public/portfolio (routes/public_brokerage.py),\nwhich takes precedence on that path. This raw view is kept for\ndebugging/inspection.",
-        "operationId": "get_public_portfolio_api_public_portfolio_raw_get",
+        "operationId": "get_api_public_portfolio_raw",
         "responses": {
           "200": {
             "content": {
@@ -14657,7 +14657,7 @@
     "/api/public/quotes/{ticker}": {
       "get": {
         "description": "Return live quote data from Public API for a given ticker.\n\n``ok`` / ``ticker`` / ``spot`` / ``data_source`` keep their original names and\nmeanings (frontend/src/lib/publicApi.js reads them); the top-of-book fields\nare additive.",
-        "operationId": "get_public_quotes_api_public_quotes__ticker__get",
+        "operationId": "get_api_public_quotes_ticker",
         "parameters": [
           {
             "in": "path",
@@ -14699,7 +14699,7 @@
     "/api/public/technical/{ticker}/{indicator}": {
       "get": {
         "description": "RSI/SMA/EMA/MACD computed locally from Public API bars (replaces alpha technical).",
-        "operationId": "get_public_technical_api_public_technical__ticker___indicator__get",
+        "operationId": "get_api_public_technical_ticker_indicator",
         "parameters": [
           {
             "in": "path",
@@ -14772,7 +14772,7 @@
     "/api/quant/full": {
       "get": {
         "description": "Return full quant signal data with live market data.\n\nCalls build_heatmap to get live spot, contracts, GEX totals, and IV surface.\nFalls back to empty fields if heatmap is unavailable.",
-        "operationId": "quant_full_api_quant_full_get",
+        "operationId": "get_api_quant_full",
         "parameters": [
           {
             "description": "Ticker to evaluate signals for",
@@ -14835,7 +14835,7 @@
     "/api/quant/signals": {
       "get": {
         "description": "Return the catalog of available quant signals and their current values.\n\nEach signal entry includes:\n    - name: canonical signal name\n    - source: quant service that produces it\n    - value: current numeric or categorical value (empty if unavailable)\n    - unit: human-readable unit\n    - description: one-line explanation",
-        "operationId": "quant_signal_catalog_api_quant_signals_get",
+        "operationId": "get_api_quant_signals",
         "parameters": [
           {
             "description": "Ticker to evaluate signals for",
@@ -14883,7 +14883,7 @@
     },
     "/api/regime-stats/{ticker}": {
       "get": {
-        "operationId": "regime_stats_api_regime_stats__ticker__get",
+        "operationId": "get_api_regime-stats_ticker",
         "parameters": [
           {
             "in": "path",
@@ -14935,7 +14935,7 @@
     },
     "/api/regime/{ticker}": {
       "get": {
-        "operationId": "regime_api_regime__ticker__get",
+        "operationId": "get_api_regime_ticker",
         "parameters": [
           {
             "in": "path",
@@ -15000,7 +15000,7 @@
     "/api/regime_persistence/{ticker}": {
       "get": {
         "description": "Regime-Persistence classifier (steal-list #8).\n\nReturns the canonical classifier schema::\n\n    {\n        ticker, regime (None | persistent_positive | persistent_negative\n                        | transitional | low_conviction),\n        sign_persistence_pct, flip_count, magnitude_conviction,\n        coefficient_of_variation, n_days_covered, window_label, warnings,\n    }\n\nThe ``warnings`` field surfaces DB hiccups and missing-data\nconditions. ``regime=None`` indicates either: no gex_total history\nfound for the ticker in the window, OR that the window sits below\nthe absolute noise floor (NOISE_FLOOR_ABS=1.0 in\nservices.regime_persistence).",
-        "operationId": "regime_persistence_endpoint_api_regime_persistence__ticker__get",
+        "operationId": "get_api_regime_persistence_ticker",
         "parameters": [
           {
             "in": "path",
@@ -15059,7 +15059,7 @@
     "/api/replay/start": {
       "post": {
         "description": "Start replaying historical data from DuckDB/Mongo.",
-        "operationId": "start_replay_api_replay_start_post",
+        "operationId": "post_api_replay_start",
         "parameters": [
           {
             "description": "ISO start datetime",
@@ -15126,7 +15126,7 @@
     "/api/replay/status": {
       "get": {
         "description": "Get current replay status.",
-        "operationId": "replay_status_api_replay_status_get",
+        "operationId": "get_api_replay_status",
         "responses": {
           "200": {
             "content": {
@@ -15147,7 +15147,7 @@
     "/api/replay/stop": {
       "post": {
         "description": "Stop the current replay.",
-        "operationId": "stop_replay_api_replay_stop_post",
+        "operationId": "post_api_replay_stop",
         "responses": {
           "200": {
             "content": {
@@ -15168,7 +15168,7 @@
     "/api/retail-flow/{ticker}": {
       "get": {
         "description": "Return the latest retail flow snapshot for a ticker.",
-        "operationId": "get_retail_flow_snapshot_api_retail_flow__ticker__get",
+        "operationId": "get_api_retail-flow_ticker",
         "parameters": [
           {
             "in": "path",
@@ -15210,7 +15210,7 @@
     "/api/retail-flow/{ticker}/compute": {
       "post": {
         "description": "Compute retail flow metrics from raw option chain data.\n\nArgs:\n    ticker: Ticker symbol.\n    call_volumes: Dict mapping expiry -> total call volume.\n    put_volumes: Dict mapping expiry -> total put volume.\n    current_oi: Dict mapping strike -> current open interest.\n    previous_oi: Dict mapping strike -> previous-day open interest.\n    iv_skew: Put IV minus Call IV (scalar, e.g. 0.02 = put IV 2pts higher).\n    expiries: Optional explicit expiry list.\n\nReturns:\n    Full retail flow snapshot with CPR, OI change, and composite score.",
-        "operationId": "compute_retail_flow_api_retail_flow__ticker__compute_post",
+        "operationId": "post_api_retail-flow_ticker_compute",
         "parameters": [
           {
             "in": "path",
@@ -15272,7 +15272,7 @@
     "/api/retail-flow/{ticker}/cpr": {
       "get": {
         "description": "Return the latest CPR values per expiry.",
-        "operationId": "get_cpr_api_retail_flow__ticker__cpr_get",
+        "operationId": "get_api_retail-flow_ticker_cpr",
         "parameters": [
           {
             "in": "path",
@@ -15314,7 +15314,7 @@
     "/api/retail-flow/{ticker}/oi-change": {
       "get": {
         "description": "Return the latest OI change data per strike.",
-        "operationId": "get_oi_change_api_retail_flow__ticker__oi_change_get",
+        "operationId": "get_api_retail-flow_ticker_oi-change",
         "parameters": [
           {
             "in": "path",
@@ -15356,7 +15356,7 @@
     "/api/retail-flow/{ticker}/score": {
       "get": {
         "description": "Return the composite retail flow score.",
-        "operationId": "get_flow_score_api_retail_flow__ticker__score_get",
+        "operationId": "get_api_retail-flow_ticker_score",
         "parameters": [
           {
             "in": "path",
@@ -15398,7 +15398,7 @@
     "/api/rnd/{ticker}": {
       "get": {
         "description": "Breeden\u2013Litzenberger risk-neutral density at one option expiry.\n\nReads the chain via ``_load_chain`` (which returns spot + calls + puts\n+ chosen_expiry in a single structured tuple, the same helper strike_cone\nuses for its IV inputs). Filters to calls-only (the BL formula is\ncall-side) and forwards to ``services.risk_neutral_density.compute_rnd_pdf``\nfor the math.\n\nThe route returns the full documented schema:\n{ticker, expiry, spot, T_years, r, n_strikes_used, n_grid_points,\n x_grid, pdf, cdf, expected_price, expected_move_pct, median, mode,\n tail_probs={p_below_95|98pct_spot, p_above_102|105pct_spot},\n warnings, method=cubic_spline_2nd_derivative|central_diff}.\n\nDefensive degrade: any upstream failure returns a well-formed empty\ndict so the dashboard never breaks on a cold cache.\n\nRouting hygiene: ``expiry_index`` flows through to ``_load_chain``\nverbatim. The upstream prior bug was a forced ``min_dte=1`` override\nthat silently set ``cap=1`` and discarded the user's index \u2014 that\nis now removed, and the documented Query contract (0 = 0DTE, 1 =\nfirst non-0DTE, 2+ longer-dated) is honored as-is.",
-        "operationId": "risk_neutral_density_endpoint_api_rnd__ticker__get",
+        "operationId": "get_api_rnd_ticker",
         "parameters": [
           {
             "in": "path",
@@ -15453,7 +15453,7 @@
     "/api/rnd/{ticker}/{expiry}": {
       "get": {
         "description": "Steal-list #4 path-style alias \u2014 /api/rnd/{ticker}/{expiry}.\n\nISO expiry date in the path (e.g. /api/rnd/SPY/2026-07-19) maps\nto the existing /api/rnd/{ticker}?expiry_index=N contract here.\nIf the requested ISO isn't in ``yt.options`` (off-market-week gap,\npost-expiry fetch) fall back to expiry_index=1 (first non-0DTE)\nso the dashboard never 500s on cold cache \u2014 mirrors the parent\nroute's defensive pattern.",
-        "operationId": "risk_neutral_density_path_endpoint_api_rnd__ticker___expiry__get",
+        "operationId": "get_api_rnd_ticker_expiry",
         "parameters": [
           {
             "in": "path",
@@ -15503,7 +15503,7 @@
     "/api/screener/income": {
       "get": {
         "description": "Wheel-Income Screener (steal-list rank #3) \u2014 canonical route.\n\nBackward-compat note: a sibling ``/api/wheel_income/{ticker}``\nroute is mounted AFTER this one to support legacy callers/manual\ncurl habits \u2014 both routes share the ``_run_income_screener``\nhelper below, so behavior is identical apart from the ticker\nargument name (``symbol`` vs ``ticker``).",
-        "operationId": "screener_income_api_screener_income_get",
+        "operationId": "get_api_screener_income",
         "parameters": [
           {
             "in": "query",
@@ -15620,7 +15620,7 @@
     "/api/sentiment": {
       "get": {
         "description": "Single-text sentiment scorer via VADER+TextBlob agreement gate.\n\nReturns ``{polarity, subjectivity, label, available}``. For per-ticker\nbulk-aggregate over many headlines/tweets, callers (e.g.\nsocial_flow_pipeline.py) should call\n``services.sentiment.aggregate_sentiment(...)`` directly. The single-text\nGET endpoint exists for ad-hoc UI flows and integration tests.",
-        "operationId": "sentiment_route_api_sentiment_get",
+        "operationId": "get_api_sentiment",
         "parameters": [
           {
             "description": "Single text to score (URL-encode). Empty \u21d2 neutral no-op.",
@@ -15668,7 +15668,7 @@
     "/api/social/flow/{ticker}": {
       "get": {
         "description": "Get options flow signals for a ticker.",
-        "operationId": "get_flow_api_social_flow__ticker__get",
+        "operationId": "get_api_social_flow_ticker",
         "parameters": [
           {
             "in": "path",
@@ -15720,7 +15720,7 @@
     "/api/social/report/{ticker}": {
       "get": {
         "description": "Get combined social + flow + GEX report for a ticker.",
-        "operationId": "get_full_report_api_social_report__ticker__get",
+        "operationId": "get_api_social_report_ticker",
         "parameters": [
           {
             "in": "path",
@@ -15762,7 +15762,7 @@
     "/api/social/sentiment/{ticker}": {
       "get": {
         "description": "Get social sentiment for a ticker.\n\nSteal-list deferred (a) ship 2026-07-15: now reports\n``aggregate_sentiment_available`` (true iff at least one VADER / TextBlob\nlibrary is importable) and ``stale_as_of`` (the on-disk mtime if the\ncache file lacks a ``generated_at``). When the cache file exists we\npass the cached ``sentiment`` dict through verbatim \u2014 we CANNOT\nre-score without the raw tweet corpus that produced it, so the cache\nshape is the canonical \"as-of\" snapshot.",
-        "operationId": "get_sentiment_api_social_sentiment__ticker__get",
+        "operationId": "get_api_social_sentiment_ticker",
         "parameters": [
           {
             "in": "path",
@@ -15804,7 +15804,7 @@
     "/api/social/status": {
       "get": {
         "description": "Get status of the social flow pipeline.",
-        "operationId": "get_pipeline_status_api_social_status_get",
+        "operationId": "get_api_social_status",
         "responses": {
           "200": {
             "content": {
@@ -15825,7 +15825,7 @@
     "/api/solstice/attribute/{ticker}": {
       "get": {
         "description": "Coarse wall-level change between the last two snapshots (T09).\n\nDescriptive comparison only \u2014 not the spot/IV/time/OI counterfactual.",
-        "operationId": "attribute_api_solstice_attribute__ticker__get",
+        "operationId": "get_api_solstice_attribute_ticker",
         "parameters": [
           {
             "in": "path",
@@ -15881,7 +15881,7 @@
     "/api/solstice/capability": {
       "get": {
         "description": "27-operation registry + measured manifest (T18/T26, R5-F unified).\n\nRegistry (documented), in-memory measured manifest, and persisted\ncapability observations are returned together so documented support can\nbe reconciled against observed behavior in one place.",
-        "operationId": "capability_api_solstice_capability_get",
+        "operationId": "get_api_solstice_capability",
         "responses": {
           "200": {
             "content": {
@@ -15906,7 +15906,7 @@
     "/api/solstice/evidence/{ticker}": {
       "get": {
         "description": "Read-only evidence packet for the selected wall (T21, P02/R4-03).\n\nTwo coherent modes, never a rebuilt different scope:\n- snapshot_id given: packet is built from the RECORDED snapshot\n  (available-at replay \u2014 the exact scope the UI displayed).\n- otherwise: rebuilds with the FULL scope (dte/scalp included) and the\n  identical query-key format as /snapshot, so IDs stay comparable.",
-        "operationId": "evidence_api_solstice_evidence__ticker__get",
+        "operationId": "get_api_solstice_evidence_ticker",
         "parameters": [
           {
             "in": "path",
@@ -16035,7 +16035,7 @@
     "/api/solstice/manifest/{ticker}": {
       "get": {
         "description": "Session completeness manifest for ticker/day (T09/T23 guided replay).\n\nR5-F: the expected capture cadence is explicit so gap detection runs;\nwithout it every manifest would report snapshots without gaps.",
-        "operationId": "manifest_api_solstice_manifest__ticker__get",
+        "operationId": "get_api_solstice_manifest_ticker",
         "parameters": [
           {
             "in": "path",
@@ -16102,7 +16102,7 @@
     "/api/solstice/outcomes/close": {
       "post": {
         "description": "Run the deterministic outcome job over open decisions (R6-5/B11).\n\nResearch-write endpoint: appends idempotent outcome rows only \u2014 never\norders, positions, or snapshots. The caller supplies price paths per\nopen decision id (the scheduled price-path recorder is a commissioning\nitem; see COMMISSIONING_PACKAGE.md). Decisions without a complete\nepisode stay pending (NEED_EPISODE) and are never labeled.",
-        "operationId": "outcomes_close_api_solstice_outcomes_close_post",
+        "operationId": "post_api_solstice_outcomes_close",
         "requestBody": {
           "content": {
             "application/json": {
@@ -16147,7 +16147,7 @@
     "/api/solstice/patterns/{ticker}": {
       "get": {
         "description": "Numeric pattern records (T16, P08/R4-03: same scope + queryKey).",
-        "operationId": "patterns_api_solstice_patterns__ticker__get",
+        "operationId": "get_api_solstice_patterns_ticker",
         "parameters": [
           {
             "in": "path",
@@ -16244,7 +16244,7 @@
     "/api/solstice/recorder_health": {
       "get": {
         "description": "Truthful recorder health (R5-F): durable mode, tables, latest write.\n\nMemory fallback keeps analytics running but never claims durable capture.\nCommissioning remains a separate final authorization.",
-        "operationId": "recorder_health_api_solstice_recorder_health_get",
+        "operationId": "get_api_solstice_recorder_health",
         "responses": {
           "200": {
             "content": {
@@ -16269,7 +16269,7 @@
     "/api/solstice/regime/{ticker}": {
       "get": {
         "description": "Corrected gamma regime + roots (T15). Sign never permits direction.",
-        "operationId": "regime_api_solstice_regime__ticker__get",
+        "operationId": "get_api_solstice_regime_ticker",
         "parameters": [
           {
             "in": "path",
@@ -16327,7 +16327,7 @@
     "/api/solstice/replay/{snapshot_id}": {
       "get": {
         "description": "Available-at replay of a recorded snapshot (T09).",
-        "operationId": "replay_api_solstice_replay__snapshot_id__get",
+        "operationId": "get_api_solstice_replay_snapshot_id",
         "parameters": [
           {
             "in": "path",
@@ -16373,7 +16373,7 @@
     "/api/solstice/scout/{ticker}": {
       "get": {
         "description": "Read-only 0DTE scout with rejection reasons (T10, R5-D strict context).",
-        "operationId": "scout_api_solstice_scout__ticker__get",
+        "operationId": "get_api_solstice_scout_ticker",
         "parameters": [
           {
             "in": "path",
@@ -16441,7 +16441,7 @@
     "/api/solstice/snapshot/{ticker}": {
       "get": {
         "description": "Canonical immutable snapshot (HeatmapSnapshotV2) + legacy payload.",
-        "operationId": "snapshot_api_solstice_snapshot__ticker__get",
+        "operationId": "get_api_solstice_snapshot_ticker",
         "parameters": [
           {
             "in": "path",
@@ -16538,7 +16538,7 @@
     "/api/solstice/vanna/{ticker}": {
       "get": {
         "description": "Vanna/Vomma views + expiry-removal scenario (T17).",
-        "operationId": "vanna_api_solstice_vanna__ticker__get",
+        "operationId": "get_api_solstice_vanna_ticker",
         "parameters": [
           {
             "in": "path",
@@ -16596,7 +16596,7 @@
     "/api/solstice/walls/{ticker}": {
       "get": {
         "description": "Wall registry for the current snapshot (T05, P08/R4-03).\n\nSame full scope (expiries/mode/dte/scalp) and identical query-key format\nas /snapshot; scoped wall IDs (symbol+formula) so grid/inspector/AI/\nrecorder resolve one wall.",
-        "operationId": "walls_api_solstice_walls__ticker__get",
+        "operationId": "get_api_solstice_walls_ticker",
         "parameters": [
           {
             "in": "path",
@@ -16693,7 +16693,7 @@
     "/api/solstice/{ticker}/decisions": {
       "get": {
         "description": "List saved scenario decisions for a ticker (R8-04 review journal).\n\nReturns decision rows with frozen features, candidate quotes, and\nany attached outcome labels. Read-only \u2014 never mutates storage.",
-        "operationId": "decisions_list_api_solstice__ticker__decisions_get",
+        "operationId": "get_api_solstice_ticker_decisions",
         "parameters": [
           {
             "in": "path",
@@ -16767,7 +16767,7 @@
     "/api/solstice/{ticker}/decisions/{decision_id}/review": {
       "post": {
         "description": "Save a review state on a decision (R8-04).\n\nStates: pending | reviewed | waiting | skipped.\nPersists through the real route/store; never falls back to\ntransient memory and claims durability.",
-        "operationId": "save_review_api_solstice__ticker__decisions__decision_id__review_post",
+        "operationId": "post_api_solstice_ticker_decisions_decision_id_review",
         "parameters": [
           {
             "in": "path",
@@ -16831,7 +16831,7 @@
     },
     "/api/spot/{ticker}": {
       "get": {
-        "operationId": "spot_api_spot__ticker__get",
+        "operationId": "get_api_spot_ticker",
         "parameters": [
           {
             "in": "path",
@@ -16872,7 +16872,7 @@
     "/api/strategy/evaluate": {
       "post": {
         "description": "Evaluate a multi-leg option strategy.\n\nBody shape::\n\n    {\n        \"ticker\": \"SPY\",          # informational; for logging\n        \"spot\": 100.0,             # underlying price at evaluation\n        \"legs\": [                  # list of leg dicts\n            {\"side\": \"buy\"/\"sell\", \"qty\": int,\n             \"option_type\": \"call\"/\"put\", \"strike\": float,\n             \"expiry\": \"YYYY-MM-DD\", \"premium\": float,\n             \"iv\": float | None}\n        ],\n        \"n_grid_points\": 150,      # optional spot-grid resolution\n        \"today\": \"YYYY-MM-DD\",     # optional anchor today (ISO)\n        \"expiry\": \"YYYY-MM-DD\",    # optional anchor expiry (ISO)\n    }\n\nReturns the ``evaluate_strategy`` dict \u2014 structure label, payoff\ngrid, breakevens, PoP, expected P&L, VaR/ES, aggregate greeks.\n\nInvalid leg shapes degrade gracefully \u2014 the service filters\ninvalid legs (zero qty / negative strike / bad expiry) out of\nthe calculation, populates the ``warnings`` list with the\nskipped message, and continues with the surviving legs (or\nreturns empty grids if none survive). No HTTP 400 mapping is\nneeded; the route mirrors the service's defensive pattern.",
-        "operationId": "strategy_evaluate_endpoint_api_strategy_evaluate_post",
+        "operationId": "post_api_strategy_evaluate",
         "requestBody": {
           "content": {
             "application/json": {
@@ -16914,7 +16914,7 @@
     "/api/strike_cone/{ticker}": {
       "get": {
         "description": "Strike cone \u2014 strikes at target prob / target delta levels.\n\n``target_probs`` and ``target_deltas`` accept comma-separated lists\n(e.g. \"0.16,0.30,0.70,0.84\" / \"0.16,0.30\"). Out-of-range tokens\nare silently dropped by the service.",
-        "operationId": "strike_cone_endpoint_api_strike_cone__ticker__get",
+        "operationId": "get_api_strike_cone_ticker",
         "parameters": [
           {
             "in": "path",
@@ -16984,7 +16984,7 @@
     },
     "/api/surface/{ticker}": {
       "get": {
-        "operationId": "surface_api_surface__ticker__get",
+        "operationId": "get_api_surface_ticker",
         "parameters": [
           {
             "in": "path",
@@ -17049,7 +17049,7 @@
     "/api/tick-cache/{ticker}": {
       "get": {
         "description": "Lightweight endpoint for the offline-first data layer.\nReturns the latest tick from DuckDB (fast, always available).\nFrontend uses this as fallback when live endpoints fail.",
-        "operationId": "tick_cache_api_tick_cache__ticker__get",
+        "operationId": "get_api_tick-cache_ticker",
         "parameters": [
           {
             "in": "path",
@@ -17089,7 +17089,7 @@
     },
     "/api/tickers": {
       "get": {
-        "operationId": "list_tickers_api_tickers_get",
+        "operationId": "get_api_tickers",
         "responses": {
           "200": {
             "content": {
@@ -17106,7 +17106,7 @@
     "/api/tickers/all": {
       "get": {
         "description": "Full Finnhub symbol universe, paged (T2).\n\nReturns the sorted deduped symbol list; the frontend pages through it\n(``has_more``) to build the full scroller universe instead of the\nfeatured-only sets above. Cached in memory for 30 minutes;\n``?refresh=true`` forces a fresh fetch. Empty list when Finnhub is not\nconfigured (callers fall back to the featured sets).",
-        "operationId": "list_all_tickers_api_tickers_all_get",
+        "operationId": "get_api_tickers_all",
         "parameters": [
           {
             "in": "query",
@@ -17171,7 +17171,7 @@
     },
     "/api/trinity": {
       "get": {
-        "operationId": "trinity_api_trinity_get",
+        "operationId": "get_api_trinity",
         "parameters": [
           {
             "in": "query",
@@ -17241,7 +17241,7 @@
     "/api/trinity/align": {
       "get": {
         "description": "Compute Trinity Alignment Index across SPX, SPY, and QQQ.",
-        "operationId": "get_trinity_alignment_api_trinity_align_get",
+        "operationId": "get_api_trinity_align",
         "parameters": [
           {
             "in": "query",
@@ -17286,7 +17286,7 @@
     "/api/trinity/{ticker}": {
       "get": {
         "description": "Get zero-gamma levels and GEX data for a single ticker.",
-        "operationId": "get_trinity_for_ticker_api_trinity__ticker__get",
+        "operationId": "get_api_trinity_ticker",
         "parameters": [
           {
             "in": "path",
@@ -17340,7 +17340,7 @@
     "/api/turboquant/generate": {
       "post": {
         "description": "Generate text using a local HuggingFace model with turboQuantDC compressed KV cache.\n\nThis loads a model locally and uses turboQuantDC's GenerationCache to compress\nthe KV cache by 3-5x, reducing VRAM usage while maintaining <0.5% quality loss.\n\nRequires: turboquantdc, transformers, accelerate, and optionally bitsandbytes.",
-        "operationId": "turboquant_generate_api_turboquant_generate_post",
+        "operationId": "post_api_turboquant_generate",
         "requestBody": {
           "content": {
             "application/json": {
@@ -17380,7 +17380,7 @@
     "/api/turboquant/presets": {
       "get": {
         "description": "List available turboQuantDC quality presets.",
-        "operationId": "turboquant_presets_api_turboquant_presets_get",
+        "operationId": "get_api_turboquant_presets",
         "responses": {
           "200": {
             "content": {
@@ -17400,7 +17400,7 @@
     "/api/turboquant/status": {
       "get": {
         "description": "Get turboQuantDC KV cache compression service status.",
-        "operationId": "turboquant_status_api_turboquant_status_get",
+        "operationId": "get_api_turboquant_status",
         "responses": {
           "200": {
             "content": {
@@ -17419,7 +17419,7 @@
     },
     "/api/uoa/{ticker}": {
       "get": {
-        "operationId": "uoa_api_uoa__ticker__get",
+        "operationId": "get_api_uoa_ticker",
         "parameters": [
           {
             "in": "path",
@@ -17482,7 +17482,7 @@
     },
     "/api/vanna-exposure/{ticker}": {
       "get": {
-        "operationId": "vanna_exposure_endpoint_api_vanna_exposure__ticker__get",
+        "operationId": "get_api_vanna-exposure_ticker",
         "parameters": [
           {
             "in": "path",
@@ -17547,7 +17547,7 @@
     "/api/vanna/{ticker}": {
       "get": {
         "description": "Alias for vanna-exposure.",
-        "operationId": "vanna_endpoint_api_vanna__ticker__get",
+        "operationId": "get_api_vanna_ticker",
         "parameters": [
           {
             "in": "path",
@@ -17612,7 +17612,7 @@
     "/api/version": {
       "get": {
         "description": "Build-vs-backend freshness stamp for the UI stale banner.",
-        "operationId": "version_api_version_get",
+        "operationId": "get_api_version",
         "responses": {
           "200": {
             "content": {
@@ -17632,7 +17632,7 @@
     "/api/vol-surface/{ticker}": {
       "get": {
         "description": "Return the full implied volatility surface for a ticker.",
-        "operationId": "get_vol_surface_api_vol_surface__ticker__get",
+        "operationId": "get_api_vol-surface_ticker",
         "parameters": [
           {
             "in": "path",
@@ -17686,7 +17686,7 @@
     "/api/vol-surface/{ticker}/sabr": {
       "post": {
         "description": "Fit SABR model to market volatility smile.",
-        "operationId": "fit_sabr_api_vol_surface__ticker__sabr_post",
+        "operationId": "post_api_vol-surface_ticker_sabr",
         "parameters": [
           {
             "in": "path",
@@ -17756,7 +17756,7 @@
     "/api/vol-surface/{ticker}/svi": {
       "post": {
         "description": "Fit SVI model to market data.",
-        "operationId": "fit_svi_api_vol_surface__ticker__svi_post",
+        "operationId": "post_api_vol-surface_ticker_svi",
         "parameters": [
           {
             "in": "path",
@@ -17817,7 +17817,7 @@
     "/api/vol/realized/{ticker}": {
       "get": {
         "description": "Steal-list #7 \u2014 Realised-vol suite + cones + typical-range bands + VRP.\n\nPure-logic orchestration:\n  1. Pull 60+ daily OHLC bars from yfinance (same path #7 consumes).\n  2. Compute all 5 estimators (yang_zhang, garman_klass, parkinson,\n     rogers_satchell, close_to_close).\n  3. Compute the 20d/30d/60d vol-cone percentiles.\n  4. Compute the daily/weekly/monthly typical-range bands.\n  5. Compute VRP (front-month ATM IV / YZ RV) via _load_chain for\n     the IV numerator.\n  6. If ``accumulate=true`` and at least one estimator produced a\n     finite value, UPSERT today\u2019s snapshot into the rv_daily DuckDB\n     table (mirrors max_pain_drift / news_feed / occ_volume cron\n     pattern).\n  7. Return the last ``days`` rows from rv_daily as ``history``.\n\nDefensive degrade: yfinance crash, chain load failure, or DB error\nnever propagates as a 500 \u2014 the route returns 200 with the empty\nshape + warnings so the frontend can render without crashing.",
-        "operationId": "realized_volatility_endpoint_api_vol_realized__ticker__get",
+        "operationId": "get_api_vol_realized_ticker",
         "parameters": [
           {
             "in": "path",
@@ -17882,7 +17882,7 @@
     "/api/vpin/{ticker}": {
       "get": {
         "description": "Return the current VPIN engine state for a ticker.",
-        "operationId": "get_vpin_state_api_vpin__ticker__get",
+        "operationId": "get_api_vpin_ticker",
         "parameters": [
           {
             "in": "path",
@@ -17924,7 +17924,7 @@
     "/api/vpin/{ticker}/history": {
       "get": {
         "description": "Return VPIN bucket history from DuckDB.",
-        "operationId": "get_vpin_history_api_vpin__ticker__history_get",
+        "operationId": "get_api_vpin_ticker_history",
         "parameters": [
           {
             "in": "path",
@@ -17978,7 +17978,7 @@
     "/api/vpin/{ticker}/ingest": {
       "post": {
         "description": "Ingest a trade tick and update VPIN + QI engines.",
-        "operationId": "ingest_trade_api_vpin__ticker__ingest_post",
+        "operationId": "post_api_vpin_ticker_ingest",
         "parameters": [
           {
             "in": "path",
@@ -18077,7 +18077,7 @@
     "/api/vpin/{ticker}/toxicity": {
       "get": {
         "description": "Return the composite toxicity signal (VPIN CDF + QI z-score).",
-        "operationId": "get_toxicity_api_vpin__ticker__toxicity_get",
+        "operationId": "get_api_vpin_ticker_toxicity",
         "parameters": [
           {
             "in": "path",
@@ -18118,7 +18118,7 @@
     },
     "/api/wheel_income/{ticker}": {
       "get": {
-        "operationId": "wheel_income_alias_api_wheel_income__ticker__get",
+        "operationId": "get_api_wheel_income_ticker",
         "parameters": [
           {
             "in": "path",
@@ -18233,7 +18233,7 @@
     "/gex/flippoints/{ticker}": {
       "get": {
         "description": "Get zero-gamma flip points with regime analysis.",
-        "operationId": "get_flip_points_gex_flippoints__ticker__get",
+        "operationId": "get_gex_flippoints_ticker",
         "parameters": [
           {
             "in": "path",
@@ -18276,7 +18276,7 @@
     "/gex/flow-analysis/{ticker}": {
       "get": {
         "description": "Analyze options flow direction.",
-        "operationId": "get_flow_analysis_gex_flow_analysis__ticker__get",
+        "operationId": "get_gex_flow-analysis_ticker",
         "parameters": [
           {
             "in": "path",
@@ -18319,7 +18319,7 @@
     "/gex/liquidity/{ticker}": {
       "get": {
         "description": "Get comprehensive GEX+VEX liquidity analysis.",
-        "operationId": "get_gex_liquidity_analysis_gex_liquidity__ticker__get",
+        "operationId": "get_gex_liquidity_ticker",
         "parameters": [
           {
             "in": "path",
@@ -18362,7 +18362,7 @@
     "/gex/term-structure/{ticker}": {
       "get": {
         "description": "Get GEX term structure across expiries.",
-        "operationId": "get_gex_term_structure_gex_term_structure__ticker__get",
+        "operationId": "get_gex_term-structure_ticker",
         "parameters": [
           {
             "in": "path",
@@ -18405,7 +18405,7 @@
     "/health": {
       "get": {
         "description": "Lightweight liveness alias at the root level.\n\nLoad balancers / Caddy probes hit /health (no /api prefix). This returns\na minimal 200 without running dependency checks \u2014 deep diagnostics live\nat /api/health. Mounted without prefix via server.py include_router.",
-        "operationId": "health_alias_health_get",
+        "operationId": "get_health",
         "responses": {
           "200": {
             "content": {
@@ -18425,7 +18425,7 @@
     "/metrics": {
       "get": {
         "description": "Prometheus metrics exposition endpoint.",
-        "operationId": "prometheus_metrics_metrics_get",
+        "operationId": "get_metrics",
         "responses": {
           "200": {
             "content": {

@@ -70,3 +70,33 @@ def test_grouping_splits_paths_sensibly():
     assert mod._group_for("/api/") == "(root)"
     # A version segment must not become the group name.
     assert mod._group_for("/api/v1/data/chain") == "data"
+
+
+def test_operation_ids_are_unique_and_stable():
+    """Duplicate operationId made generation order-dependent (flaky gate).
+
+    server.py registers the root probe as both @app.get("/") and
+    @app.head("/"). FastAPI's generated ids collided, the winner depended on
+    set iteration order, and the committed spec therefore flipped between two
+    states across runs -- which made the --check gate fail roughly 1 run in 3
+    on unchanged source.
+    """
+    spec = json.loads(SPEC.read_text())
+    seen: dict[str, str] = {}
+    for path, ops in spec["paths"].items():
+        for method, op in ops.items():
+            oid = op.get("operationId")
+            assert oid, f"{method.upper()} {path} has no operationId"
+            key = f"{method.upper()} {path}"
+            assert oid not in seen, (
+                f"operationId {oid!r} is shared by {seen.get(oid)} and {key}"
+            )
+            seen[oid] = key
+
+
+def test_generation_is_reproducible(tmp_path):
+    """Two generations of the same source must be byte-identical."""
+    mod = _load_generator()
+    first = json.dumps(mod._load_spec(), indent=2, sort_keys=True)
+    second = json.dumps(mod._load_spec(), indent=2, sort_keys=True)
+    assert first == second, "app.openapi() generation is not deterministic"

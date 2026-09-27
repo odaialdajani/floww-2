@@ -64,7 +64,25 @@ def _load_spec() -> dict:
     # deps. Those are expected here; we only care that the app object builds.
     from server import app  # noqa: PLC0415
 
-    return app.openapi()
+    # DETERMINISM. server.py registers the root health probe as both
+    # @app.get("/") and @app.head("/"). FastAPI derives operationId from
+    # name+path+method, and when two routes collide it emits a
+    # "Duplicate Operation ID" warning and the winner is decided by
+    # dict/set iteration order -- which varies between interpreter runs
+    # because the route table is built from a set. Left alone, that made
+    # this script's own --check gate flip between pass and fail on
+    # identical source, roughly 1 run in 3, which would have made CI a
+    # coin toss.
+    #
+    # Fix: give every operation a stable, explicitly-computed id instead of
+    # the colliding generated one. Ids stay unique because the method is
+    # part of the key, and they no longer depend on registration order.
+    spec = app.openapi()
+    for path, ops in spec.get("paths", {}).items():
+        for method, op in ops.items():
+            slug = path.strip("/").replace("/", "_").replace("{", "").replace("}", "") or "root"
+            op["operationId"] = f"{method.lower()}_{slug}"
+    return spec
 
 
 def render_readme(spec: dict) -> str:
