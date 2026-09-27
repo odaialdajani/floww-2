@@ -281,10 +281,6 @@ class OrderRouter:
             logger.error(f"Failed to fetch Alpaca positions: {e}")
             return {}
 
-    # Back-compat alias (renamed when Schwab was deleted 2026-09-06).
-    async def get_positions_from_schwab(self) -> dict[str, int]:
-        return await self.get_positions_from_alpaca()
-
     def get_state(self) -> dict[str, Any]:
         return {
             "account_id": self.account_id,

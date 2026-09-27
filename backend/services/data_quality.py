@@ -2,7 +2,7 @@
 backend/services/data_quality.py
 
 Cross-source GEX consistency check.
-Every 5 minutes during market hours: compute GEX from Schwab chain AND yfinance chain,
+Every 5 minutes during market hours: compute GEX from the primary chain AND the yfinance chain,
 compare, log warnings if rel-err > 5%, escalate if > 20%.
 """
 from __future__ import annotations
@@ -27,40 +27,40 @@ class DataQualityChecker:
 
     async def check_gex_consistency(
         self,
-        schwab_chain: list[dict[str, Any]],
+        primary_chain: list[dict[str, Any]],
         yfinance_chain: list[dict[str, Any]],
         ticker: str = "SPY",
     ) -> dict[str, Any]:
-        """Compare GEX computed from Schwab vs yfinance chains.
+        """Compare GEX computed from the primary chain vs yfinance.
 
         Returns dict with:
           - ticker: str
-          - schwab_gex: float
+          - primary_gex: float
           - yfinance_gex: float
           - rel_err: float
           - status: "OK" | "WARNING" | "CRITICAL"
           - timestamp: iso8601
         """
-        schwab_gex = self._compute_net_gex(schwab_chain)
+        primary_gex = self._compute_net_gex(primary_chain)
         yfinance_gex = self._compute_net_gex(yfinance_chain)
 
         if abs(yfinance_gex) < 1e-10:
-            rel_err = 0.0 if abs(schwab_gex) < 1e-10 else float("inf")
+            rel_err = 0.0 if abs(primary_gex) < 1e-10 else float("inf")
         else:
-            rel_err = abs(schwab_gex - yfinance_gex) / abs(yfinance_gex)
+            rel_err = abs(primary_gex - yfinance_gex) / abs(yfinance_gex)
 
         if rel_err > self.critical_threshold:
             status = "CRITICAL"
             logger.error(
                 f"DATA QUALITY CRITICAL: {ticker} GEX mismatch — "
-                f"Schwab={schwab_gex:,.0f}, yfinance={yfinance_gex:,.0f}, "
+                f"primary={primary_gex:,.0f}, yfinance={yfinance_gex:,.0f}, "
                 f"rel_err={rel_err:.2%}"
             )
         elif rel_err > self.warning_threshold:
             status = "WARNING"
             logger.warning(
                 f"DATA QUALITY WARNING: {ticker} GEX mismatch — "
-                f"Schwab={schwab_gex:,.0f}, yfinance={yfinance_gex:,.0f}, "
+                f"primary={primary_gex:,.0f}, yfinance={yfinance_gex:,.0f}, "
                 f"rel_err={rel_err:.2%}"
             )
         else:
@@ -68,7 +68,7 @@ class DataQualityChecker:
 
         result = {
             "ticker": ticker,
-            "schwab_gex": round(schwab_gex, 2),
+            "primary_gex": round(primary_gex, 2),
             "yfinance_gex": round(yfinance_gex, 2),
             "rel_err": round(rel_err, 6),
             "status": status,

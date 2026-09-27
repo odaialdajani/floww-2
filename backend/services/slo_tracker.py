@@ -7,7 +7,7 @@ Implements Google SRE Book Ch. 4 patterns.
 SLOs tracked:
   - API availability: 99.9% (43.2 min downtime/month budget)
   - API latency: p99 < 200ms
-  - Schwab ingestion uptime: 99% during market hours
+  - Market-data ingestion uptime: 99% during market hours (Public.com path)
   - WebSocket message delivery: 99.99%
 """
 
@@ -57,7 +57,7 @@ class ErrorBudget:
 SLO_DEFINITIONS = [
     SLOTarget("api_availability", 99.9, 720, "API endpoint availability"),
     SLOTarget("api_latency_p99", 99.0, 720, "API p99 latency < 200ms"),
-    SLOTarget("schwab_ingestion_uptime", 99.0, 720, "Schwab WS uptime during market hours"),
+    SLOTarget("ingestion_uptime", 99.0, 720, "Market-data ingestion uptime during market hours"),
     SLOTarget("ws_delivery", 99.99, 720, "WebSocket message delivery"),
 ]
 

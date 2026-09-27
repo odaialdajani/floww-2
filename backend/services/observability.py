@@ -194,13 +194,6 @@ hf_bytes_downloaded_total = Counter(
     registry=REGISTRY,
 )
 
-schwab_api_calls_total = Counter(
-    "floww_schwab_api_calls_total",
-    "Total Schwab API calls made today",
-    registry=REGISTRY,
-)
-
-
 # ---------------------------------------------------------------------------
 # Data Provider Health metrics
 # ---------------------------------------------------------------------------

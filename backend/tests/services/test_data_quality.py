@@ -34,13 +34,13 @@ class TestDataQualityChecker:
     async def test_small_difference_warning(self):
         """5-20% difference should trigger WARNING."""
         checker = DataQualityChecker()
-        schwab_chain = [
+        primary_chain = [
             {"gamma": 0.01, "oi": 1000, "spot": 500.0, "type": "call"},
         ]
         yf_chain = [
             {"gamma": 0.01, "oi": 1060, "spot": 500.0, "type": "call"},
         ]
-        result = await checker.check_gex_consistency(schwab_chain, yf_chain, "SPY")
+        result = await checker.check_gex_consistency(primary_chain, yf_chain, "SPY")
         assert result["status"] == "WARNING"
         assert 0.05 <= result["rel_err"] < 0.20
 
@@ -48,13 +48,13 @@ class TestDataQualityChecker:
     async def test_large_difference_critical(self):
         """>20% difference should trigger CRITICAL."""
         checker = DataQualityChecker()
-        schwab_chain = [
+        primary_chain = [
             {"gamma": 0.01, "oi": 1000, "spot": 500.0, "type": "call"},
         ]
         yf_chain = [
             {"gamma": 0.01, "oi": 1500, "spot": 500.0, "type": "call"},
         ]
-        result = await checker.check_gex_consistency(schwab_chain, yf_chain, "SPY")
+        result = await checker.check_gex_consistency(primary_chain, yf_chain, "SPY")
         assert result["status"] == "CRITICAL"
         assert result["rel_err"] > 0.20
 
@@ -68,7 +68,7 @@ class TestDataQualityChecker:
 
     @pytest.mark.asyncio
     async def test_yfinance_zero_gex(self):
-        """If yfinance GEX is 0, rel_err should be 0 if Schwab is also 0."""
+        """If yfinance GEX is 0, rel_err should be 0 if primary is also 0."""
         checker = DataQualityChecker()
         result = await checker.check_gex_consistency([], [], "SPY")
         assert result["rel_err"] == 0.0
@@ -98,13 +98,13 @@ class TestDataQualityChecker:
     async def test_stale_spot_detection(self):
         """A stale spot price in one source should be detected."""
         checker = DataQualityChecker()
-        schwab_chain = [
+        primary_chain = [
             {"gamma": 0.01, "oi": 1000, "spot": 500.0, "type": "call"},
         ]
         yf_chain = [
             {"gamma": 0.01, "oi": 1000, "spot": 480.0, "type": "call"},
         ]
-        result = await checker.check_gex_consistency(schwab_chain, yf_chain, "SPY")
+        result = await checker.check_gex_consistency(primary_chain, yf_chain, "SPY")
         assert result["status"] in ("WARNING", "OK")
         assert result["rel_err"] > 0
 

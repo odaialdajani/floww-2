@@ -47,7 +47,7 @@ NUM_STRIKES = 20  # strikes above and below ATM
 
 
 class MockSyntheticFeed:
-    """Synthetic market data feed that mimics Schwab WebSocket streamer.
+    """Synthetic market data feed (GBM generator, no network).
 
     Generates:
       - Equity ticks (bid/ask/last/volume) for SPY/QQQ/DIA/IWM
@@ -112,7 +112,7 @@ class MockSyntheticFeed:
         self._running = True
         self._start_time = time.monotonic()
         interval = 1.0 / self.rate
-        logger.info(f"Mock Schwab feed starting: {self.rate} msg/s, symbols={self.symbols}")
+        logger.info(f"Mock synthetic feed starting: {self.rate} msg/s, symbols={self.symbols}")
 
         while self._running:
             try:
