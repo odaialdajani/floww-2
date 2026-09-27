@@ -1,11 +1,18 @@
 """
-backend/services/mock_schwab_feed.py
+backend/services/mock_synthetic_feed.py
 
-Synthetic Schwab WebSocket feed for testing and CI.
+Synthetic tick feed for local development and CI.
 Generates realistic Level 1 options and equities data using GBM spot dynamics
 with chain Greeks computed via services/numba_greeks.py.
 
-Same message shape as real Schwab streamer — drop-in replacement.
+RENAMED from mock_schwab_feed.py on 2026-09-27. It was never a Schwab
+connection: it opens no socket, reads no credential, and contacts no host. It
+is a pure in-process random generator that happens to emit a message shape
+modelled on the (now deleted) Schwab streamer. The name was the only Schwab
+thing about it, and it was actively misleading — this feed stands in for the
+Public.com ingestion path, not for a retired broker.
+
+Enabled only by FLOWW_ENABLE_MOCK_FEED=1; never a live data source.
 """
 from __future__ import annotations
 
@@ -39,7 +46,7 @@ STRIKE_STEP = 5.0
 NUM_STRIKES = 20  # strikes above and below ATM
 
 
-class MockSchwabFeed:
+class MockSyntheticFeed:
     """Synthetic market data feed that mimics Schwab WebSocket streamer.
 
     Generates:
@@ -48,7 +55,7 @@ class MockSchwabFeed:
       - LOB snapshots
 
     Usage:
-        feed = MockSchwabFeed(rate=100)  # 100 msg/sec
+        feed = MockSyntheticFeed(rate=100)  # 100 msg/sec
         feed.on_tick(handle_tick)
         feed.on_chain(handle_chain)
         await feed.start()

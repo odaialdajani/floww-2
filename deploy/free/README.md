@@ -101,5 +101,6 @@ Disk watch: Mongo grows slowly (11MB now). `df -h` monthly is enough.
 - ~~Frontend hardcoded `http://localhost:8000` fetch bases~~ FIXED at
   `af4e254`: all 14 components resolve same-origin at runtime. No
   REACT_APP_* build args needed — one build works on localhost AND prod.
-- Schwab WebSocket streamer won't run on server unless you copy its token env;
-  stack falls back to yfinance/polling providers without it.
+- ~~Schwab WebSocket streamer~~ **removed 2026-09-27.** It had no live key and no
+  importers. Market data is Public.com (cvserver / yfinance / Databento-OI
+  fallbacks); there is no broker WebSocket to configure.

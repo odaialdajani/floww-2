@@ -47,32 +47,52 @@ components.
 | `CLAUDE.md` told readers to run a nonexistent Windows venv and to **never** use the one that works | `CLAUDE.md`, `README.md` |
 | 13 dead frontend modules (verified by build + full jest run) | commit `c2fa3288` |
 
-## Schwab retirement — mapped, not deleted
+## Schwab retirement — COMPLETE (2026-09-27)
 
-Schwab was retired as a data feed on **2026-09-03**. All market data is
-**Public.com**, with cvserver / yfinance / Databento-OI as fallbacks. This
-branch corrected the documentation and added guards, but deliberately did
-**not** delete the code, because each piece is load-bearing for something:
+Schwab was retired as a data feed on 2026-09-03. All market data is
+**Public.com**, with cvserver / yfinance / Databento-OI as fallbacks. On
+2026-09-27 it was removed from the tree entirely.
 
-| Artifact | Status | Why it stays |
-|---|---|---|
-| `services/schwab_streamer.py` | dead — 0 importers, no key | has a reconnect-chaos test suite (`tests/schwab/`); deleting means deciding what to do with those tests |
-| `services/data_fallback.py` | dead — tests only | has a 37-reference test file; same trade |
-| `services/data_quality.py::compare_gex_sources` | dead method on a **live** class | the live route correctly compares cvserver vs yfinance; removing the method touches a mounted router |
-| `services/mock_schwab_feed.py` | **not dead** | synthetic tick generator behind `FLOWW_ENABLE_MOCK_FEED=1`, imported by `server.py`. The name is legacy; it makes no Schwab connection. Renaming is behaviour-neutral but deserves its own commit. |
-| `prometheus/alerts` SchwabTokenExpiring | **deleted here** | watched a metric nothing emits, pointed at a route that does not exist |
-| `ARCHITECTURE.md`, `CLAUDE.md`, `RUNBOOK.md` | **corrected here** | all three described Schwab as a live data source |
+**Deleted**
+- `services/schwab_streamer.py` — zero importers, no key, unreachable host
+- `services/data_fallback.py` — Schwab-primary failover, tests only
+- `tests/schwab/`, `test_schwab_streamer_reauth.py`,
+  `test_schwab_streamer_reconnect.py`, `test_data_fallback.py`
+- `tests/integration/test_api_resilience.py` — 15 of its 19 cases tested the
+  two deleted modules. The 4 circuit-breaker cases exercised the **live**
+  `services/circuit_breaker.py` and were salvaged into
+  `tests/integration/test_circuit_breaker.py`.
+- `tests/integration/test_network_resilience.py` — 4 Schwab-specific cases
+  removed; the 7 feed-based resilience cases (offline mode, data integrity,
+  no-loss-during-outage, graceful degradation, multi-symbol, recovery) kept.
+- Grafana panels "Schwab API Calls vs Daily Limit" and "Schwab Token TTL" —
+  both queried metrics that no longer exist.
+- The `SchwabTokenExpiring` Prometheus alert and the RUNBOOK row for it.
 
-The guards now in `test_compose_consistency.py` fail if a Schwab host,
-credential or env var reappears in live backend code, if `schwab_streamer.py`
-gains an importer, if the frontend names Schwab, if a retired provider
-declares an API key, or if ARCHITECTURE.md lists it as active. So the
-quarantine is enforced, not merely intended.
+**Renamed**
+- `mock_schwab_feed.py` → `mock_synthetic_feed.py` (`MockSchwabFeed` →
+  `MockSyntheticFeed`). It was never a Schwab connection: no socket, no
+  credential, no network — a GBM random generator modelled on the old
+  streamer's message shape. Live via `FLOWW_ENABLE_MOCK_FEED=1`.
 
-**Follow-up worth doing separately:** delete `schwab_streamer.py` +
-`data_fallback.py` together with their test suites, and rename
-`mock_schwab_feed.py` → `mock_synthetic_feed.py`. That is one coherent
-"finish the retirement" commit, and it is mechanical once agreed.
+**Corrected**
+- `ARCHITECTURE.md`, `CLAUDE.md`, `RUNBOOK.md`, `deploy/free/README.md`,
+  `HEATSEEKER_ARCHITECTURE.md`, and the four `.claude/commands/` checklists
+  all described Schwab as a live data source. `CLAUDE.md` and the agent
+  commands also documented a `FLOWW_ENABLE_LIVE_SCHWAB` kill-switch that was
+  removed some time earlier; they now describe the real control,
+  `ALLOW_MARKET_ORDERS = False` in `services/order_router.py`.
+- `FLOWW_ENABLE_LIVE_SCHWAB=0` dropped from two test env fixtures.
+
+**Guards** (`tests/test_compose_consistency.py`): no Schwab host, credential
+or env var in live backend code; the deleted modules must not reappear; the
+streamer must never gain an importer; the frontend must not name Schwab; no
+retired provider may declare an API key; ARCHITECTURE.md must not list one
+as active.
+
+Left alone: dated historical logs (`MORNING_BRIEFING.md` and the `ROUND*` /
+`DISPATCH*` / `LAUNCH_PROMPTS*` records) which describe what was true when
+written. Rewriting history would be dishonest.
 
 ## Still open — needs a human, not a code change
 

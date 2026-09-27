@@ -26,12 +26,15 @@ SINGLE SOURCE OF TRUTH for the subprocess-test baseline env — new static keys 
 """
 
 # Baseline Python env for subprocess-driven test suites.
-# (PATH / API_SECRET_KEY / FLOWW_ENABLE_LIVE_SCHWAB are truly-static and
-# can be baked at import time; PYTHONPATH and HOME are per-call-site-computed.)
-# FLOWW_ENABLE_LIVE_SCHWAB=0 guards live-Schwab — harmless when spread
-# into dev/paper-only tests (Schwab branch never fires without creds).
+# (PATH / API_SECRET_KEY are truly-static and can be baked at import time;
+# PYTHONPATH and HOME are per-call-site-computed.)
+#
+# FLOWW_ENABLE_LIVE_SCHWAB used to be pinned here to "0". It guarded a live
+# Schwab execution path that no longer exists, so the key was dead weight that
+# still read like a live-trading guard. The real default-deny control is
+# ALLOW_MARKET_ORDERS=False in services/order_router.py, which is a module
+# constant and needs no env var.
 _SUBPROCESS_MIN_ENV: dict[str, str] = {
     "PATH": "/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin",
     "API_SECRET_KEY": "test-secret-key",
-    "FLOWW_ENABLE_LIVE_SCHWAB": "0",
 }

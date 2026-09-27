@@ -3,7 +3,10 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -22,8 +25,16 @@
     {
       "title": "Databento Credit Burn Rate",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "floww_cost_budget_pct{provider=\"databento\"}",
@@ -39,9 +50,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 80 },
-              { "color": "red", "value": 95 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
             ]
           }
         }
@@ -56,8 +76,16 @@
     {
       "title": "Databento Burn Rate Over Time",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 6, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 6,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "floww_cost_budget_pct{provider=\"databento\"}",
@@ -91,8 +119,16 @@
     {
       "title": "Databento Daily Spend",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "floww_cost_usd_daily{provider=\"databento\"}",
@@ -106,9 +142,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 80 },
-              { "color": "red", "value": 95 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
             ]
           }
         }
@@ -121,42 +166,18 @@
       }
     },
     {
-      "title": "Schwab API Calls vs Daily Limit",
-      "type": "gauge",
-      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        {
-          "expr": "(floww_schwab_api_calls_total / 2000) * 100",
-          "legendFormat": "API Usage %",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "min": 0,
-          "max": 100,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 75 },
-              { "color": "red", "value": 90 }
-            ]
-          }
-        }
-      },
-      "options": {
-        "showThresholdLabels": true,
-        "showThresholdMarkers": true
-      }
-    },
-    {
       "title": "HuggingFace Download Bandwidth (7d Rolling)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "sum(rate(floww_hf_bytes_downloaded_total[1h])) * 3600 * 24 * 7",
@@ -178,8 +199,16 @@
     {
       "title": "HuggingFace Bandwidth Rate",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "rate(floww_hf_bytes_downloaded_total[5m])",
@@ -201,12 +230,20 @@
     {
       "title": "LLM Tokens Consumed by Provider & Model",
       "type": "barchart",
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 16 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "sum by (provider, model) (increase(floww_llm_tokens_total[1d]))",
-          "legendFormat": "{{ provider }} — {{ model }}",
+          "legendFormat": "{{ provider }} \u2014 {{ model }}",
           "refId": "A"
         }
       ],
@@ -216,21 +253,36 @@
           "custom": {
             "drawStyle": "bars",
             "fillOpacity": 80,
-            "stacking": { "mode": "normal", "group": "A" }
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
           }
         }
       },
       "options": {
         "orientation": "auto",
         "showValue": "auto",
-        "legend": { "showLegend": true, "displayMode": "table", "placement": "right" }
+        "legend": {
+          "showLegend": true,
+          "displayMode": "table",
+          "placement": "right"
+        }
       }
     },
     {
       "title": "Total Spend Today",
       "type": "stat",
-      "gridPos": { "h": 5, "w": 8, "x": 0, "y": 26 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 0,
+        "y": 26
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "sum(floww_cost_usd_daily)",
@@ -244,9 +296,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 50 },
-              { "color": "red", "value": 100 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 100
+              }
             ]
           }
         }
@@ -261,8 +322,16 @@
     {
       "title": "Projected Month-End Spend",
       "type": "stat",
-      "gridPos": { "h": 5, "w": 8, "x": 8, "y": 26 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 8,
+        "y": 26
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "sum(floww_cost_usd_daily) * (31 - day_of_month(now())) + sum(floww_cost_usd_daily)",
@@ -276,9 +345,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 500 },
-              { "color": "red", "value": 1000 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 500
+              },
+              {
+                "color": "red",
+                "value": 1000
+              }
             ]
           }
         }
@@ -293,8 +371,16 @@
     {
       "title": "Projected vs Budget",
       "type": "stat",
-      "gridPos": { "h": 5, "w": 8, "x": 16, "y": 26 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 26
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "(sum(floww_cost_usd_daily) / sum(floww_cost_budget_usd)) * 100",
@@ -310,9 +396,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 80 },
-              { "color": "red", "value": 95 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
             ]
           }
         }
@@ -327,8 +422,16 @@
     {
       "title": "Daily Spend by Provider",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 31 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "sum by (provider) (floww_cost_usd_daily)",
@@ -343,7 +446,10 @@
             "drawStyle": "line",
             "fillOpacity": 20,
             "lineWidth": 2,
-            "stacking": { "mode": "normal", "group": "providers" }
+            "stacking": {
+              "mode": "normal",
+              "group": "providers"
+            }
           }
         }
       }
@@ -351,17 +457,27 @@
   ],
   "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["oracle", "cost", "budget"],
+  "tags": [
+    "oracle",
+    "cost",
+    "budget"
+  ],
   "templating": {
     "list": [
       {
         "name": "provider",
         "type": "query",
-        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
         "query": "label_values(floww_cost_usd_daily, provider)",
         "includeAll": true,
         "multi": true,
-        "current": { "text": "All", "value": "$__all" },
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
         "refresh": 2
       }
     ]
@@ -371,11 +487,29 @@
     "to": "now"
   },
   "timepicker": {
-    "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h"],
-    "time_options": ["5m", "15m", "1h", "6h", "12h", "1d", "7d", "30d"]
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h"
+    ],
+    "time_options": [
+      "5m",
+      "15m",
+      "1h",
+      "6h",
+      "12h",
+      "1d",
+      "7d",
+      "30d"
+    ]
   },
   "timezone": "America/New_York",
-  "title": "Project Oracle — Cost",
+  "title": "Project Oracle \u2014 Cost",
   "uid": "oracle-cost",
   "version": 1,
   "weekStart": ""

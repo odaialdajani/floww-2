@@ -3666,10 +3666,10 @@ async def shutdown_duckdb():
 import contextlib
 
 from services.ingestion_pipeline import IngestionPipeline
-from services.mock_schwab_feed import MockSchwabFeed
+from services.mock_synthetic_feed import MockSyntheticFeed
 
 _ingestion_pipeline: IngestionPipeline | None = None
-_mock_feed: MockSchwabFeed | None = None
+_mock_feed: MockSyntheticFeed | None = None
 _mock_feed_task: asyncio.Task | None = None
 _mock_feed_task: asyncio.Task | None = None
 
@@ -3687,9 +3687,11 @@ async def startup_ingestion():
 
         # Synthetic dev tick generator. Live market data comes from the
         # Public.com API (fetch_spot_and_chains_merged → public_api_adapter);
-        # Schwab is retired (2026-09-03) and this feed is never a live source.
+        # This is a synthetic generator, not a broker connection: it opens no
+        # socket and reads no credential. Schwab was retired 2026-09-03 and has
+        # been fully removed from the tree.
         if os.getenv("FLOWW_ENABLE_MOCK_FEED") == "1":
-            _mock_feed = MockSchwabFeed(rate=100.0, symbols=["SPY", "QQQ"], seed=42)
+            _mock_feed = MockSyntheticFeed(rate=100.0, symbols=["SPY", "QQQ"], seed=42)
             _mock_feed.on_tick(_ingestion_pipeline.enqueue_tick)
             _mock_feed.on_chain(_ingestion_pipeline.enqueue_chain)
             _mock_feed.on_lob(_ingestion_pipeline.enqueue_lob)

@@ -26,7 +26,7 @@ Heatseeker is a real-time options flow analytics and automated trading system. I
 │  ┌──────────┐    ┌──────────────┐    ┌──────────┐    ┌──────────┐ │
 │  │ Alpha    │───▶│ Ingestion    │───▶│  DuckDB  │───▶│ Snapshot │ │
 │  │ Vantage  │    │ Pipeline     │    │  Engine  │    │ Manager  │ │
-│  │ /Schwab  │    │ (normalize,  │    │ (batch   │    │ (50ms    │ │
+│  │ /Public   │    │ (normalize,  │    │ (batch   │    │ (50ms    │ │
 │  │ WebSocket│    │  validate)   │    │  flush)  │    │  window) │ │
 │  └──────────┘    └──────────────┘    └──────────┘    └──────────┘ │
 │       │                │                  │               │        │

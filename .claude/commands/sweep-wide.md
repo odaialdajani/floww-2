@@ -127,13 +127,15 @@ for every hit:
   meta JSON with empty baselines, Sharpe > 5, < 50 samples, feature/sample ratio > 0.2, or accuracy
   > 0.95. Real live path only regardless — never build, keep, or "fix" a demo/fake feature.
 - **MONEY PATH — paper only, with a concrete enforcement point.**
-  `backend/services/order_router.py` refuses to submit a real order unless
-  `FLOWW_ENABLE_LIVE_SCHWAB == "1"`; `backend/routes/live_trading.py` is the route surface and
-  `backend/tests/services/test_order_router_gate.py` pins it (`backend/tests/conftest.py` sets the
-  flag to `"1"` for the suite). **Any change that removes, inverts, defaults-on, or bypasses that
-  check is a HIGH finding.** Never delete it as "dead Schwab code".
-- **Schwab as a data feed is out.** `schwab_streamer.py` has no live key — mock-only. Do not push it
-  toward a live feed. This does **not** make the live-execution path dead code — see MONEY PATH.
+  `backend/services/order_router.py` refuses MARKET orders unless
+  `ALLOW_MARKET_ORDERS` is True (it is `False` at module scope) or the caller passes
+  `allow_market=True`; `backend/routes/live_trading.py` is the route surface and
+  `backend/tests/services/test_order_router_gate.py` pins the default-deny posture.
+  **Any change that removes, inverts, defaults-on, or bypasses that
+  check is a HIGH finding.** Never delete it as leftover provider code.
+- **Schwab is gone.** Fully removed from the tree on 2026-09-27 (streamer, fallback handler,
+  their tests, dashboards and alerts). The former mock feed is now
+  `services/mock_synthetic_feed.py`, which never opened a socket.
 - A control that renders but mutates nothing; a page with view code but no reachable route
   (`steal-three` is a known example — has an `App.js` render block and a `backend/routes/steal_three.py`
   but no nav entry and no `?page=` whitelist entry). Report it; do not wire it up unasked.

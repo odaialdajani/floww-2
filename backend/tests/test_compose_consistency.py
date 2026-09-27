@@ -285,24 +285,42 @@ def test_no_schwab_endpoint_or_credential_in_live_backend_code():
     assert not offenders, f"Schwab integration points in live code: {offenders}"
 
 
-def test_schwab_streamer_stays_unreferenced():
-    """If something starts importing it, that is a regression to investigate.
+def test_schwab_is_fully_removed_from_the_tree():
+    """Schwab is gone, not merely unreferenced.
 
-    It is not deleted in this branch (it has a reconnect-chaos test suite);
-    it is quarantined. The point is that any new importer surfaces here.
+    Removed 2026-09-27: schwab_streamer.py, data_fallback.py, their five test
+    modules, the two Grafana panels that queried Schwab metrics, and the
+    SchwabTokenExpiring alert. Nothing named schwab may come back in live code.
     """
+    gone = [
+        "backend/services/schwab_streamer.py",
+        "backend/services/data_fallback.py",
+        "backend/services/mock_schwab_feed.py",
+        "backend/tests/schwab",
+        "backend/tests/services/test_schwab_streamer_reauth.py",
+        "backend/tests/services/test_schwab_streamer_reconnect.py",
+        "backend/tests/services/test_data_fallback.py",
+    ]
+    still_here = [g for g in gone if (REPO_ROOT / g).exists()]
+    assert not still_here, f"retired Schwab artifacts are back: {still_here}"
+
+    # The replacement is a synthetic generator under a provider-neutral name.
+    assert (REPO_ROOT / "backend" / "services" / "mock_synthetic_feed.py").exists()
+
+
+def test_schwab_streamer_never_gains_an_importer():
+    """If the module reappears, something must have re-added it deliberately."""
     streamer = REPO_ROOT / "backend" / "services" / "schwab_streamer.py"
     if not streamer.exists():
-        pytest.skip("schwab_streamer.py has been removed")
-    importers = []
-    for py in _non_test_backend_files():
-        if py == streamer:
-            continue
-        if "schwab_streamer" in py.read_text(errors="ignore"):
-            importers.append(str(py.relative_to(REPO_ROOT)))
+        return
+    importers = [
+        str(py.relative_to(REPO_ROOT))
+        for py in _non_test_backend_files()
+        if py != streamer and "schwab_streamer" in py.read_text(errors="ignore")
+    ]
     assert not importers, (
-        f"{streamer.name} is retired but is now imported by {importers} — if "
-        "that is intentional, re-open the retirement decision deliberately"
+        f"schwab_streamer.py is retired but imported by {importers} — re-open "
+        "the retirement decision deliberately if that is intended"
     )
 
 

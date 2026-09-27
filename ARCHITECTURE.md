@@ -15,16 +15,20 @@ Market data enters through the **Public.com adapter**
 `server.py`), which cascades Public.com → cvserver → yfinance, with
 Databento supplying open interest. Chain data is then written to DuckDB.
 
-**There is no WebSocket market-data feed.** `schwab_streamer.py` is dead code
-from a retired provider (retired 2026-09-03; it has no live key and nothing
-imports it). `websocket_streamer.py` is unrelated to market data — it is the
-*client-push* manager that broadcasts computed results to the browser, and it
-is live.
+**There is no WebSocket market-data feed.** `websocket_streamer.py` is
+unrelated to market data — it is the *client-push* manager that broadcasts
+computed results to the browser, and it is live.
+
+Schwab was a data source until 2026-09-03 and has since been **fully removed**:
+the streamer, the source-failover handler, their test suites, the Grafana
+panels that queried Schwab metrics, and the token-expiry alert are all gone.
+Nothing named schwab remains in live code.
 
 `ingestion_pipeline.py` remains for the DuckDB tick/LOB write path and is
-driven in development by `mock_schwab_feed.py`, an explicitly synthetic feed
-behind `FLOWW_ENABLE_MOCK_FEED=1`. That module is a test fixture that happens
-to carry a legacy name; it is not a Schwab connection.
+driven in development by `mock_synthetic_feed.py` — a purely synthetic GBM
+generator behind `FLOWW_ENABLE_MOCK_FEED=1`. It opens no socket and reads no
+credential. (It was called `mock_schwab_feed.py` until 2026-09-27; the old
+name was the only Schwab thing about it, and it was misleading.)
 
 ### 2. DuckDB OLAP Engine
 `duckdb_engine.py` provides a columnar analytical store for tick data, options
@@ -79,7 +83,7 @@ Databento OI   ───→ (open-interest overlay only)
 | DuckDB Engine | `duckdb_engine.py` | Columnar OLAP storage |
 | Client-Push Manager | `websocket_streamer.py` | Pushes computed results to the browser over WS (not market data) |
 | Public API Adapter | `public_api_adapter.py` | The live market-data source (Public.com → cvserver → yfinance) |
-| Schwab Streamer | `schwab_streamer.py` | **DEAD** — retired provider, no key, zero importers. Safe to delete. |
+| Schwab (REMOVED) | — | Retired 2026-09-03. Streamer, failover handler, tests, dashboards and alert all deleted 2026-09-27. |
 
 ### Phase 2 — Microstructure Analytics
 | Service | File | Purpose |
