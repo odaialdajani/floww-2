@@ -15,6 +15,8 @@ load — documented in the script).
 | compare-desktop.png | 1600×900 | GEX+VEX compare desk, independent panes/scales |
 | single-narrow.png | 390×844 | Single grid stacked, readable, no overlap |
 | movers-populated.png | 1600×900 | Top Movers populated live (MSFT +3.66%, AAPL +1.53%, session dates, 2/75 partial + last-good badge), Data usable · OI |
+| prod-gex.png | 1600×900 | Production stack (:3000 static frontend → :8000 backend, current main): full grid, populated sidebar, movers 3/75 partial |
+| prod-vex.png | 1600×900 | Same stack, VEX tab: full VEX surface rendered (purple scale, signed values); sidebar keeps raw structural anchors (see R8 sidebar-label fix) |
 
 Data is live vendor chain (spot ~771, session 2026-09-25), so cell values
 are layout receipts, not reproducible fixtures. Mounted jsdom tests pin
