@@ -1,10 +1,14 @@
 # Solstice STATUS — T00 baseline + T01–T03 foundation (living receipt)
 
 > **Current state, 27 Sep 2026 — supersedes the "open PR" lines below.**
-> All work described in this file is merged: #13, #19, #55, #56, #12, #5.
-> `origin/main` = `1eefd864`. Cumulative verification on that tree:
-> **5503 backend passed / 0 failed**, **82 frontend suites / 675 tests passed**,
-> silent-except gate OK (289 files), ruff clean.
+> All work described in this file is merged: #13, #19, #55, #56, #12, #5, #58, #54.
+> `origin/main` = `2333c5bf`. Cumulative verification on that tree:
+> **5446 backend passed / 0 failed** (55 skipped, 9 deselected; 5565 collected
+> before the three optional-dependency files are ignored), **83 frontend suites /
+> 680 tests passed**, silent-except gate OK (289 files, 27 gate self-tests pass),
+> ruff clean. Solstice 222 and 15 WebSocket regression tests pass on main.
+> #54 was merged as `2333c5bf` and added the first `AlertOverlay` coverage,
+> which is the 83rd suite.
 > The historical sections below are preserved verbatim as the audit trail; where
 > they say a PR is OPEN, read this note instead.
 >
@@ -14,21 +18,24 @@
 >   `setdefault("type", "signal")`, which cannot replace an existing
 >   `GAMMA_FLIP` type, and it lacks the `add_api_websocket_route("/ws/signals")`
 >   registration. Merging it as-is would regress the signal channel fixed in #56.
-> - **#54** — partially superseded. Its SSE switch is justified by "the legacy
->   /ws/signals socket had no server producer", which was true when written and
->   is now false. Its other two changes are still net-positive: it *adds*
->   `AlertOverlay.test.jsx` (absent on main) and deletes `useSolsticeSnapshot.js`,
->   which is dead code (defined, never imported, untested). Recommend rebasing
->   and keeping the WebSocket, not closing wholesale.
-> - **#4** — do NOT merge. Its `fetched_at` falls back to
->   `datetime.now(UTC)`, fabricating source time when none exists. Main already
->   does this correctly at `server.py:1536` via
+>   Local head is ahead of the PR head and unpushed, so this is live work.
+> - **#4** — do NOT merge; not mechanically possible either. One conflict, in
+>   `backend/services/public_api_adapter.py`. Substantively it must not land: its
+>   `fetched_at` falls back to `datetime.now(UTC)`, fabricating source time when
+>   none exists. Main already does this correctly at `server.py:1536` via
 >   `"source_received_at": raw.get("received_at")` with the comment "Never
->   reset". Merging #4 reintroduces the defect the master plan names.
-> - **#3** — do NOT bulk merge. It deletes `frontend/src/utils/appKey.js`, which
->   main has six live consumers for (`AlertOverlay.js`, `App.js`,
->   `PublicPanel.jsx`, `useWebSocketGex.jsx`, and its own tests). It also
->   conflicts on `scripts/walkforward_backtest_spy.py`. Extract narrow fixes only.
+>   reset". Merging #4 reintroduces the exact defect the master plan names.
+> - **#3** — do NOT merge; **412 conflicts** against current main, including
+>   add/add on `CLAUDE.md`, `.github/workflows/lint.yml`, `.serena/project.yml`
+>   and `.gitignore`. It also deletes `frontend/src/utils/appKey.js`, which main
+>   has six live consumers for (`AlertOverlay.js`, `App.js`, `PublicPanel.jsx`,
+>   `useWebSocketGex.jsx`, and its own tests). No mechanical merge can resolve
+>   this; if any of its fixes are wanted, cherry-pick them individually.
+>
+> **Method note.** Every claim above was re-derived by test-merging each branch
+> onto current `main` and diffing the result, not from PR metadata. That check is
+> what caught #54 silently reverting this file, and it is why `gh pr diff` is not
+> trusted here — it returned empty for #3 while the API reported 100 files.
 
 Base: local `main` 5db4971a (includes open-PR #11 retry-404 work) stacked on
 origin/main 61d17917276b92913ff64339f9824b8a19d9b36a (12 Sep 2026).
