@@ -4,8 +4,8 @@
 <!-- Regenerate: python3 qc/audit/generate_api_docs.py -->
 <!-- Verify:     python3 qc/audit/generate_api_docs.py --check -->
 
-Total endpoints: 367
-Route groups: 103
+Total endpoints: 380
+Route groups: 104
 
 Generated from the live FastAPI app, so every path below is a real,
 callable route rather than a hand-copied guess.
@@ -35,7 +35,7 @@ callable route rather than a hand-copied guess.
 |--------|------|---------|
 | GET | `/api/advanced/{ticker}` | Advanced Analytics |
 
-## agent (8 endpoints)
+## agent (14 endpoints)
 
 | Method | Path | Summary |
 |--------|------|---------|
@@ -43,8 +43,14 @@ callable route rather than a hand-copied guess.
 | GET | `/api/agent/budget` | Budget |
 | POST | `/api/agent/cancel/{turn_id}` | Cancel |
 | GET | `/api/agent/claims` | Claims |
-| GET | `/api/agent/prefs` | Get Prefs |
-| PUT | `/api/agent/prefs` | Put Prefs |
+| GET | `/api/agent/history` | History |
+| GET | `/api/agent/models` | Models |
+| GET | `/api/agent/prefs` | Prefs |
+| PUT | `/api/agent/prefs` | Save Prefs |
+| POST | `/api/agent/session` | Session |
+| POST | `/api/agent/session/logout` | Logout Session |
+| POST | `/api/agent/session/recover` | Recover Session |
+| POST | `/api/agent/session/rotate` | Rotate Session |
 | GET | `/api/agent/stream/{turn_id}` | Stream |
 | GET | `/api/agent/turn/{turn_id}` | Get Turn |
 
@@ -326,7 +332,7 @@ callable route rather than a hand-copied guess.
 |--------|------|---------|
 | GET | `/api/flow-digest` | Flow Digest |
 
-## flowseeker (26 endpoints)
+## flowseeker (29 endpoints)
 
 | Method | Path | Summary |
 |--------|------|---------|
@@ -343,6 +349,7 @@ callable route rather than a hand-copied guess.
 | GET | `/api/flowseeker/journal/stats` | Journal Stats |
 | GET | `/api/flowseeker/journal/trades` | Journal Trades |
 | GET | `/api/flowseeker/live` | Live Flow |
+| GET | `/api/flowseeker/market-session` | Market Session |
 | GET | `/api/flowseeker/model` | Calibration Model |
 | GET | `/api/flowseeker/outcomes` | Alert Outcomes |
 | POST | `/api/flowseeker/outcomes/refresh` | Alert Outcomes Refresh |
@@ -356,6 +363,8 @@ callable route rather than a hand-copied guess.
 | GET | `/api/flowseeker/scan/history` | Scan History |
 | POST | `/api/flowseeker/scan/refresh` | Force Refresh Scan |
 | GET | `/api/flowseeker/screen` | Screen Options |
+| GET | `/api/flowseeker/universe/leaderboard` | Universe Leaderboard |
+| GET | `/api/flowseeker/universe/scan` | Universe Scan |
 
 ## gamma-flip (1 endpoints)
 
@@ -407,7 +416,7 @@ callable route rather than a hand-copied guess.
 |--------|------|---------|
 | GET | `/api/heatmap/{ticker}` | Heatmap |
 
-## heatseeker (16 endpoints)
+## heatseeker (18 endpoints)
 
 | Method | Path | Summary |
 |--------|------|---------|
@@ -417,7 +426,9 @@ callable route rather than a hand-copied guess.
 | GET | `/api/heatseeker/history/{ticker}` | Get History |
 | GET | `/api/heatseeker/latest/{ticker}` | Get Latest |
 | GET | `/api/heatseeker/node-classification` | Node Classification Route |
+| GET | `/api/heatseeker/node-confluence` | Node Confluence Route |
 | GET | `/api/heatseeker/node-lifecycle` | Node Lifecycle Route |
+| GET | `/api/heatseeker/price-history/{ticker}` | Price History |
 | GET | `/api/heatseeker/rainbow-road` | Rainbow Road Route |
 | GET | `/api/heatseeker/reverse-rug` | Reverse Rug Route |
 | GET | `/api/heatseeker/rolling-floors-ceilings` | Rolling Floors Ceilings Route |
@@ -487,6 +498,13 @@ callable route rather than a hand-copied guess.
 | POST | `/api/llm/analyze-trade` | Llm Analyze Trade |
 | POST | `/api/llm/generate` | Llm Generate |
 | GET | `/api/llm/providers` | Llm Providers |
+
+## market (2 endpoints)
+
+| Method | Path | Summary |
+|--------|------|---------|
+| GET | `/api/market/catalog` | Catalog Page |
+| GET | `/api/market/provider-updates` | Provider Updates |
 
 ## max_pain (1 endpoints)
 
