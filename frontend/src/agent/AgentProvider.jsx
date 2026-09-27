@@ -28,7 +28,7 @@ export default function AgentProvider({children}){
  },[clearSessionView]);
  const askQuestion=useCallback(async(question)=>{
   if(busy.current || ending.current || !question.trim())return;
-  if(!context.ticker){setError("Select a ticker first.");return;}
+  if(!context.ticker){setError("Open the Solstice grid or Tidehunter to ask about the current selection.");return;}
   busy.current=true;setError(null);setSessionNotice(null);setProgress("Starting research");
   frozen.current=JSON.parse(JSON.stringify(context));
   const epoch=historyEpoch.current;

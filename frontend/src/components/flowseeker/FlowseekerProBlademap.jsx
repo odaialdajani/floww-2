@@ -40,7 +40,7 @@ import { persistJournalSeeds } from "./journalPlans";
 import OutcomeLedger from "./OutcomeLedger";
 import TidehunterSettings, { loadTide, saveSettings as saveTide } from "./TidehunterSettings";
 import "./FlowseekerProBlademap.css";
-import { publishScreenContext } from "../../agent/useScreenContext";
+import { usePublishScreenContext } from "../../agent/useScreenContext";
 import DealerDrilldown from "./DealerDrilldown";
 import { dealerSeries, finite } from "./dealerSeries";
 
@@ -1163,17 +1163,14 @@ export default function FlowseekerProBlademap({ active = true }) {
       ok:cellValues.length > 0 };
   }, [dealers.heat,dealerData]);
 
-  useEffect(()=>{
-    if(!active)return;
-    publishScreenContext({page:"flowseeker-pro",ticker:focusTicker,dte:"all",mode,
+  usePublishScreenContext(active ? {page:"flowseeker-pro",ticker:focusTicker,dte:"all",mode,
       selectedContract:selectedRow?.osi || selectedRow?.ckey || null,
       selectedExpiry:selectedRow?.exp || selectedRow?.expiration || null,selectedStrike:selectedRow?.strike ?? null,
       selectedType:selectedRow?.type || null,
       expiryRange:[knobDteMin,knobDteMax],expiries:dealerData.expiries,
       metric:"gex",mapQuery:dealers.heat?.map_query || null,
       mapVersion:dealers.heat?.asof || null,mapStrikes:dealerData.strikes,mapExpiries:dealerData.expiries,
-      observedAt:sourceTime || null});
-  },[active,focusTicker,mode,selectedRow,knobDteMin,knobDteMax,dealerData,dealers.heat]);
+      observedAt:sourceTime || null} : null);
 
   const drillFiltered = useMemo(() => drillRows.filter((p) => {
     const side = String(p.type || "").toLowerCase().startsWith("c") ? "CALL" : "PUT";

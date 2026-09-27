@@ -413,7 +413,7 @@ function ContextSections({ scout, patterns, regime, vanna, moneyness, members = 
         <details>
           <summary>Pattern + regime context</summary>
           <div style={{ fontSize: 12, color: "#94a3b8" }}>
-            {regSign != null && <>regime: {String(regSign)} (context, not direction). </>}
+            {regSign != null && <>regime: {String(regSign)} (context, not direction). {regime?.reason === "MODEL_INPUTS_INCOMPLETE" && "Options data is incomplete; no reliable sign or zero-gamma level is available. "}</>}
             {pats ? <>patterns: {pats.length ? pats.map((p) => `${p.pattern_id || p.id}(${p.state || "?"})`).join(", ") : "none"}. Candidates lack temporal evidence; names are not forecasts.</> : <>patterns: unavailable.</>}
           </div>
         </details>

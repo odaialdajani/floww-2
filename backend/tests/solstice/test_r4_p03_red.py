@@ -102,7 +102,9 @@ def test_r4_16_regime_metadata_multiplier_and_zero_curve():
     zero = [{"strike": 500, "type": "call", "gamma": 0.0, "oi": 100,
              "iv": 0.2, "T": 0.08}]
     r2 = regime_at_spot(500.0, zero, "SPY")
-    assert r2["sign"] == "ZERO" and r2["reason"] == "ZERO_CURVE"
+    assert r2["sign"] == "POSITIVE" and r2["reason"] == "MODELED_SIGN"
+    assert r2["vendor_at_spot"] == 0
+    assert r2["modeled_at_spot"] > 0
 
 
 def test_r4_16_timer_sign_interpretation():

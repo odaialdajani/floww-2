@@ -1,3 +1,7 @@
+# Latest accuracy corrections - 2026-09-27 02:19 UTC
+
+Three confirmed critical defects are corrected and checked: incomplete model inputs no longer publish false signs/zero levels; new research cannot inherit a departed screen's ticker/map; chain filters now apply to both sources and ticker changes discard old rows/expiry. Final desktop checks: 901 passed; final build passed. See .planning/eval/critical-accuracy-verification-20260927.md for exact evidence and limits. Browser check remains in progress. Bars metric fallback and Profile missing-cell behavior remain to inspect; no whole-product accuracy claim.
+
 # Current priority: substantial functionality and accuracy - 2026-09-27 01:58 UTC
 
 The user has explicitly deferred further shutdown, minor hardening and expanded operational proof. Focus on errors that could mislead a decision or break the existing main experience: wrong prices/calculations, wrong source/time/expiry context, misleading missing data, unsupported research answers, and broken primary controls. Preserve and push all source/plan work. Do not reopen optional paper/live, alert/learning or broad redesign work.

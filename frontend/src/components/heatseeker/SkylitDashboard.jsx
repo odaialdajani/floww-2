@@ -11,7 +11,7 @@ import SolsticeStatusStrip from "./SolsticeStatusStrip";
 import WallInspector from "./WallInspector";
 import ScenarioStrip from "./ScenarioStrip";
 import ExposureStrip from "./ExposureStrip";
-import { publishScreenContext } from "../../agent/useScreenContext";
+import { usePublishScreenContext } from "../../agent/useScreenContext";
 import ReplayStrip from "./ReplayStrip";
 import AlertEngineStrip from "../flowseeker/AlertEngineStrip";
 import { shownMapStrikes, mapSurface } from "./shownMapStrikes";
@@ -369,14 +369,12 @@ function SkylitDashboard({
       setSelectedCell(selectedCell.wall_id ? {...selectedCell,colKey:null,value:null} : null);
     }
   }, [selectedCell,selectedReading]);
-  useEffect(() => {
-    publishScreenContext({page:"heatseeker",ticker,dte:dte==null?"all":dte===0?"0dte":`days:${dte}`,
+  usePublishScreenContext({page:"heatseeker",ticker,dte:dte==null?"all":dte===0?"0dte":`days:${dte}`,
       metric:activeView,overlayMetric:activeMetric,displayMode:priceHistoryOpen?"price-history":isReplay?"replay":"live",snapshotId:priceHistoryOpen?null:visibleData?.snapshotId || null,mode:timeframe,
       expiries,selectedStrike:priceHistoryOpen?null:selectedReading?.strike ?? null,selectedExpiry:priceHistoryOpen?null:selectedReading?.colKey ?? null,
       mapQuery:priceHistoryOpen?null:visibleData?.map_query || null,mapVersion:priceHistoryOpen?null:visibleData?.asof || null,
       mapStrikes:priceHistoryOpen?[]:shownMapStrikes(visibleData,displaySpot,expanded?null:fitRows,activeView,activeMetric),
       mapExpiries:priceHistoryOpen?[]:activeSurface.expiries,observedAt:priceHistoryOpen?null:visibleData?.event_time || visibleData?.observed_at || null});
-  }, [priceHistoryOpen,ticker,dte,activeView,activeMetric,isReplay,timeframe,expiries,selectedReading,visibleData,displaySpot,expanded,fitRows,activeSurface]);
   useEffect(() => { setFollowWall(false); setFollowWallId(null); }, [ticker,timeframe,expiries,dte,expWidened]);
   const overlayNote = (() => {
     const n = overlayData?.strikes?.length || 0;

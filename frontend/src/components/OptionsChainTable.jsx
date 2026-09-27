@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import axios from "axios";
-import { fmt, fmtAbs, pctClass } from "../lib/helpers";
+import { fmtAbs, pctClass } from "../lib/helpers";
 import { API } from "../config/api";
 import { fetchPublicChain } from "../lib/publicApi";
 
@@ -24,26 +24,27 @@ const SORT_OPTIONS = [
  */
 function chainRespToRows(resp) {
   if (!resp) return null;
-  const contracts = resp.contracts || [];
+  const contracts = resp.contracts || resp.rows || [];
+  const finite = value => typeof value === "number" && Number.isFinite(value) ? value : null;
   return {
     rows: contracts.map(c => ({
-      type: c.type === "call" ? "call" : "put",
-      strike: c.strike,
+      type: c.type === "call" || c.type === "put" ? c.type : null,
+      strike: finite(c.strike),
       expiry: c.expiry,
-      dte: c.T != null ? Math.round(c.T * 365) : null,
-      iv: c.iv,
-      delta: c.delta,
-      gamma: c.gamma,
-      oi: c.oi,
-      volume: c.volume,
-      gex: c.gex != null ? c.gex : 0,
-      vanna: c.vanna != null ? c.vanna : 0,
-      charm: c.charm != null ? c.charm : 0,
-      moneyness_pct: c.moneyness_pct,
-      bid: c.bid,
-      ask: c.ask,
+      dte: finite(c.dte) ?? (finite(c.T) !== null ? Math.round(c.T * 365) : null),
+      iv: finite(c.iv),
+      delta: finite(c.delta),
+      gamma: finite(c.gamma),
+      oi: finite(c.oi),
+      volume: finite(c.volume),
+      gex: finite(c.gex),
+      vanna: finite(c.vanna),
+      charm: finite(c.charm),
+      moneyness_pct: finite(c.moneyness_pct),
+      bid: finite(c.bid),
+      ask: finite(c.ask),
     })),
-    count: resp.n_contracts != null ? resp.n_contracts : contracts.length,
+    count: resp.n_contracts ?? resp.count ?? contracts.length,
     expiries: resp.expiries || [],
     spot: resp.spot,
     ticker: resp.ticker,
@@ -51,8 +52,10 @@ function chainRespToRows(resp) {
   };
 }
 
-export default function OptionsChainTable({ ticker, spot }) {
-  const [chain, setChain] = useState(null);
+export default function OptionsChainTable({ ticker }) {
+  const [loadedChain, setChain] = useState(null);
+  // Hide the previous ticker during the render before its replacement fetch starts.
+  const chain = loadedChain?.requestTicker === ticker ? loadedChain : null;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [expiry, setExpiry] = useState("");
@@ -66,18 +69,12 @@ export default function OptionsChainTable({ ticker, spot }) {
   useEffect(() => {
     let mounted = true;
     const controller = new AbortController();
+    setExpiry("");
 
     const fetchChain = async () => {
       setLoading(true);
       setError(null);
       try {
-        const params = new URLSearchParams({
-          min_oi: minOi, sort_by: sortBy, sort_dir: sortDir,
-          moneyness: moneyness === "all" ? "" : moneyness,
-        });
-        if (expiry) params.set("expiry", expiry);
-        if (dteMax !== null) params.set("dte_max", String(dteMax));
-
         // Phase 5.1: try direct Public API endpoint first.
         // Falls back to merged /api/chain if Public API unavailable.
         let chainData = null;
@@ -93,10 +90,11 @@ export default function OptionsChainTable({ ticker, spot }) {
         }
 
         // Fallback: merged /api/chain (Public API → cvserver → yfinance)
-        if (!chainData || !mounted) {
+        if (!mounted) return;
+        if (!chainData) {
           try {
             const mergedRes = await axios.get(
-              `${CHAIN_API}/${ticker}?${params}`,
+              `${CHAIN_API}/${ticker}`,
               { signal: controller.signal, timeout: 30000 }
             );
             if (mounted) {
@@ -109,7 +107,7 @@ export default function OptionsChainTable({ ticker, spot }) {
           }
         }
 
-        if (mounted && chainData) setChain(chainData);
+        if (mounted && chainData) setChain({ ...chainData, requestTicker: ticker });
       } catch (err) {
         if (err.name === "AbortError" || err.code === "ERR_CANCELED") return;
         if (mounted) console.error("Chain fetch failed:", err);
@@ -122,14 +120,35 @@ export default function OptionsChainTable({ ticker, spot }) {
       mounted = false;
       controller.abort();
     };
-  }, [ticker, expiry, dteMax, moneyness, minOi, sortBy, sortDir]);
+  }, [ticker]);
 
   const filtered = useMemo(() => {
     if (!chain?.rows) return [];
-    if (side === "calls") return chain.rows.filter(r => r.type === "call");
-    if (side === "puts") return chain.rows.filter(r => r.type === "put");
-    return chain.rows;
-  }, [chain, side]);
+    const currentSpot = chain.spot;
+    const rows = chain.rows.filter(r => {
+      if (side === "calls" && r.type !== "call") return false;
+      if (side === "puts" && r.type !== "put") return false;
+      if (expiry && r.expiry !== expiry) return false;
+      if (minOi > 0 && (r.oi === null || r.oi < minOi)) return false;
+      if (dteMax !== null && (r.dte === null || r.dte > dteMax)) return false;
+      if (moneyness !== "all") {
+        if (!Number.isFinite(currentSpot) || currentSpot <= 0 || r.strike === null || !r.type) return false;
+        if (moneyness === "atm") return Math.abs(r.strike - currentSpot) / currentSpot <= 0.01;
+        const intrinsic = r.type === "call" ? currentSpot - r.strike : r.strike - currentSpot;
+        if (moneyness === "itm" && intrinsic <= 0) return false;
+        if (moneyness === "otm" && intrinsic >= 0) return false;
+      }
+      return true;
+    });
+    return rows.sort((a, b) => {
+      const av = a[sortBy], bv = b[sortBy];
+      // Unavailable values remain last in both directions, never treated as zero.
+      if (av == null) return bv == null ? 0 : 1;
+      if (bv == null) return -1;
+      const order = typeof av === "string" ? av.localeCompare(bv) : av - bv;
+      return sortDir === "asc" ? order : -order;
+    });
+  }, [chain, side, expiry, minOi, dteMax, moneyness, sortBy, sortDir]);
 
   const toggleSort = (col) => {
     if (sortBy === col) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -168,6 +187,7 @@ export default function OptionsChainTable({ ticker, spot }) {
   return (
     <div className="panel p-2">
       <div className="label mb-2">Options Chain {chain ? `(${filtered.length}/${chain.count})` : ""}</div>
+      {error && <div role="alert">{error}</div>}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-1 mb-2">
@@ -178,7 +198,7 @@ export default function OptionsChainTable({ ticker, spot }) {
           <option value="all">All</option>
           <option value="itm">ITM</option>
           <option value="otm">OTM</option>
-          <option value="atm">ATM</option>
+          <option value="atm">ATM (within 1%)</option>
         </select>
         <select value={expiry} onChange={e => setExpiry(e.target.value)} className="btn text-[9px] px-1 py-0.5">
           <option value="">All Expiries</option>
@@ -239,18 +259,19 @@ export default function OptionsChainTable({ ticker, spot }) {
                 const actualIdx = startIdx + i;
                 const isCall = r.type === "call";
                 const gexClass = r.gex > 0 ? "text-teal-400" : r.gex < 0 ? "text-purple-400" : "text-slate-500";
-                const nearSpot = spot && Math.abs(r.strike - spot) / spot < 0.01;
+                const nearSpot = Number.isFinite(chain.spot) && chain.spot > 0 && r.strike !== null
+                  && Math.abs(r.strike - chain.spot) / chain.spot < 0.01;
                 return (
                   <tr key={actualIdx} style={{ height: ROW_HEIGHT }} className={`${nearSpot ? "bg-slate-700/30" : ""} hover:bg-slate-700/20`}>
-                    <td className={`px-1 py-0.5 font-bold ${isCall ? "text-teal-400" : "text-purple-400"}`}>{isCall ? "C" : "P"}</td>
-                    <td className="text-right px-1 py-0.5 mono">{r.strike.toFixed(r.strike < 10 ? 2 : 0)}</td>
+                    <td className={`px-1 py-0.5 font-bold ${isCall ? "text-teal-400" : "text-purple-400"}`}>{isCall ? "C" : r.type === "put" ? "P" : "—"}</td>
+                    <td className="text-right px-1 py-0.5 mono">{r.strike !== null ? r.strike.toFixed(r.strike < 10 ? 2 : 0) : "—"}</td>
                     <td className="text-right px-1 py-0.5 text-slate-400">{r.expiry?.slice(5)}</td>
                     <td className="text-right px-1 py-0.5 text-slate-400">{r.dte ?? "—"}</td>
                     <td className="text-right px-1 py-0.5 mono">{r.iv != null ? (r.iv * 100).toFixed(1) + "%" : "—"}</td>
                     <td className="text-right px-1 py-0.5 mono">{r.delta != null ? r.delta.toFixed(2) : "—"}</td>
                     <td className="text-right px-1 py-0.5 mono">{r.gamma != null ? r.gamma.toFixed(4) : "—"}</td>
-                    <td className="text-right px-1 py-0.5">{r.oi >= 1000 ? (r.oi / 1000).toFixed(1) + "K" : r.oi}</td>
-                    <td className="text-right px-1 py-0.5">{r.volume >= 1000 ? (r.volume / 1000).toFixed(1) + "K" : r.volume}</td>
+                    <td className="text-right px-1 py-0.5">{r.oi >= 1000 ? (r.oi / 1000).toFixed(1) + "K" : r.oi ?? "—"}</td>
+                    <td className="text-right px-1 py-0.5">{r.volume >= 1000 ? (r.volume / 1000).toFixed(1) + "K" : r.volume ?? "—"}</td>
                     <td className={`text-right px-1 py-0.5 mono ${gexClass}`}>{fmtAbs(r.gex)}</td>
                     <td className="text-right px-1 py-0.5 mono">{fmtAbs(r.vanna)}</td>
                     <td className="text-right px-1 py-0.5 mono">{fmtAbs(r.charm)}</td>
