@@ -6,3 +6,5 @@
 # Preserve the exact upstream sample and licence bytes, including on Windows.
 /backend/tests/fixtures/flashalpha_gex/sample_chain.csv -text
 /backend/tests/fixtures/flashalpha_gex/LICENSE -text
+
+*.sh text eol=lf

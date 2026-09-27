@@ -20,15 +20,47 @@ tree. Only changing the gate's own behaviour can break these tests.
 from __future__ import annotations
 
 import json
+import os
+import shlex
 import shutil
 import subprocess
-import textwrap
+import sys
 from pathlib import Path
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GATE_PATH = REPO_ROOT / "qc" / "audit" / "truth_audit.sh"
+
+
+def _bash():
+    if os.name == "nt":
+        git = Path(shutil.which("git")).resolve()
+        candidate = git.parent.parent / "bin" / "bash.exe"
+        assert candidate.is_file(), "Git Bash is required to run the real audit gate"
+        return str(candidate)
+    return shutil.which("bash") or "bash"
+
+def _run(args, **kwargs):
+    if os.name == "nt":
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    kwargs.setdefault("encoding", "utf-8")
+    return subprocess.run(args, **kwargs)
+
+def _gate(root):
+    # Keep the real script unchanged while using this test's actual interpreter.
+    python = shlex.quote(sys.executable.replace("\\", "/"))
+    command = 'python3() { ' + python + ' "$@"; }; export -f python3; bash "$1"'
+    return _run([_bash(), "-c", command, "audit-test", "qc/audit/truth_audit.sh"],
+                cwd=root, capture_output=True, text=True, check=False)
+
+def _discovered():
+    # Execute the production discovery block; never duplicate its patterns here.
+    source = GATE_PATH.read_text(encoding="utf-8")
+    block = "MODEL_METAS=$(" + source.split("MODEL_METAS=$(", 1)[1].split("\n)", 1)[0] + "\n)"
+    proc = _run([_bash(), "-c", block + '\nprintf "%s\\n" "$MODEL_METAS"'],
+                cwd=REPO_ROOT, capture_output=True, text=True, check=True)
+    return proc.stdout.splitlines()
 
 # A commit subject that trips the ML/model rules, so findings are BLOCKING
 # rather than WARN. A non-ML subject is used separately to pin the WARN path.
@@ -96,13 +128,13 @@ def run_gate(
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(payload), encoding="utf-8")
 
-    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
-    subprocess.run([*GIT, "add", "-A"], cwd=root, check=True)
+    _run(["git", "init", "-q"], cwd=root, check=True)
+    _run([*GIT, "add", "-A"], cwd=root, check=True)
     if commit:
         # check=False with an explicit assert: a bare CalledProcessError here
         # says only "exit 128" and hides which git setting caused it. Surface
         # git's own stderr in the failure message instead.
-        done = subprocess.run(
+        done = _run(
             [*GIT, "commit", "-q", "--allow-empty", "-m", subject],
             cwd=root, capture_output=True, text=True, check=False,
         )
@@ -110,13 +142,7 @@ def run_gate(
             f"fixture git commit failed ({done.returncode}): "
             f"{done.stderr.strip() or done.stdout.strip()}"
         )
-    return subprocess.run(
-        ["bash", "qc/audit/truth_audit.sh"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    return _gate(root)
 
 
 def manifest(n_features: int, n_samples: int, sharpe=None) -> dict:
@@ -148,11 +174,13 @@ def test_gate_script_exists():
 
 
 def test_gate_is_executable():
-    assert GATE_PATH.stat().st_mode & 0o111, "gate must be executable for CI"
+    tracked = _run(["git", "ls-files", "--stage", "qc/audit/truth_audit.sh"],
+                   cwd=REPO_ROOT, capture_output=True, text=True, check=True)
+    assert tracked.stdout.startswith("100755 "), "gate must be executable in Git for CI"
 
 
 def test_gate_passes_syntax_check():
-    proc = subprocess.run(["bash", "-n", str(GATE_PATH)], capture_output=True, text=True)
+    proc = _run([_bash(), "-n", "qc/audit/truth_audit.sh"], cwd=REPO_ROOT, capture_output=True, text=True)
     assert proc.returncode == 0, f"bash -n failed: {proc.stderr}"
 
 
@@ -160,13 +188,8 @@ def test_gate_passes_syntax_check():
 @pytest.mark.parametrize("pattern", REQUIRED_PATTERNS)
 def test_find_covers_every_metadata_convention(pattern):
     """The gate's own find must still match each convention in the repo."""
-    proc = subprocess.run(
-        ["find", "models", "backend/models", "-maxdepth", "2", "-type", "f",
-         "(", "-name", "*_meta_*.json", "-o", "-name", "*_meta.json",
-         "-o", "-name", "meta_*.json", "-o", "-name", "*_manifest.json", ")"],
-        cwd=REPO_ROOT, capture_output=True, text=True, check=True,
-    )
-    found = [line for line in proc.stdout.split() if Path(line).match(pattern)]
+    discovered = _discovered()
+    found = [line for line in discovered if Path(line).match(pattern)]
     assert found, (
         f"pattern {pattern!r} now matches nothing in the live tree. Either the "
         f"convention was renamed or the gate's find regressed to covering less."
@@ -177,13 +200,8 @@ def test_find_covers_every_metadata_convention(pattern):
 def test_live_descriptor_is_discovered(sample):
     """Each real descriptor must be reachable by the gate's find."""
     assert (REPO_ROOT / sample).is_file(), f"fixture drifted: {sample} is gone"
-    proc = subprocess.run(
-        ["find", "models", "backend/models", "-maxdepth", "2", "-type", "f",
-         "(", "-name", "*_meta_*.json", "-o", "-name", "*_meta.json",
-         "-o", "-name", "meta_*.json", "-o", "-name", "*_manifest.json", ")"],
-        cwd=REPO_ROOT, capture_output=True, text=True, check=True,
-    )
-    assert sample in proc.stdout.split(), f"gate cannot see {sample}"
+    discovered = _discovered()
+    assert sample in discovered, f"gate cannot see {sample}"
 
 
 def test_manifest_fixtures_are_inspected(tmp_path):
@@ -208,13 +226,16 @@ def test_sharpe_ceiling_fails_for_ml_commit(tmp_path):
     proc = run_gate(
         tmp_path, models={"models/X_manifest.json": manifest(10, 1000, sharpe=8.02)}
     )
-    assert "Sharpe" in proc.stdout and "FAIL" in proc.stdout
+    assert "FAIL: Model models/X_manifest.json: Sharpe 8.02 > 5" in proc.stdout
+    assert proc.returncode == 1, proc.stdout
 
 
 def test_healthy_model_passes(tmp_path):
     """44 features on 2799 samples is 0.0157, comfortably under the ceiling."""
     proc = run_gate(tmp_path, models={"models/X_manifest.json": manifest(44, 2799)})
     assert proc.returncode == 0, proc.stdout
+    assert "PASS: Model models/X_manifest.json: 2799 training samples (ok)" in proc.stdout
+    assert "PASS: Model models/X_manifest.json: feature/sample ratio" in proc.stdout
 
 
 def test_missing_sharpe_is_skip_not_pass(tmp_path):
@@ -274,16 +295,34 @@ def test_ml_word_in_body_does_not_trip_ml_rules(tmp_path):
     (root / "models" / "X_manifest.json").write_text(
         json.dumps(manifest(53, 167)), encoding="utf-8"
     )
-    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
-    subprocess.run([*GIT, "add", "-A"], cwd=root, check=True)
-    subprocess.run(
+    _run(["git", "init", "-q"], cwd=root, check=True)
+    _run([*GIT, "add", "-A"], cwd=root, check=True)
+    _run(
         [*GIT, "commit", "-q", "--allow-empty", "-m",
          f"{DOCS_SUBJECT}\n\nThis note describes what the model artifacts contain."],
         cwd=root, check=True,
     )
-    proc = subprocess.run(
-        ["bash", "qc/audit/truth_audit.sh"], cwd=root, capture_output=True, text=True
-    )
+    proc = _gate(root)
     assert proc.returncode == 0, (
         "a commit whose BODY mentions models must not be treated as ML work"
     )
+
+
+@pytest.mark.parametrize("filename", ["X_meta_v1.json", "X_meta.json", "meta_X.json", "X_manifest.json"])
+def test_each_convention_receives_actual_metric_verdict(tmp_path, filename):
+    proc = run_gate(tmp_path, models={"models/" + filename: manifest(53, 167)})
+    assert filename in proc.stdout
+    assert "feature/sample ratio" in proc.stdout
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+
+
+def test_too_few_samples_fails(tmp_path):
+    proc = run_gate(tmp_path, models={"models/X_manifest.json": manifest(1, 20)})
+    assert "FAIL: Model models/X_manifest.json: only 20 training samples" in proc.stdout
+    assert proc.returncode == 1, proc.stdout
+
+def test_suspicious_accuracy_fails(tmp_path):
+    data = {**manifest(10, 1000), "accuracy": 0.99}
+    proc = run_gate(tmp_path, models={"models/X_manifest.json": data})
+    assert "FAIL: Model models/X_manifest.json: accuracy 0.99 > 0.95" in proc.stdout
+    assert proc.returncode == 1, proc.stdout
