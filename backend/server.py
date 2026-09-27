@@ -2982,7 +2982,20 @@ async def websocket_gex(websocket: WebSocket, ticker: str):
             except Exception as e:
                 consecutive_errors += 1
                 log.warning(f"WebSocket error for {t}: {e} (consecutive: {consecutive_errors})")
-                await websocket.send_json({"error": str(e), "ticker": t})
+                # The socket that just failed is usually already unusable --
+                # this exception is very often itself a send failure, or the
+                # peer has gone away. Sending here raised LocalProtocolError
+                # ("Can't send data when our state is ERROR"), which escaped to
+                # the outer handler and logged every ordinary browser
+                # disconnect as a FATAL error. Reporting is best-effort.
+                try:
+                    await websocket.send_json({"error": str(e), "ticker": t})
+                except Exception as send_err:
+                    log.debug(
+                        f"Could not deliver error payload to {t} "
+                        f"(socket already closed): {send_err}"
+                    )
+                    break
                 if consecutive_errors >= max_errors:
                     log.error(f"Too many consecutive errors for {t}, closing WebSocket")
                     await websocket.close(code=1011, reason="Too many errors")
@@ -3493,6 +3506,24 @@ app.include_router(social_flow_router, tags=["social"])
 from routes.alerts import router as alerts_router
 
 app.include_router(alerts_router, tags=["alerts"])
+
+# The alerts websocket MUST also be reachable at the path the frontend
+# actually opens. `router` carries prefix="/api/alerts", so
+# `@router.websocket("/ws/signals")` registers at /api/alerts/ws/signals —
+# a path nothing connects to. AlertOverlay.js opens
+# `${WS_URL}/ws/signals`, which resolved to server.py's greedy
+# `/ws/{topic}` with topic="signals" (ws_manager), so every client landed
+# in the generic streamer and the alerts producer's _signal_clients list
+# was never read. The channel was dead on every commit that shipped it.
+#
+# Registered here, before /ws/{topic} below, so Starlette's first-match
+# ordering hands the exact path to the alerts handler. Both paths are
+# served: the prefixed one for direct API use, this one for the client.
+from routes.alerts import websocket_signals as _alerts_websocket_signals
+
+app.add_api_websocket_route(
+    "/ws/signals", _alerts_websocket_signals, name="alerts_ws_signals_frontend"
+)
 
 # Preferences & theme sync
 from routes.preferences import router as preferences_router

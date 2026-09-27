@@ -626,6 +626,93 @@ async def node_classification_route(
         return {"ticker": ticker.upper() if isinstance(ticker, str) else "unknown", "spot": 0, "nodes": [], "error": str(e), "status": "degraded"}
 
 
+@router.get("/node-confluence")
+async def node_confluence_route(
+    ticker: str,
+    expiries: int = Query(2, ge=1, le=12),
+    limit: int = Query(12, ge=1, le=50),
+    include_flow: bool = Query(True),
+):
+    """Per-strike confluence overlay + flow-at-node (roadmap #4 and #5).
+
+    Wires two scorers that already existed but had no mounted consumer:
+    `services.agent.confluence.score` (deterministic, zero production
+    callers) and the strike-scoped flow read (previously only reachable by
+    switching tabs).
+
+    Honesty contract, preserved from the pure service: a dimension with no
+    real per-strike input is reported `missing` and contributes 0.0, and
+    `structure` is reported `context_only` because gamma magnitude is not a
+    direction. A thin tape yields `microstructure: missing`, not a lean.
+    """
+    try:
+        from server import _sanitize
+        from services.heatseeker import _is_call, _strike
+        from services.node_confluence import node_brief
+        t = ticker.strip().upper()
+        raw = await _fetch_chain(t, expiries)
+        spot = raw.get("spot", 0)
+        contracts = raw.get("contracts", [])
+        if not spot or not contracts:
+            raise HTTPException(404, f"No options data for {ticker}")
+
+        # Per-strike rows: signed GEX from the canonical S² engine, volume
+        # aggregated per strike. Same convention every other heatseeker
+        # route uses, so the overlay cannot disagree with the grid.
+        gex_by_strike = _gex_per_strike(spot, contracts)
+        vol_by_strike: dict[float, dict[str, float]] = {}
+        for c in contracts:
+            k = _strike(c)
+            if k <= 0:
+                continue
+            bucket = vol_by_strike.setdefault(k, {"call_volume": 0.0, "put_volume": 0.0})
+            side = "call_volume" if _is_call(c) else "put_volume"
+            bucket[side] += float(c.get("total_volume", c.get("volume", 0)) or 0)
+
+        strikes = [
+            {
+                "strike": k,
+                "gex": g,
+                "total_oi": 0.0,
+                "call_volume": vol_by_strike.get(k, {}).get("call_volume", 0.0),
+                "put_volume": vol_by_strike.get(k, {}).get("put_volume", 0.0),
+                "lifecycle": None,
+                "taps": None,
+                "tap_prob": None,
+            }
+            for k, g in gex_by_strike.items()
+        ]
+
+        flow_rows: list[dict[str, Any]] = []
+        flow_status = "disabled"
+        if include_flow:
+            try:
+                from services.duckdb_engine import db as _ddb
+                from services.flow_alerts import read_alert_feed
+                flow_rows = await asyncio.to_thread(
+                    read_alert_feed, _ddb, days=2, ticker=t, sort_by="conviction"
+                )
+                flow_status = "ok" if flow_rows else "no_prints"
+            except Exception as e:
+                logger.warning("node-confluence flow read failed: %s", e)
+                flow_status = "unavailable"
+
+        out = node_brief(t, strikes, flow_rows=flow_rows, limit=limit)
+        return _sanitize({**out, "spot": spot, "flow_status": flow_status})
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"node-confluence route fail: {e}")
+        return {
+            "ticker": ticker.upper() if isinstance(ticker, str) else "unknown",
+            "spot": 0,
+            "rows": [],
+            "strikes_considered": 0,
+            "error": str(e),
+            "status": "degraded",
+        }
+
+
 @router.get("/stacked-nodes")
 async def stacked_nodes_route(
     ticker: str,

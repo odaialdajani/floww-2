@@ -9,6 +9,7 @@ All tests are offline (mocked broker/provider). No live key required.
 from __future__ import annotations
 
 import os
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -18,6 +19,22 @@ import server
 from server import app
 
 client = TestClient(app)
+
+
+def _future_weekday_expiries(count: int) -> list[str]:
+    """`count` upcoming weekdays, as ISO dates.
+
+    Weekdays only, because option expiries land on trading days; a Saturday
+    date resolves to EXPIRED under `time_to_expiry_years` and silently
+    empties the chain.
+    """
+    out: list[str] = []
+    day = datetime.now(UTC).date() + timedelta(days=1)
+    while len(out) < count:
+        if day.weekday() < 5:  # Mon-Fri
+            out.append(day.isoformat())
+        day += timedelta(days=1)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -234,14 +251,53 @@ class TestAlphaShims:
 
 class TestPublicBarsHistoryTechnical:
     def test_bars(self):
+        # The response field is `count`, not `n_bars`, and the request axis is
+        # `timeframe` (with an explicit `sessions` scope), not `interval`.
+        # That is deliberate: commit 2b2592c1 made bars session-aware so an
+        # intraday request near the close cannot return extended-hours prints
+        # that look like regular-session bars. `?interval=daily` is now an
+        # unsupported timeframe and the route 400s on it.
         with patch("routes.public_api.fetch_bars_from_public_api",
                    new=AsyncMock(return_value=_bars(5))):
-            r = client.get("/api/public/bars/SPY?interval=daily")
+            r = client.get("/api/public/bars/SPY?timeframe=1Day")
         assert r.status_code == 200
         d = r.json()
         assert d["ok"] is True
-        assert d["n_bars"] == 5
+        assert d["count"] == 5
+        assert d["timeframe"] == "1Day"  # the axis label is 1Day, not "daily"
+        # Session scope is part of the contract — it is what makes the bars
+        # regular-session-only.
+        assert d["sessions"] == "regular"
         assert d["data_source"] == "public_api"
+
+    def test_bars_rejects_unsupported_timeframe(self):
+        """An unsupported axis label is a 400, not a silently-empty 200."""
+        with patch("routes.public_api.fetch_bars_from_public_api",
+                   new=AsyncMock(return_value=_bars(5))):
+            r = client.get("/api/public/bars/SPY?timeframe=7min")
+        assert r.status_code == 400
+        # The app's custom http_exception_handler uses "error", not FastAPI's
+        # "detail", for a uniform error envelope across every route.
+        assert "timeframe" in r.json()["error"].lower()
+
+    def test_bars_legacy_interval_param_is_not_the_axis(self):
+        """`interval` is a dead parameter on this route, not a 400.
+
+        The axis is `timeframe`. Passing `interval=` leaves `timeframe` at its
+        default and the route serves the default series with 200 — FastAPI
+        ignores unknown query params. This test records that, because the
+        original test read `?interval=daily`, believed it was selecting daily
+        bars, and was in fact asserting against whatever the default returned.
+        """
+        with patch("routes.public_api.fetch_bars_from_public_api",
+                   new=AsyncMock(return_value=_bars(5))) as m:
+            r = client.get("/api/public/bars/SPY?interval=daily")
+        assert r.status_code == 200
+        assert r.json()["timeframe"] != "interval"  # the default, not the param
+        # And the fetcher was called with the DEFAULT timeframe, proving
+        # `interval` never reached it.
+        assert m.await_args is not None
+        assert m.await_args.kwargs["timeframe"] == "1Day"
 
     def test_bars_502_when_unavailable(self):
         with patch("routes.public_api.fetch_bars_from_public_api",
@@ -259,7 +315,11 @@ class TestPublicBarsHistoryTechnical:
         assert r.json()["n_bars"] == 5
 
     def test_technical_sma(self):
-        with patch("routes.public_api.fetch_bars_from_public_api",
+        # The technical route calls `fetch_bars_by_interval`, NOT
+        # `fetch_bars_from_public_api`. Patching the latter let the real
+        # fetcher run, so these two tests never exercised the indicator math
+        # at all — they depended on whatever the live/mocked vendor returned.
+        with patch("routes.public_api.fetch_bars_by_interval",
                    new=AsyncMock(return_value=_bars(30))):
             r = client.get("/api/public/technical/SPY/SMA?time_period=10")
         assert r.status_code == 200
@@ -269,7 +329,7 @@ class TestPublicBarsHistoryTechnical:
         assert d["value"] == pytest.approx(124.5)
 
     def test_technical_bad_indicator_400(self):
-        with patch("routes.public_api.fetch_bars_from_public_api",
+        with patch("routes.public_api.fetch_bars_by_interval",
                    new=AsyncMock(return_value=_bars(30))):
             r = client.get("/api/public/technical/SPY/NOPE")
         assert r.status_code == 400
@@ -327,28 +387,45 @@ class TestChainCache:
         yield
         adapter._clear_chain_cache()
 
-    def _broker(self, spot=450.0, expiries=None):
+    def _broker(self, spot=450.0, expiries=None, symbol=None):
+        # These tests pin past calendar dates, which quietly rotted: both
+        # expiries below are now history, `time_to_expiry_years` classifies
+        # them EXPIRED, every contract is dropped, and the chain comes back
+        # None. Derive future trading days instead of hardcoding them.
+        fut = _future_weekday_expiries(2)
         broker = MagicMock()
         broker.get_trading_account.return_value = MagicMock(account_id="TEST-ACCT")
         broker.get_option_expirations = AsyncMock(
-            return_value=expiries or ["2026-09-18", "2026-09-25"])
+            return_value=expiries or fut)
         q = MagicMock()
         q.mid_price = spot
         q.last = spot
+        # The adapter REFUSES to substitute a quote whose symbol does not match
+        # the request (see _matching_quote — it exists so a QQQ price can never
+        # be served as SPY). An unqualified MagicMock attribute is a Mock, not a
+        # str, so the match fails and the spot degrades to no-data. Echo back
+        # whichever ticker this broker is standing in for.
+        q.symbol = symbol or ""
         broker.get_quotes = AsyncMock(return_value=[q])
         broker.get_option_chain_parsed = AsyncMock(return_value={"calls": [], "puts": []})
         return broker
 
+    def _broker_for(self, ticker, spot=450.0):
+        b = self._broker(spot=spot, symbol=ticker)
+        return b
+
     @pytest.mark.asyncio
     async def test_second_call_served_from_cache(self):
         import services.public_api_adapter as adapter
-        broker = self._broker()
+        broker = self._broker(symbol="CACHE1")
+        exp = _future_weekday_expiries(1)[0]
         with patch.object(adapter, "_get_broker", new=AsyncMock(return_value=broker)):
             # Empty chain -> None is NOT cached (falsy contracts); use expiries
             # with no parsed data is also None... so give it contracts via
-            # parsed side effect below instead.
+            # parsed side effect below instead. The contract must be dated on a
+            # real future trading day or it is dropped as EXPIRED.
             broker.get_option_chain_parsed = AsyncMock(return_value={
-                "calls": [MagicMock(symbol="X", expiration="2026-09-18", strike=450,
+                "calls": [MagicMock(symbol="X", expiration=exp, strike=450,
                                     open_interest=10, iv=0.2, delta=0.5, gamma=0.01,
                                     theta=0, vega=0.1, bid=1.0, ask=1.2, volume=5)],
                 "puts": [],
@@ -363,11 +440,11 @@ class TestChainCache:
     async def test_different_broker_refetches(self):
         import services.public_api_adapter as adapter
         with patch.object(adapter, "_get_broker",
-                          new=AsyncMock(return_value=self._broker(spot=450.0))):
+                          new=AsyncMock(return_value=self._broker(spot=450.0, symbol="CACHE2"))):
             await adapter.fetch_chain_from_public_api("CACHE2", max_expiries=1)
         # Different broker object, same key -> must NOT serve the other
         # broker's entry (unit-test isolation + key-rotation safety).
-        b2 = self._broker(spot=451.0)
+        b2 = self._broker(spot=451.0, symbol="CACHE2")
         with patch.object(adapter, "_get_broker", new=AsyncMock(return_value=b2)):
             r = await adapter.fetch_chain_from_public_api("CACHE2", max_expiries=1)
         assert b2.get_option_expirations.await_count == 1
@@ -376,9 +453,10 @@ class TestChainCache:
     @pytest.mark.asyncio
     async def test_stale_served_on_failure(self):
         import services.public_api_adapter as adapter
-        broker = self._broker()
+        broker = self._broker(symbol="CACHE3")
+        exp = _future_weekday_expiries(1)[0]
         broker.get_option_chain_parsed = AsyncMock(return_value={
-            "calls": [MagicMock(symbol="X", expiration="2026-09-18", strike=450,
+            "calls": [MagicMock(symbol="X", expiration=exp, strike=450,
                                 open_interest=10, iv=0.2, delta=0.5, gamma=0.01,
                                 theta=0, vega=0.1, bid=1.0, ask=1.2, volume=5)],
             "puts": [],

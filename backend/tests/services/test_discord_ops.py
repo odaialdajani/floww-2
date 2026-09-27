@@ -8,6 +8,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+# Every test in this module imports `services.discord_ops`, which imports
+# discord.py transitively. That package is an optional extra and is not in
+# requirements.txt (the gateway is not part of the shipped backend), so
+# without this guard the module is uncollectable and the tests fail rather
+# than skip. Same treatment as tests/services/test_discord_gateway.py.
+pytest.importorskip("discord", reason="optional discord.py extra not installed")
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 
