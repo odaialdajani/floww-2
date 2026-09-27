@@ -1,11 +1,13 @@
 # Solstice STATUS — T00 baseline + T01–T03 foundation (living receipt)
 
 > **Current state, 27 Sep 2026 — supersedes the "open PR" lines below.**
-> All work described in this file is merged: #13, #19, #55, #56, #12, #5, #58.
-> `origin/main` = `d6ed0e0b`. Cumulative verification on that tree:
-> **5503 backend passed / 0 failed**, **82 frontend suites / 675 tests passed**,
+> All work described in this file is merged: #13, #19, #55, #56, #12, #5, #58, #54.
+> `origin/main` = `2333c5bf`. Cumulative verification on that tree:
+> **5503 backend passed / 0 failed**, **83 frontend suites / 680 tests passed**,
 > silent-except gate OK (289 files), ruff clean. Re-verified after the merge
 > batch: 222 Solstice tests and 15 WebSocket regression tests pass on main.
+> #54 was merged as `2333c5bf` and added the first `AlertOverlay` coverage,
+> which is the 83rd suite.
 > The historical sections below are preserved verbatim as the audit trail; where
 > they say a PR is OPEN, read this note instead.
 >
@@ -16,13 +18,6 @@
 >   `GAMMA_FLIP` type, and it lacks the `add_api_websocket_route("/ws/signals")`
 >   registration. Merging it as-is would regress the signal channel fixed in #56.
 >   Local head is ahead of the PR head and unpushed, so this is live work.
-> - **#54** — rebased onto current main at `917fea5d`, CI running. Its SSE switch
->   was justified by "the legacy /ws/signals socket had no server producer", true
->   when written and false after #56. Only the transport swap is reverted; the
->   three net-positive changes are kept: `AlertOverlay.test.jsx` (main had no
->   test for that component at all), the `DualGEXBadge.jsx` fix, and removal of
->   `useSolsticeSnapshot.js`, which is dead code (only self-reference on main).
->   `AlertOverlay.js` is byte-identical to main, so the WebSocket is intact.
 > - **#4** — do NOT merge; not mechanically possible either. One conflict, in
 >   `backend/services/public_api_adapter.py`. Substantively it must not land: its
 >   `fetched_at` falls back to `datetime.now(UTC)`, fabricating source time when
