@@ -1,0 +1,108 @@
+{
+  "status": "preserved_at_user_request_independent_review_stopped",
+  "root_focused": {
+    "exitCode": 0,
+    "stdout": "......................                                                   [100%]\r\n22 passed, 27 warnings in 2.66s\r\n",
+    "stderr": ""
+  },
+  "root_real_research_shutdown": {
+    "graceful_shutdown": true,
+    "limits": [
+      "Local isolated MongoDB remains running; this is not database crash recovery or production backup proof",
+      "Only research startup runs; graceful mode invokes all registered shutdown callbacks, not full application startup/background workers",
+      "External cached-data and model-transport seams are synthetic; no real upstream model dispatch",
+      "Routes use the real application through in-process HTTP transport, not a listening server or browser",
+      "Descriptive answers only; prediction projection and paper/live lifecycles are not covered"
+    ],
+    "processes": [
+      {
+        "exit": 0,
+        "expected": 0,
+        "phase": "shutdown"
+      },
+      {
+        "exit": 0,
+        "expected": 0,
+        "phase": "recover"
+      }
+    ],
+    "recovery": {
+      "checks": [
+        "actual_research_startup",
+        "registered_graceful_shutdown_saved_before_restart",
+        "exact_completed_answer",
+        "queued_and_active_interrupted_once",
+        "saved_history_and_cursor_resume",
+        "same_request_no_repeat",
+        "changed_request_conflict",
+        "disabled_new_work_retains_history",
+        "new_factual_work_after_restart",
+        "foreign_owner_isolation",
+        "uncertain_usage_retained",
+        "reinitialize_idempotent"
+      ],
+      "completed_answer_sha256": "3c764ed4c8967942d62df22885dfedb0728929e1b394ea458873cb4026978007",
+      "external_attempts": [],
+      "fixture_calls_after": 3,
+      "fixture_calls_before": 3,
+      "real_model_calls": 0,
+      "restart_counts": {
+        "cache": 1,
+        "fixture_answer": 0,
+        "fixture_catalog": 0
+      },
+      "states_after": [
+        "completed",
+        "interrupted",
+        "interrupted",
+        "interrupted"
+      ],
+      "states_before": [
+        "completed",
+        "running",
+        "running",
+        "queued"
+      ],
+      "status": "passed",
+      "store": "research_worker_recovery_e1a7eef0195149f78eb078d3ef5544fd",
+      "usage_statuses": [
+        "completed",
+        "uncertain",
+        "uncertain"
+      ]
+    },
+    "shutdown": {
+      "callbacks": [
+        "server.on_stop",
+        "routes.market_catalog.stop_release_watch",
+        "server.shutdown_research",
+        "server.shutdown_duckdb",
+        "server.shutdown_ingestion",
+        "server.shutdown_solstice_capture"
+      ],
+      "external_attempts": [],
+      "states_after_shutdown_before_restart": [
+        "completed",
+        "interrupted",
+        "interrupted",
+        "interrupted"
+      ]
+    },
+    "sources": {
+      "backend/routes/agent.py": "40f54240ba5ec47fd601255e73760ca91291f7df92c9300263ac3125fe4930df",
+      "backend/scripts/verify_research_worker_recovery.py": "a1a911c0a41896511d12e12b623bd008b48f1d80ff4206a6d02a507e0d213c7f",
+      "backend/server.py": "7f1b67f99785b8575e27ffd99f7cd0c096d189cb86076985672cd680a6e4585f",
+      "backend/services/agent/codex_model.py": "e9d1d7c909c57c9d7c206a3d11cb833f0223252d1e5c391b473e9448a9fdf7d3",
+      "backend/services/agent/contracts.py": "6ac9434175ae6b02101a628271710515dc0d08d2ba688d113f7ec7dd66402273",
+      "backend/services/agent/local_access.py": "306a8c03940dea63ad0eb3badc3561aed1530c5d1dd4d7f9fc111b62f4d19a55",
+      "backend/services/agent/read_budget.py": "dac83653c5f73044b09521461589e9addfc090d8a0903f2ac4d2b550570441a4",
+      "backend/services/agent/reads.py": "62f64457e3e53a3863b4800906eb6d1221fedf252f5cc6e6a7a23d4710847e60",
+      "backend/services/agent/repository.py": "c578fce82b95de61f9f232606825b32fb245a6ad0add2e013da9f01cc74d10b9",
+      "backend/services/agent/research.py": "e5370729bb4bbb3a56841157a68937143d81b1e05998d1c92de171ac9d8832bb"
+    },
+    "sources_unchanged": true,
+    "status": "passed"
+  },
+  "independent": "Stopped at user direction; scratch setup failed before test bodies, no independent PASS",
+  "scope": "No further shutdown work; focus substantive functionality and accuracy"
+}

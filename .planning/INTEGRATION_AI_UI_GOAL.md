@@ -1,3 +1,7 @@
+## User priority update - 2026-09-27 01:58 UTC
+
+The user explicitly stopped further shutdown/minor-hardening work and asked to focus on how the app works and its accuracy: substantial data, calculation, research-answer and core-use failures only. Additional shutdown, full-startup and backup experiments are deferred and are NOT completion blockers for this narrowed accuracy pass. Commit/push preservation remains required. Already made changes are retained; do not label unfinished independent checks as passed.
+
 # Active scope narrowed by the user - 2026-09-27 01:45 UTC
 
 The user requested commit/push preservation and narrowed the goal to **Research, accurate screens, and saved-work safety**, explicitly choosing this over adding paper trading. This supersedes the earlier requirement to complete the entire AI/UI roadmap. Previously completed work is retained.

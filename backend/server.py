@@ -105,6 +105,25 @@ log = logging.getLogger("heatseeker")
 # -- Graceful shutdown infrastructure --
 _shutdown_event = asyncio.Event()
 _background_tasks: set[asyncio.Task] = set()
+_BACKGROUND_SHUTDOWN_TIMEOUT_S = 5.0
+
+
+async def _stop_tracked_background_tasks():
+    """Cancel known work and include children registered during cancellation."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + _BACKGROUND_SHUTDOWN_TIMEOUT_S
+    while True:
+        pending = {task for task in _background_tasks if not task.done()}
+        if not pending:
+            return set()
+        if loop.time() >= deadline:
+            return pending
+        for task in pending:
+            if not task.cancelling():
+                task.cancel()
+        _, unfinished = await asyncio.wait(pending, timeout=max(0.0, deadline - loop.time()))
+        if unfinished:
+            return {task for task in _background_tasks if not task.done()}
 
 
 async def _logged_task(coro, name: str):
@@ -942,6 +961,8 @@ async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = Tr
     (< STALE_TTL) exists, serve it immediately and refresh in the background
     (single-flight per key)."""
     from services.market_provenance import cached_market_copy
+    if _shutdown_event.is_set():
+        raise HTTPException(status_code=503, detail="Market refresh is stopping")
     cache_key = f"{ticker}:{max_expiries}:{mode}:{dte}:{scalp}:{with_taps}:{max_strikes}"
     cached = _BUILD_HEATMAP_CACHE.get(cache_key)
     age = (time.time() - cached["ts"]) if cached else None
@@ -956,9 +977,11 @@ async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = Tr
             and not cached["data"].get("error")
         ):
             _BUILD_HEATMAP_INFLIGHT.add(cache_key)
-            asyncio.create_task(_revalidate_heatmap(
+            refresh = asyncio.create_task(_revalidate_heatmap(
                 cache_key, ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes,
             ))
+            _background_tasks.add(refresh)
+            refresh.add_done_callback(_background_tasks.discard)
             return cached_market_copy(cached["data"], age, revalidating=True)
     try:
         return await _build_heatmap_impl(ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes)
@@ -1515,6 +1538,9 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     # Run yfinance calls in parallel threads to avoid blocking
     rv_task = asyncio.create_task(asyncio.to_thread(calc_realized_volatility, ticker.replace("^", ""), 20))
     iv_rank_task = asyncio.create_task(asyncio.to_thread(calc_iv_rank_percentile, ticker.replace("^", ""), skew.get("atm_iv", 0.2)))
+    for task in (rv_task, iv_rank_task):
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
     rv = await rv_task
     iv_rank = await iv_rank_task
     if rv:
@@ -3353,20 +3379,18 @@ async def on_stop():
         except Exception as e:
             log.warning(f"on_stop: scheduler task raised on cancel: {e}")
 
-    # Cancel any remaining tracked background tasks
-    pending = [t for t in _background_tasks if not t.done()]
-    for t in pending:
-        t.cancel()
-    if pending:
-        # Wait with a short bound so a stuck task can't block shutdown
-        await asyncio.wait(pending, timeout=5.0)
-        log.info(f"on_stop: cancelled {len(pending)} background task(s)")
+    await _stop_tracked_background_tasks()
 
     # Research cancellation persists terminal state. It must finish while
     # Mongo is still open; its later registered callback is idempotent.
     research = getattr(app.state, "research_service", None)
     if research is not None:
         await research.close()
+
+    unfinished = {task for task in _background_tasks if not task.done()}
+    if unfinished:
+        log.error("on_stop: %d background task(s) did not stop; storage remains open", len(unfinished))
+        raise RuntimeError("Background work did not stop; storage remains open")
 
     # Finally close MongoDB
     client.close()

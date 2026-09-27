@@ -1,3 +1,11 @@
+# Current priority: substantial functionality and accuracy - 2026-09-27 01:58 UTC
+
+The user has explicitly deferred further shutdown, minor hardening and expanded operational proof. Focus on errors that could mislead a decision or break the existing main experience: wrong prices/calculations, wrong source/time/expiry context, misleading missing data, unsupported research answers, and broken primary controls. Preserve and push all source/plan work. Do not reopen optional paper/live, alert/learning or broad redesign work.
+
+The prior research-saving shutdown fix is committed and independently verified. The subsequent background-shutdown edits are preserved at the user's explicit save-all request: root22focused checks and the real isolated research-shutdown check pass, but independent review was stopped before its test bodies ran. No further shutdown work is planned under this scope. Raw test/session records remain private local artifacts.
+
+## Prior narrowed-scope notes (superseded where noted above)
+
 # Active critical scope - 2026-09-27 01:45 UTC
 
 The user has narrowed this goal to **reliable research, accurate existing screens, and saved-work safety**. The [current goal and completion requirements](.planning/INTEGRATION_AI_UI_GOAL.md) supersede the broader completion requirement below. The critical goal remains unfinished.
