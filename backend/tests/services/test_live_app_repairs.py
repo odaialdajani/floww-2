@@ -36,6 +36,31 @@ async def test_invalid_close_cannot_bypass_book(monkeypatch,day,symbol,now):
     assert result['price'] is None
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('field,value', [
+    ('low', -5.0),
+    ('low', 0),
+    ('volume', -1),
+    ('high', float('inf')),
+    ('low', float('nan')),
+])
+async def test_implausible_bar_fields_fail_closed(monkeypatch,field,value):
+    # The bar guard in public_session_close.completed_public_close is
+
+    #     0 < l <= min(o, c) <= max(o, c) <= h  and  v >= 0
+
+    # `test_bad_close_fails_closed` varies only the close, which the ordering
+    # constraint already rejects. That left the positivity and volume halves
+    # unpinned: weakening `0 < bar['l']` to `-1e18 < bar['l']` kept all 26 tests
+    # in this file green. These cases fail only because of the half being
+    # exercised.
+    monkeypatch.setenv('FLOWW_MARKET_DATA_PROVIDER','public')
+    broker = broker_for()
+    broker.get_bars.return_value['regularMarket']['bars'][0][field] = value
+    result = await adapter._resolve_spot_observation(broker,'SPY','test',now=NOW)
+    assert result['price'] is None
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize('value', [-1, 0, float('nan'), 900])
 async def test_bad_close_fails_closed(monkeypatch,value):
     monkeypatch.setenv('FLOWW_MARKET_DATA_PROVIDER','public')
