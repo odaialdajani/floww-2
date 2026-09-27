@@ -148,3 +148,87 @@ def test_grafana_root_url_matches_the_published_host_port():
             f"GF_SERVER_ROOT_URL says port {m.group(1)} but the host port is "
             f"{published}; Grafana will redirect to the wrong origin"
         )
+
+
+# ── Alert rules vs. metrics that actually exist ────────────────────────────
+#
+# An alert whose metric is never emitted can never fire, and Prometheus will
+# not complain: the rule loads, the target is simply absent. That is a safety
+# net that does not exist while appearing to.
+#
+# `SchwabTokenExpiring` was exactly that: it watched
+# floww_schwab_token_expires_in_seconds, which nothing in the backend emits,
+# and told the operator to re-authenticate via /api/schwab/auth -- a route
+# that does not exist, for a provider explicitly listed as retired in
+# routes/data_providers.py. Removed rather than left as decoration.
+
+ALERT_DIR = REPO_ROOT / "prometheus" / "alerts"
+
+
+def _alert_metrics() -> set[str]:
+    metrics: set[str] = set()
+    for path in sorted(ALERT_DIR.glob("*.yml")):
+        doc = yaml.safe_load(path.read_text()) or {}
+        for group in doc.get("groups") or []:
+            for rule in group.get("rules") or []:
+                for name in re.findall(r"\b(floww_[a-z_]+)", str(rule.get("expr", ""))):
+                    metrics.add(name)
+    return metrics
+
+
+def _backend_declares(metric: str) -> bool:
+    """True if any non-test backend module references the metric name."""
+    root = REPO_ROOT / "backend"
+    for py in root.rglob("*.py"):
+        parts = py.parts
+        if ".venv" in parts or "tests" in parts:
+            continue
+        try:
+            if metric in py.read_text(errors="ignore"):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+# Prometheus synthesises these from a parent metric rather than the app
+# declaring them, so their absence from the source is not a dead alert.
+PROMETHEUS_DERIVED_SUFFIXES = ("_count", "_sum", "_bucket")
+
+
+def test_alert_rules_reference_only_emitted_metrics():
+    """An alert on a metric nothing emits can never fire.
+
+    `floww_*_count` / `_sum` / `_bucket` are excluded: Prometheus generates
+    those series from the parent histogram/summary, so the backend declaring
+    `floww_api_request_duration_seconds` is enough for an alert on
+    `floww_api_request_duration_seconds_count`.
+    """
+    dead = sorted(
+        m
+        for m in _alert_metrics()
+        if not m.endswith(PROMETHEUS_DERIVED_SUFFIXES) and not _backend_declares(m)
+    )
+    assert not dead, (
+        "alert rules watch metrics the backend never emits, so they can never "
+        f"fire: {dead}"
+    )
+
+
+def test_no_alert_points_at_a_retired_provider():
+    retired = ("schwab", "alphavantage")
+    for path in sorted(ALERT_DIR.glob("*.yml")):
+        text = path.read_text().lower()
+        for name in retired:
+            assert name not in text, (
+                f"{path.name} references {name}, which "
+                "routes/data_providers.py lists as retired"
+            )
+
+
+def test_alert_files_are_valid_yaml():
+    files = sorted(ALERT_DIR.glob("*.yml"))
+    assert files, "no alert files found"
+    for path in files:
+        assert isinstance(yaml.safe_load(path.read_text()), dict), path
+
