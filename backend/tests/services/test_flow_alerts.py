@@ -22,7 +22,6 @@ from datetime import date, timedelta
 import pytest
 
 from services.flow_alerts import (
-    SCAN_COLUMNS,
     biz_dte,
     dedup_filter,
     est_entry,
@@ -88,10 +87,14 @@ def test_norm_rows_drops_malformed_rows_not_crash():
     assert len(rows) == 1
 
 
-@pytest.mark.flaky_env
-def test_biz_dte_same_day_is_zero_and_skips_weekends():
-    assert biz_dte(date.today().isoformat()) == 0
-    assert biz_dte(_future_exp(3)) == 3
+@pytest.mark.parametrize("today,expiry,expected", [
+    (date(2026, 9, 11), "2026-09-11", 0),
+    (date(2026, 9, 11), "2026-09-16", 3),
+    (date(2026, 9, 12), "2026-09-14", 1),
+    (date(2026, 9, 13), "2026-09-14", 1),
+])
+def test_biz_dte_same_day_is_zero_and_skips_weekends(today, expiry, expected):
+    assert biz_dte(expiry, today=today) == expected
 
 
 # ── SCORING PARITY ──────────────────────────────────────────────────
@@ -145,16 +148,16 @@ def test_est_entry_missing_iv_returns_none():
 
 # ── SIDE / BIAS ─────────────────────────────────────────────────────
 
-def test_opening_call_flow_is_buy_bullish():
+def test_daily_call_volume_has_no_proven_direction():
     r = norm_rows([_raw(typ="call", vol=9000, oi=900)])[0]
     side, bias = infer_side_bias(r)
-    assert side == "BUY" and bias == "BULLISH"
+    assert side == "FLOW" and bias is None
 
 
-def test_opening_put_flow_is_buy_bearish():
+def test_daily_put_volume_has_no_proven_direction():
     r = norm_rows([_raw(typ="put", vol=9000, oi=900, delta=-0.3)])[0]
     side, bias = infer_side_bias(r)
-    assert side == "BUY" and bias == "BEARISH"
+    assert side == "FLOW" and bias is None
 
 
 def test_low_vol_oi_is_flow_with_no_bias_claim():
@@ -187,7 +190,7 @@ def test_eval_score_rule_fires_with_entry_side_tier():
     assert len(alerts) == 1
     a = alerts[0]
     assert a["rule"] == "SCORE" and a["under"] == "PLTR"
-    assert a["side"] == "BUY" and a["bias"] == "BULLISH"
+    assert a["side"] == "FLOW" and a["bias"] is None
     assert a["est_entry"] is not None and a["est_entry"] > 0
     assert a["tier"] in ("GOLD", "SILVER", "BRONZE")
     assert a["under_price"] == 133.0
@@ -351,6 +354,8 @@ def test_gex_confluent_fires_on_lowercase_bias_vs_negative_gamma():
     from services.flow_alerts import _common_factors
     r = dict(norm_rows([_bearish_raw()])[0])
     r["bias"] = "BEARISH"
+    # Explicit individual-trade fixture for the regime comparison.
+    r.update(activity_basis="individual_trade_fixture", signed_side="ASK")
     gex_ctx = {"PLTR": {"gamma_imbalance": {"gamma_imbalance_pct": -1.2,
                                             "regime": "negative_gamma"}}}
     f = _common_factors(r, {}, set(), {}, {}, gex_context=gex_ctx)
@@ -361,6 +366,8 @@ def test_gex_confluent_fires_on_lowercase_bias_vs_negative_gamma():
 def test_gex_confluent_fires_bullish_positive_gamma():
     from services.flow_alerts import _common_factors
     r = dict(norm_rows([_raw(vol=60000, oi=1500)])[0])
+    # Explicit individual-trade fixture for the regime comparison.
+    r.update(activity_basis="individual_trade_fixture", signed_side="ASK")
     gex_ctx = {"PLTR": {"gamma_imbalance": {"gamma_imbalance_pct": 0.9,
                                             "regime": "positive_gamma"}}}
     f = _common_factors(r, {}, set(), {}, {}, gex_context=gex_ctx)
@@ -371,6 +378,8 @@ def test_gex_confluent_fires_bullish_positive_gamma():
 def test_gex_confluent_false_when_opposed():
     from services.flow_alerts import _common_factors
     r = dict(norm_rows([_raw(vol=60000, oi=1500)])[0])
+    # Explicit individual-trade fixture for the regime comparison.
+    r.update(activity_basis="individual_trade_fixture", signed_side="ASK")
     gex_ctx = {"PLTR": {"gamma_imbalance": {"gamma_imbalance_pct": -1.2,
                                             "regime": "negative_gamma"}}}
     f = _common_factors(r, {}, set(), {}, {}, gex_context=gex_ctx)

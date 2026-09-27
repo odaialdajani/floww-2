@@ -792,8 +792,10 @@ def calc_gamma_flip_levels(spot: float, contracts: list[dict[str, Any]],
             gamma_flip = k1 + (k2 - k1) * (-g1 / (g2 - g1))
             break
 
-    call_wall = max(sorted_strikes, key=lambda k: gex_by_strike[k])
-    put_wall = min(sorted_strikes, key=lambda k: gex_by_strike[k])
+    positive_strikes = [k for k in sorted_strikes if gex_by_strike[k] > 0]
+    negative_strikes = [k for k in sorted_strikes if gex_by_strike[k] < 0]
+    call_wall = max(positive_strikes, key=lambda k: gex_by_strike[k]) if positive_strikes else None
+    put_wall = min(negative_strikes, key=lambda k: gex_by_strike[k]) if negative_strikes else None
 
     # Max pain
     if oi_by_strike:
@@ -829,11 +831,12 @@ def calc_gamma_flip_levels(spot: float, contracts: list[dict[str, Any]],
         regime = "unknown"
 
     # Dealer hedging flow at ±1%
-    move_pct = 0.01
     try:
         if spot > 0 and total_gex == total_gex:  # NaN check: NaN != NaN
-            up_shares = int(total_gex * move_pct / spot)
-            dn_shares = int(total_gex * (-move_pct) / spot)
+            # total_gex already measures dollar delta change for a 1% move.
+            # A delta hedge offsets that change under the declared gamma-sign proxy.
+            up_shares = int(-total_gex / spot)
+            dn_shares = int(total_gex / spot)
         else:
             up_shares = 0
             dn_shares = 0
@@ -855,12 +858,12 @@ def calc_gamma_flip_levels(spot: float, contracts: list[dict[str, Any]],
         "total_gex": total_gex_clean,
         "regime": regime,
         "hedging_flow": {
-            "up_1pct": {"shares": abs(up_shares), "direction": "buy" if up_shares > 0 else "sell", "notional_usd": abs(up_shares) * spot},
-            "down_1pct": {"shares": abs(dn_shares), "direction": "buy" if dn_shares > 0 else "sell", "notional_usd": abs(dn_shares) * spot},
+            "up_1pct": {"shares": abs(up_shares), "direction": "buy" if up_shares > 0 else "sell" if up_shares < 0 else "none", "notional_usd": abs(up_shares) * spot},
+            "down_1pct": {"shares": abs(dn_shares), "direction": "buy" if dn_shares > 0 else "sell" if dn_shares < 0 else "none", "notional_usd": abs(dn_shares) * spot},
         },
         "dist_to_flip": round(spot - gamma_flip, 2) if gamma_flip else None,
-        "dist_to_call_wall_pct": round((call_wall - spot) / spot * 100, 2) if spot > 0 else None,
-        "dist_to_put_wall_pct": round((spot - put_wall) / spot * 100, 2) if spot > 0 else None,
+        "dist_to_call_wall_pct": round((call_wall - spot) / spot * 100, 2) if spot > 0 and call_wall is not None else None,
+        "dist_to_put_wall_pct": round((spot - put_wall) / spot * 100, 2) if spot > 0 and put_wall is not None else None,
         "spot": spot,
     }
 

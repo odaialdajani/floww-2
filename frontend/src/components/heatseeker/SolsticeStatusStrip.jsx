@@ -43,7 +43,7 @@ function SolsticeStatusStrip({ data = null, spot = null, ticker = "", isLive = f
   return (
     <div className="skylit-status-strip" data-testid="solstice-status-strip"
       title="Environment · Location · Setup state · Data status (deterministic)">
-      <span data-testid="solstice-env">Env: {String(regime)} γ proxy</span>
+      <span data-testid="solstice-env">Env: {String(regime)} γ proxy{data?.gamma_regime_v1?.reason === "MODEL_INPUTS_INCOMPLETE" && " — incomplete options data"}</span>
       <span data-testid="solstice-loc">Loc: {location}</span>
       {chips.map(({ side, wall }) => (
         <button

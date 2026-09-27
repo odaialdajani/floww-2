@@ -35,7 +35,11 @@ Frozen feature vector (order matters; never reorder — models are pinned):
     2: dte (capped at 90)
     3: |delta| (0.5 when None)
     4: sigma (capped at 10, 0 when None)
-    5: bias_bullish (1/0; calls + BULLISH bias → 1)
+    5: mins_since_open (−1.0 sentinel = fired outside RTH / unknown)
+    6: bias_bullish (1/0; calls + BULLISH bias → 1)
+
+This list is the authority for FEATURE_NAMES below and must stay in step
+with it — a wrong index map silently mistrains a pinned model.
 
 No sklearn dependency at stage 0/1 (pure python); stage 2+ uses sklearn
 LogisticRegression if available, else stays at stage 1 (honest degradation).
@@ -45,7 +49,6 @@ from __future__ import annotations
 
 import logging
 import math
-import random
 from datetime import UTC, datetime
 from typing import Any
 
@@ -342,17 +345,7 @@ def calibration_status_blob(calibration: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _demo() -> None:  # pragma: no cover - manual smoke
-    rng = random.Random(1)
-    rows = []
-    for i in range(80):
-        score = min(99.0, 40 + i * 0.7)
-        hit = rng.random() < (score / 100) * 0.8
-        rows.append({"score": score, "hit": hit, "censored": False,
-                     "asof_date": f"2099-01-{(i % 28) + 1:02d}",
-                     "vol_oi": 3.0, "premium": 1e6, "dte": 5, "delta": 0.4, "sigma": 4.0})
-    print(fit_calibration(rows))
-
-
-if __name__ == "__main__":  # pragma: no cover
-    _demo()
+# NOTE: the upstream fork shipped a `_demo()` smoke helper here that fabricated
+# 80 synthetic score/hit rows with a seeded RNG. Removed on port: this project
+# forbids simulated data inside a production service module. Exercise the
+# fitter through tests/services/test_flow_calibration.py instead.

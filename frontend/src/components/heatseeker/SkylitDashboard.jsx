@@ -1,4 +1,6 @@
-import React, { memo, useCallback, useEffect, useRef, useState } from "react";
+import StockDirectory from "./StockDirectory";
+import PriceNodeHistory from "./PriceNodeHistory";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { API as BACKEND_API } from "../../config/api";
 import SkylitTickerBar from "./SkylitTickerBar";
@@ -9,8 +11,10 @@ import SolsticeStatusStrip from "./SolsticeStatusStrip";
 import WallInspector from "./WallInspector";
 import ScenarioStrip from "./ScenarioStrip";
 import ExposureStrip from "./ExposureStrip";
+import { usePublishScreenContext } from "../../agent/useScreenContext";
 import ReplayStrip from "./ReplayStrip";
 import AlertEngineStrip from "../flowseeker/AlertEngineStrip";
+import { shownMapStrikes, mapSurface } from "./shownMapStrikes";
 
 import { resolveSelectedWall, wallPositionOf } from "../../lib/solsticeSelection";
 
@@ -22,10 +26,7 @@ import { resolveSelectedWall, wallPositionOf } from "../../lib/solsticeSelection
  * (GEX under a VEX view).
  */
 function SelectedCellReadout({ selectedCell, displayData, metric, viewMode }) {
-  const gridKey = { gex: "grid", vex: "vex_grid", charm: "charm_grid", skylit: "grid" }[viewMode] || "grid";
-  const useOverlay = metric !== "raw" && (viewMode === "gex" || viewMode === "skylit");
-  const overlay = useOverlay ? (displayData?.metrics?.grids || {})[metric] : null;
-  const surface = (overlay && overlay.grid ? overlay.grid : displayData?.grid?.[gridKey]) || {};
+  const surface = mapSurface(displayData, viewMode, metric).matrix;
   const _sn = Number(selectedCell.strike);
   const sk = Number.isFinite(_sn) && Math.floor(_sn) === _sn ? String(Math.trunc(_sn)) : String(selectedCell.strike);
   const current = surface[selectedCell.colKey]?.[sk];
@@ -80,7 +81,7 @@ function SelectedWallBlock({ data, spot, selectedCell, metric = "raw", replay = 
   return (
     <>
       <WallInspector
-        wall={wall} interaction={interaction} metrics={data.metrics} grids={data.metrics?.grids}
+        wall={wall} interaction={interaction} metrics={data.metrics} grids={data.metrics?.grids} displayGrid={data.grid}
         quality={data.quality} scenario={scenarios[0]}
         scout={data.scout} patterns={data.patterns_v1} regime={data.gamma_regime_v1}
         vanna={data.vanna_v1} moneyness={data.moneyness} metric={metric}
@@ -193,6 +194,7 @@ function SkylitDashboard({
   onRefresh,
   onCellClick,
   onStrikeClick,
+  onReplayChange,
   isLive = false,
   regime = null,
   loading = false,
@@ -254,12 +256,15 @@ function SkylitDashboard({
   // deliberate. Cleared on ticker change (no cross-symbol leakage).
   const [replaySnap, setReplaySnap] = useState(null);
   useEffect(() => { setReplaySnap(null); }, [ticker]);
-  const displayData = replaySnap || data;
+  const baseData = data && (!data.ticker || data.ticker === ticker) ? data : null;
+  const displayData = replaySnap?.ticker && replaySnap.ticker !== ticker ? null : (replaySnap || baseData);
   const isReplay = Boolean(replaySnap);
+  useEffect(() => { onReplayChange?.(isReplay); }, [isReplay, onReplayChange]);
+  useEffect(() => () => { onReplayChange?.(false); }, [onReplayChange]);
   // R5-B: in replay every data view renders the RECORDED spot; live keeps
   // the caller-supplied spot prop exactly (never the chain-build spot).
   // Live spot must never masquerade as replay, nor replay as live.
-  const displaySpot = isReplay ? (displayData?.spot ?? spot) : spot;
+  const displaySpot = isReplay ? (displayData?.spot ?? null) : spot;
   // Grid zoom, in-frame only (2026-09-04): the expanded overlay keeps its
   // designed full density instead of compounding scale on scale.
   const [gridZoom, setGridZoom] = useState(1);
@@ -322,10 +327,11 @@ function SkylitDashboard({
     setCompareLock(null);
   }, [ticker, metric, viewMode, timeframe, expiries, dte, expWidened, replaySnap]);
   useEffect(() => {
-    if (!expanded) return undefined;
+    if (!expanded || isReplay) return undefined;
     let cancelled = false;
     const ctrl = new AbortController();
     const myKey = expQueryKey;
+    setExpData(null);
     setExpLoading(true);
     const widen = expWidened ? "&expiries=8" : "";
     // Preserve full analytical scope (R4-15): mode + dte + scalp travel with
@@ -339,13 +345,37 @@ function SkylitDashboard({
         signal: ctrl.signal,
       })
       .then((r) => {
-        if (!cancelled && myKey === expQueryKey && r?.data?.strikes?.length) setExpData(r.data);
+        if (!cancelled && myKey === expQueryKey && r?.data?.strikes?.length && (!r.data.ticker || r.data.ticker === ticker)) setExpData({...r.data,ticker});
       })
       .catch(() => { /* fallback to in-frame data below */ })
       .finally(() => { if (!cancelled && myKey === expQueryKey) setExpLoading(false); });
     return () => { cancelled = true; ctrl.abort(); };
-  }, [expanded, ticker, timeframe, expiries, dte, expWidened, expQueryKey]);
-  const overlayData = replaySnap || expData || data;
+  }, [expanded, ticker, timeframe, expiries, dte, expWidened, expQueryKey, isReplay]);
+  const overlayData = isReplay ? displayData : (expData?.ticker === ticker ? expData : baseData);
+  const visibleData = expanded ? overlayData : displayData;
+  const [priceHistoryOpen, setPriceHistoryOpen] = useState(false);
+  const activeView = compareMode ? activePane : viewMode;
+  const activeMetric = ["gex", "skylit"].includes(activeView) ? metric : "raw";
+  const activeSurface = useMemo(() => mapSurface(visibleData, activeView, activeMetric), [visibleData, activeView, activeMetric]);
+  const selectedReading = useMemo(() => {
+    if (!selectedCell || selectedCell.ticker !== ticker || selectedCell.view !== activeView || selectedCell.metric !== activeMetric) return null;
+    const {strike,colKey} = selectedCell;
+    if (!shownMapStrikes(visibleData,displaySpot,expanded?null:fitRows,activeView,activeMetric).includes(strike) || !activeSurface.expiries.includes(colKey)) return null;
+    const value = activeSurface.matrix[colKey]?.[String(strike)];
+    return typeof value === "number" && Number.isFinite(value) ? {...selectedCell,value} : null;
+  }, [selectedCell,ticker,activeView,activeMetric,visibleData,displaySpot,expanded,fitRows,activeSurface]);
+  useEffect(() => {
+    if (selectedCell?.colKey && !selectedReading) {
+      setSelectedCell(selectedCell.wall_id ? {...selectedCell,colKey:null,value:null} : null);
+    }
+  }, [selectedCell,selectedReading]);
+  usePublishScreenContext({page:"heatseeker",ticker,dte:dte==null?"all":dte===0?"0dte":`days:${dte}`,
+      metric:activeView,overlayMetric:activeMetric,displayMode:priceHistoryOpen?"price-history":isReplay?"replay":"live",snapshotId:priceHistoryOpen?null:visibleData?.snapshotId || null,mode:timeframe,
+      expiries,selectedStrike:priceHistoryOpen?null:selectedReading?.strike ?? null,selectedExpiry:priceHistoryOpen?null:selectedReading?.colKey ?? null,
+      mapQuery:priceHistoryOpen?null:visibleData?.map_query || null,mapVersion:priceHistoryOpen?null:visibleData?.asof || null,
+      mapStrikes:priceHistoryOpen?[]:shownMapStrikes(visibleData,displaySpot,expanded?null:fitRows,activeView,activeMetric),
+      mapExpiries:priceHistoryOpen?[]:activeSurface.expiries,observedAt:priceHistoryOpen?null:visibleData?.event_time || visibleData?.observed_at || null});
+  useEffect(() => { setFollowWall(false); setFollowWallId(null); }, [ticker,timeframe,expiries,dte,expWidened]);
   const overlayNote = (() => {
     const n = overlayData?.strikes?.length || 0;
     const scope = `${timeframe} · ${expWidened ? 8 : expiries} expiries`;
@@ -358,23 +388,23 @@ function SkylitDashboard({
   })();
 
   const handleCellClick = useCallback(
-    (strike, colKey, value) => {
+    (strike, colKey, value, pane = activeView) => {
       // P05 identity selection (R6-1: overlayData listed so replay-only
       // updates cannot retain a stale selection source): store wall_id +
       // strike at click time; values always re-resolved from the current
       // snapshot (never a stored number reused across refreshes).
-      const src = overlayData;
-      const snap = { asof: src?.asof || data?.asof || null, ticker };
+      const src = visibleData;
+      const snap = { asof: src?.asof || null, ticker };
       // R8-02 deeper edge: when follow is active, prefer the followed wall
       // over the struck wall so clicking near the followed zone keeps it
       // selected instead of switching to a different wall.
-      const walls = src?.metrics?.walls || data?.metrics?.walls || [];
+      const walls = src?.metrics?.walls || [];
       const s = Number(strike);
       const hit = walls.find((w) => s >= Number(w.low) && s <= Number(w.high)) || null;
       const wall_id = followWall && followWallId
         ? (hit?.wall_id === followWallId ? hit?.wall_id : followWallId)
         : (hit?.wall_id || null);
-      const sel = { strike, colKey, value, ...snap, wall_id };
+      const sel = { strike, colKey, value, ...snap, wall_id, view:pane, metric:["gex","skylit"].includes(pane)?metric:"raw" };
       // R7-F12: historical/study clicks NEVER reach the live Trade handler.
       // Both the call boundary (here) and the arming control (below) enforce
       // it; entering replay also disarms an armed live session.
@@ -384,7 +414,7 @@ function SkylitDashboard({
         setSelectedCell(sel);
       }
     },
-    [tradeMode, onCellClick, data, expData, replaySnap, ticker, isReplay]
+    [tradeMode,onCellClick,visibleData,ticker,isReplay,followWall,followWallId,activeView,metric]
   );
   // Clear ticker-dependent selection on symbol change (F18).
   useEffect(() => { setSelectedCell(null); setActivePane("gex"); }, [ticker]);
@@ -394,15 +424,15 @@ function SkylitDashboard({
 
   const handleStrikeClick = useCallback(
     (strike) => {
-      if (onStrikeClick) onStrikeClick(strike);
+      if (!isReplay && onStrikeClick) onStrikeClick(strike);
     },
-    [onStrikeClick]
+    [onStrikeClick,isReplay]
   );
   // R7-04: pane clicks share one selection source; the clicked pane owns
   // the readout. Defined after handleCellClick (same render scope).
   const handlePaneCellClick = useCallback((pane, strike, colKey, value) => {
     setActivePane(pane);
-    handleCellClick(strike, colKey, value);
+    handleCellClick(strike, colKey, value, pane);
   }, [handleCellClick]);
 
   // R8-02 (deeper edge): when followWall is on and a new live snapshot
@@ -477,12 +507,15 @@ function SkylitDashboard({
         tickers={tickers}
       />
 
+      <StockDirectory onSelect={onTickerChange} />
+      <PriceNodeHistory ticker={ticker} open={priceHistoryOpen} onOpenChange={setPriceHistoryOpen} />
+
       {/* 2. Control Bar */}
       <SkylitControlBar
         ticker={ticker}
-        spot={spot}
-        change={change}
-        changePct={changePct}
+        spot={displaySpot}
+        change={isReplay ? null : change}
+        changePct={isReplay ? null : changePct}
         viewMode={viewMode}
         onViewModeChange={onViewModeChange}
         timeframe={timeframe}
@@ -491,8 +524,8 @@ function SkylitDashboard({
         onExpiriesChange={onExpiriesChange}
         metric={metric}
         onMetricChange={setMetric}
-        isLive={isLive}
-        onRefresh={onRefresh}
+        isLive={!isReplay && isLive}
+        onRefresh={isReplay ? undefined : onRefresh}
         onExpand={() => setExpanded(true)}
         onTickerChange={onTickerChange}
         tickers={tickers}
@@ -518,7 +551,7 @@ function SkylitDashboard({
       {/* 2.6 Bottom replay strip — deterministic session replay + data status */}
       <ReplayStrip ticker={ticker} onReplay={setReplaySnap} openRequest={replayOpenRequest} />
       {isReplay && (
-        <div data-testid="solstice-replay-banner" title="Replay mode — live refresh ignored">
+        <div className="skylit-replay-banner" data-testid="solstice-replay-banner" title="Replay mode — live refresh ignored">
           REPLAY {replaySnap?.asof || ""} — live updates paused · select Live in the replay strip to return
         </div>
       )}
@@ -530,8 +563,8 @@ function SkylitDashboard({
       {/* 2.5 Trade Mode bar */}
       <div className="skylit-col-bar">
         <div className="skylit-col-spacer" />
-        {selectedCell && !tradeMode && (
-          <SelectedCellReadout selectedCell={selectedCell} displayData={displayData} metric={metric} viewMode={compareMode ? activePane : viewMode} />
+        {selectedReading && !tradeMode && (
+          <SelectedCellReadout selectedCell={selectedReading} displayData={visibleData} metric={metric} viewMode={compareMode ? activePane : viewMode} />
         )}
         <button
           className="skylit-trade-mode-btn"
@@ -694,7 +727,7 @@ function SkylitDashboard({
             spot={displaySpot}
             viewMode={viewMode}
             metric={metric}
-            regime={regime}
+            regime={isReplay ? (visibleData?.regime || null) : regime}
           />
           {/* T07/T23: selected-wall inspector + two-sided scenarios (deterministic) */}
           <SelectedWallBlock
@@ -842,7 +875,7 @@ function SkylitDashboard({
                 spot={displaySpot}
                 viewMode={viewMode}
                 metric={metric}
-                regime={regime}
+                regime={isReplay ? (visibleData?.regime || null) : regime}
               />
               {/* R6-1 expanded inspector parity: same wall/scenarios as inline. */}
               <SelectedWallBlock data={overlayData} spot={displaySpot} selectedCell={selectedCell} metric={metric} replay={isReplay} />
@@ -856,9 +889,9 @@ function SkylitDashboard({
         <div className="skylit-bottom-ticker">
           <span className="skylit-bottom-ticker-name">{ticker}</span>
           <span className="skylit-bottom-spot">
-            ${spot != null ? Number(spot).toFixed(2) : "—"}
+            ${displaySpot != null ? Number(displaySpot).toFixed(2) : "—"}
           </span>
-          {changePct != null && (
+          {!isReplay && changePct != null && (
             <span
               className="skylit-bottom-change"
               style={{ color: changePct >= 0 ? "#34d399" : "#f87171" }}

@@ -5,15 +5,16 @@ Unit tests for calc_vex, calc_dex, calc_vega_total.
 Uses hand-calculated examples and the FlashAlpha sample chain fixture.
 """
 
+import hashlib
 import math
 import os
 import sys
+from datetime import date, datetime
+from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from datetime import UTC
 
 from advanced_analytics import calc_dex, calc_vega_total, calc_vex
 from bs_greeks import bs_delta, bs_vanna, bs_vega
@@ -22,13 +23,11 @@ from bs_greeks import bs_delta, bs_vanna, bs_vega
 # Test fixtures
 # ============================================================================
 
-def make_contracts_from_chain(chain_csv_path):
-    """Load contracts from a CSV chain file, adding T and iv fields."""
+def make_contracts_from_chain(chain_csv_path, *, valuation_date=date(2026, 2, 19)):
+    """Load original demo data with a fixed, explicitly modeled valuation date."""
     import csv
-    from datetime import datetime, timezone
     contracts = []
-    today = datetime.now(UTC).date()
-    with open(chain_csv_path) as f:
+    with open(chain_csv_path, encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
             strike = float(row["strike"])
@@ -39,16 +38,12 @@ def make_contracts_from_chain(chain_csv_path):
             ask = float(row["ask"])
             spot = float(row["underlying_price"])
 
-            # Compute T from expiry
-            try:
-                exp_date = datetime.strptime(expiry, "%Y-%m-%d").date()
-                T = max((exp_date - today).days / 365.0, 0.001)
-            except Exception:
-                T = 0.25  # default 3 months
+            exp_date = datetime.strptime(expiry, "%Y-%m-%d").date()
+            T = (exp_date - valuation_date).days / 365.0
+            if T <= 0:
+                raise ValueError("Sample valuation must precede expiry")
 
-            # Estimate IV from mid-price using BS inversion approximation
-            # For testing, use a reasonable IV estimate
-            _mid = (bid + ask) / 2.0
+            # Explicit modeled volatility, not an observed or inverted market IV.
             moneyness = strike / spot
             # Rough IV estimate: higher for OTM, lower for ITM
             iv = 0.20 + 0.05 * abs(moneyness - 1.0)
@@ -69,14 +64,11 @@ def make_contracts_from_chain(chain_csv_path):
 
 @pytest.fixture
 def sample_chain():
-    """Load the FlashAlpha sample chain."""
-    chain_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        "data", "github-repos", "cloned", "FlashAlpha-lab_gex-explained",
-        "data", "sample_chain.csv"
-    )
-    if not os.path.exists(chain_path):
-        pytest.skip(f"Sample chain not found: {chain_path}")
+    """Load the pinned MIT-licensed original sample; missing bytes are a failure."""
+    chain_path = Path(__file__).parent / "fixtures" / "flashalpha_gex" / "sample_chain.csv"
+    assert hashlib.sha256(chain_path.read_bytes()).hexdigest() == (
+        "6e1e6617916580ae60ff9d5e6327f16e1da36992744fa8e29ba98364918d4b54"
+    ), "Original sample bytes changed; check the pinned provenance"
     return make_contracts_from_chain(chain_path)
 
 

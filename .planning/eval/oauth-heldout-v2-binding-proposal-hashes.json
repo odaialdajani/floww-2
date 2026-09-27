@@ -1,0 +1,16 @@
+{
+  "status": "PROPOSAL_NOT_RUNNER_READY_NOT_RUN",
+  "frozen_at_utc": "2026-09-11T22:23:59.151575+00:00",
+  "files": [
+    {
+      "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+      "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8"
+    },
+    {
+      "path": ".planning/eval/oauth-heldout-v2-binding-proposal-review.md",
+      "sha256": "128e01f0c0f5aee0963e7556d5265277f128a2c80d8d80e0d21e8af39a847641"
+    }
+  ],
+  "model_provider_calls": 0,
+  "execution_authorized": false
+}

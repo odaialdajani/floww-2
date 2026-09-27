@@ -1,0 +1,48 @@
+{
+  "status": "passed",
+  "driver": {
+    "motor": "3.3.1",
+    "pymongo": "4.6.3"
+  },
+  "server_version": "8.0.32",
+  "real_mongo": true,
+  "database": "floww_agent_verify_883bcf70103f41d3a05d9df61f7c9ed6",
+  "restored_database": "floww_agent_verify_4fd84b07fde94d4cb6cd141e46ef44b9",
+  "backup": {
+    "agent_budget_accounts": {
+      "count": 1,
+      "sha256": "af2948b11f4887711ac43d3b702ee9bb7b6f3eb50282b9975ace81e47acb4f3a"
+    },
+    "agent_claim_paths": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "agent_claims": {
+      "count": 1,
+      "sha256": "ae57fe9bf5d33ca805517cb6661491be1a5b9e9998c499892fe7bb2c0ba82a04"
+    },
+    "agent_collection_jobs": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "agent_preferences": {
+      "count": 1,
+      "sha256": "821bf5440ff3f2f2ce1c062f698759714183dcfb8e3141946d8ee2357b86416c"
+    },
+    "agent_sessions": {
+      "count": 2,
+      "sha256": "1d1461e05b3d2fafc45893b6e8aaf7daf324897cf46e04cc17c57ac6bf5e9a42"
+    },
+    "agent_structure_snapshots": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "agent_turns": {
+      "count": 3,
+      "sha256": "c4482d3e02a6b0296f45323b7c8baa9a4502b43c0a49d713acf01ac0abd1df74"
+    }
+  },
+  "process_restart": true,
+  "bson_restore": true,
+  "limitation": "Synthetic records, pinned driver, fresh-process repository recovery and quiescent BSON restore. No application or Mongo crash, full-store equality, production-size backup, provider or model acceptance."
+}

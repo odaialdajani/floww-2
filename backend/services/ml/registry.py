@@ -336,11 +336,12 @@ class ModelRegistry:
                 f"Model artifact not found: {artifact_path}"
             )
 
-        model = joblib.load(artifact_path)
+        from services.ml.artifact_paths import resolve_artifact_path
+        model = joblib.load(resolve_artifact_path(artifact_path))
 
         scaler = None
         if os.path.exists(scaler_path):
-            scaler = joblib.load(scaler_path)
+            scaler = joblib.load(resolve_artifact_path(scaler_path))
 
         self._cache[ticker] = (model, scaler, model_doc)
         log.debug(f"Loaded active model for {ticker}: {model_doc['model_id']}")

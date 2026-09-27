@@ -1,0 +1,211 @@
+{
+  "createdAt": "2026-09-27T02:25:54.175Z",
+  "lastSourceEditUtc": "2026-09-27 02:23:41 UTC",
+  "scope": "actual mounted component, actual pure vendor-grid producer with synthetic contract inputs",
+  "red": {
+    "passed": 5,
+    "failed": 7,
+    "tests": [
+      {
+        "name": "renders node strip with regime, king, air pockets",
+        "status": "passed"
+      },
+      {
+        "name": "renders volume column when strike volume exists",
+        "status": "passed"
+      },
+      {
+        "name": "hides volume column without strike volume",
+        "status": "passed"
+      },
+      {
+        "name": "empty state without data",
+        "status": "passed"
+      },
+      {
+        "name": "missing and partial expiry readings never become zero or AIR, while measured zero remains AIR",
+        "status": "failed"
+      },
+      {
+        "name": "flat missing selected GEX stays unavailable; explicit zero and legacy total GEX stay readable",
+        "status": "failed"
+      },
+      {
+        "name": "invalid reading NaN is unavailable and never AIR",
+        "status": "failed"
+      },
+      {
+        "name": "invalid reading Infinity is unavailable and never AIR",
+        "status": "failed"
+      },
+      {
+        "name": "invalid reading -Infinity is unavailable and never AIR",
+        "status": "failed"
+      },
+      {
+        "name": "invalid reading 0 is unavailable and never AIR",
+        "status": "failed"
+      },
+      {
+        "name": "missing expiry list cannot manufacture a zero summed reading",
+        "status": "failed"
+      },
+      {
+        "name": "opposing complete expiry readings are not a low-pressure pocket merely because net sum is zero",
+        "status": "passed"
+      }
+    ]
+  },
+  "green": {
+    "passed": 12,
+    "failed": 0,
+    "tests": [
+      {
+        "name": "renders node strip with regime, king, air pockets",
+        "status": "passed"
+      },
+      {
+        "name": "renders volume column when strike volume exists",
+        "status": "passed"
+      },
+      {
+        "name": "hides volume column without strike volume",
+        "status": "passed"
+      },
+      {
+        "name": "empty state without data",
+        "status": "passed"
+      },
+      {
+        "name": "missing and partial expiry readings never become zero or AIR, while measured zero remains AIR",
+        "status": "passed"
+      },
+      {
+        "name": "flat missing selected GEX stays unavailable; explicit zero and legacy total GEX stay readable",
+        "status": "passed"
+      },
+      {
+        "name": "invalid reading NaN is unavailable and never AIR",
+        "status": "passed"
+      },
+      {
+        "name": "invalid reading Infinity is unavailable and never AIR",
+        "status": "passed"
+      },
+      {
+        "name": "invalid reading -Infinity is unavailable and never AIR",
+        "status": "passed"
+      },
+      {
+        "name": "invalid reading 0 is unavailable and never AIR",
+        "status": "passed"
+      },
+      {
+        "name": "missing expiry list cannot manufacture a zero summed reading",
+        "status": "passed"
+      },
+      {
+        "name": "opposing complete expiry readings are not a low-pressure pocket merely because net sum is zero",
+        "status": "passed"
+      }
+    ]
+  },
+  "producer": {
+    "spot": 100,
+    "contracts": [
+      {
+        "type": "call",
+        "strike": 103,
+        "expiry": "2026-10-02",
+        "gamma": 0.1,
+        "oi": 100
+      },
+      {
+        "type": "call",
+        "strike": 103,
+        "expiry": "2026-10-09",
+        "gamma": 0.1,
+        "oi": 100
+      },
+      {
+        "type": "call",
+        "strike": 99,
+        "expiry": "2026-10-02",
+        "gamma": 0.0001,
+        "oi": 100
+      },
+      {
+        "type": "call",
+        "strike": 99,
+        "expiry": "2026-10-09",
+        "gamma": null,
+        "oi": 100
+      }
+    ],
+    "grid": {
+      "expiries": [
+        "2026-10-02",
+        "2026-10-09"
+      ],
+      "strikes": [
+        99,
+        103
+      ],
+      "grid": {
+        "2026-10-02": {
+          "99": 100,
+          "103": 100000
+        },
+        "2026-10-09": {
+          "103": 100000
+        }
+      },
+      "strike_totals": [
+        {
+          "strike": 99,
+          "gex": 100
+        },
+        {
+          "strike": 103,
+          "gex": 200000
+        }
+      ],
+      "exposure_basis": "OI_VENDOR",
+      "invalid_type": 0,
+      "formula_version": "gex.v2"
+    }
+  },
+  "mountedProducerBeforeAfter": {
+    "original": {
+      "cells": [
+        "100",
+        "0"
+      ],
+      "airClass": true,
+      "airHint": "Air: 1 strikes",
+      "status": null
+    },
+    "fixed": {
+      "cells": [
+        "100",
+        "—"
+      ],
+      "airClass": false,
+      "airHint": null,
+      "status": "Some readings are unavailable. Incomplete rows are not marked AIR."
+    }
+  },
+  "sourceHashes": {
+    "frontend/src/components/VolumeProfileGrid.jsx": "87647d5109d79269de9221ee55d5f4ce0dee9c8e026193d0f6a454d9df4beb3d",
+    "frontend/src/components/VolumeProfileGrid.test.jsx": "1f27f6a4d2f4e0f8490d6fc049d6aade584d15e8c782e51fd79f2ad03b1d0b05",
+    "backend/services/gex_core.py": "3497894804799e839195f86ea7179fd85fd116480213a482d4dc0282ab3d06f7",
+    "frontend/src/App.js": "cd6831b6f427fbfc414c622b55ac057c5355af8cc9045157702b3c17bb6e6755"
+  },
+  "temporaryEvidence": "C:/Users/DARK HERO/AppData/Local/Temp/floww-chain-review-e25801c5",
+  "limits": [
+    "Not a full App mount or real provider request.",
+    "Finite upstream cells may themselves omit skipped contracts; frontend has no contract-level coverage to detect that.",
+    "Sparse absence does not distinguish unlisted contracts from unavailable inputs; neither is assumed measured zero.",
+    "Externally supplied node-strip Air levels remain upstream-owned and are not recomputed by this fix."
+  ]
+}

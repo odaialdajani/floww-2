@@ -54,3 +54,15 @@ test("no paging controls when the universe fits in one window", () => {
   expect(screen.queryByTestId("skylit-ticker-page-next")).not.toBeInTheDocument();
   expect(screen.queryByTestId("skylit-ticker-page-prev")).not.toBeInTheDocument();
 });
+
+
+test("shrinking universe with an unlisted ticker makes Previous move immediately", () => {
+  const symbols = Array.from({length:1500}, (_,i)=>`S${String(i).padStart(4,"0")}`);
+  const view = render(<SkylitTickerBar activeTicker="NOTLISTED" tickers={{popular:symbols}} />);
+  fireEvent.click(screen.getByTestId("skylit-ticker-page-next"));
+  fireEvent.click(screen.getByTestId("skylit-ticker-page-next"));
+  view.rerender(<SkylitTickerBar activeTicker="NOTLISTED" tickers={{popular:symbols.slice(0,600)}} />);
+  expect(screen.getByTestId("skylit-ticker-count")).toHaveTextContent("page 2/2");
+  fireEvent.click(screen.getByTestId("skylit-ticker-page-prev"));
+  expect(screen.getByTestId("skylit-ticker-count")).toHaveTextContent("page 1/2");
+});

@@ -261,4 +261,3 @@ def test_r7_07_episode_status_from_outcome():
     assert episode_status_from_outcome("no_touch", False)["status"] == "pending"
     assert episode_status_from_outcome("data_gap", True)["status"] == "pending"
     assert episode_status_from_outcome("simultaneous_unknown", True)["status"] == "pending"
-

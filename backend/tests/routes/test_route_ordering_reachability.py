@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from unittest.mock import AsyncMock, call
 
 import pytest
 from fastapi.testclient import TestClient
@@ -70,16 +71,33 @@ class TestRouteOrderingDataProviders:
 class TestRouteOrderingTrinity:
     """/api/trinity/align must be reachable above /api/trinity/{ticker}."""
 
-    def test_align_route_reachable(self, client):
-        """GET /api/trinity/align returns 200/401/404/503, NOT 422.
+    def test_align_route_reachable(self, client, monkeypatch):
+        """The literal route computes all three markets, never ticker ALIGN."""
+        from routes import trinity
 
-        422 means "align" was parsed as a {ticker} catch-all param —
-        the exact shadowing bug Phase 1 fixed.
-        """
+        spots = {"SPY": 500.0, "QQQ": 450.0, "^SPX": 5000.0}
+
+        async def market_chain(ticker, expiries):
+            spot = spots[ticker]
+            return {
+                "spot": spot,
+                "contracts": [
+                    {"strike": spot * 0.99, "type": "put", "oi": 100,
+                     "iv": 0.2, "T": 30 / 365},
+                    {"strike": spot * 1.01, "type": "call", "oi": 100,
+                     "iv": 0.2, "T": 30 / 365},
+                ],
+            }
+
+        fetch_chain = AsyncMock(side_effect=market_chain)
+        monkeypatch.setattr(trinity, "_fetch_chain", fetch_chain)
         r = client.get("/api/trinity/align")
-        assert r.status_code not in (422,), (
-            f"Got 422 — /align is shadowed by /{{ticker}} catch-all: {r.text[:200]}"
-        )
-        assert r.status_code in (200, 401, 404, 503), (
-            f"Unexpected status {r.status_code}: {r.text[:200]}"
-        )
+        assert r.status_code == 200, r.text[:200]
+        assert fetch_chain.await_args_list == [call("SPY", 4), call("QQQ", 4), call("^SPX", 4)]
+        result = r.json()
+        for key, spot in zip(("spy", "qqq", "spx"), spots.values(), strict=True):
+            levels = result[f"{key}_flip_levels"]
+            assert len(levels) == 1
+            assert spot * 0.99 < levels[0] < spot * 1.01
+        assert result["score"] > 0
+        assert result["aligned_levels"]

@@ -105,7 +105,7 @@ function SkylitTickerBar({
             <>
               <button
                 className="skylit-ticker-btn"
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                onClick={() => setPage(Math.max(0, safePage - 1))}
                 disabled={safePage <= 0}
                 title="Previous 500"
                 data-testid="skylit-ticker-page-prev"
@@ -114,7 +114,7 @@ function SkylitTickerBar({
               </button>
               <button
                 className="skylit-ticker-btn"
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                onClick={() => setPage(Math.min(totalPages - 1, safePage + 1))}
                 disabled={safePage >= totalPages - 1}
                 title="Next 500"
                 data-testid="skylit-ticker-page-next"

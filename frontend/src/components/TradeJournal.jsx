@@ -13,6 +13,11 @@ export function journalDateKey(v) {
 }
 
 export function journalKeysEqual(a, b) {
+  // Venue fills must retain their separate order identities on history reload.
+  // Date-only compatibility is retained for existing manual/legacy tickets.
+  const orderA = a?.broker_order_id || "";
+  const orderB = b?.broker_order_id || "";
+  if (orderA || orderB) return Boolean(orderA && orderB && orderA === orderB);
   const pick = (t) => [
     String(t?.ticker || "").replace("^", "").toUpperCase(),
     t?.type, t?.action,
@@ -21,6 +26,49 @@ export function journalKeysEqual(a, b) {
     journalDateKey(t?.entry_date),
   ].join("|");
   return pick(a) === pick(b);
+}
+
+// DuckDB timestamps are UTC but serialized without a zone. Compare them as UTC,
+// not the browser's local timezone; local annotation edits have a separate clock.
+function brokerUpdateTime(value) {
+  if (!value) return null;
+  const match = String(value).trim().match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?(Z|[+-]\d{2}:?\d{2})?$/i);
+  if (!match) return null;
+  const seconds = Date.parse(`${match[1]}T${match[2]}${match[4] || "Z"}`);
+  if (!Number.isFinite(seconds)) return null;
+  // Date.parse drops sub-millisecond digits. Retain DuckDB's six-digit fraction
+  // separately so an immediate close cannot look equal to its entry timestamp.
+  return BigInt(seconds) * BigInt(1000) + BigInt((match[3] || "").padEnd(6, "0"));
+}
+
+export function mergeJournalRows(local, server) {
+  const merged = [...local];
+  let freshCount = 0;
+  for (const [i, row] of server.entries()) {
+    const index = merged.findIndex(existing => journalKeysEqual(existing, row));
+    if (index < 0) {
+      merged.splice(freshCount++, 0, { ...row, id: `srv-${Date.now()}-${i}`,
+        ...(row.broker_order_id ? { _broker_updated_at: row.updated_at } : {}) });
+      continue;
+    }
+    if (!row.broker_order_id) continue; // Existing manual/legacy rules stay local.
+    const cached = merged[index];
+    const incomingTime = brokerUpdateTime(row.updated_at);
+    // Older caches have only the local edit clock. The first valid server row
+    // establishes an execution clock; annotation time must never suppress it.
+    const cachedTime = brokerUpdateTime(cached._broker_updated_at);
+    if (incomingTime === null || (cachedTime !== null && incomingTime <= cachedTime)) continue;
+    const next = { ...cached, _broker_updated_at: row.updated_at };
+    // Only execution/provenance fields belong to the server. Keep local notes,
+    // tags, setup, levels, and stable card identity when a fill/close arrives.
+    for (const field of ["ticker", "type", "action", "strike", "expiry", "quantity",
+      "entry_price", "exit_price", "entry_date", "exit_date", "source", "ckey",
+      "created_at", "updated_at", "broker_order_id"]) {
+      if (Object.prototype.hasOwnProperty.call(row, field)) next[field] = row[field];
+    }
+    merged[index] = next;
+  }
+  return merged;
 }
 
 
@@ -48,10 +96,9 @@ function TradeForm({ trade, onSave, onCancel, ticker, spot }) {
   const pnl = useMemo(() => {
     const entry = parseFloat(form.entry_price) || 0;
     const exit = parseFloat(form.exit_price) || 0;
-    const qty = parseInt(form.quantity) || 1;
     if (!entry || !exit) return null;
-    return (exit - entry) * qty * 100 * (form.action === "buy" ? 1 : -1);
-  }, [form.entry_price, form.exit_price, form.quantity, form.action]);
+    return tradePnl(form);
+  }, [form.entry_price, form.exit_price, form.quantity, form.action, form.type]);
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onCancel}>
@@ -63,7 +110,7 @@ function TradeForm({ trade, onSave, onCancel, ticker, spot }) {
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Ticker" value={form.ticker} onChange={v => update("ticker", v.toUpperCase())} autoFocus />
-          <Field label="Type" value={form.type} onChange={v => update("type", v)} select options={["call","put"]} />
+          <Field label="Type" value={form.type} onChange={v => update("type", v)} select options={["call","put","equity"]} />
           <Field label="Action" value={form.action} onChange={v => update("action", v)} select options={["buy","sell"]} />
           <Field label="Strike" value={form.strike} onChange={v => update("strike", v)} type="number" />
           <Field label="Expiry" value={form.expiry} onChange={v => update("expiry", v)} type="date" />
@@ -262,12 +309,7 @@ export default function TradeJournal({ ticker }) {
         const data = await res.json();
         const server = data.trades || [];
         if (cancelled || server.length === 0) return;
-        setTrades(prev => {
-          const fresh = server
-            .filter(s => !prev.some(t => journalKeysEqual(t, s)))
-            .map((s, i) => ({ ...s, id: `srv-${Date.now()}-${i}`, created_at: s.created_at }));
-          return fresh.length ? [...fresh, ...prev] : prev;
-        });
+        setTrades(prev => mergeJournalRows(prev, server));
       } catch (e) { /* server store unreachable — localStorage is the fallback */ }
     };
     loadServer();

@@ -1,0 +1,9 @@
+{
+  "scope": "unmounted bounded guarded assessment preparation",
+  "files": {
+    "backend/services/agent/paper/risk_assessment.py": "8fb7c543393d4b7c9762e856e850eb3fd1ad277fd2da7de6ca4b30107840c59f",
+    "backend/services/agent/paper/guarded_repository.py": "01203b68f39431b85cd2b70333c4c349bd6a7135b0937e2462522070db7ea6e9",
+    "tests/test_agent_paper_guard.py": "846e8d6aa0daee1d7404607a70a43c3583fd337379cef891fff8f3702da8eff8",
+    "backend/scripts/verify_paper_guard.py": "87e5e47cec361dba354af56a8714cd0ebc9965d2c110c60da6962ff5c9d620ed"
+  }
+}

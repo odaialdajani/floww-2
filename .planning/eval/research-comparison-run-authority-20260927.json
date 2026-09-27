@@ -1,0 +1,20 @@
+{
+  "status": "pending_existing_questions_only",
+  "settings": {
+    "inexpensive": {
+      "model": "gpt-5.6-terra",
+      "effort": "medium",
+      "speed": "default"
+    },
+    "stronger": null
+  },
+  "inexpensive_authority": "Existing user-approved managed ChatGPT settings retained; no repeat approval requested.",
+  "stronger_user_choice": null,
+  "cost_decision": null,
+  "cost_user_choice": null,
+  "question_history": {
+    "stronger": "Unanswered earlier20:59question",
+    "cost": "Unanswered earlier22:24question"
+  },
+  "no_new_model_calls_authorized": true
+}

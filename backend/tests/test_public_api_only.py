@@ -17,6 +17,8 @@ from fastapi.testclient import TestClient
 
 import server
 from server import app
+from services.public_api import OptionContract, Quote
+from tests.offline_network import deny_external_network  # noqa: F401
 
 client = TestClient(app)
 
@@ -145,7 +147,8 @@ class TestSchwabDeleted:
         r = client.get("/api/schwab/sweeps/abc123")
         assert r.status_code == 404
 
-    def test_import_absent(self):
+    def test_import_absent(self, monkeypatch):
+        monkeypatch.setenv("API_SECRET_KEY", "test-secret-key")
         r = client.post("/api/schwab/import-to-portfolio/x/abc123",
                         headers={"X-API-Key": "test-secret-key"})
         assert r.status_code == 404
@@ -258,8 +261,9 @@ class TestPublicBarsHistoryTechnical:
         # that look like regular-session bars. `?interval=daily` is now an
         # unsupported timeframe and the route 400s on it.
         with patch("routes.public_api.fetch_bars_from_public_api",
-                   new=AsyncMock(return_value=_bars(5))):
+                   new=AsyncMock(return_value=_bars(5))) as fetch:
             r = client.get("/api/public/bars/SPY?timeframe=1Day")
+        fetch.assert_awaited_once_with("SPY", timeframe="1Day", limit=100, sessions="regular")
         assert r.status_code == 200
         d = r.json()
         assert d["ok"] is True
@@ -315,13 +319,10 @@ class TestPublicBarsHistoryTechnical:
         assert r.json()["n_bars"] == 5
 
     def test_technical_sma(self):
-        # The technical route calls `fetch_bars_by_interval`, NOT
-        # `fetch_bars_from_public_api`. Patching the latter let the real
-        # fetcher run, so these two tests never exercised the indicator math
-        # at all — they depended on whatever the live/mocked vendor returned.
         with patch("routes.public_api.fetch_bars_by_interval",
-                   new=AsyncMock(return_value=_bars(30))):
+                   new=AsyncMock(return_value=_bars(30))) as fetch:
             r = client.get("/api/public/technical/SPY/SMA?time_period=10")
+        fetch.assert_awaited_once_with("SPY", interval="daily")
         assert r.status_code == 200
         d = r.json()
         assert d["indicator"] == "SMA"
@@ -380,6 +381,11 @@ class TestTechnicalMath:
 # ---------------------------------------------------------------------------
 
 class TestChainCache:
+    @staticmethod
+    def _expiry(days=90):
+        from datetime import UTC, datetime, timedelta
+        return (datetime.now(UTC) + timedelta(days=days)).date().isoformat()
+
     @pytest.fixture(autouse=True)
     def _clean(self):
         import services.public_api_adapter as adapter
@@ -397,16 +403,15 @@ class TestChainCache:
         broker.get_trading_account.return_value = MagicMock(account_id="TEST-ACCT")
         broker.get_option_expirations = AsyncMock(
             return_value=expiries or fut)
-        q = MagicMock()
-        q.mid_price = spot
-        q.last = spot
-        # The adapter REFUSES to substitute a quote whose symbol does not match
-        # the request (see _matching_quote — it exists so a QQQ price can never
-        # be served as SPY). An unqualified MagicMock attribute is a Mock, not a
-        # str, so the match fails and the spot degrades to no-data. Echo back
-        # whichever ticker this broker is standing in for.
-        q.symbol = symbol or ""
-        broker.get_quotes = AsyncMock(return_value=[q])
+        # Match the requested symbol and expose real optional fields/properties;
+        # unconstrained MagicMocks manufacture non-serializable quote values.
+        async def quotes(symbols, account_id):
+            from datetime import UTC, datetime
+            stamp = datetime.now(UTC).isoformat()
+            return [Quote(symbol=symbols[0], instrument_type="EQUITY", last=spot,
+                          bid=spot - .01, ask=spot + .01,
+                          timestamp=stamp, bid_timestamp=stamp, ask_timestamp=stamp)]
+        broker.get_quotes = AsyncMock(side_effect=quotes)
         broker.get_option_chain_parsed = AsyncMock(return_value={"calls": [], "puts": []})
         return broker
 
@@ -425,7 +430,7 @@ class TestChainCache:
             # parsed side effect below instead. The contract must be dated on a
             # real future trading day or it is dropped as EXPIRED.
             broker.get_option_chain_parsed = AsyncMock(return_value={
-                "calls": [MagicMock(symbol="X", expiration=exp, strike=450,
+                "calls": [OptionContract(symbol="X", option_type="CALL", expiration=exp, strike=450,
                                     open_interest=10, iv=0.2, delta=0.5, gamma=0.01,
                                     theta=0, vega=0.1, bid=1.0, ask=1.2, volume=5)],
                 "puts": [],
@@ -456,7 +461,7 @@ class TestChainCache:
         broker = self._broker(symbol="CACHE3")
         exp = _future_weekday_expiries(1)[0]
         broker.get_option_chain_parsed = AsyncMock(return_value={
-            "calls": [MagicMock(symbol="X", expiration=exp, strike=450,
+            "calls": [OptionContract(symbol="X", option_type="CALL", expiration=exp, strike=450,
                                 open_interest=10, iv=0.2, delta=0.5, gamma=0.01,
                                 theta=0, vega=0.1, bid=1.0, ask=1.2, volume=5)],
             "puts": [],
@@ -545,11 +550,13 @@ class TestBrokerageGuards:
         assert d["positions"][0]["symbol"] == "SPY"
 
     @pytest.mark.parametrize("bad", ["abc", None, "", -1, 0])
-    def test_place_order_rejects_bad_quantity_422(self, bad):
+    def test_place_order_rejects_bad_quantity_422(self, bad, monkeypatch):
+        monkeypatch.setenv("API_SECRET_KEY", "test-secret-key")
         import routes.public_brokerage as mod
         broker = _mock_brokerage()
         broker.place_order = AsyncMock()
         with patch.object(mod, "_get_broker", new=AsyncMock(return_value=broker)):
+            monkeypatch.setenv("FLOWW_ENABLE_LIVE_PUBLIC", "1")
             r = client.post("/api/public/order", headers={"X-API-Key": "test-secret-key"}, json={
                 "symbol": "AAPL", "side": "BUY", "order_type": "MARKET",
                 "quantity": bad, "time_in_force": "DAY",
@@ -558,11 +565,13 @@ class TestBrokerageGuards:
         assert r.status_code == 422, r.text
         broker.place_order.assert_not_called()
 
-    def test_place_order_rejects_bad_prices_422(self):
+    def test_place_order_rejects_bad_prices_422(self, monkeypatch):
+        monkeypatch.setenv("API_SECRET_KEY", "test-secret-key")
         import routes.public_brokerage as mod
         broker = _mock_brokerage()
         broker.place_order = AsyncMock()
         with patch.object(mod, "_get_broker", new=AsyncMock(return_value=broker)):
+            monkeypatch.setenv("FLOWW_ENABLE_LIVE_PUBLIC", "1")
             r = client.post("/api/public/order", headers={"X-API-Key": "test-secret-key"}, json={
                 "symbol": "AAPL", "side": "BUY", "order_type": "LIMIT",
                 "quantity": 1, "limit_price": "abc",

@@ -95,7 +95,7 @@ class ReplayEngine:
         rows = await self.db.query_async(
             """
             SELECT * FROM ticks
-            WHERE timestamp >= ? AND timestamp <= ?
+            WHERE timestamp >= ? AND timestamp <= ? AND data_source = 'public_api'
             ORDER BY timestamp ASC
             """,
             [self.start_dt.isoformat(), self.end_dt.isoformat()],
@@ -129,6 +129,7 @@ class ReplayEngine:
                 "last": row.get("last", 0),
                 "volume": row.get("volume", 0),
                 "source": "replay",
+                "original_source": row.get("data_source"),
             }
 
             for h in self._tick_handlers:
@@ -145,7 +146,7 @@ class ReplayEngine:
         rows = await self.db.query_async(
             """
             SELECT * FROM ticks
-            WHERE timestamp >= ? AND timestamp <= ?
+            WHERE timestamp >= ? AND timestamp <= ? AND data_source = 'public_api'
             AND delta_val != 0
             ORDER BY timestamp ASC
             LIMIT 1000
@@ -169,6 +170,7 @@ class ReplayEngine:
                 "theta": row.get("theta_val", 0),
                 "vega": row.get("vega_val", 0),
                 "source": "replay",
+                "original_source": row.get("data_source"),
             }
             for h in self._chain_handlers:
                 try:
@@ -185,6 +187,7 @@ class ReplayEngine:
             db = self.mongo_client.get_default_database()
             snapshots = db.snapshots
             cursor = snapshots.find({
+                "data_source": "public_api",
                 "timestamp": {
                     "$gte": self.start_dt.isoformat(),
                     "$lte": self.end_dt.isoformat(),
@@ -199,6 +202,7 @@ class ReplayEngine:
                     "ask": doc.get("ask", 0),
                     "last": doc.get("last", 0),
                     "volume": doc.get("volume", 0),
+                    "data_source": doc.get("data_source"),
                 })
             return results
         except Exception as e:

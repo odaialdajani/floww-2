@@ -1,0 +1,72 @@
+{
+  "run_started_utc": "2026-09-11T23:13Z",
+  "command": "Python3.11 pytest tests/ -v --tb=short --cov=. -m not flaky_env -p tests.offline_network",
+  "full_run": {
+    "passed": 5656,
+    "failed": 2,
+    "skipped": 39,
+    "deselected": 0,
+    "errors": 0,
+    "warnings": 136,
+    "seconds": 472.69,
+    "coverage_percent": 68.08,
+    "required_coverage_percent": 60
+  },
+  "failed_tests": [
+    "tests/services/test_public_api_integration.py::TestFetchChainFromPublicApi::test_expiries_match_broker",
+    "tests/test_api.py::test_daily_checklist_endpoint"
+  ],
+  "skipped_tests": [
+    "tests/e2e/test_dashboard_visual.py::TestDashboardVisual::test_heatseeker_tab_loads",
+    "tests/e2e/test_dashboard_visual.py::TestDashboardVisual::test_heatseeker_tag_overlays_render",
+    "tests/e2e/test_dashboard_visual.py::TestDashboardVisual::test_visual_regression_heatseeker",
+    "tests/e2e/test_dashboard_visual.py::TestDashboardVisual::test_screenshot_determinism",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_model_loads[QQQ]",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_model_loads[TLT]",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_model_loads[DIA]",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_model_loads[IWM]",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_manifest_valid[QQQ]",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_manifest_valid[TLT]",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_manifest_valid[DIA]",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_manifest_valid[IWM]",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_prediction_shape[QQQ]",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_prediction_shape[TLT]",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_prediction_shape[DIA]",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_prediction_shape[IWM]",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_prediction_proba_valid[QQQ]",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_prediction_proba_valid[TLT]",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_prediction_proba_valid[DIA]",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_prediction_proba_valid[IWM]",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_dummy_input_deterministic[QQQ]",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_dummy_input_deterministic[TLT]",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_dummy_input_deterministic[DIA]",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_dummy_input_deterministic[IWM]",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_qqq_rf_primary_ship",
+    "tests/services/ml/test_ship_models.py::TestShipModelLoading::test_tlt_gbm_ship_quality",
+    "tests/services/test_ml_pipeline.py::TestModelArtifacts::test_meta_file_exists",
+    "tests/services/test_ml_pipeline.py::TestModelArtifacts::test_meta_valid_json",
+    "tests/services/test_ml_pipeline.py::TestModelArtifacts::test_model_predicts_valid_output",
+    "tests/test_analytics_vex_dex_vega.py::TestCalcVex::test_with_sample_chain",
+    "tests/test_analytics_vex_dex_vega.py::TestSampleChainShape::test_vex_sample_chain",
+    "tests/test_analytics_vex_dex_vega.py::TestSampleChainShape::test_dex_sample_chain",
+    "tests/test_analytics_vex_dex_vega.py::TestSampleChainShape::test_vega_sample_chain",
+    "tests/test_kelly_replay.py::TestReplayAllStructure::test_real_dvt_backtest_v2_loads_cleanly",
+    "tests/test_kelly_replay.py::TestReplayAllConsistency::test_full_kelly_filter_count_matches_per_record_filter",
+    "tests/test_kelly_replay.py::TestReplayAllConsistency::test_avoided_loss_pnl_sums_correctly",
+    "tests/test_kelly_replay.py::TestReplayAllConsistency::test_naive_2pct_aggregate_equals_sum_of_records",
+    "tests/test_kelly_replay.py::TestReplayAllConsistency::test_scaling_factor_matches_baseline"
+  ],
+  "full_log_sha256": "3b07193171ad5708c94b3061532f48d854cfd2cf3d29a4ff595d8fcaa9dce4d8",
+  "followup": {
+    "expired_coverage_expectation": "Corrected outdated request-date expectation to usable returned contract dates; preserves proof both listed expiries requested",
+    "targeted_tests_passed": 19,
+    "production_code_changed_after_full_run": false,
+    "remaining_failure": "tests/test_api.py::test_daily_checklist_endpoint"
+  },
+  "limits": [
+    "No final whole-suite pass claimed: recorded full run has two failures; one corrected test passes in separate focused run.",
+    "39 absent-artifact/other skipped checks remain unverified.",
+    "Full test store and journal isolated; outside-network guard completed with no teardown error.",
+    "Production journal migration, historical repair and future paper lifecycle not certified."
+  ]
+}

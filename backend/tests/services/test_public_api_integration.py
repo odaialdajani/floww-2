@@ -190,14 +190,19 @@ class TestFetchChainFromPublicApi:
         assert result["spot"] == 520.50
 
     @pytest.mark.asyncio
-    async def test_expiries_match_broker(self, mock_broker):
+    async def test_expiries_match_usable_broker_contracts(self, mock_broker):
         from services.public_api_adapter import fetch_chain_from_public_api
 
         with patch("services.public_api_adapter._get_broker",
                    new=AsyncMock(return_value=mock_broker)):
             result = await fetch_chain_from_public_api("SPY")
 
-        assert result["expiries"] == [mock_broker._test_exp1, mock_broker._test_exp2]
+        # Coverage contains only accepted contracts, not empty requested dates.
+        assert result["expiries"] == [mock_broker._test_exp1]
+        assert {c["expiry"] for c in result["contracts"]} == {mock_broker._test_exp1}
+        assert {call.args[1] for call in mock_broker.get_option_chain_parsed.call_args_list} == {
+            mock_broker._test_exp1, mock_broker._test_exp2,
+        }
 
     @pytest.mark.asyncio
     async def test_contracts_only_from_first_expiry(self, mock_broker):

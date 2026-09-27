@@ -1,4 +1,4 @@
-"""Agent C (C7): ex-post value per rule, net of slippage — feeds Sync-3 kill/keep.
+"""Agent C (C7): ex-post value per rule, net of slippage â€” feeds Sync-3 kill/keep.
 
 rule_value_table consumes labeled ledger rows (flow_outcomes.label_alerts
 shape: rule/hit/ret/censored) and scores each rule on realized edge net
@@ -32,7 +32,7 @@ def test_value_table_hand_worked():
     score = out["SCORE"]
     assert score["n_measured"] == 10
     assert score["hit_rate"] == pytest.approx(0.6)
-    # avg ret 0.0093 minus 25bps cost → 0.0068 net
+    # avg ret 0.0093 minus 25bps cost â†’ 0.0068 net
     assert score["avg_edge_net"] == pytest.approx(0.0068)
     assert score["verdict"] == "KEEP"
     assert out["WHALE"]["verdict"] == "THIN", "n=1 must stay unjudged"
@@ -42,3 +42,13 @@ def test_value_table_hand_worked():
 def test_empty_is_empty():
     assert rule_value_table([]) == {}
     assert rule_value_table([_row("SCORE", None, censored=True)])["SCORE"]["verdict"] == "THIN"
+
+
+@pytest.mark.parametrize("bad", ["bad", float("nan"), float("inf"), float("-inf"), True])
+def test_invalid_returns_do_not_promote_thin_rules(bad):
+    rows = [_row("SCORE", 0.02) for _ in range(9)]
+    rows.append({"rule": "SCORE", "ret": bad, "hit": True})
+    result = rule_value_table(rows)["SCORE"]
+    assert result["n_measured"] == 9
+    assert result["verdict"] == "THIN"
+    assert result["avg_edge_net"] == pytest.approx(0.0175)

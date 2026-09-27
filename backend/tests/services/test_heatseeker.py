@@ -743,10 +743,10 @@ class TestClassifyNodes:
         Nodes with fading protection (put, OI decreasing) → 'hedge'.
         """
         nodes = [
-            {"strike": 100.0, "net_gex": 50000, "gamma_sign": "positive", "oi_trend": "growing", "taps": 0, "state": "fresh", "tap_probability": 80},
-            {"strike": 105.0, "net_gex": -30000, "gamma_sign": "negative", "oi_trend": "fading", "taps": 1, "state": "tested", "tap_probability": 66},
-            {"strike": 95.0, "net_gex": 20000, "gamma_sign": "positive", "oi_trend": "growing", "taps": 2, "state": "delivered", "tap_probability": 33},
-            {"strike": 110.0, "net_gex": -10000, "gamma_sign": "negative", "oi_trend": "fading", "taps": 3, "state": "decaying", "tap_probability": 10},
+            {"strike": 100.0, "net_gex": 50000, "gamma_sign": "positive", "oi_trend_source": "observed", "oi_trend": "growing", "taps": 0, "state": "fresh", "tap_probability": 80},
+            {"strike": 105.0, "net_gex": -30000, "gamma_sign": "negative", "oi_trend_source": "observed", "oi_trend": "fading", "taps": 1, "state": "tested", "tap_probability": 66},
+            {"strike": 95.0, "net_gex": 20000, "gamma_sign": "positive", "oi_trend_source": "observed", "oi_trend": "growing", "taps": 2, "state": "delivered", "tap_probability": 33},
+            {"strike": 110.0, "net_gex": -10000, "gamma_sign": "negative", "oi_trend_source": "observed", "oi_trend": "fading", "taps": 3, "state": "decaying", "tap_probability": 10},
         ]
         result = classify_nodes(nodes)
         classified = {n["strike"]: n for n in result["nodes"]}
@@ -765,7 +765,7 @@ class TestClassifyNodes:
     def test_real_when_positive_gamma_growing(self):
         """Positive gamma + growing OI → real (dealer positioning)."""
         nodes = [
-            {"strike": 100.0, "net_gex": 50000, "gamma_sign": "positive", "oi_trend": "growing", "taps": 0, "state": "fresh", "tap_probability": 80},
+            {"strike": 100.0, "net_gex": 50000, "gamma_sign": "positive", "oi_trend_source": "observed", "oi_trend": "growing", "taps": 0, "state": "fresh", "tap_probability": 80},
         ]
         result = classify_nodes(nodes)
         assert result["nodes"][0]["classification"] == "real"
@@ -775,7 +775,7 @@ class TestClassifyNodes:
     def test_hedge_when_negative_gamma_fading(self):
         """Negative gamma + fading OI → hedge (fading protection)."""
         nodes = [
-            {"strike": 100.0, "net_gex": -50000, "gamma_sign": "negative", "oi_trend": "fading", "taps": 0, "state": "fresh", "tap_probability": 80},
+            {"strike": 100.0, "net_gex": -50000, "gamma_sign": "negative", "oi_trend_source": "observed", "oi_trend": "fading", "taps": 0, "state": "fresh", "tap_probability": 80},
         ]
         result = classify_nodes(nodes)
         assert result["nodes"][0]["classification"] == "hedge"
@@ -785,7 +785,7 @@ class TestClassifyNodes:
     def test_unknown_when_oi_trend_flat(self):
         """Flat OI trend → classification is 'unknown'."""
         nodes = [
-            {"strike": 100.0, "net_gex": 50000, "gamma_sign": "positive", "oi_trend": "flat", "taps": 0, "state": "fresh", "tap_probability": 80},
+            {"strike": 100.0, "net_gex": 50000, "gamma_sign": "positive", "oi_trend_source": "observed", "oi_trend": "flat", "taps": 0, "state": "fresh", "tap_probability": 80},
         ]
         result = classify_nodes(nodes)
         assert result["nodes"][0]["classification"] == "unknown"

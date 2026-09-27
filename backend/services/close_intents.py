@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from uuid import uuid4
 
-_KEYS = ("ticker", "type", "action", "strike", "expiry", "entry_date")
+_KEYS = ("ticker", "type", "action", "strike", "expiry", "entry_date", "broker_order_id")
 _WHERE = " AND ".join(f"{k} IS NOT DISTINCT FROM ?" for k in _KEYS)
 _FIELDS = ", ".join(_KEYS) + ", quantity, created_at, updated_at"
 
@@ -150,6 +150,10 @@ def apply_close_fill(engine, symbol, order_id, order):
         if status != "filled":
             return _result("pending_fill", status or "venue_status_unknown")
         targets = json.loads(intent["targets"])
+        # Reservations written before optional broker identity belong only to
+        # legacy rows; they must never acquire a newly added broker fill.
+        for row in targets:
+            row.setdefault("broker_order_id", "")
         try:
             qty = sum((Decimal(str(r["quantity"])) for r in targets), Decimal(0))
             actions = {r["action"] for r in targets}

@@ -121,6 +121,12 @@ class TestKeyLevels:
 # ── 3. context block ─────────────────────────────────────────────────
 
 class TestContextBlock:
+    def test_summary_uses_actual_open_interest_not_volume_ratio(self):
+        from services.flow_alerts import build_context
+        text = build_context(_row(vol=60000,oi=1500),{})["activity_summary"]
+        assert "1,500" in text and "4,000 resting" not in text
+        assert "session volume" in text
+
     def test_build_context_lists_indicators(self):
         from services.flow_alerts import build_context
         r = _row(vol=60000, oi=1500)
@@ -155,6 +161,12 @@ class TestAlertContract:
         assert gold, "expected at least one GOLD alert"
         a = gold[0]
         assert isinstance(a["conviction"], int) and 0 <= a["conviction"] <= 100
+        assert a["key_levels"] is None
+        assert a["bias"] is None and a["side"] == "FLOW"
+        # Explicit synthetic individual trade retains the downstream level contract.
+        directed = {**_row(vol=60000, oi=1500, delta=0.25),
+                    "activity_basis": "individual_trade_fixture", "signed_side": "ASK"}
+        a = eval_institutional([directed], regimes={"PLTR": "negative"})[0]
         assert a["key_levels"] is not None
         assert "invalidation" in a["key_levels"]
         assert "context" in a and "institutional_indicators" in a["context"]

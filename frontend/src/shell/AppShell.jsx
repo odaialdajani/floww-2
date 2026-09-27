@@ -12,7 +12,7 @@ function readCollapsed() {
   try {
     const v = localStorage.getItem(SIDEBAR_KEY);
     if (v != null) return v === "true";
-  } catch { /* private mode — fall through to the attribute */ }
+  } catch { /* private mode â€” fall through to the attribute */ }
   return document.documentElement.getAttribute("data-sidebar-collapsed") === "true";
 }
 

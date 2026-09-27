@@ -1,0 +1,190 @@
+{
+  "status": "approved_before_answers",
+  "bindings": {
+    "proposal": "305a42af3a8d86ed8e39ad314a99c592ad2fb57ccab53faf575e507e3aa71c2b",
+    "oracle": "24c13e69ae26b4c1d12e5fc175b73440b0a869a7a8806e42a19bd1702ce10b0e",
+    "grading": "32a57f037557de0221a5e85c88f11bc22b662059b89e6506c9e355c0ecbf9170",
+    "manifest": "b28a35f15ab4784cf4b7871b598771ca7663d3f4bc66adb5f80f2e5add224c42"
+  },
+  "closed_bindings": {
+    "map_missing_cell_total": [
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-comparison-contract-bindings-20260927.json",
+        "sha256": "234905d3af86084e8cab7b67b7263b4de52aeb30727d62b493f25fd4f5030fbd"
+      },
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\backend\\services\\agent\\display_map.py",
+        "sha256": "7f28f968bf6dfdee03dc668124cc7e86c639697c4a959745f50f04525fba4d01"
+      },
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\frontend\\src\\agent\\chartReading.js",
+        "sha256": "823642f348f9a16ec0faac2c60ad2c6f01347cd9d5bc882bb8c2d090e488906f"
+      },
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\frontend\\src\\agent\\Evidence.jsx",
+        "sha256": "2607afa45399216ff7d8f3df4f5da40669567edfcf74a8c11ab9a4143099e367"
+      }
+    ],
+    "map_measured_zero": [
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-comparison-contract-bindings-20260927.json",
+        "sha256": "234905d3af86084e8cab7b67b7263b4de52aeb30727d62b493f25fd4f5030fbd"
+      },
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\backend\\services\\agent\\display_map.py",
+        "sha256": "7f28f968bf6dfdee03dc668124cc7e86c639697c4a959745f50f04525fba4d01"
+      },
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\frontend\\src\\agent\\chartReading.js",
+        "sha256": "823642f348f9a16ec0faac2c60ad2c6f01347cd9d5bc882bb8c2d090e488906f"
+      },
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\frontend\\src\\agent\\Evidence.jsx",
+        "sha256": "2607afa45399216ff7d8f3df4f5da40669567edfcf74a8c11ab9a4143099e367"
+      }
+    ],
+    "vanna_display_units": [
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-comparison-contract-bindings-20260927.json",
+        "sha256": "234905d3af86084e8cab7b67b7263b4de52aeb30727d62b493f25fd4f5030fbd"
+      },
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\backend\\services\\agent\\display_map.py",
+        "sha256": "7f28f968bf6dfdee03dc668124cc7e86c639697c4a959745f50f04525fba4d01"
+      },
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\frontend\\src\\agent\\chartReading.js",
+        "sha256": "823642f348f9a16ec0faac2c60ad2c6f01347cd9d5bc882bb8c2d090e488906f"
+      },
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\frontend\\src\\agent\\Evidence.jsx",
+        "sha256": "2607afa45399216ff7d8f3df4f5da40669567edfcf74a8c11ab9a4143099e367"
+      }
+    ],
+    "synthetic_cached_map_price": [
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-comparison-contract-bindings-20260927.json",
+        "sha256": "234905d3af86084e8cab7b67b7263b4de52aeb30727d62b493f25fd4f5030fbd"
+      },
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\backend\\services\\agent\\display_map.py",
+        "sha256": "7f28f968bf6dfdee03dc668124cc7e86c639697c4a959745f50f04525fba4d01"
+      },
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\frontend\\src\\agent\\chartReading.js",
+        "sha256": "823642f348f9a16ec0faac2c60ad2c6f01347cd9d5bc882bb8c2d090e488906f"
+      },
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\frontend\\src\\agent\\Evidence.jsx",
+        "sha256": "2607afa45399216ff7d8f3df4f5da40669567edfcf74a8c11ab9a4143099e367"
+      }
+    ],
+    "month_partial_coverage": [
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-comparison-contract-bindings-20260927.json",
+        "sha256": "234905d3af86084e8cab7b67b7263b4de52aeb30727d62b493f25fd4f5030fbd"
+      },
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\backend\\services\\agent\\contracts.py",
+        "sha256": "6ac9434175ae6b02101a628271710515dc0d08d2ba688d113f7ec7dd66402273"
+      },
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\backend\\services\\agent\\access\\horizon.py",
+        "sha256": "6ff1cd8a913d4a8b8b560e50bdb0066e249cf7ee6fb8fd0083b476f9cb09b45d"
+      }
+    ],
+    "synthetic_mixed_flow": [
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-comparison-contract-bindings-20260927.json",
+        "sha256": "234905d3af86084e8cab7b67b7263b4de52aeb30727d62b493f25fd4f5030fbd"
+      },
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-fresh-independent-oracles-20260926.json",
+        "sha256": "24c13e69ae26b4c1d12e5fc175b73440b0a869a7a8806e42a19bd1702ce10b0e"
+      }
+    ],
+    "synthetic_aligned_positive_flow": [
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-comparison-contract-bindings-20260927.json",
+        "sha256": "234905d3af86084e8cab7b67b7263b4de52aeb30727d62b493f25fd4f5030fbd"
+      },
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-fresh-independent-oracles-20260926.json",
+        "sha256": "24c13e69ae26b4c1d12e5fc175b73440b0a869a7a8806e42a19bd1702ce10b0e"
+      }
+    ],
+    "three_ticker_read_limit": [
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-comparison-contract-bindings-20260927.json",
+        "sha256": "234905d3af86084e8cab7b67b7263b4de52aeb30727d62b493f25fd4f5030fbd"
+      },
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\backend\\services\\agent\\read_budget.py",
+        "sha256": "dac83653c5f73044b09521461589e9addfc090d8a0903f2ac4d2b550570441a4"
+      },
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-fresh-independent-oracles-20260926.json",
+        "sha256": "24c13e69ae26b4c1d12e5fc175b73440b0a869a7a8806e42a19bd1702ce10b0e"
+      }
+    ],
+    "three_ticker_history_budget": [
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-comparison-contract-bindings-20260927.json",
+        "sha256": "234905d3af86084e8cab7b67b7263b4de52aeb30727d62b493f25fd4f5030fbd"
+      },
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\backend\\services\\agent\\read_budget.py",
+        "sha256": "dac83653c5f73044b09521461589e9addfc090d8a0903f2ac4d2b550570441a4"
+      },
+      {
+        "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-fresh-independent-oracles-20260926.json",
+        "sha256": "24c13e69ae26b4c1d12e5fc175b73440b0a869a7a8806e42a19bd1702ce10b0e"
+      }
+    ]
+  },
+  "critical_receipt": {
+    "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-comparison-critical-proof-20260927-0036.json",
+    "sha256": "b93cfe5623b9e7af52afe8793fc7823f748c7ed8d212c21ba87f8e8649a9194e"
+  },
+  "quota_rule": "whole_arm_preflight_per_turn_atomic_40_no_cohort_lock",
+  "quota_authority": "Prospective clarification before any new answer: plan section5.4 reserves each request;40/day remains unchanged. The prior proposed cohort lock was not a user/plan requirement. A full-arm headroom preflight does not claim a cohort reservation.",
+  "remaining": [
+    "Earlier stronger-model choice and cost-acceptance reply",
+    "Final immutable execution seal after those choices",
+    "Actual three-arm execution and all32outcomes in each arm",
+    "Blind visible-answer grading and actual browser display measurement"
+  ],
+  "reviewed_at_utc": "2026-09-27T00:13:59.951Z",
+  "closed_binding_meaning": "Independent definitions/expected predicates are fixed before answers. This does not claim actual functional-case execution, required returned rows, read order, usefulness, browser display or costs have passed.",
+  "review_evidence": [
+    {
+      "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-comparison-run-review-20260927.md",
+      "sha256": "23abb2a5c338932d32afc4625ae977d301d6615cb8fac11d3de02b567f980975"
+    },
+    {
+      "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-comparison-critical-review-20260927.md",
+      "sha256": "4a46798b6e724b6bca0f58e453a86804d16581e5bd2f225e0d3a6f9545271284"
+    },
+    {
+      "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-fresh-independent-oracles-20260926.md",
+      "sha256": "56c0f2438338aededa9a8925bb3bce3c666ccecafb13b342112750de775e97a5"
+    },
+    {
+      "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-comparison-quota-authority-review-20260926.md",
+      "sha256": "4cdf4bb55f6b4834d3774f6609024cc02727afdc77ca632f7ac51520edbca77d"
+    },
+    {
+      "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-comparison-critical-refresh-20260927.md",
+      "sha256": "7353932131caf341aad2ecd403462a636ef3949a5eb93afd722d3699188d5e7c"
+    },
+    {
+      "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-comparison-export-review-20260927.md",
+      "sha256": "fcb9864f5bc1ba0fe2c335efe59c7eca16cc08c49ed08fd3ca35f0efe25b256b"
+    },
+    {
+      "path": "C:\\Users\\DARK HERO\\Desktop\\FLOWW2.0\\.planning\\eval\\research-comparison-display-review-20260927.md",
+      "sha256": "cee99a804dc6d160e933c6d51c20abcc07ec2fdb1b2919f1553ef7cac753da66"
+    }
+  ],
+  "refreshed_at_utc": "2026-09-27T00:37:25.052Z"
+}

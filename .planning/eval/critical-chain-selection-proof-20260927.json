@@ -1,0 +1,637 @@
+{
+  "createdAt": "2026-09-27T02:18:24.111Z",
+  "scope": "Mounted actual OptionsChainTable; synthetic public and merged transports; no real provider or browser painting",
+  "originalSourceSha256": "b9c5e11d3391891822fce40f4349375f32aab94e12ac779f18f3f0416e4f40a4",
+  "originalControlReproduction": [
+    {
+      "name": "expiry",
+      "controlValue": "2026-10-02",
+      "expected": [
+        110,
+        100
+      ],
+      "actual": [
+        110,
+        90,
+        100
+      ],
+      "requests": [
+        {
+          "ticker": "SPY",
+          "optionKeys": [
+            "signal"
+          ]
+        },
+        {
+          "ticker": "SPY",
+          "optionKeys": [
+            "signal"
+          ]
+        }
+      ],
+      "shownCells": [
+        [
+          "C",
+          "110",
+          "10-02",
+          "1",
+          "20.0%",
+          "0.50",
+          "0.1000",
+          "200",
+          "50",
+          "100",
+          "100",
+          "100",
+          "+10.0%"
+        ],
+        [
+          "C",
+          "90",
+          "10-30",
+          "30",
+          "20.0%",
+          "0.50",
+          "0.1000",
+          "500",
+          "50",
+          "100",
+          "100",
+          "100",
+          "-10.0%"
+        ],
+        [
+          "C",
+          "100",
+          "10-02",
+          "7",
+          "20.0%",
+          "0.50",
+          "0.1000",
+          "300",
+          "50",
+          "100",
+          "100",
+          "100",
+          "0.0%"
+        ]
+      ]
+    },
+    {
+      "name": "minimum OI",
+      "controlValue": "400",
+      "expected": [
+        90
+      ],
+      "actual": [
+        110,
+        90,
+        100
+      ],
+      "requests": [
+        {
+          "ticker": "SPY",
+          "optionKeys": [
+            "signal"
+          ]
+        },
+        {
+          "ticker": "SPY",
+          "optionKeys": [
+            "signal"
+          ]
+        }
+      ],
+      "shownCells": [
+        [
+          "C",
+          "110",
+          "10-02",
+          "1",
+          "20.0%",
+          "0.50",
+          "0.1000",
+          "200",
+          "50",
+          "100",
+          "100",
+          "100",
+          "+10.0%"
+        ],
+        [
+          "C",
+          "90",
+          "10-30",
+          "30",
+          "20.0%",
+          "0.50",
+          "0.1000",
+          "500",
+          "50",
+          "100",
+          "100",
+          "100",
+          "-10.0%"
+        ],
+        [
+          "C",
+          "100",
+          "10-02",
+          "7",
+          "20.0%",
+          "0.50",
+          "0.1000",
+          "300",
+          "50",
+          "100",
+          "100",
+          "100",
+          "0.0%"
+        ]
+      ]
+    },
+    {
+      "name": "moneyness",
+      "controlValue": "itm",
+      "expected": [
+        90
+      ],
+      "actual": [
+        110,
+        90,
+        100
+      ],
+      "requests": [
+        {
+          "ticker": "SPY",
+          "optionKeys": [
+            "signal"
+          ]
+        },
+        {
+          "ticker": "SPY",
+          "optionKeys": [
+            "signal"
+          ]
+        }
+      ],
+      "shownCells": [
+        [
+          "C",
+          "110",
+          "10-02",
+          "1",
+          "20.0%",
+          "0.50",
+          "0.1000",
+          "200",
+          "50",
+          "100",
+          "100",
+          "100",
+          "+10.0%"
+        ],
+        [
+          "C",
+          "90",
+          "10-30",
+          "30",
+          "20.0%",
+          "0.50",
+          "0.1000",
+          "500",
+          "50",
+          "100",
+          "100",
+          "100",
+          "-10.0%"
+        ],
+        [
+          "C",
+          "100",
+          "10-02",
+          "7",
+          "20.0%",
+          "0.50",
+          "0.1000",
+          "300",
+          "50",
+          "100",
+          "100",
+          "100",
+          "0.0%"
+        ]
+      ]
+    },
+    {
+      "name": "maximum DTE",
+      "controlValue": "7",
+      "expected": [
+        110,
+        100
+      ],
+      "actual": [
+        110,
+        90,
+        100
+      ],
+      "requests": [
+        {
+          "ticker": "SPY",
+          "optionKeys": [
+            "signal"
+          ]
+        },
+        {
+          "ticker": "SPY",
+          "optionKeys": [
+            "signal"
+          ]
+        }
+      ],
+      "shownCells": [
+        [
+          "C",
+          "110",
+          "10-02",
+          "1",
+          "20.0%",
+          "0.50",
+          "0.1000",
+          "200",
+          "50",
+          "100",
+          "100",
+          "100",
+          "+10.0%"
+        ],
+        [
+          "C",
+          "90",
+          "10-30",
+          "30",
+          "20.0%",
+          "0.50",
+          "0.1000",
+          "500",
+          "50",
+          "100",
+          "100",
+          "100",
+          "-10.0%"
+        ],
+        [
+          "C",
+          "100",
+          "10-02",
+          "7",
+          "20.0%",
+          "0.50",
+          "0.1000",
+          "300",
+          "50",
+          "100",
+          "100",
+          "100",
+          "0.0%"
+        ]
+      ]
+    },
+    {
+      "name": "descending strike sort",
+      "controlValue": null,
+      "expected": [
+        110,
+        100,
+        90
+      ],
+      "actual": [
+        110,
+        90,
+        100
+      ],
+      "requests": [
+        {
+          "ticker": "SPY",
+          "optionKeys": [
+            "signal"
+          ]
+        },
+        {
+          "ticker": "SPY",
+          "optionKeys": [
+            "signal"
+          ]
+        }
+      ],
+      "shownCells": [
+        [
+          "C",
+          "110",
+          "10-02",
+          "1",
+          "20.0%",
+          "0.50",
+          "0.1000",
+          "200",
+          "50",
+          "100",
+          "100",
+          "100",
+          "+10.0%"
+        ],
+        [
+          "C",
+          "90",
+          "10-30",
+          "30",
+          "20.0%",
+          "0.50",
+          "0.1000",
+          "500",
+          "50",
+          "100",
+          "100",
+          "100",
+          "-10.0%"
+        ],
+        [
+          "C",
+          "100",
+          "10-02",
+          "7",
+          "20.0%",
+          "0.50",
+          "0.1000",
+          "300",
+          "50",
+          "100",
+          "100",
+          "100",
+          "0.0%"
+        ]
+      ]
+    }
+  ],
+  "originalAgainstNewRegression": {
+    "passed": 0,
+    "failed": 22,
+    "tests": [
+      {
+        "name": "public chain selection expiry changes visible rows",
+        "status": "failed"
+      },
+      {
+        "name": "public chain selection minimum OI changes visible rows",
+        "status": "failed"
+      },
+      {
+        "name": "public chain selection in the money changes visible rows",
+        "status": "failed"
+      },
+      {
+        "name": "public chain selection out of the money changes visible rows",
+        "status": "failed"
+      },
+      {
+        "name": "public chain selection at the money changes visible rows",
+        "status": "failed"
+      },
+      {
+        "name": "public chain selection maximum DTE changes visible rows",
+        "status": "failed"
+      },
+      {
+        "name": "public chain selection descending strike changes visible rows",
+        "status": "failed"
+      },
+      {
+        "name": "public chain selection OI sort changes visible rows",
+        "status": "failed"
+      },
+      {
+        "name": "merged chain selection expiry changes visible rows",
+        "status": "failed"
+      },
+      {
+        "name": "merged chain selection minimum OI changes visible rows",
+        "status": "failed"
+      },
+      {
+        "name": "merged chain selection in the money changes visible rows",
+        "status": "failed"
+      },
+      {
+        "name": "merged chain selection out of the money changes visible rows",
+        "status": "failed"
+      },
+      {
+        "name": "merged chain selection at the money changes visible rows",
+        "status": "failed"
+      },
+      {
+        "name": "merged chain selection maximum DTE changes visible rows",
+        "status": "failed"
+      },
+      {
+        "name": "merged chain selection descending strike changes visible rows",
+        "status": "failed"
+      },
+      {
+        "name": "merged chain selection OI sort changes visible rows",
+        "status": "failed"
+      },
+      {
+        "name": "put moneyness reverses call moneyness, and filters combine",
+        "status": "failed"
+      },
+      {
+        "name": "ticker change immediately hides old rows and late old completion cannot replace new rows",
+        "status": "failed"
+      },
+      {
+        "name": "late public failure does not start an obsolete fallback",
+        "status": "failed"
+      },
+      {
+        "name": "missing values stay unavailable and sort last in both directions",
+        "status": "failed"
+      },
+      {
+        "name": "unknown OI and DTE never pass active numeric filters",
+        "status": "failed"
+      },
+      {
+        "name": "both sources failing shows an error and no old ticker rows",
+        "status": "failed"
+      }
+    ]
+  },
+  "fixedRegression": {
+    "passed": 34,
+    "failed": 0,
+    "tests": [
+      {
+        "name": "public chain selection expiry changes visible rows",
+        "status": "passed"
+      },
+      {
+        "name": "public chain selection minimum OI changes visible rows",
+        "status": "passed"
+      },
+      {
+        "name": "public chain selection in the money changes visible rows",
+        "status": "passed"
+      },
+      {
+        "name": "public chain selection out of the money changes visible rows",
+        "status": "passed"
+      },
+      {
+        "name": "public chain selection at the money changes visible rows",
+        "status": "passed"
+      },
+      {
+        "name": "public chain selection maximum DTE changes visible rows",
+        "status": "passed"
+      },
+      {
+        "name": "public chain selection descending strike changes visible rows",
+        "status": "passed"
+      },
+      {
+        "name": "public chain selection OI sort changes visible rows",
+        "status": "passed"
+      },
+      {
+        "name": "merged chain selection expiry changes visible rows",
+        "status": "passed"
+      },
+      {
+        "name": "merged chain selection minimum OI changes visible rows",
+        "status": "passed"
+      },
+      {
+        "name": "merged chain selection in the money changes visible rows",
+        "status": "passed"
+      },
+      {
+        "name": "merged chain selection out of the money changes visible rows",
+        "status": "passed"
+      },
+      {
+        "name": "merged chain selection at the money changes visible rows",
+        "status": "passed"
+      },
+      {
+        "name": "merged chain selection maximum DTE changes visible rows",
+        "status": "passed"
+      },
+      {
+        "name": "merged chain selection descending strike changes visible rows",
+        "status": "passed"
+      },
+      {
+        "name": "merged chain selection OI sort changes visible rows",
+        "status": "passed"
+      },
+      {
+        "name": "put moneyness reverses call moneyness, and filters combine",
+        "status": "passed"
+      },
+      {
+        "name": "ticker change immediately hides old rows and late old completion cannot replace new rows",
+        "status": "passed"
+      },
+      {
+        "name": "late public failure does not start an obsolete fallback",
+        "status": "passed"
+      },
+      {
+        "name": "missing values stay unavailable and sort last in both directions",
+        "status": "passed"
+      },
+      {
+        "name": "unknown OI and DTE never pass active numeric filters",
+        "status": "passed"
+      },
+      {
+        "name": "both sources failing shows an error and no old ticker rows",
+        "status": "passed"
+      },
+      {
+        "name": "ticker change resets an expiry unavailable on the new symbol",
+        "status": "passed"
+      },
+      {
+        "name": "near-spot highlight uses the same response spot as filtering",
+        "status": "passed"
+      },
+      {
+        "name": "OptionsChainTable renders without crash on populated rows",
+        "status": "passed"
+      },
+      {
+        "name": "OptionsChainTable fetches from public API first",
+        "status": "passed"
+      },
+      {
+        "name": "OptionsChainTable falls back to merged chain when public API fails",
+        "status": "passed"
+      },
+      {
+        "name": "OptionsChainTable renders vanna column header",
+        "status": "passed"
+      },
+      {
+        "name": "OptionsChainTable renders charm column header",
+        "status": "passed"
+      },
+      {
+        "name": "OptionsChainTable renders dte column header",
+        "status": "passed"
+      },
+      {
+        "name": "OptionsChainTable handles null greeks gracefully - no crash",
+        "status": "passed"
+      },
+      {
+        "name": "OptionsChainTable moneyness_pct null safety",
+        "status": "passed"
+      },
+      {
+        "name": "OptionsChainTable moneyness_pct positive value renders + sign",
+        "status": "passed"
+      },
+      {
+        "name": "OptionsChainTable moneyness_pct negative value has no + sign",
+        "status": "passed"
+      }
+    ]
+  },
+  "sourceHashes": {
+    "frontend/src/components/OptionsChainTable.jsx": "985f68c3aeaea6bc2d8df91670d0dc2e349676da2887d8a0a964b50d3cdf740c",
+    "frontend/src/components/OptionsChainTable.filters.test.jsx": "e9226db45979d9e8d9075cb004cc28ef54a59de3df2a2cdc59c3a5d7219a77d8"
+  },
+  "temporaryEvidence": "C:/Users/DARK HERO/AppData/Local/Temp/floww-chain-review-e25801c5",
+  "limitations": [
+    "Original smoke tests emit React act warnings; new functional suite passes without warnings.",
+    "No real provider request, full App mount, browser paint, or CSV download exercised.",
+    "Filters apply to fetched expiries only, not a promise of entire-market chain coverage."
+  ],
+  "siblingRed": {
+    "failed": 2,
+    "passed": 0,
+    "tests": [
+      {
+        "name": "ticker change resets an expiry unavailable on the new symbol",
+        "status": "failed"
+      },
+      {
+        "name": "near-spot highlight uses the same response spot as filtering",
+        "status": "failed"
+      }
+    ]
+  },
+  "lastSourceEditUtc": "2026-09-27 02:18:03 UTC"
+}

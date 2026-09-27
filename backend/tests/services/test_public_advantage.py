@@ -15,7 +15,6 @@ import asyncio
 import os
 import sys
 import time
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -128,10 +127,10 @@ def test_unusual_rows_filters_sorts_and_caps():
     from services.public_scanner import MAX_ROWS_PER_TICKER, unusual_rows_from_chain
 
     chain = {"ticker": "SNDK", "spot": 50.0, "contracts": [
-        _chain_contract(osi="O:small", volume=100, oi=10000),          # below floor
+        _chain_contract(osi="O:small", strike=99, volume=100, oi=10000),          # below floor
         _chain_contract(osi="O:thin", volume=300, oi=100),             # 3x -> keep
-        _chain_contract(osi="O:big", volume=5000, oi=50000),           # big vol -> keep
-        _chain_contract(osi="O:churn", volume=300, oi=10000),          # 0.03x, small -> drop
+        _chain_contract(osi="O:big", strike=101, volume=5000, oi=50000),           # big vol -> keep
+        _chain_contract(osi="O:churn", strike=102, volume=300, oi=10000),          # 0.03x, small -> drop
         {"bogus": True},                                               # malformed -> drop
     ]}
     rows, xtras = unusual_rows_from_chain(chain)
@@ -144,7 +143,7 @@ def test_unusual_rows_filters_sorts_and_caps():
     # cvserver column order parity
     assert rows[0][0] == "SNDK" and rows[0][2] == "call" and rows[0][9] == 50.0
     # extras keyed by ckey for the emitted rows only
-    assert set(xtras) == {"SNDK|call|100|2026-09-18"}
+    assert set(xtras) == {"SNDK|call|100|2026-09-18", "SNDK|call|101|2026-09-18"}
     x = xtras["SNDK|call|100|2026-09-18"]
     assert x["premium_true"] is None  # no bid/ask/last in fixture
     assert x["side"] == "FLOW" and x["bias"] is None
@@ -166,6 +165,12 @@ def test_nbbo_side_matrix_and_mid_print_unknown():
     assert side_bias("call", None) == ("FLOW", None)
 
 
+@pytest.mark.parametrize("bid,ask,mid", [(None,None,2),(0,3,1.5),(3,2,2.5),(1,2,float("inf")),(1,2,10)])
+def test_midpoint_needs_valid_finite_matching_book(bid,ask,mid):
+    from services.public_scanner import _contract_mid
+    assert _contract_mid({"bid":bid,"ask":ask,"mid":mid}) is None
+
+
 def test_mid_rings_feed_ticker_roll_read():
     """A9: sweeper stamps capped mid rings; dealer carries the pooled Roll read."""
     import services.public_scanner as ps
@@ -175,10 +180,10 @@ def test_mid_rings_feed_ticker_roll_read():
         chain = {"ticker": "SNDK", "spot": 50.0, "contracts": [
             {"osi": "O:R1", "expiry": "2026-09-18", "type": "call", "strike": 50.0,
              "volume": 500, "oi": 100, "iv": 0.4, "delta": 0.5,
-             "bid": 1.0, "ask": 1.2, "mid": 1.1, "last": 1.2},
+             "bid": 1.0, "ask": 1.2, "mid": 1.1, "last": 1.2, "bid_timestamp": 1000, "ask_timestamp": 1000},
             {"osi": "O:R2", "expiry": "2026-09-18", "type": "put", "strike": 50.0,
              "volume": 400, "oi": 100, "iv": 0.4, "delta": -0.5,
-             "bid": 1.0, "ask": 1.2, "mid": 1.1, "last": 1.0},
+             "bid": 1.0, "ask": 1.2, "mid": 1.1, "last": 1.0, "bid_timestamp": 1000, "ask_timestamp": 1000},
         ]}
         out = ps.unusual_rows_from_chain(
             chain, vol_marks=ps._vol_marks, mid_marks=ps._mid_marks, now=1000.0)[0]
@@ -212,17 +217,21 @@ def test_velocity_marks_turn_cumulative_into_arrival():
 
     def chain_with(vol):
         return {"ticker": "SNDK", "spot": 50.0, "contracts": [
-            _chain_contract(osi="O:V", volume=vol, oi=100, bid=1.0, ask=1.2, last=1.2),
+            _chain_contract(osi="O:V", volume=vol, oi=100, bid=1.0, ask=1.2, last=1.2,
+                            volume_timestamp=1000 if vol == 1000 else 1060,
+                            bid_timestamp=1060, ask_timestamp=1060, last_timestamp=1060),
         ]}
     marks: dict = {}
     rows1, x1 = unusual_rows_from_chain(chain_with(1000), vol_marks=marks, now=1000.0)
     assert x1["SNDK|call|100|2026-09-18"]["velocity_per_min"] is None
     marks["O:V"] = (1000.0, 1000.0)  # what _stamp_marks would record
-    rows2, x2 = unusual_rows_from_chain(chain_with(1600), vol_marks=marks, now=1060.0)
+    rows2, x2 = unusual_rows_from_chain(chain_with(1600), vol_marks=marks, now=1060.0,
+                                          observations={"O:V": {"volume": 1000, "received_at": 1000, "volume_timestamp": 1000}})
     x = x2["SNDK|call|100|2026-09-18"]
     assert x["vol_delta"] == 600.0
     assert x["velocity_per_min"] == pytest.approx(600.0)
-    assert x["side"] == "BUY" and x["bias"] == "BULLISH"  # last lifted at ask
+    assert x["side"] == "FLOW" and x["bias"] is None  # one print cannot classify the whole day
+    assert x["last_trade_side"] == "ASK"
     assert x["premium_true"] == pytest.approx(1600 * 100 * 1.1)
 
 
@@ -232,7 +241,8 @@ def test_lee_ready_signing_rides_sweep_mids():
 
     def chain_with(**over):
         base = dict(osi="O:LR", expiry="2026-09-18", type="call", strike=100.0,
-                    volume=1000, oi=100, iv=0.4, delta=0.4)
+                    volume=1000, oi=100, iv=0.4, delta=0.4,
+                    bid_timestamp=1000, ask_timestamp=1000, last_timestamp=1000)
         base.update(over)
         return {"ticker": "SNDK", "spot": 50.0, "contracts": [base]}
 
@@ -243,8 +253,9 @@ def test_lee_ready_signing_rides_sweep_mids():
     assert x["signed_side"] == "ASK" and x["sign_method"] == "quote"
     # Mid-print with rising sweep mid -> tick ASK.
     _, x2 = unusual_rows_from_chain(
-        chain_with(bid=1.0, ask=1.2, last=1.1, mid=1.1),
-        mid_marks={"O:LR": 1.0}, now=1060.0)
+        chain_with(bid=1.0, ask=1.2, last=1.1, mid=1.1,
+                   bid_timestamp=1060, ask_timestamp=1060, last_timestamp=1060),
+        observations={"O:LR": {"mid": 1.0, "received_at": 1001, "quote_timestamp": 1000}}, now=1060.0)
     x = x2["SNDK|call|100|2026-09-18"]
     assert x["signed_side"] == "ASK" and x["sign_method"] == "tick"
     # Mid-print, no lag anchor -> signed honestly absent (None, not UNKNOWN).
@@ -264,6 +275,8 @@ def test_engine_prefers_signed_over_touch_and_grades_conviction():
     )
 
     rows = norm_rows([["SNDK", "O:S", "call", 50.0, "2026-09-18", 3000, 500, 0.5, 0.4, 49.0]])
+    # This isolated positive fixture represents individual trades, not day volume.
+    rows[0]["activity_basis"] = "individual_trade_fixture"
     extras = {"SNDK|call|50|2026-09-18": {
         "premium_true": 600000.0, "nbbo_side": "ASK",
         "signed_side": "BID", "sign_method": "quote",
@@ -298,7 +311,8 @@ def test_dealer_context_walls_and_regime():
 def test_get_universe_env_override():
     import services.public_scanner as ps
 
-    assert "SNDK" in ps.get_universe() and len(ps.get_universe()) == 40
+    with patch("services.market_catalog.cached_scan_symbols", return_value=["SNDK", "XYZ"]):
+        assert ps.get_universe() == ["SNDK", "XYZ"]
     with patch.dict("os.environ", {"FLOWW_PUBLIC_UNIVERSE": "SPY, QQQ, SPY, SNDK"}):
         assert ps.get_universe() == ["SPY", "QQQ", "SNDK"]
 
@@ -311,7 +325,7 @@ def test_merge_slices_drops_stale_and_reports_coverage():
         "SPY": {"ts": now - 10, "rows": [["SPY", "O:1", "call", 1, "2026-09-18", 9, 1, 0.2, 0.5, 1]]},
         "QQQ": {"ts": now - 9999, "rows": [["QQQ", "O:2", "call", 1, "2026-09-18", 1, 1, 0.2, 0.5, 1]]},
     }
-    rows, xtras, cov = merge_slices(slices, now=now, ttl_s=600.0)
+    rows, xtras, cov = merge_slices(slices, now=now, ttl_s=600.0, universe=list(UNIVERSE))
     assert [r[0] for r in rows] == ["SPY"]
     assert cov["universe"] == len(UNIVERSE)
     assert cov["fresh"] == 1 and cov["stale_dropped"] == ["QQQ"]
@@ -326,7 +340,8 @@ async def test_scan_next_merges_and_never_wipes_on_failure():
         async def fake_slice(tickers, max_expiries=2, concurrency=3):
             return {t: {"rows": [[t, f"O:{t}", "call", 100.0, "2026-09-18",
                                   500, 100, 0.4, 0.4, 99.0]],
-                        "extras": {}, "dealer": {"regime": "positive"}} for t in tickers}
+                        "extras": {}, "dealer": {"regime": "positive"},
+                        "status": "ok", "received_ts": time.time()} for t in tickers}
         with patch.object(ps, "scan_slice", side_effect=fake_slice):
             uni = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"]
             v1 = await ps.scan_next(slice_size=8, universe=uni)
@@ -388,6 +403,9 @@ def test_cluster_fires_on_ladder_with_no_single_line_qualifying():
         _raw(under="PLTR", occ="O:3", strike=145.0, exp=_future_exp(9),
              vol=3000, oi=1200, iv=0.05, delta=0.30),
     ])
+    assert eval_institutional(rows) == []  # Daily snapshots do not prove a directional ladder.
+    for row in rows:
+        row.update(activity_basis="individual_trade_fixture", signed_side="ASK")
     alerts = eval_institutional(rows)
     assert len(alerts) == 1, f"expected only CLUSTER, got {[a['rule'] for a in alerts]}"
     a = alerts[0]
@@ -448,13 +466,13 @@ def test_apply_quote_truth_overlays_premium_side_velocity():
         "velocity_per_min": 450.0, "side": "SELL", "bias": "BEARISH"}}
     apply_quote_truth(rows, extras)
     r = rows[0]
-    assert r["premium"] == 600000.0 and r.get("premium_truth") is True
+    assert r["premium"] == 600000.0 and r.get("premium_truth") is False
     assert r["velocity_per_min"] == 450.0
-    assert infer_side_bias(r) == ("SELL", "BEARISH")  # NBBO truth beats proxy
-    # no extras -> untouched vol/OI-proxy behavior
+    assert infer_side_bias(r) == ("FLOW", None)  # Last trade is not whole-day direction
+    # No extras still means cumulative daily volume, not known initiation.
     rows2 = norm_rows([["SNDK", "O:S", "call", 50.0, "2026-09-18", 3000, 500, 0.5, 0.4, 49.0]])
     apply_quote_truth(rows2, None)
-    assert infer_side_bias(rows2[0]) == ("BUY", "BULLISH")
+    assert infer_side_bias(rows2[0]) == ("FLOW", None)
 
 
 def test_ticker_keyed_gex_context_drives_confluence_and_levels():
@@ -471,6 +489,8 @@ def test_ticker_keyed_gex_context_drives_confluence_and_levels():
                        60000, 1500, 0.7, -0.4, 133.0]])
     ctx = {"PLTR": {"gamma_imbalance": {"gamma_imbalance_pct": -2.0,
                                         "regime": "negative_gamma"}}}
+    assert not _common_factors(rows[0], {}, set(), {}, {}, gex_context=ctx)["gex_confluent"]
+    rows[0].update(activity_basis="individual_trade_fixture", signed_side="ASK")
     f = _common_factors(rows[0], {}, set(), {}, {}, gex_context=ctx)
     assert f["gex_confluent"] is True and f["gex_regime"] == "negative"
     # regime propagates to wider bearish targets (5.5% vs 3.5%)
@@ -492,7 +512,7 @@ def test_conviction_rewards_measured_urgency_only():
     r["velocity_per_min"] = 1200.0
     r["nbbo_side"] = "ASK"
     boosted = score_conviction(r, {})
-    assert boosted == base + 6  # +4 velocity, +2 known initiation
+    assert boosted == base + 4  # Known volume timing, but no whole-day initiation bonus
     assert boosted <= 100
 
 
@@ -568,7 +588,7 @@ async def test_public_chain_route_degrades():
         def release(self):
             return None
 
-    with patch("services.public_budget.budget", DeadBudget()):
+    with patch("services.public_budget.budget", DeadBudget()), patch.dict("os.environ", {"FLOWW_PUBLIC_UNIVERSE": "SPY"}):
         with pytest.raises(HTTPException) as e:
             await fs.public_chain_flat("SPY", expirations=4, expiration=None, fields=None)
         assert e.value.status_code == 503
@@ -701,6 +721,12 @@ async def test_sweep_once_skips_cleanly_on_spent_budget():
     from services.public_budget import BudgetExhausted
 
     class DeadBudget:
+        async def check_request_allowed(self, host="api.public.com"):
+            raise BudgetExhausted(retry_after=30)
+
+        async def peek_available(self):
+            return 0
+
         async def acquire(self, host="public"):
             raise BudgetExhausted(retry_after=30)
 
@@ -784,7 +810,7 @@ def test_get_universe_rejects_garbage_never_crashes():
         out = ps.get_universe()
     assert out == ["SPY", "OK-NAME.X"]
     with patch.dict("os.environ", {"FLOWW_PUBLIC_UNIVERSE": "!!!, ???"}):
-        assert ps.get_universe() == ps.UNIVERSE  # all rejected -> default
+        assert ps.get_universe() == []  # Invalid explicit list must not silently broaden.
 
 
 def test_extras_carry_rel_spread():
@@ -802,15 +828,18 @@ def test_extras_carry_rel_spread():
     assert xtras["SNDK|call|55|2026-09-18"]["rel_spread"] is None
 
 
-def test_alert_carries_rel_spread_when_measured():
+def test_alert_carries_rel_spread_when_measured(monkeypatch):
     from services.flow_alerts import apply_quote_truth, eval_institutional, norm_rows
 
-    rows = norm_rows([["SNDK", "O:S", "call", 50.0, "2026-09-18", 3000, 500, 0.5, 0.4, 49.0]])
-    apply_quote_truth(rows, {"SNDK|call|50|2026-09-18": {
+    # This tests spread propagation, not a changing option-price eligibility cutoff.
+    monkeypatch.setattr("services.flow_alerts.est_entry", lambda row: 2.0)
+    exp = _future_exp(10)
+    rows = norm_rows([["SNDK", "O:S", "call", 50.0, exp, 3000, 500, 0.5, 0.4, 49.0]])
+    apply_quote_truth(rows, {f"SNDK|call|50|{exp}": {
         "premium_true": 600000.0, "rel_spread": 0.04}})
     alerts = eval_institutional(rows)
     assert alerts and alerts[0]["rel_spread"] == 0.04
-    rows2 = norm_rows([["SNDK", "O:S", "call", 50.0, "2026-09-18", 3000, 500, 0.5, 0.4, 49.0]])
+    rows2 = norm_rows([["SNDK", "O:S", "call", 50.0, exp, 3000, 500, 0.5, 0.4, 49.0]])
     assert eval_institutional(rows2)[0]["rel_spread"] is None
 
 
@@ -920,7 +949,7 @@ async def test_scan_next_trims_slice_to_affordability(monkeypatch):
             seen.extend(tickers)
             return {t: {"rows": [[t, f"O:{t}", "call", 100.0, "2026-09-18",
                                   500, 100, 0.4, 0.4, 99.0]],
-                        "extras": {}, "dealer": None} for t in tickers}
+                        "extras": {}, "dealer": None, "status": "ok", "received_ts": time.time()} for t in tickers}
 
         # capacity 9, cost 4/ticker -> afford 2 of 8 requested
         monkeypatch.setattr("services.public_budget.budget",
@@ -977,3 +1006,4 @@ def test_scan_payload_truncated_and_coverage():
         assert full["coverage"] == {"tickers": 2, "limit": 2}
         room = fs._scan_payload(rows, False, "asof", ["c"], limit=500)
         assert room["truncated"] is False
+        assert room["cache_age_seconds"] == 0

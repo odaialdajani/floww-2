@@ -28,6 +28,8 @@ from typing import Any
 
 import pyarrow as pa
 
+from services.connection_guard import guarded_connection
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -84,6 +86,7 @@ SNAPSHOT_COLUMN_TYPES = {
 }
 
 
+@guarded_connection
 def create_snapshot_table(conn) -> None:
     """Create the heatseeker_snapshots table if it doesn't exist.
 
@@ -104,6 +107,7 @@ def create_snapshot_table(conn) -> None:
 # PyArrow bulk insert (I-3: no Pandas)
 # ---------------------------------------------------------------------------
 
+@guarded_connection
 def bulk_insert(conn, batch: pa.RecordBatch) -> int:
     """Insert a PyArrow RecordBatch into heatseeker_snapshots.
 
@@ -394,6 +398,7 @@ def rank_top_movers(
 # Query helpers
 # ---------------------------------------------------------------------------
 
+@guarded_connection
 def get_latest_snapshot(
     conn,
     ticker: str,
@@ -424,6 +429,7 @@ def get_latest_snapshot(
         return []
 
 
+@guarded_connection
 def get_history(
     conn,
     ticker: str,
@@ -453,6 +459,7 @@ def get_history(
         return []
 
 
+@guarded_connection
 def get_top_movers_from_db(
     conn,
     ticker: str,

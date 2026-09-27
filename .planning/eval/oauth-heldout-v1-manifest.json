@@ -1,0 +1,98 @@
+{
+  "status": "execution_complete_independent_grading_pending",
+  "denominator": 30,
+  "counts": {
+    "assessed_factual_bypass": 5,
+    "assessed_model_assisted": 22,
+    "not_assessable": 3
+  },
+  "candidate": {
+    "model": "gpt-5.6-terra",
+    "effort": "medium",
+    "speed": "default"
+  },
+  "quota_before": {
+    "provider": "ChatGPT login",
+    "calls": 3,
+    "daily_limit": 40,
+    "actual_cost": null,
+    "accounting": "Subscription usage; dollar cost is not reported"
+  },
+  "quota_after": {
+    "provider": "ChatGPT login",
+    "calls": 25,
+    "daily_limit": 40,
+    "actual_cost": null,
+    "accounting": "Subscription usage; dollar cost is not reported"
+  },
+  "app_dispatches": 22,
+  "unique_generation_ids": 22,
+  "reported_token_totals": {
+    "totalTokens": 320011,
+    "inputTokens": 307716,
+    "cachedInputTokens": 157952,
+    "cacheWriteInputTokens": 0,
+    "outputTokens": 12295,
+    "reasoningOutputTokens": 3167
+  },
+  "missing_token_usage_records": 0,
+  "actual_dollar_cost": null,
+  "upstream_attempts": "not independently observable; app dispatches are not upstream attempts",
+  "public_capture_requests": 10,
+  "not_assessable": [
+    {
+      "id": "OH1-17",
+      "reason": "No independently frozen exact-expiry screen and matching scoped facts; aggregate evidence not widened"
+    },
+    {
+      "id": "OH1-18",
+      "reason": "No independently frozen exact-expiry screen and matching scoped facts; aggregate evidence not widened"
+    },
+    {
+      "id": "OH1-26",
+      "reason": "Only one independently frozen IBM observation; no second price invented"
+    }
+  ],
+  "case_binding_hashes": {
+    "OH1-01": "711c027a0c2fd6889ff4aa440daf665d4767659138ca4fa78a17181bbde6ef1b",
+    "OH1-02": "019909f283db6bfd78419d05d92d8bff5a1dac96f4cb9154d52e2650a3dd3f06",
+    "OH1-03": "8041826d37d9bee25e20334b1c63bece1f12e40035ba6f546053b1899ed5b3b3",
+    "OH1-04": "5689abcdf79bd0b200547c3f56e4a4373cfc902f0a633b126d562c985067ce5a",
+    "OH1-05": "8a223d48e6800d9e7d9e7db4af3bdb2a68a3d3f9258d53d911f15dd21ec53daa",
+    "OH1-06": "4b235d8e810035156029b553db71534385d4751f31abc848e96a27f76e238121",
+    "OH1-07": "4ecff704b8c087132e85531048757a01591e10a24f852ab94a556f8101c97636",
+    "OH1-08": "508f69220a8e4494bff247f9610c8983e3a2c8239ecedad7d924476e64baacf2",
+    "OH1-09": "b9c50997728764d09f049695d6b2f2264d7d7e4f0cd7e16b58eb11bb05dda5bb",
+    "OH1-10": "a2e072b62a4c1b82ccdfae956831a3281b2b0e953fa3753ff51fceb146ae0dd2",
+    "OH1-11": "19f87a4df67b4abbc6a0ffcc1cdf10f6caf410c73384b838d2cacb7eb9a674e0",
+    "OH1-12": "232d7e4f1770ca7c415d1790f5eb670531d86b44bfe1eba7bb7305bcf10c4dbf",
+    "OH1-13": "bbd7fc190f824785f330a20d79d08d376dcd3a39e97b600bc7af2b7e8907c6f3",
+    "OH1-14": "e4d8fe0c071c5d17adeaa0ca87ec00b80c9a1ca4b99f5046cbd9c5c09c4922e9",
+    "OH1-15": "ae7a0e5ce577a5c70b697122b64c4e147a44e8bf2d98a63f4a8d0701d43c2e58",
+    "OH1-16": "2618f267dd781720749cee485b687e8a6416663a3685eded90117a66aebb69a8",
+    "OH1-17": "b248d13cd7363f165bed6da35ff9c80979389db8aa72ba863957e8ea74aaf086",
+    "OH1-18": "a47efc539c47110c58120b4d50aadc72ec2e4c27db14a36eb90f84e047702feb",
+    "OH1-19": "85dc88b3234141c9f941239ce5d57258a0335e32c3a62a852de471b75b99bcf5",
+    "OH1-20": "f7d7db4739851d40f7460be7c25d06abd965905991f66735da62cc76947815e6",
+    "OH1-21": "26ed938da3ff4f15faa082cf67548d40626fce3f17ce08df316e1e10e305b6b1",
+    "OH1-22": "99725daa3977830f2a408a8dacba51052f924b3a4d8434de0c68c21afb9d0114",
+    "OH1-23": "cce4ee81a4f9f8c950e62ded6cd1dc0e59533591cfadd07506f105b92e0c3fa4",
+    "OH1-24": "f30bf62bc96354192424004462c9352219e9b38e13ad7c1426a7f32980d271da",
+    "OH1-25": "97f6b9bc068376fcaad8a0876af7f65966dcc719f14d5613d6d08e50647b8d74",
+    "OH1-26": "df4ab9d8f2e2e0b236b17e03094143ca7a0b350e8841258aa6e97537c539a351",
+    "OH1-27": "5e65160e3894944a109f3840a4a8d1f04a93250f84682ebb1947e74bccf7ab1f",
+    "OH1-28": "37f1af3863f26928998e27e2428c5e362eeeb21470073ec6a4e14da7d185d58d",
+    "OH1-29": "e94371ead4f78074424120e0f73edb8a7926014783612c9608529c41bae1ce65",
+    "OH1-30": "7973cc7e8ece521c6d6f1169e2516938b95d603ba49da8e992e0af7a89682299"
+  },
+  "artifact_sha256": {
+    "oauth-heldout-v1-cases.json": "58A18634EB3A458E467D144E981A2CEA73B9B8C8722602FA967126261676E2C1",
+    "oauth-heldout-v1-rubric.md": "26D53CB7E489B0DBABEAD6CF5BC0EC0DB17AD149BA8640399117A430E56D8230",
+    "oauth-heldout-v1-sources.json": "E02D91ED159248F4CD7261718DA03C4D2D6505573F1590CCBBDB79E8E898C5DF",
+    "oauth-heldout-v1-binding.json": "28AB41C54888DC3688692327FB0A8C17961BDF1F6D84A0F501B048C17F614CB3",
+    "oauth-heldout-v1-results.json": "3E9E5B025BD460F79B502B765668E7AF353A7BF6A18009B3B8128CFDE3208FE6"
+  },
+  "runner_sha256": "6B148F4C55084729540D16FF93D2F691B4D3727E70C667C514BCA0A0A3206987",
+  "code_unchanged_at_end": true,
+  "limitation": "No self-grading.22 validator-accepted answers do not establish useful answers or improvement.5 price cases bypassed model;3 unavailable evidence cases remain in full denominator. Sources and quality frozen, no source re-aging; no model retries or quota bypass."
+}

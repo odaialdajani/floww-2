@@ -1141,3 +1141,11 @@ describe("poll-chain integration — the effect's exact sequence", () => {
     expect(pool.spread).toBe(0);
   });
 });
+
+test.each([null, undefined, 0, -1, NaN, Infinity])("unknown or zero open interest has no invented ratio (%s)", oi => {
+ const row=mkScanRow("TEST","call",100,"2026-10-30",3000,oi,null,null,null);
+ expect(row.volOI).toBeNull();
+ expect(row.arch).not.toBe("FRESH");
+ expect(fmtK(row.oi)).toBe(oi===0?"0":"Unknown");
+ expect(fmtUSD(row.premium)).toBe("Unknown");
+});

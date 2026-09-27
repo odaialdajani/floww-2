@@ -35,6 +35,7 @@ def _accepting_broker():
     broker.get_positions = AsyncMock(return_value=[])
     broker.get_order = AsyncMock(
         return_value={"id": "alpaca-1", "status": "filled",
+                      "symbol": "SPY", "side": "buy", "qty": "1",
                       "filled_avg_price": "751.0", "filled_qty": "1"})
     return broker
 
@@ -85,7 +86,7 @@ class TestApproveThroughRealRouter:
         assert broker.place_stock_order.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_journal_marks_submission_not_fill(self, monkeypatch):
+    async def test_journal_records_confirmed_readback(self, monkeypatch):
         """Journal seed must not read as a confirmed fill."""
         from services import discord_ops as ops
         from services.journal_store import read_trades
@@ -99,7 +100,7 @@ class TestApproveThroughRealRouter:
             await ops.execute_approve(
                 "score|SPY|call|745|2099-01-08", 1, MagicMock(), router)
         notes = read_trades(eng)[0]["notes"]
-        assert "not a confirmed fill" in notes
+        assert "confirmed execution only" in notes
 
 
 class TestPaperTransportPins:
@@ -299,7 +300,7 @@ class TestReconcile:
         assert res["status"] == "submitted"
         assert res["reconciliation"]["venue_status"] == "filled"
         notes = read_trades(eng)[0]["notes"]
-        assert "not a confirmed fill" in notes
+        assert "confirmed execution only" in notes
         assert "venue reports filled" in notes
 
     @pytest.mark.asyncio

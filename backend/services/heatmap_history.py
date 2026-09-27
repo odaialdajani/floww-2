@@ -19,12 +19,14 @@ import threading
 from datetime import UTC, datetime
 from typing import Any
 
+from services.connection_guard import guarded_connection
+
 log = logging.getLogger(__name__)
 
 SCHEMA_VERSION = "2"
 
-# Single-writer policy: concurrent recorders serialize on this lock (short
-# critical section). Readers never block.
+# Recorder ordering is nested inside the shared connection guard.
+# Reads, writes, commit and rollback hold the same connection lock.
 _RECORDER_LOCK = threading.Lock()
 
 
@@ -167,6 +169,7 @@ DDL = {
 }
 
 
+@guarded_connection
 def ensure_tables(conn) -> None:
     for name, ddl in DDL.items():
         try:
@@ -201,6 +204,7 @@ def ensure_tables(conn) -> None:
             log.warning("heatmap_history migrate %s failed: %s", col, e)
 
 
+@guarded_connection
 def recorder_status(conn, path: str | None = None) -> dict[str, Any]:
     """Honest durability status (R4-13/P07, R6-3/B04): inspect the ACTUAL
     database backing — never infer health from a configured path string.
@@ -236,6 +240,7 @@ def recorder_status(conn, path: str | None = None) -> dict[str, Any]:
         return {"durable": False, "mode": "unknown", "error": str(e)}
 
 
+@guarded_connection
 def record_capability(conn, ticker: str, operation: str,
                       requested: int | None = None, returned: int | None = None,
                       usable: int | None = None, truncated: bool = False,
@@ -268,6 +273,7 @@ def _esc(v: Any) -> str:
     return f"'{s}'"
 
 
+@guarded_connection
 def attach_outcomes_to_decisions(conn, results: dict[str, dict[str, Any]]) -> None:
     """After close_episodes, copy outcome labels into decision features.
 
@@ -309,6 +315,7 @@ def attach_outcomes_to_decisions(conn, results: dict[str, dict[str, Any]]) -> No
         log.debug("attach_outcomes_to_decisions: %s", e)
 
 
+@guarded_connection
 def _parse_features(conn, did: str) -> dict[str, Any]:
     """Read the current features JSON for a decision."""
     try:
@@ -324,6 +331,7 @@ def _parse_features(conn, did: str) -> dict[str, Any]:
     return {}
 
 
+@guarded_connection
 def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
                     snapshot_id: str | None = None) -> str | None:
     """Record one heatmap payload + its contracts. Returns snapshot_id or None.
@@ -339,8 +347,8 @@ def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
     repeated cache hits as new events: caller must only invoke on fresh
     builds, not stale-serve paths.
 
-    Concurrency policy: one module-level writer lock; concurrent recorders
-    serialize (short critical section). Readers never block.
+    Concurrency policy: shared connection lock covers the complete operation,
+    including reads, commit and rollback; engine writers use the same lock.
     """
     try:
         ensure_tables(conn)
@@ -493,9 +501,11 @@ def _full_grids(payload: dict[str, Any]) -> dict[str, Any]:
     if isinstance(main, dict):
         section: dict[str, Any] = {"exposure_basis": main.get("exposure_basis", "OI"),
                                    "formula_version": main.get("formula_version", "gex.v2")}
-        for k in ("grid", "charm_grid", "vex_grid", "vomma_grid"):
+        for k in ("grid", "charm_grid", "vex_grid", "vomma_grid", "vex_meta"):
             if isinstance(main.get(k), dict):
                 section[k] = main[k]
+        if isinstance(main.get("vex_strike_gross"), list):
+            section["vex_strike_gross"] = main["vex_strike_gross"]
         _axes(section)
         out["grid"] = section
     grids = ((payload.get("metrics") or {}).get("grids")) or {}
@@ -543,6 +553,7 @@ def _axes(section: dict[str, Any]) -> None:
         section["strikes"] = sorted(seen)
 
 
+@guarded_connection
 def record_wall_event(conn, wall_id: str, ticker: str, event: str,
                       snapshot_id: str, evidence: dict | None = None,
                       scope: str = "") -> None:
@@ -558,6 +569,7 @@ def record_wall_event(conn, wall_id: str, ticker: str, event: str,
         log.warning("wall event record failed: %s", e)
 
 
+@guarded_connection
 def latest_wall_state(conn, wall_id: str, ticker: str, scope: str = "") -> dict | None:
     """Load the most recent interaction state for a scoped wall ID.
 
@@ -595,6 +607,7 @@ def latest_wall_state(conn, wall_id: str, ticker: str, scope: str = "") -> dict 
         return None
 
 
+@guarded_connection
 def record_node_lifecycle(conn, ticker: str, scope: str, tracker_dict: dict) -> None:
     """Persist a NodeLifecycleTracker snapshot (one row per ticker+scope).
 
@@ -616,6 +629,7 @@ def record_node_lifecycle(conn, ticker: str, scope: str, tracker_dict: dict) -> 
         log.warning("node lifecycle record failed: %s", e)
 
 
+@guarded_connection
 def latest_node_lifecycle(conn, ticker: str, scope: str) -> dict | None:
     """Load the most recent tracker snapshot for ticker+scope, or None.
 
@@ -641,6 +655,7 @@ def latest_node_lifecycle(conn, ticker: str, scope: str) -> dict | None:
         return None
 
 
+@guarded_connection
 def record_wall_last_state(conn, ticker: str, scope: str, wall_id: str,
                            state: dict) -> None:
     """Persist a wall's last interaction state (one row per ticker+scope+wall).
@@ -663,6 +678,7 @@ def record_wall_last_state(conn, ticker: str, scope: str, wall_id: str,
         log.warning("wall last-state record failed: %s", e)
 
 
+@guarded_connection
 def latest_wall_last_state(conn, ticker: str, scope: str, wall_id: str) -> dict | None:
     """Load a wall's last interaction state, or None when never recorded."""
     try:
@@ -685,6 +701,7 @@ def latest_wall_last_state(conn, ticker: str, scope: str, wall_id: str) -> dict 
         return None
 
 
+@guarded_connection
 def record_decision(conn, decision: dict[str, Any]) -> str:
     """Record scenario decision incl. no-trade with all features known then.
 
@@ -713,6 +730,7 @@ def record_decision(conn, decision: dict[str, Any]) -> str:
     return did
 
 
+@guarded_connection
 def record_outcome(conn, decision_id: str, ticker: str, horizon_s: int,
                    label: str, label_version: str = "outcome.v1",
                    censored: bool = False, detail: dict | None = None,
@@ -737,6 +755,7 @@ def record_outcome(conn, decision_id: str, ticker: str, horizon_s: int,
         log.warning("outcome record failed: %s", e)
 
 
+@guarded_connection
 def record_price_path(conn, ticker: str, at_ts: float, price: float,
                       source: str = "synthetic",
                       received_at: str | None = None) -> bool:
@@ -764,6 +783,7 @@ def record_price_path(conn, ticker: str, at_ts: float, price: float,
         return False
 
 
+@guarded_connection
 def price_paths_since(conn, ticker: str, since_ts: float = 0.0,
                       limit: int = 100000) -> list[tuple[float, float]]:
     """Ordered finite (t, price) observations for a ticker (R8-05)."""
@@ -788,6 +808,7 @@ def price_paths_since(conn, ticker: str, since_ts: float = 0.0,
         return []
 
 
+@guarded_connection
 def outcome_close_tick(conn, ticker: str | None = None,
                        default_horizon_s: float = 300) -> dict[str, Any]:
     """One deterministic outcome-worker tick (R8-05).
@@ -830,6 +851,7 @@ def outcome_close_tick(conn, ticker: str | None = None,
     return out
 
 
+@guarded_connection
 def replay_snapshot(conn, snapshot_id: str) -> dict[str, Any] | None:
     """Reconstruct exactly what was available at decision time (known-at join).
 
@@ -879,6 +901,7 @@ def replay_snapshot(conn, snapshot_id: str) -> dict[str, Any] | None:
         return None
 
 
+@guarded_connection
 def compare_snapshots(conn, ticker: str, day: str) -> dict[str, Any]:
     """Coarse wall-level change between the last two snapshots of a ticker/day.
 
@@ -952,6 +975,7 @@ def compare_snapshots(conn, ticker: str, day: str) -> dict[str, Any]:
         return {"ticker": ticker.upper(), "day": day, "status": "error", "error": str(e)}
 
 
+@guarded_connection
 def session_manifest(conn, ticker: str, day: str,
                      expected_cadence_s: float | None = None) -> dict[str, Any]:
     """Completeness report for a ticker/day: snapshots, gaps, coverage.
@@ -1005,6 +1029,7 @@ def session_manifest(conn, ticker: str, day: str,
 # R8-04: review journal — list and annotate saved scenario decisions.
 # ---------------------------------------------------------------------------
 
+@guarded_connection
 def list_decisions(conn, ticker: str, limit: int = 50, state_filter: str | None = None) -> list[dict[str, Any]]:
     """List saved scenario decisions for a ticker (R8-04 review journal).
 
@@ -1012,6 +1037,8 @@ def list_decisions(conn, ticker: str, limit: int = 50, state_filter: str | None 
     and any attached outcome labels. Read-only — never mutates storage.
     """
     try:
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 1000:
+            raise ValueError("limit must be an integer from 1 to 1000")
         ensure_tables(conn)
         q = ("SELECT d.decision_id, d.ticker, d.at_ts, d.snapshot_id, "
              "d.scenario, d.side, d.eligible, d.reason_codes, d.features, "
@@ -1022,13 +1049,16 @@ def list_decisions(conn, ticker: str, limit: int = 50, state_filter: str | None 
              "LEFT JOIN candidate_quotes_v1 c ON c.decision_id = d.decision_id "
              "LEFT JOIN outcome_labels_v1 o ON o.decision_id = d.decision_id "
              "LEFT JOIN decision_reviews_v1 r ON r.decision_id = d.decision_id "
-             "WHERE d.ticker = " + _esc(ticker) + " ")
+             "WHERE d.ticker = ? ")
+        params = [ticker]
         if state_filter is not None:
-            q += "AND r.state = " + _esc(state_filter) + " "
+            q += "AND r.state = ? "
+            params.append(state_filter)
         q += "GROUP BY d.decision_id, d.ticker, d.at_ts, d.snapshot_id, "
         q += "d.scenario, d.side, d.eligible, d.reason_codes, d.features "
-        q += "ORDER BY d.at_ts DESC LIMIT " + str(limit)
-        rows = conn.execute(q).fetchdf()
+        q += "ORDER BY d.at_ts DESC LIMIT ?"
+        params.append(limit)
+        rows = conn.execute(q, params).fetchdf()
         if rows is None or len(rows) == 0:
             return []
         out = []
@@ -1062,9 +1092,10 @@ def list_decisions(conn, ticker: str, limit: int = 50, state_filter: str | None 
         return []
 
 
+@guarded_connection
 def save_decision_review(conn, decision_id: str, state: str,
                          reason: str | None = None,
-                         note: str | None = None) -> str | None:
+                         note: str | None = None, *, ticker: str | None = None) -> str | None:
     """Save a review state on a decision (R8-04).
 
     States: pending | reviewed | waiting | skipped.
@@ -1073,17 +1104,21 @@ def save_decision_review(conn, decision_id: str, state: str,
     try:
         ensure_tables(conn)
         with _RECORDER_LOCK:
+            if ticker is not None:
+                matches = conn.execute(
+                    "SELECT ticker FROM scenario_decisions_v1 WHERE decision_id = ?", [decision_id]
+                ).fetchall()
+                if len(matches) != 1 or str(matches[0][0]).upper() != ticker.upper():
+                    return None
+            saved_at = _now_iso()
             conn.execute(
                 "INSERT OR REPLACE INTO decision_reviews_v1 VALUES ("
                 + _esc(decision_id) + ", "
                 + _esc(state) + ", "
                 + _esc(reason) + ", "
                 + _esc(note) + ", "
-                + _esc(_now_iso()) + ")")
-        return _now_iso()
+                + _esc(saved_at) + ")")
+        return saved_at
     except Exception as e:
         log.warning("save_decision_review failed for %s: %s", decision_id, e)
         return None
-
-
-

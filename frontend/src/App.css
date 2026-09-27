@@ -3453,17 +3453,34 @@ button, select, input {
   margin-top: 4px;
   border-collapse: collapse;
   width: 100%;
+  table-layout: fixed;
 }
 
+.skylit-compare-table th,
 .skylit-compare-table td {
   padding: 1px 8px 1px 0;
   vertical-align: top;
 }
 
-.skylit-compare-table td:last-child {
-  opacity: 0.75;
-  padding-right: 0;
+.skylit-compare-table th {
+  font-weight: 400;
+  text-align: left;
+  width: 52%;
+  overflow-wrap: anywhere;
 }
+.skylit-compare-table td {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.skylit-compare-table td:last-child { padding-right: 0; }
+.skylit-compare-basis {
+  display: block;
+  font-size: 10px;
+  color: #8b9aaf;
+  line-height: 1.4;
+  margin-top: 2px;
+}
+.skylit-compare-table tr + tr > * { padding-top: 7px; }
 
 .skylit-inspector-note {
   font-size: 12px;
@@ -3698,6 +3715,44 @@ button, select, input {
   color: #475569;
   margin-left: 4px;
 }
+
+/* Keep summary prices intact; supporting totals get their own line. */
+.skylit-metrics-sidebar .skylit-metric-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+  row-gap: 0;
+}
+.skylit-metrics-sidebar .skylit-metric-value { white-space: nowrap; }
+.skylit-metrics-sidebar .skylit-metric-sub {
+  grid-column: 2;
+  text-align: right;
+  margin-left: 0;
+}
+
+/* Contract details must fit the narrow inspector without lost columns. */
+.skylit-shortlist-table {
+  width: 100%;
+  margin-top: 4px;
+  border-collapse: collapse;
+  font-size: 11px;
+  color: #94a3b8;
+}
+.skylit-shortlist-table tr {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  column-gap: 4px;
+  padding: 6px 0;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.skylit-shortlist-table td {
+  grid-column: 2;
+  min-width: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+  padding: 0;
+}
+.skylit-shortlist-table td:first-child { grid-column: 1; grid-row: 1 / 5; }
 
 .skylit-spot-box {
   margin-top: auto;
@@ -4340,4 +4395,56 @@ select[class*="focus:border-sky"], textarea[class*="focus:border-sky"] {
 input[class*="bg-slate-800"], select[class*="bg-slate-800"], textarea[class*="bg-slate-800"] {
   background: rgba(13,17,23,0.7) !important;
   border-color: rgba(255,255,255,0.09) !important;
+}
+
+.lodestar-open { position:fixed;right:18px;bottom:18px;z-index:1100;background:#22262d;color:#d2d6dd;border:1px solid #495160;border-radius:8px;padding:10px 16px;box-shadow:0 4px 20px #0005; }
+@media (max-width: 768px) { .lodestar-open { bottom:calc(64px + env(safe-area-inset-bottom)); } }
+.lodestar-open small {display:block;font-size:10px;color:#98a3b4;}
+.lodestar-backdrop {position:fixed;inset:0;z-index:1199;background:#0004;}
+.lodestar-panel {position:fixed;right:0;top:0;bottom:0;z-index:1200;width:min(480px,100vw);padding:22px;background:#1b1e24;color:#c5ccd6;border-left:1px solid #444c59;overflow:auto;box-shadow:-8px 0 36px #0005;}
+.lodestar-panel header {display:flex;justify-content:space-between;align-items:center;}
+.lodestar-panel h2 {font-size:20px;}
+.lodestar-panel button {border:1px solid #4b5463;border-radius:5px;padding:6px 10px;margin:5px 6px 5px 0;}
+.lodestar-panel textarea {width:100%;min-height:84px;resize:vertical;background:#13161b;color:#d7dce5;border:1px solid #4b5463;border-radius:5px;padding:10px;}
+.lodestar-panel label {display:block;margin:12px 0 5px;font-size:12px;}
+.lodestar-panel summary {cursor:pointer;padding:7px 0;}
+.lodestar-panel [role=alert] {color:#e1ac97;}
+.lodestar-panel button:focus-visible,.lodestar-panel summary:focus-visible,.lodestar-panel textarea:focus-visible {outline:2px solid #9b9ed3;outline-offset:3px;}
+.lodestar-context,.lodestar-panel small {font-size:11px;color:#9ba7b7;}
+.lodestar-answer {margin-top:18px;padding-top:14px;border-top:1px solid #39414d;}
+.lodestar-answer h3 {font-size:15px;}
+.lodestar-model-settings {margin:10px 0; font-size:13px;}
+.lodestar-model-settings fieldset {display:grid;gap:10px;padding:12px;margin:10px 0;border:1px solid #46505f;min-width:0;}
+.lodestar-model-settings label {display:grid;gap:5px;}
+.lodestar-model-settings select {width:100%;min-width:0;padding:8px;color:#e8edf3;background:#141a23;border:1px solid #657083;border-radius:5px;}
+.lodestar-model-settings small,.lodestar-ai-usage small {display:block;margin-top:7px;line-height:1.5;color:#adb7c7;}
+.lodestar-model-settings select:focus-visible {outline:2px solid #7fc2ff;outline-offset:2px;}
+.lodestar-answer p {font-size:13px;line-height:1.6;margin:8px 0;}
+.lodestar-evidence pre {white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;}
+
+/* Recorded-view controls share the compact Solstice toolbar rhythm. */
+.skylit-status-strip,
+.skylit-replay-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #202936;
+  color: #a6b6ca;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.skylit-status-strip > span + span {
+  padding-left: 12px;
+  border-left: 1px solid #303c4e;
+}
+.skylit-replay-strip .skylit-trade-mode-btn { flex: 0 0 auto; }
+.skylit-replay-banner {
+  padding: 8px 12px;
+  border-bottom: 1px solid #725721;
+  background: #282215;
+  color: #f0ce7c;
+  font-size: 11px;
+  line-height: 1.5;
 }

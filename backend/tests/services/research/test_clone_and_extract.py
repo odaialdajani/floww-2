@@ -3,7 +3,7 @@
 Covers URL parsing, manifest awareness, plan construction, and queue I/O.
 The actual ``git clone`` subprocess is not exercised in unit tests — see
 ``test_main_dry_run`` for the end-to-end dry-run path.
-NOTE: Several tests require network access to GitHub and are skipped.
+License and repository-size reads are mocked; every test runs offline.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -18,6 +19,15 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import clone_and_extract as ce  # noqa: E402
+
+
+@pytest.fixture
+def repository_checks(monkeypatch):
+    license_check = Mock(return_value=(True, "MIT"))
+    size_check = Mock(return_value=1.0)
+    monkeypatch.setattr(ce, "check_license", license_check)
+    monkeypatch.setattr(ce, "get_repo_size_mb", size_check)
+    return license_check, size_check
 
 
 # ---------------------------------------------------------------- parse_owner_repo
@@ -142,8 +152,7 @@ def test_collect_candidates_only_filter(tmp_path):
 
 
 # ---------------------------------------------------------------- plan_clones
-@pytest.mark.skip(reason="Requires network access to GitHub for license check")
-def test_plan_clones_buckets(tmp_path, monkeypatch):
+def test_plan_clones_buckets(tmp_path, monkeypatch, repository_checks):
     monkeypatch.setattr(ce, "CLONED_DIR", tmp_path)
     candidates = [
         {"paper_id": "p1", "paper_title": "T1", "paper_url": "u1", "code_url": "https://github.com/a/b"},
@@ -153,6 +162,9 @@ def test_plan_clones_buckets(tmp_path, monkeypatch):
     ]
     manifest = {"cloned": ["a/b"], "count": 1}
     plan = ce.plan_clones(candidates, manifest)
+    repository_checks[0].assert_called_once()
+    assert repository_checks[0].call_args.args[:2] == ("x", "y")
+    repository_checks[1].assert_called_once_with("x", "y")
     assert [c["code_url"] for c in plan["to_clone"]] == ["https://github.com/x/y"]
     assert [c["code_url"] for c in plan["skip_already"]] == ["https://github.com/a/b"]
     assert [c["code_url"] for c in plan["skip_unparseable"]] == ["garbage"]
@@ -170,13 +182,15 @@ def test_update_manifest_idempotent():
 
 
 # ---------------------------------------------------------------- write_queue
-@pytest.mark.skip(reason="Requires network access to GitHub for license check")
 def test_write_queue_payload_shape(tmp_path):
     plan = {"to_clone": [{"code_url": "https://github.com/a/b"}], "skip_already": [], "skip_unparseable": []}
     out = tmp_path / "q.json"
     ce.write_queue(plan, out)
     data = json.loads(out.read_text())
-    assert set(data.keys()) == {"generated_at", "to_clone", "skip_already", "skip_unparseable", "counts"}
+    assert set(data) == {"generated_at", "to_clone", "skip_already", "skip_unparseable",
+                         "skip_license", "skip_size", "counts"}
+    assert data["skip_license"] == data["skip_size"] == []
+    assert data["counts"]["skip_license"] == data["counts"]["skip_size"] == 0
     assert data["counts"]["to_clone"] == 1
 
 
@@ -191,8 +205,7 @@ def test_append_provenance_creates_then_appends(tmp_path):
 
 
 # ---------------------------------------------------------------- main dry-run path
-@pytest.mark.skip(reason="Requires network access to GitHub for license check")
-def test_main_dry_run_writes_queue_and_returns_zero(tmp_path, monkeypatch):
+def test_main_dry_run_writes_queue_and_returns_zero(tmp_path, monkeypatch, repository_checks):
     # Isolate paths
     monkeypatch.setattr(ce, "GITHUB_REPOS_DIR", tmp_path)
     monkeypatch.setattr(ce, "CLONED_DIR", tmp_path / "cloned")
@@ -208,7 +221,12 @@ def test_main_dry_run_writes_queue_and_returns_zero(tmp_path, monkeypatch):
         }]
     }))
 
+    execute = Mock(side_effect=AssertionError("Dry run must not clone"))
+    monkeypatch.setattr(ce, "execute_plan", execute)
     rc = ce.main(["--data-dir", str(data_dir)])
+    execute.assert_not_called()
+    repository_checks[0].assert_called_once()
+    repository_checks[1].assert_called_once_with("a", "b")
     assert rc == 0
     queues = list(tmp_path.glob("clone_queue_*.json"))
     assert len(queues) == 1
@@ -221,8 +239,7 @@ def test_main_returns_2_when_no_code_links_file(tmp_path):
     assert rc == 2
 
 
-@pytest.mark.skip(reason="Requires network access to GitHub for license check")
-def test_main_execute_without_yes_returns_3(tmp_path, monkeypatch):
+def test_main_execute_without_yes_returns_3(tmp_path, monkeypatch, repository_checks):
     monkeypatch.setattr(ce, "GITHUB_REPOS_DIR", tmp_path)
     monkeypatch.setattr(ce, "CLONED_DIR", tmp_path / "cloned")
     monkeypatch.setattr(ce, "CLONED_MANIFEST", tmp_path / "cloned-manifest.json")
@@ -236,5 +253,8 @@ def test_main_execute_without_yes_returns_3(tmp_path, monkeypatch):
         }]
     }))
 
+    execute = Mock(side_effect=AssertionError("Missing confirmation must not clone"))
+    monkeypatch.setattr(ce, "execute_plan", execute)
     rc = ce.main(["--data-dir", str(data_dir), "--execute"])
+    execute.assert_not_called()
     assert rc == 3

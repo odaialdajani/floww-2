@@ -18,7 +18,6 @@ import asyncio
 import contextlib
 import logging
 import os
-import threading
 from datetime import UTC, datetime
 from functools import wraps
 from typing import Any
@@ -27,6 +26,7 @@ import duckdb
 import numpy as np
 
 import services.observability as obs_metrics
+from services.connection_guard import connection_lock
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +133,7 @@ class DuckDBEngine:
         # vpin history route) all touch this one connection from different OS
         # threads. This lock serializes EVERY raw connection access — reads and
         # writes — so two threads never share the connection's pending result.
-        self._conn_lock = threading.Lock()
+        self._conn_lock = connection_lock(self._conn)
         self._tick_buffer: list[tuple] = []
         self._lob_buffer: list[tuple] = []
         self._flow_buffer: list[tuple] = []
@@ -347,9 +347,10 @@ class DuckDBEngine:
         and long pytest runs grind to a halt. Safe to call twice."""
         conn = getattr(self, '_conn', None)
         if conn is not None:
-            with contextlib.suppress(Exception):
-                conn.close()
-            self._conn = None
+            with self._conn_lock:
+                with contextlib.suppress(Exception):
+                    conn.close()
+                self._conn = None
 
     async def insert_tick(self, symbol: str, bid: float, ask: float, last: float,
                           volume: int, oi: int, delta: float, gamma: float,
@@ -458,6 +459,13 @@ class DuckDBEngine:
                 logger.error(f"DuckDB flow flush timeout - {len(buf)} rows dropped")
             except Exception as e:
                 logger.error(f"DuckDB flow flush error: {e}")
+
+    def query_strict(self, sql: str, params: list | None = None) -> list[dict]:
+        """Read with explicit failure, for callers distinguishing outage from empty."""
+        with self._conn_lock:
+            cursor = self._conn.execute(sql, params or [])
+            names = [column[0] for column in cursor.description]
+            return [dict(zip(names, row, strict=True)) for row in cursor.fetchall()]
 
     def execute_write(self, sql: str, params_seq: list | None = None) -> None:
         """Serialized write against the shared connection. Pass a sequence of

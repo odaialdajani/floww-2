@@ -1,0 +1,38 @@
+{
+  "set_id": "oauth-heldout-v2",
+  "amendment_version": 1,
+  "status": "PRE_EXECUTION_UNBOUND_NOT_RUN",
+  "frozen_at_utc": "2026-09-11T22:14:37.235360+00:00",
+  "authority": "Authoritative AI plan section12 explicitly permits recorded sanitized market fixtures and labeled synthetic failures; parent requested prospective correction before any v2 execution.",
+  "output_driven": false,
+  "model_provider_calls_made": 0,
+  "original_files_unchanged": [
+    {
+      "path": ".planning/eval/oauth-heldout-v2-cases.json",
+      "sha256": "ac8ecec0d9d4543949a9d0080a4e9df1882ec872605b20163af35f618c73ff30"
+    },
+    {
+      "path": ".planning/eval/oauth-heldout-v2-rubric.md",
+      "sha256": "5b822586b9c508cab91e5678a416a096e252dd3c9175191eca23b6aa3e231f88"
+    },
+    {
+      "path": ".planning/eval/oauth-heldout-v2-manifest.json",
+      "sha256": "35334b511165c6c28b3c491660f89413cfa3eabc7d6dc18e360c4da1ac9809ad"
+    }
+  ],
+  "canonical_question_sha256": "e74d6e14cd3b1c5d1d02fc99fbb721176de35df2e752095fbd7722a98d4026d5",
+  "amendment": {
+    "path": ".planning/eval/oauth-heldout-v2-protocol-amendment.md",
+    "sha256": "05ca64d172b0192de03d02748d514492d240ddecbf467e429d048a1bc8739930"
+  },
+  "checks": {
+    "original_cases_hash": "pass",
+    "original_rubric_hash": "pass",
+    "canonical_question_hash": "pass",
+    "30_questions": true,
+    "original_binding_and_results_empty": "pass",
+    "original_case_states_not_run": "pass"
+  },
+  "binding_required": true,
+  "execution_authorized": false
+}

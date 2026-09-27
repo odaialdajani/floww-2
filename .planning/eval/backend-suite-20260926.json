@@ -1,0 +1,217 @@
+{
+  "suites": [
+    {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "39",
+      "tests": "5941",
+      "time": "381.889",
+      "timestamp": "2026-09-26T16:16:53.836769-04:00"
+    }
+  ],
+  "skipped": [
+    {
+      "class": "",
+      "test": "tests.test_dvt_backtest_byte_compat",
+      "reason": "collection skipped"
+    },
+    {
+      "class": "tests.e2e.test_dashboard_visual.TestDashboardVisual",
+      "test": "test_heatseeker_tab_loads",
+      "reason": "playwright not installed — run: pip install playwright && playwright install chromium"
+    },
+    {
+      "class": "tests.e2e.test_dashboard_visual.TestDashboardVisual",
+      "test": "test_heatseeker_tag_overlays_render",
+      "reason": "playwright not installed — run: pip install playwright && playwright install chromium"
+    },
+    {
+      "class": "tests.e2e.test_dashboard_visual.TestDashboardVisual",
+      "test": "test_visual_regression_heatseeker",
+      "reason": "playwright not installed — run: pip install playwright && playwright install chromium"
+    },
+    {
+      "class": "tests.e2e.test_dashboard_visual.TestDashboardVisual",
+      "test": "test_screenshot_determinism",
+      "reason": "playwright not installed — run: pip install playwright && playwright install chromium"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_model_loads[QQQ]",
+      "reason": "No SHIP model found for QQQ"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_model_loads[TLT]",
+      "reason": "No SHIP model found for TLT"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_model_loads[DIA]",
+      "reason": "No SHIP model found for DIA"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_model_loads[IWM]",
+      "reason": "No SHIP model found for IWM"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_manifest_valid[QQQ]",
+      "reason": "No SHIP manifest found for QQQ"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_manifest_valid[TLT]",
+      "reason": "No SHIP manifest found for TLT"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_manifest_valid[DIA]",
+      "reason": "No SHIP manifest found for DIA"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_manifest_valid[IWM]",
+      "reason": "No SHIP manifest found for IWM"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_prediction_shape[QQQ]",
+      "reason": "No SHIP model found for QQQ"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_prediction_shape[TLT]",
+      "reason": "No SHIP model found for TLT"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_prediction_shape[DIA]",
+      "reason": "No SHIP model found for DIA"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_prediction_shape[IWM]",
+      "reason": "No SHIP model found for IWM"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_prediction_proba_valid[QQQ]",
+      "reason": "No SHIP model found for QQQ"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_prediction_proba_valid[TLT]",
+      "reason": "No SHIP model found for TLT"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_prediction_proba_valid[DIA]",
+      "reason": "No SHIP model found for DIA"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_prediction_proba_valid[IWM]",
+      "reason": "No SHIP model found for IWM"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_dummy_input_deterministic[QQQ]",
+      "reason": "No SHIP model found for QQQ"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_dummy_input_deterministic[TLT]",
+      "reason": "No SHIP model found for TLT"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_dummy_input_deterministic[DIA]",
+      "reason": "No SHIP model found for DIA"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_dummy_input_deterministic[IWM]",
+      "reason": "No SHIP model found for IWM"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_qqq_rf_primary_ship",
+      "reason": "No SHIP model found for QQQ"
+    },
+    {
+      "class": "tests.services.ml.test_ship_models.TestShipModelLoading",
+      "test": "test_tlt_gbm_ship_quality",
+      "reason": "No SHIP manifest found for TLT"
+    },
+    {
+      "class": "tests.services.test_ml_pipeline.TestModelArtifacts",
+      "test": "test_meta_file_exists",
+      "reason": "meta quarantined by truth audit (feature/sample ratio)"
+    },
+    {
+      "class": "tests.services.test_ml_pipeline.TestModelArtifacts",
+      "test": "test_meta_valid_json",
+      "reason": "meta quarantined by truth audit (feature/sample ratio)"
+    },
+    {
+      "class": "tests.services.test_ml_pipeline.TestModelArtifacts",
+      "test": "test_model_predicts_valid_output",
+      "reason": "meta quarantined by truth audit (feature/sample ratio)"
+    },
+    {
+      "class": "tests.test_analytics_vex_dex_vega.TestCalcVex",
+      "test": "test_with_sample_chain",
+      "reason": "Sample chain not found: <workspace>/data\\github-repos\\cloned\\FlashAlpha-lab_gex-explained\\data\\sample_chain.csv"
+    },
+    {
+      "class": "tests.test_analytics_vex_dex_vega.TestSampleChainShape",
+      "test": "test_vex_sample_chain",
+      "reason": "Sample chain not found: <workspace>/data\\github-repos\\cloned\\FlashAlpha-lab_gex-explained\\data\\sample_chain.csv"
+    },
+    {
+      "class": "tests.test_analytics_vex_dex_vega.TestSampleChainShape",
+      "test": "test_dex_sample_chain",
+      "reason": "Sample chain not found: <workspace>/data\\github-repos\\cloned\\FlashAlpha-lab_gex-explained\\data\\sample_chain.csv"
+    },
+    {
+      "class": "tests.test_analytics_vex_dex_vega.TestSampleChainShape",
+      "test": "test_vega_sample_chain",
+      "reason": "Sample chain not found: <workspace>/data\\github-repos\\cloned\\FlashAlpha-lab_gex-explained\\data\\sample_chain.csv"
+    },
+    {
+      "class": "tests.test_kelly_replay.TestReplayAllStructure",
+      "test": "test_real_dvt_backtest_v2_loads_cleanly",
+      "reason": "dvt_backtest_v2.json not present"
+    },
+    {
+      "class": "tests.test_kelly_replay.TestReplayAllConsistency",
+      "test": "test_full_kelly_filter_count_matches_per_record_filter",
+      "reason": "dvt_backtest_v2.json not present"
+    },
+    {
+      "class": "tests.test_kelly_replay.TestReplayAllConsistency",
+      "test": "test_avoided_loss_pnl_sums_correctly",
+      "reason": "dvt_backtest_v2.json not present"
+    },
+    {
+      "class": "tests.test_kelly_replay.TestReplayAllConsistency",
+      "test": "test_naive_2pct_aggregate_equals_sum_of_records",
+      "reason": "dvt_backtest_v2.json not present"
+    },
+    {
+      "class": "tests.test_kelly_replay.TestReplayAllConsistency",
+      "test": "test_scaling_factor_matches_baseline",
+      "reason": "dvt_backtest_v2.json not present"
+    }
+  ],
+  "failed": [],
+  "isolation": "Offline guard, separate test Mongo, in-memory DuckDB default, dedicated journal file; hidden test subprocesses",
+  "limitations": [
+    "No model or provider acceptance",
+    "Missing prerequisites remain skipped",
+    "No coverage collection in this run"
+  ]
+}

@@ -268,7 +268,7 @@ test("R7-05: same-wall comparison table shows both walls' own values", () => {
       wall_metrics: { [id]: { daddex_gross: dd, daddex_net: dd / 2, daddex_missing: 0, daddex_usable: 2, volume_gross: 7, volume_net: 7, volume_n: 2 } },
       wall_window: { [id]: { window_daddex: 3, coverage: { active_strikes: 2, member_strikes: 2 } } },
     },
-    grids: { grid: { vex_grid: { "2030-01-15": { [low]: 11, [low + 2]: 22 } }, vex_meta: { status: "ok" } } },
+    displayGrid: { vex_grid: { "2030-01-15": { [low]: 11, [low + 2]: 22 } }, vex_strike_gross: [{strike:low,vex_gross:11},{strike:low+2,vex_gross:22}], vex_meta: { status: "ok" } },
   });
   const a = mk("w_a", 490, 2000000, 900000);
   r7(React.createElement(WI, { ...a, quality: data.quality }));

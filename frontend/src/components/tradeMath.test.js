@@ -15,6 +15,14 @@ describe("isTradeClosed", () => {
 });
 
 describe("tradePnl", () => {
+  it("counts stock gains per actual share, including fractional fills", () => {
+    expect(tradePnl({ type: "equity", action: "buy", entry_price: 500, exit_price: 501, quantity: 2 })).toBe(2);
+    expect(tradePnl({ type: "equity", action: "sell", entry_price: 501, exit_price: 500, quantity: 0.5 })).toBe(0.5);
+  });
+  it("retains one hundred shares per standard option contract", () => {
+    expect(tradePnl({ type: "call", action: "buy", entry_price: 2, exit_price: 3, quantity: 2 })).toBe(200);
+    expect(tradePnl({ type: "put", action: "sell", entry_price: 3, exit_price: 2, quantity: 2 })).toBe(200);
+  });
   it("long total loss = -entry*qty*100", () => {
     expect(tradePnl({ action: "buy", entry_price: "5", exit_price: 0, quantity: "10" })).toBe(-5000);
   });

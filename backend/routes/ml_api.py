@@ -204,7 +204,10 @@ async def register_model(body: dict[str, Any]) -> dict[str, Any]:
     ticker = body.get("ticker", "").upper()
     artifact_path = body.get("artifact_path", "")
     feature_version = body.get("feature_version", "v1.0")
-    metrics_summary = body.get("metrics_summary", {})
+    # `or {}` not a two-arg default: a caller posting an explicit
+    # "metrics_summary": null would otherwise store null, and the ensemble
+    # route then read feature_names off None.
+    metrics_summary = body.get("metrics_summary") or {}
     training_window = body.get("training_window", "unknown")
     status = body.get("status", "shadow")
 

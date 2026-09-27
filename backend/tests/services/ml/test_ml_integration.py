@@ -41,7 +41,8 @@ def _find_manifest(model_path: Path) -> Path | None:
 
 def _load_model(model_path: Path):
     """Load a model, handling both raw sklearn and dict-artifact formats."""
-    artifact = joblib.load(str(model_path))
+    from services.ml.artifact_paths import resolve_artifact_path
+    artifact = joblib.load(resolve_artifact_path(model_path))
     if isinstance(artifact, dict) and "model" in artifact:
         return artifact["model"]
     return artifact

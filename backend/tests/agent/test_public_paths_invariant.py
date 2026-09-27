@@ -1,19 +1,18 @@
-"""Public-paths invariant (plan v3 L8): no PUBLIC_PATHS entry parents a
-mutating route outside the allow-list; agent-actions is never public."""
-
 from auth import PUBLIC_PATHS, is_public_path
+from services.agent.local_access import research_path
 
 
 def test_no_bare_agent_prefix_public():
-    assert "/api/agent/" not in PUBLIC_PATHS
-    assert "/api/agent" not in PUBLIC_PATHS
+    assert not any(p.startswith("/api/agent") for p in PUBLIC_PATHS)
 
 
 def test_actions_never_public():
-    assert is_public_path("/api/agent-actions/live/fire") is False
-    assert is_public_path("/api/agent-actions/paper/stage") is False
+    for path in ("/api/agent-actions/live/fire", "/api/agent/budget", "/api/agent/ask/extra"):
+        assert not is_public_path(path)
+        assert not research_path("POST", path)
 
 
-def test_agent_read_routes_public():
-    for p in ("/api/agent/ask", "/api/agent/stream/", "/api/agent/turn/", "/api/agent/cancel/", "/api/agent/budget", "/api/agent/claims", "/api/agent/prefs"):
-        assert p in PUBLIC_PATHS, f"missing public route {p}"
+def test_only_exact_research_methods_are_exempt():
+    assert research_path("POST", "/api/agent/ask")
+    assert not research_path("DELETE", "/api/agent/ask")
+    assert not research_path("PUT", "/api/agent/ask")

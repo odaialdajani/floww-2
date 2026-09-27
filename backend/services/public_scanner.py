@@ -1,43 +1,8 @@
-"""
-backend/services/public_scanner.py
+"""Public options-snapshot scanner over the provider's option-enabled directory.
 
-Public-backed market-wide unusual-flow scanner (paid Advanced API).
-
-Why this exists: `/scan` rides ONE cvserver `screen` (20 upstream calls/hour,
-top-300 by raw day_volume). On a busy day mega-cap churn (SPY/QQQ/NVDA/SPX)
-fills all 300 slots — mid-cap institutional building (SNDK-type: 3-8k
-contracts laddered across strikes, each line score 70-85) never appears, and
-the hourly budget leaves the scanner STALE most of each hour.
-
-This scanner walks a UNIVERSE (index ETFs + megas + high-beta mid-caps,
-overridable via FLOWW_PUBLIC_UNIVERSE) through the paid Public chains on a
-rotating cursor: each call scans the next SLICE of tickers, merges into a TTL
-cache, and returns the full-universe view. Per-call upstream cost is bounded
-(slice × (2 + expiries) calls against the 60/min Public budget); full
-coverage refreshes every few minutes with no hourly cap and no STALE gaps —
-every slice carries its own age stamp.
-
-Two payloads come back per sweep, both from the SAME chains (zero extra
-upstream calls):
-
-  rows   — cvserver-shaped unusual list-rows (columns [underlying_ticker,
-           ticker, contract_type, strike_price, expiration_date, day_volume,
-           open_interest, implied_volatility, delta, underlying_price]) so
-           flow_alerts.norm_rows / eval_institutional and the frontend
-           mkScanRow consume them unchanged.
-  extras — quote-truth per contract keyed by ckey: NBBO side (last vs mid),
-           Lee-Ready signed_side/sign_method (A2: quote rule + tick test on
-           the previous sweep's mid), true premium (mid×vol×100, never a BS
-           estimate), per-contract volume velocity (contracts/min since the
-           previous sweep — arrival intensity is the institutional urgency
-           read), mid/last.
-  dealer — per-ticker dealer positioning from real gamma×OI: call/put walls,
-           max-OI strike, net dealer gamma + regime. The context an
-           institutional alert needs, computed from data already in hand.
-
-Pure helpers (advance_cursor, unusual_rows_from_chain, merge_slices,
-nbbo_side, dealer_context) are unit-testable without network; I/O lives in
-scan_slice().
+A rotating cursor visits all supported names. Results retain a one-minute
+freshness window, bounded rows and expiry depth; coverage reports distinguish
+unvisited, failed and fresh names. This is not an all-market trade tape.
 """
 
 from __future__ import annotations
@@ -48,11 +13,22 @@ import logging
 import math
 import os
 import time
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from services.flow_signing import sign_print as _sign_print
-from services.roll_spread import push_capped as _push_capped
 from services.roll_spread import roll_pooled_for as _roll_pooled_for
+from services.scan_observations import (
+    SnapshotObservations,
+    eligible_quote,
+    quote_time,
+    select_observations,
+    session_day,
+    timestamp,
+    unique_contracts,
+    volume_change,
+)
 
 try:
     from services.market_bars import get_adv_21d as _get_adv
@@ -81,7 +57,7 @@ UNIVERSE: list[str] = [
 
 def get_universe() -> list[str]:
     """Active scan universe — FLOWW_PUBLIC_UNIVERSE (comma-separated) wins,
-    else the curated default. Env override lets the desk reshape coverage
+    else the cached option-enabled provider catalog. Env override reshapes coverage
     without a deploy.
 
     Entries are uppercased, deduped, and validated (B7): anything that is
@@ -102,7 +78,10 @@ def get_universe() -> list[str]:
             log.warning("public scanner dropping invalid universe ticker %r", t)
             continue
         out.append(t)
-    return out or list(UNIVERSE)
+    if raw.strip():
+        return out
+    from services.market_catalog import cached_scan_symbols
+    return cached_scan_symbols()
 
 
 SCAN_COLUMNS: list[str] = [
@@ -121,7 +100,7 @@ MAX_ROWS_PER_TICKER = 60
 
 # Slice cache TTL: a slice older than this is dropped from the merged view
 # rather than served as if fresh (honesty over coverage).
-SLICE_TTL_S = 600.0
+SLICE_TTL_S = 60.0
 
 # Upstream fan-out per ticker chain fetch (B4): expirations + quotes +
 # one chain call per expiry. Debited per ticker so the 60/min assumption
@@ -266,11 +245,22 @@ def dealer_context(
     }
 
 
+def _nonnegative_reading(value):
+    try:
+        if value is None or isinstance(value, bool):
+            return None
+        number = float(value)
+        return number if math.isfinite(number) and number >= 0 else None
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 def unusual_rows_from_chain(
     chain: dict[str, Any],
     vol_marks: dict[str, tuple[float, float]] | None = None,
     mid_marks: dict[str, float] | None = None,
     now: float | None = None,
+    observations: dict | None = None,
 ) -> tuple[list[list], dict[str, dict[str, Any]]]:
     """Public chain dict → (cvserver-shaped unusual list-rows, quote-truth extras).
 
@@ -279,39 +269,34 @@ def unusual_rows_from_chain(
     dropped, never raised. Rows sorted vol_oi desc so the strongest
     positioning leads even before scoring.
 
-    vol_marks ({osi: (vol, ts)}) turns cumulative day-volume into arrival
-    intensity: vol_delta = new contracts since the mark; velocity_per_min =
-    delta / elapsed minutes (None on first sight or clock anomalies — honest
-    unknown, never a fabricated zero that would read as "dead flow").
-    mid_marks ({osi: mid}) feeds the Lee-Ready tick fallback: the previous
-    sweep's mid is the lag anchor (snapshot-data adaptation — prev trade
-    price unavailable in chain snapshots; see flow_signing.sign_print).
+    Saved per-name observations retain receipt-window changes separately
+    from source-timed volume rates. Legacy receipt marks cannot establish
+    arrival rates. Quote signing requires fresh, ordered actual quote/trade
+    times; prior mids cannot look ahead or survive a long rotation as fresh.
     """
     if not isinstance(chain, dict):
         return [], {}
     under = str(chain.get("ticker") or "").upper()
-    spot = chain.get("spot") or 0
-    try:
-        spot_f = float(spot) or 0
-    except (TypeError, ValueError):
-        spot_f = 0
-    if not math.isfinite(spot_f):  # D3: float("nan") is truthy — never emit it
-        spot_f = 0
+    spot_f = _nonnegative_reading(chain.get("spot")) or None
     now = time.time() if now is None else now
     marks = vol_marks if vol_marks is not None else {}
-    mids = mid_marks if mid_marks is not None else {}
+    observations = observations or {}
     out: list[tuple[float, list]] = []
     extras: dict[str, dict[str, Any]] = {}
-    for c in chain.get("contracts", []) or []:
+    for c in unique_contracts(chain.get("contracts", []))[0]:
         try:
             if not isinstance(c, dict):
                 continue
-            vol = int(float(c.get("volume") or 0))
-            oi = int(float(c.get("oi") or 0))
+            volume = _nonnegative_reading(c.get("volume"))
+            if volume is None:
+                continue
+            vol = int(volume)
+            oi_value = _nonnegative_reading(c.get("oi"))
+            oi = int(oi_value) if oi_value is not None else None
             if vol < MIN_VOL:
                 continue
-            vol_oi = (vol / oi) if oi > 0 else float(vol)
-            if vol_oi < MIN_VOL_OI and vol < BIG_VOL:
+            vol_oi = (vol / oi) if oi is not None and oi > 0 else None
+            if (vol_oi is None or vol_oi < MIN_VOL_OI) and vol < BIG_VOL:
                 continue
             strike = float(c.get("strike") or 0)
             if not math.isfinite(strike) or strike <= 0:  # D3: no nan/inf strikes
@@ -323,13 +308,7 @@ def unusual_rows_from_chain(
             exp = str(c.get("expiry") or "")[:10]
             if not exp:
                 continue
-            iv = c.get("iv") or 0
-            try:
-                iv_f = float(iv)
-            except (TypeError, ValueError):
-                iv_f = 0
-            if not math.isfinite(iv_f):  # D3: never emit nan/inf IV
-                iv_f = 0
+            iv_f = _nonnegative_reading(c.get("iv")) or None
             _delta = c.get("delta")
             if isinstance(_delta, float) and not math.isfinite(_delta):
                 _delta = None
@@ -345,19 +324,12 @@ def unusual_rows_from_chain(
                 _delta,
                 spot_f,
             ]
-            out.append((vol_oi, row))
+            out.append((vol_oi if vol_oi is not None else -1, row))
             # ── quote truth (paid feed only) ──
             bid = c.get("bid")
             ask = c.get("ask")
             last = c.get("last")
-            mid = c.get("mid")
-            try:
-                mid_f = float(mid) if mid is not None else None
-                if (mid_f is None and bid is not None and ask is not None
-                        and float(ask) > float(bid) > 0):
-                    mid_f = (float(bid) + float(ask)) / 2
-            except (TypeError, ValueError):
-                mid_f = None
+            mid_f = _contract_mid(c)
             px = mid_f
             if px is None:
                 try:
@@ -374,8 +346,17 @@ def unusual_rows_from_chain(
             if isinstance(_last, float) and not math.isfinite(_last):
                 _last = None
             premium_true = vol * 100 * px if px and px > 0 else None
-            side = nbbo_side(last, bid, ask)
-            s, bias = side_bias(ctype, side)
+            previous_quote = observations.get(str(c.get("osi") or ""), {})
+            previous_quote_time = timestamp(previous_quote.get("quote_timestamp"))
+            current_quote_time = quote_time(c)
+            quote_ordered = (not previous_quote or (
+                timestamp(previous_quote.get("received_at")) is not None
+                and timestamp(previous_quote.get("received_at")) < now
+                and not previous_quote.get("uncertain")
+                and (previous_quote_time is None or current_quote_time is not None
+                     and current_quote_time > previous_quote_time)))
+            quote_eligible = eligible_quote(c, now) and quote_ordered
+            side = nbbo_side(last, bid, ask) if quote_eligible else None
             # Relative spread (C4 execution input): spread/mid, None without
             # a valid two-sided quote. Wide-spread + aggressive (Glosten–
             # Milgrom adverse selection) reads as informed urgency.
@@ -395,40 +376,41 @@ def unusual_rows_from_chain(
             # tick honestly degrades to UNKNOWN (never a forced side).
             signed_side: str | None = None
             sign_method: str | None = None
-            if osi:
-                prev_mid = mids.get(osi)
+            if osi and quote_eligible:
+                previous_quote = observations.get(osi, {})
+                previous_time = timestamp(previous_quote.get("quote_timestamp"))
+                prev_mid = previous_quote.get("mid") if (previous_time is not None
+                    and 0 < now - previous_time <= 60
+                    and previous_time < timestamp(c.get("last_timestamp") or c.get("last_event_time"))
+                    and session_day(now) == session_day(previous_time)) else None
                 try:
                     signed_side, sign_method = _sign_print(last, bid, ask, prev_mid)
                 except Exception:
                     signed_side, sign_method = "UNKNOWN", "none"
                 if signed_side not in ("ASK", "BID"):
                     signed_side = None
-            # ── velocity from marks ──
-            vol_delta: float | None = None
-            velocity: float | None = None
-            if osi:
-                prev = marks.get(osi)
-                if prev is not None:
-                    prev_vol, prev_ts = prev
-                    dt_min = (now - prev_ts) / 60.0
-                    if vol >= prev_vol:
-                        vol_delta = float(vol - prev_vol)
-                    else:
-                        vol_delta = float(vol)  # session rollover: full figure is fresh
-                    if dt_min > 0:
-                        velocity = vol_delta / dt_min
+            previous = observations.get(osi)
+            if previous is None and osi in marks:
+                legacy = marks[osi]
+                if isinstance(legacy, (tuple, list)) and len(legacy) == 2:
+                    previous = dict(volume=legacy[0], received_at=legacy[1])
+            changes = volume_change(c, previous, now)
             extras[ckey_of(under, ctype, strike, exp)] = {
                 "premium_true": premium_true,
-                "side": s if side else "FLOW",
+                "premium_basis": "snapshot_volume_x_quote" if premium_true is not None else None,
+                "premium_is_estimate": True,
+                "activity_basis": "cumulative_snapshot",
+                "side": "FLOW",
+                "last_trade_side": signed_side or side,
                 "nbbo_side": side,
                 "signed_side": signed_side,
                 "sign_method": sign_method,
-                "bias": bias,
+                "bias": None,
                 "mid": mid_f,
                 "last": _last,
                 "rel_spread": rel_spread,
-                "vol_delta": vol_delta,
-                "velocity_per_min": velocity,
+                **changes,
+                "volume_data_received_at": now,
             }
         except (TypeError, ValueError):
             continue
@@ -443,6 +425,7 @@ def merge_slices(
     slices: dict[str, dict],
     now: float | None = None,
     ttl_s: float = SLICE_TTL_S,
+    universe: list[str] | None = None,
 ) -> tuple[list[list], dict[str, dict[str, Any]], dict[str, Any]]:
     """Merge per-ticker slices into (rows, extras, coverage).
 
@@ -455,7 +438,10 @@ def merge_slices(
     fresh: list[str] = []
     stale_dropped: list[str] = []
     max_age: float = 0.0
+    allowed = set(slices if universe is None else universe)
     for ticker, entry in slices.items():
+        if ticker not in allowed:
+            continue
         age = now - float(entry.get("ts", 0))
         if age > ttl_s:
             stale_dropped.append(ticker)
@@ -473,7 +459,7 @@ def merge_slices(
             row_keys.add(ckey_of(r[0], r[2], r[3], r[4]))
     extras = {k: v for k, v in extras.items() if k in row_keys}
     coverage = {
-        "universe": len(get_universe()),
+        "universe": len(allowed),
         "fresh": len(fresh),
         "stale_dropped": stale_dropped,
         "max_age_s": round(max_age, 1),
@@ -485,16 +471,30 @@ def merge_slices(
 
 _slices: dict[str, dict] = {}   # ticker -> {ts, rows, extras, dealer}
 _cursor: int = 0
+_attempts: dict[str, dict] = {}
 _scan_lock = asyncio.Lock()
 _vol_marks: dict[str, tuple[float, float]] = {}  # osi -> (vol, ts)
 _mid_marks: dict[str, float] = {}  # osi -> last-seen mid (Lee-Ready tick anchor)
-_mid_rings: dict[str, list[float]] = {}  # osi -> capped mid history (Roll cost)
+_mid_rings: dict[str, list[float]] = {}  # legacy test helper only
+_observation_store = None
+
+
+def _observations_store():
+    global _observation_store
+    if _observation_store is None:
+        default = Path(__file__).resolve().parents[1] / "data" / "scan_observations.sqlite3"
+        _observation_store = SnapshotObservations(os.environ.get("FLOWW_PUBLIC_OBSERVATIONS_PATH") or default)
+    return _observation_store
 
 
 def _reset_state() -> None:
     """Tests only — clear slices + cursor + velocity/mid marks + rings."""
-    global _cursor
+    global _cursor, _observation_store
+    if _observation_store is not None:
+        _observation_store.close()
+    _observation_store = SnapshotObservations(":memory:")
     _slices.clear()
+    _attempts.clear()
     _cursor = 0
     _vol_marks.clear()
     _mid_marks.clear()
@@ -502,43 +502,36 @@ def _reset_state() -> None:
 
 
 def _contract_mid(c: dict[str, Any]) -> float | None:
-    """Best mid for one chain contract: vendor mid, else (bid+ask)/2."""
+    """Finite midpoint backed by a valid two-sided book."""
     try:
-        mid = c.get("mid")
-        if mid is not None and float(mid) > 0:
-            return float(mid)
         bid, ask = float(c.get("bid")), float(c.get("ask"))
-        if ask > bid > 0:
-            return (bid + ask) / 2
+        if not math.isfinite(bid) or not math.isfinite(ask) or not ask >= bid > 0:
+            return None
+        mid = c.get("mid")
+        if mid is None:
+            return bid + (ask - bid) / 2
+        value = float(mid)
+        if math.isfinite(value) and bid <= value <= ask:
+            return value
     except (TypeError, ValueError):
         pass
     return None
 
 
 def _stamp_marks(contracts: list[dict[str, Any]], now: float) -> None:
-    """Record current cumulative volumes + mids for the next sweep.
-
-    Volumes feed velocity math; mids feed the Lee-Ready tick fallback and
-    the per-contract Roll rings (bounded at 60 mids/contract).
-    Bounded: entries for contracts never seen again are pruned when the
-    maps grow past 20k keys (long-lived-process guard)."""
-    for c in contracts or []:
-        try:
-            if not isinstance(c, dict):
-                continue
-            osi = str(c.get("osi") or "")
-            if not osi:
-                continue
-            _vol_marks[osi] = (float(c.get("volume") or 0), now)
-            mid = _contract_mid(c)
-            if mid is not None:
-                _mid_marks[osi] = mid
-                _mid_rings[osi] = _push_capped(_mid_rings.get(osi), mid, cap=60)
-        except (TypeError, ValueError):
+    """Legacy pure-test helper; production comparison uses per-name persistence."""
+    selected, _ = select_observations(contracts, [], now)
+    for osi, item in selected.items():
+        previous = _vol_marks.get(osi)
+        if previous is not None and previous[1] >= now:
             continue
-    if len(_vol_marks) > 20000:
-        # Drop oldest by timestamp (marks are (vol, ts) tuples).
-        for osi in sorted(_vol_marks, key=lambda k: _vol_marks[k][1])[: len(_vol_marks) - 20000]:
+        _vol_marks[osi] = (item["volume"], now)
+        if item["mid"] is not None:
+            _mid_marks[osi] = item["mid"]
+            _mid_rings[osi] = item["mid_ring"]
+    # This compatibility helper is never the production all-market cache.
+    if len(_vol_marks) > 60:
+        for osi in list(_vol_marks)[:-60]:
             _vol_marks.pop(osi, None)
             _mid_marks.pop(osi, None)
             _mid_rings.pop(osi, None)
@@ -562,11 +555,11 @@ async def scan_slice(
     rows (the caller then clears obsolete rows); "failed" when no fresh
     read exists (the caller keeps the prior slice with its age).
     """
+    from services.agent.contracts import instant
     from services.public_api_adapter import fetch_chain_from_public_api
 
     out: dict[str, dict[str, Any]] = {}
     sem = asyncio.Semaphore(max(1, concurrency))
-    now = time.time()
 
     async def _one(t: str) -> None:
         async with sem:
@@ -579,10 +572,22 @@ async def scan_slice(
             if not chain:
                 out[t] = {"rows": [], "extras": {}, "dealer": None, "status": "failed"}
                 return
-            contracts = chain.get("contracts", []) or []
-            rows, extras = unusual_rows_from_chain(
-                chain, vol_marks=_vol_marks, mid_marks=_mid_marks, now=now
-            )
+            received = instant(chain.get("fetched_at"))
+            received_ts = datetime.fromisoformat(received).timestamp() if received else None
+            if chain.get("stale") or received_ts is None or not -30 <= time.time() - received_ts <= 300:
+                out[t] = {"rows": [], "extras": {}, "dealer": None, "status": "failed"}
+                return
+            now = received_ts
+            contracts, contract_conflicts = unique_contracts(chain.get("contracts", []))
+            history_status = "available"
+            try:
+                saved = await asyncio.to_thread(_observations_store().read, t)
+                prior = saved["records"] if saved else {}
+            except Exception as exc:
+                log.warning("Snapshot history read unavailable for %s (%s)", t, type(exc).__name__)
+                prior = {}
+                history_status = "unavailable"
+            rows, extras = unusual_rows_from_chain(chain, now=now, observations=prior)
             try:
                 spot = float(chain.get("spot") or 0)
             except (TypeError, ValueError):
@@ -596,15 +601,21 @@ async def scan_slice(
                 except Exception as e:
                     log.debug("public scanner ADV miss %s: %s", t, e)
             dealer = dealer_context(contracts, spot, adv_shares=adv)
-            _stamp_marks(contracts, now)
-            # Roll read over this ticker's contracts (pooled bucket).
-            # Building state until ~30 deltas — an honest "warming up",
-            # never a premature number.
-            tick_osis = {str(c.get("osi") or "") for c in contracts
-                         if isinstance(c, dict) and c.get("osi")}
-            tick_rings = {o: _mid_rings[o] for o in tick_osis if o in _mid_rings}
-            dealer["roll_spread"] = _roll_pooled_for(tick_rings)
-            out[t] = {"rows": rows, "extras": extras, "dealer": dealer, "status": "ok"}
+            observations, history_capped = select_observations(contracts, [row[1] for row in rows], now, prior)
+            try:
+                saved_status = await asyncio.to_thread(_observations_store().write, t, now, observations)
+                if saved_status not in ("saved", "unchanged"):
+                    history_status = saved_status
+            except Exception as exc:
+                log.warning("Snapshot history save unavailable for %s (%s)", t, type(exc).__name__)
+                history_status = "unavailable"
+            dealer["roll_spread"] = _roll_pooled_for({osi: value["mid_ring"] for osi, value in observations.items()})
+            out[t] = {"rows": rows, "extras": extras, "dealer": dealer, "status": "ok", "received_ts": received_ts,
+                      "event_time": instant(chain.get("event_time")),
+                      "expiries_checked": len(chain.get("expiries") or []),
+                      "rows_capped": len(rows) >= MAX_ROWS_PER_TICKER,
+                      "history_status": history_status, "history_capped": history_capped,
+                      "history_contracts": len(observations), "contract_conflicts": contract_conflicts}
 
     await asyncio.gather(*(_one(t) for t in tickers))
     return out
@@ -626,11 +637,17 @@ async def scan_next(
     coverage degrades gracefully instead of stampeding upstream.
     """
     global _cursor
-    uni = universe or get_universe()
+    catalog = None
+    if universe is None and not os.environ.get("FLOWW_PUBLIC_UNIVERSE", "").strip():
+        from services.market_catalog import get_catalog
+        catalog = await get_catalog()
+    uni = list(dict.fromkeys(get_universe() if universe is None else universe))
     async with _scan_lock:
         from services.public_budget import BudgetExhausted
         from services.public_budget import budget as pub_budget
 
+        await pub_budget.check_request_allowed("api.public.com")
+        started = time.monotonic()
         per_ticker = chain_cost(max_expiries)
         try:
             affordable = max(0, int(await pub_budget.peek_available() // per_ticker))
@@ -654,20 +671,57 @@ async def scan_next(
         }
         if tickers:
             fresh = await scan_slice(tickers, max_expiries=max_expiries)
-            now = time.time()
-            for t, pack in fresh.items():
+            for t in tickers:
+                pack = fresh.get(t, {"status": "failed"})
+                _attempts[t] = {"status": pack.get("status"), "at": time.time(),
+                                "expiries_checked": pack.get("expiries_checked", 0),
+                                "history_status": pack.get("history_status", "unavailable"),
+                                "history_capped": pack.get("history_capped", False),
+                                "contract_conflicts": pack.get("contract_conflicts", 0)}
                 # D3: a successful fresh read (even zero rows) replaces the
                 # slice — obsolete rows must not pose as current. Only a
                 # failed read keeps the prior slice with its age (merge
                 # drops it past TTL and names it in coverage).
-                if pack.get("status") == "ok":
-                    _slices[t] = {"ts": now, "rows": pack["rows"],
-                                  "extras": pack["extras"], "dealer": pack["dealer"]}
+                received_ts = pack.get("received_ts")
+                if pack.get("status") == "ok" and isinstance(received_ts, (float, int)) and math.isfinite(received_ts):
+                    _slices[t] = {"ts": received_ts, "rows": pack["rows"], "event_time": pack.get("event_time"),
+                                  "extras": pack["extras"], "dealer": pack["dealer"],
+                                  "rows_capped": pack.get("rows_capped", False)}
                     dealer[t] = pack["dealer"]
-                elif pack["rows"]:
-                    _slices[t] = {"ts": now, **pack}
-                    dealer[t] = pack["dealer"]
-        rows, extras, coverage = merge_slices(_slices)
+        # Removed symbols must not remain in rows or count as scanned.
+        for old in set(_slices) - set(uni):
+            _slices.pop(old, None)
+        for old in set(_attempts) - set(uni):
+            _attempts.pop(old, None)
+        rows, extras, coverage = merge_slices(_slices, universe=uni)
+        # A full provider pass can contain thousands of names. Keep each
+        # expired name's last-check time, not its discarded contract payload.
+        for expired in coverage["stale_dropped"]:
+            _slices[expired] = {"ts": _slices[expired]["ts"], "rows": [],
+                                "extras": {}, "dealer": None,
+                                "event_time": _slices[expired].get("event_time")}
+        duration = max(0, time.monotonic() - started)
+        try:
+            pause = max(0.1, float(os.environ.get("FLOWW_PUBLIC_SWEEP_RTH_S", "1")))
+        except ValueError:
+            pause = 1.0
+        coverage.update(
+            source="public-instruments" if catalog is not None else "custom-universe",
+            catalog_stale=bool(catalog and catalog["stale"]),
+            catalog_available=bool(catalog["complete_provider_catalog"]) if catalog is not None else True,
+            attempted=len(_attempts), never_scanned=max(0, len(uni) - len(_attempts)),
+            latest_failed=sum(a["status"] != "ok" for a in _attempts.values()),
+            expiries_per_ticker=max_expiries, rows_per_ticker_cap=MAX_ROWS_PER_TICKER,
+            rows_capped=any(v.get("rows_capped") for v in _slices.values()),
+            fresh_window_seconds=SLICE_TTL_S, checked_at=time.time(),
+            estimated_pass_seconds=round(math.ceil(len(uni) / len(tickers)) * (duration + pause)) if tickers else None,
+            complete_realtime_market=False,
+            history_contract_limit=60,
+            history_unavailable=sum(a.get("history_status") != "available" for a in _attempts.values()),
+            history_capped=sum(bool(a.get("history_capped")) for a in _attempts.values()),
+            arrival_rates_require_source_time=True,
+            conflicting_contracts_excluded=sum(a.get("contract_conflicts", 0) for a in _attempts.values()),
+        )
         # Dealer context only for tickers actually in the merged view —
         # a dropped stale slice must not keep contributing regime reads.
         fresh_unders = {r[0] for r in rows if r}
@@ -679,7 +733,7 @@ async def scan_next(
             "quote_truth": extras,
             "dealer": dealer,
             "coverage": coverage,
-            "tickers": sorted(_slices.keys()),
+            "tickers": sorted(uni),
         }
 
 
@@ -695,22 +749,12 @@ async def sweep_once(
     next tick), pipeline failures log and return the view anyway.
     """
     from services.public_budget import BudgetExhausted
-    from services.public_budget import budget as pub_budget
 
-    try:
-        await pub_budget.acquire("api.public.com")
-    except BudgetExhausted as e:
-        log.info(
-            "public sweep skipped — budget spent (retry in ~%ss)", e.retry_after)
-        return None
     try:
         view = await scan_next(slice_size=slice_size, max_expiries=max_expiries)
     except BudgetExhausted as e:
-        log.info("public sweep skipped — slice unaffordable (retry in ~%ss)",
-                 e.retry_after)
+        log.info("public sweep skipped (retry in ~%ss)", e.retry_after)
         return None
-    finally:
-        pub_budget.release()
     try:
         from routes.flowseeker import _record_scan_baseline, _run_institutional_alerts
 

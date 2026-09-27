@@ -18,14 +18,9 @@ POST /api/public/order — place a single-leg order.
 POST /api/public/order/{order_id}/cancel — cancel an open order.
 
 Auth: every endpoint requires the master key (X-API-Key, see auth.py).
-The two mutating endpoints additionally refuse with 403 unless the
-operator arms live trading with FLOWW_ENABLE_LIVE_PUBLIC=1 (fail-closed
-kill-switch; input validation still runs first so 422 contracts hold
-while disarmed).
-
-Paper trading mode by default — no live orders until the user explicitly
-connects a live account and generates a secret key at
-public.com/settings/security/api.
+Public.com orders are LIVE, not a paper simulation. New submissions are
+disabled unless FLOWW_ENABLE_LIVE_PUBLIC is exactly 1 after explicit operator
+authorization. Merely configuring a data key does not enable submissions.
 
 Mounted at /api/public alongside /api/public/chain + /api/public/quotes
 from routes/public_api.py.
@@ -50,8 +45,9 @@ __all__ = ["router"]
 def _require_live_trading_enabled() -> None:
     """Fail-closed kill-switch for the live-money order paths.
 
-    POST /order and POST /cancel refuse with 403 unless the operator has
-    explicitly armed live trading with FLOWW_ENABLE_LIVE_PUBLIC=1.
+    POST /order refuses with 403 unless the operator explicitly arms live
+    submissions with FLOWW_ENABLE_LIVE_PUBLIC=1. Authenticated cancellation
+    remains available while submissions are disarmed.
     """
     if os.environ.get("FLOWW_ENABLE_LIVE_PUBLIC", "") != "1":
         raise HTTPException(status_code=403, detail={
@@ -363,8 +359,8 @@ async def get_account(_: bool = Depends(require_api_key)) -> dict[str, Any]:
 # POST /order — place a single-leg order
 # ---------------------------------------------------------------------------
 
-@router.post("/order")
-async def place_order(request: dict[str, Any], _: bool = Depends(require_api_key)) -> dict[str, Any]:
+@router.post("/order", dependencies=[Depends(require_api_key)])
+async def place_order(request: dict[str, Any]) -> dict[str, Any]:
     """Place a single-leg order via Public.com.
 
     Body:
@@ -378,17 +374,6 @@ async def place_order(request: dict[str, Any], _: bool = Depends(require_api_key
         instrument_type:    EQUITY, OPTION, CRYPTO, BOND
         equity_market_session: optional for EQUITY
     """
-    broker = await _get_broker()
-    if broker is None:
-        raise HTTPException(status_code=502, detail={
-            "error": "no_public_api_key",
-            "message": "PUBLIC_API_KEY not configured.",
-        })
-
-    account = broker.get_trading_account()
-    if account is None:
-        raise HTTPException(status_code=502, detail={"error": "no_account"})
-
     try:
         symbol = request.get("symbol", "")
         side = request.get("side", "BUY")
@@ -421,6 +406,17 @@ async def place_order(request: dict[str, Any], _: bool = Depends(require_api_key
 
         # Kill-switch AFTER validation so 422 contracts hold while disarmed.
         _require_live_trading_enabled()
+
+        broker = await _get_broker()
+        if broker is None:
+            raise HTTPException(status_code=502, detail={
+                "error": "no_public_api_key",
+                "message": "PUBLIC_API_KEY not configured.",
+            })
+
+        account = broker.get_trading_account()
+        if account is None:
+            raise HTTPException(status_code=502, detail={"error": "no_account"})
 
         order = await broker.place_order(
             account_id=account.account_id,
@@ -470,8 +466,8 @@ async def place_order(request: dict[str, Any], _: bool = Depends(require_api_key
 # POST /order/{order_id}/cancel
 # ---------------------------------------------------------------------------
 
-@router.post("/order/{order_id}/cancel")
-async def cancel_order(order_id: str, _: bool = Depends(require_api_key)) -> dict[str, Any]:
+@router.post("/order/{order_id}/cancel", dependencies=[Depends(require_api_key)])
+async def cancel_order(order_id: str) -> dict[str, Any]:
     """Cancel an open order by ID. Uses DELETE under the hood (Public API
     accepts DELETE to .../order/{id}; POST to .../cancel returns 404)."""
     broker = await _get_broker()
@@ -485,9 +481,8 @@ async def cancel_order(order_id: str, _: bool = Depends(require_api_key)) -> dic
     if account is None:
         raise HTTPException(status_code=502, detail={"error": "no_account"})
 
-    # Kill-switch OUTSIDE the try below: the except converts everything to
-    # 502, which would mask the 403.
-    _require_live_trading_enabled()
+    # Cancelling an existing order is allowed while new entries are disarmed.
+    # The route still requires the local application key.
     try:
         result = await broker.cancel_order(account.account_id, order_id)
         return {

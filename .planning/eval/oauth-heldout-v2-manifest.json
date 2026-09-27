@@ -1,0 +1,187 @@
+{
+  "set_id": "oauth-heldout-v2",
+  "manifest_version": 1,
+  "status": "UNBOUND/NOT_RUN",
+  "binding_status": "UNBOUND",
+  "execution_status": "NOT_RUN",
+  "frozen_at_utc": "2026-09-11T22:08:24.476526+00:00",
+  "case_count": 30,
+  "cases": {
+    "path": ".planning/eval/oauth-heldout-v2-cases.json",
+    "sha256": "ac8ecec0d9d4543949a9d0080a4e9df1882ec872605b20163af35f618c73ff30"
+  },
+  "rubric": {
+    "path": ".planning/eval/oauth-heldout-v2-rubric.md",
+    "sha256": "5b822586b9c508cab91e5678a416a096e252dd3c9175191eca23b6aa3e231f88"
+  },
+  "question_hash": {
+    "algorithm": "SHA256",
+    "encoding": "UTF-8",
+    "canonicalization": "JSON array in case-file order of objects containing id and question only; ensure_ascii=False; sort_keys=True; separators comma and colon; no final newline",
+    "sha256": "e74d6e14cd3b1c5d1d02fc99fbb721176de35df2e752095fbd7722a98d4026d5"
+  },
+  "case_ids": [
+    "price_01",
+    "price_02",
+    "price_03",
+    "explain_04",
+    "explain_05",
+    "explain_06",
+    "explain_07",
+    "explain_08",
+    "compare_09",
+    "compare_10",
+    "compare_11",
+    "expiry_12",
+    "expiry_13",
+    "expiry_14",
+    "expiry_15",
+    "map_16",
+    "map_17",
+    "map_18",
+    "map_19",
+    "history_20",
+    "history_21",
+    "history_22",
+    "source_23",
+    "source_24",
+    "source_25",
+    "unsupported_26",
+    "unsupported_27",
+    "unsupported_28",
+    "limit_29",
+    "limit_30"
+  ],
+  "scenario_counts": {
+    "price_only": 3,
+    "explanation": 5,
+    "multi_ticker": 2,
+    "multi_ticker_exclusion": 1,
+    "exact_expiry": 2,
+    "expiry_window": 1,
+    "missing_exact_expiry": 1,
+    "display_map": 1,
+    "display_map_scope": 1,
+    "display_map_missing": 1,
+    "frozen_screen": 1,
+    "history_missing": 1,
+    "closing_history_missing": 1,
+    "history_coverage_mismatch": 1,
+    "unknown_source_time": 1,
+    "stale_source": 1,
+    "missing_expiry_instant": 1,
+    "option_entry": 1,
+    "company": 1,
+    "probability": 1,
+    "ticker_limit": 1,
+    "bounded_read_only": 1
+  },
+  "route_counts": {
+    "bypass": 3,
+    "interpretation": 26,
+    "reject": 1
+  },
+  "source_contracts_at_freeze": [
+    {
+      "path": ".planning/unknowns/lodestar-plan-v4-review-draft.md",
+      "sha256": "f43fcc66aecb5419a30cc273a7b1191dca1a923dca29def3cb01f6b8c2af674a"
+    },
+    {
+      "path": "backend/services/agent/contracts.py",
+      "sha256": "5a81342a29220e10e63cdd42799883295f6cef5ec3b497b486b94c244d842c7b"
+    },
+    {
+      "path": "backend/services/agent/answer_sections.py",
+      "sha256": "ce299169db93c67d67d86d5bc5b11a8ec83bda0119d424a18368e3a81a9159aa"
+    },
+    {
+      "path": "backend/services/agent/explanations.py",
+      "sha256": "035ee941623fd409e8b2625243335ead273a8711f0c6279d02eaf79d223ed927"
+    },
+    {
+      "path": "backend/services/agent/reads.py",
+      "sha256": "17231a1207c0d79142f639a24dead37d38c77cfc2113c201d8c2fba0cd7eb6f8"
+    },
+    {
+      "path": "backend/services/agent/structure_reads.py",
+      "sha256": "2385b898cd8ea6e948e7e09b8eceb9218c25551042c5102546cf520dbac64f53"
+    },
+    {
+      "path": "backend/services/agent/volatility_reads.py",
+      "sha256": "21c4ab2cdd293e3028ccd6204b0970d69c54406f610a7ca350d9a61e849834d1"
+    },
+    {
+      "path": "backend/services/agent/display_map.py",
+      "sha256": "7f28f968bf6dfdee03dc668124cc7e86c639697c4a959745f50f04525fba4d01"
+    },
+    {
+      "path": "backend/services/agent/saved_history.py",
+      "sha256": "365c8f503be92207d86f5e3b79defb4120c1077012f5a8c018afa210e9c986db"
+    },
+    {
+      "path": "backend/services/agent/access/horizon.py",
+      "sha256": "6ff1cd8a913d4a8b8b560e50bdb0066e249cf7ee6fb8fd0083b476f9cb09b45d"
+    },
+    {
+      "path": "backend/services/agent/research.py",
+      "sha256": "78fbd671b2047bae099ca9d1f10d61d8d6f5671dbb076219183e3ed5e832e2be"
+    }
+  ],
+  "independence": {
+    "prior_v1_or_development_questions_read": false,
+    "prior_candidate_answers_read": false,
+    "source": "Authored from authoritative plan section 12 and current contracts/read capabilities.",
+    "disclosure": "The goal document was opened to locate the exact plan. It contains historical aggregate progress/counts, but no prior question files or candidate answer files were opened. No comparison against prior question text has been performed."
+  },
+  "binding": null,
+  "baseline_results": null,
+  "candidate_results": null,
+  "new_snapshot_requirement": "Bind new immutable genuine Public inputs and actual screen/history context in a separate file before either arm. Preserve source times, quality and missing inputs. No v1/development outputs are reused.",
+  "prerequisite_policy": "Unmet prerequisites are not_assessable and remain in the 30-case denominator. They are not passes and cannot be silently replaced. No synthetic market values may satisfy a real-source prerequisite.",
+  "binding_required_fields": [
+    "frozen_question_hash",
+    "cases_file_hash",
+    "rubric_file_hash",
+    "evaluation_clock_utc",
+    "calendar_version",
+    "raw_evidence_files_and_sha256",
+    "source_observation_and_receipt_times",
+    "source_quality_and_absent_fields",
+    "exact_question_and_screen_scope",
+    "map_request_version_and_selection",
+    "equivalent_isolated_owner_history",
+    "per_case_prerequisite_verdicts",
+    "precomputed_expected_values_and_gaps",
+    "code_prompt_contract_versions",
+    "candidate_model_endpoint_routing",
+    "effective_limits_and_authorization",
+    "durable_usage_and_dispatch_capture"
+  ],
+  "run_authorized_by_this_manifest": false,
+  "calls_made_during_preparation": 0,
+  "call_planning": {
+    "remaining_daily_calls_reported_by_parent": 9,
+    "daily_allowance_reported_by_parent": 40,
+    "interpretation_cases": 26,
+    "zero_model_cases": 4,
+    "deterministic_model_calls": 0,
+    "single_candidate_minimum_one_attempt_each": 26,
+    "single_candidate_maximum_three_attempts_each": 78,
+    "two_candidates_minimum_one_attempt_each": 52,
+    "two_candidates_maximum_three_attempts_each": 156,
+    "maximum_one_attempt_diagnostic_cases_with_current_allowance": 9,
+    "note": "Counts assume every interpretation prerequisite is met; failed prerequisites reduce executable coverage, not the 30-case denominator. Provider snapshot acquisition is separate and not authorized here. Additional daily allowance needs explicit user authorization; account headroom and per-turn caps still apply."
+  },
+  "release_status": "NOT_ASSESSED",
+  "release_rule": "All 30 rows bound/executed/graded; zero critical grounding, scope, ownership, budget or order-isolation failures; bypass/refusal and saved-answer checks pass; greater summed usefulness and more paired wins than losses, with verified candidate improvement in two interpretation scenario families; full details in frozen rubric. Separate plan-required stronger-candidate comparison and critical operational checks remain required.",
+  "offline_preparation_validation": {
+    "json_parse": "pass",
+    "case_count_30": "pass",
+    "unique_ids_and_questions": "pass",
+    "question_length_bounds": "pass",
+    "prerequisites_and_answer_criteria_present": "pass",
+    "no_bound_evidence_or_results": "pass",
+    "source_files_exist": "pass"
+  },
+  "checkpoint": ".planning/eval/oauth-heldout-v2-preparation-checkpoint.md"
+}

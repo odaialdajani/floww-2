@@ -47,3 +47,11 @@ test('R8: vex view labels structural anchors honestly, never VEX values', () => 
   render(<SkylitMetricsSidebar data={data} spot={500} viewMode="vex" metric="raw" />);
   expect(screen.getByText('Key Levels · GEX structural · OI')).toBeInTheDocument();
 });
+
+test("missing readings do not claim a neutral gamma regime", () => {
+  const view = render(<SkylitMetricsSidebar />);
+  expect(screen.getByText("Gamma reading unavailable")).toBeInTheDocument();
+  expect(screen.queryByText("Neutral γ")).not.toBeInTheDocument();
+  view.rerender(<SkylitMetricsSidebar regime="neutral" />);
+  expect(screen.getByText("Neutral γ")).toBeInTheDocument();
+});

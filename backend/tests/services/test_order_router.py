@@ -265,7 +265,7 @@ class TestOrderRouter:
         broker.place_stock_order.assert_awaited_once()
         call = broker.place_stock_order.call_args
         assert call.args[0] == "SPY" and call.args[1] == 5
-        assert router.position_tracker.get("SPY") == 5
+        assert router.position_tracker.get("SPY") == 0  # accepted is not filled
 
     @pytest.mark.asyncio
     async def test_anonymous_submission_uses_one_client_order_id(self):
@@ -347,6 +347,9 @@ class TestOrderRouter:
         from services.order_router import OrderRouter
         router = OrderRouter("acc-123", broker=_mock_broker())
         router.position_tracker.update("SPY", 10)
+        router._broker.place_stock_order.return_value = {
+            "id": "sell-1", "symbol": "SPY", "side": "sell", "qty": "3",
+            "status": "filled", "filled_qty": "3", "filled_avg_price": "500"}
         intent = {
             "ticker": "SPY",
             "side": "sell",

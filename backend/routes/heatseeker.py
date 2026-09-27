@@ -625,22 +625,13 @@ async def node_classification_route(
         lifecycle = calc_node_lifecycle(spot, contracts, history)
         raw_nodes = lifecycle.get("nodes", [])
 
-        # Attach gamma_sign + oi_trend so classify_nodes can apply its rules.
-        # gamma_sign comes straight from the signed net_gex. oi_trend is
-        # "growing" for fresh/tested nodes (no/few taps → intent forming) and
-        # "fading" for delivered/decaying nodes (protection has expired).
+        # Tap lifecycle cannot establish changes in observed open interest.
         annotated = []
         for n in raw_nodes:
             net = float(n.get("net_gex") or 0.0)
-            state = str(n.get("state") or "").lower()
             gamma_sign = "positive" if net > 0 else "negative" if net < 0 else "neutral"
-            if state in ("fresh", "tested"):
-                oi_trend = "growing"
-            elif state in ("delivered", "decaying"):
-                oi_trend = "fading"
-            else:
-                oi_trend = "unknown"
-            annotated.append({**n, "gamma_sign": gamma_sign, "oi_trend": oi_trend})
+            annotated.append({**n, "gamma_sign": gamma_sign, "oi_trend": "unknown",
+                              "oi_trend_source": "unavailable"})
 
         result = classify_nodes(annotated)
         return _sanitize({"ticker": t, "spot": spot, **result})

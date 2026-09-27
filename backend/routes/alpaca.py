@@ -92,7 +92,7 @@ async def place_order(
         client = AlpacaClient()
         result = await client.place_stock_order(symbol, qty, side, order_type, limit_price)
         if result:
-            _journal_equity_fill(symbol, qty, side, order_type, limit_price, result)
+            result.update(_journal_equity_fill(symbol, qty, side, order_type, limit_price, result))
             return result
         return {"error": "Order failed. Check Alpaca credentials and parameters."}
     except Exception as e:
@@ -100,16 +100,17 @@ async def place_order(
 
 
 def _journal_equity_fill(symbol: str, qty: int, side: str,
-                         order_type: str, limit_price: float, result: dict) -> None:
+                         order_type: str, limit_price: float, result: dict) -> dict:
     """Journal a UI/API equity fill (fail-open, never breaks the trade)."""
     try:
         from datetime import UTC, datetime
 
-        from services.journal_store import get_engine, init_journal_tables, save_seeds
+        from services.entry_fills import journal_confirmed_entry
+        from services.journal_store import get_engine, init_journal_tables
 
         engine = get_engine()
         init_journal_tables(engine)
-        save_seeds(engine, [{
+        return journal_confirmed_entry(engine, {
             "ticker": symbol.upper(),
             "type": "equity",
             "action": side.lower(),
@@ -128,9 +129,10 @@ def _journal_equity_fill(symbol: str, qty: int, side: str,
             "setup": "manual equity",
             "tags": "alpaca,equity,ui-click",
             "source": "api-alpaca",
-        }])
+        }, result, qty, symbol, side)
     except Exception as e:
         logger.warning("alpaca order journaling failed (non-fatal): %s", e)
+        return {"journal_status": "journal_unavailable"}
 
 
 @router.post("/order/option")
@@ -152,7 +154,7 @@ async def place_option_order(
         client = AlpacaClient()
         result = await client.place_option_order(symbol, qty, side, order_type, limit_price)
         if result:
-            _journal_option_fill(symbol, qty, side, result)
+            result.update(_journal_option_fill(symbol, qty, side, result))
             return result
         return {"error": "Option order failed. Check Alpaca options approval, credentials, and symbol."}
     except Exception as e:
@@ -172,17 +174,18 @@ def _parse_occ(symbol: str) -> dict | None:
         return None
 
 
-def _journal_option_fill(symbol: str, qty: int, side: str, result: dict) -> None:
+def _journal_option_fill(symbol: str, qty: int, side: str, result: dict) -> dict:
     """Journal an option fill (fail-open, never breaks the trade)."""
     try:
         from datetime import UTC, datetime
 
-        from services.journal_store import get_engine, init_journal_tables, save_seeds
+        from services.entry_fills import journal_confirmed_entry
+        from services.journal_store import get_engine, init_journal_tables
 
         occ = _parse_occ(symbol) or {}
         engine = get_engine()
         init_journal_tables(engine)
-        save_seeds(engine, [{
+        return journal_confirmed_entry(engine, {
             "ticker": re.sub(r"\d{6}[CP]\d{8}$", "", str(symbol).upper()),
             "type": occ.get("type", "call"),
             "action": "buy" if side.lower() == "buy" else "sell",
@@ -199,9 +202,10 @@ def _journal_option_fill(symbol: str, qty: int, side: str, result: dict) -> None
             "setup": "click-to-trade",
             "tags": "alpaca,option,ui-click",
             "source": "api-alpaca-option",
-        }])
+        }, result, qty, symbol, side)
     except Exception as e:
         logger.warning("alpaca option journaling failed (non-fatal): %s", e)
+        return {"journal_status": "journal_unavailable"}
 
 
 @router.delete("/position/{symbol}")
@@ -217,6 +221,9 @@ async def close_position(symbol: str):
         from services.close_intents import bind_close_order, prepare_close
         from services.journal_store import get_engine, init_journal_tables
         client = AlpacaClient()
+        # Known refusal before dispatch must not create an unresolved intent.
+        if not client.enabled:
+            return {"error": "Alpaca not configured; close was not submitted"}
         engine = get_engine()
         init_journal_tables(engine)
         intent = prepare_close(engine, symbol)

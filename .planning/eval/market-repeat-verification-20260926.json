@@ -1,0 +1,83 @@
+{
+  "source_manifest": "market-repeat-source-manifest-20260926.json",
+  "checks": [
+    {
+      "label": "integrated-services-final",
+      "passed": 246,
+      "exit_code": 0,
+      "log_sha256": "afb84a616b39a55b0f141782877d7da89078c7acd59e16fd72b66650b3454e3b"
+    },
+    {
+      "label": "integrated-observations-final",
+      "passed": 24,
+      "exit_code": 0,
+      "log_sha256": "7c9aafd77a228cceee4058c9081609be855a39b49a8c12bf107560a1ad5ea34c"
+    },
+    {
+      "label": "integrated-consumers-corrected",
+      "passed": 40,
+      "exit_code": 0,
+      "log_sha256": "578b84a9ef80698711df8d69ff49cbd1fac3d49af558a5c18defa4dd5b15133e"
+    },
+    {
+      "label": "truth-ui-full",
+      "passed": 847,
+      "exit_code": 0,
+      "log_sha256": "13bc3341d542dde7afe6dc24ff5743e940713e7ea909267ae4dd71aacab0f715"
+    },
+    {
+      "label": "truth-ui-mounted-final",
+      "passed": 100,
+      "exit_code": 0,
+      "log_sha256": "f425a23f7cab65d6f56daa7409a858fa5903f30aa0a7acb3537c5ac338e324a6"
+    },
+    {
+      "label": "truth-ui-build-wrap-final",
+      "passed": null,
+      "exit_code": 0,
+      "log_sha256": "6a0e1403e62be49aae7316f16546fc50c1c176361049ed77cb58bd0b8b65afc5"
+    }
+  ],
+  "browser": {
+    "checked_at": "2026-09-26T23:56:43.474Z",
+    "source": "synthetic daily-volume fixture rendered through actual component",
+    "estimate": [
+      {
+        "text": "~$200k",
+        "title": "Estimated daily value: session volume times a quote, not actual traded dollars"
+      }
+    ],
+    "direction_unknown": true,
+    "old_fresh_print_label": false,
+    "page_errors": [],
+    "horizontal_overflow": false,
+    "style_source": "Final built production stylesheet main.a1869f51.css served from verified bytes",
+    "source_hashes": {
+      "FlowseekerProBlademap.jsx": "2c6ef90158eef3a9f590a79104ef931f2d3c694f3a81ad690df69a8679478ebb",
+      "FlowseekerProBlademap.css": "6de839b3a92acc0602ad90faef7716291974749d870b1b370f21f3d7ef68c6fb",
+      "tideFeed.js": "1ae0d3010751d8f75090627878d17a074833d38568c6e176c829d4677690ff35"
+    },
+    "wide_horizontal_overflow": false,
+    "style_sha256": "835da487364c6d1e565a3a0b1aea97e959468436765602b23097d11ee9443e17",
+    "garbled_fixture_labels": false
+  },
+  "live_scan": {
+    "path": "market-full-pass-20260926.json",
+    "tested_pre_change_sources": true,
+    "complete_pass": true,
+    "attempted": 8786,
+    "usable": 4350,
+    "unavailable": 4436,
+    "continuous": false,
+    "http_counts_lower_bound": true,
+    "patch_after_source_hash_verification": true
+  },
+  "limits": [
+    "No new implementation live full-provider repeat pass was run.",
+    "No actual source volume timestamps means trade arrival velocity remains unknown.",
+    "Per-name history retains up to60contracts; not every option.",
+    "No trading/model calls or running-app restart.",
+    "The full frontend847pass run predates only label and CSS-wrap edits; final100focused checks and productionbuild pass cover final state.",
+    "Full backend suite not rerun; changed paths plus direct consumers tested."
+  ]
+}

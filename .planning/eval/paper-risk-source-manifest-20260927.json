@@ -1,0 +1,9 @@
+{
+  "scope": "unmounted pure risk preparation and isolated storage proof",
+  "files": {
+    "backend/services/agent/paper/policy.py": "b97cb71c3f7b2e5f97125c5fad4877bab983c4a8bc2a800c734548e5ce36112e",
+    "backend/services/agent/paper/risk.py": "7c637bae3245a4d104214461ba03ad30b59feb6923b865a9fab51de0c6dd89e4",
+    "backend/scripts/verify_paper_risk.py": "2e0913b3a315a2c1f2cfaca4d677d9afdbb6b93bc24cce360f543926c818d6bb",
+    "tests/test_agent_paper_risk.py": "fe3c43c922ec76caed8d7c3409fcb561b9443afa528ff264133096ae4243d49d"
+  }
+}

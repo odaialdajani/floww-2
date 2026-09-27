@@ -1,0 +1,24 @@
+{
+  "frontend_suites": 84,
+  "frontend_tests_passed": 723,
+  "frontend_log_sha256": "95c8626476e602bdc6ebf88abf45df1d4a4303246d06ab52ed1ba093ae398d00",
+  "build": "Compiled successfully",
+  "build_log_sha256": "a6e5dbbbe68b22c23c5cd9610b92be589fac3e157692f55efd93ea50eecdc66e",
+  "ruff": "passed",
+  "required_medium_bandit": "passed",
+  "whitespace": "passed",
+  "independent_journal_recheck": "both final microsecond/legacy local-clock probes passed",
+  "model_calls_reserved": 34,
+  "daily_limit_unchanged": 40,
+  "fresh_comparison": "sealed inputs verified; candidate not run",
+  "full_goal": "incomplete",
+  "controlled_journal_browser": {
+    "record": "synthetic isolated browser only",
+    "closed_visible": true,
+    "local_note_retained": true,
+    "share_profit": 2,
+    "option_sizing_tests": "standard100 unchanged",
+    "screenshot": "output/playwright/journal-closed-desktop-controlled-2323.png",
+    "final_source_note": "equity select option added after test collection; final build and actual browser use it"
+  }
+}

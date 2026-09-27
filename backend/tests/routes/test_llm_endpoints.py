@@ -1,56 +1,88 @@
-"""
-backend/tests/routes/test_llm_endpoints.py
+"""Strict local route success, unavailable-service and invalid-input checks."""
 
-Verify LLM endpoints respond with 200 or clean 503 (not 500/ImportError).
-"""
+import sys
+from types import ModuleType
+from unittest.mock import AsyncMock, Mock
+
 import pytest
 from fastapi.testclient import TestClient
 
 from server import app
 
+TRADE = {"ticker": "SPY", "spot": 570.0, "regime": "positive", "net_gex": 1.2e9,
+         "prediction": "bullish", "confidence": 0.65}
+GENERATE = {"prompt": "A short market briefing", "system_prompt": "You are a market analyst.",
+            "max_tokens": 64}
 
-@pytest.fixture(scope="module")
-def client():
+
+@pytest.fixture
+def model_boundary(monkeypatch):
+    module = ModuleType("services.llm")
+    module.analyze_trade_with_llm = AsyncMock(return_value={"analysis": "saved trade explanation"})
+    service = Mock()
+    service.generate.return_value = {"text": "saved briefing"}
+    service.available_providers = ["test-provider"]
+    service.provider = "test-provider"
+    service.is_configured = True
+    module.get_llm_service = Mock(return_value=service)
+    monkeypatch.setitem(sys.modules, "services.llm", module)
+    return module, service
+
+
+@pytest.fixture
+def client(monkeypatch, model_boundary):
+    monkeypatch.setenv("API_SECRET_KEY", "test-secret-key")
     return TestClient(app, headers={"X-API-Key": "test-secret-key"})
 
 
-def test_llm_providers_returns_200_or_503(client: TestClient):
-    """GET /api/llm/providers should return 200 if LLM configured, 503 otherwise."""
-    resp = client.get("/api/llm/providers")
-    assert resp.status_code in (200, 503), (
-        f"Expected 200 or 503, got {resp.status_code}: {resp.text}"
-    )
-    if resp.status_code == 200:
-        data = resp.json()
-        assert "providers" in data
+def test_llm_providers_returns_exact_configured_state(client, model_boundary):
+    response = client.get("/api/llm/providers")
+    assert response.status_code == 200
+    assert response.json() == {"providers": ["test-provider"], "current": "test-provider", "configured": True}
+    model_boundary[0].get_llm_service.assert_called_once_with()
 
 
-@pytest.mark.flaky_env
-def test_llm_analyze_trade_returns_200_or_503(client: TestClient):
-    """POST /api/llm/analyze-trade should return 200 or 503 (not 500)."""
-    payload = {
-        "ticker": "SPY",
-        "spot": 570.0,
-        "regime": "positive",
-        "net_gex": 1.2e9,
-        "prediction": "bullish",
-        "confidence": 0.65,
-    }
-    resp = client.post("/api/llm/analyze-trade", json=payload)
-    assert resp.status_code in (200, 422, 503), (
-        f"Expected 200/422/503, got {resp.status_code}: {resp.text}"
-    )
+def test_llm_analyze_trade_forwards_exact_args(client, model_boundary):
+    response = client.post("/api/llm/analyze-trade", json=TRADE)
+    assert response.status_code == 200
+    assert response.json() == {"analysis": "saved trade explanation"}
+    model_boundary[0].analyze_trade_with_llm.assert_awaited_once_with(**TRADE)
 
 
-@pytest.mark.flaky_env
-def test_llm_generate_briefing_returns_200_or_503(client: TestClient):
-    """POST /api/llm/generate should return 200 or 503 (not 500)."""
-    payload = {
-        "prompt": "Give me a short market briefing",
-        "system_prompt": "You are a market analyst.",
-        "max_tokens": 64,
-    }
-    resp = client.post("/api/llm/generate", json=payload)
-    assert resp.status_code in (200, 422, 503), (
-        f"Expected 200/422/503, got {resp.status_code}: {resp.text}"
-    )
+def test_llm_generate_forwards_exact_args(client, model_boundary):
+    response = client.post("/api/llm/generate", json=GENERATE)
+    assert response.status_code == 200
+    assert response.json() == {"text": "saved briefing"}
+    model_boundary[0].get_llm_service.assert_called_once_with()
+    model_boundary[1].generate.assert_called_once_with(**GENERATE)
+
+
+@pytest.mark.parametrize("route,payload", [("analyze-trade", TRADE), ("generate", GENERATE)])
+def test_missing_service_import_is_clean_503(client, monkeypatch, model_boundary, route, payload):
+    monkeypatch.setitem(sys.modules, "services.llm", None)
+    response = client.post("/api/llm/" + route, json=payload)
+    assert response.status_code == 503
+    assert response.json() == {"error": "LLM service not configured",
+                               "status_code": 503, "path": "/api/llm/" + route}
+    model_boundary[0].analyze_trade_with_llm.assert_not_awaited()
+    model_boundary[1].generate.assert_not_called()
+
+
+@pytest.mark.parametrize("route,payload", [("analyze-trade", {"ticker": "SPY", "spot": "bad"}),
+                                           ("generate", {"max_tokens": 64})])
+def test_invalid_input_never_calls_model(client, model_boundary, route, payload):
+    response = client.post("/api/llm/" + route, json=payload)
+    assert response.status_code == 422
+    assert isinstance(response.json()["detail"], list)
+    model_boundary[0].analyze_trade_with_llm.assert_not_awaited()
+    model_boundary[0].get_llm_service.assert_not_called()
+    model_boundary[1].generate.assert_not_called()
+
+
+def test_generation_rejected_by_service_is_clean_400(client, model_boundary):
+    model_boundary[1].generate.side_effect = ValueError("provider not configured")
+    response = client.post("/api/llm/generate", json=GENERATE)
+    assert response.status_code == 400
+    assert response.json() == {"error": "provider not configured",
+                               "status_code": 400, "path": "/api/llm/generate"}
+    model_boundary[1].generate.assert_called_once_with(**GENERATE)

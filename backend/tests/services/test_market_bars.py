@@ -6,9 +6,22 @@ quarantine counters, stale-serve on failure, None when cold+unavailable.
 Pure helpers tested without network; I/O paths via monkeypatched upstream.
 """
 
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
 import pytest
 
 import services.market_bars as mb
+
+
+@pytest.mark.asyncio
+async def test_actual_public_bar_adapter_accepts_history_scope(monkeypatch):
+    from services import public_api_adapter
+    broker = SimpleNamespace(get_trading_account=lambda:SimpleNamespace(account_id="test"),
+                             get_bars=AsyncMock(return_value={"regularMarket":{"bars":[]}}))
+    monkeypatch.setattr(public_api_adapter,"_get_broker",AsyncMock(return_value=broker))
+    assert await mb._upstream("SPY","DAY","ONE_MINUTE") is None
+    broker.get_bars.assert_awaited_once_with("SPY","DAY","EQUITY","ONE_MINUTE")
 
 
 @pytest.fixture(autouse=True)

@@ -11,6 +11,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from services.connection_guard import guarded_connection
+
 HORIZONS_S = (60, 180, 300, 900)
 LABEL_VERSION = "outcome.v1"
 
@@ -134,6 +136,7 @@ def label_touch(path: list[tuple[float, float]], zone: tuple[float, float],
             "detail": "HORIZON_INCOMPLETE_no_decision"}
 
 
+@guarded_connection
 def close_episodes(conn, paths_by_decision: dict[str, list],
                    default_horizon_s: float = 300) -> dict[str, Any]:
     """Deterministic pending→complete/censored outcome job (R6-5/B11, R8-05).
@@ -255,9 +258,10 @@ def close_episodes(conn, paths_by_decision: dict[str, list],
                     if _new_end <= _old_end:
                         continue
                     conn.execute(
-                        "DELETE FROM outcome_labels_v1 WHERE decision_id = "
-                        f"'{str(did).replace(chr(39), chr(39) * 2)}' AND horizon_s = {_hor} "
-                        f"AND COALESCE(policy_version, 'legacy') = '{_policy}'")
+                        "DELETE FROM outcome_labels_v1 WHERE decision_id = ? AND horizon_s = ? "
+                        "AND COALESCE(policy_version, 'legacy') = ?",
+                        [str(did), _hor, _policy],
+                    )
                 res = label_touch(path or [], (_lo, _hi), _hor, _tgt, _stp)
                 _detail = {"detail": res.get("detail"), "version": res.get("version")}
                 if path:

@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en" data-mode="trade" data-screen="all" data-cb="off">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tidehunter Pro — Blademap-matched mockup v3</title>
+<style>
+/* ============================================================
+   TIDEHUNTER PRO v3 — structure and density matched to Blademap.ai
+   (reference captures in ./ref: lattice / pulse / vector / edge).
+   One page, sidebar = section anchors (no separate tabs).
+   Zero network calls. Every number invented. Field provenance in
+   data-src attributes. Low-glare: Blademap's near-black is lifted to
+   #16181c and its white text to #c3c7cd — the only deliberate deviation.
+   ============================================================ */
+:root{
+  --bg:#16181c;--side:#191c21;--panel:#1a1d23;--row:#1b1e24;--hover:#20242b;
+  --line:#25292f;--line2:#2f343c;
+  --ink:#a4a8ae;--hi:#c3c7cd;--lo:#767b83;--xlo:#5a5f67;
+  --acc:#8b7cf6;--acc-s:rgba(139,124,246,.14);
+  --bull:#4fc3a1;--bear:#e0607f;--amber:#d9a441;--teal:#5fb8c9;
+  --bull-s:rgba(79,195,161,.11);--bear-s:rgba(224,96,127,.11);--amber-s:rgba(217,164,65,.12);--teal-s:rgba(95,184,201,.12);
+  --neg1:#2b2550;--neg2:#4a3f8f;--neg3:#6d5fd0;--pos1:#5a4a3a;--pos2:#a97a52;--pos3:#e0a262;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+  --rowh:44px;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:400 13px/1.4 var(--sans);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;display:flex;flex-direction:column;min-height:100vh}
+button,input,select{font:inherit;color:inherit}button{background:none;border:0;cursor:pointer;text-align:left;padding:0}
+a{color:inherit;text-decoration:none}
+.up{color:var(--bull)}.dn{color:var(--bear)}.hi{color:var(--hi)}.lo{color:var(--lo)}.xlo{color:var(--xlo)}.am{color:var(--amber)}
+.lbl{font:500 9.5px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--xlo)}
+
+/* mock strip */
+.mock{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:5px 14px;background:#1d1a12;border-bottom:1px solid #3a3220;font-size:11.5px;flex:0 0 auto}
+.mock .w{font:600 10.5px/1 var(--sans);letter-spacing:.1em;color:#d9a441;border:1px solid rgba(217,164,65,.4);padding:4px 8px;border-radius:999px}
+.mock .g{display:flex;gap:4px;align-items:center}.mock .l{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--xlo);margin-right:2px}
+.mb{padding:3px 9px;border-radius:5px;border:1px solid var(--line2);color:var(--lo);font-size:11px}
+.mb[aria-pressed="true"]{color:#16181c;background:var(--amber);border-color:var(--amber);font-weight:600}
+.mock .ref{margin-left:auto;color:var(--xlo)}
+
+/* ---------- shell: sidebar + content (Blademap) ---------- */
+.shell{flex:1;display:grid;grid-template-columns:232px 1fr;min-height:0}
+.side{background:var(--side);border-right:1px solid var(--line);padding:18px 14px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh}
+.brand{display:flex;align-items:center;gap:10px;padding:2px 8px 22px}
+.brand i{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#2a2d35,#1e2127);border:1px solid var(--line2);display:grid;place-items:center;font-style:normal;color:var(--acc);font-weight:700}
+.brand b{font-size:15px;font-weight:600;color:var(--hi)}
+.nav{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:6px;color:var(--ink);font-size:13.5px;border-left:2px solid transparent}
+.nav svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;opacity:.85}
+.nav:hover{background:var(--hover);color:var(--hi)}
+.nav.on{background:var(--hover);color:var(--hi);border-left-color:var(--acc)}
+.side .sp{flex:1}
+.side .st{padding:10px 12px;font-size:11px;color:var(--lo);border-top:1px solid var(--line);display:grid;gap:4px}
+.side .st b{color:var(--bull);font-weight:600;letter-spacing:.08em;font-size:10px}
+.dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--bull);margin-right:6px;vertical-align:middle}
+.dot.y{background:var(--amber)}.dot.g{background:var(--xlo)}
+
+.content{min-width:0;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;gap:10px;padding:12px 28px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:30}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:9px;border:1px solid var(--line2);background:var(--panel);font-size:13px;color:var(--hi)}
+.pill .k{color:var(--lo)}.pill .v{font-weight:500}.pill .c{color:var(--lo);font-size:11px}
+.topbar .sp{flex:1}
+.icb{width:32px;height:32px;border-radius:9px;border:1px solid var(--line2);display:grid;place-items:center;color:var(--lo);background:var(--panel)}
+.icb:hover{color:var(--hi)}
+.page{padding:22px 28px 40px;display:grid;gap:26px;align-content:start}
+
+/* page header (Blademap) */
+.ph{display:grid;grid-template-columns:1fr auto;gap:20px;align-items:start}
+.ph h1{margin:0;font-size:30px;font-weight:600;color:var(--hi);letter-spacing:-.01em;display:flex;align-items:center;gap:12px}
+.ph h1 .ic{width:26px;height:26px;border-radius:50%;border:1px solid var(--line2);display:grid;place-items:center;font-size:12px;color:var(--lo);font-weight:400}
+.ph .meta{display:flex;gap:10px;align-items:center;margin-top:8px;font-size:11.5px;color:var(--lo);letter-spacing:.04em}
+.ph .meta b{color:var(--bull);font-weight:600;letter-spacing:.1em;font-size:10.5px}
+.ph .meta .k{letter-spacing:.1em;font-size:10px;text-transform:uppercase;color:var(--xlo)}
+.howto{display:inline-flex;align-items:center;gap:7px;margin-top:12px;padding:5px 11px;border-radius:999px;border:1px solid var(--line2);font:500 10.5px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--lo)}
+.seg{display:flex;gap:22px}
+.seg > div{display:grid;gap:6px;justify-items:start}
+.segbar{display:flex;border-bottom:1px solid var(--line)}
+.segbar button{padding:6px 12px 8px;font:500 10.5px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--lo);border-bottom:2px solid transparent;margin-bottom:-1px}
+.segbar button:hover{color:var(--hi)}
+.segbar button[aria-pressed="true"]{color:var(--hi);border-bottom-color:var(--hi)}
+
+/* ---------- answer row: four cells, hairline separated (not boxes) ---------- */
+.answers{display:grid;grid-template-columns:1.25fr 1fr 1fr 1fr;border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}
+.ans{padding:16px 20px 15px;border-right:1px solid var(--line);display:grid;gap:7px;align-content:start;text-align:left}
+.ans:last-child{border-right:0}
+.ans:hover{background:var(--hover)}
+.ans .q{display:flex;align-items:center;gap:8px}
+.ans .q .lbl{color:var(--lo)}
+.ans .q .tag{margin-left:auto;font:500 9.5px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--acc)}
+.ans .v{font-size:16px;font-weight:600;color:var(--hi);line-height:1.3;letter-spacing:-.005em}
+.ans.top .v{font-size:18px}
+.ans .s{font-size:11.5px;color:var(--lo);display:flex;flex-wrap:wrap;gap:4px 14px}
+.ans .s b{color:var(--ink);font-weight:500}
+.ans .f{font-size:10.5px;color:var(--xlo);letter-spacing:.03em}
+
+/* ---------- screens row ---------- */
+.screens{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.screens .segbar{flex:1}
+.screens .segbar button{padding:8px 14px 10px;font-size:11px}
+.screens .segbar button small{margin-left:6px;color:var(--xlo);letter-spacing:0;font-size:10px}
+.chipb{padding:6px 11px;border-radius:999px;border:1px solid var(--line2);font:500 10.5px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--lo)}
+.chipb:hover{color:var(--hi)}
+.chipb.on{color:var(--acc);border-color:rgba(139,124,246,.5);background:var(--acc-s)}
+.fchip{padding:5px 9px;border-radius:6px;border:1px solid var(--line2);font-size:11px;color:var(--ink)}
+.fchip b{color:var(--acc);font-weight:500}.fchip i{font-style:normal;color:var(--xlo);margin-left:6px}
+.disc,.rb{width:100%;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.disc{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.disc select,.disc input,.rb select,.rb input{background:var(--bg);border:1px solid var(--line2);border-radius:7px;padding:6px 9px;font-size:12px;color:var(--ink)}
+.disc input::placeholder{color:var(--xlo)}
+.w70{width:76px}.w110{width:112px}.w170{width:180px}
+.disc .lbl{margin:0 4px 0 6px}
+.disc .brk{flex-basis:100%;height:0}
+.rb{display:grid;gap:8px}
+.rb .t{display:flex;align-items:center;gap:10px}
+.rb .t input{width:200px;color:var(--hi)}
+.rule{display:grid;grid-template-columns:40px 210px 96px 150px 24px;gap:8px;align-items:center}
+.rule .op{font:600 10px/1 var(--sans);letter-spacing:.1em;color:var(--xlo);text-align:center}
+.rule .x{color:var(--xlo);text-align:center}
+.rb .ft{display:flex;gap:8px;align-items:center;margin-top:4px}
+.rb .ft .sp{flex:1}
+.rb .hint{font-size:11px;color:var(--xlo);line-height:1.5}
+
+/* ---------- sections ---------- */
+.sec{display:grid;gap:14px;scroll-margin-top:70px}
+.sh{display:flex;align-items:flex-end;gap:14px}
+.sh h2{margin:0;font-size:20px;font-weight:600;color:var(--hi);display:flex;align-items:center;gap:10px}
+.sh h2 .ic{width:22px;height:22px;border-radius:50%;border:1px solid var(--line2);display:grid;place-items:center;font-size:10px;color:var(--lo);font-weight:400}
+.sh .meta{font-size:11px;color:var(--lo);letter-spacing:.06em;padding-bottom:3px}
+.sh .meta b{color:var(--bull);font-weight:600;letter-spacing:.1em;font-size:10px}
+.sh .sp{flex:1}
+.sh .segbar button{padding:5px 10px 7px;font-size:10px}
+
+/* ---------- Blademap table ---------- */
+.tbl{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}
+table{width:100%;border-collapse:collapse}
+th{padding:12px 14px;text-align:right;white-space:nowrap;font:500 10px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--lo);border-bottom:1px solid var(--line);background:var(--bg)}
+th.l,td.l{text-align:left}
+th .i{display:inline-grid;place-items:center;width:12px;height:12px;border-radius:50%;border:1px solid var(--line2);font-size:8px;margin-left:5px;color:var(--xlo);vertical-align:middle}
+th.on{color:var(--hi)}
+td{padding:0 14px;height:var(--rowh);text-align:right;white-space:nowrap;border-bottom:1px solid var(--line);color:var(--ink);font-size:13px}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--hover)}
+tbody tr.sel td{background:var(--hover)}
+tbody tr.bear td:first-child{box-shadow:inset 3px 0 0 rgba(224,96,127,.55)}
+tbody tr.bull td:first-child{box-shadow:inset 3px 0 0 rgba(79,195,161,.55)}
+td .sym{font-weight:600;color:var(--hi)}
+td .sub{display:block;font-size:10.5px;color:var(--xlo);margin-top:2px;line-height:1.2}
+td .two{display:inline-grid;gap:2px;text-align:right}
+.pl{display:inline-block;padding:3px 8px;border-radius:999px;border:1px solid var(--line2);font:600 9.5px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--lo);background:transparent}
+.pl.bull{color:var(--bull);border-color:rgba(79,195,161,.45);background:var(--bull-s)}
+.pl.bear{color:var(--bear);border-color:rgba(224,96,127,.45);background:var(--bear-s)}
+.pl.gold{color:var(--amber);border-color:rgba(217,164,65,.5);background:var(--amber-s)}
+.pl.whale{color:var(--teal);border-color:rgba(95,184,201,.5);background:var(--teal-s)}
+.pl.silver{color:var(--ink);border-color:var(--line2)}
+.pl.acc{color:var(--acc);border-color:rgba(139,124,246,.5);background:var(--acc-s)}
+.pl.sweep{color:var(--bear)}.pl.block{color:var(--amber)}.pl.unusual{color:var(--acc)}
+.dir{font-weight:600;letter-spacing:.06em;font-size:11.5px}
+.stage{display:inline-grid;gap:5px;justify-items:start}
+.stage .d{display:flex;gap:0;align-items:center}
+.stage .d i{width:7px;height:7px;border-radius:50%;border:1px solid var(--lo);background:transparent;display:block}
+.stage .d i.f{background:var(--hi);border-color:var(--hi)}
+.stage .d s{width:14px;height:1px;background:var(--lo);display:block;text-decoration:none}
+.stage .d s.f{background:var(--hi)}
+.stage small{font:500 9.5px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--lo)}
+.conf{display:inline-grid;gap:4px;justify-items:start;min-width:84px}
+.conf b{font-size:14px;color:var(--hi);font-weight:600}
+.conf .bar{width:84px;height:2px;background:var(--line2);border-radius:1px;overflow:hidden}
+.conf .bar i{display:block;height:100%;background:var(--acc)}
+.conf small{font:500 9.5px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--lo)}
+.state{display:inline-grid;gap:3px;justify-items:start;padding-left:10px;border-left:2px solid var(--line2)}
+.state.ok{border-left-color:var(--bull)}.state.bd{border-left-color:var(--bear)}.state.er{border-left-color:var(--amber)}
+.state b{font-size:13px;color:var(--hi);font-weight:600}
+.state small{font-size:10.5px;color:var(--lo)}
+.state .pl{margin-top:2px}
+.lv{font-weight:500;color:var(--hi)}
+.lv.dn{color:var(--bear)}.lv.up{color:var(--bull)}
+.acts{display:none;gap:6px}
+tr:hover .acts{display:inline-flex}
+tr:hover .lvwrap{display:none}
+.act{padding:4px 9px;border-radius:6px;border:1px solid var(--line2);font-size:11px;color:var(--ink)}
+.act:hover{color:var(--hi);background:var(--bg)}
+.act.p{color:var(--acc);border-color:rgba(139,124,246,.5)}
+.pinned td{background:var(--acc-s)}
+.pinned td:first-child{box-shadow:inset 3px 0 0 var(--acc)}
+.tblfoot{display:flex;gap:16px;padding:9px 14px;border-top:1px solid var(--line);font-size:10.5px;color:var(--xlo);letter-spacing:.03em}
+kbd{font-size:10px;padding:1px 4px;border-radius:3px;border:1px solid var(--line2);color:var(--lo)}
+
+/* ---------- Lattice ---------- */
+.lat{border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}
+.lath{display:grid;grid-template-columns:1fr auto;gap:20px;padding:16px 18px 10px;align-items:end}
+.lath h3{margin:0;font-size:22px;font-weight:600;color:var(--hi);display:flex;align-items:center;gap:10px}
+.lath .meta{font-size:11px;color:var(--lo);letter-spacing:.05em;margin-top:6px}
+.lath .meta b{color:var(--bull);letter-spacing:.1em;font-size:10px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.mchip{padding:4px 8px;border-radius:5px;border:1px solid var(--line2);font:500 9.5px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--lo)}
+.mchip b{color:var(--hi);margin-left:5px;font-weight:600;letter-spacing:0}
+.keys{display:flex;gap:6px;flex-wrap:wrap;padding:0 18px 12px}
+.key{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:5px;border:1px solid var(--line2);font:500 9.5px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--lo)}
+.key i{width:6px;height:6px;border-radius:50%;display:block}
+.key b{color:var(--hi);font-weight:600;letter-spacing:0}
+.key em{font-style:normal;color:var(--pos3)}.key em.n{color:var(--neg3)}
+.grid{display:grid;grid-template-columns:80px repeat(5,1fr);border-top:1px solid var(--line)}
+.grid .hd{padding:10px 12px;font:500 10px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--lo);border-bottom:1px solid var(--line);background:var(--bg)}
+.grid .sk{padding:0 12px;height:27px;line-height:27px;font-size:11.5px;color:var(--lo);border-bottom:1px solid var(--line)}
+.grid .c{height:27px;line-height:27px;padding:0 10px;font-size:11.5px;color:var(--hi);border-bottom:1px solid rgba(0,0,0,.25);border-right:1px solid rgba(0,0,0,.25);position:relative}
+.grid .c.spot::after{content:"";position:absolute;right:8px;top:11px;width:5px;height:5px;border-radius:50%;background:var(--amber)}
+.n1{background:var(--neg1)}.n2{background:var(--neg2)}.n3{background:var(--neg3)}.p1{background:var(--pos1)}.p2{background:var(--pos2)}.p3{background:var(--pos3);color:#1c1810 !important}
+.latfoot{display:flex;gap:18px;padding:10px 18px;font-size:11px;color:var(--xlo);border-top:1px solid var(--line)}
+.latfoot i{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:5px}
+
+/* ---------- focused dealer drill-down (reference: ref/drilldown-reference.png) ---------- */
+.dealer-drill{margin-top:18px;border:1px solid var(--line);border-radius:12px;background:var(--panel);min-width:0;scroll-margin-top:84px}
+.dealer-drill:focus{outline:2px solid var(--acc);outline-offset:3px}
+.drill-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 18px;border-bottom:1px solid var(--line)}
+.drill-head h3{margin:0;color:var(--ink);font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase}
+.drill-head h3 strong{color:var(--hi)}
+.drill-head p{margin:0;color:var(--ink);font-size:12px}
+.drill-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:0;padding:18px}
+.drill-facts dt{color:var(--ink);font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;margin-bottom:5px}
+.drill-facts dd{margin:0;color:var(--hi);font-size:14px;overflow-wrap:anywhere}
+.drill-facts dd small{display:block;font-size:12px;color:var(--ink);margin-top:3px}
+.drill-chart{margin:0;padding:8px 18px 18px}
+.drill-chart figcaption{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:var(--ink);font-size:11px;margin-bottom:12px}
+.drill-chart figcaption strong{font-weight:600;letter-spacing:.09em;text-transform:uppercase}
+.drill-plot{overflow-x:auto}
+.drill-plot svg{display:block;width:100%;min-width:480px;height:auto;max-height:350px}
+.drill-bar{fill:var(--bull)}.drill-bar.short{fill:var(--bear)}.drill-bar.flat{fill:var(--ink)}
+.drill-hatch{display:none;fill:url(#drill-short-pattern)}
+[data-cb="on"] .drill-hatch{display:block}
+.drill-curve{fill:none;stroke:var(--teal);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.drill-axis{fill:var(--ink);font-size:11px;font-family:var(--sans)}
+.drill-flip{stroke:var(--amber);stroke-width:1;vector-effect:non-scaling-stroke}
+.drill-flip-label{fill:var(--amber);font-size:11px;font-family:var(--sans)}
+.drill-note{margin:12px 0 0;color:var(--ink);font-size:12px;line-height:1.65}
+.drill-legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--ink)}
+.drill-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;background:var(--bull)}
+.drill-legend .short{background:var(--bear)}
+[data-cb="on"] .drill-legend .short{background-image:repeating-linear-gradient(-45deg,var(--bg) 0 2px,transparent 2px 5px)}
+.drill-empty{padding:0 18px 20px;color:var(--ink)}.drill-empty p{margin:0 0 12px}
+button.sym{font:inherit;font-weight:600;color:var(--hi);cursor:pointer;text-decoration:underline;text-decoration-color:var(--line2);text-underline-offset:4px}
+button.sym:focus-visible,.dealer-drill button:focus-visible{outline:2px solid var(--acc);outline-offset:4px;border-radius:3px}
+tr:focus-within .acts{display:inline-flex}tr:focus-within .lvwrap{display:none}
+@media(max-width:640px){.drill-facts{grid-template-columns:1fr;gap:12px}.drill-facts dd small{display:inline;margin-left:6px}}
+
+/* ---------- trust / settings ---------- */
+.stats{display:grid;grid-template-columns:repeat(6,1fr);border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}
+.stat{padding:14px 16px;border-right:1px solid var(--line);display:grid;gap:5px}
+.stat:last-child{border-right:0}
+.stat b{font-size:18px;color:var(--hi);font-weight:600}
+.stat b small{font-size:10.5px;color:var(--xlo);margin-left:6px;font-weight:400}
+.stat .bar{height:2px;background:var(--line2);border-radius:1px;overflow:hidden}.stat .bar i{display:block;height:100%;background:var(--acc)}
+.stat.thin{opacity:.45}
+.set{border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}
+.set .in{padding:16px 18px;border-bottom:1px solid var(--line);display:grid;gap:4px}
+.set .in h3{margin:0;font-size:16px;font-weight:600;color:var(--hi)}
+.set .in p{margin:0;font-size:12px;color:var(--lo)}
+.tog{width:34px;height:18px;border-radius:9px;background:var(--acc);position:relative;display:inline-block}
+.tog::after{content:"";position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--hi)}
+.tog.off{background:var(--line2)}.tog.off::after{right:auto;left:2px;background:var(--lo)}
+
+/* ---------- modes ---------- */
+[data-mode="monitor"]{--rowh:32px}
+[data-mode="monitor"] .ans{padding:11px 16px}
+[data-mode="monitor"] .ans .v{font-size:14px}[data-mode="monitor"] .ans.top .v{font-size:15px}
+[data-mode="monitor"] #lattice,[data-mode="monitor"] #trust{display:none}
+[data-mode="research"] #vector tbody tr:nth-child(n+5){display:none}
+[data-mode="research"] .grid .c,[data-mode="research"] .grid .sk{height:32px;line-height:32px}
+[data-mode="trade"] #pulse tbody tr:nth-child(n+9){display:none}
+
+/* ---------- colour-blind demo (floww_settings.colorBlindMode) ---------- */
+[data-cb="on"] .up,[data-cb="on"] .dn,[data-cb="on"] .lv.up,[data-cb="on"] .lv.dn{color:var(--hi)}
+[data-cb="on"] .pl.bull,[data-cb="on"] .pl.bear{color:var(--hi);border-color:var(--line2);background:transparent}
+[data-cb="on"] .pl.bull::before{content:"▲ "}[data-cb="on"] .pl.bear::before{content:"▼ "}
+[data-cb="on"] .n1,[data-cb="on"] .n2,[data-cb="on"] .n3{background-image:repeating-linear-gradient(-45deg,rgba(0,0,0,.35) 0 2px,transparent 2px 6px)}
+[data-cb="on"] tbody tr.bear td:first-child,[data-cb="on"] tbody tr.bull td:first-child{box-shadow:none}
+</style>
+</head>
+<body>
+
+<div class="mock">
+  <span class="w">MADE-UP SAMPLE · NOT REAL DATA · NO NETWORK</span>
+  <span class="g"><span class="l">Mode</span><button class="mb" data-mode="trade" aria-pressed="true">Trade</button><button class="mb" data-mode="monitor" aria-pressed="false">Monitor</button><button class="mb" data-mode="research" aria-pressed="false">Research</button></span>
+  <span class="g"><span class="l">Colour-blind</span><button class="mb" data-cb="off" aria-pressed="true">Off</button><button class="mb" data-cb="on" aria-pressed="false">On</button></span>
+  <span class="ref">structure matched to Blademap Lattice / Pulse / Vector captures (./ref)</span>
+</div>
+
+<div class="shell">
+  <!-- ================= SIDEBAR (Blademap) — anchors within ONE page ================= -->
+  <aside class="side">
+    <div class="brand"><i>◢</i><b>Tidehunter Pro</b></div>
+    <a class="nav on" href="#board" data-nav="board"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Board</a>
+    <a class="nav" href="#vector" data-nav="vector"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>Vector · direction</a>
+    <a class="nav" href="#pulse" data-nav="pulse"><svg viewBox="0 0 24 24"><path d="M2 12h4l3-8 4 16 3-8h6"/></svg>Pulse · live flow</a>
+    <a class="nav" href="#lattice" data-nav="lattice"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>Lattice · positioning</a>
+    <a class="nav" href="#settings" data-nav="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</a>
+    <span class="sp"></span>
+    <div class="st"><span><b>LIVE</b> <span class="dot"></span>cvforge · market-wide · 712 symbols</span><span>6 / 20 calls this hour · next scan 22s</span><span>Order-flow imbalance, price impact: no feed</span></div>
+  </aside>
+
+  <!-- ================= CONTENT ================= -->
+  <div class="content">
+    <div class="topbar">
+      <span class="pill"><span class="k">Ticker</span><span class="v" id="tk">NVDA</span><span class="c">▾</span></span>
+      <span class="pill"><span class="k">Screen</span><span class="v" id="scr">All flow</span><span class="c">▾</span></span>
+      <span class="sp"></span>
+      <span class="pill" style="font-size:11.5px"><span class="dot"></span><span class="k">Regime</span><span class="v">Chop · warming</span></span>
+      <button class="icb" title="Refresh">↻</button>
+      <button class="icb" title="Settings" data-nav="settings">⚙</button>
+    </div>
+
+    <div class="page">
+
+      <!-- ===== BOARD header ===== -->
+      <div class="sec" id="board">
+        <div class="ph">
+          <div>
+            <h1>Board <span class="ic">↻</span></h1>
+            <div class="meta"><b>LIVE</b><span class="dot"></span><span class="k">Last updated</span><span>Sep 06, 2026, 14:31:52</span><span class="k">Showing</span><span>184 contracts · 7 signals · <span id="scrn">All flow</span></span></div>
+            <span class="howto">ⓘ How to read</span>
+          </div>
+          <div class="seg">
+            <div><span class="lbl">DTE</span><div class="segbar"><button>0-7D</button><button aria-pressed="true">0-21D</button><button>0-45D</button><button>All</button></div></div>
+            <div><span class="lbl">Score</span><div class="segbar"><button>All</button><button aria-pressed="true">70+</button><button>85+</button><button>90+</button></div></div>
+            <div><span class="lbl">Layout</span><div class="segbar"><button data-mode="trade" aria-pressed="true">Trade</button><button data-mode="monitor">Monitor</button><button data-mode="research">Research</button></div></div>
+          </div>
+        </div>
+
+        <!-- ===== ANSWER ROW — four cells, one verdict line each ===== -->
+        <div class="answers">
+          <button class="ans top" data-src="alerts/feed top directional row: under,type,strike,dte,tier,conviction,bias,why,key_levels_json,move_pct" data-go="vector">
+            <span class="q"><span class="lbl">Trade now</span><span class="tag" data-stamp>All flow</span></span>
+            <span class="v" data-card="trade">Buy NVDA 182.5C · 14d · conviction 94</span>
+            <span class="s"><b class="am">GOLD</b><b class="up">▲ BULLISH</b><span>OI +41% held overnight</span><span>Entry <b>178.40</b></span><span>Stop <b class="dn">173.94</b></span><span>Target <b class="up">188.21</b></span><span>Moved <b class="up">+1.8%</b> · 33% of target</span></span>
+            <span class="f">fired 2m ago · model levels ±2.5% / ±5.5% of spot · 2.3% OTM</span>
+          </button>
+          <button class="ans" data-src="tickerRollup + streakOf + server SIGMA" data-go="pulse">
+            <span class="q"><span class="lbl">Money building</span><span class="tag" data-stamp>All flow</span></span>
+            <span class="v" data-card="money">NVDA · 4th straight day · $182M</span>
+            <span class="s"><span>call-heavy <b>PCR 0.41</b></span><span><b>4.2σ</b> vs 14-day norm</span><span>then TSLA $75M · AMD $41M</span></span>
+            <span class="f">premium is an estimate · σ server-confirmed</span>
+          </button>
+          <button class="ans" data-src="awaySummary re-armed per visit; oi_chg_pct; firstSeen" data-go="vector">
+            <span class="q"><span class="lbl">Changed since you looked</span><span class="tag" data-stamp>All flow</span></span>
+            <span class="v" data-card="changed">3 changes · 1 matters · PLTR OI held</span>
+            <span class="s"><span>away <b>3h 12m</b></span><span><b>2</b> OI-confirmed</span><span><b>1</b> whale</span><span><b>4</b> new arrivals</span></span>
+            <span class="f">re-arms every return · last check 14:31</span>
+          </button>
+          <button class="ans" data-src="/regime/{t}: gamma_flip, dist_to_flip_pct, total_gex, current_state, vol_env" data-go="lattice">
+            <span class="q"><span class="lbl">Dealers · NVDA</span><span class="tag">focused</span></span>
+            <span class="v" data-card="dealers">Short gamma · flip $176 · spot 1.4% above</span>
+            <span class="s"><span>below flip <b>they chase</b></span><span>regime <b>chop</b></span><span>vol <b>elevated</b></span></span>
+            <span class="f">display-scale gamma · refreshed 38s ago</span>
+          </button>
+        </div>
+
+        <!-- ===== SCREENS ===== -->
+        <div class="screens">
+          <div class="segbar">
+            <button data-screen="all" aria-pressed="true">All flow<small>184</small></button>
+            <button data-screen="whale">Whale blocks<small>9</small></button>
+            <button data-screen="oiconf">OI-confirmed<small>14</small></button>
+            <button data-screen="zerodte">0DTE lottos<small>21</small></button>
+            <button data-screen="hedge">Hedges<small>11</small></button>
+            <button data-screen="fresh">Fresh positioning<small>38</small></button>
+            <button data-screen="mine">My universe<small>42</small></button>
+          </div>
+          <button class="chipb" data-toggle="rb">✎ Edit screen</button>
+          <button class="chipb" data-toggle="disc">Filters · 2</button>
+          <span class="fchip">min score <b>≥70</b><i>✕</i></span>
+          <span class="fchip">DTE <b>0–21</b><i>✕</i></span>
+          <button class="chipb" data-toggle="more">⋯</button>
+
+          <div class="disc" id="disc" hidden>
+            <span class="lbl">Type</span><select><option>All</option><option>Calls</option><option>Puts</option></select>
+            <input class="w70" placeholder="Min vol"><input class="w70" value="70" title="Min score"><input class="w110" placeholder="Ticker  ( / )">
+            <span class="lbl">DTE</span><input class="w70" value="0"><input class="w70" value="21">
+            <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--lo)"><input type="checkbox" checked style="accent-color:var(--acc)">My universe</label><input class="w170" value="SPY,QQQ,IWM,NVDA,TSLA,AAPL">
+            <span class="lbl">Alert ≥</span><input class="w70" value="85">
+            <span class="brk"></span>
+            <span class="lbl">Sort</span><button class="chipb on">Top score</button><button class="chipb">Big money</button><button class="chipb">Unusual</button><button class="chipb">Short fuse</button><button class="chipb">New arrivals</button>
+            <span class="lbl">Poll</span><select><option>5s</option><option>15s</option><option>30s</option><option selected>60s</option><option>Off</option></select>
+            <button class="chipb">⟳ Force</button><button class="chipb">⤓ CSV</button>
+          </div>
+          <div class="disc" id="more" hidden style="gap:18px">
+            <span style="font-size:12px">🔔 Notify when hidden <span class="tog"></span></span>
+            <span style="font-size:12px">🎯 Alerts scoped to universe <span class="tog"></span></span>
+            <button class="chipb">Tape · newest first</button><button class="chipb">⧉ Copy tape</button><button class="chipb">Clear tape</button><button class="chipb">Show history · 34</button>
+          </div>
+          <div class="rb" id="rb" hidden>
+            <div class="t"><span class="lbl">Editing screen</span><input value="OI-confirmed (copy)"><span class="xlo" style="font-size:11px">built-in copied · saved to floww Settings</span></div>
+            <div class="rule"><span class="op">IF</span><select><option>ΔOI vs prior session (%)</option></select><select><option>≥</option><option>≤</option><option>between</option></select><input value="20"><span class="x">✕</span></div>
+            <div class="rule"><span class="op">AND</span><select><option>Vol / OI</option></select><select><option>≥</option></select><input value="2"><span class="x">✕</span></div>
+            <div class="rule"><span class="op">AND</span><select><option>Est. premium ($)</option></select><select><option>≥</option></select><input value="1,000,000"><span class="x">✕</span></div>
+            <div class="rule"><span class="op">OR</span><select><option>Alert rule fired</option></select><select><option>is</option></select><select><option>OICONF</option><option>FOLLOW</option><option>SIGMA</option><option>SCORE</option><option>WHALE</option><option>0DTE</option><option>SOURCE</option></select><span class="x">✕</span></div>
+            <div class="ft"><button class="chipb">+ condition</button><button class="chipb">+ OR group</button><span class="sp"></span><button class="chipb">Duplicate</button><button class="chipb">Delete</button><button class="chipb on">Save screen</button></div>
+            <div class="hint">Facts: ticker · call/put · strike · expiry · DTE · volume · open interest · ΔOI % · vol/OI · IV · delta · est. premium · notional · score · flow type · archetype · dealer γ sign · per-ticker premium · put/call ratio · σ vs baseline · streak days · alert rule. Combinations only — no new rules or scoring.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== VECTOR — direction board (verdict feed) ===== -->
+      <div class="sec" id="vector">
+        <div class="sh"><h2>Vector <span class="ic">↻</span></h2><span class="meta"><b>LIVE</b> <span class="dot"></span> direction board · ranked by conviction · <span id="vn">7</span> in screen</span><span class="sp"></span><span class="lbl" style="padding-bottom:4px">Rows freeze while you hover · hover a row for actions</span></div>
+        <div class="tbl" data-src="alerts/feed rows: tier, conviction, bias, why, context_json, key_levels_json, move_pct, asof_ts">
+          <table>
+            <thead><tr>
+              <th class="l">Symbol</th><th class="l">Contract</th><th class="l">Direction</th><th class="l">Stage <span class="i">i</span></th><th class="l">Conviction <span class="i">i</span></th><th class="l">State <span class="i">i</span></th><th>Price</th><th>Invalidation</th><th>Target</th><th>Moved</th>
+            </tr></thead>
+            <tbody id="vrows">
+              <tr class="pinned bull" data-r="1|3|1|4|5|1|1"><td class="l"><span class="sym">NVDA</span><span class="sub">pinned · trade now</span></td><td class="l">182.5 CALL · 09-19 <span class="sub">14 DTE · 2.3% OTM</span></td><td class="l"><span class="dir up">▲ BULLISH</span></td><td class="l"><span class="stage"><span class="d"><i class="f"></i><s class="f"></s><i class="f"></i><s class="f"></s><i class="f"></i></span><small>Confirmed · 3/3</small></span></td><td class="l"><span class="conf"><b>94</b><span class="bar"><i style="width:94%"></i></span><small>Gold · high</small></span></td><td class="l"><span class="state ok"><b>OI held overnight</b><small>+41% open interest · sweep was kept, not churned</small><span class="pl bull">Flow aligned</span></span></td><td class="lv">178.40</td><td><span class="lvwrap"><span class="lv dn">173.94 ↓</span></span><span class="acts"><button class="act">Drill</button><button class="act">Watch</button><button class="act p">Plan</button><button class="act">Ack</button></span></td><td class="lv up">188.21 ↑</td><td class="up">+1.8% <span class="sub">33% of target</span></td></tr>
+              <tr class="bear" data-r="2|1|3|5|6|2|2"><td class="l"><span class="sym">SPY</span></td><td class="l">642 PUT · 09-06 <span class="sub">1 DTE · 0.8% ITM</span></td><td class="l"><span class="dir dn">▼ BEARISH</span></td><td class="l"><span class="stage"><span class="d"><i class="f"></i><s class="f"></s><i class="f"></i><s></s><i></i></span><small>Building · 2/3</small></span></td><td class="l"><span class="conf"><b>91</b><span class="bar"><i style="width:91%"></i></span><small>Gold · high</small></span></td><td class="l"><span class="state ok"><b>Whale print</b><small>$12.1M single print · 2.2× resting OI · dealers long gamma</small><span class="pl whale">Whale</span></span></td><td class="lv">642.10</td><td><span class="lvwrap"><span class="lv dn">658.15 ↑</span></span><span class="acts"><button class="act">Drill</button><button class="act">Watch</button><button class="act p">Plan</button><button class="act">Ack</button></span></td><td class="lv up">619.63 ↓</td><td class="dn">−0.4% <span class="sub">13% of target</span></td></tr>
+              <tr class="bull" data-r="3|5|2|1|7|3|3"><td class="l"><span class="sym">AMD</span></td><td class="l">168 CALL · 09-26 <span class="sub">21 DTE · 2.3% OTM</span></td><td class="l"><span class="dir up">▲ BULLISH</span></td><td class="l"><span class="stage"><span class="d"><i class="f"></i><s class="f"></s><i class="f"></i><s class="f"></s><i class="f"></i></span><small>Confirmed · 3/3</small></span></td><td class="l"><span class="conf"><b>88</b><span class="bar"><i style="width:88%"></i></span><small>Gold · high</small></span></td><td class="l"><span class="state ok"><b>OI held overnight</b><small>+31% · informed-positioning window · 4.6σ volume</small><span class="pl bull">Flow aligned</span></span></td><td class="lv">164.20</td><td><span class="lvwrap"><span class="lv dn">160.10 ↓</span></span><span class="acts"><button class="act">Drill</button><button class="act">Watch</button><button class="act p">Plan</button><button class="act">Ack</button></span></td><td class="lv up">169.95 ↑</td><td class="up">+0.6% <span class="sub">17% of target</span></td></tr>
+              <tr class="bull" data-r="4|6|4|2|1|4|4"><td class="l"><span class="sym">QQQ</span></td><td class="l">588 CALL · 09-05 <span class="sub">0 DTE · 0.3% OTM</span></td><td class="l"><span class="dir up">▲ BULLISH</span></td><td class="l"><span class="stage"><span class="d"><i class="f"></i><s></s><i></i><s></s><i></i></span><small>Early · 1/3</small></span></td><td class="l"><span class="conf"><b>84</b><span class="bar"><i style="width:84%"></i></span><small>Silver · high</small></span></td><td class="l"><span class="state er"><b>0DTE hot</b><small>18× vol/OI same-day · short-gamma name, moves get chased</small></span></td><td class="lv">586.30</td><td><span class="lvwrap"><span class="lv dn">571.64 ↓</span></span><span class="acts"><button class="act">Drill</button><button class="act">Watch</button><button class="act p">Plan</button><button class="act">Ack</button></span></td><td class="lv up">618.55 ↑</td><td class="up">+0.2% <span class="sub">4% of target</span></td></tr>
+              <tr data-r="5|7|5|6|2|5|6"><td class="l"><span class="sym">AMD</span></td><td class="l"><span class="lo">ticker-level</span></td><td class="l"><span class="dir lo">— NO DIRECTION</span></td><td class="l"><span class="stage"><span class="d"><i class="f"></i><s class="f"></s><i class="f"></i><s></s><i></i></span><small>Building · 2/3</small></span></td><td class="l"><span class="conf"><b>79</b><span class="bar"><i style="width:79%"></i></span><small>Silver · medium</small></span></td><td class="l"><span class="state"><b>Volume 4.6σ</b><small>612k contracts vs 118k median · survives market-wide test</small></span></td><td class="lo">—</td><td><span class="lvwrap lo">—</span><span class="acts"><button class="act">Drill</button></span></td><td class="lo">—</td><td class="lo">—</td></tr>
+              <tr class="bear" data-r="6|4|6|7|3|6|5"><td class="l"><span class="sym">TSLA</span></td><td class="l">330 PUT · 09-12 <span class="sub">7 DTE · 1.5% ITM</span></td><td class="l"><span class="dir dn">▼ BEARISH</span></td><td class="l"><span class="stage"><span class="d"><i class="f"></i><s class="f"></s><i class="f"></i><s></s><i></i></span><small>Building · 2/3</small></span></td><td class="l"><span class="conf"><b>76</b><span class="bar"><i style="width:76%"></i></span><small>Silver · medium</small></span></td><td class="l"><span class="state bd"><b>Protective size</b><small>mid-delta put $4.9M · 2nd straight day of put volume</small><span class="pl silver">Follow 2d</span></span></td><td class="lv">334.80</td><td><span class="lvwrap"><span class="lv dn">343.17 ↑</span></span><span class="acts"><button class="act">Drill</button><button class="act">Watch</button><button class="act p">Plan</button><button class="act">Ack</button></span></td><td class="lv up">316.39 ↓</td><td class="dn">−1.1% <span class="sub">20% of target</span></td></tr>
+              <tr class="bull" data-r="7|8|7|3|4|7|7"><td class="l"><span class="sym">PLTR</span></td><td class="l">44 CALL · 10-17 <span class="sub">42 DTE · 5.0% OTM</span></td><td class="l"><span class="dir up">▲ BULLISH</span></td><td class="l"><span class="stage"><span class="d"><i class="f"></i><s class="f"></s><i class="f"></i><s class="f"></s><i class="f"></i></span><small>Confirmed · 3/3</small></span></td><td class="l"><span class="conf"><b>71</b><span class="bar"><i style="width:71%"></i></span><small>Bronze · medium</small></span></td><td class="l"><span class="state ok"><b>Fresh, then held</b><small>3.0× OI · +18% overnight · 3rd day running hot</small><span class="pl silver">Follow 3d</span></span></td><td class="lv">41.90</td><td><span class="lvwrap"><span class="lv dn">40.85 ↓</span></span><span class="acts"><button class="act">Drill</button><button class="act">Watch</button><button class="act p">Plan</button><button class="act">Ack</button></span></td><td class="lv up">43.37 ↑</td><td class="up">+2.4% <span class="sub">68% of target</span></td></tr>
+              <tr data-r="8|2|8|8|8|8|8"><td class="l"><span class="sym">IWM</span></td><td class="l">228 PUT · 09-06 <span class="sub">1 DTE · 0.4% OTM</span></td><td class="l"><span class="dir dn">▼ BEARISH</span></td><td class="l"><span class="stage"><span class="d"><i class="f"></i><s></s><i></i><s></s><i></i></span><small>Early · 1/3</small></span></td><td class="l"><span class="conf"><b>70</b><span class="bar"><i style="width:70%"></i></span><small>Bronze · medium</small></span></td><td class="l"><span class="state"><b>Whale print</b><small>$11.8M · 3.4× OI · OI faded −4%, watch for churn</small><span class="pl whale">Whale</span></span></td><td class="lv">228.90</td><td><span class="lvwrap"><span class="lv dn">234.62 ↑</span></span><span class="acts"><button class="act">Drill</button><button class="act">Watch</button><button class="act p">Plan</button><button class="act">Ack</button></span></td><td class="lv up">220.89 ↓</td><td class="lo">0.0%</td></tr>
+            </tbody>
+          </table>
+          <div class="tblfoot"><span>Stage: Early = fresh print · Building = repeated days or σ · Confirmed = overnight OI held</span><span>Levels are model defaults: ±2.5% stop, ±3.5% target (±5.5% in short gamma) — edit before you plan</span><span>Plan writes a journal note only; nothing is sent to a broker</span></div>
+        </div>
+      </div>
+
+      <!-- ===== PULSE — live flow (Blademap Pulse columns) ===== -->
+      <div class="sec" id="pulse">
+        <div class="sh"><h2>Pulse <span class="ic">↻</span></h2><span class="meta"><b>LIVE</b> <span class="dot"></span> screened contracts · <span id="pn">184</span> of 1 204 · Public API, cvserver fallback</span><span class="sp"></span>
+          <div class="seg"><div><span class="lbl">Columns</span><div class="segbar"><button data-toggle="cols" aria-pressed="true">10 of 17</button><button data-toggle="cols">All 17</button></div></div></div></div>
+        <div class="tbl" data-src="scan rows via mkScanRow + oiChgPct + firstSeen; ticker flow via mapPublicChainToRows">
+          <table>
+            <thead><tr>
+              <th class="l">Seen</th><th class="l">Sym</th><th>Strike</th><th class="l">C/P</th><th>OTM <span class="i">i</span></th><th>Exp</th><th>DTE</th><th class="l">Type <span class="i">i</span></th><th class="l">Signal <span class="i">i</span></th><th class="l">Badges <span class="i">i</span></th><th class="on">Score ▾</th><th>Size</th><th>ΔOI</th><th>Prem</th>
+            </tr></thead>
+            <tbody id="prows">
+              <tr data-r="1|3|1|5|4|1|1"><td class="l">14:29 <span class="sub">new</span></td><td class="l"><span class="sym">NVDA</span></td><td>182.5</td><td class="l">CALL</td><td>+2.3%</td><td>2026-09-19</td><td>14</td><td class="l"><span class="pl sweep">Sweep</span></td><td class="l"><span class="pl bull">Bullish</span></td><td class="l"><span class="pl gold">Golden</span> <span class="pl acc">Fresh</span></td><td class="hi">94</td><td>218k</td><td class="up">+41% held</td><td><span class="two"><span class="hi">$18.4M</span><span class="sub">2.9× OI · IV 38%</span></span></td></tr>
+              <tr class="sel" data-r="2|1|3|6|5|2|2"><td class="l">14:22 <span class="sub">new</span></td><td class="l"><span class="sym">SPY</span></td><td>642</td><td class="l">PUT</td><td>−0.8%</td><td>2026-09-06</td><td>1</td><td class="l"><span class="pl block">Block</span></td><td class="l"><span class="pl bear">Bearish</span></td><td class="l"><span class="pl gold">Golden</span> <span class="pl whale">Whale</span></td><td class="hi">91</td><td>412k</td><td class="up">+22% held</td><td><span class="two"><span class="hi">$12.1M</span><span class="sub">2.2× OI · IV 15%</span></span></td></tr>
+              <tr data-r="3|6|2|1|6|3|3"><td class="l">13:58</td><td class="l"><span class="sym">QQQ</span></td><td>588</td><td class="l">CALL</td><td>+0.3%</td><td>2026-09-05</td><td>0</td><td class="l"><span class="pl sweep">Sweep</span></td><td class="l"><span class="pl bull">Bullish</span></td><td class="l"><span class="pl silver">Silver</span> <span class="pl bear" style="background:transparent">Lotto</span></td><td class="hi">88</td><td>96k</td><td class="dn">−8% faded</td><td><span class="two"><span class="hi">$3.4M</span><span class="sub">18.4× OI · IV 22%</span></span></td></tr>
+              <tr data-r="4|5|4|7|1|4|4"><td class="l">13:44 <span class="sub">new</span></td><td class="l"><span class="sym">AMD</span></td><td>168</td><td class="l">CALL</td><td>+2.3%</td><td>2026-09-26</td><td>21</td><td class="l"><span class="pl sweep">Sweep</span></td><td class="l"><span class="pl bull">Bullish</span></td><td class="l"><span class="pl gold">Golden</span> <span class="pl acc">Fresh</span></td><td class="hi">84</td><td>142k</td><td class="up">+31% held</td><td><span class="two"><span class="hi">$6.2M</span><span class="sub">3.0× OI · IV 45%</span></span></td></tr>
+              <tr data-r="5|4|6|8|2|5|5"><td class="l">13:31</td><td class="l"><span class="sym">TSLA</span></td><td>330</td><td class="l">PUT</td><td>−1.5%</td><td>2026-09-12</td><td>7</td><td class="l"><span class="pl unusual">Unusual</span></td><td class="l"><span class="pl bear">Bearish</span></td><td class="l"><span class="pl silver">Silver</span> <span class="pl silver">Hedge</span></td><td class="hi">76</td><td>88k</td><td class="up">+11% held</td><td><span class="two"><span class="hi">$4.9M</span><span class="sub">1.4× OI · IV 51%</span></span></td></tr>
+              <tr data-r="6|8|5|9|3|6|9"><td class="l">13:12</td><td class="l"><span class="sym">PLTR</span></td><td>44</td><td class="l">CALL</td><td>+5.0%</td><td>2026-10-17</td><td>42</td><td class="l"><span class="pl unusual">Unusual</span></td><td class="l"><span class="pl bull">Bullish</span></td><td class="l"><span class="pl silver">Silver</span> <span class="pl acc">Fresh</span></td><td class="hi">72</td><td>64k</td><td class="up">+18% held</td><td><span class="two"><span class="hi">$2.1M</span><span class="sub">3.0× OI · IV 59%</span></span></td></tr>
+              <tr data-r="7|2|8|10|9|7|10"><td class="l">12:54</td><td class="l"><span class="sym">IWM</span></td><td>228</td><td class="l">PUT</td><td>−0.4%</td><td>2026-09-06</td><td>1</td><td class="l"><span class="pl block">Block</span></td><td class="l"><span class="pl bear">Bearish</span></td><td class="l"><span class="pl silver">Silver</span> <span class="pl whale">Whale</span></td><td class="hi">70</td><td>172k</td><td class="dn">−4% faded</td><td><span class="two"><span class="hi">$11.8M</span><span class="sub">3.4× OI · IV 20%</span></span></td></tr>
+              <tr data-r="8|9|7|2|7|8|6"><td class="l">12:31</td><td class="l"><span class="sym">COIN</span></td><td>310</td><td class="l">CALL</td><td>+3.1%</td><td>2026-09-19</td><td>14</td><td class="l"><span class="pl unusual">Unusual</span></td><td class="l"><span class="pl bull">Bullish</span></td><td class="l"><span class="pl silver">Silver</span></td><td class="hi">68</td><td>38k</td><td class="up">+9% held</td><td><span class="two"><span class="hi">$1.8M</span><span class="sub">2.7× OI · IV 66%</span></span></td></tr>
+              <tr data-r="9|7|9|3|8|9|7"><td class="l">12:10</td><td class="l"><span class="sym">SPY</span></td><td>648</td><td class="l">CALL</td><td>+0.9%</td><td>2026-09-05</td><td>0</td><td class="l"><span class="pl sweep">Sweep</span></td><td class="l"><span class="pl bull">Bullish</span></td><td class="l"><span class="pl silver">Silver</span> <span class="pl bear" style="background:transparent">Lotto</span></td><td class="hi">66</td><td>301k</td><td class="dn">−12% faded</td><td><span class="two"><span class="hi">$2.9M</span><span class="sub">6.8× OI · IV 14%</span></span></td></tr>
+              <tr data-r="10|10|10|4|10|10|8"><td class="l">11:48</td><td class="l"><span class="sym">AAPL</span></td><td>220</td><td class="l">PUT</td><td>−1.2%</td><td>2026-10-17</td><td>42</td><td class="l"><span class="pl">Regular</span></td><td class="l"><span class="pl bear">Bearish</span></td><td class="l"><span class="pl silver">Hedge</span></td><td class="hi">63</td><td>52k</td><td class="up">+6% held</td><td><span class="two"><span class="hi">$2.4M</span><span class="sub">1.3× OI · IV 27%</span></span></td></tr>
+              <tr data-r="11|11|11|11|11|11|11"><td class="l">11:20</td><td class="l"><span class="sym">MSFT</span></td><td>515</td><td class="l">CALL</td><td>+1.8%</td><td>2026-09-19</td><td>14</td><td class="l"><span class="pl unusual">Unusual</span></td><td class="l"><span class="pl bull">Bullish</span></td><td class="l"><span class="pl silver">Silver</span></td><td class="hi">61</td><td>41k</td><td class="lo">— no prior day</td><td><span class="two"><span class="hi">$1.6M</span><span class="sub">1.5× OI · IV 21%</span></span></td></tr>
+              <tr data-r="12|12|12|12|12|12|12"><td class="l">10:52</td><td class="l"><span class="sym">META</span></td><td>780</td><td class="l">CALL</td><td>+2.6%</td><td>2026-09-12</td><td>7</td><td class="l"><span class="pl unusual">Unusual</span></td><td class="l"><span class="pl bull">Bullish</span></td><td class="l"><span class="pl silver">Silver</span></td><td class="hi">58</td><td>29k</td><td class="up">+4% held</td><td><span class="two"><span class="hi">$1.9M</span><span class="sub">1.7× OI · IV 34%</span></span></td></tr>
+            </tbody>
+          </table>
+          <div class="tblfoot"><span><kbd>j</kbd><kbd>k</kbd> move</span><span><kbd>Enter</kbd> drill</span><span><kbd>/</kbd> ticker</span><span><kbd>r</kbd> force refresh</span><span><kbd>g</kbd>/<kbd>G</kbd> top / bottom</span><span>Hidden columns: OI · Vol/OI · Notional · IV · Delta · γ sign · 7-day trend</span></div>
+        </div>
+      </div>
+
+      <!-- ===== LATTICE — dealer positioning for the focused ticker ===== -->
+      <div class="sec" id="lattice">
+        <div class="lat" data-src="/api/heatmap/{t} grid (display-scale S²) + /regime/{t} gamma_flip, dist_to_flip_pct, total_gex">
+          <div class="lath">
+            <div>
+              <h3>Lattice · NVDA <span class="ic" style="width:22px;height:22px;border-radius:50%;border:1px solid var(--line2);display:inline-grid;place-items:center;font-size:10px;color:var(--lo);font-weight:400">↻</span></h3>
+              <div class="meta"><b>LIVE</b> <span class="dot"></span> last updated Sep 06, 2026, 14:31:14 · expiries 09-12 → 10-17</div>
+              <div class="chips"><span class="mchip">Spot<b>178.40</b></span><span class="mchip">Step<b>2.5</b></span><span class="mchip">Strikes<b>12</b></span><span class="mchip">Regime<b>chop · warming</b></span><span class="mchip" title="Net gamma across only the strikes and expiries shown in this map">Shown gamma<b class="up" id="lattice-shown-gamma">+$56.0K long</b></span></div>
+            </div>
+            <div class="segbar"><button aria-pressed="true">Net GEX</button><button>Net Vex</button><button>Net Dex</button></div>
+          </div>
+          <div class="keys">
+            <span class="lbl" style="align-self:center;margin-right:4px">Key levels</span>
+            <span class="key"><i style="background:var(--amber)"></i>Gamma flip<b>176.0</b><em class="n">−$64.2K</em></span>
+            <span class="key"><i style="background:var(--pos3)"></i>Call wall<b>185.0</b><em>+$63.4K</em></span>
+            <span class="key"><i style="background:var(--neg3)"></i>Put wall<b>170.0</b><em class="n">−$56.2K</em></span>
+            <span class="key"><i style="background:var(--teal)"></i>Max pain<b>177.5</b></span>
+            <span class="key"><i style="background:var(--acc)"></i>Spot<b>178.40</b><em>1.4% above flip</em></span>
+          </div>
+          <div class="grid">
+            <div class="hd">Strike ↓</div><div class="hd">09-12</div><div class="hd">09-19</div><div class="hd">09-26</div><div class="hd">10-03</div><div class="hd">10-17</div>
+            <div class="sk">190.0</div><div class="c p1">$9.2K</div><div class="c p1">$11.3K</div><div class="c p2">$24.0K</div><div class="c n1">−$13.7K</div><div class="c p1">$9.0K</div>
+            <div class="sk">187.5</div><div class="c p1">$3.8K</div><div class="c p1">$3.7K</div><div class="c p2">$39.7K</div><div class="c p1">$10.4K</div><div class="c p1">$8.1K</div>
+            <div class="sk">185.0</div><div class="c p2">$40.5K</div><div class="c n1">−$9.0K</div><div class="c p3">$63.4K</div><div class="c p2">$29.6K</div><div class="c p1">$5.7K</div>
+            <div class="sk">182.5</div><div class="c p2">$48.7K</div><div class="c n1">−$19.7K</div><div class="c p2">$48.2K</div><div class="c p2">$32.9K</div><div class="c p1">$3.1K</div>
+            <div class="sk">180.0</div><div class="c p1">$16.0K</div><div class="c n2">−$22.5K</div><div class="c n2">−$24.9K</div><div class="c p1">$18.4K</div><div class="c p1">$2.0K</div>
+            <div class="sk">177.5</div><div class="c n1 spot">−$18.8K</div><div class="c n2">−$16.3K</div><div class="c n2">−$41.5K</div><div class="c n1">−$6.3K</div><div class="c p1">$3.4K</div>
+            <div class="sk">175.0</div><div class="c n2">−$26.8K</div><div class="c n3">−$64.2K</div><div class="c n2">−$34.0K</div><div class="c n2">−$28.1K</div><div class="c p1">$7.5K</div>
+            <div class="sk">172.5</div><div class="c n2">−$21.4K</div><div class="c n3">−$56.2K</div><div class="c n1">−$5.1K</div><div class="c n2">−$36.2K</div><div class="c p1">$13.5K</div>
+            <div class="sk">170.0</div><div class="c n1">−$3.2K</div><div class="c n3">−$67.2K</div><div class="c n2">−$31.3K</div><div class="c n2">−$28.6K</div><div class="c p2">$20.4K</div>
+            <div class="sk">167.5</div><div class="c p1">$20.7K</div><div class="c n2">−$13.8K</div><div class="c n1">−$7.9K</div><div class="c n1">−$12.6K</div><div class="c p2">$27.6K</div>
+            <div class="sk">165.0</div><div class="c p2">$33.5K</div><div class="c n1">−$5.4K</div><div class="c p1">$6.1K</div><div class="c n1">−$1.1K</div><div class="c p2">$34.7K</div>
+            <div class="sk">162.5</div><div class="c p2">$31.9K</div><div class="c p1">$2.3K</div><div class="c p1">$5.4K</div><div class="c n1">−$4.1K</div><div class="c p2">$41.2K</div>
+          </div>
+          <div class="latfoot"><span><i style="background:var(--pos3)"></i>Dealers long gamma — hedging dampens moves</span><span><i style="background:var(--neg3)"></i>Dealers short gamma — hedging amplifies moves</span><span>● spot row</span><span>Display-scale gamma; never mixed with the model-feature scale</span><span>Order-flow imbalance · price impact: no feed on this backend</span></div>
+        </div>
+        <section class="dealer-drill" id="dealer-drill" tabindex="-1" aria-labelledby="drill-title" data-ticker="NVDA">
+          <header class="drill-head">
+            <h3 id="drill-title">Drill-down · <strong id="drill-ticker">NVDA</strong></h3>
+            <p>Open from a ticker or Drill action</p>
+          </header>
+          <dl class="drill-facts" aria-live="polite" data-src="/api/flowseeker/regime/{t}: current_state, is_warming, gamma_flip, dist_to_flip_pct, vol_env">
+            <div><dt>Regime</dt><dd id="drill-regime">Chop · warming</dd></div>
+            <div><dt>Gamma flip</dt><dd id="drill-flip">$176<small>Spot 1.4% above flip</small></dd></div>
+            <div><dt>Vol env</dt><dd id="drill-vol">Elevated</dd></div>
+          </dl>
+          <figure class="drill-chart" id="drill-chart" data-src="Same displayed NVDA /api/heatmap/{t} mock grid as Lattice; sum displayed expiries by strike, then cumulative in ascending strike order; display-scale S² only">
+            <figcaption><strong>Net dealer gamma by strike</strong><span>Bars, then cumulative below · same strike axis</span></figcaption>
+            <div class="drill-plot"><svg id="drill-svg" viewBox="0 0 660 290" role="img" aria-labelledby="drill-chart-title drill-chart-desc"></svg></div>
+            <div class="drill-legend"><span><i class="short"></i>− Short gamma</span><span><i></i>+ Long gamma</span><span>Blue line · cumulative gamma</span></div>
+            <p class="drill-note">Red = dealers short gamma there; their hedging can amplify moves. Green = long gamma; hedging can dampen moves. Short bars also have stripes in colour-blind mode.</p>
+            <p class="drill-note">Same strikes and expiries as the dealer map above. Sample data.</p>
+          </figure>
+          <div class="drill-empty" id="drill-empty" hidden role="status">
+            <p id="drill-empty-copy"></p><button class="act" data-drill="NVDA">Show NVDA example</button>
+          </div>
+        </section>
+      </div>
+
+      <!-- ===== TRUST ===== -->
+      <div class="sec" id="trust">
+        <div class="sh"><h2>Is it working?</h2><span class="meta">hit = moved ≥0.5% in the claimed direction · 30-day window · journal 90 days</span></div>
+        <div class="stats" data-src="/alerts/quality conviction_calibration (bands <50/50-59/60-74/75+) + /journal/stats by_setup">
+          <div class="stat"><span class="lbl">&lt;50 conviction</span><b>31%<small>n 141</small></b><span class="bar"><i style="width:31%"></i></span></div>
+          <div class="stat"><span class="lbl">50–59</span><b>38%<small>n 168</small></b><span class="bar"><i style="width:38%"></i></span></div>
+          <div class="stat"><span class="lbl">60–74</span><b>51%<small>n 109</small></b><span class="bar"><i style="width:51%"></i></span></div>
+          <div class="stat"><span class="lbl">75+</span><b>64%<small>n 52</small></b><span class="bar"><i style="width:64%"></i></span></div>
+          <div class="stat"><span class="lbl">Journal · sweep-follow</span><b>58%<small>14W 10L</small></b><span class="bar"><i style="width:58%"></i></span></div>
+          <div class="stat thin"><span class="lbl">Journal · gamma-flip</span><b>44%<small>n 9 · too few</small></b><span class="bar"><i style="width:44%"></i></span></div>
+        </div>
+      </div>
+
+      <!-- ===== SETTINGS (Blademap "Tickers & Access" idiom) ===== -->
+      <div class="sec" id="settings">
+        <div class="sh"><h2>Settings</h2><span class="meta">saved in floww Settings · this browser · follows the app's existing store</span></div>
+        <div class="set">
+          <div class="in"><h3>Screens &amp; layout</h3><p>What runs, what is shown, and in which order. Built-in screens are editable copies.</p></div>
+          <table>
+            <thead><tr><th class="l">Enabled</th><th class="l">Screen</th><th>Rules</th><th class="l">Type</th><th class="l">Default sort</th><th class="l">Status</th><th></th></tr></thead>
+            <tbody>
+              <tr><td class="l"><span class="tog"></span></td><td class="l"><span class="sym">All flow</span></td><td>2</td><td class="l">built-in</td><td class="l">Top score</td><td class="l">Active</td><td>—</td></tr>
+              <tr><td class="l"><span class="tog"></span></td><td class="l"><span class="sym">Whale blocks</span></td><td>3</td><td class="l">built-in</td><td class="l">Big money</td><td class="l">Ready</td><td>—</td></tr>
+              <tr><td class="l"><span class="tog"></span></td><td class="l"><span class="sym">OI-confirmed (copy)</span></td><td>5</td><td class="l">mine</td><td class="l">Top score</td><td class="l">Ready</td><td>edit</td></tr>
+              <tr><td class="l"><span class="tog off"></span></td><td class="l"><span class="sym">Hedges</span></td><td>3</td><td class="l">built-in</td><td class="l">Short fuse</td><td class="l">Off</td><td>—</td></tr>
+            </tbody>
+          </table>
+          <div class="in" style="border-top:1px solid var(--line);border-bottom:0"><h3>Page order · columns · mode</h3><p>Board → Vector → Pulse → Lattice → Trust (drag to reorder) · Trade: 10 of 17 columns · Monitor: 8 · Research: 17 · Focused ticker defaults to your floww default (SPY). Colour-blind mode follows the app setting.</p></div>
+        </div>
+      </div>
+
+    </div><!-- /page -->
+  </div><!-- /content -->
+</div><!-- /shell -->
+
+<script>
+(function(){
+  var root=document.documentElement;
+  var S={
+    all:{n:'All flow',trade:'Buy NVDA 182.5C · 14d · conviction 94',money:'NVDA · 4th straight day · $182M',changed:'3 changes · 1 matters · PLTR OI held',v:7,p:184},
+    whale:{n:'Whale blocks',trade:'Sell SPY via 642P · 1d · conviction 91',money:'SPY · biggest single prints · $96M',changed:'1 whale since you left · IWM 228P',v:3,p:9},
+    oiconf:{n:'OI-confirmed',trade:'Buy NVDA 182.5C · 14d · conviction 94',money:'AMD, PLTR held overnight · 2 names',changed:'2 confirmations overnight · PLTR, AMD',v:4,p:14},
+    zerodte:{n:'0DTE lottos',trade:'Buy QQQ 588C · today · conviction 84',money:'QQQ, SPY same-day calls · 18× vol/OI',changed:'4 new 0DTE arrivals · none confirmed',v:3,p:21},
+    hedge:{n:'Hedges',trade:'Sell TSLA via 330P · 7d · conviction 76',money:'TSLA puts · 2nd day · protection',changed:'1 new hedge · AAPL 220P',v:2,p:11},
+    fresh:{n:'Fresh positioning',trade:'Buy NVDA 182.5C · 14d · conviction 94',money:'NVDA, AMD, PLTR · 3 names fresh OI',changed:'3 fresh names held overnight',v:5,p:38},
+    mine:{n:'My universe',trade:'Buy NVDA 182.5C · 14d · conviction 94',money:'NVDA · 4th straight day · $182M',changed:'2 in your names · NVDA held, SPY whale',v:5,p:42}};
+  var ORDER=['all','whale','oiconf','zerodte','hedge','fresh','mine'];
+  var drill=document.getElementById('dealer-drill');
+  function money(v){return (v<0?'−':v>0?'+':'')+'$'+(Math.abs(v)/1000).toFixed(1)+'K';}
+  function renderDrillChart(){
+    var grid=document.querySelector('#lattice .grid'),cells=[].slice.call(grid.children),expiryCount=grid.querySelectorAll('.hd').length-1;
+    var points=cells.reduce(function(out,cell,index){if(cell.classList.contains('sk')){
+      var net=0;for(var j=1;j<=expiryCount;j++)net+=Number(cells[index+j].textContent.replace('−','-').replace(/[^0-9.+-]/g,''))*1000;
+      out.push({strike:Number(cell.textContent),net:Math.round(net)});
+    }return out;},[]).sort(function(a,b){return a.strike-b.strike;});
+    var running=0;points.forEach(function(p){p.cum=running+=p.net;});
+    var total=document.getElementById('lattice-shown-gamma');total.textContent=money(running)+' '+(running<0?'short':running>0?'long':'flat');total.className=running<0?'dn':running>0?'up':'hi';
+    var maxNet=Math.max(1,...points.map(function(p){return Math.abs(p.net);}));
+    var minCum=Math.min(0,...points.map(function(p){return p.cum;})),maxCum=Math.max(0,...points.map(function(p){return p.cum;}));
+    var left=34,right=626,first=points[0].strike,last=points[points.length-1].strike;
+    function x(s){return left+(s-first)/(last-first)*(right-left);}
+    function y(c){return 250-(c-minCum)/(maxCum-minCum||1)*74;}
+    var barWidth=(right-left)/(points.length-1)-7;
+    var svg='<title id="drill-chart-title">NVDA net dealer gamma by strike and cumulative gamma</title>'+
+      '<desc id="drill-chart-desc">Sample data from the dealer map. Bars show magnitude, with minus signs for short gamma and plus signs for long gamma. The blue line sums signed gamma from lowest to highest strike. Gamma flip is $176.</desc>'+
+      '<defs><pattern id="drill-short-pattern" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="var(--bg)" stroke-width="2"/></pattern></defs>';
+    points.forEach(function(p){var height=Math.abs(p.net)/maxNet*112,bx=x(p.strike)-barWidth/2,by=142-height,kind=p.net<0?'short':p.net>0?'long':'flat';
+      svg+='<g data-strike="'+p.strike+'" data-net="'+p.net+'" data-cumulative="'+p.cum+'"><title>Strike $'+p.strike+': '+money(p.net)+' '+kind+' gamma; cumulative '+money(p.cum)+'</title>'+
+        '<rect class="drill-bar '+kind+'" x="'+bx+'" y="'+by+'" width="'+barWidth+'" height="'+height+'" rx="2"/>'+
+        (p.net<0?'<rect class="drill-hatch" x="'+bx+'" y="'+by+'" width="'+barWidth+'" height="'+height+'" rx="2"/>':'')+
+        '<text class="drill-axis" x="'+x(p.strike)+'" y="'+(by-7)+'" text-anchor="middle">'+(p.net<0?'−':p.net>0?'+':'0')+'</text></g>';
+    });
+    svg+='<line x1="12" x2="648" y1="142" y2="142" stroke="var(--line2)"/>'+
+      '<line x1="12" x2="648" y1="'+y(0)+'" y2="'+y(0)+'" stroke="var(--lo)" stroke-dasharray="3 5"/>'+
+      '<text class="drill-axis" x="12" y="'+(y(0)-5)+'">0</text>'+
+      '<path class="drill-curve" d="'+points.map(function(p,i){return (i?'L':'M')+x(p.strike)+','+y(p.cum);}).join(' ')+'"/>'+
+      '<line class="drill-flip" x1="'+x(176)+'" x2="'+x(176)+'" y1="156" y2="256"/>'+
+      '<text class="drill-flip-label" x="'+(x(176)+6)+'" y="165">flip $176</text>';
+    points.forEach(function(p){svg+='<text class="drill-axis" x="'+x(p.strike)+'" y="277" text-anchor="middle">'+p.strike+'</text>';});
+    document.getElementById('drill-svg').innerHTML=svg;
+  }
+  function showDrill(ticker,scroll){
+    var available=ticker==='NVDA';drill.dataset.ticker=ticker;document.getElementById('drill-ticker').textContent=ticker;
+    document.getElementById('drill-regime').textContent=available?'Chop · warming':'Not available';
+    document.getElementById('drill-flip').innerHTML=available?'$176<small>Spot 1.4% above flip</small>':'Not available';
+    document.getElementById('drill-vol').textContent=available?'Elevated':'Not available';
+    document.getElementById('drill-chart').hidden=!available;document.getElementById('drill-empty').hidden=available;
+    document.getElementById('drill-empty-copy').textContent=available?'':'No dealer preview for '+ticker+' is included in this mockup. The NVDA example is available.';
+    if(scroll){if(root.dataset.mode==='monitor'){root.dataset.mode='trade';press('button[data-mode]','data-mode','trade');}
+      document.querySelectorAll('.nav').forEach(function(link){link.classList.toggle('on',link.dataset.nav==='lattice');});
+      drill.focus({preventScroll:true});drill.scrollIntoView({behavior:'auto',block:'start'});}
+  }
+  document.querySelectorAll('#vrows tr,#prows tr').forEach(function(row){var sym=row.querySelector('.sym');if(!sym)return;
+    var ticker=sym.textContent.trim(),button=document.createElement('button');button.className='sym';button.textContent=ticker;button.dataset.drill=ticker;button.setAttribute('aria-label','Drill down into '+ticker);sym.replaceWith(button);
+    row.querySelectorAll('.act').forEach(function(action){if(action.textContent.trim()==='Drill'){action.dataset.drill=ticker;action.setAttribute('aria-label','Drill down into '+ticker);}});
+  });
+  function press(sel,attr,val){document.querySelectorAll(sel).forEach(function(b){b.setAttribute('aria-pressed',String(b.getAttribute(attr)===val));});}
+  function rerank(tb,i,keep){var rows=[].slice.call(tb.querySelectorAll('tr[data-r]'));rows.sort(function(a,b){return +a.dataset.r.split('|')[i]-+b.dataset.r.split('|')[i];});rows.forEach(function(r,n){tb.appendChild(r);if(keep)r.hidden=n>=keep;});}
+  function setScreen(s){var d=S[s],i=ORDER.indexOf(s);root.setAttribute('data-screen',s);press('button[data-screen]','data-screen',s);
+    ['scr','scrn'].forEach(function(id){document.getElementById(id).textContent=d.n;});
+    document.querySelectorAll('[data-stamp]').forEach(function(x){x.textContent=d.n;});
+    document.querySelector('[data-card="trade"]').textContent=d.trade;document.querySelector('[data-card="money"]').textContent=d.money;document.querySelector('[data-card="changed"]').textContent=d.changed;
+    document.getElementById('vn').textContent=d.v;document.getElementById('pn').textContent=d.p;
+    rerank(document.getElementById('vrows'),i,d.v);rerank(document.getElementById('prows'),i,null);}
+  document.addEventListener('click',function(e){var b;
+    if(b=e.target.closest('[data-drill]')){showDrill(b.dataset.drill,true);return;}
+    if(b=e.target.closest('button[data-mode]')){root.setAttribute('data-mode',b.dataset.mode);press('button[data-mode]','data-mode',b.dataset.mode);return;}
+    if(b=e.target.closest('button[data-cb]')){root.setAttribute('data-cb',b.dataset.cb);press('button[data-cb]','data-cb',b.dataset.cb);return;}
+    if(b=e.target.closest('button[data-screen]')){setScreen(b.dataset.screen);return;}
+    if(b=e.target.closest('[data-toggle]')){var el=document.getElementById(b.dataset.toggle);if(el){['disc','more','rb'].forEach(function(id){if(id!==b.dataset.toggle)document.getElementById(id).hidden=true;});el.hidden=!el.hidden;}
+      if(b.dataset.toggle==='cols'){press('[data-toggle="cols"]','data-toggle','cols');b.parentElement.querySelectorAll('button').forEach(function(x){x.setAttribute('aria-pressed',String(x===b));});}return;}
+    if(b=e.target.closest('[data-go]')){if(b.dataset.go==='lattice'){showDrill('NVDA',true);return;}var t=document.getElementById(b.dataset.go);if(t)t.scrollIntoView({behavior:'smooth',block:'start'});return;}
+    if(b=e.target.closest('[data-nav]')){e.preventDefault();var t2=document.getElementById(b.dataset.nav);if(t2)t2.scrollIntoView({behavior:'smooth',block:'start'});document.querySelectorAll('.nav').forEach(function(x){x.classList.toggle('on',x.dataset.nav===b.dataset.nav);});return;}
+  });
+  renderDrillChart();
+  setScreen('all');
+})();
+</script>
+</body>
+</html>

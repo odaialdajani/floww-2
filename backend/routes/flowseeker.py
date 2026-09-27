@@ -421,6 +421,9 @@ async def public_chain_flat(
         "expiries": result.get("expiries", []),
         "n_contracts": len(flat),
         "data_source": "public_api",
+        **{key: result.get(key) for key in (
+            "spot_source", "spot_event_time", "spot_fetched_at", "event_time", "fetched_at", "cache_age_s",
+        )},
         "stale": result.get("stale", False),
         "contracts": flat,
     }
@@ -782,8 +785,8 @@ async def _record_scan_baseline(rows: list) -> None:
             # Per-contract OI (static intraday, so $max == the value). One doc
             # per contract per day; the OCC ticker r[1] is the exact join key.
             ckey = r[1]
-            oi = int(r[6] or 0)
-            if ckey and ckey not in seen_contracts:
+            oi = int(r[6]) if r[6] is not None else None
+            if oi is not None and oi >= 0 and ckey and ckey not in seen_contracts:
                 seen_contracts.add(ckey)
                 oi_ops.append(UpdateOne(
                     {"ticker": ckey, "date": today},
@@ -920,8 +923,8 @@ async def _run_institutional_alerts(
                 for a in fresh or []:
                     if a.get("rule") == "WHALE":
                         r0 = rows_by_ckey.get(a.get("ckey")) or {}
-                        bookmark_whale(weng, a, spot=r0.get("spot") or 0,
-                                       oi=r0.get("oi") or 0, vol=r0.get("vol") or 0)
+                        bookmark_whale(weng, a, spot=r0.get("spot"),
+                                       oi=r0.get("oi"), vol=r0.get("vol"))
                 snaps = {c: {"spot": r.get("spot"), "oi": r.get("oi"),
                              "vol": r.get("vol"), "dte": r.get("dte")}
                          for c, r in rows_by_ckey.items()}
@@ -1107,7 +1110,8 @@ async def _prev_contract_oi() -> dict[str, int]:
             async for doc in db.flow_scan_contract_oi.find(
                 {"date": pdate}, {"ticker": 1, "oi": 1}
             ).limit(20000):
-                out[doc["ticker"]] = doc.get("oi") or 0
+                if doc.get("oi") is not None:
+                    out[doc["ticker"]] = doc["oi"]
     except Exception as e:
         logger.debug(f"prev contract OI unavailable: {e}")
     _contract_oi_cache["ts"] = nowt
@@ -1159,7 +1163,7 @@ def _scan_payload(rows: list, stale: bool, asof: str, columns: list, cache_age: 
     return {
         "columns": columns, "rows": rows, "count": len(rows),
         "source": source, "stale": stale, "asof": asof,
-        "cache_age_seconds": round(cache_age) if cache_age else None,
+        "cache_age_seconds": round(cache_age) if cache_age is not None else None,
         "retry_after_seconds": round(retry_after) if retry_after else None,
         "scan_ttl": int(_SCAN_TTL),
         "budget": _budget_state(),
@@ -1171,6 +1175,13 @@ def _scan_payload(rows: list, stale: bool, asof: str, columns: list, cache_age: 
         "truncated": bool(limit is not None and len(rows) >= limit),
         "coverage": {"tickers": tickers, "limit": limit},
     }
+
+
+@router.get("/market-session")
+async def market_session():
+    from services.agent.access.horizon import horizon_window
+
+    return {**horizon_window("all"), "checked_at": datetime.now(UTC).isoformat()}
 
 
 @router.get("/scan")
@@ -1190,6 +1201,8 @@ async def market_scan(
     good result marked stale=true rather than collapsing to a client fallback.
     Use ?force=true to bypass cache and backoff (debounced server-side).
     """
+    if os.getenv("FLOWW_MARKET_DATA_PROVIDER", "").lower() == "public":
+        return await _public_dashboard_scan(min_volume, limit)
     columns = [
         "underlying_ticker", "ticker", "contract_type", "strike_price",
         "expiration_date", "day_volume", "open_interest",
@@ -1337,6 +1350,8 @@ async def force_refresh_scan(
     Debounced: ignores if last force refresh was < 10s ago.
     """
     global _last_force_refresh, _scan_backoff
+    if os.getenv("FLOWW_MARKET_DATA_PROVIDER", "").lower() == "public":
+        return await _public_dashboard_scan(min_volume, limit)
     now = time.time()
     if now - _last_force_refresh < 10.0:
         return {"status": "debounced", "retry_after_seconds": int(10 - (now - _last_force_refresh))}
@@ -1491,21 +1506,10 @@ async def public_market_scan(
     from services.public_budget import budget as _pub_budget
 
     try:
-        await _pub_budget.acquire("api.public.com")
-    except BudgetExhausted as e:
-        raise HTTPException(
-            status_code=503,
-            detail={"error": "public budget exhausted", "retry_after": e.retry_after},
-        ) from e
-    try:
         view = await ps.scan_next(slice_size=slice_size, max_expiries=max_expiries)
     except BudgetExhausted as e:
-        raise HTTPException(
-            status_code=503,
-            detail={"error": "public slice unaffordable", "retry_after": e.retry_after},
-        ) from e
-    finally:
-        _pub_budget.release()
+        raise HTTPException(status_code=503,
+                            detail={"error": "public slice unaffordable", "retry_after": e.retry_after}) from e
 
     rows = view["rows"]
     extras = view.get("quote_truth", {})
@@ -1515,8 +1519,8 @@ async def public_market_scan(
     _spawn_bg(_run_institutional_alerts(rows, extras=extras, dealer=dealer))
     cov = view.get("coverage", {})
     # Honest freshness: slices carry their own ages — a merged view with
-    # dropped or aging slices must not claim stale:false.
-    is_stale = bool(cov.get("stale_dropped")) or (cov.get("max_age_s") or 0) > 300
+    # missing coverage is separate from the age of returned rows.
+    is_stale = (cov.get("max_age_s") or 0) > 120
     return {
         "columns": view["columns"],
         "rows": rows,
@@ -1535,6 +1539,34 @@ async def public_market_scan(
         "baselines": await _volume_baselines(),
         "prev_oi": await _prev_contract_oi(),
     }
+
+
+_public_dashboard_lock = asyncio.Lock()
+_public_dashboard_cache = None
+
+
+async def _public_dashboard_scan(min_volume, limit):
+    """One shared bounded Public sweep per minute, including force refresh.
+
+    Filters do not spend extra provider calls. Returned age is the oldest
+    included slice age plus time since this cached response was assembled.
+    """
+    import copy
+
+    global _public_dashboard_cache
+    async with _public_dashboard_lock:
+        now = time.monotonic()
+        if _public_dashboard_cache is None or now - _public_dashboard_cache[0] >= 60:
+            payload = await public_market_scan(slice_size=2, max_expiries=2)
+            _public_dashboard_cache = (time.monotonic(), copy.deepcopy(payload))
+        saved_at, payload = _public_dashboard_cache
+        result = copy.deepcopy(payload)
+        age = (result.get("coverage", {}).get("max_age_s") or 0) + max(0, time.monotonic() - saved_at)
+        eligible = [row for row in result.get("rows", []) if len(row) > 5 and float(row[5] or 0) >= min_volume]
+        result.update(rows=eligible[:limit], count=min(len(eligible), limit), truncated=len(eligible) > limit,
+                      cache_age_seconds=age, stale=bool(result.get("stale")) or age > 300,
+                      budget=None)
+        return result
 
 
 @router.get("/alerts/quality")
@@ -2339,9 +2371,23 @@ def get_calibration_status() -> dict:
             "model_kind": model.get("kind"), "age_s": age}
 
 
+def _require_legacy_outcome_source():
+    # This legacy calculation uses yfinance history, including its cached
+    # reports. Neither may bypass an explicitly selected Public-only source.
+    # Missing configuration defaults to the source in .env.example.
+    mode = (os.getenv("FLOWW_MARKET_DATA_PROVIDER") or "").strip().lower() or "public"
+    if mode == "public":
+        raise HTTPException(
+            status_code=503,
+            detail="Historical outcome comparison is unavailable in Public-only mode. "
+                   "Legacy prices and recalculation are disabled; no compatible Public history is available.",
+        )
+
+
 async def _load_outcomes(days: int, horizon: int) -> dict | None:
     """Precomputed stats from the nightly cron (Mongo flow_outcome_cache);
     falls back to computing live when the cron hasn't run yet."""
+    _require_legacy_outcome_source()
     import time as _time
 
     from services import flow_outcomes as fo
@@ -2395,9 +2441,10 @@ async def alert_outcomes_refresh(
     X-API-Key) and the result is written to Mongo flow_outcome_cache, where
     the brief's outcome section reads it.
 
-    Always 200 with a status field: cold ledger (no_alerts) and missing
-    bars (no_bars) are normal nightly states, not errors.
+    When legacy sources are enabled, cold ledger (no_alerts) and missing
+    bars (no_bars) return 200 with a status. Public-only mode refuses with 503.
     """
+    _require_legacy_outcome_source()
     import time as _time
 
     from services import flow_calibration as fc
@@ -2465,6 +2512,7 @@ async def calibration_model():
     desk can see whether the probability on the tape is measured or honest-
     uncalibrated. Structural parity: the frontend never recomputes p.
     """
+    _require_legacy_outcome_source()
     from services import flow_calibration as fc
     from services import flow_outcomes as fo
     from services.duckdb_engine import db as duckdb_engine

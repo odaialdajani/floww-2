@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
 from server import app
+from tests.offline_network import deny_external_network  # noqa: F401
 
 client = TestClient(app)
 

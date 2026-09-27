@@ -281,29 +281,62 @@ async def daily_checklist(
     max_age_seconds: int = Query(default=300, ge=0, le=3600),
 ):
     try:
+        import math
+
         from advanced_analytics import calc_gamma_flip_levels, calc_market_regime
         from server import _sanitize
-        from vol_analytics import calc_iv_surface_data, calc_skew_metrics
         raw = await _cache.get_chain(ticker, expiries, max_age_seconds, _coordinator)
         spot = raw.get("spot")
-        if not spot or spot != spot or not raw.get("contracts"):
+        if isinstance(spot, bool) or not isinstance(spot, (int, float)) or not math.isfinite(spot) or spot <= 0 or not raw.get("contracts"):
             raise HTTPException(404, f"No options data for {ticker}")
 
         gf = calc_gamma_flip_levels(spot, raw["contracts"], ticker.strip().upper())
-        regime_data = calc_market_regime(spot, raw["contracts"])
-        iv_surface = calc_iv_surface_data(spot, raw["contracts"])
-        skew = calc_skew_metrics(spot, raw["contracts"])
-
+        # Do not let the legacy calculator replace absent IV with its 20% default.
+        iv_contracts = [c for c in raw["contracts"] if c.get("type") in ("call", "put") and all(
+            not isinstance(c.get(k), bool) and isinstance(c.get(k), (int, float))
+            and math.isfinite(c[k]) and c[k] > 0 for k in ("strike", "iv")
+        )]
+        regime_data = calc_market_regime(spot, iv_contracts) if iv_contracts else {}
+        skew_value = None
+        skew_expiry = None
+        for expiry in sorted({c.get("expiry") for c in iv_contracts if isinstance(c.get("expiry"), str)}):
+            calls = [c for c in iv_contracts if c.get("expiry") == expiry and c["type"] == "call" and c["strike"] > spot]
+            puts = [c for c in iv_contracts if c.get("expiry") == expiry and c["type"] == "put" and c["strike"] < spot]
+            if calls and puts:
+                skew_value = min(calls, key=lambda c: c["strike"])["iv"] - max(puts, key=lambda c: c["strike"])["iv"]
+                skew_expiry = expiry
+                break
+        move_fraction = regime_data.get("expected_daily_spot_move")
+        observed_at = raw.get("event_time")
         return _sanitize({
-            "ticker": ticker.strip().upper(),
-            "spot": spot,
-            "asof": datetime.now(UTC).isoformat(),
+            "ticker": ticker.strip().upper(), "spot": spot,
+            "asof": datetime.now(UTC).isoformat(), "observed_at": observed_at,
+            "data_source": raw.get("data_source"),
             "regime": {
-                "gex_regime": gf["regime"],
+                "gex_regime": gf.get("regime", "unknown"),
                 "market_regime": regime_data.get("regime", "unknown"),
-                "iv_rank": iv_surface.get("atm_iv", 0),
-                "skew": skew.get("risk_reversal_25d", 0),
+                "iv_rank": None, "iv_rank_status": "historical_iv_unavailable",
+                "atm_iv": regime_data.get("atm_iv"), "atm_strike": regime_data.get("atm_strike"),
+                "skew": skew_value, "skew_expiry": skew_expiry,
+                "skew_basis": "nearest_otm_call_minus_put_iv_proxy" if skew_value is not None else None,
             },
+            "key_levels": {key: gf.get(key) for key in (
+                "gamma_flip", "call_wall", "put_wall", "max_pain", "zero_dte_magnet",
+                "dist_to_flip", "dist_to_call_wall_pct", "dist_to_put_wall_pct",
+            )},
+            "strategy": {"status": "unavailable", "recommended_strategies": [],
+                         "reason": "No validated strategy selection is connected to this checklist."},
+            "risk_management": {
+                "status": "estimate" if move_fraction is not None else "unavailable",
+                "expected_daily_move_fraction": move_fraction,
+                "expected_daily_move_points": spot * move_fraction if move_fraction is not None else None,
+                "basis": "atm_iv_sqrt_252" if move_fraction is not None else None,
+                "stop_loss": None, "position_size": None,
+                "reason": "The volatility estimate is not a stop or a position-size recommendation.",
+            },
+            "hedging_flow": {"status": "modeled" if gf.get("hedging_flow") else "unavailable",
+                             "basis": "modeled-call-positive-put-negative",
+                             "observed_dealer_positions": False, **gf.get("hedging_flow", {})},
         })
     except HTTPException:
         raise
@@ -358,13 +391,15 @@ async def history(
     try:
         from datetime import timedelta
 
+        from server import _snapshot_time
         from server import db as mongo_db
-        cutoff = datetime.now(UTC) - timedelta(days=days)
-        cursor = mongo_db.snapshots.find(
-            {"ticker": ticker.upper(), "ts": {"$gte": cutoff}},
-            {"_id": 0},
-        ).sort("ts", -1)
-        snapshots = await cursor.to_list(length=1000)
+        cutoff = (datetime.now(UTC) - timedelta(days=days)).timestamp()
+        cursor = mongo_db.snapshots.find({"ticker": ticker.upper()}, {"_id": 0})
+        # The display buffer can contain both BSON dates and legacy ISO strings.
+        # Compare instants before filtering/limiting, not BSON type precedence.
+        snapshots = [row async for row in cursor if _snapshot_time(row) >= cutoff]
+        snapshots.sort(key=_snapshot_time, reverse=True)
+        snapshots = snapshots[:1000]
         return {"ticker": ticker.upper(), "snapshots": snapshots, "count": len(snapshots)}
     except Exception as e:
         logger.warning(f"history error for {ticker}: {e}")

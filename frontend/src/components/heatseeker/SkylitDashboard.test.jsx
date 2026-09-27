@@ -33,10 +33,11 @@ jest.mock("./SkylitTickerBar",       () => (props) => (
   <div data-testid="mock-ticker-bar" data-tickers={JSON.stringify(props.tickers ?? null)} />
 ));
 jest.mock("./SkylitControlBar",      () => (props) => (
-  <div data-testid="mock-control-bar" data-tickers={JSON.stringify(props.tickers ?? null)} />
+  <div data-testid="mock-control-bar" data-tickers={JSON.stringify(props.tickers ?? null)} data-spot={JSON.stringify(props.spot ?? null)} data-live={String(props.isLive)}><button data-testid="mock-activity" onClick={()=>props.onMetricChange("activity")}>Activity</button></div>
 ));
-jest.mock("./SkylitHeatmapGrid",     () => ({ onCellClick, windowRows, density }) => (
-  <div data-testid="mock-heatmap" data-window={windowRows} data-density={density}>
+jest.mock("./SkylitHeatmapGrid",     () => ({ onCellClick, onStrikeClick, windowRows, density, spot }) => (
+  <div data-testid="mock-heatmap" data-window={windowRows} data-density={density} data-spot={JSON.stringify(spot ?? null)}>
+    <button data-testid="mock-strike" onClick={()=>onStrikeClick?.(650)}>Strike</button>
     <button
       data-testid="mock-heatmap-cell"
       onClick={() => onCellClick && onCellClick(650, "2026-09-18", 123.4)}
@@ -45,7 +46,9 @@ jest.mock("./SkylitHeatmapGrid",     () => ({ onCellClick, windowRows, density }
     </button>
   </div>
 ));
-jest.mock("./SkylitMetricsSidebar",  () => () => <div data-testid="mock-metrics" />);
+jest.mock("./SkylitMetricsSidebar",  () => (props) => <div data-testid="mock-metrics" data-spot={JSON.stringify(props.spot ?? null)} data-regime={JSON.stringify(props.regime ?? null)} />);
+jest.mock("./ExposureStrip", () => () => null);
+jest.mock("../flowseeker/AlertEngineStrip", () => () => null);
 
 // Mock the steal-list top-3 components (they fetch from :8000 which is not
 // running in tests). Use the same data-testids the components expose in
@@ -70,6 +73,83 @@ jest.mock("./RndDensityPanel",              () => () => <div data-testid="hs-rnd
 
 // Import AFTER mocks are set up.
 import SkylitDashboard from "./SkylitDashboard";
+import useScreenContext from "../../agent/useScreenContext";
+
+function ResearchSelection(){const [context]=useScreenContext();return <output data-testid="research-selection">{JSON.stringify(context)}</output>;}
+
+function selectionMap(value = 123.4, asof = "2026-09-11T18:00:00Z") {
+ return {ticker:"SPY",asof,map_query:{expiries:4,mode:"day",dte:null},strikes:[{strike:650}],
+   grid:{strikes:[650],expiries:["2026-09-18"],grid:{"2026-09-18":{"650":value}}}};
+}
+
+test("same-scope polling retains the selected cell with the latest displayed value and map version",()=>{
+ const mounted=render(<><SkylitDashboard ticker="SPY" data={selectionMap()} spot={650}/><ResearchSelection/></>);
+ fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+ expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("123.4");
+ mounted.rerender(<><SkylitDashboard ticker="SPY" data={selectionMap(567.8,"2026-09-11T18:01:00Z")} spot={650}/><ResearchSelection/></>);
+ expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("567.8");
+ expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({selectedStrike:650,selectedExpiry:"2026-09-18",mapVersion:"2026-09-11T18:01:00Z"});
+});
+
+test("selection uses current exact data even when a response keeps the same version",()=>{
+ const mounted=render(<SkylitDashboard ticker="SPY" data={selectionMap()} spot={650}/>);
+ fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+ mounted.rerender(<SkylitDashboard ticker="SPY" data={selectionMap(0)} spot={650}/>);
+ expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("0.0");
+});
+
+test.each([null,NaN,Infinity])("a missing or invalid selected value clears its identity permanently (%s)",(value)=>{
+ const mounted=render(<><SkylitDashboard ticker="SPY" data={selectionMap()} spot={650}/><ResearchSelection/></>);
+ fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+ mounted.rerender(<><SkylitDashboard ticker="SPY" data={selectionMap(value)} spot={650}/><ResearchSelection/></>);
+ expect(screen.queryByTestId("skylit-selected-cell")).not.toBeInTheDocument();
+ expect(JSON.parse(screen.getByTestId("research-selection").textContent).selectedStrike).toBeNull();
+ mounted.rerender(<><SkylitDashboard ticker="SPY" data={selectionMap()} spot={650}/><ResearchSelection/></>);
+ expect(screen.queryByTestId("skylit-selected-cell")).not.toBeInTheDocument();
+});
+
+test.each(["ticker","measure","expiry","visible rows"])("changing %s out of the selected scope clears and does not restore an old choice",(change)=>{
+ const original={ticker:"SPY",data:selectionMap(),spot:650};
+ const mounted=render(<><SkylitDashboard {...original}/><ResearchSelection/></>);
+ fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+ let next={...original};
+ if(change==="ticker")next={...next,ticker:"QQQ",data:{...next.data,ticker:"QQQ"}};
+ if(change==="measure")next={...next,viewMode:"vex",data:{...next.data,grid:{...next.data.grid,vex_grid:{"2026-09-18":{"650":999}}}}};
+ if(change==="expiry")next={...next,data:{...next.data,grid:{...next.data.grid,expiries:["2026-09-25"]}}};
+ if(change==="visible rows")next={...next,spot:600,data:{...next.data,grid:{...next.data.grid,strikes:Array.from({length:51},(_,i)=>600+i)}}};
+ mounted.rerender(<><SkylitDashboard {...next}/><ResearchSelection/></>);
+ expect(screen.queryByTestId("skylit-selected-cell")).not.toBeInTheDocument();
+ expect(JSON.parse(screen.getByTestId("research-selection").textContent).selectedStrike).toBeNull();
+ mounted.rerender(<><SkylitDashboard {...original}/><ResearchSelection/></>);
+ expect(screen.queryByTestId("skylit-selected-cell")).not.toBeInTheDocument();
+});
+
+test("research follows the rendered wide map and never carries it into another ticker",async()=>{
+ const stamp="2026-09-11T18:00:00Z";
+ const query={expiries:4,mode:"day",dte:null,scalp:false,withTaps:true,maxStrikes:80};
+ const base={...selectionMap(),asof:stamp,mode:"day",map_query:query};
+ let resolveWide;
+ axios.get.mockImplementation(()=>new Promise(resolve=>{resolveWide=resolve;}));
+ const mounted=render(<><SkylitDashboard ticker="SPY" data={base} spot={500}/><ResearchSelection/></>);
+ const current=()=>JSON.parse(screen.getByTestId("research-selection").textContent);
+ expect(current().mapQuery.expiries).toBe(4);
+ expect(current().mapStrikes).toEqual([650]);
+ mounted.rerender(<><SkylitDashboard ticker="SPY" data={base} spot={500} expiries={8} dte={7}/><ResearchSelection/></>);
+ expect(current().mapQuery).toEqual(query);
+ fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+ expect(current().selectedStrike).toBe(650);
+ fireEvent.click(screen.getByTestId("skylit-expand-btn"));
+ expect(current().selectedStrike).toBe(650);
+ await act(async()=>{resolveWide({data:{...base,mode:"swing",map_query:{...query,expiries:8,mode:"swing"},asof:"2026-09-11T18:01:00Z",grid:{strikes:[490,500,510],expiries:["2026-09-18"]}}});});
+ expect(current().mapQuery).toMatchObject({expiries:8,mode:"swing",dte:null});
+ expect(current().mapStrikes).toEqual([510,500,490]);
+ expect(current().mapVersion).toBe("2026-09-11T18:01:00Z");
+ expect(current().selectedStrike).toBeNull();
+ mounted.rerender(<><SkylitDashboard ticker="QQQ" data={base} spot={600}/><ResearchSelection/></>);
+ expect(current().ticker).toBe("QQQ");
+ expect(current().mapVersion).toBeNull();
+ expect(current().mapStrikes).toEqual([]);
+});
 
 beforeEach(() => {
   axios.get.mockImplementation(async () => ({ data: { strikes: [] } }));
@@ -157,7 +237,7 @@ describe("SkylitDashboard", () => {
 
   test("clicking a cell outside trade mode shows the selected-cell readout", async () => {
     await act(async () => {
-      render(<SkylitDashboard ticker="SPY" />);
+      render(<SkylitDashboard ticker="SPY" data={selectionMap()} spot={650} />);
     });
 
     expect(screen.queryByTestId("skylit-selected-cell")).not.toBeInTheDocument();
@@ -326,7 +406,7 @@ test("R7-03: readout for a cell absent from the current snapshot is unavailable"
   await act(async () => {
     fireEvent.click(screen.getAllByTestId("mock-heatmap-cell")[0]);
   });
-  expect(screen.getByTestId("skylit-selected-cell").textContent).toContain("unavailable");
+  expect(screen.queryByTestId("skylit-selected-cell")).not.toBeInTheDocument();
 });
 
 test("R7-03: false eligibility without reasons shows a generic blocker, not permission", async () => {
@@ -347,13 +427,15 @@ test("R7-03: false eligibility without reasons shows a generic blocker, not perm
 
 test("R7-03: replay clicks never reach the live Trade callback; Trade disabled in replay", async () => {
   const onCellClick = jest.fn();
+  const onStrikeClick = jest.fn();
+  const onReplayChange = jest.fn();
   axios.get.mockImplementation(async (url) => {
     if (String(url).includes("/solstice/manifest/")) {
       return { data: { snapshots: [{ id: "s1" }] } };
     }
     if (String(url).includes("/solstice/replay/")) {
       return { data: {
-        snapshot: { ticker: "SPY", snapshot_id: "s1", asof_ts: "2026-09-03T14:00:00Z", spot: 650, exposure_basis: "OI" },
+        snapshot: { ticker: "SPY", snapshot_id: "s1", asof_ts: "2026-09-03T14:00:00Z", spot: null, exposure_basis: "OI" },
         strikes: [{ strike: 650, gex: 1000 }],
         walls: [{ wall_id: "w_r", low: 640, high: 660 }],
         grids: { grid: { expiries: ["2026-09-18"], strikes: [650], grid: { "2026-09-18": { 650: 1111 } } } },
@@ -365,20 +447,30 @@ test("R7-03: replay clicks never reach the live Trade callback; Trade disabled i
     return { data: {} };
   });
   await act(async () => {
-    render(<SkylitDashboard ticker="SPY" data={null} spot={650} onCellClick={onCellClick} />);
+    render(<SkylitDashboard ticker="SPY" data={null} spot={999} regime="positive" isLive onCellClick={onCellClick} onStrikeClick={onStrikeClick} onReplayChange={onReplayChange} />);
   });
   // Arm Trade while LIVE, then enter replay (must disarm), then click.
   await act(async () => { fireEvent.click(screen.getByTestId("skylit-trade-btn")); });
   await act(async () => { fireEvent.click(screen.getByTestId("solstice-replay-load")); });
   await act(async () => { fireEvent.click(screen.getByTestId("solstice-replay-next")); });
   expect(screen.getByTestId("solstice-replay-banner")).toBeInTheDocument();
+  expect(onReplayChange).toHaveBeenLastCalledWith(true);
   await act(async () => {
     fireEvent.click(screen.getAllByTestId("mock-heatmap-cell")[0]);
   });
   // Historical click selected locally but never invoked the live callback.
+  fireEvent.click(screen.getByTestId("mock-strike"));
+  expect(onStrikeClick).not.toHaveBeenCalled();
+  expect(screen.getByTestId("mock-heatmap")).toHaveAttribute("data-spot","null");
+  expect(screen.getByTestId("mock-control-bar")).toHaveAttribute("data-spot","null");
+  expect(screen.getByTestId("mock-control-bar")).toHaveAttribute("data-live","false");
+  expect(screen.getByTestId("mock-metrics")).toHaveAttribute("data-regime","null");
+  expect(screen.queryByText("$999.00")).not.toBeInTheDocument();
   expect(onCellClick).not.toHaveBeenCalled();
   expect(screen.getByTestId("skylit-trade-btn")).toBeDisabled();
   expect(screen.getByTestId("skylit-selected-cell")).toBeInTheDocument();
+  fireEvent.click(screen.getByTestId("solstice-replay-exit"));
+  expect(onReplayChange).toHaveBeenLastCalledWith(false);
 });
 
 test("R7-04: compare toggle mounts two real panes over one snapshot; back to one", async () => {
@@ -407,7 +499,7 @@ test("R7-04: clicking the VEX pane makes it own the readout; scroll syncs", asyn
   const data = {
     ticker: "SPY", asof: "2026-09-03T00:00:00Z", spot: 650, exposure_basis: "OI",
     strikes: [{ strike: 650, gex: 1000 }],
-    grid: { expiries: ["2026-09-18"], strikes: [650], grid: { "2026-09-18": { 650: 1000 } } },
+    grid: { expiries: ["2026-09-18"], strikes: [650], grid: { "2026-09-18": { 650: 1000 } }, vex_grid: { "2026-09-18": {650: 25} } },
     metrics: { walls: [], grids: {} },
     quality: { state: "usable", reasonCodes: [], setupEligible: true },
   };
@@ -684,4 +776,53 @@ test("R8-04: next-to-review lists unreviewed only and jumps to replay", async ()
     expect(screen.getByTestId("solstice-replay-banner")).toBeInTheDocument();
   });
   expect(screen.queryByTestId("skylit-review-save")).not.toBeInTheDocument();
+});
+
+
+test("activity selection and research share its own axes without raw fallback",()=>{
+ const data={...selectionMap(999),metrics:{grids:{activity:{strikes:[650],expiries:["2026-09-18"],grid:{"2026-09-18":{"650":7}}}}}};
+ const view=render(<><SkylitDashboard ticker="SPY" data={data} spot={650}/><ResearchSelection/></>);
+ fireEvent.click(screen.getByTestId("mock-activity"));
+ fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+ expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("7.0");
+ expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({overlayMetric:"activity",selectedStrike:650,mapStrikes:[650]});
+ view.rerender(<><SkylitDashboard ticker="SPY" data={{...data,metrics:{grids:{}}}} spot={650}/><ResearchSelection/></>);
+ expect(screen.queryByTestId("skylit-selected-cell")).not.toBeInTheDocument();
+ expect(JSON.parse(screen.getByTestId("research-selection").textContent).selectedStrike).toBeNull();
+});
+
+// The actual historical chart must never borrow a current map for research.
+jest.mock("react-plotly.js", () => () => <div data-testid="history-plot" />);
+test("open history blocks research through loading and live refresh; close uses latest map", async()=>{
+ axios.get.mockImplementation(()=>new Promise(()=>{}));
+ const mounted=render(<><SkylitDashboard ticker="SPY" data={selectionMap()} spot={650}/><ResearchSelection/></>);
+ fireEvent.click(screen.getByText("Price chart + historical nodes"));
+ let context=JSON.parse(screen.getByTestId("research-selection").textContent);
+ expect(context).toMatchObject({displayMode:"price-history",mapVersion:null,mapQuery:null,selectedStrike:null});
+ mounted.rerender(<><SkylitDashboard ticker="SPY" data={selectionMap(999,"LATEST")} spot={650}/><ResearchSelection/></>);
+ expect(JSON.parse(screen.getByTestId("research-selection").textContent).displayMode).toBe("price-history");
+ fireEvent.click(screen.getByText("Price chart + historical nodes"));
+ expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({displayMode:"live",mapVersion:"LATEST"});
+ fireEvent.click(screen.getByText("Price chart + historical nodes"));
+ mounted.rerender(<><SkylitDashboard ticker="QQQ" data={{...selectionMap(),ticker:"QQQ"}} spot={650}/><ResearchSelection/></>);
+ expect(screen.getByText("Price chart + historical nodes")).toHaveAttribute("aria-expanded","true");
+ expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({ticker:"QQQ",displayMode:"price-history",mapVersion:null});
+});
+
+
+test('selected wall receives the current VEX surface and separate contract gross',async()=>{
+ const base=selectionMap();
+ const payload={...base,grid:{...base.grid,vex_grid:{'2026-09-18':{'650':0}},
+    vex_strike_gross:[{strike:650,vex_gross:400}],vex_meta:{status:'ok'}},
+   metrics:{walls:[{wall_id:'selected',low:650,high:650,members:[650],gross:1000,net:1000}],grids:{}}};
+ const mounted=render(<SkylitDashboard ticker="SPY" data={payload} spot={650}/>);
+ fireEvent.click(screen.getByTestId('mock-heatmap-cell'));
+ expect(screen.getByText('VEX gross / net').closest('tr').textContent).toContain('$400 / $0');
+ const next={...payload,grid:{...payload.grid,vex_grid:{'2026-09-18':{'650':25}},vex_strike_gross:[{strike:650,vex_gross:525}]}};
+ mounted.rerender(<SkylitDashboard ticker="SPY" data={next} spot={650}/>);
+ expect(screen.getByText('VEX gross / net').closest('tr').textContent).toContain('$525 / $25');
+ const old={...payload,grid:{...payload.grid}};delete old.grid.vex_strike_gross;
+ mounted.rerender(<SkylitDashboard ticker="SPY" data={old} spot={650}/>);
+ expect(screen.getByText('VEX gross / net').closest('tr').textContent).toContain('— / $0');
+ await act(async()=>{});
 });

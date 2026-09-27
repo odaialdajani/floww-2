@@ -131,3 +131,24 @@ deploy/free/deploy_key_ed25519
 # Runtime DuckDB stores (journal etc.) — local state, never commit
 data/*.duckdb
 data/*.duckdb.wal
+
+# Private local proof stores, generated previews, and raw session records.
+# Preserved on disk; sanitized review/verification artifacts are committed.
+/output/
+/.playwright-cli/
+/.research/xcheck/
+/.planning/INTEGRATION_AI_UI_CHECKPOINT.md
+/.planning/MARKET_COVERAGE_HISTORY_API_CHECKPOINT.md
+/.planning/eval/journal-audit-20260911-2059/
+/.planning/eval/research-comparison-alert-proof-20260926.json
+/.planning/eval/storage-pinned-20260911-1920.json
+/.planning/eval/storage-pinned-20260911-1920.json.artifacts/
+/.planning/eval/storage-pinned-20260911-1933.json.artifacts/
+/.planning/eval/storage-preflight-20260911-1915.json
+/.planning/eval/storage-real-20260911-1919.json
+/.planning/eval/storage-real-20260911-1919.json.artifacts/
+/.playwright-mcp/page-2026-09-06T08-30-52-057Z.yml
+/.playwright-mcp/page-2026-09-06T08-31-04-527Z.yml
+/.playwright-mcp/page-2026-09-06T08-38-47-009Z.yml
+/2026-09-08-redesing-messages-below.txt
+/backend/2026-09-07-091737-command-messageprompt2command-message.txt

@@ -882,9 +882,26 @@ def classify_nodes(
         gamma_sign = str(node.get("gamma_sign", "")).lower()
         oi_trend = str(node.get("oi_trend", "")).lower()
         trend_source = str(node.get("oi_trend_source", "")).lower()
-        has_obs = isinstance(node.get("oi_observations"), list) and len(node["oi_observations"]) >= 2
+        observations = {}
+        observed_rows = node.get("oi_observations")
+        for obs in observed_rows if isinstance(observed_rows, list) else []:
+            if not isinstance(obs, dict):
+                continue
+            try:
+                from datetime import date
+                day = date.fromisoformat(obs["effective_date"])
+                oi = obs["oi"]
+                if isinstance(oi, bool) or not isinstance(oi, (int, float)) or not math.isfinite(oi) or oi < 0:
+                    continue
+                observations[day] = oi
+            except (KeyError, ValueError, TypeError):
+                continue
+        has_obs = len(observations) >= 2
+        if has_obs:
+            before, after = [observations[d] for d in sorted(observations)[-2:]]
+            oi_trend = "growing" if after > before else "fading" if after < before else "unchanged"
 
-        if not oi_trend or (trend_source and trend_source not in ("observed", "oi_history")) and not has_obs:
+        if not oi_trend or (trend_source not in ("observed", "oi_history") and not has_obs):
             # Unobserved trend (e.g. derived from lifecycle state) → unknown.
             classified.append({**node, "classification": "unknown",
                                "classification_reason": "OI_TREND_UNOBSERVED"})

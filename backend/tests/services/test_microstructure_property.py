@@ -10,8 +10,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 import numpy as np
 import pytest
-
-pytest.importorskip("hypothesis", reason="hypothesis not installed")
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -55,13 +53,13 @@ class TestGexProperties:
         base_contracts = []
         for s in [spot * 0.9, spot, spot * 1.1]:
             for typ in ["call", "put"]:
-                base_contracts.append({"strike": s, "expiry": "2026-06-15", "T": T, "type": typ, "oi": 100.0, "gamma": 0.01, "iv": 0.2, "volume": 1000})
+                base_contracts.append({"strike": s, "expiry": "2026-06-15", "T": T, "type": typ, "oi": 200.0 if typ == "call" else 100.0, "gamma": 0.01, "iv": 0.2, "volume": 1000})
         result_base = GexAggregator().compute(spot, base_contracts)
         scaled = [dict(c, oi=c["oi"] * multiplier) for c in base_contracts]
         result_scaled = GexAggregator().compute(spot, scaled)
-        if abs(result_base["net_gex"]) > 1e-10:
-            ratio = result_scaled["net_gex"] / result_base["net_gex"]
-            np.testing.assert_allclose(ratio, multiplier, rtol=1e-6)
+        assert result_base["net_gex"] > 0  # Asymmetric OI prevents a vacuous zero-net check.
+        ratio = result_scaled["net_gex"] / result_base["net_gex"]
+        np.testing.assert_allclose(ratio, multiplier, rtol=1e-6)
 
     @given(spot=st.floats(min_value=50.0, max_value=500.0))
     @settings(max_examples=30, deadline=None)

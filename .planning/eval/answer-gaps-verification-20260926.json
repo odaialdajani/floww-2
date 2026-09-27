@@ -1,0 +1,38 @@
+{
+  "checked_at": "2026-09-26T21:00:17.071Z",
+  "status": "DEVELOPMENT_CHECKS_PASS_NOT_FRESH_ACCEPTANCE",
+  "source_sha256": {
+    "backend/services/agent/research.py": "e42a107ba407c08d841144efd0e2b6114311e73e1fbd62102aac11b5974b862f",
+    "backend/services/agent/saved_history.py": "283b820a4a31a5fe08d2f129d54d74462a3e6625053d1155d84ff1f96ed44903",
+    "backend/services/agent/volatility_reads.py": "db605cfc07a02e78e118a9af5ae8e930b9d90b7eeb1c9409503bb56b54d0c9dc",
+    "backend/services/agent/explanations.py": "c6ffc90647fa863896b5aabb1769c4908ab3a6e0b8b2d97f839737c0eb00b28b",
+    "backend/tests/agent/test_saved_history.py": "aa328b2ef06ebf45ea3d7ef2dac714a66c84247d903c562da33e3b27f750165b",
+    "backend/tests/agent/test_initial_capabilities.py": "330f5b276b7b3cb94d2bb6a94919be34b0440914b6446123b37d8caefdd45334"
+  },
+  "checks": {
+    "synthetic_regressions": "Earlier-saved history with1vs2contracts; presentIVvsnoIV; missing source and expiry times. All3first failed on the intended assertions then passed.",
+    "focused": {
+      "passed": 43,
+      "failed": 0,
+      "seconds": 1.41
+    },
+    "all_research": {
+      "passed": 242,
+      "failed": 0,
+      "skipped": 0,
+      "warnings": 27,
+      "seconds": 4.63
+    },
+    "ruff": "passed"
+  },
+  "independent_review": {
+    "status": "passed",
+    "tests": 58,
+    "report": "answer-gaps-review-20260926.md"
+  },
+  "limits": [
+    "Recorded30-case evaluation predates these edits and remains immutable.",
+    "New unseen functional acceptance and stronger comparison are still required.",
+    "No model calls, input-cap increases, quota changes or financial actions made for this fix."
+  ]
+}

@@ -12,8 +12,9 @@ this to a build item; the build is now in place.
 
 ## Decision
 
-Alert state persists in the MongoDB `alerts` collection (database
-`confluence_decoder`, same store as the rest of the app):
+Alert state persists in the MongoDB `alerts` collection (database from
+`DB_NAME`, default `floww` — see `backend/server.py`; the same store as
+the rest of the app):
 
 1. **Rules sync both directions at startup.** `_init_alert_collection()`
    creates `alerts_ticker_idx` (sparse) and `alerts_created_at_idx`,

@@ -1,0 +1,240 @@
+{
+  "status": "failed",
+  "commit": "20c0be40",
+  "python": "3.11.15",
+  "command": "python -m pytest tests/ -v --tb=short --cov=. -m 'not flaky_env' -p tests.offline_network",
+  "mongo": "real loopback; isolated test database",
+  "environment": {
+    "FLOWW_PUBLIC_SWEEP": "0",
+    "FLOWW_ENABLE_LIVE_PUBLIC": "0",
+    "FLOWW_ENABLE_LIVE_SCHWAB": "0"
+  },
+  "summary": "54 failed, 5312 passed, 71 skipped, 9 deselected, 109 warnings, 1 error in 429.40s (0:07:09)",
+  "coverage_percent": 67.61,
+  "required_coverage_percent": 60,
+  "exit_code": 1,
+  "log_sha256": "790ccce0a918d21ae11ab3ebc6a6cfbec76d04f2723b5c9e082594a05755f726",
+  "failures": [
+    {
+      "status": "FAILED",
+      "test": "tests/integration/test_api_resilience.py::test_circuit_breaker_half_open_after_cooldown"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/integration/test_api_resilience.py::test_circuit_breaker_closes_after_successes"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/routes/test_tickers_all.py::test_pagination_math"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/routes/test_tickers_all.py::test_refresh_bypasses_cache"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/routes/test_tickers_all.py::test_no_key_returns_empty"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/routes/test_tickers_all.py::test_symbols_us_equities_unit"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/memory/test_chart_embeddings.py::TestChartEmbeddingIndex::test_search_returns_results"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/memory/test_chart_embeddings.py::TestChartEmbeddingIndex::test_search_result_structure"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/memory/test_chart_embeddings.py::TestChartEmbeddingIndex::test_search_top_k_limits"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/memory/test_chart_embeddings.py::TestChartEmbeddingIndex::test_search_scores_are_floats"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/memory/test_chart_embeddings.py::TestChartEmbeddingIndex::test_search_with_zero_norm_embedding"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/memory/test_federation.py::TestFederatedMemorySync::test_apply_remote_write"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/memory/test_federation.py::TestFederatedMemorySync::test_2_node_convergence"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/ml/test_ml_integration.py::test_model_loads_with_joblib[IWM_rf_production.joblib]"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/ml/test_ml_integration.py::test_model_loads_with_joblib[QQQ_rf_production.joblib]"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/ml/test_ml_integration.py::test_model_loads_with_joblib[SPY_rf_production.joblib]"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/ml/test_ml_integration.py::test_model_loads_with_joblib[TLT_rf_production.joblib]"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/ml/test_ml_integration.py::test_manifest_feature_count_matches_model[IWM_rf_production.joblib]"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/ml/test_ml_integration.py::test_manifest_feature_count_matches_model[QQQ_rf_production.joblib]"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/ml/test_ml_integration.py::test_manifest_feature_count_matches_model[SPY_rf_production.joblib]"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/ml/test_ml_integration.py::test_manifest_feature_count_matches_model[TLT_rf_production.joblib]"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/ml/test_outcome_tracking.py::test_record_prediction"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/ml/test_outcome_tracking.py::test_record_all_tickers"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_autoformer_inference.py::TestAutoformerInference::test_forecast_shape"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_autoformer_inference.py::TestAutoformerInference::test_forecast_deterministic"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_autoformer_inference.py::TestAutoformerInference::test_inference_latency_under_20ms"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_autoformer_inference.py::TestAutoformerInference::test_different_n_strikes"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_autoformer_inference.py::TestAutoformerInference::test_forecast_not_nan"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_autoformer_inference.py::TestAutoformerInference::test_model_parameter_count"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_autoformer_inference.py::TestAutoformerInference::test_batch_size_invariance"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_composite_weight_parity.py::test_weights_sum_to_one"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_microstructure_math.py::TestAnomalyDetector::test_flow_detector_warmup_then_active"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_ml_realtime_features.py::TestGexFeatureHandpin::test_compute_gex_features_kurtosis_scipy_crosscheck"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_patchtst_inference.py::TestPatchTSTInference::test_model_loads_from_checkpoint"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_patchtst_inference.py::TestPatchTSTInference::test_forecast_shape"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_patchtst_inference.py::TestPatchTSTInference::test_forecast_deterministic"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_patchtst_inference.py::TestPatchTSTInference::test_inference_latency_under_20ms"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_patchtst_inference.py::TestPatchTSTInference::test_beats_persistence_baseline"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_patchtst_inference.py::TestPatchTSTInference::test_different_batch_sizes"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_patchtst_inference.py::TestPatchTSTInference::test_forecast_values_in_reasonable_range"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_patchtst_inference.py::TestPatchTSTInference::test_model_parameter_count"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_regime_thresholds.py::TestFlowAnomalyDetectorWithRegime::test_regime_in_update_result"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_server_cors_wiring.py::TestCorsRuntimeImportRaises::test_non_dev_env_with_no_cors_origins_raises_runtimeerror_on_import[production]"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_server_cors_wiring.py::TestCorsRuntimeImportRaises::test_non_dev_env_with_no_cors_origins_raises_runtimeerror_on_import[staging]"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_server_cors_wiring.py::TestCorsRuntimeImportRaises::test_non_dev_env_with_no_cors_origins_raises_runtimeerror_on_import[qa]"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_server_cors_wiring.py::TestGlobalExceptionHandlerPayloadRedaction::test_500_payload_in_prod_does_not_carry_a_traceback_or_full_exc_message"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_server_cors_wiring.py::TestRedacted500CountMetric::test_redacted_500_count_increments_when_prod_handler_fires"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_server_cors_wiring.py::TestLocalDevFallthrough::test_default_no_env_vars_set_does_not_raise"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_server_cors_wiring.py::TestLocalDevFallthrough::test_explicit_development_env_does_not_raise"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_server_cors_wiring.py::TestLocalDevFallthrough::test_dev_cors_origins_resolves_to_wildcard"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/services/test_server_p1_wiring.py::TestServerP1ImportDoesNotCrash::test_server_module_imports_successfully_with_mongo_url_unset"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/test_verify_runner.py::test_all_pass_prints_all_green"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/test_verify_runner.py::test_failing_required_tool_cannot_print_all_green"
+    },
+    {
+      "status": "FAILED",
+      "test": "tests/test_verify_runner.py::test_missing_advisory_tool_is_named_skip"
+    },
+    {
+      "status": "ERROR",
+      "test": "tests/test_vpin_toxicity.py::test_invalid_arguments_raise"
+    }
+  ],
+  "limitation": "No full-suite pass. Focused research and real synthetic-record storage checks pass separately; this does not prove model or supported-market-source acceptance."
+}

@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import TidehunterSettings from "./flowseeker/TidehunterSettings";
+import PaperSettings from "../agent/PaperSettings";
 
 const STORAGE_KEY = "floww_settings";
 
@@ -10,8 +12,14 @@ function loadSettings() {
   }
 }
 
-function saveSettings(s) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+export function saveSettings(patch) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...loadSettings(), ...patch }));
+    window.dispatchEvent(new Event("floww-settings-changed"));
+    return true;
+  } catch {
+    return false; // private mode — settings just don't persist
+  }
 }
 
 export function getSettings() {
@@ -20,16 +28,31 @@ export function getSettings() {
 
 export function SettingsPanel({ refreshMs, onRefreshMsChange, defaultTicker, onDefaultTickerChange }) {
   const [open, setOpen] = useState(false);
-  const s = getSettings();
+  const [s, setSettings] = useState(getSettings);
+  const [saveError, setSaveError] = useState(false);
+  useEffect(() => {
+    const refresh = () => setSettings(getSettings());
+    const storage = (event) => { if (event.key === STORAGE_KEY || event.key === null) refresh(); };
+    window.addEventListener("storage", storage);
+    window.addEventListener("floww-settings-changed", refresh);
+    return () => {
+      window.removeEventListener("storage", storage);
+      window.removeEventListener("floww-settings-changed", refresh);
+    };
+  }, []);
+
+  const save = (patch) => {
+    const saved = saveSettings(patch);
+    setSaveError(!saved);
+    return saved;
+  };
 
   const setRefreshMs = (ms) => {
-    saveSettings({ ...s, refreshMs: ms });
-    onRefreshMsChange?.(ms);
+    if (save({ refreshMs: ms })) onRefreshMsChange?.(ms);
   };
 
   const setDefaultTicker = (t) => {
-    saveSettings({ ...s, defaultTicker: t });
-    onDefaultTickerChange?.(t);
+    if (save({ defaultTicker: t })) onDefaultTickerChange?.(t);
   };
 
   return (
@@ -44,6 +67,7 @@ export function SettingsPanel({ refreshMs, onRefreshMsChange, defaultTicker, onD
       </button>
       {open && (
         <div className="mt-2 space-y-2">
+          {saveError && <p role="alert">Your setting could not be saved. Try again after checking browser storage.</p>}
           <div>
             <div className="label mb-0.5">Refresh Rate</div>
             <div className="flex gap-1">
@@ -79,7 +103,7 @@ export function SettingsPanel({ refreshMs, onRefreshMsChange, defaultTicker, onD
             <div className="label mb-0.5">Accessibility</div>
             <div className="flex gap-1">
               <button
-                onClick={() => saveSettings({ ...s, colorBlindMode: !s.colorBlindMode })}
+                onClick={() => save({ colorBlindMode: !getSettings().colorBlindMode })}
                 className={`btn flex-1 text-[9px] ${s.colorBlindMode ? "active" : ""}`}
                 aria-label={s.colorBlindMode ? "Disable color-blind mode" : "Enable color-blind mode"}
                 title="Use patterns instead of colors for regime indicators"
@@ -88,6 +112,13 @@ export function SettingsPanel({ refreshMs, onRefreshMsChange, defaultTicker, onD
               </button>
             </div>
             <div className="text-[8px] text-slate-600 mt-0.5">Patterns instead of colors</div>
+          </div>
+          <div>
+            <div className="label mb-0.5">Tidehunter Pro</div>
+            <TidehunterSettings />
+          </div>
+          <div>
+            <PaperSettings />
           </div>
         </div>
       )}

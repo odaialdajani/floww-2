@@ -37,6 +37,7 @@ import AlertsPanel from "./components/AlertsPanel";
 import UOAPanel from "./components/UOAPanel";
 import { useWebSocketGex } from "./hooks/useWebSocketGex";
 import { useDebounce } from "./hooks/useDebounce";
+import { useScopedReading } from "./hooks/useScopedReading";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { ShortcutsModal } from "./components/ShortcutsModal";
 import { MorningBriefing } from "./components/MorningBriefing";
@@ -57,7 +58,9 @@ import { useTheme } from "./context/ThemeContext";
 import { autoDecimate } from "./utils/dataDecimator";
 import { mutatingHeaders } from "./utils/appKey";
 import { PAGE_NAMES } from "./shell/navConfig";
-import { buildTickerUniverse, fetchFullUniverse, normalizeTicker } from "./components/heatseeker/tickerUniverse";
+import { buildTickerUniverse, normalizeTicker } from "./components/heatseeker/tickerUniverse";
+import useTickerDirectory from "./components/heatseeker/useTickerDirectory";
+import StockSearchNotice from "./components/heatseeker/StockSearchNotice";
 
 import ToxicityGauge from "./components/ToxicityGauge";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -180,9 +183,9 @@ function ApHeader({ page, ticker, onTickerChange, tickers, data, onSignOut, user
           )}
 
           {/* Live badge */}
-          <div className="ap-live-badge" title="Live">
+          <div className="ap-live-badge" title="Market research">
             <span className="dot" />
-            <span>Live</span>
+            <span>Research</span>
           </div>
 
           {/* Data source indicator */}
@@ -479,9 +482,6 @@ export default function App() {
   const [refreshMs, setRefreshMs] = useState(() => {
     try { return localStorage.getItem("floww_settings") ? JSON.parse(localStorage.getItem("floww_settings")).refreshMs || 25000 : 25000; } catch { return 25000; }
   });
-  const [data, setData] = useState(null);
-  const [livespot, setLivespot] = useState(null);
-  const [err, setErr] = useState(null);
   const [showLeftSidebar, setShowLeftSidebar] = useState(false);
   const [showRightSidebar, setShowRightSidebar] = useState(false);
   const [viewMode, setViewMode] = useState("gex");
@@ -491,14 +491,13 @@ export default function App() {
   const [expiries, setExpiries] = useState(4);
   const [trinityTab, setTrinityTab] = useState("gex");
   const [dte, setDte] = useState(null);
-  const [tickers, setTickers] = useState(null);
-  const [advanced, setAdvanced] = useState(null);
+  const { tickers, status: stockSearchStatus, retry: retryStockSearch } = useTickerDirectory(API);
   const [advancedLoading, setAdvancedLoading] = useState(true);
   const [advancedError, setAdvancedError] = useState(false);
   const wsGex = useWebSocketGex((page === "heatseeker" || page === "skylit") ? ticker : null);
   const { theme, toggleTheme } = useTheme();
-  const [ensembleData, setEnsembleData] = useState(null);
   const [tradeSelection, setTradeSelection] = useState(null);
+  const [heatmapReplay, setHeatmapReplay] = useState(false);
   // Use auth context for user info
   const userEmail = user?.email || null;
   const userTier = user?.tier || null;
@@ -507,32 +506,12 @@ export default function App() {
   const debouncedMode = useDebounce(mode, 300);
   const debouncedExpiries = useDebounce(expiries, 300);
   const debouncedDte = useDebounce(dte, 300);
-
-  // Fetch tickers: featured sets first, then the full listed universe page by
-  // page (T2) so the scroller/search/arrows traverse every tradable name, not
-  // just featured ones. Same {trinity, default, popular} shape is retained —
-  // the full list rides in `popular` and the shared universe helper dedups.
-  useEffect(() => {
-    let on = true;
-    (async () => {
-      let base = null;
-      try {
-        const r = await axios.get(`${API}/tickers`);
-        base = r.data || null;
-        if (on && base) setTickers(base);
-      } catch (_) { /* offline: leave prior tickers */ }
-      try {
-        const full = await fetchFullUniverse((u) => axios.get(u), API);
-        if (!on || full.symbols.length === 0) return;
-        setTickers({
-          trinity: (base && base.trinity) || [],
-          default: (base && base.default) || [],
-          popular: full.symbols,
-        });
-      } catch (_) { /* full list failed: featured sets already set */ }
-    })();
-    return () => { on = false; };
-  }, []);
+  const readingScope = JSON.stringify([ticker, debouncedExpiries, debouncedMode, debouncedDte]);
+  const [data, setData] = useScopedReading(readingScope);
+  const [livespot, setLivespot] = useScopedReading(ticker);
+  const [err, setErr] = useScopedReading(readingScope);
+  const [advanced, setAdvanced] = useScopedReading(JSON.stringify([ticker, debouncedExpiries]));
+  const [ensembleData, setEnsembleData] = useScopedReading(ticker);
 
   // Flowseeker signal cards dispatch this to focus the desk ticker.
   useEffect(() => {
@@ -588,28 +567,25 @@ export default function App() {
     } catch (e) { /* noop */ }
   }, [ticker, debouncedExpiries]);
 
-  // Auto-dismiss errors after 10s
-  useEffect(() => {
-    if (!err) return;
-    const id = setTimeout(() => setErr(null), 10000);
-    return () => clearTimeout(id);
-  }, [err]);
-
   // Main data fetch with in-flight guard
   useEffect(() => {
     let cancelled = false;
+    let inFlight = false;
     const ctrl = new AbortController();
-    const myGen = ++fetchGen.current;
     const doFetch = async () => {
-      if (cancelled) return;
+      if (cancelled || inFlight) return;
+      inFlight = true;
+      const myGen = ++fetchGen.current;
       try {
         // Same query as the manual /heatmap fetch — a naked poll here
         // overwrites the user's DTE/Expiries/mode selection with backend
         // defaults on every tick (Round-8 regression).
         const qs = buildHeatmapQuery({ expiries: debouncedExpiries, mode: debouncedMode, dte: debouncedDte });
         const r = await axios.get(`${API}/data/${ticker}?${qs}`, { signal: ctrl.signal });
-        if (!cancelled && fetchGen.current === myGen) setData(r.data);
-      } catch (e) { if (!cancelled && fetchGen.current === myGen && !axios.isCancel?.(e)) setErr(e.message); }
+        if (!cancelled && fetchGen.current === myGen) { setData(r.data); setErr(null); setLoading(false); }
+      } catch (e) {
+        if (!cancelled && fetchGen.current === myGen && !axios.isCancel?.(e)) { setErr(e.message); setLoading(false); }
+      } finally { inFlight = false; }
     };
     doFetch();
     const id = setInterval(doFetch, refreshMs);
@@ -619,14 +595,17 @@ export default function App() {
   // Advanced analytics with in-flight guard
   useEffect(() => {
     let cancelled = false;
+    let inFlight = false;
     const doFetch = async () => {
-      if (cancelled) return;
+      if (cancelled || inFlight) return;
+      inFlight = true;
       setAdvancedLoading(true);
       setAdvancedError(false);
       try {
         const r = await axios.get(`${API}/advanced/${ticker}?expiries=${debouncedExpiries != null ? debouncedExpiries : 4}`);
         if (!cancelled) { setAdvanced(r.data); setAdvancedLoading(false); }
       } catch (e) { if (!cancelled) { setAdvancedError(true); setAdvancedLoading(false); } }
+      finally { inFlight = false; }
     };
     doFetch();
     const id = setInterval(doFetch, refreshMs * 2);
@@ -651,12 +630,15 @@ export default function App() {
   // Live spot polling with in-flight guard
   useEffect(() => {
     let cancelled = false;
+    let inFlight = false;
     const poll = async () => {
-      if (cancelled) return;
+      if (cancelled || inFlight) return;
+      inFlight = true;
       try {
         const r = await axios.get(`${API}/spot/${ticker}`);
         if (!cancelled) setLivespot(r.data);
-      } catch (e) { if (!cancelled) {} }
+      } catch (e) { if (!cancelled) setLivespot(null); }
+      finally { inFlight = false; }
     };
     poll();
     const id = setInterval(poll, 5000);
@@ -781,6 +763,9 @@ export default function App() {
           userTier={userTier}
         />
 
+        {["heatseeker", "trinity", "skylit", "ticker-analysis"].includes(page) &&
+          <StockSearchNotice status={stockSearchStatus} onRetry={retryStockSearch} />}
+
         {/* ===== DECODER PAGES ===== */}
 
         {/* Triad View */}
@@ -868,17 +853,20 @@ export default function App() {
             <aside className={`heatseeker-sidebar-left ${showLeftSidebar ? 'open' : ''}`}>
               <div className="p-2 space-y-2">
                 {/* Ticker Summary */}
-                <div className="panel p-3">
+                {heatmapReplay ? <div className="panel p-3" data-testid="replay-summary">
+                  Recorded view · current quote and summary hidden during replay.
+                </div> : <div className="panel p-3">
                   <div className="flex justify-between items-baseline mb-2">
                     <div className="text-[13px] font-bold tracking-wider">{ticker.replace("^", "")}</div>
                     <div className={`text-[10px] uppercase tracking-widest ${regimeColor(data?.nodes?.regime)}`}>{data?.nodes?.regime || "—"} γ</div>
                   </div>
                   <div className="text-[22px] mono font-bold mt-0.5 flex items-center gap-2" data-testid="spot-price">
                     <span>${fmt(livespot?.spot ?? data?.spot, 2)}</span>
-                    {livespot && (
-                      <span className="text-[9px] uppercase tracking-widest text-teal-400 flash-pulse">● live</span>
-                    )}
                   </div>
+                  {(livespot || data) && <div className="text-[10px] text-slate-400">
+                    Quote {livespot?.status || "quality unverified"} · {livespot?.data_source || data?.spot_source || "source unknown"}
+                    <br />Observed {livespot ? livespot.ts || "time unknown" : data?.spot_event_time || "time unknown"}
+                  </div>}
                   <div className="text-[10px] text-slate-500 mt-1">
                     {data?.expiries_used?.length ? `${data.expiries_used.length} exp · ${data.expiries_used[0]} → ${data.expiries_used.slice(-1)[0]}` : ""}
                   </div>
@@ -909,7 +897,7 @@ export default function App() {
                   <div className="dotted-divider my-2" />
                   <div className="flex items-center justify-between text-[9px]">
                     {wsGex.connected ? (
-                      <span className="text-teal-400 font-bold flash-pulse">● LIVE GEX</span>
+                      <span className="text-slate-400">Stream connected</span>
                     ) : wsGex.reconnectAttempt > 0 ? (
                       <span className="text-amber-400">⟳ Reconnecting ({wsGex.reconnectAttempt})</span>
                     ) : (
@@ -919,7 +907,7 @@ export default function App() {
                   {wsGex.connected && wsGex.data && (
                     <>
                       <div className="flex items-center justify-between text-[9px]">
-                        <span className="text-slate-500">{new Date(wsGex.data.asof).toLocaleTimeString()}</span>
+                        <span className="text-slate-500">{Number.isFinite(Date.parse(wsGex.data.source_event_time)) ? `Observed ${new Date(wsGex.data.source_event_time).toLocaleTimeString()}` : "Source time unknown"}</span>
                       </div>
                       <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px] mt-1">
                         <div className="flex justify-between"><span className="text-slate-500">Spot</span><span className="mono text-slate-300">${fmt(wsGex.data.spot, 2)}</span></div>
@@ -931,6 +919,7 @@ export default function App() {
                   )}
                 </div>
 
+                }
                 {/* Filters */}
                 <div className="panel p-3">
                   <div className="text-slate-500 mb-1 text-[10px]">View</div>
@@ -968,8 +957,8 @@ export default function App() {
                   </div>
                 </div>
 
-                <Movers onPick={(t) => setTicker(t)} />
-                <UniverseLeaderboard onPick={(t) => setTicker(t)} />
+                {!heatmapReplay && <Movers onPick={(t) => setTicker(t)} />}
+                {!heatmapReplay && <UniverseLeaderboard onPick={(t) => setTicker(t)} />}
                 <HistoryPanel ticker={ticker} />
                 <SettingsPanel
                   refreshMs={refreshMs}
@@ -994,6 +983,7 @@ export default function App() {
                 </div>
               ) : view === "skylit" || view === "grid" ? (
                 <SkylitDashboard
+                  onReplayChange={setHeatmapReplay}
                   ticker={ticker}
                   spot={livespot?.spot ?? data?.spot}
                   change={livespot?.change ?? data?.change}
@@ -1056,6 +1046,7 @@ export default function App() {
                 />
               ) : (
                 <SkylitDashboard
+                  onReplayChange={setHeatmapReplay}
                   ticker={ticker}
                   spot={livespot?.spot ?? data?.spot}
                   change={livespot?.change ?? data?.change}
@@ -1276,7 +1267,7 @@ export default function App() {
 
         {/* Footer */}
         <footer className="border-t border-slate-800 px-4 py-2 text-[10px] text-slate-600 flex justify-between flex-shrink-0">
-          <span>Data: CVForge cvserver · Databento OPRA · yfinance · Polygon · GEX via Black-Scholes γ</span>
+          <span>Data sources and observation limits are shown with each reading.</span>
           <span className="hidden md:inline text-slate-700">
             Keys: 1/2/3 pages · G/B/C views · D/S/X modes · E/V/H overlays · ↑↓ tickers · ? shortcuts
           </span>

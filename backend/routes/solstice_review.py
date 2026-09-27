@@ -91,9 +91,14 @@ def register_review_routes(router: APIRouter) -> None:
         try:
             saved = save_decision_review(
                 conn, decision_id, body.state,
-                reason=body.reason, note=body.note)
+                reason=body.reason, note=body.note, ticker=ticker)
+            if not saved:
+                raise HTTPException(status_code=503, detail={
+                    "error": "Review could not be saved", "durability": "failed"})
             return {"decision_id": decision_id, "state": body.state,
                     "saved_at": saved, "durability": "durable"}
+        except HTTPException:
+            raise
         except Exception as e:
             log.warning("review save failed for %s/%s: %s",
                         ticker, decision_id, e)

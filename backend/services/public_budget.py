@@ -17,9 +17,9 @@ Applied at:
     + existing stale entry -> serve stale with stale_reason).
   - services/public_api_adapter.py (HTTP 429 sightings -> record_429).
 
-Tuning defaults assume a ~60 req/min retail key. Confirm against the
-Public dashboard and adjust CAPACITY/REFILL (proposal packet
-.public-path-budget.md has the verify-first steps).
+Public documents 10 requests/second per account. The budget refills at eight
+per second; the broker additionally paces every actual HTTP request, preventing
+initial token bursts. Other processes can still consume the shared account cap.
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 CAPACITY = 60
-REFILL_PER_SEC = 1.0
+REFILL_PER_SEC = 8.0
 MAX_INFLIGHT = 4
 COOLDOWN_BASE_SEC = 15.0
 COOLDOWN_MAX_SEC = 300.0
@@ -120,6 +120,13 @@ class PublicBudget:
             self._tokens -= float(n)
             self._inflight += 1
 
+    async def check_request_allowed(self, host: str = "api.public.com") -> None:
+        """Recheck cooldown immediately before each fan-out HTTP request."""
+        async with self._guard:
+            left = self._cooldown_left_locked(host, time.monotonic())
+            if left > 0:
+                raise BudgetExhausted(retry_after=int(left) + 1, reason="host_cooldown")
+
     def release(self) -> None:
         """Return one in-flight slot (call when the upstream call settles)."""
         self._inflight = max(0, self._inflight - 1)
@@ -176,7 +183,7 @@ class PublicBudget:
             applied += random.randint(0, min(5, applied))
         if len(self._cooldowns) >= CACHE_MAX_HOSTS:
             self._cooldowns.pop(next(iter(self._cooldowns)))
-        self._cooldowns[host] = now + applied
+        self._cooldowns[host] = max(self._cooldowns.get(host, 0), now + applied)
         self._cool_set_at[host] = now
         logger.warning("Public-path 429 on %s — cooling down %ss", host, applied)
         return applied

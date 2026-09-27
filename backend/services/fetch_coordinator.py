@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import copy
 import logging
 import time
 from collections.abc import Callable
@@ -92,22 +93,30 @@ class FetchCoordinator:
             finally:
                 lock.release()
 
-        # We have the lock — perform the fetch. Budget-gated (2026-09-04):
-        # refuse BEFORE creating the upstream task so bursts degrade to
-        # structured payloads instead of burning the retail key. Coalesced
-        # waiters above share the winner and never touch the budget; the
-        # slot releases via done-callback when the upstream call settles.
+        # We have the lock — perform the fetch. Budget-gated: refuse BEFORE
+        # creating the upstream task so a burst degrades to a structured
+        # payload instead of burning the retail Public.com key. Coalesced
+        # waiters above share the winner and never touch the budget; the slot
+        # releases via done-callback when the upstream call settles.
+        pub_budget = None
         try:
             from services.public_budget import BudgetExhausted
-            from services.public_budget import budget as pub_budget
-            await pub_budget.acquire()
-        except BudgetExhausted as exc:
-            logger.warning("Budget refused fetch for %s: %s", key, exc)
-            return degraded_response(
-                "budget_exhausted", str(exc), retry_after=exc.retry_after
-            )
-        except Exception:
-            pub_budget = None
+            from services.public_budget import budget as _pub_budget
+        except ImportError:
+            # silent by design: the budget shield is optional, a missing
+            # module must not stop a fetch that used to work.
+            BudgetExhausted = _pub_budget = None
+        if _pub_budget is not None:
+            try:
+                await _pub_budget.acquire()
+                pub_budget = _pub_budget
+            except BudgetExhausted as exc:
+                logger.warning("Budget refused fetch for %s: %s", key, exc)
+                return degraded_response(
+                    "budget_exhausted", str(exc), retry_after=exc.retry_after
+                )
+            except Exception as exc:
+                logger.warning("Budget acquire failed for %s: %s", key, exc)
         logger.info("Initiating external fetch for %s", key)
         task = asyncio.create_task(self._do_fetch(key, ticker, expiries, fetcher))
         if pub_budget is not None:
@@ -188,6 +197,26 @@ class CacheRouter:
 
     def __init__(self):
         self._cache: dict[str, dict[str, Any]] = {}
+
+    def peek_chain(self, ticker: str, expiries: int = 6) -> dict[str, Any] | None:
+        """Copy an existing observation without refreshing or extending its age."""
+        entry = self._cache.get(f"chain:{ticker.upper()}:{expiries}")
+        if entry is None:
+            return None
+        result = copy.deepcopy(entry["data"])
+        result["cache_age_s"] = max(0.0, time.monotonic() - entry["ts"])
+        return result
+
+    def peek_available_chain(self, ticker: str, preferred: int = 6) -> dict[str, Any] | None:
+        prefix = f"chain:{ticker.upper()}:"
+        candidates = [(key, value) for key, value in self._cache.items() if key.startswith(prefix)]
+        if not candidates:
+            return None
+        key, _ = max(candidates, key=lambda item: (item[0] == f"{prefix}{preferred}", item[1]["ts"]))
+        count = int(key.rsplit(":", 1)[1])
+        result = self.peek_chain(ticker, count)
+        result["requested_expiry_count"] = count
+        return result
 
     async def get_chain(
         self,

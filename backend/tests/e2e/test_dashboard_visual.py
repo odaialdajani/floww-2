@@ -86,9 +86,9 @@ def _compare_screenshots(
     baseline = Image.open(baseline_path).convert("RGBA")
     actual = Image.open(actual_path).convert("RGBA")
 
-    # Ensure same size
+    # A changed viewport/layout must not be rescaled into a passing comparison.
     if baseline.size != actual.size:
-        actual = actual.resize(baseline.size, Image.LANCZOS)
+        raise ValueError(f"Screenshot dimensions differ: {baseline.size} != {actual.size}")
 
     w, h = baseline.size
     diff = Image.new("RGBA", (w, h))
@@ -156,6 +156,7 @@ def fastapi_server():
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         preexec_fn=os.setsid if hasattr(os, "setsid") else None,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
 
     # Wait for server to be ready
@@ -344,52 +345,45 @@ class TestDashboardVisual:
 
         page.close()
 
-    def test_screenshot_determinism(self, fastapi_server, browser_context):
-        """
-        Verify screenshot determinism: two consecutive captures of the same
-        page state must be identical (0% diff after the baseline is established).
-        """
-        if not BASELINE_PATH.exists():
-            pytest.skip("No baseline screenshot yet — run test_visual_regression_heatseeker first")
-
+    def test_screenshot_determinism(self, fastapi_server, browser_context, tmp_path):
+        """Compare two new captures; no saved baseline is needed for repeatability."""
         page = browser_context.new_page()
-        page.route("**/api/live/**", lambda route: route.abort())
+        try:
+            page.route("**/api/live/**", lambda route: route.abort())
+            page.goto(DASHBOARD_URL, wait_until="networkidle", timeout=30000)
+            page.add_style_tag(content="""
+                * { animation-duration: 0s !important; transition-duration: 0s !important; }
+            """)
+            page.wait_for_selector("#main-tabs", timeout=15000)
+            page.click("#main-tabs >> text=Heatseeker", timeout=10000)
+            page.wait_for_selector(".dash-graph", timeout=15000)
+            page.wait_for_timeout(2000)
+            screenshot1 = page.screenshot()
 
-        page.goto(DASHBOARD_URL, wait_until="networkidle", timeout=30000)
-        page.add_style_tag(content="""
-            * { animation-duration: 0s !important; transition-duration: 0s !important; }
-        """)
-        page.wait_for_selector("#main-tabs", timeout=15000)
-        page.click("#main-tabs >> text=Heatseeker", timeout=10000)
-        page.wait_for_selector(".dash-graph", timeout=15000)
-        page.wait_for_timeout(2000)
+            page.reload(wait_until="networkidle", timeout=30000)
+            page.add_style_tag(content="""
+                * { animation-duration: 0s !important; transition-duration: 0s !important; }
+            """)
+            page.wait_for_selector("#main-tabs", timeout=15000)
+            page.click("#main-tabs >> text=Heatseeker", timeout=10000)
+            page.wait_for_selector(".dash-graph", timeout=15000)
+            page.wait_for_timeout(2000)
+            screenshot2 = page.screenshot()
 
-        # First capture
-        screenshot1 = page.screenshot()
+            if screenshot1 != screenshot2:
+                first_path = tmp_path / "determinism_first.png"
+                second_path = tmp_path / "determinism_second.png"
+                first_path.write_bytes(screenshot1)
+                second_path.write_bytes(screenshot2)
+                passed, diff_ratio = _compare_screenshots(
+                    first_path, second_path, tmp_path / "determinism_check.png",
+                    tolerance=PIXEL_DIFF_TOLERANCE,
+                )
+                if not passed:
+                    pytest.fail(f"Non-deterministic screenshots: {diff_ratio:.4%} diff between captures")
+        finally:
+            page.close()
 
-        # Reload and re-capture
-        page.reload(wait_until="networkidle", timeout=30000)
-        page.add_style_tag(content="""
-            * { animation-duration: 0s !important; transition-duration: 0s !important; }
-        """)
-        page.wait_for_selector("#main-tabs", timeout=15000)
-        page.click("#main-tabs >> text=Heatseeker", timeout=10000)
-        page.wait_for_selector(".dash-graph", timeout=15000)
-        page.wait_for_timeout(2000)
-
-        screenshot2 = page.screenshot()
-
-        # Compare byte-for-byte (should be identical with fixed viewport and no animations)
-        if screenshot1 != screenshot2:
-            # Small differences may occur due to timing; check pixel ratio instead
-            ratio_path = SCREENSHOTS_DIR / "determinism_check.png"
-            passed, diff_ratio = _compare_screenshots(
-                BASELINE_PATH, ACTUAL_PATH, ratio_path, tolerance=PIXEL_DIFF_TOLERANCE
-            )
-            if not passed:
-                pytest.fail(f"Non-deterministic screenshots: {diff_ratio:.4%} diff between captures")
-
-        page.close()
 
 
 # ===========================================================================

@@ -105,6 +105,25 @@ log = logging.getLogger("heatseeker")
 # -- Graceful shutdown infrastructure --
 _shutdown_event = asyncio.Event()
 _background_tasks: set[asyncio.Task] = set()
+_BACKGROUND_SHUTDOWN_TIMEOUT_S = 5.0
+
+
+async def _stop_tracked_background_tasks():
+    """Cancel known work and include children registered during cancellation."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + _BACKGROUND_SHUTDOWN_TIMEOUT_S
+    while True:
+        pending = {task for task in _background_tasks if not task.done()}
+        if not pending:
+            return set()
+        if loop.time() >= deadline:
+            return pending
+        for task in pending:
+            if not task.cancelling():
+                task.cancel()
+        _, unfinished = await asyncio.wait(pending, timeout=max(0.0, deadline - loop.time()))
+        if unfinished:
+            return {task for task in _background_tasks if not task.done()}
 
 
 async def _logged_task(coro, name: str):
@@ -425,6 +444,19 @@ def cache_set(key: str, data: Any):
 
 
 
+def _snapshot_time(d: dict) -> float:
+    ts = d.get("ts")
+    if isinstance(ts, datetime):
+        t = ts if ts.tzinfo else ts.replace(tzinfo=UTC)
+        return t.timestamp()
+    iso = d.get("ts_iso") or (ts if isinstance(ts, str) else None)
+    try:
+        dt = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+        return (dt if dt.tzinfo else dt.replace(tzinfo=UTC)).timestamp()
+    except (TypeError, ValueError):
+        return 0.0
+
+
 async def save_snapshot(ticker: str, payload: dict[str, Any]):
     try:
         # F12: typed UTC datetime for ts (ISO string kept as ts_iso for compat
@@ -445,8 +477,10 @@ async def save_snapshot(ticker: str, payload: dict[str, Any]):
         }
         await db.snapshots.insert_one(doc)
         # Keep last 50 per ticker
-        cursor = db.snapshots.find({"ticker": ticker}, {"_id": 1}).sort("ts", -1).skip(50)
-        ids = [d["_id"] async for d in cursor]
+        cursor = db.snapshots.find({"ticker": ticker}, {"_id": 1, "ts": 1, "ts_iso": 1})
+        retained = [d async for d in cursor]
+        retained.sort(key=_snapshot_time, reverse=True)
+        ids = [d["_id"] for d in retained[50:]]
         if ids:
             await db.snapshots.delete_many({"_id": {"$in": ids}})
     except Exception as e:
@@ -459,22 +493,13 @@ async def velocity_and_rolling(ticker: str, current_nodes: dict[str, Any]) -> di
     F12 migration: ts may be datetime (new) or ISO string (legacy rows).
     Normalizes in Python after fetch so mixed-type storage never misorders.
     """
-    cur = db.snapshots.find({"ticker": ticker}, {"_id": 0}).sort("ts", -1).limit(10)
+    # This is the short display buffer (50 rows), not the research archive.
+    # Limit only after comparing real instants across legacy strings and dates.
+    cur = db.snapshots.find({"ticker": ticker}, {"_id": 0})
     history = [d async for d in cur]
 
-    def _ts_key(d: dict) -> float:
-        ts = d.get("ts")
-        if isinstance(ts, datetime):
-            t = ts if ts.tzinfo else ts.replace(tzinfo=UTC)
-            return t.timestamp()
-        iso = d.get("ts_iso") or (ts if isinstance(ts, str) else None)
-        try:
-            dt = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
-            return (dt if dt.tzinfo else dt.replace(tzinfo=UTC)).timestamp()
-        except (TypeError, ValueError):
-            return 0.0
-
-    history.sort(key=_ts_key, reverse=True)
+    history.sort(key=_snapshot_time, reverse=True)
+    history = history[:10]
     if len(history) < 1:
         return {"velocity_score": 0, "rolling_floor": "stable", "rolling_ceiling": "stable", "history": []}
 
@@ -624,6 +649,9 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
                 # Public API error is already logged above; losing the counter
                 # must not abort the cvserver fallback below.
                 pass
+
+    if os.getenv("FLOWW_MARKET_DATA_PROVIDER") == "public":
+        raise HTTPException(503, "Public market data is unavailable; alternate sources are disabled")
 
     # ── 1. Try cvserver first (with timeout) ──
     try:
@@ -932,14 +960,16 @@ async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = Tr
     Stale-while-revalidate: if the fresh-TTL cache misses but a stale entry
     (< STALE_TTL) exists, serve it immediately and refresh in the background
     (single-flight per key)."""
+    from services.market_provenance import cached_market_copy
+    if _shutdown_event.is_set():
+        raise HTTPException(status_code=503, detail="Market refresh is stopping")
     cache_key = f"{ticker}:{max_expiries}:{mode}:{dte}:{scalp}:{with_taps}:{max_strikes}"
     cached = _BUILD_HEATMAP_CACHE.get(cache_key)
     age = (time.time() - cached["ts"]) if cached else None
     if cached is not None and age is not None:
         if age < _BUILD_HEATMAP_CACHE_TTL:
             # Contract: frontend StaleDataBadge reads data.stale_age_s (App.js).
-            cached["data"]["stale_age_s"] = round(age, 1)
-            return cached["data"]  # fresh
+            return cached_market_copy(cached["data"], age)
         if (
             age < _BUILD_HEATMAP_STALE_TTL
             and cache_key not in _BUILD_HEATMAP_INFLIGHT
@@ -947,11 +977,12 @@ async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = Tr
             and not cached["data"].get("error")
         ):
             _BUILD_HEATMAP_INFLIGHT.add(cache_key)
-            asyncio.create_task(_revalidate_heatmap(
+            refresh = asyncio.create_task(_revalidate_heatmap(
                 cache_key, ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes,
             ))
-            cached["data"]["stale_age_s"] = round(age, 1)
-            return cached["data"]  # stale-but-serveable, refresh running
+            _background_tasks.add(refresh)
+            refresh.add_done_callback(_background_tasks.discard)
+            return cached_market_copy(cached["data"], age, revalidating=True)
     try:
         return await _build_heatmap_impl(ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes)
     except HTTPException:
@@ -1002,6 +1033,7 @@ def _display_surfaces(spot: float, contracts: list[dict[str, Any]], ticker: str,
     def _with_vex(grid: dict) -> dict:
         try:
             grid["vex_grid"] = _vg.get("grid", {})
+            grid["vex_strike_gross"] = _vg.get("strike_gross", [])
             grid["vex_meta"] = {"exposure_basis": _vg.get("exposure_basis"),
                                 "model": _vg.get("model"),
                                 "status": _vg.get("status"),
@@ -1074,6 +1106,9 @@ def _display_quality(exposure_basis: str, model_basis: str, strikes: list) -> di
     GREEK_TIME_UNKNOWN: it informs freshness interpretation without
     blocking structure (eligibility stays driven by setupEligible).
     """
+    if not strikes:
+        return {"state": "unavailable", "reasonCodes": ["NO_USABLE_CONTRACTS"],
+                "setupEligible": False, "executionEligible": False, "tradeSideCapability": "none"}
     vendor_ok = exposure_basis == "OI" and model_basis == "vendor-supplied-greeks"
     if vendor_ok:
         reasons = ["GREEK_TIME_UNKNOWN"]
@@ -1096,6 +1131,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     log.info(f"build_heatmap: {ticker} expiries={max_expiries} mode={mode} max_strikes={max_strikes}")
     # Check cache first
     cache_key = f"{ticker}:{max_expiries}:{mode}:{dte}:{scalp}:{with_taps}:{max_strikes}"
+    requested_map_query = {"expiries": max_expiries, "mode": mode, "dte": dte, "scalp": scalp, "withTaps": with_taps, "maxStrikes": max_strikes}
     cached = _BUILD_HEATMAP_CACHE.get(cache_key)
     if cached and (time.time() - cached["ts"]) < _BUILD_HEATMAP_CACHE_TTL:
         # Poison-entry guard: a cached payload from a degraded upstream window
@@ -1444,10 +1480,11 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                 _wconn = getattr(_ddb_win, "conn", None)
                 if _wconn is not None:
                     _scope_key = f"{ticker}:{mode}:{dte}:{scalp}"
-                    _prev_rows = _wconn.execute(
+                    from services.connection_guard import query_rows
+                    _prev_rows = query_rows(_wconn,
                         "SELECT snapshot_id, asof_ts, data_source FROM heatmap_snapshots_v2 "
                         "WHERE ticker = '" + str(ticker).replace("'", "''") + "' AND query_key = '"
-                        + _scope_key.replace("'", "''") + "' ORDER BY asof_ts DESC LIMIT 1").fetchall()
+                        + _scope_key.replace("'", "''") + "' ORDER BY asof_ts DESC LIMIT 1")
                     if _prev_rows:
                         _pid = _prev_rows[0][0]
                         _prep = replay_snapshot(_wconn, _pid)
@@ -1501,6 +1538,9 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     # Run yfinance calls in parallel threads to avoid blocking
     rv_task = asyncio.create_task(asyncio.to_thread(calc_realized_volatility, ticker.replace("^", ""), 20))
     iv_rank_task = asyncio.create_task(asyncio.to_thread(calc_iv_rank_percentile, ticker.replace("^", ""), skew.get("atm_iv", 0.2)))
+    for task in (rv_task, iv_rank_task):
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
     rv = await rv_task
     iv_rank = await iv_rank_task
     if rv:
@@ -1528,28 +1568,27 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         "patterns": patterns,
         "velocity": velocity,
         "tap_counts": {str(k): v for k, v in tap_map.items()},
-        # F04: upstream age survives caches. stale_age_s is time since build
-        # here; source age comes from raw.received_at when present. Never reset
-        # upstream age to zero by rebuilding. data_fallback reflects actual
-        # provider switch, not a hardcoded False.
-        "stale_age_s": 0.0,
+        "stale_age_s": raw.get("cache_age_s"),
+        "stale": bool(raw.get("stale")),
+        "data_fallback": bool(raw.get("stale") or raw.get("data_fallback")),
+        "data_source": raw.get("data_source", "unknown"),
+        **{key: raw.get(key) for key in ("spot_source", "spot_event_time", "spot_fetched_at")
+           if key in raw},
         "source_received_at": raw.get("received_at"),
         "source_age_s": None,
-        "data_fallback": raw.get("data_source", "yfinance") != "public_api",
-        "data_source": raw.get("data_source", "yfinance"),
         "exposure_basis": exposure_basis,
         "formula_version": "gex.v2",
-        # R6-1 canonical display policy: raw/volume strikes + grids derive
-        # from supplied vendor Greeks (model_basis vendor-supplied-greeks).
-        # Local Black-Scholes Greeks feed charm/vex/vomma scenario overlays
-        # only, under model_basis local-bs-v1 — never raw structure.
         "model_basis": model_basis,
         "quality": _display_quality(exposure_basis, model_basis, strikes),
         "gex_regime": nodes.get("regime"),
         "mode": mode,
+        "map_query": requested_map_query,
         "dte": dte,
         "scalp": scalp,
         "asof": datetime.now(UTC).isoformat(),
+        # Build time identifies the displayed version; only producer times establish freshness.
+        "event_time": raw.get("event_time") or raw.get("observed_at"),
+        "fetched_at": raw.get("fetched_at"),
         # New analytics
         "implied_move": implied_move,
         "prob_distribution": prob_distribution,
@@ -1894,6 +1933,8 @@ def _sanitize(obj):
         return {k: _sanitize(v) for k, v in obj.items()}
     if isinstance(obj, list):
         return [_sanitize(v) for v in obj]
+    if isinstance(obj, (bool, np.bool_)):
+        return bool(obj)
     if isinstance(obj, (float, np.floating)):
         if math.isnan(obj) or math.isinf(obj):
             return None
@@ -2545,6 +2586,9 @@ async def _scheduler_loop():
                     _last_snapshot_hhmm = today_et + slot
             except Exception as e:
                 log.warning(f"snapshot tick err: {e}")
+            research = getattr(app.state, "research_service", None)
+            if research is not None and os.getenv("FLOWW_AGENT_DISABLED") != "1":
+                research.schedule_maintenance()
         except Exception as e:
             log.warning(f"scheduler tick err: {e}")
         # R8-05: outcome-worker tick — default DISABLED. Set
@@ -3263,12 +3307,12 @@ async def _public_sweep_loop():
         log.info("public sweep disabled (FLOWW_PUBLIC_SWEEP=0)")
         return
     try:
-        rth_s = float(os.environ.get("FLOWW_PUBLIC_SWEEP_RTH_S", "45"))
+        rth_s = float(os.environ.get("FLOWW_PUBLIC_SWEEP_RTH_S", "1"))
         off_s = float(os.environ.get("FLOWW_PUBLIC_SWEEP_OFFH_S", "600"))
-        sl = int(os.environ.get("FLOWW_PUBLIC_SWEEP_SLICE", "8"))
+        sl = int(os.environ.get("FLOWW_PUBLIC_SWEEP_SLICE", "12"))
         mx = int(os.environ.get("FLOWW_PUBLIC_SWEEP_MAX_EXPIRES", "2"))
     except (TypeError, ValueError):
-        rth_s, off_s, sl, mx = 45.0, 600.0, 8, 2
+        rth_s, off_s, sl, mx = 1.0, 600.0, 12, 2
     log.info("public sweep loop started (rth=%ss offh=%ss slice=%d expiries=%d)",
              rth_s, off_s, sl, mx)
     # U1 provenance: every future sweep/alert mystery resolves to a process.
@@ -3280,7 +3324,8 @@ async def _public_sweep_loop():
         _root = str(pathlib.Path(__file__).resolve().parent.parent)
         _sha = subprocess.run(
             ["git", "-C", _root, "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, timeout=5).stdout.strip() or "unknown"
+            capture_output=True, text=True, timeout=5,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0).stdout.strip() or "unknown"
     except Exception:
         _sha = "unknown"
     log.info("public sweep identity: pid=%d tree=%s", os.getpid(), _sha)
@@ -3363,14 +3408,18 @@ async def on_stop():
         except Exception as e:
             log.warning(f"on_stop: scheduler task raised on cancel: {e}")
 
-    # Cancel any remaining tracked background tasks
-    pending = [t for t in _background_tasks if not t.done()]
-    for t in pending:
-        t.cancel()
-    if pending:
-        # Wait with a short bound so a stuck task can't block shutdown
-        await asyncio.wait(pending, timeout=5.0)
-        log.info(f"on_stop: cancelled {len(pending)} background task(s)")
+    await _stop_tracked_background_tasks()
+
+    # Research cancellation persists terminal state. It must finish while
+    # Mongo is still open; its later registered callback is idempotent.
+    research = getattr(app.state, "research_service", None)
+    if research is not None:
+        await research.close()
+
+    unfinished = {task for task in _background_tasks if not task.done()}
+    if unfinished:
+        log.error("on_stop: %d background task(s) did not stop; storage remains open", len(unfinished))
+        raise RuntimeError("Background work did not stop; storage remains open")
 
     # Finally close MongoDB
     client.close()
@@ -3550,6 +3599,12 @@ from routes.market_data import router as market_data_router
 
 app.include_router(market_data_router, prefix="/api", tags=["market_data"])
 
+from routes.market_catalog import router as market_catalog_router
+from routes.price_history import router as price_history_router
+
+app.include_router(market_catalog_router)
+app.include_router(price_history_router)
+
 from routes.ml_api import router as ml_api_router
 
 app.include_router(ml_api_router, tags=["ml_api"])
@@ -3656,6 +3711,54 @@ try:
     from routes.agent import router as agent_router
 
     app.include_router(agent_router, tags=["agent"])
+    from services.agent.local_access import AgentCORSMiddleware
+    app.add_middleware(AgentCORSMiddleware)
+
+    @app.on_event("startup")
+    async def startup_research():
+        # Composition owns the broad application dependencies. Research only
+        # receives these three fixed, copy-only read functions.
+        import copy
+
+        from routes.analytics import _cache as chain_cache
+        from services.agent.reads import ResearchReads
+        from services.agent.repository import AgentRepository
+        from services.agent.research import ResearchService
+
+        def peek_map(ticker, query):
+            from services.agent.display_map import map_cache_key
+            entry = _BUILD_HEATMAP_CACHE.get(map_cache_key(ticker, query))
+            return copy.deepcopy(entry["data"]) if entry else None
+
+        def read_alerts(ticker):
+            from services.research_data_seam import stored_research_alerts
+            return stored_research_alerts(duckdb_engine.query_strict, ticker)
+
+        def peek_chain(ticker, preferred):
+            from services.public_api_adapter import peek_chain_from_public_api
+            return peek_chain_from_public_api(ticker, preferred) or chain_cache.peek_available_chain(ticker, preferred)
+
+        try:
+            repository = AgentRepository(db)
+            await repository.initialize()
+            reads = ResearchReads(peek_chain, peek_map, read_alerts)
+            from services.agent.codex_model import CodexModel
+            from services.agent.spend import SpendLedger, money_units
+            spending = SpendLedger(repository.budgets, cap_units=money_units(os.getenv("AGENT_DAILY_BUDGET_USD", "20")), audit_collection=db["agent_budget_audit"])
+            await spending.initialize()
+            await spending.recover_undispatched()
+            app.state.research_service = ResearchService(repository, reads, model=CodexModel(repository, db.agent_oauth_usage))
+            from services.agent.tools import configure_reads
+            configure_reads(reads)
+        except Exception as exc:
+            app.state.research_service = None
+            log.warning("Saved research unavailable: %s", type(exc).__name__)
+
+    @app.on_event("shutdown")
+    async def shutdown_research():
+        research = getattr(app.state, "research_service", None)
+        if research is not None:
+            await research.close()
 except Exception as _agent_import_err:  # noqa: BLE001 - non-fatal; feature degrades
     log.warning(f"Lodestar agent routes disabled (non-fatal): {_agent_import_err}")
 
@@ -3709,21 +3812,17 @@ async def shutdown_duckdb():
     except Exception as e:
         log.warning(f"server.py: duckdb_engine.stop() raise swallowed (shutdown continued): {e}", exc_info=True)
 
-# ============ Ingestion Pipeline (Mock Feed for now) ============
+# ============ Ingestion Pipeline (verified producers only) ============
 import contextlib
 
 from services.ingestion_pipeline import IngestionPipeline
-from services.mock_schwab_feed import MockSchwabFeed
 
 _ingestion_pipeline: IngestionPipeline | None = None
-_mock_feed: MockSchwabFeed | None = None
-_mock_feed_task: asyncio.Task | None = None
-_mock_feed_task: asyncio.Task | None = None
 
 @app.on_event("startup")
 async def startup_ingestion():
-    """Launch ingestion pipeline. Mock feed is opt-in via FLOWW_ENABLE_MOCK_FEED=1."""
-    global _ingestion_pipeline, _mock_feed, _mock_feed_task
+    """Start storage ingestion. Synthetic producers belong in isolated fixtures."""
+    global _ingestion_pipeline
     try:
         _ingestion_pipeline = IngestionPipeline(
             db=duckdb_engine,
@@ -3732,37 +3831,15 @@ async def startup_ingestion():
         )
         await _ingestion_pipeline.start()
 
-        # Synthetic dev tick generator. Live market data comes from the
-        # Public.com API (fetch_spot_and_chains_merged → public_api_adapter);
-        # Schwab is retired (2026-09-03) and this feed is never a live source.
-        if os.getenv("FLOWW_ENABLE_MOCK_FEED") == "1":
-            _mock_feed = MockSchwabFeed(rate=100.0, symbols=["SPY", "QQQ"], seed=42)
-            _mock_feed.on_tick(_ingestion_pipeline.enqueue_tick)
-            _mock_feed.on_chain(_ingestion_pipeline.enqueue_chain)
-            _mock_feed.on_lob(_ingestion_pipeline.enqueue_lob)
-            _mock_feed.on_lob_depth(_ingestion_pipeline.enqueue_lob_depth)
-
-            # Run mock feed in background with tracked task
-            _mock_feed_task = asyncio.create_task(_mock_feed.start())
-            _background_tasks.add(_mock_feed_task)
-            _mock_feed_task.add_done_callback(_background_tasks.discard)
-            log.info("Ingestion pipeline + mock feed started")
-        else:
-            log.info("Ingestion pipeline started (mock feed disabled)")
+        log.info("Ingestion storage started; awaiting verified market producers")
     except Exception as e:
         log.warning(f"Ingestion startup failed (non-fatal): {e}")
 
 @app.on_event("shutdown")
 async def shutdown_ingestion() -> None:
     """Drain queue and stop ingestion on shutdown."""
-    global _ingestion_pipeline, _mock_feed, _mock_feed_task
+    global _ingestion_pipeline
     try:
-        if _mock_feed_task and not _mock_feed_task.done():
-            _mock_feed_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await _mock_feed_task
-        if _mock_feed:
-            await _mock_feed.stop()
         if _ingestion_pipeline:
             await _ingestion_pipeline.stop()
         log.info("Ingestion pipeline stopped")

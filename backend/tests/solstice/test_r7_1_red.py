@@ -151,35 +151,29 @@ def test_total_provider_failure_is_unavailable_then_stale():
 
 
 def test_upstream_seam_calls_real_adapter_signature_and_shape():
-    """R8-01: market_bars._upstream must call fetch_bars_from_public_api
-    with its real (timeframe/limit/sessions) signature and translate the
-    canonical {date,open,high,low,close,volume,session} rows. The previous
-    call passed interval/period/aggregation kwargs the adapter never
-    accepted — every fetch raised before touching the network (live
-    /api/movers showed 0/75 valid with correct session dates)."""
+    """The real adapter retains requested period and regular-session bars."""
     import asyncio
+    from types import SimpleNamespace
     from unittest.mock import AsyncMock, patch
 
     from services import market_bars
 
-    seen = {}
-
-    async def fake_fetch(ticker, timeframe="1Day", limit=100, sessions="regular"):
-        seen.update({"ticker": ticker, "timeframe": timeframe,
-                     "limit": limit, "sessions": sessions})
-        return [{"date": "2026-09-24T00:00:00-04:00", "open": 100.0,
-                 "high": 101.0, "low": 99.0, "close": 101.0, "volume": 10,
-                 "session": "regular"},
-                {"date": "2026-09-25T00:00:00-04:00", "open": 101.0,
-                 "high": 102.0, "low": 100.0, "close": 102.0, "volume": 11,
-                 "session": "regular"}]
+    broker = SimpleNamespace(
+        get_trading_account=lambda: SimpleNamespace(account_id="fixture"),
+        get_bars=AsyncMock(return_value={"regularMarket": {"bars": [
+            {"timestamp": "2026-09-24T00:00:00-04:00", "open": 100.0,
+             "high": 101.0, "low": 99.0, "close": 101.0, "volume": 10},
+            {"timestamp": "2026-09-25T00:00:00-04:00", "open": 101.0,
+             "high": 102.0, "low": 100.0, "close": 102.0, "volume": 11},
+        ]}}),
+    )
 
     async def go():
-        with patch("services.public_api_adapter.fetch_bars_from_public_api",
-                   new=AsyncMock(side_effect=fake_fetch)):
+        market_bars._reset_state()
+        with patch("services.public_api_adapter._get_broker", new=AsyncMock(return_value=broker)):
             return await market_bars.get_daily_bars("SPY", days=10)
     bars = asyncio.run(go())
-    assert seen["timeframe"] == "1Day"
+    broker.get_bars.assert_awaited_once_with("SPY", "YEAR", "EQUITY", "ONE_DAY")
     assert bars is not None and len(bars) == 2
     assert bars[-1] == {"t": "2026-09-25T00:00:00-04:00", "o": 101.0,
                         "h": 102.0, "l": 100.0, "c": 102.0, "v": 11,

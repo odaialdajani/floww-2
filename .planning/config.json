@@ -62,6 +62,5 @@
     "source_grounding": true,
     "source_grounding_authority": "grep"
   },
-  "resolve_model_ids": "omit",
-  "runtime": "hermes"
+  "resolve_model_ids": "omit"
 }

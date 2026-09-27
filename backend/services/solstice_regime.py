@@ -14,19 +14,73 @@ from typing import Any
 
 from bs_greeks import bs_gamma
 
-VERSION = "regime.v1"
+VERSION = "regime.v2"
+
+
+def _number(value) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) else None
 
 
 def _contract_mult(c: dict[str, Any]) -> float | None:
-    """Per-contract multiplier; adjusted/nonstandard contracts are quarantined
-    (None) — never silently forced to 100 (R4-16)."""
     if c.get("adjusted") or c.get("nonstandard"):
         return None
-    try:
-        m = float(c.get("multiplier", 100.0) or 100.0)
-    except (TypeError, ValueError):
-        return None
-    return m if math.isfinite(m) and m > 0 else None
+    value = _number(c.get("multiplier", 100.0))
+    return value if value is not None and value > 0 else None
+
+
+def _model_row(c):
+    if not isinstance(c, dict):
+        return None, "INVALID_CONTRACT"
+    mult = _contract_mult(c)
+    if mult is None:
+        return None, "QUARANTINED"
+    kind = str(c.get("type", "")).lower()
+    if kind not in {"call", "put", "c", "p"}:
+        return None, "MISSING_OPTION_TYPE"
+    strike, oi = _number(c.get("strike")), _number(c.get("oi"))
+    if strike is None or strike <= 0:
+        return None, "MISSING_STRIKE"
+    if oi is None or oi < 0:
+        return None, "MISSING_OPEN_INTEREST"
+    iv, remaining = _number(c.get("iv")), _number(c.get("T"))
+    # Explicit zero interest has a known zero contribution, without repricing.
+    if oi > 0 and (iv is None or iv <= 0):
+        return None, "MISSING_VOLATILITY"
+    if oi > 0 and (remaining is None or remaining <= 0):
+        return None, "MISSING_TIME_TO_EXPIRY"
+    return {**c, "type": "call" if kind in {"call", "c"} else "put",
+            "strike": strike, "oi": oi, "iv": iv or 0.0, "T": remaining or 0.0,
+            "multiplier": mult}, None
+
+
+def _vendor_value(contracts, spot):
+    total, usable = 0.0, 0
+    for c in contracts:
+        if not isinstance(c, dict):
+            continue
+        mult = _contract_mult(c)
+        oi, gamma = _number(c.get("oi")), _number(c.get("gamma"))
+        kind = str(c.get("type", "")).lower()
+        if mult is None or oi is None or oi < 0 or kind not in {"call", "put", "c", "p"}:
+            continue
+        if oi == 0:
+            usable += 1
+            continue
+        if gamma is None or gamma < 0:
+            continue
+        unit = gamma * oi * mult * spot * spot * .01
+        if not math.isfinite(unit):
+            continue
+        total += unit if kind in {"call", "c"} else -unit
+        usable += 1
+    complete = bool(contracts) and usable == len(contracts) and math.isfinite(total)
+    return (total if complete else None), {"requested": len(contracts), "usable": usable}
 
 
 def gamma_curve(contracts: list[dict[str, Any]], spots: list[float],
@@ -85,97 +139,59 @@ def find_roots(spots: list[float], values: list[float]) -> list[dict[str, Any]]:
 
 def regime_at_spot(spot: float, contracts: list[dict[str, Any]], ticker: str = "",
                    scope: str = "") -> dict[str, Any]:
-    """Evaluate modeled curve at current spot + bracket roots in coverage.
+    """Publish a modeled sign only for a complete, validated input population.
 
-    R4-16/P03 contract: per-contract multipliers (quarantined adjusted/
-    nonstandard never forced to 100); exact-zero observed curve returns
-    ZERO/ZERO_CURVE; fully-quarantined population returns UNKNOWN with
-    quarantined count. Sign alone never grants directional permission.
+    Missing inputs must not silently remove one side of the option book. Vendor
+    gamma is a separate observed comparison and never overrides modeled sign.
     """
-    quarantined: list = []
-    usable = [c for c in (contracts or []) if isinstance(c, dict)
-              and _contract_mult(c) is not None]
-    n_quarantined = len([c for c in (contracts or []) if isinstance(c, dict)]) - len(usable)
-    # gamma_curve also appends to quarantined for audit parity.
-    strikes = sorted({c.get("strike") for c in usable if c.get("strike")})
-    if not strikes or spot <= 0:
-        reason = "QUARANTINED" if (contracts and not usable) else "NO_COVERAGE"
-        return {"sign": "UNKNOWN", "roots": [], "version": VERSION,
-                "reason": reason, "quarantined": n_quarantined,
-                "directional_permission": "NONE"}
-    lo = max(min(strikes), spot * 0.85)
-    hi = min(max(strikes), spot * 1.15)
-    n = 100
-    spots = [lo + (hi - lo) * i / n for i in range(n + 1)]
-    vals = gamma_curve(usable, spots, ticker, _quarantined=quarantined)
-    # n_quarantined reconciled with gamma_curve's own audit list.
-    n_quarantined = max(n_quarantined, len(quarantined))
-    at = gamma_curve(usable, [spot], ticker)[0] if spots else 0.0
-    # Vendor residual at spot (model vs supplied gamma) — never spliced silently.
-    # Uses the same per-contract multiplier; quarantined contracts excluded.
-    vendor_total = 0.0
-    vendor_has_nonzero = False
-    for c in usable:
-        try:
-            g = float(c.get("gamma", 0) or 0)
-            oi = float(c.get("oi", 0) or 0)
-        except (TypeError, ValueError):
-            continue
-        if g < 0 or oi <= 0:
-            continue
-        if g > 0:
-            vendor_has_nonzero = True
-        mult = _contract_mult(c) or 100.0
-        u = g * oi * mult * spot * spot * 0.01
-        vendor_total += u if str(c.get("type", "")).lower().startswith("c") else -u
-    # Exact-zero observed curve: no usable vendor exposure (all supplied
-    # gamma zero / zero OI) → ZERO/ZERO_CURVE even when the frozen-input
-    # model reprices non-zero. Both values reported; residual explains gap.
-    if not vendor_has_nonzero and vendor_total == 0.0:
-        return {
-            "sign": "ZERO", "modeled_at_spot": at,
-            "vendor_at_spot": vendor_total,
-            "model_vendor_residual": at - vendor_total,
-            "roots": find_roots(spots, vals),
-            "bounds": [round(lo, 2), round(hi, 2)],
-            "version": VERSION, "scope": scope,
-            "inventory_basis": "CONVENTIONAL_PROXY",
-            "reason": "ZERO_CURVE", "quarantined": n_quarantined,
-            "directional_permission": "NONE",
-            "guidance": "Transition/uncertain near a root; damping/amplification are "
-                        "hypotheses under a declared positioning assumption, requiring "
-                        "observed price confirmation.",
-        }
-    # Fully-flat modeled curve (within eps) is also a zero curve.
-    if vals and max(abs(v) for v in vals) < 1e-9 and abs(at) < 1e-9:
-        return {
-            "sign": "ZERO", "modeled_at_spot": at,
-            "vendor_at_spot": vendor_total,
-            "model_vendor_residual": at - vendor_total,
-            "roots": find_roots(spots, vals),
-            "bounds": [round(lo, 2), round(hi, 2)],
-            "version": VERSION, "scope": scope,
-            "inventory_basis": "CONVENTIONAL_PROXY",
-            "reason": "ZERO_CURVE", "quarantined": n_quarantined,
-            "directional_permission": "NONE",
-            "guidance": "Transition/uncertain near a root; damping/amplification are "
-                        "hypotheses under a declared positioning assumption, requiring "
-                        "observed price confirmation.",
-        }
-    return {
-        "sign": "POSITIVE" if at > 0 else ("NEGATIVE" if at < 0 else "ZERO"),
-        "modeled_at_spot": at,
-        "vendor_at_spot": vendor_total,
-        "model_vendor_residual": at - vendor_total,
-        "roots": find_roots(spots, vals),
-        "bounds": [round(lo, 2), round(hi, 2)],
-        "version": VERSION, "scope": scope,
-        "inventory_basis": "CONVENTIONAL_PROXY",
-        "reason": "ZERO_CURVE" if at == 0 else "MODELED_SIGN",
-        "quarantined": n_quarantined,
-        # Corrected contract: sign alone never permits direction.
-        "directional_permission": "NONE",
-        "guidance": "Transition/uncertain near a root; damping/amplification are "
-                    "hypotheses under a declared positioning assumption, requiring "
-                    "observed price confirmation.",
+    contracts = contracts or []
+    usable, reasons = [], {}
+    for contract in contracts:
+        row, reason = _model_row(contract)
+        if reason:
+            reasons[reason] = reasons.get(reason, 0) + 1
+        else:
+            usable.append(row)
+    coverage = {"requested": len(contracts), "usable": len(usable),
+                "status": "complete" if usable and not reasons else "partial" if usable else "unavailable",
+                "reasons": reasons}
+    spot = _number(spot)
+    vendor, vendor_coverage = _vendor_value(contracts, spot) if spot is not None and spot > 0 else (None, None)
+    result = {
+        "sign": "UNKNOWN", "modeled_at_spot": None, "vendor_at_spot": vendor,
+        "model_vendor_residual": None, "roots": [], "bounds": None,
+        "version": VERSION, "scope": scope, "sign_basis": "frozen_oi_iv_model",
+        "inventory_basis": "CONVENTIONAL_PROXY", "directional_permission": "NONE",
+        "quarantined": reasons.get("QUARANTINED", 0),
+        "model_coverage": coverage, "vendor_coverage": vendor_coverage,
+        "reason": "MODEL_INPUTS_INCOMPLETE" if reasons else "NO_COVERAGE",
+        "guidance": "Model inputs are incomplete; the market regime and zero-gamma levels are unknown.",
     }
+    if spot is None or spot <= 0:
+        result["reason"] = "INVALID_SPOT"
+        return result
+    if reasons or not usable:
+        return result
+    strikes = sorted({row["strike"] for row in usable})
+    lo, hi = max(min(strikes), spot * .85), min(max(strikes), spot * 1.15)
+    spots = [lo + (hi - lo) * i / 100 for i in range(101)] if hi > lo else []
+    try:
+        at = gamma_curve(usable, [spot], ticker)[0]
+        values = gamma_curve(usable, spots, ticker)
+    except (ArithmeticError, ValueError):
+        result["reason"] = "MODEL_CALCULATION_UNAVAILABLE"
+        return result
+    if not all(math.isfinite(value) for value in [at, *values]):
+        result["reason"] = "MODEL_CALCULATION_UNAVAILABLE"
+        return result
+    flat = at == 0 and all(value == 0 for value in values)
+    result.update(
+        sign="POSITIVE" if at > 0 else "NEGATIVE" if at < 0 else "ZERO",
+        modeled_at_spot=at, model_vendor_residual=at - vendor if vendor is not None else None,
+        roots=[] if flat else find_roots(spots, values),
+        bounds=[round(lo, 2), round(hi, 2)] if hi > lo else None,
+        reason="ZERO_CURVE" if flat else "AT_ZERO" if at == 0 else "MODELED_SIGN",
+        guidance="Damping/amplification are hypotheses under a declared positioning assumption, "
+                 "requiring observed price confirmation. Sign alone does not grant trade direction.",
+    )
+    return result

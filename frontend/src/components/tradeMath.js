@@ -19,8 +19,9 @@ export function isTradeClosed(t) {
 export function tradePnl(t) {
   const entry = parseFloat(t.entry_price) || 0;
   const exit = parseFloat(t.exit_price) || 0;
-  const qty = parseInt(t.quantity) || 1;
-  return (exit - entry) * qty * 100 * (t.action === "buy" ? 1 : -1);
+  const isEquity = String(t.type || "").toLowerCase() === "equity";
+  const qty = (isEquity ? parseFloat(t.quantity) : parseInt(t.quantity)) || 1;
+  return (exit - entry) * qty * (isEquity ? 1 : 100) * (t.action === "buy" ? 1 : -1);
 }
 
 // "win" | "loss" | "scratch" — scratch (exit === entry) is excluded from both

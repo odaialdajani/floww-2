@@ -11,6 +11,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import services.composite_confidence as cc  # noqa: E402
@@ -29,8 +31,8 @@ def test_weights_mirrored_across_modules():
 
 
 def test_weights_sum_to_one():
-    assert sum(_weights(cfs)) == 1.0
-    assert sum(_weights(cc)) == 1.0
+    assert sum(_weights(cfs)) == pytest.approx(1.0, rel=0, abs=1e-12)
+    assert sum(_weights(cc)) == pytest.approx(1.0, rel=0, abs=1e-12)
 
 
 def test_docstring_names_all_five_components():

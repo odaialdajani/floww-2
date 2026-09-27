@@ -12,7 +12,7 @@ Four desk disciplines a real flow desk applies that the raw engine cannot:
      dedup TTL lapses, the same morning print re-qualifies all afternoon on
      stale volume. Per-contract volume marks turn cumulative volume into
      NEW-contracts-since-last-scan; intraday rules re-fire only on fresh
-     interest (arrival intensity, not level).
+     interest within receipt windows; this does not establish trade arrival timing.
   2. CAMPAIGN DETECTION — the same contract alerting across multiple prior
      sessions is an institution building a position over days (the FOLLOW
      insight applied per-contract). One-notch tier promotion, with the
@@ -31,11 +31,15 @@ DuckDB invariant: all writes via engine.execute_write.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from services.scan_observations import nonnegative, session_day, timestamp
+
 logger = logging.getLogger(__name__)
+_volume_marks_lock = threading.RLock()
 
 _ET = ZoneInfo("America/New_York")
 
@@ -67,42 +71,77 @@ def init_desk_tables(engine) -> None:
 # ── 1. fresh interest ───────────────────────────────────────────────
 
 def mark_vol_deltas(engine, rows, now: float | None = None) -> dict:
-    """{ckey: new volume since the last scan} — None on first sight.
+    """Same-day changes in saved cumulative snapshots, not trade arrival times.
 
-    A drop in cumulative volume means a new session started upstream; the
-    full figure counts as fresh. Marks are upserted for every row seen.
+    First/missing/revised/older readings remain unknown. Only successful writes
+    establish a baseline. The process lock and conditional update prevent an
+    older pass from replacing a newer observation.
     """
-    t = time.time() if now is None else now
-    out: dict = {}
-    rows = [r for r in (rows or []) if r.get("ckey")]
-    if not rows:
-        return out
-    keys = [r["ckey"] for r in rows]
-    prev: dict = {}
-    try:
-        ph = ",".join("?" for _ in keys)
-        prev = {x["ckey"]: x["vol"] for x in engine.query(
-            f"SELECT ckey, vol FROM flow_vol_marks WHERE ckey IN ({ph})", keys)}
-    except Exception as e:
-        logger.debug(f"flow_desk.mark_vol_deltas read: {e}")
-    for r in rows:
-        vol = r.get("vol") or 0.0
-        p = prev.get(r["ckey"])
-        if p is None:
-            out[r["ckey"]] = None
-        elif vol < p:
-            out[r["ckey"]] = vol            # session rollover
-        else:
-            out[r["ckey"]] = vol - p
-    try:
-        engine.execute_write("""
-            INSERT INTO flow_vol_marks (ckey, vol, ts) VALUES (?, ?, ?)
-            ON CONFLICT (ckey) DO UPDATE SET vol = excluded.vol, ts = excluded.ts
-        """, [[r["ckey"], r.get("vol") or 0.0, t] for r in rows])
-    except Exception as e:
-        logger.debug(f"flow_desk.mark_vol_deltas write: {e}")
-    return out
+    with _volume_marks_lock:
+        return _mark_vol_deltas(engine, rows, now)
 
+
+def _mark_vol_deltas(engine, rows, now):
+    t = timestamp(time.time() if now is None else now)
+    rows = [row for row in (rows or []) if isinstance(row, dict) and row.get("ckey")]
+    out = {row["ckey"]: None for row in rows}
+    if not rows or t is None:
+        return out
+    keys = list(out)
+    prev = {}
+    try:
+        placeholders = ",".join("?" for _ in keys)
+        query = (getattr(engine, "query_strict", None) or engine.query)
+        prev = {row["ckey"]: row for row in query(
+            f"SELECT ckey,vol,ts FROM flow_vol_marks WHERE ckey IN ({placeholders})", keys)}
+    except Exception as exc:
+        logger.debug("Saved volume read unavailable (%s)", type(exc).__name__)
+    updates, invalid = {}, {}
+    for row in rows:
+        key = row["ckey"]
+        volume = nonnegative(row.get("vol"))
+        observed = timestamp(row.get("volume_data_received_at", t))
+        if observed is None or observed > t:
+            invalid[key] = t
+            updates.pop(key, None)
+            out[key] = None
+            continue
+        earlier = prev.get(key, {})
+        earlier_time = timestamp(earlier.get("ts"))
+        earlier_volume = nonnegative(earlier.get("vol"))
+        if earlier_time is not None and observed <= earlier_time:
+            continue
+        if volume is None:
+            invalid[key] = observed
+            updates.pop(key, None)
+            out[key] = None
+            continue
+        if key in updates and updates[key] != [key, volume, observed]:
+            invalid[key] = observed
+            updates.pop(key, None)
+            out[key] = None
+            continue
+        if key in invalid:
+            continue
+        if "snapshot_volume_change" in row:
+            out[key] = nonnegative(row.get("snapshot_volume_change"))
+        elif (earlier_volume is not None and earlier_time is not None
+              and session_day(observed) == session_day(earlier_time) and volume >= earlier_volume):
+            out[key] = volume - earlier_volume
+        updates[key] = [key, volume, observed]
+    try:
+        if invalid:
+            engine.execute_write("DELETE FROM flow_vol_marks WHERE ckey=? AND ts<?", list(invalid.items()))
+        if updates:
+            engine.execute_write("""
+                INSERT INTO flow_vol_marks (ckey,vol,ts) VALUES (?,?,?)
+                ON CONFLICT (ckey) DO UPDATE SET vol=excluded.vol,ts=excluded.ts
+                WHERE excluded.ts > flow_vol_marks.ts
+            """, list(updates.values()))
+    except Exception as exc:
+        logger.debug("Saved volume write unavailable (%s)", type(exc).__name__)
+        return {key: None for key in out}
+    return out
 
 def fresh_gate(alerts, deltas, min_abs: float = _FRESH_MIN_ABS,
                min_frac: float = _FRESH_MIN_FRAC) -> list:
@@ -118,6 +157,7 @@ def fresh_gate(alerts, deltas, min_abs: float = _FRESH_MIN_ABS,
             continue
         d = (deltas or {}).get(a.get("ckey"))
         if d is None:
+            a["why"] = (a.get("why") or "") + " · new trade timing unknown; cumulative snapshot only"
             kept.append(a)
             continue
         strike = a.get("strike") or 0

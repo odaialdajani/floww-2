@@ -75,21 +75,14 @@ def env():
 
 
 @pytest.mark.asyncio
-async def test_expired_dropped_today_kept(env):
-    """An expired expiry is dropped; a still-trading one is kept.
+async def test_expired_dropped_today_kept(env, monkeypatch):
+    class TradingDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 9, 11, 15, tzinfo=UTC)
 
-    The live/today expiries must be real TRADING days. `time_to_expiry_years`
-    resolves each expiry against the current session clock, so an expiry dated
-    on a weekend or a past holiday is correctly classified EXPIRED (today's
-    session has closed) and dropped. Building the fixture from
-    `datetime.now().date()` alone assumed every calendar day is a session, which
-    silently broke the test on non-trading days.
-
-    So: the "expired" leg is dated in the past, and the "kept" leg is dated on
-    the next weekday at least a day out, where the contract is unambiguously
-    still trading.
-    """
-    today = datetime.now(UTC).date()
+    monkeypatch.setattr(adapter, "datetime", TradingDateTime)
+    today = TradingDateTime.now(UTC).date()
     yesterday = (today - timedelta(days=1)).isoformat()
     # Next weekday strictly after today — guaranteed to be a future session.
     future = today + timedelta(days=1)

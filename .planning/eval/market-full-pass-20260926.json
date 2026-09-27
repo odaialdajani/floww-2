@@ -1,0 +1,91 @@
+{
+  "started_at": "2026-09-26T21:26:43.868265+00:00",
+  "mode": "full",
+  "requests_per_second": 4,
+  "orders_allowed": false,
+  "model_calls": 0,
+  "source_hashes_at_start": {
+    "public_scanner.py": "2512e6f65a6f07e731241cf7a6eb752227468bea9a968d36cab6c867652308e4",
+    "public_api.py": "e470110e6cb4b6ab5b78230708d5f38b1e89f63297a522fc9e1633e582b7523c",
+    "public_api_adapter.py": "5b5117b51b96c9551a12527ea033f14e022a7a89d8123376fb3d1793ebd7c085",
+    "public_budget.py": "a9973850c78cec0ee462bf48a06549d73ff36c88d10856de8582cc66d716575f",
+    "public_request_pacer.py": "0170c49660a81c02b1e902a35de155f9e101eb7ddbda353f2f6271ef1cfe6aff",
+    "market_catalog.py": "85b84ad07697a53d35b7aa564dbd60df35d8d83045c4335b1c75feb8fbfe3fed",
+    "market_bars.py": "f73fc4d01c2f1eb890b4186ff60ce0f80160bbaf4f15a3874a795a1b67772602"
+  },
+  "state": "completed_with_gaps",
+  "http_requests": 26186,
+  "http_statuses": {
+    "200": 26181,
+    "400": 1,
+    "429": 1
+  },
+  "blocked_requests": 0,
+  "coverage": {
+    "universe": 8786,
+    "fresh": 27,
+    "max_age_s": 59.6,
+    "source": "public-instruments",
+    "catalog_stale": false,
+    "catalog_available": true,
+    "attempted": 8786,
+    "never_scanned": 0,
+    "latest_failed": 4436,
+    "expiries_per_ticker": 2,
+    "rows_per_ticker_cap": 60,
+    "rows_capped": false,
+    "fresh_window_seconds": 60,
+    "checked_at": 1790466710.8172424,
+    "estimated_pass_seconds": 9562,
+    "complete_realtime_market": false,
+    "stale_dropped_count": 3540
+  },
+  "complete_pass": true,
+  "updated_at": "2026-09-26T23:51:51.837379+00:00",
+  "catalog": {
+    "asof": "2026-09-26T21:54:57.588739+00:00",
+    "source": "public-instruments",
+    "stale": false,
+    "complete_provider_catalog": true,
+    "complete_exchange_catalog": false,
+    "total": 13135,
+    "optionable_total": 8786
+  },
+  "universe_size": 8786,
+  "elapsed_seconds": 8572.67,
+  "successful": 4350,
+  "failed": 4436,
+  "interruptions": [
+    {
+      "last_saved_at": "2026-09-26T21:52:39.031902+00:00",
+      "resumed_at": "2026-09-26T21:54:54.192709+00:00",
+      "completed_names": 1619,
+      "reason": "verification tool reset terminated its child process",
+      "inflight_requests_at_interruption": "unknown"
+    }
+  ],
+  "http_counts_are_lower_bound": true,
+  "continuous_pass": false,
+  "catalog_at_resume": {
+    "asof": "2026-09-26T21:54:57.588739+00:00",
+    "source": "public-instruments",
+    "stale": false,
+    "complete_provider_catalog": true,
+    "complete_exchange_catalog": false,
+    "total": 13135,
+    "optionable_total": 8786
+  },
+  "universe_sha256": "24b702cf3e483416f4ca43953d5e9037427c9c128ad5a8a767edc7d62f44f36b",
+  "source_hashes_at_end": {
+    "public_scanner.py": "2512e6f65a6f07e731241cf7a6eb752227468bea9a968d36cab6c867652308e4",
+    "public_api.py": "e470110e6cb4b6ab5b78230708d5f38b1e89f63297a522fc9e1633e582b7523c",
+    "public_api_adapter.py": "5b5117b51b96c9551a12527ea033f14e022a7a89d8123376fb3d1793ebd7c085",
+    "public_budget.py": "a9973850c78cec0ee462bf48a06549d73ff36c88d10856de8582cc66d716575f",
+    "public_request_pacer.py": "0170c49660a81c02b1e902a35de155f9e101eb7ddbda353f2f6271ef1cfe6aff",
+    "market_catalog.py": "85b84ad07697a53d35b7aa564dbd60df35d8d83045c4335b1c75feb8fbfe3fed",
+    "market_bars.py": "f73fc4d01c2f1eb890b4186ff60ce0f80160bbaf4f15a3874a795a1b67772602"
+  },
+  "source_unchanged": true,
+  "evidence_scope": "One complete resumed name pass before repeat-history and daily-volume truth changes; not simultaneous fresh market coverage or proof of new implementation on live provider",
+  "raw_report_sha256": "2a5b4e12c28226eb2a841cbe71965fd2d25a6c4524e15b13ea18c4474d189e90"
+}

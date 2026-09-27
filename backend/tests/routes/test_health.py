@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import logging
 import os
-from unittest.mock import AsyncMock, MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -27,8 +28,11 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(autouse=True)
-def _patch_externals():
+def _patch_externals(monkeypatch):
     """Avoid calling real Public API/DuckDB/WebSocket singletons during tests."""
+    monkeypatch.setattr("routes.health.av_circuit", SimpleNamespace(
+        state=SimpleNamespace(value="closed"), failure_count=0, success_count=0))
+    monkeypatch.setattr("routes.health._institutional_section", lambda feed_status: {"feed": feed_status})
     # Public API key presence probe (routes.health reads PUBLIC_API_KEY env)
     with patch.dict(os.environ, {"PUBLIC_API_KEY": "test-key"}):
         # DuckDB DB connection
@@ -49,7 +53,6 @@ def _patch_externals():
 # Tests
 # ---------------------------------------------------------------------------
 
-@pytest.mark.flaky_env
 def test_all_healthy():
     resp = client.get("/api/health")
     assert resp.status_code == 200
@@ -111,19 +114,14 @@ def test_ws_manager_check():
 
 
 def test_timeout_handling():
-    import asyncio
-
     import routes.health as health_mod
 
-    async def _slow():
-        await asyncio.sleep(999)
-
-    health_mod.duckdb_engine._conn.execute.side_effect = lambda *a, **kw: _slow()
-
+    health_mod.duckdb_engine._conn.execute.side_effect = TimeoutError("controlled storage timeout")
     resp = client.get("/api/health")
     assert resp.status_code == 200
     body = resp.json()
     assert body["checks"]["duckdb"]["status"] == "unhealthy"
+    assert "controlled storage timeout" in body["checks"]["duckdb"]["error"]
 
 
 def test_json_structure():

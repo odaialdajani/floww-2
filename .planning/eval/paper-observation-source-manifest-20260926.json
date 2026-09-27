@@ -1,0 +1,29 @@
+{
+  "checked_at": "2026-09-26T23:28:27.021Z",
+  "files": [
+    {
+      "path": "backend/services/agent/paper/accounting.py",
+      "sha256": "1c20649ca298b164bdbec59aa5e4fff1ff464fdfc27e912df175693063c725fc"
+    },
+    {
+      "path": "backend/services/agent/paper/valuation.py",
+      "sha256": "43dd0a9df0c22435ca67e7569af79f6e80a35d771ca43cfc37e6f22d6e9b452f"
+    },
+    {
+      "path": "backend/services/agent/paper/observation_service.py",
+      "sha256": "c5355e4ba54edf59725e76d16bb926d026cb17d5229e0f62f3bdd1420dcdc2b6"
+    },
+    {
+      "path": "backend/scripts/verify_paper_observations.py",
+      "sha256": "a1d7c0dc42d6170e66055423d165496c1dec5e455ff5470280f577ec32d33cb9"
+    },
+    {
+      "path": "tests/test_agent_paper_arithmetic.py",
+      "sha256": "098bdb5f4e0d74c5011b71bda28b4ee2a9380817ade6bbe996ba92127a123e77"
+    },
+    {
+      "path": "tests/test_agent_paper_valuation.py",
+      "sha256": "af5ebd05818465e6a1b46caaaeba96278cfc8314178148ab515e08813748dd11"
+    }
+  ]
+}

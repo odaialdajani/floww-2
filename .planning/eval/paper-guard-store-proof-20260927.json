@@ -1,0 +1,34 @@
+{
+  "implementation_verification": {
+    "status": "pass",
+    "checks": [
+      "legacy account services cannot find the newly created guarded account",
+      "full ordinary event capacity still saves refused-entry actual equity1188.70 and sampled high",
+      "full capacity permits funded close stage and fill with cash633.05 while retaining earlier actual high",
+      "fresh process recovers exact guarded cash peak credits and all pending/projected event bodies",
+      "failed resolution leaves funded intent and blocks new exposure; normal checkpoint/frozen restore preserves it exactly",
+      "two distinct entry assessments at one version fund exactly one durable intent",
+      "insufficient new-position storage preserves the intent and its prepaid observation-only refusal path",
+      "actual server predicates reject expired/future windows and accept a current window without claiming acknowledgement-time freshness"
+    ],
+    "paper_enabled": false,
+    "limitations": [
+      "new isolated synthetic guarded collections only",
+      "bounded prepaid attempts; projection required to replenish",
+      "no mounted controller or automatic historical reconciliation",
+      "server expression time is not final journal acknowledgement time",
+      "owner policy values and product lifecycle remain unapproved/unimplemented"
+    ]
+  },
+  "independent_concurrency_verification": {
+    "status": "pass",
+    "checks": [
+      "two distinct same-version begin intents: exactly one commit and one conflict",
+      "unresolved winner prevents new-entry assessment",
+      "twelve duplicate begin retries return exact original receipt without changing credits",
+      "write succeeded then response was lost: durable intent retained and same-identity retry reconciled exactly once"
+    ],
+    "paper_enabled": false,
+    "limits": "storage intent protocol only; empty synthetic frame never evaluated; no controller, providers or models"
+  }
+}

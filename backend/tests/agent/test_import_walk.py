@@ -1,46 +1,62 @@
-"""Static import-walk proof (plan v3 L1): tools/** never names a banned module."""
+"""Follow every local import reachable from the complete research boundary."""
 
 import ast
 from pathlib import Path
 
+from services.agent.registry import BANNED_MODULE_SUBSTRINGS, BANNED_TOKEN_SUBSTRINGS
 
-def test_tools_transitively_avoid_banned_modules():
-    from services.agent.registry import BANNED_MODULE_SUBSTRINGS
+ROOT = Path(__file__).resolve().parents[2]
 
-    root = Path(__file__).resolve().parents[2] / "services" / "agent" / "tools"
-    assert root.exists(), f"tools dir missing: {root}"
-    hits: list[str] = []
-    for py in root.rglob("*.py"):
-        try:
-            tree = ast.parse(py.read_text(encoding="utf-8"))
-        except Exception:
+
+def local_source(module):
+    base = ROOT.joinpath(*module.split("."))
+    return next((p for p in (base.with_suffix(".py"), base / "__init__.py") if p.is_file()), None)
+
+
+def test_research_transitively_avoids_order_modules_and_calls():
+    pending = [
+        "services.agent.tools",
+        "services.agent.research",
+        "services.agent.reads",
+        "services.agent.model",
+        "services.agent.repository",
+        "services.research_data_seam",
+    ]
+    visited = set()
+    while pending:
+        name = pending.pop()
+        if name in visited:
             continue
+        assert not any(banned in name for banned in BANNED_MODULE_SUBSTRINGS), name
+        path = local_source(name)
+        if path is None:
+            continue
+        visited.add(name)
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
-            if isinstance(node, (ast.Import, ast.ImportFrom)):
-                names: list[str] = []
-                if isinstance(node, ast.Import):
-                    names = [a.name for a in node.names]
-                else:
-                    mod = node.module or ""
-                    names = [mod] + [a.name for a in node.names]
-                blob = " ".join(names)
-                for banned in BANNED_MODULE_SUBSTRINGS:
-                    if banned in blob:
-                        hits.append(f"{py.name}: {blob}")
-    assert hits == [], f"banned imports in tools/: {hits[:5]}"
-
-
-def test_tools_have_no_order_tokens():
-    from services.agent.registry import BANNED_TOKEN_SUBSTRINGS
-
-    root = Path(__file__).resolve().parents[2] / "services" / "agent" / "tools"
-    hits: list[str] = []
-    for py in root.rglob("*.py"):
-        try:
-            text = py.read_text(encoding="utf-8")
-        except Exception:
-            continue
-        for tok in BANNED_TOKEN_SUBSTRINGS:
-            if tok in text:
-                hits.append(f"{py.name}: {tok}")
-    assert hits == [], f"order tokens in tools/: {hits[:5]}"
+            if isinstance(node, ast.Import):
+                pending.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                base = node.module or ""
+                if node.level:
+                    package = name if path.name == "__init__.py" else name.rsplit(".", 1)[0]
+                    parts = package.split(".")
+                    base = ".".join(parts[: len(parts) - node.level + 1] + ([base] if base else []))
+                pending.append(base)
+                pending.extend(base + "." + alias.name for alias in node.names)
+            elif isinstance(node, ast.Call):
+                called = (
+                    node.func.attr
+                    if isinstance(node.func, ast.Attribute)
+                    else node.func.id
+                    if isinstance(node.func, ast.Name)
+                    else ""
+                )
+                assert called not in BANNED_TOKEN_SUBSTRINGS, f"{name}: {called}"
+                assert called not in {"__import__", "import_module"}, f"Dynamic import needs explicit review: {name}"
+    assert {
+        "services.heatseeker",
+        "services.agent.repository",
+        "services.agent.contracts",
+        "services.agent.spend",
+    } <= visited

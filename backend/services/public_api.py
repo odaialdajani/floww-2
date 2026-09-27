@@ -79,6 +79,8 @@ class Quote:
     change: float | None = None
     percent_change: float | None = None
     timestamp: str | None = None
+    bid_timestamp: str | None = None
+    ask_timestamp: str | None = None
     option_details: dict[str, Any] | None = None
     bond_details: dict[str, Any] | None = None
 
@@ -214,6 +216,11 @@ class PublicBroker:
         self._access_token: str | None = None
         self._token_expires_at: float = 0.0
         self._client = client or self._make_client()
+        from services.public_request_pacer import observe_response
+
+        hooks = self._client.event_hooks["response"]
+        if observe_response not in hooks:
+            hooks.append(observe_response)
         self._accounts: dict[str, Account] = {}
         self._instrument_cache: dict[str, dict[str, Any]] = {}
 
@@ -223,7 +230,10 @@ class PublicBroker:
 
     @staticmethod
     def _make_client() -> httpx.AsyncClient:
+        from services.public_request_pacer import pace_request
+
         return httpx.AsyncClient(
+            event_hooks={"request": [pace_request]},
             base_url=BASE_URL,
             timeout=httpx.Timeout(30.0),
             headers={
@@ -419,6 +429,8 @@ class PublicBroker:
                 change=float(odc.get("change")) if odc.get("change") is not None else None,
                 percent_change=float(odc.get("percentChange")) if odc.get("percentChange") is not None else None,
                 timestamp=q.get("lastTimestamp"),
+                bid_timestamp=q.get("bidTimestamp"),
+                ask_timestamp=q.get("askTimestamp"),
                 option_details=od,
                 bond_details=bd,
             )
@@ -460,9 +472,9 @@ class PublicBroker:
         await self._ensure_token()
         params: dict[str, Any] = {}
         if type_filter:
-            params["type"] = type_filter
+            params["typeFilter"] = type_filter
         if trading_filter:
-            params["trading"] = trading_filter
+            params["tradingFilter"] = trading_filter
         url = f"{GW}/trading/instruments"
         resp = await self._client.get(url, params=params or None, headers=self._auth_headers())
         resp.raise_for_status()

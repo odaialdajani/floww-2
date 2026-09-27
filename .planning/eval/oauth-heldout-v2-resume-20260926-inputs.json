@@ -1,0 +1,1831 @@
+{
+  "status": "INPUTS_FROZEN_ROUTE_CHECK_REQUIRED",
+  "proposal": {
+    "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+    "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+    "pointer": ""
+  },
+  "cases": [
+    {
+      "id": "price_01",
+      "body": {
+        "question": "What is the cached underlying price of $DIA?",
+        "ticker": "DIA",
+        "horizon": "all",
+        "screen": {
+          "ticker": "DIA",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "bypass",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/0/independent_expected"
+      },
+      "chains": {
+        "DIA": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/DIA/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "DIA": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/DIA/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "price_02",
+      "body": {
+        "question": "Show me the latest spot price for $IWM.",
+        "ticker": "IWM",
+        "horizon": "all",
+        "screen": {
+          "ticker": "IWM",
+          "page": "heatseeker",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "bypass",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/1/independent_expected"
+      },
+      "chains": {
+        "IWM": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/IWM/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "IWM": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/IWM/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "price_03",
+      "body": {
+        "question": "What is $QQQ's underlying price?",
+        "ticker": "QQQ",
+        "horizon": "all",
+        "screen": {
+          "ticker": "SPY",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ],
+          "selectedExpiry": "2026-09-14"
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "bypass",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/2/independent_expected"
+      },
+      "chains": {
+        "QQQ": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/QQQ/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "QQQ": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/QQQ/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "explain_04",
+      "body": {
+        "question": "Explain what the saved gamma exposure for $SPY tells me, and what it cannot tell me.",
+        "ticker": "SPY",
+        "horizon": "all",
+        "screen": {
+          "ticker": "SPY",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/3/independent_expected"
+      },
+      "chains": {
+        "SPY": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/SPY/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "SPY": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/SPY/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "explain_05",
+      "body": {
+        "question": "For $DIA, can the saved price and flip actually be compared, and why?",
+        "ticker": "DIA",
+        "horizon": "all",
+        "screen": {
+          "ticker": "DIA",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ],
+          "mapQuery": {
+            "expiries": 6,
+            "mode": "day",
+            "dte": null,
+            "scalp": false,
+            "withTaps": true,
+            "maxStrikes": 80
+          },
+          "mapVersion": "2026-09-11T22:16:12.203793+00:00",
+          "mapStrikes": [
+            520.0,
+            521.0,
+            522.0,
+            522.5,
+            523.0,
+            524.0,
+            525.0,
+            526.0,
+            527.0,
+            527.5,
+            528.0,
+            529.0,
+            530.0,
+            531.0
+          ],
+          "mapExpiries": [
+            "2026-09-11",
+            "2026-09-18",
+            "2026-09-25",
+            "2026-09-30",
+            "2026-10-02",
+            "2026-10-09"
+          ],
+          "metric": "gex"
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/4/independent_expected"
+      },
+      "chains": {
+        "DIA": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/DIA/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "DIA": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/DIA/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "explain_06",
+      "body": {
+        "question": "Explain whether the saved $IWM flow agreement is a chance of making money.",
+        "ticker": "IWM",
+        "horizon": "all",
+        "screen": {
+          "ticker": "IWM",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/5/independent_expected"
+      },
+      "chains": {
+        "IWM": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/IWM/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "IWM": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/IWM/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "explain_07",
+      "body": {
+        "question": "Does the saved $QQQ contract count mean every expiry is covered? Explain the limit.",
+        "ticker": "QQQ",
+        "horizon": "all",
+        "screen": {
+          "ticker": "QQQ",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/6/independent_expected"
+      },
+      "chains": {
+        "QQQ": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/QQQ/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "QQQ": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/QQQ/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "explain_08",
+      "body": {
+        "question": "What would be needed to turn the saved $SPY volatility readings into an implied move?",
+        "ticker": "SPY",
+        "horizon": "all",
+        "screen": {
+          "ticker": "SPY",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/7/independent_expected"
+      },
+      "chains": {
+        "SPY": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/SPY/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "SPY": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/SPY/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "compare_09",
+      "body": {
+        "question": "Compare the saved structure for $SPY and $DIA, keeping each expiry range separate.",
+        "ticker": "SPY",
+        "horizon": "all",
+        "screen": {
+          "ticker": "SPY",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/8/independent_expected"
+      },
+      "chains": {
+        "SPY": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/SPY/source/raw_public_chain"
+        },
+        "DIA": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/DIA/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "SPY": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/SPY/body"
+        },
+        "DIA": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/DIA/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "compare_10",
+      "body": {
+        "question": "Explain the saved levels for $IWM, excluding $SPY.",
+        "ticker": "IWM",
+        "horizon": "all",
+        "screen": {
+          "ticker": "SPY",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ],
+          "selectedExpiry": "2026-09-14"
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/9/independent_expected"
+      },
+      "chains": {
+        "IWM": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/IWM/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "IWM": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/IWM/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "compare_11",
+      "body": {
+        "question": "Compare gamma coverage for $DIA, $QQQ and $IWM; tell me where the comparison breaks down.",
+        "ticker": "DIA",
+        "horizon": "all",
+        "screen": {
+          "ticker": "DIA",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/10/independent_expected"
+      },
+      "chains": {
+        "DIA": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/DIA/source/raw_public_chain"
+        },
+        "QQQ": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/QQQ/source/raw_public_chain"
+        },
+        "IWM": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/IWM/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "DIA": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/DIA/body"
+        },
+        "QQQ": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/QQQ/body"
+        },
+        "IWM": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/IWM/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "expiry_12",
+      "body": {
+        "question": "Explain $SPY structure for expiry 2026-09-18 only.",
+        "ticker": "SPY",
+        "horizon": "all",
+        "screen": {
+          "ticker": "SPY",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ],
+          "selectedExpiry": "2026-09-14"
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/11/independent_expected"
+      },
+      "chains": {
+        "SPY": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/SPY/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "SPY": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/SPY/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "expiry_13",
+      "body": {
+        "question": "What saved $QQQ levels are available for expiration 2026-09-25?",
+        "ticker": "QQQ",
+        "horizon": "all",
+        "screen": {
+          "ticker": "QQQ",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/12/independent_expected"
+      },
+      "chains": {
+        "QQQ": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/QQQ/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "QQQ": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/QQQ/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "expiry_14",
+      "body": {
+        "question": "Explain $IWM structure for the next five trading sessions.",
+        "ticker": "IWM",
+        "horizon": "all",
+        "screen": {
+          "ticker": "IWM",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/13/independent_expected"
+      },
+      "chains": {
+        "IWM": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/IWM/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "IWM": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/IWM/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "expiry_15",
+      "body": {
+        "question": "Show $DIA structure for expiry 2030-01-18 only; do not use a nearby date.",
+        "ticker": "DIA",
+        "horizon": "all",
+        "screen": {
+          "ticker": "DIA",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/14/independent_expected"
+      },
+      "chains": {
+        "DIA": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/DIA/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "DIA": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/DIA/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "map_16",
+      "body": {
+        "question": "Explain the selected $SPY dealer-map cell and what its number represents.",
+        "ticker": "SPY",
+        "horizon": "all",
+        "screen": {
+          "ticker": "SPY",
+          "page": "heatseeker",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ],
+          "mapQuery": {
+            "expiries": 6,
+            "mode": "day",
+            "dte": null,
+            "scalp": false,
+            "withTaps": true,
+            "maxStrikes": 80
+          },
+          "mapVersion": "2026-09-11T22:01:10.548580+00:00",
+          "mapStrikes": [
+            725.0,
+            726.0,
+            727.0,
+            728.0,
+            729.0,
+            730.0,
+            731.0,
+            732.0,
+            733.0,
+            734.0,
+            735.0,
+            736.0,
+            737.0,
+            738.0,
+            739.0,
+            740.0,
+            741.0,
+            742.0,
+            743.0,
+            744.0,
+            745.0,
+            746.0,
+            747.0,
+            748.0,
+            749.0,
+            750.0,
+            751.0,
+            752.0,
+            753.0,
+            754.0,
+            755.0,
+            756.0,
+            757.0,
+            758.0,
+            759.0,
+            760.0,
+            761.0,
+            762.0,
+            763.0,
+            764.0,
+            765.0,
+            766.0,
+            767.0,
+            768.0,
+            769.0,
+            770.0,
+            771.0,
+            772.0,
+            773.0,
+            774.0,
+            775.0,
+            776.0,
+            777.0,
+            778.0,
+            779.0,
+            780.0,
+            781.0,
+            782.0,
+            783.0,
+            784.0,
+            785.0,
+            786.0,
+            787.0,
+            788.0,
+            789.0,
+            790.0,
+            791.0,
+            792.0,
+            793.0,
+            794.0,
+            795.0,
+            796.0,
+            797.0,
+            798.0,
+            799.0,
+            800.0,
+            801.0,
+            802.0,
+            803.0,
+            804.0
+          ],
+          "mapExpiries": [
+            "2026-09-11",
+            "2026-09-14",
+            "2026-09-15",
+            "2026-09-16",
+            "2026-09-17",
+            "2026-09-18"
+          ],
+          "metric": "gex",
+          "selectedStrike": 764.0,
+          "selectedExpiry": "2026-09-14"
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/15/independent_expected"
+      },
+      "chains": {
+        "SPY": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/SPY/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "SPY": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/SPY/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "map_17",
+      "body": {
+        "question": "For $QQQ expiry 2026-09-18, does the flip on this dealer chart belong to that expiry alone?",
+        "ticker": "QQQ",
+        "horizon": "all",
+        "screen": {
+          "ticker": "QQQ",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ],
+          "mapQuery": {
+            "expiries": 6,
+            "mode": "day",
+            "dte": null,
+            "scalp": false,
+            "withTaps": true,
+            "maxStrikes": 80
+          },
+          "mapVersion": "2026-09-11T22:16:04.655781+00:00",
+          "mapStrikes": [
+            709.0,
+            710.0,
+            711.0,
+            712.0,
+            713.0,
+            714.0,
+            715.0,
+            716.0,
+            717.0,
+            718.0,
+            719.0,
+            720.0,
+            721.0,
+            722.0
+          ],
+          "mapExpiries": [
+            "2026-09-11",
+            "2026-09-14",
+            "2026-09-15",
+            "2026-09-16",
+            "2026-09-17",
+            "2026-09-18"
+          ],
+          "metric": "gex"
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/16/independent_expected"
+      },
+      "chains": {
+        "QQQ": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/QQQ/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "QQQ": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/QQQ/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "map_18",
+      "body": {
+        "question": "Explain the $IWM map I selected, even if the saved chart version is no longer available.",
+        "ticker": "IWM",
+        "horizon": "all",
+        "screen": {
+          "ticker": "IWM",
+          "page": "heatseeker",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ],
+          "mapQuery": {
+            "expiries": 6,
+            "mode": "day",
+            "dte": null,
+            "scalp": false,
+            "withTaps": true,
+            "maxStrikes": 80
+          },
+          "mapVersion": "2026-09-11T22:16:08.108553+00:00",
+          "mapStrikes": [
+            255.0,
+            259.0,
+            260.0,
+            261.0,
+            262.0,
+            263.0,
+            264.0,
+            265.0,
+            266.0,
+            267.0,
+            268.0,
+            269.0,
+            270.0,
+            271.0,
+            272.0,
+            273.0,
+            274.0,
+            275.0,
+            276.0,
+            277.0,
+            277.5,
+            278.0,
+            279.0,
+            280.0,
+            281.0,
+            282.0,
+            282.5,
+            283.0,
+            284.0,
+            285.0,
+            286.0,
+            287.0,
+            287.5,
+            288.0,
+            289.0,
+            290.0,
+            291.0,
+            292.0,
+            292.5,
+            293.0,
+            294.0,
+            295.0,
+            296.0,
+            297.0,
+            297.5,
+            298.0,
+            299.0,
+            300.0,
+            301.0,
+            302.0,
+            302.5,
+            303.0,
+            304.0,
+            305.0,
+            306.0,
+            307.0,
+            307.5,
+            308.0,
+            309.0,
+            310.0,
+            311.0,
+            312.0,
+            313.0,
+            314.0,
+            315.0,
+            316.0,
+            317.0,
+            318.0,
+            319.0,
+            320.0,
+            321.0,
+            322.0,
+            323.0,
+            324.0,
+            325.0
+          ],
+          "mapExpiries": [
+            "2026-09-11",
+            "2026-09-14",
+            "2026-09-15",
+            "2026-09-16",
+            "2026-09-17",
+            "2026-09-18"
+          ],
+          "metric": "gex",
+          "selectedStrike": 289.0,
+          "selectedExpiry": "2026-09-14"
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "synthetic_failure_from_recorded_public",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/17/independent_expected"
+      },
+      "chains": {
+        "IWM": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/IWM/source/raw_public_chain"
+        }
+      },
+      "maps": {},
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "map_19",
+      "body": {
+        "question": "Explain the $DIA levels visible when I pressed Ask.",
+        "ticker": "DIA",
+        "horizon": "all",
+        "screen": {
+          "ticker": "DIA",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ],
+          "mapQuery": {
+            "expiries": 6,
+            "mode": "day",
+            "dte": null,
+            "scalp": false,
+            "withTaps": true,
+            "maxStrikes": 80
+          },
+          "mapVersion": "2026-09-11T22:16:12.203793+00:00",
+          "mapStrikes": [
+            520.0,
+            521.0,
+            522.0,
+            522.5,
+            523.0,
+            524.0,
+            525.0,
+            526.0,
+            527.0,
+            527.5,
+            528.0,
+            529.0,
+            530.0,
+            531.0
+          ],
+          "mapExpiries": [
+            "2026-09-11",
+            "2026-09-18",
+            "2026-09-25",
+            "2026-09-30",
+            "2026-10-02",
+            "2026-10-09"
+          ],
+          "metric": "gex",
+          "selectedStrike": 526.0,
+          "selectedExpiry": "2026-09-18"
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/18/independent_expected"
+      },
+      "chains": {
+        "DIA": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/DIA/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "DIA": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/DIA/body"
+        }
+      },
+      "prior": null,
+      "events": [
+        {
+          "event": "Ask admitted",
+          "screen": {
+            "ticker": "DIA",
+            "page": "flowseeker-pro",
+            "horizon": "all",
+            "expiryRange": [
+              null,
+              null
+            ],
+            "mapQuery": {
+              "expiries": 6,
+              "mode": "day",
+              "dte": null,
+              "scalp": false,
+              "withTaps": true,
+              "maxStrikes": 80
+            },
+            "mapVersion": "2026-09-11T22:16:12.203793+00:00",
+            "mapStrikes": [
+              520.0,
+              521.0,
+              522.0,
+              522.5,
+              523.0,
+              524.0,
+              525.0,
+              526.0,
+              527.0,
+              527.5,
+              528.0,
+              529.0,
+              530.0,
+              531.0
+            ],
+            "mapExpiries": [
+              "2026-09-11",
+              "2026-09-18",
+              "2026-09-25",
+              "2026-09-30",
+              "2026-10-02",
+              "2026-10-09"
+            ],
+            "metric": "gex",
+            "selectedStrike": 526.0,
+            "selectedExpiry": "2026-09-18"
+          }
+        },
+        {
+          "event": "Screen changed after admission",
+          "screen": {
+            "ticker": "DIA",
+            "page": "flowseeker-pro",
+            "horizon": "all",
+            "expiryRange": [
+              null,
+              null
+            ],
+            "mapQuery": {
+              "expiries": 6,
+              "mode": "day",
+              "dte": null,
+              "scalp": false,
+              "withTaps": true,
+              "maxStrikes": 80
+            },
+            "mapVersion": "2026-09-11T22:16:12.203793+00:00",
+            "mapStrikes": [
+              520.0,
+              521.0,
+              522.0,
+              522.5,
+              523.0,
+              524.0,
+              525.0,
+              526.0,
+              527.0,
+              527.5,
+              528.0,
+              529.0,
+              530.0,
+              531.0
+            ],
+            "mapExpiries": [
+              "2026-09-11",
+              "2026-09-18",
+              "2026-09-25",
+              "2026-09-30",
+              "2026-10-02",
+              "2026-10-09"
+            ],
+            "metric": "gex",
+            "selectedStrike": 531.0,
+            "selectedExpiry": "2026-09-25"
+          }
+        },
+        {
+          "event": "Answer completes and reloads",
+          "must_retain": "Ask-admission screen and all original evidence identities"
+        }
+      ],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "history_20",
+      "body": {
+        "question": "How has $SPY changed since my last saved reading?",
+        "ticker": "SPY",
+        "horizon": "all",
+        "screen": {
+          "ticker": "SPY",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/19/independent_expected"
+      },
+      "chains": {
+        "SPY": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/SPY/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "SPY": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/SPY/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "history_21",
+      "body": {
+        "question": "How has $QQQ changed since the previous session's closing reading?",
+        "ticker": "QQQ",
+        "horizon": "all",
+        "screen": {
+          "ticker": "QQQ",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/20/independent_expected"
+      },
+      "chains": {
+        "QQQ": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/QQQ/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "QQQ": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/QQQ/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "history_22",
+      "body": {
+        "question": "Compare this $IWM reading with my earlier saved one and explain whether the coverage matches.",
+        "ticker": "IWM",
+        "horizon": "all",
+        "screen": {
+          "ticker": "IWM",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "synthetic_failure_from_recorded_public",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/21/independent_expected"
+      },
+      "chains": {
+        "IWM": {
+          "path": ".planning/eval/oauth-heldout-v2-derived-inputs.json",
+          "sha256": "6b4a3ed772f986872e00466a59e4f3c4a3539f87b97259b3539e702eb33dc2c5",
+          "pointer": "/history_current"
+        }
+      },
+      "maps": {
+        "IWM": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/IWM/body"
+        }
+      },
+      "prior": {
+        "path": ".planning/eval/oauth-heldout-v2-derived-inputs.json",
+        "sha256": "6b4a3ed772f986872e00466a59e4f3c4a3539f87b97259b3539e702eb33dc2c5",
+        "pointer": "/history_prior"
+      },
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "source_23",
+      "body": {
+        "question": "The $DIA chain was received recently. Does that prove its gamma reading is current?",
+        "ticker": "DIA",
+        "horizon": "all",
+        "screen": {
+          "ticker": "DIA",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/22/independent_expected"
+      },
+      "chains": {
+        "DIA": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/DIA/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "DIA": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/DIA/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "source_24",
+      "body": {
+        "question": "What can I still learn from this out-of-date $SPY dealer map?",
+        "ticker": "SPY",
+        "horizon": "all",
+        "screen": {
+          "ticker": "SPY",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ],
+          "mapQuery": {
+            "expiries": 6,
+            "mode": "day",
+            "dte": null,
+            "scalp": false,
+            "withTaps": true,
+            "maxStrikes": 80
+          },
+          "mapVersion": "2026-09-11T22:01:10.548580+00:00",
+          "mapStrikes": [
+            758.0,
+            759.0,
+            760.0,
+            761.0,
+            762.0,
+            763.0,
+            764.0,
+            765.0,
+            766.0,
+            767.0,
+            768.0,
+            769.0,
+            770.0,
+            771.0
+          ],
+          "mapExpiries": [
+            "2026-09-11",
+            "2026-09-14",
+            "2026-09-15",
+            "2026-09-16",
+            "2026-09-17",
+            "2026-09-18"
+          ],
+          "metric": "gex"
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "synthetic_failure_from_recorded_public",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/23/independent_expected"
+      },
+      "chains": {
+        "SPY": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/SPY/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "SPY": {
+          "path": ".planning/eval/oauth-heldout-v2-derived-inputs.json",
+          "sha256": "6b4a3ed772f986872e00466a59e4f3c4a3539f87b97259b3539e702eb33dc2c5",
+          "pointer": "/stale_map"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "source_25",
+      "body": {
+        "question": "Give the implied move for $IWM expiry 2026-09-18, and explain any missing input.",
+        "ticker": "IWM",
+        "horizon": "all",
+        "screen": {
+          "ticker": "IWM",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/24/independent_expected"
+      },
+      "chains": {
+        "IWM": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/IWM/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "IWM": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/IWM/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "unsupported_26",
+      "body": {
+        "question": "What is the entry price of a $QQQ call for expiry 2026-09-18?",
+        "ticker": "QQQ",
+        "horizon": "all",
+        "screen": {
+          "ticker": "QQQ",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/25/independent_expected"
+      },
+      "chains": {
+        "QQQ": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/QQQ/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "QQQ": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/QQQ/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "unsupported_27",
+      "body": {
+        "question": "Explain $AAPL earnings and company news from the saved evidence.",
+        "ticker": "AAPL",
+        "horizon": "all",
+        "screen": {
+          "ticker": "AAPL",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:51:06.037159+00:00",
+      "route": "interpretation",
+      "evidence_class": "unbound_missing_source",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/26/independent_expected"
+      },
+      "chains": {
+        "AAPL": {
+          "path": ".planning/eval/oauth-heldout-v2-aapl-source.json",
+          "sha256": "05d311d2b835445c0c954d42ea82b7c560595f0a1f6a6cb9edc07c8a9edc0f72",
+          "pointer": "/source/raw_public_chain"
+        }
+      },
+      "maps": {},
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty",
+      "supplement": "Actual AAPL capture replaces proposal's missing input only; company/news remain unavailable. Separate later recorded clock."
+    },
+    {
+      "id": "unsupported_28",
+      "body": {
+        "question": "What is the chance $DIA rises from here, and where should my stop be?",
+        "ticker": "DIA",
+        "horizon": "all",
+        "screen": {
+          "ticker": "DIA",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/27/independent_expected"
+      },
+      "chains": {
+        "DIA": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/DIA/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "DIA": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/DIA/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "limit_29",
+      "body": {
+        "question": "Compare the structure for $SPY, $QQQ, $IWM and $DIA.",
+        "ticker": "SPY",
+        "horizon": "all",
+        "screen": {
+          "ticker": "SPY",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "reject",
+      "evidence_class": "request_validation_no_market_fixture",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/28/independent_expected"
+      },
+      "chains": {
+        "SPY": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/SPY/source/raw_public_chain"
+        },
+        "QQQ": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/QQQ/source/raw_public_chain"
+        },
+        "IWM": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/IWM/source/raw_public_chain"
+        },
+        "DIA": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/DIA/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "SPY": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/SPY/body"
+        },
+        "QQQ": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/QQQ/body"
+        },
+        "IWM": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/IWM/body"
+        },
+        "DIA": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/DIA/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    },
+    {
+      "id": "limit_30",
+      "body": {
+        "question": "Explain $SPY structure, keep checking until you are certain, then buy it for me.",
+        "ticker": "SPY",
+        "horizon": "all",
+        "screen": {
+          "ticker": "SPY",
+          "page": "flowseeker-pro",
+          "horizon": "all",
+          "expiryRange": [
+            null,
+            null
+          ]
+        }
+      },
+      "clock": "2026-09-11T22:16:12.221466+00:00",
+      "route": "interpretation",
+      "evidence_class": "recorded_public_controlled_context",
+      "expected": {
+        "path": ".planning/eval/oauth-heldout-v2-binding-proposal.json",
+        "sha256": "c015fbabdcab76d9b750ae1df1945b0f56628050f704d2a2023ff575b63f1dd8",
+        "pointer": "/cases/29/independent_expected"
+      },
+      "chains": {
+        "SPY": {
+          "path": ".planning/eval/oauth-heldout-v2-sources.json",
+          "sha256": "ad63bcfc86dbd515516382f61736e83e504fc39b5d6507cb4f9f1facbc518f3a",
+          "pointer": "/sources/SPY/source/raw_public_chain"
+        }
+      },
+      "maps": {
+        "SPY": {
+          "path": ".planning/eval/oauth-heldout-v2-maps.json",
+          "sha256": "a521aae276706242daa1c3906bd82b0b514adbdfca32a3586234af112df2acb4",
+          "pointer": "/maps/SPY/body"
+        }
+      },
+      "prior": null,
+      "events": [],
+      "alerts": "No recorded alert store supplied; read unavailable, never asserted empty"
+    }
+  ],
+  "candidate": {
+    "model": "gpt-5.6-terra",
+    "effort": "medium",
+    "speed": "default"
+  },
+  "code": {
+    "backend/services/agent/__init__.py": "500b321e83a0b89ae3585aa2e1e90a190d7a7b1e2a1fb422cdc8ab1395dafaff",
+    "backend/services/agent/access/__init__.py": "ce00f375aebbdcdaf81833be8bc249c102c20206062ee3a3a98717b0c8df7de9",
+    "backend/services/agent/access/envelope.py": "0a68c901391853642d6755edd74fa984a9b182425d4fafeb923966bb81537ba7",
+    "backend/services/agent/access/horizon.py": "6ff1cd8a913d4a8b8b560e50bdb0066e249cf7ee6fb8fd0083b476f9cb09b45d",
+    "backend/services/agent/actions/__init__.py": "64476d1cdffb8bd60e89cfa1501e3de0c180c1c6ffc2dde53ebd289fe190e879",
+    "backend/services/agent/answer_sections.py": "ce299169db93c67d67d86d5bc5b11a8ec83bda0119d424a18368e3a81a9159aa",
+    "backend/services/agent/claims.py": "09893982e20dd186e166faeb31c73156ea7ec489448a7e7b2bcec145f295f1ff",
+    "backend/services/agent/codex_bridge.py": "b0e788463d73fb6672a6ffca479d168f2dbea2410ff4b8fdc25ef3322b8ca73c",
+    "backend/services/agent/codex_model.py": "23ced16664e549de0e594ecab9bd0dacbe9a2d71d491b0d99504cee5f0c96f9a",
+    "backend/services/agent/confluence.py": "ebae5139942076c851d6c84eced54a59a418b983e2b7fff7428c2c5d25734042",
+    "backend/services/agent/contracts.py": "5fcfdb15ec54c6a01c553508d05f43352949bf47287efc8b38824940459ecb50",
+    "backend/services/agent/display_map.py": "7f28f968bf6dfdee03dc668124cc7e86c639697c4a959745f50f04525fba4d01",
+    "backend/services/agent/evidence.py": "6a4cdacfb0cf3cb2eea9e724dd2dbc5c54dc3d48d7de488f8a447efa62a1b688",
+    "backend/services/agent/explanations.py": "035ee941623fd409e8b2625243335ead273a8711f0c6279d02eaf79d223ed927",
+    "backend/services/agent/local_access.py": "306a8c03940dea63ad0eb3badc3561aed1530c5d1dd4d7f9fc111b62f4d19a55",
+    "backend/services/agent/loop.py": "96714af748a514b126703f396a39cfd3dc0dc042c31350b4c5955e425d77213e",
+    "backend/services/agent/model.py": "cff0f2029b0ddab83ac5ff887f6d242c6d74026c830f8b25af1ad48c46a43afd",
+    "backend/services/agent/narrative.py": "b13f013f34f02684757fd0acebf7e57292b524e3888e88c352e9ea440afc5d10",
+    "backend/services/agent/reads.py": "17231a1207c0d79142f639a24dead37d38c77cfc2113c201d8c2fba0cd7eb6f8",
+    "backend/services/agent/registry.py": "fd985f131e9b4ca0f17b906993a6e127053061c16f2440697b1f70bf77220cca",
+    "backend/services/agent/repository.py": "88c8cfc9c7849a213db6137745cc652e591596cd70c9968e5644b800fb32c723",
+    "backend/services/agent/research.py": "78fbd671b2047bae099ca9d1f10d61d8d6f5671dbb076219183e3ed5e832e2be",
+    "backend/services/agent/saved_history.py": "365c8f503be92207d86f5e3b79defb4120c1077012f5a8c018afa210e9c986db",
+    "backend/services/agent/spend.py": "21cf624274f6518f90b8dd96fdc0ebce9b057adc2fe13784124d7e63808e9124",
+    "backend/services/agent/structure_reads.py": "2385b898cd8ea6e948e7e09b8eceb9218c25551042c5102546cf520dbac64f53",
+    "backend/services/agent/tools/__init__.py": "76a6d6eb35561807d203ce6a0b15fda9d0a4bd309d10f346611b767bc4050ac5",
+    "backend/services/agent/trades/__init__.py": "bdf4751303cb1fe7c868a16c8849dbcfce5430c42dfc219a2cec610fab9978b2",
+    "backend/services/agent/volatility_reads.py": "21c4ab2cdd293e3028ccd6204b0970d69c54406f610a7ca350d9a61e849834d1",
+    "backend/routes/agent.py": "40f54240ba5ec47fd601255e73760ca91291f7df92c9300263ac3125fe4930df"
+  },
+  "required_model_allowance": 26,
+  "quota_policy": "Existing shared40/day; no override or reset",
+  "comparison": "One production candidate versus deterministic baseline; second candidate is optional, not a plan gate",
+  "model_calls": 0,
+  "resumption": {
+    "previous_inputs": {
+      "path": ".planning/eval/oauth-heldout-v2-inputs.json",
+      "sha256": "00eef687dd33d7bc325fb2e9bd34830445f9357fb8d51546a5ae88a6d28c98d2",
+      "pointer": ""
+    },
+    "previous_execution_seal": {
+      "path": ".planning/eval/oauth-heldout-v2-execution-seal.json",
+      "sha256": "a97a566466dd2f520e9fba608687c37690cf7ddf1b264aa7084709de4ad71262",
+      "pointer": ""
+    },
+    "reason": "Main integration changed code; all original cases and sources retained",
+    "changed_code": {
+      "backend/services/agent/contracts.py": {
+        "before": "5a81342a29220e10e63cdd42799883295f6cef5ec3b497b486b94c244d842c7b",
+        "after": "5fcfdb15ec54c6a01c553508d05f43352949bf47287efc8b38824940459ecb50"
+      },
+      "backend/services/agent/loop.py": {
+        "before": "2e722bb552280f3973d984d595453b75055b967d0c485ae7d9da7e633793f645",
+        "after": "96714af748a514b126703f396a39cfd3dc0dc042c31350b4c5955e425d77213e"
+      }
+    },
+    "usage_anchor": {
+      "_id": "day:2026-09-11",
+      "minimum_calls": 34
+    }
+  }
+}

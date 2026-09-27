@@ -26,6 +26,12 @@ def client():
     return TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def offline_chain(monkeypatch):
+    # Query-boundary tests exercise route validation, never provider availability.
+    monkeypatch.setattr("routes.heatseeker._fetch_chain", AsyncMock(return_value=_mock_chain()))
+
+
 def _mock_chain():
     return {
         "ticker": "SPY",

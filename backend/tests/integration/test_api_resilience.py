@@ -328,7 +328,7 @@ async def test_circuit_breaker_blocks_when_tripped(breaker):
 
 
 @pytest.mark.asyncio
-async def test_circuit_breaker_half_open_after_cooldown(breaker):
+async def test_circuit_breaker_half_open_after_cooldown(breaker, monkeypatch):
     """Circuit breaker should transition to HALF_OPEN after cooldown."""
     breaker.thresholds.cooldown_seconds = 0  # Instant cooldown for testing
 
@@ -339,13 +339,14 @@ async def test_circuit_breaker_half_open_after_cooldown(breaker):
     assert breaker.is_tripped
 
     # Check trading — should transition to HALF_OPEN
+    monkeypatch.setattr("services.circuit_breaker.time.time", lambda: breaker._last_trip_time + 1)
     allowed = breaker.is_trading_allowed()
     assert breaker.state == CircuitState.HALF_OPEN
     assert allowed is True
 
 
 @pytest.mark.asyncio
-async def test_circuit_breaker_closes_after_successes(breaker):
+async def test_circuit_breaker_closes_after_successes(breaker, monkeypatch):
     """Circuit breaker should close after enough successes in HALF_OPEN."""
     breaker.thresholds.cooldown_seconds = 0
     breaker.thresholds.half_open_successes_needed = 3
@@ -355,6 +356,7 @@ async def test_circuit_breaker_closes_after_successes(breaker):
         breaker.record_request(latency_ms=float(i), is_error=(i < 3))
 
     # Transition to HALF_OPEN
+    monkeypatch.setattr("services.circuit_breaker.time.time", lambda: breaker._last_trip_time + 1)
     breaker.is_trading_allowed()
 
     # Clear old measurements so error rate doesn't re-trip

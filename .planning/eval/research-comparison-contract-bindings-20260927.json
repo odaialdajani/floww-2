@@ -1,0 +1,553 @@
+{
+  "id": "research-comparison-contract-bindings-20260927",
+  "status": "PROSPECTIVE_DECLARATIONS_BOUND_PENDING_ROOT_REVIEW_NOT_RUN",
+  "scope": "Resolves nine prospective contract/receipt classifications only. Does not alter proposal, raw inputs, grading or runner. No production calculations, frozen answers, models or providers were executed.",
+  "sources": {
+    "display_contract": {
+      "path": "backend/services/agent/display_map.py",
+      "sha256": "7f28f968bf6dfdee03dc668124cc7e86c639697c4a959745f50f04525fba4d01",
+      "lines": [
+        66,
+        159
+      ],
+      "role": "Read-only grid/metric/unit and missing-cell display contract; not executed."
+    },
+    "month_contract": {
+      "path": "backend/services/agent/access/horizon.py",
+      "sha256": "6ff1cd8a913d4a8b8b560e50bdb0066e249cf7ee6fb8fd0083b476f9cb09b45d",
+      "lines": [
+        37,
+        117
+      ],
+      "role": "Read-only local-date/month-offset and inclusive expiry filtering declarations; not executed."
+    },
+    "question_scope": {
+      "path": "backend/services/agent/contracts.py",
+      "sha256": "6ac9434175ae6b02101a628271710515dc0d08d2ba688d113f7ec7dd66402273",
+      "lines": [
+        133,
+        162
+      ],
+      "role": "Read-only explicit next/coming-month question scope overrides saved all horizon."
+    },
+    "visible_chart_reading": {
+      "path": "frontend/src/agent/chartReading.js",
+      "sha256": "823642f348f9a16ec0faac2c60ad2c6f01347cd9d5bc882bb8c2d090e488906f",
+      "lines": [
+        24,
+        70
+      ],
+      "role": "Read-only visible selected-cell gamma/vanna naming, expected units and map dollar scalars."
+    },
+    "visible_evidence": {
+      "path": "frontend/src/agent/Evidence.jsx",
+      "sha256": "2607afa45399216ff7d8f3df4f5da40669567edfcf74a8c11ab9a4143099e367",
+      "lines": [
+        1,
+        9
+      ],
+      "role": "Visible evidence prints supplied fact values, units, source, status and observation."
+    },
+    "visible_answer": {
+      "path": "frontend/src/agent/AgentPanelAnswer.jsx",
+      "sha256": "b6d551d2da629c18b8eae94f7c31935a24c06cbe6d6183c0c7a3140e8fdb47e4",
+      "lines": [
+        12,
+        32
+      ],
+      "role": "Visible summary/chart reading/sections and linked fact unit rendering."
+    },
+    "heatmap_display": {
+      "path": "frontend/src/components/heatseeker/SkylitHeatmapGrid.jsx",
+      "sha256": "65fe0858aec706adf9eca1d29e833312b13ce0d1216489c8f8b71786868b908e",
+      "lines": [
+        23,
+        139
+      ],
+      "role": "Raw named grid selection and abbreviated chart formatting; formatting alone does not establish physical conversion."
+    },
+    "read_accounting": {
+      "path": "backend/services/agent/read_budget.py",
+      "sha256": "dac83653c5f73044b09521461589e9addfc090d8a0903f2ac4d2b550570441a4",
+      "lines": [
+        1,
+        116
+      ],
+      "role": "Eight-capability ceiling; saved reservation and entered callback are distinct; no evaluation executed."
+    }
+  },
+  "proposal_sha256": "305a42af3a8d86ed8e39ad314a99c592ad2fb57ccab53faf575e507e3aa71c2b",
+  "input_manifest_sha256": "b28a35f15ab4784cf4b7871b598771ca7663d3f4bc66adb5f80f2e5add224c42",
+  "independent_oracle_sha256": "24c13e69ae26b4c1d12e5fc175b73440b0a869a7a8806e42a19bd1702ce10b0e",
+  "bindings": [
+    {
+      "id": "map_missing_cell_total",
+      "kind": "display_contract",
+      "status": "DECLARED_CONTRACT_RESOLVED_NOT_EXECUTED",
+      "metric": "gex",
+      "raw_grid": "grid.grid",
+      "exact_research_unit": "display gamma units",
+      "visible_measure_name": "displayed gamma",
+      "unit_interpretation": "Generic display-contract unit. Do not convert or conflate with a differently scaled modeled exposure or invent a physical currency-per-volatility basis. The absence of raw physical-unit metadata is preserved, but does not prevent binding the actual generic displayed unit.",
+      "source_refs": [
+        {
+          "path": "backend/services/agent/display_map.py",
+          "sha256": "7f28f968bf6dfdee03dc668124cc7e86c639697c4a959745f50f04525fba4d01",
+          "lines": [
+            66,
+            159
+          ],
+          "role": "Read-only grid/metric/unit and missing-cell display contract; not executed."
+        },
+        {
+          "path": "frontend/src/agent/chartReading.js",
+          "sha256": "823642f348f9a16ec0faac2c60ad2c6f01347cd9d5bc882bb8c2d090e488906f",
+          "lines": [
+            24,
+            70
+          ],
+          "role": "Read-only visible selected-cell gamma/vanna naming, expected units and map dollar scalars."
+        },
+        {
+          "path": "frontend/src/agent/Evidence.jsx",
+          "sha256": "2607afa45399216ff7d8f3df4f5da40669567edfcf74a8c11ab9a4143099e367",
+          "lines": [
+            1,
+            9
+          ],
+          "role": "Visible evidence prints supplied fact values, units, source, status and observation."
+        }
+      ],
+      "execution_receipts_required_later": [
+        "Actual displayed selected identity/value and the corresponding preserved unit; no fact-builder result has been executed for this binding."
+      ],
+      "independent_expected_values": {
+        "row_strikes": [
+          95,
+          100,
+          105
+        ],
+        "net": [
+          3,
+          null,
+          6
+        ],
+        "cumulative": [
+          3,
+          null,
+          null
+        ],
+        "complete_total": null,
+        "rule": "Any participating missing cell makes that row unknown; missing cumulative row propagates forward. The selected Oct2/100cell itself is3."
+      },
+      "raw_fixture": {
+        "path": "output/research-fresh-inputs-v3-20260926-2317/map_missing_cell_total.json",
+        "sha256": "4bc6de0dfbc2e7a5e10ecabd58fa4bc1f55edd90c65afba7807abde23329f972",
+        "pointer": ""
+      }
+    },
+    {
+      "id": "map_measured_zero",
+      "kind": "display_contract",
+      "status": "DECLARED_CONTRACT_RESOLVED_NOT_EXECUTED",
+      "metric": "gex",
+      "raw_grid": "grid.grid",
+      "exact_research_unit": "display gamma units",
+      "visible_measure_name": "displayed gamma",
+      "unit_interpretation": "Generic display-contract unit. Do not convert or conflate with a differently scaled modeled exposure or invent a physical currency-per-volatility basis. The absence of raw physical-unit metadata is preserved, but does not prevent binding the actual generic displayed unit.",
+      "source_refs": [
+        {
+          "path": "backend/services/agent/display_map.py",
+          "sha256": "7f28f968bf6dfdee03dc668124cc7e86c639697c4a959745f50f04525fba4d01",
+          "lines": [
+            66,
+            159
+          ],
+          "role": "Read-only grid/metric/unit and missing-cell display contract; not executed."
+        },
+        {
+          "path": "frontend/src/agent/chartReading.js",
+          "sha256": "823642f348f9a16ec0faac2c60ad2c6f01347cd9d5bc882bb8c2d090e488906f",
+          "lines": [
+            24,
+            70
+          ],
+          "role": "Read-only visible selected-cell gamma/vanna naming, expected units and map dollar scalars."
+        },
+        {
+          "path": "frontend/src/agent/Evidence.jsx",
+          "sha256": "2607afa45399216ff7d8f3df4f5da40669567edfcf74a8c11ab9a4143099e367",
+          "lines": [
+            1,
+            9
+          ],
+          "role": "Visible evidence prints supplied fact values, units, source, status and observation."
+        }
+      ],
+      "execution_receipts_required_later": [
+        "Actual displayed selected identity/value and the corresponding preserved unit; no fact-builder result has been executed for this binding."
+      ],
+      "independent_expected_values": {
+        "selected_value": 0,
+        "rule": "Explicit numeric zero must survive; it is not missing."
+      },
+      "raw_fixture": {
+        "path": "output/research-fresh-inputs-v3-20260926-2317/map_measured_zero.json",
+        "sha256": "c28d904013b9955f27741c1b5d10d847c7f54b0954abe1bf7058d46621b3d45a",
+        "pointer": ""
+      }
+    },
+    {
+      "id": "vanna_display_units",
+      "kind": "display_contract",
+      "status": "DECLARED_CONTRACT_RESOLVED_NOT_EXECUTED",
+      "metric": "vex",
+      "raw_grid": "grid.vex_grid",
+      "exact_research_unit": "display vex units",
+      "visible_measure_name": "displayed vanna",
+      "unit_interpretation": "Generic display-contract unit. Do not convert or conflate with a differently scaled modeled exposure or invent a physical currency-per-volatility basis. The absence of raw physical-unit metadata is preserved, but does not prevent binding the actual generic displayed unit.",
+      "source_refs": [
+        {
+          "path": "backend/services/agent/display_map.py",
+          "sha256": "7f28f968bf6dfdee03dc668124cc7e86c639697c4a959745f50f04525fba4d01",
+          "lines": [
+            66,
+            159
+          ],
+          "role": "Read-only grid/metric/unit and missing-cell display contract; not executed."
+        },
+        {
+          "path": "frontend/src/agent/chartReading.js",
+          "sha256": "823642f348f9a16ec0faac2c60ad2c6f01347cd9d5bc882bb8c2d090e488906f",
+          "lines": [
+            24,
+            70
+          ],
+          "role": "Read-only visible selected-cell gamma/vanna naming, expected units and map dollar scalars."
+        },
+        {
+          "path": "frontend/src/agent/Evidence.jsx",
+          "sha256": "2607afa45399216ff7d8f3df4f5da40669567edfcf74a8c11ab9a4143099e367",
+          "lines": [
+            1,
+            9
+          ],
+          "role": "Visible evidence prints supplied fact values, units, source, status and observation."
+        }
+      ],
+      "execution_receipts_required_later": [
+        "Actual displayed selected identity/value and the corresponding preserved unit; no fact-builder result has been executed for this binding."
+      ],
+      "independent_expected_values": {
+        "selected_strike": 716,
+        "selected_expiry": "2026-09-11",
+        "selected_value": 80417.44783037002,
+        "map_observation": null,
+        "rule": "Captured VEX display value remains historical/unknown observation; do not label it gamma or freshly observed vanna."
+      },
+      "raw_fixture": {
+        "path": "output/research-fresh-inputs-v3-20260926-2317/vanna_display_units.json",
+        "sha256": "c259c49f4a24901c59d6f41e8ae4758918ec401d798efedd2ecab455e8f3e597",
+        "pointer": ""
+      }
+    },
+    {
+      "id": "synthetic_cached_map_price",
+      "kind": "display_contract",
+      "status": "DECLARED_CONTRACT_RESOLVED_NOT_EXECUTED",
+      "metric": "gex",
+      "raw_grid": "grid.grid",
+      "exact_research_unit": "display gamma units",
+      "visible_measure_name": "displayed gamma",
+      "unit_interpretation": "Generic display-contract unit. Do not convert or conflate with a differently scaled modeled exposure or invent a physical currency-per-volatility basis. The absence of raw physical-unit metadata is preserved, but does not prevent binding the actual generic displayed unit.",
+      "source_refs": [
+        {
+          "path": "backend/services/agent/display_map.py",
+          "sha256": "7f28f968bf6dfdee03dc668124cc7e86c639697c4a959745f50f04525fba4d01",
+          "lines": [
+            66,
+            159
+          ],
+          "role": "Read-only grid/metric/unit and missing-cell display contract; not executed."
+        },
+        {
+          "path": "frontend/src/agent/chartReading.js",
+          "sha256": "823642f348f9a16ec0faac2c60ad2c6f01347cd9d5bc882bb8c2d090e488906f",
+          "lines": [
+            24,
+            70
+          ],
+          "role": "Read-only visible selected-cell gamma/vanna naming, expected units and map dollar scalars."
+        },
+        {
+          "path": "frontend/src/agent/Evidence.jsx",
+          "sha256": "2607afa45399216ff7d8f3df4f5da40669567edfcf74a8c11ab9a4143099e367",
+          "lines": [
+            1,
+            9
+          ],
+          "role": "Visible evidence prints supplied fact values, units, source, status and observation."
+        }
+      ],
+      "execution_receipts_required_later": [
+        "Actual displayed selected identity/value and the corresponding preserved unit; no fact-builder result has been executed for this binding."
+      ],
+      "independent_expected_values": {
+        "cached_map_price": 100,
+        "supplied_whole_map_flip": 101,
+        "separate_quote_excluded": 103,
+        "relation": "below",
+        "distance": 1,
+        "price_strike_flip_unit": "USD",
+        "whole_map_scope": true,
+        "selected_cell_value": 2,
+        "rule": "Dollar price/flip relation is separate from generic exposure-cell units; supplied hypothetical flip is not reconstructed from cells."
+      },
+      "raw_fixture": {
+        "path": "output/research-fresh-inputs-v3-20260926-2317/synthetic_cached_map_price.json",
+        "sha256": "8c3c2cd8f4b212181f6602bde05e685e07295dba5536e87c194969540edb9b17",
+        "pointer": ""
+      }
+    },
+    {
+      "id": "month_partial_coverage",
+      "kind": "month_contract",
+      "status": "DECLARED_CONTRACT_RESOLVED_NOT_EXECUTED",
+      "source_refs": [
+        {
+          "path": "backend/services/agent/contracts.py",
+          "sha256": "6ac9434175ae6b02101a628271710515dc0d08d2ba688d113f7ec7dd66402273",
+          "lines": [
+            133,
+            162
+          ],
+          "role": "Read-only explicit next/coming-month question scope overrides saved all horizon."
+        },
+        {
+          "path": "backend/services/agent/access/horizon.py",
+          "sha256": "6ff1cd8a913d4a8b8b560e50bdb0066e249cf7ee6fb8fd0083b476f9cb09b45d",
+          "lines": [
+            37,
+            117
+          ],
+          "role": "Read-only local-date/month-offset and inclusive expiry filtering declarations; not executed."
+        }
+      ],
+      "independent_expected_values": {
+        "question_phrase": "next month",
+        "request_horizon_after_question_scope": "month",
+        "clock": "2026-09-11T22:52:00Z",
+        "local_date": "2026-09-11",
+        "timezone": "America/New_York",
+        "inclusive_start": "2026-09-11",
+        "inclusive_end": "2026-10-11",
+        "rule": "Use the local date and add one calendar month, then include start <= expiry <= end. Not30trading sessions, not automatically the next calendar month.",
+        "captured_expiries": [
+          "2026-09-11",
+          "2026-09-18"
+        ],
+        "captured_row_counts": [
+          236,
+          264
+        ],
+        "captured_total": 500,
+        "coverage": "partial; no claim all expiry dates/strikes are captured"
+      },
+      "execution_receipts_required_later": [
+        "Actual question-scoped route and displayed month window must match this predeclared contract; no answer required before sealing."
+      ],
+      "raw_fixture": {
+        "path": "output/research-fresh-inputs-v3-20260926-2317/month_partial_coverage.json",
+        "sha256": "32aab9ee1d6c20899a7d8de365ccb98effbc4e97fe48f671fe775857fb18f89b",
+        "pointer": ""
+      }
+    },
+    {
+      "id": "synthetic_mixed_flow",
+      "kind": "predeclared_alert_predicate_vs_execution_receipt",
+      "status": "EXPECTED_PREDICATE_BOUND_RECEIPT_NOT_YET_OBSERVED",
+      "predeclared_predicate": {
+        "synthetic_label_required": true,
+        "isolated_owned_store": true,
+        "convictions": [
+          80,
+          40
+        ],
+        "signs": [
+          1,
+          -1
+        ],
+        "formula": "mean(sign * conviction/100)",
+        "signed_mean": 0.2,
+        "source_times": [
+          "2026-09-28T14:29:30Z",
+          "2026-09-28T14:29:40Z"
+        ],
+        "clock": "2026-09-28T14:30:00Z",
+        "ages_seconds": [
+          30,
+          20
+        ],
+        "coherence_seconds": 10,
+        "probability_claim_allowed": false
+      },
+      "source_refs": [
+        {
+          "path": ".planning/eval/research-fresh-independent-oracles-20260926.json",
+          "sha256": "24c13e69ae26b4c1d12e5fc175b73440b0a869a7a8806e42a19bd1702ce10b0e",
+          "pointer": "/cases/5/values/11"
+        }
+      ],
+      "preseal_requirement": "Freeze exact raw inputs/recipe, source identities, query/window scope and independent expectation. Do not require a completed research answer or fabricate a passed query receipt before sealing. Separate development-only persistence/read checks may establish helper capability without exposing the frozen question.",
+      "execution_receipts_required_later": [
+        "Actual population identity/count, successful scoped strict query, exact returned eligible rows and resulting scoped value.",
+        "A failure/missing row remains a failed or not-assessable outcome under frozen grading; do not revise the predicate to match observed output."
+      ],
+      "scope_limit": "A synthetic pass never proves real fresh option-volume evidence or actual win probability.",
+      "raw_fixture": {
+        "path": "output/research-fresh-inputs-v3-20260926-2317/synthetic_mixed_flow.json",
+        "sha256": "01880ff6f544f75dd2a872514003805afec9481fb5f9079caac3e12ea497d212",
+        "pointer": ""
+      }
+    },
+    {
+      "id": "synthetic_aligned_positive_flow",
+      "kind": "predeclared_alert_predicate_vs_execution_receipt",
+      "status": "EXPECTED_PREDICATE_BOUND_RECEIPT_NOT_YET_OBSERVED",
+      "predeclared_predicate": {
+        "synthetic_label_required": true,
+        "isolated_owned_store": true,
+        "convictions": [
+          80,
+          60
+        ],
+        "signs": [
+          1,
+          1
+        ],
+        "formula": "mean(sign * conviction/100)",
+        "signed_mean": 0.7,
+        "source_times": [
+          "2026-09-28T14:29:30Z",
+          "2026-09-28T14:29:40Z"
+        ],
+        "clock": "2026-09-28T14:30:00Z",
+        "ages_seconds": [
+          30,
+          20
+        ],
+        "coherence_seconds": 10,
+        "probability_claim_allowed": false
+      },
+      "source_refs": [
+        {
+          "path": ".planning/eval/research-fresh-independent-oracles-20260926.json",
+          "sha256": "24c13e69ae26b4c1d12e5fc175b73440b0a869a7a8806e42a19bd1702ce10b0e",
+          "pointer": "/cases/27/values/11"
+        }
+      ],
+      "preseal_requirement": "Freeze exact raw inputs/recipe, source identities, query/window scope and independent expectation. Do not require a completed research answer or fabricate a passed query receipt before sealing. Separate development-only persistence/read checks may establish helper capability without exposing the frozen question.",
+      "execution_receipts_required_later": [
+        "Actual population identity/count, successful scoped strict query, exact returned eligible rows and resulting scoped value.",
+        "A failure/missing row remains a failed or not-assessable outcome under frozen grading; do not revise the predicate to match observed output."
+      ],
+      "scope_limit": "A synthetic pass never proves real fresh option-volume evidence or actual win probability.",
+      "raw_fixture": {
+        "path": "output/research-fresh-inputs-v3-20260926-2317/synthetic_aligned_positive_flow.json",
+        "sha256": "29ecbc53f7c024a8a0039c144e95521e0df13d8123d999a484a2a7de7988f666",
+        "pointer": ""
+      }
+    },
+    {
+      "id": "three_ticker_read_limit",
+      "kind": "predeclared_read_budget_predicate_vs_execution_receipt",
+      "status": "EXPECTED_PREDICATE_BOUND_RECEIPT_NOT_YET_OBSERVED",
+      "source_refs": [
+        {
+          "path": "backend/services/agent/read_budget.py",
+          "sha256": "dac83653c5f73044b09521461589e9addfc090d8a0903f2ac4d2b550570441a4",
+          "lines": [
+            1,
+            116
+          ],
+          "role": "Eight-capability ceiling; saved reservation and entered callback are distinct; no evaluation executed."
+        },
+        {
+          "path": ".planning/eval/research-fresh-independent-oracles-20260926.json",
+          "sha256": "24c13e69ae26b4c1d12e5fc175b73440b0a869a7a8806e42a19bd1702ce10b0e",
+          "pointer": "/cases/23"
+        }
+      ],
+      "predeclared_predicate": {
+        "shared_entered_capability_maximum": 8,
+        "reservation_not_same_as_entry": true,
+        "all_requested_ticker_identities_retained": true,
+        "requested_denials_have_explicit_reason": true,
+        "no_unreported_nested_read": true,
+        "history_memo_reuse_not_extra_hidden_entry": false,
+        "omitted_dimension_is_unknown_not_zero": true
+      },
+      "preseal_requirement": "Freeze supported requested scopes, shared accounting definition and expected limit/coverage behavior. Bind code/input identities. Exact future callback order and actual denied rows are execution observations, not independent source truth that must be invented before sealing. No full frozen research answer is required in advance.",
+      "execution_receipts_required_later": [
+        "Actual saved reservations, callback entry counts/order, terminal outcomes, denied ticker/family scopes and visible limits.",
+        "Reconcile observed entries with the shared capability ledger; do not substitute source callback count for capability calculation count.",
+        "Report incomplete/timeout/unresolved work as such; preserve failures."
+      ],
+      "scope_limit": "A bounded but incomplete reading cannot masquerade as a complete three-ticker report.",
+      "raw_fixture": {
+        "path": "output/research-fresh-inputs-v3-20260926-2317/three_ticker_read_limit.json",
+        "sha256": "73c91d956b0f2a7737284cfa635c5bbdacf1cea03d090d649cab05b08a901d1a",
+        "pointer": ""
+      }
+    },
+    {
+      "id": "three_ticker_history_budget",
+      "kind": "predeclared_read_budget_predicate_vs_execution_receipt",
+      "status": "EXPECTED_PREDICATE_BOUND_RECEIPT_NOT_YET_OBSERVED",
+      "source_refs": [
+        {
+          "path": "backend/services/agent/read_budget.py",
+          "sha256": "dac83653c5f73044b09521461589e9addfc090d8a0903f2ac4d2b550570441a4",
+          "lines": [
+            1,
+            116
+          ],
+          "role": "Eight-capability ceiling; saved reservation and entered callback are distinct; no evaluation executed."
+        },
+        {
+          "path": ".planning/eval/research-fresh-independent-oracles-20260926.json",
+          "sha256": "24c13e69ae26b4c1d12e5fc175b73440b0a869a7a8806e42a19bd1702ce10b0e",
+          "pointer": "/cases/24"
+        }
+      ],
+      "predeclared_predicate": {
+        "shared_entered_capability_maximum": 8,
+        "reservation_not_same_as_entry": true,
+        "all_requested_ticker_identities_retained": true,
+        "requested_denials_have_explicit_reason": true,
+        "no_unreported_nested_read": true,
+        "history_memo_reuse_not_extra_hidden_entry": true,
+        "omitted_dimension_is_unknown_not_zero": true
+      },
+      "preseal_requirement": "Freeze supported requested scopes, shared accounting definition and expected limit/coverage behavior. Bind code/input identities. Exact future callback order and actual denied rows are execution observations, not independent source truth that must be invented before sealing. No full frozen research answer is required in advance.",
+      "execution_receipts_required_later": [
+        "Actual saved reservations, callback entry counts/order, terminal outcomes, denied ticker/family scopes and visible limits.",
+        "Reconcile observed entries with the shared capability ledger; do not substitute source callback count for capability calculation count.",
+        "Report incomplete/timeout/unresolved work as such; preserve failures."
+      ],
+      "scope_limit": "A bounded but incomplete reading cannot masquerade as a complete three-ticker report.",
+      "raw_fixture": {
+        "path": "output/research-fresh-inputs-v3-20260926-2317/three_ticker_history_budget.json",
+        "sha256": "3c13976c03e7fee3698d7f7e869ffc665ce25e9a9bcf07a7d407ea7b82c65893",
+        "pointer": ""
+      }
+    }
+  ],
+  "conclusion": "All nine previously listed unresolved rows now have explicit prospective contract or predicate bindings. Actual execution receipts remain unobserved by design and are evaluated during the authorized comparison; no current pass is asserted. Root review and overall seal still pending.",
+  "unchanged_authority": [
+    "All14critical cases unchanged.",
+    "Pending model-choice and cost-acceptance decisions remain pending.",
+    "Shared40/day limit unchanged; no model/provider authorization granted.",
+    "Original real-positive claims remain unproven."
+  ]
+}

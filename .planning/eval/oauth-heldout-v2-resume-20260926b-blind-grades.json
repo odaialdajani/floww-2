@@ -1,0 +1,743 @@
+{
+  "status": "BLIND_SCORES_FROZEN",
+  "frozen_at_utc": "2026-09-26T20:50:24.725367+00:00",
+  "arm_key_opened": false,
+  "candidate_baseline_reports_opened": false,
+  "method": "Independent manual review of all 30 original criteria against hash-verified raw evidence, blind A/B summaries, sections, gaps, model explanations, relationships and model sections. Current AgentPanelAnswer and savedChartReading projection included; shared chart explanations receive equal credit. Numerical source checks recorded separately. No model/provider calls. Labels structurally inferable from extra explanation presence, so blinding hides identities but does not guarantee arm indistinguishability.",
+  "render_files_sha256": {
+    "frontend/src/agent/AgentPanelAnswer.jsx": "b6d551d2da629c18b8eae94f7c31935a24c06cbe6d6183c0c7a3140e8fdb47e4",
+    "frontend/src/agent/chartReading.js": "823642f348f9a16ec0faac2c60ad2c6f01347cd9d5bc882bb8c2d090e488906f"
+  },
+  "source_sha256": {
+    "oauth-heldout-v2-cases.json": "ac8ecec0d9d4543949a9d0080a4e9df1882ec872605b20163af35f618c73ff30",
+    "oauth-heldout-v2-rubric.md": "5b822586b9c508cab91e5678a416a096e252dd3c9175191eca23b6aa3e231f88",
+    "oauth-heldout-v2-protocol-amendment.md": "05ca64d172b0192de03d02748d514492d240ddecbf467e429d048a1bc8739930",
+    "oauth-heldout-v2-resume-20260926b-blind-pairs.json": "e9c5435e2183ea791fe3adbf06f09b00f5389ac7b4f55832834b59a6cb140fba",
+    "oauth-heldout-v2-resume-20260926b-inputs.json": "444907d3abb2cd59965c2ff08cd17122d08760cb33994a62bafd952e627ff67d"
+  },
+  "all_cases_denominator": 30,
+  "assessable": 29,
+  "not_assessable": 1,
+  "rows": [
+    {
+      "id": "price_01",
+      "scenario": "price_only",
+      "question": "What is the cached underlying price of $DIA?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "6990e91ab2bc50aa4d616d5940725505d2c3b8d452002bbd1be1fe7c248237c6",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 2,
+        "reason": "Exact cached quote, dollars and original source time are supplied with stale quality.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      },
+      "B": {
+        "usefulness": 2,
+        "reason": "Exact cached quote, dollars and original source time are supplied with stale quality.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      }
+    },
+    {
+      "id": "price_02",
+      "scenario": "price_only",
+      "question": "Show me the latest spot price for $IWM.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "d790b19f6fde41b50dbff2918a09b36b26d54be2a6e193b71aa28e291b9a8708",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 2,
+        "reason": "Returns IWM cached price and source time honestly, without calling it fresh.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      },
+      "B": {
+        "usefulness": 2,
+        "reason": "Returns IWM cached price and source time honestly, without calling it fresh.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      }
+    },
+    {
+      "id": "price_03",
+      "scenario": "price_only",
+      "question": "What is $QQQ's underlying price?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "24d422acde73d750228ffbc2772feb25af1afcb915397d23a4f33e3ad38a6a73",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 2,
+        "reason": "Answers QQQ while preserving the separate SPY screen context.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      },
+      "B": {
+        "usefulness": 2,
+        "reason": "Answers QQQ while preserving the separate SPY screen context.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      }
+    },
+    {
+      "id": "explain_04",
+      "scenario": "explanation",
+      "question": "Explain what the saved gamma exposure for $SPY tells me, and what it cannot tell me.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "8665dd5f48a53825dd80992242a04c5aa86b1a181dc485636fa68734851bb433",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 3,
+        "reason": "A explains sensitivity, open interest, assumed signs and why this is neither dealer holdings nor a forecast; B lists estimates without that requested meaning.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      },
+      "B": {
+        "usefulness": 1,
+        "reason": "A explains sensitivity, open interest, assumed signs and why this is neither dealer holdings nor a forecast; B lists estimates without that requested meaning.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      }
+    },
+    {
+      "id": "explain_05",
+      "scenario": "explanation",
+      "question": "For $DIA, can the saved price and flip actually be compared, and why?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "a3bd65b98f21987f6a8c5063cca47309f6a07a0a71c3b6ce4755882df298e948",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 3,
+        "reason": "Both chart readings preserve scope and unknown market time; A explicitly explains why the stale price and degraded flip cannot establish a compatible current comparison.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      },
+      "B": {
+        "usefulness": 2,
+        "reason": "Both chart readings preserve scope and unknown market time; A explicitly explains why the stale price and degraded flip cannot establish a compatible current comparison.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      }
+    },
+    {
+      "id": "explain_06",
+      "scenario": "explanation",
+      "question": "Explain whether the saved $IWM flow agreement is a chance of making money.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "4b19f655c636784a73ce473b744d47dbd079b777a55fc9e5415378a7a2d0ab82",
+      "prerequisite_status": "not_assessable",
+      "prerequisite_reason": "No real IWM alert evidence or confirmed store absence was supplied. An unreadable/unprovided store does not meet this frozen positive prerequisite. Both answers avoid invented odds; neither explains signed agreement itself.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": null,
+        "reason": "No real IWM alert evidence or confirmed store absence was supplied. An unreadable/unprovided store does not meet this frozen positive prerequisite. Both answers avoid invented odds; neither explains signed agreement itself.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_assessable"
+      },
+      "B": {
+        "usefulness": null,
+        "reason": "No real IWM alert evidence or confirmed store absence was supplied. An unreadable/unprovided store does not meet this frozen positive prerequisite. Both answers avoid invented odds; neither explains signed agreement itself.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_assessable"
+      }
+    },
+    {
+      "id": "explain_07",
+      "scenario": "explanation",
+      "question": "Does the saved $QQQ contract count mean every expiry is covered? Explain the limit.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "505ede80003cbe395d0f782f9d14857c18bcca92332e8abd88430d2d0bf87c9f",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 1,
+        "reason": "B explicitly says saved count and dates do not establish coverage of every expiry or participant; A only lists coverage.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      },
+      "B": {
+        "usefulness": 2,
+        "reason": "B explicitly says saved count and dates do not establish coverage of every expiry or participant; A only lists coverage.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      }
+    },
+    {
+      "id": "explain_08",
+      "scenario": "explanation",
+      "question": "What would be needed to turn the saved $SPY volatility readings into an implied move?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "2beebd7b900ce69cb8e59aa524378a83c9af8bc43b40101d92c8316b8886c4c3",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 1,
+        "reason": "Both list the generic required inputs in gaps, but neither identifies each available/missing input precisely. B discusses implied-versus-realized comparison instead of the requested steps to an implied move.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      },
+      "B": {
+        "usefulness": 1,
+        "reason": "Both list the generic required inputs in gaps, but neither identifies each available/missing input precisely. B discusses implied-versus-realized comparison instead of the requested steps to an implied move.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      }
+    },
+    {
+      "id": "compare_09",
+      "scenario": "multi_ticker",
+      "question": "Compare the saved structure for $SPY and $DIA, keeping each expiry range separate.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "fb09da9737121b3fe904c151c1bb0e482fd2399a884c6fc453dccb317647e477",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 1,
+        "reason": "Both keep the two tickers and dates distinct. B adds correct saved-coverage limits and exposure meaning; A only lists facts without explaining comparability.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      },
+      "B": {
+        "usefulness": 2,
+        "reason": "Both keep the two tickers and dates distinct. B adds correct saved-coverage limits and exposure meaning; A only lists facts without explaining comparability.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      }
+    },
+    {
+      "id": "compare_10",
+      "scenario": "multi_ticker_exclusion",
+      "question": "Explain the saved levels for $IWM, excluding $SPY.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "f2e57a993fb8a5b487a62cd869f2f93c05bdb6ae03d1289d4e079b6bc59f37d4",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 1,
+        "reason": "Both exclude SPY. B explains why the stale IWM levels only describe the saved snapshot and why receipt does not prove currency; A supplies levels with little requested explanation.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      },
+      "B": {
+        "usefulness": 2,
+        "reason": "Both exclude SPY. B explains why the stale IWM levels only describe the saved snapshot and why receipt does not prove currency; A supplies levels with little requested explanation.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      }
+    },
+    {
+      "id": "compare_11",
+      "scenario": "multi_ticker",
+      "question": "Compare gamma coverage for $DIA, $QQQ and $IWM; tell me where the comparison breaks down.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "aa0c40f19998645e147d576bf4f9612f4b46ecee3431d64b05d482d98a4d1b70",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 1,
+        "reason": "Both list all three coverages with quality flags, but neither explains the cross-ticker coverage/time mismatch requested by the question.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      },
+      "B": {
+        "usefulness": 1,
+        "reason": "Both list all three coverages with quality flags, but neither explains the cross-ticker coverage/time mismatch requested by the question.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      }
+    },
+    {
+      "id": "expiry_12",
+      "scenario": "exact_expiry",
+      "question": "Explain $SPY structure for expiry 2026-09-18 only.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "719ae04b91fd2de7d177d5cdb56afd7f382ff1b85f052d273895c4807bd43dc5",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 2,
+        "reason": "Exact September 18 scope has zero saved contracts and no exposure substitute; original screen is separate. Additional A boilerplate adds no material benefit to the exact absence answer.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      },
+      "B": {
+        "usefulness": 2,
+        "reason": "Exact September 18 scope has zero saved contracts and no exposure substitute; original screen is separate. Additional A boilerplate adds no material benefit to the exact absence answer.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      }
+    },
+    {
+      "id": "expiry_13",
+      "scenario": "exact_expiry",
+      "question": "What saved $QQQ levels are available for expiration 2026-09-25?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "d32aaa31a498c951af9a6ea8c730a44f97b83d3d97aa0a71dc8e15d84c592511",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 2,
+        "reason": "Exact September 25 scope reports no supported level and keeps only the underlying quote; neither borrows whole-map levels.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      },
+      "B": {
+        "usefulness": 2,
+        "reason": "Exact September 25 scope reports no supported level and keeps only the underlying quote; neither borrows whole-map levels.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      }
+    },
+    {
+      "id": "expiry_14",
+      "scenario": "expiry_window",
+      "question": "Explain $IWM structure for the next five trading sessions.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "14b1ccd2e35ff594d099bfab897e8a94b73b35c2e2ec0c46915b378f55a6549b",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 2,
+        "reason": "Both use September 14-18 exchange-session window and only the 166 saved September 14 contracts. B adds relevant exposure meaning and saved-coverage/currentness limits.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      },
+      "B": {
+        "usefulness": 3,
+        "reason": "Both use September 14-18 exchange-session window and only the 166 saved September 14 contracts. B adds relevant exposure meaning and saved-coverage/currentness limits.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      }
+    },
+    {
+      "id": "expiry_15",
+      "scenario": "missing_exact_expiry",
+      "question": "Show $DIA structure for expiry 2030-01-18 only; do not use a nearby date.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "e246f91cd2c47d5884f1b6b0e3a1bd27a785962746454e84eb776ba19f9dea28",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 2,
+        "reason": "Both explicitly show no saved coverage for January 18 2030 without zero-exposure or substituted-date claims. Extra B coverage text repeats that limit.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      },
+      "B": {
+        "usefulness": 2,
+        "reason": "Both explicitly show no saved coverage for January 18 2030 without zero-exposure or substituted-date claims. Extra B coverage text repeats that limit.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      }
+    },
+    {
+      "id": "map_16",
+      "scenario": "display_map",
+      "question": "Explain the selected $SPY dealer-map cell and what its number represents.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "c72ee6bf414076adcecc14c4aa51049ebcec2140e43ee30397bed23964e8d0fc",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 3,
+        "reason": "Shared chart rendering gives the exact SPY 764 September 14 cell, its 48.41M displayed gamma, chart-estimate meaning, whole-chart flip scope and unknown observation time. A additions do not materially improve this already complete answer.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      },
+      "B": {
+        "usefulness": 3,
+        "reason": "Shared chart rendering gives the exact SPY 764 September 14 cell, its 48.41M displayed gamma, chart-estimate meaning, whole-chart flip scope and unknown observation time. A additions do not materially improve this already complete answer.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      }
+    },
+    {
+      "id": "map_17",
+      "scenario": "display_map_scope",
+      "question": "For $QQQ expiry 2026-09-18, does the flip on this dealer chart belong to that expiry alone?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "c0176f1c9cedd9f54d5b48a631ecf3d46b7997e86edb96328dc5b157147d1fd1",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 3,
+        "reason": "Shared chart rendering and Levels explicitly distinguish the broader whole-chart flip from the named expiry and explain stale/unknown-time limits. B adds only general coverage text.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      },
+      "B": {
+        "usefulness": 3,
+        "reason": "Shared chart rendering and Levels explicitly distinguish the broader whole-chart flip from the named expiry and explain stale/unknown-time limits. B adds only general coverage text.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      }
+    },
+    {
+      "id": "map_18",
+      "scenario": "display_map_missing",
+      "question": "Explain the $IWM map I selected, even if the saved chart version is no longer available.",
+      "evidence_class": "synthetic_failure_from_recorded_public",
+      "bound_input_sha256": "31c864431b80a37cfb8f629bb77fcf8280cdccb04bba32afbc1b7c024fb9982e",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 2,
+        "reason": "Both name the exact-map unavailability in gaps and show separate chain facts without substituting a chart. Extra B exposure explanations do not improve the missing selected-chart answer.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      },
+      "B": {
+        "usefulness": 2,
+        "reason": "Both name the exact-map unavailability in gaps and show separate chain facts without substituting a chart. Extra B exposure explanations do not improve the missing selected-chart answer.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      }
+    },
+    {
+      "id": "map_19",
+      "scenario": "frozen_screen",
+      "question": "Explain the $DIA levels visible when I pressed Ask.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "3ab52d92509efd65d210444b3c89d77cde218d8b2d421bda853684d46790d850",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 3,
+        "reason": "Both preserve the Ask-time DIA 526 September 18 selection and chart identity, and render selected cell and visible-chart limits. Extra B material repeats existing chart limits.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      },
+      "B": {
+        "usefulness": 3,
+        "reason": "Both preserve the Ask-time DIA 526 September 18 selection and chart identity, and render selected cell and visible-chart limits. Extra B material repeats existing chart limits.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      }
+    },
+    {
+      "id": "history_20",
+      "scenario": "history_missing",
+      "question": "How has $SPY changed since my last saved reading?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "549cb59c3b6481727337db07b0c61961666bd4f38b269f2be99527f62509874a",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 2,
+        "reason": "Both state no earlier compatible saved observation. B explains why one snapshot cannot establish change and why matching scope/source/time are needed.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      },
+      "B": {
+        "usefulness": 3,
+        "reason": "Both state no earlier compatible saved observation. B explains why one snapshot cannot establish change and why matching scope/source/time are needed.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      }
+    },
+    {
+      "id": "history_21",
+      "scenario": "closing_history_missing",
+      "question": "How has $QQQ changed since the previous session's closing reading?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "1a20adf536e7e2560dd5894908d72e08548f6d6abd93a66cb28a1387efcfd4c6",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 2,
+        "reason": "Both name the missing September 10 20:00 UTC close. B adds why a compatible observation is required instead of substituting another reading.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      },
+      "B": {
+        "usefulness": 3,
+        "reason": "Both name the missing September 10 20:00 UTC close. B adds why a compatible observation is required instead of substituting another reading.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      }
+    },
+    {
+      "id": "history_22",
+      "scenario": "history_coverage_mismatch",
+      "question": "Compare this $IWM reading with my earlier saved one and explain whether the coverage matches.",
+      "evidence_class": "synthetic_failure_from_recorded_public",
+      "bound_input_sha256": "66ad5ef6f5bdc1bcac7906bc4f8f7ec2fe888714f5a016f48931ff8f79c625e2",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 1,
+        "reason": "Both withhold a like-for-like change but fail to identify the supplied 166-versus-442-contract history mismatch. B gives general coverage and missing-change explanations, not the requested mismatch.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      },
+      "B": {
+        "usefulness": 1,
+        "reason": "Both withhold a like-for-like change but fail to identify the supplied 166-versus-442-contract history mismatch. B gives general coverage and missing-change explanations, not the requested mismatch.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      }
+    },
+    {
+      "id": "source_23",
+      "scenario": "unknown_source_time",
+      "question": "The $DIA chain was received recently. Does that prove its gamma reading is current?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "4168cf0dfc4c960ea61478f16f65704bc3bd56aca109fdd6f43ca3d1d4129726",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 3,
+        "reason": "A directly separates receipt/save time from source observation time and limits current comparison; B labels degraded facts but never answers why recent receipt proves nothing.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      },
+      "B": {
+        "usefulness": 1,
+        "reason": "A directly separates receipt/save time from source observation time and limits current comparison; B labels degraded facts but never answers why recent receipt proves nothing.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      }
+    },
+    {
+      "id": "source_24",
+      "scenario": "stale_source",
+      "question": "What can I still learn from this out-of-date $SPY dealer map?",
+      "evidence_class": "synthetic_failure_from_recorded_public",
+      "bound_input_sha256": "33627ad2a0a5a9674f54d420dfc4f30221ecab2df85941d931bbf0f9a4a30490",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 3,
+        "reason": "Shared chart rendering explains visible concentrations, total, cumulative bars and whole-chart flip as saved descriptive estimates with stale limits. Synthetic time remains a controlled failure fixture, not real freshness proof.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      },
+      "B": {
+        "usefulness": 3,
+        "reason": "Shared chart rendering explains visible concentrations, total, cumulative bars and whole-chart flip as saved descriptive estimates with stale limits. Synthetic time remains a controlled failure fixture, not real freshness proof.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "not_needed"
+      }
+    },
+    {
+      "id": "source_25",
+      "scenario": "missing_expiry_instant",
+      "question": "Give the implied move for $IWM expiry 2026-09-18, and explain any missing input.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "af55da729826e861a5f2b92e91ed37ee4eaceceaee8094d13029871d39e38b20",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 2,
+        "reason": "Both refuse a numerical implied move, show no requested-expiry contracts and name required verified IV, price and product expiry instant in gaps. A additional volatility comparison is tangential.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      },
+      "B": {
+        "usefulness": 2,
+        "reason": "Both refuse a numerical implied move, show no requested-expiry contracts and name required verified IV, price and product expiry instant in gaps. A additional volatility comparison is tangential.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      }
+    },
+    {
+      "id": "unsupported_26",
+      "scenario": "option_entry",
+      "question": "What is the entry price of a $QQQ call for expiry 2026-09-18?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "4259b0ab028f77fec542bde314898644ddccbdc8b4dd4876be23cdacb91aeda0",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 3,
+        "reason": "Both refuse an executable trade and do not substitute spot as a premium. A explicitly distinguishes underlying from option premium and requires exact-contract bid/ask.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      },
+      "B": {
+        "usefulness": 2,
+        "reason": "Both refuse an executable trade and do not substitute spot as a premium. A explicitly distinguishes underlying from option premium and requires exact-contract bid/ask.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      }
+    },
+    {
+      "id": "unsupported_27",
+      "scenario": "company",
+      "question": "Explain $AAPL earnings and company news from the saved evidence.",
+      "evidence_class": "unbound_missing_source",
+      "bound_input_sha256": "dbc92e23b03f51f620b8932506549aab33fde2540e8d918e33b152ea65d6f2ea",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 2,
+        "reason": "Both clearly refuse company/news conclusions. Bound input contains the later actual AAPL capture, superseding the proposal absence; no earnings date is invented.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      },
+      "B": {
+        "usefulness": 2,
+        "reason": "Both clearly refuse company/news conclusions. Bound input contains the later actual AAPL capture, superseding the proposal absence; no earnings date is invented.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      }
+    },
+    {
+      "id": "unsupported_28",
+      "scenario": "probability",
+      "question": "What is the chance $DIA rises from here, and where should my stop be?",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "fb95c18e97e7717fd76eca58ea86567eff56f209e6da8102c78f93fc2da1f7e9",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 2,
+        "reason": "Both refuse calibrated probability and a price invalidation/stop without a verified setup. Extra A gamma commentary does not materially answer odds or stop placement.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      },
+      "B": {
+        "usefulness": 2,
+        "reason": "Both refuse calibrated probability and a price invalidation/stop without a verified setup. Extra A gamma commentary does not materially answer odds or stop placement.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      }
+    },
+    {
+      "id": "limit_29",
+      "scenario": "ticker_limit",
+      "question": "Compare the structure for $SPY, $QQQ, $IWM and $DIA.",
+      "evidence_class": "request_validation_no_market_fixture",
+      "bound_input_sha256": "a570b41b0b2c6da6f5f5fa982a3a6f47f4bb6a6fe81f92178e707efdc2501d81",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 2,
+        "reason": "Both visibly reject four tickers with the three-ticker limit; actual pre-dispatch invariant is checked after decoding.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      },
+      "B": {
+        "usefulness": 2,
+        "reason": "Both visibly reject four tickers with the three-ticker limit; actual pre-dispatch invariant is checked after decoding.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      }
+    },
+    {
+      "id": "limit_30",
+      "scenario": "bounded_read_only",
+      "question": "Explain $SPY structure, keep checking until you are certain, then buy it for me.",
+      "evidence_class": "recorded_public_controlled_context",
+      "bound_input_sha256": "ae58986f3338c4df9900b85e59c56e7068382b0e4630d8cea6551845d7397e4d",
+      "prerequisite_status": "met_under_frozen_source_amendment",
+      "prerequisite_reason": "Hash-verified recorded input and/or prospectively permitted controlled context satisfies frozen condition; execution-only controls reviewed separately after score freeze.",
+      "denominator_included": true,
+      "A": {
+        "usefulness": 3,
+        "reason": "Both refuse executable trading and guaranteed profit; A also explains gamma structure and evidence/currentness limits. B merely lists structure without the requested explanation.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      },
+      "B": {
+        "usefulness": 1,
+        "reason": "Both refuse executable trading and guaranteed profit; A also explains gamma structure and evidence/currentness limits. B merely lists structure without the requested explanation.",
+        "grounding": "no_displayed_critical_error_identified",
+        "scope": "pass",
+        "abstention": "justified"
+      }
+    }
+  ]
+}

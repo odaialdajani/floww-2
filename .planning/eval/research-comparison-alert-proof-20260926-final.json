@@ -1,0 +1,1122 @@
+{
+  "status": "PREANSWER_ISOLATED_ALERT_INPUT_PROOF",
+  "manifest_sha256": "b28a35f15ab4784cf4b7871b598771ca7663d3f4bc66adb5f80f2e5add224c42",
+  "helper_sha256": "83b8bdf056039613c3eece92c2db813cc5ba48ae138ef0cfbfabc3db7e3e1aad",
+  "cases": [
+    {
+      "id": "gamma_shared_inputs",
+      "input_sha256": "bffc24829933c888de16d8650ac817d84003f0b07b453a09e30d1acd98a1a879",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "SPY",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "blank_charm_not_zero",
+      "input_sha256": "bb54672735781e892faf748c57a93a1a68d64f06eafd4eb1f2f9f2f63f392041",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "DIA",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "derived_alert_source_time",
+      "input_sha256": "054aafe2215cf7ffa88cc6702becd9f6114875424a4a47247dd97405d4503f1d",
+      "mode": "derived_alerts_unknown",
+      "reads": [
+        {
+          "ticker": "QQQ",
+          "status": "ok",
+          "rows": [
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 61,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": "BULLISH",
+              "conviction": 58,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": "BULLISH",
+              "conviction": 54,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 65,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 64,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 70,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": "BULLISH",
+              "conviction": 53,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-11",
+              "bias": null,
+              "conviction": 70,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": "BEARISH",
+              "conviction": 51,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 59,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-11",
+              "bias": null,
+              "conviction": 70,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": "BEARISH",
+              "conviction": 51,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": "BULLISH",
+              "conviction": 58,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": "BULLISH",
+              "conviction": 53,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 60,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-11",
+              "bias": null,
+              "conviction": 64,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-11",
+              "bias": null,
+              "conviction": 62,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": "BULLISH",
+              "conviction": 58,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-11",
+              "bias": null,
+              "conviction": 70,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 58,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-11",
+              "bias": null,
+              "conviction": 62,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 64,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 64,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-11",
+              "bias": null,
+              "conviction": 62,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 56,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 61,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-11",
+              "bias": "BEARISH",
+              "conviction": 52,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 60,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 61,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 57,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 56,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 58,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-11",
+              "bias": "BULLISH",
+              "conviction": 56,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": "BULLISH",
+              "conviction": 54,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-11",
+              "bias": null,
+              "conviction": 62,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 59,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-11",
+              "bias": null,
+              "conviction": 62,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 70,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-11",
+              "bias": null,
+              "conviction": 62,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 57,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": "BEARISH",
+              "conviction": 52,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 62,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 62,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 60,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 59,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-11",
+              "bias": null,
+              "conviction": 64,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 62,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 62,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 61,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": "BULLISH",
+              "conviction": 53,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 62,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": "BEARISH",
+              "conviction": 58,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-11",
+              "bias": null,
+              "conviction": 62,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 59,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": "BULLISH",
+              "conviction": 58,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": null,
+              "conviction": 58,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-11",
+              "bias": "BEARISH",
+              "conviction": 59,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-11",
+              "bias": null,
+              "conviction": 70,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": "BULLISH",
+              "conviction": 57,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-14",
+              "bias": "BEARISH",
+              "conviction": 53,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-09-11",
+              "bias": null,
+              "conviction": 62,
+              "asof_ts": null,
+              "computed_at": "2026-09-11T22:52:00+00:00"
+            }
+          ]
+        }
+      ],
+      "query_receipts": [
+        {
+          "ticker": "QQQ",
+          "params": [
+            "QQQ",
+            "2026-09-04"
+          ],
+          "query": "SELECT under, exp AS expiry, bias, conviction, asof_ts, context_json FROM flow_alerts_daily WHERE under = ? AND asof_date >= ? ORDER BY asof_ts DESC LIMIT 200",
+          "label": "DERIVED_FROM_RECORDED_PUBLIC_CHAINS",
+          "clock": "2026-09-11T22:52:00+00:00",
+          "status": "ok",
+          "rows": 61
+        }
+      ],
+      "population": [
+        {
+          "ticker": "QQQ",
+          "scan_rows": 60,
+          "persisted_rows": 61,
+          "label": "DERIVED_FROM_RECORDED_PUBLIC_CHAINS",
+          "optional_live_inputs": "Not supplied: historical baselines, regimes, calibration, desk pass"
+        }
+      ]
+    },
+    {
+      "id": "controlled_empty_alert_scope",
+      "input_sha256": "ab4c9d1e47cb62a1cdccbbe159d422d433280d4490d8de2352b8a3383204010d",
+      "mode": "controlled_empty_alerts",
+      "reads": [
+        {
+          "ticker": "IWM",
+          "status": "ok",
+          "rows": []
+        }
+      ],
+      "query_receipts": [
+        {
+          "ticker": "IWM",
+          "params": [
+            "IWM",
+            "2026-09-04"
+          ],
+          "query": "SELECT under, exp AS expiry, bias, conviction, asof_ts, context_json FROM flow_alerts_daily WHERE under = ? AND asof_date >= ? ORDER BY asof_ts DESC LIMIT 200",
+          "label": "CONTROLLED_EMPTY_STORE",
+          "clock": "2026-09-11T22:52:00+00:00",
+          "status": "ok",
+          "rows": 0
+        }
+      ],
+      "population": []
+    },
+    {
+      "id": "alert_error_not_empty",
+      "input_sha256": "427f77a8b526ceb135c0fecb9b658f173ba4ec450d8a26946142ba60349a29a1",
+      "mode": "controlled_alert_error",
+      "reads": [
+        {
+          "ticker": "DIA",
+          "status": "expected_unavailable",
+          "error_class": "CatalogException"
+        }
+      ],
+      "query_receipts": [
+        {
+          "ticker": "DIA",
+          "params": [
+            "DIA",
+            "2026-09-04"
+          ],
+          "query": "SELECT under, exp AS expiry, bias, conviction, asof_ts, context_json FROM flow_alerts_daily WHERE under = ? AND asof_date >= ? ORDER BY asof_ts DESC LIMIT 200",
+          "label": "CONTROLLED_QUERY_FAILURE",
+          "clock": "2026-09-11T22:52:00+00:00",
+          "status": "error",
+          "rows": null,
+          "error_class": "CatalogException"
+        }
+      ],
+      "population": []
+    },
+    {
+      "id": "synthetic_mixed_flow",
+      "input_sha256": "01880ff6f544f75dd2a872514003805afec9481fb5f9079caac3e12ea497d212",
+      "mode": "synthetic_alerts_positive",
+      "reads": [
+        {
+          "ticker": "SPY",
+          "status": "ok",
+          "rows": [
+            {
+              "under": "SPY",
+              "expiry": "2026-10-02",
+              "bias": "bullish",
+              "conviction": 80,
+              "asof_ts": "2026-09-28T14:29:30+00:00",
+              "computed_at": "2026-09-28T14:30:00+00:00"
+            },
+            {
+              "under": "SPY",
+              "expiry": "2026-10-02",
+              "bias": "bearish",
+              "conviction": 40,
+              "asof_ts": "2026-09-28T14:29:40+00:00",
+              "computed_at": "2026-09-28T14:30:00+00:00"
+            }
+          ]
+        }
+      ],
+      "query_receipts": [
+        {
+          "ticker": "SPY",
+          "params": [
+            "SPY",
+            "2026-09-21"
+          ],
+          "query": "SELECT under, exp AS expiry, bias, conviction, asof_ts, context_json FROM flow_alerts_daily WHERE under = ? AND asof_date >= ? ORDER BY asof_ts DESC LIMIT 200",
+          "label": "SYNTHETIC_CONTRACT_TEST",
+          "clock": "2026-09-28T14:30:00+00:00",
+          "status": "ok",
+          "rows": 2
+        }
+      ],
+      "population": [
+        {
+          "ticker": "SPY",
+          "scan_rows": null,
+          "persisted_rows": 2,
+          "label": "SYNTHETIC_CONTRACT_TEST",
+          "optional_live_inputs": "Not supplied: historical baselines, regimes, calibration, desk pass"
+        }
+      ]
+    },
+    {
+      "id": "unpaired_iv",
+      "input_sha256": "5c7f0266788c62138137b464f5f9d9e08b0a87df97546572b9b2efb2d21cfaec",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "QQQ",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "zero_and_missing_oi",
+      "input_sha256": "daebf88b2d02065869567f1ef2e1c47b84948b5c6ac0ff2b5b982cc079314fa4",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "DIA",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "synthetic_bracketing_levels",
+      "input_sha256": "c10c317af9787e33834a0507367a0265ed68a5e2bee9a3908659b9ac633285fd",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "AAPL",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "synthetic_move_not_straddle",
+      "input_sha256": "71302e0e3d47ab595aa075213527fc104b351a3a098adb71b41a436150703bcf",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "IWM",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "gamma_and_expected_moves",
+      "input_sha256": "3ef10d8c0f58fd9b28a0e7a7394174c2031fa9783df66b71c6422eb1caad4eee",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "QQQ",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "map_missing_cell_total",
+      "input_sha256": "4bc6de0dfbc2e7a5e10ecabd58fa4bc1f55edd90c65afba7807abde23329f972",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "SPY",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "map_measured_zero",
+      "input_sha256": "c28d904013b9955f27741c1b5d10d847c7f54b0954abe1bf7058d46621b3d45a",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "IWM",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "vanna_display_units",
+      "input_sha256": "c259c49f4a24901c59d6f41e8ae4758918ec401d798efedd2ecab455e8f3e597",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "QQQ",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "synthetic_cached_map_price",
+      "input_sha256": "8c3c2cd8f4b212181f6602bde05e685e07295dba5536e87c194969540edb9b17",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "SPY",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "closed_expiry_descriptive",
+      "input_sha256": "e77087700c118dcdf9328880d04e5c9a6aa2bb20d5f6452f9bf6884625712416",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "DIA",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "friday_next_session",
+      "input_sha256": "e22b51ceef59f5a66d50b79bda73494ef8baeaf39339723df469d6d464333b29",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "IWM",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "month_partial_coverage",
+      "input_sha256": "32aab9ee1d6c20899a7d8de365ccb98effbc4e97fe48f671fe775857fb18f89b",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "DIA",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "owned_price_change",
+      "input_sha256": "1be7844386979359ef02020dc72b55d34ddc1ffad5e7cdceb26a9c2a42db8f29",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "IWM",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "history_changed_selection",
+      "input_sha256": "1695272512eaf889e4e1d8757823fcc505a93db13ffdadded97552c950765192",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "SPY",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "other_owner_history",
+      "input_sha256": "bf2bae6d5db7c0dd52fbccf584f5991990759b9116b578240775ed08bf57fa62",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "QQQ",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "late_snapshot_not_close",
+      "input_sha256": "f60a1ff78eb4248625c566172a3ef5120e95092e4bd765d1d81df420568b534a",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "DIA",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "two_ticker_evidence_strength",
+      "input_sha256": "c3431d8232a52f83693049cb0647ba9f6d49ddb4b729b6404ae357dfaa35d305",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "QQQ",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        },
+        {
+          "ticker": "SPY",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "three_ticker_read_limit",
+      "input_sha256": "73c91d956b0f2a7737284cfa635c5bbdacf1cea03d090d649cab05b08a901d1a",
+      "mode": "controlled_empty_alerts",
+      "reads": [
+        {
+          "ticker": "IWM",
+          "status": "ok",
+          "rows": []
+        },
+        {
+          "ticker": "QQQ",
+          "status": "ok",
+          "rows": []
+        },
+        {
+          "ticker": "SPY",
+          "status": "ok",
+          "rows": []
+        }
+      ],
+      "query_receipts": [
+        {
+          "ticker": "IWM",
+          "params": [
+            "IWM",
+            "2026-09-04"
+          ],
+          "query": "SELECT under, exp AS expiry, bias, conviction, asof_ts, context_json FROM flow_alerts_daily WHERE under = ? AND asof_date >= ? ORDER BY asof_ts DESC LIMIT 200",
+          "label": "CONTROLLED_EMPTY_STORE",
+          "clock": "2026-09-11T22:52:00+00:00",
+          "status": "ok",
+          "rows": 0
+        },
+        {
+          "ticker": "QQQ",
+          "params": [
+            "QQQ",
+            "2026-09-04"
+          ],
+          "query": "SELECT under, exp AS expiry, bias, conviction, asof_ts, context_json FROM flow_alerts_daily WHERE under = ? AND asof_date >= ? ORDER BY asof_ts DESC LIMIT 200",
+          "label": "CONTROLLED_EMPTY_STORE",
+          "clock": "2026-09-11T22:52:00+00:00",
+          "status": "ok",
+          "rows": 0
+        },
+        {
+          "ticker": "SPY",
+          "params": [
+            "SPY",
+            "2026-09-04"
+          ],
+          "query": "SELECT under, exp AS expiry, bias, conviction, asof_ts, context_json FROM flow_alerts_daily WHERE under = ? AND asof_date >= ? ORDER BY asof_ts DESC LIMIT 200",
+          "label": "CONTROLLED_EMPTY_STORE",
+          "clock": "2026-09-11T22:52:00+00:00",
+          "status": "ok",
+          "rows": 0
+        }
+      ],
+      "population": []
+    },
+    {
+      "id": "three_ticker_history_budget",
+      "input_sha256": "3c13976c03e7fee3698d7f7e869ffc665ce25e9a9bcf07a7d407ea7b82c65893",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "DIA",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        },
+        {
+          "ticker": "IWM",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        },
+        {
+          "ticker": "QQQ",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "source_label_instructions",
+      "input_sha256": "b0c23f9d39d82dccc910ea1b612c106d9deb1e4b7f972d5ae84cc459940bbd58",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "AAPL",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "guarantee_from_readings",
+      "input_sha256": "38f6201174ed32c30460a02c49d88ba0510d5aef50ffc7a07f1e30d0ccbca01b",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "SPY",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "synthetic_aligned_positive_flow",
+      "input_sha256": "29ecbc53f7c024a8a0039c144e95521e0df13d8123d999a484a2a7de7988f666",
+      "mode": "synthetic_alerts_positive",
+      "reads": [
+        {
+          "ticker": "QQQ",
+          "status": "ok",
+          "rows": [
+            {
+              "under": "QQQ",
+              "expiry": "2026-10-02",
+              "bias": "BULLISH",
+              "conviction": 80,
+              "asof_ts": "2026-09-28T14:29:30+00:00",
+              "computed_at": "2026-09-28T14:29:50+00:00"
+            },
+            {
+              "under": "QQQ",
+              "expiry": "2026-10-02",
+              "bias": "BULLISH",
+              "conviction": 60,
+              "asof_ts": "2026-09-28T14:29:40+00:00",
+              "computed_at": "2026-09-28T14:29:50+00:00"
+            }
+          ]
+        }
+      ],
+      "query_receipts": [
+        {
+          "ticker": "QQQ",
+          "params": [
+            "QQQ",
+            "2026-09-21"
+          ],
+          "query": "SELECT under, exp AS expiry, bias, conviction, asof_ts, context_json FROM flow_alerts_daily WHERE under = ? AND asof_date >= ? ORDER BY asof_ts DESC LIMIT 200",
+          "label": "SYNTHETIC_CONTRACT_TEST",
+          "clock": "2026-09-28T14:30:00+00:00",
+          "status": "ok",
+          "rows": 2
+        }
+      ],
+      "population": [
+        {
+          "ticker": "QQQ",
+          "scan_rows": null,
+          "persisted_rows": 2,
+          "label": "SYNTHETIC_CONTRACT_TEST",
+          "optional_live_inputs": "Not supplied: historical baselines, regimes, calibration, desk pass"
+        }
+      ]
+    },
+    {
+      "id": "aapl_price_bypass",
+      "input_sha256": "ef502080e986e1502a4118c2cdb3c797c0d5649a7d3069c96ae74567c627439b",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "AAPL",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "explicit_spy_price_over_map",
+      "input_sha256": "5116b448dd91297b8b56963369a413f5d9098330777aa0d8185586a889edce50",
+      "mode": "unbound",
+      "reads": [
+        {
+          "ticker": "SPY",
+          "status": "expected_unavailable",
+          "error_class": "RuntimeError"
+        }
+      ],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "historical_chart_refusal",
+      "input_sha256": "5694421fc0ef1e12b35e102c2aaa25ce09a93c90dddacf8b09a4b8e0a4a1966c",
+      "mode": "unbound",
+      "reads": [],
+      "query_receipts": [],
+      "population": []
+    },
+    {
+      "id": "activity_overlay_refusal",
+      "input_sha256": "2f2ffd59d92971e11ab2472fb3bb35229f5535c65367b33aa3bfe4a1aa1616f7",
+      "mode": "unbound",
+      "reads": [],
+      "query_receipts": [],
+      "population": []
+    }
+  ],
+  "model_calls": 0,
+  "provider_calls": 0,
+  "research_answers": 0,
+  "limitation": "Actual isolated alert writes/reads only. No production alert coverage, route answers, model comparison, history store proof or acceptance."
+}

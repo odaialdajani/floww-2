@@ -25,6 +25,8 @@ makes this directory a package) and spread per-call-site keys as above.
 SINGLE SOURCE OF TRUTH for the subprocess-test baseline env — new static keys go HERE, not at per-test sites.
 """
 
+import os
+
 # Baseline Python env for subprocess-driven test suites.
 # (PATH / API_SECRET_KEY / FLOWW_ENABLE_LIVE_SCHWAB are truly-static and
 # can be baked at import time; PYTHONPATH and HOME are per-call-site-computed.)
@@ -35,3 +37,7 @@ _SUBPROCESS_MIN_ENV: dict[str, str] = {
     "API_SECRET_KEY": "test-secret-key",
     "FLOWW_ENABLE_LIVE_SCHWAB": "0",
 }
+if os.name == "nt":
+    # Winsock provider loading requires OS directory metadata even with an
+    # absolute interpreter path. Keep credentials and app settings excluded.
+    _SUBPROCESS_MIN_ENV.update({key: os.environ[key] for key in ("SystemRoot", "WINDIR") if key in os.environ})

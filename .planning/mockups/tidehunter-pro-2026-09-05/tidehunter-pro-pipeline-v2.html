@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en" data-mode="trade" data-state="live" data-screen="all" data-cb="off">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tidehunter Pro — insight pipeline mockup v2</title>
+<style>
+/* ============================================================
+   TIDEHUNTER PRO — INSIGHT PIPELINE MOCKUP v2 (post-audit)
+   One page. Zero page tabs. Zero network calls. Inline SVG only.
+   Every number is INVENTED. Field provenance is in HTML comments
+   (data-src="...") naming the real backend field it would carry.
+   Low-glare: bg #16181c–#1e2126, ink #a4a8ae. No pure white/black.
+   Bull/bear #4fc3a1/#e0607f validated (normal ΔE 28.8 pass; deutan 7.8
+   → direction always carries ▲/▼ + BULL/BEAR word; colour is secondary).
+   ============================================================ */
+:root{
+  --bg:#16181c;--s1:#1a1d23;--s2:#1e2126;--s3:#23272e;
+  --line:#262a31;--line2:#30353d;
+  --ink:#a4a8ae;--hi:#c3c7cd;--lo:#71767e;--xlo:#565b63;
+  --gold:#c9a84c;--gold-s:rgba(201,168,76,.13);
+  --bull:#4fc3a1;--bear:#e0607f;--warn:#d9a441;--info:#6aa5c9;--violet:#9b7ade;
+  --bull-s:rgba(79,195,161,.12);--bear-s:rgba(224,96,127,.12);--warn-s:rgba(217,164,65,.1);
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+  --ease:cubic-bezier(.23,1,.32,1);
+  --row:30px;--fs:13px;--num:12.5px;--gap:12px;--pad:16px;--r:10px;--rs:6px;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:400 var(--fs)/1.45 var(--sans);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+button,input,select{font:inherit;color:inherit}
+button{background:none;border:0;cursor:pointer;text-align:left}
+button:active{transform:scale(.985)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:var(--num)}
+.up{color:var(--bull)}.dn{color:var(--bear)}.w{color:var(--warn)}.hi{color:var(--hi)}.lo{color:var(--lo)}.xlo{color:var(--xlo)}
+kbd{font-family:var(--mono);font-size:10px;padding:1px 4px;border-radius:3px;border:1px solid var(--line2);background:var(--s2);color:var(--lo)}
+
+/* ---------- mock chrome (not the design) ---------- */
+.mock{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:7px 14px;background:#1d1a12;border-bottom:1px solid #3a3220;flex:0 0 auto;font-size:12px}
+.mock .warn{font:600 11px/1 var(--mono);letter-spacing:.08em;color:#d9a441;border:1px solid rgba(217,164,65,.4);background:rgba(217,164,65,.08);padding:5px 9px;border-radius:999px}
+.mock .g{display:flex;align-items:center;gap:5px}
+.mock .l{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--xlo)}
+.mb{padding:4px 10px;border-radius:5px;border:1px solid var(--line2);color:var(--lo);font-size:11.5px}
+.mb:hover{color:var(--hi);background:var(--s2)}
+.mb[aria-pressed="true"]{color:#16181c;background:var(--gold);border-color:var(--gold);font-weight:600}
+
+/* ---------- shell ---------- */
+.app{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;background:radial-gradient(1100px 500px at 18% -14%,#1c1a14 0%,var(--bg) 60%),var(--bg)}
+.top{display:flex;align-items:center;gap:14px;padding:8px var(--pad);border-bottom:1px solid var(--line);flex:0 0 auto;background:linear-gradient(180deg,#191712,var(--bg))}
+.logo{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;background:linear-gradient(135deg,var(--gold),#8d7431);color:#16181c;font-weight:800;font-size:13px}
+.bname{font-weight:600;font-size:14px;color:var(--hi)}.bname em{font-style:normal;color:var(--gold)}
+.chip{font:500 10.5px/1 var(--mono);letter-spacing:.06em;padding:4px 8px;border-radius:999px;border:1px solid var(--line2);color:var(--lo);background:var(--s2);white-space:nowrap}
+.chip.live{color:var(--bull);background:var(--bull-s);border-color:rgba(79,195,161,.28)}
+.chip.stamp{color:var(--gold);background:var(--gold-s);border-color:rgba(201,168,76,.35)}
+.top .sp{flex:1}
+.icb{width:26px;height:26px;border-radius:5px;border:1px solid var(--line2);color:var(--lo);display:grid;place-items:center;font-size:13px}
+.icb:hover{color:var(--hi);background:var(--s2)}
+.popwrap{position:relative}
+.pop{position:absolute;right:0;top:calc(100% + 6px);z-index:50;width:290px;padding:11px;background:var(--s2);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 14px 34px rgba(0,0,0,.45);transform-origin:top right;animation:pin .16s var(--ease) both}
+@keyframes pin{from{opacity:0;transform:scale(.96) translateY(-4px)}}
+.pop h4{margin:0 0 8px;font:600 10px/1 var(--sans);letter-spacing:.11em;text-transform:uppercase;color:var(--xlo)}
+.pop .row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;font-size:12px}
+.pop .row b{font-family:var(--mono);font-weight:500;color:var(--hi);font-size:11.5px}
+.pop hr{border:0;border-top:1px solid var(--line);margin:8px 0}
+.pop .drag{display:flex;align-items:center;gap:7px;padding:3px 0;font-size:12px;color:var(--ink)}
+.pop .drag i{font-style:normal;color:var(--xlo);cursor:grab}
+
+.body{flex:1 1 auto;min-height:0;overflow:auto;padding:var(--gap) var(--pad);display:grid;gap:var(--gap);align-content:start}
+.card{background:var(--s1);border:1px solid var(--line);border-radius:var(--r)}
+.ch{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);font:600 10.5px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--lo)}
+.ch .sub{font:400 11px/1 var(--mono);letter-spacing:0;text-transform:none;color:var(--xlo)}
+.ch .sp{flex:1}
+.foot{flex:0 0 auto;display:flex;justify-content:space-between;gap:16px;padding:6px var(--pad);border-top:1px solid var(--line);font-size:11px;color:var(--xlo)}
+
+/* ---------- LEVEL 1: answer row ---------- */
+.answers{display:grid;grid-template-columns:1.35fr 1fr 1fr 1fr;gap:var(--gap)}
+.ans{display:grid;gap:5px;padding:13px 15px;border-radius:var(--r);border:1px solid var(--line);background:var(--s1);align-content:start;transition:border-color .15s,background .15s}
+.ans:hover{border-color:var(--line2);background:var(--s2)}
+.ans .q{font:600 9.5px/1 var(--sans);letter-spacing:.13em;text-transform:uppercase;color:var(--xlo);display:flex;gap:8px;align-items:center}
+.ans .q .stamp{margin-left:auto;font:500 9px/1 var(--mono);letter-spacing:.05em;color:var(--gold);text-transform:none}
+.ans .l1{font-size:16.5px;font-weight:600;color:var(--hi);line-height:1.25;letter-spacing:-.005em}
+.ans .l2{font-size:11.5px;color:var(--ink);line-height:1.5}
+.ans .l2 .num{font-size:11.5px}
+.ans .l3{font:400 10.5px/1.3 var(--mono);color:var(--xlo);display:flex;gap:6px;align-items:center;margin-top:2px}
+.ans.gold{border-color:rgba(201,168,76,.42);background:linear-gradient(135deg,rgba(201,168,76,.11),var(--s1) 55%)}
+.ans.gold .l1{font-size:19px;color:var(--gold)}
+.ans .l1 .num{font-size:inherit;font-weight:600}
+.lv{display:flex;gap:14px;margin-top:2px}
+.lv div{display:grid;gap:1px}
+.lv .k{font:500 9px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--xlo)}
+.lv .v{font-family:var(--mono);font-size:13px;color:var(--hi)}
+.dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--bull);box-shadow:0 0 0 0 rgba(79,195,161,.5);animation:beat 2.4s var(--ease) infinite}
+.dot.y{background:var(--warn);box-shadow:none;animation:none}.dot.r{background:var(--bear);box-shadow:none;animation:none}.dot.g{background:var(--xlo);box-shadow:none;animation:none}
+@keyframes beat{70%{box-shadow:0 0 0 7px rgba(79,195,161,0)}100%{box-shadow:0 0 0 0 rgba(79,195,161,0)}}
+/* state variants: only the matching .st-* block shows */
+.st{display:none}[data-state="live"] .st-live,[data-state="stale"] .st-stale,[data-state="empty"] .st-empty,[data-state="closed"] .st-closed{display:contents}
+[data-state="stale"] .ans.gold{border-color:rgba(217,164,65,.4);background:linear-gradient(135deg,var(--warn-s),var(--s1) 55%)}
+[data-state="stale"] .ans.gold .l1{color:var(--warn)}
+
+/* ---------- LEVEL 2: market tape ---------- */
+.tape{display:flex;align-items:center;gap:0;background:var(--s1);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;font-family:var(--mono);font-size:11px}
+.tape span{padding:6px 12px;border-right:1px solid var(--line);white-space:nowrap;color:var(--ink)}
+.tape span:last-child{border-right:0;margin-left:auto}
+.tape b{font-weight:500;color:var(--hi)}
+.tape i{font-style:normal;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--xlo);margin-right:6px;font-family:var(--sans)}
+
+/* ---------- LEVEL 3: screen bar ---------- */
+.screens{display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:7px 9px;background:var(--s1);border:1px solid var(--line);border-radius:var(--r)}
+.scr{padding:6px 12px;border-radius:var(--rs);font-size:12.5px;color:var(--lo);white-space:nowrap;transition:color .15s,background .15s}
+.scr:hover{color:var(--hi);background:var(--s2)}
+.scr[aria-pressed="true"]{color:var(--hi);background:var(--s3);box-shadow:inset 0 -2px 0 var(--gold)}
+.scr .n{font-family:var(--mono);font-size:10.5px;color:var(--xlo);margin-left:5px}
+.screens .sep{width:1px;height:20px;background:var(--line2);margin:0 4px}
+.sb{padding:5px 10px;border-radius:var(--rs);border:1px solid var(--line2);font-size:11.5px;color:var(--lo);white-space:nowrap}
+.sb:hover{color:var(--hi);background:var(--s2)}
+.sb.on{color:var(--gold);border-color:rgba(201,168,76,.45);background:var(--gold-s)}
+.fchip{font:500 11px/1 var(--mono);padding:4px 7px;border-radius:4px;border:1px solid var(--line2);color:var(--ink);background:var(--s2)}
+.fchip b{color:var(--gold);font-weight:500}
+.fchip .x{color:var(--xlo);margin-left:5px}
+.disc{padding:9px 11px;border-top:1px solid var(--line);display:flex;gap:7px;flex-wrap:wrap;align-items:center;width:100%}
+.disc select,.disc input{background:var(--s2);border:1px solid var(--line2);border-radius:var(--rs);padding:4px 7px;font-family:var(--mono);font-size:11px;color:var(--ink)}
+.disc input::placeholder{color:var(--xlo)}
+.w70{width:74px}.w100{width:104px}.w160{width:170px}
+.disc .l{font:500 9.5px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--xlo);margin-right:2px}
+.disc .lb{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--lo)}
+.disc input[type=checkbox]{accent-color:var(--gold)}
+.disc .sp{flex-basis:100%;height:0}
+/* rule builder */
+.rb{padding:11px;border-top:1px solid var(--line);display:grid;gap:7px;width:100%}
+.rb .t{display:flex;align-items:center;gap:8px;font:600 10.5px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--lo)}
+.rb .t input{background:var(--s2);border:1px solid var(--line2);border-radius:var(--rs);padding:4px 8px;font-size:12px;color:var(--hi);width:170px;text-transform:none;letter-spacing:0}
+.rule{display:grid;grid-template-columns:34px 190px 90px 130px 24px;gap:6px;align-items:center}
+.rule select,.rule input{background:var(--s2);border:1px solid var(--line2);border-radius:var(--rs);padding:4px 7px;font-family:var(--mono);font-size:11px;color:var(--ink);width:100%}
+.rule .and{font:600 9.5px/1 var(--mono);color:var(--xlo);text-align:center}
+.rule .del{color:var(--xlo);text-align:center}
+.rb .foot{border:0;padding:4px 0 0;display:flex;gap:6px;font-size:11.5px}
+.rb .foot .sb{padding:4px 9px}
+.rb .hint{font-size:11px;color:var(--xlo)}
+
+/* ---------- LEVEL 4: verdict feed ---------- */
+.feed{display:grid}
+.pin{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);background:linear-gradient(90deg,rgba(201,168,76,.08),transparent 60%)}
+.pin .tag{font:600 9px/1 var(--mono);letter-spacing:.1em;color:var(--gold);border:1px solid rgba(201,168,76,.4);padding:3px 6px;border-radius:4px}
+.frow{display:grid;grid-template-columns:52px 44px minmax(210px,1.2fr) 2.2fr auto 130px 64px;gap:10px;align-items:center;padding:0 12px;min-height:var(--row);border-bottom:1px solid var(--line);transition:background .12s}
+.frow:hover{background:var(--s2)}
+.frow.ctx{grid-template-columns:52px 44px 1fr auto 130px 64px}
+.frow .tier{font:600 9.5px/1 var(--mono);letter-spacing:.09em;color:var(--lo)}
+.frow .tier.gold{color:var(--gold)}.frow .tier.silver{color:var(--hi)}.frow .tier.bronze{color:var(--lo)}
+.ring{--p:70;position:relative;width:32px;height:32px;border-radius:50%;background:conic-gradient(var(--gold) calc(var(--p)*1%),var(--line) 0);display:grid;place-items:center;flex:0 0 auto}
+.ring::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--s1)}
+.ring span{position:relative;z-index:1;font-family:var(--mono);font-size:11px;color:var(--hi)}
+.ring.big{width:44px;height:44px}.ring.big span{font-size:14px}.ring.big::after{inset:4px}
+.frow .con{font-family:var(--mono);font-size:12.5px;color:var(--hi);white-space:nowrap}
+.frow .con .side{font-weight:600}
+.side.c{color:var(--bull)}.side.p{color:var(--bear)}
+.frow .why{font-size:12px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.frow .chips{display:flex;gap:4px}
+.ic{font:500 9.5px/1 var(--mono);padding:3px 5px;border-radius:3px;border:1px solid var(--line2);color:var(--lo);white-space:nowrap}
+.frow .lvl{font-family:var(--mono);font-size:10.5px;color:var(--lo);white-space:nowrap}
+.frow .lvl b{color:var(--hi);font-weight:500}
+.frow .age{font-family:var(--mono);font-size:10.5px;color:var(--xlo);text-align:right;white-space:nowrap}
+.frow.open{background:var(--s2);border-left:2px solid var(--gold)}
+.fx{display:grid;grid-template-columns:1fr auto;gap:12px;padding:10px 12px 12px 14px;border-bottom:1px solid var(--line);background:var(--s2)}
+.fx .more{font-size:11.5px;color:var(--ink);line-height:1.6;display:grid;gap:4px}
+.fx .more .k{font:500 9px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--xlo);margin-right:6px}
+.acts{display:flex;gap:6px;align-items:start}
+.act{padding:6px 10px;border-radius:var(--rs);border:1px solid var(--line2);font-size:11.5px;color:var(--ink);white-space:nowrap}
+.act:hover{color:var(--hi);background:var(--s3)}
+.act.p{color:var(--gold);border-color:rgba(201,168,76,.45)}
+.newpill{margin:6px 12px;display:inline-flex;gap:6px;align-items:center;padding:4px 10px;border-radius:999px;border:1px solid rgba(201,168,76,.4);background:var(--gold-s);font-size:11px;color:var(--gold)}
+.plan{margin:0 12px 10px;padding:10px 12px;border:1px dashed var(--line2);border-radius:var(--rs);background:var(--s1);font-size:11.5px;display:grid;gap:5px}
+.plan .t{font:600 10px/1 var(--sans);letter-spacing:.11em;text-transform:uppercase;color:var(--lo)}
+.plan .g{display:grid;grid-template-columns:repeat(5,auto);gap:12px;font-family:var(--mono);font-size:11.5px}
+.plan .g i{font-style:normal;display:block;font:500 9px/1 var(--sans);letter-spacing:.11em;text-transform:uppercase;color:var(--xlo);margin-bottom:2px}
+
+/* ---------- LEVEL 5: evidence table ---------- */
+.tbl{overflow:auto}
+table.ev{width:100%;border-collapse:collapse}
+table.ev th{position:sticky;top:0;z-index:2;background:var(--s2);padding:6px 8px;text-align:right;white-space:nowrap;cursor:pointer;font:600 9.5px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--xlo);border-bottom:1px solid var(--line2)}
+table.ev th.l,table.ev td.l{text-align:left}
+table.ev th.on{color:var(--gold)}
+table.ev td{padding:0 8px;height:var(--row);text-align:right;white-space:nowrap;border-bottom:1px solid var(--line);font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:var(--num);color:var(--ink)}
+table.ev tr:hover td{background:var(--s2)}
+table.ev tr.top td{background:rgba(201,168,76,.06)}
+table.ev tr.top td:first-child{box-shadow:inset 2px 0 0 var(--gold)}
+table.ev tr.kb td{background:var(--s3);box-shadow:inset 0 0 0 1px var(--line2)}
+.col-hidden{display:none}
+[data-cols="all"] .col-hidden{display:table-cell}
+.newdot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--gold);margin-right:5px}
+.sc{display:inline-block;min-width:24px;padding:1px 5px;border-radius:4px;font-size:11px;border:1px solid var(--line2);color:var(--lo);background:var(--s2)}
+.sc.a{color:var(--gold);border-color:rgba(201,168,76,.42);background:var(--gold-s)}
+.sc.b{color:var(--info);border-color:rgba(106,165,201,.3)}
+.tk{font-weight:600;color:var(--hi)}
+.flt{font-size:9.5px;padding:2px 5px;border-radius:4px;border:1px solid var(--line2);color:var(--lo)}
+.arch{font-size:9px;margin-left:4px;padding:2px 4px;border-radius:3px;border:1px solid rgba(155,122,222,.3);color:var(--violet)}
+.arch.f{border-color:rgba(79,195,161,.3);color:var(--bull)}.arch.lt{border-color:rgba(224,96,127,.3);color:var(--bear)}
+.oiup{color:var(--bull)}.oidn{color:var(--bear)}
+.trd{display:inline-flex;align-items:flex-end;gap:1.5px;height:12px}.trd i{width:3px;background:var(--line2);border-radius:1px}.trd i.now{background:var(--gold)}
+.kbh{padding:6px 12px;border-top:1px solid var(--line);font-family:var(--mono);font-size:10.5px;color:var(--xlo);display:flex;gap:14px;flex-wrap:wrap}
+.chooser{position:absolute;right:12px;top:36px;z-index:20;width:230px;padding:10px;background:var(--s2);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 14px 34px rgba(0,0,0,.45);display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:11.5px}
+.chooser label{display:flex;gap:6px;align-items:center;color:var(--ink)}
+.chooser input{accent-color:var(--gold)}
+.chooser h4{grid-column:1/-1;margin:0 0 4px;font:600 10px/1 var(--sans);letter-spacing:.11em;text-transform:uppercase;color:var(--xlo)}
+
+/* ---------- LEVEL 6: drill-down ---------- */
+.main{display:grid;gap:var(--gap);grid-template-columns:1fr 380px;align-items:start}
+.main .left{display:grid;gap:var(--gap);min-width:0}
+.rail{display:grid;gap:var(--gap);position:sticky;top:0}
+.rail .card{background:var(--s1)}
+.gex{padding:10px 12px 4px}
+.bars{display:flex;align-items:flex-end;gap:3px;height:96px}
+.bars .b{flex:1;border-radius:2px 2px 0 0;background:var(--bull)}
+.bars .b.n{background:var(--bear)}
+.cum{position:relative;height:44px;margin-top:6px}
+.axis{display:flex;gap:3px;padding:4px 0 0;font-family:var(--mono);font-size:9px;color:var(--xlo)}.axis span{flex:1;text-align:center}
+.flip{position:absolute;top:0;bottom:0;width:1px;background:var(--gold)}
+.flip i{position:absolute;top:-2px;left:5px;font:500 9px/1 var(--mono);color:var(--gold);white-space:nowrap;font-style:normal}
+.mini{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}
+.mini th{font:600 9px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--xlo);text-align:right;padding:5px 8px;border-bottom:1px solid var(--line)}
+.mini th.l,.mini td.l{text-align:left}
+.mini td{padding:0 8px;height:24px;text-align:right;border-bottom:1px solid var(--line);color:var(--ink);white-space:nowrap}
+.mini tr.sel td{background:var(--gold-s)}
+.chips2{display:flex;flex-wrap:wrap;gap:4px;padding:8px 10px;border-bottom:1px solid var(--line)}
+.c2{padding:3px 8px;border-radius:999px;border:1px solid var(--line2);font-size:10.5px;color:var(--lo)}
+.c2.on{color:var(--gold);border-color:rgba(201,168,76,.45);background:var(--gold-s)}
+.nofeed{padding:9px 12px;font-family:var(--mono);font-size:10.5px;color:var(--xlo);border-top:1px solid var(--line);display:flex;justify-content:space-between}
+.nofeed b{color:var(--warn);font-weight:500}
+.radar{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;padding:10px 12px}
+.rat{padding:0 12px 10px;font-size:11.5px;color:var(--ink);line-height:1.55}
+.rat ul{margin:4px 0 0;padding-left:15px}.rat li{margin-bottom:3px}
+.tag{font:600 9px/1 var(--mono);letter-spacing:.07em;padding:3px 5px;border-radius:4px;margin-right:6px;border:1px solid var(--line2);color:var(--lo)}
+.tag.i{color:var(--info);border-color:rgba(106,165,201,.32)}.tag.w{color:var(--warn);border-color:rgba(217,164,65,.32)}
+.wl{display:flex;flex-wrap:wrap;gap:4px;padding:8px 10px}
+.wl button{font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid var(--line2);color:var(--ink)}
+.wl button.sel{color:var(--gold);border-color:rgba(201,168,76,.45);background:var(--gold-s)}
+.regime{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:10px 12px;font-family:var(--mono);font-size:11.5px}
+.regime div{display:grid;gap:2px}.regime i{font-style:normal;font:500 9px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--xlo)}
+.regime b{font-weight:500;color:var(--hi)}
+
+/* ---------- LEVEL 7: trust strip ---------- */
+.trust{display:flex;gap:6px;flex-wrap:wrap;align-items:stretch;padding:9px 11px}
+.tc{min-width:92px;padding:6px 9px;border-radius:var(--rs);border:1px solid var(--line);background:var(--s2)}
+.tc.hot{border-color:rgba(201,168,76,.34);background:var(--gold-s)}
+.tc.thin{opacity:.5}
+.tc .k{display:block;font:500 9px/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--xlo)}
+.tc .v{display:block;font-family:var(--mono);font-size:14px;color:var(--hi)}
+.tc .v small{font-size:9.5px;color:var(--xlo);margin-left:4px}
+.tc .bar{display:block;height:2px;background:var(--line2);border-radius:1px;margin-top:4px;overflow:hidden}.tc .bar i{display:block;height:100%;background:var(--gold)}
+.spark{display:flex;align-items:flex-end;gap:2px;height:22px;padding:0 4px}
+.spark i{width:5px;background:var(--line2);border-radius:1px 1px 0 0}.spark i.gap{background:transparent;border-bottom:1px dotted var(--xlo);height:1px !important}.spark i.t{background:var(--gold)}
+
+/* ---------- mapping sheet ---------- */
+.map{display:none;padding:var(--gap) var(--pad)}
+[data-view="map"] .body{display:none}[data-view="map"] .map{display:block}
+.map h3{margin:16px 0 6px;font:600 11.5px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--gold)}
+.map ul{margin:0;padding-left:18px;columns:2;column-gap:32px}.map li{font-size:12.5px;color:var(--ink);margin-bottom:4px;break-inside:avoid}
+.map p{font-size:12.5px;color:var(--lo);max-width:100ch}
+
+/* ============ LAYOUT MODES (one tree, CSS only) ============ */
+[data-mode="trade"]{--row:30px}
+[data-mode="monitor"]{--row:23px;--num:11.5px;--fs:12.5px;--gap:9px;--pad:12px}
+[data-mode="monitor"] .main{grid-template-columns:1fr}
+[data-mode="monitor"] .rail{display:none}
+[data-mode="monitor"] .ans .l1{font-size:14.5px}[data-mode="monitor"] .ans.gold .l1{font-size:16px}
+[data-mode="monitor"] .ans .l2{font-size:11px}
+[data-mode="monitor"] .fx{display:none}
+[data-mode="monitor"] .frow{min-height:24px}
+[data-mode="research"]{--row:28px}
+[data-mode="research"] .main{grid-template-columns:1fr 460px}
+[data-mode="research"] .feed .frow:nth-child(n+5){display:none}
+[data-mode="research"] .fx{display:none}
+[data-mode="research"] .ans .l1{font-size:14.5px}[data-mode="research"] .ans.gold .l1{font-size:16px}
+[data-mode="trade"] table.ev tbody tr:nth-child(n+9){display:none}
+
+/* ============ COLOUR-BLIND MODE (demo of floww_settings.colorBlindMode) ============ */
+[data-cb="on"] .side.c,[data-cb="on"] .side.p,[data-cb="on"] .up,[data-cb="on"] .dn,[data-cb="on"] .oiup,[data-cb="on"] .oidn{color:var(--hi)}
+[data-cb="on"] .side::before{font-weight:700;margin-right:3px}
+[data-cb="on"] .side.c::before{content:"▲"}[data-cb="on"] .side.p::before{content:"▼"}
+[data-cb="on"] .bars .b{background:repeating-linear-gradient(45deg,var(--hi) 0 2px,transparent 2px 5px)}
+[data-cb="on"] .bars .b.n{background:repeating-linear-gradient(-45deg,var(--lo) 0 2px,transparent 2px 5px);border-top:2px solid var(--hi)}
+[data-cb="on"] .ans.gold{border-style:double;border-width:3px}
+</style>
+</head>
+<body>
+
+<!-- ================= MOCK CHROME (not the design) ================= -->
+<div class="mock">
+  <span class="warn">MADE-UP SAMPLE — NOT REAL DATA · NO NETWORK</span>
+  <span class="g"><span class="l">Mode</span>
+    <button class="mb" data-mode="trade" aria-pressed="true">Trade</button>
+    <button class="mb" data-mode="monitor" aria-pressed="false">Monitor</button>
+    <button class="mb" data-mode="research" aria-pressed="false">Research</button></span>
+  <span class="g"><span class="l">Data state</span>
+    <button class="mb" data-state="live" aria-pressed="true">Live</button>
+    <button class="mb" data-state="stale" aria-pressed="false">Stale</button>
+    <button class="mb" data-state="empty" aria-pressed="false">Feed empty</button>
+    <button class="mb" data-state="closed" aria-pressed="false">Market closed</button></span>
+  <span class="g"><span class="l">Colour-blind</span>
+    <button class="mb" data-cb="off" aria-pressed="true">Off</button>
+    <button class="mb" data-cb="on" aria-pressed="false">On</button></span>
+  <span class="g"><span class="l">View</span>
+    <button class="mb" data-view="page" aria-pressed="true">Page</button>
+    <button class="mb" data-view="map" aria-pressed="false">Nothing-lost map</button></span>
+</div>
+
+<div class="app">
+
+<!-- ================= TOP BAR — no page tabs ================= -->
+<div class="top">
+  <span class="logo">◢</span><span class="bname">Tidehunter <em>Pro</em></span>
+  <span class="chip live">LIVE · CVFORGE</span>
+  <span class="chip stamp" id="stamp">screen: All flow</span>
+  <span class="sp"></span>
+  <span class="chip" data-src="regime.current_state">Chop · warming</span>
+  <span class="chip num" data-src="clock">14:32:07</span>
+  <button class="icb" title="Refresh now" data-src="POST /scan/refresh">↻</button>
+  <span class="popwrap">
+    <button class="icb" data-pop="settings" title="Tidehunter settings (saved in floww Settings)">⚙</button>
+    <div class="pop" id="pop-settings" hidden>
+      <h4>Tidehunter · saved in floww Settings</h4>
+      <div class="row"><span>Active screen</span><b>All flow</b></div>
+      <div class="row"><span>Saved screens</span><b>7 built-in · 2 mine</b></div>
+      <div class="row"><span>Layout mode</span><b>Trade</b></div>
+      <div class="row"><span>Columns (Trade)</span><b>10 of 17</b></div>
+      <div class="row"><span>Focused ticker</span><b>NVDA (default SPY)</b></div>
+      <hr>
+      <h4>Section order — drag</h4>
+      <div class="drag"><i>⋮⋮</i>Answer row</div>
+      <div class="drag"><i>⋮⋮</i>Market tape</div>
+      <div class="drag"><i>⋮⋮</i>Screen bar</div>
+      <div class="drag"><i>⋮⋮</i>Verdict feed</div>
+      <div class="drag"><i>⋮⋮</i>Evidence table</div>
+      <div class="drag"><i>⋮⋮</i>Trust strip</div>
+      <hr>
+      <div class="row"><span class="xlo">Stored under floww_settings.tidehunter</span></div>
+    </div>
+  </span>
+</div>
+
+<div class="body">
+
+<!-- ================= LEVEL 1 — ANSWER ROW ================= -->
+<div class="answers">
+
+  <!-- TRADE NOW · data-src: /alerts/feed?sort_by=conviction row: under,type,strike,exp,dte,tier,conviction,bias,why,key_levels_json,move_pct,under_price,iv -->
+  <button class="ans gold" data-drill="NVDA">
+    <span class="q">Is there a trade now? <span class="stamp" data-stamp>All flow</span></span>
+    <span class="st st-live">
+      <span class="l1" data-card="trade">Buy NVDA 182.5C, 14d — <span class="num">94</span> conviction</span>
+      <span class="l2"><b class="hi">GOLD</b> · <span class="side c">▲ BULLISH</span> · open interest grew <span class="num">+41%</span> overnight — yesterday's sweep was held, not churned</span>
+      <span class="lv">
+        <div><span class="k">Entry</span><span class="v">178.40</span></div>
+        <div><span class="k">Stop</span><span class="v dn">173.94</span></div>
+        <div><span class="k">Target</span><span class="v up">188.21</span></div>
+        <div><span class="k">Moved</span><span class="v up">+1.8% · 33% of target</span></div>
+        <div><span class="k">Strike</span><span class="v">2.3% OTM · 0.6 IV-days to stop</span></div>
+      </span>
+      <span class="l3"><span class="dot"></span> fired 2m ago · model levels: ±2.5% stop / ±5.5% target of spot (short-γ scaled) · not analysis</span>
+    </span>
+    <span class="st st-stale">
+      <span class="l1">Verdict withheld — data <span class="num">9m</span> stale</span>
+      <span class="l2">Last read: Buy NVDA 182.5C, 94 conviction at 14:23. Upstream rate-limited; serving last good scan. σ and ΔOI unavailable while stale.</span>
+      <span class="l3"><span class="dot y"></span> stale · retry in 4m 12s · 18 of 20 calls used this hour</span>
+    </span>
+    <span class="st st-empty">
+      <span class="l1">Nothing ≥75 — best is <span class="num">68</span>, SPY 642P</span>
+      <span class="l2">Server feed empty — ranking client-side from <span class="num">184</span> screened contracts (volume, size, unusualness, urgency). Levels unavailable without the server engine.</span>
+      <span class="l3"><span class="dot g"></span> client ranking · lower confidence · engine table empty</span>
+    </span>
+    <span class="st st-closed">
+      <span class="l1">Market closed — Friday's read stands</span>
+      <span class="l2">Buy NVDA 182.5C was the close-of-day verdict (94). Volumes shown are Friday's totals, <span class="num">2d</span> old. Nothing is "new" until Monday's open.</span>
+      <span class="l3"><span class="dot g"></span> closed · next session Mon 09:30 · no alerts re-fire on reload</span>
+    </span>
+  </button>
+
+  <!-- MONEY BUILDING · data-src: tickerRollup(prem,callPct,pcr) + streakOf(n,mult) + server SIGMA alerts (sigma) -->
+  <button class="ans" data-drill="NVDA">
+    <span class="q">Where is big money building? <span class="stamp" data-stamp>All flow</span></span>
+    <span class="st st-live">
+      <span class="l1" data-card="money">NVDA is where money builds — <span class="num">4</span> straight days</span>
+      <span class="l2"><span class="num">$182M</span> est. premium · call-heavy (PCR 0.41) · <span class="num">4.2σ</span> vs its own 14-day norm (server-confirmed) · then TSLA $75M 2d put-heavy · AMD $41M 2.6σ raw, not market-adjusted</span>
+      <span class="l3"><span class="dot"></span> premium is an estimate — no quote feed on the scan</span>
+    </span>
+    <span class="st st-stale"><span class="l1">Concentration frozen at <span class="num">14:23</span></span><span class="l2">NVDA $182M · TSLA $75M · AMD $41M — streaks and σ need baselines, which drop out on a stale scan.</span><span class="l3"><span class="dot y"></span> stale · no σ · no ΔOI</span></span>
+    <span class="st st-empty"><span class="l1">NVDA leads by premium — <span class="num">$182M</span></span><span class="l2">Streaks from scan history (4d) still work; σ confirmation needs the server feed, which is empty.</span><span class="l3"><span class="dot g"></span> client-only read</span></span>
+    <span class="st st-closed"><span class="l1">Friday: NVDA <span class="num">$182M</span>, 4th day</span><span class="l2">Persistence still counts across sessions — the streak read is the one number that survives a weekend.</span><span class="l3"><span class="dot g"></span> closed · Friday totals</span></span>
+  </button>
+
+  <!-- WHAT CHANGED · data-src: awaySummary(gapMs,counts,topNew) re-armed per visit; firstSeen; oi_chg_pct -->
+  <button class="ans" data-drill="PLTR">
+    <span class="q">What changed since I looked? <span class="stamp" data-stamp>All flow</span></span>
+    <span class="st st-live">
+      <span class="l1" data-card="changed"><span class="num">3</span> things changed, 1 matters: PLTR OI held</span>
+      <span class="l2">Away <span class="num">3h 12m</span>: 2 OI-confirmed (PLTR 44C, AMD 168C), 1 whale (SPY 642P $12M), 4 new arrivals. Nothing you were watching dropped.</span>
+      <span class="l3"><span class="dot"></span> re-arms every time you return · last check 14:31</span>
+    </span>
+    <span class="st st-stale"><span class="l1">No fresh changes — feed is stale</span><span class="l2">Last confirmed change 14:18: AMD 4.6σ volume spike. New-arrival flags are paused so reload cannot mass-flag rows as new.</span><span class="l3"><span class="dot y"></span> stale</span></span>
+    <span class="st st-empty"><span class="l1"><span class="num">4</span> new arrivals, none confirmed</span><span class="l2">Arrival tracking is client-side and still works. Confirmation (OI held, σ) needs the server feed.</span><span class="l3"><span class="dot g"></span> client-only</span></span>
+    <span class="st st-closed"><span class="l1">Nothing new — market closed</span><span class="l2">Last change Friday 15:52: SPY 642P whale print. Overnight OI change lands with Monday's first scan.</span><span class="l3"><span class="dot g"></span> closed</span></span>
+  </button>
+
+  <!-- DEALERS · data-src: /regime/{t}: gamma_flip, dist_to_flip_pct, total_gex, current_state, vol_env; /api/heatmap (S² display scale) -->
+  <button class="ans" data-drill="NVDA">
+    <span class="q">What are dealers doing? <span class="stamp">NVDA</span></span>
+    <span class="st st-live">
+      <span class="l1" data-card="dealers">Dealers are short gamma — flip <span class="num">$176</span>, below = they chase</span>
+      <span class="l2">Spot 178.40 sits <span class="num">1.4%</span> above the flip. Hedging amplifies moves here; a break under $176 turns their selling into fuel. Regime: chop, warming. Vol: elevated.</span>
+      <span class="l3"><span class="dot"></span> gamma from the display-scale heatmap · refreshed 38s ago</span>
+    </span>
+    <span class="st st-stale"><span class="l1">Dealer read <span class="num">15m</span> old — flip $176</span><span class="l2">Heatmap cache expired; last known: short gamma, spot 1.4% above flip.</span><span class="l3"><span class="dot y"></span> stale cache</span></span>
+    <span class="st st-empty"><span class="l1">Dealers are short gamma — flip <span class="num">$176</span></span><span class="l2">This card does not depend on the alert feed. Spot 1.4% above flip; hedging amplifies moves.</span><span class="l3"><span class="dot"></span> live</span></span>
+    <span class="st st-closed"><span class="l1">Friday close: short gamma, flip <span class="num">$176</span></span><span class="l2">Positioning carries into Monday unless open interest rolls. Watch the flip on the open.</span><span class="l3"><span class="dot g"></span> closed</span></span>
+  </button>
+</div>
+
+<!-- ================= LEVEL 2 — MARKET TAPE · data-src: scan payload count/stale/cache_age_seconds/scan_ttl/budget/source -->
+<div class="tape">
+  <span><i>Contracts</i><b>184</b> / 1 204</span>
+  <span><i>Notional Σ</i><b>$4.81B</b></span>
+  <span><i>Call / Put</i><b>63</b> / 37 %</span>
+  <span><i>Unusual ≥2×</i><b>47</b></span>
+  <span><span class="dot"></span> <i>Heartbeat</i><b>fresh</b> · 6/20 calls this hour · next scan 22s</span>
+  <span><i>Updated</i><b>14:31:52</b> · data 38s</span>
+  <span><i>Source</i><b>LIVE</b> · market-wide · 712 symbols</span>
+  <span class="xlo">poll 60s</span>
+</div>
+
+<!-- ================= LEVEL 3 — SCREEN BAR ================= -->
+<div class="screens">
+  <button class="scr" data-screen="all" aria-pressed="true">All flow<span class="n">184</span></button>
+  <button class="scr" data-screen="whale" aria-pressed="false">Whale blocks<span class="n">9</span></button>
+  <button class="scr" data-screen="oiconf" aria-pressed="false">OI-confirmed<span class="n">14</span></button>
+  <button class="scr" data-screen="zerodte" aria-pressed="false">0DTE lottos<span class="n">21</span></button>
+  <button class="scr" data-screen="hedge" aria-pressed="false">Hedges<span class="n">11</span></button>
+  <button class="scr" data-screen="fresh" aria-pressed="false">Fresh positioning<span class="n">38</span></button>
+  <button class="scr" data-screen="mine" aria-pressed="false">My universe<span class="n">42</span></button>
+  <span class="sep"></span>
+  <button class="sb" data-toggle="rb">✎ Edit screen</button>
+  <button class="sb" data-toggle="disc">Filters · 2 active</button>
+  <span class="fchip">min score <b>≥70</b><span class="x">✕</span></span>
+  <span class="fchip">DTE <b>0–45</b><span class="x">✕</span></span>
+  <span class="popwrap" style="margin-left:auto">
+    <button class="sb" data-pop="more">⋯</button>
+    <div class="pop" id="pop-more" hidden style="width:220px">
+      <h4>More</h4>
+      <div class="row"><span>🔔 Notify when hidden</span><b>on</b></div>
+      <div class="row"><span>🎯 Alerts scoped to universe</span><b>on</b></div>
+      <div class="row"><span>Tape order</span><b>newest first</b></div>
+      <div class="row"><span>⧉ Copy tape (TSV)</span><b>→</b></div>
+      <div class="row"><span>Clear tape</span><b>→</b></div>
+      <div class="row"><span>⤓ CSV of this view</span><b>→</b></div>
+    </div>
+  </span>
+
+  <!-- Filters disclosure — today's knobs, collapsed by default -->
+  <div class="disc" id="disc" hidden>
+    <span class="l">Type</span><select><option>All</option><option>Calls</option><option>Puts</option></select>
+    <input class="w70" placeholder="Min vol" /><input class="w70" value="70" title="Min score" />
+    <input class="w100" placeholder="Ticker  ( / )" />
+    <span class="l">DTE</span><input class="w70" value="0" /><input class="w70" value="45" />
+    <label class="lb"><input type="checkbox" checked /> My universe</label>
+    <input class="w160" value="SPY,QQQ,IWM,NVDA,TSLA,AAPL" />
+    <span class="l">Alert ≥</span><input class="w70" value="85" />
+    <span class="sp"></span>
+    <span class="l">Sort</span>
+    <button class="sb on">Top Score</button><button class="sb">Big Money</button><button class="sb">Unusual</button><button class="sb">Short Fuse</button><button class="sb">New Arrivals</button>
+    <span class="l" style="margin-left:8px">Poll</span><select><option>5s</option><option>15s</option><option>30s</option><option selected>60s</option><option>Off</option></select>
+    <button class="sb">⟳ Force</button>
+  </div>
+
+  <!-- Rule builder — shown open once, on the active screen -->
+  <div class="rb" id="rb" hidden>
+    <div class="t">Editing screen <input value="OI-confirmed (copy)" /> <span class="xlo" style="text-transform:none;letter-spacing:0;font-weight:400">built-in copied · saved to floww Settings</span></div>
+    <div class="rule"><span class="and">IF</span><select><option>ΔOI vs prior session (%)</option></select><select><option>≥</option><option>≤</option><option>=</option><option>between</option></select><input value="20" /><span class="del">✕</span></div>
+    <div class="rule"><span class="and">AND</span><select><option>Vol / OI</option></select><select><option>≥</option></select><input value="2" /><span class="del">✕</span></div>
+    <div class="rule"><span class="and">AND</span><select><option>Est. premium ($)</option></select><select><option>≥</option></select><input value="1,000,000" /><span class="del">✕</span></div>
+    <div class="rule"><span class="and">OR</span><select><option>Alert rule fired</option></select><select><option>is</option></select><select><option>OICONF</option><option>FOLLOW</option><option>SIGMA</option><option>SCORE</option><option>WHALE</option><option>0DTE</option><option>SOURCE</option></select><span class="del">✕</span></div>
+    <div class="rule"><span class="and">AND</span><select><option>Days running hot (streak)</option></select><select><option>≥</option></select><input value="2" /><span class="del">✕</span></div>
+    <div class="foot"><button class="sb">+ condition</button><button class="sb">+ OR group</button><span style="flex:1"></span><button class="sb">Duplicate</button><button class="sb">Delete</button><button class="sb on">Save screen</button></div>
+    <div class="hint">Facts available: ticker · call/put · strike · expiry · days to expiry · volume · open interest · ΔOI % · vol/OI · IV · delta · est. premium · notional · score · flow type · archetype · dealer γ sign · per-ticker premium concentration · put/call ratio · σ vs baseline · streak days · alert rule. No new rules or scoring — combinations of what exists.</div>
+  </div>
+</div>
+
+<!-- ================= LEVEL 4 + 5 + 6 ================= -->
+<div class="main">
+<div class="left">
+
+  <!-- LEVEL 4 — VERDICT FEED · data-src: /alerts/feed rows; SSE /alerts/stream -->
+  <div class="card feed">
+    <div class="ch"><span>Verdict feed</span><span class="sub">ranked by conviction · <span id="feedn">7</span> rows in screen</span><span class="sp"></span>
+      <span class="sub">order frozen while you hover</span><button class="sb" style="padding:3px 8px">show history · 34</button></div>
+
+    <!-- pinned header row = the Trade-now alert (one object; not repeated in the body) -->
+    <div class="pin">
+      <span class="tag">PINNED · TRADE NOW</span>
+      <span class="num hi" id="pintxt">NVDA <span class="side c">CALL</span> 182.5 · 09-19 · GOLD 94 · <span class="up">▲ BULLISH</span> · <span class="lo">shown in full above — not repeated here</span></span>
+      <span class="acts"><button class="act" data-drill="NVDA">Drill ▸</button><button class="act">Watch ☆</button><button class="act p" data-toggle="plan">Plan trade ✎</button><button class="act">Ack ✕</button></span>
+    </div>
+    <div class="newpill" hidden id="newpill">↑ 2 new above — click to apply re-rank</div>
+
+    <!-- plan-trade stub sheet (depicted; build writes client-side floww_trades_v2 only; never /auto-trade) -->
+    <div class="plan" id="plan" hidden>
+      <span class="t">Plan trade — journal note only · no order is placed anywhere</span>
+      <div class="g"><span><i>Contract</i>NVDA 182.5C 09-19</span><span><i>Entry (spot)</i>178.40</span><span><i>Invalidation</i>173.94</span><span><i>Target</i>188.21</span><span><i>Setup</i>OI-confirmed sweep</span></div>
+      <div style="display:flex;gap:6px"><button class="sb on">Save to journal</button><button class="sb">Cancel</button><span class="xlo" style="font-size:11px;align-self:center">levels are model defaults — edit before saving</span></div>
+    </div>
+
+    <div id="rows">
+      <!-- directional rows: tier · ring · contract+bias · why · chips(not in why) · levels · age -->
+      <div class="frow open" data-r="1|2|1|4|2|1|2">
+        <span class="tier gold">GOLD</span><span class="ring" style="--p:91"><span>91</span></span>
+        <span class="con"><b>SPY</b> <span class="side p">PUT</span> 642 · 09-06 <span class="lo">1d</span> · <span class="dn">▼ BEARISH</span></span>
+        <span class="why">Whale premium — <span class="num">$12.1M</span> in one print, 2.2× resting OI, dealers long gamma so expect it to mean-revert toward the wall</span>
+        <span class="chips"><span class="ic">cluster ×3</span><span class="ic">IV spread confirms</span></span>
+        <span class="lvl">E <b>642.10</b> S <b>658.15</b> T <b>619.63</b></span>
+        <span class="age">10m</span>
+      </div>
+      <div class="fx">
+        <div class="more">
+          <span><span class="k">Print</span>Put print: 412,000 contracts vs 188,000 resting OI (2.2×), ~$12.10M premium, 1 DTE</span>
+          <span><span class="k">Dealers</span>Net long gamma — hedging dampens moves; flows mean-revert toward walls. Regime: positive gamma.</span>
+          <span><span class="k">Moved</span><span class="dn">−0.44%</span> since alert · 13% of target · 0.8% ITM · <span class="k" style="margin-left:8px">Score</span>91 = vol/OI 22 · size 30 · notional 18 · urgency 14 · OTM 5 · γ-nudge +2</span>
+        </div>
+        <span class="acts"><button class="act" data-drill="SPY">Drill ▸</button><button class="act">Watch ☆</button><button class="act p" data-toggle="plan">Plan ✎</button><button class="act">Ack ✕</button></span>
+      </div>
+
+      <div class="frow" data-r="2|1|3|5|3|2|1">
+        <span class="tier gold">GOLD</span><span class="ring" style="--p:88"><span>88</span></span>
+        <span class="con"><b>AMD</b> <span class="side c">CALL</span> 168 · 09-26 <span class="lo">21d</span> · <span class="up">▲ BULLISH</span></span>
+        <span class="why">Open interest grew <span class="num">+31%</span> overnight — Thursday's flow was held; informed-positioning window (7–90 DTE)</span>
+        <span class="chips"><span class="ic">σ spike 4.6</span><span class="ic">prime print</span></span>
+        <span class="lvl">E <b>164.20</b> S <b>160.10</b> T <b>169.95</b></span>
+        <span class="age">34m</span>
+      </div>
+
+      <div class="frow" data-r="3|5|2|1|4|3|3">
+        <span class="tier silver">SILVER</span><span class="ring" style="--p:84"><span>84</span></span>
+        <span class="con"><b>QQQ</b> <span class="side c">CALL</span> 588 · 09-05 <span class="lo">0d</span> · <span class="up">▲ BULLISH</span></span>
+        <span class="why">0DTE hot — <span class="num">18×</span> vol/OI on a same-day expiry, short-gamma name so moves get chased</span>
+        <span class="chips"><span class="ic">γ confluent</span></span>
+        <span class="lvl">E <b>586.30</b> S <b>571.64</b> T <b>618.55</b></span>
+        <span class="age">41m</span>
+      </div>
+
+      <!-- contextual row: SIGMA — sentence only, no levels, no arrow, Drill only -->
+      <div class="frow ctx" data-r="4|6|4|6|1|4|4">
+        <span class="tier silver">SILVER</span><span class="ring" style="--p:79"><span>79</span></span>
+        <span class="why"><b class="hi">AMD</b> volume is <span class="num">4.6σ</span> above its own 14-day norm — 612k contracts vs a 118k median; survives the market-wide test</span>
+        <span class="chips"><span class="ic">ticker-level</span></span>
+        <span class="lvl lo">no direction claimed</span>
+        <span class="age">46m</span>
+      </div>
+
+      <div class="frow" data-r="5|3|5|2|5|5|6">
+        <span class="tier silver">SILVER</span><span class="ring" style="--p:76"><span>76</span></span>
+        <span class="con"><b>TSLA</b> <span class="side p">PUT</span> 330 · 09-12 <span class="lo">7d</span> · <span class="dn">▼ BEARISH</span></span>
+        <span class="why">Protective size — mid-delta put, <span class="num">$4.9M</span>, second straight day of elevated put volume</span>
+        <span class="chips"><span class="ic">follow 2d</span></span>
+        <span class="lvl">E <b>334.80</b> S <b>343.17</b> T <b>316.39</b></span>
+        <span class="age">58m</span>
+      </div>
+
+      <div class="frow" data-r="6|4|6|3|6|6|5">
+        <span class="tier bronze">BRONZE</span><span class="ring" style="--p:71"><span>71</span></span>
+        <span class="con"><b>PLTR</b> <span class="side c">CALL</span> 44 · 10-17 <span class="lo">42d</span> · <span class="up">▲ BULLISH</span></span>
+        <span class="why">Fresh positioning — volume <span class="num">3.0×</span> open interest, OI held +18% overnight, third day running hot</span>
+        <span class="chips"><span class="ic">follow 3d</span><span class="ic">informed band</span></span>
+        <span class="lvl">E <b>41.90</b> S <b>40.85</b> T <b>43.37</b></span>
+        <span class="age">1h 12m</span>
+      </div>
+
+      <!-- contextual row: SOURCE flip -->
+      <div class="frow ctx" data-r="7|7|7|7|7|7|7">
+        <span class="tier">SYSTEM</span><span class="ring" style="--p:0"><span>—</span></span>
+        <span class="why">Scanner recovered to market-wide coverage (<span class="num">712</span> symbols) after a 9-minute fallback to the 18-name universe</span>
+        <span class="chips"></span>
+        <span class="lvl lo">informational</span>
+        <span class="age">1h 40m</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- LEVEL 5 — EVIDENCE TABLE · data-src: mkScanRow keys + oiChgPct + firstSeen; columns toggle via chooser -->
+  <div class="card" style="position:relative">
+    <div class="ch"><span>Evidence — screened contracts</span><span class="sub"><span id="tbln">184</span> of 1 204 · sorted by Score ▾</span><span class="sp"></span>
+      <button class="sb" data-toggle="chooser" style="padding:3px 8px">Columns · 10 of 17</button></div>
+    <div class="chooser" id="chooser" hidden>
+      <h4>Columns — saved per layout mode</h4>
+      <label><input type="checkbox" checked> Seen</label><label><input type="checkbox" checked> Score</label>
+      <label><input type="checkbox" checked> Ticker</label><label><input type="checkbox" checked> Call/Put</label>
+      <label><input type="checkbox" checked> Strike</label><label><input type="checkbox" checked> DTE</label>
+      <label><input type="checkbox" checked> Volume</label><label><input type="checkbox" data-cols> OI</label>
+      <label><input type="checkbox" checked> ΔOI</label><label><input type="checkbox" data-cols> Vol/OI</label>
+      <label><input type="checkbox" checked> Premium</label><label><input type="checkbox" data-cols> Notional</label>
+      <label><input type="checkbox" data-cols> IV</label><label><input type="checkbox" checked> Flow</label>
+      <label><input type="checkbox" data-cols> Delta</label><label><input type="checkbox" data-cols> γ sign</label>
+      <label><input type="checkbox" data-cols> 7-day trend</label>
+    </div>
+    <div class="tbl" id="tblwrap">
+      <table class="ev">
+        <thead><tr>
+          <th class="l">Seen</th><th class="on">Score ▾</th><th class="l">Ticker</th><th class="l">C/P</th><th>Strike</th><th>DTE</th><th>Volume</th>
+          <th class="col-hidden">OI</th><th>ΔOI</th><th class="col-hidden">Vol/OI</th><th>Prem~</th><th class="col-hidden">Notional</th><th class="col-hidden">IV</th>
+          <th class="l">Flow</th><th class="col-hidden">Delta</th><th class="col-hidden">γ</th><th class="col-hidden">Trend</th>
+        </tr></thead>
+        <tbody id="tbody">
+          <tr class="top" data-r="1|3|1|5|4|1|1"><td class="l"><span class="newdot"></span><span class="xlo">14:29</span></td><td><span class="sc a">94</span></td><td class="l"><span class="tk">NVDA</span> <span class="xlo">09-19</span></td><td class="l"><span class="side c">CALL</span></td><td>182.5</td><td>14d</td><td>218k</td><td class="col-hidden">76k</td><td class="oiup">+41% held</td><td class="col-hidden">2.9x</td><td>~$18.4M</td><td class="col-hidden">$3.98B</td><td class="col-hidden">38.2%</td><td class="l"><span class="flt">SWEEP</span><span class="arch f">FRESH</span></td><td class="col-hidden">0.42</td><td class="col-hidden dn">γ−</td><td class="col-hidden"><span class="trd"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i><i class="now" style="height:12px"></i></span></td></tr>
+          <tr class="kb" data-r="2|1|3|6|5|2|2"><td class="l"><span class="newdot"></span><span class="xlo">14:22</span></td><td><span class="sc a">91</span></td><td class="l"><span class="tk">SPY</span> <span class="xlo">09-06</span></td><td class="l"><span class="side p">PUT</span></td><td>642</td><td>1d</td><td>412k</td><td class="col-hidden">188k</td><td class="oiup">+22% held</td><td class="col-hidden">2.2x</td><td>~$12.1M</td><td class="col-hidden">$26.4B</td><td class="col-hidden">14.7%</td><td class="l"><span class="flt">BLOCK</span><span class="arch">WHALE</span></td><td class="col-hidden">−0.55</td><td class="col-hidden up">γ+</td><td class="col-hidden"><span class="trd"><i style="height:7px"></i><i style="height:6px"></i><i style="height:7px"></i><i style="height:8px"></i><i class="now" style="height:9px"></i></span></td></tr>
+          <tr data-r="3|6|2|1|6|3|3"><td class="l"><span class="xlo">13:58</span></td><td><span class="sc b">88</span></td><td class="l"><span class="tk">QQQ</span> <span class="xlo">09-05</span></td><td class="l"><span class="side c">CALL</span></td><td>588</td><td>0d</td><td>96k</td><td class="col-hidden">5k</td><td class="oidn">−8% faded</td><td class="col-hidden">18.4x</td><td>~$3.4M</td><td class="col-hidden">$5.64B</td><td class="col-hidden">22.1%</td><td class="l"><span class="flt">SWEEP</span><span class="arch lt">LOTTO</span></td><td class="col-hidden">0.12</td><td class="col-hidden dn">γ−</td><td class="col-hidden"><span class="trd"><i style="height:5px"></i><i style="height:4px"></i><i style="height:6px"></i><i style="height:5px"></i><i class="now" style="height:7px"></i></span></td></tr>
+          <tr data-r="4|5|4|7|1|4|4"><td class="l"><span class="newdot"></span><span class="xlo">13:44</span></td><td><span class="sc b">84</span></td><td class="l"><span class="tk">AMD</span> <span class="xlo">09-26</span></td><td class="l"><span class="side c">CALL</span></td><td>168</td><td>21d</td><td>142k</td><td class="col-hidden">48k</td><td class="oiup">+31% held</td><td class="col-hidden">3.0x</td><td>~$6.2M</td><td class="col-hidden">$2.39B</td><td class="col-hidden">44.9%</td><td class="l"><span class="flt">SWEEP</span><span class="arch f">FRESH</span></td><td class="col-hidden">0.38</td><td class="col-hidden xlo">—</td><td class="col-hidden"><span class="trd"><i style="height:3px"></i><i style="height:5px"></i><i style="height:8px"></i><i style="height:9px"></i><i class="now" style="height:11px"></i></span></td></tr>
+          <tr data-r="5|4|6|8|2|5|5"><td class="l"><span class="xlo">13:31</span></td><td><span class="sc">76</span></td><td class="l"><span class="tk">TSLA</span> <span class="xlo">09-12</span></td><td class="l"><span class="side p">PUT</span></td><td>330</td><td>7d</td><td>88k</td><td class="col-hidden">62k</td><td class="oiup">+11% held</td><td class="col-hidden">1.4x</td><td>~$4.9M</td><td class="col-hidden">$2.90B</td><td class="col-hidden">51.3%</td><td class="l"><span class="flt">UNUSUAL</span><span class="arch">HEDGE</span></td><td class="col-hidden">−0.41</td><td class="col-hidden dn">γ−</td><td class="col-hidden"><span class="trd"><i style="height:6px"></i><i style="height:7px"></i><i style="height:7px"></i><i style="height:8px"></i><i class="now" style="height:9px"></i></span></td></tr>
+          <tr data-r="6|8|5|9|3|6|9"><td class="l"><span class="xlo">13:12</span></td><td><span class="sc">72</span></td><td class="l"><span class="tk">PLTR</span> <span class="xlo">10-17</span></td><td class="l"><span class="side c">CALL</span></td><td>44</td><td>42d</td><td>64k</td><td class="col-hidden">21k</td><td class="oiup">+18% held</td><td class="col-hidden">3.0x</td><td>~$2.1M</td><td class="col-hidden">$281M</td><td class="col-hidden">58.7%</td><td class="l"><span class="flt">UNUSUAL</span><span class="arch f">FRESH</span></td><td class="col-hidden">0.33</td><td class="col-hidden xlo">—</td><td class="col-hidden"><span class="trd"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:8px"></i><i class="now" style="height:8px"></i></span></td></tr>
+          <tr data-r="7|2|8|10|9|7|10"><td class="l"><span class="xlo">12:54</span></td><td><span class="sc">70</span></td><td class="l"><span class="tk">IWM</span> <span class="xlo">09-06</span></td><td class="l"><span class="side p">PUT</span></td><td>228</td><td>1d</td><td>172k</td><td class="col-hidden">51k</td><td class="oidn">−4% faded</td><td class="col-hidden">3.4x</td><td>~$11.8M</td><td class="col-hidden">$3.92B</td><td class="col-hidden">19.8%</td><td class="l"><span class="flt">BLOCK</span><span class="arch">WHALE</span></td><td class="col-hidden">−0.48</td><td class="col-hidden up">γ+</td><td class="col-hidden"><span class="trd"><i style="height:6px"></i><i style="height:5px"></i><i style="height:6px"></i><i style="height:6px"></i><i class="now" style="height:9px"></i></span></td></tr>
+          <tr data-r="8|9|7|2|7|8|6"><td class="l"><span class="xlo">12:31</span></td><td><span class="sc">68</span></td><td class="l"><span class="tk">COIN</span> <span class="xlo">09-19</span></td><td class="l"><span class="side c">CALL</span></td><td>310</td><td>14d</td><td>38k</td><td class="col-hidden">14k</td><td class="oiup">+9% held</td><td class="col-hidden">2.7x</td><td>~$1.8M</td><td class="col-hidden">$1.18B</td><td class="col-hidden">66.2%</td><td class="l"><span class="flt">UNUSUAL</span></td><td class="col-hidden">0.29</td><td class="col-hidden xlo">—</td><td class="col-hidden"><span class="trd"><i style="height:5px"></i><i style="height:5px"></i><i style="height:7px"></i><i style="height:7px"></i><i class="now" style="height:8px"></i></span></td></tr>
+          <tr data-r="9|7|9|3|8|9|7"><td class="l"><span class="xlo">12:10</span></td><td><span class="sc">66</span></td><td class="l"><span class="tk">SPY</span> <span class="xlo">09-05</span></td><td class="l"><span class="side c">CALL</span></td><td>648</td><td>0d</td><td>301k</td><td class="col-hidden">44k</td><td class="oidn">−12% faded</td><td class="col-hidden">6.8x</td><td>~$2.9M</td><td class="col-hidden">$19.5B</td><td class="col-hidden">13.9%</td><td class="l"><span class="flt">SWEEP</span><span class="arch lt">LOTTO</span></td><td class="col-hidden">0.09</td><td class="col-hidden up">γ+</td><td class="col-hidden"><span class="trd"><i style="height:7px"></i><i style="height:6px"></i><i style="height:6px"></i><i style="height:7px"></i><i class="now" style="height:8px"></i></span></td></tr>
+          <tr data-r="10|10|10|4|10|10|8"><td class="l"><span class="xlo">11:48</span></td><td><span class="sc">63</span></td><td class="l"><span class="tk">AAPL</span> <span class="xlo">10-17</span></td><td class="l"><span class="side p">PUT</span></td><td>220</td><td>42d</td><td>52k</td><td class="col-hidden">39k</td><td class="oiup">+6% held</td><td class="col-hidden">1.3x</td><td>~$2.4M</td><td class="col-hidden">$1.14B</td><td class="col-hidden">27.4%</td><td class="l"><span class="flt">REGULAR</span><span class="arch">HEDGE</span></td><td class="col-hidden">−0.36</td><td class="col-hidden up">γ+</td><td class="col-hidden"><span class="trd"><i style="height:5px"></i><i style="height:6px"></i><i style="height:5px"></i><i style="height:6px"></i><i class="now" style="height:6px"></i></span></td></tr>
+          <tr data-r="11|11|11|11|11|11|11"><td class="l"><span class="xlo">11:20</span></td><td><span class="sc">61</span></td><td class="l"><span class="tk">MSFT</span> <span class="xlo">09-19</span></td><td class="l"><span class="side c">CALL</span></td><td>515</td><td>14d</td><td>41k</td><td class="col-hidden">28k</td><td class="xlo">— no prior day</td><td class="col-hidden">1.5x</td><td>~$1.6M</td><td class="col-hidden">$2.11B</td><td class="col-hidden">21.0%</td><td class="l"><span class="flt">UNUSUAL</span></td><td class="col-hidden">0.31</td><td class="col-hidden xlo">—</td><td class="col-hidden"><span class="trd"><i style="height:4px"></i><i style="height:5px"></i><i style="height:5px"></i><i style="height:6px"></i><i class="now" style="height:6px"></i></span></td></tr>
+          <tr data-r="12|12|12|12|12|12|12"><td class="l"><span class="xlo">10:52</span></td><td><span class="sc">58</span></td><td class="l"><span class="tk">META</span> <span class="xlo">09-12</span></td><td class="l"><span class="side c">CALL</span></td><td>780</td><td>7d</td><td>29k</td><td class="col-hidden">17k</td><td class="oiup">+4% held</td><td class="col-hidden">1.7x</td><td>~$1.9M</td><td class="col-hidden">$2.26B</td><td class="col-hidden">33.6%</td><td class="l"><span class="flt">UNUSUAL</span></td><td class="col-hidden">0.27</td><td class="col-hidden xlo">—</td><td class="col-hidden"><span class="trd"><i style="height:4px"></i><i style="height:4px"></i><i style="height:5px"></i><i style="height:5px"></i><i class="now" style="height:7px"></i></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="kbh"><span><kbd>j</kbd><kbd>k</kbd> move</span><span><kbd>Enter</kbd> drill</span><span><kbd>/</kbd> ticker</span><span><kbd>r</kbd> force refresh</span><span><kbd>g</kbd>/<kbd>G</kbd> top / bottom</span><span class="xlo">★ = best score in screen · dot = new this refresh · "held/faded" = overnight OI verdict</span></div>
+  </div>
+
+  <!-- LEVEL 7 — TRUST STRIP · data-src: /alerts/quality conviction_calibration (real bands) + /journal/stats by_setup -->
+  <div class="card">
+    <div class="ch"><span>Is this thing working?</span><span class="sub">hit = moved ≥0.5% in the claimed direction · 30-day window · journal 90d</span></div>
+    <div class="trust">
+      <div class="tc"><span class="k">&lt;50 conviction</span><span class="v">31%<small>n 141</small></span><span class="bar"><i style="width:31%"></i></span></div>
+      <div class="tc"><span class="k">50–59</span><span class="v">38%<small>n 168</small></span><span class="bar"><i style="width:38%"></i></span></div>
+      <div class="tc"><span class="k">60–74</span><span class="v">51%<small>n 109</small></span><span class="bar"><i style="width:51%"></i></span></div>
+      <div class="tc hot"><span class="k">75+</span><span class="v">64%<small>n 52</small></span><span class="bar"><i style="width:64%"></i></span></div>
+      <div class="tc"><span class="k">📓 sweep-follow</span><span class="v">58%<small>14W 10L</small></span></div>
+      <div class="tc thin" title="fewer than 10 measured — greyed"><span class="k">📓 gamma-flip</span><span class="v">44%<small>n 9 · too few</small></span></div>
+      <div class="tc"><span class="k">75+ hit rate · last 10 days</span><span class="spark" title="gaps = days with no measured alerts"><i style="height:60%"></i><i style="height:70%"></i><i class="gap"></i><i style="height:55%"></i><i style="height:65%"></i><i style="height:72%"></i><i class="gap"></i><i style="height:68%"></i><i style="height:61%"></i><i class="t" style="height:64%"></i></span></div>
+    </div>
+  </div>
+
+</div><!-- /left -->
+
+<!-- LEVEL 6 — DRILL-DOWN RAIL (Trade mode). Focused ticker printed. -->
+<div class="rail">
+  <div class="card">
+    <div class="ch"><span>Drill-down · <span id="focus" class="hi">NVDA</span></span><span class="sp"></span><span class="sub">opens from any card or row</span></div>
+    <div class="regime" data-src="/regime/{t}: current_state, confidence, gamma_flip, dist_to_flip_pct, total_gex, vol_env">
+      <div><i>Regime</i><b>Chop · warming</b></div><div><i>Gamma flip</i><b class="w">$176 · 1.4% below</b></div><div><i>Vol env</i><b>elevated</b></div>
+    </div>
+    <div class="gex" data-src="/api/heatmap/{t} grid — display-scale S² GEX; never gex_history S¹">
+      <div class="ch" style="border:0;padding:0 0 6px"><span>Net dealer gamma by strike</span><span class="sub">bars · then cumulative below, same axis</span></div>
+      <div class="bars"><span class="b n" style="height:28%"></span><span class="b n" style="height:44%"></span><span class="b n" style="height:62%"></span><span class="b n" style="height:38%"></span><span class="b" style="height:22%"></span><span class="b" style="height:58%"></span><span class="b" style="height:88%"></span><span class="b" style="height:71%"></span><span class="b" style="height:49%"></span><span class="b" style="height:33%"></span><span class="b" style="height:18%"></span></div>
+      <div class="cum">
+        <svg viewBox="0 0 320 44" width="100%" height="44" preserveAspectRatio="none" aria-label="cumulative dealer gamma">
+          <line x1="0" y1="30" x2="320" y2="30" stroke="#30353d" stroke-dasharray="3 4"/>
+          <path d="M0,42 L32,39 L64,35 L96,32 L128,30 L160,22 L192,12 L224,8 L256,6 L288,5 L320,4" fill="none" stroke="#6aa5c9" stroke-width="2"/>
+        </svg>
+        <span class="flip" style="left:40%"><i>flip $176</i></span>
+      </div>
+      <div class="axis"><span>170</span><span>172</span><span>174</span><span>176</span><span>178</span><span>180</span><span>182</span><span>184</span><span>186</span><span>188</span><span>190</span></div>
+      <div class="xlo" style="font-size:10.5px;padding:6px 0 4px">Red = dealers short gamma there (their hedging amplifies moves); green = long (dampens). Direction also carried by the bar pattern in colour-blind mode.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><span>Live flow · NVDA</span><span class="sub"><span class="dot"></span> 41 rows · Public API</span></div>
+    <div class="chips2"><span class="c2 on">All</span><span class="c2">Calls</span><span class="c2">Puts</span><span class="c2">Sweep</span><span class="c2">Block</span><span class="c2">≥80</span><span style="width:1px;background:var(--line2);margin:0 3px"></span><span class="c2 on">All DTE</span><span class="c2">0DTE</span><span class="c2">1-7D</span><span class="c2">Wk</span><span class="c2">Mo</span><span class="c2">Qtr</span><span class="c2">LEAPS</span></div>
+    <table class="mini" data-src="/api/public/chain (primary) → /api/flowseeker/chain (fallback); mapPublicChainToRows">
+      <thead><tr><th class="l">Type</th><th class="l">Side</th><th>Strike</th><th>DTE</th><th>Day $</th><th>V/OI</th><th>Conv</th></tr></thead>
+      <tbody>
+        <tr class="sel"><td class="l">SWEEP</td><td class="l"><span class="side c">CALL</span></td><td>182.5</td><td>14d</td><td>~$18.4M</td><td>2.9</td><td>94</td></tr>
+        <tr><td class="l">UNUSUAL</td><td class="l"><span class="side c">CALL</span></td><td>185</td><td>14d</td><td>~$6.1M</td><td>2.1</td><td>78</td></tr>
+        <tr><td class="l">SWEEP</td><td class="l"><span class="side p">PUT</span></td><td>175</td><td>7d</td><td>~$3.8M</td><td>3.3</td><td>74</td></tr>
+        <tr><td class="l">BLOCK</td><td class="l"><span class="side c">CALL</span></td><td>190</td><td>42d</td><td>~$9.2M</td><td>1.2</td><td>69</td></tr>
+        <tr><td class="l">UNUSUAL</td><td class="l"><span class="side p">PUT</span></td><td>170</td><td>14d</td><td>~$1.9M</td><td>1.6</td><td>57</td></tr>
+      </tbody>
+    </table>
+    <div class="xlo" style="font-size:10.5px;padding:6px 10px">Legend: call · put · sweep (urgent) · block (negotiated). Selected row feeds the panel below.</div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><span>Selected contract · NVDA 182.5C</span><span class="sub">conviction ring · components radar</span></div>
+    <div class="radar">
+      <span class="ring big" style="--p:94"><span>94</span></span>
+      <svg width="100" height="82" viewBox="0 0 100 92" aria-label="unusualness, pattern, size, urgency">
+        <polygon points="50,6 92,32 76,84 24,84 8,32" fill="none" stroke="#30353d"/>
+        <polygon points="50,29 71,42 63,68 37,68 29,42" fill="none" stroke="#30353d"/>
+        <polygon points="50,10 88,34 70,80 30,76 14,36" fill="rgba(106,165,201,.18)" stroke="#6aa5c9" stroke-width="2"/>
+        <text x="50" y="4" font-size="7" fill="#71767e" text-anchor="middle">unusual</text><text x="96" y="34" font-size="7" fill="#71767e">size</text>
+        <text x="50" y="92" font-size="7" fill="#71767e" text-anchor="middle">pattern</text><text x="0" y="34" font-size="7" fill="#71767e">urgency</text>
+      </svg>
+      <span class="lo" style="font-size:11px;grid-column:1/-1">94 = pattern 24 + size 28 + unusualness 26 + urgency 9 · GOLD (5 of 9 factors)</span>
+    </div>
+    <div class="rat">
+      <ul><li>Sweep-class: volume 2.9× open interest — positioning proxy, no per-trade tape on this feed</li>
+        <li>Est. premium ~$18.4M · 2.3% out of the money · 38% IV</li>
+        <li>Dealers short gamma below $176 — a break turns hedging into fuel</li></ul>
+      <div style="margin-top:8px"><span class="tag i">GEX</span>see the strike bars above · <span class="tag w">RISK</span>paper / educational — not a recommendation</div>
+    </div>
+    <div class="nofeed"><span>VPIN toxicity</span><b>stub · /api/vpin route exists, unwired</b></div>
+    <div class="nofeed"><span>Order-flow imbalance</span><b>NO FEED — endpoint does not exist</b></div>
+    <div class="nofeed"><span>Kyle-λ price impact</span><b>NO FEED — endpoint does not exist</b></div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><span>Watchlist</span><span class="sub">click = focus</span></div>
+    <div class="wl"><button class="sel">NVDA</button><button>SPY</button><button>QQQ</button><button>IWM</button><button>TSLA</button><button>AAPL</button><button>MSFT</button><button>AMZN</button><button>META</button><button>GOOGL</button></div>
+  </div>
+</div><!-- /rail -->
+</div><!-- /main -->
+
+</div><!-- /body -->
+
+<!-- ================= NOTHING-LOST MAP ================= -->
+<div class="map">
+  <p class="hi" style="font-size:13.5px">Every control in today's Tidehunter Pro and where it now lives. Nothing is dropped; things are moved or merged. <b style="color:var(--gold)">moved</b> marks a deliberate change.</p>
+  <h3>Top bar</h3><ul>
+    <li>Brand, LIVE·CVFORGE chip → top bar</li><li>Three page buttons → <b style="color:var(--gold)">removed</b>; their content is folded into the pipeline (flow → drill-down, gamma → Dealers card + drill-down, scanner → screen bar + table)</li>
+    <li>Regime pill, clock, refresh → top bar</li><li>Quick filters (min score, DTE min/max, Clear) → Filters disclosure + active chips</li><li>Settings popup (poll interval) → Filters disclosure + gear</li></ul>
+  <h3>Scanner status tiles</h3><ul>
+    <li>Source, Contracts, Notional Σ, Call/Put, Unusual ≥2×, Updated, Heartbeat + budget tooltip → market tape</li><li>⚡ Alerts count → verdict feed header (history count)</li><li>Simple / Advanced toggle → Filters disclosure + column chooser (saved per mode)</li></ul>
+  <h3>Alert layer</h3><ul>
+    <li>Fire banner (rule, contract, why, premium, σ, streak, age, ack) → Trade-now card + pinned feed row</li><li>Institutional alert tape (source dot, time, rule, contract, score, premium, age) → verdict feed + "show history"</li>
+    <li>Rule toggles ΔOI conf / Follow / Sigma / Score / Whale / 0DTE → rule builder ("alert rule fired" condition) and screens</li><li>🔔 Notify, 🎯 UNIV scope, tape order, ⧉ Copy, Clear → ⋯ menu</li>
+    <li>Session window + per-rule counts → What-changed card + history</li><li>Calibration cells + journal win rates → trust strip (real bands &lt;50 / 50–59 / 60–74 / 75+)</li><li>While-you-were-away digest → What-changed card</li></ul>
+  <h3>Context strips</h3><ul>
+    <li>Premium-flow chips (ticker, γ sign, streak, premium, PCR, σ, sparkline, call/put bar) → Money-building card; γ sign and trend also table columns</li><li>Following strip → Money-building card + feed "follow Nd" chips</li>
+    <li>Top Conviction cards (ring, tier, bias, score, notional, dte, move, E/S/T) → feed rows</li></ul>
+  <h3>Filters and table</h3><ul>
+    <li>Type, min vol, min score, ticker search, universe, alert threshold, sort presets, Force, CSV → Filters disclosure and ⋯ menu</li><li>All 16 columns + γ sign → 17-column table with chooser; simple-mode default = 10</li>
+    <li>Sortable headers, ★ leader, new dot, keyboard nav j/k/g/G/Enter///r → table (shortcuts printed)</li><li>Empty / loading / stale states → cards' third line + table copy</li></ul>
+  <h3>Smart Order Flow page</h3><ul>
+    <li>Watchlist, filter chips, DTE chips, legend, live feed (8 cols), selected signal (gauge, radar, rationale, GEX/RISK tags) → drill-down rail</li>
+    <li>Order-Flow-Imbalance sub-tab → <b style="color:var(--gold)">honest placeholder</b>: the backend has no such route; it never drew real data</li><li>Dealer GEX heatmap sub-tab → net-gamma bars + cumulative strip</li></ul>
+  <h3>Dealer Positioning page</h3><ul><li>Net GEX by strike, cumulative curve, read note → Dealers card + drill-down (flip marked, one axis)</li></ul>
+  <h3>Footer</h3><ul><li>Provenance line → footer</li><li>Vol surface (simulated) and Academy → stay removed; unreachable in the live tab today</li></ul>
+  <h3>Deliberate changes</h3><ul style="columns:1">
+    <li><b>Levels are labelled as model defaults</b> (±2.5% stop, ±3.5% / ±5.5% target of spot). They are constants, so no risk-reward number is shown; "% of target travelled" is shown instead.</li>
+    <li><b>Move-since-alert is fixed</b> — today's page multiplies it by 100 twice (+0.8% shows as +80%).</li>
+    <li><b>Plan trade writes a journal note only.</b> It never touches the auto-trade or any order path.</li>
+    <li><b>One σ, one premium.</b> Server-confirmed σ on the cards; raw client σ is labelled as such. Premium is always "est."</li>
+    <li><b>Colour never carries direction alone.</b> ▲/▼ + word everywhere; colour-blind mode adds bar patterns.</li></ul>
+</div>
+
+<div class="foot">
+  <span>Live cvforge data · gamma, regime and alerts from the decoder backend · order-flow imbalance and price impact have no feed · premium and levels are estimates.</span>
+  <span>Tidehunter Pro · insight pipeline v2</span>
+</div>
+</div><!-- /app -->
+
+<script>
+(function(){
+  var root=document.documentElement;
+  var SCREENS={
+    all:{name:'All flow',trade:'Buy NVDA 182.5C, 14d — <span class="num">94</span> conviction',money:'NVDA is where money builds — <span class="num">4</span> straight days',changed:'<span class="num">3</span> things changed, 1 matters: PLTR OI held',pin:'NVDA <span class="side c">CALL</span> 182.5 · 09-19 · GOLD 94 · <span class="up">▲ BULLISH</span>',n:184,f:7},
+    whale:{name:'Whale blocks',trade:'Sell SPY via 642P, 1d — <span class="num">91</span> conviction',money:'SPY draws the biggest single prints — <span class="num">$96M</span>',changed:'<span class="num">1</span> whale since you left: IWM 228P $11.8M',pin:'SPY <span class="side p">PUT</span> 642 · 09-06 · GOLD 91 · <span class="dn">▼ BEARISH</span>',n:9,f:3},
+    oiconf:{name:'OI-confirmed',trade:'Buy NVDA 182.5C, 14d — <span class="num">94</span> conviction',money:'AMD and PLTR hold overnight — <span class="num">2</span> names confirmed',changed:'<span class="num">2</span> confirmations overnight: PLTR, AMD',pin:'NVDA <span class="side c">CALL</span> 182.5 · 09-19 · GOLD 94 · <span class="up">▲ BULLISH</span>',n:14,f:4},
+    zerodte:{name:'0DTE lottos',trade:'Buy QQQ 588C, today — <span class="num">84</span> conviction',money:'QQQ and SPY same-day calls — <span class="num">18×</span> vol/OI',changed:'<span class="num">4</span> new 0DTE arrivals, none confirmed',pin:'QQQ <span class="side c">CALL</span> 588 · 09-05 · SILVER 84 · <span class="up">▲ BULLISH</span>',n:21,f:3},
+    hedge:{name:'Hedges',trade:'Sell TSLA via 330P, 7d — <span class="num">76</span> conviction',money:'TSLA puts build for a <span class="num">2nd</span> day — protection',changed:'<span class="num">1</span> new hedge: AAPL 220P',pin:'TSLA <span class="side p">PUT</span> 330 · 09-12 · SILVER 76 · <span class="dn">▼ BEARISH</span>',n:11,f:2},
+    fresh:{name:'Fresh positioning',trade:'Buy NVDA 182.5C, 14d — <span class="num">94</span> conviction',money:'NVDA, AMD, PLTR — <span class="num">3</span> names with fresh OI',changed:'<span class="num">3</span> fresh names held overnight',pin:'NVDA <span class="side c">CALL</span> 182.5 · 09-19 · GOLD 94 · <span class="up">▲ BULLISH</span>',n:38,f:5},
+    mine:{name:'My universe',trade:'Buy NVDA 182.5C, 14d — <span class="num">94</span> conviction',money:'NVDA is where money builds — <span class="num">4</span> straight days',changed:'<span class="num">2</span> in your names: NVDA held, SPY whale',pin:'NVDA <span class="side c">CALL</span> 182.5 · 09-19 · GOLD 94 · <span class="up">▲ BULLISH</span>',n:42,f:5}
+  };
+  var ORDER=['all','whale','oiconf','zerodte','hedge','fresh','mine'];
+  function press(sel,attr,val){document.querySelectorAll(sel).forEach(function(b){b.setAttribute('aria-pressed',String(b.getAttribute(attr)===val));});}
+  function rerank(container,idx){
+    var kids=[].slice.call(container.children).filter(function(k){return k.hasAttribute('data-r');});
+    kids.sort(function(a,b){return +a.dataset.r.split('|')[idx]-+b.dataset.r.split('|')[idx];});
+    var fx=container.querySelector('.fx');
+    kids.forEach(function(k){container.appendChild(k);});
+    if(fx){var open=container.querySelector('.frow.open');if(open){open.after(fx);}else{fx.remove();}}
+  }
+  function setScreen(s){
+    root.setAttribute('data-screen',s);press('[data-screen]','data-screen',s);
+    var S=SCREENS[s],i=ORDER.indexOf(s);
+    document.getElementById('stamp').textContent='screen: '+S.name;
+    document.querySelectorAll('[data-stamp]').forEach(function(x){x.textContent=S.name;});
+    document.querySelector('[data-card="trade"]').innerHTML=S.trade;
+    document.querySelector('[data-card="money"]').innerHTML=S.money;
+    document.querySelector('[data-card="changed"]').innerHTML=S.changed;
+    document.getElementById('pintxt').innerHTML=S.pin+' · <span class="lo">shown in full above — not repeated here</span>';
+    document.getElementById('tbln').textContent=S.n;document.getElementById('feedn').textContent=S.f;
+    var rows=document.getElementById('rows');
+    rerank(rows,i);rerank(document.getElementById('tbody'),i);
+    // the pinned alert must not appear in the body: hide the body row that matches the pin
+    [].slice.call(rows.querySelectorAll('.frow')).forEach(function(r,n){r.hidden=n>=S.f;});
+    document.getElementById('newpill').hidden=(s==='all');
+  }
+  document.addEventListener('click',function(e){
+    var b;
+    if(b=e.target.closest('[data-mode]')){root.setAttribute('data-mode',b.dataset.mode);press('[data-mode]','data-mode',b.dataset.mode);return;}
+    if(b=e.target.closest('[data-state]')){root.setAttribute('data-state',b.dataset.state);press('[data-state]','data-state',b.dataset.state);return;}
+    if(b=e.target.closest('[data-cb]')){root.setAttribute('data-cb',b.dataset.cb);press('[data-cb]','data-cb',b.dataset.cb);return;}
+    if(b=e.target.closest('[data-view]')){root.setAttribute('data-view',b.dataset.view);press('[data-view]','data-view',b.dataset.view);return;}
+    if(b=e.target.closest('.scr[data-screen]')){setScreen(b.dataset.screen);return;}
+    if(b=e.target.closest('[data-toggle]')){var el=document.getElementById(b.dataset.toggle);el.hidden=!el.hidden;return;}
+    if(b=e.target.closest('[data-pop]')){var p=document.getElementById('pop-'+b.dataset.pop);document.querySelectorAll('.pop').forEach(function(x){if(x!==p)x.hidden=true;});p.hidden=!p.hidden;return;}
+    if(b=e.target.closest('[data-drill]')){document.getElementById('focus').textContent=b.dataset.drill;document.querySelectorAll('.rail .ch .hi').forEach(function(x){x.textContent=b.dataset.drill;});return;}
+    if(b=e.target.closest('[data-cols]')){root.setAttribute('data-cols',root.getAttribute('data-cols')==='all'?'':'all');return;}
+    if(b=e.target.closest('.frow:not(.ctx)')){var was=b.classList.contains('open');document.querySelectorAll('.frow.open').forEach(function(x){x.classList.remove('open');});var fx=document.querySelector('.fx');if(!was){b.classList.add('open');b.after(fx);fx.hidden=false;}else{fx.hidden=true;}return;}
+    if(!e.target.closest('.pop'))document.querySelectorAll('.pop').forEach(function(x){x.hidden=true;});
+  });
+  setScreen('all');
+})();
+</script>
+</body>
+</html>

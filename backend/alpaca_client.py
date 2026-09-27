@@ -230,7 +230,7 @@ class AlpacaClient:
 
     async def place_stock_order(self, symbol: str, qty: int, side: str = "buy",
                                  order_type: str = "market", limit_price: float = 0,
-                                 client_order_id: str = "") -> dict | None:
+                                 client_order_id: str = "", stop_price: float = 0) -> dict | None:
         """Place a stock order."""
         order_data = {
             "symbol": symbol.upper(),
@@ -241,12 +241,15 @@ class AlpacaClient:
         }
         if client_order_id:
             order_data["client_order_id"] = client_order_id
-        if order_type == "limit" and limit_price:
+        if order_type in ("limit", "stop_limit") and limit_price:
             order_data["limit_price"] = str(limit_price)
+        if order_type in ("stop", "stop_limit") and stop_price:
+            order_data["stop_price"] = str(stop_price)
 
         data = await self._post(f"{ALPACA_BASE_URL}/v2/orders", order_data)
         if data:
             return {
+                **data,
                 "id": data.get("id", ""),
                 "status": data.get("status", ""),
                 "symbol": data.get("symbol", ""),
@@ -382,6 +385,7 @@ class AlpacaClient:
         data = await self._post(f"{ALPACA_BASE_URL}/v2/orders", order_data)
         if data:
             return {
+                **data,
                 "id": data.get("id", ""),
                 "status": data.get("status", ""),
                 "symbol": data.get("symbol", osi),
