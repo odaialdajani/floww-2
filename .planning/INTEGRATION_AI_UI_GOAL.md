@@ -1,3 +1,28 @@
+# Active scope narrowed by the user - 2026-09-27 01:45 UTC
+
+The user requested commit/push preservation and narrowed the goal to **Research, accurate screens, and saved-work safety**, explicitly choosing this over adding paper trading. This supersedes the earlier requirement to complete the entire AI/UI roadmap. Previously completed work is retained.
+
+## Current completion requirements
+
+1. Reliable existing research: questions use the intended ticker/time/context; answers distinguish actual readings, missing evidence and interpretation; saved answers/history remain private; cancellation, duplicate requests and restarts do not repeat work or lose saved state; current budget limits remain intact. Validate the actual supported path and review practical answer quality. No unsupported-answer or all-provider coverage claim.
+2. Accurate existing desktop screens: critical price/exposure/history values and source age/scope are truthful, selections show the intended data, and the main research/dealer/history controls remain usable. Fix defects affecting interpretation or use; a comprehensive cosmetic redesign and mobile work are outside this narrowed finish.
+3. Saved-work safety: preserve and push reviewed source and handoff changes; safely finish active research before closing storage; verify bounded recovery and a practical backup/restore path using isolated copies. Do not restart existing user apps or alter live stores to demonstrate it. Preserve private local evidence without publishing credentials or recovery material.
+4. Close with focused tests, an actual supported-path check, independent review of consequential fixes, and a current remaining-risk record. Review incoming changes only for critical correctness or compatibility; optional backlog expansion is deferred. Broader tests should be used where they could reveal a material regression, not rerun endlessly.
+
+## Deferred scope
+
+New research capability expansion; stronger-model tournaments and the unexecuted three-arm32case acceptance campaign; predictive claims/forward-learning features; new watches, proactive alerts and morning briefs; trade proposals and paper-account activation; paper/live lifecycle implementation; live trading; mobile work; optional redesign polish and unrelated backlog. Existing cost, identity, budget and trading permissions remain unchanged. The old frozen comparison remains unexecuted and must not be described as passed. Useful-answer checks still belong to the current research requirement.
+
+The two original plans remain linked from REMAINING_WORK.md for provenance. Their broader completion gates apply only to their deferred capabilities; they are no longer the active goal's definition of done. The running goal tool still displays the original objective because its interface cannot edit an active objective; this explicit later user instruction controls actual scope.
+
+## Immediate priority
+
+Actual shutdown registration closes Mongo before research cancellation can save interruptions. Independent source/order evidence is recorded in application-shutdown-order-review-20260927.md; reproduce and fix it next. Full application startup and production database-crash recovery remain unproven; do not imply these from the narrower worker proof.
+
+---
+
+# Earlier full-scope history (preserved)
+
 # FLOWW reconciliation, AI and UI delivery
 
 User objective confirmed 2026-09-11: preserve and commit local work, review colleague changes and backlog, bring current main into the working branch, implement the two specified plans, validate and commit delivery.

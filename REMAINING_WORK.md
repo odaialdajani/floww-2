@@ -1,3 +1,16 @@
+# Active critical scope - 2026-09-27 01:45 UTC
+
+The user has narrowed this goal to **reliable research, accurate existing screens, and saved-work safety**. The [current goal and completion requirements](.planning/INTEGRATION_AI_UI_GOAL.md) supersede the broader completion requirement below. The critical goal remains unfinished.
+
+- Fix and verify the confirmed shutdown ordering that closes storage before unfinished research can save its state. Check sibling unfinished-work paths before claiming safe shutdown.
+- Verify the existing research path, practical answer usefulness, privacy, source/time honesty and budget behavior. The optional stronger-model/three-arm comparison remains deferred, unexecuted and unapproved; its old receipts are not acceptance.
+- Finish only screen defects that affect interpreting data or using the existing desktop flows. Preserve the truthful data/replay corrections already delivered.
+- Verify practical saved-work recovery and backup/restore on isolated copies, complete proportionate final regression checks, and keep reviewed work committed/pushed. Never restart an existing user app for this proof.
+
+Paper trading, live trading, new alerts/briefs, capability expansion, learning/forward claims, mobile work and optional redesign/backlog are deferred. Preserve their code and evidence; do not expand them under this root goal. Pending permissions and risk limits are not granted by this scope change.
+
+## Earlier full-scope record (retained, no longer the active finish line)
+
 # Remaining work and handoff
 
 Updated 2026-09-27. **The full goal is not complete.** Current integration evidence: [September26 verification](.planning/eval/integration-verification-20260926.md), [backend review](.planning/eval/backend-integration-review-20260926.md), [frontend review](.planning/eval/frontend-integration-review-20260926.md), [open-PR review](.planning/eval/pr-backlog-review-20260926.md).

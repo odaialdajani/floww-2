@@ -1,5 +1,8 @@
 # Tidehunter Pro UI redesign v3 - implementation plan
 
+> User scope update, 2026-09-27: the active finish is reliable existing research, accurate existing desktop screens, and saved-work safety. Wider capability expansion, paper/live trading, proactive features, learning, mobile and optional polish are deferred. See `.planning/INTEGRATION_AI_UI_GOAL.md` and `REMAINING_WORK.md` for the current completion requirements. The full plan below is preserved as future scope.
+
+
 Updated: 2026-09-11
 
 **User priority update,2026-09-11 22:22 UTC:** Stop mobile optimization work.
