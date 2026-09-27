@@ -3041,6 +3041,8 @@ async def websocket_gex(websocket: WebSocket, ticker: str):
                     negative = sorted([s for s in strikes if s["gex"] < 0], key=lambda x: x["gex"])
                     nodes = classify_nodes(strikes, spot)
 
+                    from services.market_provenance import spot_provenance
+                    observation = spot_provenance(raw, datetime.now(UTC))
                     payload = {
                         "ticker": t,
                         "spot": spot,
@@ -3050,6 +3052,11 @@ async def websocket_gex(websocket: WebSocket, ticker: str):
                         "ceilings": [{"strike": s["strike"], "gex": round(s["gex"], 0)} for s in negative[:5]],
                         "regime": nodes.get("regime"),
                         "asof": datetime.now(UTC).isoformat(),
+                        "source_event_time": observation["event_time"],
+                        "spot_source": observation["source"],
+                        "spot_status": observation["status"],
+                        "spot_fetched_at": observation["received_at"],
+                        "chain_event_time": raw.get("event_time"),
                     }
                     await websocket.send_json(_sanitize(payload))
 

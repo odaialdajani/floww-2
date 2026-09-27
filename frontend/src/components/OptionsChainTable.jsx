@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import axios from "axios";
 import { fmtAbs, pctClass } from "../lib/helpers";
+import { formatStrike, formatGreek } from "../lib/marketDisplay";
 import { API } from "../config/api";
 import { fetchPublicChain } from "../lib/publicApi";
 
@@ -264,7 +265,7 @@ export default function OptionsChainTable({ ticker }) {
                 return (
                   <tr key={actualIdx} style={{ height: ROW_HEIGHT }} className={`${nearSpot ? "bg-slate-700/30" : ""} hover:bg-slate-700/20`}>
                     <td className={`px-1 py-0.5 font-bold ${isCall ? "text-teal-400" : "text-purple-400"}`}>{isCall ? "C" : r.type === "put" ? "P" : "—"}</td>
-                    <td className="text-right px-1 py-0.5 mono">{r.strike !== null ? r.strike.toFixed(r.strike < 10 ? 2 : 0) : "—"}</td>
+                    <td className="text-right px-1 py-0.5 mono">{formatStrike(r.strike)}</td>
                     <td className="text-right px-1 py-0.5 text-slate-400">{r.expiry?.slice(5)}</td>
                     <td className="text-right px-1 py-0.5 text-slate-400">{r.dte ?? "—"}</td>
                     <td className="text-right px-1 py-0.5 mono">{r.iv != null ? (r.iv * 100).toFixed(1) + "%" : "—"}</td>
@@ -273,8 +274,8 @@ export default function OptionsChainTable({ ticker }) {
                     <td className="text-right px-1 py-0.5">{r.oi >= 1000 ? (r.oi / 1000).toFixed(1) + "K" : r.oi ?? "—"}</td>
                     <td className="text-right px-1 py-0.5">{r.volume >= 1000 ? (r.volume / 1000).toFixed(1) + "K" : r.volume ?? "—"}</td>
                     <td className={`text-right px-1 py-0.5 mono ${gexClass}`}>{fmtAbs(r.gex)}</td>
-                    <td className="text-right px-1 py-0.5 mono">{fmtAbs(r.vanna)}</td>
-                    <td className="text-right px-1 py-0.5 mono">{fmtAbs(r.charm)}</td>
+                    <td className="text-right px-1 py-0.5 mono">{formatGreek(r.vanna)}</td>
+                    <td className="text-right px-1 py-0.5 mono">{formatGreek(r.charm)}</td>
                     <td className={`text-right px-1 py-0.5 mono ${pctClass(r.moneyness_pct)}`}>{r.moneyness_pct != null ? (r.moneyness_pct > 0 ? "+" : "") + r.moneyness_pct.toFixed(1) + "%" : "—"}</td>
                   </tr>
                 );

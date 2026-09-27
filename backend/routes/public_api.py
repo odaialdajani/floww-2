@@ -92,6 +92,9 @@ async def get_public_chain(
             detail=f"Public API unavailable for {ticker} — key may be missing or API call failed",
         )
 
+    from services.chain_readings import chain_readings
+    result = {**result, "contracts": chain_readings(result.get("contracts", []), result.get("spot"), ticker.upper())}
+
     # If specific expiration requested, filter to that expiry
     if expiration:
         result["contracts"] = [c for c in result["contracts"] if c["expiry"] == expiration]
@@ -106,6 +109,7 @@ async def get_public_chain(
         "data_source": result.get("data_source", "public_api"),
         "stale": result.get("stale", False),
         "contracts": result.get("contracts", []),
+        **{key: result.get(key) for key in ("event_time", "fetched_at", "spot_source", "spot_event_time", "spot_fetched_at", "cache_age_s")},
     }
 
 
@@ -145,6 +149,7 @@ async def get_public_quotes(ticker: str):
         "change": quote.get("change"),
         "percent_change": quote.get("percent_change"),
         "timestamp": quote.get("timestamp"),
+        **{key: quote.get(key) for key in ("last_event_time", "bid_event_time", "ask_event_time", "spot_source", "spot_event_time", "spot_fetched_at")},
         "data_source": "public_api",
     }
 

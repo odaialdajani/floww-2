@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { formatStrike } from "../lib/marketDisplay";
 import { fmt } from "../lib/helpers";
 
 export default function BarHeatmap({ data, filters, compact = true, viewMode = "gex" }) {
@@ -73,7 +74,7 @@ export default function BarHeatmap({ data, filters, compact = true, viewMode = "
               <div className="flex-1 flex justify-end pr-1">
                 {val !== null && val < 0 && <div style={{ width: `${w}%`, height: 10, borderRadius: 2, background: isKing ? kingColorNeg : barColorNeg }} />}
               </div>
-              <div className={`w-14 text-center ${isKing ? "text-amber-300 font-bold" : isF ? "text-emerald-400" : isC ? "text-rose-400" : "text-slate-400"}`}>{fmt(s.strike, 0)}</div>
+              <div className={`w-14 text-center ${isKing ? "text-amber-300 font-bold" : isF ? "text-emerald-400" : isC ? "text-rose-400" : "text-slate-400"}`}>{formatStrike(s.strike)}</div>
               <div className="flex-1 flex pl-1">
                 {val === null ? <span className="text-slate-500">Unavailable</span> : val === 0 ? <span className="text-slate-500">0</span> : null}
                 {val !== null && pos && <div style={{ width: `${w}%`, height: 10, borderRadius: 2, background: isKing ? kingColorPos : barColorPos }} />}

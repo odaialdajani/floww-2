@@ -43,7 +43,7 @@ function Movers({ onPick }) {
   }, [reload]);
 
   const changeOf = (r) => (typeof r.change_pct === "number" ? r.change_pct : r.change);
-  const stale = meta && (meta.status === "stale" || meta.status === "partial");
+  const stale = meta?.status === "stale";
   const footer = meta && (meta.session_date || meta.coverage)
     ? `${meta.session_date || "?"} vs ${meta.prior_session_date || "?"} · ` +
       `${meta.coverage ? `${meta.coverage.valid}/${meta.coverage.requested} valid` : ""}` +
@@ -88,6 +88,7 @@ function Movers({ onPick }) {
         })}
       </div>
       {footer && <div className="text-[10px] text-slate-500 mt-1" data-testid="movers-meta">{footer}</div>}
+      {meta?.status === "partial" && <div className="text-[10px] text-amber-400" data-testid="movers-partial">Some stocks unavailable</div>}
       {stale && <div className="text-[10px] text-amber-400" data-testid="movers-stale">last-good values</div>}
     </div>
   );

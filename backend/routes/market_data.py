@@ -203,7 +203,7 @@ async def spot(ticker: str):
     return {"ticker": t, "spot": raw.get("spot"), "ts": observation["event_time"],
             "fetched_at": observation["received_at"], "data_source": observation["source"],
             "status": observation["status"], "stale": observation["status"] == "stale",
-            "data_fallback": bool(raw.get("stale") or observation["source"] == "yfinance-fallback")}
+            "data_fallback": bool(raw.get("stale") or observation["source"] in ("yfinance-fallback", "public-session-close"))}
 
 
 @router.get("/chain/{ticker}")
@@ -214,9 +214,7 @@ async def chain(
     expiry: str | None = None,
     dte_max: int | None = Query(None, ge=0, le=365),
 ):
-    from bs_greeks import bs_charm, bs_vanna
     from server import _sanitize, fetch_spot_and_chains_merged
-    from services.gex_core import DIV_YIELD
     t = ticker.strip().upper()
     if t == "SPX":
         t = "^SPX"
@@ -229,63 +227,11 @@ async def chain(
     if min_oi:
         contracts = [c for c in contracts if (c.get("oi", 0) or c.get("open_interest", 0)) >= min_oi]
     spot = raw["spot"]
-    from bs_greeks import dollar_gex_per_contract
-    from domain.exposure_metrics import option_type_sign
-    rows = []
-    for c in contracts:
-        gamma = c.get("gamma", 0) or 0
-        oi = c.get("oi", c.get("open_interest", 0)) or 0
-        # Canonical display units (S2: USD per 1% spot move, +call/-put),
-        # matching the heatmap/aggregator surfaces. R7-F04: unknown option
-        # types are skipped, never default-signed.
-        sign = option_type_sign(c.get("type"))
-        if sign is None:
-            continue
-        gex = sign * dollar_gex_per_contract(gamma, oi, spot)
-        # Compute T (time to expiry in years) from expiry date string
-        expiry_str = c.get("expiry", "")
-        T = 0.0
-        if expiry_str and spot > 0:
-            try:
-                exp_date = datetime.strptime(expiry_str, "%Y-%m-%d")
-                T = max(0.0, (exp_date - datetime.now()).total_seconds() / (365.25 * 86400))
-            except (ValueError, TypeError):
-                T = 0.0
-        strike = c["strike"]
-        iv = c.get("iv", 0) or 0
-        q = DIV_YIELD.get(t, 0.0)
-        try:
-            vanna = bs_vanna(spot, strike, T, iv, q=q) if spot > 0 and iv > 0 and T > 0 else 0
-        except Exception:
-            vanna = 0
-        try:
-            charm = bs_charm(spot, strike, T, iv, q=q, kind=c["type"]) if spot > 0 and iv > 0 and T > 0 else 0
-        except Exception:
-            charm = 0
-        moneyness_pct = ((spot - strike) / spot * 100) if spot > 0 else 0
-        dte_val = max(1, int(T * 365.25)) if T > 0 else 0
-        rows.append({
-            "type": c["type"],
-            "strike": c["strike"],
-            "expiry": c["expiry"],
-            "iv": c.get("iv", 0) or 0,
-            "delta": c.get("delta", 0) or 0,
-            "gamma": c.get("gamma", 0) or 0,
-            "vega": c.get("vega", 0) or 0,
-            "theta": c.get("theta", 0) or 0,
-            "vanna": vanna,
-            "charm": charm,
-            "moneyness_pct": moneyness_pct,
-            "dte": dte_val,
-            "oi": c.get("oi", c.get("open_interest", 0)) or 0,
-            "volume": c.get("volume", 0) or 0,
-            "bid": c.get("bid", 0) or 0,
-            "ask": c.get("ask", 0) or 0,
-            "gex": gex,
-        })
+    from services.chain_readings import chain_readings
+    rows = chain_readings(contracts, spot, t)
     # Apply DTE filter if specified
     if dte_max is not None:
-        rows = [r for r in rows if r.get("dte", 0) <= dte_max]
+        rows = [r for r in rows if r.get("dte") is not None and r["dte"] <= dte_max]
     return _sanitize({"ticker": t, "spot": raw["spot"], "expiries": raw.get("expiries", []), "rows": rows, "count": len(rows),
                       "gex_unit": "USD per 1% spot move (sign*gamma*OI*100*spot^2*0.01; +call/-put)",
                       **{key: raw.get(key) for key in ("data_source", "event_time", "fetched_at", "spot_source",

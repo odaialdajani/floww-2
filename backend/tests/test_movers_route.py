@@ -29,7 +29,7 @@ def _bars_for(symbol, drift):
     return rows
 
 
-async def _fake_daily(sym, days=10):
+async def _fake_daily(sym, days=10, *, budget_wait_s=0):
     # Serve real universe tickers (route uses POPULAR_UNIVERSE); the rest miss.
     table = {"AAPL": 0.004, "MSFT": -0.009, "GOOGL": 0.0}
     if sym not in table:

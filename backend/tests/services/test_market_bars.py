@@ -148,3 +148,31 @@ async def test_adv_uses_daily_path(monkeypatch):
 
     monkeypatch.setattr(mb, "get_daily_bars", fake_daily)
     assert await mb.get_adv_21d("SPY") == pytest.approx(2000.0)
+
+@pytest.mark.asyncio
+async def test_bounded_wait_recovers_busy_slot_without_extra_provider_calls(monkeypatch):
+    from unittest.mock import Mock
+
+    from services.public_budget import BudgetExhausted
+    upstream=AsyncMock(return_value=[_bar('2026-09-25T00:00:00-04:00')])
+    budget=SimpleNamespace(acquire=AsyncMock(side_effect=[BudgetExhausted(reason='inflight_cap'),None]),release=Mock())
+    monkeypatch.setattr(mb,'_budget',budget)
+    monkeypatch.setattr(mb,'_upstream',upstream)
+    assert await mb.get_daily_bars('SPY',days=10,budget_wait_s=1)
+    assert budget.acquire.await_count==2
+    upstream.assert_awaited_once()
+    budget.release.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_wait_does_not_bypass_provider_cooldown(monkeypatch):
+    from unittest.mock import Mock
+
+    from services.public_budget import BudgetExhausted
+    upstream=AsyncMock()
+    budget=SimpleNamespace(acquire=AsyncMock(side_effect=BudgetExhausted(reason='host_cooldown')),release=Mock())
+    monkeypatch.setattr(mb,'_budget',budget)
+    monkeypatch.setattr(mb,'_upstream',upstream)
+    assert await mb.get_daily_bars('SPY',days=10,budget_wait_s=1) is None
+    budget.acquire.assert_awaited_once()
+    upstream.assert_not_awaited()
+    budget.release.assert_not_called()

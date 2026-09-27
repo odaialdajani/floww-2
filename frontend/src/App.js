@@ -3,6 +3,7 @@ import axios from "axios";
 import "@/App.css";
 import { useAuth } from "./context/AuthContext";
 
+import { formatStrike } from "./lib/marketDisplay";
 import { fmt, fmtAbs, tagFor, TRIAD, DEFAULT_TICKERS } from "./lib/helpers";
 import { buildHeatmapQuery } from "./lib/heatmapQuery";
 import GridHeatmap from "./components/GridHeatmap";
@@ -269,9 +270,9 @@ function DashboardPage({ ticker, data, livespot }) {
             <div className="label mb-2">Key Levels</div>
             {data?.nodes?.king && (
               <div className="text-[13px] mono">
-                <div>King: <span style={{ color: "var(--king)" }}>{fmt(data.nodes.king.strike, 0)}</span></div>
-                <div>Floor: <span style={{ color: "var(--pos)" }}>{fmt(data.nodes.floors?.[0]?.strike, 0) || "—"}</span></div>
-                <div>Ceiling: <span style={{ color: "var(--neg)" }}>{fmt(data.nodes.ceilings?.[0]?.strike, 0) || "—"}</span></div>
+                <div>King: <span style={{ color: "var(--king)" }}>{formatStrike(data.nodes.king.strike)}</span></div>
+                <div>Floor: <span style={{ color: "var(--pos)" }}>{formatStrike(data.nodes.floors?.[0]?.strike) || "—"}</span></div>
+                <div>Ceiling: <span style={{ color: "var(--neg)" }}>{formatStrike(data.nodes.ceilings?.[0]?.strike) || "—"}</span></div>
               </div>
             )}
           </div>
@@ -864,7 +865,7 @@ export default function App() {
                     <span>${fmt(livespot?.spot ?? data?.spot, 2)}</span>
                   </div>
                   {(livespot || data) && <div className="text-[10px] text-slate-400">
-                    Quote {livespot?.status || "quality unverified"} · {livespot?.data_source || data?.spot_source || "source unknown"}
+                    {(livespot?.data_source || data?.spot_source) === "public-session-close" ? "Closing price" : "Quote"} {livespot?.status || "quality unverified"} · {livespot?.data_source || data?.spot_source || "source unknown"}
                     <br />Observed {livespot ? livespot.ts || "time unknown" : data?.spot_event_time || "time unknown"}
                   </div>}
                   <div className="text-[10px] text-slate-500 mt-1">
@@ -885,10 +886,10 @@ export default function App() {
                   )}
                   <div className="dotted-divider my-3" />
                   <div className="grid grid-cols-2 gap-2 text-[11px]">
-                    <div><div className="label">King</div><div className="mono text-amber-300">{fmt(data?.nodes?.king?.strike, 0)}</div></div>
+                    <div><div className="label">King</div><div className="mono text-amber-300">{formatStrike(data?.nodes?.king?.strike)}</div></div>
                     <div><div className="label">|GEX|</div><div className="mono">{fmtAbs(data?.nodes?.king?.gex)}</div></div>
-                    <div><div className="label">Top Floor</div><div className="mono text-emerald-400">{fmt(data?.nodes?.floors?.[0]?.strike, 0) || "—"}</div></div>
-                    <div><div className="label">Top Ceiling</div><div className="mono text-rose-400">{fmt(data?.nodes?.ceilings?.[0]?.strike, 0) || "—"}</div></div>
+                    <div><div className="label">Top Floor</div><div className="mono text-emerald-400">{formatStrike(data?.nodes?.floors?.[0]?.strike) || "—"}</div></div>
+                    <div><div className="label">Top Ceiling</div><div className="mono text-rose-400">{formatStrike(data?.nodes?.ceilings?.[0]?.strike) || "—"}</div></div>
                     <div><div className="label">Polarity</div><div className="mono text-sky-300">{data?.nodes?.polarity_level ? fmt(data.nodes.polarity_level, 1) : "—"}</div></div>
                     <div><div className="label">Gatekeepers</div><div className="mono">{data?.nodes?.gatekeepers?.length || 0}</div></div>
                   </div>
@@ -907,12 +908,12 @@ export default function App() {
                   {wsGex.connected && wsGex.data && (
                     <>
                       <div className="flex items-center justify-between text-[9px]">
-                        <span className="text-slate-500">{Number.isFinite(Date.parse(wsGex.data.source_event_time)) ? `Observed ${new Date(wsGex.data.source_event_time).toLocaleTimeString()}` : "Source time unknown"}</span>
+                        <span className="text-slate-500">{Number.isFinite(Date.parse(wsGex.data.source_event_time)) ? `Price observed ${new Date(wsGex.data.source_event_time).toLocaleString()}` : "Price time unknown"}</span>
                       </div>
                       <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px] mt-1">
                         <div className="flex justify-between"><span className="text-slate-500">Spot</span><span className="mono text-slate-300">${fmt(wsGex.data.spot, 2)}</span></div>
                         <div className="flex justify-between"><span className="text-slate-500">Total GEX</span><span className={`mono ${wsGex.data.total_gex > 0 ? "text-emerald-400" : "text-rose-400"}`}>{wsGex.data.total_gex > 0 ? "+" : ""}{fmtAbs(wsGex.data.total_gex)}</span></div>
-                        <div className="flex justify-between"><span className="text-slate-500">King</span><span className="mono text-amber-300">{wsGex.data.king ? fmt(wsGex.data.king.strike, 0) : "—"}</span></div>
+                        <div className="flex justify-between"><span className="text-slate-500">King</span><span className="mono text-amber-300">{wsGex.data.king ? formatStrike(wsGex.data.king.strike) : "—"}</span></div>
                         <div className="flex justify-between"><span className="text-slate-500">Regime</span><span className={`mono ${regimeColor(wsGex.data.regime)}`}>{wsGex.data.regime || "—"}</span></div>
                       </div>
                     </>

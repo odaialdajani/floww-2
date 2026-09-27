@@ -15,6 +15,7 @@ universe, bounded concurrency, no per-ticker polling loop here.
 from __future__ import annotations
 
 import asyncio
+import copy
 import logging
 import math
 import time
@@ -51,6 +52,7 @@ POPULAR_UNIVERSE = [
 ]
 
 _CACHE: dict[tuple, dict[str, Any]] = {}
+_INFLIGHT: dict[tuple, asyncio.Task] = {}
 
 
 def _et_day(ts: Any) -> str | None:
@@ -142,7 +144,7 @@ async def compute_movers(universe: list[str] | None = None,
         from services.market_bars import get_daily_bars
 
         async def fetch_daily(sym: str, days: int = 10):  # noqa: F811
-            return await get_daily_bars(sym, days=days)
+            return await get_daily_bars(sym, days=days, budget_wait_s=3.0)
     last, prior = completed_session_pair(now=now, day_info=day_info)
     computed_at = (now.astimezone(UTC) if isinstance(now, datetime)
                    else datetime.now(UTC)).isoformat()
@@ -281,7 +283,7 @@ def _empty(reason: str) -> dict[str, Any]:
             "source_asof": None, "results": [], "reason_codes": [reason]}
 
 
-async def get_movers(limit: int = 20, mode: str = "previous_completed_session") -> dict[str, Any]:
+async def _get_movers_payload(mode: str = "previous_completed_session") -> dict[str, Any]:
     """Cached entry point for the route (completed sessions cache by pair)."""
     if mode not in MODES:
         return _empty(f"unknown mode {mode!r}; expected one of {MODES}")
@@ -290,15 +292,15 @@ async def get_movers(limit: int = 20, mode: str = "previous_completed_session") 
     key = (last, prior, UNIVERSE_ID, mode)
     hit = _CACHE.get(key)
     if hit and (time.time() - hit["ts"]) < _CACHE_TTL_S:
-        out = dict(hit["payload"])
+        out = copy.deepcopy(hit["payload"])
         out["cache"] = "hit"
         return out
     try:
-        out = await compute_movers(limit=limit, mode=mode, now=now)
+        out = await compute_movers(limit=len(POPULAR_UNIVERSE), mode=mode, now=now)
     except Exception as e:
         log.warning("movers compute failed: %s", e)
         if hit:
-            out = dict(hit["payload"])
+            out = copy.deepcopy(hit["payload"])
             out["status"] = "stale"
             out.setdefault("reason_codes", []).append("PROVIDER_FAIL")
             return out
@@ -306,7 +308,26 @@ async def get_movers(limit: int = 20, mode: str = "previous_completed_session") 
     if out.get("status") in ("ok", "partial"):
         _CACHE[key] = {"ts": time.time(), "payload": out}
     elif hit:
-        out = dict(hit["payload"])
+        out = copy.deepcopy(hit["payload"])
         out["status"] = "stale"
         out.setdefault("reason_codes", []).append("PROVIDER_FAIL")
+    return out
+
+
+async def get_movers(limit: int = 20, mode: str = "previous_completed_session") -> dict[str, Any]:
+    """Share each pending scan, including failed scans, without blocking successors."""
+    if mode not in MODES:
+        return _empty(f"unknown mode {mode!r}; expected one of {MODES}")
+    key = (mode, *completed_session_pair())
+    task = _INFLIGHT.get(key)
+    if task is None:
+        task = asyncio.create_task(_get_movers_payload(mode))
+        _INFLIGHT[key] = task
+        def finished(done):
+            if _INFLIGHT.get(key) is done:
+                _INFLIGHT.pop(key, None)
+        task.add_done_callback(finished)
+    # One disconnected caller must not cancel the bounded scan for everyone.
+    out = copy.deepcopy(await asyncio.shield(task))
+    out["results"] = out.get("results", [])[:max(0, limit)]
     return out

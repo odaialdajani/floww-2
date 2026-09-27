@@ -14,6 +14,7 @@ take injected data — no network. Never raises to callers.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import logging
 import time
@@ -179,7 +180,7 @@ async def _upstream(ticker: str, period: str, aggregation: str,
     )
 
 
-async def _get(kind: str, ticker: str, days: int, sessions: str = "regular") -> list[dict[str, Any]] | None:
+async def _get(kind: str, ticker: str, days: int, sessions: str = "regular", budget_wait_s: float = 0) -> list[dict[str, Any]] | None:
     sym = (ticker or "").strip().upper()
     if not sym or days <= 0:
         return None
@@ -189,7 +190,16 @@ async def _get(kind: str, ticker: str, days: int, sessions: str = "regular") -> 
     if hit is not None:
         return hit
     try:
-        await _budget.acquire("api.public.com")
+        deadline = time.monotonic() + min(5.0, max(0.0, budget_wait_s))
+        while True:
+            try:
+                await _budget.acquire("api.public.com")
+                break
+            except BudgetExhausted as exc:
+                remaining = deadline - time.monotonic()
+                if exc.reason not in ("inflight_cap", "token_bucket") or remaining <= 0:
+                    raise
+                await asyncio.sleep(min(0.1, remaining))
     except Exception as e:
         _note_error("budget-exhausted")
         log.debug("bars budget exhausted for %s: %s", sym, e)
@@ -227,9 +237,9 @@ async def get_1min_bars(ticker: str, days: int = 5,
 
 
 async def get_daily_bars(ticker: str, days: int = 60,
-                         sessions: str = "regular") -> list[dict[str, Any]] | None:
+                         sessions: str = "regular", *, budget_wait_s: float = 0) -> list[dict[str, Any]] | None:
     """Last `days` daily bars, oldest-first. None when unavailable."""
-    return await _get("daily", ticker, days, sessions)
+    return await _get("daily", ticker, days, sessions, budget_wait_s)
 
 
 async def get_adv_21d(ticker: str) -> float | None:

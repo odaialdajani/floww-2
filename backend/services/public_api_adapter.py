@@ -177,9 +177,9 @@ def _normalize_symbol(symbol: str) -> str:
 # current. Trusting mid_price unconditionally printed fiction for every
 # Public-served ticker (AFRM 81.705 vs true 72.35). A quote is trusted only
 # when its book is sane AND its timestamp is at/after the last US close;
-# otherwise spot falls back to the yfinance daily close (correct all
-# weekend) and the source is tagged. Exchange holidays are not modeled —
-# worst case there is a same-as-yfinance number, never a crossed mid.
+# otherwise a matching Public regular-session daily close may be used
+# outside the open session, with its exchange-close time and source tagged.
+# The legacy yfinance fallback remains disabled in Public-only mode.
 # ---------------------------------------------------------------------------
 
 _SPOT_MAX_REL_SPREAD = 0.01  # NBBO wider than 1% is not a reference price
@@ -290,6 +290,7 @@ async def _resolve_spot_observation(pb, symbol: str, account_id: str,
     substitution (P2 contract); (0.0, reason) when there is honestly no
     price so downstream fails over to the next provider.
     """
+    rejected_quote = False
     try:
         quotes = await pb.get_quotes([symbol], account_id)
         q = _matching_quote(quotes, symbol)
@@ -300,7 +301,8 @@ async def _resolve_spot_observation(pb, symbol: str, account_id: str,
                 return {"price": price, "source": reason,
                         "event_time": ts.isoformat() if ts else None,
                         "fetched_at": datetime.now(UTC).isoformat()}
-            log.warning("Public API spot rejected for %s (%s) — yfinance fallback",
+            rejected_quote = True
+            log.warning("Public API spot rejected for %s (%s) — checking completed session",
                         symbol, reason)
         elif quotes:
             # Wrong symbol answered: fail CLOSED (P2 contract) — no fallback
@@ -312,6 +314,10 @@ async def _resolve_spot_observation(pb, symbol: str, account_id: str,
     except Exception as e:
         _note_public_429(e)
         log.warning("Public API quote fail for %s: %s", symbol, e)
+    from services.public_session_close import completed_public_close
+    closing = await completed_public_close(pb, symbol, now) if rejected_quote else None
+    if closing is not None:
+        return closing
     if os.getenv("FLOWW_MARKET_DATA_PROVIDER") == "public":
         return {"price": None, "source": "public-unavailable", "event_time": None,
                 "fetched_at": datetime.now(UTC).isoformat()}
@@ -1078,12 +1084,18 @@ async def fetch_quotes_from_public_api(
     out: dict[str, dict[str, Any]] = {}
     for q in quotes or []:
         symbol = _normalize_symbol(str(getattr(q, "symbol", "") or ""))
-        if not symbol:
+        if not symbol or symbol not in symbols:
             continue
         spot, spot_source = _public_quote_spot(q)
+        closing = None
+        if spot is None:
+            from services.public_session_close import completed_public_close
+            closing = await completed_public_close(pb, symbol)
+            if closing:
+                spot, spot_source = closing["price"], closing["source"]
         if spot is None or (spot <= 0 and _fnum(getattr(q, "mid_price", None)) != 0):
             continue
-        mid = spot_source == "public-mid"
+        observed = _mid_ts_utc(q) if spot_source == "public-mid" else _quote_ts_utc(q) if spot_source == "public-last" else None
         out[symbol] = {
             "ticker": symbol,
             "spot": float(spot),
@@ -1101,9 +1113,8 @@ async def fetch_quotes_from_public_api(
             "bid_event_time": getattr(q, "bid_timestamp", None),
             "ask_event_time": getattr(q, "ask_timestamp", None),
             "spot_source": spot_source,
-            "spot_event_time": (_mid_ts_utc(q).isoformat() if _mid_ts_utc(q) else None)
-            if mid else (_quote_ts_utc(q).isoformat() if spot_source == "public-last" and _quote_ts_utc(q) else None),
-            "spot_fetched_at": datetime.now(UTC).isoformat(),
+            "spot_event_time": closing["event_time"] if closing else observed.isoformat() if observed else None,
+            "spot_fetched_at": closing["fetched_at"] if closing else datetime.now(UTC).isoformat(),
             "data_source": "public_api",
         }
 

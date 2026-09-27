@@ -62,3 +62,5 @@ test('centers the chart after data arrives without resetting a manual scroll on 
   if(top) Object.defineProperty(HTMLElement.prototype,'offsetTop',top); else delete HTMLElement.prototype.offsetTop;
  }
 });
+
+test('fractional strikes stay distinct',()=>{render(<BarHeatmap data={{spot:257.5,strikes:[{strike:257.5,gex:10},{strike:258,gex:20}]}}/>); expect(screen.getByLabelText('257.5 GEX: 10').textContent).toBe('257.5'); expect(screen.getByText('258')).toBeInTheDocument();});

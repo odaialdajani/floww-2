@@ -63,3 +63,5 @@ describe("Movers (R7-01)", () => {
     expect(screen.getByTestId("movers-stale")).toBeInTheDocument();
   });
 });
+
+test('partial coverage is not mislabeled as stale saved values',async()=>{axios.get.mockResolvedValue({data:{...V2,status:'partial'}});await act(async()=>{render(<Movers/>);});expect(screen.getByText('Some stocks unavailable')).toBeInTheDocument();expect(screen.queryByTestId('movers-stale')).toBeNull();});
