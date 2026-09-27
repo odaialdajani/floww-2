@@ -35,6 +35,23 @@ GATE_PATH = REPO_ROOT / "qc" / "audit" / "truth_audit.sh"
 ML_SUBJECT = "chore: retrain gbm production artifacts"
 DOCS_SUBJECT = "docs: refresh the status notes"
 
+# The fixture repo is created fresh in tmp_path, so it must not depend on the
+# ambient git config. A developer machine has user.name/user.email set and a CI
+# runner does not. Without these, `git commit` exits 128 and every test in this
+# file fails for a reason that has nothing to do with the gate -- which is
+# exactly how the first CI run of this suite went red.
+GIT = [
+    "git",
+    "-c", "user.name=truth-audit-test",
+    "-c", "user.email=truth-audit-test@example.invalid",
+    "-c", "commit.gpgsign=false",
+    # git >= 2.35 refuses to operate in a directory owned by another user
+    # ("dubious ownership", exit 128). tmp_path is not always owned by the CI
+    # runner, so allow it explicitly rather than inheriting whatever
+    # safe.directory the environment happens to have.
+    "-c", "safe.directory=*",
+]
+
 # Patterns the gate must match. Each is a convention actually used in this repo;
 # dropping one is exactly the #61 regression.
 REQUIRED_PATTERNS = [
@@ -80,12 +97,18 @@ def run_gate(
         target.write_text(json.dumps(payload), encoding="utf-8")
 
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
-    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run([*GIT, "add", "-A"], cwd=root, check=True)
     if commit:
-        subprocess.run(
-            ["git", "commit", "-q", "--allow-empty", "-m", subject],
-            cwd=root,
-            check=True,
+        # check=False with an explicit assert: a bare CalledProcessError here
+        # says only "exit 128" and hides which git setting caused it. Surface
+        # git's own stderr in the failure message instead.
+        done = subprocess.run(
+            [*GIT, "commit", "-q", "--allow-empty", "-m", subject],
+            cwd=root, capture_output=True, text=True, check=False,
+        )
+        assert done.returncode == 0, (
+            f"fixture git commit failed ({done.returncode}): "
+            f"{done.stderr.strip() or done.stdout.strip()}"
         )
     return subprocess.run(
         ["bash", "qc/audit/truth_audit.sh"],
@@ -252,9 +275,9 @@ def test_ml_word_in_body_does_not_trip_ml_rules(tmp_path):
         json.dumps(manifest(53, 167)), encoding="utf-8"
     )
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
-    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run([*GIT, "add", "-A"], cwd=root, check=True)
     subprocess.run(
-        ["git", "commit", "-q", "--allow-empty", "-m",
+        [*GIT, "commit", "-q", "--allow-empty", "-m",
          f"{DOCS_SUBJECT}\n\nThis note describes what the model artifacts contain."],
         cwd=root, check=True,
     )
