@@ -17,7 +17,7 @@ The two original plans remain linked from REMAINING_WORK.md for provenance. Thei
 
 ## Immediate priority
 
-Actual shutdown registration closes Mongo before research cancellation can save interruptions. Independent source/order evidence is recorded in application-shutdown-order-review-20260927.md; reproduce and fix it next. Full application startup and production database-crash recovery remain unproven; do not imply these from the narrower worker proof.
+The shutdown ordering defect is now fixed and verified with real isolated-store red/green evidence and an independent final replay; see application-shutdown-verification-20260927.md. Next address the important detached-refresh/background-stop findings and practical isolated backup recovery. Full application startup and production database-crash recovery remain unproven; do not imply these from narrower worker checks.
 
 ---
 

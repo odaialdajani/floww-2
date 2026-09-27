@@ -90,7 +90,7 @@ async def wait_for(check, *, seconds=15):
             await asyncio.sleep(.02)
 
 
-async def child(name, phase, receipt):
+async def child(name, phase, receipt, *, graceful=False):
     # PyMongo reads Windows version metadata on import. Use the real kernel
     # version directly so platform does not spawn a visible cmd.exe helper.
     if os.name == "nt":
@@ -122,7 +122,7 @@ async def child(name, phase, receipt):
     database = server.db
     if database.name != name:
         raise AssertionError("Composition selected a different store")
-    if phase == "crash" and await database.list_collection_names():
+    if phase in {"crash", "shutdown"} and await database.list_collection_names():
         raise AssertionError("Initial recovery store must be empty")
     await server.startup_research()
     service = server.app.state.research_service
@@ -152,7 +152,7 @@ async def child(name, phase, receipt):
 
         async def answer(self, content, settings, answer_shape):
             counts["fixture_answer"] += 1
-            if phase != "crash":
+            if phase not in {"crash", "shutdown"}:
                 raise AssertionError("Restart must not repeat the model boundary")
             body = json.loads(content)
             question = body["question"]
@@ -173,7 +173,7 @@ async def child(name, phase, receipt):
                 "ticker": "SPY", "question": question, "horizon": "all",
                 "screen": {"ticker": "SPY", "page": "heatseeker"}}
 
-    if phase == "crash":
+    if phase in {"crash", "shutdown"}:
         async with httpx.AsyncClient(transport=transport, base_url="http://localhost:8000", headers=headers) as client:
             response = await client.post("/api/agent/session")
             assert response.status_code == 200, response.text
@@ -212,9 +212,37 @@ async def child(name, phase, receipt):
                      "counts_before": counts, "usage_before": usage,
                      "states_before": [row["status"] for row in rows]}
             await database.recovery_probe.insert_one(probe)
-            exclusive_json(receipt, {"state": "ready_for_owned_abrupt_exit", "store": name,
+            exclusive_json(receipt, {"state": "ready_for_owned_graceful_shutdown" if graceful else "ready_for_owned_abrupt_exit", "store": name,
                 "states": probe["states_before"], "calls": usage["calls"], "counts": counts,
                 "real_model_calls": 0, "external_attempts": attempts})
+            if phase == "shutdown":
+                # Exercise actual callback ordering, then inspect through a new
+                # client WITHOUT repository initialization or restart repair.
+                await server.app.router.shutdown()
+                from motor.motor_asyncio import AsyncIOMotorClient
+
+                from services.agent.repository import AgentRepository
+
+                observer = AsyncIOMotorClient(os.environ["MONGO_URL"])
+                try:
+                    observed_repository = AgentRepository(observer[name])
+                    saved = [await observed_repository.read(owner, key) for key in ids]
+                    states = [row["status"] for row in saved]
+                    exclusive_json(receipt.with_name("shutdown_state.json"), {
+                        "states_after_shutdown_before_restart": states,
+                        "callbacks": [handler.__module__ + "." + handler.__name__
+                                      for handler in server.app.router.on_shutdown],
+                        "external_attempts": attempts,
+                    })
+                    assert states == ["completed", "interrupted", "interrupted", "interrupted"], states
+                    assert canonical(saved[0]["answer"]) == canonical(first["answer"])
+                    for index, row in enumerate(saved[1:], 1):
+                        assert len(row["events"]) == probe["events_before"][index] + 1
+                        assert row["events"][-1]["status"] == "interrupted"
+                    assert not service.tasks and not attempts
+                finally:
+                    observer.close()
+                return
             # Abrupt termination of ONLY this newly spawned proof process. No
             # shutdown callback, task cancellation, client close or finally.
             os._exit(73)
@@ -290,7 +318,9 @@ async def child(name, phase, receipt):
     await server.shutdown_research()
     exclusive_json(receipt, {"status": "passed", "store": name,
         "states_before": probe["states_before"], "states_after": [row["status"] for row in rows],
-        "checks": ["actual_research_startup", "real_worker_owned_abrupt_exit", "exact_completed_answer",
+        "checks": ["actual_research_startup",
+                   "registered_graceful_shutdown_saved_before_restart" if graceful else "real_worker_owned_abrupt_exit",
+                   "exact_completed_answer",
                    "queued_and_active_interrupted_once", "saved_history_and_cursor_resume", "same_request_no_repeat",
                    "changed_request_conflict", "disabled_new_work_retains_history", "new_factual_work_after_restart",
                    "foreign_owner_isolation", "uncertain_usage_retained", "reinitialize_idempotent"],
@@ -300,7 +330,7 @@ async def child(name, phase, receipt):
     server.client.close()
 
 
-def verify(output):
+def verify(output, *, graceful=False):
     output = output.resolve()
     if not output.is_relative_to(ROOT / "output"):
         raise ValueError("Recovery proof output must be a new directory below project output")
@@ -308,11 +338,14 @@ def verify(output):
     before = identities()
     name = PREFIX + uuid.uuid4().hex
     exclusive_json(output / "initial.json", {"store": name, "sources": before,
-                                            "scope": "isolated worker recovery; synthetic cache/model"})
+                                            "scope": "isolated worker recovery; synthetic cache/model",
+                                            "graceful_shutdown": graceful})
     results = []
-    for phase, expected in [("crash", 73), ("recover", 0)]:
+    for phase, expected in [("shutdown" if graceful else "crash", 0 if graceful else 73), ("recover", 0)]:
         command = [sys.executable, "-m", "scripts.verify_research_worker_recovery",
                    "--child", phase, "--database", name, "--receipt", str(output / (phase + ".json"))]
+        if graceful:
+            command.append("--graceful")
         result = subprocess.run(command, cwd=ROOT / "backend", capture_output=True, text=True,
                                 encoding="utf-8", errors="replace", timeout=60,
                                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
@@ -327,8 +360,10 @@ def verify(output):
     unchanged = before == identities()
     exclusive_json(output / "result.json", {"status": "passed" if unchanged else "source_changed",
         "sources": before, "sources_unchanged": unchanged, "processes": results, "recovery": recovered,
+        "graceful_shutdown": graceful,
+        "shutdown": json.loads((output / "shutdown_state.json").read_text(encoding="utf-8")) if graceful else None,
         "limits": ["Local isolated MongoDB remains running; this is not database crash recovery or production backup proof",
-                   "Only actual research startup/shutdown callbacks run, not full application lifespan/background workers",
+                   "Only research startup runs; graceful mode invokes all registered shutdown callbacks, not full application startup/background workers",
                    "External cached-data and model-transport seams are synthetic; no real upstream model dispatch",
                    "Routes use the real application through in-process HTTP transport, not a listening server or browser",
                    "Descriptive answers only; prediction projection and paper/live lifecycles are not covered"]})
@@ -341,16 +376,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", action="store_true")
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--child", choices=["crash", "recover"])
+    parser.add_argument("--child", choices=["crash", "shutdown", "recover"])
+    parser.add_argument("--graceful", action="store_true")
     parser.add_argument("--database")
     parser.add_argument("--receipt", type=Path)
     args = parser.parse_args()
     if args.child:
         if not args.receipt or not args.receipt.resolve().is_relative_to(ROOT / "output"):
             parser.error("Child receipt must be below project output")
-        asyncio.run(child(args.database, args.child, args.receipt))
+        asyncio.run(child(args.database, args.child, args.receipt, graceful=args.graceful))
     elif args.run and args.output:
-        verify(args.output)
+        verify(args.output, graceful=args.graceful)
     else:
         parser.error("Use --run --output <new directory>")
 

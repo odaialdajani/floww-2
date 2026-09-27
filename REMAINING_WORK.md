@@ -2,7 +2,7 @@
 
 The user has narrowed this goal to **reliable research, accurate existing screens, and saved-work safety**. The [current goal and completion requirements](.planning/INTEGRATION_AI_UI_GOAL.md) supersede the broader completion requirement below. The critical goal remains unfinished.
 
-- Fix and verify the confirmed shutdown ordering that closes storage before unfinished research can save its state. Check sibling unfinished-work paths before claiming safe shutdown.
+- The [research shutdown fix](.planning/eval/application-shutdown-verification-20260927.md) is verified: real isolated-store failure first reproduced, then root graceful/abrupt runs and independent final graceful repeat passed. All16focused research checks pass. Saved interruptions now precede storage closure. Detached market-refresh work and the bounded background-stop wait remain critical sibling checks before claiming whole-app shutdown safety.
 - Verify the existing research path, practical answer usefulness, privacy, source/time honesty and budget behavior. The optional stronger-model/three-arm comparison remains deferred, unexecuted and unapproved; its old receipts are not acceptance.
 - Finish only screen defects that affect interpreting data or using the existing desktop flows. Preserve the truthful data/replay corrections already delivered.
 - Verify practical saved-work recovery and backup/restore on isolated copies, complete proportionate final regression checks, and keep reviewed work committed/pushed. Never restart an existing user app for this proof.

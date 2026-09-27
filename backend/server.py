@@ -3362,6 +3362,12 @@ async def on_stop():
         await asyncio.wait(pending, timeout=5.0)
         log.info(f"on_stop: cancelled {len(pending)} background task(s)")
 
+    # Research cancellation persists terminal state. It must finish while
+    # Mongo is still open; its later registered callback is idempotent.
+    research = getattr(app.state, "research_service", None)
+    if research is not None:
+        await research.close()
+
     # Finally close MongoDB
     client.close()
     try:

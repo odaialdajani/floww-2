@@ -1,6 +1,6 @@
 # Application shutdown ordering review - 2026-09-27
 
-Verdict: CHANGES REQUIRED for saved research shutdown ordering. Read-only review; production sources unchanged by reviewer. Scope is concrete shutdown data safety, not whole-app readiness.
+Verdict: bounded saved-research fix independently passed; final evidence below. Initial finding required changes. Read-only review; production sources unchanged by reviewer. Scope is concrete shutdown data safety, not whole-app readiness.
 
 ## Verified actual ordering
 
@@ -37,3 +37,28 @@ A cleaner but larger alternative is moving shared Mongo/provider closure into a 
 ## Boundaries
 
 No full application startup, live listening server, user process shutdown, external call, database crash, backup restoration or trading action occurred. The actual research-worker abrupt-restart proof remains a separate passing result; it does not excuse graceful-shutdown ordering. This report makes no whole-app readiness claim.
+
+
+## Reproduction and first independent fix verification - 01:49 UTC
+
+Root's pre-fix actual-router shutdown receipt `output/research-shutdown-red-20260927-0148/shutdown_state.json` shows completed/running/running/queued through a fresh observer before any restart. This demonstrates failure to save interruptions during graceful shutdown.
+
+The production change now awaits research.close inside on_stop before client.close. No callback-registration or unrelated shutdown logic was changed. The later research callback remains idempotent.
+
+Reviewer independently executed the extended proof with --graceful: `output/research-shutdown-independent-20260927-0149/result.json`. Both owned child processes exited 0; sources remained unchanged; the fresh observer (without initialize) read completed/interrupted/interrupted/interrupted immediately after actual router.shutdown. The completed answer remained exact, each unfinished turn gained one interruption event, and service tasks were empty. A subsequent fresh process verified restart did not add further events or repeat model work. Count stayed three with completed/uncertain/uncertain usage; new factual work and ownership checks passed. No denied external attempts occurred.
+
+Initial graceful receipts inherited an abrupt-exit label and an overly narrow callback limit string. These are reporting defects, not weakened assertions; root is correcting labels and reviewer will rerun the final script identity below. Only research startup is invoked, but graceful mode runs every registered shutdown callback. Other application background workers were not started, so this remains a research shutdown proof, not a full-application shutdown guarantee.
+
+
+## Final independent verdict - 01:50 UTC
+
+PASS for the targeted saved-research graceful-shutdown fix. Final-label script independently passed in 7.5 seconds with actual registered router.shutdown, fresh observer before any restart, and fresh-process replay. Evidence: `output/research-shutdown-independent-final-20260927-0150/result.json` plus its shutdown_state/recover receipts and child logs. Both children exited 0 and source identities remained unchanged throughout. Final checks explicitly name registered_graceful_shutdown_saved_before_restart rather than abrupt exit.
+
+- Final server SHA-256: `7c5aac5be9911c6fb11ecebe51df91483c66318df2fd345ff909b7487aa2248c`
+- Final proof script SHA-256: `a1a911c0a41896511d12e12b623bd008b48f1d80ff4206a6d02a507e0d213c7f`
+- Complete dependency source hashes are retained in the result receipt.
+
+
+The completed answer survived exactly, the two active and one queued requests were already interrupted before any startup repair, each gained exactly one terminal event, and restart added no duplicate work/events. Usage remained three with two uncertain entries retained. Synthetic transport/cache seams and isolated stores remain explicit; no provider/model/order calls were made.
+
+No remaining blocker was found in this six-line fix. Previously noted untracked refresh and five-second pending-task handling remain separate broader shutdown limits. This pass must not be presented as full application startup/shutdown, database crash recovery, backup restoration or trading readiness.
