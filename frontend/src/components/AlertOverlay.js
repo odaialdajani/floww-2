@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, memo } from 'react';
-import { BACKEND_URL } from "../config/api";
-import { withWsToken } from "../utils/appKey";
+import { API } from "../config/api";
 
 const SIGNAL_STYLES = {
   BUY: 'toast-buy',
@@ -106,7 +105,8 @@ const ToastMemo = memo(Toast);
 
 /**
  * AlertOverlay - Non-intrusive toast notification overlay for trading signals.
- * Connects to WebSocket for real-time signal delivery.
+ * Consumes the conviction-alert SSE stream (same source as the Blademap
+ * feed), toasting each unseen high-conviction alert once.
  *
  * Props:
  *   onSignalClick: (alert) => void - called when user clicks a toast
@@ -114,10 +114,11 @@ const ToastMemo = memo(Toast);
  */
 export default function AlertOverlay({ onSignalClick, maxVisible = 3 }) {
   const [alerts, setAlerts] = useState([]);
-  const wsRef = useRef(null);
+  const esRef = useRef(null);
   const reconnectRef = useRef(null);
   const mountedRef = useRef(true);
   const alertIdRef = useRef(0);
+  const seenKeysRef = useRef(new Set());
 
   const dismissAlert = useCallback((id) => {
     setAlerts(prev => prev.filter(a => a._id !== id));
@@ -140,50 +141,60 @@ export default function AlertOverlay({ onSignalClick, maxVisible = 3 }) {
     });
   }, [maxVisible]);
 
-  // Lifted to component scope: both useEffects below reference connect.
+  // Lifted to component scope: visibility handler and backoff timer re-enter here.
+  // Transport is the conviction-alert SSE stream (same source as the Blademap
+  // feed: GET /api/flowseeker/alerts/stream). The legacy /ws/signals socket
+  // had no server producer; SSE auto-reconnects and the stream re-issues.
   const connect = useCallback(() => {
-    // Don't open a second socket if one is already connecting/open — the
-    // visibilitychange handler and the backoff timer can both re-enter here.
-    if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) return;
+    if (esRef.current) return;
     try {
-      // BACKEND_URL imported from config/api.js
-      const WS_URL = BACKEND_URL.replace('http', 'ws');
-      const ws = new WebSocket(withWsToken(`${WS_URL}/ws/signals`));
-      wsRef.current = ws;   // track immediately (CONNECTING) so re-entrant connect() bails
+      const es = new EventSource(
+        `${API}/flowseeker/alerts/stream?min_conviction=75&max_seconds=300`
+      );
+      esRef.current = es;   // track immediately so re-entrant connect() bails
 
-      ws.onopen = () => {
-        if (!mountedRef.current) { ws.close(); return; }
-        reconnectRef.current = null;   // successful open — reset backoff attempts
-      };
-
-      ws.onmessage = (e) => {
+      const scheduleReconnect = () => {
         if (!mountedRef.current) return;
-        try {
-          const data = JSON.parse(e.data);
-          if (data.type === 'signal' || data.signal) {
-            addAlert(data);
-          }
-        } catch { /* skip malformed */ }
-      };
-
-      ws.onclose = () => {
-        if (!mountedRef.current) return;
-        wsRef.current = null;
-        // Exponential backoff reconnect (mobile-friendly)
-        const delay = Math.min(1000 * Math.pow(2, (reconnectRef.current?.attempts || 0)), 30000);
+        try { es.close(); } catch { /* noop */ }
+        if (esRef.current === es) esRef.current = null;
+        const attempts = (reconnectRef.current?.attempts || 0) + 1;
+        const delay = Math.min(1000 * Math.pow(2, attempts - 1), 30000);
         reconnectRef.current = {
-          attempts: (reconnectRef.current?.attempts || 0) + 1,
+          attempts,
           timer: setTimeout(connect, delay),
         };
       };
 
-      ws.onerror = () => {
-        try { ws.close(); } catch { /* noop */ }
-      };
+      es.addEventListener("alerts", (e) => {
+        if (!mountedRef.current) return;
+        try {
+          const body = JSON.parse(e.data);
+          for (const row of body.alerts || []) {
+            const key = row.key || `${row.under}|${row.asof_ts}|${row.tier}`;
+            if (seenKeysRef.current.has(key)) continue;
+            seenKeysRef.current.add(key);
+            if (seenKeysRef.current.size > 500) {
+              const first = seenKeysRef.current.values().next().value;
+              seenKeysRef.current.delete(first);
+            }
+            addAlert({
+              signal: row.bias || row.side || row.tier || "HOLD",
+              ticker: row.under || row.ticker || "SPY",
+              message: row.headline || row.summary ||
+                `${row.tier || ""} ${row.under || ""} conviction ${row.conviction ?? ""}`.trim(),
+              details: { tier: row.tier, conviction: row.conviction, ...(row.details || {}) },
+            });
+          }
+          reconnectRef.current = null;   // live data — reset backoff
+        } catch { /* skip malformed */ }
+      });
+      es.addEventListener("error", scheduleReconnect);
+      es.addEventListener("end", scheduleReconnect);
+      es.onerror = scheduleReconnect;
     } catch { /* noop */ }
   }, [addAlert]);
 
-  // WebSocket connection for real-time signals
+  // Alert-stream connection for real-time toasts
   useEffect(() => {
     mountedRef.current = true;
     connect();
@@ -191,10 +202,9 @@ export default function AlertOverlay({ onSignalClick, maxVisible = 3 }) {
     return () => {
       mountedRef.current = false;
       clearTimeout(reconnectRef.current?.timer);
-      if (wsRef.current) {
-        wsRef.current.onclose = null;
-        wsRef.current.close();
-        wsRef.current = null;
+      if (esRef.current) {
+        try { esRef.current.close(); } catch { /* noop */ }
+        esRef.current = null;
       }
     };
   }, [connect]);
@@ -202,7 +212,7 @@ export default function AlertOverlay({ onSignalClick, maxVisible = 3 }) {
   // Handle visibility change - reconnect when tab becomes visible
   useEffect(() => {
     const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && mountedRef.current && !wsRef.current) {
+      if (document.visibilityState === 'visible' && mountedRef.current && !esRef.current) {
         try { connect(); } catch { /* noop */ }
       }
     };

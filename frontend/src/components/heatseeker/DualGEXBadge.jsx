@@ -2,7 +2,9 @@
  * DualGEXBadge.jsx — STEAL-TOP-3 RANK #1
  *
  * Renders the activity-ratio badge + dual-GEX series from
- * GET http://127.0.0.1:8001/api/dual_gex/{ticker}.
+ * GET {BACKEND_BASE}/api/dual_gex/{ticker} (mounted steal_three route on
+ * :8000 by default; REACT_APP_STEAL_THREE_BASE only to point at the :8001
+ * dev sidecar explicitly).
  *
  * Visual tier matches the HeatseekerDashboard subtle panel aesthetic
  * (Tailwind + dark slate, mono numerics, tiny labels).
