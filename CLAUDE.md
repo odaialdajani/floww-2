@@ -73,7 +73,7 @@ near execution — an earlier version of this section claimed there was only one
 `ALPACA_BASE_URL = "https://paper-api.alpaca.markets"` — Alpaca's paper endpoint. No live money can
 leave through it. **Changing that constant to a live host is forbidden without Nav's approval.**
 
-**2. `OrderRouter` — GATED, fail-closed, but currently guards nothing reachable.**
+**2. `OrderRouter` — GATED, fail-closed, and reachable from the Discord bot.**
 `backend/services/order_router.py` → `OrderRouter.submit_order()` submits **Alpaca paper**
 orders only. The Schwab live path was removed entirely, and
 `backend/tests/services/test_order_router_gate.py::test_no_schwab_imports_remain`
@@ -82,10 +82,16 @@ now *asserts* that `schwabapi.com`, `SchwabTokenManager` and the old
 guards the removal, so the env-var gate described here no longer exists.
 
 The live safety control is per-call: `submit_order(..., allow_market: bool = False)`
-is default-deny, and market orders require an explicit `allow_market=True` from
-the Discord `!approve`/`!buy` path.
-**`OrderRouter` has no callers outside its own module and its tests**, so today this gate protects a
-path nothing can reach. Do not read "the gate exists" as "the app is gated".
+is default-deny, and market orders require an explicit `allow_market=True`.
+
+**This path IS reachable.** `backend/discord_bot.py:77-80` builds
+`OrderRouter("discord-paper")` for its trade commands, and that router is the
+only paper-order path in the app. (An earlier version of this file claimed the
+router "has no callers outside its own module and its tests" — that was false
+and is exactly the kind of sentence that lets someone weaken a live gate.)
+No live caller passes `allow_market=True`, so MARKET orders are refused today;
+that default-deny is enforced by `order_router.py:117` and is the control to
+preserve.
 Note: `backend/routes/live_trading.py` is **not** this route surface — its handlers call
 `get_live_policy` / `update_live_policy` / `stop_live_tape` in `server.py` and never touch
 `OrderRouter`.

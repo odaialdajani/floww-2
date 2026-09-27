@@ -365,3 +365,79 @@ def test_docs_do_not_describe_a_retired_provider_as_the_data_source():
                 f"ARCHITECTURE.md still describes Schwab as a live data source: {phrase!r}"
             )
 
+
+
+# ── Docs that describe this deployment must stay true ──────────────────────
+#
+# Two of these caught real regressions introduced by this branch's own fixes:
+# moving Grafana to host :3001 left two RUNBOOK URLs on :3000, and the Schwab
+# retirement left six Schwab/Alpha Vantage references in HEATSEEKER_ARCHITECTURE
+# that a later commit believed it had already fixed. Both were invisible to
+# review because nothing compared the docs against the compose files.
+
+def test_runbook_grafana_port_matches_the_observability_stack():
+    """Grafana moved to host 3001 because docker-compose.yml owns 3000."""
+    doc = (REPO_ROOT / "RUNBOOK.md").read_text()
+    obs = _load("docker-compose.observability.yml")
+    published = None
+    for port in obs["services"]["grafana"].get("ports") or []:
+        m = re.match(r'"?(\d+):(\d+)"?', str(port))
+        if m:
+            published = m.group(1)
+    assert published, "grafana publishes no host port"
+    assert f"localhost:{published}/api/health" in doc, (
+        f"RUNBOOK's Grafana health URL does not use the published host port "
+        f"{published} -- an operator curling it gets nothing"
+    )
+    # A reader-facing URL must never point at the dev-frontend port. Prose that
+    # merely MENTIONS 3000 (explaining the move, or the in-container port) is
+    # correct and is not flagged -- only a URL an operator would open.
+    for url in re.findall(r"localhost:(3000)[^\s`)\"]*", doc):
+        ctx = doc[max(0, doc.find(f"localhost:{url}") - 120): doc.find(f"localhost:{url}") + 60].lower()
+        assert "frontend" in ctx, (
+            f"RUNBOOK tells a reader to open localhost:{url}, which is the dev "
+            f"frontend, not Grafana"
+        )
+
+
+@pytest.mark.parametrize("doc_rel", [
+    "docs/HEATSEEKER_ARCHITECTURE.md",
+    "README.md",
+    "CLAUDE.md",
+    "RUNBOOK.md",
+    "ARCHITECTURE.md",
+])
+def test_current_docs_do_not_present_retired_providers_as_live(doc_rel: str):
+    """Retired providers may only appear in an explicit retraction.
+
+    Schwab was removed 2026-09-27 and Alpha Vantage is not on the options
+    path. A doc line naming either is fine when it says so ("no Schwab
+    WebSocket"); it is a defect when it presents them as a data source.
+    """
+    path = REPO_ROOT / doc_rel
+    if not path.exists():
+        pytest.skip(f"{doc_rel} not present")
+    offenders = []
+    for lineno, line in enumerate(path.read_text().splitlines(), 1):
+        low = line.lower()
+        if "schwab" not in low and "alpha vantage" not in low and "alpha_vantage" not in low:
+            continue
+        # A retraction mentions the absence, not a live source.
+        # A retraction mentions the absence, a guard, or a past tense -- not a
+        # live source. Multi-line paragraphs matter too, so a line that merely
+        # names a test (e.g. test_no_schwab_imports_remain) is judged with a
+        # window of surrounding context, not the line alone.
+        window = " ".join(
+            path.read_text().splitlines()[max(0, lineno - 4):lineno + 3]
+        ).lower()
+        if any(marker in window for marker in (
+            "no schwab", "not schwab", "nothing named schwab", "removed",
+            "retired", "there is no", "fully removed", "was called", "gone",
+            "asserts that", "must stay deleted", "until 2026",
+        )):
+            continue
+        offenders.append(f"{doc_rel}:{lineno}: {line.strip()[:90]}")
+    assert not offenders, (
+        "current-facing docs present a retired provider as a live source:\n  "
+        + "\n  ".join(offenders)
+    )

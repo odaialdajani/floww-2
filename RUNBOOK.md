@@ -25,13 +25,13 @@ curl -s http://localhost:9090/api/v1/targets | python3 -m json.tool | grep -E "h
 # Floww metrics endpoint
 curl -s http://localhost:8000/metrics | head -20
 
-# Grafana health
-curl -s http://localhost:3000/api/health
+# Grafana health (host 3001 -> container 3000)
+curl -s http://localhost:3001/api/health
 ```
 
 ### Access Grafana
 
-1. Open http://localhost:3000
+1. Open http://localhost:3001
 2. Login: `admin` / `admin` (change recommended)
 3. Dashboards are auto-provisioned:
    - **Project Oracle — Live Metrics** (uid: `oracle-live`) — Real-time metrics
