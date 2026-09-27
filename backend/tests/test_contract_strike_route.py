@@ -65,3 +65,25 @@ def test_helper_miss_returns_empty():
     assert contracts_for_strike_expiry(rows, 999, "2026-09-18") == []
     assert contracts_for_strike_expiry(rows, 22, "2030-01-01") == []
     assert contracts_for_strike_expiry([], 22, "2026-09-18") == []
+
+
+def test_detail_budget_exhaustion_is_429_not_404():
+    import os
+    from unittest.mock import AsyncMock, patch
+
+    from fastapi.testclient import TestClient
+
+    os.environ.setdefault("API_SECRET_KEY", "test-secret-key")
+    import routes.analytics as _analytics
+    from server import app
+
+    degraded = {"status": "degraded", "reason": "budget_exhausted",
+                "detail": "bucket empty", "retry_after": 5,
+                "stale": True, "asof": 0.0, "data": None,
+                "contracts": [], "spot": None}
+    client = TestClient(app, headers={"X-API-Key": "test-secret-key"})
+    with patch.object(_analytics, "_cache") as cache:
+        cache.get_chain = AsyncMock(return_value=degraded)
+        r = client.get("/api/contract/SPY/500/2030-01-15")
+    assert r.status_code == 429, r.text
+    assert r.json()["reason"] == "budget_exhausted"
