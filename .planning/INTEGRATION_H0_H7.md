@@ -248,6 +248,41 @@ Mutations: MUT10 threshold widened → 1 failed; MUT11 always-fresh → 1 failed
 MUT12 unparseable-as-fresh → 1 failed. ruff flagged 3 issues on the first draft
 (local import placement, timezone alias); fixed before commit, not left to CI.
 
+### H2 — `^SPX` exclusion was a factual error (`13b952bc`)
+
+`NON_OPTIONABLE = {"^VIX","^SPX","BTC","ETH"}` asserted these have no options
+contract. ^VIX and ^SPX **are listed on Cboe**, and this deployment serves them:
+
+    GET /api/heatmap/%5ESPX?expiries=2 -> HTTP 200, 124144 bytes
+    ticker ^SPX, source yfinance, spot 7743.41015625, 80 strike rows
+
+Split into `NON_OPTIONABLE` (BTC, ETH — true fact) and
+`ENTITLEMENT_UNVERIFIED` (^VIX, ^SPX — options exist, this path hasn't proven
+it can serve them). Both still excluded, so **live behavior is unchanged**; only
+the reason string is now accurate. Sets asserted disjoint.
+
+`test_prefilter_orders_and_excludes` used ^VIX as its NON_OPTIONABLE exemplar
+and asserted that reason — it encoded the error. Exemplar is now BTC. The
+behavior actually pinned (excluded stays excluded) is unchanged and still
+asserted.
+
+### H2 — 0DTE was folded into an expiry COUNT (`91881cc2`)
+
+`max_expiries` is a count. `build_heatmap` also takes `dte` as a separate axis.
+`scan_batch` forwarded only the count, so no tenor filter was ever applied and
+0DTE silently entered every row's metrics on an expiry day — today, 2026-09-28,
+is the chain's first expiry. Live proof the axes are independent:
+
+    dte=0&expiries=2 -> expiries_used=['2026-09-28']
+    dte=1&expiries=3 -> expiries_used=['2026-09-28','2026-09-29']
+
+`dte` is now a parameter on `scan_batch` and a query param on `/universe/scan`,
+defaulting to None (no filter — exactly current behavior), so "expire in 1 day"
+is expressible instead of impossible. API docs regenerated (370 paths).
+
+A stub in `test_scan_batch_builds_with_injected_fns` needed the new signature;
+assertion unchanged.
+
 ## 7. Next actions
 
 | # | Action | Owner | Blocked on |
