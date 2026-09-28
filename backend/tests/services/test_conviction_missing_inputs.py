@@ -297,6 +297,53 @@ def test_genuinely_malformed_payloads_stay_invalid_not_missing():
         assert ev[f"{scorer}_status"] == "invalid", (scorer, payload, ev)
 
 
+def test_stale_observation_is_reported_as_stale():
+    """A historical alert must not read as a current observation.
+
+    `asof` was recorded but never evaluated, so a 6-month-old alert scored
+    identically to a fresh one. The age is now surfaced. The SCORE is
+    deliberately unchanged -- a decay curve would be an unvalidated model of
+    how signal decays, and this module has no evidence for one.
+    """
+    old = rank_one("SPY", flow={"conviction": 90}, opportunity=None, confluence=None, ml=None,
+                   snapshot_id="s", asof="2026-03-01T00:00:00+00:00")
+    fresh = rank_one("SPY", flow={"conviction": 90}, opportunity=None, confluence=None, ml=None,
+                     snapshot_id="s", asof="2026-09-28T00:00:00+00:00")
+
+    assert old["evidence"]["asof_status"] == "stale", old["evidence"]
+    assert fresh["evidence"]["asof_status"] == "fresh", fresh["evidence"]
+    assert old["evidence"]["asof_age_seconds"] > 7 * 24 * 3600
+    assert fresh["evidence"]["asof_age_seconds"] < 7 * 24 * 3600
+    # Reporting, not rescoring.
+    assert old["conviction"] == fresh["conviction"]
+
+
+@pytest.mark.parametrize(
+    "asof,expected",
+    [
+        (None, "unknown"),
+        ("not-a-date", "unparseable"),
+        ("2099-01-01T00:00:00+00:00", "future"),
+    ],
+)
+def test_recency_reports_honestly_on_bad_input(asof, expected):
+    """Absent or unparseable timestamps are labelled, never guessed."""
+    ev = rank_one("SPY", flow={"conviction": 90}, opportunity=None, confluence=None, ml=None,
+                  snapshot_id="s", asof=asof)["evidence"]
+    assert ev["asof_status"] == expected, ev
+    assert ev["asof_age_seconds"] is None or isinstance(ev["asof_age_seconds"], int)
+
+
+def test_recency_never_changes_the_score():
+    """The staleness diagnostic must be inert with respect to conviction."""
+    scores = {
+        rank_one("SPY", flow={"conviction": 90}, opportunity=None, confluence=None, ml=None,
+                 snapshot_id="s", asof=a)["conviction"]
+        for a in ("2020-01-01T00:00:00+00:00", "2026-09-28T00:00:00+00:00", None, "junk")
+    }
+    assert len(scores) == 1, scores
+
+
 def test_weights_sum_to_one():
     """Guards the fusion denominator while the normalizers are in flux."""
     assert abs(sum(WEIGHTS.values()) - 1.0) < 1e-9, WEIGHTS

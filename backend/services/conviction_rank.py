@@ -9,6 +9,8 @@ inputs degrade the tier, never fabricate confidence.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 SCHEMA_VERSION = "conviction_rank.v1"
 VERSION = "conviction_rank.v1"
 WEIGHTS = {"flow": 0.35, "opportunity": 0.30, "confluence": 0.20, "ml": 0.15}
@@ -134,6 +136,42 @@ def _norm_ml(ml):
     return _clamp01(abs(base - neutral) * (0.5 + 0.5 * w)), "ok"
 
 
+# Age at which an observation is reported STALE. Reporting only -- this does NOT
+# rescale the score. A decay curve would be an unvalidated model of how signal
+# decays, and this module has no evidence for one. Consumers get the age and
+# decide; the module refuses to invent the decay.
+STALE_AFTER_SECONDS = 7 * 24 * 3600  # matches the 7-day alert feed window
+
+
+def _recency(asof):
+    """Age diagnostics for an observation. Never changes conviction.
+
+    `asof` was recorded but never evaluated, so a 6-month-old alert scored
+    identically to a fresh one -- a historical high-conviction alert read as a
+    current directional observation. This surfaces the age so that is visible.
+    """
+    if not asof:
+        return {"asof_age_seconds": None, "asof_status": "unknown"}
+    dt = asof
+    if isinstance(dt, str):
+        try:
+            dt = datetime.fromisoformat(str(dt).replace("Z", "+00:00"))
+        except ValueError:
+            return {"asof_age_seconds": None, "asof_status": "unparseable"}
+    if not isinstance(dt, datetime):
+        return {"asof_age_seconds": None, "asof_status": "unparseable"}
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    age = (datetime.now(UTC) - dt).total_seconds()
+    if age < 0:
+        status = "future"
+    elif age > STALE_AFTER_SECONDS:
+        status = "stale"
+    else:
+        status = "fresh"
+    return {"asof_age_seconds": int(age), "asof_status": status}
+
+
 def rank_one(
     ticker, *, flow=None, opportunity=None, confluence=None, ml=None, snapshot_id=None, asof=None, weights=None
 ):
@@ -182,6 +220,7 @@ def rank_one(
     }
     if isinstance(flow, dict) and flow.get("key"):
         ev["flow_alert_key"] = flow["key"]
+    ev.update(_recency(asof))
     return {
         "ticker": str(ticker or "").upper(),
         "conviction": conviction,
