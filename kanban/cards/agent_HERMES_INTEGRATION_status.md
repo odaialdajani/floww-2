@@ -36,14 +36,57 @@ H2 refuted: advance_cursor rotates over the full universe; batches disjoint;
        n=0 and slice>n guarded. No code change made. Recorded so it is not
        re-audited as broken.
 
+slice 3 -- recency surfaced, score deliberately unchanged (f76a5cee):
+  asof was recorded and never evaluated, so a 6-month-old alert scored
+  identically to a fresh one (both 31.5). Evidence now carries asof_status in
+  {fresh,stale,future,unknown,unparseable} + asof_age_seconds; 7-day window
+  matches the alert feed. SCORE UNCHANGED on purpose -- a decay curve is an
+  unvalidated model of signal decay, the exact invented arithmetic this work
+  removes. Test pins the diagnostic as inert.
+
+slice 4 -- ^SPX classification corrected (13b952bc), DOCUMENTATION-ONLY:
+  NON_OPTIONABLE had ^VIX/^SPX, asserting no options contract exists. Both are
+  listed on Cboe and this deployment serves ^SPX: HTTP 200, spot 7743.41, 80
+  strike rows. Split into NON_OPTIONABLE (BTC,ETH) + ENTITLEMENT_UNVERIFIED
+  (^VIX,^SPX), sets asserted disjoint.
+  SCOPE CORRECTION: neither symbol is in POPULAR_UNIVERSE (75 symbols, 0
+  excluded in a real prefilter) so NO live behavior moved and exposure was
+  always zero. Not the user-visible defect the packet implied. Recorded so it
+  is not over-claimed.
+  test_prefilter_orders_and_excludes used ^VIX as its NON_OPTIONABLE exemplar
+  and asserted that reason -- it encoded the error. Exemplar now BTC; the
+  behavior actually pinned (excluded stays excluded) unchanged and asserted.
+
+slice 5 -- dte was folded into an expiry COUNT (91881cc2):
+  max_expiries is a COUNT. build_heatmap also takes dte as a separate axis.
+  scan_batch forwarded only the count, so NO tenor filter was ever applied and
+  0DTE entered every row's metrics on an expiry day -- today 2026-09-28 is the
+  chain's FIRST expiry. Live proof the axes are independent:
+    dte=0&expiries=2 -> expiries_used=['2026-09-28']
+    dte=1&expiries=3 -> expiries_used=['2026-09-28','2026-09-29']
+  dte is now a scan_batch param + /universe/scan query param, defaulting to
+  None (no filter = exactly current behavior). API docs regenerated (370 paths).
+  This one DID affect every scan, unlike slice 4.
+  a stub in test_scan_batch_builds_with_injected_fns needed the new signature
+  (it did not accept dte, so scanned fell to 0); assertion unchanged.
+
+gates: local tests/services+tests/routes 4564 passed / 33 skipped / 0 failed
+       ruff clean; API docs check passes (370 paths)
+mutations: MUT1-MUT6, MUT8, MUT9, MUT13, MUT14, MUT15 killed. MUT7 SURVIVED
+       -> clause deleted rather than left untested.
+live proof: /api/heatmap/%5ESPX -> HTTP 200, 124144 bytes, spot 7743.41, 80 rows
+       /api/flowseeker/universe/scan pre-fix row: score 23.62 with
+       confluence=0.5, ml=0.5 from no evidence -> same row fixed = 6.12
+       (exactly the 17.5 phantom points removed)
+
 STILL OPEN -- not claimed done:
   confluence/ml not yet wired into the route. Producer proven COMPATIBLE:
   node_confluence rows[].confluence = {total, direction, dimensions,
   coverage_weight, missing_input_policy, weights_version}, directly consumable
   by _norm_conf. Wiring is mechanical but is a behavior change to a live route
   and is NOT done.
-  ^SPX entitlement vs 0DTE separation; recency/invalidation handling;
-  cross-batch leaderboard rank recomputation. H4-H7 untouched.
+  cross-batch leaderboard rank recomputation over one eligible population.
+  H4-H7 untouched (persistence/events/history, Muse packet, H5-H7 evidence).
   OpenCode and Command Code have handed over nothing; three-track integration
   has NOT happened. No WallDeskSnapshot.v1 fixture exchanged yet.
 
