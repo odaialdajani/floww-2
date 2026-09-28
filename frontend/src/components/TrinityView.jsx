@@ -1,251 +1,194 @@
-import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
-import { fmt, fmtAbs, TRIAD } from "../lib/helpers";
-import { API as BACKEND_API } from "../config/api";
-import { fetchPublicChain } from "../lib/publicApi";
-
-const API = BACKEND_API;
+import { API } from "../config/api";
+import SkylitHeatmapGrid from "./heatseeker/SkylitHeatmapGrid";
+import { mapSurface } from "./heatseeker/shownMapStrikes";
+import { wallPositionOf } from "../lib/solsticeSelection";
+import { useReviewJournal } from "./triad/useReviewJournal";
 
 /**
- * Triad 3-Panel View — Institutional Redesign
+ * TrinityView — Triad 0DTE review desk (O4 rebuild).
  *
- * Improvements:
- * - Stale-while-revalidate: show cached data instantly, refresh in background
- * - Richer headers: price, change%, King distance, VIX
- * - Strike price column with color-coded heatmap rows
- * - More data per row: OI, IV, delta, volume badges
- * - Quick-trade: click any row to populate trade entry
- * - Timeline bar at bottom
+ * Consumes the versioned heatmap snapshot projection directly
+ * (GET /api/heatmap/{ticker}: snapshotId, formula_version, walls, grids,
+ * scenarios, quality). The old Public-chain mapper (client-side gex split
+ * by sign, 200-contract truncation, hardcoded fallback expiry, vex: 0,
+ * empty floors/ceilings) is gone: every number on screen is a backend
+ * packet field, and anything missing renders as unavailable.
+ *
+ * Layout: compact SPY/QQQ/SPX context strip, one focused symbol, one
+ * raw/adjusted pair on the same rail, selected-wall scenario card,
+ * contract-review drawer, second-level review journal.
  */
+const TRIAD = ["^SPX", "SPY", "QQQ"];
+const HANDOFF_KEY = "solstice.triadHandoff";
 
-// ── Color scale for heatmap rows ────────────────────────────────────
-function rowColors(v, maxAbs) {
-  if (v === null || v === undefined || isNaN(v) || v === 0) {
-    return { bg: "transparent", text: "#4a5568", barColor: "transparent", badge: null };
-  }
-  const norm = Math.min(1, Math.abs(v) / maxAbs);
-  const isNeg = v < 0;
-
-  if (norm > 0.85 && !isNeg) {
-    return {
-      bg: `rgba(251,191,36,${0.75 + 0.2 * norm})`, text: "#0a0e1a", barColor: "#fbbf24",
-      badge: { text: `+${(norm * 100).toFixed(0)}%`, cls: "trinity-badge-yellow" },
-    };
-  }
-  if (norm > 0.50 && !isNeg) {
-    return {
-      bg: `rgba(45,212,191,${0.45 + 0.25 * norm})`, text: "#0a0e1a", barColor: "#2dd4bf",
-      badge: { text: `+${(norm * 100).toFixed(0)}%`, cls: "trinity-badge-green" },
-    };
-  }
-  if (norm > 0.20 && !isNeg) {
-    return { bg: `rgba(45,212,191,${0.15 + 0.15 * norm})`, text: "#6ee7b7", barColor: "#2dd4bf", badge: null };
-  }
-  if (norm > 0.85 && isNeg) {
-    return {
-      bg: `rgba(59,130,246,${0.6 + 0.3 * norm})`, text: "#e0f2fe", barColor: "#3b82f6",
-      badge: { text: `-${(norm * 100).toFixed(0)}%`, cls: "trinity-badge-blue" },
-    };
-  }
-  if (norm > 0.50 && isNeg) {
-    return {
-      bg: `rgba(168,85,247,${0.45 + 0.25 * norm})`, text: "#e9d5ff", barColor: "#a855f7",
-      badge: { text: `-${(norm * 100).toFixed(0)}%`, cls: "trinity-badge-purple" },
-    };
-  }
-  if (norm > 0.20 && isNeg) {
-    return { bg: `rgba(168,85,247,${0.15 + 0.15 * norm})`, text: "#c4b5fd", barColor: "#a855f7", badge: null };
-  }
-  return {
-    bg: isNeg ? "rgba(88,28,135,0.08)" : "rgba(22,78,99,0.08)",
-    text: isNeg ? "#8b7fd4" : "#5ebfb0",
-    barColor: isNeg ? "#7c3aed" : "#14b8a6",
-    badge: null,
-  };
-}
-
-function fmtGex(v) {
-  if (v === null || v === undefined || isNaN(v)) return "—";
-  const abs = Math.abs(v);
-  const sign = v < 0 ? "-" : "";
-  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(1)}M`;
-  if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(1)}K`;
-  return `${sign}${abs.toFixed(0)}`;
-}
-
-function fmtOi(v) {
-  if (!v) return "—";
-  if (v >= 1e6) return (v / 1e6).toFixed(1) + "M";
-  if (v >= 1e3) return (v / 1e3).toFixed(0) + "K";
-  return v.toFixed(0);
-}
-
-// Calculate percentage of max abs value
-function pctOfMax(v, maxAbs) {
-  if (!v || !maxAbs) return 0;
-  return Math.abs(v) / maxAbs * 100;
-}
-
-const TAG_STYLES = {
-  KING: { bg: "rgba(251,191,36,0.15)", border: "rgba(251,191,36,0.4)", text: "#fbbf24" },
-  FLR: { bg: "rgba(52,211,153,0.12)", border: "rgba(52,211,153,0.35)", text: "#34d399" },
-  CEIL: { bg: "rgba(248,113,113,0.12)", border: "rgba(248,113,113,0.35)", text: "#f87171" },
-  GATE: { bg: "rgba(56,189,248,0.12)", border: "rgba(56,189,248,0.35)", text: "#38bdf8" },
-  AIR: { bg: "rgba(148,163,184,0.08)", border: "rgba(148,163,184,0.25)", text: "#94a3b8" },
-};
-
-const VIEW_MODES = [
-  { id: "dom", label: "DOM", icon: "▦" },
-  { id: "grid", label: "Grid", icon: "⊞" },
-  { id: "bars", label: "Bars", icon: "▤" },
-  { id: "chain", label: "Chain", icon: "☰" },
-  { id: "list", label: "List", icon: "≡" },
+// Adjusted bases available in the snapshot contract (metrics.grids).
+// Window Δvolume×delta has no per-strike surface in the packet, so it is
+// offered disabled with the reason rather than invented client-side.
+const ADJUSTED_BASES = [
+  { id: "delta", label: "Δ-weighted OI", units: "USD/1% move · dadgex_net_v1 — experimental weighting, not flow" },
+  { id: "activity", label: "Session vol × Δ", units: "volume_gamma — session turnover, not positioning" },
+  { id: "window", label: "Window Δvol", units: null },
 ];
 
-const GEX_VEX_MODES = [
-  { id: "gex", label: "GEX" },
-  { id: "vex", label: "VEX" },
-];
+function readHandoff() {
+  try {
+    const raw = sessionStorage.getItem(HANDOFF_KEY);
+    if (!raw) return null;
+    sessionStorage.removeItem(HANDOFF_KEY);
+    const h = JSON.parse(raw);
+    return h && typeof h === "object" ? h : null;
+  } catch {
+    return null;
+  }
+}
 
-// ── Main Triad View ────────────────────────────────────────────────
-export default function TrinityView({ onFocusTicker, onTradeSelect }) {
-  const [allData, setAllData] = useState({});
+function wallForStrike(walls, strike) {
+  const s = Number(strike);
+  if (!Number.isFinite(s)) return null;
+  return (walls || []).find((w) => s >= Number(w.low) && s <= Number(w.high)) || null;
+}
+
+function scenariosForWall(scenarios, wall, spot) {
+  const list = (scenarios || []).filter((sc) => !wall || sc.wall_id === wall.wall_id);
+  if (list.length || !wall) return list;
+  // Compat fallback (same derivation as the Solstice drawer): position-based
+  // two-sided watch. Never another wall's scenarios.
+  const wpos = wallPositionOf(wall, spot);
+  const side = wpos === "inside" ? "below" : wpos;
+  return [
+    { wall_id: wall.wall_id, wall_position: wpos,
+      name: side === "below" ? "Bounce watch" : "Rejection watch", type: "reversal_watch",
+      confirmation: `reclaim and hold ${side === "below" ? "above " + wall.low : "below " + wall.high}`,
+      invalidation: `sustained acceptance ${side === "below" ? "below " + wall.low : "above " + wall.high}` },
+    { wall_id: wall.wall_id, wall_position: wpos,
+      name: side === "below" ? "Breakdown continuation" : "Breakout continuation", type: "continuation",
+      confirmation: "acceptance beyond zone + follow-through/retest",
+      invalidation: `reclaim and hold ${side === "below" ? "above " + wall.low : "below " + wall.high}` },
+  ];
+}
+
+function TrinityView({ onFocusTicker, onTradeSelect }) {
+  const [handoff] = useState(readHandoff);
+  const [ticker, setTicker] = useState(handoff?.ticker || "SPY");
+  const [symbolInput, setSymbolInput] = useState(handoff?.ticker || "SPY");
+  const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [viewMode, setViewMode] = useState("dom");
-  const [gexVexMode, setGexVexMode] = useState("gex");
-  const [panelTickers, setPanelTickers] = useState({ "0": "^SPX", "1": "SPY", "2": "QQQ" });
-  const [dteFilter, setDteFilter] = useState(3);
-  const [lastUpdate, setLastUpdate] = useState(null);
-  const cacheRef = useRef({});
+  const [wallId, setWallId] = useState(handoff?.wall_id || null);
+  const [basis, setBasis] = useState("delta");
+  const [board, setBoard] = useState([]);
+  const [contract, setContract] = useState(null);
+  const [contractLoading, setContractLoading] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const genRef = useRef(0);
   const mountedRef = useRef(true);
-  const abortRef = useRef(null);
-
-  // Phase 5.2: fetch a single ticker — Public API first, /api/data fallback.
-  const fetchTickerData = useCallback(async (ticker, timeout) => {
-    // Try Public API chain endpoint first.
-    try {
-      const pubRes = await fetchPublicChain(ticker, { timeout: Math.min(timeout, 20000), expirations: dteFilter });
-      if (pubRes?.ok && pubRes?.contracts?.length) {
-        // Map public chain → triad data shape.
-        const contracts = pubRes.contracts || [];
-        const strikes = contracts.map(c => ({
-          strike: c.strike,
-          gex: c.gex,
-          call_gex: c.gex >= 0 ? c.gex : 0,
-          put_gex: c.gex < 0 ? c.gex : 0,
-          iv: c.iv,
-          delta: c.delta,
-          gamma: c.gamma,
-          vega: c.vega,
-          theta: c.theta,
-          vanna: c.vanna,
-          charm: c.charm,
-          oi: c.oi,
-          total_oi: c.oi,
-          volume: c.volume,
-          bid: c.bid,
-          ask: c.ask,
-          dte: c.T ? Math.round(c.T * 365) : null,
-          expiry: c.expiry,
-          type: c.type,
-          moneyness_pct: c.moneyness_pct,
-        }));
-        const grid = { grid: { "0": {} } };
-        for (const c of contracts.slice(0, 200)) {
-          const expKey = c.expiry || "2026-09-18";
-          if (!grid.grid[expKey]) grid.grid[expKey] = {};
-          grid.grid[expKey][String(c.strike)] = {
-            gex: c.gex, iv: c.iv, delta: c.delta, charm: c.charm,
-            vanna: c.vanna, vex: 0, call_gex: c.gex >= 0 ? c.gex : 0, put_gex: c.gex < 0 ? c.gex : 0,
-          };
-        }
-        const spot = pubRes.spot || 0;
-        // Approximate nodes from contract data.
-        const netGex = strikes.reduce((s, c) => s + (c.gex || 0), 0);
-        const kingStrike = strikes.reduce((best, c) => Math.abs(c.gex || 0) > Math.abs(best?.gex || 0) ? c : best, null);
-        return {
-          ticker,
-          spot,
-          change_pct: 0,
-          nodes: {
-            regime: netGex > 0 ? "positive" : netGex < 0 ? "negative" : "neutral",
-            king: kingStrike || null,
-            gamma_flip: null,
-            floors: [],
-            ceilings: [],
-            gatekeepers: [],
-            air_pockets: [],
-            polarity_level: Math.min(1, Math.abs(netGex) / (spot || 1) * 100),
-          },
-          strikes,
-          grid,
-          vix: 20,
-          expiries_used: [...new Set(contracts.map(c => c.expiry).filter(Boolean))].slice(0, dteFilter),
-          data_source: pubRes.data_source || "public_api",
-        };
-      }
-    } catch (pubErr) {
-      if (pubErr.name === "AbortError" || pubErr.code === "ERR_CANCELED") throw pubErr;
-    }
-    // Fallback: merged /api/data (Public API → cvserver → yfinance)
-    const res = await axios.get(`${API}/data/${ticker}?expiries=${dteFilter}&mode=day`, { timeout, signal: AbortSignal.timeout(timeout) });
-    return res.data;
-  }, [dteFilter]);
-
-  // Fetch all 7 tickers concurrently (no waterfall). Panel tickers use the
-  // shorter timeout; extras use the longer one. Each resolved ticker is merged
-  // into the cache immediately so a single failure never blocks or blanks others.
-  const applyTicker = useCallback((ticker, data) => {
-    if (!data?.strikes?.length) return;
-    cacheRef.current = { ...cacheRef.current, [ticker]: data };
-    if (mountedRef.current) setAllData({ ...cacheRef.current });
-  }, []);
-
-  const fetchTickers = useCallback((tickers, timeout) =>
-    Promise.allSettled(
-      tickers.map(t =>
-        fetchTickerData(t, timeout).then(r => applyTicker(t, r))
-      )
-    ), [dteFilter, fetchTickerData, applyTicker]);
-
-  const fetchAll = useCallback(async (isBackground = false) => {
-    const panelTickers = ["^SPX", "SPY", "QQQ"];
-    const extraTickers = ["^NDX", "IWM", "DIA", "TLT"];
-
-    if (!isBackground) setLoading(true);
-    setError(null);
-
-    // Both phases run in parallel; panel results land first because of the
-    // shorter timeout, but we never wait for phase 1 before starting phase 2.
-    await Promise.all([
-      fetchTickers(panelTickers, 8000),
-      fetchTickers(extraTickers, 30000),
-    ]);
-
-    if (mountedRef.current) {
-      setLastUpdate(new Date());
-      setLoading(false);
-      // If absolutely nothing loaded and no cache, show error
-      if (Object.keys(cacheRef.current).length === 0) {
-        setError("No data available. Backend may be degraded.");
-      }
-    }
-  }, [dteFilter, fetchTickers]);
 
   useEffect(() => {
     mountedRef.current = true;
-    if (Object.keys(cacheRef.current).length > 0) { setAllData(cacheRef.current); setLoading(false); }
-    fetchAll(false);
-    // 60s cadence (2026-09-04): each poll fans out to ~7 uncached Public
-    // chain fetches (~6 upstream calls each). 30s sustained ~80+/min on a
-    // single retail key — 60s halves that alongside the backend 60s chain
-    // TTL without visibly aging the Triad view.
-    const id = setInterval(() => fetchAll(true), 60000);
-    return () => { mountedRef.current = false; clearInterval(id); };
-  }, [fetchAll]);
+    return () => { mountedRef.current = false; };
+  }, []);
 
-  if (loading && Object.keys(allData).length === 0) {
+  // Focused-symbol snapshot projection (the contract — no client math).
+  useEffect(() => {
+    const myGen = ++genRef.current;
+    const ctrl = new AbortController();
+    setLoading(true);
+    setError(null);
+    setPayload(null);
+    setWallId(handoff?.wall_id || null);
+    axios
+      .get(`${API}/heatmap/${encodeURIComponent(ticker)}?mode=day&expiries=4`, {
+        timeout: 45000, signal: ctrl.signal,
+      })
+      .then((r) => {
+        if (!mountedRef.current || genRef.current !== myGen) return;
+        setPayload(r.data);
+        setLoading(false);
+      })
+      .catch((e) => {
+        if (!mountedRef.current || genRef.current !== myGen) return;
+        if (e?.name === "CanceledError" || e?.code === "ERR_CANCELED") return;
+        setError(e?.response?.data?.detail || e.message || "fetch failed");
+        setLoading(false);
+      });
+    return () => { ctrl.abort(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticker]);
+
+  // Context strip: free leaderboard read (no scan, no budget spend).
+  useEffect(() => {
+    let cancelled = false;
+    axios
+      .get(`${API}/flowseeker/universe/leaderboard?limit=12`, { timeout: 15000 })
+      .then((r) => { if (!cancelled) setBoard(r?.data?.leaderboard || []); })
+      .catch(() => { /* strip degrades to focused-symbol only */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  const walls = useMemo(() => payload?.metrics?.walls || [], [payload]);
+  const spot = payload?.spot ?? null;
+  const selectedWall = useMemo(
+    () => (walls || []).find((w) => w.wall_id === wallId) || null,
+    [walls, wallId]
+  );
+  const rawSurface = useMemo(() => mapSurface(payload, "gex", "raw"), [payload]);
+  const adjSurface = useMemo(() => mapSurface(payload, "gex", basis), [payload, basis]);
+  const adjDef = ADJUSTED_BASES.find((b) => b.id === basis);
+  const adjAvailable = basis !== "window" && adjSurface.available;
+  const scenarios = useMemo(
+    () => scenariosForWall(payload?.scenarios, selectedWall, spot),
+    [payload, selectedWall, spot]
+  );
+  const quality = payload?.quality || null;
+
+  const submitSymbol = useCallback(() => {
+    const t = (symbolInput || "").trim().toUpperCase();
+    if (!t || t === ticker) return;
+    setTicker(t);
+    setContract(null);
+    setDrawerOpen(false);
+    if (onFocusTicker) onFocusTicker(t);
+  }, [symbolInput, ticker, onFocusTicker]);
+
+  const selectWall = useCallback((id) => {
+    setWallId(id);
+    setContract(null);
+  }, []);
+
+  const onGridCell = useCallback((strike) => {
+    const w = wallForStrike(walls, strike);
+    if (w) {
+      selectWall(w.wall_id);
+    } else {
+      selectWall(null);
+    }
+  }, [walls, selectWall]);
+
+  // Contract review drawer: real detail route for the selected wall zone.
+  // Uses the wall mid + first expiry column; rows carry bid/ask/quote state.
+  const openContracts = useCallback(() => {
+    const strike = selectedWall ? selectedWall.mid ?? selectedWall.low : null;
+    const expiry = payload?.grid?.expiries?.[0] || payload?.expiries_used?.[0];
+    if (strike == null || !expiry || !ticker) return;
+    setDrawerOpen(true);
+    setContractLoading(true);
+    setContract(null);
+    axios
+      .get(`${API}/contract/${encodeURIComponent(ticker)}/${strike}/${encodeURIComponent(expiry)}`, { timeout: 20000 })
+      .then((r) => setContract(r.data))
+      .catch((e) => setContract({ error: e?.response?.data?.detail || e.message || "contract unavailable" }))
+      .finally(() => setContractLoading(false));
+  }, [selectedWall, payload, ticker]);
+
+  const journal = useReviewJournal(ticker, payload?.snapshotId,
+    `triad wall ${selectedWall?.wall_id || "?"} basis ${basis} mode live`);
+
+  const isSPX = ticker === "^SPX" || ticker === "SPX";
+  const spxMissing = isSPX && !loading && (!payload || !payload.strikes?.length);
+
+  if (loading && !payload) {
     return (
       <div className="trinity-loading">
         <div className="trinity-loading-spinner" />
@@ -253,406 +196,278 @@ export default function TrinityView({ onFocusTicker, onTradeSelect }) {
       </div>
     );
   }
-  if (error && Object.keys(allData).length === 0) {
-    return <div className="trinity-error"><span>⚠</span> Error: {error}<button onClick={() => fetchAll(false)}>Retry</button></div>;
+  if ((error || !payload) && !loading) {
+    return (
+      <div className="trinity-error" data-testid="triad-error">
+        <span>⚠</span> {isSPX
+          ? "SPX unavailable in this session (entitlement/coverage unknown). No substitution made — pick another symbol."
+          : `Error: ${error || "no data"}`}
+        <button onClick={() => setTicker("SPY")}>SPY</button>
+      </div>
+    );
   }
 
   return (
     <div className="trinity-layout" data-testid="trinity-view">
-      <ConfluenceBar data={allData} viewMode={viewMode} onViewModeChange={setViewMode} gexVexMode={gexVexMode} onGexVexChange={setGexVexMode} dteFilter={dteFilter} onDteChange={setDteFilter} lastUpdate={lastUpdate} loading={loading} />
-      <div className="trinity-panels">
-        {TRIAD.map((defaultTicker, idx) => {
-          const currentTicker = panelTickers[idx] || defaultTicker;
+      <ContextStrip board={board} ticker={ticker} symbolInput={symbolInput}
+        onSymbolInput={setSymbolInput} onSubmit={submitSymbol} />
+      <div className="triad-pair" data-testid="triad-raw-adjusted">
+        <div className="triad-pane" data-testid="triad-pane-raw">
+          <div className="triad-pane-header" title="Raw structural GEX — gex_net_v1/gex_gross_v1, USD per 1% spot move">
+            Raw GEX · USD/1% move · {payload?.formula_version || "gex.v2"}
+          </div>
+          <SkylitHeatmapGrid data={payload} spot={spot} ticker={ticker}
+            viewMode="gex" metric="raw" onCellClick={(s) => onGridCell(s)} />
+        </div>
+        <div className="triad-pane" data-testid="triad-pane-adjusted">
+          <div className="triad-pane-header" title={adjDef?.units || "No per-strike surface for this basis in the snapshot"}>
+            Adjusted · {adjDef?.label || basis}{adjAvailable ? ` · ${adjDef.units}` : " · unavailable"}
+          </div>
+          {adjAvailable ? (
+            <SkylitHeatmapGrid data={payload} spot={spot} ticker={ticker}
+              viewMode="gex" metric={basis} onCellClick={(s) => onGridCell(s)} />
+          ) : (
+            <div className="triad-unavailable" data-testid="triad-adjusted-unavailable"
+              title={basis === "window" ? "window_dadgex has no per-strike surface in the snapshot contract" : "adjusted surface missing from this snapshot"}>
+              {basis === "window"
+                ? "Window Δvol has no per-strike surface in this snapshot — not invented here."
+                : "Adjusted surface unavailable in this snapshot — showing nothing rather than borrowing Raw."}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="triad-basis-row">
+        <span className="triad-basis-label">Adjusted basis:</span>
+        {ADJUSTED_BASES.map((b) => {
+          const dis = b.id === "window";
           return (
-            <TrinityPanel key={idx} ticker={currentTicker} data={allData[currentTicker] || allData[defaultTicker]} viewMode={viewMode} gexVexMode={gexVexMode} loading={loading && !allData[currentTicker]} onFocus={() => onFocusTicker && onFocusTicker(currentTicker)} onTickerChange={(t) => setPanelTickers(prev => ({ ...prev, [idx]: t }))} onTradeSelect={onTradeSelect} />
+            <button key={b.id}
+              className={`triad-basis-btn${basis === b.id ? " active" : ""}`}
+              disabled={dis}
+              title={dis ? "Window Δvol: no per-strike surface in the snapshot contract" : b.units}
+              data-testid={`triad-basis-${b.id}`}
+              onClick={() => setBasis(b.id)}>
+              {b.label}
+            </button>
           );
         })}
       </div>
-      <TimelineBar />
-    </div>
-  );
-}
-
-function ConfluenceBar({ data, viewMode, onViewModeChange, gexVexMode, onGexVexChange, dteFilter, onDteChange, lastUpdate, loading }) {
-  const { regimes, confluence, hasTickers } = useMemo(() => {
-    const tickers = TRIAD.map(t => data[t]).filter(d => d && !d.error);
-    const regs = tickers.map(d => d.nodes?.regime).filter(Boolean);
-    const conf = regs.length > 0 ? regs.filter(r => r === regs[0]).length / regs.length : 0;
-    return { regimes: regs, confluence: conf, hasTickers: tickers.length > 0 };
-  }, [data]);
-  if (!hasTickers) return null;
-  const verdict = confluence === 1 ? "full" : confluence >= 0.66 ? "partial" : "diverge";
-  const verdictColor = verdict === "full" ? "trinity-verdict-pos" : verdict === "partial" ? "trinity-verdict-warn" : "trinity-verdict-neg";
-  const verdictText = verdict === "full" ? "All three agree. Highest conviction." : verdict === "partial" ? "Two-of-three. Reduced size." : "Disagreement. Wait.";
-  const timeStr = lastUpdate ? lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : "";
-  return (
-    <div className="trinity-summary">
-      <div className="trinity-summary-left">
-        <div className="trinity-stat"><span className="trinity-stat-label">Meridian</span><span className={`trinity-stat-value ${confluence === 1 ? "text-emerald-400" : confluence >= 0.66 ? "text-amber-400" : "text-rose-400"}`}>{(confluence * 100).toFixed(0)}%</span></div>
-        <div className="trinity-divider" />
-        <div className="trinity-stat"><span className="trinity-stat-label">Regime</span><span className={`trinity-stat-value ${regimes[0] === "positive" ? "text-emerald-400" : regimes[0] === "negative" ? "text-rose-400" : "text-slate-400"}`}>{regimes[0] || "—"}</span></div>
-        <div className="trinity-divider" />
-        <div className="trinity-stat"><span className="trinity-stat-label">Updated</span><span className="trinity-stat-value text-slate-400" style={{ fontSize: 9 }}>{loading ? "…" : timeStr}</span></div>
-      </div>
-      <div className="trinity-summary-right">
-        <span className={`trinity-verdict ${verdictColor}`}>{verdictText}</span>
-        <div className="trinity-view-toggle">{VIEW_MODES.map(vm => (<button key={vm.id} className={`trinity-view-btn${viewMode === vm.id ? " trinity-view-active" : ""}`} onClick={() => onViewModeChange(vm.id)} title={vm.label}><span className="trinity-view-icon">{vm.icon}</span><span className="trinity-view-label">{vm.label}</span></button>))}</div>
-        <div className="trinity-gexvex-toggle">{GEX_VEX_MODES.map(m => (<button key={m.id} className={`trinity-gexvex-btn${gexVexMode === m.id ? " trinity-gexvex-active" : ""}`} onClick={() => onGexVexChange(m.id)}>{m.label}</button>))}</div>
-        <div className="trinity-dte-toggle">{/* ids are expiry COUNTS sent as ?expiries= — labels describe the practical window */}
-        {[[1,"0–1DTE"],[3,"~3DTE"],[7,"1 Week"],[12,"All"]].map(([id,label])=>(<button key={id} className={`trinity-dte-btn${dteFilter===id?" trinity-dte-active":""}`} onClick={()=>onDteChange(id)}>{label}</button>))}</div>
-      </div>
-    </div>
-  );
-}
-
-// ── Mini Sparkline ────────────────────────────────────────────────────
-function MiniSparkline({ data, spot }) {
-  // Generate 20 bars from the strikes data around spot
-  const window = useMemo(() => {
-    if (!data?.strikes?.length || !spot) return null;
-    const strikes = data.strikes;
-    const spotIdx = strikes.reduce((best, s, i) =>
-      Math.abs(s.strike - spot) < Math.abs(strikes[best].strike - spot) ? i : best, 0);
-    const start = Math.max(0, spotIdx - 10);
-    const end = Math.min(strikes.length, spotIdx + 10);
-    return strikes.slice(start, end);
-  }, [data, spot]);
-  if (!window) return null;
-  const maxGex = Math.max(...window.map(s => Math.abs(s.gex || 0)), 1);
-  
-  return (
-    <span className="trinity-panel-sparkline">
-      {window.map((s, i) => {
-        const h = Math.max(2, Math.round((Math.abs(s.gex || 0) / maxGex) * 12));
-        const isNeg = (s.gex || 0) < 0;
-        return <span key={i} className={`trinity-sparkline-bar${isNeg ? " neg" : ""}`} style={{ height: `${h}px` }} />;
-      })}
-    </span>
-  );
-}
-
-function TimelineBar() {
-  const now = new Date();
-  const marketOpen = new Date(); marketOpen.setHours(9, 30, 0, 0);
-  const marketClose = new Date(); marketClose.setHours(16, 0, 0, 0);
-  const totalMin = (marketClose - marketOpen) / 60000;
-  const elapsed = Math.max(0, Math.min(totalMin, (now - marketOpen) / 60000));
-  const pct = Math.min(100, (elapsed / totalMin) * 100);
-  const formatTime = (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  return (
-    <div className="trinity-timeline">
-      <span className="trinity-timeline-label">4:00</span>
-      <span className="trinity-timeline-label">OPEN</span>
-      <div className="trinity-timeline-track">
-        <div className="trinity-timeline-fill" style={{ width: `${pct}%` }} />
-        <div className="trinity-timeline-now" style={{ left: `${pct}%` }}>
-          <span className="trinity-timeline-now-label">{formatTime(now)}</span>
-        </div>
-      </div>
-      <span className="trinity-timeline-label">20:00</span>
-      <span className="trinity-timeline-label">CLOSE</span>
-    </div>
-  );
-}
-
-const PANEL_TICKERS = ["^SPX", "SPY", "QQQ", "^NDX", "IWM", "DIA", "TLT"];
-
-function TrinityPanel({ ticker, data, viewMode, gexVexMode, loading: panelLoading, onFocus, onTickerChange, onTradeSelect }) {
-  const [showTickerMenu, setShowTickerMenu] = useState(false);
-  const spot = data?.spot;
-  const nodes = data?.nodes;
-  const gridData = data?.grid?.grid;
-  const changePct = data?.change_pct;
-  const vixLevel = data?.vix;
-
-  const rows = useMemo(() => {
-    if (!data?.strikes) return [];
-    const sorted = data.strikes.filter(s => s.strike != null && s.gex != null).sort((a, b) => b.strike - a.strike);
-    // Mark top 3 rows by abs GEX (excluding King which already has special styling)
-    const byGex = [...sorted].sort((a, b) => Math.abs(b.gex || 0) - Math.abs(a.gex || 0));
-    const top3Strikes = new Set(byGex.slice(0, 3).map(s => s.strike));
-    return sorted.map(s => ({ ...s, _isTopGex: top3Strikes.has(s.strike) }));
-  }, [data]);
-
-  const expiries = useMemo(() => { if (!gridData) return []; return Object.keys(gridData).sort().slice(0, 6); }, [gridData]);
-
-  const gridMaxAbs = useMemo(() => {
-    if (!gridData || !expiries.length) return 1;
-    let m = 1;
-    for (const exp of expiries) { for (const s of Object.keys(gridData[exp] || {})) { const v = Math.abs(gridData[exp][s]?.gex || 0); if (v > m) m = v; } }
-    return m;
-  }, [gridData, expiries]);
-
-  const maxAbs = useMemo(() => { if (!rows.length) return 1; return Math.max(...rows.map(s => Math.abs(s.gex || 0)), 1); }, [rows]);
-
-  const spotIdx = useMemo(() => {
-    if (!spot || !rows.length) return -1;
-    let best = 0, bestDist = Math.abs(rows[0].strike - spot);
-    for (let i = 1; i < rows.length; i++) { const d = Math.abs(rows[i].strike - spot); if (d < bestDist) { bestDist = d; best = i; } }
-    return best;
-  }, [rows, spot]);
-
-  const flipStrike = useMemo(() => {
-    if (nodes?.gamma_flip) return nodes.gamma_flip;
-    let prev = rows[0]?.gex || 0;
-    for (let i = 1; i < rows.length; i++) {
-      const curr = rows[i]?.gex || 0;
-      if ((prev > 0 && curr < 0) || (prev < 0 && curr > 0)) return (rows[i - 1].strike + rows[i].strike) / 2;
-      prev = curr;
-    }
-    return null;
-  }, [nodes, rows]);
-
-  const kingStrike = useMemo(() => {
-    if (!rows.length) return null;
-    let maxVal = 0, kingS = null;
-    for (const row of rows) { const v = Math.abs(row.gex || 0); if (v > maxVal) { maxVal = v; kingS = row.strike; } }
-    return kingS;
-  }, [rows]);
-
-  const kingDistPct = useMemo(() => { if (!kingStrike || !spot) return null; return ((kingStrike - spot) / spot * 100); }, [kingStrike, spot]);
-
-  const netGex = useMemo(() => { if (!rows.length) return 0; return rows.reduce((sum, s) => sum + (s.gex || 0), 0); }, [rows]);
-  const [minGex, maxGex] = useMemo(() => { if (!rows.length) return [0, 0]; const g = rows.map(s => s.gex || 0); return [Math.min(...g), Math.max(...g)]; }, [rows]);
-
-  const tags = useMemo(() => {
-    const t = [];
-    if (kingStrike != null) t.push("KING");
-    if (flipStrike != null) t.push("FLR");
-    if (nodes?.ceilings?.[0]) t.push("CEIL");
-    if (nodes?.gatekeepers?.[0]) t.push("GATE");
-    if (nodes?.air_pockets?.[0]) t.push("AIR");
-    return t;
-  }, [kingStrike, flipStrike, nodes]);
-
-  const domCols = useMemo(() => {
-    if (gexVexMode === "vex") return [{key:"call_vex",label:"Call VEX",field:"call_vex"},{key:"vex",label:"Net VEX",field:"vex"},{key:"put_vex",label:"Put VEX",field:"put_vex"},{key:"vomma",label:"Vomma",field:"vomma"},{key:"zomma",label:"Zomma",field:"zomma"}];
-    return [{key:"call_gex",label:"Call GEX",field:"call_gex"},{key:"gex",label:"Net GEX",field:"gex"},{key:"put_gex",label:"Put GEX",field:"put_gex"},{key:"vex",label:"VEX",field:"vex"},{key:"charm",label:"Charm",field:"charm"}];
-  }, [gexVexMode]);
-
-  const handleRowClick = useCallback((row) => {
-    // NOTE on `iv` / `delta` / `expiry`: these are NOT on the /api/data
-    // heatmap strike rows. That payload's rows carry only 27 aggregate keys
-    // (strike, gex, call_gex, put_gex, vex, charm, vomma, zomma, *_oi,
-    // *_volume, *_vega, lifecycle, taps, tap_prob) — verified by calling the
-    // route and reading the emitted keys. Reading row.iv / row.delta here
-    // therefore always yielded undefined, which:
-    //   * passed iv:undefined and delta:undefined into QuickTradePanel, so the
-    //     trade panel opened with no IV and no delta to show or size against;
-    //   * fell through to `row.expiry || expiries[0]`, so the contract
-    //     enrichment usually requested the WRONG expiry whenever the row was
-    //     not the front one.
-    // The real per-strike IV/delta/expiry live on /api/chain/{ticker}, which
-    // emits them per contract row. The enrichment call below fetches that
-    // contract anyway, so we populate the panel from its response instead of
-    // from a field that was never there.
-    const base = {
-      ticker,
-      strike: row.strike,
-      spot,
-      gex: row.gex,
-      call_gex: row.call_gex,
-      put_gex: row.put_gex,
-      oi: row.total_oi,
-    };
-    if (onTradeSelect) onTradeSelect(base);
-    // Enrich with live Public.com contract data (OSI + bid/ask/last) so the
-    // QuickTradePanel can submit a real order via /api/public/order.
-    // Fire-and-forget upgrade: the base selection opens the panel instantly,
-    // then we re-emit once Public data arrives (same strike → panel keeps
-    // state and just fills in prices). Failure keeps the base selection.
-    //
-    // `expiries` is derived from Object.keys(data.grid.grid) — the grid is
-    // keyed BY expiry, so its first (sorted) key is the nearest listed expiry.
-    // That is the right default for a row that carries no expiry of its own.
-    // Fall back to the payload's expiries_used when the grid is absent, so a
-    // row click still enriches instead of silently doing nothing.
-    const front =
-      row.expiry ||
-      expiries[0] ||
-      (Array.isArray(data?.expiries_used) ? data.expiries_used[0] : null) ||
-      null;
-    if (onTradeSelect && front) {
-      axios.get(
-        `${API}/contract/${encodeURIComponent(ticker)}/${row.strike}/${front}`,
-        { timeout: 15000 },
-      ).then(({ data }) => {
-        const contracts = data?.contracts || [];
-        const callC = contracts.find((c) => c.type === "call") || contracts[0];
-        const putC = contracts.find((c) => c.type === "put") || contracts[1];
-        if (!callC && !putC) return;
-        onTradeSelect({
-          ...base,
-          expiry: front,
-          iv: base.iv ?? callC?.iv,
-          delta: base.delta ?? callC?.delta,
-          oi: base.oi ?? (callC?.open_interest ?? 0) + (putC?.open_interest ?? 0),
-          oi_symbol: callC?.osi || putC?.osi || null,
-          call_bid: callC?.bid, call_ask: callC?.ask, call_last: callC?.last,
-          put_bid: putC?.bid, put_ask: putC?.ask, put_last: putC?.last,
-        });
-      }).catch(() => { /* base selection stands */ });
-    }
-  }, [ticker, spot, expiries, data, onTradeSelect]);
-
-  const displayName = ticker.replace("^", "");
-  const regime = nodes?.regime || "—";
-  const regimeColor = regime === "positive" ? "text-emerald-400" : regime === "negative" ? "text-rose-400" : "text-slate-400";
-  const regimeLabel = regime === "positive" ? "positive γ" : regime === "negative" ? "negative γ" : "neutral";
-
-  const renderView = () => {
-    if (rows.length === 0) return <div className="trinity-no-data">{panelLoading ? "Loading…" : "No strike data available"}</div>;
-    const ma = Math.max(...rows.map(r => Math.abs(r.gex || 0)), 1);
-    switch (viewMode) {
-      case "dom": return <DOMView rows={rows} domCols={domCols} spotIdx={spotIdx} kingStrike={kingStrike} flipStrike={flipStrike} tags={tags} maxAbs={ma} onRowClick={handleRowClick} />;
-      case "chain": return <ChainView rows={rows} spotIdx={spotIdx} kingStrike={kingStrike} flipStrike={flipStrike} onRowClick={handleRowClick} ma={ma} />;
-      case "bars": return <BarsView rows={rows} maxAbs={ma} spotIdx={spotIdx} kingStrike={kingStrike} tags={tags} onRowClick={handleRowClick} />;
-      case "list": return <ListView rows={rows} maxAbs={ma} spotIdx={spotIdx} kingStrike={kingStrike} flipStrike={flipStrike} onRowClick={handleRowClick} />;
-      case "grid": default: return <GridView rows={rows} expiries={expiries} gridData={gridData} gridMaxAbs={gridMaxAbs} spotIdx={spotIdx} flipStrike={flipStrike} kingStrike={kingStrike} onRowClick={handleRowClick} />;
-    }
-  };
-
-  return (
-    <div className="trinity-panel">
-      <div className="trinity-panel-header">
-        <div className="trinity-ticker-wrap">
-          <button className="trinity-ticker-btn" onClick={() => setShowTickerMenu(!showTickerMenu)} title="Switch ticker">{displayName}<span className="trinity-ticker-caret">▾</span></button>
-          {showTickerMenu && (<div className="trinity-ticker-menu">{PANEL_TICKERS.map(t=>(<button key={t} className={`trinity-ticker-option${t===ticker?" trinity-ticker-active":""}`} onClick={()=>{onTickerChange(t);setShowTickerMenu(false);}}>{t.replace("^","")}</button>))}</div>)}
-        </div>
-        <span className="trinity-panel-price">${fmt(spot, spot >= 1000 ? 2 : 2)}</span>
-        <MiniSparkline data={data} spot={spot} />
-        {changePct != null && (<span className={`trinity-panel-change ${changePct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{changePct >= 0 ? "+" : ""}{changePct.toFixed(2)}%</span>)}
-        <span className="trinity-live-dot" />
-        <span className={`trinity-panel-regime ${regimeColor}`}>{regimeLabel}</span>
-      </div>
-      <div className="trinity-panel-subheader">
-        <span className="trinity-king-dot" /><span className="trinity-king-label">King</span>
-        {kingStrike != null && <span className="trinity-king-value">{fmt(kingStrike, 0)}</span>}
-        {kingDistPct != null && <span className={`trinity-king-dist ${kingDistPct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{kingDistPct >= 0 ? "+" : ""}{kingDistPct.toFixed(1)}%</span>}
-        {vixLevel != null && (<><div className="trinity-divider" /><span className="trinity-stat-label">VIX</span><span className="trinity-stat-value text-amber-400">{fmt(vixLevel, 2)}</span></>)}
-        <div className="trinity-tags">{tags.map(tag=>(<span key={tag} className={`trinity-tag trinity-tag-${tag.toLowerCase()}`}>{tag}</span>))}</div>
-        <span className={`trinity-net-badge ${netGex >= 0 ? "trinity-net-pos" : "trinity-net-neg"}`}>{fmtGex(netGex)}</span>
-      </div>
-      <div className="trinity-grid">{renderView()}</div>
-      {viewMode === "grid" && (
-        <div className="trinity-legend">
-          <span className="trinity-legend-label">Scale</span>
-          <div className="trinity-legend-bar"><span className="trinity-legend-seg legend-neg-strong" /><span className="trinity-legend-seg legend-neg-weak" /><span className="trinity-legend-seg legend-zero" /><span className="trinity-legend-seg legend-pos-weak" /><span className="trinity-legend-seg legend-pos-strong" /></div>
-          <div className="trinity-legend-labels"><span>−</span><span>0</span><span>+</span></div>
+      {spxMissing && (
+        <div className="triad-capability" data-testid="triad-spx-capability">
+          SPX unavailable in this session (entitlement/coverage unknown). No substitution made.
         </div>
       )}
-      <div className="trinity-footer"><span className="trinity-footer-min">{fmtGex(minGex)}</span><div className="trinity-gradient-bar" /><span className="trinity-footer-max">{fmtGex(maxGex)}</span></div>
-      <button className="trinity-focus-btn" onClick={onFocus}>focus →</button>
+      <WallBar walls={walls} wallId={selectedWall?.wall_id || null} onSelect={selectWall} />
+      {selectedWall ? (
+        <ScenarioCard wall={selectedWall} scenarios={scenarios} spot={spot}
+          quality={quality} onContracts={openContracts} onTradeSelect={onTradeSelect} ticker={ticker} />
+      ) : (
+        <div className="triad-nowall" data-testid="triad-no-wall">
+          No structural wall selected — pick a cell in either pane. An adjusted-only peak with no
+          corresponding GEX wall will say so here rather than inheriting another wall's story.
+        </div>
+      )}
+      {drawerOpen && (
+        <ContractDrawer contract={contract} loading={contractLoading}
+          wall={selectedWall} onClose={() => setDrawerOpen(false)} ticker={ticker} />
+      )}
+      <ReviewSection journal={journal} ticker={ticker} snapshotId={payload?.snapshotId} />
+      <div className="triad-source" data-testid="triad-source">
+        {payload?.snapshotId ? `snapshot ${payload.snapshotId}` : "no snapshot"}
+        {payload?.asof ? ` · ${payload.asof}` : ""}
+        {payload?.data_source ? ` · ${payload.data_source}` : ""}
+        {quality?.state ? ` · quality ${quality.state}` : ""}
+      </div>
     </div>
   );
 }
 
-function DOMView({ rows, domCols, spotIdx, kingStrike, flipStrike, tags, maxAbs, onRowClick }) {
-  const colMaxAbs = useMemo(() => {
-    const r = {};
-    for (const c of domCols) { let m = 1; for (const row of rows) { const v = Math.abs(row[c.field] || 0); if (v > m) m = v; } r[c.field] = m; }
-    return r;
-  }, [rows, domCols]);
-  let pocF = null, pocA = 0, pocRI = -1, pocCK = null;
-  rows.forEach((r, i) => { for (const c of domCols) { const v = Math.abs(r[c.field] || 0); if (v > pocA) { pocA = v; pocRI = i; pocCK = c.key; } } });
+function ContextStrip({ board, ticker, symbolInput, onSymbolInput, onSubmit }) {
+  const byTicker = useMemo(() => {
+    const m = {};
+    for (const r of board || []) m[String(r.ticker || "").toUpperCase()] = r;
+    return m;
+  }, [board]);
+  const observed = TRIAD.filter((t) => byTicker[t.replace("^", "")] || byTicker[t]);
+  const dirs = observed.map((t) => (byTicker[t.replace("^", "")] || byTicker[t])?.direction).filter(Boolean);
   return (
-    <div className="trinity-dom-scroll"><table className="trinity-dom-table"><thead><tr className="trinity-dom-header"><th className="trinity-dom-th-price">Strike</th>{domCols.map(c=>(<th key={c.field} className="trinity-dom-th">{c.label}</th>))}<th className="trinity-dom-th">OI</th><th className="trinity-dom-th">Vol</th><th className="trinity-dom-th-tags">Tags</th></tr></thead><tbody>
-      {rows.map((row, i) => {
-        const isC = i === spotIdx, isK = row.strike === kingStrike, isF = flipStrike != null && Math.abs(row.strike - flipStrike) <= (rows[0]?.strike - rows[1]?.strike || 5) / 2, isPR = i === pocRI;
-        const rc = rowColors(row.gex, maxAbs);
-        return (<tr key={row.strike} className={`trinity-dom-row${isC?" trinity-row-current":""}${isK?" trinity-row-king":""}${isF?" trinity-row-flip":""}${isPR?" trinity-row-king-grid":""}${row._isTopGex && !isK?" trinity-row-top-gex":""}`} style={{background:rc.bg}} onClick={()=>onRowClick&&onRowClick(row)} role="button" tabIndex={0}>
-          <td className={`trinity-dom-price${isC?" trinity-price-current":""}`}>{isC&&<span className="trinity-price-arrow" />}{(isK || row._isTopGex) && <span className="trinity-king-star">★</span>}{fmt(row.strike, row.strike >= 1000 ? 0 : 1)}</td>
-          {domCols.map(c => { const val = row[c.field] || 0; const cc = rowColors(val, colMaxAbs[c.field]); const isPC = pocCK === c.key && isPR; const pct = pctOfMax(val, colMaxAbs[c.field]); return (<td key={c.field} className={`trinity-dom-cell${isPC?" trinity-grid-poc":""}`} style={{background:isPC?"rgba(251,191,36,0.35)":cc.bg,color:isPC?"#0b1121":cc.text}}>{fmtGex(val)}{pct > 40 && <span className={`trinity-cell-pct${val >= 0 ? " trinity-cell-pct-pos" : " trinity-cell-pct-neg"}`}>{val >= 0 ? "+" : ""}{pct.toFixed(0)}%</span>}</td>); })}
-          <td className="trinity-dom-cell trinity-dom-oi">{fmtOi(row.total_oi)}</td>
-          <td className="trinity-dom-cell trinity-dom-iv">{row.total_volume != null ? fmtOi(row.total_volume) : "—"}</td>
-          <td className="trinity-dom-tags">{tags.map(t=>(<span key={t} className={`trinity-tag trinity-tag-${t.toLowerCase()}`}>{t}</span>))}</td>
-        </tr>);
+    <div className="triad-context" data-testid="triad-context">
+      {TRIAD.map((t) => {
+        const r = byTicker[t.replace("^", "")] || byTicker[t];
+        return (
+          <div key={t} className="triad-context-cell" data-testid={`triad-context-${t.replace("^", "")}`}>
+            <span className="triad-context-ticker">{t}</span>
+            {r ? (
+              <>
+                <span className="triad-context-conv">{r.conviction ?? "—"}</span>
+                <span className="triad-context-tier">{r.tier || ""}</span>
+                <span className="triad-context-dir">{r.direction || ""}</span>
+              </>
+            ) : (
+              <span className="triad-context-missing" title="Not in the latest leaderboard sweep — unobserved, not zero">unscanned</span>
+            )}
+          </div>
+        );
       })}
-    </tbody></table></div>
+      <div className="triad-context-focus">
+        <input value={symbolInput} onChange={(e) => onSymbolInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") onSubmit(); }}
+          data-testid="triad-symbol-input" aria-label="Focused symbol" placeholder="SYM" />
+        <button onClick={onSubmit} data-testid="triad-symbol-go" title="Load this symbol's snapshot (its own data only)">Go</button>
+      </div>
+      <div className="triad-context-note" data-testid="triad-coverage-note"
+        title="Coverage description only — never a position size">
+        {observed.length}/3 observed{dirs.length ? ` · ${dirs.join(" / ")}` : ""}
+      </div>
+      {ticker && !TRIAD.includes(ticker) && (
+        <div className="triad-context-focusname" data-testid="triad-focus-name">Focused: {ticker}</div>
+      )}
+    </div>
   );
 }
 
-function ChainView({ rows, spotIdx, kingStrike, flipStrike, onRowClick, ma }) {
-  return (<div className="trinity-chain-scroll"><table className="trinity-chain-table"><thead><tr className="trinity-chain-header"><th className="trinity-chain-th">Strike</th><th className="trinity-chain-th">GEX</th><th className="trinity-chain-th">Call</th><th className="trinity-chain-th">Put</th><th className="trinity-chain-th">OI</th><th className="trinity-chain-th">VEX</th><th className="trinity-chain-th">Vol</th><th className="trinity-chain-th">Charm Δ</th><th className="trinity-chain-th">Charm</th></tr></thead><tbody>
-    {rows.map((row, i) => {
-      const isC = i === spotIdx, isK = row.strike === kingStrike, isF = flipStrike != null && Math.abs(row.strike - flipStrike) <= (rows[0]?.strike - rows[1]?.strike || 5) / 2;
-      const rc = rowColors(row.gex, ma);
-      return (<tr key={row.strike} className={`trinity-chain-row${isC?" trinity-row-current":""}`} style={{background:rc.bg}} onClick={()=>onRowClick&&onRowClick(row)} role="button" tabIndex={0}>
-        <td className={`trinity-chain-price${isC?" trinity-price-current":""}`}>{isC&&<span className="trinity-price-arrow" />}{(isK || row._isTopGex) && <span className="trinity-king-star">★</span>}{fmt(row.strike, row.strike >= 1000 ? 0 : 1)}</td>
-        <td className="trinity-chain-cell" style={{color:rc.text}}>{fmtGex(row.gex)}</td>
-        <td className="trinity-chain-cell" style={{color:"#6ee7b7"}}>{fmtGex(row.call_gex)}</td>
-        <td className="trinity-chain-cell" style={{color:"#c4b5fd"}}>{fmtGex(row.put_gex)}</td>
-        <td className="trinity-chain-cell trinity-chain-oi">{fmtOi(row.total_oi)}</td>
-        <td className="trinity-chain-cell" style={{color:row.vex>=0?"#6ee7b7":"#c4b5fd"}}>{fmtGex(row.vex)}</td>
-        <td className="trinity-chain-cell trinity-chain-iv">{row.total_volume!=null?fmtOi(row.total_volume):"—"}</td>
-        <td className="trinity-chain-cell">{row.call_charm!=null?fmtGex(row.call_charm):"—"}</td>
-        <td className="trinity-chain-cell" style={{color:row.charm>=0?"#6ee7b7":"#c4b5fd"}}>{fmtGex(row.charm)}</td>
-      </tr>);
-    })}
-  </tbody></table></div>);
+function WallBar({ walls, wallId, onSelect }) {
+  if (!walls || !walls.length) {
+    return (
+      <div className="triad-walls" data-testid="triad-walls-empty">
+        No structural walls in this snapshot.
+      </div>
+    );
+  }
+  return (
+    <div className="triad-walls" data-testid="triad-walls">
+      {(walls || []).map((w) => (
+        <button key={w.wall_id}
+          className={`triad-wall-chip${w.wall_id === wallId ? " active" : ""}`}
+          data-testid={`triad-wall-${w.wall_id}`}
+          title={`zone ${w.low}–${w.high} · gross ${w.gross} · net ${w.net}`}
+          onClick={() => onSelect(w.wall_id === wallId ? null : w.wall_id)}>
+          {w.low}–{w.high}
+        </button>
+      ))}
+    </div>
+  );
 }
 
-function BarsView({ rows, maxAbs, spotIdx, kingStrike, tags, onRowClick }) {
-  let pocI = -1, pocA = 0;
-  rows.forEach((r, i) => { const v = Math.abs(r.gex || 0); if (v > pocA) { pocA = v; pocI = i; } });
-  return (<div className="trinity-bars-scroll">
-    {rows.map((row, i) => {
-      const isC = i === spotIdx, isK = row.strike === kingStrike, isP = i === pocI && !isK;
-      const gex = row.gex || 0, pct = maxAbs > 0 ? (Math.abs(gex) / maxAbs) * 100 : 0;
-      const rc = rowColors(gex, maxAbs);
-      let barColor;
-      if (isK) barColor = "linear-gradient(90deg, rgba(251,191,36,0.95), rgba(253,224,71,0.95))";
-      else if (isP) barColor = "linear-gradient(90deg, rgba(251,191,36,0.7), rgba(251,191,36,0.4))";
-      else if (gex < 0) barColor = "linear-gradient(90deg, rgba(168,85,247,0.6), rgba(168,85,247,0.3))";
-      else barColor = "linear-gradient(90deg, rgba(45,212,191,0.6), rgba(45,212,191,0.3))";
-      return (<div key={row.strike} className={`trinity-bar-row${isC?" trinity-row-current":""}${isK?" trinity-row-king-bar":""}${isP?" trinity-row-poc-bar":""}`} style={{background:rc.bg}} onClick={()=>onRowClick&&onRowClick(row)} role="button" tabIndex={0}>
-        <span className={`trinity-bar-price${isC?" trinity-price-current":""}`}>{isC&&<span className="trinity-price-arrow" />}{isK&&<span className="trinity-king-star-bar">★</span>}{fmt(row.strike, row.strike >= 1000 ? 0 : 1)}</span>
-        <div className="trinity-bar-track"><div className="trinity-bar-fill" style={{width:`${Math.min(100,pct)}%`,background:barColor}} /></div>
-        <span className="trinity-bar-value" style={{color:rc.text}}>{fmtGex(gex)}</span>
-        {rc.badge && <span className={`trinity-badge ${rc.badge.cls}`}>{rc.badge.text}</span>}
-      </div>);
-    })}
-  </div>);
+function ScenarioCard({ wall, scenarios, spot, quality, onContracts, onTradeSelect, ticker }) {
+  const [first, second] = scenarios || [];
+  return (
+    <div className="triad-scenario" data-testid="triad-scenario">
+      <div className="triad-scenario-zone" data-testid="triad-scenario-zone">
+        Wall {wall.wall_id} · zone {wall.low}–{wall.high}
+        {spot != null && wall.mid != null ? ` · ${Math.abs(spot - wall.mid).toFixed(1)} from mid` : ""}
+      </div>
+      {first ? (
+        <div className="triad-scenario-side" data-testid="triad-scenario-first">
+          <span className="triad-scenario-name">{first.name}</span>
+          <span className="triad-scenario-confirm" title="Confirmation condition">Confirm: {first.confirmation}</span>
+          <span className="triad-scenario-invalidate" title="Invalidation condition">Invalidate: {first.invalidation}</span>
+        </div>
+      ) : null}
+      {second ? (
+        <div className="triad-scenario-side" data-testid="triad-scenario-second">
+          <span className="triad-scenario-name">{second.name}</span>
+          <span className="triad-scenario-confirm" title="Confirmation condition">Confirm: {second.confirmation}</span>
+          <span className="triad-scenario-invalidate" title="Invalidation condition">Invalidate: {second.invalidation}</span>
+        </div>
+      ) : null}
+      {!first && (
+        <div className="triad-scenario-empty">No scenario attached to this wall in the snapshot.</div>
+      )}
+      <div className="triad-scenario-blocker" data-testid="triad-blocker"
+        title="Primary interpretation blocker">
+        Blocker: {quality?.reasonCodes?.[0] || quality?.state || "none stated"}
+      </div>
+      <button className="triad-contracts-btn" data-testid="triad-contracts-btn"
+        title="Review contracts at this wall (identity, delta, spread, quote age)"
+        onClick={onContracts}>
+        Review contracts
+      </button>
+    </div>
+  );
 }
 
-function ListView({ rows, maxAbs, spotIdx, kingStrike, flipStrike, onRowClick }) {
-  return (<div className="trinity-list-scroll">
-    {rows.map((row, i) => {
-      const isC = i === spotIdx, isK = row.strike === kingStrike, isF = flipStrike != null && Math.abs(row.strike - flipStrike) <= (rows[0]?.strike - rows[1]?.strike || 5) / 2;
-      const gex = row.gex || 0, rc = rowColors(gex, maxAbs), pctV = maxAbs > 0 ? Math.abs(gex / maxAbs) * 100 : 0;
-      return (<div key={row.strike} className={`trinity-row${isC?" trinity-row-current":""}${isK?" trinity-row-king":""}${isF?" trinity-row-flip":""}`} style={{background:rc.bg}} onClick={()=>onRowClick&&onRowClick(row)} role="button" tabIndex={0}>
-        <span className={`trinity-row-price${isC?" trinity-price-current":""}`}>{isC&&<span className="trinity-price-arrow" />}{(isK || row._isTopGex) && <span className="trinity-king-star">★</span>}{fmt(row.strike, row.strike >= 1000 ? 0 : 1)}</span>
-        <span className="trinity-row-pct">{pctV > 15 && (<span className={`trinity-pct-badge${gex>=0?" trinity-pct-pos":" trinity-pct-neg"}`}>{gex>=0?"+":""}{pctV.toFixed(0)}%</span>)}</span>
-        <span className="trinity-row-value" style={{color:rc.text}}>{fmtGex(gex)}</span>
-        {row.total_oi > 0 && <span className="trinity-row-oi">{fmtOi(row.total_oi)}</span>}
-        {row.total_volume != null && <span className="trinity-row-iv">{fmtOi(row.total_volume)}</span>}
-        {rc.badge && <span className={`trinity-badge ${rc.badge.cls}`}>{rc.badge.text}</span>}
-      </div>);
-    })}
-  </div>);
+function ContractDrawer({ contract, loading, wall, onClose, ticker }) {
+  const rows = contract?.contracts || [];
+  return (
+    <div className="triad-drawer" data-testid="triad-contract-drawer" role="dialog" aria-label="Contract review">
+      <div className="triad-drawer-header">
+        <span>Contracts · {ticker} {wall ? `${wall.low}–${wall.high}` : ""}</span>
+        <button onClick={onClose} data-testid="triad-drawer-close" aria-label="Close contract review">✕</button>
+      </div>
+      {loading && <div className="triad-drawer-loading">loading contracts…</div>}
+      {!loading && contract?.error && (
+        <div className="triad-drawer-error" data-testid="triad-contract-error">{contract.error}</div>
+      )}
+      {!loading && !contract?.error && (
+        <table className="triad-contract-table">
+          <thead><tr><th>Contract</th><th>Exp</th><th>Δ</th><th>Bid/Ask</th><th>Spread</th><th>IV</th><th>OI</th></tr></thead>
+          <tbody>
+            {rows.map((c, i) => {
+              const spread = c.ask != null && c.bid != null ? (Number(c.ask) - Number(c.bid)) : null;
+              return (
+                <tr key={c.osi || i} data-testid="triad-contract-row">
+                  <td>{c.osi || `${c.type || ""} ${c.strike ?? ""}`}</td>
+                  <td>{c.expiry || ""}</td>
+                  <td>{c.delta ?? "—"}</td>
+                  <td>{c.bid ?? "—"} / {c.ask ?? "—"}</td>
+                  <td>{spread == null || Number.isNaN(spread) ? "—" : spread.toFixed(2)}</td>
+                  <td>{c.iv ?? "—"}</td>
+                  <td>{c.open_interest ?? c.oi ?? "—"}</td>
+                </tr>
+              );
+            })}
+            {!rows.length && (
+              <tr><td colSpan={7}>No contracts returned for this zone.</td></tr>
+            )}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
 }
 
-function GridView({ rows, expiries, gridData, gridMaxAbs, spotIdx, flipStrike, kingStrike, onRowClick }) {
-  const poc = useMemo(() => {
-    if (!gridData || expiries.length === 0) return { pocS: null, pocE: null, pocA: 0 };
-    let pocS = null, pocE = null, pocA = 0;
-    for (const exp of expiries) { for (const [s, cell] of Object.entries(gridData[exp] || {})) { const v = Math.abs(cell?.gex || 0); if (v > pocA) { pocA = v; pocS = Number(s); pocE = exp; } } }
-    return { pocS, pocE, pocA };
-  }, [gridData, expiries]);
-  if (!gridData || expiries.length === 0) return <div className="trinity-no-data">No grid data available</div>;
-  const { pocS, pocE, pocA } = poc;
-  const pocN = Math.min(1, pocA / gridMaxAbs);
-  return (<div className="trinity-grid-scroll"><table className="trinity-grid-table"><thead><tr className="trinity-grid-header"><th className="trinity-grid-th-price">Strike</th>{expiries.map(e=>(<th key={e} className="trinity-grid-th">{e.slice(5)}</th>))}</tr></thead><tbody>
-    {rows.map((row, i) => {
-      const isC = i === spotIdx, isF = flipStrike != null && Math.abs(row.strike - flipStrike) <= (rows[0]?.strike - rows[1]?.strike || 5) / 2, isPR = pocS != null && Math.abs(row.strike - pocS) < 0.5;
-      const rc = rowColors(row.gex, gridMaxAbs);
-      return (<tr key={row.strike} className={`trinity-grid-row${isC?" trinity-row-current":""}${isF?" trinity-row-flip":""}${isPR?" trinity-row-king-grid":""}`} style={{background:rc.bg}} onClick={()=>onRowClick&&onRowClick(row)} role="button" tabIndex={0}>
-        <td className={`trinity-grid-price${isC?" trinity-price-current":""}`}>{isC&&<span className="trinity-price-arrow" />}{fmt(row.strike, row.strike >= 1000 ? 0 : 1)}</td>
-        {expiries.map(exp => {
-          const cv = gridData[exp]?.[row.strike]?.gex || 0, cc = rowColors(cv, gridMaxAbs), isPC = isPR && exp === pocE;
-          return (<td key={exp} className={`trinity-grid-cell${isPC?" trinity-grid-poc":""}`} style={{background:isPC?`rgba(251,191,36,${0.25+0.65*pocN})`:cc.bg,color:isPC?"#0b1121":cc.text}} title={`${fmt(row.strike,0)} @ ${exp}: ${fmtGex(cv)}`}>{fmtGex(cv)}</td>);
-        })}
-      </tr>);
-    })}
-  </tbody></table></div>);
+function ReviewSection({ journal, ticker, snapshotId }) {
+  const { reviewState, reviewDec, reviewQueue, reviewReason, setReviewReason,
+    reviewSaving, reviewLoading, saveReview } = journal;
+  return (
+    <div className="triad-review" data-testid="triad-review">
+      <span className="triad-review-label">Review</span>
+      {reviewLoading && <span data-testid="triad-review-loading">loading review…</span>}
+      {!reviewLoading && reviewState !== null && (
+        <span data-testid="triad-review-state">Decision: {reviewState}</span>
+      )}
+      {!reviewLoading && reviewState === null && snapshotId && (
+        <span data-testid="triad-review-pending">No review yet</span>
+      )}
+      {!reviewLoading && reviewDec && (
+        <div data-testid="triad-review-save">
+          {["reviewed", "waiting", "skipped"].map((s) => (
+            <button key={s} data-testid={`triad-review-save-${s}`} disabled={reviewSaving}
+              title={`Mark this decision ${s} (frozen snapshot context)`}
+              onClick={() => saveReview(s)}>{s}</button>
+          ))}
+          <select data-testid="triad-review-reason" value={reviewReason}
+            onChange={(e) => setReviewReason(e.target.value)} title="Reason recorded with the review">
+            <option value="">reason…</option>
+            {["CONFIRMED_SETUP", "NEEDS_MORE_EVIDENCE", "STALE_DATA", "WRONG_WALL", "TIME_EXPIRED"].map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      {reviewQueue.length > 0 && (
+        <div data-testid="triad-review-queue" title="Unreviewed decisions, newest first (max 5)">
+          <span>Next to review:</span>
+          {reviewQueue.map((d) => (
+            <span key={d.decision_id} data-testid={`triad-review-open-${d.decision_id}`}>
+              {d.scenario || d.side || d.decision_id}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
+
+export default TrinityView;
