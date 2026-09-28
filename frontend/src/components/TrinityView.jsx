@@ -378,11 +378,69 @@ function ScenarioCard({ wall, scenarios, spot, quality, onContracts, onTradeSele
         title="Primary interpretation blocker">
         Blocker: {quality?.reasonCodes?.[0] || quality?.state || "none stated"}
       </div>
+      <WallPricePath ticker={ticker} wall={wall} spot={spot} />
       <button className="triad-contracts-btn" data-testid="triad-contracts-btn"
         title="Review contracts at this wall (identity, delta, spread, quote age)"
         onClick={onContracts}>
         Review contracts
       </button>
+    </div>
+  );
+}
+
+function WallPricePath({ ticker, wall, spot }) {
+  const [frames, setFrames] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (!ticker || !wall) return undefined;
+    let cancelled = false;
+    const ctrl = new AbortController();
+    axios
+      .get(`${API}/heatseeker/price-history/${encodeURIComponent(ticker)}`, {
+        params: { days: 5 }, timeout: 30000, signal: ctrl.signal,
+      })
+      .then((r) => { if (!cancelled) setFrames(r?.data?.frames || []); })
+      .catch(() => { if (!cancelled) setFailed(true); });
+    return () => { cancelled = true; ctrl.abort(); };
+  }, [ticker, wall?.wall_id]);
+  const closes = useMemo(
+    () => (frames || []).map((f) => Number(f.close)).filter((c) => Number.isFinite(c)),
+    [frames]
+  );
+  if (frames === null && !failed) {
+    return <div className="triad-price-loading">loading price path…</div>;
+  }
+  if (failed) {
+    return <div className="triad-price-empty" data-testid="triad-price-empty">Price history unavailable for this symbol.</div>;
+  }
+  if (!closes.length) {
+    return <div className="triad-price-empty" data-testid="triad-price-empty">No price candles for this period.</div>;
+  }
+  const W = 300, H = 120, PAD = 6;
+  const lo = Math.min(...closes, Number(wall.low));
+  const hi = Math.max(...closes, Number(wall.high));
+  const span = hi - lo || 1;
+  const X = (i) => PAD + (closes.length < 2 ? W / 2 : (i / (closes.length - 1)) * (W - 2 * PAD));
+  const Y = (v) => H - PAD - ((Number(v) - lo) / span) * (H - 2 * PAD);
+  const pts = closes.map((c, i) => `${X(i).toFixed(1)},${Y(c).toFixed(1)}`).join(" ");
+  const zy1 = Y(Math.min(Number(wall.high), hi));
+  const zy2 = Y(Math.max(Number(wall.low), lo));
+  const spotY = spot != null && Number.isFinite(Number(spot)) ? Y(Number(spot)) : null;
+  return (
+    <div className="triad-price" data-testid="triad-price-path">
+      <svg data-testid="triad-price-path-svg" viewBox={`0 0 ${W} ${H}`} width="100%" height="120"
+        role="img" aria-label={`Recent closes with wall zone ${wall.low} to ${wall.high}`}>
+        <rect data-testid="triad-price-zone" x={PAD} y={Math.min(zy1, zy2)}
+          width={W - 2 * PAD} height={Math.abs(zy2 - zy1)}
+          fill="rgba(251,191,36,0.12)" />
+        <polyline points={pts} fill="none" stroke="#7dd3fc" strokeWidth="1.5" />
+        {spotY != null && spotY >= 0 && spotY <= H && (
+          <line x1={PAD} x2={W - PAD} y1={spotY} y2={spotY} stroke="#f472b6" strokeWidth="1" strokeDasharray="4 3" />
+        )}
+      </svg>
+      <div className="triad-price-caption" data-testid="triad-price-caption">
+        {closes.length} closes · zone shaded · VWAP unavailable (no verified source)
+      </div>
     </div>
   );
 }

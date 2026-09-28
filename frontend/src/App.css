@@ -3361,6 +3361,10 @@ button, select, input {
 .triad-review-queue { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .triad-review-queue > span { margin-right: 2px; }
 
+.triad-price { margin: 6px 0; }
+.triad-price-loading, .triad-price-empty { font-size: 11px; color: #64748b; padding: 6px 0; }
+.triad-price-caption { font-size: 10px; color: #475569; margin-top: 2px; }
+
 .triad-source { padding: 0 12px 12px; font-size: 10px; color: #475569; }
 .triad-error { padding: 24px; color: #fca5a5; font-size: 13px; }
 .triad-loading { padding: 24px; color: #94a3b8; font-size: 13px; }

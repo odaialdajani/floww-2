@@ -143,3 +143,50 @@ test("review saves through the journal with frozen context", async () => {
   expect(String(axios.post.mock.calls[0][0])).toContain("/api/solstice/SPY/decisions/d9/review");
   expect(axios.post.mock.calls[0][1].state).toBe("reviewed");
 });
+
+test("selected wall shows an actual price path with the zone shaded and VWAP labeled unavailable", async () => {
+  axios.get.mockImplementation(async (url) => {
+    const u = String(url);
+    if (u.includes("/api/heatmap/")) return { data: heatmapFixture() };
+    if (u.includes("universe/leaderboard")) return { data: { leaderboard: [] } };
+    if (u.includes("price-history")) {
+      return { data: { ticker: "SPY", frames: [
+        { time: "2026-09-21T14:00:00Z", close: 758 },
+        { time: "2026-09-22T14:00:00Z", close: 762 },
+        { time: "2026-09-23T14:00:00Z", close: 759 },
+        { time: "2026-09-24T14:00:00Z", close: 764 },
+      ] } };
+    }
+    if (u.includes("/decisions")) return { data: { decisions: [] } };
+    return { data: {} };
+  });
+  window.sessionStorage.setItem("solstice.triadHandoff", JSON.stringify({
+    ticker: "SPY", wall_id: "w1", strike: 760, expiry: "2026-10-02", ts: Date.now(),
+  }));
+  await act(async () => { render(<TrinityView />); });
+  await waitFor(() => expect(screen.getByTestId("triad-price-path")).toBeInTheDocument());
+  const svg = screen.getByTestId("triad-price-path-svg");
+  // 4 closes -> 4-point polyline with real coordinates (not flat).
+  const pts = svg.querySelector("polyline").getAttribute("points").trim().split(" ");
+  expect(pts).toHaveLength(4);
+  expect(new Set(pts.map((p) => p.split(",")[1])).size).toBeGreaterThan(1);
+  // Wall zone 760-766 shaded; VWAP honestly unavailable.
+  expect(screen.getByTestId("triad-price-zone")).toBeInTheDocument();
+  expect(screen.getByTestId("triad-price-caption").textContent).toMatch(/VWAP unavailable/i);
+});
+
+test("no price candles renders an honest empty, not an empty chart", async () => {
+  axios.get.mockImplementation(async (url) => {
+    const u = String(url);
+    if (u.includes("/api/heatmap/")) return { data: heatmapFixture() };
+    if (u.includes("universe/leaderboard")) return { data: { leaderboard: [] } };
+    if (u.includes("price-history")) return { data: { ticker: "SPY", frames: [] } };
+    if (u.includes("/decisions")) return { data: { decisions: [] } };
+    return { data: {} };
+  });
+  window.sessionStorage.setItem("solstice.triadHandoff", JSON.stringify({
+    ticker: "SPY", wall_id: "w1", ts: Date.now(),
+  }));
+  await act(async () => { render(<TrinityView />); });
+  await waitFor(() => expect(screen.getByTestId("triad-price-empty")).toBeInTheDocument());
+});
