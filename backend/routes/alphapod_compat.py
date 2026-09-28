@@ -24,11 +24,22 @@ the AlphaPod keys (`alerts`, `page`, `page_size`, `total`) alongside the legacy
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
+
+# DEAD-WIRE note: imported at module scope on purpose. A local `from ... import`
+# inside a broad `except` is what hid the previous missing symbol — binding it
+# at import time makes a rename fail loudly at startup instead of silently
+# degrading every call.
+from services.flowseeker import fetch_live_flow_with_meta
+from services.morning_briefing import build_briefing
+from services.public_api_adapter import fetch_chain_from_public_api
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["alphapod-compat"])
 
@@ -119,24 +130,74 @@ _TOP10_FALLBACK = [
 async def alpha_flow(date_str: str | None = Query(None, alias="date")) -> dict[str, Any]:
     """Daily top-flow summary. Maps floww flowseeker output to AlphaPod schema."""
     session_date = date_str or _today_iso()
-    spy_close = 0.0
-    vix_close = 0.0
+    # Both closes are MEASURED quantities. They are unknown here, so they are
+    # null — never 0.0, which reads as a real zero print and can zero a chart.
+    spy_close: float | None = None
+    vix_close: float | None = None
     top_10: list[dict[str, Any]] = []
+    top_10_source = "fallback_stub"
+    degraded = False
+    degraded_reason: str | None = None
+    prints_seen = 0
 
-    # Pull live flowseeker if available — fall back to deterministic stub.
+    # DEAD-WIRE REPAIR: the previous wire was
+    #     from routes.flowseeker import live as flowseeker_live
+    # `live` does not exist — the route handler is `live_flow`, and it takes
+    # Query parameters rather than being a zero-arg coroutine. The `except
+    # Exception` swallowed that AttributeError, so this endpoint ALWAYS fell
+    # back to `_TOP10_FALLBACK` while its docstring claimed "live data when the
+    # flowseeker provider is healthy". The service underneath the route is
+    # `services.flowseeker.fetch_live_flow_with_meta`, which is what is now
+    # called directly.
     try:
-        from routes.flowseeker import live as flowseeker_live  # type: ignore
-        live_payload = await flowseeker_live()  # type: ignore[misc]
-        rows = (live_payload or {}).get("symbols") or (live_payload or {}).get("rows") or []
-        for i, row in enumerate(rows[:10]):
+        meta = await fetch_live_flow_with_meta()
+        prints = meta.get("prints") or []
+        degraded = bool(meta.get("degraded"))
+        degraded_reason = meta.get("degraded_reason")
+        prints_seen = len(prints)
+
+        # Rank by REAL premium per ticker. There is no composite score in this
+        # payload, so `score` stays null instead of being faked at 0.
+        by_ticker: dict[str, dict[str, Any]] = {}
+        for p in prints:
+            if not isinstance(p, dict):
+                continue
+            tk = str(p.get("ticker") or "").upper()
+            if not tk:
+                continue
+            bucket = by_ticker.setdefault(tk, {"ticker": tk, "premium": 0.0, "print_count": 0,
+                                               "directions": set()})
+            prem = p.get("premium")
+            if isinstance(prem, (int, float)) and not isinstance(prem, bool):
+                bucket["premium"] += float(prem)
+            bucket["print_count"] += 1
+            cls = str(p.get("classification") or "").strip()
+            if cls:
+                bucket["directions"].add(cls)
+
+        ranked = sorted(by_ticker.values(), key=lambda b: b["premium"], reverse=True)[:10]
+        for i, b in enumerate(ranked):
+            # A single direction across every print is a real signal; mixed or
+            # absent classifications are unknown, not "neutral".
+            dirs = b.pop("directions")
+            direction = dirs.pop() if len(dirs) == 1 else "unknown"
             top_10.append({
                 "rank": i + 1,
-                "ticker": (row.get("symbol") or row.get("ticker") or "").upper(),
-                "score": float(row.get("score") or row.get("composite") or 0),
-                "direction": row.get("direction") or row.get("bias") or "neutral",
+                "ticker": b["ticker"],
+                "score": None,          # not computed by this platform
+                "direction": direction,
+                "premium": round(b["premium"], 2),
+                "print_count": b["print_count"],
             })
-    except Exception:
-        top_10 = list(_TOP10_FALLBACK)
+        top_10_source = "flowseeker_live" if top_10 else ("degraded_empty" if degraded else "empty")
+    except Exception as exc:
+        degraded = True
+        degraded_reason = str(exc)
+        top_10 = []
+        top_10_source = "unavailable"
+
+    use_stub = not top_10
+    effective_source = "fallback_stub" if use_stub else top_10_source
 
     return {
         "session_date": session_date,
@@ -144,10 +205,16 @@ async def alpha_flow(date_str: str | None = Query(None, alias="date")) -> dict[s
         "title": f"Alpha Flow — {session_date}",
         "executive_summary_md": (
             f"## Alpha Flow — {session_date}\n\n"
-            "Top 10 tickers by composite flow score. Live data when the "
-            "flowseeker provider is healthy, otherwise a deterministic stub."
+            f"Top tickers by aggregate option premium observed in the flowseeker "
+            f"feed ({prints_seen} prints). `score` is not computed here and is "
+            f"reported as null. Source: `{effective_source}`.\n"
+            + ("_Live feed degraded; fallback stub in use._\n" if use_stub and degraded_reason else "")
         ),
         "top_10": top_10 or list(_TOP10_FALLBACK),
+        "top_10_source": effective_source,
+        "degraded": degraded,
+        "degraded_reason": degraded_reason,
+        "prints_seen": prints_seen,
     }
 
 
@@ -169,28 +236,61 @@ async def alpha_flow_dates() -> dict[str, Any]:
 
 @router.get("/flow-digest")
 async def flow_digest(date_str: str | None = Query(None, alias="date")) -> dict[str, Any]:
-    """Daily digest. Wraps briefing if available."""
-    session_date = date_str or _today_iso()
-    body_md = ""
-    try:
-        from routes.briefing import daily_briefing  # type: ignore
-        b = await daily_briefing()  # type: ignore[misc]
-        body_md = (b or {}).get("markdown") or (b or {}).get("body_md") or ""
-    except Exception:
-        body_md = ""
+    """Daily digest built from the canonical briefing builder.
 
-    if not body_md:
+    DEAD-WIRE REPAIR. This used to call `routes.briefing.daily_briefing`,
+    which does not exist — that module exposes `briefing_send(ticker, request)`
+    and nothing else. The `except Exception` swallowed the AttributeError, so
+    the endpoint ALWAYS served the scaffold, and the scaffold asserted facts
+    it never measured:
+
+        - Top flow tickers: SPY, QQQ, NVDA
+        - VIX regime: normal
+        - Gamma regime: positive
+
+    None of those were read from anywhere. The narrative now comes from
+    `services.morning_briefing.build_briefing`, fed a real Public chain, and
+    when no chain is available the endpoint says so instead of printing a
+    market call it did not compute.
+    """
+    session_date = date_str or _today_iso()
+    status = "unavailable"
+    reason = "NO_BRIEFING_INPUT"
+    briefing = None
+
+    try:
+        chain = await fetch_chain_from_public_api("SPY", max_expiries=2)
+        contracts = (chain or {}).get("contracts") or []
+        try:
+            spot = float((chain or {}).get("spot") or 0.0)
+        except (TypeError, ValueError):
+            spot = 0.0
+        if contracts and spot > 0:
+            briefing = await build_briefing(
+                "SPY", chain_contracts=contracts, spot=spot
+            )
+    except Exception as exc:
+        reason = "BRIEFING_FAILED"
+        logger.warning("flow-digest briefing failed: %s", exc)
+
+    narrative = getattr(briefing, "narrative", None)
+    if narrative:
+        status = "ok"
+        reason = None
+        body_md = f"# Flow Digest — {session_date}\n\n{narrative}"
+    else:
         body_md = (
             f"# Flow Digest — {session_date}\n\n"
-            "_Live briefing unavailable; showing scaffold._\n\n"
-            "- Top flow tickers: SPY, QQQ, NVDA\n"
-            "- VIX regime: normal\n"
-            "- Gamma regime: positive\n"
+            "_No briefing available for this session._\n"
         )
+
     return {
         "session_date": session_date,
         "title": f"Daily Flow Digest — {session_date}",
         "body_md": body_md,
+        "status": status,
+        "reason": reason,
+        "regime": getattr(briefing, "regime", None),
         "created_at": _now_iso(),
     }
 
