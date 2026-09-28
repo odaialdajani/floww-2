@@ -16,6 +16,52 @@ from services.universe_scan import (
 )
 
 
+def test_budget_read_failure_does_not_grant_unlimited_spend(monkeypatch):
+    """An unreadable budget must fail CLOSED, not open.
+
+    `scan_batch` caught any exception from `peek_available` and substituted
+    `float("inf")` -- so a broken or missing budget governor produced *more*
+    permissive behavior than a working one, and the scan spent freely with
+    nothing recorded. The entire point of the governor is to bound spend;
+    losing sight of it is the worst possible moment to stop enforcing it.
+    """
+    import services.public_budget as pb
+
+    async def boom():
+        raise RuntimeError("budget backend unavailable")
+
+    monkeypatch.setattr(pb.budget, "peek_available", boom)
+
+    async def fake_build(t, max_expiries=2, dte=None, **kw):
+        raise AssertionError("must not fetch when the budget is unknown")
+
+    out = asyncio.run(scan_batch(["SPY", "QQQ"], build_heatmap_fn=fake_build, pace_sec=0.0))
+
+    assert out["coverage"]["scanned"] == 0, out["coverage"]
+    assert len(out["skipped"]) == 2, out["skipped"]
+    reasons = {s["reason"] for s in out["skipped"]}
+    assert reasons == {"BUDGET_UNAVAILABLE"}, out["skipped"]
+
+
+def test_budget_uncertainty_is_distinguishable_from_genuine_exhaustion(monkeypatch):
+    """'We could not ask' and 'the answer was no' are different states."""
+    import services.public_budget as pb
+
+    async def boom():
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(pb.budget, "peek_available", boom)
+    out = asyncio.run(scan_batch(["SPY"], build_heatmap_fn=lambda t, **k: None, pace_sec=0.0))
+    assert out["skipped"][0]["reason"] == "BUDGET_UNAVAILABLE", out["skipped"]
+
+    async def empty():
+        return 0.0
+
+    monkeypatch.setattr(pb.budget, "peek_available", empty)
+    out2 = asyncio.run(scan_batch(["SPY"], build_heatmap_fn=lambda t, **k: None, pace_sec=0.0))
+    assert out2["skipped"][0]["reason"] == "BUDGET_UNAFFORDABLE", out2["skipped"]
+
+
 def test_research_features_degrade_on_missing_zone_instead_of_crashing():
     """A missing zone must return policy_unavailable, not raise TypeError.
 

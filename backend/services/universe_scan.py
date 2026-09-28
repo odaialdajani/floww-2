@@ -117,10 +117,21 @@ async def scan_batch(
     skipped = []
     scanned = 0
     for t in tickers or []:
+        # Fail CLOSED. This used to substitute float("inf") on any exception,
+        # so a broken or missing budget governor produced MORE permissive
+        # behavior than a working one and the scan spent freely with nothing
+        # recorded. Bounding spend is the governor's entire purpose; losing
+        # sight of it is the worst possible moment to stop enforcing it.
+        budget_ok = True
         try:
             available = await _pub_budget.peek_available()
         except Exception:
-            available = float("inf")
+            # Unknown is not unlimited. Skip rather than guess.
+            available = None
+            budget_ok = False
+        if not budget_ok or available is None:
+            skipped.append({"ticker": t, "reason": "BUDGET_UNAVAILABLE"})
+            continue
         if available < per_ticker:
             skipped.append({"ticker": t, "reason": "BUDGET_UNAFFORDABLE"})
             continue
