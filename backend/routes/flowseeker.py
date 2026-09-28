@@ -2602,13 +2602,19 @@ def _universe_scan_opportunity(ticker: str, heat: dict | None):
 def _universe_scan_conviction(ticker: str, heat: dict | None, opp: dict | None):
     try:
         from services.conviction_rank import rank_one as _rank
-        flow = {"conviction": 0}
+        # Start at None, not {"conviction": 0}. A hardcoded zero made an
+        # absent alert feed indistinguishable from a real conviction reading of
+        # 0: rank_one reported flow_status "ok" with a 0.0 component either way,
+        # so a row with no flow evidence at all looked measured.
+        flow = None
         try:
             from services import flow_alerts as _fa
             from services.duckdb_engine import db as _ddb
             _rows = _fa.read_alert_feed(_ddb, days=7, ticker=str(ticker).upper(), sort_by="conviction")
             if _rows:
-                flow = {"conviction": _rows[0].get("conviction", 0), "key": _rows[0].get("key")}
+                _c = _rows[0].get("conviction")
+                if _c is not None:
+                    flow = {"conviction": _c, "key": _rows[0].get("key")}
         except Exception:
             pass  # silent by design: DuckDB alert feed optional; conviction falls back to unranked rather than failing the rank
         return _rank(ticker, flow=flow, opportunity=opp, confluence=None, ml=None,

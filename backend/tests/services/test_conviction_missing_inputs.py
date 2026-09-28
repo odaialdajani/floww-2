@@ -180,6 +180,26 @@ def test_fused_markers_block_unpacking_even_with_scorer_keys():
     assert out["conviction"] == 0.0, out["conviction"]
 
 
+def test_absent_flow_is_not_reported_as_a_measured_zero():
+    """A missing alert feed must not look like a conviction reading of 0.
+
+    `_universe_scan_conviction` used to seed `flow = {"conviction": 0}` before
+    attempting the DuckDB read, so an unavailable feed and a genuine zero were
+    indistinguishable downstream: `_norm_flow` returned 0.0/"ok" either way and
+    the row carried `flow_status: "ok"`. Absent evidence has to be None so the
+    module reports "missing".
+    """
+    absent = rank_one("SPY", flow=None, opportunity=None, confluence=None, ml=None, **TS)
+    hardcoded_zero = rank_one(
+        "SPY", flow={"conviction": 0}, opportunity=None, confluence=None, ml=None, **TS
+    )
+
+    assert absent["evidence"]["flow_status"] == "missing", absent["evidence"]
+    assert hardcoded_zero["evidence"]["flow_status"] == "ok", hardcoded_zero["evidence"]
+    # The route must therefore pass None, not a seeded zero.
+    assert absent["evidence"]["flow_status"] != hardcoded_zero["evidence"]["flow_status"]
+
+
 def test_weights_sum_to_one():
     """Guards the fusion denominator while the normalizers are in flux."""
     assert abs(sum(WEIGHTS.values()) - 1.0) < 1e-9, WEIGHTS
