@@ -3,6 +3,7 @@ import axios from "axios";
 import { fmt, fmtAbs, TRIAD } from "../lib/helpers";
 import { API as BACKEND_API } from "../config/api";
 import { fetchPublicChain } from "../lib/publicApi";
+import { projectTriadFromChain } from "../lib/triadProjection";
 
 const API = BACKEND_API;
 
@@ -127,63 +128,15 @@ export default function TrinityView({ onFocusTicker, onTradeSelect }) {
     try {
       const pubRes = await fetchPublicChain(ticker, { timeout: Math.min(timeout, 20000), expirations: dteFilter });
       if (pubRes?.ok && pubRes?.contracts?.length) {
-        // Map public chain → triad data shape.
-        const contracts = pubRes.contracts || [];
-        const strikes = contracts.map(c => ({
-          strike: c.strike,
-          gex: c.gex,
-          call_gex: c.gex >= 0 ? c.gex : 0,
-          put_gex: c.gex < 0 ? c.gex : 0,
-          iv: c.iv,
-          delta: c.delta,
-          gamma: c.gamma,
-          vega: c.vega,
-          theta: c.theta,
-          vanna: c.vanna,
-          charm: c.charm,
-          oi: c.oi,
-          total_oi: c.oi,
-          volume: c.volume,
-          bid: c.bid,
-          ask: c.ask,
-          dte: c.T ? Math.round(c.T * 365) : null,
-          expiry: c.expiry,
-          type: c.type,
-          moneyness_pct: c.moneyness_pct,
-        }));
-        const grid = { grid: { "0": {} } };
-        for (const c of contracts.slice(0, 200)) {
-          const expKey = c.expiry || "2026-09-18";
-          if (!grid.grid[expKey]) grid.grid[expKey] = {};
-          grid.grid[expKey][String(c.strike)] = {
-            gex: c.gex, iv: c.iv, delta: c.delta, charm: c.charm,
-            vanna: c.vanna, vex: 0, call_gex: c.gex >= 0 ? c.gex : 0, put_gex: c.gex < 0 ? c.gex : 0,
-          };
-        }
-        const spot = pubRes.spot || 0;
-        // Approximate nodes from contract data.
-        const netGex = strikes.reduce((s, c) => s + (c.gex || 0), 0);
-        const kingStrike = strikes.reduce((best, c) => Math.abs(c.gex || 0) > Math.abs(best?.gex || 0) ? c : best, null);
-        return {
-          ticker,
-          spot,
-          change_pct: 0,
-          nodes: {
-            regime: netGex > 0 ? "positive" : netGex < 0 ? "negative" : "neutral",
-            king: kingStrike || null,
-            gamma_flip: null,
-            floors: [],
-            ceilings: [],
-            gatekeepers: [],
-            air_pockets: [],
-            polarity_level: Math.min(1, Math.abs(netGex) / (spot || 1) * 100),
-          },
-          strikes,
-          grid,
-          vix: 20,
-          expiries_used: [...new Set(contracts.map(c => c.expiry).filter(Boolean))].slice(0, dteFilter),
-          data_source: pubRes.data_source || "public_api",
-        };
+        // Canonical projection (lib/triadProjection). The previous inline
+        // transform is gone: it overwrote a call with the put at the same
+        // strike, invented an expiry for contracts that had none, seeded a
+        // literal "0" expiry column, truncated at 200 contracts silently,
+        // zero-filled unmeasured VEX, and defaulted change%/VIX.
+        const packet = projectTriadFromChain(pubRes, { expiryCount: dteFilter });
+        // An empty projection is not a usable panel. Fall through to the
+        // /api/data path rather than rendering a hollow grid.
+        if (packet.strikes.length) return packet;
       }
     } catch (pubErr) {
       if (pubErr.name === "AbortError" || pubErr.code === "ERR_CANCELED") throw pubErr;
@@ -298,8 +251,8 @@ function ConfluenceBar({ data, viewMode, onViewModeChange, gexVexMode, onGexVexC
         <span className={`trinity-verdict ${verdictColor}`}>{verdictText}</span>
         <div className="trinity-view-toggle">{VIEW_MODES.map(vm => (<button key={vm.id} className={`trinity-view-btn${viewMode === vm.id ? " trinity-view-active" : ""}`} onClick={() => onViewModeChange(vm.id)} title={vm.label}><span className="trinity-view-icon">{vm.icon}</span><span className="trinity-view-label">{vm.label}</span></button>))}</div>
         <div className="trinity-gexvex-toggle">{GEX_VEX_MODES.map(m => (<button key={m.id} className={`trinity-gexvex-btn${gexVexMode === m.id ? " trinity-gexvex-active" : ""}`} onClick={() => onGexVexChange(m.id)}>{m.label}</button>))}</div>
-        <div className="trinity-dte-toggle">{/* ids are expiry COUNTS sent as ?expiries= — labels describe the practical window */}
-        {[[1,"0–1DTE"],[3,"~3DTE"],[7,"1 Week"],[12,"All"]].map(([id,label])=>(<button key={id} className={`trinity-dte-btn${dteFilter===id?" trinity-dte-active":""}`} onClick={()=>onDteChange(id)}>{label}</button>))}</div>
+        <div className="trinity-dte-toggle">{/* ids are EXPIRY COUNTS sent as ?expiries= to /api/public/chain. They select how many expirations load, NOT a day window, so the labels say "exp" — "0–1DTE" described a DTE band this control never selected. */}
+        {[[1,"1 exp"],[3,"3 exp"],[7,"7 exp"],[12,"12 exp"]].map(([id,label])=>(<button key={id} className={`trinity-dte-btn${dteFilter===id?" trinity-dte-active":""}`} onClick={()=>onDteChange(id)} title={`Load ${id} expiration${id===1?"":"s"}`}>{label}</button>))}</div>
       </div>
     </div>
   );
