@@ -554,6 +554,23 @@ arithmetic and asserted against its own copy — the UTC-5 mutation SURVIVED it.
 Rewritten to drive the real `check_entry_condition`. Green tests that only test
 a copy are not evidence.
 
+### Post-fix sweeps — no third instance of either pattern
+
+After the DST and fail-open fixes, swept for siblings rather than assuming the
+pattern stopped:
+
+- **Fixed-offset ET conversions:** whole-backend AST scan. The only remaining
+  `hours=5` are the two explanatory comments and the deliberate
+  `zoneinfo`-failure fallback. No third site. (Kanban `estimate_hours=4` hits
+  are unrelated — agent estimates, not timezones.)
+- **`except` -> benign default:** 257 sites, far too broad to act on. Narrowed
+  to the scoring path, where `_clamp01`/`_norm_flow` were already corrected in
+  H3 and are mutation-covered. Malformed input returns `invalid`; absence
+  returns `missing`; neither may report `ok`.
+- **Budget fail-closed re-verified against the real classes**, not just
+  fixtures: `FetchCoordinator.fetch` with a raising governor returns
+  `budget_unavailable` / `degraded` rather than proceeding to the fetch.
+
 ## 7. Next actions
 
 | # | Action | Owner | Status / blocked on |
