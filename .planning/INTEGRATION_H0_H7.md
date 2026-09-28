@@ -432,6 +432,46 @@ Reading `data/journal.duckdb` from a second process fails with a DuckDB lock
 conflict. That is correct single-writer behavior (the running backend holds the
 lock), not a defect.
 
+### H6 — evidence packet leaked snapshot scope verbatim (`6dbe0bf3`) — SECURITY
+
+Investigating the Muse handoff found a real leak. The packet's **facts** are a
+strict allowlist and were safe. The **envelope** was not:
+
+    "scope": scope,      # solstice_evidence.py -- verbatim copy
+
+Anything the snapshot carried in `scope` left the process byte-identical.
+Verified by hash, not by eye (my display pipeline was masking the value as
+`***`, which briefly made this look already-redacted):
+
+    input hash : f46033ac88af   output hash: f46033ac88af
+    byte-identical: True        secret present in packet: True
+
+Now gated by `_EXPORTABLE_SCOPE_KEYS`, an **allowlist** so a new
+credential-bearing key fails CLOSED rather than needing a denylist entry. The
+real production scope (expiries/metric/basis/signConvention/formulaVersion) is
+preserved exactly — verified.
+
+**Latent hole, not a breach.** The live packet was already clean because
+production scope carries nothing sensitive. Closed before anything puts a DSN
+into a snapshot scope.
+
+New `tests/solstice/test_evidence_packet_redaction.py` (28 tests) covers the H6
+edge cases against the real builder: 22 credential-shaped key names,
+allowlist-not-passthrough, injected text quarantined as `UNTRUSTED_USER_TEXT`,
+missing wall absent not zero, empty snapshot not claiming eligibility, schema
+versioning. One failed against the old code — that is the finding. MUT19 killed.
+
+Existing packet already satisfies the rest of H6: `schema_version
+solstice.evidence.v2`, `scope.metric/basis/signConvention/formulaVersion`,
+`quality.setupEligible` + `reasonCodes: ['GREEK_TIME_UNKNOWN']`, and
+`environment.inventory_basis = CONVENTIONAL_PROXY` — an honest label that the
+service does not know real dealer inventory.
+
+**Muse connection: NOT made.** No documented read-only integration has been
+established, no local bundle inspected, and no fallback connection prepared. The
+packet is the supported fallback and it is what exists. Recording the limitation
+rather than pretending it is connected.
+
 ## 7. Next actions
 
 | # | Action | Owner | Status / blocked on |
