@@ -97,3 +97,25 @@ test("info button toggles the grid explainer popover", () => {
   fireEvent.click(screen.getByTestId("skylit-info-btn"));
   expect(screen.queryByTestId("skylit-info-popover")).not.toBeInTheDocument();
 });
+
+test("O2: one family control GEX/VEX/Charm; basis is a compact GEX-only menu", () => {
+  const onViewModeChange = jest.fn();
+  const onMetricChange = jest.fn();
+  render(<SkylitControlBar ticker="SPY" viewMode="gex" metric="raw" onViewModeChange={onViewModeChange} onMetricChange={onMetricChange} />);
+  // Single permanent family tab set (no Raw/Delta/Activity tower).
+  expect(screen.queryByTestId("skylit-metric-switch")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByTitle("Charm Exposure"));
+  expect(onViewModeChange).toHaveBeenCalledWith("charm");
+  // GEX basis menu present on the GEX family, carrying the same contract.
+  const basis = screen.getByTestId("skylit-basis-select");
+  expect(basis.value).toBe("raw");
+  fireEvent.change(basis, { target: { value: "activity" } });
+  expect(onMetricChange).toHaveBeenCalledWith("activity");
+});
+
+test("O2: basis menu hides on single-basis families (VEX/Charm)", () => {
+  render(<SkylitControlBar ticker="SPY" viewMode="vex" metric="raw" />);
+  expect(screen.queryByTestId("skylit-basis-select")).not.toBeInTheDocument();
+  render(<SkylitControlBar ticker="SPY" viewMode="charm" metric="raw" />);
+  expect(screen.queryByTestId("skylit-basis-select")).not.toBeInTheDocument();
+});

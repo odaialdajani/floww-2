@@ -3152,11 +3152,16 @@ button, select, input {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  /* O2: anchor for the absolutely-positioned inspector drawer. */
+  position: relative;
 }
 
 .skylit-heatmap-area {
   flex: 1;
   min-width: 0;
+  /* O1: flex-column scroll ownership — without min-height:0 the grid
+     content can force this box taller instead of scrolling inside it. */
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -3169,6 +3174,200 @@ button, select, input {
   border-left: 1px solid rgba(255,255,255,0.06);
   overflow-y: auto;
   background: #0d1117;
+}
+
+/* ── O2 inspector drawer: selection-opened evidence panel. Anchored to
+   the main area (position absolute) so the toolbar/control bars above stay
+   clickable; covers grid/sidebar only. Own scroll region. ── */
+.skylit-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(380px, 94vw);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: #0d1117;
+  border-left: 1px solid rgba(255,255,255,0.09);
+  box-shadow: -12px 0 32px rgba(0,0,0,0.5);
+}
+
+.skylit-drawer-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.skylit-drawer-title {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  font-weight: 700;
+  margin-right: auto;
+}
+
+.skylit-drawer-close {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+}
+
+.skylit-drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px 16px;
+}
+
+/* ── O4 Triad review desk: context strip, raw/adjusted pair, wall chips,
+   scenario card, contract drawer, review section. Scoped triad-* classes
+   only; no global effects. Narrow widths stack the pair. ── */
+.triad-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.triad-context-cell {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  background: #0d1117;
+  font-size: 11px;
+}
+
+.triad-context-ticker { font-weight: 700; color: #e2e8f0; }
+.triad-context-conv { font-family: ui-monospace, monospace; color: #94a3b8; }
+.triad-context-tier { font-size: 10px; color: #fbbf24; }
+.triad-context-dir { font-size: 10px; color: #94a3b8; }
+.triad-context-missing { font-size: 10px; color: #64748b; font-style: italic; }
+
+.triad-context-focus { display: flex; gap: 6px; margin-left: auto; }
+.triad-context-focus input {
+  width: 90px;
+  background: #0d1117;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.triad-context-note, .triad-context-focusname { font-size: 10px; color: #64748b; }
+
+.triad-pair { display: flex; gap: 6px; padding: 8px 12px; }
+.triad-pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 6px;
+  background: #0d1117;
+  max-height: 560px;
+}
+
+.triad-pane-header {
+  font-size: 11px;
+  color: #94a3b8;
+  padding: 4px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+.triad-unavailable {
+  padding: 24px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.triad-basis-row { display: flex; align-items: center; gap: 6px; padding: 0 12px 8px; font-size: 11px; color: #94a3b8; }
+.triad-basis-btn {
+  background: none; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;
+  color: #cbd5e1; font-size: 11px; padding: 3px 10px; cursor: pointer;
+}
+.triad-basis-btn.active { border-color: #f59e0b; color: #fbbf24; }
+.triad-basis-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.triad-capability { margin: 0 12px 8px; padding: 8px 10px; font-size: 12px; color: #fbbf24;
+  border: 1px solid rgba(251,191,36,0.3); border-radius: 6px; background: rgba(251,191,36,0.06); }
+
+.triad-walls { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 12px 8px; }
+.triad-wall-chip {
+  background: #0d1117; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;
+  color: #cbd5e1; font-size: 11px; font-family: ui-monospace, monospace; padding: 4px 10px; cursor: pointer;
+}
+.triad-wall-chip.active { border-color: #f59e0b; color: #fbbf24; }
+.triad-nowall { padding: 12px; font-size: 12px; color: #94a3b8; }
+
+.triad-scenario { margin: 0 12px 8px; padding: 10px 12px; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; background: #0d1117; }
+.triad-scenario-zone { font-size: 12px; font-weight: 700; color: #e2e8f0; margin-bottom: 6px; }
+.triad-scenario-side { display: flex; flex-direction: column; gap: 2px; font-size: 11px; margin-bottom: 6px; }
+.triad-scenario-name { font-weight: 700; color: #fbbf24; }
+.triad-scenario-confirm { color: #6ee7b7; }
+.triad-scenario-invalidate { color: #fca5a5; }
+.triad-scenario-empty { font-size: 11px; color: #64748b; }
+.triad-scenario-blocker { font-size: 11px; color: #94a3b8; margin: 6px 0; }
+.triad-contracts-btn {
+  background: none; border: 1px solid rgba(255,255,255,0.14); border-radius: 6px;
+  color: #e2e8f0; font-size: 11px; padding: 4px 12px; cursor: pointer;
+}
+
+.triad-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 94vw); z-index: 60;
+  display: flex; flex-direction: column; background: #0d1117;
+  border-left: 1px solid rgba(255,255,255,0.09); box-shadow: -12px 0 32px rgba(0,0,0,0.5);
+  padding: 10px 12px; overflow-y: auto;
+}
+.triad-drawer-header { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: #e2e8f0; margin-bottom: 8px; }
+.triad-drawer-header button { margin-left: auto; background: none; border: none; color: #64748b; cursor: pointer; font-size: 14px; }
+.triad-contract-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.triad-contract-table th, .triad-contract-table td { text-align: right; padding: 4px 6px; border-bottom: 1px solid rgba(255,255,255,0.05); color: #cbd5e1; }
+.triad-contract-table th { color: #64748b; font-weight: 600; }
+.triad-drawer-loading, .triad-drawer-error { font-size: 12px; color: #94a3b8; padding: 12px 0; }
+.triad-drawer-error { color: #fca5a5; }
+
+.triad-review { margin: 0 12px 8px; padding: 8px 10px; font-size: 11px; color: #94a3b8;
+  border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.triad-review-label { text-transform: uppercase; letter-spacing: 0.06em; font-size: 10px; color: #64748b; }
+.triad-review button {
+  background: none; border: 1px solid rgba(255,255,255,0.14); border-radius: 6px;
+  color: #e2e8f0; font-size: 11px; padding: 3px 10px; cursor: pointer;
+}
+.triad-review button:disabled { opacity: 0.5; cursor: default; }
+.triad-review select {
+  background: #0d1117; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;
+  color: #cbd5e1; font-size: 11px; padding: 3px 6px;
+}
+.triad-review-queue { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.triad-review-queue > span { margin-right: 2px; }
+
+.triad-source { padding: 0 12px 12px; font-size: 10px; color: #475569; }
+.triad-error { padding: 24px; color: #fca5a5; font-size: 13px; }
+.triad-loading { padding: 24px; color: #94a3b8; font-size: 13px; }
+
+@media (max-width: 900px) {
+  .triad-pair { flex-direction: column; }
+  .triad-pane { max-height: 420px; }
 }
 
 /* ── R7-04 GEX+VEX compare workspace: two real grids, one snapshot. ── */
