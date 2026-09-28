@@ -434,12 +434,22 @@ lock), not a defect.
 
 ## 7. Next actions
 
-| # | Action | Owner | Blocked on |
+| # | Action | Owner | Status / blocked on |
 |---|---|---|---|
-| 1 | Open PR for `5cba1d9d`; verify CI on exact head | Hermes | — |
-| 2 | Hand over `WallDeskSnapshot.v1` frozen fixture | Command Code | definitions |
-| 3 | Decide confluence/ml: connect causal producers vs label unavailable | Hermes | — |
-| 4 | Confirm scope: H2 scanner cursor + budget, H4 persistence, H5/H6/H7 | Nav | — |
+| 1 | H2/H3 defects: find, reproduce, fix, mutation-verify | Hermes | **DONE** — 7 code slices on PR #73 |
+| 2 | Open PR for the ranking work | Hermes | **DONE** — #73, open, NOT merged (no authorization) |
+| 3 | Decide confluence/ml | Hermes | **DONE** — investigated; label-unavailable is correct, wiring deferred (no evidence source exists) |
+| 4 | H4 durability + chain trace | Hermes | **DONE** — durability honest; both modules mounted; journal honestly empty |
+| 5 | Verify CI on the exact head | Hermes | **PENDING** — backend-tests still in_progress; local suite is the only complete evidence |
+| 6 | Hand over `WallDeskSnapshot.v1` frozen fixture | Command Code | **NOT RECEIVED** — no handover from either agent |
+| 7 | H5 integration, H6 Muse packet, H7 release evidence | Hermes | **NOT STARTED** — blocked on #6; H7 also needs OpenCode screenshots |
+| 8 | Restart backend/frontend so runtime picks up the fixes | Nav | **NOT DONE** — needs authorization; PID 46355 still pre-fix |
+
+**H5/H6/H7 cannot start.** They all require the two colleague tracks, which have
+handed over nothing: no branch, no SHA, no fixture, no receipt. The ledger and
+receipt exist precisely so they can hand over through the repo rather than
+through me relaying messages. That is the real release blocker and it is not
+mine to close by guessing at another agent's work.
 
 ## 8. Actions explicitly NOT taken
 
