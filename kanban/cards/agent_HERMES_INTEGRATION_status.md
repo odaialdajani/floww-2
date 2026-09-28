@@ -70,9 +70,49 @@ slice 5 -- dte was folded into an expiry COUNT (91881cc2):
   a stub in test_scan_batch_builds_with_injected_fns needed the new signature
   (it did not accept dte, so scanned fell to 0); assertion unchanged.
 
-gates: local tests/services+tests/routes 4564 passed / 33 skipped / 0 failed
+slice 6 -- cross-batch leaderboard ranks were per-batch accidents (c34824bf):
+  `rank` is a WITHIN-BATCH ordinal; the rotating cursor restarts at 1 every
+  batch, and latest_leaderboard ordered by it. Reproduced on real DuckDB:
+    BEFORE rank=1 AAA 15.0 / rank=1 BBB 40.0  (two rank-1s; 15.0 above 40.0)
+    AFTER  rank=1 BBB 40.0 / rank=2 AAA 15.0
+  Now ordered by fused score, rank recomputed over the whole population, and
+  the stored ordinal preserved as `batch_rank`.
+  test_leaderboard_round_trip asserted rank==2 for the only stored row -- it
+  read a per-batch ordinal as a global position. Now rank 1 / batch_rank 2 /
+  updated conviction; the update-replace behavior it covers is unchanged.
+
+confluence/ml wiring -- INVESTIGATED, deliberately NOT done, on evidence:
+  1. producer IS compatible: node_brief(ticker, strikes) consumes the
+     heatmap's own strikes; verified on live ^SPX -> structure_magnitude
+     (1.0,'ok'), rows carry confluence{total,direction,dimensions,
+     coverage_weight,missing_input_policy,weights_version} = _norm_conf's input.
+  2. but it honestly returns total=None: confluence.score counts a dimension
+     only when inputs_status=="ok"; node_brief populates only flow and
+     microstructure, the other four are hardcoded 0.0/"missing", structure is
+     "context_only" (deliberately unsigned). No signed evidence -> coverage 0.0.
+  3. the evidence source is EMPTY here: flow_alerts_daily does not exist
+     (Catalog Error), flow_prints has 0 rows, read_alert_feed returns 0.
+  => wiring today replaces a truthful None with an equally truthful None while
+     adding a failing query per ticker. The honest result the code now emits:
+     conviction 0.0, all four statuses "missing", asof_status "fresh".
+     DEFERRED not blocked: worth doing once flow_prints is populated or a real
+     per-strike ML producer exists. NOT claimed as connected.
+
+H2 refuted: advance_cursor rotates over the full universe; batches disjoint;
+       n=0 and slice>n guarded. No code change made. Recorded so it is not
+       re-audited as broken.
+
+H4 durability VERIFIED HONEST, no change: live recorder_status reports
+       {"durable": false, "mode": "memory", "backing": "memory",
+        "path": ":memory:", "note": "memory mode is not crash-safe durable
+        storage"}; durable=true only when backing=="file" AND tables present;
+        the heatseeker route fails closed to False on error. DUCKDB_PATH unset
+        here, so :memory: is correct and correctly reported. R8 real-file
+        restart proof already passed (docs/solstice/R8-ACCEPTANCE.md).
+
+gates: local tests/services+tests/routes 4566 passed / 33 skipped / 0 failed
        ruff clean; API docs check passes (370 paths)
-mutations: MUT1-MUT6, MUT8, MUT9, MUT13, MUT14, MUT15 killed. MUT7 SURVIVED
+mutations: MUT1-MUT6, MUT8, MUT9, MUT13-MUT17 killed. MUT7 SURVIVED
        -> clause deleted rather than left untested.
 live proof: /api/heatmap/%5ESPX -> HTTP 200, 124144 bytes, spot 7743.41, 80 rows
        /api/flowseeker/universe/scan pre-fix row: score 23.62 with
@@ -80,13 +120,10 @@ live proof: /api/heatmap/%5ESPX -> HTTP 200, 124144 bytes, spot 7743.41, 80 rows
        (exactly the 17.5 phantom points removed)
 
 STILL OPEN -- not claimed done:
-  confluence/ml not yet wired into the route. Producer proven COMPATIBLE:
-  node_confluence rows[].confluence = {total, direction, dimensions,
-  coverage_weight, missing_input_policy, weights_version}, directly consumable
-  by _norm_conf. Wiring is mechanical but is a behavior change to a live route
-  and is NOT done.
-  cross-batch leaderboard rank recomputation over one eligible population.
-  H4-H7 untouched (persistence/events/history, Muse packet, H5-H7 evidence).
+  H4 events/history review (saved review -> episode policy -> price
+  observations -> pending/final outcome -> mounted journal) NOT traced yet.
+  H5 integration, H6 Muse evidence packet, H7 combined release evidence: NOT
+  started. No browser screenshots at 390px/split from this agent.
   OpenCode and Command Code have handed over nothing; three-track integration
   has NOT happened. No WallDeskSnapshot.v1 fixture exchanged yet.
 
