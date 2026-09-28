@@ -31,13 +31,28 @@ if [ -z "$COMMIT_MSG" ]; then
     exit 0
 fi
 
+# Rules that gate on what a commit CLAIMS TO DO must match the SUBJECT LINE
+# ONLY, not the whole message. A body is prose: a commit can legitimately
+# explain that some code is "one refactor away" from a bug without claiming to
+# BE a refactor. Matching the full message made this exact commit
+# (433d99ab, "fix: fail closed and correct time/DST handling across 9 sites")
+# fail Rule 2 -- it mentioned "refactor" once in an explanation of the evidence
+# leak, and server.py was already 4047 lines from earlier work that this commit
+# never touched. The gate blocked a correct commit for a word in a sentence.
+#
+# Rules 9-12 already learned this lesson and scope themselves to the subject;
+# the same reasoning applies to Rules 1 and 2, which decide whether a commit is
+# making an ML or refactor claim. Defined here so every rule can use it.
+COMMIT_SUBJECT=$(echo "$COMMIT_MSG" | head -1)
+
 echo "=== Truth Audit ==="
 echo "Commit: $(git log -1 --oneline)"
-echo "Message: $(echo "$COMMIT_MSG" | head -1)"
+echo "Message: $COMMIT_SUBJECT"
 echo ""
 
 # --- Rule 1: No synthetic data in any commit touching ML ---
-if echo "$COMMIT_MSG" | grep -qiE "ml|model|train|synthetic|data.*gen"; then
+# Subject line only, for the same reason as Rule 2.
+if echo "$COMMIT_SUBJECT" | grep -qiE "ml|model|train|synthetic|data.*gen"; then
     # `|| true` is required because pipefail+errexit would otherwise abort the
     # entire script when grep finds nothing (exit 1). With this guard, the
     # subsequent rules actually get a chance to run. Without it, the audit
@@ -52,7 +67,9 @@ if echo "$COMMIT_MSG" | grep -qiE "ml|model|train|synthetic|data.*gen"; then
 fi
 
 # --- Rule 2: If commit claims "refactor", server.py must not have grown ---
-if echo "$COMMIT_MSG" | grep -qiE "refactor|Phase A"; then
+# Subject line only: see the note where COMMIT_SUBJECT is defined. A commit body
+# that merely mentions "refactor" is describing work, not claiming to be one.
+if echo "$COMMIT_SUBJECT" | grep -qiE "refactor|Phase A"; then
     SERVER_LINES=$(wc -l < backend/server.py 2>/dev/null || echo 0)
     if [ "$SERVER_LINES" -gt 3532 ]; then
         check "Refactor commit: server.py must not grow (currently $SERVER_LINES lines, baseline 3532)" "fail"
@@ -192,7 +209,6 @@ fi
 # commit that merely *describes* model behaviour in its explanation trips the
 # gate — this very rule blocked its own commit that way on the first try. The
 # subject is what declares what a commit does; the body is prose.
-COMMIT_SUBJECT=$(echo "$COMMIT_MSG" | head -1)
 if echo "$COMMIT_SUBJECT" | grep -qiE "\b(ml|model|models|train|training|retrain|promote)\b"; then
     MODEL_RULES_BLOCK=1
 else
