@@ -82,6 +82,17 @@ function TrinityView({ onFocusTicker, onTradeSelect }) {
   const [contract, setContract] = useState(null);
   const [contractLoading, setContractLoading] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // O5: same focus ownership as the Solstice inspector drawer.
+  const drawerCloseRef = useRef(null);
+  const drawerPrevFocusRef = useRef(null);
+  useEffect(() => {
+    if (!drawerOpen) return undefined;
+    drawerPrevFocusRef.current = document.activeElement;
+    drawerCloseRef.current?.focus();
+    return () => {
+      try { drawerPrevFocusRef.current?.focus?.(); } catch { /* noop */ }
+    };
+  }, [drawerOpen]);
   const genRef = useRef(0);
   const mountedRef = useRef(true);
 
@@ -269,7 +280,8 @@ function TrinityView({ onFocusTicker, onTradeSelect }) {
       )}
       {drawerOpen && (
         <ContractDrawer contract={contract} loading={contractLoading}
-          wall={selectedWall} onClose={() => setDrawerOpen(false)} ticker={ticker} />
+          wall={selectedWall} onClose={() => setDrawerOpen(false)} ticker={ticker}
+          closeRef={drawerCloseRef} />
       )}
       <ReviewSection journal={journal} ticker={ticker} snapshotId={payload?.snapshotId} />
       <div className="triad-source" data-testid="triad-source">
@@ -445,13 +457,13 @@ function WallPricePath({ ticker, wall, spot }) {
   );
 }
 
-function ContractDrawer({ contract, loading, wall, onClose, ticker }) {
+function ContractDrawer({ contract, loading, wall, onClose, ticker, closeRef }) {
   const rows = contract?.contracts || [];
   return (
     <div className="triad-drawer" data-testid="triad-contract-drawer" role="dialog" aria-label="Contract review">
       <div className="triad-drawer-header">
         <span>Contracts · {ticker} {wall ? `${wall.low}–${wall.high}` : ""}</span>
-        <button onClick={onClose} data-testid="triad-drawer-close" aria-label="Close contract review">✕</button>
+        <button ref={closeRef} onClick={onClose} data-testid="triad-drawer-close" aria-label="Close contract review">✕</button>
       </div>
       {loading && <div className="triad-drawer-loading">loading contracts…</div>}
       {!loading && contract?.error && (

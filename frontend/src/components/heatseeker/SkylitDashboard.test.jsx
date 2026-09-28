@@ -987,3 +987,24 @@ test("O2 drawer anchors to the main area so toolbar controls stay clickable", as
   const toggle = screen.getByTestId("skylit-compare-toggle");
   expect(drawer.contains(toggle)).toBe(false);
 });
+
+test("O5 drawer moves focus to its close control and restores prior focus on close", async () => {
+  axios.get.mockImplementation(async () => ({ data: { strikes: [] } }));
+  const data = { ticker: "SPY", asof: "2026-09-03T00:00:00Z", spot: 650, exposure_basis: "OI",
+    strikes: [{ strike: 650, gex: 1000 }],
+    grid: { expiries: ["2026-09-18"], strikes: [650], grid: { "2026-09-18": { 650: 1000 } } },
+    snapshotId: "s-focus", metrics: { walls: [], grids: {} },
+    quality: { state: "usable", reasonCodes: [], setupEligible: true } };
+  await act(async () => {
+    render(<SkylitDashboard ticker="SPY" data={data} spot={650} />);
+  });
+  const cell = screen.getByTestId("mock-heatmap-cell");
+  cell.focus();
+  await act(async () => { fireEvent.click(cell); });
+  await waitFor(() => {
+    expect(screen.getByTestId("skylit-inspector-drawer")).toBeInTheDocument();
+  });
+  expect(screen.getByTestId("skylit-drawer-close")).toHaveFocus();
+  await act(async () => { fireEvent.click(screen.getByTestId("skylit-drawer-close")); });
+  expect(cell).toHaveFocus();
+});
