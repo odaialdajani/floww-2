@@ -33,9 +33,11 @@ test("metric switch renders and changes overlay basis", async () => {
   await act(async () => {
     render(<SkylitDashboard ticker="SPY" data={data} spot={500} />);
   });
-  expect(screen.getByTestId("skylit-metric-switch")).toBeInTheDocument();
+  // O2: the permanent tab tower is a compact GEX-basis menu with the same contract.
+  const basis = screen.getByTestId("skylit-basis-select");
+  expect(basis.value).toBe("raw");
   await act(async () => {
-    fireEvent.click(screen.getByTestId("skylit-metric-delta"));
+    fireEvent.change(basis, { target: { value: "delta" } });
   });
   expect(screen.getByTestId("skylit-grid-basis").textContent).toContain("OI_DELTA_WEIGHTED");
 });

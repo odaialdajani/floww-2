@@ -102,7 +102,7 @@ function SelectedWallBlock({ data, spot, selectedCell, metric = "raw", replay = 
  * when its surface is missing. Own scroll refs per instance so inline and
  * expanded desks never cross-sync.
  */
-function CompareWorkspace({ data, spot, ticker, metric, gridZoom,
+function CompareWorkspace({ data, spot, ticker, metric,
                             density, windowRows, onPaneCellClick,
                             onStrikeClick, onPaneScale, compareLock }) {
   const gexRef = useRef(null);
@@ -148,8 +148,10 @@ function CompareWorkspace({ data, spot, ticker, metric, gridZoom,
       />
     </div>
   );
+  // O1: zoom applies ONCE at the heatmap-area level (see render below).
+  // A second zoom here used to square the scale in compare mode.
   return (
-    <div className="skylit-compare-workspace" data-testid="skylit-compare-desk" style={{ zoom: gridZoom }}>
+    <div className="skylit-compare-workspace" data-testid="skylit-compare-desk">
       {pane("gex", "gex", "Raw structural wall anchor; weighting changes cells, not walls",
         "USD/1% move", compareLock?.gex || null)}
       {pane("vex", "vex", "Vanna exposure; delta weighting N/A here",
@@ -224,6 +226,10 @@ function SkylitDashboard({
   // compatible live refreshes. Cleared on ticker change or scope change.
   const [followWall, setFollowWall] = useState(false);
   const [followWallId, setFollowWallId] = useState(null);
+  // O2: inspector drawer — selection opens it, ✕ or cleared selection
+  // closes it. Only auto-opens on a NEW selection (follow refreshes must
+  // not yank it open after the user closed it).
+  const [drawerOpen, setDrawerOpen] = useState(false);
   // R8-04: review journal state for the current snapshot's decision
   const [reviewState, setReviewState] = useState(null);
   const [reviewLoading, setReviewLoading] = useState(false);
@@ -271,24 +277,29 @@ function SkylitDashboard({
   const zoomIn = useCallback(() => setGridZoom((z) => Math.min(1.5, +(z + 0.25).toFixed(2))), []);
   const zoomOut = useCallback(() => setGridZoom((z) => Math.max(0.75, +(z - 0.25).toFixed(2))), []);
   const zoomReset = useCallback(() => setGridZoom(1), []);
-  // Fill-height rows (2026-09-04): the in-frame window sizes itself to the
-  // measured heatmap area so strikes run as long as possible instead of a
-  // fixed short list with dead space below. Falls back to 21 pre-measure.
+  // Fill-height rows: derive capacity from the EXTERNAL allocated box
+  // (the flex parent), never from the measured element itself. Measuring
+  // self while descendants change with fitRows is a feedback loop
+  // (O1): row count -> content height -> new row count. The parent box is
+  // flex-constrained, so its height is stable across grid re-renders.
+  // Falls back to 21 pre-measure / without ResizeObserver.
   const heatAreaRef = useRef(null);
   const [fitRows, setFitRows] = useState(21);
   useEffect(() => {
     const el = heatAreaRef.current;
     if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const box = el.parentElement || el;
     const measure = () => {
-      const h = el.clientHeight || 0;
+      const h = box.clientHeight || 0;
       if (h > 0) {
         const rows = Math.floor((h - 40) / 24);
-        setFitRows(Math.max(10, Math.min(120, rows)));
+        const next = Math.max(10, Math.min(120, rows));
+        setFitRows((prev) => (prev === next ? prev : next));
       }
     };
     measure();
     const ro = new ResizeObserver(measure);
-    ro.observe(el);
+    ro.observe(box);
     return () => ro.disconnect();
   }, []);
   // Full-page grid overlay: the in-frame heatmap only shows what fits;
@@ -302,6 +313,14 @@ function SkylitDashboard({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [expanded]);
+
+  // Esc closes the inspector drawer too (same local pattern).
+  useEffect(() => {
+    if (!drawerOpen) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") setDrawerOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [drawerOpen]);
 
   // Expanded view preserves analytical scope (F18): same mode/expiries as the
   // in-frame grid by default; widening analysis is an explicit user action.
@@ -376,6 +395,20 @@ function SkylitDashboard({
       mapStrikes:priceHistoryOpen?[]:shownMapStrikes(visibleData,displaySpot,expanded?null:fitRows,activeView,activeMetric),
       mapExpiries:priceHistoryOpen?[]:activeSurface.expiries,observedAt:priceHistoryOpen?null:visibleData?.event_time || visibleData?.observed_at || null});
   useEffect(() => { setFollowWall(false); setFollowWallId(null); }, [ticker,timeframe,expiries,dte,expWidened]);
+  // O2 drawer auto-open: a NEW wall/strike selection opens the inspector;
+  // cleared selection closes it. Identity-keyed so follow refreshes and
+  // re-renders never yank it open after an explicit close.
+  const selKey = selectedCell ? `${selectedCell.wall_id || ""}|${selectedCell.strike ?? ""}|${selectedCell.colKey ?? ""}` : "";
+  const prevSelKey = useRef("");
+  useEffect(() => {
+    if (selKey && selKey !== prevSelKey.current) {
+      prevSelKey.current = selKey;
+      setDrawerOpen(true);
+    } else if (!selKey) {
+      prevSelKey.current = "";
+      setDrawerOpen(false);
+    }
+  }, [selKey]);
   const overlayNote = (() => {
     const n = overlayData?.strikes?.length || 0;
     const scope = `${timeframe} · ${expWidened ? 8 : expiries} expiries`;
@@ -497,6 +530,28 @@ function SkylitDashboard({
       .catch(() => { /* save failed — pill keeps prior state, no false durable */ })
       .finally(() => setReviewSaving(false));
   }, [isReplay, reviewDec, reviewSaving, reviewReason, selectedCell, metric, viewMode, ticker]);
+
+  // O4: "Open in Triad" handoff — Triad reads + clears this on mount.
+  // sessionStorage (tab-scoped, no App.js lease needed; App reads ?page=
+  // on init, so navigation is a reload into the Triad page). Defined here
+  // (after displayData/compareMode) so the deps array never hits TDZ.
+  const openInTriad = useCallback(() => {
+    try {
+      sessionStorage.setItem("solstice.triadHandoff", JSON.stringify({
+        ticker, wall_id: selectedCell?.wall_id || null,
+        strike: selectedCell?.strike ?? null, expiry: selectedCell?.colKey || null,
+        snapshotId: displayData?.snapshotId || null,
+        view: compareMode ? activePane : viewMode, metric,
+        replayAsOf: isReplay ? (displayData?.asof || null) : null,
+        ts: Date.now(),
+      }));
+    } catch { /* storage unavailable — Triad still opens, without context */ }
+    try {
+      const q = new URLSearchParams(window.location.search);
+      q.set("page", "trinity");
+      window.location.search = q.toString();
+    } catch { /* noop */ }
+  }, [ticker, selectedCell, displayData, compareMode, activePane, viewMode, metric, isReplay]);
 
   return (
     <div className="skylit-full-dashboard">
@@ -696,7 +751,6 @@ function SkylitDashboard({
               spot={displaySpot}
               ticker={ticker}
               metric={metric}
-              gridZoom={gridZoom}
               density="compact"
               windowRows={fitRows}
               onPaneCellClick={handlePaneCellClick}
@@ -720,7 +774,9 @@ function SkylitDashboard({
           )}
         </div>
 
-        {/* Metrics Sidebar */}
+        {/* Metrics Sidebar — structural readout only (O2). The selected-wall
+            inspector + review journal live in the drawer below, opened by
+            selection; the sidebar never grows with review state. */}
         <div className="skylit-sidebar-area">
           <SkylitMetricsSidebar
             data={displayData}
@@ -729,6 +785,25 @@ function SkylitDashboard({
             metric={metric}
             regime={isReplay ? (visibleData?.regime || null) : regime}
           />
+        </div>
+
+      {/* O2 inspector drawer — selection-opened evidence panel. Anchored to
+          the main area (not the viewport) so toolbar controls above it stay
+          clickable; covers grid/sidebar only, never the control bars. */}
+      {drawerOpen && (
+        <div className="skylit-drawer" data-testid="skylit-inspector-drawer" role="dialog" aria-label="Selected level inspector">
+          <div className="skylit-drawer-header">
+            <span className="skylit-drawer-title">Selected level</span>
+            <button className="skylit-trade-mode-btn" onClick={openInTriad}
+              data-testid="skylit-open-triad" title="Open this wall/snapshot in Triad (raw + adjusted review desk)">
+              Open in Triad
+            </button>
+            <button className="skylit-drawer-close" onClick={() => setDrawerOpen(false)}
+              data-testid="skylit-drawer-close" title="Close inspector (Esc)" aria-label="Close inspector">
+              ✕
+            </button>
+          </div>
+          <div className="skylit-drawer-body">
           {/* T07/T23: selected-wall inspector + two-sided scenarios (deterministic) */}
           <SelectedWallBlock
             data={displayData} spot={displaySpot}
@@ -799,6 +874,8 @@ function SkylitDashboard({
             </div>
           )}
           </div>
+        </div>
+      )}
       </div>
 
       {/* 3.5 Meridian & Velocity band REMOVED from Solstice (2026-09-03,
@@ -847,7 +924,6 @@ function SkylitDashboard({
                   spot={displaySpot}
                   ticker={ticker}
                   metric={metric}
-                  gridZoom={1}
                   density="full"
                   windowRows={null}
                   onPaneCellClick={handlePaneCellClick}
@@ -884,7 +960,9 @@ function SkylitDashboard({
         </div>
       )}
 
-      {/* 4. Bottom Ticker Info Bar */}
+      {/* 4. Bottom Ticker Info Bar — readout only. Family switching lives
+          once in the control bar (O2); a second GEX/VEX tab set here was a
+          duplicate control for the same state. */}
       <div className="skylit-bottom-bar">
         <div className="skylit-bottom-ticker">
           <span className="skylit-bottom-ticker-name">{ticker}</span>
@@ -899,26 +977,6 @@ function SkylitDashboard({
               {changePct >= 0 ? "+" : ""}{changePct.toFixed(2)}%
             </span>
           )}
-        </div>
-        <div className="skylit-bottom-tabs">
-          <button
-            className={`skylit-bottom-tab${viewMode === "gex" ? " active" : ""}`}
-            onClick={() => onViewModeChange && onViewModeChange("gex")}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-            </svg>
-            GEX
-          </button>
-          <button
-            className={`skylit-bottom-tab${viewMode === "vex" ? " active" : ""}`}
-            onClick={() => onViewModeChange && onViewModeChange("vex")}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-            </svg>
-            VEX
-          </button>
         </div>
       </div>
     </div>
