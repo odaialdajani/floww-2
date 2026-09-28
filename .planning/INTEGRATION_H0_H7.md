@@ -311,6 +311,53 @@ stored row — it was reading a per-batch ordinal as a global position. Now
 asserts rank 1 / batch_rank 2 / updated conviction; the update-replace behavior
 it covers is unchanged.
 
+### H3 — confluence/ML wiring: investigated, DELIBERATELY not done, with evidence
+
+The packet said: "The route currently supplies confluence=None and ml=None
+despite the four-scorer description. Either connect valid, causal, compatible
+producers or label those dimensions unavailable."
+
+I traced the whole chain rather than assuming. Findings:
+
+1. **The producer is compatible.** `node_confluence.node_brief(ticker, strikes)`
+   consumes the heatmap's own `strikes` list directly. Verified on a live
+   `^SPX` payload: `structure_magnitude` returns `(1.0, 'ok')`, and `node_brief`
+   produces rows carrying `confluence = {total, direction, dimensions,
+   coverage_weight, missing_input_policy, weights_version}` — exactly what
+   `_norm_conf` consumes. So wiring is mechanical.
+
+2. **But the producer honestly returns `total: None`.** `confluence.score`
+   takes six weighted dimensions (`flow .25, structure .25, microstructure .15,
+   ml .10, vol .10, time_delta .15`) and only counts a dimension when its
+   `inputs_status` is `"ok"`. `node_brief` populates only `flow` and
+   `microstructure`; the other four are hardcoded `0.0` with status `"missing"`,
+   and `structure` is marked `"context_only"` because it is deliberately unsigned.
+   With no signed evidence, coverage is 0.0 and total is `None` — which my
+   slice-2 fix already reports as `missing`, not `invalid`.
+
+3. **The evidence source is empty in this deployment.** Verified directly:
+   `flow_alerts_daily` **does not exist** (Catalog Error) and `flow_prints`
+   has **0 rows**. `read_alert_feed` therefore returns 0 rows, and the route's
+   `except Exception: pass` swallows the DuckDB error.
+
+**Conclusion: wiring confluence/ML today is a no-op that costs a failing query
+per ticker.** It would replace a truthful `None` with an equally truthful
+`None`, while adding I/O and a per-ticker exception. The honest state is what
+the code now reports:
+
+    conviction: 0.0 | tier: LOW
+    flow_status: missing, opportunity_status: missing,
+    confluence_status: missing, ml_status: missing, asof_status: fresh
+
+That is the truthful result for this deployment: **there is no flow evidence to
+rank on.** Before this work the same situation reported `ok` with fabricated
+0.5 components and a 17.5-point phantom score.
+
+**Deferred, not blocked.** The wiring becomes worth doing the moment
+`flow_prints` is populated or a real per-strike ML producer exists. The
+compatibility work is done and recorded so it is a parameter change, not a
+redesign. Nothing here is claimed as "connected".
+
 ## 7. Next actions
 
 | # | Action | Owner | Blocked on |
