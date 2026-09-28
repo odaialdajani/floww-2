@@ -223,6 +223,31 @@ The row shape is `{'total', 'direction', 'dimensions', 'coverage_weight',
 'missing_input_policy', 'weights_version'}` — directly consumable by
 `_norm_conf`, so wiring it is mechanical rather than a redesign.
 
+### H3 — recency: age now surfaced, score deliberately unchanged (`f76a5cee`)
+
+`asof` was recorded on every row and never evaluated, so a historical alert read
+as a current observation:
+
+    6-month-old alert : 31.5 LOW | asof 2026-03-01T00:00:00+00:00
+    fresh alert       : 31.5 LOW | asof 2026-09-28T00:00:00+00:00
+    identical score? True
+
+Evidence now carries `asof_status` in {fresh, stale, future, unknown,
+unparseable} and `asof_age_seconds`. The 7-day staleness window matches the
+alert feed window the scan route actually reads.
+
+**The conviction score is unchanged, on purpose.** A decay curve would be a
+model of how conviction decays, and there is no evidence for one here.
+Applying invented decay to a fusion score is precisely the class of
+unvalidated arithmetic this work removes. The module reports age and refuses to
+rescale; the consumer decides. A test pins the diagnostic as inert.
+
+Absent and unparseable timestamps are labelled, never guessed.
+
+Mutations: MUT10 threshold widened → 1 failed; MUT11 always-fresh → 1 failed;
+MUT12 unparseable-as-fresh → 1 failed. ruff flagged 3 issues on the first draft
+(local import placement, timezone alias); fixed before commit, not left to CI.
+
 ## 7. Next actions
 
 | # | Action | Owner | Blocked on |
