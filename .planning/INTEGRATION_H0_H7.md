@@ -440,7 +440,7 @@ lock), not a defect.
 | 2 | Open PR for the ranking work | Hermes | **DONE** — #73, open, NOT merged (no authorization) |
 | 3 | Decide confluence/ml | Hermes | **DONE** — investigated; label-unavailable is correct, wiring deferred (no evidence source exists) |
 | 4 | H4 durability + chain trace | Hermes | **DONE** — durability honest; both modules mounted; journal honestly empty |
-| 5 | Verify CI on the exact head | Hermes | **PENDING** — backend-tests still in_progress; local suite is the only complete evidence |
+| 5 | Verify CI on the exact head | Hermes | **PENDING** — backend-tests in_progress on every push; superseded runs keep getting cancelled by the next commit. **Local full backend suite on the tip: 6446 passed / 0 failed / 37 skipped (5m33s)**. Frontend local run was BLOCKED awaiting consent; frontend CI (105 suites / 918 tests) is the only frontend evidence. |
 | 6 | Hand over `WallDeskSnapshot.v1` frozen fixture | Command Code | **NOT RECEIVED** — no handover from either agent |
 | 7 | H5 integration, H6 Muse packet, H7 release evidence | Hermes | **NOT STARTED** — blocked on #6; H7 also needs OpenCode screenshots |
 | 8 | Restart backend/frontend so runtime picks up the fixes | Nav | **NOT DONE** — needs authorization; PID 46355 still pre-fix |
