@@ -472,6 +472,29 @@ established, no local bundle inspected, and no fallback connection prepared. The
 packet is the supported fallback and it is what exists. Recording the limitation
 rather than pretending it is connected.
 
+### H2 — budget uncertainty became UNLIMITED (`ed58eb7c`)
+
+The packet said: "No local exception should turn budget uncertainty into
+'unlimited.'" That is exactly what the code did.
+
+    except Exception:
+        available = float("inf")
+
+A missing or unhealthy budget governor produced **more** permissive behavior
+than a working one. Reproduced with a governor that raises:
+
+    BEFORE  scanned: 2   skipped: []
+    AFTER   scanned: 0   skipped: [{'ticker':'SPY','reason':'BUDGET_UNAVAILABLE'}, ...]
+
+Bounding spend is the governor's whole purpose; an outage in it silently removed
+the cap. Now fails CLOSED with a new `BUDGET_UNAVAILABLE`, deliberately distinct
+from `BUDGET_UNAFFORDABLE` — "we could not ask" (infrastructure, worth alerting
+on) versus "the answer was no" (ordinary backpressure). Collapsing them would
+hide the outage inside normal throttling.
+
+Behavior narrows only in the degraded case; a working budget and a genuinely
+exhausted one are unchanged. MUT20 killed.
+
 ## 7. Next actions
 
 | # | Action | Owner | Status / blocked on |
