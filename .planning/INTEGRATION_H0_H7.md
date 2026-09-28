@@ -258,8 +258,15 @@ contract. ^VIX and ^SPX **are listed on Cboe**, and this deployment serves them:
 
 Split into `NON_OPTIONABLE` (BTC, ETH — true fact) and
 `ENTITLEMENT_UNVERIFIED` (^VIX, ^SPX — options exist, this path hasn't proven
-it can serve them). Both still excluded, so **live behavior is unchanged**; only
-the reason string is now accurate. Sets asserted disjoint.
+it can serve them). Both still excluded; sets asserted disjoint.
+
+**Scope correction, verified after the fact:** neither `^VIX`, `^SPX`, `BTC` nor
+`ETH` appears in `POPULAR_UNIVERSE` (75 symbols, 0 excluded in a real
+prefilter). So this fix is **documentation-only — no live scan behavior moved**,
+and the actual exposure was always zero for the shipped universe. The
+classification was still wrong and would have become a live exclusion the moment
+anyone added ^SPX to the universe, but it is not the user-visible defect the
+packet implied. Recorded so it is not over-claimed.
 
 `test_prefilter_orders_and_excludes` used ^VIX as its NON_OPTIONABLE exemplar
 and asserted that reason — it encoded the error. Exemplar is now BTC. The
