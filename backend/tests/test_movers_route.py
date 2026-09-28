@@ -33,6 +33,7 @@ def _bars_for(symbol, drift):
     in order, so the expected ranking is unchanged.
     """
     from datetime import UTC, datetime, timedelta
+
     from services.movers import completed_session_pair
 
     last, prior = completed_session_pair()
