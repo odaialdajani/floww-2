@@ -16,6 +16,41 @@ from services.universe_scan import (
 )
 
 
+def test_dte_is_forwarded_to_the_heatmap_builder():
+    """`max_expiries` is a COUNT; `dte` is a separate tenor axis.
+
+    `build_heatmap` accepts both, and they are independent (verified live:
+    `dte=0` -> only today, `dte=1` -> today excluded). `scan_batch` forwarded
+    only `max_expiries`, so a scan on an expiry day silently folded 0DTE
+    contracts into every row's metrics with nothing in the request to say so.
+    """
+    seen = {}
+
+    async def fake_build(ticker, *, max_expiries=4, dte=None, **kw):
+        seen["max_expiries"] = max_expiries
+        seen["dte"] = dte
+        return {"snapshotId": "s1", "spot": 1.0, "asof": "a"}
+
+    out = asyncio.run(scan_batch(["SPY"], build_heatmap_fn=fake_build,
+                                 max_expiries=3, dte=0, pace_sec=0.0))
+    assert seen["max_expiries"] == 3, seen
+    assert seen["dte"] == 0, seen
+    assert out["rows"][0]["ticker"] == "SPY", out
+
+
+def test_dte_defaults_to_none_which_means_no_tenor_filter():
+    """Omitting `dte` must stay a no-filter, not silently become 0DTE-only."""
+    seen = {}
+
+    async def fake_build(ticker, *, max_expiries=4, dte=None, **kw):
+        seen["dte"] = dte
+        return {"snapshotId": "s1", "spot": 1.0, "asof": "a"}
+
+    asyncio.run(scan_batch(["SPY"], build_heatmap_fn=fake_build,
+                           max_expiries=2, pace_sec=0.0))
+    assert "dte" in seen and seen["dte"] is None, seen
+
+
 def test_non_optionable_is_not_the_same_as_entitlement_unverified():
     """`^SPX`/`^VIX` have listed options; this path simply must prove it can serve them.
 
@@ -88,7 +123,9 @@ def test_scan_batch_builds_with_injected_fns(monkeypatch):
     async def rich():
         return 1000.0
     monkeypatch.setattr(pb.budget, "peek_available", rich)
-    async def fake_build(t, max_expiries=2):
+    # Signature mirrors the real build_heatmap, which takes `dte` as a
+    # separate axis alongside max_expiries.
+    async def fake_build(t, max_expiries=2, dte=None, **kw):
         return {"snapshotId": "snap-" + t, "spot": 500.0, "asof": "2026-01-01"}
     out = asyncio.run(us.scan_batch(["SPY"], build_heatmap_fn=fake_build,
         opportunity_fn=lambda t, h: {"ok": True}, conviction_fn=lambda t, h, o: {"ok": True}, pace_sec=0))

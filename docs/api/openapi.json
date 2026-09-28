@@ -7884,6 +7884,24 @@
           },
           {
             "in": "query",
+            "name": "dte",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 365,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dte"
+            }
+          },
+          {
+            "in": "query",
             "name": "refresh",
             "required": false,
             "schema": {

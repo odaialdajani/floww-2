@@ -2627,6 +2627,7 @@ def _universe_scan_conviction(ticker: str, heat: dict | None, opp: dict | None):
 
 @router.get("/universe/scan")
 async def universe_scan(limit: int = Query(20, ge=1, le=40), max_expiries: int = Query(2, ge=1, le=4),
+                        dte: int | None = Query(None, ge=0, le=365),
                         refresh: bool = Query(False)):
     """Prefilter + batched heatmap builds + fused conviction leaderboard.
     Rotating cursor: each call scans the NEXT slice (no budget stampede).
@@ -2686,7 +2687,7 @@ async def universe_scan(limit: int = Query(20, ge=1, le=40), max_expiries: int =
         batch = []
     swept = await scan_batch(batch, opportunity_fn=_universe_scan_opportunity,
                              conviction_fn=_universe_scan_conviction,
-                             max_expiries=max_expiries, pace_sec=0.0)
+                             max_expiries=max_expiries, dte=dte, pace_sec=0.0)
     fused = _rank_many([{"ticker": r["ticker"], "opportunity": r.get("opportunity"),
                          "conviction": r.get("conviction"), "snapshot_id": r.get("snapshot_id"),
                          "asof": r.get("asof")} for r in swept["rows"]])

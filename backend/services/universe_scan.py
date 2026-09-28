@@ -95,7 +95,7 @@ def affordable_take(available, per_ticker, want):
 
 
 async def scan_batch(
-    tickers, *, build_heatmap_fn=None, opportunity_fn=None, conviction_fn=None, max_expiries=2, pace_sec=SCAN_PACE_SEC
+    tickers, *, build_heatmap_fn=None, opportunity_fn=None, conviction_fn=None, max_expiries=2, dte=None, pace_sec=SCAN_PACE_SEC
 ):
     """Build heatmaps+opportunity+conviction for one prefiltered batch.
     Peeks shared PublicBudget before EACH ticker; stops (keeping prior
@@ -125,7 +125,14 @@ async def scan_batch(
             skipped.append({"ticker": t, "reason": "BUDGET_UNAFFORDABLE"})
             continue
         try:
-            heat = await build_heatmap_fn(t, max_expiries=max_expiries)
+            # `max_expiries` is a COUNT, not a tenor filter: the first N
+            # expiries the chain returns, whatever their dates. The heatmap
+            # builder also accepts `dte` as a separate axis, and omitting it
+            # means "no tenor filter" -- so a scan run on an expiry day
+            # silently includes 0DTE contracts in every row's metrics. The two
+            # knobs are independent (verified live: dte=0 -> only today,
+            # dte=1 -> today excluded) and conflating them is the defect.
+            heat = await build_heatmap_fn(t, max_expiries=max_expiries, dte=dte)
         except Exception as e:
             skipped.append({"ticker": t, "reason": f"HEATMAP_FAIL: {e}"})
             continue
