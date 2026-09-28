@@ -137,6 +137,39 @@ into **Triad**. Raw walls locate the level; adjusted/activity context interprets
 a possible reaction; price confirmation is required. **A model or sign alone is
 not an automatic trading instruction.**
 
+### H2 — scanner cursor: claim REFUTED, no code change
+
+The packet's headline H2 defect — "prefilter truncates to limit, then cursor
+advances by that same limit modulo the truncated length. Repeated calls scan
+the identical top batch" — **does not exist in this code.**
+
+`backend/services/public_scanner.py:118 advance_cursor` rotates over the FULL
+universe size, not the truncated batch:
+
+    first 3 indices per call: [(0,1,2), (10,11,12), (20,21,22), (30,31,32), (40,41,42)]
+    cursor after 5 calls: 50
+    n=0 -> ([], 0)          # empty universe guarded
+    slice>n -> ([0,1,2], 0) # slice larger than universe guarded
+
+Batches are disjoint, so repeated calls do advance. No change made; recording the
+refutation so the item is not re-audited as broken. **Not yet checked**: whether
+priority changes between calls are honored across the rotation, and the
+checkpoint/durability requirement — those remain open.
+
+### H3 — additional: absent flow reported as a measured zero (`df3ddc10`)
+
+`flowseeker.py:_universe_scan_conviction` seeded `flow = {"conviction": 0}`
+before attempting the DuckDB read. `_norm_flow` returns `0.0`/"ok" for a dict
+holding 0, so a row whose feed was unavailable reported `flow_status: "ok"` —
+evidence that was never observed, presented as measured. Now starts at None and
+only builds a flow dict when the read returns a real non-None conviction.
+
+Combined with the phantom-0.5 fix, every `/universe/scan` leaderboard row on
+main carried **17.5 points of confidence that did not come from evidence.**
+
+The silent-except fallback is preserved exactly: an unavailable feed still
+degrades to unranked rather than failing the rank.
+
 ## 7. Next actions
 
 | # | Action | Owner | Blocked on |
