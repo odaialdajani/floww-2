@@ -495,6 +495,30 @@ hide the outage inside normal throttling.
 Behavior narrows only in the degraded case; a working budget and a genuinely
 exhausted one are unchanged. MUT20 killed.
 
+### H2 sweep — the fail-open shape appeared TWICE (`62b571f1`)
+
+Searching for siblings of the budget bug found a second instance, in a
+different file and with different mechanics. `fetch_coordinator.fetch` handled
+`BudgetExhausted` correctly, but any *other* exception from `acquire()` was
+logged and then execution **continued into the fetch**:
+
+    BEFORE  fetched despite governor error? True   response: {'ok': True}
+    AFTER   no fetch; caller gets a degraded response
+
+An outage in the spend-cap mechanism removed the cap, and the caller saw a
+successful response. Now `budget_unavailable`, distinct from `budget_exhausted`
+— the second is ordinary backpressure, the first an infrastructure fault that
+must not hide inside it.
+
+Generalized lesson recorded: **the degraded state must be distinguishable from
+the healthy-but-restrictive state.** Both of these bugs were "we could not
+determine the budget, so we behaved as if there were none."
+
+Swept the remaining `float("inf")` uses in production code: all are numerically
+correct (min-accumulators, a "never succeeded" staleness age that errs safe).
+No third instance. `read_budget.py` already fails closed; `sentiment.py` sets
+`VADER_AVAILABLE = False` deliberately.
+
 ## 7. Next actions
 
 | # | Action | Owner | Status / blocked on |
