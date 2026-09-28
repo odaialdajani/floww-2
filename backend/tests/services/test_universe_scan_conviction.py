@@ -16,11 +16,52 @@ from services.universe_scan import (
 )
 
 
+def test_non_optionable_is_not_the_same_as_entitlement_unverified():
+    """`^SPX`/`^VIX` have listed options; this path simply must prove it can serve them.
+
+    Both symbols were hardcoded NON_OPTIONABLE, which asserts they have no
+    options contract at all. They do: VIX and SPX options are listed on Cboe,
+    and in this very deployment `/api/heatmap/^SPX` returns 80 live strike
+    rows at spot 7743.41 via yfinance (HTTP 200, 124KB). Reporting
+    "non-optionable" for an instrument the service can price is a factual
+    error, and it silently drops the index most traders watch.
+
+    Both remain excluded so live behavior is unchanged, but under a distinct
+    reason so an operator can tell "no options exist" from "we cannot see
+    them" and act on the difference.
+    """
+    out = prefilter_universe(["^SPX", "^VIX", "BTC", "ETH", "SPY"], limit=10)
+    reasons = {r["ticker"]: r["reason"] for r in out["excluded"]}
+
+    assert reasons["^SPX"] == "ENTITLEMENT_UNVERIFIED", reasons
+    assert reasons["^VIX"] == "ENTITLEMENT_UNVERIFIED", reasons
+    assert reasons["BTC"] == "NON_OPTIONABLE", reasons
+    assert reasons["ETH"] == "NON_OPTIONABLE", reasons
+
+    # Neither category is silently dropped from the universe: the caller can
+    # see what was excluded and why.
+    assert "SPY" in [r["ticker"] for r in out["ordered"]]
+
+
+def test_entitlement_unverified_does_not_leak_into_non_optionable():
+    """The two sets must stay disjoint so a reason never contradicts itself."""
+    from services.universe_scan import ENTITLEMENT_UNVERIFIED, NON_OPTIONABLE
+
+    assert not (NON_OPTIONABLE & ENTITLEMENT_UNVERIFIED)
+    assert not (ENTITLEMENT_UNVERIFIED & NON_OPTIONABLE)
+
+
 def test_prefilter_orders_and_excludes():
-    out = prefilter_universe(["SPY", "^VIX", "QQQ"], movers={"SPY": 5.0, "QQQ": 0.1},
+    # BTC replaced ^VIX as the excluded exemplar. ^VIX has listed options, so
+    # excluding it on "non-optionable" grounds was a factual error; it now
+    # reports ENTITLEMENT_UNVERIFIED (see
+    # test_non_optionable_is_not_the_same_as_entitlement_unverified). The
+    # behavior this test actually pins -- an excluded symbol stays excluded --
+    # is unchanged.
+    out = prefilter_universe(["SPY", "BTC", "QQQ"], movers={"SPY": 5.0, "QQQ": 0.1},
         flow_alert_tickers={"QQQ"}, limit=10)
     names = [r["ticker"] for r in out["ordered"]]
-    assert "^VIX" not in names
+    assert "BTC" not in names
     assert out["excluded"][0]["reason"] == "NON_OPTIONABLE"
     assert names[0] == "SPY"  # 5.0 beats QQQ 0.1+2.0
 

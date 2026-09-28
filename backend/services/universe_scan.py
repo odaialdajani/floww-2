@@ -22,7 +22,18 @@ LEADERBOARD_TABLE_DDL = """
         evidence VARCHAR, updated_at VARCHAR
     )
 """
-NON_OPTIONABLE = frozenset({"^VIX", "^SPX", "BTC", "ETH"})
+# Instruments with no listed options contract at all. These are excluded on
+# fact, independent of which data path is used.
+NON_OPTIONABLE = frozenset({"BTC", "ETH"})
+
+# Index symbols whose options DO exist and are listed (VIX on Cboe, SPX on Cboe)
+# but which this scanner's data path may not serve. That is an access/entitlement
+# question, not a statement that the instrument is un-optionable, so conflating
+# the two produced a factual error: ^SPX was reported NON_OPTIONABLE purely
+# because one access path failed. Kept excluded by default so live behavior does
+# not change, but reported under a distinct reason so the operator can tell
+# "no options exist" from "we cannot see them".
+ENTITLEMENT_UNVERIFIED = frozenset({"^VIX", "^SPX"})
 SCAN_PACE_SEC = 6.0
 MAX_TICKERS_PER_SWEEP = 20
 
@@ -46,8 +57,15 @@ def prefilter_universe(universe=None, *, movers=None, prior=None, flow_alert_tic
     ranked = []
     for t in uni:
         name = str(t or "").strip().upper()
-        if not name or name in NON_OPTIONABLE:
+        if not name:
             excluded.append({"ticker": name or str(t), "reason": "NON_OPTIONABLE"})
+            continue
+        if name in NON_OPTIONABLE:
+            excluded.append({"ticker": name, "reason": "NON_OPTIONABLE"})
+            continue
+        if name in ENTITLEMENT_UNVERIFIED:
+            # Options exist; this data path has not proven it can serve them.
+            excluded.append({"ticker": name, "reason": "ENTITLEMENT_UNVERIFIED"})
             continue
         score = abs(float(movers.get(name, 0.0) or 0.0))
         score += float(prior.get(name, 0.0) or 0.0) / 100.0
