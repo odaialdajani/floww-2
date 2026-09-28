@@ -17,6 +17,21 @@ from typing import Any
 
 SCHEMA_VERSION = "solstice.evidence.v2"
 
+# The only scope keys permitted to leave the process. Everything else is
+# dropped at export time. An allowlist, not a denylist: a new credential-
+# bearing scope key fails CLOSED (it is simply not exported) instead of
+# requiring someone to remember to add it to a blocklist.
+_EXPORTABLE_SCOPE_KEYS = frozenset({
+    "expiries",
+    "metric",
+    "basis",
+    "signConvention",
+    "formulaVersion",
+    "mode",
+    "dte",
+    "scalp",
+})
+
 ALLOWED_ACTIONS = ("EXPLAIN", "REPLAY")
 
 # Output schema: every key required unless marked optional.
@@ -105,7 +120,16 @@ def build_evidence_packet(snapshot_v2: dict[str, Any], wall_id: str | None = Non
         "snapshot_id": snapshot_v2.get("snapshotId"),
         "query_id": snapshot_v2.get("queryKey"),
         "mode": mode,
-        "scope": scope,
+        # Allowlist the exported scope. Copying it verbatim exported whatever
+        # the snapshot happened to carry: a `dsn` such as
+        # postgres://user:pw@host/db passed through byte-identical, credentials
+        # included. The FACTS below are allowlisted, but the envelope was not,
+        # so redaction held only as long as nobody added a key to scope.
+        "scope": {
+            k: v
+            for k, v in scope.items()
+            if k in _EXPORTABLE_SCOPE_KEYS
+        },
         "versions": {
             "formula": scope.get("formulaVersion", "gex.v2"),
             "evidence": SCHEMA_VERSION,

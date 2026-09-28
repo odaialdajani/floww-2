@@ -6,15 +6,23 @@ backend/tests/services/strategies/test_friday_pin.py — Tests for Friday Pin st
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from services.strategies.friday_pin import FridayPinConfig, FridayPinStrategy
 
 
 def make_friday_1535_et() -> datetime:
-    """Create a Friday at 15:35 ET (20:35 UTC)."""
-    # Find a Friday
-    dt = datetime(2026, 5, 22, 20, 35, tzinfo=UTC)  # Friday
-    return dt
+    """Create a Friday at 15:35 Eastern.
+
+    This previously hardcoded 20:35 UTC and called it 15:35 ET. That is
+    correct only for EST; 2026-05-22 falls in EDT (UTC-4), where 15:35 ET is
+    19:35 UTC. So the fixture was an hour off and only passed BECAUSE the
+    production code had the same UTC-5 bug -- a test written to match the
+    defect rather than the intent.
+
+    Built from the zone now, so the instant is right in either season.
+    """
+    return datetime(2026, 5, 22, 15, 35, tzinfo=ZoneInfo("America/New_York")).astimezone(UTC)
 
 
 def make_market_data(price: float, timestamp: datetime = None) -> dict:
@@ -66,8 +74,9 @@ class TestEntryCondition:
     def test_not_friday(self):
         """Signal should not fire on non-Friday."""
         strat = FridayPinStrategy()
-        # Thursday
-        dt = datetime(2026, 5, 21, 20, 35, tzinfo=UTC)
+        # Thursday, same ET wall-clock time as the firing case.
+        dt = datetime(2026, 5, 21, 15, 35,
+                      tzinfo=ZoneInfo("America/New_York")).astimezone(UTC)
         for _i in range(30):
             strat.update_price(100.0)
         result = strat.check_entry_condition(make_market_data(100.0, dt))
@@ -169,7 +178,7 @@ class TestBacktest:
         """Backtest with data that triggers signals."""
         strat = FridayPinStrategy()
         data = []
-        base_dt = datetime(2026, 5, 22, 20, 35, tzinfo=UTC)  # Friday 15:35 ET
+        base_dt = make_friday_1535_et()  # Friday 15:35 ET, built from the zone
         for i in range(100):
             dt = base_dt + timedelta(minutes=i)
             # Keep prices very tight (pinned)

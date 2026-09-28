@@ -22,7 +22,18 @@ LEADERBOARD_TABLE_DDL = """
         evidence VARCHAR, updated_at VARCHAR
     )
 """
-NON_OPTIONABLE = frozenset({"^VIX", "^SPX", "BTC", "ETH"})
+# Instruments with no listed options contract at all. These are excluded on
+# fact, independent of which data path is used.
+NON_OPTIONABLE = frozenset({"BTC", "ETH"})
+
+# Index symbols whose options DO exist and are listed (VIX on Cboe, SPX on Cboe)
+# but which this scanner's data path may not serve. That is an access/entitlement
+# question, not a statement that the instrument is un-optionable, so conflating
+# the two produced a factual error: ^SPX was reported NON_OPTIONABLE purely
+# because one access path failed. Kept excluded by default so live behavior does
+# not change, but reported under a distinct reason so the operator can tell
+# "no options exist" from "we cannot see them".
+ENTITLEMENT_UNVERIFIED = frozenset({"^VIX", "^SPX"})
 SCAN_PACE_SEC = 6.0
 MAX_TICKERS_PER_SWEEP = 20
 
@@ -46,8 +57,15 @@ def prefilter_universe(universe=None, *, movers=None, prior=None, flow_alert_tic
     ranked = []
     for t in uni:
         name = str(t or "").strip().upper()
-        if not name or name in NON_OPTIONABLE:
+        if not name:
             excluded.append({"ticker": name or str(t), "reason": "NON_OPTIONABLE"})
+            continue
+        if name in NON_OPTIONABLE:
+            excluded.append({"ticker": name, "reason": "NON_OPTIONABLE"})
+            continue
+        if name in ENTITLEMENT_UNVERIFIED:
+            # Options exist; this data path has not proven it can serve them.
+            excluded.append({"ticker": name, "reason": "ENTITLEMENT_UNVERIFIED"})
             continue
         score = abs(float(movers.get(name, 0.0) or 0.0))
         score += float(prior.get(name, 0.0) or 0.0) / 100.0
@@ -77,7 +95,7 @@ def affordable_take(available, per_ticker, want):
 
 
 async def scan_batch(
-    tickers, *, build_heatmap_fn=None, opportunity_fn=None, conviction_fn=None, max_expiries=2, pace_sec=SCAN_PACE_SEC
+    tickers, *, build_heatmap_fn=None, opportunity_fn=None, conviction_fn=None, max_expiries=2, dte=None, pace_sec=SCAN_PACE_SEC
 ):
     """Build heatmaps+opportunity+conviction for one prefiltered batch.
     Peeks shared PublicBudget before EACH ticker; stops (keeping prior
@@ -99,15 +117,33 @@ async def scan_batch(
     skipped = []
     scanned = 0
     for t in tickers or []:
+        # Fail CLOSED. This used to substitute float("inf") on any exception,
+        # so a broken or missing budget governor produced MORE permissive
+        # behavior than a working one and the scan spent freely with nothing
+        # recorded. Bounding spend is the governor's entire purpose; losing
+        # sight of it is the worst possible moment to stop enforcing it.
+        budget_ok = True
         try:
             available = await _pub_budget.peek_available()
         except Exception:
-            available = float("inf")
+            # Unknown is not unlimited. Skip rather than guess.
+            available = None
+            budget_ok = False
+        if not budget_ok or available is None:
+            skipped.append({"ticker": t, "reason": "BUDGET_UNAVAILABLE"})
+            continue
         if available < per_ticker:
             skipped.append({"ticker": t, "reason": "BUDGET_UNAFFORDABLE"})
             continue
         try:
-            heat = await build_heatmap_fn(t, max_expiries=max_expiries)
+            # `max_expiries` is a COUNT, not a tenor filter: the first N
+            # expiries the chain returns, whatever their dates. The heatmap
+            # builder also accepts `dte` as a separate axis, and omitting it
+            # means "no tenor filter" -- so a scan run on an expiry day
+            # silently includes 0DTE contracts in every row's metrics. The two
+            # knobs are independent (verified live: dte=0 -> only today,
+            # dte=1 -> today excluded) and conflating them is the defect.
+            heat = await build_heatmap_fn(t, max_expiries=max_expiries, dte=dte)
         except Exception as e:
             skipped.append({"ticker": t, "reason": f"HEATMAP_FAIL: {e}"})
             continue
@@ -196,9 +232,24 @@ def latest_leaderboard(conn, limit=50):
         rows = conn.execute(
             "SELECT ticker, rank, conviction, tier, direction, trade_type,"
             + " invalidation, snapshot_id, asof_ts, evidence, updated_at"
-            + " FROM universe_leaderboard_v1 ORDER BY rank ASC LIMIT "
+            + " FROM universe_leaderboard_v1 ORDER BY conviction DESC, updated_at ASC LIMIT "
             + str(max(1, int(limit)))
         ).fetchall()
+        # `rank` is a WITHIN-BATCH ordinal. The rotating cursor scans one slice
+        # per call, so successive batches each produce a rank 1 and those
+        # ordinals are persisted per ticker. Ordering by it made two rows tie
+        # at rank 1 and let a 15.0-conviction row sort ahead of a 40.0 row
+        # purely because of which batch it arrived in. Order by the fused
+        # score instead, so the view is ranked over the whole eligible
+        # population, and hand back a recomputed dense rank alongside the
+        # stored per-batch one.
+        global_rows = conn.execute(
+            "SELECT ticker, conviction FROM universe_leaderboard_v1"
+            " ORDER BY conviction DESC, updated_at ASC"
+        ).fetchall()
+        dense_rank = {}
+        for i, (tk, _cv) in enumerate(global_rows or [], start=1):
+            dense_rank.setdefault(tk, i)
         out = []
         for r in rows or []:
             try:
@@ -208,7 +259,10 @@ def latest_leaderboard(conn, limit=50):
             out.append(
                 {
                     "ticker": r[0],
-                    "rank": r[1],
+                    # Global rank recomputed over every stored row; the stored
+                    # per-batch ordinal is preserved under `batch_rank`.
+                    "rank": dense_rank.get(r[0], r[1]),
+                    "batch_rank": r[1],
                     "conviction": r[2],
                     "tier": r[3],
                     "direction": r[4],

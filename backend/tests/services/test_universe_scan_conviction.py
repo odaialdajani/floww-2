@@ -16,11 +16,213 @@ from services.universe_scan import (
 )
 
 
+def test_budget_read_failure_does_not_grant_unlimited_spend(monkeypatch):
+    """An unreadable budget must fail CLOSED, not open.
+
+    `scan_batch` caught any exception from `peek_available` and substituted
+    `float("inf")` -- so a broken or missing budget governor produced *more*
+    permissive behavior than a working one, and the scan spent freely with
+    nothing recorded. The entire point of the governor is to bound spend;
+    losing sight of it is the worst possible moment to stop enforcing it.
+    """
+    import services.public_budget as pb
+
+    async def boom():
+        raise RuntimeError("budget backend unavailable")
+
+    monkeypatch.setattr(pb.budget, "peek_available", boom)
+
+    async def fake_build(t, max_expiries=2, dte=None, **kw):
+        raise AssertionError("must not fetch when the budget is unknown")
+
+    out = asyncio.run(scan_batch(["SPY", "QQQ"], build_heatmap_fn=fake_build, pace_sec=0.0))
+
+    assert out["coverage"]["scanned"] == 0, out["coverage"]
+    assert len(out["skipped"]) == 2, out["skipped"]
+    reasons = {s["reason"] for s in out["skipped"]}
+    assert reasons == {"BUDGET_UNAVAILABLE"}, out["skipped"]
+
+
+def test_budget_uncertainty_is_distinguishable_from_genuine_exhaustion(monkeypatch):
+    """'We could not ask' and 'the answer was no' are different states."""
+    import services.public_budget as pb
+
+    async def boom():
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(pb.budget, "peek_available", boom)
+    out = asyncio.run(scan_batch(["SPY"], build_heatmap_fn=lambda t, **k: None, pace_sec=0.0))
+    assert out["skipped"][0]["reason"] == "BUDGET_UNAVAILABLE", out["skipped"]
+
+    async def empty():
+        return 0.0
+
+    monkeypatch.setattr(pb.budget, "peek_available", empty)
+    out2 = asyncio.run(scan_batch(["SPY"], build_heatmap_fn=lambda t, **k: None, pace_sec=0.0))
+    assert out2["skipped"][0]["reason"] == "BUDGET_UNAFFORDABLE", out2["skipped"]
+
+
+def test_research_features_degrade_on_missing_zone_instead_of_crashing():
+    """A missing zone must return policy_unavailable, not raise TypeError.
+
+    The function's own contract is "or {status: policy_unavailable, reason}",
+    and `server.py` guards the call with `zone=(None if zone is None else
+    tuple(zone))` -- passing None is an anticipated input. But `lo, hi = zone`
+    unpacked None before any validation, so the documented "no zone -> no
+    numeric barriers, close_episodes reports NEED_EPISODE and never invents a
+    label" path crashed instead. A crash is not a label, but it is a 500 and
+    the caller cannot distinguish it from a genuine fault.
+    """
+    from services.episode_policy import research_default_features
+
+    for bad in (None, (), (1.0,), "nope", (1.0, 2.0, 3.0)):
+        out = research_default_features(zone=bad, encounter_price=769.0, underlying_tick=0.01)
+        assert out.get("status") == "policy_unavailable", (bad, out)
+        assert out.get("reason"), (bad, out)
+        # No barriers may be invented when the zone is unusable.
+        assert "target" not in out and "stop" not in out, (bad, out)
+
+
+def test_research_features_reject_nonfinite_and_inverted_zones():
+    """Non-finite and hi<=lo zones are invalid, not merely unusual."""
+    from services.episode_policy import research_default_features
+
+    for bad in ((float("nan"), 1.0), (1.0, float("inf")), (5.0, 5.0), (5.0, 1.0)):
+        out = research_default_features(zone=bad, encounter_price=769.0, underlying_tick=0.01)
+        assert out.get("status") == "policy_unavailable", (bad, out)
+
+
+def test_research_features_derive_barriers_from_a_valid_zone():
+    """A valid zone still produces deterministic barriers -- the fix is narrow."""
+    from services.episode_policy import research_default_features
+
+    out = research_default_features(zone=(768.0, 770.0), encounter_price=769.0, underlying_tick=0.01)
+    assert out.get("status") != "policy_unavailable", out
+    assert out.get("target") is not None and out.get("stop") is not None, out
+    # Deterministic: same inputs, same barriers.
+    again = research_default_features(zone=(768.0, 770.0), encounter_price=769.0, underlying_tick=0.01)
+    assert again == out
+
+
+def test_cross_batch_ranks_are_recomputed_over_one_population():
+    """Two batches must not each contribute their own "rank 1".
+
+    `rank` is a within-batch ordinal. The rotating cursor scans one slice per
+    call, so every batch starts again at 1 and those ordinals are persisted per
+    ticker. Ordering the view by it produced two rows tied at rank 1 and let a
+    15.0 row sort ahead of a 40.0 row purely by batch arrival order.
+    """
+    conn = duckdb.connect(":memory:")
+    record_leaderboard(conn, [{"ticker": "AAA", "rank": 1, "conviction": 15.0,
+                               "tier": "LOW", "direction": "BULL", "trade_type": "no_trade",
+                               "invalidation": "x", "snapshot_id": "s1", "asof": "a"}])
+    record_leaderboard(conn, [{"ticker": "BBB", "rank": 1, "conviction": 40.0,
+                               "tier": "HIGH", "direction": "BEAR", "trade_type": "no_trade",
+                               "invalidation": "x", "snapshot_id": "s2", "asof": "b"}])
+
+    rows = latest_leaderboard(conn)
+    by_ticker = {r["ticker"]: r for r in rows}
+
+    assert [r["ticker"] for r in rows] == ["BBB", "AAA"], rows
+    assert by_ticker["BBB"]["rank"] == 1, by_ticker["BBB"]
+    assert by_ticker["AAA"]["rank"] == 2, by_ticker["AAA"]
+    # The stored per-batch ordinal is still available, not silently lost.
+    assert by_ticker["AAA"]["batch_rank"] == 1 and by_ticker["BBB"]["batch_rank"] == 1
+
+
+def test_leaderboard_ordering_follows_score_not_arrival():
+    """A later, weaker row must not outrank an earlier, stronger one."""
+    conn = duckdb.connect(":memory:")
+    for tk, rank, score in (("WEAK", 1, 3.0), ("STRONG", 2, 88.0), ("MID", 1, 40.0)):
+        record_leaderboard(conn, [{"ticker": tk, "rank": rank, "conviction": score,
+                                   "tier": "LOW", "direction": "NEUTRAL", "trade_type": "no_trade",
+                                   "invalidation": "x", "snapshot_id": "s", "asof": "a"}])
+    rows = latest_leaderboard(conn)
+    assert [r["ticker"] for r in rows] == ["STRONG", "MID", "WEAK"], rows
+    assert [r["rank"] for r in rows] == [1, 2, 3], rows
+
+
+def test_dte_is_forwarded_to_the_heatmap_builder():
+    """`max_expiries` is a COUNT; `dte` is a separate tenor axis.
+
+    `build_heatmap` accepts both, and they are independent (verified live:
+    `dte=0` -> only today, `dte=1` -> today excluded). `scan_batch` forwarded
+    only `max_expiries`, so a scan on an expiry day silently folded 0DTE
+    contracts into every row's metrics with nothing in the request to say so.
+    """
+    seen = {}
+
+    async def fake_build(ticker, *, max_expiries=4, dte=None, **kw):
+        seen["max_expiries"] = max_expiries
+        seen["dte"] = dte
+        return {"snapshotId": "s1", "spot": 1.0, "asof": "a"}
+
+    out = asyncio.run(scan_batch(["SPY"], build_heatmap_fn=fake_build,
+                                 max_expiries=3, dte=0, pace_sec=0.0))
+    assert seen["max_expiries"] == 3, seen
+    assert seen["dte"] == 0, seen
+    assert out["rows"][0]["ticker"] == "SPY", out
+
+
+def test_dte_defaults_to_none_which_means_no_tenor_filter():
+    """Omitting `dte` must stay a no-filter, not silently become 0DTE-only."""
+    seen = {}
+
+    async def fake_build(ticker, *, max_expiries=4, dte=None, **kw):
+        seen["dte"] = dte
+        return {"snapshotId": "s1", "spot": 1.0, "asof": "a"}
+
+    asyncio.run(scan_batch(["SPY"], build_heatmap_fn=fake_build,
+                           max_expiries=2, pace_sec=0.0))
+    assert "dte" in seen and seen["dte"] is None, seen
+
+
+def test_non_optionable_is_not_the_same_as_entitlement_unverified():
+    """`^SPX`/`^VIX` have listed options; this path simply must prove it can serve them.
+
+    Both symbols were hardcoded NON_OPTIONABLE, which asserts they have no
+    options contract at all. They do: VIX and SPX options are listed on Cboe,
+    and in this very deployment `/api/heatmap/^SPX` returns 80 live strike
+    rows at spot 7743.41 via yfinance (HTTP 200, 124KB). Reporting
+    "non-optionable" for an instrument the service can price is a factual
+    error, and it silently drops the index most traders watch.
+
+    Both remain excluded so live behavior is unchanged, but under a distinct
+    reason so an operator can tell "no options exist" from "we cannot see
+    them" and act on the difference.
+    """
+    out = prefilter_universe(["^SPX", "^VIX", "BTC", "ETH", "SPY"], limit=10)
+    reasons = {r["ticker"]: r["reason"] for r in out["excluded"]}
+
+    assert reasons["^SPX"] == "ENTITLEMENT_UNVERIFIED", reasons
+    assert reasons["^VIX"] == "ENTITLEMENT_UNVERIFIED", reasons
+    assert reasons["BTC"] == "NON_OPTIONABLE", reasons
+    assert reasons["ETH"] == "NON_OPTIONABLE", reasons
+
+    # Neither category is silently dropped from the universe: the caller can
+    # see what was excluded and why.
+    assert "SPY" in [r["ticker"] for r in out["ordered"]]
+
+
+def test_entitlement_unverified_does_not_leak_into_non_optionable():
+    """The two sets must stay disjoint so a reason never contradicts itself."""
+    from services.universe_scan import ENTITLEMENT_UNVERIFIED, NON_OPTIONABLE
+
+    assert not (NON_OPTIONABLE & ENTITLEMENT_UNVERIFIED)
+    assert not (ENTITLEMENT_UNVERIFIED & NON_OPTIONABLE)
+
+
 def test_prefilter_orders_and_excludes():
-    out = prefilter_universe(["SPY", "^VIX", "QQQ"], movers={"SPY": 5.0, "QQQ": 0.1},
+    # BTC replaced ^VIX as the excluded exemplar. ^VIX has listed options, so
+    # excluding it on "non-optionable" grounds was a factual error; it now
+    # reports ENTITLEMENT_UNVERIFIED (see
+    # test_non_optionable_is_not_the_same_as_entitlement_unverified). The
+    # behavior this test actually pins -- an excluded symbol stays excluded --
+    # is unchanged.
+    out = prefilter_universe(["SPY", "BTC", "QQQ"], movers={"SPY": 5.0, "QQQ": 0.1},
         flow_alert_tickers={"QQQ"}, limit=10)
     names = [r["ticker"] for r in out["ordered"]]
-    assert "^VIX" not in names
+    assert "BTC" not in names
     assert out["excluded"][0]["reason"] == "NON_OPTIONABLE"
     assert names[0] == "SPY"  # 5.0 beats QQQ 0.1+2.0
 
@@ -47,7 +249,9 @@ def test_scan_batch_builds_with_injected_fns(monkeypatch):
     async def rich():
         return 1000.0
     monkeypatch.setattr(pb.budget, "peek_available", rich)
-    async def fake_build(t, max_expiries=2):
+    # Signature mirrors the real build_heatmap, which takes `dte` as a
+    # separate axis alongside max_expiries.
+    async def fake_build(t, max_expiries=2, dte=None, **kw):
         return {"snapshotId": "snap-" + t, "spot": 500.0, "asof": "2026-01-01"}
     out = asyncio.run(us.scan_batch(["SPY"], build_heatmap_fn=fake_build,
         opportunity_fn=lambda t, h: {"ok": True}, conviction_fn=lambda t, h, o: {"ok": True}, pace_sec=0))
@@ -56,12 +260,26 @@ def test_scan_batch_builds_with_injected_fns(monkeypatch):
 
 def test_rank_one_fuses_and_degrades():
     full = rank_one("SPY", flow={"conviction": 90}, opportunity={"opportunity_score": 8.0, "direction": "BULL", "trade_type": "debit_spread", "invalidation": "lose 500", "regime": "Trending"}, confluence={"total": 60.0, "direction": "bullish"}, ml={"prediction": "UP", "confidence": 0.8}, snapshot_id="s1", asof="a")
-    assert full["tier"] == "HIGH" and full["direction"] == "BULL"
+    # Tier is now MED, not HIGH. Full evidence here scores 74.25:
+    #   flow 0.9, opportunity 0.8, confluence 0.6, ml 0.45
+    # The old normalizers reported 85.75 for this same row by crediting a
+    # signed confluence of +60 as 0.8 and a BULLISH label as 0.95, while the
+    # exact bearish mirror scored 60.25. Quality must not depend on which side
+    # the evidence points, so both now score 74.25 and the thresholds are
+    # unchanged -- the inputs stopped being flattering.
+    assert full["conviction"] == 74.25, full["conviction"]
+    assert full["tier"] == "MED" and full["direction"] == "BULL"
     assert full["invalidation"] == "lose 500" and full["evidence"]["flow_status"] == "ok"
     bare = rank_one("QQQ")
     assert bare["tier"] == "LOW" and bare["direction"] == "NEUTRAL"
     assert "No invalidation" in bare["invalidation"]
     assert bare["evidence"]["flow_status"] == "missing"
+
+    # Equal evidence, opposite side, equal quality. This was 85.75 vs 60.25
+    # before the normalizers were corrected.
+    bear = rank_one("SPY", flow={"conviction": 90}, opportunity={"opportunity_score": 8.0, "direction": "BEAR", "trade_type": "debit_spread", "invalidation": "lose 500", "regime": "Trending"}, confluence={"total": -60.0, "direction": "bearish"}, ml={"prediction": "DOWN", "confidence": 0.8}, snapshot_id="s1", asof="a")
+    assert full["conviction"] == bear["conviction"], (full["conviction"], bear["conviction"])
+    assert full["direction"] == "BULL" and bear["direction"] == "BEAR"
 
 def test_rank_many_sorts_and_ranks():
     rows = [{"ticker": "AAA", "opportunity": {"opportunity_score": 1.0}, "snapshot_id": "s", "asof": "a"},
@@ -78,4 +296,10 @@ def test_leaderboard_round_trip():
     assert got[0]["ticker"] == "SPY" and got[0]["conviction"] == 88.0 and got[0]["evidence"] == {"k": 1}
     record_leaderboard(conn, [{"ticker": "SPY", "rank": 2, "conviction": 50.0, "tier": "WATCH", "direction": "NEUTRAL", "trade_type": "no_trade", "invalidation": "i", "snapshot_id": "s2", "asof": "a2", "evidence": {}}])
     got2 = latest_leaderboard(conn)
-    assert len(got2) == 1 and got2[0]["rank"] == 2
+    # SPY is the only stored row, so its GLOBAL rank is 1. The stored
+    # per-batch ordinal (2) is preserved as `batch_rank` -- the point of this
+    # test is the update/replace, not the ordinal.
+    assert len(got2) == 1, got2
+    assert got2[0]["rank"] == 1, got2[0]
+    assert got2[0]["batch_rank"] == 2, got2[0]
+    assert got2[0]["conviction"] == 50.0, got2[0]
