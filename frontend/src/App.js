@@ -939,11 +939,9 @@ export default function App() {
                       <button key={m} onClick={() => setMode(m)} className={`btn flex-1 ${mode === m ? "active" : ""}`}>{m.toUpperCase()}</button>
                     ))}
                   </div>
-                  <div className="flex gap-1 mb-2">
-                    {["gex", "vex", "charm"].map(m => (
-                      <button key={m} onClick={() => setViewMode(m)} className={`btn flex-1 ${viewMode === m ? "active" : ""}`}>{m.toUpperCase()}</button>
-                    ))}
-                  </div>
+                  {/* O2: family switching (GEX/VEX/Charm) lives once in the
+                      Solstice control bar; this duplicate row is removed.
+                      viewMode state + keyboard shortcuts (e/v/h) unchanged. */}
                   <div className="text-slate-500 mb-1 text-[10px]">DTE</div>
                   <div className="flex gap-1 mb-2">
                     {[{l:"0DTE",v:0},{l:"1DTE",v:1},{l:"Week",v:7},{l:"All",v:null}].map(({l,v}) => (
