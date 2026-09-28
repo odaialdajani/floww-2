@@ -17,15 +17,39 @@ def client():
 
 
 def _bars_for(symbol, drift):
-    """10 ET days of bars with a fixed per-day drift (fraction)."""
+    """Bars covering the two completed sessions the service actually asks for.
+
+    The previous version walked back 10 *calendar* days from now and stopped at
+    yesterday. services.movers.get_movers reads the last two COMPLETED exchange
+    sessions, and on any weekday the most recent one is today -- so the fixture
+    could never cover it and the route correctly returned 0 rows with
+    coverage {requested: 75, valid: 0, excluded: 75}.
+
+    That made this test pass on weekends and fail every weekday, so CI went red
+    intermittently depending on the day it ran.
+
+    Now the dates come from the service's own session pair, so the fixture is
+    correct on any calendar day. The drift is applied across the emitted bars
+    in order, so the expected ranking is unchanged.
+    """
     from datetime import UTC, datetime, timedelta
+    from services.movers import completed_session_pair
+
+    last, prior = completed_session_pair()
+    last_d = datetime.strptime(last, "%Y-%m-%d")
+    prior_d = datetime.strptime(prior, "%Y-%m-%d")
+
+    # last session plus a few sessions before it, so the pair is always present.
+    sessions = [last_d - timedelta(days=i) for i in range(0, 6)]
+    sessions.append(prior_d)
+
     rows = []
     base = 100.0
-    for back in range(10, 0, -1):
-        day = (datetime.now(UTC) - timedelta(days=back)).strftime("%Y-%m-%d")
-        c = base * (1.0 + drift) ** (10 - back)
-        rows.append({"t": f"{day}T12:00:00-04:00", "o": c, "h": c * 1.01,
-                     "l": c * 0.99, "c": c, "v": 1000})
+    n = len(sessions)
+    for i, day in enumerate(sessions):
+        c = base * (1.0 + drift) ** (n - 1 - i)
+        rows.append({"t": f"{day.strftime('%Y-%m-%d')}T12:00:00-04:00",
+                     "o": c, "h": c * 1.01, "l": c * 0.99, "c": c, "v": 1000})
     return rows
 
 
