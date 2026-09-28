@@ -358,6 +358,31 @@ rank on.** Before this work the same situation reported `ok` with fabricated
 compatibility work is done and recorded so it is a parameter change, not a
 redesign. Nothing here is claimed as "connected".
 
+### H4 — durability contract: VERIFIED HONEST (no code change)
+
+The packet warned: "Memory fallback must be explicitly transient; never show
+'saved' or 'durable capture' after a failed disk path." Inspected before
+rebuilding, as instructed. It is already correct:
+
+    LIVE recorder_status:
+    {"durable": false, "mode": "memory", "backing": "memory", "path": ":memory:",
+     "tables": [...7 tables...], "note": "memory mode is not crash-safe durable storage"}
+
+`recorder_status` only reports `durable: true` when `backing == "file"` AND
+tables are present, and returns `durable: false` on any exception. The
+`heatseeker` route reads it and **fails closed** to `False` on error rather than
+defaulting optimistic. `DUCKDB_PATH` is unset in this deployment, so `:memory:`
+is correct and honestly reported.
+
+**No change made — this is not a defect.** Recorded so H4's durability clause is
+not re-audited as broken. The separate R8 restart-durability proof (real file +
+process kill + reopen) already passed and is recorded in
+`docs/solstice/R8-ACCEPTANCE.md`.
+
+Note: `flow_alerts_daily` does not exist in this deployment's DuckDB and
+`flow_prints` has 0 rows, which is why the flow/confluence evidence chain is
+empty (see the confluence/ML section above).
+
 ## 7. Next actions
 
 | # | Action | Owner | Blocked on |
