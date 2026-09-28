@@ -153,7 +153,8 @@ class SABRModel:
                 "beta": self.beta,
                 "rho": self.rho,
                 "nu": self.nu,
-                "rmse": float("inf"),
+                "rmse": None,
+                "fit_status": "insufficient_data",
             }
 
         # Filter out invalid data
@@ -168,7 +169,8 @@ class SABRModel:
                 "beta": self.beta,
                 "rho": self.rho,
                 "nu": self.nu,
-                "rmse": float("inf"),
+                "rmse": None,
+                "fit_status": "insufficient_data",
             }
 
         def objective(params: np.ndarray) -> float:
@@ -211,11 +213,11 @@ class SABRModel:
                 rmse = float(np.sqrt(np.mean((fitted_vols - market_vols) ** 2)))
             else:
                 logger.warning("SABR fit did not converge: %s", result.message)
-                rmse = float("inf")
+                rmse = None
 
         except Exception as e:
             logger.error("SABR fit failed: %s", e)
-            rmse = float("inf")
+            rmse = None
 
         return {
             "alpha": float(self.alpha),
@@ -337,7 +339,8 @@ class SVIProfile:
                 "rho": self.rho,
                 "m": self.m,
                 "sigma": self.sigma,
-                "rmse": float("inf"),
+                "rmse": None,
+                "fit_status": "insufficient_data",
             }
 
         # Filter invalid data
@@ -353,7 +356,8 @@ class SVIProfile:
                 "rho": self.rho,
                 "m": self.m,
                 "sigma": self.sigma,
-                "rmse": float("inf"),
+                "rmse": None,
+                "fit_status": "insufficient_data",
             }
 
         market_total_var = market_vols ** 2 * T
@@ -396,11 +400,11 @@ class SVIProfile:
                 rmse = float(np.sqrt(np.mean((fitted_vols - market_vols) ** 2)))
             else:
                 logger.warning("SVI fit did not converge: %s", result.message)
-                rmse = float("inf")
+                rmse = None
 
         except Exception as e:
             logger.error("SVI fit failed: %s", e)
-            rmse = float("inf")
+            rmse = None
 
         return {
             "a": float(self.a),
@@ -573,7 +577,8 @@ class VolSurfaceConstructor:
             sabr_params = self.sabr_model.fit(all_strikes_arr, all_vols_arr, spot, ref_T)
         else:
             sabr_params = self.sabr_model.get_state()
-            sabr_params["rmse"] = float("inf")
+            sabr_params["rmse"] = None
+            sabr_params["fit_status"] = "not_fitted"
 
         # Build 2D grid
         grid_strikes, grid_expiries, iv_grid = self._build_iv_grid(

@@ -255,6 +255,16 @@ meta_detector = MetaAnomalyDetector()
 # ---------------------------------------------------------------------------
 
 
+def _round_or_none(value: float | None) -> float | None:
+    """round() that passes None through instead of raising.
+
+    ProviderStats.seconds_since_last_success is None when no success has ever
+    been recorded, so every call site that formats it must handle the absent
+    case rather than assuming a float.
+    """
+    return None if value is None else round(value, 1)
+
+
 @dataclass
 class ProviderStats:
     """Rolling stats for a single data provider."""
@@ -294,9 +304,26 @@ class ProviderStats:
         return len(self._calls)
 
     @property
-    def seconds_since_last_success(self) -> float:
+    def seconds_since_last_success(self) -> float | None:
+        """Seconds since the last success, or None if there has never been one.
+
+        This used to return float("inf"), which propagated into the
+        `provider_down` alert dict and made `/api/data/health` unserializable:
+        inf is not JSON compliant, so response encoding raised ValueError and
+        the endpoint returned 500. The route's own `except Exception` could not
+        catch it, because encoding happens after the handler returns.
+
+        So a provider that had never succeeded took the health endpoint down
+        with it -- the endpoint went dark exactly when there was an outage to
+        report. None is both serializable and more honest: "no success has
+        happened yet" is an absent measurement, not an infinitely long one.
+
+        Consumers comparing against a threshold must treat None as "not
+        measured" and still alert; see check_alerts, which fires provider_down
+        on consecutive failures regardless of this value.
+        """
         if self._last_success == 0:
-            return float("inf")
+            return None
         return time.time() - self._last_success
 
     @property
@@ -375,12 +402,21 @@ class DataProviderMonitor:
                 self._alerted[name].discard("low_success_rate")
 
             # Alert: provider down (no success in N seconds)
-            if stats.seconds_since_last_success > self.provider_down_seconds and stats.window_calls > 0:
+            # None means no success has EVER been recorded. That is a stronger
+            # statement than "more than N seconds ago", so it still alerts --
+            # it is not a reason to stay quiet. Only window_calls > 0 gates it,
+            # i.e. we have actually tried to reach this provider.
+            since = stats.seconds_since_last_success
+            is_down = since is None or since > self.provider_down_seconds
+            if is_down and stats.window_calls > 0:
                 if "provider_down" not in self._alerted[name]:
                     alert = {
                         "provider": name,
                         "alert_type": "provider_down",
-                        "seconds_since_success": round(stats.seconds_since_last_success, 1),
+                        # None stays None: "never succeeded" is not a duration.
+                        "seconds_since_success": (
+                            None if since is None else round(since, 1)
+                        ),
                         "threshold_seconds": self.provider_down_seconds,
                         "severity": "critical",
                     }
@@ -419,7 +455,9 @@ class DataProviderMonitor:
                 "window_calls": stats.window_calls,
                 "total_calls": stats._total_calls,
                 "total_successes": stats._total_successes,
-                "seconds_since_last_success": round(stats.seconds_since_last_success, 1),
+                "seconds_since_last_success": _round_or_none(
+                    stats.seconds_since_last_success
+                ),
                 "consecutive_failures": stats.consecutive_failures,
             }
         return {
@@ -444,8 +482,15 @@ class DataProviderMonitor:
                 # Set success rate gauge
                 provider_success_rate.labels(provider=name).set(round(stats.success_rate, 4))
                 # Set seconds since last success
-                provider_last_success_seconds_ago.labels(provider=name).set(
-                    round(stats.seconds_since_last_success, 1)
+                since = _round_or_none(stats.seconds_since_last_success)
+            # A Gauge cannot hold None. For a provider that has never
+            # succeeded there is no elapsed time to report, and 0 would read
+            # as "just succeeded" -- the exact opposite of the truth. Fall back
+            # to +inf, which a gauge CAN hold, so a scrape distinguishes
+            # "never succeeded" from "succeeded moments ago". The
+            # provider_down alert carries the honest None.
+            provider_last_success_seconds_ago.labels(provider=name).set(
+                    since if since is not None else float("inf")
                 )
         except Exception as e:
             log.debug(f"Failed to update Prometheus gauges: {e}")
