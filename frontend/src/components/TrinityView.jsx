@@ -518,7 +518,7 @@ function ReviewSection({ journal, ticker, snapshotId }) {
         <div data-testid="triad-review-queue" title="Unreviewed decisions, newest first (max 5)">
           <span>Next to review:</span>
           {reviewQueue.map((d) => (
-            <span key={d.decision_id} data-testid={`triad-review-open-${d.decision_id}`}>
+            <span key={d.decision_id} className="triad-review-chip" data-testid={`triad-review-open-${d.decision_id}`}>
               {d.scenario || d.side || d.decision_id}
             </span>
           ))}

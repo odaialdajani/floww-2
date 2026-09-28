@@ -3360,6 +3360,10 @@ button, select, input {
 }
 .triad-review-queue { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .triad-review-queue > span { margin-right: 2px; }
+.triad-review-chip {
+  border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;
+  padding: 2px 8px; color: #cbd5e1; background: rgba(255,255,255,0.02);
+}
 
 .triad-price { margin: 6px 0; }
 .triad-price-loading, .triad-price-empty { font-size: 11px; color: #64748b; padding: 6px 0; }
