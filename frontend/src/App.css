@@ -4025,37 +4025,8 @@ button, select, input {
   font-family: "JetBrains Mono", ui-monospace, monospace;
 }
 
-.skylit-bottom-tabs {
-  display: flex;
-  gap: 2px;
-}
-
-.skylit-bottom-tab {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 10px;
-  font-size: 10px;
-  font-weight: 600;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  color: #475569;
-  background: transparent;
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 120ms ease;
-}
-
-.skylit-bottom-tab:hover {
-  color: #94a3b8;
-  border-color: rgba(255,255,255,0.12);
-}
-
-.skylit-bottom-tab.active {
-  color: #fbbf24;
-  background: rgba(251,191,36,0.08);
-  border-color: rgba(251,191,36,0.2);
-}
+/* O2: .skylit-bottom-tabs/.skylit-bottom-tab rules removed with the
+   duplicate tab row (readout-only bottom bar). */
 
 /* ── Responsive ── */
 @media (max-width: 1024px) {
