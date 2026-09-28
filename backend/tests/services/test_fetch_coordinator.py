@@ -94,5 +94,80 @@ class TestFetchCoordinatorErrors:
         assert result["spot"] is None
         assert result["contracts"] == []
 
+    @pytest.mark.asyncio
+    async def test_unreachable_budget_governor_fails_closed(self, coordinator, monkeypatch):
+        """An error from the budget acquire must NOT fall through to fetching.
+
+        `BudgetExhausted` was handled and returned a degraded response, but any
+        OTHER exception -- a governor that is down, unreachable, or throwing --
+        was logged and then execution continued into the fetch. So an outage in
+        the thing that exists to cap spend removed the cap.
+        """
+        # `fetch` re-imports the budget inside the function body, so the patch
+        # has to land on services.public_budget, not on the coordinator module.
+        import services.public_budget as pb
+
+        class UnreachableGovernor:
+            async def acquire(self):
+                raise RuntimeError("governor unreachable")
+
+            def release(self):
+                pass
+
+        monkeypatch.setattr(pb, "budget", UnreachableGovernor())
+
+        fetched = []
+
+        async def fetcher(t, e):
+            fetched.append(t)
+            return {"status": "ok", "spot": 1.0, "contracts": []}
+
+        result = await coordinator.fetch("SPY", 4, fetcher)
+        await asyncio.sleep(0.05)
+
+        assert not fetched, "external fetch ran with an unusable budget governor"
+        assert result["status"] != "ok", result
+        assert result.get("contracts") == [], result
+
+    @pytest.mark.asyncio
+    async def test_budget_unavailable_is_distinct_from_exhaustion(self, coordinator, monkeypatch):
+        """'Could not ask' and 'the answer was no' must not collapse together."""
+        import services.public_budget as pb
+        from services.public_budget import BudgetExhausted
+
+        class Unreachable:
+            async def acquire(self):
+                raise RuntimeError("down")
+
+            def release(self):
+                pass
+
+        class Exhausted:
+            async def acquire(self):
+                # Signature is (retry_after, reason) -- a positional message
+                # here would bind to retry_after and collide with the keyword.
+                raise BudgetExhausted(retry_after=30, reason="spent")
+
+            def release(self):
+                pass
+
+        async def fetcher(t, e):
+            raise AssertionError("must not fetch in either degraded case")
+
+        # Distinct keys: the coordinator coalesces in-flight work per key, so
+        # reusing one key would just replay the first result.
+        monkeypatch.setattr(pb, "budget", Unreachable())
+        unavailable = await coordinator.fetch("SPY", 4, fetcher)
+
+        monkeypatch.setattr(pb, "budget", Exhausted())
+        exhausted = await coordinator.fetch("QQQ", 4, fetcher)
+
+        assert unavailable["status"] != "ok", unavailable
+        assert exhausted["status"] != "ok", exhausted
+        # The distinction has to survive to the caller, or an outage is
+        # indistinguishable from ordinary throttling.
+        assert unavailable["error_type"] == "budget_unavailable", unavailable
+        assert exhausted["error_type"] == "budget_exhausted", exhausted
+
     def test_coalesced_count_zero_initially(self, coordinator):
         assert coordinator.get_coalesced_count("SPY", 4) == 0
