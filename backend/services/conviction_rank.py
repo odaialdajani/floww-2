@@ -46,15 +46,22 @@ def _norm_opp(opp):
 
 
 def _norm_conf(conf):
+    # A missing input is an ABSENT observation, not a neutral one. Returning
+    # 0.5 here made an entirely empty setup score 17.5 (0.2*0.5 + 0.15*0.5),
+    # which outranked real but weak evidence and read as a low-conviction
+    # signal rather than the absence of one. `*_status` already reports
+    # "missing", so the component must be 0.0 to agree with it.
     if conf is None:
-        return 0.5, "missing"
+        return 0.0, "missing"
     try:
         v = float(conf.get("total", 0) if isinstance(conf, dict) else conf)
     except (TypeError, ValueError):
-        return 0.5, "invalid"
-    if v > 100 or v < -100:
-        v = max(-100.0, min(100.0, v))
-    return _clamp01((v + 100.0) / 200.0), "ok"
+        return 0.0, "invalid"
+    # `total` is signed, so 0 is genuinely "no confluence signal". Rescale
+    # around 0 rather than 0->0.5, so a neutral reading contributes nothing
+    # instead of half a directional signal, and bearish/bullish totals of
+    # equal magnitude receive equal quality.
+    return _clamp01(abs(v) / 100.0), "ok"
 
 
 _ML_MAP = {
@@ -70,8 +77,11 @@ _ML_MAP = {
 
 
 def _norm_ml(ml):
+    # Same rule as _norm_conf: absent is absent. A missing model reading was
+    # returning 0.5, contributing 7.5 points of apparently-sourced conviction
+    # to every row the model had not scored.
     if ml is None:
-        return 0.5, "missing"
+        return 0.0, "missing"
     try:
         if isinstance(ml, dict):
             lab = str(ml.get("prediction", ml.get("label", ml.get("direction", "")))).upper()
@@ -80,10 +90,19 @@ def _norm_ml(ml):
             lab = str(ml).upper()
             conf = 0.75
     except (TypeError, ValueError):
-        return 0.5, "invalid"
-    base = _ML_MAP.get(lab, 0.5)
+        return 0.0, "invalid"
+    base = _ML_MAP.get(lab)
+    if base is None:
+        # An unrecognised label is not a HOLD. Treat it as unavailable so an
+        # unknown string cannot be silently scored as a neutral middle.
+        return 0.0, "invalid"
+    # Quality is evidence STRENGTH, not direction. BULLISH and BEARISH of equal
+    # confidence must receive equal quality, so scale magnitude symmetrically
+    # around the neutral label rather than mapping DOWN->0 and UP->1, which
+    # handed a bearish model 0.0 and a bullish model 1.0 for identical evidence.
+    neutral = 0.5
     w = max(0.0, min(1.0, conf))
-    return _clamp01(0.5 + (base - 0.5) * (0.5 + 0.5 * w)), "ok"
+    return _clamp01(abs(base - neutral) * (0.5 + 0.5 * w)), "ok"
 
 
 def rank_one(
@@ -156,11 +175,23 @@ def rank_many(rows, **kw):
             continue
         opp = r.get("opportunity") if isinstance(r.get("opportunity"), dict) else None
         conv = r.get("conviction")
-        flow = conv if isinstance(conv, dict) and "conviction" in conv else None
-        confl = conv if isinstance(conv, dict) and "total" in conv else None
-        ml_in = conv if isinstance(conv, dict) and ("prediction" in conv or "label" in conv) else None
-        if flow is None and confl is None and ml_in is None and isinstance(conv, dict):
-            flow = conv
+        flow = confl = ml_in = None
+        # A row's `conviction` is the ALREADY-FUSED output of an earlier
+        # rank_one. It is not a scorer payload. Re-reading it here re-fused a
+        # fused score: a blob carrying `label` matched the ML branch and
+        # `total` matched the confluence branch, so the row silently gained
+        # components it never had. Only unpack a blob that is unambiguously a
+        # raw scorer payload -- one that carries a scorer-shaped value and none
+        # of the fused-output markers (components / total / *_status / tier).
+        if isinstance(conv, dict):
+            fused_markers = {"components", "total", "tier", "flow_status", "ml_status", "confluence_status"}
+            if not (fused_markers & set(conv)):
+                if "conviction" in conv or "score" in conv:
+                    flow = conv
+                elif "prediction" in conv or "label" in conv:
+                    ml_in = conv
+                elif "opportunity_score" in conv:
+                    flow = conv
         out.append(
             rank_one(
                 r.get("ticker"),

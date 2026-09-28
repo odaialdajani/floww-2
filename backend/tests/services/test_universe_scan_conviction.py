@@ -56,12 +56,26 @@ def test_scan_batch_builds_with_injected_fns(monkeypatch):
 
 def test_rank_one_fuses_and_degrades():
     full = rank_one("SPY", flow={"conviction": 90}, opportunity={"opportunity_score": 8.0, "direction": "BULL", "trade_type": "debit_spread", "invalidation": "lose 500", "regime": "Trending"}, confluence={"total": 60.0, "direction": "bullish"}, ml={"prediction": "UP", "confidence": 0.8}, snapshot_id="s1", asof="a")
-    assert full["tier"] == "HIGH" and full["direction"] == "BULL"
+    # Tier is now MED, not HIGH. Full evidence here scores 74.25:
+    #   flow 0.9, opportunity 0.8, confluence 0.6, ml 0.45
+    # The old normalizers reported 85.75 for this same row by crediting a
+    # signed confluence of +60 as 0.8 and a BULLISH label as 0.95, while the
+    # exact bearish mirror scored 60.25. Quality must not depend on which side
+    # the evidence points, so both now score 74.25 and the thresholds are
+    # unchanged -- the inputs stopped being flattering.
+    assert full["conviction"] == 74.25, full["conviction"]
+    assert full["tier"] == "MED" and full["direction"] == "BULL"
     assert full["invalidation"] == "lose 500" and full["evidence"]["flow_status"] == "ok"
     bare = rank_one("QQQ")
     assert bare["tier"] == "LOW" and bare["direction"] == "NEUTRAL"
     assert "No invalidation" in bare["invalidation"]
     assert bare["evidence"]["flow_status"] == "missing"
+
+    # Equal evidence, opposite side, equal quality. This was 85.75 vs 60.25
+    # before the normalizers were corrected.
+    bear = rank_one("SPY", flow={"conviction": 90}, opportunity={"opportunity_score": 8.0, "direction": "BEAR", "trade_type": "debit_spread", "invalidation": "lose 500", "regime": "Trending"}, confluence={"total": -60.0, "direction": "bearish"}, ml={"prediction": "DOWN", "confidence": 0.8}, snapshot_id="s1", asof="a")
+    assert full["conviction"] == bear["conviction"], (full["conviction"], bear["conviction"])
+    assert full["direction"] == "BULL" and bear["direction"] == "BEAR"
 
 def test_rank_many_sorts_and_ranks():
     rows = [{"ticker": "AAA", "opportunity": {"opportunity_score": 1.0}, "snapshot_id": "s", "asof": "a"},
