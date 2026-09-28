@@ -2,9 +2,14 @@
 
 > **Current state, 27 Sep 2026 — supersedes the "open PR" lines below.**
 > All work described in this file is merged: #13, #19, #55, #56, #12, #5, #58,
-> #54, #59, #60, #61, #62, #63, #64, #65, #66, #67, #68, #69, #70 (and #3, #4,
-> #57 — see below). Zero open PRs.
-> `origin/main` = `5dcb8774`. Cumulative verification on that tree:
+> #54, #59, #60, #61, #62, #63, #64, #65, #66, #67, #68, #69, #70, #71 (and
+> #3, #4, #57 — see below). Zero open PRs.
+> **The SHA is deliberately not pinned here.** Naming a commit in the document
+> that the document's own merge creates guarantees staleness: #69 wrote
+> `70265385`, its own merge made it `5dcb8774`, and #71 was needed purely to
+> repoint it. Read the current head with `git log -1 origin/main` instead. The
+> counts below are the durable part, and each names what moved it.
+> Cumulative verification on this tree:
 > **6500 backend passed / 0 failed** in CI (6467 before `91c7c032` added 28 and
 > #70 added 5),
 > **105
