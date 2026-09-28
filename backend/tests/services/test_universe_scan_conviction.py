@@ -16,6 +16,44 @@ from services.universe_scan import (
 )
 
 
+def test_cross_batch_ranks_are_recomputed_over_one_population():
+    """Two batches must not each contribute their own "rank 1".
+
+    `rank` is a within-batch ordinal. The rotating cursor scans one slice per
+    call, so every batch starts again at 1 and those ordinals are persisted per
+    ticker. Ordering the view by it produced two rows tied at rank 1 and let a
+    15.0 row sort ahead of a 40.0 row purely by batch arrival order.
+    """
+    conn = duckdb.connect(":memory:")
+    record_leaderboard(conn, [{"ticker": "AAA", "rank": 1, "conviction": 15.0,
+                               "tier": "LOW", "direction": "BULL", "trade_type": "no_trade",
+                               "invalidation": "x", "snapshot_id": "s1", "asof": "a"}])
+    record_leaderboard(conn, [{"ticker": "BBB", "rank": 1, "conviction": 40.0,
+                               "tier": "HIGH", "direction": "BEAR", "trade_type": "no_trade",
+                               "invalidation": "x", "snapshot_id": "s2", "asof": "b"}])
+
+    rows = latest_leaderboard(conn)
+    by_ticker = {r["ticker"]: r for r in rows}
+
+    assert [r["ticker"] for r in rows] == ["BBB", "AAA"], rows
+    assert by_ticker["BBB"]["rank"] == 1, by_ticker["BBB"]
+    assert by_ticker["AAA"]["rank"] == 2, by_ticker["AAA"]
+    # The stored per-batch ordinal is still available, not silently lost.
+    assert by_ticker["AAA"]["batch_rank"] == 1 and by_ticker["BBB"]["batch_rank"] == 1
+
+
+def test_leaderboard_ordering_follows_score_not_arrival():
+    """A later, weaker row must not outrank an earlier, stronger one."""
+    conn = duckdb.connect(":memory:")
+    for tk, rank, score in (("WEAK", 1, 3.0), ("STRONG", 2, 88.0), ("MID", 1, 40.0)):
+        record_leaderboard(conn, [{"ticker": tk, "rank": rank, "conviction": score,
+                                   "tier": "LOW", "direction": "NEUTRAL", "trade_type": "no_trade",
+                                   "invalidation": "x", "snapshot_id": "s", "asof": "a"}])
+    rows = latest_leaderboard(conn)
+    assert [r["ticker"] for r in rows] == ["STRONG", "MID", "WEAK"], rows
+    assert [r["rank"] for r in rows] == [1, 2, 3], rows
+
+
 def test_dte_is_forwarded_to_the_heatmap_builder():
     """`max_expiries` is a COUNT; `dte` is a separate tenor axis.
 
@@ -170,4 +208,10 @@ def test_leaderboard_round_trip():
     assert got[0]["ticker"] == "SPY" and got[0]["conviction"] == 88.0 and got[0]["evidence"] == {"k": 1}
     record_leaderboard(conn, [{"ticker": "SPY", "rank": 2, "conviction": 50.0, "tier": "WATCH", "direction": "NEUTRAL", "trade_type": "no_trade", "invalidation": "i", "snapshot_id": "s2", "asof": "a2", "evidence": {}}])
     got2 = latest_leaderboard(conn)
-    assert len(got2) == 1 and got2[0]["rank"] == 2
+    # SPY is the only stored row, so its GLOBAL rank is 1. The stored
+    # per-batch ordinal (2) is preserved as `batch_rank` -- the point of this
+    # test is the update/replace, not the ordinal.
+    assert len(got2) == 1, got2
+    assert got2[0]["rank"] == 1, got2[0]
+    assert got2[0]["batch_rank"] == 2, got2[0]
+    assert got2[0]["conviction"] == 50.0, got2[0]

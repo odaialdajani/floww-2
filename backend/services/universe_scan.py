@@ -221,9 +221,24 @@ def latest_leaderboard(conn, limit=50):
         rows = conn.execute(
             "SELECT ticker, rank, conviction, tier, direction, trade_type,"
             + " invalidation, snapshot_id, asof_ts, evidence, updated_at"
-            + " FROM universe_leaderboard_v1 ORDER BY rank ASC LIMIT "
+            + " FROM universe_leaderboard_v1 ORDER BY conviction DESC, updated_at ASC LIMIT "
             + str(max(1, int(limit)))
         ).fetchall()
+        # `rank` is a WITHIN-BATCH ordinal. The rotating cursor scans one slice
+        # per call, so successive batches each produce a rank 1 and those
+        # ordinals are persisted per ticker. Ordering by it made two rows tie
+        # at rank 1 and let a 15.0-conviction row sort ahead of a 40.0 row
+        # purely because of which batch it arrived in. Order by the fused
+        # score instead, so the view is ranked over the whole eligible
+        # population, and hand back a recomputed dense rank alongside the
+        # stored per-batch one.
+        global_rows = conn.execute(
+            "SELECT ticker, conviction FROM universe_leaderboard_v1"
+            " ORDER BY conviction DESC, updated_at ASC"
+        ).fetchall()
+        dense_rank = {}
+        for i, (tk, _cv) in enumerate(global_rows or [], start=1):
+            dense_rank.setdefault(tk, i)
         out = []
         for r in rows or []:
             try:
@@ -233,7 +248,10 @@ def latest_leaderboard(conn, limit=50):
             out.append(
                 {
                     "ticker": r[0],
-                    "rank": r[1],
+                    # Global rank recomputed over every stored row; the stored
+                    # per-batch ordinal is preserved under `batch_rank`.
+                    "rank": dense_rank.get(r[0], r[1]),
+                    "batch_rank": r[1],
                     "conviction": r[2],
                     "tier": r[3],
                     "direction": r[4],
