@@ -28,8 +28,17 @@ def _clamp01(x):
 def _norm_flow(flow):
     if flow is None:
         return 0.0, "missing"
+    raw = flow.get("conviction", flow.get("score")) if isinstance(flow, dict) else flow
+    # Same availability boundary as _norm_conf: a producer that ran and found
+    # nothing reports None, and an empty dict carries no reading. Neither is
+    # malformed data, so neither is "invalid", and neither may report "ok" --
+    # that status is what tells a consumer the evidence was actually measured.
+    # `raw is None` already covers `{}`: a dict without conviction or score
+    # yields None, which is the same absence a producer reports.
+    if raw is None:
+        return 0.0, "missing"
     try:
-        v = float(flow.get("conviction", flow.get("score", 0)) if isinstance(flow, dict) else flow)
+        v = float(raw)
     except (TypeError, ValueError):
         return 0.0, "invalid"
     return _clamp01(v / 100.0), "ok"
@@ -54,7 +63,20 @@ def _norm_conf(conf):
     if conf is None:
         return 0.0, "missing"
     try:
-        v = float(conf.get("total", 0) if isinstance(conf, dict) else conf)
+        raw = conf.get("total", 0) if isinstance(conf, dict) else conf
+    except AttributeError:
+        return 0.0, "invalid"
+    # A producer that ran and found nothing reports total=None (see
+    # services.agent.confluence.score, which pairs it with
+    # direction="insufficient_evidence"). That is an absence, not malformed
+    # data -- relabelling it "invalid" told consumers the producer emitted
+    # garbage. An empty dict likewise carries no reading.
+    # NOTE: the default here is 0, NOT None, so `{}` yields 0.0 and would
+    # report "ok". The empty-dict clause is load-bearing for confluence.
+    if raw is None or (isinstance(conf, dict) and not conf):
+        return 0.0, "missing"
+    try:
+        v = float(raw)
     except (TypeError, ValueError):
         return 0.0, "invalid"
     # `total` is signed, so 0 is genuinely "no confluence signal". Rescale
@@ -82,6 +104,13 @@ def _norm_ml(ml):
     # to every row the model had not scored.
     if ml is None:
         return 0.0, "missing"
+    # A dict with no prediction -- empty, or explicitly null -- carries no
+    # reading. Same availability boundary as _norm_flow / _norm_conf. This one
+    # clause covers both: `{}` yields _lab None, as does {"prediction": None}.
+    if isinstance(ml, dict):
+        _lab = ml.get("prediction", ml.get("label", ml.get("direction")))
+        if _lab is None:
+            return 0.0, "missing"
     try:
         if isinstance(ml, dict):
             lab = str(ml.get("prediction", ml.get("label", ml.get("direction", "")))).upper()

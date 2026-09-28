@@ -19,7 +19,16 @@ reflects only what was actually supplied.
 """
 from __future__ import annotations
 
-from services.conviction_rank import WEIGHTS, rank_many, rank_one
+import pytest
+
+from services.conviction_rank import (
+    WEIGHTS,
+    _norm_conf,
+    _norm_flow,
+    _norm_ml,
+    rank_many,
+    rank_one,
+)
 
 TS = {"snapshot_id": "snap-1", "asof": "2026-09-28T00:00:00+00:00"}
 
@@ -198,6 +207,94 @@ def test_absent_flow_is_not_reported_as_a_measured_zero():
     assert hardcoded_zero["evidence"]["flow_status"] == "ok", hardcoded_zero["evidence"]
     # The route must therefore pass None, not a seeded zero.
     assert absent["evidence"]["flow_status"] != hardcoded_zero["evidence"]["flow_status"]
+
+
+def test_producer_insufficient_evidence_is_missing_not_invalid():
+    """A real producer's own unavailable state must survive normalization.
+
+    `services.agent.confluence.score` returns `{"total": None, "direction":
+    "insufficient_evidence"}` when it has no coverage. That is an ABSENCE of
+    evidence, not malformed data. `_norm_conf` was collapsing it to "invalid",
+    which tells a consumer the producer emitted garbage rather than that there
+    was nothing to read -- two different operational responses.
+    """
+    from services.agent.confluence import score as confluence_score
+
+    empty = confluence_score({})
+    assert empty["total"] is None, empty
+    assert empty["direction"] == "insufficient_evidence", empty
+
+    out = rank_one("SPY", confluence=empty, opportunity=None, flow=None, ml=None, **TS)
+    ev = out["evidence"]
+    assert ev["confluence_status"] == "missing", ev
+    assert out["conviction"] == 0.0, out["conviction"]
+
+
+def test_empty_confluence_dict_is_missing_not_ok():
+    """An empty dict carries no evidence and must not report `ok`."""
+    ev = rank_one("SPY", confluence={}, opportunity=None, flow=None, ml=None, **TS)["evidence"]
+    assert ev["confluence_status"] == "missing", ev
+
+
+def test_malformed_total_is_still_invalid():
+    """Genuinely malformed data must keep the distinct "invalid" status."""
+    ev = rank_one("SPY", confluence={"total": "junk"}, opportunity=None, flow=None, ml=None, **TS)["evidence"]
+    assert ev["confluence_status"] == "invalid", ev
+
+
+def test_neutral_and_absent_confluence_are_both_zero_but_distinguishable():
+    """A real reading of 0.0 is measured-and-neutral; absent is unavailable.
+
+    Both contribute 0.0 to the fusion, but a consumer must be able to tell
+    "we looked and there is no confluence signal" from "we never looked".
+    """
+    measured = rank_one(
+        "SPY", confluence={"total": 0.0, "direction": "neutral"},
+        opportunity=None, flow=None, ml=None, **TS,
+    )["evidence"]
+    absent = rank_one("SPY", confluence=None, opportunity=None, flow=None, ml=None, **TS)["evidence"]
+
+    assert measured["confluence_status"] == "ok", measured
+    assert absent["confluence_status"] == "missing", absent
+    assert measured["components"]["confluence"] == absent["components"]["confluence"] == 0.0
+
+
+@pytest.mark.parametrize(
+    "scorer,absent_payloads",
+    [
+        ("flow", [None, {}, {"conviction": None}, {"score": None}]),
+        ("confluence", [None, {}, {"total": None}]),
+        ("ml", [None, {}, {"prediction": None}, {"prediction": None, "confidence": 0.9}]),
+    ],
+)
+def test_every_scorer_agrees_on_the_availability_boundary(scorer, absent_payloads):
+    """All four scorers must use one consistent rule for 'no evidence'.
+
+    The three normalizers had drifted apart: `_norm_flow` reported an empty
+    dict as "ok", `_norm_conf` reported a producer's `total: None` as
+    "invalid", and `_norm_ml` reported `{"prediction": None}` as "invalid".
+    A consumer reading `*_status` could not tell "never measured" from
+    "measured as zero" from "producer emitted garbage". Every payload that
+    carries no reading must normalize to (0.0, "missing").
+    """
+    assert _norm_flow is not None and _norm_conf is not None and _norm_ml is not None
+    for payload in absent_payloads:
+        ev = rank_one("SPY", **{scorer: payload}, **TS)["evidence"]
+        status = ev[f"{scorer}_status"]
+        assert status == "missing", (scorer, payload, status)
+        assert ev["components"][scorer] == 0.0, (scorer, payload, ev["components"])
+
+
+def test_genuinely_malformed_payloads_stay_invalid_not_missing():
+    """Real garbage must remain distinguishable from absence."""
+    malformed = [
+        ("flow", {"conviction": "junk"}),
+        ("confluence", {"total": "junk"}),
+        ("ml", {"prediction": "NOT_A_LABEL"}),
+    ]
+    for scorer, payload in malformed:
+        ev = rank_one("SPY", **{scorer: payload}, **TS)["evidence"]
+        assert ev[f"{scorer}_status"] == "invalid", (scorer, payload, ev)
 
 
 def test_weights_sum_to_one():
