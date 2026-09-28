@@ -205,6 +205,24 @@ calls `services.agent.confluence.score`, which emits exactly the `{"total",
 "direction", "dimensions"}` shape `_norm_conf` consumes. The route still passes
 `confluence=None` — connecting it is the open decision below, not a blocker.
 
+### Live-data confirmation of the availability fix
+
+Not a synthetic fixture — the running Floww-2 service, `/api/heatseeker/node-confluence?ticker=SPY`
+(136 strikes considered), feeding its real `rows[0]["confluence"]` into `rank_one`:
+
+    producer total         : None
+    producer direction     : insufficient_evidence
+    ranker confluence_status: missing        <- was "invalid"
+    ranker component        : 0.0
+    conviction              : 0.0 LOW
+
+Before the fix the ranker told consumers this producer emitted garbage. It now
+agrees with the producer: nothing was available, so nothing was claimed.
+
+The row shape is `{'total', 'direction', 'dimensions', 'coverage_weight',
+'missing_input_policy', 'weights_version'}` — directly consumable by
+`_norm_conf`, so wiring it is mechanical rather than a redesign.
+
 ## 7. Next actions
 
 | # | Action | Owner | Blocked on |
