@@ -122,6 +122,17 @@ function SkylitControlBar({
           VEX
         </button>
         <button
+          className={`skylit-mode-btn${viewMode === "charm" ? " active" : ""}`}
+          onClick={() => onViewModeChange && onViewModeChange("charm")}
+          title="Charm Exposure"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+          Charm
+        </button>
+        <button
           className="skylit-info-btn"
           title="How to read this grid"
           onClick={() => setShowInfo(!showInfo)}
@@ -132,24 +143,22 @@ function SkylitControlBar({
             <path d="M12 16v-4" /><path d="M12 8h.01" />
           </svg>
         </button>
-        {/* T04 metric switch: same snapshot, different overlay (no new fetch) */}
-        <div className="skylit-metric-switch" data-testid="skylit-metric-switch" title="Metric overlay — same snapshot, same walls">
-          {[
-            ["raw", "Raw", "gex_net_v1 / gex_gross_v1 — call-minus-put proxy + gross concentration (USD/1% move)"],
-            ["delta", "Δ-wtd", "dadgex_net_v1 / dadgex_gross_v1 — experimental moneyness weighting, not flow"],
-            ["activity", "Activity", "volume_gamma_v1 — session turnover, not positioning"],
-          ].map(([m, label, tip]) => (
-            <button
-              key={m}
-              className={`skylit-mode-btn${metric === m ? " active" : ""}`}
-              onClick={() => onMetricChange && onMetricChange(m)}
-              title={tip}
-              data-testid={`skylit-metric-${m}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {/* O2 GEX-basis menu: same snapshot, different overlay (no new fetch).
+            Compact contextual menu instead of a permanent tab tower; only the
+            GEX family has multiple bases (VEX/Charm are single-basis). */}
+        {viewMode === "gex" && (
+          <select
+            className="skylit-tf-select"
+            data-testid="skylit-basis-select"
+            value={metric}
+            onChange={(e) => onMetricChange && onMetricChange(e.target.value)}
+            title="GEX basis — Raw: gex_net_v1/gex_gross_v1 · Δ-wtd: experimental moneyness weighting, not flow · Activity: session turnover, not positioning"
+          >
+            <option value="raw">Raw</option>
+            <option value="delta">Δ-wtd</option>
+            <option value="activity">Activity</option>
+          </select>
+        )}
         {showInfo && (
           <div
             className="skylit-info-popover"
