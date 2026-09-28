@@ -16,6 +16,48 @@ from services.universe_scan import (
 )
 
 
+def test_research_features_degrade_on_missing_zone_instead_of_crashing():
+    """A missing zone must return policy_unavailable, not raise TypeError.
+
+    The function's own contract is "or {status: policy_unavailable, reason}",
+    and `server.py` guards the call with `zone=(None if zone is None else
+    tuple(zone))` -- passing None is an anticipated input. But `lo, hi = zone`
+    unpacked None before any validation, so the documented "no zone -> no
+    numeric barriers, close_episodes reports NEED_EPISODE and never invents a
+    label" path crashed instead. A crash is not a label, but it is a 500 and
+    the caller cannot distinguish it from a genuine fault.
+    """
+    from services.episode_policy import research_default_features
+
+    for bad in (None, (), (1.0,), "nope", (1.0, 2.0, 3.0)):
+        out = research_default_features(zone=bad, encounter_price=769.0, underlying_tick=0.01)
+        assert out.get("status") == "policy_unavailable", (bad, out)
+        assert out.get("reason"), (bad, out)
+        # No barriers may be invented when the zone is unusable.
+        assert "target" not in out and "stop" not in out, (bad, out)
+
+
+def test_research_features_reject_nonfinite_and_inverted_zones():
+    """Non-finite and hi<=lo zones are invalid, not merely unusual."""
+    from services.episode_policy import research_default_features
+
+    for bad in ((float("nan"), 1.0), (1.0, float("inf")), (5.0, 5.0), (5.0, 1.0)):
+        out = research_default_features(zone=bad, encounter_price=769.0, underlying_tick=0.01)
+        assert out.get("status") == "policy_unavailable", (bad, out)
+
+
+def test_research_features_derive_barriers_from_a_valid_zone():
+    """A valid zone still produces deterministic barriers -- the fix is narrow."""
+    from services.episode_policy import research_default_features
+
+    out = research_default_features(zone=(768.0, 770.0), encounter_price=769.0, underlying_tick=0.01)
+    assert out.get("status") != "policy_unavailable", out
+    assert out.get("target") is not None and out.get("stop") is not None, out
+    # Deterministic: same inputs, same barriers.
+    again = research_default_features(zone=(768.0, 770.0), encounter_price=769.0, underlying_tick=0.01)
+    assert again == out
+
+
 def test_cross_batch_ranks_are_recomputed_over_one_population():
     """Two batches must not each contribute their own "rank 1".
 
