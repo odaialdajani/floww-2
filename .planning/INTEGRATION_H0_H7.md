@@ -383,6 +383,55 @@ Note: `flow_alerts_daily` does not exist in this deployment's DuckDB and
 `flow_prints` has 0 rows, which is why the flow/confluence evidence chain is
 empty (see the confluence/ML section above).
 
+### H4 — episode policy crashed on a missing zone instead of degrading (`58ac742c`)
+
+`research_default_features` unpacked `lo, hi = zone` before any validation, so
+`zone=None` raised `TypeError` instead of reaching its own documented
+`{status: policy_unavailable, reason}` path. `server.py` explicitly guards its
+call with `zone=(None if zone is None else tuple(zone))`, so None is an
+anticipated input — the documented path was simply unreachable.
+
+    BEFORE  TypeError: cannot unpack non-iterable NoneType object
+    AFTER   {'status': 'policy_unavailable',
+             'reason': 'missing_or_malformed_zone',
+             'policy_version': 'research_barriers.v1'}
+
+Shape and numeric validation now precede unpacking, each with its own reason.
+Non-finite/inverted zones were already rejected correctly and still are; a valid
+zone still produces deterministic barriers, and a test pins that determinism so
+this cannot quietly become non-deterministic.
+
+Gates: 4569 passed / 33 skipped / 0 failed; **tests/solstice 273 passed** — the
+R8 acceptance path that exercises this function is unregressed. MUT18 killed.
+
+### H4 — chain traced, NOT orphaned (verified, no change)
+
+The packet warned: "Do not report a missing caller as 'needs time.'" I traced
+every link rather than assuming.
+
+- `episode_policy` → **wired** at `server.py:1851`, guarded with
+  `zone=(None if zone is None else tuple(zone))`.
+- `journal_store` → **wired** at `server.py:3987` (`close_open_by_symbol`) and
+  `discord_bot.py:315` (`read_trades`). Not an unmounted module.
+
+Live through the running service (paths taken from `docs/api/openapi.json`, not
+guessed):
+
+    GET /api/flowseeker/journal/stats  -> 200
+      {"days":90,"overall":{"wins":0,"losses":0,"n":0,"win_rate":null,
+       "avg_return":null},"by_setup":{},"by_gex_regime":{}}
+    GET /api/flowseeker/journal/trades -> 200 {"trades":[],"count":0}
+
+**The journal is empty and reports itself honestly** — `win_rate: null` and
+`avg_return: null`, not a fabricated 0% or a 50% prior. That is the correct
+behavior for zero recorded outcomes, and it is the concrete reason **no
+empirical costed-outcome evidence exists yet**. Nothing in this work supports a
+profitability claim.
+
+Reading `data/journal.duckdb` from a second process fails with a DuckDB lock
+conflict. That is correct single-writer behavior (the running backend holds the
+lock), not a defect.
+
 ## 7. Next actions
 
 | # | Action | Owner | Blocked on |
