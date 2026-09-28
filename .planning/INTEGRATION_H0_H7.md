@@ -170,6 +170,41 @@ main carried **17.5 points of confidence that did not come from evidence.**
 The silent-except fallback is preserved exactly: an unavailable feed still
 degrades to unranked rather than failing the rank.
 
+### H3 — availability boundary unified across scorers (`b51ee581`)
+
+The three normalizers had drifted, so `*_status` could not be trusted. Three
+distinct meanings were being reported through two labels:
+
+| payload | before | now |
+|---|---|---|
+| `_norm_flow({})` | 0.0 / `ok` | 0.0 / `missing` |
+| `_norm_flow({"conviction": None})` | 0.0 / `invalid` | 0.0 / `missing` |
+| `_norm_conf({"total": None})` | 0.0 / `invalid` | 0.0 / `missing` |
+| `_norm_ml({})` | 0.0 / `invalid` | 0.0 / `missing` |
+| `_norm_ml({"prediction": None})` | 0.0 / `invalid` | 0.0 / `missing` |
+
+The confluence case is a **real integration boundary, not hypothetical**:
+`services.agent.confluence.score` returns `{"total": None,
+"direction": "insufficient_evidence"}` when it has no coverage (verified by
+calling it). The producer said "insufficient evidence"; the ranker relabelled
+it "invalid" = "emitted garbage".
+
+Genuinely malformed data still reports `invalid`; a real reading of 0.0 still
+reports `ok` with a 0.0 component. So "measured and neutral" remains
+distinguishable from "never measured" while both contribute nothing.
+
+**Correction to my own work:** I initially "simplified" the empty-dict clauses
+in all three normalizers as redundant. That was wrong for confluence —
+`conf.get("total", 0)` defaults to 0, not None — and the suite caught it. The
+confluence clause is load-bearing and is now commented as such. The `_norm_flow`
+clause genuinely IS redundant; MUT7 survived its removal, so it was deleted
+rather than left as untested code.
+
+**Confluence producer exists and is compatible.** `node_confluence.node_brief`
+calls `services.agent.confluence.score`, which emits exactly the `{"total",
+"direction", "dimensions"}` shape `_norm_conf` consumes. The route still passes
+`confluence=None` — connecting it is the open decision below, not a blocker.
+
 ## 7. Next actions
 
 | # | Action | Owner | Blocked on |
