@@ -74,8 +74,9 @@ class TestEntryCondition:
     def test_not_friday(self):
         """Signal should not fire on non-Friday."""
         strat = FridayPinStrategy()
-        # Thursday
-        dt = datetime(2026, 5, 21, 20, 35, tzinfo=UTC)
+        # Thursday, same ET wall-clock time as the firing case.
+        dt = datetime(2026, 5, 21, 15, 35,
+                      tzinfo=ZoneInfo("America/New_York")).astimezone(UTC)
         for _i in range(30):
             strat.update_price(100.0)
         result = strat.check_entry_condition(make_market_data(100.0, dt))
@@ -177,7 +178,7 @@ class TestBacktest:
         """Backtest with data that triggers signals."""
         strat = FridayPinStrategy()
         data = []
-        base_dt = datetime(2026, 5, 22, 20, 35, tzinfo=UTC)  # Friday 15:35 ET
+        base_dt = make_friday_1535_et()  # Friday 15:35 ET, built from the zone
         for i in range(100):
             dt = base_dt + timedelta(minutes=i)
             # Keep prices very tight (pinned)
