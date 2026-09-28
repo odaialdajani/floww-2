@@ -519,6 +519,41 @@ correct (min-accumulators, a "never succeeded" staleness age that errs safe).
 No third instance. `read_budget.py` already fails closed; `sentiment.py` sets
 `VADER_AVAILABLE = False` deliberately.
 
+### DST sweep — hardcoded ET offsets found in TWO places (`a134820e`, `68f3f216`)
+
+Chasing the pre-existing `test_v3_costsave` failure led to a systemic bug:
+**hardcoded UTC-5 used as "Eastern time",** which is EST and ignores DST. Two
+sites, both live:
+
+**1. `routes/admin.py` — `/api/databento/usage`.** Reported `in_window_now` one
+hour early for ~5 months a year, so it claimed the window was CLOSED an hour
+before the trade route opened it. Now delegates to the existing correct helper
+`server._in_window_now_et` rather than adding a third calculation.
+
+**2. `services/strategies/friday_pin.py` — worse.** The comment said
+"UTC-5 or UTC-4 for DST" and the code did neither. The strategy gates on
+15:30–15:40 ET, so during EDT a 15:35 bar evaluated as 14:35 and was **rejected
+by the exact window it exists to catch** — the strategy could not fire for five
+months a year. Now uses `zoneinfo`.
+
+Lesson recorded: a comment describing correct behavior is not evidence of it.
+Both sites had comments implying DST was handled; neither did.
+
+Swept all `hours=4)` / `hours=5)` occurrences — these two were the only real
+ones remaining.
+
+**Test bug found alongside:** `test_flow_spy_outside_window_emits_error` was
+failing in the full suite. Verified pre-existing (identical failure on base
+`d905c9d2` in a clean worktree), NOT a regression from this branch. Its guard
+returned `False` on any error, so "could not tell" was read as "outside the
+window" — the endpoint 503s without auth. Now returns `None` and the test
+skips. Same fail-open pattern as the budget bugs.
+
+**Mutation lesson:** the first friday_pin test suite re-implemented the window
+arithmetic and asserted against its own copy — the UTC-5 mutation SURVIVED it.
+Rewritten to drive the real `check_entry_condition`. Green tests that only test
+a copy are not evidence.
+
 ## 7. Next actions
 
 | # | Action | Owner | Status / blocked on |
