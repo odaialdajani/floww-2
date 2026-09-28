@@ -290,6 +290,27 @@ is expressible instead of impossible. API docs regenerated (370 paths).
 A stub in `test_scan_batch_builds_with_injected_fns` needed the new signature;
 assertion unchanged.
 
+### H3 — cross-batch leaderboard ranks were per-batch accidents (`c34824bf`)
+
+`rank` is a within-batch ordinal. The rotating cursor scans one slice per call,
+so every batch restarts at 1 and each batch's rank 1 is persisted per ticker.
+`latest_leaderboard` ordered by that column. Reproduced against real DuckDB with
+two successive `record_leaderboard` calls:
+
+    BEFORE  rank=1 AAA conviction=15.0 LOW
+            rank=1 BBB conviction=40.0 HIGH   <- two rank-1s; 15.0 sorted above 40.0
+    AFTER   rank=1 BBB conviction=40.0 HIGH
+            rank=2 AAA conviction=15.0 LOW
+
+Ordering is now by fused score and `rank` is recomputed over every stored row,
+so the view is ranked over one eligible population. The stored ordinal is
+preserved as `batch_rank` rather than discarded.
+
+`test_leaderboard_round_trip` asserted `rank == 2` for SPY when SPY was the only
+stored row — it was reading a per-batch ordinal as a global position. Now
+asserts rank 1 / batch_rank 2 / updated conviction; the update-replace behavior
+it covers is unchanged.
+
 ## 7. Next actions
 
 | # | Action | Owner | Blocked on |
