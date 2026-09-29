@@ -190,3 +190,18 @@ test("no price candles renders an honest empty, not an empty chart", async () =>
   await act(async () => { render(<TrinityView />); });
   await waitFor(() => expect(screen.getByTestId("triad-price-empty")).toBeInTheDocument());
 });
+
+test("contract drawer moves focus in and restores it on close", async () => {
+  window.sessionStorage.setItem("solstice.triadHandoff", JSON.stringify({
+    ticker: "SPY", wall_id: "w1", strike: 760, expiry: "2026-10-02", ts: Date.now(),
+  }));
+  await act(async () => { render(<TrinityView />); });
+  await waitFor(() => expect(screen.getByTestId("triad-scenario")).toBeInTheDocument());
+  const btn = screen.getByTestId("triad-contracts-btn");
+  btn.focus();
+  await act(async () => { fireEvent.click(btn); });
+  await waitFor(() => expect(screen.getByTestId("triad-contract-drawer")).toBeInTheDocument());
+  expect(screen.getByTestId("triad-drawer-close")).toHaveFocus();
+  await act(async () => { fireEvent.click(screen.getByTestId("triad-drawer-close")); });
+  expect(btn).toHaveFocus();
+});

@@ -230,6 +230,18 @@ function SkylitDashboard({
   // closes it. Only auto-opens on a NEW selection (follow refreshes must
   // not yank it open after the user closed it).
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // O5: drawer focus ownership — focus the close control on open, restore
+  // the previously focused element on close/unmount.
+  const drawerCloseRef = useRef(null);
+  const drawerPrevFocusRef = useRef(null);
+  useEffect(() => {
+    if (!drawerOpen) return undefined;
+    drawerPrevFocusRef.current = document.activeElement;
+    drawerCloseRef.current?.focus();
+    return () => {
+      try { drawerPrevFocusRef.current?.focus?.(); } catch { /* noop */ }
+    };
+  }, [drawerOpen]);
   // R8-04: review journal state for the current snapshot's decision
   const [reviewState, setReviewState] = useState(null);
   const [reviewLoading, setReviewLoading] = useState(false);
@@ -798,7 +810,7 @@ function SkylitDashboard({
               data-testid="skylit-open-triad" title="Open this wall/snapshot in Triad (raw + adjusted review desk)">
               Open in Triad
             </button>
-            <button className="skylit-drawer-close" onClick={() => setDrawerOpen(false)}
+            <button className="skylit-drawer-close" ref={drawerCloseRef} onClick={() => setDrawerOpen(false)}
               data-testid="skylit-drawer-close" title="Close inspector (Esc)" aria-label="Close inspector">
               ✕
             </button>
