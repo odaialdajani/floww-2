@@ -63,17 +63,38 @@ behind a route), **test-only**, **deferred** (with the reason), **external**
 
 ## Known failures, honestly
 
-1. **Full-suite: 6711 passed, 37 skipped, 1 error.** The error is
-   `tests/test_wall_strength_policy.py::test_unknown_values_are_unavailable_not_zero`
-   at *teardown*, raised by the session `deny_external_network` fixture after
-   `tests/services/test_agentfield_hub.py::TestTickerNormalization::test_gex_regime_uppercases_ticker`
-   attempted a real `api.public.com` connection. That test patches
-   `services.heatseeker`, which the reasoner no longer calls.
-   **Reproduced on the unmodified base files** (checked out `origin/main`
-   versions of `gex_core.py`, `exposure_metrics.py`, `server.py`: 42 passed
-   in isolation, identical either way), and the file passes in isolation on
-   both trees. It is a full-run ordering/isolation defect = R10-10, owned by
-   Hermes. It is not a result of this work and was not worked around.
+1. **Full suite on the operator's machine: 6711 passed, 37 skipped, 1 error.**
+   The error surfaces at the *teardown* of whichever test happens to be
+   running when the session-scoped `deny_external_network` fixture asserts.
+   The originating test is
+   `tests/services/test_agentfield_hub.py::TestTickerNormalization::test_gex_regime_uppercases_ticker`,
+   which patches `sys.modules["services.heatseeker"]` while the reasoner
+   actually calls `services.public_api_adapter.fetch_chain_from_public_api`
+   (agentfield_hub.py:110-112). The real `api.public.com` request is then
+   blocked by the offline guard.
+
+   **This is R10-10, it is credential-conditional, and it is not caused by
+   this work.** Evidence:
+
+   - Reverting **all** of this branch's production changes in place
+     (`git checkout 605aca8a -- <every changed production file>`, new
+     modules moved aside) still produced the error in this checkout.
+   - A detached worktree at `origin/main`, with a copy of this venv and a
+     copy of the live `backend/data` store, produced **0 errors, 4 runs in
+     a row**, on the same subset.
+   - The one remaining difference: this checkout has `backend/.env` with
+     `PUBLIC_API_KEY` set; the worktree had only `.env.example`. The
+     adapter's `_get_broker()` returns a live broker when the key is
+     present and `None` when it is absent, so with no key the reasoner
+     returns before any request is made.
+   - I did **not** reproduce it with the real key in the worktree, per the
+     packet's instruction not to repeat a credential-triggered network
+     attempt. The isolation above identifies the cause without doing so.
+
+   Consequences worth acting on: CI is green because CI has no key, so this
+   class of defect is invisible to CI; and the fix is to stop the test from
+   relying on a module the code no longer calls. **Hermes owns this.**
+
 2. Bandit is not in the venv by default; installed for the gate. Exit 0.
 3. `frontend/` was not touched (deferred by the packet). No frontend suite
    was run, and none of the UI is certified by any backend commit here.
