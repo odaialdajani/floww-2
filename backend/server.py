@@ -411,17 +411,44 @@ LIVE_WINDOW = {"start_hhmm": "09:00", "stop_hhmm": "10:30"}
 PREFETCH_HHMM = "08:55"  # pre-fetch SPY OI 5 min before market open
 
 
+def _eastern_utc_offset_hours(utc_dt: datetime) -> int:
+    """US Eastern UTC offset in hours for a given UTC instant.
+
+    Implements the US rule directly (second Sunday in March 02:00 local ->
+    first Sunday in November 02:00 local) rather than reading
+    `time.localtime().tm_isdst`. That flag describes the HOST's timezone, not
+    Eastern's, and the two disagree twice a year: roughly Mar 8-28 and
+    Oct 25-31 the EU and US DST rules are out of step, so a host in Berlin
+    reports the opposite of Eastern's actual state.
+
+    Only reached when zoneinfo is unavailable, so it stays dependency-free.
+    """
+    year = utc_dt.year
+    tzinfo = utc_dt.tzinfo
+
+    def nth_sunday(year_: int, month: int, n: int) -> datetime:
+        """The n-th Sunday of a month, tz-aware to match the caller's clock."""
+        first_dow = datetime(year_, month, 1).weekday()  # Monday == 0
+        day = 1 + (6 - first_dow) % 7 + (n - 1) * 7
+        return datetime(year_, month, day, tzinfo=tzinfo)
+
+    dst_start = nth_sunday(year, 3, 2).replace(hour=7)   # 02:00 EST == 07:00 UTC
+    dst_end = nth_sunday(year, 11, 1).replace(hour=6)    # 02:00 EDT == 06:00 UTC
+    return -4 if dst_start <= utc_dt < dst_end else -5
+
+
 def _in_window_now_et() -> bool:
     """Check if current time is within configured live window (US/Eastern)."""
     try:
         from zoneinfo import ZoneInfo
         et = datetime.now(ZoneInfo("America/New_York"))
     except Exception:
-        # Fallback: use UTC-4 (EDT) during DST, UTC-5 (EST) otherwise
-        import time
-        is_dst = time.localtime().tm_isdst > 0
-        offset = 4 if is_dst else 5
-        et = datetime.now(UTC) - timedelta(hours=offset)
+        # Fallback: apply the US DST rule to UTC directly. Deriving Eastern's
+        # offset from the host's tm_isdst was wrong on any non-Eastern host
+        # during the two weeks a year the EU and US rules disagree, which
+        # shifted this gate by an hour.
+        now_utc = datetime.now(UTC)
+        et = now_utc + timedelta(hours=_eastern_utc_offset_hours(now_utc))
     hhmm = et.strftime("%H:%M")
     return LIVE_WINDOW["start_hhmm"] <= hhmm <= LIVE_WINDOW["stop_hhmm"]
 
