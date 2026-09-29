@@ -1,7 +1,7 @@
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { API as BACKEND_API } from "../../config/api";
-import { replayToDisplay, stepReplay } from "../../lib/solsticeReplay";
+import { replayToDisplay, stepReplay, replayIndexOf } from "../../lib/solsticeReplay";
 
 /**
  * ReplayStrip — actual guided replay (P09/R4-15, R5-B isolation).
@@ -18,6 +18,12 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
   const [currentId, setCurrentId] = useState(null);
   const [replayAsOf, setReplayAsOf] = useState(null);
   const [health, setHealth] = useState(null);
+  // O3 Play: auto-advance through RECORDED snapshots only. Chained timeouts
+  // (not an interval) so each step waits for the previous snapshot to land;
+  // reaching the last record stops playback by itself. Never arms live.
+  const [playing, setPlaying] = useState(false);
+  const curIdRef = useRef(currentId);
+  curIdRef.current = currentId;
   const genRef = useRef(0);
   // Ticker switch clears replay state: no old-ticker snapshot may render
   // under the new heading, and in-flight work is invalidated.
@@ -28,6 +34,7 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
     setCurrentId(null);
     setReplayAsOf(null);
     setHealth(null);
+    setPlaying(false);
   }, [ticker]);
   const load = useCallback(async () => {
     const myGen = ++genRef.current;
@@ -102,8 +109,32 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
     genRef.current += 1;
     setCurrentId(null);
     setReplayAsOf(null);
+    setPlaying(false);
     if (onReplay) onReplay(null);
   }, [onReplay]);
+  const stepOnce = useCallback(() => {
+    const nxt = stepReplay(snaps, curIdRef.current, 1);
+    if (nxt) openSnap(nxt.id);
+    else setPlaying(false);
+  }, [snaps, openSnap]);
+  useEffect(() => {
+    if (!playing) return undefined;
+    if (currentId && replayIndexOf(snaps, currentId) >= snaps.length - 1) {
+      setPlaying(false);
+      return undefined;
+    }
+    const id = setTimeout(stepOnce, 2000);
+    return () => clearTimeout(id);
+  }, [playing, currentId, snaps, stepOnce]);
+  const togglePlay = useCallback(() => {
+    if (playing) {
+      setPlaying(false);
+      return;
+    }
+    stepOnce();
+    setPlaying(true);
+  }, [playing, stepOnce]);
+  const scrubIndex = replayIndexOf(snaps, currentId);
   // R8-04: external replay jump (Next-to-review list). Same generation
   // guards as stepping: ticker switches and exits invalidate the request.
   const lastOpened = useRef(null);
@@ -127,6 +158,22 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
       </button>
       {snaps.length > 0 && (
         <>
+          <button className="skylit-trade-mode-btn" onClick={togglePlay} data-testid="solstice-replay-play"
+            title={playing ? "Pause recorded playback" : "Play recorded snapshots in order (stops at the last record; never arms live refresh)"}>
+            {playing ? "Pause" : "Play"}
+          </button>
+          <input type="range" min={0} max={snaps.length - 1} step={1}
+            value={scrubIndex >= 0 ? scrubIndex : 0}
+            data-testid="solstice-replay-scrub" aria-label="Replay timeline scrubber"
+            title="Scrub recorded snapshots (recorded time only)"
+            onChange={(e) => {
+              const s = snaps[Number(e.target.value)];
+              if (s) openSnap(s.id);
+            }} />
+          <span data-testid="solstice-replay-range"
+            title="Recorded range start · current · end">
+            {String(snaps[0]?.asof || "").slice(11, 16)} · {String(snaps[scrubIndex >= 0 ? scrubIndex : 0]?.asof || "").slice(11, 16)} · {String(snaps[snaps.length - 1]?.asof || "").slice(11, 16)}
+          </span>
           <button className="skylit-trade-mode-btn" onClick={() => step(-1)} data-testid="solstice-replay-prev" title="Step to earlier recorded snapshot">‹ Prev</button>
           <button className="skylit-trade-mode-btn" onClick={() => step(1)} data-testid="solstice-replay-next" title="Step to later recorded snapshot (never beyond the last record)">Next ›</button>
         </>
