@@ -727,6 +727,39 @@ verified byte-intact (3 keys, original mtime).
 **Do not delete `backend/.env` to make this green.** That hides the leak
 instead of fixing it and would break the running local stack.
 
+### Malformed momentum: the `50` sentinel re-checked, and SAFE (no code change)
+
+Recorded here to close a claim I had carried as an open defect: "missing or
+malformed momentum still becomes score 50, which can influence alerts instead
+of propagating unavailable state." That is **wrong**, and is retracted.
+
+`_parse_momentum_score` returns 50 for any unusable input. The worry was that
+50 is a fabricated measurement rather than an unavailable marker, and might
+reach the detector as if it were real. It does not: MOMENTUM_EXTREME_HIGH is
+80 and MOMENTUM_EXTREME_LOW is 20, both exclusive, so 50 is inside the dead
+band and can fire neither direction. Verified against the real
+`AlertEngine.detect_alerts` with a real `GEXSnapshot`:
+
+| raw | score | MOMENTUM_EXTREME |
+|---|---|---|
+| None, "abc", {}, [], True, False, nan, "nan", "" | 50 | 0 |
+| "7", 7.9 | 7 | 1 |
+| -5 | 0 | 1 |
+| 500, 95 | 100, 95 | 1 |
+
+Every unusable input yields zero alerts and every usable one still fires, so
+the sentinel does not swallow genuine extremes either. The bool rejection from
+#79 is confirmed live: `True` no longer becomes 1. The response body never
+echoes the coerced value, so no synthetic 50 can be read downstream as a
+measurement.
+
+Two earlier probes were wrong and both produced a false "safe" reading: the
+first called `detect_alerts` with no snapshot (it returns `[]` when `current`
+is absent, so every case looked like zero alerts), and the second passed a
+dict to `add_snapshot`, which requires a `GEXSnapshot`. The table is from the
+corrected probe. Same class of error as the H2 cursor refutation: checking one
+function without checking its inputs.
+
 ## 7. Next actions
 
 | # | Action | Owner | Status / blocked on |
