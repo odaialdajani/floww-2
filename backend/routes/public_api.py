@@ -95,6 +95,17 @@ async def get_public_chain(
     from services.chain_readings import chain_readings
     result = {**result, "contracts": chain_readings(result.get("contracts", []), result.get("spot"), ticker.upper())}
 
+    # C3 wiring (was Hermes's lease; consolidated here): attach canonical
+    # per-row exposure. chain_readings scores gex from supplied vendor gamma
+    # with a hardcoded 100 multiplier and no quarantine; annotate recomputes
+    # via compute_raw_oi, which is value-identical for standard contracts
+    # but honours explicit multipliers and quarantines adjusted/nonstandard
+    # rows to None+reason instead of confident wrong numbers. Basis fields
+    # ride along so renderers can distinguish measured from unknown.
+    from services.triad_projection import annotate_contract_exposure
+    result = {**result, "contracts": annotate_contract_exposure(
+        result.get("contracts", []), result.get("spot", 0))}
+
     # If specific expiration requested, filter to that expiry
     if expiration:
         result["contracts"] = [c for c in result["contracts"] if c["expiry"] == expiration]

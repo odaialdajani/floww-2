@@ -85,14 +85,71 @@ class AgentFieldHub:
     # ──────────────────────────────────────────────────────────────────────
     #  Signal Processing Reasoners
     # ──────────────────────────────────────────────────────────────────────
+    @staticmethod
+    async def _canonical_gex_profile(ticker: str) -> dict[str, Any] | None:
+        """Spot / net GEX / flip level from the canonical Public chain + engine.
+
+        DEAD-WIRE REPAIR. This reasoner used to open with
+
+            from services.heatseeker import compute_gex_profile
+
+        which does not exist — the name is undefined, so the reasoner raised
+        on every call and the remaining body never ran. Nothing reported a
+        failure because the reasoner's own `try` was BELOW the import.
+
+        The profile is now built from the platform's canonical path: the
+        Public chain adapter for contracts, `gex_core` for the vendor-gamma
+        GEX rows, and `find_zero_crossings` for the flip level. The flip is
+        the canonical root computation, not a sign-change guess between
+        adjacent strikes.
+
+        Returns None when coverage is genuinely missing — never a zero-filled
+        profile, because a zeroed spot or flip reads as a real level.
+        """
+        from services.gex_core import compute_gex_by_strike_vendor, find_zero_crossings
+        from services.public_api_adapter import fetch_chain_from_public_api
+
+        chain = await fetch_chain_from_public_api(ticker.upper(), max_expiries=4)
+        if not chain or not chain.get("contracts"):
+            return None
+        try:
+            spot = float(chain.get("spot") or 0.0)
+        except (TypeError, ValueError):
+            return None
+        if spot <= 0:
+            return None
+        rows = compute_gex_by_strike_vendor(spot, chain["contracts"])
+        if not rows:
+            return None
+        net = sum(float(r.get("gex") or 0.0) for r in rows)
+        roots = find_zero_crossings(spot, rows)
+        return {
+            "spot": spot,
+            "net_gex": net,
+            "flip_level": float(roots[0]) if roots else None,
+            "gex_rows": len(rows),
+            "expiries": chain.get("expiries") or [],
+            "data_source": chain.get("data_source"),
+        }
+
     def _register_signal_reasoners(self) -> None:
         @self.router.reasoner(path="/signals/gex-regime", tags=["signal", "gex"])
         async def gex_regime(ticker: str = "SPY") -> dict[str, Any]:
             """Compute GEX regime for a ticker. Returns paper-accurate metrics."""
-            from services.heatseeker import compute_gex_profile  # type: ignore
-
             try:
-                profile = await compute_gex_profile(ticker)
+                profile = await self._canonical_gex_profile(ticker)
+            except Exception as exc:
+                logger.error("gex_regime profile error: %s", exc)
+                return {"ticker": ticker.upper(), "status": "error", "error": str(exc)}
+            if profile is None:
+                # Coverage is missing. This is reported, not zero-filled: a
+                # zeroed spot or flip level reads as a real level downstream.
+                return {
+                    "ticker": ticker.upper(),
+                    "status": "unavailable",
+                    "reason": "NO_CHAIN_COVERAGE",
+                }
+            try:
                 result: dict[str, Any] = {"ticker": ticker.upper(), "status": "ok", **profile}
 
                 # ── Paper-accurate metrics (Barbon-Buraschi + Ni-Pearson) ──
@@ -106,17 +163,19 @@ class AgentFieldHub:
                         vix_gamma_fragility,
                     )
 
-                    spot = result.get("spot", 0) or 0
-                    net_gex = result.get("net_gex", 0) or 0
-                    flip_level = result.get("flip_level", 0) or 0
-                    vix = result.get("vix", 22)
+                    spot = result.get("spot") or 0
+                    net_gex = result.get("net_gex") or 0
+                    # Unknown, never defaulted to a number. `result.get("vix", 22)`
+                    # used to invent a 22 vol reading for every ticker, and the
+                    # fragility metric below consumed it as if measured.
+                    vix = result.get("vix")
+                    flip_level = result.get("flip_level")
 
                     gib = compute_gamma_imbalance(net_gex, spot)
                     flip = compute_flip_metrics(flip_level, spot)
                     regime = predict_intraday_regime(gib.get("gamma_imbalance_pct", 0))
                     crash = flash_crash_risk(gib.get("gamma_imbalance_pct", 0))
                     liq = gamma_liquidity_regime(gib.get("gamma_imbalance_pct", 0), flip.get("flip_distance_pct", 100))
-                    vgf = vix_gamma_fragility(vix_spot=vix, gamma_imbalance_pct=gib.get("gamma_imbalance_pct", 0), flip_distance_pct=flip.get("flip_distance_pct", 100))
 
                     result["paper_metrics"] = {
                         "gamma_imbalance": gib,
@@ -124,9 +183,20 @@ class AgentFieldHub:
                         "intraday_regime": regime,
                         "flash_crash_risk": crash,
                         "gamma_liquidity_regime": liq,
-                        "vix_gamma_fragility": vgf,
                         "net_gex_dollars": net_gex,
                     }
+                    # Only computed when a real vol reading exists.
+                    if isinstance(vix, (int, float)) and not isinstance(vix, bool):
+                        result["paper_metrics"]["vix_gamma_fragility"] = vix_gamma_fragility(
+                            vix_spot=vix,
+                            gamma_imbalance_pct=gib.get("gamma_imbalance_pct", 0),
+                            flip_distance_pct=flip.get("flip_distance_pct", 100),
+                        )
+                    else:
+                        result["paper_metrics"]["vix_gamma_fragility"] = None
+                        result["paper_metrics"]["vix_unavailable_reason"] = "VIX_NOT_PROVIDED"
+                    if flip_level is None:
+                        result["reason_codes"] = ["GAMMA_FLIP_ROOT_NOT_FOUND"]
                 except Exception as paper_err:
                     logger.warning("Paper metrics unavailable for %s: %s", ticker, paper_err)
 
@@ -273,15 +343,46 @@ class AgentFieldHub:
     # ──────────────────────────────────────────────────────────────────────
     def _register_data_reasoners(self) -> None:
         @self.router.reasoner(path="/data/option-chain", tags=["data", "options"])
-        async def option_chain(ticker: str = "SPY") -> dict[str, Any]:
-            """Fetch current option chain with Greeks."""
-            from services.yfinance_fetcher import fetch_option_chain  # type: ignore
+        async def option_chain(ticker: str = "SPY", max_expiries: int = 2) -> dict[str, Any]:
+            """Fetch the current option chain with Greeks.
+
+            DEAD-WIRE REPAIR. This used to import
+            `services.yfinance_fetcher.fetch_option_chain`, which does not
+            exist — that module is OHLCV-only (`fetch_underlying_ohlcv`,
+            `fetch_and_store`, `get_latest_ticks`). The import was inside the
+            `try`, so the failure was swallowed and the reasoner returned a
+            generic error for every call.
+
+            The canonical chain source is the Public adapter, which is
+            data-only by construction (its own tests assert it never
+            references an order method).
+            """
+            from services.public_api_adapter import fetch_chain_from_public_api
 
             try:
-                chain = await fetch_option_chain(ticker.upper())
-                return {"ticker": ticker.upper(), "status": "ok", "chain": chain}
-            except Exception as e:
-                return {"ticker": ticker.upper(), "status": "error", "error": str(e)}
+                expiries = max(1, min(int(max_expiries), 12))
+            except (TypeError, ValueError):
+                expiries = 2
+            chain = await fetch_chain_from_public_api(ticker.upper(), max_expiries=expiries)
+            if not chain or not chain.get("contracts"):
+                # Reported, never zero-filled: an empty chain is not a chain
+                # of zero exposures.
+                return {
+                    "ticker": ticker.upper(),
+                    "status": "unavailable",
+                    "reason": "NO_CHAIN_COVERAGE",
+                }
+            contracts = chain.get("contracts") or []
+            return {
+                "ticker": ticker.upper(),
+                "status": "ok",
+                "spot": chain.get("spot"),
+                "expiries": chain.get("expiries") or [],
+                "n_contracts": len(contracts),
+                "data_source": chain.get("data_source"),
+                "stale": chain.get("stale", False),
+                "chain": contracts,
+            }
 
         @self.router.reasoner(path="/data/vol-surface", tags=["data", "vol"])
         async def vol_surface(ticker: str = "SPY") -> dict[str, Any]:
@@ -295,28 +396,56 @@ class AgentFieldHub:
             except Exception as e:
                 return {"ticker": ticker.upper(), "status": "error", "error": str(e)}
 
+    @staticmethod
+    def _submit_order_refusal_payload() -> dict[str, Any]:
+        """The fail-closed answer for /execute/order.
+
+        Kept as its own method so the refusal contract can be pinned directly
+        rather than only through whatever routing the hub happens to use.
+        """
+        logger.warning("agentfield /execute/order refused: no approved execution path")
+        return {
+            "status": "refused",
+            "refused": True,
+            "reason": "EXECUTION_PATH_NOT_APPROVED",
+            "detail": (
+                "The agentfield hub holds no approved broker path. Wiring "
+                "this reasoner to a broker requires Nav's explicit "
+                "approval; see CLAUDE.md 'Money path'."
+            ),
+            "requested": None,
+            "submitted": False,
+        }
+
     # ──────────────────────────────────────────────────────────────────────
     #  Execution Reasoners
     # ──────────────────────────────────────────────────────────────────────
     def _register_execution_reasoners(self) -> None:
         @self.router.reasoner(path="/execute/order", tags=["execution"])
         async def submit_order(order: dict[str, Any]) -> dict[str, Any]:
-            """Submit a paper order via PaperBroker.execute_signal."""
-            from services.paper_trader import PaperBroker, Signal  # type: ignore
+            """Refuse order submission. Always, and deterministically.
 
-            try:
-                broker = PaperBroker()
-                signal = Signal(
-                    ticker=order.get("ticker", "SPY"),
-                    side=order.get("side", "buy").upper(),
-                    order_type=order.get("order_type", "limit"),
-                    quantity=order.get("quantity", 1),
-                    price=order.get("price", 0.0),
-                )
-                result = broker.execute_signal(signal)
-                return {"status": "ok", "result": result}
-            except Exception as e:
-                return {"status": "error", "error": str(e)}
+            DEAD-WIRE REPAIR, fail-closed. This used to import
+            `services.paper_trader.PaperBroker`, a name that does not exist:
+            `paper_trader` exports `PaperTrader`, and the `PaperBroker` class
+            lives in `services/paper_broker.py`. The import sat INSIDE the
+            `try`, so every call fell through to a generic error and the
+            reasoner never reached a broker at all.
+
+            Making that wire resolve would bring a NEW broker-reachable path
+            into existence. CLAUDE.md forbids that without Nav's explicit
+            approval -- "adding any new code path that reaches a real broker
+            order" is on the forbidden list, and a paper submit still needs a
+            reviewed, default-deny gate. So this refuses and says why, instead
+            of importing a broker it has no approved way to use.
+            """
+            logger.debug("agentfield /execute/order invoked; refusing")
+            payload = self._submit_order_refusal_payload()
+            payload["requested"] = {
+                "ticker": str(order.get("ticker", "")).upper() or None,
+                "side": order.get("side"),
+            }
+            return payload
 
         @self.router.reasoner(path="/execute/health", tags=["execution", "health"])
         async def execution_health() -> dict[str, Any]:

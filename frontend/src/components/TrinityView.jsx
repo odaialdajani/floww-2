@@ -363,12 +363,54 @@ function WallBar({ walls, wallId, onSelect }) {
 
 function ScenarioCard({ wall, scenarios, spot, quality, onContracts, onTradeSelect, ticker }) {
   const [first, second] = scenarios || [];
+  // Position strip: spot marker against the wall zone on one shared scale.
+  // Pure geometry (percent positions), no inferred levels.
+  const pos = useMemo(() => {
+    const low = Number(wall.low);
+    const high = Number(wall.high);
+    const sp = Number(spot);
+    if (!Number.isFinite(low) || !Number.isFinite(high) || high <= low) return null;
+    const lo = Number.isFinite(sp) ? Math.min(low, sp) : low;
+    const hi = Number.isFinite(sp) ? Math.max(high, sp) : high;
+    const pad = Math.max((hi - lo) * 0.5, Math.abs(hi) * 0.002, 0.01);
+    const loP = lo - pad;
+    const span = (hi - lo) + 2 * pad;
+    const pct = (v) => Math.min(100, Math.max(0, ((v - loP) / span) * 100));
+    return { z0: pct(low), z1: pct(high), sp: Number.isFinite(sp) ? pct(sp) : null };
+  }, [wall, spot]);
+  // State text derives from CURRENT spot vs zone (observable now), not the
+  // packet's scenario label (which may describe an older observation).
+  // wallPositionOf names the WALL's side of spot; the strip names the
+  // PRICE's side of the wall, so the two are mirrored.
+  const wposNow = wallPositionOf(wall, spot);
+  const posState = wposNow === "inside" ? "price inside wall"
+    : wposNow === "below" ? "price above wall"
+    : wposNow === "above" ? "price below wall" : null;
   return (
     <div className="triad-scenario" data-testid="triad-scenario">
       <div className="triad-scenario-zone" data-testid="triad-scenario-zone">
         Wall {wall.wall_id} · zone {wall.low}–{wall.high}
         {spot != null && wall.mid != null ? ` · ${Math.abs(spot - wall.mid).toFixed(1)} from mid` : ""}
       </div>
+      {pos && (
+        <div className="triad-position" data-testid="triad-position"
+          title="Spot position against the wall zone (shared scale)">
+          <div className="triad-position-rail">
+            <div className="triad-position-zone" data-testid="triad-position-zone"
+              style={{ left: `${pos.z0}%`, width: `${pos.z1 - pos.z0}%` }} />
+            {pos.sp != null && (
+              <div className="triad-position-spot" data-testid="triad-position-spot"
+                style={{ left: `${pos.sp}%` }} />
+            )}
+          </div>
+          <div className="triad-position-labels">
+            <span>Below</span><span>Spot</span><span>Above</span>
+          </div>
+          {posState && (
+            <div className="triad-position-state" data-testid="triad-position-state">{posState}</div>
+          )}
+        </div>
+      )}
       {first ? (
         <div className="triad-scenario-side" data-testid="triad-scenario-first">
           <span className="triad-scenario-name">{first.name}</span>

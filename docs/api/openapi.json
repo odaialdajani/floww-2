@@ -6161,7 +6161,7 @@
     },
     "/api/flow-digest": {
       "get": {
-        "description": "Daily digest. Wraps briefing if available.",
+        "description": "Daily digest built from the canonical briefing builder.\n\nDEAD-WIRE REPAIR. This used to call `routes.briefing.daily_briefing`,\nwhich does not exist \u2014 that module exposes `briefing_send(ticker, request)`\nand nothing else. The `except Exception` swallowed the AttributeError, so\nthe endpoint ALWAYS served the scaffold, and the scaffold asserted facts\nit never measured:\n\n    - Top flow tickers: SPY, QQQ, NVDA\n    - VIX regime: normal\n    - Gamma regime: positive\n\nNone of those were read from anywhere. The narrative now comes from\n`services.morning_briefing.build_briefing`, fed a real Public chain, and\nwhen no chain is available the endpoint says so instead of printing a\nmarket call it did not compute.",
         "operationId": "get_api_flow-digest",
         "parameters": [
           {

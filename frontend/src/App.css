@@ -3368,6 +3368,12 @@ button, select, input {
 .triad-price { margin: 6px 0; }
 .triad-price-loading, .triad-price-empty { font-size: 11px; color: #64748b; padding: 6px 0; }
 .triad-price-caption { font-size: 10px; color: #475569; margin-top: 2px; }
+.triad-position { margin: 6px 0 2px; }
+.triad-position-rail { position: relative; height: 18px; background: rgba(255,255,255,0.04); border-radius: 4px; }
+.triad-position-zone { position: absolute; top: 0; bottom: 0; background: rgba(251,191,36,0.18); border-left: 1px solid rgba(251,191,36,0.6); border-right: 1px solid rgba(251,191,36,0.6); }
+.triad-position-spot { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #f472b6; }
+.triad-position-labels { display: flex; justify-content: space-between; font-size: 9px; color: #64748b; margin-top: 2px; }
+.triad-position-state { font-size: 11px; color: #e2e8f0; margin-top: 2px; }
 
 .triad-source { padding: 0 12px 12px; font-size: 10px; color: #475569; }
 .triad-error { padding: 24px; color: #fca5a5; font-size: 13px; }

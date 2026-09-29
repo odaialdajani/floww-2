@@ -1008,3 +1008,28 @@ test("O5 drawer moves focus to its close control and restores prior focus on clo
   await act(async () => { fireEvent.click(screen.getByTestId("skylit-drawer-close")); });
   expect(cell).toHaveFocus();
 });
+
+test("O3 compare panes share one snapshot and identical geometry inputs", async () => {
+  axios.get.mockImplementation(async () => ({ data: { strikes: [] } }));
+  const data = { ticker: "SPY", asof: "2026-09-03T00:00:00Z", spot: 650, exposure_basis: "OI",
+    strikes: [{ strike: 650, gex: 1000 }],
+    grid: { expiries: ["2026-09-18"], strikes: [650], grid: { "2026-09-18": { 650: 1000 } } },
+    snapshotId: "s-geo", metrics: { walls: [], grids: {} },
+    quality: { state: "usable", reasonCodes: [], setupEligible: true } };
+  await act(async () => {
+    render(<SkylitDashboard ticker="SPY" data={data} spot={650} />);
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByTestId("skylit-compare-toggle"));
+  });
+  const panes = screen.getAllByTestId("mock-heatmap");
+  expect(panes).toHaveLength(2);
+  // Same snapshot, same spot, same row window in both panes: row geometry is
+  // identical by construction, so pixel-offset scroll sync is valid (S3).
+  // A missing VEX surface renders its own unavailable state instead.
+  const windows = panes.map((p) => p.getAttribute("data-window"));
+  expect(windows[0]).toBe(windows[1]);
+  const spots = panes.map((p) => p.getAttribute("data-spot"));
+  expect(spots[0]).toBe(spots[1]);
+  expect(spots[0]).toBe("650");
+});

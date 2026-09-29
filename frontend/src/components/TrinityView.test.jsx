@@ -205,3 +205,26 @@ test("contract drawer moves focus in and restores it on close", async () => {
   await act(async () => { fireEvent.click(screen.getByTestId("triad-drawer-close")); });
   expect(btn).toHaveFocus();
 });
+
+test("wall region shows a Below/Spot/Above position strip bound to the zone", async () => {
+  window.sessionStorage.setItem("solstice.triadHandoff", JSON.stringify({
+    ticker: "SPY", wall_id: "w1", strike: 760, expiry: "2026-10-02", ts: Date.now(),
+  }));
+  await act(async () => { render(<TrinityView />); });
+  await waitFor(() => expect(screen.getByTestId("triad-position")).toBeInTheDocument());
+  // Fixture: spot 767.9 above wall 760-766.
+  expect(screen.getByTestId("triad-position-state").textContent).toMatch(/above/i);
+  const zone = screen.getByTestId("triad-position-zone");
+  const spotMk = screen.getByTestId("triad-position-spot");
+  const zLeft = parseFloat(zone.style.left);
+  const zRight = zLeft + parseFloat(zone.style.width);
+  const sLeft = parseFloat(spotMk.style.left);
+  // Spot marker sits right of the zone band, both inside 0-100.
+  expect(sLeft).toBeGreaterThan(zRight);
+  for (const v of [zLeft, zRight, sLeft]) {
+    expect(v).toBeGreaterThanOrEqual(0);
+    expect(v).toBeLessThanOrEqual(100);
+  }
+  expect(screen.getByText("Below")).toBeInTheDocument();
+  expect(screen.getByText("Above")).toBeInTheDocument();
+});
