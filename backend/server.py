@@ -1537,33 +1537,68 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                         _psnap = (_prep or {}).get("snapshot") or {}
                         import datetime as _dtw
                         _today = _dtw.datetime.now(_dtw.UTC).date().isoformat()
-                        _same_day = str(_psnap.get("asof_ts", ""))[:10] == _today
-                        _same_src = ((_psnap.get("data_source") or "")
-                                     == (raw.get("data_source", "yfinance") or ""))
-                        if _pcontracts and _same_day and _same_src:
-                            from services.solstice_enrichment import (
-                                aggregate_window_by_wall,
-                                window_contract_activity,
-                            )
-                            _w = window_contract_activity(_pcontracts, raw["contracts"], spot)
-                            if _w.get("status") == "ok" and _w.get("contracts"):
-                                metrics["window_daddex_v1"] = sum(
-                                    c.get("window_daddex", 0) for c in _w["contracts"])
-                                metrics["window_delta_weighted_volume_v1"] = metrics["window_daddex_v1"]
-                                # Registry canonical name kept in sync (alias).
-                                metrics["window_dadgex_v1"] = metrics["window_daddex_v1"]
-                                metrics["window_daddex_reason"] = None
-                                metrics["window_contracts"] = _w["contracts"][:20]
-                                metrics["window_missing_delta"] = _w.get("missing_delta", 0)
-                                metrics["window_mixed_pair"] = _w.get("mixed_pair", 0)
-                                # R6-2: wall-local window aggregation over the
-                                # FULL row list (before the display cut above);
-                                # a truncated sample is not a population.
-                                metrics["wall_window"] = aggregate_window_by_wall(
-                                    sol_walls, _w["contracts"])
-                            elif _w.get("reason") == "VOLUME_REBASE":
-                                metrics["window_daddex_reason"] = "VOLUME_REBASE"
-                                metrics["window_dadgex_reason"] = "VOLUME_REBASE"
+                        # S2: the comparability gate is now shared, declared and
+                        # reasoned. The legacy pair of inline booleans
+                        # (_same_day/_same_src) reported nothing when it
+                        # refused, so a session roll and a provider change were
+                        # indistinguishable from "no prior snapshot".
+                        from services.solstice_window import window_activity_surface
+                        _w = window_activity_surface(
+                            {
+                                "ticker": ticker,
+                                "data_source": _psnap.get("data_source") or "",
+                                "scope_key": _scope_key,
+                                "formula_version": _psnap.get("formula_version") or "gex.v2",
+                                "session_date": str(_psnap.get("asof_ts") or "")[:10],
+                                "asof": _psnap.get("asof_ts"),
+                            },
+                            {
+                                "ticker": ticker,
+                                "data_source": raw.get("data_source", "yfinance") or "",
+                                "scope_key": _scope_key,
+                                "formula_version": "gex.v2",
+                                "session_date": _today,
+                                "asof": raw.get("asof"),
+                            },
+                            _pcontracts, raw["contracts"], spot,
+                        )
+                        if _w.get("status") == "ok" and _w.get("contracts"):
+                            from services.solstice_enrichment import aggregate_window_by_wall
+                            _wrows = _w["contracts"]
+                            metrics["window_dadgex_v1"] = _w.get("window_net")
+                            metrics["window_delta_weighted_volume_v1"] = _w.get("window_net")
+                            # Registry canonical name kept in sync (alias).
+                            metrics["window_daddex_v1"] = metrics["window_dadgex_v1"]
+                            metrics["window_daddex_reason"] = None
+                            metrics["window_contracts"] = _wrows[:20]
+                            metrics["window_missing_delta"] = _w["coverage"]["n_missing_delta"]
+                            metrics["window_mixed_pair"] = _w["coverage"]["n_mixed_pair"]
+                            # S2: declared Greek observation convention, actual
+                            # interval, per-strike/expiry surface and the
+                            # observed population. A consumer can no longer
+                            # read a window number without its scope.
+                            metrics["window_surface"] = _w["surface"]
+                            metrics["window_coverage"] = _w["coverage"]
+                            metrics["window_greek_convention"] = _w["greek_convention"]
+                            metrics["window_interval"] = _w["interval"]
+                            metrics["window_provenance_note"] = _w["provenance_note"]
+                            # R6-2: wall-local window aggregation over the
+                            # FULL row list (before the display cut above);
+                            # a truncated sample is not a population.
+                            metrics["wall_window"] = aggregate_window_by_wall(
+                                sol_walls, _wrows)
+                        else:
+                            # Every refusal now names itself. Previously only
+                            # VOLUME_REBASE was reported, so a session roll, a
+                            # provider change or a formula change all looked
+                            # like "no prior snapshot".
+                            _wr = _w.get("reason") or "NO_PRIOR_SNAPSHOT"
+                            metrics["window_dadgex_v1"] = None
+                            metrics["window_daddex_v1"] = None
+                            metrics["window_delta_weighted_volume_v1"] = None
+                            metrics["window_dadgex_reason"] = _wr
+                            metrics["window_contracts"] = []
+                            metrics["wall_window"] = {}
         except Exception as we:
             log.debug("window activity attach failed: %s", we)
     except Exception as me:
