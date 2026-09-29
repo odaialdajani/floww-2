@@ -63,7 +63,7 @@ behind a route), **test-only**, **deferred** (with the reason), **external**
 | R10-10 | **Not mine.** Pre-existing, reproducible with or without my changes (see below). Hermes's test-isolation lane. |
 | R10-11 | **Fixed.** `eastern_at_safe` / `eastern_now_safe` return aware datetimes whose UTC timestamp equals the input. `server._eastern_now` uses it; wall-hour gates unchanged. | `5cedd6ba` |
 | R10-12 | **Backend capability only.** The four surfaces now exist server-side. Periodic refresh, `dte=0` requests and the label migration are **deferred UI** work. |
-| R10-13 | **Deferred UI.** Backend exact-identity support landed (`5cedd6ba`); the unguarded detail request is a frontend correctness migration. |
+| R10-13 | **Backend closed, UI still deferred.** `GET /api/solstice/{ticker}/contract` resolves an explicit identity (OSI, or strike+expiry+type) from a recorded snapshot and refuses a wall midpoint or first expiry with a reason (`d27cbf14`). The unguarded frontend detail request and its generation guard remain a frontend correctness migration. |
 | R10-14 | **Ledger below.** Helpers are classified, not wired to make an inventory green. |
 
 ## Feature matrix
@@ -80,6 +80,7 @@ behind a route), **test-only**, **deferred** (with the reason), **external**
 | Wall-local metric breakdown | `wall_metric_breakdown` | `/api/heatmap` | `metrics_full_json` | inspector | **live** |
 | Contract exposure annotation | `services.triad_projection.annotate_contract_exposure` | `/api/public/chain/{ticker}`, `/api/market/...` | — | chain consumers | **live** (caller and missing-vs-zero semantics preserved) |
 | Triad chain projection | `project_triad_from_chain` (exact strikes) | none | none | none | **source-ready** — no production caller found; the audit's own note is preserved rather than inventing a route |
+| Contract detail by exact identity | `services.contract_identity.resolve_contract` | `GET /api/solstice/{ticker}/contract` (new, read-only) | recorded snapshot contracts | review UI (future) | **live**; a wall midpoint or first expiry is refused with a reason, never substituted |
 | Strict multiplier provenance | `domain.exposure_metrics.resolve_multiplier` | all exposure routes | — | all exposure consumers | **live** |
 | Eastern instant-preserving clock | `services.eastern_clock.eastern_*_safe` | n/a (gates) | — | `server._eastern_now` + gates | **live** |
 | Session reference (bar VWAP) | `session_levels_source.session_bar_vwap_for_ticker` | none | none | none | **source-ready** — no production caller found; deliberately not mounted because nothing consumes it yet |
