@@ -281,6 +281,7 @@ class KeyedScanCache:
         self._ttl = ttl_s
         self._entries: dict[str, dict[str, Any]] = {}
         self._locks: dict[str, threading.Lock] = {}
+        self._async_locks: dict[str, Any] = {}
         self._meta = threading.Lock()
 
     def _lock_for(self, key: str) -> threading.Lock:
@@ -315,6 +316,36 @@ class KeyedScanCache:
 
     def invalidate(self, key: str) -> None:
         self._entries.pop(key, None)
+
+    async def get_or_compute_async(self, key: str, compute: Callable[[], Any]) -> dict[str, Any]:
+        """Async single-flight. Identical concurrent scopes share one call.
+
+        Uses an asyncio lock PER KEY, so two different scopes never serialize
+        against each other while two identical ones never both compute.
+        """
+        hit = self.get(key)
+        if hit is not None:
+            out = dict(hit)
+            out["cache"] = "hit"
+            return out
+        lock = self._async_lock_for(key)
+        async with lock:
+            hit = self.get(key)
+            if hit is not None:
+                out = dict(hit)
+                out["cache"] = "hit"
+                return out
+            payload = await compute()
+            self._entries[key] = {"cached_at": time.time(), "payload": dict(payload)}
+            out = dict(payload)
+            out["cache"] = "miss"
+            return out
+
+    def _async_lock_for(self, key: str) -> Any:
+        import asyncio
+
+        with self._meta:
+            return self._async_locks.setdefault(key, asyncio.Lock())
 
 
 __all__ = [
