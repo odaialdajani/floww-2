@@ -412,45 +412,13 @@ PREFETCH_HHMM = "08:55"  # pre-fetch SPY OI 5 min before market open
 
 
 def _eastern_now() -> datetime:
-    """Current time in US Eastern, using the US DST rule as the fallback.
+    """Current time in US Eastern. See services.eastern_clock for the rules.
 
-    Prefers the tz database. When it is unavailable, `_eastern_utc_offset_hours`
-    applies the US rule directly instead of reading the host's `tm_isdst`, which
-    describes the host timezone rather than Eastern's and is wrong for roughly
-    Mar 8-28 and Oct 25-31 each year on any non-Eastern host.
+    Kept as a thin module-level alias because the gates below read it by name.
     """
-    try:
-        from zoneinfo import ZoneInfo
-        return datetime.now(ZoneInfo("America/New_York"))
-    except Exception:
-        now_utc = datetime.now(UTC)
-        return now_utc + timedelta(hours=_eastern_utc_offset_hours(now_utc))
+    from services.eastern_clock import eastern_now
 
-
-def _eastern_utc_offset_hours(utc_dt: datetime) -> int:
-    """US Eastern UTC offset in hours for a given UTC instant.
-
-    Implements the US rule directly (second Sunday in March 02:00 local ->
-    first Sunday in November 02:00 local) rather than reading
-    `time.localtime().tm_isdst`. That flag describes the HOST's timezone, not
-    Eastern's, and the two disagree twice a year: roughly Mar 8-28 and
-    Oct 25-31 the EU and US DST rules are out of step, so a host in Berlin
-    reports the opposite of Eastern's actual state.
-
-    Only reached when zoneinfo is unavailable, so it stays dependency-free.
-    """
-    year = utc_dt.year
-    tzinfo = utc_dt.tzinfo
-
-    def nth_sunday(year_: int, month: int, n: int) -> datetime:
-        """The n-th Sunday of a month, tz-aware to match the caller's clock."""
-        first_dow = datetime(year_, month, 1).weekday()  # Monday == 0
-        day = 1 + (6 - first_dow) % 7 + (n - 1) * 7
-        return datetime(year_, month, day, tzinfo=tzinfo)
-
-    dst_start = nth_sunday(year, 3, 2).replace(hour=7)   # 02:00 EST == 07:00 UTC
-    dst_end = nth_sunday(year, 11, 1).replace(hour=6)    # 02:00 EDT == 06:00 UTC
-    return -4 if dst_start <= utc_dt < dst_end else -5
+    return eastern_now()
 
 
 def _in_window_now_et() -> bool:

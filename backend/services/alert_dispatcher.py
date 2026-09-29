@@ -23,7 +23,7 @@ import asyncio
 import logging
 import os
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 log = logging.getLogger(__name__)
@@ -169,14 +169,11 @@ class AlertDispatcher:
 
     def _is_quiet_hours(self, now_utc: datetime) -> bool:
         """Check if current ET time is within quiet hours (22:00–06:00 ET)."""
-        try:
-            from zoneinfo import ZoneInfo
-            et = now_utc.astimezone(ZoneInfo("America/New_York"))
-        except Exception:
-            import time as _time
-            is_dst = _time.localtime().tm_isdst > 0
-            offset = 4 if is_dst else 5
-            et = now_utc - timedelta(hours=offset)
+        from services.eastern_clock import eastern_at
+
+        # Raises if the clock cannot be determined; the caller treats that as
+        # an error rather than silently guessing at Eastern time.
+        et = eastern_at(now_utc)
 
         hour = et.hour
 
