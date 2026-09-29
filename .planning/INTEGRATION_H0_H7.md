@@ -608,10 +608,10 @@ is clean.
   points at an innocent file. Anyone triaging this would start in the wrong
   place, exactly as I did — I first blamed Command Code, then my own test
   ordering, before isolating the real variable.
-- `_canonical_gex_profile`'s own docstring is correct about *coverage* honesty
-  (`NO_CHAIN_COVERAGE`, never zero-filled). The defect is not that it reports
-  a wrong value — it is that a background refresh path reaches the credentialed
-  adapter during a test run and swallows the failure.
+- **The guard's attribution is not a suspect list.** It names whichever test
+  is current when a *pending* task fires, which varies between runs of the
+  same tree. I twice narrowed toward the named test and twice found it
+  innocent. Reproduce by combination, not by the name in the message.
 
 **Mechanism (source-confirmed).** `server.build_heatmap` is
 stale-while-revalidate: on a stale-but-usable cache entry it serves
@@ -656,6 +656,14 @@ clean at 354 passed). A background task started during an earlier test stays
 pending and only performs its call later, when some *other* test is current.
 The guard then attributes the attempt to that test. The two-file subset that
 does reproduce it is a timing window, not a causal pair.
+
+**The test the guard names is not necessarily the one involved.**
+`tests/routes` + `tests/services` (the whole directory, 4,649 tests)
+reproduces the error with `test_agentfield_hub.py` absent from the selection
+entirely. The guard happened to name that test in one run and a different one
+in another. It reports whoever is *current* when the pending task fires, so
+its attribution carries no causal information and must not be treated as a
+suspect list. Narrowing by the named test is a dead end.
 
 **Owner:** the stale-while-revalidate background refresh is pre-existing
 `server.py` behaviour; `_canonical_gex_profile` and its tests came from
