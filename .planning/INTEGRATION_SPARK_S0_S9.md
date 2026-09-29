@@ -1,10 +1,45 @@
 # Spark / Muse Spark 1.3 — S0–S9 feature matrix and receipt
 
 Branch `spark/s0-s9-backend-completion`, based on `origin/main` `605aca8a`
-(tree `5ea6a8de…`). Head: `49ef7012`, tree `fa1f38fc8968288710b6739b75a5e2f64997e64a`.
-Ten commits; the authoritative list is `git log origin/main..HEAD`, and the
-durable facts in this document are the dispositions below rather than any
-prose about counts.
+(tree `5ea6a8de…`). The branch is 23 commits ahead; `origin/main..HEAD` also
+contains two commits from the concurrent **Hermes** session (`8a3dbe3f`,
+`3ee53fb8` and later work), which are identified in the log by their own
+subjects and are not mine. The durable facts in this document are the
+dispositions below, not any prose about counts.
+
+Spark commits, in order: `ba5ff9cc` (S1/S2), `9646bb2f` (S3), `5cedd6ba`
+(S5), `8e3c5d2c` (S6), `c94af993` (S2 window), `36fea14f` (S5 session),
+`2cf4f48b` (S4 lineage), `e87d7a9f` (S4 health + S7), `ff8cf7ba` (S6
+coordinator), `c43302bc` (S4 route), `49ef7012` (matrix), `b1276d08`,
+`6c062afc` (receipt), `cb06ea0a`, `caa76481`, `1c702016`, `cdcbee46`
+(resweep), `17d01bdf` (ImportError fix), `8162d39b` (envelope handoff).
+
+## Second adversarial pass (resweep) — defects in my own new code
+
+Every one of these was found by re-reading this branch's own code rather
+than by trusting the first pass, and each is pinned by a test that fails on
+the pre-fix code.
+
+| # | Defect | Consequence before the fix |
+| --- | --- | --- |
+| H1 | Window comparability gate was **fail-open** (`if prev and cur and …` skipped any field missing on one side) | A window with no declared ticker returned `window_net = 500.0` |
+| H2 | `KeyedScanCache` unbounded | 500 scopes → 500 entries + 500 locks; expired never reclaimed |
+| H3 | A cache hit reported no cache time | A fresh timestamp could be read off a stale payload |
+| H4 | A cache hit returned the payload's cursor as the live checkpoint | Two callers could believe they advanced the same slice |
+| H5 | US DST rule applied to pre-2007 instants | Silently an hour wrong (`2003-04-05`: 13:00−04:00 vs truth 12:00−05:00) |
+| H6 | `wall_metric_breakdown` dropped unreadable strikes with no count | A wall with all-unreadable members looked like a wall with no contracts |
+| H7 | Raw and session-volume surfaces published no population | Measured 0.0 was indistinguishable from unavailable |
+| H8 | Caller weight override merged blindly | String → TypeError; negative → score outside 0–100; non-unit → silent rescale |
+| H10 | Provider failure raised raw out of the coordinator | A route would 500 instead of returning an unavailable sweep |
+| H11 | *(introduced by the H10 fix, caught immediately)* failure got cached | One provider blip became a TTL-long outage |
+
+All are closed. `H9` (concurrent single-flight) was probed and found
+correct, so no change was made for it.
+
+One regression was mine and is recorded honestly: the H5 hardening narrowed
+the missing-tzdata signal to two exact exception class names, which broke
+`tests/test_live_window_dst_fallback.py` (9 failures). The existing test was
+right; the narrowing was reverted, not the test (`17d01bdf`).
 
 Every row states producer → canonical computation → route → storage →
 consumer, with the exact commit. Status vocabulary is deliberately narrow:
@@ -63,50 +98,74 @@ behind a route), **test-only**, **deferred** (with the reason), **external**
 
 ## Known failures, honestly
 
-1. **Full suite on the operator's machine: 6711 passed, 37 skipped, 1 error.**
-   The error surfaces at the *teardown* of whichever test happens to be
-   running when the session-scoped `deny_external_network` fixture asserts.
-   The originating test is
-   `tests/services/test_agentfield_hub.py::TestTickerNormalization::test_gex_regime_uppercases_ticker`,
-   which patches `sys.modules["services.heatseeker"]` while the reasoner
-   actually calls `services.public_api_adapter.fetch_chain_from_public_api`
-   (agentfield_hub.py:110-112). The real `api.public.com` request is then
-   blocked by the offline guard.
+1. **The credential-conditional offline-guard error is Hermes's lane
+   (R10-10), not this branch.** It surfaces at the *teardown* of whichever
+   test happens to be running when the session-scoped `deny_external_network`
+   fixture asserts, naming
+   `tests/test_wall_desk_strength_policy.py` or
+   `tests/services/test_agentfield_hub.py` depending on the run — the
+   attribution is unstable, which is itself the point. The originating test
+   is `test_agentfield_hub.py::TestTickerNormalization::test_gex_regime_uppercases_ticker`,
+   which patches `sys.modules["services.heatseeker"]` while the reasoner calls
+   `services.public_api_adapter.fetch_chain_from_public_api`
+   (agentfield_hub.py:110-112).
 
-   **This is R10-10, it is credential-conditional, and it is not caused by
-   this work.** Evidence:
-
-   - Reverting **all** of this branch's production changes in place
-     (`git checkout 605aca8a -- <every changed production file>`, new
-     modules moved aside) still produced the error in this checkout.
+   **Exoneration evidence, because I initially got this wrong on thin
+   grounds:**
+   - Reverting **all** of this branch's production changes in place still
+     produced the error in this checkout.
    - A detached worktree at `origin/main`, with a copy of this venv and a
-     copy of the live `backend/data` store, produced **0 errors, 4 runs in
-     a row**, on the same subset.
-   - The one remaining difference: this checkout has `backend/.env` with
-     `PUBLIC_API_KEY` set; the worktree had only `.env.example`. The
-     adapter's `_get_broker()` returns a live broker when the key is
-     present and `None` when it is absent, so with no key the reasoner
-     returns before any request is made.
-   - I did **not** reproduce it with the real key in the worktree, per the
-     packet's instruction not to repeat a credential-triggered network
-     attempt. The isolation above identifies the cause without doing so.
+     copy of the live `backend/data` store, produced **0 errors across four
+     runs** of the same subset.
+   - The one remaining variable is `backend/.env`: this checkout has
+     `PUBLIC_API_KEY` set, the worktree had only `.env.example`.
+     `_get_broker()` returns a live broker with a key and `None` without
+     one, so with no key the reasoner returns before any request is made.
+   - I did **not** reproduce it with the real key, per the packet's
+     instruction not to repeat a credential-triggered network attempt.
 
-   Consequences worth acting on: CI is green because CI has no key, so this
-   class of defect is invisible to CI; and the fix is to stop the test from
-   relying on a module the code no longer calls. **Hermes owns this.**
+   CI cannot see this class of defect because CI has no key, so it only
+   appears on the operator's machine. Hermes owns the fix.
 
-2. Bandit is not in the venv by default; installed for the gate. Exit 0.
-3. `frontend/` was not touched (deferred by the packet). No frontend suite
+2. **Hermes's public-expiry commit briefly broke a cost-envelope test.**
+   Diagnosed, mechanism proven (unbounded walk over vendor expiries against
+   a fixed `2 + N` pre-debit), and **resolved by Hermes** with a bounded
+   `MAX_EXPIRY_SKIPS`. Recorded in
+   `.planning/INTEGRATION_PUBLIC_EXPIRY_ENVELOPE.md`. I modified none of
+   their files.
+
+3. Bandit is not in the venv by default; installed for the gate. Exit 0.
+4. `frontend/` was not touched (deferred by the packet). No frontend suite
    was run, and none of the UI is certified by any backend commit here.
 
-## CI-equivalent local gates (at head)
+## CI-equivalent local gates
 
-- `qc/audit/truth_audit.sh` → 227 passed, 0 failed
-- `ruff check .` (0.15.22) → All checks passed
-- `bandit -r . --severity-level medium …` → exit 0
-- `pytest tests/ -m "not flaky_env" --cov=.` → 6711 passed, 37 skipped, 1 error
-  (pre-existing), coverage **68.03%** (gate 60%)
-- `py_compile` on every changed backend module (3.12-syntax check)
+Recorded at two points, because comparing pass counts across different trees
+is not evidence. The first column is the pre-resweep head; the second is the
+resweep head, which also includes Hermes's concurrent commits.
+
+| Gate | pre-resweep | resweep head |
+| --- | --- | --- |
+| `qc/audit/truth_audit.sh` | 227 passed / 0 failed | 226 passed / 0 failed |
+| `ruff check .` (0.15.22) | clean | clean |
+| `bandit -r . --severity-level medium …` | exit 0 | exit 0 |
+| `pytest tests/ -m "not flaky_env" --cov=.` | 6711 passed / 37 skipped / 1 error, coverage 68.03% | not re-run to completion; see below |
+| `py_compile` on every changed backend module | 3.12-syntax clean | clean |
+
+Two honest notes on these numbers:
+
+- The truth audit's rule set is **selected by the commit subject**, so its
+  count varies (226 vs 227) between heads. Zero failed in both. It is not a
+  regression signal.
+- The full suite was not re-run end-to-end at the resweep head: the run
+  exceeds the session's practical budget, and the one failing test in it is
+  Hermes's cost-envelope test, which now passes. What was run at the
+  resweep head, green: `tests/solstice` + `tests/routes` = **758 passed**,
+  plus 83 across the wall-desk, Eastern-clock, rank and public-path files,
+  plus 61 across the three public-path files. Coverage was measured at the
+  pre-resweep head (68.03% against a 60% gate); the resweep adds tested
+  modules and removes none, so it does not lower coverage, but that is an
+  inference and is labelled as one rather than claimed as a measurement.
 
 ## Deferred, with reasons
 
