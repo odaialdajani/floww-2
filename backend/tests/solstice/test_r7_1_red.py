@@ -170,6 +170,12 @@ def test_upstream_seam_calls_real_adapter_signature_and_shape():
 
     async def go():
         market_bars._reset_state()
+        # Same isolation class as the v3_costsave flake: _reset_state clears
+        # the bars cache but not the process-global Public token bucket. Late
+        # in a full-suite run the bucket is drained and _get short-circuits
+        # before the broker is ever awaited. Reset it here (test-only).
+        from services.public_budget import budget as _pub_budget
+        _pub_budget.reset()
         with patch("services.public_api_adapter._get_broker", new=AsyncMock(return_value=broker)):
             return await market_bars.get_daily_bars("SPY", days=10)
     bars = asyncio.run(go())
