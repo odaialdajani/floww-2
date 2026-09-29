@@ -268,16 +268,23 @@ async def recorder_health() -> dict[str, Any]:
 
     Memory fallback keeps analytics running but never claims durable capture.
     Commissioning remains a separate final authorization.
+
+    S4: durability (the STORE) and capture state (the JOB) are reported as
+    separate facts. A durable store with no capture worker is exactly that,
+    and is no longer described as "needs time" — worker_state names
+    absent / wired_off / active.
     """
-    import os as _os
     from datetime import UTC, datetime
 
     from services.duckdb_engine import db as eng
-    from services.heatmap_history import recorder_status
+    from services.recorder_health import recorder_health as capture_health
 
     conn = eng.conn if hasattr(eng, "conn") else None
-    path = _os.environ.get("DUCKDB_PATH", ":memory:")
-    status = recorder_status(conn, path)
+    combined = capture_health(conn)
+    # Preserve the existing top-level shape (durable/mode/backing/path/
+    # tables) for current consumers, and add the capture state beneath it.
+    status = dict(combined["store"])
+    status["durable"] = combined["durable"]
     latest: dict[str, Any] = {}
     try:
         if conn is not None:
@@ -292,6 +299,21 @@ async def recorder_health() -> dict[str, Any]:
         log.debug("recorder health latest failed: %s", e)
     status["latest_snapshot"] = latest
     status["checked_at"] = datetime.now(UTC).isoformat()
+    status["capture"] = {
+        "version": combined["version"],
+        "worker_state": combined["worker_state"],
+        "worker_enabled": combined["worker_enabled"],
+        "worker_interval_s": combined["worker_interval_s"],
+        "capture_registered": combined["capture_registered"],
+        "last_capture_at": combined["last_capture_at"],
+        "last_capture_age_s": combined["last_capture_age_s"],
+        "captures": combined["captures"],
+        "gaps": combined["gaps"],
+        "errors": combined["errors"],
+        "last_error": combined["last_error"],
+        "last_error_at": combined["last_error_at"],
+        "stop_recovery": combined["stop_recovery"],
+    }
     return status
 
 

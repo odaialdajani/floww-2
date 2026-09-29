@@ -46,6 +46,7 @@ from domain.exposure_metrics import (
     FORMULA_VERSION,
     METRIC_REGISTRY,
     compute_raw_oi,
+    decimal_strike,
     option_type_sign,
 )
 
@@ -69,6 +70,27 @@ def _finite(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return out if math.isfinite(out) else None
+
+
+def _strike_key(value: Any) -> str | None:
+    """Exact strike identity for grid keys (R10-08 repair).
+
+    100.25 and 100.75 are different strikes and must never collapse to
+    "100" via int(). Integral strikes keep their legacy "450" form so
+    existing consumers see no change; fractional strikes render exactly
+    ("100.25"). None when the strike is not a valid positive number.
+    """
+    d = decimal_strike(value)
+    if d is None:
+        return None
+    if d == d.to_integral_value():
+        return str(int(d))
+    return str(d.normalize())
+
+
+def _strike_num(value: Any) -> float | None:
+    d = decimal_strike(value)
+    return float(d) if d is not None else None
 
 
 def annotate_contract_exposure(
@@ -197,7 +219,9 @@ def project_triad_from_chain(
     for row in annotated:
         if row["expiry"].strip() not in used:
             continue
-        key = str(int(_finite(row["strike"]) or 0))
+        key = _strike_key(row["strike"])
+        if key is None:
+            continue
         bucket = grid[row["expiry"].strip()]
         cell = bucket.setdefault(
             key,
@@ -226,16 +250,20 @@ def project_triad_from_chain(
             cell["volume"] = (cell["volume"] or 0.0) + vol
         cell["sides_present"] += 1
 
-    # Per-strike rows across the expiries actually shown.
-    by_strike: dict[int, dict[str, Any]] = {}
+    # Per-strike rows across the expiries actually shown. Keyed by exact
+    # decimal strike identity (R10-08): 100.25 and 100.75 stay distinct.
+    by_strike: dict[str, dict[str, Any]] = {}
     for row in annotated:
         if row["expiry"].strip() not in used:
             continue
-        strike = int(_finite(row["strike"]) or 0)
+        strike_key = _strike_key(row["strike"])
+        if strike_key is None:
+            continue
+        strike_num = _strike_num(row["strike"])
         rec = by_strike.setdefault(
-            strike,
+            strike_key,
             {
-                "strike": strike,
+                "strike": strike_num,
                 "gex": None,
                 "call_gex": None,
                 "put_gex": None,
@@ -258,7 +286,8 @@ def project_triad_from_chain(
         if vol is not None:
             rec["volume"] = (rec["volume"] or 0.0) + vol
 
-    strikes = [by_strike[k] for k in sorted(by_strike, reverse=True)]
+    strikes = sorted(by_strike.values(), key=lambda r: (r["strike"] is None, r["strike"] or 0.0),
+                     reverse=True)
 
     # King is a STRIKE chosen from aggregated rows, not a single contract.
     king = None

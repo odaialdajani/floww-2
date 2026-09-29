@@ -415,10 +415,12 @@ def _eastern_now() -> datetime:
     """Current time in US Eastern. See services.eastern_clock for the rules.
 
     Kept as a thin module-level alias because the gates below read it by name.
+    Uses the instant-preserving safe boundary (R10-11): identical wall hour
+    to eastern_now, with a correct aware UTC offset when tz data is absent.
     """
-    from services.eastern_clock import eastern_now
+    from services.eastern_clock import eastern_now_safe
 
-    return eastern_now()
+    return eastern_now_safe()
 
 
 def _in_window_now_et() -> bool:
@@ -1426,9 +1428,11 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     metrics: dict[str, Any] = {"default_basis": exposure_basis}
     try:
         from domain.exposure_metrics import compute_delta_weighted_oi, compute_raw_oi, compute_volume_gamma
+        from domain.exposure_metrics import compute_session_delta_volume_gamma as _compute_sess_dvol
         from services.gex_core import (
             compute_gex_by_strike_vendor,
             compute_gex_grid_delta_weighted,
+            compute_gex_grid_session_delta_volume,
             compute_gex_grid_vendor,
             compute_gex_grid_volume_vendor,
         )
@@ -1436,16 +1440,38 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         raw_m = compute_raw_oi(raw["contracts"], spot)
         dw_m = compute_delta_weighted_oi(raw["contracts"], spot)
         vol_m = compute_volume_gamma(raw["contracts"], spot)
+        # S2: DISTINCT fourth activity surface (R10-01 repair). session_dvol
+        # is Σ c·u·V·|δ|; the legacy volume_gamma keys stay Σ c·u·V,
+        # backward compatible. No silent field replacement.
+        sess_dvol_m = _compute_sess_dvol(raw["contracts"], spot)
         vendor_rows = compute_gex_by_strike_vendor(spot, raw["contracts"])
         vendor_grid = compute_gex_grid_vendor(spot, raw["contracts"])
         delta_grid = compute_gex_grid_delta_weighted(spot, raw["contracts"])
         activity_grid = compute_gex_grid_volume_vendor(spot, raw["contracts"])
+        sess_dvol_grid = compute_gex_grid_session_delta_volume(spot, raw["contracts"])
         metrics.update({
             "gex_gross_v1": raw_m.gross, "gex_net_v1": raw_m.net,
             "gex_call": raw_m.call, "gex_put": raw_m.put,
+            # Resweep: the raw and session-volume surfaces carried NO
+            # population, so a consumer could not tell a measured 0.0 from
+            # an unavailable one (e.g. spot missing/0/NaN makes every
+            # contract invalid and every gross 0.0). The delta and session
+            # delta-volume surfaces already reported theirs; these two
+            # were the inconsistent ones. Additive keys only.
+            "raw_usable": raw_m.usable, "raw_missing_oi": raw_m.missing_oi,
+            "raw_invalid": raw_m.invalid,
             "dadgex_gross_v1": dw_m.gross, "dadgex_net_v1": dw_m.net,
             "dadgex_usable": dw_m.usable, "dadgex_missing_delta": dw_m.missing_delta,
+            "dadgex_missing_oi": dw_m.missing_oi, "dadgex_invalid": dw_m.invalid,
             "volume_gamma_gross": vol_m.gross, "volume_gamma_net": vol_m.net,
+            "volume_gamma_usable": vol_m.usable, "volume_gamma_missing_vol": vol_m.missing_oi,
+            "volume_gamma_invalid": vol_m.invalid,
+            "session_delta_volume_gross_v1": sess_dvol_m.gross,
+            "session_delta_volume_net_v1": sess_dvol_m.net,
+            "session_delta_volume_usable": sess_dvol_m.usable,
+            "session_delta_volume_missing_delta": sess_dvol_m.missing_delta,
+            "session_delta_volume_missing_vol": sess_dvol_m.missing_oi,
+            "session_delta_volume_invalid": sess_dvol_m.invalid,
             "window_dadgex_v1": None, "window_dadgex_reason": "HISTORY_NOT_YET_RECORDED",
             # §28.3 registry name alias (same unavailable state, both keys).
             "window_delta_weighted_volume_v1": None,
@@ -1466,6 +1492,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             # the same class of bug as the VEX/charm surfaces reading keys the
             # vendor path never emitted.
             "grids": {"raw": None, "delta": delta_grid, "activity": activity_grid,
+                      "session_delta_volume": sess_dvol_grid,
                       "vendor": vendor_grid},
             "formula_version": "gex.v2",
         })
@@ -1521,33 +1548,68 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                         _psnap = (_prep or {}).get("snapshot") or {}
                         import datetime as _dtw
                         _today = _dtw.datetime.now(_dtw.UTC).date().isoformat()
-                        _same_day = str(_psnap.get("asof_ts", ""))[:10] == _today
-                        _same_src = ((_psnap.get("data_source") or "")
-                                     == (raw.get("data_source", "yfinance") or ""))
-                        if _pcontracts and _same_day and _same_src:
-                            from services.solstice_enrichment import (
-                                aggregate_window_by_wall,
-                                window_contract_activity,
-                            )
-                            _w = window_contract_activity(_pcontracts, raw["contracts"], spot)
-                            if _w.get("status") == "ok" and _w.get("contracts"):
-                                metrics["window_daddex_v1"] = sum(
-                                    c.get("window_daddex", 0) for c in _w["contracts"])
-                                metrics["window_delta_weighted_volume_v1"] = metrics["window_daddex_v1"]
-                                # Registry canonical name kept in sync (alias).
-                                metrics["window_dadgex_v1"] = metrics["window_daddex_v1"]
-                                metrics["window_daddex_reason"] = None
-                                metrics["window_contracts"] = _w["contracts"][:20]
-                                metrics["window_missing_delta"] = _w.get("missing_delta", 0)
-                                metrics["window_mixed_pair"] = _w.get("mixed_pair", 0)
-                                # R6-2: wall-local window aggregation over the
-                                # FULL row list (before the display cut above);
-                                # a truncated sample is not a population.
-                                metrics["wall_window"] = aggregate_window_by_wall(
-                                    sol_walls, _w["contracts"])
-                            elif _w.get("reason") == "VOLUME_REBASE":
-                                metrics["window_daddex_reason"] = "VOLUME_REBASE"
-                                metrics["window_dadgex_reason"] = "VOLUME_REBASE"
+                        # S2: the comparability gate is now shared, declared and
+                        # reasoned. The legacy pair of inline booleans
+                        # (_same_day/_same_src) reported nothing when it
+                        # refused, so a session roll and a provider change were
+                        # indistinguishable from "no prior snapshot".
+                        from services.solstice_window import window_activity_surface
+                        _w = window_activity_surface(
+                            {
+                                "ticker": ticker,
+                                "data_source": _psnap.get("data_source") or "",
+                                "scope_key": _scope_key,
+                                "formula_version": _psnap.get("formula_version") or "gex.v2",
+                                "session_date": str(_psnap.get("asof_ts") or "")[:10],
+                                "asof": _psnap.get("asof_ts"),
+                            },
+                            {
+                                "ticker": ticker,
+                                "data_source": raw.get("data_source", "yfinance") or "",
+                                "scope_key": _scope_key,
+                                "formula_version": "gex.v2",
+                                "session_date": _today,
+                                "asof": raw.get("asof"),
+                            },
+                            _pcontracts, raw["contracts"], spot,
+                        )
+                        if _w.get("status") == "ok" and _w.get("contracts"):
+                            from services.solstice_enrichment import aggregate_window_by_wall
+                            _wrows = _w["contracts"]
+                            metrics["window_dadgex_v1"] = _w.get("window_net")
+                            metrics["window_delta_weighted_volume_v1"] = _w.get("window_net")
+                            # Registry canonical name kept in sync (alias).
+                            metrics["window_daddex_v1"] = metrics["window_dadgex_v1"]
+                            metrics["window_daddex_reason"] = None
+                            metrics["window_contracts"] = _wrows[:20]
+                            metrics["window_missing_delta"] = _w["coverage"]["n_missing_delta"]
+                            metrics["window_mixed_pair"] = _w["coverage"]["n_mixed_pair"]
+                            # S2: declared Greek observation convention, actual
+                            # interval, per-strike/expiry surface and the
+                            # observed population. A consumer can no longer
+                            # read a window number without its scope.
+                            metrics["window_surface"] = _w["surface"]
+                            metrics["window_coverage"] = _w["coverage"]
+                            metrics["window_greek_convention"] = _w["greek_convention"]
+                            metrics["window_interval"] = _w["interval"]
+                            metrics["window_provenance_note"] = _w["provenance_note"]
+                            # R6-2: wall-local window aggregation over the
+                            # FULL row list (before the display cut above);
+                            # a truncated sample is not a population.
+                            metrics["wall_window"] = aggregate_window_by_wall(
+                                sol_walls, _wrows)
+                        else:
+                            # Every refusal now names itself. Previously only
+                            # VOLUME_REBASE was reported, so a session roll, a
+                            # provider change or a formula change all looked
+                            # like "no prior snapshot".
+                            _wr = _w.get("reason") or "NO_PRIOR_SNAPSHOT"
+                            metrics["window_dadgex_v1"] = None
+                            metrics["window_daddex_v1"] = None
+                            metrics["window_delta_weighted_volume_v1"] = None
+                            metrics["window_dadgex_reason"] = _wr
+                            metrics["window_contracts"] = []
+                            metrics["wall_window"] = {}
         except Exception as we:
             log.debug("window activity attach failed: %s", we)
     except Exception as me:
