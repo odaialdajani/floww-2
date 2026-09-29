@@ -38,6 +38,16 @@ def test_gate_script_exists_and_is_importable():
 
 
 class TestBrokenLinks:
+    def test_dependency_installs_are_never_scanned(self):
+        """Vendored READMEs (nltk/openai dist-info links broke CI): .venv and
+        node_modules contents depend on the installing environment, so the
+        gate must not read them — otherwise green depends on which packages
+        CI installed rather than on the tree."""
+        docs = gate._markdown_files()
+        bad = [str(p) for p in docs
+               if ".venv" in p.parts or "node_modules" in p.parts]
+        assert bad == [], f"gate scans dependency installs:\n{bad[:5]}"
+
     def test_template_files_are_excluded(self, tmp_path):
         """Templates with {{PLACEHOLDER}} links must not be flagged."""
         doc = tmp_path / "template_example.md"

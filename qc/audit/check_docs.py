@@ -51,11 +51,17 @@ def _is_template(path: Path) -> bool:
     return name.startswith("template_") or "_template" in name
 
 
+# Dependency installs are not documentation: their vendored READMEs link
+# relatively inside packages CI may or may not install, so scanning them
+# makes the gate depend on the environment instead of the tree.
+DIR_EXCLUDES = (".git", ".venv", "node_modules", "__pycache__")
+
+
 def _markdown_files() -> list[Path]:
     out: list[Path] = []
     for pattern in DOC_GLOBS:
         out.extend(p for p in REPO_ROOT.glob(pattern) if p.is_file())
-    return sorted({p for p in out if ".git" not in p.parts})
+    return sorted({p for p in out if not (set(p.parts) & set(DIR_EXCLUDES))})
 
 
 def find_broken_links() -> list[dict[str, str]]:
