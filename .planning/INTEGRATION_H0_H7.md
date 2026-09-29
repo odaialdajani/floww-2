@@ -613,70 +613,69 @@ is clean.
   same tree. I twice narrowed toward the named test and twice found it
   innocent. Reproduce by combination, not by the name in the message.
 
-**Mechanism (source-confirmed).** `server.build_heatmap` is
-stale-while-revalidate: on a stale-but-usable cache entry it serves
-immediately and spawns `_revalidate_heatmap` as a fire-and-forget task
-(`server.py:988-992`), retained in `_background_tasks`. That task calls
-`_build_heatmap_impl`, which reaches the live Public adapter, and then
+**Mechanism — a direct synchronous call, not a pending background task.**
 
-```python
-except Exception as e:
-    log.warning(f"swr revalidate failed {cache_key}: {e}")
-```
-
-swallows the guard's `AssertionError` and discards the inflight key. So the
-offending test never fails on the call itself — it fails only because the
-session guard inspects `attempts` at teardown. That is also why the leak
-survives a credential-free environment: without a key the adapter
-short-circuits, no request is made, and there is nothing to swallow.
-
-**Verified by driving the real function**, not by reading it. A throwaway
-probe primed `_BUILD_HEATMAP_CACHE` past the fresh TTL but inside the stale
-TTL, replaced `_build_heatmap_impl` with one that raises the guard's own
-`AssertionError`, then called `server.build_heatmap`:
+An earlier revision of this entry claimed a stale-while-revalidate background
+task swallowed the guard's exception. That was inferred from reading the code
+and is **wrong**. The guard truncates its recorded stack at 7 frames
+(`traceback.extract_stack(limit=7)`), which lands inside httpx internals and
+hides the caller entirely, so the trace looked like a fire-and-forget task.
+Widening the limit to 40 in a scratch copy shows the real chain, and it is
+fully synchronous within the test's own await:
 
 ```
-build_heatmap returned: dict
-build_heatmap did NOT raise to the caller
-impl invocations: 1
-log records: ['swr revalidate failed SPY:1:day:... : Offline test attempted an external connection']
-VERDICT: exception swallowed by _revalidate_heatmap = True
+test_gex_regime_uppercases_ticker:540
+  -> gex_regime:140
+  -> _canonical_gex_profile:112
+  -> fetch_chain_from_public_api:417
+  -> _get_broker:138
+  -> auth:266 -> post:1859 -> request:1540 -> ... -> refuse_async:32
 ```
 
-The caller received a clean dict while the only trace was a WARNING. An
-earlier version of this probe used a cache age past the stale TTL, so it took
-the fresh-build path instead and produced a misleading `False`; the TTL
-window has to sit between `_BUILD_HEATMAP_CACHE_TTL` (60s) and
-`_BUILD_HEATMAP_STALE_TTL` (900s). The probe was removed after use — it is a
-diagnosis, not a test to keep.
+So: `test_gex_regime_uppercases_ticker` calls `gex_regime` directly, which
+calls `_canonical_gex_profile`, which calls `fetch_chain_from_public_api`
+against the live Public broker. The test mocks `services.heatseeker`, which
+is the *old* dead-wire import — it no longer intercepts anything, because
+`_canonical_gex_profile` now uses the canonical adapter path. The mock is
+simply aimed at the wrong symbol.
 
-This explains the shape of the reproduction: no single test file triggers it
-(54 route files scanned individually, all clean; `tests/routes` alone is
-clean at 354 passed). A background task started during an earlier test stays
-pending and only performs its call later, when some *other* test is current.
-The guard then attributes the attempt to that test. The two-file subset that
-does reproduce it is a timing window, not a causal pair.
+`offline_network.py` was restored from backup immediately after the
+experiment and `git diff` confirms it is unmodified.
 
-**The test the guard names is not necessarily the one involved.**
-`tests/routes` + `tests/services` (the whole directory, 4,649 tests)
-reproduces the error with `test_agentfield_hub.py` absent from the selection
-entirely. The guard happened to name that test in one run and a different one
-in another. It reports whoever is *current* when the pending task fires, so
-its attribution carries no causal information and must not be treated as a
-suspect list. Narrowing by the named test is a dead end.
+**The fix is one line in the test**: mock
+`services.public_api_adapter.fetch_chain_from_public_api` (or the narrower
+`_canonical_gex_profile`) rather than `services.heatseeker`. That is
+Command Code's ownership lane (`b1f06d18` rewired this reasoner off the dead
+import and left the test mocking the dead name), so it is recorded here for
+handoff rather than patched.
 
-**Owner:** the stale-while-revalidate background refresh is pre-existing
-`server.py` behaviour; `_canonical_gex_profile` and its tests came from
-Command Code's `b1f06d18`. Not fixed here — `services/agentfield_hub.py` is
-their ownership lane and the Revision 9 packet forbids editing another track
-to unblock local work. Recorded for handoff rather than silently patched.
-`backend/.env` was restored immediately after the experiment and verified
-byte-intact (3 keys, original mtime).
+**The fix is verified, not proposed.** With the adapter mocked at
+`services.public_api_adapter.fetch_chain_from_public_api` (returning an empty
+contract list) the whole file runs `42 passed` with `backend/.env` present and
+no blocked request. The verification was done through a throwaway conftest,
+without editing their file; the fixture was removed after use.
 
-**Not fixed by me** is stated above. The fix belongs at the seam: the offline
-guard should either fail the test that started the task, or
-`_revalidate_heatmap` should not swallow a test-harness assertion. Both are
-outside the ET-gate scope of this branch.
+`agentfield_hub.py:94` still names `services.heatseeker` inside the
+`_canonical_gex_profile` docstring describing the OLD dead wire, while the
+live call at line 112 is `fetch_chain_from_public_api`. That stale docstring
+is what made the mock look plausible.
+
+**Verified separately:** the SWR path does swallow exceptions —
+`_revalidate_heatmap` catches and logs — but it is not involved in this
+failure, and no test ages a cache entry into the 60s-900s stale window. That
+mechanism is real but is a different, currently-unreached concern.
+
+**Owner:** Command Code. `b1f06d18` rewired `_canonical_gex_profile` off the
+dead `services.heatseeker` import onto the canonical adapter path, but left
+`test_gex_regime_uppercases_ticker` mocking the old dead name. The production
+code is doing the right thing; the test's mock is simply pointed at a symbol
+nothing calls any more.
+
+**Not fixed by me** — `services/agentfield_hub.py` and its tests are Command
+Code's ownership lane, and the Revision 9 packet forbids editing another
+track to unblock local work. Recorded for handoff rather than silently
+patched. `backend/.env` was restored immediately after the experiment and
+verified byte-intact (3 keys, original mtime).
 
 **Do not delete `backend/.env` to make this green.** That hides the leak
 instead of fixing it and would break the running local stack.
