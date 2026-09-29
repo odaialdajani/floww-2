@@ -46,7 +46,6 @@ from domain.exposure_metrics import (
     FORMULA_VERSION,
     METRIC_REGISTRY,
     compute_raw_oi,
-    dollar_gamma_unit,
     option_type_sign,
 )
 
