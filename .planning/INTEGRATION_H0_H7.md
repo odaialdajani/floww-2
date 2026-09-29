@@ -851,6 +851,37 @@ receipt and captured `WallDeskSnapshot.v1` evidence. A merged fixture is not
 that: there is no receipt, and the module that should consume it is still
 test-only. Ledger item 6 stays open, with the reason corrected.
 
+### Runtime drift: the live Meridian window predates PR #87
+
+Not a code defect -- a deployment-state finding, recorded so it is not
+mistaken for a working system.
+
+PR #87 (`b338c10d`, visual-finish) merged another agent's frontend work:
+`TrinityView.jsx` gained a `triad-position` rail, and `ReplayStrip.jsx` gained
+a Play control and scrubber. The bundle currently served on port 3000 is
+`main.9d2ae88c.js`, built Sep 28 20:56, and it contains none of it: a grep for
+`position-strip` / `replay-scrubber` / `SkylitPosition` in the served bundle
+returns 0 hits, while `frontend/src/components/TrinityView.jsx:396` clearly
+contains `className="triad-position"` with `data-testid="triad-position"`.
+
+`find frontend/src -newer frontend/build/...` lists five files, including all
+three #87 component files. The source is current; the served artifact is not.
+
+So the Meridian `--app` window is showing pre-#87 UI. Every health check that
+only asks "is it 200" passes while the window is visibly behind the source.
+This is the same failure shape as the earlier static-proxy 200-during-build:
+status codes do not detect content staleness.
+
+**Rebuild not performed** -- `CI=true npx craco build` needs approval and was
+not granted, so it was not run and not retried. Requires: rebuild, confirm
+the new bundle filename changes, confirm #87 markers are present in the
+served bytes, then reload the `--app` window.
+
+Backend is separately stale in a known way: PID 69680 runs with cwd
+`/Users/nav/Documents/GitHub/floww-2/backend` (canonical, confirmed, not the
+legacy `/Users/nav/Documents/GitHub/floww`) but predates the Eastern-clock
+and universe-scan work on this branch.
+
 ## 8. Actions explicitly NOT taken
 
 No remote merge, no deploy, no service restart, no persistent-service
