@@ -78,6 +78,17 @@ def annotate_contract_exposure(
 ) -> list[dict[str, Any]]:
     """Return the contracts with a canonical signed `gex` attached per row.
 
+    The VALUE is not re-derived here. Each row's exposure is obtained by
+    evaluating the canonical aggregate over that row alone
+    (`compute_raw_oi([row], spot).net`), so the per-contract number is by
+    construction the `gex_net_v1` term and cannot drift from the registry. An
+    earlier version of this function re-implemented the formula with a
+    hardcoded multiplier of 100; that silently disagreed with the canonical
+    resolver, which honours an explicit per-contract multiplier and QUARANTINES
+    adjusted/nonstandard contracts. Deriving instead of re-deriving removes
+    that whole class of drift, and the reason codes below stay diagnostics
+    rather than part of the arithmetic.
+
     The input rows are not mutated. Each returned row carries:
       gex          float | None   signed canonical contribution (gex_net_v1 term)
       gex_basis    str            "OI" when measured, "OI_UNKNOWN" when not
@@ -99,27 +110,35 @@ def annotate_contract_exposure(
 
         gex: float | None = None
         reason: str | None = None
+
         if oi is None:
             reason = REASON_OI_MISSING
         elif oi < 0:
             reason = "OI_NEGATIVE"
         elif oi == 0:
-            # Measured zero. Real, and different from unknown.
-            gex, reason = 0.0, None
-        elif gamma is None:
-            reason = REASON_GAMMA_MISSING
-        elif gamma < 0:
-            reason = "GAMMA_NEGATIVE"
-        elif sign is None:
-            reason = REASON_TYPE_UNKNOWN
-        elif spot_f is None or spot_f <= 0:
-            reason = "SPOT_UNKNOWN"
+            # Measured zero. Real, and different from unknown. The canonical
+            # aggregate skips zero-OI rows without counting them as invalid,
+            # which is exactly this case.
+            gex = 0.0
         else:
-            unit = dollar_gamma_unit(gamma, 100.0, spot_f)
-            if unit is None:
-                reason = "GAMMA_UNIT_UNDEFINED"
+            result = compute_raw_oi([row], spot_f if spot_f is not None else 0.0)
+            if result.usable == 1:
+                gex = result.net
             else:
-                gex = sign * unit * oi
+                # Diagnostics only. The value, when there is one, came from the
+                # canonical aggregate above.
+                if gamma is None:
+                    reason = REASON_GAMMA_MISSING
+                elif gamma < 0:
+                    reason = "GAMMA_NEGATIVE"
+                elif sign is None:
+                    reason = REASON_TYPE_UNKNOWN
+                elif spot_f is None or spot_f <= 0:
+                    reason = "SPOT_UNKNOWN"
+                elif result.invalid:
+                    reason = "CONTRACT_QUARANTINED"
+                else:
+                    reason = "EXPOSURE_UNDEFINED"
 
         enriched["gex"] = gex
         enriched["gex_basis"] = "OI" if gex is not None else "OI_UNKNOWN"

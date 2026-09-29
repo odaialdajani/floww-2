@@ -320,6 +320,58 @@ class TestExpiryCountIsNotDte:
         assert "dte" not in packet["coverage"]
 
 
+class TestMultiplierPolicyIsCanonical:
+    """Regression guard for a real defect in this module.
+
+    An earlier version of annotate_contract_exposure re-implemented the formula
+    with a hardcoded multiplier of 100. The canonical resolver does not: it
+    honours an explicit per-contract multiplier, and it QUARANTINES
+    adjusted/nonstandard contracts (returns None, so the aggregate counts them
+    invalid). The hardcoded version therefore produced a confidently wrong
+    number for both cases. These tests are the ones that would have caught it.
+    """
+
+    def test_an_explicit_non_100_multiplier_is_honoured(self):
+        row = adapter_contract(multiplier=1000, oi=100)
+        out = annotate_contract_exposure([row], SPOT)[0]
+        # gex = sign * (gamma * mult * S^2 * 0.01) * oi
+        expected = 0.011 * 1000 * SPOT * SPOT * 0.01 * 100
+        assert out["gex"] == pytest.approx(expected, rel=1e-12)
+        # A hardcoded 100 would have produced 1/10th of this.
+        assert out["gex"] != pytest.approx(expected / 10, rel=1e-6)
+
+    def test_an_adjusted_contract_is_quarantined_not_scored_at_100(self):
+        out = annotate_contract_exposure([adapter_contract(adjusted=True)], SPOT)[0]
+        assert out["gex"] is None
+        assert out["gex_reason"] == "CONTRACT_QUARANTINED"
+
+    def test_a_nonstandard_contract_is_quarantined(self):
+        out = annotate_contract_exposure([adapter_contract(nonstandard=True)], SPOT)[0]
+        assert out["gex"] is None
+        assert out["gex_reason"] == "CONTRACT_QUARANTINED"
+
+    def test_a_quarantined_contract_contributes_nothing_to_the_net(self):
+        payload = adapter_payload(
+            [adapter_contract(oi=1000), adapter_contract(strike=455, adjusted=True)]
+        )
+        packet = project_triad_from_chain(payload)
+        assert packet["coverage"]["usable"] == 1
+        assert packet["coverage"]["contracts_without_gex"] == 1
+
+    def test_parity_holds_for_nonstandard_contracts_too(self):
+        """The parity claim must cover the cases where it is easiest to break."""
+        contracts = [
+            adapter_contract(multiplier=1000),
+            adapter_contract(type="put", multiplier=50, oi=700, strike=460),
+            adapter_contract(strike=455, adjusted=True),
+            adapter_contract(strike=465, oi=0),
+        ]
+        result = exposure_parity(contracts, SPOT)
+        assert result["agrees"], (
+            f"projection {result['projected_net']} != canonical {result['canonical_net']}"
+        )
+
+
 def test_spot_is_required_for_exposure_and_its_absence_is_reported():
     out = annotate_contract_exposure([adapter_contract()], 0.0)[0]
     assert out["gex"] is None
