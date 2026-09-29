@@ -432,23 +432,30 @@ def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str,
         volume_usable = volume_missing = volume_invalid = 0
         expiries: set = set()
         n_contracts = 0
+        # Excluded population (resweep). A contract whose strike cannot be
+        # read at all used to be dropped by a bare `continue` with NO count,
+        # so a wall whose members all carried an unreadable strike reported
+        # n_contracts=0 and looked exactly like a wall with no contracts
+        # there. Unreadable and merely non-member are different facts.
+        unreadable_strike = 0
+        not_a_member = 0
         for c in contracts or []:
             if not isinstance(c, dict):
+                unreadable_strike += 1
                 continue
-            try:
-                s = float(c.get("strike"))
-            except (TypeError, ValueError):
+            s = is_valid_measurement(c.get("strike"))
+            if s is None:
+                unreadable_strike += 1
                 continue
             if s not in members:
+                not_a_member += 1
                 continue
             n_contracts += 1
             if c.get("expiry"):
                 expiries.add(str(c.get("expiry")))
             sign = option_type_sign(c.get("type"))
             u = dollar_gamma_unit(c.get("gamma"), _resolve_mult(c), spot)
-            if (sign is None or u is None or not math.isfinite(u)
-                    or isinstance(c.get("gamma"), bool) or isinstance(spot, bool)
-                    or any(isinstance(c.get(k), bool) for k in ("multiplier", "contractMultiplier", "m"))):
+            if sign is None or u is None or not math.isfinite(u):
                 invalid += 1
                 volume_invalid += 1
                 continue
@@ -457,31 +464,27 @@ def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str,
             if volume is None:
                 volume_missing += 1
             else:
-                try:
-                    v_f = float(volume) if not isinstance(volume, bool) else float("nan")
-                except (TypeError, ValueError):
-                    v_f = float("nan")
-                contribution = u * v_f
-                if not math.isfinite(v_f) or v_f < 0 or not math.isfinite(contribution):
+                v_f = is_valid_measurement(volume)
+                if v_f is None or v_f < 0:
                     volume_invalid += 1
                 else:
-                    vg += contribution
-                    vn += sign * contribution
-                    volume_usable += 1
-                    if v_f > 0:
-                        vn_n += 1
+                    contribution = u * v_f
+                    if not math.isfinite(contribution):
+                        volume_invalid += 1
+                    else:
+                        vg += contribution
+                        vn += sign * contribution
+                        volume_usable += 1
+                        if v_f > 0:
+                            vn_n += 1
 
-            try:
-                oi_f = float(c.get("oi")) if c.get("oi") is not None else None
-            except (TypeError, ValueError):
-                oi_f = None
-            if oi_f is None or not math.isfinite(oi_f) or oi_f < 0 or isinstance(c.get("oi"), bool):
+            oi_f = is_valid_measurement(c.get("oi"))
+            if oi_f is None or oi_f < 0:
                 invalid += 1
                 continue
             if oi_f == 0:
                 continue
-            delta = c.get("delta", c.get("δ"))
-            ad, _reason = abs_delta(delta) if not isinstance(delta, bool) else (None, "DELTA_INVALID")
+            ad, _reason = abs_delta(c.get("delta", c.get("δ")))
             if ad is None:
                 missing += 1
             elif not math.isfinite(u * ad * oi_f):
@@ -499,6 +502,10 @@ def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str,
             "volume_usable": volume_usable, "volume_missing": volume_missing,
             "volume_invalid": volume_invalid,
             "n_contracts": n_contracts, "invalid": invalid,
+            # The excluded population, so "this wall has no contracts" and
+            # "these contracts could not be matched to it" never look alike.
+            "unreadable_strike": unreadable_strike,
+            "not_a_member": not_a_member,
             "expiries": sorted(expiries),
             "basis": "OI_DELTA_WEIGHTED", "formula_version": FORMULA_VERSION,
         }

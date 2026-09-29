@@ -25,7 +25,24 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-__all__ = ["eastern_utc_offset_hours", "eastern_now", "eastern_at", "eastern_at_safe", "eastern_now_safe"]
+__all__ = [
+    "eastern_utc_offset_hours", "eastern_now", "eastern_at", "eastern_at_safe",
+    "eastern_now_safe", "eastern_at_safe_provenance", "US_DST_RULE_VALID_FROM",
+    "US_DST_RULE_VALID_UNTIL",
+]
+
+# Validity window of the tz-database-free rule below. US DST was redefined by
+# the Energy Policy Act of 2005: from 2007 DST starts on the SECOND Sunday in
+# March (not the first Sunday in April). Before 2007 the rule's boundaries are
+# wrong by up to an hour, which is measured, not theoretical:
+#   2003-04-05  rule says 13:00 -04:00, reality is 12:00 -05:00
+#   2006-04-01  rule says 13:00 -04:00, reality is 12:00 -05:00
+# So the fallback refuses to answer for those instants rather than returning
+# a confident wrong hour. Current time is always inside the window.
+US_DST_RULE_VALID_FROM = 2007
+# Upper bound is open-ended: no announced change, but the value is declared so
+# a future rule change has an obvious place to break the fallback.
+US_DST_RULE_VALID_UNTIL = None
 
 
 def _nth_sunday(year: int, month: int, n: int, tzinfo) -> datetime:
@@ -65,25 +82,14 @@ def eastern_now() -> datetime:
     return eastern_at(datetime.now(UTC))
 
 
-def eastern_at_safe(utc_dt: datetime) -> datetime:
-    """Convert a UTC instant to aware Eastern wall-clock time (R10-11 repair).
+def eastern_at_safe_provenance(utc_dt: datetime) -> tuple[datetime, dict]:
+    """Aware Eastern conversion plus HOW it was derived (S5/R10-11).
 
-    Unlike eastern_at's legacy fallback (`utc_dt + offset` preserving UTC
-    tzinfo, which shifts the instant by 4-5h while reading the right wall
-    hour), this always returns an AWARE datetime whose UTC timestamp equals
-    the input instant:
-
-    - tz database available → ZoneInfo America/New_York (identical to
-      eastern_at's primary path).
-    - tz database unavailable → fixed-offset timezone carrying the US-rule
-      offset for that instant. Wall hour AND instant are both correct;
-      only the DST-fold disambiguation metadata of a full tz database is
-      absent, which is declared, not hidden.
-
-    Raises if utc_dt is naive (fail-closed: a wall clock without an instant
-    is a guess). Historical validity: the US-rule fallback encodes the
-    post-2007 DST regime; pre-2007 instants resolve via the tz database
-    when present and are flagged ESTIMATED_RULE otherwise.
+    Returns (aware_datetime, provenance). provenance["source"] is
+    "tzdata" when the database answered, or "us_dst_rule" when the
+    tz-database-free rule did. The rule path is only valid for
+    US_DST_RULE_VALID_FROM .. US_DST_RULE_VALID_UNTIL; outside that window
+    it RAISES rather than returning a wrong hour by up to 60 minutes.
     """
     from datetime import timezone as _tz
 
@@ -92,11 +98,41 @@ def eastern_at_safe(utc_dt: datetime) -> datetime:
     try:
         from zoneinfo import ZoneInfo
 
-        return utc_dt.astimezone(ZoneInfo("America/New_York"))
-    except Exception:
+        got = utc_dt.astimezone(ZoneInfo("America/New_York"))
+        return got, {"source": "tzdata", "offset_hours": eastern_utc_offset_hours(utc_dt),
+                     "rule_valid": True,
+                     "note": "tz database answered; the DST-rule fallback was not used"}
+    except Exception as exc:
+        # Distinguish "no tz database" from any other failure. A broken
+        # ZoneInfo import must not be silently downgraded to a rule guess.
+        if exc.__class__.__name__ not in ("ModuleNotFoundError", "ZoneInfoNotFoundError"):
+            raise
+        year = utc_dt.year
+        if year < US_DST_RULE_VALID_FROM or (
+            US_DST_RULE_VALID_UNTIL is not None and year > US_DST_RULE_VALID_UNTIL
+        ):
+            raise ValueError(
+                "no tz database available and the US DST rule is only valid from "
+                f"{US_DST_RULE_VALID_FROM}; refusing to guess for {year}"
+            ) from exc
         offset = eastern_utc_offset_hours(utc_dt)
-        eastern_tz = _tz(timedelta(hours=offset), name="US-Eastern-rule")
-        return utc_dt.astimezone(eastern_tz)
+        got = utc_dt.astimezone(_tz(timedelta(hours=offset), name="US-Eastern-rule"))
+        return got, {"source": "us_dst_rule", "offset_hours": offset, "rule_valid": True,
+                     "note": "tz database unavailable; the post-2007 US DST rule was "
+                             "applied directly. Correct wall hour and instant, but DST "
+                             "fold disambiguation metadata is absent"}
+
+
+def eastern_at_safe(utc_dt: datetime) -> datetime:
+    """Convert a UTC instant to aware Eastern wall-clock time (R10-11 repair).
+
+    Unlike eastern_at's legacy fallback (`utc_dt + offset` preserving UTC
+    tzinfo, which shifts the instant by 4-5h while reading the right wall
+    hour), this always returns an AWARE datetime whose UTC timestamp equals
+    the input instant. See eastern_at_safe_provenance for how it was
+    derived and for the rule's validity window.
+    """
+    return eastern_at_safe_provenance(utc_dt)[0]
 
 
 def eastern_now_safe() -> datetime:
