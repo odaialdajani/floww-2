@@ -16,7 +16,15 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from domain.wall_desk_snapshot import project_packet, source_pair  # noqa: E402
+from domain.wall_desk_snapshot import project_packet  # noqa: E402
+from tests.fixtures.wall_desk_fixture_v1 import (  # noqa: E402
+    SOURCE_OBSERVATION_T0,
+    SOURCE_OBSERVATION_T1,
+)
+
+
+def source_pair():
+    return SOURCE_OBSERVATION_T0, SOURCE_OBSERVATION_T1
 
 
 def test_packet_survives_record_replay_with_missingness_intact():
