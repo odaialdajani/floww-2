@@ -64,6 +64,41 @@ async def test_mixed_response_uses_actual_accepted_expiry_and_keeps_zero_dte(mon
 
 
 @pytest.mark.asyncio
+async def test_max_expiries_window_skips_expiries_with_no_accepted_contracts(monkeypatch):
+    """A 1-expiry request must not be spent on an expiry that yields nothing.
+
+    After the close, the vendor's expiry list still leads with TODAY, whose
+    contracts are all dropped as EXPIRED. Slicing `expiries[:max_expiries]`
+    before the per-contract filter spent the whole budget on that dead expiry
+    and returned None, which surfaced as a 503 from /api/spot/{ticker} — even
+    though the very next expiry held a full chain.
+    """
+
+    class AfterCloseDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            # 16:30 ET: today's 0DTE is expired, tomorrow is not.
+            return cls(2026, 9, 29, 20, 30, tzinfo=UTC)
+
+    monkeypatch.setattr(adapter, "datetime", AfterCloseDateTime)
+    today = AfterCloseDateTime.now(UTC).date().isoformat()
+    tomorrow = (AfterCloseDateTime.now(UTC).date() + timedelta(days=1)).isoformat()
+    broker = make_broker({
+        today: [make_contract(expiration=today)],
+        tomorrow: [make_contract(expiration=tomorrow, strike=531.0)],
+    })
+    with patch.object(adapter, "_resolve_spot_observation", AsyncMock(return_value={
+        "price": 530.0, "source": "public-mid", "event_time": None,
+        "fetched_at": AfterCloseDateTime.now().isoformat(),
+    })):
+        result = await adapter._fetch_chain_live(broker, "SPY", 1)
+
+    assert result is not None, "an empty 1-expiry window must not 503 when a live expiry follows"
+    assert result["expiries"] == [tomorrow]
+    assert {c["expiry"] for c in result["contracts"]} == {tomorrow}
+
+
+@pytest.mark.asyncio
 async def test_no_accepted_contracts_remains_unavailable():
     result = await fetch_mocked({"bad": [], "also-bad": [make_contract(expiration="invalid")]})
     assert result is None

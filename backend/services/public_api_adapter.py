@@ -546,16 +546,26 @@ async def _fetch_chain_live(
         log.warning("Public API quote fail for %s: %s", ticker, e)
         return None
 
-    # 3. Fetch chain for each expiry (up to max_expiries). Only expiries
-    # that actually return data are reported (requested vs returned coverage
-    # distinguished). Expired contracts are dropped; 0DTE kept with exact T.
+    # 3. Fetch chain for each expiry (up to max_expiries ACCEPTED). Only
+    # expiries that actually return data are reported (requested vs returned
+    # coverage distinguished). Expired contracts are dropped; 0DTE kept with
+    # exact T.
+    #
+    # max_expiries bounds ACCEPTED expiries, not expiries attempted. The
+    # vendor list leads with TODAY even after the close, and every contract in
+    # it is then dropped as EXPIRED. Slicing `expiries[:max_expiries]` up
+    # front spent a 1-expiry request entirely on that dead expiry and returned
+    # None — a 503 from /api/spot/{ticker} while the very next expiry held a
+    # full chain. Walk the list and stop once the budget is met.
     contracts: list[dict[str, Any]] = []
     exp_dates = []
     now_utc = datetime.now(UTC)
     received_at = now_utc.isoformat()
     n_expired_dropped = 0
 
-    for exp in expiries[:max_expiries]:
+    for exp in expiries:
+        if len(exp_dates) >= max_expiries:
+            break
         try:
             try:
                 parsed = await pb.get_option_chain_parsed(symbol, exp, account_id, instrument_type=chain_type)
