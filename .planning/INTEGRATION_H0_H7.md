@@ -609,15 +609,66 @@ is clean.
   place, exactly as I did — I first blamed Command Code, then my own test
   ordering, before isolating the real variable.
 - `_canonical_gex_profile`'s own docstring is correct about *coverage* honesty
-  (`NO_CHAIN_COVERAGE`, never zero-filled). The defect is that a test-visible
-  reasoner performs a credentialed network call before it can decide coverage
-  is missing.
+  (`NO_CHAIN_COVERAGE`, never zero-filled). The defect is not that it reports
+  a wrong value — it is that a background refresh path reaches the credentialed
+  adapter during a test run and swallows the failure.
 
-**Owner:** Command Code (`b1f06d18` added `_canonical_gex_profile` and its
-tests). **Not fixed by me** — `services/agentfield_hub.py` is their ownership
-lane and the packet forbids editing another track to unblock my own. Filed for
-handoff rather than silently patched. `backend/.env` was restored immediately
-after the experiment and verified byte-intact (3 keys, original mtime).
+**Mechanism (source-confirmed).** `server.build_heatmap` is
+stale-while-revalidate: on a stale-but-usable cache entry it serves
+immediately and spawns `_revalidate_heatmap` as a fire-and-forget task
+(`server.py:988-992`), retained in `_background_tasks`. That task calls
+`_build_heatmap_impl`, which reaches the live Public adapter, and then
+
+```python
+except Exception as e:
+    log.warning(f"swr revalidate failed {cache_key}: {e}")
+```
+
+swallows the guard's `AssertionError` and discards the inflight key. So the
+offending test never fails on the call itself — it fails only because the
+session guard inspects `attempts` at teardown. That is also why the leak
+survives a credential-free environment: without a key the adapter
+short-circuits, no request is made, and there is nothing to swallow.
+
+**Verified by driving the real function**, not by reading it. A throwaway
+probe primed `_BUILD_HEATMAP_CACHE` past the fresh TTL but inside the stale
+TTL, replaced `_build_heatmap_impl` with one that raises the guard's own
+`AssertionError`, then called `server.build_heatmap`:
+
+```
+build_heatmap returned: dict
+build_heatmap did NOT raise to the caller
+impl invocations: 1
+log records: ['swr revalidate failed SPY:1:day:... : Offline test attempted an external connection']
+VERDICT: exception swallowed by _revalidate_heatmap = True
+```
+
+The caller received a clean dict while the only trace was a WARNING. An
+earlier version of this probe used a cache age past the stale TTL, so it took
+the fresh-build path instead and produced a misleading `False`; the TTL
+window has to sit between `_BUILD_HEATMAP_CACHE_TTL` (60s) and
+`_BUILD_HEATMAP_STALE_TTL` (900s). The probe was removed after use — it is a
+diagnosis, not a test to keep.
+
+This explains the shape of the reproduction: no single test file triggers it
+(54 route files scanned individually, all clean; `tests/routes` alone is
+clean at 354 passed). A background task started during an earlier test stays
+pending and only performs its call later, when some *other* test is current.
+The guard then attributes the attempt to that test. The two-file subset that
+does reproduce it is a timing window, not a causal pair.
+
+**Owner:** the stale-while-revalidate background refresh is pre-existing
+`server.py` behaviour; `_canonical_gex_profile` and its tests came from
+Command Code's `b1f06d18`. Not fixed here — `services/agentfield_hub.py` is
+their ownership lane and the Revision 9 packet forbids editing another track
+to unblock local work. Recorded for handoff rather than silently patched.
+`backend/.env` was restored immediately after the experiment and verified
+byte-intact (3 keys, original mtime).
+
+**Not fixed by me** is stated above. The fix belongs at the seam: the offline
+guard should either fail the test that started the task, or
+`_revalidate_heatmap` should not swallow a test-harness assertion. Both are
+outside the ET-gate scope of this branch.
 
 **Do not delete `backend/.env` to make this green.** That hides the leak
 instead of fixing it and would break the running local stack.
