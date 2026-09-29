@@ -143,6 +143,42 @@ def is_fused_row(row: Any) -> bool:
     )
 
 
+def _validate_weights(override: dict[str, Any] | None) -> tuple[dict[str, float], bool]:
+    """Validate a caller weight override. Returns (weights, was_normalized).
+
+    Resweep: the override used to be merged blindly. A string weight raised
+    a TypeError deep in the arithmetic; a negative weight could drive the
+    score outside [0, 100]; and an override that does not sum to 1
+    silently rescaled every score while still reporting a 0-100-looking
+    number. A weight vector that does not sum to 1 is now NORMALIZED and
+    the fact is reported, so the scale is never a surprise. Non-finite,
+    negative and boolean weights are rejected outright: a bad weight is a
+    caller bug, not a measurement.
+    """
+    w = dict(WEIGHTS)
+    if not override:
+        return w, False
+    for key, value in override.items():
+        if key not in w:
+            raise ValueError(f"unknown weight {key!r}; weights are {sorted(w)}")
+        if isinstance(value, bool) or value is None:
+            raise ValueError(f"weight {key!r} must be a finite non-negative number")
+        try:
+            num = float(value)
+        except (TypeError, ValueError):
+            raise ValueError(f"weight {key!r} must be a finite non-negative number") from None
+        if not math.isfinite(num) or num < 0:
+            raise ValueError(f"weight {key!r} must be a finite non-negative number")
+        w[key] = num
+    total = sum(w.values())
+    if total <= 0:
+        raise ValueError("weight override must leave a positive total")
+    if not math.isclose(total, 1.0, rel_tol=1e-9):
+        w = {k: v / total for k, v in w.items()}
+        return w, True
+    return w, False
+
+
 def fuse_one(
     ticker: str,
     *,
@@ -155,8 +191,7 @@ def fuse_one(
     weights: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """Fuse raw scorer payloads once. Same kernel as conviction_rank.rank_one."""
-    w = dict(WEIGHTS)
-    w.update(weights or {})
+    w, normalized = _validate_weights(weights)
     fn, fs = norm_flow_strict(flow)
     on, os_ = norm_opp_strict(opportunity)
     cn, cs = norm_conf_strict(confluence)
@@ -195,6 +230,7 @@ def fuse_one(
             },
             "weights": dict(w),
             "weights_version": "v1",
+            "weights_normalized": normalized,
             "rank_version": RANK_VERSION,
         },
         "schema_version": SCHEMA_VERSION,

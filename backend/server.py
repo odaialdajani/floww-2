@@ -1452,9 +1452,20 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         metrics.update({
             "gex_gross_v1": raw_m.gross, "gex_net_v1": raw_m.net,
             "gex_call": raw_m.call, "gex_put": raw_m.put,
+            # Resweep: the raw and session-volume surfaces carried NO
+            # population, so a consumer could not tell a measured 0.0 from
+            # an unavailable one (e.g. spot missing/0/NaN makes every
+            # contract invalid and every gross 0.0). The delta and session
+            # delta-volume surfaces already reported theirs; these two
+            # were the inconsistent ones. Additive keys only.
+            "raw_usable": raw_m.usable, "raw_missing_oi": raw_m.missing_oi,
+            "raw_invalid": raw_m.invalid,
             "dadgex_gross_v1": dw_m.gross, "dadgex_net_v1": dw_m.net,
             "dadgex_usable": dw_m.usable, "dadgex_missing_delta": dw_m.missing_delta,
+            "dadgex_missing_oi": dw_m.missing_oi, "dadgex_invalid": dw_m.invalid,
             "volume_gamma_gross": vol_m.gross, "volume_gamma_net": vol_m.net,
+            "volume_gamma_usable": vol_m.usable, "volume_gamma_missing_vol": vol_m.missing_oi,
+            "volume_gamma_invalid": vol_m.invalid,
             "session_delta_volume_gross_v1": sess_dvol_m.gross,
             "session_delta_volume_net_v1": sess_dvol_m.net,
             "session_delta_volume_usable": sess_dvol_m.usable,
