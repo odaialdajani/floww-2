@@ -64,7 +64,7 @@ async def _gate_opens(utc_instant: datetime, host_tz: str) -> bool:
 
     with (
         patch.object(builtins, "__import__", _blocked_zoneinfo),
-        patch("server.datetime", _FrozenDatetime),
+        patch("services.eastern_clock.datetime", _FrozenDatetime),
         patch("time.localtime", fake_localtime),
         patch.dict(server.LIVE_WINDOW, {"start_hhmm": "09:00", "stop_hhmm": "10:30"}),
     ):

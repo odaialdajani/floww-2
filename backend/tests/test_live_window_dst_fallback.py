@@ -70,7 +70,7 @@ def _run_with_host(eastern_wall: datetime, host_tz: str) -> bool:
 
     with (
         patch.object(builtins, "__import__", _blocked_zoneinfo),
-        patch("server.datetime", _FrozenDatetime),
+        patch("services.eastern_clock.datetime", _FrozenDatetime),
         patch("time.localtime", fake_localtime),
     ):
         return _in_window_now_et()
@@ -98,7 +98,7 @@ def _eastern_now_with_host(eastern_wall: datetime, host_tz: str) -> datetime:
 
     with (
         patch.object(builtins, "__import__", _blocked_zoneinfo),
-        patch("server.datetime", _FrozenDatetime),
+        patch("services.eastern_clock.datetime", _FrozenDatetime),
         patch("time.localtime", fake_localtime),
     ):
         return _eastern_now()
