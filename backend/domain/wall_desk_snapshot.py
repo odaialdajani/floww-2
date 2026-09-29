@@ -126,7 +126,15 @@ def project_window(first: dict[str, Any], second: dict[str, Any]) -> dict[str, A
         dv = v1 - v0
         gamma = _finite(nxt.get("gamma"))
         delta = _finite(nxt.get("delta"))
-        mult = _finite(nxt.get("multiplier")) or 100.0
+        mult = _finite(nxt.get("multiplier"))
+        # An absent multiplier must be skipped like a missing gamma or delta,
+        # not defaulted. The old `or 100.0` both invented a full-magnitude term
+        # for a contract that never carried one AND conflated a measured 0.0
+        # with an absent value, since 0.0 is falsy. gex_core._resolve_mult is
+        # the reference shape: default only when the key is absent, then
+        # require a finite positive value.
+        if mult is None or mult <= 0:
+            continue
         if gamma is None or gamma < 0 or delta is None:
             continue
         unit = gamma * mult * spot * spot * 0.01
