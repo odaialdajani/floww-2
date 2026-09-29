@@ -1021,6 +1021,23 @@ as a merge criterion, and do not "fix" those 456 as if they blocked anything.
 The meaningful local check is the same command CI runs, from the same
 directory.
 
+### Wall-desk fix, full-suite verified twice (reproducible, not a flake)
+
+Two independent full-suite runs on the multiplier-fix tree:
+
+    6649 passed, 37 skipped, 1 error in 529.22s
+    6649 passed, 37 skipped, 1 error in 351.66s
+
+Identical counts, so the single error is deterministic rather than a
+flake. Against the pre-fix baseline of 6644 that is exactly +5, the five new
+tests in `test_wall_desk_multiplier_missing.py`, with no other delta -- so the
+fix introduced no regressions anywhere in the suite.
+
+The one error remains `test_wall_strength_policy.py::test_unknown_values_are_
+unavailable_not_zero`, the misattributed teardown from the credential-gated
+leak documented above. Both implicated files pass in isolation (46 passed),
+and only one code commit separates this tree from the clean 6644 run.
+
 ## 8. Actions explicitly NOT taken
 
 No remote merge, no deploy, no service restart, no persistent-service
