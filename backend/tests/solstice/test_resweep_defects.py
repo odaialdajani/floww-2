@@ -161,3 +161,64 @@ def test_cache_hit_reports_the_live_cursor_and_labels_the_stale_one():
         us.scan_batch = original
         scan._CURSOR.clear()
         scan._CACHE._entries.clear()
+
+
+# ---- H10: a failed sweep is a result, not a crash ----
+
+def test_provider_failure_returns_an_unavailable_sweep_and_advances_nothing():
+    scan._CURSOR.clear()
+    scan._CACHE._entries.clear()
+    scan._CACHE._async_locks.clear()
+
+    async def boom(tickers, **kw):
+        raise RuntimeError("provider down")
+
+    import services.universe_scan as us
+
+    original = us.scan_batch
+    us.scan_batch = boom
+    try:
+        out = asyncio.run(scan.run_scan(universe="popular", limit=2, opportunity_fn=None))
+    finally:
+        us.scan_batch = original
+
+    assert out["status"] == "unavailable"
+    assert out["reason"] == "SWEEP_FAILED"
+    assert out["rows"] == []
+    assert "RuntimeError" in out["coverage"]["error"]
+    # Nothing was measured, so the rotation must not move.
+    assert out["cursor"]["advanced"] is False
+    assert out["cursor"]["position"] == 0
+    # A failure grants no budget and caches no partial payload.
+    assert scan._CACHE._entries == {}
+
+    # The next sweep must work normally: a failure is not a poisoned cache.
+    async def ok(tickers, **kw):
+        return {"rows": [{"ticker": t, "flow": {"conviction": 1}} for t in tickers],
+                "coverage": {}, "skipped": []}
+
+    us.scan_batch = ok
+    try:
+        again = asyncio.run(scan.run_scan(universe="popular", limit=2, opportunity_fn=None))
+    finally:
+        us.scan_batch = original
+        scan._CURSOR.clear()
+        scan._CACHE._entries.clear()
+    assert again["rows"]
+    assert again["cursor"]["advanced"] is True
+
+
+def test_an_unavailable_result_is_never_cached():
+    """A cached failure is a TTL-long outage: it must be re-attempted."""
+    cache = KeyedScanCache(ttl_s=300.0)
+    first = cache.get_or_compute("k", lambda: {"status": "unavailable", "rows": []})
+    second = cache.get_or_compute("k", lambda: {"status": "unavailable", "rows": []})
+    assert first["cache"] == "miss"
+    assert second["cache"] == "miss", "the second call must retry, not serve a cached error"
+    assert cache._entries == {}
+    assert "not cached" in second["cache_note"]
+    # A genuinely available result IS cached, so single-flight still holds.
+    ok_first = cache.get_or_compute("k2", lambda: {"rows": [1]})
+    ok_second = cache.get_or_compute("k2", lambda: {"rows": [2]})
+    assert ok_first["cache"] == "miss" and ok_second["cache"] == "hit"
+    assert ok_second["rows"] == [1]

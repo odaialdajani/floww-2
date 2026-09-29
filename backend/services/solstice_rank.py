@@ -354,6 +354,17 @@ class KeyedScanCache:
             self._async_locks.pop(k, None)
 
     def _store(self, key: str, payload: dict[str, Any]) -> dict[str, Any]:
+        # A result that reports itself unavailable is NOT cached. Caching a
+        # failure turns one provider blip into a TTL-long outage: every
+        # caller inside the window would be served the error without the
+        # sweep ever being retried. Availability is re-attempted next call;
+        # the caller is never handed a stale failure.
+        if payload.get("status") == "unavailable":
+            out = dict(payload)
+            out["cache"] = "miss"
+            out["cached_at"] = None
+            out["cache_note"] = "unavailable results are not cached; the next call retries"
+            return out
         with self._meta:
             self._entries[key] = {"cached_at": time.time(), "payload": dict(payload)}
             self._evict_locked()

@@ -135,6 +135,33 @@ async def run_scan(
     key = cache_key_for(ordered, universe=universe, dte=dte, max_expiries=max_expiries)
 
     async def _compute() -> dict[str, Any]:
+        try:
+            return await _compute_inner()
+        except Exception as exc:  # noqa: BLE001 - a sweep failure is a result, not a crash
+            # Resweep: a provider/budget failure used to propagate raw, so a
+            # caller behind a route would 500 instead of learning that the
+            # sweep produced nothing. It is still an unavailable SWEEP: the
+            # cursor is NOT advanced (nothing was measured), and no budget
+            # is granted by the failure. The reason names the exception type
+            # and the message; the traceback is not carried into a response.
+            return {
+                "schema_version": SCHEMA_VERSION,
+                "coordinator_version": COORDINATOR_VERSION,
+                "scope": _scope_block(universe, dte, max_expiries, []),
+                "rows": [],
+                "coverage": {"requested": 0, "returned": 0, "usable": 0, "skipped": [],
+                             "cancelled": False,
+                             "error": f"{type(exc).__name__}: {exc}"},
+                "cursor": {"scope": scope, "position": await cursor_for(scope),
+                           "advanced": False,
+                           "note": "a failed sweep advances nothing; nothing was measured"},
+                "status": "unavailable",
+                "reason": "SWEEP_FAILED",
+                "prefilter": None,
+                "computed_at": _iso(now),
+            }
+
+    async def _compute_inner() -> dict[str, Any]:
         batch, next_cursor = next_slice(ordered, await cursor_for(scope), limit)
         if not batch:
             return {
@@ -214,6 +241,7 @@ async def run_scan(
         "position": live_cursor,
         "payload_position": cached_cursor,
         "cursor_stale": cached_cursor is not None and cached_cursor != live_cursor,
+        "advanced": (out.get("cursor") or {}).get("advanced", True),
         "note": "position is the live rotation checkpoint; payload_position is "
                 "the checkpoint captured when these rows were computed",
     }
