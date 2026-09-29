@@ -57,6 +57,21 @@ REASON_OUT_OF_ORDER = "SOURCE_OUT_OF_ORDER"
 REASON_SPOT_UNKNOWN = "SPOT_UNKNOWN"
 REASON_VOLUME_REBASE = "VOLUME_REBASE"
 REASON_NO_BASELINE = "NO_BASELINE"
+# Fail-closed: an identity field that is absent on either side is UNDECLARED,
+# not equal. "Unknown scope" was previously treated as "matching scope",
+# which let an undeclared window through.
+REASON_IDENTITY_UNDECLARED = "IDENTITY_UNDECLARED"
+
+# The full comparability identity. Every field must be declared on BOTH
+# sides and must match. Order matters: an undeclared field is reported
+# before any mismatch, because a mismatch cannot be evaluated without it.
+IDENTITY_FIELDS = (
+    ("ticker", REASON_TICKER_MISMATCH),
+    ("data_source", REASON_PROVIDER_MISMATCH),
+    ("scope_key", REASON_SCOPE_MISMATCH),
+    ("formula_version", REASON_FORMULA_MISMATCH),
+    ("session_date", REASON_SESSION_ROLL),
+)
 
 
 def _num(value: Any) -> float | None:
@@ -118,28 +133,30 @@ def check_window_comparability(
 ) -> tuple[str | None, str | None]:
     """Return (reason, detail) for the first comparability failure, else (None, None).
 
-    `reason` is a REASON_* code. This is the gate; the arithmetic only runs
-    when it returns None.
+    FAIL-CLOSED. Every identity field must be DECLARED on both sides and
+    must match. An absent field is not a match: the previous version skipped
+    the check whenever either side was falsy, so a window with no declared
+    ticker, provider, scope, formula or session sailed through and produced
+    a number. Undeclared is now `IDENTITY_UNDECLARED` naming the field.
+
+    This is the gate; the arithmetic only runs when it returns None.
     """
     prev_meta = prev_meta or {}
     cur_meta = cur_meta or {}
-    pt, ct = prev_meta.get("ticker"), cur_meta.get("ticker")
-    if pt and ct and str(pt).upper() != str(ct).upper():
-        return REASON_TICKER_MISMATCH, f"{pt} != {ct}"
-    pp, cp = prev_meta.get("data_source"), cur_meta.get("data_source")
-    if pp and cp and str(pp) != str(cp):
-        return REASON_PROVIDER_MISMATCH, f"{pp} != {cp}"
-    ps, cs = prev_meta.get("scope_key"), cur_meta.get("scope_key")
-    if (ps or cs) and ps != cs:
-        return REASON_SCOPE_MISMATCH, f"{ps} != {cs}"
-    pf, cf = prev_meta.get("formula_version"), cur_meta.get("formula_version")
-    if (pf or cf) and pf != cf:
-        return REASON_FORMULA_MISMATCH, f"{pf} != {cf}"
-    pday, cday = prev_meta.get("session_date"), cur_meta.get("session_date")
-    if (pday or cday) and pday != cday:
-        return REASON_SESSION_ROLL, f"{pday} != {cday}"
+    for field, mismatch_reason in IDENTITY_FIELDS:
+        pv, cv = prev_meta.get(field), cur_meta.get(field)
+        if pv is None or not str(pv).strip() or cv is None or not str(cv).strip():
+            return REASON_IDENTITY_UNDECLARED, f"{field} is undeclared on one or both sides"
+        if field == "ticker":
+            same = str(pv).upper() == str(cv).upper()
+        else:
+            same = str(pv) == str(cv)
+        if not same:
+            return mismatch_reason, f"{field}: {pv} != {cv}"
     pa, ca = _asof(prev_meta.get("asof")), _asof(cur_meta.get("asof"))
-    if pa is not None and ca is not None and not pa < ca:
+    if pa is None or ca is None:
+        return REASON_IDENTITY_UNDECLARED, "asof is unparseable or absent on one side"
+    if not pa < ca:
         return REASON_OUT_OF_ORDER, f"prev {pa.isoformat()} !< cur {ca.isoformat()}"
     return None, None
 

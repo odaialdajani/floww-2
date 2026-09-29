@@ -202,6 +202,21 @@ async def run_scan(
         _CACHE.invalidate(key)
     out = await _CACHE.get_or_compute_async(key, _compute)
     out["cache"] = out.get("cache", "hit")
+    # The rotation checkpoint is a property of THIS process, not of the
+    # cached payload. A cache hit returns rows computed earlier; reporting
+    # that payload's cursor would hand the caller a checkpoint from the
+    # past and let two callers believe they advanced the same slice. The
+    # live cursor is reported alongside, and the payload's own is labelled.
+    live_cursor = await cursor_for(scope)
+    cached_cursor = (out.get("cursor") or {}).get("position")
+    out["cursor"] = {
+        "scope": scope,
+        "position": live_cursor,
+        "payload_position": cached_cursor,
+        "cursor_stale": cached_cursor is not None and cached_cursor != live_cursor,
+        "note": "position is the live rotation checkpoint; payload_position is "
+                "the checkpoint captured when these rows were computed",
+    }
     return out
 
 

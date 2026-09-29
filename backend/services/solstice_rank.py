@@ -273,16 +273,58 @@ class KeyedScanCache:
 
     Identical concurrent requests share one computation; incompatible
     scopes never collide because the KEY carries the scope. Cached reads
-    do not reset source age: entries store computed_at and source_asof
-    separately, and hits return both unchanged.
+    do not reset source age: entries store cached_at and the payload's own
+    source fields separately, and hits return them unchanged.
+
+    BOUNDED. The scope key has several dimensions (universe, tickers, dte,
+    expiries, mode, scalp, provider, formula), so an unbounded map leaks in
+    a long-lived process: 500 distinct scopes produced 500 entries and 500
+    per-key locks, and expired entries were never reclaimed. This evicts the
+    oldest-expired entries on write and caps the total, so memory is O(1) in
+    the number of DISTINCT scopes ever seen rather than O(all scopes).
+    Eviction drops a CACHE ENTRY only; it never invents or recomputes a
+    value, so a dropped scope simply recomputes on next request.
     """
 
-    def __init__(self, ttl_s: float = 300.0):
+    def __init__(self, ttl_s: float = 300.0, max_entries: int = 256):
         self._ttl = ttl_s
+        self._max_entries = max_entries
         self._entries: dict[str, dict[str, Any]] = {}
         self._locks: dict[str, threading.Lock] = {}
         self._async_locks: dict[str, Any] = {}
         self._meta = threading.Lock()
+        self.evictions = 0
+
+    def _evict_locked(self) -> None:
+        """Drop expired entries first, then the oldest, down to the cap."""
+        if self._max_entries <= 0 or len(self._entries) <= self._max_entries:
+            return
+        now = time.time()
+        expired = [k for k, e in self._entries.items() if now - e["cached_at"] > self._ttl]
+        for k in expired:
+            self._entries.pop(k, None)
+        self.evictions += len(expired)
+        overflow = len(self._entries) - self._max_entries
+        if overflow > 0:
+            oldest = sorted(self._entries.items(), key=lambda kv: kv[1]["cached_at"])
+            for k, _e in oldest[:overflow]:
+                self._entries.pop(k, None)
+                self.evictions += 1
+        # Per-key locks are pure synchronization scaffolding: dropping one
+        # that no cache entry references cannot change a returned value.
+        for k in [k for k in self._locks if k not in self._entries]:
+            self._locks.pop(k, None)
+        for k in [k for k in self._async_locks if k not in self._entries]:
+            self._async_locks.pop(k, None)
+
+    def _store(self, key: str, payload: dict[str, Any]) -> dict[str, Any]:
+        with self._meta:
+            self._entries[key] = {"cached_at": time.time(), "payload": dict(payload)}
+            self._evict_locked()
+        out = dict(payload)
+        out["cache"] = "miss"
+        out["cached_at"] = self._entries[key]["cached_at"] if key in self._entries else None
+        return out
 
     def _lock_for(self, key: str) -> threading.Lock:
         with self._meta:
@@ -294,7 +336,11 @@ class KeyedScanCache:
             return None
         if time.time() - entry["cached_at"] > self._ttl:
             return None
-        return dict(entry["payload"])
+        out = dict(entry["payload"])
+        # A hit reports WHEN IT WAS CACHED, so a consumer can never read a
+        # fresh timestamp off a stale payload. Source age is unchanged.
+        out["cached_at"] = entry["cached_at"]
+        return out
 
     def get_or_compute(self, key: str, compute: Callable[[], dict[str, Any]]) -> dict[str, Any]:
         hit = self.get(key)
@@ -308,14 +354,11 @@ class KeyedScanCache:
                 out = dict(hit)
                 out["cache"] = "hit"
                 return out
-            payload = compute()
-            self._entries[key] = {"cached_at": time.time(), "payload": dict(payload)}
-            out = dict(payload)
-            out["cache"] = "miss"
-            return out
+            return self._store(key, compute())
 
     def invalidate(self, key: str) -> None:
-        self._entries.pop(key, None)
+        with self._meta:
+            self._entries.pop(key, None)
 
     async def get_or_compute_async(self, key: str, compute: Callable[[], Any]) -> dict[str, Any]:
         """Async single-flight. Identical concurrent scopes share one call.
@@ -335,11 +378,7 @@ class KeyedScanCache:
                 out = dict(hit)
                 out["cache"] = "hit"
                 return out
-            payload = await compute()
-            self._entries[key] = {"cached_at": time.time(), "payload": dict(payload)}
-            out = dict(payload)
-            out["cache"] = "miss"
-            return out
+            return self._store(key, await compute())
 
     def _async_lock_for(self, key: str) -> Any:
         import asyncio
