@@ -104,8 +104,13 @@ def eastern_at_safe_provenance(utc_dt: datetime) -> tuple[datetime, dict]:
                      "note": "tz database answered; the DST-rule fallback was not used"}
     except Exception as exc:
         # Distinguish "no tz database" from any other failure. A broken
-        # ZoneInfo import must not be silently downgraded to a rule guess.
-        if exc.__class__.__name__ not in ("ModuleNotFoundError", "ZoneInfoNotFoundError"):
+        # ZoneInfo must not be silently downgraded to a rule guess.
+        # ImportError (not just ModuleNotFoundError) is the missing-tzdata
+        # signal: a host with no tzdata, a stripped zoneinfo module and the
+        # existing DST-fallback tests all surface it that way, and narrowing
+        # this to two exact class names broke them. ZoneInfoNotFoundError
+        # derives from KeyError, so it is matched by name.
+        if not isinstance(exc, ImportError) and exc.__class__.__name__ != "ZoneInfoNotFoundError":
             raise
         year = utc_dt.year
         if year < US_DST_RULE_VALID_FROM or (
