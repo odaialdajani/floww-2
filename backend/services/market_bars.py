@@ -51,10 +51,24 @@ except Exception:  # pragma: no cover - import-time safety
 
 
 def _reset_state() -> None:
-    """Tests only — clear cache, quarantine counts, last error."""
+    """Tests only — clear cache, quarantine counts, last error, shared budget.
+
+    The shared public_budget is a module-level singleton, so its state
+    outlives an individual test. A leftover cooldown on api.public.com made
+    `_get` return early at the budget gate, never calling the broker, and
+    tests that assert the seam is exercised then failed with
+    "Expected mock to have been awaited once. Awaited 0 times." -- only in
+    full-suite order, which is why it looked order-random.
+    """
     _CACHE.clear()
     _QUARANTINE["total"] = 0
     _LAST_ERROR.update(reason=None, at=None)
+    try:
+        from services.public_budget import budget as _shared_budget
+
+        _shared_budget.reset()
+    except Exception:  # pragma: no cover - budget module always present
+        log.debug("public_budget reset unavailable", exc_info=True)
 
 
 def last_error() -> dict[str, Any]:
