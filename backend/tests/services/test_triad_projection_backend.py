@@ -372,6 +372,78 @@ class TestMultiplierPolicyIsCanonical:
         )
 
 
+class TestSameDefinitionAcrossInstruments:
+    """C4: one definition, applied to every supported instrument.
+
+    Raw gross/net OI gamma must mean the same thing, in the same units, on the
+    same basis, for an ETF, an index option chain and a single stock. If the
+    formula varied by instrument, two panels showing "net GEX" would not be
+    comparable, which is the failure this guards.
+    """
+
+    INSTRUMENTS = [
+        ("SPY", "EQUITY", 450.0),
+        ("QQQ", "EQUITY", 480.0),
+        ("^SPX", "UNDERLYING_SECURITY_FOR_INDEX_OPTION", 5700.0),
+        ("AAPL", "EQUITY", 230.0),
+    ]
+
+    @pytest.mark.parametrize("ticker,instrument,spot", INSTRUMENTS)
+    def test_parity_holds_for_each_supported_instrument(self, ticker, instrument, spot):
+        from services.public_api import resolve_public_instrument_type
+
+        assert resolve_public_instrument_type(ticker, "chain") == instrument
+        contracts = [
+            adapter_contract(strike=spot, oi=1000, gamma=0.011, series=ticker.lstrip("^")),
+            adapter_contract(strike=spot, type="put", oi=600, gamma=0.011),
+            adapter_contract(strike=spot * 1.02, oi=250, expiry=EXP_B),
+        ]
+        result = exposure_parity(contracts, spot)
+        assert result["agrees"], f"{ticker}: {result}"
+
+    @pytest.mark.parametrize("ticker,instrument,spot", INSTRUMENTS)
+    def test_formula_units_and_basis_are_instrument_independent(self, ticker, instrument, spot):
+        packet = project_triad_from_chain(
+            {
+                "ticker": ticker,
+                "spot": spot,
+                "contracts": [adapter_contract(strike=spot, oi=1000, gamma=0.011)],
+                "data_source": "public_api",
+            }
+        )
+        assert packet["formula_version"] == "gex.v2", "the registry version is not per-instrument"
+        assert "gex_net_v1" in packet["metric_ids"]
+        for row in packet["strikes"]:
+            assert row["gex"] is not None
+
+    def test_an_instrument_with_no_coverage_is_unavailable_not_a_zero(self):
+        """Gated by coverage: absent data must not render as a flat panel."""
+        for ticker, _instrument, spot in self.INSTRUMENTS:
+            packet = project_triad_from_chain(
+                {"ticker": ticker, "spot": spot, "contracts": [], "data_source": "public_api"}
+            )
+            assert packet["nodes"]["net_gex"] is None, ticker
+            assert packet["strikes"] == [], ticker
+            assert packet["nodes"]["king"] is None, ticker
+
+    def test_the_projection_does_not_branch_on_instrument_type(self):
+        """Structural: instrument identity must not select a different formula.
+
+        If a future change made SPX use a different multiplier or sign
+        convention, this fails -- two panels would stop being comparable.
+        """
+        import inspect
+
+        from services import triad_projection
+
+        source = inspect.getsource(triad_projection.annotate_contract_exposure)
+        for branchy in ("SPX", "EQUITY", "INDEX", "resolve_public_instrument_type"):
+            assert branchy not in source, (
+                f"annotate_contract_exposure must not branch on {branchy}; "
+                "instrument handling belongs to the adapter, not the metric"
+            )
+
+
 def test_spot_is_required_for_exposure_and_its_absence_is_reported():
     out = annotate_contract_exposure([adapter_contract()], 0.0)[0]
     assert out["gex"] is None
