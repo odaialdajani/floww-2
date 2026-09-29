@@ -151,6 +151,7 @@ resweep head, which also includes Hermes's concurrent commits.
 | `ruff check .` (0.15.22) | clean | clean |
 | `bandit -r . --severity-level medium …` | exit 0 | exit 0 |
 | `pytest tests/ -m "not flaky_env" --cov=.` | 6711 passed / 37 skipped / 1 error, coverage 68.03% | not re-run to completion; see below |
+| `pytest tests/solstice tests/routes` | not measured separately | 783 passed ×3, one 781/2 run recorded |
 | `py_compile` on every changed backend module | 3.12-syntax clean | clean |
 
 Two honest notes on these numbers:
@@ -158,15 +159,27 @@ Two honest notes on these numbers:
 - The truth audit's rule set is **selected by the commit subject**, so its
   count varies (226 vs 227) between heads. Zero failed in both. It is not a
   regression signal.
-- The full suite was not re-run end-to-end at the resweep head: the run
-  exceeds the session's practical budget, and the one failing test in it is
-  Hermes's cost-envelope test, which now passes. What was run at the
-  resweep head, green: `tests/solstice` + `tests/routes` = **758 passed**,
-  plus 83 across the wall-desk, Eastern-clock, rank and public-path files,
-  plus 61 across the three public-path files. Coverage was measured at the
-  pre-resweep head (68.03% against a 60% gate); the resweep adds tested
-  modules and removes none, so it does not lower coverage, but that is an
-  inference and is labelled as one rather than claimed as a measurement.
+- `tests/solstice` + `tests/routes` was run **four times** at the final head:
+  one run reported `781 passed / 2 failed`
+  (`tests/routes/test_ml_artifact_load_error.py::test_failed_load_is_not_cached`
+  and one other), and three subsequent identical runs reported
+  **783 passed / 0 failed**. The failing file passes on its own, alone
+  alongside the new contract-route test three times over, and touches ML
+  artifact loading rather than anything on this branch. So: an order- or
+  state-dependent flake, observed once and not reproduced. It is recorded
+  rather than smoothed over, because a single unexplained red run is
+  evidence, and because this branch has already produced one that turned
+  out to be real.
+- The full suite was not re-run end-to-end at the final head: the run
+  exceeds the session's practical budget, and the one failing test it did
+  surface was Hermes's cost-envelope test, which now passes. What was run at
+  the final head, green: `tests/solstice` + `tests/routes` = **783 passed**
+  (×3), 65 across the wall-desk / Eastern-clock / rank / public-path files,
+  61 across the three public-path files, 426 in `tests/solstice` alone after
+  the contract-identity slice. Coverage was measured at the pre-resweep head
+  (68.03% against a 60% gate); the resweep adds tested modules and removes
+  none, so it does not lower coverage, but that is an **inference**, not a
+  measurement.
 
 ## Deferred, with reasons
 
