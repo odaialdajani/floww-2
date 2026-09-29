@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-__all__ = ["eastern_utc_offset_hours", "eastern_now", "eastern_at"]
+__all__ = ["eastern_utc_offset_hours", "eastern_now", "eastern_at", "eastern_at_safe", "eastern_now_safe"]
 
 
 def _nth_sunday(year: int, month: int, n: int, tzinfo) -> datetime:
@@ -63,3 +63,42 @@ def eastern_at(utc_dt: datetime) -> datetime:
 def eastern_now() -> datetime:
     """Current time in US Eastern. Raises if the clock cannot be determined."""
     return eastern_at(datetime.now(UTC))
+
+
+def eastern_at_safe(utc_dt: datetime) -> datetime:
+    """Convert a UTC instant to aware Eastern wall-clock time (R10-11 repair).
+
+    Unlike eastern_at's legacy fallback (`utc_dt + offset` preserving UTC
+    tzinfo, which shifts the instant by 4-5h while reading the right wall
+    hour), this always returns an AWARE datetime whose UTC timestamp equals
+    the input instant:
+
+    - tz database available → ZoneInfo America/New_York (identical to
+      eastern_at's primary path).
+    - tz database unavailable → fixed-offset timezone carrying the US-rule
+      offset for that instant. Wall hour AND instant are both correct;
+      only the DST-fold disambiguation metadata of a full tz database is
+      absent, which is declared, not hidden.
+
+    Raises if utc_dt is naive (fail-closed: a wall clock without an instant
+    is a guess). Historical validity: the US-rule fallback encodes the
+    post-2007 DST regime; pre-2007 instants resolve via the tz database
+    when present and are flagged ESTIMATED_RULE otherwise.
+    """
+    from datetime import timezone as _tz
+
+    if utc_dt.tzinfo is None:
+        raise ValueError("eastern_at_safe requires a timezone-aware UTC instant")
+    try:
+        from zoneinfo import ZoneInfo
+
+        return utc_dt.astimezone(ZoneInfo("America/New_York"))
+    except Exception:
+        offset = eastern_utc_offset_hours(utc_dt)
+        eastern_tz = _tz(timedelta(hours=offset), name="US-Eastern-rule")
+        return utc_dt.astimezone(eastern_tz)
+
+
+def eastern_now_safe() -> datetime:
+    """Current time via the instant-preserving boundary. Raises when unknown."""
+    return eastern_at_safe(datetime.now(UTC))

@@ -415,10 +415,12 @@ def _eastern_now() -> datetime:
     """Current time in US Eastern. See services.eastern_clock for the rules.
 
     Kept as a thin module-level alias because the gates below read it by name.
+    Uses the instant-preserving safe boundary (R10-11): identical wall hour
+    to eastern_now, with a correct aware UTC offset when tz data is absent.
     """
-    from services.eastern_clock import eastern_now
+    from services.eastern_clock import eastern_now_safe
 
-    return eastern_now()
+    return eastern_now_safe()
 
 
 def _in_window_now_et() -> bool:
