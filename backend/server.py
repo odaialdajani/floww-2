@@ -1426,9 +1426,11 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     metrics: dict[str, Any] = {"default_basis": exposure_basis}
     try:
         from domain.exposure_metrics import compute_delta_weighted_oi, compute_raw_oi, compute_volume_gamma
+        from domain.exposure_metrics import compute_session_delta_volume_gamma as _compute_sess_dvol
         from services.gex_core import (
             compute_gex_by_strike_vendor,
             compute_gex_grid_delta_weighted,
+            compute_gex_grid_session_delta_volume,
             compute_gex_grid_vendor,
             compute_gex_grid_volume_vendor,
         )
@@ -1436,16 +1438,27 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         raw_m = compute_raw_oi(raw["contracts"], spot)
         dw_m = compute_delta_weighted_oi(raw["contracts"], spot)
         vol_m = compute_volume_gamma(raw["contracts"], spot)
+        # S2: DISTINCT fourth activity surface (R10-01 repair). session_dvol
+        # is Σ c·u·V·|δ|; the legacy volume_gamma keys stay Σ c·u·V,
+        # backward compatible. No silent field replacement.
+        sess_dvol_m = _compute_sess_dvol(raw["contracts"], spot)
         vendor_rows = compute_gex_by_strike_vendor(spot, raw["contracts"])
         vendor_grid = compute_gex_grid_vendor(spot, raw["contracts"])
         delta_grid = compute_gex_grid_delta_weighted(spot, raw["contracts"])
         activity_grid = compute_gex_grid_volume_vendor(spot, raw["contracts"])
+        sess_dvol_grid = compute_gex_grid_session_delta_volume(spot, raw["contracts"])
         metrics.update({
             "gex_gross_v1": raw_m.gross, "gex_net_v1": raw_m.net,
             "gex_call": raw_m.call, "gex_put": raw_m.put,
             "dadgex_gross_v1": dw_m.gross, "dadgex_net_v1": dw_m.net,
             "dadgex_usable": dw_m.usable, "dadgex_missing_delta": dw_m.missing_delta,
             "volume_gamma_gross": vol_m.gross, "volume_gamma_net": vol_m.net,
+            "session_delta_volume_gross_v1": sess_dvol_m.gross,
+            "session_delta_volume_net_v1": sess_dvol_m.net,
+            "session_delta_volume_usable": sess_dvol_m.usable,
+            "session_delta_volume_missing_delta": sess_dvol_m.missing_delta,
+            "session_delta_volume_missing_vol": sess_dvol_m.missing_oi,
+            "session_delta_volume_invalid": sess_dvol_m.invalid,
             "window_dadgex_v1": None, "window_dadgex_reason": "HISTORY_NOT_YET_RECORDED",
             # §28.3 registry name alias (same unavailable state, both keys).
             "window_delta_weighted_volume_v1": None,
@@ -1466,6 +1479,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             # the same class of bug as the VEX/charm surfaces reading keys the
             # vendor path never emitted.
             "grids": {"raw": None, "delta": delta_grid, "activity": activity_grid,
+                      "session_delta_volume": sess_dvol_grid,
                       "vendor": vendor_grid},
             "formula_version": "gex.v2",
         })

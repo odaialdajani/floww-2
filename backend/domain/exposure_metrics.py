@@ -10,6 +10,7 @@ Metrics (formula_version gex.v2):
   dadgex_gross_v1 = Σ u_i N_i |δ_i|            delta-weighted gross
   dadgex_net_v1   = Σ c_i u_i N_i |δ_i|        delta-weighted net
   volume_gamma_v1 = Σ c_i u_i V_i              session activity proxy
+  session_delta_volume_gamma_v1 = Σ c_i u_i V_i |δ_i|   session activity × delta
   window_dadgex_v1 = Σ c_i u_i |δ_i| ΔV_i(W)   window activity proxy
 
 Invariants (same valid contract set, nonneg gamma/OI, |δ|≤1):
@@ -37,6 +38,38 @@ SCHEMA_VERSION = "2"
 CALL_SIGN = 1.0
 PUT_SIGN = -1.0
 
+# Contract-multiplier alias keys. All three name the same quantity; when more
+# than one is present they must agree (see resolve_multiplier).
+MULTIPLIER_KEYS = ("multiplier", "contractMultiplier", "m")
+
+# Documented standard-contract default. Applied ONLY when no multiplier key
+# carries a value (all keys absent or explicitly None) on a contract that is
+# not flagged adjusted/nonstandard. R10-02: an EXPLICIT invalid value
+# (0, negative, NaN, bool, unparseable) must never fall back to this — the
+# contract is rejected with MULTIPLIER_INVALID instead. A present-but-None
+# value is unknown (not absent): the contract is unavailable, never defaulted.
+STANDARD_MULTIPLIER = 100.0
+
+REASON_MULTIPLIER_INVALID = "MULTIPLIER_INVALID"
+REASON_MULTIPLIER_ALIAS_DISAGREE = "MULTIPLIER_ALIAS_DISAGREE"
+REASON_MULTIPLIER_UNKNOWN = "MULTIPLIER_UNKNOWN"
+REASON_CONTRACT_QUARANTINED = "CONTRACT_QUARANTINED"
+
+
+def is_valid_measurement(value: Any) -> float | None:
+    """Finite float for a real numeric measurement, else None.
+
+    Booleans are never measurements (True would otherwise read as 1.0).
+    Nonfinite (NaN/inf), None and unparseable values are unknown, never zero.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return None
+    return out if math.isfinite(out) else None
+
 
 def option_type_sign(opt_type: str | None) -> float | None:
     """Conventional option-type sign c_i: +1 call / -1 put. None when unknown."""
@@ -50,15 +83,12 @@ def option_type_sign(opt_type: str | None) -> float | None:
 
 def dollar_gamma_unit(gamma: float | None, multiplier: float | None, spot: float) -> float | None:
     """u_i = Γ m S² × 0.01. None when any input invalid/unknown."""
-    try:
-        g = float(gamma) if gamma is not None else None
-        m = float(multiplier) if multiplier is not None else None
-        s = float(spot)
-    except (TypeError, ValueError):
+    g = is_valid_measurement(gamma)
+    m = is_valid_measurement(multiplier)
+    s = is_valid_measurement(spot)
+    if g is None or m is None or s is None:
         return None
-    if g is None or m is None or not math.isfinite(g) or not math.isfinite(m):
-        return None
-    if not math.isfinite(s) or s <= 0 or g < 0 or m <= 0:
+    if s <= 0 or g < 0 or m <= 0:
         return None
     return g * m * s * s * 0.01
 
@@ -67,10 +97,11 @@ def abs_delta(delta: float | None, tol: float = 1e-9) -> tuple[float | None, str
     """Return |δ| or (None, reason). Raw value retained by caller for provenance.
 
     Tiny overshoot (|δ| ≤ 1+tol from binary rounding) normalises with flag;
-    material violation → invalid, never silently clamped.
+    material violation → invalid, never silently clamped. Booleans are not
+    delta readings.
     """
-    if delta is None:
-        return None, "DELTA_MISSING"
+    if delta is None or isinstance(delta, bool):
+        return None, "DELTA_MISSING" if delta is None else "DELTA_INVALID"
     try:
         d = float(delta)
     except (TypeError, ValueError):
@@ -87,7 +118,7 @@ def abs_delta(delta: float | None, tol: float = 1e-9) -> tuple[float | None, str
 
 def decimal_strike(strike: Any) -> Decimal | None:
     """Exact decimal strike identity. None when unparseable."""
-    if strike is None:
+    if strike is None or isinstance(strike, bool):
         return None
     try:
         d = Decimal(str(strike))
@@ -112,21 +143,55 @@ class ExposureResult:
     formula_version: str = FORMULA_VERSION
 
 
-def _resolve_mult(contract: dict[str, Any]) -> float | None:
-    for k in ("multiplier", "contractMultiplier", "m"):
-        v = contract.get(k)
-        if v is not None:
-            try:
-                f = float(v)
-                if math.isfinite(f) and f > 0:
-                    return f
-            except (TypeError, ValueError):
-                continue
-    # Default 100 only when contract is standard equity/index option without
-    # adjusted deliverable flags; adjusted contracts must be quarantined upstream.
+def resolve_multiplier(contract: dict[str, Any]) -> tuple[float | None, str | None]:
+    """Resolve the contract multiplier with explicit provenance.
+
+    Returns (value, reason). reason is None when the value is usable.
+
+    - Adjusted/nonstandard contracts → (None, CONTRACT_QUARANTINED).
+    - No multiplier key carrying a value (all absent or None):
+      (STANDARD_MULTIPLIER, "DEFAULT_STANDARD") — the documented
+      standard-contract default. Positive-evidence provenance: exchange
+      standard equity/index option deliverables are 100 shares; anything
+      flagged adjusted must be quarantined upstream instead of defaulted.
+    - A key present with an explicitly invalid value (0, negative, NaN,
+      infinite, bool, unparseable) → (None, MULTIPLIER_INVALID). This is
+      the R10-02 repair: explicit invalid must never fall back to 100.
+    - A key present with None and no other key carrying a value →
+      (None, MULTIPLIER_UNKNOWN): unknown, not absent, never defaulted.
+    - Several keys present with differing finite positive values →
+      (None, MULTIPLIER_ALIAS_DISAGREE): disagreement is surfaced, never
+      resolved by whichever field comes first.
+    """
+    if not isinstance(contract, dict):
+        return None, REASON_MULTIPLIER_INVALID
     if contract.get("adjusted") or contract.get("nonstandard"):
-        return None
-    return 100.0
+        return None, REASON_CONTRACT_QUARANTINED
+    seen: dict[str, float] = {}
+    for k in MULTIPLIER_KEYS:
+        if k not in contract:
+            continue
+        raw = contract.get(k)
+        if raw is None:
+            continue
+        parsed = is_valid_measurement(raw)
+        if parsed is None or parsed <= 0:
+            return None, REASON_MULTIPLIER_INVALID
+        seen[k] = parsed
+    if not seen:
+        if any(k in contract for k in MULTIPLIER_KEYS):
+            return None, REASON_MULTIPLIER_UNKNOWN
+        return STANDARD_MULTIPLIER, "DEFAULT_STANDARD"
+    values = set(seen.values())
+    if len(values) > 1:
+        return None, REASON_MULTIPLIER_ALIAS_DISAGREE
+    return next(iter(values)), None
+
+
+def _resolve_mult(contract: dict[str, Any]) -> float | None:
+    """Legacy thin wrapper: usable value or None. Prefer resolve_multiplier."""
+    value, _reason = resolve_multiplier(contract)
+    return value
 
 
 def compute_raw_oi(contracts: list[dict[str, Any]], spot: float) -> ExposureResult:
@@ -134,14 +199,15 @@ def compute_raw_oi(contracts: list[dict[str, Any]], spot: float) -> ExposureResu
     gross = net = call = put = 0.0
     usable = missing_oi = invalid = 0
     missing_delta = 0  # raw path does not need delta; kept for shape parity
+    spot_f = is_valid_measurement(spot)
     for c in contracts:
+        if not isinstance(c, dict):
+            invalid += 1
+            continue
         oi = c.get("oi", c.get("open_interest", c.get("N")))
         gamma = c.get("gamma", c.get("Γ"))
-        try:
-            oi_f = float(oi) if oi is not None else None
-        except (TypeError, ValueError):
-            oi_f = None
-        if oi_f is None or not math.isfinite(oi_f):
+        oi_f = is_valid_measurement(oi)
+        if oi_f is None:
             missing_oi += 1
             continue
         if oi_f < 0:
@@ -149,11 +215,8 @@ def compute_raw_oi(contracts: list[dict[str, Any]], spot: float) -> ExposureResu
             continue
         if oi_f == 0:
             continue
-        try:
-            g_f = float(gamma) if gamma is not None else None
-        except (TypeError, ValueError):
-            g_f = None
-        if g_f is None or not math.isfinite(g_f) or g_f < 0:
+        g_f = is_valid_measurement(gamma)
+        if g_f is None or g_f < 0:
             invalid += 1
             continue
         sign = option_type_sign(c.get("type"))
@@ -164,7 +227,7 @@ def compute_raw_oi(contracts: list[dict[str, Any]], spot: float) -> ExposureResu
         if mult is None:
             invalid += 1
             continue
-        u = dollar_gamma_unit(g_f, mult, spot)
+        u = dollar_gamma_unit(g_f, mult, spot_f if spot_f is not None else spot)
         if u is None:
             invalid += 1
             continue
@@ -184,15 +247,16 @@ def compute_delta_weighted_oi(contracts: list[dict[str, Any]], spot: float) -> E
     """dadgex_gross_v1 / dadgex_net_v1: Σ u N |δ| with conventional sign."""
     gross = net = call = put = 0.0
     usable = missing_delta = missing_oi = invalid = 0
+    spot_f = is_valid_measurement(spot)
     for c in contracts:
+        if not isinstance(c, dict):
+            invalid += 1
+            continue
         oi = c.get("oi", c.get("open_interest", c.get("N")))
         gamma = c.get("gamma", c.get("Γ"))
         delta = c.get("delta", c.get("δ"))
-        try:
-            oi_f = float(oi) if oi is not None else None
-        except (TypeError, ValueError):
-            oi_f = None
-        if oi_f is None or not math.isfinite(oi_f):
+        oi_f = is_valid_measurement(oi)
+        if oi_f is None:
             missing_oi += 1
             continue
         if oi_f < 0:
@@ -200,11 +264,8 @@ def compute_delta_weighted_oi(contracts: list[dict[str, Any]], spot: float) -> E
             continue
         if oi_f == 0:
             continue
-        try:
-            g_f = float(gamma) if gamma is not None else None
-        except (TypeError, ValueError):
-            g_f = None
-        if g_f is None or not math.isfinite(g_f) or g_f < 0:
+        g_f = is_valid_measurement(gamma)
+        if g_f is None or g_f < 0:
             invalid += 1
             continue
         sign = option_type_sign(c.get("type"))
@@ -219,7 +280,7 @@ def compute_delta_weighted_oi(contracts: list[dict[str, Any]], spot: float) -> E
         if mult is None:
             invalid += 1
             continue
-        u = dollar_gamma_unit(g_f, mult, spot)
+        u = dollar_gamma_unit(g_f, mult, spot_f if spot_f is not None else spot)
         if u is None:
             invalid += 1
             continue
@@ -240,14 +301,15 @@ def compute_volume_gamma(contracts: list[dict[str, Any]], spot: float) -> Exposu
     gross_like = net = call = put = 0.0
     usable = missing_delta = invalid = 0
     missing_vol = 0
+    spot_f = is_valid_measurement(spot)
     for c in contracts:
+        if not isinstance(c, dict):
+            invalid += 1
+            continue
         vol = c.get("volume", c.get("V"))
         gamma = c.get("gamma", c.get("Γ"))
-        try:
-            v_f = float(vol) if vol is not None else None
-        except (TypeError, ValueError):
-            v_f = None
-        if v_f is None or not math.isfinite(v_f):
+        v_f = is_valid_measurement(vol)
+        if v_f is None:
             missing_vol += 1
             continue
         if v_f < 0:
@@ -255,11 +317,8 @@ def compute_volume_gamma(contracts: list[dict[str, Any]], spot: float) -> Exposu
             continue
         if v_f == 0:
             continue
-        try:
-            g_f = float(gamma) if gamma is not None else None
-        except (TypeError, ValueError):
-            g_f = None
-        if g_f is None or not math.isfinite(g_f) or g_f < 0:
+        g_f = is_valid_measurement(gamma)
+        if g_f is None or g_f < 0:
             invalid += 1
             continue
         sign = option_type_sign(c.get("type"))
@@ -270,7 +329,7 @@ def compute_volume_gamma(contracts: list[dict[str, Any]], spot: float) -> Exposu
         if mult is None:
             invalid += 1
             continue
-        u = dollar_gamma_unit(g_f, mult, spot)
+        u = dollar_gamma_unit(g_f, mult, spot_f if spot_f is not None else spot)
         if u is None:
             invalid += 1
             continue
@@ -285,6 +344,71 @@ def compute_volume_gamma(contracts: list[dict[str, Any]], spot: float) -> Exposu
         usable += 1
     r = ExposureResult(gross_like, net, call, put, usable, missing_delta, missing_vol, invalid, "VOLUME")
     return r
+
+
+def compute_session_delta_volume_gamma(
+    contracts: list[dict[str, Any]], spot: float
+) -> ExposureResult:
+    """session_delta_volume_gamma_v1 = Σ c u V |δ| (R10-01 repair).
+
+    The DISTINCT fourth activity formula: session volume weighted by
+    |delta|, per contract, with the conventional call/put sign. This is
+    NOT volume_gamma_v1 (Σ c u V, no delta weighting), which stays
+    backward compatible. A contract with missing delta is UNAVAILABLE
+    (missing_delta++, never zero-substituted); missing volume is
+    unavailable separately. Same units/basis conventions as the family:
+    USD per 1% spot move, VOLUME_DELTA_WEIGHTED basis.
+    """
+    gross = net = call = put = 0.0
+    usable = missing_delta = missing_vol = invalid = 0
+    spot_f = is_valid_measurement(spot)
+    for c in contracts:
+        if not isinstance(c, dict):
+            invalid += 1
+            continue
+        vol = c.get("volume", c.get("V"))
+        gamma = c.get("gamma", c.get("Γ"))
+        delta = c.get("delta", c.get("δ"))
+        v_f = is_valid_measurement(vol)
+        if v_f is None:
+            missing_vol += 1
+            continue
+        if v_f < 0:
+            invalid += 1
+            continue
+        if v_f == 0:
+            continue
+        g_f = is_valid_measurement(gamma)
+        if g_f is None or g_f < 0:
+            invalid += 1
+            continue
+        sign = option_type_sign(c.get("type"))
+        if sign is None:
+            invalid += 1
+            continue
+        ad, _reason = abs_delta(delta)
+        if ad is None:
+            missing_delta += 1
+            continue
+        mult = _resolve_mult(c)
+        if mult is None:
+            invalid += 1
+            continue
+        u = dollar_gamma_unit(g_f, mult, spot_f if spot_f is not None else spot)
+        if u is None:
+            invalid += 1
+            continue
+        w = u * ad * v_f
+        gross += w
+        signed = sign * w
+        net += signed
+        if sign > 0:
+            call += w
+        else:
+            put += w
+        usable += 1
+    return ExposureResult(gross, net, call, put, usable, missing_delta, missing_vol, invalid,
+                          "VOLUME_DELTA_WEIGHTED")
 
 
 def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str, Any]],
@@ -387,6 +511,8 @@ METRIC_REGISTRY = {
     "dadgex_gross_v1": {"formula": "Σ u N |δ|", "units": "USD/1% move", "basis": "OI_DELTA_WEIGHTED", "version": FORMULA_VERSION},
     "dadgex_net_v1": {"formula": "Σ c u N |δ|", "units": "USD/1% move", "basis": "OI_DELTA_WEIGHTED", "version": FORMULA_VERSION},
     "volume_gamma_v1": {"formula": "Σ c u V", "units": "USD/1% move", "basis": "VOLUME", "version": FORMULA_VERSION},
+    "session_delta_volume_gamma_v1": {"formula": "Σ c u V |δ|", "units": "USD/1% move",
+                                      "basis": "VOLUME_DELTA_WEIGHTED", "version": FORMULA_VERSION},
     "window_dadgex_v1": {"formula": "Σ c u |δ| ΔV(W)", "units": "USD/1% move", "basis": "VOLUME_WINDOW", "version": FORMULA_VERSION},
     # Live-assembly alias of window_dadgex_v1 (double-d): same formula, units
     # and basis. R5-B naming resolution — both keys always carry the same
