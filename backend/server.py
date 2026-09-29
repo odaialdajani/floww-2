@@ -411,17 +411,57 @@ LIVE_WINDOW = {"start_hhmm": "09:00", "stop_hhmm": "10:30"}
 PREFETCH_HHMM = "08:55"  # pre-fetch SPY OI 5 min before market open
 
 
+def _eastern_now() -> datetime:
+    """Current time in US Eastern, using the US DST rule as the fallback.
+
+    Prefers the tz database. When it is unavailable, `_eastern_utc_offset_hours`
+    applies the US rule directly instead of reading the host's `tm_isdst`, which
+    describes the host timezone rather than Eastern's and is wrong for roughly
+    Mar 8-28 and Oct 25-31 each year on any non-Eastern host.
+    """
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("America/New_York"))
+    except Exception:
+        now_utc = datetime.now(UTC)
+        return now_utc + timedelta(hours=_eastern_utc_offset_hours(now_utc))
+
+
+def _eastern_utc_offset_hours(utc_dt: datetime) -> int:
+    """US Eastern UTC offset in hours for a given UTC instant.
+
+    Implements the US rule directly (second Sunday in March 02:00 local ->
+    first Sunday in November 02:00 local) rather than reading
+    `time.localtime().tm_isdst`. That flag describes the HOST's timezone, not
+    Eastern's, and the two disagree twice a year: roughly Mar 8-28 and
+    Oct 25-31 the EU and US DST rules are out of step, so a host in Berlin
+    reports the opposite of Eastern's actual state.
+
+    Only reached when zoneinfo is unavailable, so it stays dependency-free.
+    """
+    year = utc_dt.year
+    tzinfo = utc_dt.tzinfo
+
+    def nth_sunday(year_: int, month: int, n: int) -> datetime:
+        """The n-th Sunday of a month, tz-aware to match the caller's clock."""
+        first_dow = datetime(year_, month, 1).weekday()  # Monday == 0
+        day = 1 + (6 - first_dow) % 7 + (n - 1) * 7
+        return datetime(year_, month, day, tzinfo=tzinfo)
+
+    dst_start = nth_sunday(year, 3, 2).replace(hour=7)   # 02:00 EST == 07:00 UTC
+    dst_end = nth_sunday(year, 11, 1).replace(hour=6)    # 02:00 EDT == 06:00 UTC
+    return -4 if dst_start <= utc_dt < dst_end else -5
+
+
 def _in_window_now_et() -> bool:
     """Check if current time is within configured live window (US/Eastern)."""
     try:
-        from zoneinfo import ZoneInfo
-        et = datetime.now(ZoneInfo("America/New_York"))
+        et = _eastern_now()
     except Exception:
-        # Fallback: use UTC-4 (EDT) during DST, UTC-5 (EST) otherwise
-        import time
-        is_dst = time.localtime().tm_isdst > 0
-        offset = 4 if is_dst else 5
-        et = datetime.now(UTC) - timedelta(hours=offset)
+        # _eastern_now already falls back internally; reaching here means both
+        # the tz database and the arithmetic fallback failed. Fail closed
+        # rather than guessing at Eastern time.
+        return False
     hhmm = et.strftime("%H:%M")
     return LIVE_WINDOW["start_hhmm"] <= hhmm <= LIVE_WINDOW["stop_hhmm"]
 
@@ -2569,13 +2609,9 @@ async def _scheduler_loop():
                 pass
 
             try:
-                from zoneinfo import ZoneInfo
-                et = datetime.now(ZoneInfo("America/New_York"))
+                et = _eastern_now()
             except Exception:
-                import time
-                is_dst = time.localtime().tm_isdst > 0
-                offset = 4 if is_dst else 5
-                et = datetime.now(UTC) - timedelta(hours=offset)
+                et = datetime.now(UTC)
             hhmm = et.strftime("%H:%M")
             today_et = et.date().isoformat()
             if hhmm >= PREFETCH_HHMM and fired_for_date != today_et and et.weekday() < 5:
@@ -2961,13 +2997,9 @@ async def flow_sse(
     # Check trading window
     if enforce_window:
         try:
-            from zoneinfo import ZoneInfo
-            et = datetime.now(ZoneInfo("America/New_York"))
+            et = _eastern_now()
         except Exception:
-            import time as _time
-            is_dst = _time.localtime().tm_isdst > 0
-            offset = 4 if is_dst else 5
-            et = datetime.now(UTC) - timedelta(hours=offset)
+            et = datetime.now(UTC)
         hhmm = et.strftime("%H:%M")
         lw = LIVE_WINDOW
         start = lw.get("start_hhmm", "09:30")
