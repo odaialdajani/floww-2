@@ -62,13 +62,43 @@ _model_cache: dict[str, tuple] = {}
 
 
 def _load_model_cached(path: str):
-    """joblib.load with an mtime-keyed cache: reload only when the file changes."""
+    """joblib.load with an mtime-keyed cache: reload only when the file changes.
+
+    An artifact that cannot be unpickled (e.g. it was pickled under a
+    different environment and references a class that is no longer
+    importable) is a broken serve path, not a server fault. Report it the
+    same way the feature-schema and non-finite checks below do: a 503 that
+    names the artifact and the underlying cause, so the caller can tell a
+    missing model from a broken one. Nothing is cached on failure, so a
+    retrained artifact is picked up on the next request without a restart.
+    """
     import joblib
     mtime = os.path.getmtime(path)
     entry = _model_cache.get(path)
     if entry and entry[0] == mtime:
         return entry[1]
-    artifact = joblib.load(path)
+    try:
+        artifact = joblib.load(path)
+    except Exception as exc:
+        logger.error(
+            "Model artifact %s could not be loaded (%s: %s). Retrain and "
+            "re-promote the artifact; do not zero-fill a prediction.",
+            os.path.basename(path), type(exc).__name__, exc,
+        )
+        raise HTTPException(
+            503,
+            detail={
+                "error": "model_artifact_unloadable",
+                "artifact": os.path.basename(path),
+                "cause": f"{type(exc).__name__}: {exc}",
+                "message": (
+                    f"Model artifact {os.path.basename(path)} could not be "
+                    "deserialized. Retrain the model and re-promote it per the "
+                    "model promotion policy. Refusing to return a prediction: a "
+                    "fabricated score is worse than no score."
+                ),
+            },
+        ) from exc
     _model_cache[path] = (mtime, artifact)
     return artifact
 
