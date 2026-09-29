@@ -806,6 +806,51 @@ The right move was to open a new branch and PR rather than rewrite a pushed
 one. I have not repeated it and will not; the remaining remote actions are
 append-only.
 
+### H5 fixture: DELIVERED (ledger was stale) but production code imports from tests/
+
+Two corrections to the "NOT RECEIVED" blocker above.
+
+**The fixture did arrive.** `backend/tests/fixtures/wall_desk_fixture_v1.py`
+is in `origin/main`, added by `b1f06d18` (PR #84). It is a redacted,
+hand-checkable C5 desk packet: S=100, K=100, two expiries, opposing
+call/put contracts sharing a strike so gross/net cancellation is visible, one
+contract with missing delta, one stale quote, and two chronological
+observations. Formula version `gex.v2`, units USD per 1% spot move. The four
+tests that exercise it pass (`4 passed`).
+
+**But it is wired backwards.** `backend/domain/wall_desk_snapshot.py:30`
+imports from `tests.fixtures.wall_desk_fixture_v1`, and production functions
+`expected_packet()`, `expected_window()` and `source_pair()` return the
+fixture constants verbatim. The real projection path,
+`project_packet(observation, snapshot_id)`, does not touch the fixture.
+
+So a domain module in production depends on the test tree. Consequences:
+- `sys.path.insert(0, ...)` at line 22 exists to make that import work.
+- Any deployment that ships `backend/` without `backend/tests/` fails at
+  import. `Dockerfile.backend` does `COPY backend/ .` and `.dockerignore`
+  does not exclude `tests/`, so the container happens to survive -- but that
+  is luck, not design, and it ships the entire test suite into the image.
+- `SPOT` and `FIXTURE_VERSION` are module constants used by the real
+  projection path, so the fixture's values are baked into production
+  defaults: `spot = _finite(observation.get("spot")) or SPOT` silently
+  substitutes 100.0 when a caller omits spot.
+
+Nothing currently calls `expected_packet`/`expected_window`/`source_pair` --
+they are test-support accessors living in the wrong module. The correct shape
+is for the fixture to import nothing from production, and for the accessors
+to live in the test file.
+
+**Not fixed here** -- `domain/wall_desk_snapshot.py` is Command Code's
+`b1f06d18` work. Recorded for handoff. The `or SPOT` fallback in particular
+is a missing-vs-default defect: an observation with no spot should be
+unavailable, not 100.0.
+
+**H5 unblocked on the fixture, still blocked on a real handoff.** The
+deliverable the packet asks for is an agent handover with exact branch, SHA,
+receipt and captured `WallDeskSnapshot.v1` evidence. A merged fixture is not
+that: there is no receipt, and the module that should consume it is still
+test-only. Ledger item 6 stays open, with the reason corrected.
+
 ## 8. Actions explicitly NOT taken
 
 No remote merge, no deploy, no service restart, no persistent-service
