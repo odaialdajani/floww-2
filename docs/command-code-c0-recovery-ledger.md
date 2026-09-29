@@ -200,15 +200,56 @@ Not fixed here: both candidate repairs (resetting the shared budget in
 `_reset_state`, or giving the seam test a `_NullBudget`) touch a shared service
 or a test this slice does not own. Left for Nav or Hermes to call.
 
+## C6 test manifest, measured at `223c6fc8`
+
+Run from `./backend` unless stated — that is the `working-directory` CI uses, and
+running these from the repo root produces different (misleading) results.
+
+| CI gate | Command | Result |
+|---|---|---|
+| 1 truth audit | `bash qc/audit/truth_audit.sh` | 229 passed, 0 failed — **PASSED** |
+| 2 lint | `ruff check .` | All checks passed! |
+| 3 security | `bandit -r . --severity-level medium -q --exclude ./.venv,./tests --skip B101,B108,B301,B310,B313,B314,B324,B604,B608,B614,B615` | exit 0, no findings |
+| 4 tests + coverage | `pytest tests/ -m "not flaky_env" --cov=.` | **6533 passed, 1 failed, 37 skipped**; coverage **67.67%** vs `fail_under = 60` — reached |
+| 5 frontend tests | `npm test -- --watchAll=false` | 107 suites, 940 tests passed |
+| 6 frontend build | `npm run build` | build succeeded |
+
+Two new audit gates, run directly (not part of CI yet):
+`python3 qc/audit/find_dead_imports.py` and `python3 qc/audit/check_docs.py` —
+both clean.
+
+Coverage of the modules this slice added, measured directly:
+`triad_projection.py` 94%, `session_levels_source.py` 96%,
+`domain/session_levels.py` 98%.
+
+The single failure in gate 4 is the inherited, order-dependent solstice test
+characterised above; it reproduces identically at the base commit.
+
+Two notes on running the gates locally, so the next person is not misled:
+
+- `pytest --cov` needs `pytest-cov`, which is not in the shared working venv. CI
+  installs it explicitly. Running it locally means adding it — do **not** install
+  into `/Users/nav/Documents/GitHub/floww-2/backend/.venv`, which is shared with
+  another checkout. A `pip install --target <dir>` plus `PYTHONPATH=<dir>` gives
+  coverage without mutating the shared venv.
+- `ruff check .` from the REPO ROOT reports ~456 errors, almost all in vendored
+  data under `data/`. None of that is what CI lints. Run it from `./backend`.
+
 ## Honest limits
 
 - The agentfield SDK is not installed and not declared in requirements;
   `server.py` documents that hub as optional. Its tests stub the SDK.
-- `frontend` full suite: 107 suites / 940 tests pass at `790257f1`. Not
-  re-run since — every commit after that one is backend/docs only.
-- C1.1's displayed DUO values are **unverified by choice**, not by omission.
-- C1.5's writer/storage/route half is **not done**; it is Hermes's lease.
-- C3's route wiring is **not done**; it is Hermes's lease.
-- C6's test manifest is pinned to the full-suite run recorded in the commit
-  history, not to a number typed from memory.
+- C1.1's displayed DUO values (−929.33 / −8.77) are **unverified by choice**,
+  not by omission: the original inputs and Taylor factor were never recovered,
+  and pinning the numbers would invent the definition they claim to check.
+- C1.5's writer/storage/route half is **not done** — Hermes's lease.
+- C3's route wiring is **not done** — Hermes's lease. Until it lands the Triad
+  primary path still falls through to `/api/data`.
+- The inherited solstice failure is **left failing on purpose**, with both
+  candidate fixes named in the ledger. It is not in this slice's lease.
+- The 19 commits sit on `cmd/recovery-c0-20260928070352` in a worktree. Nothing
+  was merged, pushed, deployed, rebased or force-written. `fix/audit-2026-09`
+  remains at `bacc9fab` with its dirty path and both rollback refs intact,
+  re-verified after the last commit.
+
 
