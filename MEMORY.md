@@ -11,13 +11,22 @@ All entries in this project are tagged `project:floww`.
 
 ## Active Memory
 
-- [Project Oracle directive](project_oracle.md) — May 2026 master directive; supersedes CLAUDE_REVIEW_PROMPT.md
-- [Master plan operating laws](project_master_plan.md) — no synthetic data, baseline-first, OOS-locked
-- [Skylit feature parity](project_skylit.md) — commercial target; gap list in SKYLIT_FEATURES.md
-- [Research pipeline](project_research_pipeline.md) — arxiv discovery → URL extraction → clone → extract patterns
-- [Herder swarm regime](reference_herder_swarm.md) — skill arsenal and dispatch patterns
-- [Truth-audit](reference_truth_audit.md) — qc/audit/truth_audit.sh runs every session start
-- [Tool boundaries](project_tool_boundaries.md) — CLI/Bash/Python/git only; Nav drives IDEs
+<!-- These seven entries used to be links to project_*.md / reference_*.md.
+     Those files were never committed: `git log --all -- project_oracle.md`
+     (and the other six) returns nothing for every branch. A link to a file
+     that is not in the tree sends the reader nowhere and gives no signal
+     about whether they are on the wrong branch or the doc was never written.
+     The one-line descriptions below are kept, with the dead target removed
+     and its location stated honestly. If a target lives outside the repo,
+     say so here rather than emitting an unresolvable relative link. -->
+
+- **Project Oracle directive** — May 2026 master directive; supersedes CLAUDE_REVIEW_PROMPT.md. _Not present in this repository._
+- **Master plan operating laws** — no synthetic data, baseline-first, OOS-locked. _Not present in this repository._
+- **Skylit feature parity** — commercial target; gap list in SKYLIT_FEATURES.md (in `docs/`). _Source doc not present in this repository._
+- **Research pipeline** — arxiv discovery → URL extraction → clone → extract patterns. _Not present in this repository._
+- **Herder swarm regime** — skill arsenal and dispatch patterns. _Not present in this repository._
+- **Truth-audit** — `qc/audit/truth_audit.sh` runs every session start. _Source doc not present; the script itself is in the repo._
+- **Tool boundaries** — CLI/Bash/Python/git only; Nav drives IDEs. _Not present in this repository._
 
 ## Cross-Project Memory
 
