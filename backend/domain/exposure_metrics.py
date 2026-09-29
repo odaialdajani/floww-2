@@ -399,4 +399,8 @@ METRIC_REGISTRY = {
                        "basis": "VEX_1VOLPT", "version": FORMULA_VERSION, "model": "local-bs-vanna.v1"},
     "vex_gross_1volpt": {"formula": "Σ |m N S vanna 0.01|", "units": "USD delta-notional/+1 vol pt",
                          "basis": "VEX_1VOLPT", "version": FORMULA_VERSION, "model": "local-bs-vanna.v1"},
+    "duo_d2gex_dS2_v1": {"formula": "C*(S^2*gamma''+4*S*gamma'+2*gamma)", "units": "USD/(1% move)^2",
+                         "basis": "DUO_D2GEX_DS2", "version": FORMULA_VERSION, "model": "local-bs-second-order.v1"},
+    "dvo_dvega_dsigma_v1": {"formula": "vomma*OI*100", "units": "USD/unit-sigma",
+                            "basis": "DVO_DVEGA_DSIGMA", "version": FORMULA_VERSION, "model": "local-bs-second-order.v1"},
 }
