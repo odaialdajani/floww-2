@@ -348,6 +348,15 @@ _CHAIN_CACHE_TTL = 60.0
 _CHAIN_LOCKS: dict[tuple[str, int], asyncio.Lock] = {}
 _CHAIN_CACHE_MAX = 128
 
+# How many expiries past `max_expiries` the chain walk may ATTEMPT in order
+# to reach that many accepted ones. The vendor list leads with TODAY, which
+# is fully expired after the close, so at least one skip is required for the
+# 1-expiry case to return anything. The bound is what keeps actual provider
+# calls within the `2 + max_expiries` envelope pre-debited by the caller
+# (C8): skipping is free, but an unbounded walk would silently exceed the
+# shared-quota pre-debit.
+MAX_EXPIRY_SKIPS = 3
+
 
 def _chain_lock(key: tuple[str, int]) -> asyncio.Lock:
     lock = _CHAIN_LOCKS.get(key)
@@ -557,13 +566,21 @@ async def _fetch_chain_live(
     # front spent a 1-expiry request entirely on that dead expiry and returned
     # None — a 503 from /api/spot/{ticker} while the very next expiry held a
     # full chain. Walk the list and stop once the budget is met.
+    #
+    # The walk MUST also be bounded in ATTEMPTS: the caller pre-debited a
+    # fixed `2 + max_expiries` envelope above (C8), so attempting more
+    # expiries than that would make actual provider calls exceed the debit
+    # and turn the shared-quota pre-debit into an under-count. Skipping past
+    # dead expiries is allowed, but only within the already-paid envelope;
+    # MAX_EXPIRY_SKIPS bounds how far past max_expiries we may walk.
     contracts: list[dict[str, Any]] = []
     exp_dates = []
     now_utc = datetime.now(UTC)
     received_at = now_utc.isoformat()
     n_expired_dropped = 0
 
-    for exp in expiries:
+    max_attempts = min(len(expiries), max_expiries + MAX_EXPIRY_SKIPS)
+    for exp in expiries[:max_attempts]:
         if len(exp_dates) >= max_expiries:
             break
         try:
