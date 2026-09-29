@@ -882,6 +882,73 @@ Backend is separately stale in a known way: PID 69680 runs with cwd
 legacy `/Users/nav/Documents/GitHub/floww`) but predates the Eastern-clock
 and universe-scan work on this branch.
 
+### H1 T1 re-verified: the triad projection does not fabricate GEX
+
+H1's T2-T9 labels are not recorded anywhere in the repository -- they came
+from the Revision 9 packet prose, not a file. I am not going to reconstruct
+their text from memory and audit against an invented list, so this entry
+covers only what can be checked from source.
+
+`backend/services/triad_projection.py` computes per-contract canonical GEX
+from the `gex.v2` registry (`domain/exposure_metrics`), taking the sign from
+`option_option_type_sign()` and applying OI and volume terms, rather than
+reading a precomputed `gex` field the adapter never emits. Where gamma, OI,
+or option type is unknown it emits `gex: None` with a `gex_basis` of
+`OI_UNKNOWN` and a `gex_reason`; a measured zero OI yields `0.0`, not `None`.
+
+`tests/services/test_triad_projection_backend.py` covers exactly the
+distinctions that matter: `test_missing_oi_yields_null_not_zero`,
+`test_zero_oi_...`, `test_net_matches_the_canonical_registry_formula`,
+`test_per_strike_net_equals_the_canonical_net_over_the_same_rows`,
+`test_the_canonical_gross_and_net_remain_distinct`, and
+`test_same_strike_different_expiry_occupies_two_columns_not_one_cell`.
+41 passed.
+
+So T1 holds on the current tree. T2-T9 remain unverified because their
+content is not recoverable from the repo; they need the packet text.
+
+### H5 follow-on: a missing multiplier is silently defaulted to 100.0
+
+Same module as the fixture-import finding, same defect class, and it is a
+`or` against a falsy zero rather than a missing value only.
+
+`wall_desk_snapshot.py:129`:
+
+    mult = _finite(nxt.get("multiplier")) or 100.0
+    unit = gamma * mult * spot * spot * 0.01
+
+On the adjacent lines, `gamma is None` and `delta is None` both `continue`.
+So the block skips a contract for a missing gamma or delta but invents a
+multiplier. Driven against the real `project_window`:
+
+| second observation | window_net |
+|---|---|
+| multiplier present (100.0) | 150.0 |
+| multiplier absent | 150.0 |
+| multiplier measured 0.0 | 150.0 |
+| gamma absent | 0.0 |
+| delta absent | 0.0 |
+
+Two defects in one line. A missing multiplier produces a full-magnitude
+number indistinguishable from a real reading. And because `0.0` is falsy, a
+*measured zero* multiplier is also replaced by 100.0 -- so an explicit zero
+and a missing value are not even distinguishable from each other, let alone
+from a real 100. This is the precise inverse of what `triad_projection.py`
+does correctly two files over, where a measured zero yields `0.0` and a
+missing one yields `None` with `OI_UNKNOWN`.
+
+Nothing downstream reports the substitution: `project_window` returns
+`window_gross_like`, `window_net` and an interval, with no unknown-count or
+provenance field for skipped inputs.
+
+Not fixed here -- `b1f06d18` is Command Code's work. Recorded for handoff.
+The fix is to `continue` on a missing multiplier like the adjacent guards do,
+and to accept a measured `0.0` as `0.0` rather than as missing.
+
+My first probe of this returned all zeros and looked like a non-finding; the
+observation shape is a flat `contracts` list keyed by `osi`, not the nested
+`expiries` dict I assumed. The table above is from the corrected probe.
+
 ## 8. Actions explicitly NOT taken
 
 No remote merge, no deploy, no service restart, no persistent-service
