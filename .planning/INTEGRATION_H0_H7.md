@@ -571,6 +571,57 @@ pattern stopped:
   fixtures: `FetchCoordinator.fetch` with a raising governor returns
   `budget_unavailable` / `degraded` rather than proceeding to the fetch.
 
+### Credential-gated network leak — a green suite that only stays green without `.env`
+
+**H0 drift, 2026-09-28.** Main moved to `53d8237a` (PR #84, Command Code's
+handoff). Rebased the ET work onto it. The rebased tree produced
+`6639 passed, 1 error` where pristine `53d8237a` gave `6620 passed, 0 errors`.
+
+The error was `tests/offline_network.py` at **teardown**, attributed to
+`test_wall_strength_policy.py` — the alphabetically last test, not the owner.
+The guard's own record named the real trigger:
+`tests/services/test_agentfield_hub.py::TestTickerNormalization::test_gex_regime_uppercases_ticker`,
+host `api.public.com`.
+
+**Not my code.** Established by controlled comparison, each variable moved alone:
+
+| Tree | Result |
+|---|---|
+| pristine `53d8237a` | 396 passed, clean |
+| pristine + my 3 production files | 396 passed, clean |
+| pristine + my production + my 3 test files | 415 passed, clean |
+| my checkout, my 3 test files removed | 396 passed, **1 error** |
+| my checkout, `backend/.env` moved aside | 396 passed, clean |
+
+Identical tracked source in every case. The variable is `backend/.env`, which
+exists only in the canonical checkout and holds a real `PUBLIC_API_KEY`
+(never printed; values stay redacted). With a key present, `_canonical_gex_profile`
+reaches the live Public adapter and the offline guard blocks a real outbound
+request at session end. With no key the adapter short-circuits and the suite
+is clean.
+
+**Consequences, stated plainly:**
+
+- The suite is **only** green where `backend/.env` is absent. CI has no key, so
+  CI cannot see this class of failure at all.
+- The guard attributes the failure to the wrong test, so the error message
+  points at an innocent file. Anyone triaging this would start in the wrong
+  place, exactly as I did — I first blamed Command Code, then my own test
+  ordering, before isolating the real variable.
+- `_canonical_gex_profile`'s own docstring is correct about *coverage* honesty
+  (`NO_CHAIN_COVERAGE`, never zero-filled). The defect is that a test-visible
+  reasoner performs a credentialed network call before it can decide coverage
+  is missing.
+
+**Owner:** Command Code (`b1f06d18` added `_canonical_gex_profile` and its
+tests). **Not fixed by me** — `services/agentfield_hub.py` is their ownership
+lane and the packet forbids editing another track to unblock my own. Filed for
+handoff rather than silently patched. `backend/.env` was restored immediately
+after the experiment and verified byte-intact (3 keys, original mtime).
+
+**Do not delete `backend/.env` to make this green.** That hides the leak
+instead of fixing it and would break the running local stack.
+
 ## 7. Next actions
 
 | # | Action | Owner | Status / blocked on |
