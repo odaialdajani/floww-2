@@ -28,7 +28,7 @@ from datetime import datetime, timedelta
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
-from server import LIVE_WINDOW, _in_window_now_et
+from server import LIVE_WINDOW, _eastern_now, _in_window_now_et
 
 ET = ZoneInfo("America/New_York")
 UTC = ZoneInfo("UTC")
@@ -84,6 +84,73 @@ def _assert_window_opens(eastern_wall: datetime, host_tz: str, when: str) -> Non
         f"on a {host_tz} host -- the fallback read the host's DST flag "
         "instead of Eastern's"
     )
+
+
+def _eastern_now_with_host(eastern_wall: datetime, host_tz: str) -> datetime:
+    """Return the real `_eastern_now()` result for a pinned instant + host tz."""
+    _FrozenDatetime._frozen = eastern_wall.astimezone(UTC)
+    host_dst = bool(eastern_wall.astimezone(ZoneInfo(host_tz)).dst().total_seconds())
+
+    def fake_localtime(t=None):
+        st = list(time.struct_time((2026, 1, 1, 0, 0, 0, 0, 1, 1)))
+        st[8] = 1 if host_dst else 0
+        return time.struct_time(tuple(st))
+
+    with (
+        patch.object(builtins, "__import__", _blocked_zoneinfo),
+        patch("server.datetime", _FrozenDatetime),
+        patch("time.localtime", fake_localtime),
+    ):
+        return _eastern_now()
+
+
+# Mar 8-28 2026: US is on EDT, EU is not. Oct 25-31 2026: EU is back, US is not.
+# 13:00 UTC is 09:00 EDT on both dates -- the live window's opening minute.
+_DIVERGENT_UTC = [
+    ("early March", datetime(2026, 3, 9, 13, 0, tzinfo=UTC)),
+    ("late October", datetime(2026, 10, 28, 13, 0, tzinfo=UTC)),
+]
+
+
+def test_eastern_now_is_0900_for_berlin_host_in_march():
+    _, utc_instant = _DIVERGENT_UTC[0]
+    got = _eastern_now_with_host(utc_instant, "Europe/Berlin")
+    assert got.strftime("%H:%M") == "09:00", (
+        f"_eastern_now returned {got:%H:%M} for a Berlin host at 13:00 UTC on "
+        "Mar 9 2026; Eastern is on EDT (09:00), not EST (08:00)"
+    )
+
+
+def test_eastern_now_is_0900_for_berlin_host_in_october():
+    _, utc_instant = _DIVERGENT_UTC[1]
+    got = _eastern_now_with_host(utc_instant, "Europe/Berlin")
+    assert got.strftime("%H:%M") == "09:00", (
+        f"_eastern_now returned {got:%H:%M} for a Berlin host at 13:00 UTC on "
+        "Oct 28 2026; Eastern is still on EDT (09:00), not EST (08:00)"
+    )
+
+
+def test_eastern_now_agrees_across_every_host_timezone():
+    """The prefetch and trading-window gates read this helper, so it must be
+    independent of where the host machine is configured."""
+    for _, utc_instant in _DIVERGENT_UTC:
+        times = {
+            host: _eastern_now_with_host(utc_instant, host).strftime("%H:%M")
+            for host in ("America/New_York", "Europe/Berlin", "Asia/Tokyo", "UTC")
+        }
+        assert len(set(times.values())) == 1, f"host timezone changed the clock: {times}"
+
+
+def test_eastern_now_matches_zoneinfo_across_the_year():
+    """The arithmetic fallback must equal the tz database all year round."""
+    for month, day in [(1, 15), (3, 7), (3, 8), (3, 9), (3, 28), (3, 29), (7, 15),
+                       (10, 31), (11, 1), (11, 2), (12, 15)]:
+        utc_instant = datetime(2026, month, day, 16, 0, tzinfo=UTC)
+        expected = utc_instant.astimezone(ET)
+        got = _eastern_now_with_host(utc_instant, "UTC")
+        assert got.strftime("%H:%M") == expected.strftime("%H:%M"), (
+            f"{month}/{day}: fallback says {got:%H:%M}, tz database says {expected:%H:%M}"
+        )
 
 
 def test_baseline_window_opens_on_an_eastern_host_in_summer():

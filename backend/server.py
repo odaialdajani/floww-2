@@ -411,6 +411,22 @@ LIVE_WINDOW = {"start_hhmm": "09:00", "stop_hhmm": "10:30"}
 PREFETCH_HHMM = "08:55"  # pre-fetch SPY OI 5 min before market open
 
 
+def _eastern_now() -> datetime:
+    """Current time in US Eastern, using the US DST rule as the fallback.
+
+    Prefers the tz database. When it is unavailable, `_eastern_utc_offset_hours`
+    applies the US rule directly instead of reading the host's `tm_isdst`, which
+    describes the host timezone rather than Eastern's and is wrong for roughly
+    Mar 8-28 and Oct 25-31 each year on any non-Eastern host.
+    """
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("America/New_York"))
+    except Exception:
+        now_utc = datetime.now(UTC)
+        return now_utc + timedelta(hours=_eastern_utc_offset_hours(now_utc))
+
+
 def _eastern_utc_offset_hours(utc_dt: datetime) -> int:
     """US Eastern UTC offset in hours for a given UTC instant.
 
@@ -440,15 +456,12 @@ def _eastern_utc_offset_hours(utc_dt: datetime) -> int:
 def _in_window_now_et() -> bool:
     """Check if current time is within configured live window (US/Eastern)."""
     try:
-        from zoneinfo import ZoneInfo
-        et = datetime.now(ZoneInfo("America/New_York"))
+        et = _eastern_now()
     except Exception:
-        # Fallback: apply the US DST rule to UTC directly. Deriving Eastern's
-        # offset from the host's tm_isdst was wrong on any non-Eastern host
-        # during the two weeks a year the EU and US rules disagree, which
-        # shifted this gate by an hour.
-        now_utc = datetime.now(UTC)
-        et = now_utc + timedelta(hours=_eastern_utc_offset_hours(now_utc))
+        # _eastern_now already falls back internally; reaching here means both
+        # the tz database and the arithmetic fallback failed. Fail closed
+        # rather than guessing at Eastern time.
+        return False
     hhmm = et.strftime("%H:%M")
     return LIVE_WINDOW["start_hhmm"] <= hhmm <= LIVE_WINDOW["stop_hhmm"]
 
@@ -2596,13 +2609,9 @@ async def _scheduler_loop():
                 pass
 
             try:
-                from zoneinfo import ZoneInfo
-                et = datetime.now(ZoneInfo("America/New_York"))
+                et = _eastern_now()
             except Exception:
-                import time
-                is_dst = time.localtime().tm_isdst > 0
-                offset = 4 if is_dst else 5
-                et = datetime.now(UTC) - timedelta(hours=offset)
+                et = datetime.now(UTC)
             hhmm = et.strftime("%H:%M")
             today_et = et.date().isoformat()
             if hhmm >= PREFETCH_HHMM and fired_for_date != today_et and et.weekday() < 5:
@@ -2988,13 +2997,9 @@ async def flow_sse(
     # Check trading window
     if enforce_window:
         try:
-            from zoneinfo import ZoneInfo
-            et = datetime.now(ZoneInfo("America/New_York"))
+            et = _eastern_now()
         except Exception:
-            import time as _time
-            is_dst = _time.localtime().tm_isdst > 0
-            offset = 4 if is_dst else 5
-            et = datetime.now(UTC) - timedelta(hours=offset)
+            et = datetime.now(UTC)
         hhmm = et.strftime("%H:%M")
         lw = LIVE_WINDOW
         start = lw.get("start_hhmm", "09:30")
