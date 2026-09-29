@@ -136,7 +136,11 @@ class AgentFieldHub:
         @self.router.reasoner(path="/signals/gex-regime", tags=["signal", "gex"])
         async def gex_regime(ticker: str = "SPY") -> dict[str, Any]:
             """Compute GEX regime for a ticker. Returns paper-accurate metrics."""
-            profile = await self._canonical_gex_profile(ticker)
+            try:
+                profile = await self._canonical_gex_profile(ticker)
+            except Exception as exc:
+                logger.error("gex_regime profile error: %s", exc)
+                return {"ticker": ticker.upper(), "status": "error", "error": str(exc)}
             if profile is None:
                 # Coverage is missing. This is reported, not zero-filled: a
                 # zeroed spot or flip level reads as a real level downstream.

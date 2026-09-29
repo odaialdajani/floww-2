@@ -413,23 +413,30 @@ class TestReasonerErrorHandling:
 
     @pytest.mark.asyncio
     async def test_gex_regime_returns_error_on_exception(self, hub, monkeypatch):
-        """If compute_gex_profile raises, gex_regime returns status=error."""
-        async def fake_compute(ticker):
+        """If the canonical chain fetch raises, gex_regime returns status=error."""
+        async def raising_chain(*a, **k):
             raise RuntimeError("backend unavailable")
-
-        # Patch the import that gex_regime does internally
-        # We need to test the error boundary wraps exceptions
-        # Since the function does `from services.heatseeker import compute_gex_profile`,
-        # we monkeypatch it in sys.modules
-        fake_heatseeker = MagicMock()
-        fake_heatseeker.compute_gex_profile = fake_compute
-        monkeypatch.setitem(sys.modules, "services.heatseeker", fake_heatseeker)
+        import services.public_api_adapter as adapter
+        monkeypatch.setattr(adapter, "fetch_chain_from_public_api", raising_chain)
 
         fn = await self._get_gex_regime_fn(hub)
         result = await fn(ticker="SPY")
         assert result["status"] == "error"
         assert "backend unavailable" in result["error"]
         assert result["ticker"] == "SPY"
+
+    @pytest.mark.asyncio
+    async def test_gex_regime_returns_unavailable_on_missing_coverage(self, hub, monkeypatch):
+        """No chain/coverage -> status=unavailable, never a zero-filled profile."""
+        async def no_chain(*a, **k):
+            return None
+        import services.public_api_adapter as adapter
+        monkeypatch.setattr(adapter, "fetch_chain_from_public_api", no_chain)
+
+        fn = await self._get_gex_regime_fn(hub)
+        result = await fn(ticker="SPY")
+        assert result["status"] == "unavailable"
+        assert result["reason"] == "NO_CHAIN_COVERAGE"
 
 
 # ── AsyncMock-based reasoner tests for all signal reasoners ────────────────
@@ -439,11 +446,26 @@ class TestSignalReasonersAsync:
     """Test that each signal reasoner calls the right underlying service."""
 
     @pytest.mark.asyncio
-    async def test_gex_regime_calls_compute_gex_profile(self, hub, monkeypatch):
-        fake_profile = {"regime": "bullish", "flip": 450.0}
-        fake_heatseeker = MagicMock()
-        fake_heatseeker.compute_gex_profile = AsyncMock(return_value=fake_profile)
-        monkeypatch.setitem(sys.modules, "services.heatseeker", fake_heatseeker)
+    async def test_gex_regime_builds_canonical_profile(self, hub, monkeypatch):
+        """gex_regime now builds from the canonical Public chain + gex_core,
+        not the dead heatseeker import. When chain + vega data are present,
+        it returns status=ok with spot/net_gex/flip."""
+        chain = {
+            "contracts": [
+                {"strike": 440, "type": "call", "gamma": 0.02, "open_interest": 1000,
+                 "delta": 0.5, "mid": 12.0, "expiry": "2026-10-16"},
+                {"strike": 460, "type": "put", "gamma": 0.01, "open_interest": 800,
+                 "delta": -0.4, "mid": 6.0, "expiry": "2026-10-16"},
+            ],
+            "spot": 450.0,
+            "expiries": ["2026-10-16"],
+            "data_source": "public_api",
+        }
+
+        async def fake_chain(*a, **k):
+            return chain
+        import services.public_api_adapter as adapter
+        monkeypatch.setattr(adapter, "fetch_chain_from_public_api", fake_chain)
 
         await hub.init()
         gex_fn = None
@@ -451,11 +473,13 @@ class TestSignalReasonersAsync:
             if r["func"].__name__ == "gex_regime":
                 gex_fn = r["func"]
                 break
-
+        assert gex_fn is not None
         result = await gex_fn(ticker="SPY")
         assert result["status"] == "ok"
         assert result["ticker"] == "SPY"
-        assert result["regime"] == "bullish"
+        assert result["spot"] == 450.0
+        assert result["net_gex"] != 0  # real gamma, not zero-filled
+        assert result["expiries"] == ["2026-10-16"]
 
     @pytest.mark.asyncio
     async def test_vpin_returns_value(self, hub, monkeypatch):
