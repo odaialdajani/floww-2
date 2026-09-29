@@ -137,24 +137,58 @@ into **Triad**. Raw walls locate the level; adjusted/activity context interprets
 a possible reaction; price confirmation is required. **A model or sign alone is
 not an automatic trading instruction.**
 
-### H2 — scanner cursor: claim REFUTED, no code change
+#### H2 / U1 - FIXED: the rotating cursor was a no-op
 
-The packet's headline H2 defect — "prefilter truncates to limit, then cursor
-advances by that same limit modulo the truncated length. Repeated calls scan
-the identical top batch" — **does not exist in this code.**
+`prefilter_universe` truncated its ranked list to `limit`
+(`universe_scan.py:78`), and `routes.flowseeker.universe_scan` then walked
+that already-truncated list with a module-level cursor. Because the list
+length equalled `limit`, `(start + take) % n` always wrapped straight back to
+zero: every sweep rescanned the same top-ranked batch and the rest of the
+universe was never reached.
 
-`backend/services/public_scanner.py:118 advance_cursor` rotates over the FULL
-universe size, not the truncated batch:
+Reproduced against the real function -- universe of five, limit two, three
+calls:
 
-    first 3 indices per call: [(0,1,2), (10,11,12), (20,21,22), (30,31,32), (40,41,42)]
-    cursor after 5 calls: 50
-    n=0 -> ([], 0)          # empty universe guarded
-    slice>n -> ([0,1,2], 0) # slice larger than universe guarded
+```
+coverage: {'requested': 5, 'kept': 2, 'excluded': 0}
+call 1: ['AAA', 'BBB']   call 2: ['AAA', 'BBB']   call 3: ['AAA', 'BBB']
+distinct tickers scanned: ['AAA', 'BBB']   coverage: 2/5
+```
 
-Batches are disjoint, so repeated calls do advance. No change made; recording the
-refutation so the item is not re-audited as broken. **Not yet checked**: whether
-priority changes between calls are honored across the rotation, and the
-checkpoint/durability requirement — those remain open.
+Fixed by returning the full eligible ranking and letting the caller window
+it; `limit` is a batch size, not a universe cap. Prioritization is unchanged
+(still score-descending, still deterministic), and exclusions are unchanged.
+
+Red-first: 3 failed / 2 passed before the fix, 5 passed after. The two that
+passed before are the invariants the fix must not break. MUT33 (reverting the
+one-line change) produced 3 failures, so the tests bind to the behaviour
+rather than to the implementation. The 18 existing
+`test_universe_scan_conviction.py` tests still pass.
+
+## H2 - scanner cursor: PARTLY refuted, but a SECOND cursor was broken (now fixed)
+
+**Correction to the previous entry in this file.** The earlier note read
+`public_scanner.advance_cursor`, refuted the claim against it, and concluded
+the packet's H2 defect did not exist. That conclusion was wrong, for a reason
+worth recording: `advance_cursor` is not the cursor the live route uses.
+
+- `public_scanner.advance_cursor` is correct and pure, and it IS live: the
+  budget-aware sweep calls it at `public_scanner.py:664`
+  (`idx, _cursor = advance_cursor(_cursor, take, len(uni))`) over the full
+  universe `uni`. I briefly read it as test-only because a `grep advance_cursor`
+  surfaced only the definition and its test; the production call site assigns
+  two names at once, so a bare name search undercounts it. That rotation is
+  sound and needs no change.
+- The route `routes.flowseeker.universe_scan` inlines its own cursor and
+  feeds it `prefilter_universe(...).ordered`, which was truncated to `limit`.
+  That is the cursor the packet was describing, and it was a no-op.
+
+See the `H2 / U1 - FIXED` entry in the findings log for the reproduction, the
+one-line fix, MUT33, and the invariants. Summarised: the packet's headline H2
+defect was real, in a different function than the one first checked.
+
+Remaining open, unchanged: whether priority changes between calls are honored
+across the rotation, and the checkpoint/durability requirement.
 
 ### H3 — additional: absent flow reported as a measured zero (`df3ddc10`)
 
