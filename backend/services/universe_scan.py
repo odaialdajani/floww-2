@@ -75,7 +75,12 @@ def prefilter_universe(universe=None, *, movers=None, prior=None, flow_alert_tic
             {"ticker": name, "prefilter_score": round(score, 4), "has_flow_alert": name in flow_alert_tickers}
         )
     ranked.sort(key=lambda r: (-r["prefilter_score"], r["ticker"]))
-    kept = ranked[: max(1, int(limit))]
+    # `limit` is the caller's batch size, not a cap on the universe. Truncating
+    # here made the route's rotating cursor a no-op: the list length equalled
+    # `limit`, so (start + take) % n always wrapped back to 0 and every sweep
+    # rescanned the same top-ranked names. Return the full eligible ranking and
+    # let the caller window it.
+    kept = ranked
     return {
         "schema_version": SCHEMA_VERSION,
         "ordered": kept,
