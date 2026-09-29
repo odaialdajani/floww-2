@@ -941,9 +941,20 @@ Nothing downstream reports the substitution: `project_window` returns
 `window_gross_like`, `window_net` and an interval, with no unknown-count or
 provenance field for skipped inputs.
 
-Not fixed here -- `b1f06d18` is Command Code's work. Recorded for handoff.
-The fix is to `continue` on a missing multiplier like the adjacent guards do,
-and to accept a measured `0.0` as `0.0` rather than as missing.
+**FIXED** in `36afe1cc` on this branch, after checking the contract: the file
+is not architect-frozen, and no Command Code status card is active, so their
+lane is quiescent. The fix follows `gex_core._resolve_mult` -- the canonical
+shape already present two files over: read the value, require finite and
+positive, then skip. Red-first 3 failed / 1 passed before, 5 passed after;
+MUT34 killed; MUT35 initially survived because `0.0 * anything == 0.0` means
+the measured-zero case cannot observe the `<= 0` half, so a
+negative-multiplier case was added, which is observable. MUT35 then killed.
+35 mutations, all killed. The 45 existing wall-desk and triad-projection
+tests pass, including the frozen C5 fixture expectations -- the fixture always
+carries a real multiplier and never exercised this path.
+
+The `tests.fixtures` import at line 30 is deliberately left alone and still
+needs their attention.
 
 My first probe of this returned all zeros and looked like a non-finding; the
 observation shape is a flat `contracts` list keyed by `osi`, not the nested
@@ -985,6 +996,30 @@ already recorded, and it is isolated to `wall_desk_snapshot.py`. The
 canonical registry two files over demonstrates the correct shape: default,
 then validate, then discard if unusable. Recorded so a future sweep does not
 re-report the 21 safe sites as new findings.
+
+### Ruff scope, settled: the 456 findings are outside CI's scope
+
+Earlier in this session I recorded a full-repo `ruff check .` reporting 456
+findings against a tree whose CI was green, and attributed the difference to a
+local Ruff version mismatch. That was wrong on both counts, and worth
+correcting because it changes what "lint is clean" means.
+
+The system `ruff` here is **already 0.15.22**, exactly the CI pin -- no
+version mismatch existed. And both workflows lint only the backend:
+
+- `.github/workflows/lint.yml:27,30` -- `working-directory: backend`
+- `.github/workflows/ci.yml:73` -- `working-directory: ./backend`
+
+So `cd backend && ruff check .` is **All checks passed**, and
+`ruff check . --select F841` likewise. The 456 come from directories outside
+CI's working directory -- `scripts/` (~398) and `.research/` and `kanban/`,
+which exist in this checkout but are not part of the backend lint scope.
+
+**Consequence worth knowing:** a full-repo `ruff check .` is not the gate, and
+a green CI run says nothing about `scripts/`. Do not use a repo-root ruff run
+as a merge criterion, and do not "fix" those 456 as if they blocked anything.
+The meaningful local check is the same command CI runs, from the same
+directory.
 
 ## 8. Actions explicitly NOT taken
 
