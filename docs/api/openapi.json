@@ -16742,7 +16742,7 @@
     },
     "/api/solstice/recorder_health": {
       "get": {
-        "description": "Truthful recorder health (R5-F): durable mode, tables, latest write.\n\nMemory fallback keeps analytics running but never claims durable capture.\nCommissioning remains a separate final authorization.",
+        "description": "Truthful recorder health (R5-F): durable mode, tables, latest write.\n\nMemory fallback keeps analytics running but never claims durable capture.\nCommissioning remains a separate final authorization.\n\nS4: durability (the STORE) and capture state (the JOB) are reported as\nseparate facts. A durable store with no capture worker is exactly that,\nand is no longer described as \"needs time\" \u2014 worker_state names\nabsent / wired_off / active.",
         "operationId": "get_api_solstice_recorder_health",
         "responses": {
           "200": {
@@ -17183,6 +17183,132 @@
           }
         },
         "summary": "Walls",
+        "tags": [
+          "solstice",
+          "solstice"
+        ]
+      }
+    },
+    "/api/solstice/{ticker}/contract": {
+      "get": {
+        "description": "Resolve ONE exact contract identity from a recorded snapshot (S5).\n\nThe backend half of the R10-13 migration. It requires an explicit\nidentity: OSI, or strike+expiry+type. It never substitutes the wall\nmidpoint or the first expiry, and a miss is a miss. Quote age and\nspread are reported per leg with unknown preserved as unknown.\n\nRead-only. No broker call, no side inference, no aggressor identity.",
+        "operationId": "get_api_solstice_ticker_contract",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "title": "Ticker",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "osi",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Osi"
+            }
+          },
+          {
+            "in": "query",
+            "name": "strike",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Strike"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expiry",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expiry"
+            }
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "snapshot_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Snapshot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Contract Detail Api Solstice  Ticker  Contract Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Contract Detail",
         "tags": [
           "solstice",
           "solstice"
