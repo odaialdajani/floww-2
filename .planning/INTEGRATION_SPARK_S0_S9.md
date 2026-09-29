@@ -1,9 +1,10 @@
 # Spark / Muse Spark 1.3 — S0–S9 feature matrix and receipt
 
 Branch `spark/s0-s9-backend-completion`, based on `origin/main` `605aca8a`
-(tree `5ea6a8de…`). Head at the time of writing: `c43302bc` (tree
-`b5e5a5e1…` — verify with `git rev-parse HEAD^{tree}`; the durable fact is
-the commit list below, not this line).
+(tree `5ea6a8de…`). Head: `49ef7012`, tree `fa1f38fc8968288710b6739b75a5e2f64997e64a`.
+Ten commits; the authoritative list is `git log origin/main..HEAD`, and the
+durable facts in this document are the dispositions below rather than any
+prose about counts.
 
 Every row states producer → canonical computation → route → storage →
 consumer, with the exact commit. Status vocabulary is deliberately narrow:
