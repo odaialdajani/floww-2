@@ -45,6 +45,9 @@ export default function AlertsPanel({ ticker }) {
   });
   const [checkResult, setCheckResult] = useState(null);
   const [mlPrediction, setMlPrediction] = useState(null);
+  // A failed ML read is NOT the same as no signal. Track it explicitly so the
+  // panel can say why, instead of rendering nothing and looking neutral.
+  const [mlError, setMlError] = useState(null);
 
   const fetchRules = async () => {
     try {
@@ -98,8 +101,25 @@ export default function AlertsPanel({ ticker }) {
     const fetchMl = async () => {
       try {
         const r = await axios.get(`${API}/ml/predict/${ticker}`);
-        if (!cancelled) setMlPrediction(r.data);
-      } catch { /* noop */ }
+        if (!cancelled) { setMlPrediction(r.data); setMlError(null); }
+      } catch (e) {
+        if (cancelled) return;
+        // Surface WHY. A 404 means no model was trained for this ticker; a
+        // 503 names the artifact that could not be loaded (a corrupt or
+        // un-promoted model). Both used to render exactly like a neutral
+        // HOLD, which is the dangerous ambiguity: absence of a signal must
+        // never look like a signal.
+        const status = e?.response?.status;
+        const d = e?.response?.data;
+        const reason =
+          status === 404
+            ? "no model trained for this ticker"
+            : status === 503
+              ? `model unavailable${d?.artifact ? ` (${d.artifact})` : ""}`
+              : `prediction unavailable${status ? ` (HTTP ${status})` : ""}`;
+        setMlError(reason);
+        setMlPrediction(null);
+      }
     };
     fetchMl();
     const id = setInterval(fetchMl, 60000);
@@ -148,8 +168,21 @@ export default function AlertsPanel({ ticker }) {
             </div>
           )}
 
+          {/* ML unavailable — distinct from a neutral prediction */}
+          {mlError && (
+            <div
+              data-testid="ml-unavailable"
+              className="rounded px-2 py-1.5 border border-slate-600/40 bg-slate-700/10"
+              title="The model did not answer. This is not a neutral reading."
+            >
+              <div className="text-[9px] font-bold text-slate-400">ML UNAVAILABLE</div>
+              <div className="text-[8px] opacity-70 mt-0.5">{mlError}</div>
+            </div>
+          )}
+
           {/* ML Prediction */}
           {mlPrediction && mlPrediction.prediction && (
+            <div data-testid="ml-prediction">
             <div className={`rounded px-2 py-1.5 border ${
               mlPrediction.prediction === "UP" || mlPrediction.prediction === "BULLISH"
                 ? "bg-emerald-500/5 border-emerald-500/20"
@@ -182,6 +215,7 @@ export default function AlertsPanel({ ticker }) {
                   Spot: ${Number(mlPrediction.spot).toFixed(2)}
                 </div>
               )}
+            </div>
             </div>
           )}
 
