@@ -1,89 +1,89 @@
-# Handoff: cost-envelope drift in `8a3dbe3f` (foreign commit, not modified)
+# Handoff: cost-envelope drift in the public-expiry fix — RESOLVED by Hermes
 
-**Status: reported, not fixed. The commit is not mine and I did not alter it.**
+**Status: closed. Hermes resolved it while I was investigating. Nothing of
+theirs was modified by me; this file records the diagnosis and the closure so
+the claim is not re-litigated.**
 
 ## What landed
 
 Two commits appeared on `spark/s0-s9-backend-completion` after my last commit
-(`cdcbee46`, 15:08), from a concurrent session working in this checkout:
+(`cdcbee46`, 15:08), from the concurrent Hermes session working in this
+checkout:
 
 - `8a3dbe3f` 17:10 `fix(public): a 1-expiry request must not be spent on an expired expiry`
 - `3ee53fb8` 17:25 `test(public): clear FLOWW_PUBLIC_UNIVERSE so the catalog path is actually exercised`
 
 All commits carry the same local git identity, so authorship does not
-disambiguate; the timestamps relative to my last commit do.
+disambiguate; the timestamps relative to my last commit do. Hermes confirmed
+these as theirs.
 
-## The fix itself is correct and well evidenced
+## The fix itself was correct and well evidenced
 
-`8a3dbe3f` replaces `for exp in expiries[:max_expiries]` with a walk that
+`8a3dbe3f` replaced `for exp in expiries[:max_expiries]` with a walk that
 stops once `max_expiries` expiries are *accepted*. The old slice ran before
 the per-contract expiry filter, so a vendor list led by an expired expiry
 spent the whole 1-expiry window on a dead expiry and returned `None` — a real
-503 from `/api/spot/{ticker}`. The commit carries a live before/after probe
-and a route-level 503 → 200. That reasoning is sound and the bug was real.
+503 from `/api/spot/{ticker}`. The commit carried a live before/after probe
+and a route-level 503 → 200.
 
-## The defect it introduces: the cost envelope is no longer honest
+## The defect it briefly introduced: the cost envelope was no longer honest
 
 `backend/services/public_api_adapter.py`
 
-- line 438 pre-debits a **fixed** envelope: `acquire_n(2 + max_expiries, "api.public.com")`
-- line 566 walks **unboundedly** over the vendor list:
-  `for exp in expiries: if len(exp_dates) >= max_expiries: break`
+- line 438 pre-debits a **fixed** envelope: `acquire_n(2 + max_expiries, …)`
+- the walk over the vendor list became **unbounded**
 
-`max_expiries` now bounds accepted expiries, not expiries *attempted*, and
-nothing caps the attempts. So whenever the leading vendor expiries yield no
-accepted contracts, actual provider calls exceed the debited amount. The
-pre-debit becomes an under-count, which is the exact failure mode the
-shared-quota contract forbids ("no exception may create unlimited budget").
+`max_expiries` then bounded accepted expiries rather than expiries
+*attempted*, and nothing capped the attempts, so whenever leading vendor
+expiries yielded no accepted contracts the actual provider calls exceeded the
+debited amount — the pre-debit became an under-count, which is the failure
+mode the shared-quota contract forbids.
 
-This is not hypothetical: the commit's own live observation is that the
-vendor returns 33 expiries led by an already-expired `2026-09-29`. Under
-that observed condition, a `max_expiries=1` request makes
-1 expirations + 1 dead chain + 1 live chain + 1 quote = **4** calls against a
-3-call debit, every time.
+Not hypothetical: that commit's own live observation was a vendor list led by
+an already-expired expiry, exactly the condition that overruns the envelope.
 
-## Reproduction (local, no credentials, no network)
+### Reproduction (local, no credentials, no network)
 
 ```
 $ cd backend && .venv/bin/python -m pytest tests/services/test_provider_cost_h2.py -q
-FAILED tests/services/test_provider_cost_h2.py::test_4_then_8_total_is_16_on_distinct_keys
+FAILED …::test_4_then_8_total_is_16_on_distinct_keys
 AssertionError: expected 16 cold calls ((2+4)+(2+8)), got 18
 ```
 
-- 4 passed / 1 failed on the current branch; **5 passed** at `origin/main`
-  (verified in a detached worktree with a copy of this venv, with and
-  without `backend/.env`).
-- Reverting every one of my own production changes in place still fails it,
-  so the branch's Spark work is exonerated. `git log
-  origin/main..HEAD -- backend/services/public_api_adapter.py` names
-  `8a3dbe3f` as the only commit touching it.
+The 2 extra calls were exactly the 2 expired-expiry skips. Measured directly
+against the existing fixture (8 vendor expiries, only 6 still live):
 
-## Options, in the order I would pick them
+```
+N=4: calls=8 declared=6  (2 skips to collect 4 accepted)
+N=8: calls=10 declared=10
+```
 
-1. **Bound the attempts, keep the fix.** Walk at most
-   `min(len(expiries), max_expiries + MAX_EXPIRY_SKIPS)` with
-   `MAX_EXPIRY_SKIPS` a small declared constant (2 or 3). This preserves the
-   503 fix, keeps the envelope a function of `max_expiries`, and makes the
-   worst case explicit.
-2. **Debit for the walk.** Enlarge the pre-debit to cover the worst case and
-   release the unused remainder. Honest, but it taxes every request for a
-   condition that is rare.
-3. **Filter expired expiries before the fan-out.** Cheapest and most
-   precise: the vendor list can be filtered by date against `now_utc` before
-   any `get_option_chain_parsed` call, so dead expiries cost nothing. This is
-   closest to the root cause the commit identified.
-4. **Do nothing**, if the shared budget is known to be advisory. Then the
-   `16` in that test should stop being described as an envelope, because it
-   no longer is one.
+- 5 passed at `origin/main` in a detached worktree, with and without
+  `backend/.env`.
+- Reverting every Spark production change in place still failed, and
+  `git log origin/main..HEAD -- backend/services/public_api_adapter.py`
+  named `8a3dbe3f` as the only commit touching it. The Spark work was
+  exonerated before anything was concluded.
 
-Whatever is chosen, the test's expected number has to change from a constant
-`2 + N` to something derived, because after any of these fixes the naive
-constant is again wrong — in the other direction.
+## Resolution
 
-## Why I did not just fix it
+Hermes fixed it in the working tree while I was diagnosing: a declared
+`MAX_EXPIRY_SKIPS = 3` with `max_attempts = min(len(expiries),
+max_expiries + MAX_EXPIRY_SKIPS)` and the walk sliced to
+`expiries[:max_attempts]`. Verified:
 
-The operating contract says to preserve foreign WIP and inspect it read-only
-rather than stashing or reverting another session's work. `8a3dbe3f` fixes a
-real production 503 with a live reproduction; rewriting it unilaterally would
-destroy that evidence and could re-introduce the 503. This is an owner
-decision, so it is handed over with the reproduction and the options.
+- `test_provider_cost_h2.py` → 5 passed
+- `test_provider_cost_h2.py + test_public_expiry_coverage.py + test_public_advantage.py` → 61 passed
+- `ruff check services/public_api_adapter.py` → clean
+- Direct probe: with 1 / 3 / 10 / 25 dead leading expiries and
+  `max_expiries=1`, chain calls are 2 / 4 / 4 / 4 — capped at
+  `1 + MAX_EXPIRY_SKIPS`, never unbounded.
+
+So the envelope is now a bounded, declared function of `max_expiries`:
+`2 + max_expiries` contracted, at most `+ MAX_EXPIRY_SKIPS` when skipping
+dead expiries. The 503 fix survives (a 1-expiry request still returns the
+next live expiry) and the shared quota can no longer be overrun silently.
+
+I had not yet made any edit to those files when this was resolved; the
+diagnosis, the reproduction and the mechanism are what this file preserves.
+
