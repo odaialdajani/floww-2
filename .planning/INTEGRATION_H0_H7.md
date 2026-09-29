@@ -159,6 +159,19 @@ Fixed by returning the full eligible ranking and letting the caller window
 it; `limit` is a batch size, not a universe cap. Prioritization is unchanged
 (still score-descending, still deterministic), and exclusions are unchanged.
 
+Suite evidence for the fix, on this tree: full backend suite
+`6644 passed, 37 skipped, 1 error`, and the same `tests/routes` +
+`tests/services` + new rotation tests with `backend/.env` moved aside gives
+`4654 passed, 33 skipped`, zero errors. The single error is the
+credential-gated leak described below, not a U1 regression; `.env` was
+restored byte-intact (130 bytes, original mtime).
+
+Live endpoint `/api/flowseeker/universe/scan?limit=3` returns
+`['BA', 'INTC', 'TEAM']` with `flow_status: missing` and
+`confluence_status: missing` rather than zeros, so the missing-vs-zero
+semantics hold in the route this fix touches. The running process still
+predates the fix, so live rotation has not been re-proven yet.
+
 Red-first: 3 failed / 2 passed before the fix, 5 passed after. The two that
 passed before are the invariants the fix must not break. MUT33 (reverting the
 one-line change) produced 3 failures, so the tests bind to the behaviour
