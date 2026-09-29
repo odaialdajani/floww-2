@@ -3,7 +3,7 @@
 **Date:** 2026-06-20
 **Scope:** Recon only. No code changes applied.
 **Supersedes:** N/A
-**Cross-references:** [_subprocess_helpers.py](../../backend/tests/services/_subprocess_helpers.py), [2026-06-20-decoder-endpoint-silent-failure-audit](./2026-06-20-decoder-endpoint-silent-failure-audit.md).
+**Cross-references:** [_subprocess_helpers.py](../../../backend/tests/services/_subprocess_helpers.py), [2026-06-20-decoder-endpoint-silent-failure-audit](./2026-06-20-decoder-endpoint-silent-failure-audit.md).
 
 ---
 
