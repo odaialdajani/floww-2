@@ -949,6 +949,43 @@ My first probe of this returned all zeros and looked like a non-finding; the
 observation shape is a flat `contracts` list keyed by `osi`, not the nested
 `expiries` dict I assumed. The table above is from the corrected probe.
 
+### Sweep of the `or DEFAULT` shape: 22 sites, only ONE is a real defect
+
+Searched the backend for the `or <nonzero default>` pattern that produced the
+`wall_desk_snapshot.py:129` multiplier bug. 22 matches. Classified:
+
+Correct, with a guard after the default:
+- `gex_core.py:1206` and `:1243` (`_resolve_mult`) -- `m_f = float(c.get(
+  "multiplier", 100.0) or 100.0)` then `if math.isfinite(m_f) and m_f > 0`.
+  A non-positive or non-finite value falls back to a deliberate 100.0, which
+  is the intended contract-multializer default. This is the reference
+  implementation the rest should match.
+- `solstice_enrichment.py:158` -- same pattern, then explicitly `continue`s
+  when `m <= 0` or any input is non-finite.
+- `solstice_provenance.py:66` -- defaults `multiplier` but *also* collapses
+  gamma to 0.0 on the two lines above, so a 0.0 multiplier is internally
+  consistent there and does not manufacture a nonzero term from nothing.
+
+Division guards, not data defaults:
+- `gex_core.py:605` `abs(king["gex"]) or 1.0`, `:729` `total_abs or 1.0`,
+  `solstice_patterns.py:50` `sum(grosses) or 1.0`,
+  `heatmap_image.py:264/306` `max(...) or 1.0`,
+  `strategy_builder.py:658/695` `total_qty or 1` -- these prevent
+  division by zero on a normalizer, and a zero total legitimately maps to 1.0
+  so the ratio becomes 0 rather than undefined.
+
+Unrelated despite matching the regex:
+- `gex_core.py:465/468/503` `calls[0].get("T") or 1/365` -- year fraction
+  default, guarded upstream.
+- `flow_alerts.py:1217` ttl, `oi_hygiene.py:108` dte sort key,
+  `morning_briefing.py:756` min dte, `steal_three.py:1054` grid points.
+
+So the sweep found exactly one instance of the real defect class, the one
+already recorded, and it is isolated to `wall_desk_snapshot.py`. The
+canonical registry two files over demonstrates the correct shape: default,
+then validate, then discard if unusable. Recorded so a future sweep does not
+re-report the 21 safe sites as new findings.
+
 ## 8. Actions explicitly NOT taken
 
 No remote merge, no deploy, no service restart, no persistent-service
