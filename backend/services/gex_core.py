@@ -38,7 +38,7 @@ from bs_greeks import (
     dollar_gex_per_contract,
     dollar_vex_per_contract,
 )
-from domain.exposure_metrics import option_type_sign
+from domain.exposure_metrics import option_type_sign, resolve_multiplier
 
 # Dividend yields for Black-Scholes (moved from server.py)
 DIV_YIELD = {"SPY": 0.013, "QQQ": 0.006, "^SPX": 0.013, "IWM": 0.012}
@@ -70,8 +70,10 @@ def safe_float(v, default=0.0):
 
 
 def safe_float_or_none(v) -> float | None:
-    """F03/F13: unknown stays None (never 0-fill). NaN/Inf/invalid → None."""
-    if v is None:
+    """F03/F13: unknown stays None (never 0-fill). NaN/Inf/invalid → None.
+
+    Booleans are never measurements (True would otherwise read as 1.0)."""
+    if v is None or isinstance(v, bool):
         return None
     try:
         f = float(v)
@@ -1062,14 +1064,9 @@ def compute_gex_by_strike_vendor(spot: float, contracts: list[dict[str, Any]]) -
         strike = safe_float_or_none(c.get("strike"))
         if strike is None or strike <= 0:
             continue
-        mult = 100.0
-        try:
-            m_raw = c.get("multiplier", 100.0)
-            m_f = float(m_raw) if m_raw is not None else 100.0
-            if math.isfinite(m_f) and m_f > 0:
-                mult = m_f
-        except (TypeError, ValueError):
-            pass
+        mult = _resolve_mult(c)
+        if mult is None:
+            continue
         gex_unit = gamma * oi * mult * spot * spot * 0.01
         # R7-F04: unknown option type is rejected (never default-put),
         # same rule as domain.exposure_metrics.option_type_sign.
@@ -1124,14 +1121,9 @@ def compute_gex_grid_vendor(spot: float, contracts: list[dict[str, Any]]) -> dic
         expiry = c.get("expiry") or ""
         if not expiry:
             continue
-        mult = 100.0
-        try:
-            m_raw = c.get("multiplier", 100.0)
-            m_f = float(m_raw) if m_raw is not None else 100.0
-            if math.isfinite(m_f) and m_f > 0:
-                mult = m_f
-        except (TypeError, ValueError):
-            pass
+        mult = _resolve_mult(c)
+        if mult is None:
+            continue
         # R7-F04: unknown option type is rejected (never default-put).
         sign = option_type_sign(c.get("type"))
         if sign is None:
@@ -1187,10 +1179,13 @@ def compute_gex_grid_delta_weighted(spot: float, contracts: list[dict[str, Any]]
         if gamma is None:
             continue
         d_raw = c.get("delta")
-        try:
-            ad = abs(float(d_raw)) if d_raw is not None else None
-        except (TypeError, ValueError):
+        if isinstance(d_raw, bool):
             ad = None
+        else:
+            try:
+                ad = abs(float(d_raw)) if d_raw is not None else None
+            except (TypeError, ValueError):
+                ad = None
         if ad is None or not math.isfinite(ad) or ad > 1.0 + 1e-9:
             missing += 1
             continue
@@ -1201,13 +1196,10 @@ def compute_gex_grid_delta_weighted(spot: float, contracts: list[dict[str, Any]]
         expiry = c.get("expiry") or ""
         if not expiry:
             continue
-        mult = 100.0
-        try:
-            m_f = float(c.get("multiplier", 100.0) or 100.0)
-            if math.isfinite(m_f) and m_f > 0:
-                mult = m_f
-        except (TypeError, ValueError):
-            pass
+        mult = _resolve_mult(c)
+        if mult is None:
+            missing += 1
+            continue
         # R7-F04: unknown option type is rejected (never default-put).
         sign = option_type_sign(c.get("type"))
         if sign is None:
@@ -1238,14 +1230,17 @@ def compute_gex_grid_delta_weighted(spot: float, contracts: list[dict[str, Any]]
     }
 
 
-def _resolve_mult(c: dict[str, Any]) -> float:
-    try:
-        m_f = float(c.get("multiplier", 100.0) or 100.0)
-        if math.isfinite(m_f) and m_f > 0:
-            return m_f
-    except (TypeError, ValueError):
-        pass
-    return 100.0
+def _resolve_mult(c: dict[str, Any]) -> float | None:
+    """Canonical multiplier resolution (R10-02 repair).
+
+    Returns the usable value or None. Explicit invalid (0, negative,
+    nonfinite, bool, unparseable) and alias disagreement never fall back
+    to 100 — the caller must skip the contract. Only an absent multiplier
+    on a standard contract yields the documented 100 default. Callers that
+    need the reason use domain.exposure_metrics.resolve_multiplier.
+    """
+    value, _reason = resolve_multiplier(c)
+    return value
 
 
 def compute_gex_by_strike_volume_vendor(spot: float, contracts: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1271,6 +1266,8 @@ def compute_gex_by_strike_volume_vendor(spot: float, contracts: list[dict[str, A
         if strike is None or strike <= 0:
             continue
         mult = _resolve_mult(c)
+        if mult is None:
+            continue
         # R7-F04: unknown option type is rejected (never default-put).
         sign = option_type_sign(c.get("type"))
         if sign is None:
@@ -1326,6 +1323,8 @@ def compute_gex_grid_volume_vendor(spot: float, contracts: list[dict[str, Any]])
         if not expiry:
             continue
         mult = _resolve_mult(c)
+        if mult is None:
+            continue
         # R7-F04: unknown option type is rejected (never default-put).
         sign = option_type_sign(c.get("type"))
         if sign is None:
@@ -1352,6 +1351,83 @@ def compute_gex_grid_volume_vendor(spot: float, contracts: list[dict[str, Any]])
         "formula_version": "gex.v2",
         "status": "ok" if expiries else "unavailable",
         "reason": None if expiries else "NO_VOLUME_COVERAGE",
+    }
+
+
+def compute_gex_grid_session_delta_volume(spot: float, contracts: list[dict[str, Any]]) -> dict[str, Any]:
+    """S2: 2D session-volume-×-delta grid from SUPPLIED vendor gamma (R10-01 repair).
+
+    cell = Σ c·u·V·|δ|, u = Γ·m·S²×0.01 — the grid twin of
+    domain.compute_session_delta_volume_gamma. This is the DISTINCT fourth
+    activity formula, not the VOLUME grid above (Σ c·u·V, no delta). Missing
+    delta → contribution unavailable (skipped, counted); never zero-filled.
+    Empty coverage is UNAVAILABLE, never raw fallback.
+    """
+    if spot <= 0 or not contracts:
+        return {"expiries": [], "strikes": [], "grid": {}, "exposure_basis": "VOLUME_DELTA_WEIGHTED",
+                "formula_version": "gex.v2", "status": "unavailable", "reason": "NO_COVERAGE"}
+    grid: dict[str, dict[float, float]] = {}
+    totals: dict[float, float] = {}
+    quarantined = 0
+    invalid_type = 0
+    missing_delta = 0
+    for c in contracts:
+        if c.get("adjusted") or c.get("nonstandard"):
+            quarantined += 1
+            continue
+        vol = safe_float_or_none(c.get("volume", c.get("V")))
+        if vol is None or vol <= 0:
+            continue
+        gamma = _vendor_gamma(c)
+        if gamma is None:
+            continue
+        d_raw = c.get("delta")
+        if isinstance(d_raw, bool):
+            ad = None
+        else:
+            try:
+                ad = abs(float(d_raw)) if d_raw is not None else None
+            except (TypeError, ValueError):
+                ad = None
+        if ad is None or not math.isfinite(ad) or ad > 1.0 + 1e-9:
+            missing_delta += 1
+            continue
+        ad = min(ad, 1.0)
+        strike = safe_float_or_none(c.get("strike"))
+        if strike is None or strike <= 0:
+            continue
+        expiry = c.get("expiry") or ""
+        if not expiry:
+            continue
+        mult = _resolve_mult(c)
+        if mult is None:
+            continue
+        sign = option_type_sign(c.get("type"))
+        if sign is None:
+            invalid_type += 1
+            continue
+        cell = sign * gamma * mult * spot * spot * 0.01 * ad * vol
+        d = grid.setdefault(expiry, {})
+        d[strike] = d.get(strike, 0.0) + cell
+        totals[strike] = totals.get(strike, 0.0) + cell
+    expiries = sorted(grid.keys())
+    strikes = sorted(totals.keys())
+
+    def _k(x: float) -> str:
+        return str(int(x)) if float(x).is_integer() else str(x)
+
+    return {
+        "expiries": expiries,
+        "strikes": strikes,
+        "grid": {e: {_k(k): v for k, v in grid[e].items()} for e in expiries},
+        "strike_totals": [{"strike": k, "gex": v} for k, v in sorted(totals.items())],
+        "exposure_basis": "VOLUME_DELTA_WEIGHTED",
+        "missing_delta": missing_delta,
+        "quarantined": quarantined,
+        "invalid_type": invalid_type,
+        "formula_version": "gex.v2",
+        "status": "ok" if expiries else "unavailable",
+        "reason": None if expiries else ("DELTA_UNKNOWN" if missing_delta else "NO_VOLUME_COVERAGE"),
     }
 
 
@@ -1391,6 +1467,8 @@ def compute_vex_by_strike_local(spot: float, contracts: list[dict[str, Any]],
         if sign is None:
             continue
         mult = _resolve_mult(c)
+        if mult is None:
+            continue
         v = bs_vanna(spot, strike, T, iv, q=q)
         if not math.isfinite(v):
             continue
@@ -1536,6 +1614,9 @@ def compute_vex_grid_local(spot: float, contracts: list[dict[str, Any]],
             invalid_type += 1
             continue
         mult = _resolve_mult(c)
+        if mult is None:
+            invalid_type += 1
+            continue
         v = bs_vanna(spot, strike, T, iv, q=q)
         if not math.isfinite(v):
             missing += 1

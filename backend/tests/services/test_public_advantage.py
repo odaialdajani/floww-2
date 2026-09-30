@@ -311,10 +311,17 @@ def test_dealer_context_walls_and_regime():
 def test_get_universe_env_override():
     import services.public_scanner as ps
 
-    with patch("services.market_catalog.cached_scan_symbols", return_value=["SNDK", "XYZ"]):
-        assert ps.get_universe() == ["SNDK", "XYZ"]
-    with patch.dict("os.environ", {"FLOWW_PUBLIC_UNIVERSE": "SPY, QQQ, SPY, SNDK"}):
-        assert ps.get_universe() == ["SPY", "QQQ", "SNDK"]
+    # A developer's real .env may legitimately set FLOWW_PUBLIC_UNIVERSE, which
+    # would win over the patched catalog and make the catalog-path assertion
+    # below fail for reasons that have nothing to do with the code. Absent is a
+    # precondition of this test, so it is cleared explicitly (monkeypatch-style,
+    # scoped to the test) rather than assumed.
+    env = {k: v for k, v in os.environ.items() if k != "FLOWW_PUBLIC_UNIVERSE"}
+    with patch.dict("os.environ", env, clear=True):
+        with patch("services.market_catalog.cached_scan_symbols", return_value=["SNDK", "XYZ"]):
+            assert ps.get_universe() == ["SNDK", "XYZ"]
+        with patch.dict("os.environ", {"FLOWW_PUBLIC_UNIVERSE": "SPY, QQQ, SPY, SNDK"}):
+            assert ps.get_universe() == ["SPY", "QQQ", "SNDK"]
 
 
 def test_merge_slices_drops_stale_and_reports_coverage():

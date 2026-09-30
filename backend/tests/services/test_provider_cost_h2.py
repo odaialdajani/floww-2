@@ -28,6 +28,28 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def _frozen_adapter_clock(monkeypatch):
+    """Pin 'now' to a date where every fixture expiry is still live.
+
+    The expiry lists in this module are hardcoded dates (2026-09-18 ...).
+    The adapter drops contracts whose expiry has passed, so once the wall
+    clock moves past 2026-09-18 those fixtures silently contribute nothing,
+    the walk consumes extra expiries to reach max_expiries, and the exact
+    call-count assertions fail for reasons unrelated to the code under test.
+    Freezing the clock keeps the cost contract testable indefinitely.
+    """
+    mod = _get_adapter_module()
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 9, 10, 14, tzinfo=UTC)  # all fixture expiries live
+
+    monkeypatch.setattr(mod, "datetime", FrozenDateTime)
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _h2_isolated_public_budget(monkeypatch):
     """Isolate every test with a fresh high-capacity budget so this module
     leaves zero footprint on the shared singleton for later files."""

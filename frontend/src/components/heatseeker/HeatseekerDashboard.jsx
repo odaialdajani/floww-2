@@ -186,10 +186,17 @@ export const TugOfWarZonesPanel = memo(TugOfWarZonesPanelBase);
 
 // ── Hero Section ──────────────────────────────────────────────────────
 
-function HeroSection({ ticker, spot, data, dataAge, dataFallback }) {
-  const kongNode = data?.nodes?.find?.(n => n.type === "king") || data?.king_node;
-  const netGex = data?.net_gex_total;
-  const flipPoint = data?.flip_zones?.[0]?.price;
+// Exported for the data-contract test in HeroSection.contract.test.jsx.
+export function HeroSection({ ticker, spot, data, dataAge, dataFallback }) {
+  // Field paths below match the actual /api/data/{ticker} response. The
+  // previous paths (data.nodes.find(n => n.type === "king"),
+  // data.net_gex_total, data.flip_zones[0].price) are not emitted by any
+  // route, so all three tiles rendered the em-dash placeholder while the
+  // rest of the page showed live numbers. See the contract test for the
+  // captured response shape.
+  const kongNode = data?.nodes?.king;
+  const netGex = data?.metrics?.gex_net_v1;
+  const flipPoint = data?.gamma_flip?.gamma_flip;
 
   return (
     <div className="rounded-xl border border-slate-700/30 bg-gradient-to-br from-slate-900/80 to-slate-900/40 p-4 mb-4">

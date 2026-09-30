@@ -15,12 +15,27 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from domain.wall_desk_snapshot import (  # noqa: E402
-    expected_packet,
-    expected_window,
     project_packet,
     project_window,
-    source_pair,
 )
+from tests.fixtures.wall_desk_fixture_v1 import (  # noqa: E402
+    EXPECTED_PACKET_T0,
+    EXPECTED_WINDOW_T0_T1,
+    SOURCE_OBSERVATION_T0,
+    SOURCE_OBSERVATION_T1,
+)
+
+
+def source_pair():
+    return SOURCE_OBSERVATION_T0, SOURCE_OBSERVATION_T1
+
+
+def expected_packet():
+    return dict(EXPECTED_PACKET_T0)
+
+
+def expected_window():
+    return dict(EXPECTED_WINDOW_T0_T1)
 
 
 def test_source_input_projects_to_expected_packet():

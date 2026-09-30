@@ -35,6 +35,9 @@ SPOT = 100.0
 SOURCE_OBSERVATION_T0 = {
     "ticker": "SPY",
     "spot": SPOT,
+    # Desk scope carried by the observation itself (S3): production input
+    # must name the wall it describes; the projector never invents one.
+    "wall_id": "K100",
     "asof": "2030-01-02T14:00:00+00:00",
     "source_received_at": "2030-01-02T14:00:01+00:00",
     "data_source": "development_fixture",
@@ -94,6 +97,7 @@ SOURCE_OBSERVATION_T0 = {
 SOURCE_OBSERVATION_T1 = {
     "ticker": "SPY",
     "spot": SPOT,
+    "wall_id": "K100",
     "asof": "2030-01-02T14:01:00+00:00",
     "source_received_at": "2030-01-02T14:01:01+00:00",
     "data_source": "development_fixture",

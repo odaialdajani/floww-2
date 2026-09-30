@@ -4,7 +4,7 @@
 <!-- Regenerate: python3 qc/audit/generate_api_docs.py -->
 <!-- Verify:     python3 qc/audit/generate_api_docs.py --check -->
 
-Total endpoints: 380
+Total endpoints: 381
 Route groups: 104
 
 Generated from the live FastAPI app, so every path below is a real,
@@ -784,7 +784,7 @@ callable route rather than a hand-copied guess.
 | GET | `/api/social/sentiment/{ticker}` | Get Sentiment |
 | GET | `/api/social/status` | Get Pipeline Status |
 
-## solstice (15 endpoints)
+## solstice (16 endpoints)
 
 | Method | Path | Summary |
 |--------|------|---------|
@@ -801,6 +801,7 @@ callable route rather than a hand-copied guess.
 | GET | `/api/solstice/snapshot/{ticker}` | Snapshot |
 | GET | `/api/solstice/vanna/{ticker}` | Vanna |
 | GET | `/api/solstice/walls/{ticker}` | Walls |
+| GET | `/api/solstice/{ticker}/contract` | Contract Detail |
 | GET | `/api/solstice/{ticker}/decisions` | Decisions List |
 | POST | `/api/solstice/{ticker}/decisions/{decision_id}/review` | Save Review |
 

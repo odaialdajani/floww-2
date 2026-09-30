@@ -7,9 +7,11 @@ multiplier contributed a full-magnitude number that nothing downstream
 reported as unknown. Because `0.0` is falsy, a *measured* zero multiplier
 was also replaced by 100.0, making zero and absent indistinguishable.
 
-`gex_core._resolve_mult` is the reference shape: default, then validate
-finite and positive, then fall back. The measured-zero case must survive as
-0.0, not become 100.0.
+S3 contract (Spark): an explicitly invalid multiplier (None, 0.0, negative)
+is skipped via domain.exposure_metrics.resolve_multiplier, and a window with
+no comparable observations is UNAVAILABLE (None sums + reason), never an
+all-zero "measured" window (R10-07). Only a wholly absent multiplier key on
+a standard contract takes the documented DEFAULT_STANDARD provenance.
 """
 
 from __future__ import annotations
@@ -39,8 +41,12 @@ def _obs(osi: str, volume: float, **overrides) -> dict:
 FIRST = _obs("c1", volume=5)
 
 
-def _net(second: dict) -> float:
-    return project_window(FIRST, second).get("window_net")
+def _window(second: dict) -> dict:
+    return project_window(FIRST, second)
+
+
+def _net(second: dict):
+    return _window(second).get("window_net")
 
 
 def test_present_multiplier_is_the_baseline():
@@ -48,30 +54,33 @@ def test_present_multiplier_is_the_baseline():
 
 
 def test_measured_zero_multiplier_stays_zero():
-    """A measured 0.0 is a measurement, not a missing value."""
-    assert _net(_obs("c1", volume=8, multiplier=0.0)) == 0.0
+    """A measured 0.0 is skipped: no magnitude, and no zero-fill masquerade."""
+    w = _window(_obs("c1", volume=8, multiplier=0.0))
+    assert w["window_net"] is None
+    assert w["status"] == "unavailable"
+    assert w["reason"] == "NO_COMPARABLE_OBSERVATIONS"
 
 
 def test_missing_multiplier_is_skipped_like_missing_gamma():
     """Absent multiplier must be treated the same way a missing gamma is."""
-    missing_mult = _net(_obs("c1", volume=8, multiplier=None))
-    missing_gamma = _net(_obs("c1", volume=8, gamma=None))
-    assert missing_mult == 0.0, (
-        f"a contract with no multiplier contributed {missing_mult}; "
+    w = _window(_obs("c1", volume=8, multiplier=None))
+    assert w["window_net"] is None, (
+        f"a contract with no multiplier contributed {w['window_net']}; "
         "an absent value must not enter the arithmetic"
     )
-    assert missing_mult == missing_gamma, (
+    assert w["status"] == "unavailable"
+    assert _window(_obs("c1", volume=8, gamma=None))["window_net"] is None, (
         "missing multiplier and missing gamma must be handled identically"
     )
 
 
 def test_zero_measured_multiplier_is_distinguishable_from_absent():
-    """Both are unusable, but they must not be conflated with a real 100.0."""
+    """Explicit invalid is unavailable; only a real 100.0 measures 150.0."""
     measured_zero = _net(_obs("c1", volume=8, multiplier=0.0))
     absent = _net(_obs("c1", volume=8, multiplier=None))
     real_default = _net(_obs("c1", volume=8))
     assert real_default == 150.0
-    assert absent == measured_zero == 0.0, (
+    assert absent is None and measured_zero is None, (
         f"absent={absent} measured_zero={measured_zero} real={real_default}"
     )
 
@@ -85,11 +94,12 @@ def test_negative_multiplier_is_rejected_not_accumulated():
     observable -- without the guard it contributes a negative term and
     inverts the net.
     """
-    negative = _net(_obs("c1", volume=8, multiplier=-100.0))
-    assert negative == 0.0, (
-        f"a contract with a negative multiplier contributed {negative}; "
+    w = _window(_obs("c1", volume=8, multiplier=-100.0))
+    assert w["window_net"] is None, (
+        f"a contract with a negative multiplier contributed {w['window_net']}; "
         "a non-positive multiplier must be skipped, not accumulated"
     )
-    assert negative == _net(_obs("c1", volume=8, gamma=None)), (
+    assert w["status"] == "unavailable"
+    assert _window(_obs("c1", volume=8, gamma=None))["status"] == "unavailable", (
         "a negative multiplier must be handled exactly like a missing gamma"
     )
