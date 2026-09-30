@@ -430,6 +430,10 @@ def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str,
         dg = dn = vg = vn = 0.0
         usable = missing = invalid = vn_n = 0
         volume_usable = volume_missing = volume_invalid = 0
+        # R11-H01: wall-local session volume x |delta| (sigma c u V |d|), the
+        # delta-weighted activity twin. Same member contracts; its own counts.
+        sg = sn = 0.0
+        sdv_usable = sdv_missing_delta = 0
         expiries: set = set()
         n_contracts = 0
         # Excluded population (resweep). A contract whose strike cannot be
@@ -477,6 +481,15 @@ def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str,
                         volume_usable += 1
                         if v_f > 0:
                             vn_n += 1
+                        # Reported zero volume is a measured zero for this
+                        # family too; delta is only needed when V > 0.
+                        sad, _sreason = (0.0, None) if v_f == 0 else abs_delta(c.get("delta", c.get("δ")))
+                        if sad is None:
+                            sdv_missing_delta += 1
+                        else:
+                            sg += contribution * sad
+                            sn += sign * contribution * sad
+                            sdv_usable += 1
 
             oi_f = is_valid_measurement(c.get("oi"))
             if oi_f is None or oi_f < 0:
@@ -507,7 +520,14 @@ def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str,
             "unreadable_strike": unreadable_strike,
             "not_a_member": not_a_member,
             "expiries": sorted(expiries),
+            "sdv_gross": sg if math.isfinite(sg) else None,
+            "sdv_net": sn if math.isfinite(sn) else None,
+            "sdv_usable": sdv_usable, "sdv_missing_delta": sdv_missing_delta,
+            # `basis` is the legacy single label (kept for compatibility); it
+            # only ever described the daddex_* fields. `bases` names each family.
             "basis": "OI_DELTA_WEIGHTED", "formula_version": FORMULA_VERSION,
+            "bases": {"daddex": "OI_DELTA_WEIGHTED", "volume": "VOLUME",
+                      "session_delta_volume": "VOLUME_DELTA_WEIGHTED"},
         }
     return out
 

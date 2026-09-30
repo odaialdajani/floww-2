@@ -1436,6 +1436,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             compute_gex_grid_vendor,
             compute_gex_grid_volume_vendor,
         )
+        from services.solstice_metric_contract import window_grid_section as _window_grid_section
         from services.wall_structure import discover_walls, nearest_by_side, nearest_walls
         raw_m = compute_raw_oi(raw["contracts"], spot)
         dw_m = compute_delta_weighted_oi(raw["contracts"], spot)
@@ -1474,6 +1475,9 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             "session_delta_volume_invalid": sess_dvol_m.invalid,
             "window_dadgex_v1": None, "window_dadgex_reason": "HISTORY_NOT_YET_RECORDED",
             # §28.3 registry name alias (same unavailable state, both keys).
+            # R11-H01: the alias must carry the reason too — the inspector
+            # read `window_daddex_reason`, which was never populated.
+            "window_daddex_v1": None, "window_daddex_reason": "HISTORY_NOT_YET_RECORDED",
             "window_delta_weighted_volume_v1": None,
             # R6-2: per-wall window aggregation lands here when a comparable
             # baseline exists; absent means unavailable, never scope-total.
@@ -1493,7 +1497,11 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             # vendor path never emitted.
             "grids": {"raw": None, "delta": delta_grid, "activity": activity_grid,
                       "session_delta_volume": sess_dvol_grid,
-                      "vendor": vendor_grid},
+                      "vendor": vendor_grid,
+                      # R11-H03: governed window surface in grid shape;
+                      # unavailable (with reason) until a comparable
+                      # baseline exists — never zero, never raw.
+                      "window": _window_grid_section(None)},
             "formula_version": "gex.v2",
         })
         sol_scope = {"symbol": ticker, "formula": "gex.v2"}
@@ -1581,6 +1589,8 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                             # Registry canonical name kept in sync (alias).
                             metrics["window_daddex_v1"] = metrics["window_dadgex_v1"]
                             metrics["window_daddex_reason"] = None
+                            metrics["window_dadgex_reason"] = None
+                            metrics["grids"]["window"] = _window_grid_section(_w)
                             metrics["window_contracts"] = _wrows[:20]
                             metrics["window_missing_delta"] = _w["coverage"]["n_missing_delta"]
                             metrics["window_mixed_pair"] = _w["coverage"]["n_mixed_pair"]
@@ -1608,8 +1618,10 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                             metrics["window_daddex_v1"] = None
                             metrics["window_delta_weighted_volume_v1"] = None
                             metrics["window_dadgex_reason"] = _wr
+                            metrics["window_daddex_reason"] = _wr
                             metrics["window_contracts"] = []
                             metrics["wall_window"] = {}
+                            metrics["grids"]["window"] = _window_grid_section(_w)
         except Exception as we:
             log.debug("window activity attach failed: %s", we)
     except Exception as me:
@@ -1699,6 +1711,15 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         # Solstice read-only desk (T04–T10/T15–T20, deterministic, no execution)
         "metrics": metrics,
     }
+    # R11-H01: per-surface population + status summary (no arithmetic; reads
+    # the sections the kernels already produced). Additive key.
+    try:
+        from services.solstice_metric_contract import CONTRACT_VERSION as _mc_ver
+        from services.solstice_metric_contract import build_surface_coverage
+        metrics["surface_coverage"] = build_surface_coverage(metrics, grid)
+        metrics["metric_contract_version"] = _mc_ver
+    except Exception as _cov_e:
+        log.debug("surface coverage summary failed: %s", _cov_e)
     # R5-A: one issued observation ID for this build (content + asof + ticker).
     # Interactions, scenarios, evidence and recorder rows all join on this ID;
     # wall events must never be written with a blank snapshot link.
