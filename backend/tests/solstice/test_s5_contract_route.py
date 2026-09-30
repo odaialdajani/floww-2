@@ -138,10 +138,31 @@ def test_incomplete_identity_is_refused_with_a_usable_message(client):
 def test_route_carries_the_observed_request_scope(client):
     body = client.get("/api/solstice/SPY/contract", params={"osi": "A-300-C"}).json()
     scope = body["scope"]
-    assert scope["expiries_requested"] == 4
-    assert scope["is_true_zero_dte"] is False
-    assert scope["refreshes_periodically"] is False
-    assert scope["window_basis_enabled"] is False
+    assert scope["expiries_used"] == ["2030-02-21"]
+    assert scope["query_key"] == "SPY:day:0:60"
+    assert scope["provider"] == "public_api"
+    assert scope["formula_version"] == "gex.v2"
+    assert scope["basis"] == "OI"
+    assert scope["source"] == "recorded_snapshot"
+
+
+def test_explicit_snapshot_cannot_cross_tickers(client):
+    spy = client.get("/api/solstice/SPY/contract", params={"osi": "A-300-C"}).json()
+    body = client.get("/api/solstice/QQQ/contract", params={
+        "osi": "A-300-C", "snapshot_id": spy["snapshot_id"],
+    }).json()
+    assert body["status"] == "unavailable"
+    assert body["reason"] == "SNAPSHOT_TICKER_MISMATCH"
+    assert body["quote"] is None
+
+
+def test_exact_decimal_query_is_not_rounded_to_a_listed_strike(client):
+    body = client.get("/api/solstice/SPY/contract", params={
+        "strike": "300.2500000000000000001", "expiry": "2030-02-21", "type": "call",
+    }).json()
+    assert body["status"] == "unavailable"
+    assert body["reason"] == "NO_MATCH"
+    assert body["requested_identity"]["strike"] == "300.2500000000000000001"
 
 
 def test_unknown_ticker_is_a_reason_not_a_guess(client):

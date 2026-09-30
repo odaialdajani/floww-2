@@ -172,3 +172,12 @@ Owned additions/edits: SkylitDashboard/Grid, gexBases compatibility adapter, sol
 - Ran 7 current frontend suites (Canvas, Dashboard, Triad, callbacks, RecoveryR12, App egress): 74 passed. React act warnings remain in async owned tests; will fix rather than suppress.
 - Protected manifest: 71 files, zero changed blobs. `git diff --check` found one trailing space in the owned toolbar; corrected.
 - Checkpointing actual mounted UI/callback work before backend fixes so it can be recovered and published. No claim of current CI or browser acceptance.
+- Published workspace checkpoint 122c6b0e to origin/solstice/r11-opus; remote SHA verified. Draft PR #90: https://github.com/odaialdajani/floww-2/pull/90. Main remains ca3dd8b5; #90 is not merged.
+
+### H02/H06 checkpoint 2026-09-30T13:06Z
+
+- Reproduced 46 passed + 1 offline teardown error. Origin: test_gex_regime_uppercases_ticker. Fixed the dead services.heatseeker mock to the actual Public adapter and asserted uppercase call identity. Guard unchanged.
+- Six exact-contract regressions red before patch: complete prices without time falsely fresh; OSI ignored conflicting tuple; absent multiplier state; route reported guessed scope; cross-ticker snapshot accepted; exact decimal request rounded to listed strike.
+- Green: `.venv/bin/python -m pytest tests/solstice/ tests/test_wall_strength_policy.py tests/services/test_agentfield_hub.py -p tests.offline_network -q -p no:cacheprovider --tb=short`: 525 passed / 27 warnings; zero external attempts. Scoped Ruff clean.
+- Contract route now uses string/Decimal identity, ticker-owned snapshots and actual recorded scope/provenance. Quote freshness remains unknown without a declared source policy; prices alone cannot make it fresh. Multiplier value and source status explicit; older recorder rows lack multiplier source, so provenance stays unknown.
+- Known storage limit: old contract observation strike column is DOUBLE. Exact transport is now preserved and no near-strike substitution occurs; migration for source decimal strings remains required for precision beyond stored DOUBLE. Normal listed fractional strikes covered. No production store/config change.
