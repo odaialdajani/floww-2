@@ -427,20 +427,22 @@ function SkylitDashboard({
   const selectedReading = useMemo(() => {
     if (!selectedCell || selectedCell.ticker !== ticker || selectedCell.view !== activeView || selectedCell.metric !== activeMetric) return null;
     const {strike,colKey} = selectedCell;
-    if (!shownMapStrikes(visibleData,displaySpot,expanded?null:fitRows,activeView,activeMetric).includes(strike) || !activeSurface.expiries.includes(colKey)) return null;
+    if (!shownMapStrikes(visibleData,displaySpot,expanded?null:fitRows,activeView,activeMetric,anchorStrike).includes(strike) || !activeSurface.expiries.includes(colKey)) return null;
     const value = activeSurface.matrix[colKey]?.[String(strike)];
     return typeof value === "number" && Number.isFinite(value) ? {...selectedCell,value} : null;
-  }, [selectedCell,ticker,activeView,activeMetric,visibleData,displaySpot,expanded,fitRows,activeSurface]);
+  }, [selectedCell,ticker,activeView,activeMetric,visibleData,displaySpot,expanded,fitRows,activeSurface,anchorStrike]);
   useEffect(() => {
     if (selectedCell?.colKey && !selectedReading) {
       setSelectedCell(selectedCell.wall_id ? {...selectedCell,colKey:null,value:null} : null);
     }
   }, [selectedCell,selectedReading]);
-  usePublishScreenContext({page:"heatseeker",ticker,dte:dte==null?"all":dte===0?"0dte":`days:${dte}`,
+  usePublishScreenContext({contextVersion:2,page:"heatseeker",ticker,
+        provider:visibleData?.data_source || null, formula:visibleData?.formula_version || visibleData?.metrics?.formula_version || null,
+        activePane:panes?activePane:"gex", selectedWall:selectedCell?.wall_id || null, layout,dte:dte==null?"all":dte===0?"0dte":`days:${dte}`,
       metric:activeView,overlayMetric:activeMetric,displayMode:priceHistoryOpen?"price-history":isReplay?"replay":"live",snapshotId:priceHistoryOpen?null:visibleData?.snapshotId || null,mode:timeframe,
       expiries,selectedStrike:priceHistoryOpen?null:selectedReading?.strike ?? null,selectedExpiry:priceHistoryOpen?null:selectedReading?.colKey ?? null,
       mapQuery:priceHistoryOpen?null:visibleData?.map_query || null,mapVersion:priceHistoryOpen?null:visibleData?.asof || null,
-      mapStrikes:priceHistoryOpen?[]:shownMapStrikes(visibleData,displaySpot,expanded?null:fitRows,activeView,activeMetric),
+      mapStrikes:priceHistoryOpen?[]:shownMapStrikes(visibleData,displaySpot,expanded?null:fitRows,activeView,activeMetric,anchorStrike),
       mapExpiries:priceHistoryOpen?[]:activeSurface.expiries,observedAt:priceHistoryOpen?null:visibleData?.event_time || visibleData?.observed_at || null});
   useEffect(() => { setFollowWall(false); setFollowWallId(null); }, [ticker,timeframe,expiries,dte,expWidened]);
   // O2 drawer auto-open: a NEW wall/strike selection opens the inspector;

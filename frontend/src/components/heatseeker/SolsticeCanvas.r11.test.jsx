@@ -62,6 +62,21 @@ test("multi-map uses one packet with disclosed independent metric scales and one
   expect(axios.get.mock.calls.length).toBe(calls);
 });
 
+test("paused-follow selection and research scope stay on the displayed rows through spot polling", async () => {
+  const data = fixture();
+  data.grid.strikes = Array.from({ length: 100 }, (_, i) => i + 50);
+  data.strikes = data.grid.strikes.map(strike => ({ strike }));
+  data.grid.grid[E1] = Object.fromEntries(data.grid.strikes.map(s => [s, 1000]));
+  let mounted;
+  await act(async () => { mounted = render(<SkylitDashboard ticker="SPY" spot={100.25} data={data} />); });
+  fireEvent.scroll(document.querySelector(".skylit-heatmap-container"));
+  fireEvent.click(screen.getByRole("gridcell", { name: /^100 by 2031-01-17,/ }));
+  await act(async () => { mounted.rerender(<SkylitDashboard ticker="SPY" spot={149} data={data} />); });
+  expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("1000.0");
+  expect(screen.getByRole("gridcell", { name: /^100 by 2031-01-17,/ })).toBeInTheDocument();
+});
+
+
 test("manual scrolling pauses follow spot; resume is explicit", async () => {
   await mount();
   fireEvent.scroll(document.querySelector(".skylit-heatmap-container"));

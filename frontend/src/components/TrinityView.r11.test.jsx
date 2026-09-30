@@ -29,7 +29,7 @@ test("raw-wall-first desk exposes top profile, one adjustment selector, and hone
   await mount();
   expect(screen.getByTestId("triad-signed-profile")).toBeInTheDocument();
   expect(screen.getByLabelText("Adjusted context")).toBeInTheDocument();
-  fireEvent.click(screen.getByTestId("triad-wall-wall"));
+  await act(async () => { fireEvent.click(screen.getByTestId("triad-wall-wall")); });
   expect(screen.getByTestId("triad-readiness")).toHaveTextContent("Wait");
   expect(screen.getByTestId("triad-readiness")).toHaveTextContent("Bounce watch");
   fireEvent.change(screen.getByLabelText("Adjusted context"), { target: { value: "session_delta_volume" } });
@@ -40,7 +40,7 @@ test("raw-wall-first desk exposes top profile, one adjustment selector, and hone
 
 test("contract review requires choosing listed identity, not midpoint or first expiry", async () => {
   await mount();
-  fireEvent.click(screen.getByTestId("triad-wall-wall"));
+  await act(async () => { fireEvent.click(screen.getByTestId("triad-wall-wall")); });
   fireEvent.click(screen.getByTestId("triad-contracts-btn"));
   expect(axios.get.mock.calls.some(([url]) => String(url).includes("/contract"))).toBe(false);
   fireEvent.click(screen.getByRole("button", { name: `Review ${contract.osi}` }));
@@ -55,7 +55,7 @@ test("changing symbol releases wall and exact-contract response ownership, inclu
   const defaultMock = axios.get.getMockImplementation();
   axios.get.mockImplementation((url, opts) => String(url).includes("/solstice/SPY/contract") ? new Promise((resolve, reject) => { rejectOld = reject; }) : defaultMock(url, opts));
   await mount();
-  fireEvent.click(screen.getByTestId("triad-wall-wall"));
+  await act(async () => { fireEvent.click(screen.getByTestId("triad-wall-wall")); });
   fireEvent.click(screen.getByTestId("triad-contracts-btn"));
   fireEvent.click(screen.getByRole("button", { name: `Review ${contract.osi}` }));
   fireEvent.change(screen.getByTestId("triad-symbol-input"), { target: { value: "QQQ" } });

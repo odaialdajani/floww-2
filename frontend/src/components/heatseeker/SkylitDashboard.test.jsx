@@ -167,6 +167,7 @@ test("research follows the rendered wide map and never carries it into another t
 beforeEach(() => {
   axios.get.mockImplementation(async () => ({ data: { strikes: [] } }));
 });
+afterEach(async () => { await act(async () => {}); });
 
 describe("SkylitDashboard", () => {
   test("mounts the skylit chrome with NO bottom boxes (removed 2026-09-03)", async () => {

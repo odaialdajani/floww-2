@@ -49,7 +49,7 @@ beforeEach(() => {
   axios.get.mockImplementation(async (url) => {
     const u = String(url);
     if (u.includes("/api/heatmap/")) return { data: heatmapFixture() };
-    if (u.includes("universe/leaderboard")) return { data: { leaderboard: LEADERBOARD } };
+    if (u.includes("solstice/scan/leaderboard")) return { data: { leaderboard: LEADERBOARD, status: "ready" } };
     if (u.includes("/api/contract/")) {
       return { data: { ticker: "SPY", contracts: [
         { osi: "SPY261002C00760000", type: "call", strike: 760, expiry: "2026-10-02", bid: 1.2, ask: 1.35, iv: 0.2, delta: 0.55, open_interest: 1200 },
@@ -110,7 +110,7 @@ test("missing adjusted surface renders unavailable, raw untouched", async () => 
       delete f.metrics.grids.delta;
       return { data: f };
     }
-    if (u.includes("universe/leaderboard")) return { data: { leaderboard: [] } };
+    if (u.includes("solstice/scan/leaderboard")) return { data: { leaderboard: [], status: "not-scanned" } };
     if (u.includes("/decisions")) return { data: { decisions: [] } };
     return { data: {} };
   });
@@ -134,7 +134,7 @@ test("review saves through the journal with frozen context", async () => {
   axios.get.mockImplementation(async (url) => {
     const u = String(url);
     if (u.includes("/api/heatmap/")) return { data: heatmapFixture() };
-    if (u.includes("universe/leaderboard")) return { data: { leaderboard: [] } };
+    if (u.includes("solstice/scan/leaderboard")) return { data: { leaderboard: [], status: "not-scanned" } };
     if (u.includes("/decisions")) {
       return { data: { decisions: [{ decision_id: "d9", snapshot_id: "snap-triad-1", review_state: null }] } };
     }

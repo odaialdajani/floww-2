@@ -87,6 +87,7 @@ function TrinityView({ onFocusTicker }) {
   const [replayId, setReplayId] = useState(handoff?.replayAsOf ? handoff.snapshotId || null : null);
   const isReplay = Boolean(replayId);
   const [board, setBoard] = useState([]);
+  const [boardStatus, setBoardStatus] = useState("loading");
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   // O5: same focus ownership as the Solstice inspector drawer.
@@ -145,9 +146,9 @@ function TrinityView({ onFocusTicker }) {
   useEffect(() => {
     let cancelled = false;
     axios
-      .get(`${API}/flowseeker/universe/leaderboard?limit=12`, { timeout: 15000 })
-      .then((r) => { if (!cancelled) setBoard(r?.data?.leaderboard || []); })
-      .catch(() => { /* strip degrades to focused-symbol only */ });
+      .get(`${API}/solstice/scan/leaderboard?limit=12`, { timeout: 15000 })
+      .then((r) => { if (!cancelled) { setBoard(r?.data?.leaderboard || []); setBoardStatus(r?.data?.status || "unknown"); } })
+      .catch(() => { if (!cancelled) setBoardStatus("source-error"); });
     return () => { cancelled = true; };
   }, []);
 
@@ -241,6 +242,7 @@ function TrinityView({ onFocusTicker }) {
     <div className="trinity-layout" data-testid="trinity-view">
       <ContextStrip board={board} ticker={ticker} symbolInput={symbolInput}
         onSymbolInput={setSymbolInput} onSubmit={submitSymbol} />
+      <div className="triad-board-status" role="status">Solstice research ranks · {boardStatus} · unvalidated, not probability</div>
       <div className="triad-desk-toolbar">
         <span>Raw = where · adjusted = weighting, not observed direction</span>
         <select aria-label="Triad expiry scope" value={scope} disabled={isReplay} onChange={e => setScope(e.target.value)}>
