@@ -3632,6 +3632,10 @@ register_review_routes(solstice_router)
 
 app.include_router(solstice_router, tags=["solstice"])
 
+from routes.solstice_scan import router as solstice_scan_router
+
+app.include_router(solstice_scan_router)
+
 from routes.public_api import router as public_api_router
 
 app.include_router(public_api_router, tags=["public_api"])

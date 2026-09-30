@@ -84,7 +84,7 @@ def contract_identity(contract: dict[str, Any] | None) -> dict[str, Any] | None:
     """
     if not isinstance(contract, dict):
         return None
-    strike = _exact(contract.get("strike"))
+    strike = _exact(contract.get("strike_exact") if contract.get("strike_exact") is not None else contract.get("strike"))
     expiry = _norm_str(contract.get("expiry"))
     otype = _norm_str(contract.get("type") or contract.get("opt_type"))
     osi = _norm_str(contract.get("osi"))
@@ -235,7 +235,8 @@ def resolve_contract(
     else:
         source = _norm_str(row.get("multiplier_source"))
         multiplier_state = {"value": str(multiplier), "source": source,
-                            "status": "observed" if source else "source_unknown"}
+                            "status": ("registered_assumption" if source == "DEFAULT_STANDARD" else
+                                                                   "observed" if source else "source_unknown")}
     return {**base, "status": "ok", "reason": None,
             "multiplier": multiplier_state,
             "matched_identity": contract_identity(row),

@@ -237,6 +237,45 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "ScanRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "dte": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dte"
+          },
+          "limit": {
+            "default": 12,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "max_expiries": {
+            "default": 2,
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Max Expiries",
+            "type": "integer"
+          },
+          "refresh": {
+            "default": false,
+            "title": "Refresh",
+            "type": "boolean"
+          }
+        },
+        "title": "ScanRequest",
+        "type": "object"
+      },
       "TradeAnalysisRequest": {
         "properties": {
           "confidence": {
@@ -16869,6 +16908,118 @@
         ]
       }
     },
+    "/api/solstice/scan": {
+      "post": {
+        "operationId": "post_api_solstice_scan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scan",
+        "tags": [
+          "solstice"
+        ]
+      }
+    },
+    "/api/solstice/scan/leaderboard": {
+      "get": {
+        "operationId": "get_api_solstice_scan_leaderboard",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 12,
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_expiries",
+            "required": false,
+            "schema": {
+              "default": 2,
+              "maximum": 4,
+              "minimum": 1,
+              "title": "Max Expiries",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dte",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 365,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dte"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Leaderboard",
+        "tags": [
+          "solstice"
+        ]
+      }
+    },
     "/api/solstice/scout/{ticker}": {
       "get": {
         "description": "Read-only 0DTE scout with rejection reasons (T10, R5-D strict context).",
@@ -17226,7 +17377,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "number"
+                  "type": "string"
                 },
                 {
                   "type": "null"

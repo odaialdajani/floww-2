@@ -39,6 +39,26 @@ def test_cache_key_carries_dte_and_expiry_scope():
     assert a == c
 
 
+def test_batch_bound_is_part_of_cache_identity():
+    a = scan.cache_key_for(["SPY", "QQQ"], universe="popular", dte=0, max_expiries=1, limit=1)
+    b = scan.cache_key_for(["SPY", "QQQ"], universe="popular", dte=0, max_expiries=1, limit=2)
+    assert a != b
+
+
+def test_injected_builder_is_used_and_missing_scores_are_not_ranked(monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from services.public_budget import budget
+
+    build = AsyncMock(return_value={"ticker": "SPY", "spot": 100, "asof": "2030-01-02T14:00:00Z"})
+    monkeypatch.setattr(budget, "peek_available", AsyncMock(return_value=100))
+    out = asyncio.run(scan.run_scan(universe="SPY", limit=1, build_heatmap_fn=build))
+    build.assert_awaited_once_with("SPY", max_expiries=2, dte=None)
+    assert out["rows"] == []
+    assert out["status"] == "no-eligible-rows"
+    assert out["availability"][0]["reason"] == "NO_RANK_INPUTS"
+
+
 def test_rotation_is_stable_and_resumable():
     ordered = ["A", "B", "C", "D", "E"]
     seen, cursor = [], 0

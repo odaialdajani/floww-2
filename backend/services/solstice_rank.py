@@ -65,7 +65,9 @@ def norm_opp_strict(opp: Any) -> tuple[float, str]:
     """Opportunity 0-10 → 0-1 with the same strict boundary."""
     if opp is None:
         return 0.0, "missing"
-    raw = opp.get("opportunity_score", 0) if isinstance(opp, dict) else opp
+    raw = opp.get("opportunity_score") if isinstance(opp, dict) else opp
+    if raw is None:
+        return 0.0, "missing"
     if isinstance(raw, bool):
         return 0.0, "invalid"
     v = _num(raw)
@@ -79,7 +81,7 @@ def norm_conf_strict(conf: Any) -> tuple[float, str]:
     if conf is None:
         return 0.0, "missing"
     try:
-        raw = conf.get("total", 0) if isinstance(conf, dict) else conf
+        raw = conf.get("total") if isinstance(conf, dict) else conf
     except AttributeError:
         return 0.0, "invalid"
     if raw is None or (isinstance(conf, dict) and not conf):
@@ -108,7 +110,7 @@ def norm_ml_strict(ml: Any) -> tuple[float, str]:
         if lab_raw is None:
             return 0.0, "missing"
         lab = str(lab_raw).upper()
-        conf_raw = ml.get("confidence", 0.5)
+        conf_raw = ml.get("confidence")
         if conf_raw is None:
             return 0.0, "missing"
         if isinstance(conf_raw, bool):
@@ -119,8 +121,7 @@ def norm_ml_strict(ml: Any) -> tuple[float, str]:
     else:
         if isinstance(ml, bool):
             return 0.0, "invalid"
-        lab = str(ml).upper()
-        conf = 0.75
+        return 0.0, "missing"
     base = _ML_MAP.get(lab)
     if base is None:
         return 0.0, "invalid"
@@ -293,7 +294,7 @@ def scan_cache_key(
 
     body = {
         "universe": universe,
-        "tickers": sorted(str(t).upper() for t in tickers),
+        "tickers": [str(t).upper() for t in tickers],
         "scope": scope or {},
         "provider": provider,
         "formula": formula,
@@ -377,11 +378,11 @@ class KeyedScanCache:
         with self._meta:
             return self._locks.setdefault(key, threading.Lock())
 
-    def get(self, key: str) -> dict[str, Any] | None:
+    def get(self, key: str, *, allow_stale: bool = False) -> dict[str, Any] | None:
         entry = self._entries.get(key)
         if entry is None:
             return None
-        if time.time() - entry["cached_at"] > self._ttl:
+        if not allow_stale and time.time() - entry["cached_at"] > self._ttl:
             return None
         out = dict(entry["payload"])
         # A hit reports WHEN IT WAS CACHED, so a consumer can never read a

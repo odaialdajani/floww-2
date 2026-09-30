@@ -98,6 +98,46 @@ def is_price_lookup(question, tickers):
     )
 
 
+def validate_screen_context(screen):
+    """Compatible v2 selector validation; numeric client values are never evidence."""
+    version = screen.get("contextVersion", 1)
+    if type(version) is not int or version not in (1, 2):
+        raise ValueError("Unsupported screen context version")
+    if version == 1:
+        return
+    if screen.get("page") not in {"heatseeker", "trinity"}:
+        raise ValueError("Unsupported v2 screen context owner")
+    for field in ("snapshotId", "provider", "formula", "activePane"):
+        value = screen.get(field)
+        if not isinstance(value, str) or not value or len(value) > 128:
+            raise ValueError(f"Incomplete screen context: {field}")
+    if screen["activePane"] not in {"gex", "vex", "charm", "delta", "raw", "adjusted"}:
+        raise ValueError("Unknown context pane")
+    expiries = screen.get("mapExpiries")
+    if (not isinstance(expiries, list) or not 1 <= len(expiries) <= 24
+            or any(not isinstance(e, str) for e in expiries) or len(set(expiries)) != len(expiries)):
+        raise ValueError("Incomplete context expiry population")
+    try:
+        for expiry in expiries:
+            if not isinstance(expiry, str) or date.fromisoformat(expiry).isoformat() != expiry:
+                raise ValueError("Invalid context expiry")
+    except (ValueError, TypeError) as exc:
+        raise ValueError("Invalid context expiry") from exc
+    if not isinstance(screen.get("mapQuery"), dict) or instant(screen.get("mapVersion")) is None:
+        raise ValueError("Incomplete context observation query/version")
+    if screen.get("selectedExpiry") is not None and screen["selectedExpiry"] not in expiries:
+        raise ValueError("Selected contract/cell is outside context scope")
+    wall = screen.get("selectedWall")
+    if wall is not None and (not isinstance(wall, str) or not wall or len(wall) > 128):
+        raise ValueError("Invalid context wall")
+    contract = screen.get("selectedContract")
+    if contract is not None:
+        from services.contract_identity import contract_identity
+
+        if not isinstance(contract, dict) or contract_identity(contract) is None:
+            raise ValueError("Invalid exact contract context")
+
+
 def request_spec(body):
     question = body.get("question")
     if not isinstance(question, str) or not question.strip() or len(question) > 2000:
@@ -105,6 +145,7 @@ def request_spec(body):
     screen = copy.deepcopy(body.get("screen") or {})
     if not isinstance(screen, dict) or len(canonical(screen)) > 12000:
         raise ValueError("Invalid screen selection")
+    validate_screen_context(screen)
     if screen.get("displayMode", "live") not in (None, "live") or screen.get("overlayMetric", "raw") != "raw":
         raise ValueError("Research for this display is unavailable; return to the live raw chart before asking")
     explicit = re.findall(r"\$([A-Za-z][A-Za-z0-9.-]{0,9})\b", question)

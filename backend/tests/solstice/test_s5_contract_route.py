@@ -59,6 +59,7 @@ def client(tmp_path_factory):
                 _c("A-300-C", "300", "2030-02-21"),
                 _c("A-300-P", "300", "2030-02-21", "put"),
                 _c("A-300.25-C", "300.25", "2030-02-21"),
+                {**_c("A-exact-C", "300.1250000000000000001", "2030-02-21"), "multiplier_source": "fixture_contract_spec"},
             ],
             "metrics": {}, "coverage": {"requested": 3, "returned": 3, "usable": 3,
                                         "truncated": False},
@@ -154,6 +155,15 @@ def test_explicit_snapshot_cannot_cross_tickers(client):
     assert body["status"] == "unavailable"
     assert body["reason"] == "SNAPSHOT_TICKER_MISMATCH"
     assert body["quote"] is None
+
+
+def test_source_decimal_and_multiplier_provenance_survive_record_replay_route(client):
+    body = client.get("/api/solstice/SPY/contract", params={
+        "strike": "300.1250000000000000001", "expiry": "2030-02-21", "type": "call",
+    }).json()
+    assert body["status"] == "ok"
+    assert body["matched_identity"]["strike"] == "300.1250000000000000001"
+    assert body["multiplier"]["source"] == "fixture_contract_spec"
 
 
 def test_exact_decimal_query_is_not_rounded_to_a_listed_strike(client):
