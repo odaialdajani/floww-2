@@ -145,4 +145,30 @@ Resume checkpoint 2026-09-30T12:17:32Z: preserve the actual frontend recovery fi
 - Named Recovery-Harness/Audit/ZIP files were not attached as readable artifacts and path search found none. Repository #89 recovery receipt is available via its branch.
 - GSD builder invocation ends at dirty-tree guard (changes on non-gsd branch); no queue claim/stash/reset. Discovery inputs already specify the product choices; no new speculative discovery map or recurring task created.
 - Unrelated kanban file and two other worktrees untouched. No additional agents created. No preview or market/AI network call made.
-- Next: checkpoint frontend recovery with exact paths, merge #89 under authorized reviewed merge, integrate origin/main without stashing kanban, test combined tree, then layout/profile/Triad slices.
+- Recovery commit `812ea89d`, explicit local integration merge `438727b1`.
+- #89 actually merged to `origin/main@ca3dd8b5ccad5668cf433e8383d2f84e68b269ed`; verified by fetch + log. This was an explicitly authorized, reviewed merge, not a deployment.
+- Resolved four conflicts without dropping either suite: one wall calculation, compatible short/full aliases, typed window validation/counts, governed window surface, compact labels. Combined backend `pytest tests/solstice/`: 474 passed / 24 warnings; scoped Ruff PASS. Combined focused frontend: 73 PASS.
+
+### Working slice F03/F04/F06/F07/H02 (2026-09-30T12:50Z)
+
+Owned additions/edits: SkylitDashboard/Grid, gexBases compatibility adapter, solsticeMetrics, TrinityView, ExactContractReview, shared signed profile, SolsticeWorkspace.css, stable Solstice review callbacks, surgical App.js callback wiring, mounted regression tests. No protected path edited.
+
+- Four same-observation layouts: Focus, Matrix+Profile, four-metric Multi-map (not cross-symbol fetching), Calendar. Profile sums exact loaded dates, zero axis and selection align; source metadata stays visible without Lodestar. Basis availability from backend contract. Replay panel opens on request. Manual scroll pauses spot-follow. Existing compare/review testids retained.
+- Triad: top signed profile, raw-left/adjusted-right, one adjustment selector, shared raw wall, conditional readiness from wall-local supplied values + measured interaction + quality. No model/order/target/stop. True dte=0 / <=7 scopes; Next listed remains explicitly disabled pending a proven scope route. Replay handoff uses existing stored projection and never fresh price path.
+- Exact contract drawer now lists supplied shortlist and resolves explicit OSI/tuple+snapshot, never midpoint/first-expiry guess. Abort/generation guards retain late error/success ownership. Also composed into Solstice drawer.
+- Stable callbacks remove two blocking legacy contract fetches and avoid callback-identity churn on spot polling; unknown OI/delta/quotes remain null. Existing handoff remains research/paper only; no order calls added.
+- Red: four Canvas tests missing layout/follow controls. Green: 48 Canvas+Dashboard tests. Red: three Triad mounted tests missing profile/exact-choice/context. Green after implementation. Existing tests adapted only for intentional button-to-selector and listed-candidate behavior.
+- `CI=true npx craco test --watchAll=false --runInBand`: 114 suites / 986 tests PASS before latest callback edit. Existing React act warnings observed; not yet a warning-free browser receipt.
+- `CI=true npx craco test --watchAll=false --runInBand src/hooks/useSolsticeReviewCallbacks.test.jsx src/App.test.jsx src/App.egress-invariant.test.js`: 2 suites / 6 tests PASS (App.test.jsx not present; only the named existing suites ran). Callback wiring test red before App patch.
+- `CI=true npm run build`: compiled successfully. Large-bundle warning remains (main ~273 KB gzip, existing chunk ~1.38 MB); no measured live-performance claim.
+- Offline reproduction: `pytest tests/test_wall_strength_policy.py tests/services/test_agentfield_hub.py -p tests.offline_network -q`: 46 passed + 1 teardown error. Guard BLOCKED one api.public.com attempt, originating from `TestTickerNormalization.test_gex_regime_uppercases_ticker`, not wall-strength policy. Fix actual mocked seam next; do not weaken guard.
+- New inspected H02 defects: exact snapshot route does not reject cross-ticker snapshot ID; quote_state reports stale=False from quote values with no timestamps when last exists. Add red route/unit regressions before correcting.
+- Current reviewed remote base is ca3dd8b5; local current committed head remains 438727b1 plus working slice. No candidate PR yet; no exact-candidate CI claim.
+- Next: fix isolated provider seam and exact-contract server identity/age, verify scan coordinator through a Solstice-owned route (not legacy caches), validate v2 context with current raw/replay guard retained, run integrated gates and publish recoverable PR with exact-head evidence.
+
+### Recovery checkpoint 2026-09-30T13:00Z
+
+- Re-fetched origin: main remains ca3dd8b5; local integration HEAD 438727b1, confirmed ancestry. No new lane/agent created.
+- Ran 7 current frontend suites (Canvas, Dashboard, Triad, callbacks, RecoveryR12, App egress): 74 passed. React act warnings remain in async owned tests; will fix rather than suppress.
+- Protected manifest: 71 files, zero changed blobs. `git diff --check` found one trailing space in the owned toolbar; corrected.
+- Checkpointing actual mounted UI/callback work before backend fixes so it can be recovered and published. No claim of current CI or browser acceptance.

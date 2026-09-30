@@ -1,5 +1,6 @@
 import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import { shownMapStrikes } from "./shownMapStrikes";
+import "./SolsticeWorkspace.css";
 
 /**
  * SkylitHeatmapGrid — Solstice strike × expiry matrix.
@@ -65,7 +66,7 @@ function strikeKey(s) {
   return String(s);
 }
 function fmtStrike(s) {
-  return s >= 1000 ? s.toFixed(0) : s.toFixed(1);
+  return Number.isInteger(s) ? s.toFixed(s >= 1000 ? 0 : 1) : String(s);
 }
 function fmtExpiry(e) {
   // "2026-07-06" → "07-06"
@@ -97,7 +98,7 @@ function moveFocus(ev) {
 }
 
 /** Signed profile bar pair: raw underneath (muted), adjusted over (bright). */
-function ProfileBars({ raw, adj, rawMax, adjMax, adjLabel, partial }) {
+export function ProfileBars({ raw, adj, rawMax, adjMax, adjLabel, partial }) {
   const bar = (v, max, cls) => {
     if (v == null || !(max > 0)) return null;
     const w = Math.min(50, (Math.abs(v) / max) * 50);
@@ -232,6 +233,8 @@ function SkylitHeatmapGrid({
   wallBand = null,
   // R11 aligned profile: {raw, adj, adjLabel, scopeLabel, shared}
   profile = null,
+  onScroll,
+  scrollRef,
 }) {
   const gridKey = GRID_BY_VIEW[viewMode] || "grid";
 
@@ -546,7 +549,7 @@ function SkylitHeatmapGrid({
   const densityClass = density === "full" ? " density-full" : density === "calendar" ? " density-calendar" : "";
   return (
     <div className="skylit-heatmap-wrapper">
-      <div className="skylit-heatmap-container">
+      <div className="skylit-heatmap-container" onScroll={onScroll} ref={scrollRef}>
         <table className={`trin-grid-table${densityClass}`} role="grid" aria-label={`${ticker} ${viewMode.toUpperCase()} ${metric} strike by expiry`}>
           <thead>
             <tr>
@@ -555,7 +558,7 @@ function SkylitHeatmapGrid({
                 const meta = expMeta.meta[e] || {};
                 const dl = meta.daysLeft;
                 const dlTxt = dl == null ? "date unknown" : dl === 0 ? "0DTE (expires today)" : dl > 0 ? `${dl}d left` : "expired";
-                const shareTxt = meta.share != null ? ` · ${(meta.share * 100).toFixed(1)}% of matrix gross` : "";
+                const shareTxt = meta.share != null ? ` · ${(meta.share * 100).toFixed(1)}% of sum |signed cells| (not raw gross)` : "";
                 const isSelCol = selExp === e;
                 return (
                   <th key={e} className={`trin-th-exp${isSelCol ? " trin-th-selected" : ""}`}
@@ -596,7 +599,7 @@ function SkylitHeatmapGrid({
           <span
             className="trin-legend-0dte"
             data-testid="skylit-grid-0dte"
-            title="Share of this matrix's gross exposure sitting in today-expiring columns (structural context, not a signal)"
+            title="Share of sum |signed cells| in today-expiring columns (not raw gross; structural context, not a signal)"
           >
             0DTE {zeroDte.map((e) => fmtExpiry(e)).join(", ")}:{" "}
             {zeroDte.map((e) => {

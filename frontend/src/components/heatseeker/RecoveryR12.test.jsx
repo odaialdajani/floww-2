@@ -61,7 +61,7 @@ test('Triad volume × delta picks the actual fourth surface and leaves raw uncha
   } : {} }));
   await act(async () => { render(<TrinityView />); });
   await waitFor(() => expect(screen.getByTestId('triad-pane-adjusted')).toBeInTheDocument());
-  fireEvent.click(screen.getByTestId('triad-basis-session_delta_volume'));
+  fireEvent.change(screen.getByLabelText('Adjusted context'), { target: { value: 'session_delta_volume' } });
   expect(screen.getByTestId('triad-pane-adjusted').textContent).toContain('$5.0K');
   expect(screen.getByTestId('triad-pane-adjusted').textContent).not.toContain('$10.0K');
   expect(screen.getByTestId('triad-pane-raw').textContent).toContain('$100.0K');

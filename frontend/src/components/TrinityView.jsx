@@ -5,7 +5,12 @@ import SkylitHeatmapGrid from "./heatseeker/SkylitHeatmapGrid";
 import { mapSurface } from "./heatseeker/shownMapStrikes";
 import { wallPositionOf } from "../lib/solsticeSelection";
 import { useReviewJournal } from "./triad/useReviewJournal";
-import { GEX_BASES } from "./heatseeker/gexBases";
+import { ALL_BASES, surfaceStatus, wallValues, wallRead } from "../lib/solsticeMetrics";
+import StrikeExposureProfile from "./triad/StrikeExposureProfile";
+import ExactContractReview from "./heatseeker/ExactContractReview";
+import AskLodestar from "./heatseeker/AskLodestar";
+import { usePublishScreenContext } from "../agent/useScreenContext";
+import { replayToDisplay } from "../lib/solsticeReplay";
 
 /**
  * TrinityView — Triad 0DTE review desk (O4 rebuild).
@@ -27,10 +32,7 @@ const HANDOFF_KEY = "solstice.triadHandoff";
 // Adjusted bases available in the snapshot contract (metrics.grids).
 // Window Δvolume×delta has no per-strike surface in the packet, so it is
 // offered disabled with the reason rather than invented client-side.
-const ADJUSTED_BASES = [
-  ...GEX_BASES.filter(b => b.id !== "raw"),
-  { id: "window", label: "Window Δvol", units: null },
-];
+const ADJUSTED_BASES = ALL_BASES.filter(b => b.id !== "raw");
 
 function readHandoff() {
   try {
@@ -69,7 +71,7 @@ function scenariosForWall(scenarios, wall, spot) {
   ];
 }
 
-function TrinityView({ onFocusTicker, onTradeSelect }) {
+function TrinityView({ onFocusTicker }) {
   const [handoff] = useState(readHandoff);
   const [ticker, setTicker] = useState(handoff?.ticker || "SPY");
   const [symbolInput, setSymbolInput] = useState(handoff?.ticker || "SPY");
@@ -78,9 +80,14 @@ function TrinityView({ onFocusTicker, onTradeSelect }) {
   const [error, setError] = useState(null);
   const [wallId, setWallId] = useState(handoff?.wall_id || null);
   const [basis, setBasis] = useState("delta");
+  const [activePane, setActivePane] = useState("raw");
+  const [mobilePane, setMobilePane] = useState("raw");
+  const [cell, setCell] = useState(null);
+  const [scope, setScope] = useState("loaded");
+  const [replayId, setReplayId] = useState(handoff?.replayAsOf ? handoff.snapshotId || null : null);
+  const isReplay = Boolean(replayId);
   const [board, setBoard] = useState([]);
-  const [contract, setContract] = useState(null);
-  const [contractLoading, setContractLoading] = useState(false);
+
   const [drawerOpen, setDrawerOpen] = useState(false);
   // O5: same focus ownership as the Solstice inspector drawer.
   const drawerCloseRef = useRef(null);
@@ -108,14 +115,20 @@ function TrinityView({ onFocusTicker, onTradeSelect }) {
     setLoading(true);
     setError(null);
     setPayload(null);
-    setWallId(handoff?.wall_id || null);
+    setWallId(ticker === handoff?.ticker ? handoff.wall_id || null : null);
+    setCell(null);
+    setDrawerOpen(false);
+    const dteQuery = scope === "0dte" ? "&dte=0" : scope === "week" ? "&dte=7" : "";
+    const url = isReplay ? `${API}/solstice/replay/${encodeURIComponent(replayId)}` : `${API}/heatmap/${encodeURIComponent(ticker)}?mode=day&expiries=4${dteQuery}`;
     axios
-      .get(`${API}/heatmap/${encodeURIComponent(ticker)}?mode=day&expiries=4`, {
+      .get(url, {
         timeout: 45000, signal: ctrl.signal,
       })
       .then((r) => {
         if (!mountedRef.current || genRef.current !== myGen) return;
-        setPayload(r.data);
+        const next = isReplay ? replayToDisplay(r.data, ticker) : r.data;
+        if (!next || (next.ticker && next.ticker !== ticker)) { setError("Snapshot identity mismatch — no substitution made"); setLoading(false); return; }
+        setPayload(next);
         setLoading(false);
       })
       .catch((e) => {
@@ -126,7 +139,7 @@ function TrinityView({ onFocusTicker, onTradeSelect }) {
       });
     return () => { ctrl.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ticker]);
+  }, [ticker, scope, replayId]);
 
   // Context strip: free leaderboard read (no scan, no budget spend).
   useEffect(() => {
@@ -147,53 +160,59 @@ function TrinityView({ onFocusTicker, onTradeSelect }) {
   const rawSurface = useMemo(() => mapSurface(payload, "gex", "raw"), [payload]);
   const adjSurface = useMemo(() => mapSurface(payload, "gex", basis), [payload, basis]);
   const adjDef = ADJUSTED_BASES.find((b) => b.id === basis);
-  const adjAvailable = basis !== "window" && adjSurface.available;
+  const adjAvailable = adjSurface.available && surfaceStatus(payload, basis).status !== "unavailable";
   const scenarios = useMemo(
     () => scenariosForWall(payload?.scenarios, selectedWall, spot),
     [payload, selectedWall, spot]
   );
   const quality = payload?.quality || null;
+  const values = wallValues(payload, selectedWall);
+  const interaction = (payload?.interactions || []).find(i => i.wall_id === wallId) || null;
+  const value = values?.[basis];
+  const read = wallRead({ wall: selectedWall, spot, adjNet: value?.net ?? null,
+    adjAvailable: adjAvailable && value?.net != null && !(value?.missing > 0) && !(value?.invalid > 0),
+    rawGross: selectedWall?.gross ?? null, interaction, quality });
+  const activeMetric = activePane === "raw" ? "raw" : basis;
+  const activeSurface = activePane === "raw" ? rawSurface : adjSurface;
+  usePublishScreenContext({ contextVersion: 2, page: "trinity", ticker, dte: scope === "0dte" ? "0dte" : scope === "week" ? "week" : "all",
+    metric: "gex", overlayMetric: activeMetric, displayMode: isReplay ? "replay" : "live", snapshotId: payload?.snapshotId || null,
+    mapQuery: payload?.map_query || null, mapVersion: payload?.asof || null, mapStrikes: activeSurface.strikes,
+    mapExpiries: activeSurface.expiries, mode: "day", expiries: 4, provider: payload?.data_source || null,
+    formula: payload?.formula_version || payload?.metrics?.formula_version || null, activePane, selectedWall: selectedWall?.wall_id || null,
+    selectedStrike: cell?.strike ?? null, selectedExpiry: cell?.colKey || null,
+    observedAt: payload?.event_time || payload?.observed_at || null });
 
   const submitSymbol = useCallback(() => {
     const t = (symbolInput || "").trim().toUpperCase();
     if (!t || t === ticker) return;
     setTicker(t);
-    setContract(null);
+    setWallId(null);
+    setCell(null);
+    setReplayId(null);
     setDrawerOpen(false);
     if (onFocusTicker) onFocusTicker(t);
   }, [symbolInput, ticker, onFocusTicker]);
 
   const selectWall = useCallback((id) => {
     setWallId(id);
-    setContract(null);
+    setCell(null);
+    setDrawerOpen(false);
   }, []);
 
-  const onGridCell = useCallback((strike) => {
+  const onGridCell = useCallback((strike, colKey = null, pane = "raw") => {
     const w = wallForStrike(walls, strike);
     if (w) {
       selectWall(w.wall_id);
     } else {
       selectWall(null);
     }
+    setCell({ strike, colKey });
+    setActivePane(pane);
   }, [walls, selectWall]);
 
-  // Contract review drawer: real detail route for the selected wall zone.
-  // Uses the wall mid + first expiry column; rows carry bid/ask/quote state.
-  const openContracts = useCallback(() => {
-    const strike = selectedWall ? selectedWall.mid ?? selectedWall.low : null;
-    const expiry = payload?.grid?.expiries?.[0] || payload?.expiries_used?.[0];
-    if (strike == null || !expiry || !ticker) return;
-    setDrawerOpen(true);
-    setContractLoading(true);
-    setContract(null);
-    axios
-      .get(`${API}/contract/${encodeURIComponent(ticker)}/${strike}/${encodeURIComponent(expiry)}`, { timeout: 20000 })
-      .then((r) => setContract(r.data))
-      .catch((e) => setContract({ error: e?.response?.data?.detail || e.message || "contract unavailable" }))
-      .finally(() => setContractLoading(false));
-  }, [selectedWall, payload, ticker]);
+  const openContracts = useCallback(() => setDrawerOpen(true), []);
 
-  const journal = useReviewJournal(ticker, payload?.snapshotId,
+  const journal = useReviewJournal(ticker, isReplay ? null : payload?.snapshotId,
     `triad wall ${selectedWall?.wall_id || "?"} basis ${basis} mode live`);
 
   const isSPX = ticker === "^SPX" || ticker === "SPX";
@@ -222,13 +241,27 @@ function TrinityView({ onFocusTicker, onTradeSelect }) {
     <div className="trinity-layout" data-testid="trinity-view">
       <ContextStrip board={board} ticker={ticker} symbolInput={symbolInput}
         onSymbolInput={setSymbolInput} onSubmit={submitSymbol} />
-      <div className="triad-pair" data-testid="triad-raw-adjusted">
+      <div className="triad-desk-toolbar">
+        <span>Raw = where · adjusted = weighting, not observed direction</span>
+        <select aria-label="Triad expiry scope" value={scope} disabled={isReplay} onChange={e => setScope(e.target.value)}>
+          <option value="loaded">All loaded · max 4 expiries</option><option value="0dte">0DTE · same session</option><option value="week">Week · ≤7 calendar DTE</option>
+          <option value="next" disabled>Next listed · scope route pending</option>
+        </select>
+        <label>Adjusted context <select aria-label="Adjusted context" value={basis} onChange={e => { setBasis(e.target.value); setActivePane("adjusted"); }}>
+          {ADJUSTED_BASES.map(b => <option key={b.id} value={b.id} data-testid={`triad-basis-${b.id}`}
+            disabled={surfaceStatus(payload, b.id).status === "unavailable" && basis !== b.id} title={surfaceStatus(payload, b.id).reason || b.units}>{b.label}</option>)}
+        </select></label>
+        <AskLodestar subject={`${ticker} · raw wall ${wallId || "none"}`} overlayMetric={activeMetric} displayMode={isReplay ? "replay" : "live"} compact />
+        <div className="triad-mobile-switch"><button onClick={() => setMobilePane("raw")}>Raw</button><button onClick={() => setMobilePane("adjusted")}>Adjusted</button></div>
+      </div>
+      <StrikeExposureProfile data={payload} basis={basis} wall={selectedWall} onSelect={onGridCell} />
+      <div className="triad-pair" data-testid="triad-raw-adjusted" data-mobile-pane={mobilePane}>
         <div className="triad-pane" data-testid="triad-pane-raw">
           <div className="triad-pane-header" title="Raw structural GEX — gex_net_v1/gex_gross_v1, USD per 1% spot move">
             Raw GEX · USD/1% move · {payload?.formula_version || "gex.v2"}
           </div>
           <SkylitHeatmapGrid data={payload} spot={spot} ticker={ticker}
-            viewMode="gex" metric="raw" onCellClick={(s) => onGridCell(s)} />
+            viewMode="gex" metric="raw" onCellClick={(s, e) => onGridCell(s, e, "raw")} selected={cell ? { strike: cell.strike, expiry: cell.colKey } : null} wallBand={selectedWall} />
         </div>
         <div className="triad-pane" data-testid="triad-pane-adjusted">
           <div className="triad-pane-header" title={adjDef?.units || "No per-strike surface for this basis in the snapshot"}>
@@ -236,7 +269,7 @@ function TrinityView({ onFocusTicker, onTradeSelect }) {
           </div>
           {adjAvailable ? (
             <SkylitHeatmapGrid data={payload} spot={spot} ticker={ticker}
-              viewMode="gex" metric={basis} onCellClick={(s) => onGridCell(s)} />
+              viewMode="gex" metric={basis} onCellClick={(s, e) => onGridCell(s, e, "adjusted")} selected={cell ? { strike: cell.strike, expiry: cell.colKey } : null} wallBand={selectedWall} />
           ) : (
             <div className="triad-unavailable" data-testid="triad-adjusted-unavailable"
               title={basis === "window" ? "window_dadgex has no per-strike surface in the snapshot contract" : "adjusted surface missing from this snapshot"}>
@@ -247,22 +280,7 @@ function TrinityView({ onFocusTicker, onTradeSelect }) {
           )}
         </div>
       </div>
-      <div className="triad-basis-row">
-        <span className="triad-basis-label">Adjusted basis:</span>
-        {ADJUSTED_BASES.map((b) => {
-          const dis = b.id === "window";
-          return (
-            <button key={b.id}
-              className={`triad-basis-btn${basis === b.id ? " active" : ""}`}
-              disabled={dis}
-              title={dis ? "Window Δvol: no per-strike surface in the snapshot contract" : b.units}
-              data-testid={`triad-basis-${b.id}`}
-              onClick={() => setBasis(b.id)}>
-              {b.label}
-            </button>
-          );
-        })}
-      </div>
+
       {spxMissing && (
         <div className="triad-capability" data-testid="triad-spx-capability">
           SPX unavailable in this session (entitlement/coverage unknown). No substitution made.
@@ -271,7 +289,7 @@ function TrinityView({ onFocusTicker, onTradeSelect }) {
       <WallBar walls={walls} wallId={selectedWall?.wall_id || null} onSelect={selectWall} />
       {selectedWall ? (
         <ScenarioCard wall={selectedWall} scenarios={scenarios} spot={spot}
-          quality={quality} onContracts={openContracts} onTradeSelect={onTradeSelect} ticker={ticker} />
+          quality={quality} onContracts={openContracts} ticker={ticker} read={read} replay={isReplay} />
       ) : (
         <div className="triad-nowall" data-testid="triad-no-wall">
           No structural wall selected — pick a cell in either pane. An adjusted-only peak with no
@@ -279,13 +297,13 @@ function TrinityView({ onFocusTicker, onTradeSelect }) {
         </div>
       )}
       {drawerOpen && (
-        <ContractDrawer contract={contract} loading={contractLoading}
+        <ContractDrawer data={payload} cell={cell} replay={isReplay}
           wall={selectedWall} onClose={() => setDrawerOpen(false)} ticker={ticker}
           closeRef={drawerCloseRef} />
       )}
       <ReviewSection journal={journal} ticker={ticker} snapshotId={payload?.snapshotId} />
       <div className="triad-source" data-testid="triad-source">
-        {payload?.snapshotId ? `snapshot ${payload.snapshotId}` : "no snapshot"}
+        {isReplay ? "REPLAY · " : "LIVE · "}{payload?.snapshotId ? `snapshot ${payload.snapshotId}` : "no snapshot"}
         {payload?.asof ? ` · ${payload.asof}` : ""}
         {payload?.data_source ? ` · ${payload.data_source}` : ""}
         {quality?.state ? ` · quality ${quality.state}` : ""}
@@ -361,14 +379,14 @@ function WallBar({ walls, wallId, onSelect }) {
   );
 }
 
-function ScenarioCard({ wall, scenarios, spot, quality, onContracts, onTradeSelect, ticker }) {
+function ScenarioCard({ wall, scenarios, spot, quality, onContracts, ticker, read, replay }) {
   const [first, second] = scenarios || [];
   // Position strip: spot marker against the wall zone on one shared scale.
   // Pure geometry (percent positions), no inferred levels.
   const pos = useMemo(() => {
     const low = Number(wall.low);
     const high = Number(wall.high);
-    const sp = Number(spot);
+    const sp = typeof spot === "number" && Number.isFinite(spot) ? spot : NaN;
     if (!Number.isFinite(low) || !Number.isFinite(high) || high <= low) return null;
     const lo = Number.isFinite(sp) ? Math.min(low, sp) : low;
     const hi = Number.isFinite(sp) ? Math.max(high, sp) : high;
@@ -391,6 +409,10 @@ function ScenarioCard({ wall, scenarios, spot, quality, onContracts, onTradeSele
       <div className="triad-scenario-zone" data-testid="triad-scenario-zone">
         Wall {wall.wall_id} · zone {wall.low}–{wall.high}
         {spot != null && wall.mid != null ? ` · ${Math.abs(spot - wall.mid).toFixed(1)} from mid` : ""}
+      </div>
+      <div className="triad-readiness" data-testid="triad-readiness" role="status">
+        <strong>{read?.readiness || "Observe"}</strong><span>{read?.watch || "No directional watch"}</span>
+        <small>{read?.reasons?.join(" · ")} · Conditional review only; adjusted sign is not a price forecast.</small>
       </div>
       {pos && (
         <div className="triad-position" data-testid="triad-position"
@@ -432,7 +454,7 @@ function ScenarioCard({ wall, scenarios, spot, quality, onContracts, onTradeSele
         title="Primary interpretation blocker">
         Blocker: {quality?.reasonCodes?.[0] || quality?.state || "none stated"}
       </div>
-      <WallPricePath ticker={ticker} wall={wall} spot={spot} />
+      {replay ? <div className="triad-price-empty">Replay: fresh price history is not requested. Use recorded interaction evidence.</div> : <WallPricePath ticker={ticker} wall={wall} spot={spot} />}
       <button className="triad-contracts-btn" data-testid="triad-contracts-btn"
         title="Review contracts at this wall (identity, delta, spread, quote age)"
         onClick={onContracts}>
@@ -449,6 +471,8 @@ function WallPricePath({ ticker, wall, spot }) {
     if (!ticker || !wall) return undefined;
     let cancelled = false;
     const ctrl = new AbortController();
+    setFrames(null);
+    setFailed(false);
     axios
       .get(`${API}/heatseeker/price-history/${encodeURIComponent(ticker)}`, {
         params: { days: 5 }, timeout: 30000, signal: ctrl.signal,
@@ -458,7 +482,7 @@ function WallPricePath({ ticker, wall, spot }) {
     return () => { cancelled = true; ctrl.abort(); };
   }, [ticker, wall?.wall_id]);
   const closes = useMemo(
-    () => (frames || []).map((f) => Number(f.close)).filter((c) => Number.isFinite(c)),
+    () => (frames || []).map((f) => f.close).filter((c) => typeof c === "number" && Number.isFinite(c)),
     [frames]
   );
   if (frames === null && !failed) {
@@ -499,44 +523,19 @@ function WallPricePath({ ticker, wall, spot }) {
   );
 }
 
-function ContractDrawer({ contract, loading, wall, onClose, ticker, closeRef }) {
-  const rows = contract?.contracts || [];
-  return (
-    <div className="triad-drawer" data-testid="triad-contract-drawer" role="dialog" aria-label="Contract review">
-      <div className="triad-drawer-header">
-        <span>Contracts · {ticker} {wall ? `${wall.low}–${wall.high}` : ""}</span>
-        <button ref={closeRef} onClick={onClose} data-testid="triad-drawer-close" aria-label="Close contract review">✕</button>
-      </div>
-      {loading && <div className="triad-drawer-loading">loading contracts…</div>}
-      {!loading && contract?.error && (
-        <div className="triad-drawer-error" data-testid="triad-contract-error">{contract.error}</div>
-      )}
-      {!loading && !contract?.error && (
-        <table className="triad-contract-table">
-          <thead><tr><th>Contract</th><th>Exp</th><th>Δ</th><th>Bid/Ask</th><th>Spread</th><th>IV</th><th>OI</th></tr></thead>
-          <tbody>
-            {rows.map((c, i) => {
-              const spread = c.ask != null && c.bid != null ? (Number(c.ask) - Number(c.bid)) : null;
-              return (
-                <tr key={c.osi || i} data-testid="triad-contract-row">
-                  <td>{c.osi || `${c.type || ""} ${c.strike ?? ""}`}</td>
-                  <td>{c.expiry || ""}</td>
-                  <td>{c.delta ?? "—"}</td>
-                  <td>{c.bid ?? "—"} / {c.ask ?? "—"}</td>
-                  <td>{spread == null || Number.isNaN(spread) ? "—" : spread.toFixed(2)}</td>
-                  <td>{c.iv ?? "—"}</td>
-                  <td>{c.open_interest ?? c.oi ?? "—"}</td>
-                </tr>
-              );
-            })}
-            {!rows.length && (
-              <tr><td colSpan={7}>No contracts returned for this zone.</td></tr>
-            )}
-          </tbody>
-        </table>
-      )}
+function ContractDrawer({ data, cell, replay, wall, onClose, ticker, closeRef }) {
+  useEffect(() => {
+    const close = e => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [onClose]);
+  return <div className="triad-drawer" data-testid="triad-contract-drawer" role="dialog" aria-label="Contract review">
+    <div className="triad-drawer-header">
+      <span>Contracts · {ticker} {wall ? `${wall.low}–${wall.high}` : ""}</span>
+      <button ref={closeRef} onClick={onClose} data-testid="triad-drawer-close" aria-label="Close contract review">✕</button>
     </div>
-  );
+    <ExactContractReview key={`${ticker}|${wall?.wall_id || ""}|${data?.snapshotId || ""}`} ticker={ticker} data={data} wall={wall} cell={cell} replay={replay} />
+  </div>;
 }
 
 function ReviewSection({ journal, ticker, snapshotId }) {

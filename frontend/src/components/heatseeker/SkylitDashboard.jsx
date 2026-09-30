@@ -16,6 +16,9 @@ import { usePublishScreenContext } from "../../agent/useScreenContext";
 import ReplayStrip from "./ReplayStrip";
 import AlertEngineStrip from "../flowseeker/AlertEngineStrip";
 import { shownMapStrikes, mapSurface } from "./shownMapStrikes";
+import { ALL_BASES, surfaceStatus, sumProfile } from "../../lib/solsticeMetrics";
+import AskLodestar from "./AskLodestar";
+import ExactContractReview from "./ExactContractReview";
 
 import { resolveSelectedWall, wallPositionOf } from "../../lib/solsticeSelection";
 
@@ -105,41 +108,50 @@ function SelectedWallBlock({ data, spot, selectedCell, metric = "raw", replay = 
  */
 function CompareWorkspace({ data, spot, ticker, metric,
                             density, windowRows, onPaneCellClick,
-                            onStrikeClick, onPaneScale, compareLock }) {
+                            onStrikeClick, onPaneScale, compareLock,
+                            multi = false, selected, wallBand, anchorStrike, onManualScroll }) {
   const gexRef = useRef(null);
   const vexRef = useRef(null);
+  const extraRefs = useRef({});
+  const paneRefs = useRef({});
   const guard = useRef(false);
   const syncFrom = (from) => (e) => {
     if (guard.current) return;
     guard.current = true;
     try {
-      const other = from === "gex" ? vexRef.current : gexRef.current;
-      const self = from === "gex" ? gexRef.current : vexRef.current;
-      if (other && self) {
-        other.scrollTop = self.scrollTop;
-        other.scrollLeft = self.scrollLeft;
+      onManualScroll?.();
+      const refs = { ...paneRefs.current, gex: gexRef.current || paneRefs.current.gex, vex: vexRef.current || paneRefs.current.vex, ...extraRefs.current };
+      const self = e.currentTarget;
+      for (const [key, other] of Object.entries(refs)) {
+        if (key !== from && other && self) {
+          other.scrollTop = self.scrollTop;
+          other.scrollLeft = self.scrollLeft;
+        }
       }
     } finally {
       guard.current = false;
     }
   };
   const metricLabel = gexBasisLabel(metric);
-  const pane = (side, view, title, units, scale) => (
+  const pane = (side, view, title, units, scale, basis = "raw") => (
     <div
       className="skylit-compare-pane"
       data-testid={`skylit-pane-${side}`}
-      ref={side === "gex" ? gexRef : vexRef}
+      ref={el => { paneRefs.current[side] = el; }}
       onScroll={syncFrom(side)}
     >
       <div className="skylit-compare-pane-header" data-testid={`skylit-pane-${side}-header`} title={title}>
-        {side === "gex" ? `GEX · ${metricLabel}` : "VEX"} · {units}
+        {side === "gex" ? `GEX · ${multi ? "Raw OI" : metricLabel}` : side === "delta" ? "GEX · Δ-weighted OI" : view.toUpperCase()} · {units}
       </div>
       <SkylitHeatmapGrid
         data={data}
         spot={spot}
         ticker={ticker}
         viewMode={view}
-        metric={side === "gex" ? metric : "raw"}
+        metric={basis}
+        selected={selected} wallBand={wallBand} anchorStrike={anchorStrike}
+        scrollRef={side === "gex" ? gexRef : side === "vex" ? vexRef : el => { extraRefs.current[side] = el; }}
+        onScroll={syncFrom(side)}
         scale={scale ? { ...scale, locked: true } : null}
         onScaleReady={(s) => onPaneScale && onPaneScale(side, s)}
         onCellClick={(s, c, v) => onPaneCellClick && onPaneCellClick(side, s, c, v)}
@@ -152,11 +164,15 @@ function CompareWorkspace({ data, spot, ticker, metric,
   // O1: zoom applies ONCE at the heatmap-area level (see render below).
   // A second zoom here used to square the scale in compare mode.
   return (
-    <div className="skylit-compare-workspace" data-testid="skylit-compare-desk">
+    <div className={`skylit-compare-workspace${multi ? " skylit-multi-workspace" : ""}`} data-testid="skylit-compare-desk">
       {pane("gex", "gex", "Raw structural wall anchor; weighting changes cells, not walls",
-        "USD/1% move", compareLock?.gex || null)}
+        "USD/1% move", compareLock?.gex || null, multi ? "raw" : metric)}
+      {multi && pane("delta", "gex", "Same snapshot and raw structural wall, absolute-delta weighting",
+        "USD/1% move · own scale", compareLock?.delta || null, "delta")}
       {pane("vex", "vex", "Vanna exposure; delta weighting N/A here",
-        "USD/+1 vol pt · local-bs-vanna.v1", compareLock?.vex || null)}
+        "USD/+1 vol pt · own scale", compareLock?.vex || null)}
+      {multi && pane("charm", "charm", "Declared Charm convention, same snapshot; not economically interchangeable with GEX",
+        "declared Charm units · own scale", compareLock?.charm || null)}
     </div>
   );
 }
@@ -211,6 +227,10 @@ function SkylitDashboard({
   // T04: metric overlay state — same snapshot, raw wall identity locked while
   // viewing activity (walls come from the payload, never recomputed per tab).
   const [metric, setMetric] = useState("raw");
+  const [layout, setLayout] = useState("focus");
+  const [replayPanelOpen, setReplayPanelOpen] = useState(false);
+  const [followSpot, setFollowSpot] = useState(true);
+  const [anchorStrike, setAnchorStrike] = useState(null);
   // F15 display-scale control: freeze the live auto range into a locked
   // comparison scale for replay. Cleared on any scope change so a stale
   // scale can never color a new symbol/metric/view.
@@ -221,7 +241,7 @@ function SkylitDashboard({
   // while wall identity stays raw-anchored. Per-pane scales lock together.
   const [compareMode, setCompareMode] = useState(false);
   const [activePane, setActivePane] = useState("gex");
-  const [compareScales, setCompareScales] = useState({ gex: null, vex: null });
+  const [compareScales, setCompareScales] = useState({ gex: null, delta: null, vex: null, charm: null });
   const [compareLock, setCompareLock] = useState(null);
   // R8-02: "Follow this wall" — keep the same wall_id selected across
   // compatible live refreshes. Cleared on ticker change or scope change.
@@ -305,7 +325,7 @@ function SkylitDashboard({
     const measure = () => {
       const h = box.clientHeight || 0;
       if (h > 0) {
-        const rows = Math.floor((h - 40) / 24);
+        const rows = Math.floor((h / gridZoom - 64) / 23);
         const next = Math.max(10, Math.min(120, rows));
         setFitRows((prev) => (prev === next ? prev : next));
       }
@@ -314,7 +334,7 @@ function SkylitDashboard({
     const ro = new ResizeObserver(measure);
     ro.observe(box);
     return () => ro.disconnect();
-  }, []);
+  }, [gridZoom]);
   // Full-page grid overlay: the in-frame heatmap only shows what fits;
   // expand renders the same grid + sidebar full-screen with all rows.
   const [expanded, setExpanded] = useState(false);
@@ -368,9 +388,9 @@ function SkylitDashboard({
     const widen = expWidened ? "&expiries=8" : "";
     // Preserve full analytical scope (R4-15): mode + dte + scalp travel with
     // the expand fetch; widening expiries is the only explicit scope change.
-    const modeParam = timeframe === "scalp" ? "scalp" : timeframe === "swing" ? "swing" : "day";
+    const modeParam = ["scalp", "1m"].includes(timeframe) ? "scalp" : ["swing", "1h"].includes(timeframe) ? "swing" : "day";
     const dteParam = dte != null ? `&dte=${encodeURIComponent(dte)}` : "";
-    const scalpParam = timeframe === "scalp" ? "&scalp=true" : "";
+    const scalpParam = modeParam === "scalp" ? "&scalp=true" : "";
     axios
       .get(`${BACKEND_API}/heatmap/${encodeURIComponent(ticker)}?mode=${modeParam}&expiries=${expWidened ? 8 : expiries}${dteParam}${scalpParam}${widen && expWidened ? "" : ""}`, {
         timeout: 45000,
@@ -386,8 +406,23 @@ function SkylitDashboard({
   const overlayData = isReplay ? displayData : (expData?.ticker === ticker ? expData : baseData);
   const visibleData = expanded ? overlayData : displayData;
   const [priceHistoryOpen, setPriceHistoryOpen] = useState(false);
-  const activeView = compareMode ? activePane : viewMode;
-  const activeMetric = ["gex", "skylit"].includes(activeView) ? metric : "raw";
+  const multi = layout === "multi";
+  const panes = compareMode || multi;
+  const activeView = panes ? (activePane === "delta" ? "gex" : activePane) : viewMode;
+  const activeMetric = panes && multi ? (activePane === "delta" ? "delta" : "raw") : ["gex", "skylit"].includes(activeView) ? metric : "raw";
+  const basisStatus = useMemo(() => Object.fromEntries(ALL_BASES.map(b => [b.id, surfaceStatus(visibleData, b.id).status])), [visibleData]);
+  const loadedExpiries = visibleData?.grid?.expiries || [];
+  const resolvedWall = resolveSelectedWall(visibleData, selectedCell).wall || null;
+  const gridSelection = selectedCell ? { strike: selectedCell.strike, expiry: selectedCell.colKey } : null;
+  const profile = useMemo(() => layout === "profile" && ["gex", "skylit"].includes(viewMode) ? {
+    raw: sumProfile(visibleData, "raw", loadedExpiries),
+    adj: metric === "raw" ? null : sumProfile(visibleData, metric, loadedExpiries),
+    adjLabel: gexBasisLabel(metric), scopeLabel: `All loaded · ${loadedExpiries.length} expiries`, shared: true,
+  } : null, [layout, visibleData, metric, viewMode, loadedExpiries]);
+  const pauseFollow = useCallback(() => {
+    if (followSpot) { setAnchorStrike(displaySpot); setFollowSpot(false); }
+  }, [followSpot, displaySpot]);
+  useEffect(() => { setFollowSpot(true); setAnchorStrike(null); }, [ticker]);
   const activeSurface = useMemo(() => mapSurface(visibleData, activeView, activeMetric), [visibleData, activeView, activeMetric]);
   const selectedReading = useMemo(() => {
     if (!selectedCell || selectedCell.ticker !== ticker || selectedCell.view !== activeView || selectedCell.metric !== activeMetric) return null;
@@ -450,7 +485,9 @@ function SkylitDashboard({
       const wall_id = followWall && followWallId
         ? (hit?.wall_id === followWallId ? hit?.wall_id : followWallId)
         : (hit?.wall_id || null);
-      const sel = { strike, colKey, value, ...snap, wall_id, view:pane, metric:["gex","skylit"].includes(pane)?metric:"raw" };
+      const paneView = pane === "delta" ? "gex" : pane;
+            const paneMetric = multi ? (pane === "delta" ? "delta" : "raw") : ["gex", "skylit"].includes(pane) ? metric : "raw";
+            const sel = { strike, colKey, value, ...snap, wall_id, view: paneView, metric: paneMetric };
       // R7-F12: historical/study clicks NEVER reach the live Trade handler.
       // Both the call boundary (here) and the arming control (below) enforce
       // it; entering replay also disarms an armed live session.
@@ -460,7 +497,7 @@ function SkylitDashboard({
         setSelectedCell(sel);
       }
     },
-    [tradeMode,onCellClick,visibleData,ticker,isReplay,followWall,followWallId,activeView,metric]
+    [tradeMode,onCellClick,visibleData,ticker,isReplay,followWall,followWallId,activeView,metric,multi]
   );
   // Clear ticker-dependent selection on symbol change (F18).
   useEffect(() => { setSelectedCell(null); setActivePane("gex"); }, [ticker]);
@@ -595,6 +632,8 @@ function SkylitDashboard({
         isLive={!isReplay && isLive}
         onRefresh={isReplay ? undefined : onRefresh}
         onExpand={() => setExpanded(true)}
+        hideExpand
+        basisStatus={basisStatus}
         onTickerChange={onTickerChange}
         tickers={tickers}
       />
@@ -617,7 +656,9 @@ function SkylitDashboard({
       {!isReplay && <ExposureStrip ticker={ticker} />}
 
       {/* 2.6 Bottom replay strip — deterministic session replay + data status */}
-      <ReplayStrip ticker={ticker} onReplay={setReplaySnap} openRequest={replayOpenRequest} />
+      <div hidden={!replayPanelOpen && !isReplay && !replayOpenRequest} className="skylit-replay-panel">
+              <ReplayStrip ticker={ticker} onReplay={setReplaySnap} openRequest={replayOpenRequest} />
+            </div>
       {isReplay && (
         <div className="skylit-replay-banner" data-testid="solstice-replay-banner" title="Replay mode — live refresh ignored">
           REPLAY {replaySnap?.asof || ""} — live updates paused · select Live in the replay strip to return
@@ -629,11 +670,13 @@ function SkylitDashboard({
       {!isReplay && <AlertEngineStrip ticker={ticker} />}
 
       {/* 2.5 Trade Mode bar */}
-      <div className="skylit-col-bar">
-        <div className="skylit-col-spacer" />
-        {selectedReading && !tradeMode && (
-          <SelectedCellReadout selectedCell={selectedReading} displayData={visibleData} metric={metric} viewMode={compareMode ? activePane : viewMode} />
-        )}
+      <div className="skylit-col-bar" role="toolbar" aria-label="Canvas controls">
+        <span className="skylit-canvas-title">2D Grid</span>
+        <select aria-label="Canvas layout" className="skylit-tf-select" value={layout} onChange={e => { setLayout(e.target.value); setCompareMode(false); setActivePane("gex"); }}>
+          <option value="focus">Focus Matrix</option><option value="profile">Matrix + Profile</option>
+          <option value="multi">Multi-map</option><option value="calendar">Calendar Overview</option>
+        </select>
+        <button className="skylit-trade-mode-btn" onClick={() => setReplayPanelOpen(o => !o)} aria-expanded={replayPanelOpen}>Replay</button>
         <button
           className="skylit-trade-mode-btn"
           onClick={zoomOut}
@@ -661,7 +704,7 @@ function SkylitDashboard({
         <button
           className={`skylit-trade-mode-btn${scaleLock && !compareMode ? " active" : ""}${compareLock ? " active" : ""}`}
           onClick={() => {
-            if (compareMode) {
+            if (panes) {
               setCompareLock((cur) => (cur ? null : { ...compareScales }));
             } else {
               setScaleLock((cur) => (cur ? null : liveScale));
@@ -676,11 +719,16 @@ function SkylitDashboard({
         </button>
         <button
           className={`skylit-trade-mode-btn${compareMode ? " active" : ""}`}
-          onClick={() => setCompareMode((m) => !m)}
+          onClick={() => { setLayout("focus"); setCompareMode((m) => !m); setActivePane("gex"); }}
           title={compareMode ? "Back to single grid (keeps symbol and wall)" : "Compare GEX + VEX side by side (one snapshot, no extra request)"}
           data-testid="skylit-compare-toggle"
         >
           GEX+VEX
+        </button>
+        <button className={`skylit-trade-mode-btn${followSpot ? " active" : ""}`} data-testid="skylit-follow-spot-toggle"
+          aria-pressed={followSpot} title="Manual scrolling pauses following; resume explicitly. Replay spot is frozen."
+          onClick={() => { setFollowSpot(f => !f); setAnchorStrike(followSpot ? displaySpot : null); }}>
+          {followSpot ? "Follow spot" : "Resume spot"}
         </button>
         {/* R8-02: follow-wall toggle — keep the same wall_id across compatible
             live refreshes. Toggled on/off; seeded from current selection. */}
@@ -711,11 +759,12 @@ function SkylitDashboard({
           </svg>
           Expand
         </button>
+        <button className="skylit-trade-mode-btn" disabled={!selectedCell} onClick={() => setDrawerOpen(true)}>Review</button>
         <button
           className={`skylit-trade-mode-btn${tradeMode ? " active" : ""}`}
           onClick={() => { if (!isReplay) setTradeMode(!tradeMode); }}
           disabled={isReplay}
-          title={isReplay ? "Trade is disabled in replay (live-only action)" : "Trade Mode: click any cell to open Quick Trade"}
+          title={isReplay ? "Trade handoff is disabled in replay" : "Trade handoff: explicit research review only; no order is placed"}
           data-testid="skylit-trade-btn"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -727,6 +776,13 @@ function SkylitDashboard({
         </button>
       </div>
 
+      <div className="skylit-selection-strip">
+        <span data-testid="skylit-loaded-scope" title="Exact loaded dates; geometry changes never fetch an unbounded expiry universe">
+          All loaded · {loadedExpiries.length} expiries · {loadedExpiries.join(", ") || "unavailable"}
+        </span>
+        {selectedReading && !tradeMode && <SelectedCellReadout selectedCell={selectedReading} displayData={visibleData} metric={activeMetric} viewMode={activeView} />}
+        <AskLodestar subject={`${ticker}${selectedCell ? ` · wall ${selectedCell.wall_id || "none"} · strike ${selectedCell.strike}` : ""}`} overlayMetric={activeMetric} displayMode={priceHistoryOpen ? "price-history" : isReplay ? "replay" : "live"} compact />
+      </div>
       {/* 3. Main Content Area */}
       <div className="skylit-main-area">
         {/* Heatmap Grid — fills available height (fitRows) with zoom */}
@@ -758,7 +814,7 @@ function SkylitDashboard({
               </div>
             </div>
           )}
-          {compareMode ? (
+          {panes ? (
             <CompareWorkspace
               data={displayData}
               spot={displaySpot}
@@ -770,6 +826,7 @@ function SkylitDashboard({
               onStrikeClick={handleStrikeClick}
               onPaneScale={paneScaleReady}
               compareLock={compareLock}
+              multi={multi} selected={gridSelection} wallBand={resolvedWall} anchorStrike={anchorStrike} onManualScroll={pauseFollow}
             />
           ) : (
           <SkylitHeatmapGrid
@@ -783,6 +840,8 @@ function SkylitDashboard({
             onCellClick={handleCellClick}
             onStrikeClick={handleStrikeClick}
             windowRows={fitRows}
+            selected={gridSelection} wallBand={resolvedWall} profile={profile} anchorStrike={anchorStrike}
+            density={layout === "calendar" ? "calendar" : "compact"} onScroll={pauseFollow}
           />
           )}
         </div>
@@ -825,6 +884,9 @@ function SkylitDashboard({
               : selectedCell}
             metric={metric} replay={isReplay}
           />
+          <details className="skylit-contract-details"><summary>Exact contract review · read-only</summary>
+            <ExactContractReview key={`${ticker}|${selectedCell?.wall_id || ""}|${visibleData?.snapshotId || ""}`} ticker={ticker} data={visibleData} wall={resolvedWall} cell={selectedCell} replay={isReplay} />
+          </details>
           {/* R8-04: review journal state for the current snapshot's decision */}
           <div className="skylit-review-pill" data-testid="skylit-review-pill">
             {reviewLoading && (
@@ -931,7 +993,7 @@ function SkylitDashboard({
           </div>
           <div className="skylit-expanded-body">
             <div className="skylit-expanded-grid">
-              {compareMode ? (
+              {panes ? (
                 <CompareWorkspace
                   data={overlayData}
                   spot={displaySpot}
@@ -943,6 +1005,7 @@ function SkylitDashboard({
                   onStrikeClick={handleStrikeClick}
                   onPaneScale={paneScaleReady}
                   compareLock={compareLock}
+                  multi={multi} selected={gridSelection} wallBand={resolvedWall}
                 />
               ) : (
               <SkylitHeatmapGrid
@@ -954,7 +1017,8 @@ function SkylitDashboard({
                 scale={scaleLock ? { ...scaleLock, locked: true } : null}
                 onCellClick={handleCellClick}
                 onStrikeClick={handleStrikeClick}
-                density="full"
+                density={layout === "calendar" ? "calendar" : "full"}
+                selected={gridSelection} wallBand={resolvedWall} profile={profile}
               />
               )}
             </div>

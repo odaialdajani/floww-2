@@ -27,6 +27,9 @@ function heatmapFixture() {
         delta: { expiries: ["2026-10-02"], strikes: [760, 765], grid: { "2026-10-02": { 760: 3000000, 765: 5400000 } } },
       },
     },
+    scout: { shortlist: { CALLS: [
+      { osi: "SPY261002C00760000", type: "call", strike: 760, expiry: "2026-10-02", bid: 1.2, ask: 1.35, delta: .55 },
+    ], PUTS: [] } },
     scenarios: [
       { wall_id: "w1", wall_position: "below", name: "Bounce watch", type: "reversal_watch", confirmation: "reclaim and hold above 760", invalidation: "sustained acceptance below 760" },
       { wall_id: "w1", wall_position: "below", name: "Breakdown continuation", type: "continuation", confirmation: "acceptance beyond zone", invalidation: "reclaim and hold above 760" },
@@ -85,7 +88,7 @@ test("handoff selects the wall and shows its two-sided scenario", async () => {
   expect(window.sessionStorage.getItem("solstice.triadHandoff")).toBeNull();
 });
 
-test("wall chips select; contract drawer shows identity/spread from the detail route", async () => {
+test("wall chips select; drawer lists recorded candidates before any exact-detail request", async () => {
   await act(async () => { render(<TrinityView />); });
   await waitFor(() => expect(screen.getByTestId("triad-walls")).toBeInTheDocument());
   await act(async () => { fireEvent.click(screen.getByTestId("triad-wall-w1")); });
@@ -96,6 +99,7 @@ test("wall chips select; contract drawer shows identity/spread from the detail r
   expect(row.textContent).toContain("SPY261002C00760000");
   expect(row.textContent).toContain("0.55");
   expect(row.textContent).toContain("0.15"); // spread 1.35-1.20
+  expect(axios.get.mock.calls.some(([url]) => String(url).includes('/api/contract/'))).toBe(false);
 });
 
 test("missing adjusted surface renders unavailable, raw untouched", async () => {

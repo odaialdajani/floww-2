@@ -49,7 +49,7 @@ export const SECONDARY_BASES = [
   },
 ];
 
-export const ALL_BASES = [...GEX_BASES, ...SECONDARY_BASES];
+export const ALL_BASES = [...GEX_BASES, ...SECONDARY_BASES].map(b => ({ ...b, units: `USD/1% move · ${b.metricId} · ${b.basis} — ${b.note}` }));
 export const ADJUSTED_BASES = ALL_BASES.filter((b) => b.role === "how");
 
 export function baseDef(id) {
@@ -144,10 +144,12 @@ export function wallValues(data, wall) {
       net: cnt(wb.daddex_usable) ? finite(wb.daddex_net) : null,
       usable: cnt(wb.daddex_usable), missing: cnt(wb.daddex_missing) || 0,
     } : null,
-    session_delta_volume: wb && Object.prototype.hasOwnProperty.call(wb, "sdv_net") ? {
-      gross: cnt(wb.sdv_usable) ? finite(wb.sdv_gross) : null,
-      net: cnt(wb.sdv_usable) ? finite(wb.sdv_net) : null,
-      usable: cnt(wb.sdv_usable), missing: cnt(wb.sdv_missing_delta) || 0,
+    session_delta_volume: wb && (Object.prototype.hasOwnProperty.call(wb, "session_delta_volume_net") || Object.prototype.hasOwnProperty.call(wb, "sdv_net")) ? {
+      gross: cnt(wb.session_delta_volume_usable ?? wb.sdv_usable) ? finite(wb.session_delta_volume_gross ?? wb.sdv_gross) : null,
+      net: cnt(wb.session_delta_volume_usable ?? wb.sdv_usable) ? finite(wb.session_delta_volume_net ?? wb.sdv_net) : null,
+      usable: cnt(wb.session_delta_volume_usable ?? wb.sdv_usable),
+      missing: cnt(wb.session_delta_volume_missing ?? wb.sdv_missing_delta) || 0,
+      invalid: cnt(wb.session_delta_volume_invalid) || 0,
     } : null,
     activity: wb ? {
       gross: cnt(wb.volume_usable) ? finite(wb.volume_gross) : null,
@@ -174,6 +176,7 @@ export const NEAR_ZERO_SHARE = 0.05;
  *                              wall above price → Upside continuation watch
  */
 export function wallRead({ wall, spot, adjNet, adjAvailable, rawGross, interaction, quality }) {
+  adjNet = finite(adjNet);
   const pos = wallPositionOf(wall, spot);
   const reasons = [];
   let watch = null;
@@ -205,7 +208,7 @@ export function wallRead({ wall, spot, adjNet, adjAvailable, rawGross, interacti
     readiness = "Wait";
     reasons.push((quality?.reasonCodes || [])[0] || "data quality blocks review");
   } else if (!watch) readiness = "Wait";
-  else if (["holding", "rejecting", "accepted_beyond"].includes(state)) readiness = "Confirmed for review";
+  else if ((tone === "positive" && ["holding", "rejecting"].includes(state)) || (tone === "negative" && state === "accepted_beyond")) readiness = "Confirmed for review";
   else reasons.push(state === "unobserved" ? "awaiting measured price interaction" : `watching (${state})`);
   return { watch, tone, readiness, reasons, position: pos };
 }

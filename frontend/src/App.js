@@ -39,6 +39,7 @@ import UOAPanel from "./components/UOAPanel";
 import { useWebSocketGex } from "./hooks/useWebSocketGex";
 import { useDebounce } from "./hooks/useDebounce";
 import { useScopedReading } from "./hooks/useScopedReading";
+import useSolsticeReviewCallbacks from "./hooks/useSolsticeReviewCallbacks";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { ShortcutsModal } from "./components/ShortcutsModal";
 import { MorningBriefing } from "./components/MorningBriefing";
@@ -728,6 +729,9 @@ export default function App() {
     };
   }, [data]);
 
+  const solsticeCallbacks = useSolsticeReviewCallbacks({ ticker, data: displayData,
+    spot: livespot?.spot ?? data?.spot, setMode, refresh: fetchData, clearError: setErr, onReview: setTradeSelection });
+
   // F05: liveness is chain/Greek freshness, never socket/object presence.
   // Independent spot / chain / history / flow status from the snapshot itself.
   const heatLive = useMemo(() => {
@@ -992,53 +996,14 @@ export default function App() {
                   viewMode={viewMode}
                   onViewModeChange={setViewMode}
                   timeframe={mode === "scalp" ? "1m" : mode === "swing" ? "1h" : "5m"}
-                  onTimeframeChange={(tf) => {
-                    if (tf === "1m") setMode("scalp");
-                    else if (tf === "1h") setMode("swing");
-                    else setMode("day");
-                  }}
+                  onTimeframeChange={solsticeCallbacks.timeframe}
                   expiries={expiries}
                   onExpiriesChange={setExpiries}
                   onTickerChange={setTicker}
                   tickers={tickers}
-                  onRefresh={() => { setErr(null); fetchData(); }}
-                  onCellClick={async (strike, colKey, value) => {
-                    const row = displayData?.strikes?.find(s => s.strike === strike);
-                    let contractData = null;
-                    try {
-                      const cd = await fetch(
-                        `${API}/contract/${ticker}/${strike}/${colKey}`
-                      );
-                      if (cd.ok) contractData = await cd.json();
-                    } catch (_) { /* contract detail optional */ }
-
-                    const callC = contractData?.contracts?.find(c => c.type === 'call')
-                      || contractData?.contracts?.[0];
-                    const putC = contractData?.contracts?.find(c => c.type === 'put')
-                      || contractData?.contracts?.[1];
-
-                    setTradeSelection({
-                      ticker, strike, expiry: colKey,
-                      spot: livespot?.spot ?? data?.spot,
-                      gex: value,
-                      iv: row?.iv ?? callC?.iv ?? data?.iv,
-                      delta: row?.delta ?? callC?.delta ?? data?.delta,
-                      oi: row?.total_oi ?? row?.oi ?? data?.oi
-                        ?? (callC?.open_interest ?? 0) + (putC?.open_interest ?? 0),
-                      call_gex: row?.call_gex,
-                      put_gex: row?.put_gex,
-                      vex: row?.vex,
-                      charm: row?.charm,
-                      oi_symbol: callC?.osi || putC?.osi || null,
-                      call_bid: callC?.bid,
-                      call_ask: callC?.ask,
-                      call_last: callC?.last,
-                      put_bid: putC?.bid,
-                      put_ask: putC?.ask,
-                      put_last: putC?.last,
-                    });
-                  }}
-                  onStrikeClick={(strike) => setTradeSelection({ ticker, strike, spot: livespot?.spot ?? data?.spot })}
+                  onRefresh={solsticeCallbacks.reload}
+                  onCellClick={solsticeCallbacks.cell}
+                  onStrikeClick={solsticeCallbacks.strike}
                   isLive={heatLive}
                   regime={data?.nodes?.regime}
                   loading={loading && !data}
@@ -1055,53 +1020,14 @@ export default function App() {
                   viewMode={viewMode}
                   onViewModeChange={setViewMode}
                   timeframe={mode === "scalp" ? "1m" : mode === "swing" ? "1h" : "5m"}
-                  onTimeframeChange={(tf) => {
-                    if (tf === "1m") setMode("scalp");
-                    else if (tf === "1h") setMode("swing");
-                    else setMode("day");
-                  }}
+                  onTimeframeChange={solsticeCallbacks.timeframe}
                   expiries={expiries}
                   onExpiriesChange={setExpiries}
                   onTickerChange={setTicker}
                   tickers={tickers}
-                  onRefresh={() => { setErr(null); fetchData(); }}
-                  onCellClick={async (strike, colKey, value) => {
-                    const row = displayData?.strikes?.find(s => s.strike === strike);
-                    let contractData = null;
-                    try {
-                      const cd = await fetch(
-                        `${API}/contract/${ticker}/${strike}/${colKey}`
-                      );
-                      if (cd.ok) contractData = await cd.json();
-                    } catch (_) { /* contract detail optional */ }
-
-                    const callC = contractData?.contracts?.find(c => c.type === 'call')
-                      || contractData?.contracts?.[0];
-                    const putC = contractData?.contracts?.find(c => c.type === 'put')
-                      || contractData?.contracts?.[1];
-
-                    setTradeSelection({
-                      ticker, strike, expiry: colKey,
-                      spot: livespot?.spot ?? data?.spot,
-                      gex: value,
-                      iv: row?.iv ?? callC?.iv ?? data?.iv,
-                      delta: row?.delta ?? callC?.delta ?? data?.delta,
-                      oi: row?.total_oi ?? row?.oi ?? data?.oi
-                        ?? (callC?.open_interest ?? 0) + (putC?.open_interest ?? 0),
-                      call_gex: row?.call_gex,
-                      put_gex: row?.put_gex,
-                      vex: row?.vex,
-                      charm: row?.charm,
-                      oi_symbol: callC?.osi || putC?.osi || null,
-                      call_bid: callC?.bid,
-                      call_ask: callC?.ask,
-                      call_last: callC?.last,
-                      put_bid: putC?.bid,
-                      put_ask: putC?.ask,
-                      put_last: putC?.last,
-                    });
-                  }}
-                  onStrikeClick={(strike) => setTradeSelection({ ticker, strike, spot: livespot?.spot ?? data?.spot })}
+                  onRefresh={solsticeCallbacks.reload}
+                  onCellClick={solsticeCallbacks.cell}
+                  onStrikeClick={solsticeCallbacks.strike}
                   isLive={heatLive}
                   regime={data?.nodes?.regime}
                   loading={loading && !data}
