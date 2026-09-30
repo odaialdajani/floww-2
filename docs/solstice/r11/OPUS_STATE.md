@@ -1,6 +1,6 @@
 # OPUS_STATE — Solstice / R11 (sole harness)
 
-Checkpoint: 2026-09-29 (session 1). Agent: Claude Opus (Zed), sole lane —
+Original checkpoint: 2026-09-29 (session 1). Resumed 2026-09-30 by GPT-6.1-Sol in Zed (not Claude Opus), sole lane —
 no Spark/Hermes process is running in this checkout; lane separation is kept
 in commits (backend vs frontend), not by leases to other agents.
 
@@ -131,4 +131,18 @@ git switch -c solstice/r11-opus
 
 ## Next action
 
-Slice H01 — write failing tests first (`backend/tests/solstice/test_r11_metric_contract.py`).
+Resume checkpoint 2026-09-30T12:17:32Z: preserve the actual frontend recovery files, integrate reviewed PR #89, then finish mounted layouts/Triad. H01 is committed at `95b16a619d267d6079cd68f751a0c0aa93c1a3aa`, not pending.
+
+## Recovery intake (2026-09-30)
+
+- Actual base/main: `5312fe569f876be5ad05920218742424348234ce`; local HEAD: `95b16a619d267d6079cd68f751a0c0aa93c1a3aa` on `solstice/r11-opus`.
+- User explicitly authorizes reviewed integration/merge/publish, but no deploy/restart, force, capture, retrain or order wiring. Surgical App.js composition/callback changes are in the requested scope.
+- PR #89 is OPEN, not merged, at `ed107cc11accf22aa8a0cb8779325ae55cdf2464`. Retrieved with `gh pr view 89 --json state,headRefOid,statusCheckRollup,mergeable,mergeStateStatus`: backend-tests, frontend-build and ruff SUCCESS; docker-build SKIPPED. Mergeable/CLEAN. Those are #89's checks, not the later candidate's checks.
+- Reviewed its 15-file diff. It overlaps local H01 (wall/session counts and typed window inputs) and ControlBar. Preserve both contributions; consolidate compatible field aliases and the duplicate display-metadata modules after integration.
+- `python3` manifest comparison of all 71 protected blobs against #89 head: no changes. Upstream MarketCoverage retained.
+- Local unfinished frontend files match the pasted handoff. Ran `CI=true npx craco test --watchAll=false --runInBand src/lib/solsticeMetrics.test.js src/components/heatseeker/SkylitHeatmapGrid.test.jsx src/components/heatseeker/SkylitHeatmapGrid.r11.test.jsx src/components/heatseeker/SkylitControlBar.test.jsx`: 4 suites / 40 tests PASS. The handoff's larger remembered totals are not this result.
+- No actual 23-commit Opus stack exists on this branch. `fix/audit-2026-09` remains separate unique work described above; do not merge its deletions/alternative metric engine wholesale.
+- Named Recovery-Harness/Audit/ZIP files were not attached as readable artifacts and path search found none. Repository #89 recovery receipt is available via its branch.
+- GSD builder invocation ends at dirty-tree guard (changes on non-gsd branch); no queue claim/stash/reset. Discovery inputs already specify the product choices; no new speculative discovery map or recurring task created.
+- Unrelated kanban file and two other worktrees untouched. No additional agents created. No preview or market/AI network call made.
+- Next: checkpoint frontend recovery with exact paths, merge #89 under authorized reviewed merge, integrate origin/main without stashing kanban, test combined tree, then layout/profile/Triad slices.

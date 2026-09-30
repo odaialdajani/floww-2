@@ -1,6 +1,7 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TICKER_SETS } from "./SkylitTickerBar";
 import { buildTickerUniverse, stepIndex } from "./tickerUniverse";
+import { GEX_BASES, SECONDARY_BASES } from "../../lib/solsticeMetrics";
 
 /**
  * SkylitControlBar — Second header bar with GEX/VEX tabs, LIVE badge,
@@ -39,6 +40,11 @@ function SkylitControlBar({
   tickers = null,
   // Auto-refresh cadence while Playback is armed.
   playbackIntervalMs = 15000,
+  // R11: per-basis availability {id: "ok"|"partial"|"unavailable"} from the
+  // metric contract; unavailable bases stay listed but disabled.
+  basisStatus = null,
+  // R11: the Solstice canvas toolbar owns Expand; hide the duplicate here.
+  hideExpand = false,
 }) {
   const [now, setNow] = useState(new Date());
   // Playback (2026-09-03): arms interval refresh via onRefresh.
@@ -54,11 +60,16 @@ function SkylitControlBar({
     return () => clearInterval(id);
   }, []);
 
+  // The latest onRefresh lives in a ref so a parent re-render (a new
+  // callback identity every spot poll) never resets the playback timer —
+  // previously the 15 s interval was re-armed every ~5 s and never fired.
+  const refreshRef = useRef(onRefresh);
+  refreshRef.current = onRefresh;
   useEffect(() => {
     if (!playing) return undefined;
-    const id = setInterval(() => { if (onRefresh) onRefresh(); }, playbackIntervalMs);
+    const id = setInterval(() => { if (refreshRef.current) refreshRef.current(); }, playbackIntervalMs);
     return () => clearInterval(id);
-  }, [playing, onRefresh, playbackIntervalMs]);
+  }, [playing, playbackIntervalMs]);
 
   // Universe: same deduped list as the ticker bar (object, array, or
   // null shape). No position counter by design (2026-09-12): the arrows
@@ -148,15 +159,25 @@ function SkylitControlBar({
             GEX family has multiple bases (VEX/Charm are single-basis). */}
         {viewMode === "gex" && (
           <select
-            className="skylit-tf-select"
+            className="skylit-tf-select skylit-basis-select"
             data-testid="skylit-basis-select"
             value={metric}
             onChange={(e) => onMetricChange && onMetricChange(e.target.value)}
-            title="GEX basis — Raw: gex_net_v1/gex_gross_v1 · Δ-wtd: experimental moneyness weighting, not flow · Activity: session turnover, not positioning"
+            aria-label="GEX basis"
+            title={[...GEX_BASES, ...SECONDARY_BASES].map((b) => `${b.label}: ${b.note}`).join("\n")}
           >
-            <option value="raw">Raw</option>
-            <option value="delta">Δ-wtd</option>
-            <option value="activity">Activity</option>
+            {GEX_BASES.map((b) => (
+              <option key={b.id} value={b.id} disabled={basisStatus?.[b.id] === "unavailable" && metric !== b.id}>
+                {b.label}{basisStatus?.[b.id] === "partial" ? " · partial" : basisStatus?.[b.id] === "unavailable" ? " · unavailable" : ""}
+              </option>
+            ))}
+            <optgroup label="More surfaces">
+              {SECONDARY_BASES.map((b) => (
+                <option key={b.id} value={b.id} disabled={basisStatus?.[b.id] === "unavailable" && metric !== b.id}>
+                  {b.label}{basisStatus?.[b.id] === "unavailable" ? " · unavailable" : ""}
+                </option>
+              ))}
+            </optgroup>
           </select>
         )}
         {showInfo && (
@@ -165,13 +186,14 @@ function SkylitControlBar({
             data-testid="skylit-info-popover"
             onClick={() => setShowInfo(false)}
           >
-            <div><b>GEX</b> — gold/teal cells: dealer gamma walls (King ★ = max).</div>
-            <div><b>VEX</b> — blue/purple cells: vanna exposure regime.</div>
-            <div><b>Raw</b> = Σc·u·N (net) + Σu·N (gross), u=Γ·m·S²×0.01, gex.v2.</div>
-            <div><b>Δ-wtd</b> = Σc·u·N·|δ| — experimental weighting, not buying/selling.</div>
-            <div><b>Activity</b> = Σc·u·V — turnover, not new positions. Trade side unavailable in Public-only mode.</div>
-            <div>Regime sign never permits direction alone. Unknown/no-data are valid states.</div>
-            <div>Click a cell to inspect it · arm <b>Trade</b> to open Quick Trade.</div>
+            <div><b>Colors</b> — purple = most negative, indigo/cyan near zero, green → yellow = most positive (zero-anchored). Colors describe exposure, not a forecast; the same color on GEX and VEX does not mean the same size.</div>
+            <div><b>Gold</b> = spot line, selection and navigation only. ★ = largest single cell.</div>
+            <div><b>Raw OI</b> = Σc·u·OI, u=Γ·m·S²×0.01 (gex.v2). Use it to find <i>where</i> the walls are.</div>
+            <div><b>Δ-weighted OI</b> = Σc·u·OI·|δ| — a weighting, not buying or selling.</div>
+            <div><b>Volume × |Δ|</b> = Σc·u·V·|δ| — today&apos;s turnover weighted by |delta|. Use the adjusted surfaces to read <i>how</i> exposure at the same wall is weighted.</div>
+            <div><b>Session volume</b> = Σc·u·V (no Δ). <b>Window</b> = change between two comparable observations only.</div>
+            <div>A sign alone never permits a trade: price interaction at the wall decides readiness. Unknown/no-data are valid states.</div>
+            <div>Click a cell to inspect it · Trade is a review hand-off, never an automatic order.</div>
             <div>Data: Public.com live chain → cvserver → yfinance.</div>
           </div>
         )}
@@ -273,7 +295,7 @@ function SkylitControlBar({
             )}
           </svg>
         </button>
-        <button
+        {!hideExpand && <button
           className="skylit-action-btn"
           title="Expand grid full-screen"
           onClick={() => { if (onExpand) onExpand(); }}
@@ -285,7 +307,7 @@ function SkylitControlBar({
             <rect x="3" y="14" width="7" height="7" />
             <rect x="14" y="14" width="7" height="7" />
           </svg>
-        </button>
+        </button>}
         <button
           className="skylit-action-btn"
           title={copied ? "Copied!" : "Share"}
