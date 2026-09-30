@@ -118,23 +118,23 @@ def window_contract_activity(prev: list[dict], cur: list[dict],
     flow. Mixed gamma/delta provenance pairs are blocked without policy.
     OI turnover is turnover, never inventory-erosion evidence.
     """
-    import math as _math
-
     from domain.exposure_metrics import (
         abs_delta,
+        dollar_gamma_unit,
         is_valid_measurement,
         option_type_sign,
         resolve_multiplier,
     )
     from services.solstice_provenance import check_volume_window
 
+    spot_f = is_valid_measurement(spot)
+    if spot_f is None or spot_f <= 0:
+        return {"status": "unavailable", "reason": "SPOT_UNKNOWN", "contracts": [],
+                "missing_delta": 0, "mixed_pair": 0, "invalid": 0}
     before = {_contract_key(c): c for c in (prev or []) if isinstance(c, dict)}
     rows = []
     missing_delta = 0
     mixed_pair = 0
-    # R11-H01: typed/nonfinite inputs are COUNTED exclusions. Previously a
-    # boolean delta/gamma read as 1.0 (float(True)), an unknown option type
-    # defaulted to put, and an explicit 0/None multiplier became 100.
     invalid = 0
     invalid_type = 0
     for c in cur or []:
@@ -143,15 +143,14 @@ def window_contract_activity(prev: list[dict], cur: list[dict],
         p = before.get(_contract_key(c))
         if p is None:
             continue  # NO_PRIOR baseline: not comparable, not ranked
-        if p.get("delta") is None or c.get("delta") is None:
-            missing_delta += 1
-            continue
-        # Delta is validated BEFORE the volume step (same population rule as
-        # the missing case above): an unusable delta is outside the activity
-        # population and must not quarantine the window through its volume.
-        ad, _d_reason = abs_delta(p.get("delta"))
-        if ad is None:
-            invalid += 1
+        # Validate both observations before admitting this counter step.
+        d, old_reason = abs_delta(p.get("delta"))
+        current_delta, new_reason = abs_delta(c.get("delta"))
+        if d is None or current_delta is None:
+            if old_reason == "DELTA_MISSING" or new_reason == "DELTA_MISSING":
+                missing_delta += 1
+            else:
+                invalid += 1
             continue
         if isinstance(p.get("volume"), bool) or isinstance(c.get("volume"), bool):
             invalid += 1
@@ -177,15 +176,14 @@ def window_contract_activity(prev: list[dict], cur: list[dict],
         if sign is None:
             invalid_type += 1
             continue
-        g = is_valid_measurement(p.get("gamma"))
-        m, _m_reason = resolve_multiplier(p)
-        if g is None or g < 0 or m is None or not _math.isfinite(dv):
+        m, _ = resolve_multiplier(p)
+        u = dollar_gamma_unit(p.get("gamma"), m, spot_f)
+        if u is None or not math.isfinite(u * d * dv):
             invalid += 1
             continue
-        u = g * m * spot * spot * 0.01
         rows.append({"osi": c.get("osi"), "expiry": c.get("expiry"),
                      "strike": c.get("strike"), "delta_volume": dv,
-                     "window_daddex": sign * u * ad * dv,
+                     "window_daddex": sign * u * d * dv,
                      "pair": f"{gsrc}/{dsrc}"})
     rows.sort(key=lambda r: abs(r["window_daddex"]), reverse=True)
     return {"status": "ok", "contracts": rows,

@@ -430,10 +430,9 @@ def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str,
         dg = dn = vg = vn = 0.0
         usable = missing = invalid = vn_n = 0
         volume_usable = volume_missing = volume_invalid = 0
-        # R11-H01: wall-local session volume x |delta| (sigma c u V |d|), the
-        # delta-weighted activity twin. Same member contracts; its own counts.
-        sg = sn = 0.0
-        sdv_usable = sdv_missing_delta = 0
+        session_dv_gross = session_dv_net = 0.0
+        session_dv_usable = session_dv_missing = session_dv_invalid = 0
+        sdv_missing_delta = 0
         expiries: set = set()
         n_contracts = 0
         # Excluded population (resweep). A contract whose strike cannot be
@@ -462,34 +461,44 @@ def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str,
             if sign is None or u is None or not math.isfinite(u):
                 invalid += 1
                 volume_invalid += 1
+                session_dv_invalid += 1
                 continue
 
             volume = c.get("volume", c.get("V"))
             if volume is None:
                 volume_missing += 1
+                session_dv_missing += 1
             else:
                 v_f = is_valid_measurement(volume)
                 if v_f is None or v_f < 0:
                     volume_invalid += 1
+                    session_dv_invalid += 1
                 else:
                     contribution = u * v_f
                     if not math.isfinite(contribution):
                         volume_invalid += 1
+                        session_dv_invalid += 1
                     else:
                         vg += contribution
                         vn += sign * contribution
                         volume_usable += 1
                         if v_f > 0:
                             vn_n += 1
-                        # Reported zero volume is a measured zero for this
-                        # family too; delta is only needed when V > 0.
-                        sad, _sreason = (0.0, None) if v_f == 0 else abs_delta(c.get("delta", c.get("δ")))
-                        if sad is None:
-                            sdv_missing_delta += 1
+                        # Same member contracts as unweighted volume; this
+                        # fourth surface needs delta, never an OI substitute.
+                        ad_v, reason_v = abs_delta(c.get("delta", c.get("δ")))
+                        if ad_v is None:
+                            if reason_v == "DELTA_MISSING":
+                                session_dv_missing += 1
+                                sdv_missing_delta += 1
+                            else:
+                                session_dv_invalid += 1
+                        elif not math.isfinite(contribution * ad_v):
+                            session_dv_invalid += 1
                         else:
-                            sg += contribution * sad
-                            sn += sign * contribution * sad
-                            sdv_usable += 1
+                            session_dv_gross += contribution * ad_v
+                            session_dv_net += sign * contribution * ad_v
+                            session_dv_usable += 1
 
             oi_f = is_valid_measurement(c.get("oi"))
             if oi_f is None or oi_f < 0:
@@ -514,15 +523,21 @@ def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str,
             "volume_net": vn if math.isfinite(vn) else None, "volume_n": vn_n,
             "volume_usable": volume_usable, "volume_missing": volume_missing,
             "volume_invalid": volume_invalid,
+            "session_delta_volume_gross": session_dv_gross if session_dv_usable and math.isfinite(session_dv_gross) else None,
+            "session_delta_volume_net": session_dv_net if session_dv_usable and math.isfinite(session_dv_net) else None,
+            "session_delta_volume_usable": session_dv_usable,
+            "session_delta_volume_missing": session_dv_missing,
+            "session_delta_volume_invalid": session_dv_invalid,
             "n_contracts": n_contracts, "invalid": invalid,
             # The excluded population, so "this wall has no contracts" and
             # "these contracts could not be matched to it" never look alike.
             "unreadable_strike": unreadable_strike,
             "not_a_member": not_a_member,
             "expiries": sorted(expiries),
-            "sdv_gross": sg if math.isfinite(sg) else None,
-            "sdv_net": sn if math.isfinite(sn) else None,
-            "sdv_usable": sdv_usable, "sdv_missing_delta": sdv_missing_delta,
+            # R11 short names are compatibility aliases of the same result.
+            "sdv_gross": session_dv_gross if session_dv_usable and math.isfinite(session_dv_gross) else None,
+            "sdv_net": session_dv_net if session_dv_usable and math.isfinite(session_dv_net) else None,
+            "sdv_usable": session_dv_usable, "sdv_missing_delta": sdv_missing_delta,
             # `basis` is the legacy single label (kept for compatibility); it
             # only ever described the daddex_* fields. `bases` names each family.
             "basis": "OI_DELTA_WEIGHTED", "formula_version": FORMULA_VERSION,

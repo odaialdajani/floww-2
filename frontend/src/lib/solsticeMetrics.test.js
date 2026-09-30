@@ -36,8 +36,8 @@ function payload() {
   };
 }
 
-test("primary GEX bases are exactly Raw OI, Δ-weighted OI, Volume × |Δ| activity", () => {
-  expect(GEX_BASES.map((b) => b.label)).toEqual(["Raw OI", "Δ-weighted OI", "Volume × |Δ| activity"]);
+test("primary GEX bases retain the integrated compact labels and distinct activity formula", () => {
+  expect(GEX_BASES.map((b) => b.label)).toEqual(["Raw OI", "Δ-weighted OI", "Volume × |Δ|"]);
   // The legacy Σc·u·V surface is NOT labelled as delta-weighted anywhere.
   expect(baseDef("activity").label).not.toMatch(/×\s*\|?Δ/);
   expect(baseDef("session_delta_volume").basis).toBe("VOLUME_DELTA_WEIGHTED");

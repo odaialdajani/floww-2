@@ -27,7 +27,7 @@ export const GEX_BASES = [
     note: "OI gamma weighted by |delta|. A weighting, not observed buying or selling.",
   },
   {
-    id: "session_delta_volume", label: "Volume × |Δ| activity", short: "Vol×|Δ|",
+    id: "session_delta_volume", label: "Volume × |Δ|", short: "Vol×|Δ|", 
     metricId: "session_delta_volume_gamma_v1", basis: "VOLUME_DELTA_WEIGHTED", role: "how",
     section: "session_delta_volume",
     note: "Today's session volume gamma weighted by |delta|. Turnover, not new positions.",
@@ -38,7 +38,7 @@ export const GEX_BASES = [
 // never presented as a primary tab.
 export const SECONDARY_BASES = [
   {
-    id: "activity", label: "Session volume (no Δ)", short: "Session vol", metricId: "volume_gamma_v1",
+    id: "activity", label: "Session volume Γ (no Δ)", short: "Session vol", metricId: "volume_gamma_v1",
     basis: "VOLUME", role: "how", section: "activity",
     note: "Σ c·u·V — session turnover without delta weighting.",
   },

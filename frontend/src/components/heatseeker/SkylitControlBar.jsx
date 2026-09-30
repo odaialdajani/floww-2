@@ -178,6 +178,7 @@ function SkylitControlBar({
                 </option>
               ))}
             </optgroup>
+
           </select>
         )}
         {showInfo && (
@@ -194,6 +195,7 @@ function SkylitControlBar({
             <div><b>Session volume</b> = Σc·u·V (no Δ). <b>Window</b> = change between two comparable observations only.</div>
             <div>A sign alone never permits a trade: price interaction at the wall decides readiness. Unknown/no-data are valid states.</div>
             <div>Click a cell to inspect it · Trade is a review hand-off, never an automatic order.</div>
+
             <div>Data: Public.com live chain → cvserver → yfinance.</div>
           </div>
         )}
@@ -298,7 +300,8 @@ function SkylitControlBar({
         {!hideExpand && <button
           className="skylit-action-btn"
           title="Expand grid full-screen"
-          onClick={() => { if (onExpand) onExpand(); }}
+          disabled={typeof onExpand !== "function"}
+          onClick={() => { if (typeof onExpand === "function") onExpand(); }}
           data-testid="skylit-expand-toolbar-btn"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

@@ -95,6 +95,7 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
       }
     } catch (e) {
       /* replay unavailable — stay live, never partial grid */
+      if (genRef.current === myGen) setPlaying(false);
     } finally {
       if (genRef.current === myGen) setLoading(false);
     }
@@ -114,25 +115,28 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
   }, [onReplay]);
   const stepOnce = useCallback(() => {
     const nxt = stepReplay(snaps, curIdRef.current, 1);
-    if (nxt) openSnap(nxt.id);
-    else setPlaying(false);
+    if (nxt) {
+      openSnap(nxt.id);
+      return true;
+    }
+    setPlaying(false);
+    return false;
   }, [snaps, openSnap]);
   useEffect(() => {
-    if (!playing) return undefined;
+    if (!playing || loading) return undefined;
     if (currentId && replayIndexOf(snaps, currentId) >= snaps.length - 1) {
       setPlaying(false);
       return undefined;
     }
     const id = setTimeout(stepOnce, 2000);
     return () => clearTimeout(id);
-  }, [playing, currentId, snaps, stepOnce]);
+  }, [playing, loading, currentId, snaps, stepOnce]);
   const togglePlay = useCallback(() => {
     if (playing) {
       setPlaying(false);
       return;
     }
-    stepOnce();
-    setPlaying(true);
+    if (stepOnce()) setPlaying(true);
   }, [playing, stepOnce]);
   const scrubIndex = replayIndexOf(snaps, currentId);
   // R8-04: external replay jump (Next-to-review list). Same generation
