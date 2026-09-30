@@ -5,6 +5,7 @@ import SkylitHeatmapGrid from "./heatseeker/SkylitHeatmapGrid";
 import { mapSurface } from "./heatseeker/shownMapStrikes";
 import { wallPositionOf } from "../lib/solsticeSelection";
 import { useReviewJournal } from "./triad/useReviewJournal";
+import { GEX_BASES } from "./heatseeker/gexBases";
 
 /**
  * TrinityView — Triad 0DTE review desk (O4 rebuild).
@@ -27,8 +28,7 @@ const HANDOFF_KEY = "solstice.triadHandoff";
 // Window Δvolume×delta has no per-strike surface in the packet, so it is
 // offered disabled with the reason rather than invented client-side.
 const ADJUSTED_BASES = [
-  { id: "delta", label: "Δ-weighted OI", units: "USD/1% move · dadgex_net_v1 — experimental weighting, not flow" },
-  { id: "activity", label: "Session vol × Δ", units: "volume_gamma — session turnover, not positioning" },
+  ...GEX_BASES.filter(b => b.id !== "raw"),
   { id: "window", label: "Window Δvol", units: null },
 ];
 

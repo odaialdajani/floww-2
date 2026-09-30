@@ -9,6 +9,7 @@ import SkylitHeatmapGrid from "./SkylitHeatmapGrid";
 import SkylitMetricsSidebar from "./SkylitMetricsSidebar";
 import SolsticeStatusStrip from "./SolsticeStatusStrip";
 import WallInspector from "./WallInspector";
+import { gexBasisLabel } from "./gexBases";
 import ScenarioStrip from "./ScenarioStrip";
 import ExposureStrip from "./ExposureStrip";
 import { usePublishScreenContext } from "../../agent/useScreenContext";
@@ -122,7 +123,7 @@ function CompareWorkspace({ data, spot, ticker, metric,
       guard.current = false;
     }
   };
-  const metricLabel = metric === "delta" ? "Δ-weighted" : metric === "activity" ? "Session activity" : "Raw GEX";
+  const metricLabel = gexBasisLabel(metric);
   const pane = (side, view, title, units, scale) => (
     <div
       className="skylit-compare-pane"
@@ -469,9 +470,9 @@ function SkylitDashboard({
 
   const handleStrikeClick = useCallback(
     (strike) => {
-      if (!isReplay && onStrikeClick) onStrikeClick(strike);
+      if (tradeMode && !isReplay && onStrikeClick) onStrikeClick(strike);
     },
-    [onStrikeClick,isReplay]
+    [onStrikeClick,isReplay,tradeMode]
   );
   // R7-04: pane clicks share one selection source; the clicked pane owns
   // the readout. Defined after handleCellClick (same render scope).

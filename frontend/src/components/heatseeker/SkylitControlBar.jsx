@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { TICKER_SETS } from "./SkylitTickerBar";
 import { buildTickerUniverse, stepIndex } from "./tickerUniverse";
+import { GEX_BASES } from "./gexBases";
 
 /**
  * SkylitControlBar — Second header bar with GEX/VEX tabs, LIVE badge,
@@ -32,6 +33,7 @@ function SkylitControlBar({
   // Optional: open the full-page grid overlay (wired by SkylitDashboard;
   // frozen App.js call sites omit it and the button degrades to a no-op).
   onExpand,
+  hideExpand = false,
   // Optional ticker cycling for the prev/next arrows (2026-09-03).
   // T1 (2026-09-07): arrows traverse the same deduped universe as the bar;
   // open-universe tickers wrap from the boundary (pinned by tests).
@@ -154,9 +156,7 @@ function SkylitControlBar({
             onChange={(e) => onMetricChange && onMetricChange(e.target.value)}
             title="GEX basis — Raw: gex_net_v1/gex_gross_v1 · Δ-wtd: experimental moneyness weighting, not flow · Activity: session turnover, not positioning"
           >
-            <option value="raw">Raw</option>
-            <option value="delta">Δ-wtd</option>
-            <option value="activity">Activity</option>
+            {GEX_BASES.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
           </select>
         )}
         {showInfo && (
@@ -165,11 +165,12 @@ function SkylitControlBar({
             data-testid="skylit-info-popover"
             onClick={() => setShowInfo(false)}
           >
-            <div><b>GEX</b> — gold/teal cells: dealer gamma walls (King ★ = max).</div>
+            <div><b>GEX</b> — gold/teal cells: conventional exposure concentrations (King ★ = largest cell).</div>
             <div><b>VEX</b> — blue/purple cells: vanna exposure regime.</div>
             <div><b>Raw</b> = Σc·u·N (net) + Σu·N (gross), u=Γ·m·S²×0.01, gex.v2.</div>
             <div><b>Δ-wtd</b> = Σc·u·N·|δ| — experimental weighting, not buying/selling.</div>
             <div><b>Activity</b> = Σc·u·V — turnover, not new positions. Trade side unavailable in Public-only mode.</div>
+            <div><b>Volume × |Δ|</b> = Σc·u·V·|δ| — delta-weighted session turnover, not buying/selling.</div>
             <div>Regime sign never permits direction alone. Unknown/no-data are valid states.</div>
             <div>Click a cell to inspect it · arm <b>Trade</b> to open Quick Trade.</div>
             <div>Data: Public.com live chain → cvserver → yfinance.</div>
@@ -273,10 +274,11 @@ function SkylitControlBar({
             )}
           </svg>
         </button>
-        <button
+        {!hideExpand && <button
           className="skylit-action-btn"
           title="Expand grid full-screen"
-          onClick={() => { if (onExpand) onExpand(); }}
+          disabled={typeof onExpand !== "function"}
+          onClick={() => { if (typeof onExpand === "function") onExpand(); }}
           data-testid="skylit-expand-toolbar-btn"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -285,7 +287,7 @@ function SkylitControlBar({
             <rect x="3" y="14" width="7" height="7" />
             <rect x="14" y="14" width="7" height="7" />
           </svg>
-        </button>
+        </button>}
         <button
           className="skylit-action-btn"
           title={copied ? "Copied!" : "Share"}

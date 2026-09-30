@@ -75,6 +75,19 @@ jest.mock("./RndDensityPanel",              () => () => <div data-testid="hs-rnd
 import SkylitDashboard from "./SkylitDashboard";
 import useScreenContext from "../../agent/useScreenContext";
 
+test('R12: strike review callback requires explicitly armed Trade mode', () => {
+  const onStrikeClick = jest.fn();
+  render(<SkylitDashboard ticker="SPY" data={selectionMap()} onStrikeClick={onStrikeClick} />);
+  fireEvent.click(screen.getByTestId('mock-strike'));
+  expect(onStrikeClick).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByTestId('skylit-trade-btn'));
+  fireEvent.click(screen.getByTestId('mock-strike'));
+  expect(onStrikeClick).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByTestId('skylit-trade-btn'));
+  fireEvent.click(screen.getByTestId('mock-strike'));
+  expect(onStrikeClick).toHaveBeenCalledTimes(1);
+});
+
 function ResearchSelection(){const [context]=useScreenContext();return <output data-testid="research-selection">{JSON.stringify(context)}</output>;}
 
 function selectionMap(value = 123.4, asof = "2026-09-11T18:00:00Z") {

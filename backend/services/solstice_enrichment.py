@@ -118,21 +118,33 @@ def window_contract_activity(prev: list[dict], cur: list[dict],
     flow. Mixed gamma/delta provenance pairs are blocked without policy.
     OI turnover is turnover, never inventory-erosion evidence.
     """
-    import math as _math
-
+    from domain.exposure_metrics import (
+        abs_delta,
+        dollar_gamma_unit,
+        is_valid_measurement,
+        option_type_sign,
+        resolve_multiplier,
+    )
     from services.solstice_provenance import check_volume_window
 
+    spot_f = is_valid_measurement(spot)
+    if spot_f is None or spot_f <= 0:
+        return {"status": "unavailable", "reason": "SPOT_UNKNOWN", "contracts": [],
+                "missing_delta": 0, "mixed_pair": 0, "invalid": 0}
     before = {_contract_key(c): c for c in (prev or []) if isinstance(c, dict)}
     rows = []
     missing_delta = 0
     mixed_pair = 0
+    invalid = 0
     for c in cur or []:
         if not isinstance(c, dict):
             continue
         p = before.get(_contract_key(c))
         if p is None:
             continue  # NO_PRIOR baseline: not comparable, not ranked
-        if p.get("delta") is None or c.get("delta") is None:
+        d, _ = abs_delta(p.get("delta"))
+        current_delta, _ = abs_delta(c.get("delta"))
+        if d is None or current_delta is None:
             missing_delta += 1
             continue
         chk = check_volume_window(p.get("volume"), c.get("volume"))
@@ -152,25 +164,19 @@ def window_contract_activity(prev: list[dict], cur: list[dict],
         if gsrc != dsrc:
             mixed_pair += 1
             continue
-        try:
-            g = float(p.get("gamma"))
-            d = abs(float(p.get("delta")))
-            m = float(p.get("multiplier", 100.0) or 100.0)
-        except (TypeError, ValueError):
+        m, _ = resolve_multiplier(p)
+        u = dollar_gamma_unit(p.get("gamma"), m, spot_f)
+        sign = option_type_sign(p.get("type"))
+        if u is None or sign is None or not math.isfinite(u * d * dv):
+            invalid += 1
             continue
-        if not all(_math.isfinite(x) for x in (g, d, m, dv)) or g < 0 or m <= 0:
-            continue
-        if d > 1.0 + 1e-9:
-            continue
-        sign = 1.0 if str(p.get("type", "")).lower().startswith("c") else -1.0
-        u = g * m * spot * spot * 0.01
         rows.append({"osi": c.get("osi"), "expiry": c.get("expiry"),
                      "strike": c.get("strike"), "delta_volume": dv,
-                     "window_daddex": sign * u * min(d, 1.0) * dv,
+                     "window_daddex": sign * u * d * dv,
                      "pair": f"{gsrc}/{dsrc}"})
     rows.sort(key=lambda r: abs(r["window_daddex"]), reverse=True)
     return {"status": "ok", "contracts": rows,
-            "missing_delta": missing_delta, "mixed_pair": mixed_pair,
+            "missing_delta": missing_delta, "mixed_pair": mixed_pair, "invalid": invalid,
             "note": "turnover, not positioning"}
 
 
