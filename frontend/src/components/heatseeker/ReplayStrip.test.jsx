@@ -100,3 +100,20 @@ test('exiting replay stops playback and returns to live', async () => {
   await act(async () => { jest.advanceTimersByTime(10000); });
   expect(onReplay.mock.calls.length).toBe(n);
 });
+
+test('slow recorded fetch never launches duplicate playback requests', async () => {
+  let resolveFirst;
+  const original = axios.get.getMockImplementation();
+  axios.get.mockImplementation(url => String(url).endsWith('/replay/s1')
+    ? new Promise(resolve => { resolveFirst = resolve; }) : original(url));
+  const { onReplay } = await loadStrip();
+  await act(async () => { fireEvent.click(screen.getByTestId('solstice-replay-play')); });
+  await act(async () => { jest.advanceTimersByTime(10000); });
+  const requests = () => axios.get.mock.calls.filter(([url]) => String(url).includes('/replay/'));
+  expect(requests()).toHaveLength(1);
+  await act(async () => { resolveFirst({ data: replayPacket('s1') }); });
+  expect(onReplay).toHaveBeenLastCalledWith(expect.objectContaining({ asof: 'asof-s1' }));
+  await act(async () => { jest.advanceTimersByTime(2000); });
+  expect(requests()).toHaveLength(2);
+  expect(String(requests()[1][0])).toContain('/replay/s2');
+});

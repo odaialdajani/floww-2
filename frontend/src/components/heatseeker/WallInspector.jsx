@@ -35,6 +35,11 @@ function memberStrikes(wall) {
 function usableCount(value) {
   return typeof value==="number" && Number.isSafeInteger(value) && value>=0 ? value : null;
 }
+function windowReason(metrics) {
+  // Canonical spelling wins, including null on a valid current window.
+  return Object.hasOwn(metrics || {}, "window_dadgex_reason")
+    ? metrics.window_dadgex_reason : metrics?.window_daddex_reason;
+}
 
 function WallInspector({ wall = null, interaction = null, metrics = null, grids = null, displayGrid = null, quality = null, scenario = null, goneReason = null, lastWallId = null,
   scout = null, patterns = null, regime = null, vanna = null, moneyness = null,
@@ -95,7 +100,7 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
   // shown as wall-local; without a comparable baseline the row reports why.
   // (Rendered inside CompareTable below; no separate row — one window value.)
   const wallWin = (metrics?.wall_window || {})[wall.wall_id || ""];
-  const winReason = metrics?.window_daddex_reason;
+  const winReason = windowReason(metrics);
   // R6-2 same-wall comparison: raw (wall record), delta-weighted and session
   // activity (wall_metrics breakdown). Each declares its basis; unlike
   // quantities are never blended and scope totals stay out of this table.
@@ -186,11 +191,14 @@ function CompareTable({ wall, metrics, displayGrid }) {
     }
   }
   const winCov = (wallWin && wallWin.coverage) || {};
+  // The canonical spelling wins even when explicitly null. Old recorded
+  // packets used daddex; support them without reviving a stale refusal.
+  const winReason = windowReason(metrics);
   const winNote = wallWin
     ? `${fmtUsd(wallWin.window_daddex)} · ${winCov.active_strikes ?? "—"}/${winCov.member_strikes ?? "—"} strikes`
-    : ((metrics?.window_daddex_reason === "VOLUME_REBASE")
+    : ((winReason === "VOLUME_REBASE")
       ? "unavailable — volume rebase"
-      : "unavailable — no comparable window");
+      : `unavailable — ${winReason || "no comparable window"}`);
   const cell = (v) => (v == null ? "—" : fmtUsd(v));
   // R8-06: a zero with no usable inputs is missing data, not a measured
   // zero — show "—" with the reason instead of $0.
@@ -204,6 +212,11 @@ function CompareTable({ wall, metrics, displayGrid }) {
   const vInvalid=usableCount(wb?.volume_invalid);
   const vVal = !wb ? "—"
     : vN > 0 ? `${cell(wb.volume_gross)} / ${cell(wb.volume_net)}` : "—";
+  const dvN = usableCount(wb?.session_delta_volume_usable);
+  const dvMissing = usableCount(wb?.session_delta_volume_missing);
+  const dvInvalid = usableCount(wb?.session_delta_volume_invalid);
+  const dvVal = dvN > 0
+    ? `${cell(wb.session_delta_volume_gross)} / ${cell(wb.session_delta_volume_net)}` : "—";
   const vexScope = displayGrid?.vex_meta;
   const scopeNotes = [
     ["missing_vanna_inputs", "missing inputs"],
@@ -223,6 +236,8 @@ function CompareTable({ wall, metrics, displayGrid }) {
       vexBasis],
     ["Session activity", vVal,
       wb ? `session volume · ${vN ?? "unknown"} usable contracts${vMissing ? ` · ${vMissing} volume missing` : ""}${vInvalid ? ` · ${vInvalid} invalid` : ""}${vMissing == null || vInvalid == null ? " · coverage details unavailable" : ""}` : "no wall breakdown"],
+    ["Session vol × |Δ|", dvVal,
+      `session volume × |delta| · ${dvN ?? "unknown"} usable${dvMissing ? ` · ${dvMissing} missing` : ""}${dvInvalid ? ` · ${dvInvalid} invalid` : ""} · not trade-signed flow`],
     ["Recent window", winNote, "window Δ-weighted · member coverage"],
   ];
   return (

@@ -1473,6 +1473,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             "session_delta_volume_missing_vol": sess_dvol_m.missing_oi,
             "session_delta_volume_invalid": sess_dvol_m.invalid,
             "window_dadgex_v1": None, "window_dadgex_reason": "HISTORY_NOT_YET_RECORDED",
+            "window_daddex_reason": "HISTORY_NOT_YET_RECORDED",
             # §28.3 registry name alias (same unavailable state, both keys).
             "window_delta_weighted_volume_v1": None,
             # R6-2: per-wall window aggregation lands here when a comparable
@@ -1581,6 +1582,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                             # Registry canonical name kept in sync (alias).
                             metrics["window_daddex_v1"] = metrics["window_dadgex_v1"]
                             metrics["window_daddex_reason"] = None
+                            metrics["window_dadgex_reason"] = None
                             metrics["window_contracts"] = _wrows[:20]
                             metrics["window_missing_delta"] = _w["coverage"]["n_missing_delta"]
                             metrics["window_mixed_pair"] = _w["coverage"]["n_mixed_pair"]
@@ -1608,6 +1610,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                             metrics["window_daddex_v1"] = None
                             metrics["window_delta_weighted_volume_v1"] = None
                             metrics["window_dadgex_reason"] = _wr
+                            metrics["window_daddex_reason"] = _wr
                             metrics["window_contracts"] = []
                             metrics["wall_window"] = {}
         except Exception as we:

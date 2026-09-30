@@ -34,6 +34,8 @@ def check_volume_window(prev_cum: float | None, cur_cum: float | None) -> dict[s
     """Validate one cumulative-volume step. Negative delta quarantines the window."""
     if prev_cum is None or cur_cum is None:
         return {"delta": None, "valid": False, "reason": "NO_BASELINE"}
+    if isinstance(prev_cum, bool) or isinstance(cur_cum, bool):
+        return {"delta": None, "valid": False, "reason": "INVALID"}
     try:
         p, c = float(prev_cum), float(cur_cum)
     except (TypeError, ValueError):
