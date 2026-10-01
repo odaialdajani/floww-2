@@ -35,6 +35,7 @@ activity, or dealer inventory. Signed option delta is a Greek, not flow.
 
 from __future__ import annotations
 
+import json
 import math
 from typing import Any
 
@@ -314,8 +315,6 @@ def window_observation(payload):
 
 def recorded_window_activity(previous, current, spot):
     """One stored baseline plus current producer inputs, frozen by its recorder."""
-    from services.heatmap_history import normalize_stored_contract
-
     if not previous or not previous.get("snapshot"):
         return _unavailable("NO_BASELINE")
     snap = previous["snapshot"]
@@ -332,13 +331,17 @@ def recorded_window_activity(previous, current, spot):
     if not _asof(pmeta["available_at"]) < _asof(cmeta["available_at"]):
         return _unavailable("AVAILABLE_AT_CONFLICT")
     coverage = previous.get("coverage") or {}
-    rows = [normalize_stored_contract(r) for r in previous.get("contracts") or []]
+    stored = previous.get("contracts") or []
+    try:
+        rows = [json.loads(r.get("window_inputs_json")) for r in stored]
+    except (TypeError, ValueError):
+        return _unavailable("WINDOW_CONTRACT_INPUTS_UNAVAILABLE")
     if (coverage.get("truncated") is not False or coverage.get("returned") != coverage.get("requested")
             or coverage.get("returned") != len(rows)):
         return _unavailable("BASELINE_POPULATION_PARTIAL")
-    if not rows or any(not isinstance(r.get("window_inputs"), dict) for r in rows):
+    if not rows or any(not isinstance(r, dict) for r in rows):
         return _unavailable("WINDOW_CONTRACT_INPUTS_UNAVAILABLE")
-    packet = window_activity_surface(pmeta, cmeta, [r["window_inputs"] for r in rows], current.get("contracts"), spot)
+    packet = window_activity_surface(pmeta, cmeta, rows, current.get("contracts"), spot)
     packet["comparison"] = {"previous_snapshot_id": snap.get("snapshot_id"), "previous": pmeta, "current": cmeta,
                             "volume_correction_policy": "refuse-retraction"}
     return packet

@@ -216,6 +216,7 @@ function apiBody(url) {
       await dialog.getByRole('button',{name:'Close',exact:true}).click();
     };
     await page.getByRole('gridcell',{name:/^100 by/}).first().click();
+    await page.getByText('Exact contract review · read-only',{exact:true}).click();
     await page.getByLabel('Exact strike',{exact:true}).fill('100');
     await page.getByLabel('Listed expiry',{exact:true}).selectOption(fixture.contract.matched_identity.expiry);
     await page.getByLabel('Option type',{exact:true}).selectOption(fixture.contract.matched_identity.type);
