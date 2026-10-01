@@ -1,5 +1,20 @@
 import { replayIndexOf, replayToDisplay, shouldIgnoreLive, stepReplay } from "./solsticeReplay";
 
+test("recorded request and provenance restore without deriving a live identity", () => {
+  const display = { map_query: { expiries: 4, expiryScope: "next", sessionDate: "2026-10-01" },
+    scope_selection: { kind: "next", selected_expiries: ["2026-10-02"] }, event_time: "2026-10-01T14:00:00Z" };
+  const rep = { snapshot: { snapshot_id: "snap1", ticker: "SPY", data_source: "fixture", formula_version: "gex.v2" },
+    context: { display }, grids: {}, metrics_full: {} };
+  const out = replayToDisplay(rep, "SPY");
+  expect(out.map_query).toEqual(display.map_query);
+  expect(out.scope_selection).toEqual(display.scope_selection);
+  expect(out.data_source).toBe("fixture");
+  expect(out.formula_version).toBe("gex.v2");
+  expect(out.event_time).toBe(display.event_time);
+  const old = replayToDisplay({ snapshot: rep.snapshot, context: {} }, "SPY");
+  expect(old.map_query).toBeNull();
+});
+
 describe("solsticeReplay (P09/R4-15)", () => {
   const snaps = [{ id: "a", asof: "t1" }, { id: "b", asof: "t2" }, { id: "c", asof: "t3" }];
   test("steps chronologically, stops at ends", () => {

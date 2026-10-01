@@ -461,20 +461,24 @@ function SkylitDashboard({
       mapStrikes:priceHistoryOpen?[]:shownMapStrikes(visibleData,displaySpot,expanded?null:fitRows,activeView,activeMetric,anchorStrike),
       mapExpiries:priceHistoryOpen?[]:activeSurface.expiries,observedAt:priceHistoryOpen?null:visibleData?.event_time || visibleData?.observed_at || null});
   useEffect(() => { setFollowWall(false); setFollowWallId(null); }, [ticker,timeframe,expiries,dte,expWidened]);
-  // O2 drawer auto-open: a NEW wall/strike selection opens the inspector;
-  // cleared selection closes it. Identity-keyed so follow refreshes and
-  // re-renders never yank it open after an explicit close.
-  const selKey = selectedCell ? `${selectedCell.wall_id || ""}|${selectedCell.strike ?? ""}|${selectedCell.colKey ?? ""}` : "";
-  const prevSelKey = useRef("");
+  // Only explicit selection opens the inspector. Responsive/basis pruning
+  // may remove a cell reading while retaining its wall; that is not a new
+  // user selection and must not reopen a dismissed overlay.
+  const lastUserSelectionKey = useRef("");
   useEffect(() => {
-    if (selKey && selKey !== prevSelKey.current) {
-      prevSelKey.current = selKey;
-      setDrawerOpen(true);
-    } else if (!selKey) {
-      prevSelKey.current = "";
+    if (!selectedCell) {
+      lastUserSelectionKey.current = "";
       setDrawerOpen(false);
     }
-  }, [selKey]);
+  }, [selectedCell]);
+  const selectForReview = useCallback((selection) => {
+    const key = `${selection.ticker}|${selection.wall_id || ""}|${selection.strike ?? ""}|${selection.colKey ?? ""}`;
+    setSelectedCell(selection);
+    if (key !== lastUserSelectionKey.current) {
+      lastUserSelectionKey.current = key;
+      setDrawerOpen(true);
+    }
+  }, []);
   const overlayNote = (() => {
     const n = overlayData?.strikes?.length || 0;
     const scope = `${timeframe} · ${expWidened ? 8 : expiries} expiries`;
@@ -512,10 +516,10 @@ function SkylitDashboard({
       if (tradeMode && !isReplay && onCellClick) {
         onCellClick(strike, colKey, value, sel);
       } else {
-        setSelectedCell(sel);
+        selectForReview(sel);
       }
     },
-    [tradeMode,onCellClick,visibleData,ticker,isReplay,followWall,followWallId,activeView,metric,multi,compareMode,comparePair]
+    [tradeMode,onCellClick,visibleData,ticker,isReplay,followWall,followWallId,activeView,metric,multi,compareMode,comparePair,selectForReview]
   );
   // Clear ticker-dependent selection on symbol change (F18).
   useEffect(() => { setSelectedCell(null); setActivePane("gex"); }, [ticker]);
@@ -661,7 +665,7 @@ function SkylitDashboard({
         data={displayData} spot={displaySpot} ticker={ticker} isLive={isReplay ? false : isLive}
         onSelectWall={(wall) => {
           if (!wall) return;
-          setSelectedCell({
+          selectForReview({
             strike: wall.mid ?? wall.low, colKey: null, value: null,
             asof: (displayData || data)?.asof || data?.asof || null,
             ticker, wall_id: wall.wall_id || null,

@@ -25,11 +25,12 @@ from services.market_provenance import spot_provenance
 
 
 class ResearchReads:
-    def __init__(self, peek_chain, peek_map, read_alerts, *, read_daily_bars=None):
+    def __init__(self, peek_chain, peek_map, read_alerts, *, read_daily_bars=None, read_recorded_map=None):
         self._peek_chain = peek_chain
         self._peek_map = peek_map
         self._read_alerts = read_alerts
         self._read_daily_bars = read_daily_bars
+        self._read_recorded_map = read_recorded_map
 
     async def snapshot(self, ticker, horizon, **kwargs):
         if current_budget() is None:
@@ -39,6 +40,9 @@ class ResearchReads:
 
     async def _snapshot(self, ticker, horizon, *, selected_expiry=None, now=None, screen=None, price_only=False):
         now = now or datetime.now(UTC)
+        if screen and (screen.get("displayMode") == "replay" or
+                       screen.get("contextVersion") == 2 and screen.get("overlayMetric", "raw") != "raw"):
+            return await self._selected_snapshot(ticker, horizon, screen, now)
         gaps = []
         budget = current_budget()
         scope = {"horizon": horizon, "selected_expiry": selected_expiry}
@@ -254,6 +258,35 @@ class ResearchReads:
                 ).encode()
             ).hexdigest(),
         )
+
+    async def _selected_snapshot(self, ticker, horizon, screen, now):
+        # Exact displayed surface only: no unrelated chain/flow/volatility reads.
+        replay = screen.get("displayMode") == "replay"
+        raw, gaps = None, []
+        callback = self._read_recorded_map if replay else self._peek_map
+        selection = screen.get("snapshotId") if replay else screen.get("mapQuery")
+        label = "Recorded snapshot" if replay else "Adjusted displayed observation"
+        if callback is not None:
+            try:
+                raw = copy.deepcopy(await current_budget().sync(
+                    "map", ticker, callback, ticker, selection, scope={"display_selection": selection}))
+            except ReadActivityUnavailable:
+                raise
+            except Exception:
+                gaps.append(label + " resolution failed; no substitute was read")
+        if raw is None:
+            gaps.append(label + " unavailable; no substitute was read")
+        facts, missing = display_facts(raw, screen, ticker, now)
+        gaps.extend(missing)
+        identity = hashlib.sha256(canonical([screen, raw]).encode()).hexdigest()
+        observed = instant((raw or {}).get("event_time"))
+        recorded_at = instant((raw or {}).get("asof"))
+        record_clock = datetime.fromisoformat(recorded_at) if recorded_at else now
+        return dict(snapshot_id=identity, ticker=ticker, horizon=horizon,
+                    window=horizon_window(horizon, now=record_clock, selected_expiry=screen.get("selectedExpiry")),
+                    facts=facts, gaps=gaps, alerts_status="not_requested", flow=[],
+                    observed_at=observed, captured_at=now.isoformat(), anchor_kind="recorded" if replay else "display",
+                    coverage=None, coverage_id=identity, agreement={"total": None}, replay=replay)
 
 
 def _structure_read(contracts, spot, input_facts, quality, raw, source_time, context):

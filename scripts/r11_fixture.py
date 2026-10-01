@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
 
-def generate(ticker="SPY", spot=100):
+def generate(ticker="SPY", spot=100, expiry_scope="loaded"):
     import duckdb
     from fastapi.testclient import TestClient
 
@@ -43,7 +43,8 @@ def generate(ticker="SPY", spot=100):
     store = TemporaryDirectory(prefix="r11-offline-fixture-")
     conn = duckdb.connect(str(Path(store.name) / "fixture.duckdb"))
     async def build():
-        out = await server._build_heatmap_impl(ticker, max_expiries=6, with_taps=False)
+        scope = {"expiry_scope": expiry_scope} if expiry_scope == "next" else {}
+        out = await server._build_heatmap_impl(ticker, max_expiries=6, with_taps=False, **scope)
         pending = [task for task in server._background_tasks if task.get_loop() is asyncio.get_running_loop()]
         if pending:
             await asyncio.gather(*pending)
@@ -69,14 +70,15 @@ def generate(ticker="SPY", spot=100):
             display = client.get(f"/api/heatmap/{ticker}?expiries=6&withTaps=false").json()
         sid = out["snapshotId"]
         replay = replay_snapshot(conn, sid)
-        target = next(c for c in contracts if c["strike"] == spot and c["expiry"] == expiries[1])
+        target_expiry = out["expiries_used"][1 if len(out["expiries_used"]) > 1 else 0]
+        target = next(c for c in contracts if c["strike"] == spot and c["expiry"] == target_expiry)
         detail = client.get(f"/api/solstice/{ticker}/contract", params={"osi": target["osi"], "snapshot_id": sid}).json()
         walls = out["metrics"]["walls"]
         wall = next((w for w in walls if spot in w.get("members", [])), walls[0] if walls else None)
         screen = dict(contextVersion=2, page="trinity", ticker=ticker, metric="gex", overlayMetric="raw", displayMode="live",
                       snapshotId=sid, provider=out["data_source"], formula=out["formula_version"], activePane="raw",
                       mapQuery=out["map_query"], mapVersion=out["asof"], mapStrikes=out["grid"]["strikes"],
-                      mapExpiries=out["grid"]["expiries"], selectedStrike=spot, selectedExpiry=expiries[1],
+                      mapExpiries=out["grid"]["expiries"], selectedStrike=spot, selectedExpiry=target_expiry,
                       selectedWall=wall["wall_id"] if wall else None)
         facts, gaps = display_facts(out, screen, ticker, now)
         decisions = list_decisions(conn, ticker)

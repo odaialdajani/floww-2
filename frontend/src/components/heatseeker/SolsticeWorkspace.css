@@ -70,6 +70,12 @@
 .triad-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .triad-pair { height: clamp(260px, 42vh, 520px); min-height: 0; }
 .triad-mobile-switch { display: none; }
+/* Native 200% zoom can halve the viewport height. Keep a readable allocated
+   matrix box and scroll the desk, rather than clipping the grid to a few pixels. */
+@media (max-height: 640px) {
+  div.skylit-full-dashboard { overflow-y: auto; }
+  .skylit-full-dashboard > .skylit-main-area { flex: 0 0 280px; min-height: 280px; }
+}
 @media (min-width: 1700px) {
   .skylit-multi-workspace { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); }
 }

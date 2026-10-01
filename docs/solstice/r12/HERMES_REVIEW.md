@@ -1,4 +1,11 @@
-# HERMES_REVIEW — independent contract & acceptance review
+# HERMES_REVIEW — historical independent contract & acceptance review
+
+Current reconciliation (2026-10-01): PR90 merged at `9a6c0295` from `78456b9d`.
+This review's candidate/gates below are historical, not continuation-head
+acceptance. The browser receipt actually binds `72cdd943`; its 200% check was
+CSS zoom simulation, not native browser zoom. Preserve its shots/resize trace,
+but do not carry its verdict to later source. Current owner: Zed only;
+see `../ZED_STATE.md`. Retired lane queues are not instructions.
 
 - Candidate: `912ce46560dc3528fdb2b13fbbb97535471867ab` on `solstice/r11-opus`
   (base `origin/main` = `ca3dd8b5`). Reviewed pinned in `/tmp/floww2-head`

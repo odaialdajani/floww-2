@@ -25,6 +25,33 @@ beforeEach(() => {
 });
 const mount = async () => { await act(async () => render(<><TrinityView /><Context /></>)); };
 
+test("Next listed requests server-owned scope and never sends a guessed date or zero DTE", async () => {
+  await mount();
+  expect(screen.getByRole("option", { name: /Next listed/ })).not.toBeDisabled();
+  await act(async () => { fireEvent.change(screen.getByLabelText("Triad expiry scope"), { target: { value: "next" } }); });
+  const urls = axios.get.mock.calls.map(([url]) => String(url));
+  const next = urls.find(url => url.includes("expiry_scope=next"));
+  expect(next).toBeDefined();
+  expect(next).not.toMatch(/dte=|sessionDate=|expiry=/);
+});
+
+test("recorded Next listed scope restores without a second fetch or a live substitute", async () => {
+  sessionStorage.setItem("solstice.triadHandoff", JSON.stringify({ ticker: "SPY", replayAsOf: "2031-01-16T15:00:00Z", snapshotId: "recorded-next" }));
+  const p = packet();
+  const query = { expiries: 4, mode: "day", dte: null, scalp: false, withTaps: true, maxStrikes: 80, expiryScope: "next", sessionDate: "2031-01-16" };
+  axios.get.mockImplementation(async url => String(url).includes("/replay/") ? { data: {
+    snapshot: { snapshot_id: "recorded-next", ticker: "SPY", asof_ts: p.asof, spot: p.spot, data_source: "fixture", formula_version: "gex.v2" },
+    grids: { grid: p.grid, delta: p.metrics.grids.delta }, metrics_full: p.metrics, walls: p.metrics.walls,
+    context: { display: { map_query: query } }, strikes: p.strikes,
+  } } : { data: { rows: [], decisions: [] } });
+  await mount();
+  expect(screen.getByLabelText("Triad expiry scope")).toHaveValue("next");
+  expect(screen.getByLabelText("Triad expiry scope")).toBeDisabled();
+  expect(axios.get.mock.calls.filter(([url]) => String(url).includes("/replay/")).length).toBe(1);
+  expect(axios.get.mock.calls.some(([url]) => String(url).includes("/heatmap/"))).toBe(false);
+  expect(JSON.parse(screen.getByTestId("r11-context").textContent).mapQuery).toEqual(query);
+});
+
 test("raw-wall-first desk exposes top profile, one adjustment selector, and honest readiness", async () => {
   await mount();
   expect(screen.getByTestId("triad-signed-profile")).toBeInTheDocument();

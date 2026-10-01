@@ -435,6 +435,9 @@ def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
                       # inspector, not just cells.
                       "metrics_full_json": json.dumps(payload.get("metrics", {}), default=str),
                       "context_json": json.dumps({
+                          "display": {key: payload.get(key) for key in (
+                              "map_query", "scope_selection", "event_time", "observed_at", "fetched_at",
+                              "spot_source", "spot_event_time", "spot_fetched_at", "stale", "stale_age_s")},
                           "session": payload.get("session"),
                           "playbook": payload.get("playbook"),
                           "scout": payload.get("scout"),

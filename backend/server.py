@@ -953,10 +953,11 @@ _BUILD_HEATMAP_INFLIGHT: set[str] = set()
 
 async def _revalidate_heatmap(cache_key: str, ticker: str, max_expiries: int,
                               with_taps: bool, mode: str, dte, scalp: bool,
-                              max_strikes: int):
+                              max_strikes: int, expiry_scope: str = "loaded", scope_session: str | None = None):
     """Background refresh — never raises to the caller."""
     try:
-        fresh = await _build_heatmap_impl(ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes)
+        scope_kwargs = {"expiry_scope": expiry_scope, "scope_session": scope_session} if expiry_scope == "next" else {}
+        fresh = await _build_heatmap_impl(ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes, **scope_kwargs)
         if isinstance(fresh, dict) and not fresh.get("error") and (fresh.get("strikes") or fresh.get("grid")):
             _BUILD_HEATMAP_CACHE[cache_key] = {"ts": time.time(), "data": fresh}
     except Exception as e:
@@ -964,7 +965,7 @@ async def _revalidate_heatmap(cache_key: str, ticker: str, max_expiries: int,
     finally:
         _BUILD_HEATMAP_INFLIGHT.discard(cache_key)
 
-async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = True, mode: str = "day", dte: int | None = None, scalp: bool = False, max_strikes: int = 200) -> dict[str, Any]:
+async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = True, mode: str = "day", dte: int | None = None, scalp: bool = False, max_strikes: int = 200, expiry_scope: str = "loaded") -> dict[str, Any]:
     """Build heatmap with OOM protection and index symbol fast path.
 
     Stale-while-revalidate: if the fresh-TTL cache misses but a stale entry
@@ -973,7 +974,15 @@ async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = Tr
     from services.market_provenance import cached_market_copy
     if _shutdown_event.is_set():
         raise HTTPException(status_code=503, detail="Market refresh is stopping")
-    cache_key = f"{ticker}:{max_expiries}:{mode}:{dte}:{scalp}:{with_taps}:{max_strikes}"
+    from services.solstice_scope import EXCHANGE_TZ, request_query
+    from services.solstice_scope import cache_key as scope_cache_key
+    scope_session = datetime.now(EXCHANGE_TZ).date().isoformat() if expiry_scope == "next" else None
+    try:
+        query = request_query(max_expiries, mode, dte, scalp, with_taps, max_strikes, expiry_scope, scope_session)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    cache_key = scope_cache_key(ticker, query)
+    scope_kwargs = {"expiry_scope": expiry_scope, "scope_session": scope_session} if expiry_scope == "next" else {}
     cached = _BUILD_HEATMAP_CACHE.get(cache_key)
     age = (time.time() - cached["ts"]) if cached else None
     if cached is not None and age is not None:
@@ -988,13 +997,13 @@ async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = Tr
         ):
             _BUILD_HEATMAP_INFLIGHT.add(cache_key)
             refresh = asyncio.create_task(_revalidate_heatmap(
-                cache_key, ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes,
+                cache_key, ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes, **scope_kwargs,
             ))
             _background_tasks.add(refresh)
             refresh.add_done_callback(_background_tasks.discard)
             return cached_market_copy(cached["data"], age, revalidating=True)
     try:
-        return await _build_heatmap_impl(ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes)
+        return await _build_heatmap_impl(ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes, **scope_kwargs)
     except HTTPException:
         raise
     except Exception as e:
@@ -1146,11 +1155,15 @@ def _display_quality(exposure_basis: str, model_basis: str, strikes: list) -> di
     }
 
 
-async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: bool = True, mode: str = "day", dte: int | None = None, scalp: bool = False, max_strikes: int = 200) -> dict[str, Any]:
+async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: bool = True, mode: str = "day", dte: int | None = None, scalp: bool = False, max_strikes: int = 200, expiry_scope: str = "loaded", scope_session: str | None = None) -> dict[str, Any]:
     log.info(f"build_heatmap: {ticker} expiries={max_expiries} mode={mode} max_strikes={max_strikes}")
     # Check cache first
-    cache_key = f"{ticker}:{max_expiries}:{mode}:{dte}:{scalp}:{with_taps}:{max_strikes}"
-    requested_map_query = {"expiries": max_expiries, "mode": mode, "dte": dte, "scalp": scalp, "withTaps": with_taps, "maxStrikes": max_strikes}
+    from services.solstice_scope import EXCHANGE_TZ, next_listed_selection, request_query
+    from services.solstice_scope import cache_key as scope_cache_key
+    if expiry_scope == "next" and scope_session is None:
+        scope_session = datetime.now(EXCHANGE_TZ).date().isoformat()
+    requested_map_query = request_query(max_expiries, mode, dte, scalp, with_taps, max_strikes, expiry_scope, scope_session)
+    cache_key = scope_cache_key(ticker, requested_map_query)
     cached = _BUILD_HEATMAP_CACHE.get(cache_key)
     if cached and (time.time() - cached["ts"]) < _BUILD_HEATMAP_CACHE_TTL:
         # Poison-entry guard: a cached payload from a degraded upstream window
@@ -1279,6 +1292,28 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                         log.info(f"build_heatmap: cvserver full-chain enrichment for {ticker} — {len(raw['contracts'])} contracts, {cv_unique} unique strikes")
             except Exception as e:
                 log.debug(f"build_heatmap: cvserver enrichment failed for {ticker}: {e}")
+    # Work on our copy: scope selection must not mutate the provider cache.
+    import copy
+    raw = copy.deepcopy(raw)
+    scope_selection = None
+    if expiry_scope == "next":
+        scope_selection = next_listed_selection(raw.get("contracts", []), scope_session)
+        selected = set(scope_selection["selected_expiries"])
+        raw["contracts"] = [c for c in raw.get("contracts", []) if c.get("expiry") in selected]
+        raw["expiries"] = sorted(selected)
+        if not selected:
+            from services.heatmap_snapshot import snapshot_id_for
+            empty = {"ticker": ticker, "spot": raw.get("spot"), "expiries_used": [], "strikes": [],
+                     "grid": {"expiries": [], "strikes": [], "grid": {}},
+                     "metrics": {"gex_net_v1": None, "walls": [], "grids": {}},
+                     "status": "unavailable", "reason": scope_selection["reason"],
+                     "scope_selection": scope_selection, "map_query": requested_map_query,
+                     "data_source": raw.get("data_source", "unknown"), "formula_version": "gex.v2",
+                     "asof": datetime.now(UTC).isoformat(), "event_time": raw.get("event_time"),
+                     "quality": {"state": "unavailable", "reasonCodes": [scope_selection["reason"]],
+                                 "setupEligible": False, "executionEligible": False}}
+            empty["snapshotId"] = snapshot_id_for(empty)
+            return empty
     # Listed-date scope bound: the requested count applies to listed expiry
     # dates, never calendar-day substitutes. Sparse enrichment above may
     # return a deeper chain for strike density; the loaded population stays
@@ -1697,6 +1732,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         "gex_regime": nodes.get("regime"),
         "mode": mode,
         "map_query": requested_map_query,
+        **({"scope_selection": scope_selection} if scope_selection else {}),
         "dte": dte,
         "scalp": scalp,
         "asof": datetime.now(UTC).isoformat(),
@@ -1775,7 +1811,9 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         # R5-C: scope binds expiry dimensions — same strikes at another DTE/
         # mode/expiry count are a different analytical scope (fresh lifecycle).
         scope_id = scope_id_for(ticker, {"mode": mode, "dte": dte,
-                                         "scalp": scalp, "expiries": max_expiries})
+                                         "scalp": scalp, "expiries": max_expiries,
+                                                                                  **({"expiryScope": "next", "sessionDate": scope_session,
+                                                                                      "selectedExpiries": raw["expiries"]} if scope_selection else {})})
         _data_source = raw.get("data_source", "yfinance")
         sides = metrics.get("nearest_by_side") or {}
         ordered = [sides.get("below"), sides.get("inside"), sides.get("above")]
@@ -2015,6 +2053,11 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                          "expiries_used": payload.get("expiries_used"),
                                          "spot": spot,
                                          "mode": mode, "dte": dte, "scalp": scalp,
+                                         "map_query": requested_map_query,
+                                         "scope_selection": scope_selection,
+                                         **{key: payload.get(key) for key in (
+                                             "event_time", "observed_at", "fetched_at", "spot_source",
+                                             "spot_event_time", "spot_fetched_at", "stale", "stale_age_s")},
                                          "data_source": payload.get("data_source"),
                                          "exposure_basis": exposure_basis,
                                          "formula_version": "gex.v2",
@@ -2040,7 +2083,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                          "patterns_v1": payload.get("patterns_v1"),
                                          "vanna_v1": payload.get("vanna_v1"),
                                          "moneyness": payload.get("moneyness")},
-                f"{ticker}:{mode}:{dte}:{scalp}",
+                cache_key if scope_selection else f"{ticker}:{mode}:{dte}:{scalp}",
                 payload.get("snapshotId") or None))
             _background_tasks.add(_t2)
             _t2.add_done_callback(_background_tasks.discard)
@@ -3868,6 +3911,12 @@ try:
             entry = _BUILD_HEATMAP_CACHE.get(map_cache_key(ticker, query))
             return copy.deepcopy(entry["data"]) if entry else None
 
+        def read_recorded_map(ticker, snapshot_id):
+            from services.heatmap_history import replay_snapshot
+            from services.solstice_replay import recorded_display
+            conn = getattr(duckdb_engine, "_conn", None)
+            return recorded_display(replay_snapshot(conn, snapshot_id), ticker, snapshot_id) if conn is not None else None
+
         def read_alerts(ticker):
             from services.research_data_seam import stored_research_alerts
             return stored_research_alerts(duckdb_engine.query_strict, ticker)
@@ -3879,7 +3928,7 @@ try:
         try:
             repository = AgentRepository(db)
             await repository.initialize()
-            reads = ResearchReads(peek_chain, peek_map, read_alerts)
+            reads = ResearchReads(peek_chain, peek_map, read_alerts, read_recorded_map=read_recorded_map)
             from services.agent.codex_model import CodexModel
             from services.agent.spend import SpendLedger, money_units
             spending = SpendLedger(repository.budgets, cap_units=money_units(os.getenv("AGENT_DAILY_BUDGET_USD", "20")), audit_collection=db["agent_budget_audit"])

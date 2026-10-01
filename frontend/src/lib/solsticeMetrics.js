@@ -27,7 +27,7 @@ export const GEX_BASES = [
     note: "OI gamma weighted by |delta|. A weighting, not observed buying or selling.",
   },
   {
-    id: "session_delta_volume", label: "Volume × |Δ|", short: "Vol×|Δ|", 
+    id: "session_delta_volume", label: "Volume × |Δ|", short: "Vol×|Δ|",
     metricId: "session_delta_volume_gamma_v1", basis: "VOLUME_DELTA_WEIGHTED", role: "how",
     section: "session_delta_volume",
     note: "Today's session volume gamma weighted by |delta|. Turnover, not new positions.",

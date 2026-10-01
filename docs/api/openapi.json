@@ -8479,6 +8479,17 @@
               "title": "Max Strikes",
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "expiry_scope",
+            "required": false,
+            "schema": {
+              "default": "loaded",
+              "pattern": "^(loaded|next)$",
+              "title": "Expiry Scope",
+              "type": "string"
+            }
           }
         ],
         "responses": {

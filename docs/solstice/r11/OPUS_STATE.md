@@ -1,4 +1,9 @@
-# OPUS_STATE — Solstice / R11 (sole harness)
+# OPUS_STATE — Solstice / R11 (historical checkpoint)
+
+Current reconciliation (2026-10-01): PR90 is merged at `9a6c0295`, tree equal
+to final branch `78456b9d`. Single-owner continuation is `solstice/zed-r13`;
+see `../ZED_STATE.md`. Everything below is a dated receipt, not an active
+assignment, current process inventory, or acceptance of later source.
 
 Original checkpoint: 2026-09-29 (session 1). Resumed 2026-09-30 by GPT-6.1-Sol in Zed (not Claude Opus), sole lane —
 no Spark/Hermes process is running in this checkout; lane separation is kept
