@@ -182,18 +182,41 @@ jobs:
   docker-build:
     runs-on: ubuntu-latest
     needs: [backend-tests, frontend-build]
-    if: github.ref == 'refs/heads/main'
+    # Candidate acceptance, not publishing/deployment; never execute fork heads here.
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+    permissions:
+      contents: read
+    timeout-minutes: 30
+    env:
+      SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify container source
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          echo "Container source: $EXPECTED_SHA" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build backend Docker image
-        run: docker build -f Dockerfile.backend -t confluence-decoder-backend .
+        run: docker build -f Dockerfile.backend --label "org.opencontainers.image.revision=$SOURCE_SHA" -t confluence-decoder-backend .
 
       - name: Build frontend Docker image
-        run: docker build -f Dockerfile.frontend -t confluence-decoder-frontend .
+        run: docker build -f Dockerfile.frontend --label "org.opencontainers.image.revision=$SOURCE_SHA" -t confluence-decoder-frontend .
+
+      - name: Record image identity
+        run: |
+          docker image inspect --format '{{.Id}} {{.Os}}/{{.Architecture}} revision={{index .Config.Labels "org.opencontainers.image.revision"}}' confluence-decoder-backend confluence-decoder-frontend
+          echo 'Scope: image builds, backend import and frontend static assets only. No lifespan, live providers, service launch, publishing or deployment.' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Test Docker images
+        timeout-minutes: 2
         run: |
-          docker run --rm confluence-decoder-backend python -c "import server; print('Backend OK')"
-          docker run --rm confluence-decoder-frontend ls -la build/
+          docker run --rm --network none confluence-decoder-backend python -c "import server; print('Backend OK')"
+          docker run --rm --network none confluence-decoder-frontend sh -ec 'test -s build/index.html; test -s build/asset-manifest.json; ls -la build/ build/static/js/ build/static/css/'
