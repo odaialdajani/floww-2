@@ -9,10 +9,10 @@ import { useAgent } from "../../agent/AgentProvider";
  *
  * Admission is honest about the current server guard
  * (backend services/agent/contracts.py request_spec): research answers are
- * only admitted for the LIVE RAW map. Adjusted overlays, replay and the
- * price-history view are refused server-side until exact-surface/snapshot
- * resolution exists, so this control explains that instead of sending a
- * request that will 422. The published screen context (not these props)
+ * admitted for live raw, verified adjusted v2 selections and recorded GEX
+ * replay with complete identity. Window/exact-contract/price-history remain
+ * unavailable. This is a selector guard; only the server can resolve facts.
+ * The published screen context (not these props)
  * is what the server validates; client values are never numeric evidence.
  */
 export const STARTERS = [
@@ -22,10 +22,18 @@ export const STARTERS = [
 ];
 
 export function admissionBlock({ context, overlayMetric, displayMode }) {
-  if (displayMode === "replay") return "Replay answers need recorded-snapshot resolution, which is not enabled yet — return to Live to ask.";
   if (displayMode === "price-history") return "Close the price-history chart to ask about the live map.";
-  if (overlayMetric && overlayMetric !== "raw") return "Lodestar reads the live Raw OI map today — switch the GEX basis to Raw OI to ask. Adjusted answers need server-side surface resolution first.";
   if (context && !context.ticker) return "No published selection for this screen.";
+  if (context?.selectedContract) return "Exact contract answers remain unavailable — use the authoritative read-only contract drawer.";
+  if (!["raw", "delta", "session_delta_volume", "activity"].includes(overlayMetric || "raw")) return "This adjusted basis remains explicitly unavailable to Lodestar.";
+  if ((context?.overlayMetric && context.overlayMetric !== overlayMetric) || (context?.displayMode && context.displayMode !== displayMode)) return "Published selection changed — wait for the current pane and basis.";
+  const advanced = displayMode === "replay" || (overlayMetric && overlayMetric !== "raw");
+  const bound = context?.contextVersion === 2 && context.snapshotId && context.mapQuery && context.mapVersion && context.provider && context.formula;
+  if (advanced && !bound) return displayMode === "replay"
+    ? "Replay answers need a complete recorded-snapshot resolution identity; older records remain unavailable — return to Live."
+    : "Adjusted answers need a complete server-side surface identity — use Raw OI until this observation resolves.";
+  if (displayMode === "replay" && context?.metric && !["gex", "skylit"].includes(context.metric)) return "Recorded replay answers for this metric remain unavailable.";
+  if (displayMode && !["live", "replay"].includes(displayMode)) return "This display is unavailable to Lodestar.";
   return null;
 }
 

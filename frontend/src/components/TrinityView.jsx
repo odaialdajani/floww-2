@@ -119,7 +119,7 @@ function TrinityView({ onFocusTicker }) {
     setWallId(ticker === handoff?.ticker ? handoff.wall_id || null : null);
     setCell(null);
     setDrawerOpen(false);
-    const dteQuery = scope === "0dte" ? "&dte=0" : scope === "week" ? "&dte=7" : "";
+    const dteQuery = scope === "0dte" ? "&dte=0" : scope === "week" ? "&dte=7" : scope === "next" ? "&expiry_scope=next" : "";
     const url = isReplay ? `${API}/solstice/replay/${encodeURIComponent(replayId)}` : `${API}/heatmap/${encodeURIComponent(ticker)}?mode=day&expiries=4${dteQuery}`;
     axios
       .get(url, {
@@ -173,9 +173,12 @@ function TrinityView({ onFocusTicker }) {
   const read = wallRead({ wall: selectedWall, spot, adjNet: value?.net ?? null,
     adjAvailable: adjAvailable && value?.net != null && !(value?.missing > 0) && !(value?.invalid > 0),
     rawGross: selectedWall?.gross ?? null, interaction, quality });
+  const declaredScope = !isReplay ? scope : payload?.map_query?.expiryScope === "next" ? "next"
+    : payload?.map_query?.dte === 0 ? "0dte" : payload?.map_query?.dte === 7 ? "week"
+    : payload?.map_query && payload.map_query.dte == null ? "loaded" : "recorded";
   const activeMetric = activePane === "raw" ? "raw" : basis;
   const activeSurface = activePane === "raw" ? rawSurface : adjSurface;
-  usePublishScreenContext({ contextVersion: 2, page: "trinity", ticker, dte: scope === "0dte" ? "0dte" : scope === "week" ? "week" : "all",
+  usePublishScreenContext({ contextVersion: 2, page: "trinity", ticker, dte: declaredScope === "0dte" ? "0dte" : declaredScope === "week" ? "week" : "all",
     metric: "gex", overlayMetric: activeMetric, displayMode: isReplay ? "replay" : "live", snapshotId: payload?.snapshotId || null,
     mapQuery: payload?.map_query || null, mapVersion: payload?.asof || null, mapStrikes: activeSurface.strikes,
     mapExpiries: activeSurface.expiries, mode: "day", expiries: 4, provider: payload?.data_source || null,
@@ -243,11 +246,13 @@ function TrinityView({ onFocusTicker }) {
       <ContextStrip board={board} ticker={ticker} symbolInput={symbolInput}
         onSymbolInput={setSymbolInput} onSubmit={submitSymbol} />
       <div className="triad-board-status" role="status">Solstice research ranks · {boardStatus} · unvalidated, not probability</div>
+            {payload?.scope_selection?.status === "unavailable" && <div role="status" data-testid="triad-empty-scope">No listed expiry in the server's 30-day bound — no substitution made.</div>}
       <div className="triad-desk-toolbar">
         <span>Raw = where · adjusted = weighting, not observed direction</span>
-        <select aria-label="Triad expiry scope" value={scope} disabled={isReplay} onChange={e => setScope(e.target.value)}>
+        <select aria-label="Triad expiry scope" value={declaredScope} disabled={isReplay} onChange={e => setScope(e.target.value)}>
           <option value="loaded">All loaded · max 4 expiries</option><option value="0dte">0DTE · same session</option><option value="week">Week · ≤7 calendar DTE</option>
-          <option value="next" disabled>Next listed · scope route pending</option>
+          <option value="next">Next listed · one expiry, ≤30 calendar DTE</option>
+          {isReplay && declaredScope === "recorded" && <option value="recorded">Recorded scope · exact dates below</option>}
         </select>
         <label>Adjusted context <select aria-label="Adjusted context" value={basis} onChange={e => { setBasis(e.target.value); setActivePane("adjusted"); }}>
           {ADJUSTED_BASES.map(b => <option key={b.id} value={b.id} data-testid={`triad-basis-${b.id}`}

@@ -77,6 +77,20 @@ test("paused-follow selection and research scope stay on the displayed rows thro
 });
 
 
+test("pruning an unavailable cell must not reopen a dismissed inspector", async () => {
+  await mount();
+  fireEvent.click(screen.getByRole("gridcell", { name: /^101 by 2031-01-17,/ }));
+  expect(screen.getByTestId("skylit-inspector-drawer")).toBeInTheDocument();
+  fireEvent.click(screen.getByTestId("skylit-drawer-close"));
+  expect(screen.queryByTestId("skylit-inspector-drawer")).not.toBeInTheDocument();
+  // Same pruning seam as a responsive row-window change: this pane no longer
+  // has the selected cell, but the structural wall remains selected.
+  await act(async () => { fireEvent.change(screen.getByTestId("skylit-basis-select"), { target: { value: "session_delta_volume" } }); });
+  expect(screen.queryByTestId("skylit-inspector-drawer")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Review" }));
+  expect(screen.getByTestId("skylit-inspector-drawer")).toBeInTheDocument();
+});
+
 test("manual scrolling pauses follow spot; resume is explicit", async () => {
   await mount();
   fireEvent.scroll(document.querySelector(".skylit-heatmap-container"));

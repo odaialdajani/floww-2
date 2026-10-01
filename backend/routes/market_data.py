@@ -117,11 +117,16 @@ async def heatmap(
     dte: int | None = Query(None, ge=0, le=30),
     scalp: bool = Query(False),
     max_strikes: int = Query(80, ge=20, le=200),
+    expiry_scope: str = Query("loaded", pattern="^(loaded|next)$"),
 ):
     from server import build_heatmap
     t = ticker.strip().upper()
     if t == "SPX":
         t = "^SPX"
+    if expiry_scope == "next":
+        if dte is not None or scalp or mode != "day":
+            raise HTTPException(422, "Next listed cannot be combined with DTE, scalp or swing")
+        return await build_heatmap(t, expiries, taps, mode, dte, scalp, max_strikes, expiry_scope="next")
     return await build_heatmap(t, expiries, taps, mode, dte, scalp, max_strikes)
 
 

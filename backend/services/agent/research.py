@@ -26,6 +26,10 @@ def deterministic_answer(snapshots, spec):
     summary = "Available readings are shown below. Exposure estimates do not establish trade direction."
     if not any(finite(f["value"]) and f["metric"] == "Underlying price" for f in facts):
         summary = "There is not enough cached market data to answer reliably. Open the market view and try again."
+    if any(s.get("anchor_kind") in {"display", "recorded"} and s["facts"] for s in snapshots):
+        summary = "Exact displayed snapshot readings are shown below; weighting does not establish dealer intent or trade direction."
+    if any(s.get("replay") for s in snapshots):
+        summary = "Recorded snapshot research only; no live readings or current trade context were substituted."
     limits = request_limit(spec.get("question", ""))
     if limits:
         summary = limits
@@ -135,11 +139,11 @@ class ResearchService:
                                 **({"price_only": True} if spec.get("price_only") else {}),
                             )
                         )
-                        if not spec.get("price_only"):
+                        if not spec.get("price_only") and snapshots[-1].get("anchor_kind") not in {"display", "recorded"}:
                             await self.repository.save_anchor(owner, snapshots[-1])
                             await self.repository.watch_observations(owner, ticker, spec["horizon"], selected_expiry)
                     answer = deterministic_answer(snapshots, spec)
-                    if re.search(
+                    if spec["screen"].get("displayMode") != "replay" and re.search(
                         r"\b(?:changed?|since|earlier|previously|previous|prior|yesterday|closing|last close)\b",
                         spec["question"],
                         re.IGNORECASE,
