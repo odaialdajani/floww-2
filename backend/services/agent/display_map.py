@@ -81,6 +81,12 @@ def display_facts(raw, screen, ticker, now):
                 ({"gex", "raw"} if metric in {"gex", "skylit"} else {"gex", metric}) if overlay == "raw" else {"gex", "delta", "adjusted"})
             if screen.get("activePane") not in panes:
                 return [], ["Selected pane conflicts with its display basis"]
+        recorded_metric = None
+        if replay and metric in {"vex", "charm"} and screen.get("selectedContract") is None:
+            from services.agent.metric_replay import metric_evidence
+            recorded_metric, metric_gaps = metric_evidence(raw, screen, now)
+            if metric_gaps:
+                return [], metric_gaps
         window = None
         if overlay == "window":
             from services.agent.window_facts import window_evidence
@@ -133,10 +139,12 @@ def display_facts(raw, screen, ticker, now):
             status = "stale"
             gaps.append("Displayed map is marked out of date")
         if replay:
-            status = "degraded"
+            status = "stale" if recorded_metric and status == "stale" else "degraded"
             gaps.append("Recorded snapshot evidence only; not a live observation or current trading context")
         coverage = ((raw.get("metrics") or {}).get("surface_coverage") or {}).get(overlay) or {}
-        if coverage.get("status") == "partial" or grid.get("status") == "partial":
+        if (coverage.get("status") == "partial" or grid.get("status") == "partial"
+                or recorded_metric and (recorded_metric.get("status") == "partial" or any(recorded_metric.get(k, 0)
+                    for k in ("missing_vanna_inputs", "missing_charm_inputs", "quarantined", "invalid_type")))):
             status = "degraded" if status == "ok" else status
             gaps.append("Displayed surface is partial; excluded observations were not filled with zero")
         facts = []
@@ -162,6 +170,13 @@ def display_facts(raw, screen, ticker, now):
             col = matrix.get(expiry) or {}
             return number(col.get(str(int(strike)) if float(strike).is_integer() else str(strike)))
 
+        if recorded_metric:
+            add("Recorded owning observation", raw["recorded_snapshot_id"], "observation identity")
+            add("Recorded metric convention", recorded_metric["metric_id"], "registered convention")
+            add("Recorded Greek model", recorded_metric["model"], "model convention")
+            add("Recorded metric weight", recorded_metric["weight_basis"], "basis")
+            add("Recorded source age", (now - datetime.fromisoformat(observed)).total_seconds(), "seconds")
+            gaps.append("Metric-specific units/scales; no cross-metric magnitude equivalence, recomputed Greeks or dealer-intent claim")
         if window:
             for field in ("start", "end"):
                 add("Window interval " + field, window["interval"][field], "source timestamp")
@@ -197,7 +212,7 @@ def display_facts(raw, screen, ticker, now):
             )
         else:
             gaps.append("The displayed map has no verified flip level")
-        unit = (METRIC_REGISTRY[metric_id]["units"] if overlay != "raw" else
+        unit = (recorded_metric["unit"] if recorded_metric else METRIC_REGISTRY[metric_id]["units"] if overlay != "raw" else
                 "display gamma units" if metric in {"gex", "skylit"} else f"display {metric} units")
         selected_strike, selected_expiry = screen.get("selectedStrike"), screen.get("selectedExpiry")
         if finite(selected_strike) and selected_strike in strikes and selected_expiry in expiries:

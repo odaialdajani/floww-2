@@ -4,6 +4,10 @@ Redacted: no secrets, no account IDs. Read-only probes only (9 requests,
 sequential, ~0.1–0.4s each — no quota stress). No orders placed; execution
 remains disarmed by design.
 
+## R14 capability qualification (1 Oct 2026)
+
+The dated probes/capture below are historical receipts, not renewed live acceptance. R14 offline fixtures admit owning-record exact-contract facts, comparable stored windows and registered VEX/Charm replay only when required identity/clocks/provenance exist. Missing older metadata remains explicitly unavailable; quote ages do not establish Greek timestamps. No account probe, durable-capture activation, scheduler, production restart, message or order occurred in this continuation. See `r14/CONTRACT.md` and `COMMISSIONING_PACKAGE.md` for current acceptance versus external dependencies.
+
 ## Account
 - Auth/token mint works; 2 accounts; trading account selected explicitly
   (options LEVEL_2). No silent first-account fallback.

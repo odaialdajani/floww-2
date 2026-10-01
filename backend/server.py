@@ -1059,18 +1059,14 @@ def _display_surfaces(spot: float, contracts: list[dict[str, Any]], ticker: str,
         grid["charm_grid"] = _cg["grid"]
         grid["charm_meta"] = {key: value for key, value in _cg.items()
                               if key not in {"grid", "expiries", "strikes"}}
-        try:
-            grid["vex_grid"] = _vg.get("grid", {})
-            grid["vex_strike_gross"] = _vg.get("strike_gross", [])
-            grid["vex_meta"] = {"exposure_basis": _vg.get("exposure_basis"),
-                                "model": _vg.get("model"),
-                                "status": _vg.get("status"),
-                                "reason": _vg.get("reason"),
-                                "missing_vanna_inputs": _vg.get("missing_vanna_inputs", 0),
-                                "quarantined": _vg.get("quarantined", 0),
-                                "invalid_type": _vg.get("invalid_type", 0)}
-        except Exception:
-            pass  # silent by design: VEX attach is additive metadata — GEX surfaces already computed
+        from domain.exposure_metrics import METRIC_REGISTRY
+        grid["vex_grid"] = _vg.get("grid", {})
+        grid["vex_strike_gross"] = _vg.get("strike_gross", [])
+        grid["vex_meta"] = {key: value for key, value in _vg.items()
+                            if key not in {"grid", "expiries", "strikes", "strike_gross"}}
+        for _metric, _id in (("vex", "vex_net_1volpt"), ("charm", "charm_net_1pct_year_v1")):
+            grid[_metric + "_meta"].update(metric_id=_id, unit=METRIC_REGISTRY[_id]["units"])
+        grid["vex_meta"]["weight_basis"] = "OI"
         return grid
     if scalp:
         from services.gex_core import (
@@ -1707,6 +1703,15 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         # Solstice read-only desk (T04–T10/T15–T20, deterministic, no execution)
         "metrics": metrics,
     }
+    # New records declare each existing metric's complete observation envelope.
+    # Missing source clocks stay missing; older records are not backfilled.
+    for _metric in ("vex", "charm"):
+        _meta = grid.get(_metric + "_meta")
+        if isinstance(_meta, dict):
+            _meta.update(record_version="metric-record.v1", data_source=payload["data_source"],
+                         map_query=requested_map_query, event_time=payload["event_time"],
+                         fetched_at=payload["fetched_at"], available_at=payload["asof"],
+                         scope={"strikes": grid.get("strikes"), "expiries": grid.get("expiries")})
     # Bind the newly materialized window to this owning payload's availability,
     # before hashing/recording. Source interval clocks remain unchanged.
     _comparison = ((metrics.get("grids") or {}).get("window") or {}).get("comparison")

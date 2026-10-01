@@ -465,6 +465,7 @@ function SkylitDashboard({
     && contractSelection.selectionScope === contractScope ? contractSelection : null;
   usePublishScreenContext({contextVersion:2,page:"heatseeker",ticker,
         selectedContract:priceHistoryOpen ? null : currentContract?.identity || null, contractResolution:currentContract?.status || null,
+        recordedMetricVersion:!priceHistoryOpen && isReplay && ["vex", "charm"].includes(activeView) ? visibleData?.grid?.[activeView + "_meta"]?.record_version || null : null,
         windowBaselineId:!priceHistoryOpen && activeMetric === "window" ? visibleData?.metrics?.grids?.window?.comparison?.previous_snapshot_id || null : null,
         windowInterval:!priceHistoryOpen && activeMetric === "window" ? visibleData?.metrics?.grids?.window?.interval || null : null,
         provider:visibleData?.data_source || null, formula:visibleData?.formula_version || visibleData?.metrics?.formula_version || null,

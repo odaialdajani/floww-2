@@ -57,12 +57,21 @@ async def test_actual_producer_binds_window_to_source_interval_and_owning_record
         assert section["interval"]["end"] == payload["event_time"]
         raw = recorded_display(replay_snapshot(conn,payload["snapshotId"]),"SPY",payload["snapshotId"])
         raw["window_baseline"] = recorded_display(replay_snapshot(conn,"prior"),"SPY","prior")
+        for metric in ("vex", "charm"):
+            meta = raw["grid"][metric+"_meta"]
+            assert meta["record_version"] == "metric-record.v1"
+            assert meta["available_at"] == payload["asof"] and meta["event_time"] == payload["event_time"]
         screen = dict(contextVersion=2,page="heatseeker",ticker="SPY",metric="gex",overlayMetric="window",displayMode="live",
                       activePane="gex",snapshotId=payload["snapshotId"],windowBaselineId="prior",mapQuery=payload["map_query"],
                       mapVersion=payload["asof"],provider=payload["data_source"],formula="gex.v2",mapStrikes=[100],
                       mapExpiries=payload["expiries_used"],selectedStrike=100,selectedExpiry=payload["expiries_used"][0])
         facts,gaps = display_facts(raw,screen,"SPY",datetime.now(UTC))
         assert {f["metric"]:f["value"] for f in facts}["Selected display cell"] == expected, gaps
+        for metric in ("vex", "charm"):
+            facts,gaps = display_facts(raw,{**screen,"displayMode":"replay","overlayMetric":"raw","metric":metric},"SPY",datetime.now(UTC))
+            assert facts, (gaps, raw["grid"][metric+"_meta"], raw["grid"].get("exposure_basis"))
+            stored = payload["grid"][metric+"_grid"][payload["expiries_used"][0]]["100"]
+            assert {f["metric"]:f["value"] for f in facts}["Selected display cell"] == stored, gaps
 
 
 @pytest.mark.asyncio

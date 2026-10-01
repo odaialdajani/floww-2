@@ -456,6 +456,26 @@ test("R7-03: false eligibility without reasons shows a generic blocker, not perm
   expect(setup.title).not.toContain("No blockers");
 });
 
+test.each(["vex", "charm"])("%s mounted replay publishes its stored envelope, value and independent owning identity", async metric => {
+ const main={...selectionMap().grid,[metric+"_grid"]:{"2026-09-18":{"650":-7}},[metric+"_meta"]:{record_version:"metric-record.v1",status:"ok"}};
+ axios.get.mockImplementation(async url=>({data:String(url).includes("/manifest/") ? {snapshots:[{id:"record"}]} : String(url).includes("/replay/") ? {
+   snapshot:{ticker:"SPY",snapshot_id:"record",asof_ts:"2026-09-11T18:00:00Z",spot:650,data_source:"fixture",formula_version:"gex.v2"},
+   grids:{grid:main},metrics_full:{},context:{display:{map_query:selectionMap().map_query}},strikes:[{strike:650}]
+ } : {}}));
+ const mounted=render(<><SkylitDashboard ticker="SPY" data={selectionMap(999)} spot={650} viewMode={metric}/><ResearchSelection/></>);
+ await act(async()=>fireEvent.click(screen.getByTestId("solstice-replay-load")));
+ await act(async()=>fireEvent.click(screen.getByTestId("solstice-replay-next")));
+ fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+ expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("-7.0");
+ const current=()=>JSON.parse(screen.getByTestId("research-selection").textContent);
+ expect(current()).toMatchObject({metric,displayMode:"replay",snapshotId:"record",recordedMetricVersion:"metric-record.v1",selectedStrike:650});
+ mounted.rerender(<><SkylitDashboard ticker="SPY" data={selectionMap(12345)} spot={700} viewMode={metric}/><ResearchSelection/></>);
+ expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("-7.0");
+ fireEvent.click(screen.getByTestId("solstice-replay-exit"));
+ expect(current().recordedMetricVersion).toBeNull();
+ expect(current().selectedStrike).toBeNull();
+});
+
 test("R7-03: replay clicks never reach the live Trade callback; Trade disabled in replay", async () => {
   const onCellClick = jest.fn();
   const onStrikeClick = jest.fn();

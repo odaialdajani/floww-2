@@ -1,4 +1,4 @@
-"""Recorded GEX projection for research; never reconstruct from present-day sources."""
+"""Recorded display projection for research; never reconstruct from present-day sources."""
 import math
 from copy import deepcopy
 
@@ -24,13 +24,14 @@ def recorded_display(rep, ticker, snapshot_id):
     return deepcopy(dict(
         ticker=ticker, snapshotId=snapshot_id, recorded_snapshot_id=snapshot_id, replay=True,
         asof=snap.get("asof_ts"), spot=snap.get("spot"), data_source=snap.get("data_source"),
-        formula_version=snap.get("formula_version"), map_query=query,
+        formula_version=snap.get("formula_version"), exposure_basis=snap.get("exposure_basis"), map_query=query,
         scope_selection=display.get("scope_selection"),
         event_time=display.get("event_time") or display.get("observed_at"),
         fetched_at=display.get("fetched_at"), spot_source=display.get("spot_source"),
         spot_event_time=display.get("spot_event_time"), spot_fetched_at=display.get("spot_fetched_at"),
         stale=display.get("stale"), stale_age_s=display.get("stale_age_s"),
-        grid=dict(strikes=main.get("strikes") or [s["strike"] for s in rep.get("strikes", [])],
+        grid=dict(**{k: v for k, v in main.items() if k not in {"strikes", "expiries", "grid", "formula_version", "exposure_basis"}},
+                  strikes=main.get("strikes") or [s["strike"] for s in rep.get("strikes", [])],
                   expiries=main.get("expiries") or list(main["grid"]), grid=main["grid"],
                   formula_version=main.get("formula_version"), exposure_basis=main.get("exposure_basis")),
         metrics={**rep["metrics_full"], "walls": rep.get("walls") or [],

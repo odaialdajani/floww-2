@@ -43,7 +43,8 @@ export function admissionBlock({ context, overlayMetric, displayMode }) {
   if (overlayMetric === "window" && (!context?.windowBaselineId || context.windowBaselineId === context.snapshotId
     || !context.windowInterval?.start || !context.windowInterval?.end
     || !(Date.parse(context.windowInterval.start) < Date.parse(context.windowInterval.end)))) return "Window activity unavailable: a comparable recorded baseline and declared interval are required.";
-  if (displayMode === "replay" && context?.metric && !["gex", "skylit"].includes(context.metric)) return "Recorded replay answers for this metric remain unavailable.";
+  if (displayMode === "replay" && context?.metric && !["gex", "skylit"].includes(context.metric)
+    && (!["vex", "charm"].includes(context.metric) || context.recordedMetricVersion !== "metric-record.v1")) return "Recorded replay answers for this metric remain unavailable: the complete stored metric envelope is required.";
   if (displayMode && !["live", "replay"].includes(displayMode)) return "This display is unavailable to Lodestar.";
   return null;
 }

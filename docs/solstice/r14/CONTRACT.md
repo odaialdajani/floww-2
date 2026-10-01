@@ -20,9 +20,20 @@ PR89/90/R13 calculations, unknown/invalid/zero/exclusion conventions, Next liste
 - Existing mounted context/Ask publishes baseline and interval selectors only; absent/conflicting identity remains unavailable, changed basis clears them. No new panels/tabs/polling.
 - Regression: original15 backend failures; actual producer5 and mounted2 failures → green. Focused104 backend and2 suites/56 frontend; self-review edge/recorder sweep49 backend; Ruff/whitespace pass. Native browser/final integration remains pending.
 
-## Next family — not yet admitted
+## Unit 3 — registered recorded VEX/Charm (focused acceptance)
 
-Complete registered VEX/Charm replay is next. Missing baseline/old metadata remains explicitly unavailable. No recomputed/live replay Greeks, aggressor-signed flow, cross-metric magnitude equivalence or invented outcomes.
+- Restore the already-stored metric grids/meta through both replay adapters; no Greek recomputation or live substitute. New producer envelopes declare metric ID/unit/formula/model/weight/provider/full query/axes/source event/fetched/available clocks. Register the existing annualized Charm convention; do not change its engine or fitted models.
+- Record-only admission verifies owning observation, pane/symbol/wall/cell/scope, conventions, clocks, nonnegative declared coverage counters and before-available-at refusal. Old incomplete/unknown/conflicting envelopes remain typed unavailable. Signed values and measured zero survive; absent cells remain null profile gaps and partial contributions are retained. VEX uses USD delta-notional/+1 vol pt, Charm uses dollar_charm_1pct_per_year: no cross-metric magnitude equivalence.
+- Existing context/Ask/drawer are reused. Mounted replay retains recorded values through live refresh and clears the envelope on explicit return to Live. Replay Trade remains disabled; provider absence uses the existing deterministic answer path, not a paid call.
+- Regression:25 initial backend projection/admission failures and3 frontend failures → green; additional2 unknown-coverage red→green. Focused110 backend and5 suites/77 frontend, then73 actual vertical/recorder/review/outcome checks pass. Ruff/API docs373/whitespace pass. New fixture exporter asserts source-clocked stored baselines and four admitted server ledgers with external transports blocked, no lifespan.
+
+## D — research readiness, not activation
+
+Affected recorder durability/review/episode/outcome suites pass. Missing episodes/barriers/paths remain pending/censored, same-bar order remains unknown, final labels remain idempotent; outcome scheduler remains default-disabled. Existing commissioning/support documents now distinguish historical account receipts, current offline capabilities and external activation/data-rights/study dependencies. Comprehension answer-key selftest25/25 is plumbing, NOT participant acceptance. No unrelated ranking/scanner/ML/outcome mechanism was introduced.
+
+## Final acceptance status
+
+Fresh R14 source/build/served/fixture browser binding and exact-final-head integration/hosted container gates are pending. `scripts/r14_fixture.py`, `r14_answer.py`, `r14_source_binding.cjs`, `r14_browser_receipt.cjs` form an isolated finite workflow; old R11/R13 evidence is never overwritten. Fixture HTTP calls the real record-only admission/deterministic-answer modules but is not a live or durable research API service. Mocked lifecycle tests, native browser checks, human study and market/strategy validation remain separate.
 
 ## Boundaries
 

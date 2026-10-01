@@ -50,6 +50,12 @@ test("window admission requires the owning recorded baseline and declared interv
   expect(admissionBlock({ context: { ...window, windowBaselineId: "snap1" }, overlayMetric: "window", displayMode: "live" })).toMatch(/unavailable|baseline/i);
 });
 
+test.each(["vex", "charm"])("%s replay requires a recorded metric-envelope selector", (metric) => {
+ const context={...complete,metric,overlayMetric:"raw",displayMode:"replay",recordedMetricVersion:"metric-record.v1"};
+ expect(admissionBlock({context,overlayMetric:"raw",displayMode:"replay"})).toBeNull();
+ expect(admissionBlock({context:{...context,recordedMetricVersion:null},overlayMetric:"raw",displayMode:"replay"})).toMatch(/unavailable|recorded/i);
+});
+
 test("missing published selection stays unavailable", () => {
   expect(admissionBlock({ context: {}, overlayMetric: "raw", displayMode: "live" }))
     .toMatch(/No published selection/);
