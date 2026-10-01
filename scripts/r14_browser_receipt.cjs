@@ -199,8 +199,10 @@ function apiBody(url) {
     // New R14 acceptance: existing review/context/drawer, actual record-only
     // admission/answer modules behind fixture HTTP (not a live/durable service).
     const askCurrent = async family => {
+      const response = page.waitForResponse(r=>/\/api\/agent\/turn\//.test(r.url()) && r.request().method()==='GET',{timeout:30000});
       await page.getByTestId('ask-lodestar-btn').first().click();
       await page.getByTestId('ask-lodestar-q-0').first().click();
+      await response; // previous mounted answer is not acceptance of the next request
       const dialog=page.getByRole('dialog',{name:'Lodestar research'});
       await dialog.getByRole('article',{name:'Research answer for SPY'}).waitFor();
       const trace=receipt.researchTraces[receipt.researchTraces.length-1];
