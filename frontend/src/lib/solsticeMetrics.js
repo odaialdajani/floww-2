@@ -78,7 +78,9 @@ export function sectionFor(data, id) {
 /**
  * Coverage/status for a basis. Prefers the backend's surface_coverage
  * summary; falls back to the section's own status for older packets.
- * Returns {status: ok|partial|unavailable, reason, usable, missing}.
+ * Returns {status: ok|partial|unavailable, reason, usable, missing, invalid,
+ * invalidDelta}. Missing (unknown) and invalid-delta (unusable reading)
+ * stay distinct; both make a usable surface partial, never ok.
  */
 export function surfaceStatus(data, id) {
   const cov = data?.metrics?.surface_coverage?.[id];
@@ -89,33 +91,38 @@ export function surfaceStatus(data, id) {
       usable: Number.isInteger(cov.usable) ? cov.usable : null,
       missing: (cov.missing_delta || 0) + (cov.missing_oi || 0) + (cov.missing_inputs || 0),
       invalid: cov.invalid || 0,
+      invalidDelta: cov.invalid_delta || 0,
     };
   }
   const sec = sectionFor(data, id);
   const g = id === "raw" ? sec?.grid : sec?.grid;
   if (!sec || !g || !Object.keys(g).length) {
-    return { status: "unavailable", reason: sec?.reason || "not in this snapshot", usable: null, missing: 0, invalid: 0 };
+    return { status: "unavailable", reason: sec?.reason || "not in this snapshot", usable: null, missing: 0, invalid: 0, invalidDelta: 0 };
   }
   const missing = Number(sec.missing_delta) || 0;
-  return { status: missing > 0 ? "partial" : "ok", reason: null, usable: null, missing, invalid: 0 };
+  const invalidDelta = Number(sec.invalid_delta) || 0;
+  return { status: (missing + invalidDelta) > 0 ? "partial" : "ok", reason: null, usable: null, missing, invalid: 0, invalidDelta };
 }
 
 /**
  * Signed strike profile for ONE surface over ONE declared expiry scope.
  * Sums only that surface's own cells (no Greek arithmetic). A strike with
  * no cell in any scoped expiry is null (gap), never 0. `partial` marks
- * strikes where the backend excluded contracts for unknown delta.
+ * strikes where the backend excluded contracts for unknown delta;
+ * `invalid` marks strikes excluded for unusable delta readings.
  */
 export function sumProfile(data, id, scopeExpiries) {
   const sec = sectionFor(data, id);
   const grid = sec?.grid;
-  const out = { id, values: {}, partial: {}, maxAbs: 0, available: !!(grid && Object.keys(grid).length) };
+  const out = { id, values: {}, partial: {}, invalid: {}, maxAbs: 0, available: !!(grid && Object.keys(grid).length) };
   if (!out.available) return out;
   const exps = (scopeExpiries && scopeExpiries.length ? scopeExpiries : Object.keys(grid));
   const miss = sec.cell_missing_delta || {};
+  const inv = sec.cell_invalid_delta || {};
   for (const e of exps) {
     const col = grid[e];
     const mcol = miss[e] || {};
+    const icol = inv[e] || {};
     if (col) {
       for (const k of Object.keys(col)) {
         const v = finite(col[k]);
@@ -125,6 +132,9 @@ export function sumProfile(data, id, scopeExpiries) {
     }
     for (const k of Object.keys(mcol)) {
       if (mcol[k] > 0) out.partial[k] = (out.partial[k] || 0) + mcol[k];
+    }
+    for (const k of Object.keys(icol)) {
+      if (icol[k] > 0) out.invalid[k] = (out.invalid[k] || 0) + icol[k];
     }
   }
   for (const v of Object.values(out.values)) out.maxAbs = Math.max(out.maxAbs, Math.abs(v));
@@ -143,6 +153,7 @@ export function wallValues(data, wall) {
       gross: cnt(wb.daddex_usable) ? finite(wb.daddex_gross) : null,
       net: cnt(wb.daddex_usable) ? finite(wb.daddex_net) : null,
       usable: cnt(wb.daddex_usable), missing: cnt(wb.daddex_missing) || 0,
+      invalid: cnt(wb.daddex_invalid) || 0,
     } : null,
     session_delta_volume: wb && (Object.prototype.hasOwnProperty.call(wb, "session_delta_volume_net") || Object.prototype.hasOwnProperty.call(wb, "sdv_net")) ? {
       gross: cnt(wb.session_delta_volume_usable ?? wb.sdv_usable) ? finite(wb.session_delta_volume_gross ?? wb.sdv_gross) : null,

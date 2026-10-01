@@ -104,13 +104,16 @@ def build_surface_coverage(metrics: dict[str, Any], grid: dict[str, Any] | None)
         usable = _count(sec.get("usable"))
         missing = (_count(sec.get(missing_key)) or 0) if missing_key else 0
         invalid = (_count(sec.get("invalid_type")) or 0) + (_count(sec.get("quarantined")) or 0)
+        invalid_delta = (_count(sec.get("invalid_delta")) or 0) if missing_key else 0
         entry = {"metric_id": metric_id, "basis": sec.get("exposure_basis") or basis,
                  "formula_version": sec.get("formula_version") or "gex.v2",
                  "usable": usable, "invalid": invalid,
-                 "status": _status(usable, missing + invalid, sec.get("status") if sec else "unavailable"),
+                 "status": _status(usable, missing + invalid + invalid_delta,
+                                   sec.get("status") if sec else "unavailable"),
                  "reason": sec.get("reason") if sec else "SURFACE_NOT_EMITTED"}
         if missing_key:
             entry["missing_delta"] = missing
+            entry["invalid_delta"] = invalid_delta
         return entry
 
     out["delta"] = overlay("delta", "dadgex_net_v1", "OI_DELTA_WEIGHTED", "missing_delta")

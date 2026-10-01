@@ -1,10 +1,12 @@
 """Solstice-owned scanner delivery; no lifespan, provider or legacy state."""
-from unittest.mock import AsyncMock
+import logging
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi.testclient import TestClient
 
 import server
+from routes.solstice_scan import _rank_observation
 from services import solstice_scan as scan
 from services.solstice_rank import KeyedScanCache
 
@@ -63,3 +65,25 @@ def test_get_cannot_spend_via_refresh_parameter(client, monkeypatch):
     monkeypatch.setattr(scan, "run_scan", run)
     assert client.get("/api/solstice/scan/leaderboard?refresh=true").status_code == 200
     run.assert_not_awaited()
+
+
+def test_unavailable_flow_feed_is_logged_and_stays_absent(monkeypatch, caplog):
+    """The scanner fallback gate: a dead alert feed must be observable.
+
+    The ranking keeps flow absent (missing, never a measured zero) AND emits
+    a log record — a bare `except: pass` hides the failure from operators
+    and trips the silent-except gate.
+    """
+    import services.flow_alerts as flow_alerts
+
+    monkeypatch.setattr(flow_alerts, "read_alert_feed",
+                        Mock(side_effect=RuntimeError("feed down")))
+    heat = {"snapshotId": "s1", "asof": "t", "data_source": "public_api",
+            "formula_version": "gex.v2"}
+    with caplog.at_level(logging.WARNING, logger="routes.solstice_scan"):
+        row = _rank_observation("SPY", heat, {"opportunity_score": 5})
+    assert row["evidence"]["flow_status"] == "missing"
+    assert row["evidence"]["flow_asof"] is None
+    assert [r for r in caplog.records
+            if r.levelno >= logging.WARNING and "SPY" in r.getMessage()], \
+        "feed failure must be logged, not swallowed"

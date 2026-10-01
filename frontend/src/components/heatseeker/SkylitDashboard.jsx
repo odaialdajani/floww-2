@@ -18,8 +18,10 @@ import AlertEngineStrip from "../flowseeker/AlertEngineStrip";
 import { shownMapStrikes, mapSurface } from "./shownMapStrikes";
 import { ALL_BASES, surfaceStatus, sumProfile } from "../../lib/solsticeMetrics";
 import AskLodestar from "./AskLodestar";
+
 import ExactContractReview from "./ExactContractReview";
 
+import SolsticeSymbolMaps from "./SolsticeSymbolMaps";
 import { resolveSelectedWall, wallPositionOf } from "../../lib/solsticeSelection";
 
 /**
@@ -109,7 +111,8 @@ function SelectedWallBlock({ data, spot, selectedCell, metric = "raw", replay = 
 function CompareWorkspace({ data, spot, ticker, metric,
                             density, windowRows, onPaneCellClick,
                             onStrikeClick, onPaneScale, compareLock,
-                            multi = false, selected, wallBand, anchorStrike, onManualScroll }) {
+                            multi = false, selected, wallBand, anchorStrike, onManualScroll,
+                            pair = "gexvex", rightBasis = "delta" }) {
   const gexRef = useRef(null);
   const vexRef = useRef(null);
   const extraRefs = useRef({});
@@ -133,6 +136,11 @@ function CompareWorkspace({ data, spot, ticker, metric,
     }
   };
   const metricLabel = gexBasisLabel(metric);
+  // Raw+Δ pair: left pane is always raw structure, right pane the active
+  // GEX adjustment — one symbol, one snapshot, per-metric scales.
+  const isRawDelta = pair === "rawdelta" && !multi;
+  const gexBasis = multi ? "raw" : (isRawDelta ? "raw" : metric);
+  const deltaBasis = multi ? "delta" : rightBasis;
   const pane = (side, view, title, units, scale, basis = "raw") => (
     <div
       className="skylit-compare-pane"
@@ -141,7 +149,7 @@ function CompareWorkspace({ data, spot, ticker, metric,
       onScroll={syncFrom(side)}
     >
       <div className="skylit-compare-pane-header" data-testid={`skylit-pane-${side}-header`} title={title}>
-        {side === "gex" ? `GEX · ${multi ? "Raw OI" : metricLabel}` : side === "delta" ? "GEX · Δ-weighted OI" : view.toUpperCase()} · {units}
+        {side === "gex" ? `GEX · ${isRawDelta ? "Raw OI" : multi ? "Raw OI" : metricLabel}` : side === "delta" ? `GEX · ${gexBasisLabel(deltaBasis)}` : view.toUpperCase()} · {units}
       </div>
       <SkylitHeatmapGrid
         data={data}
@@ -166,10 +174,10 @@ function CompareWorkspace({ data, spot, ticker, metric,
   return (
     <div className={`skylit-compare-workspace${multi ? " skylit-multi-workspace" : ""}`} data-testid="skylit-compare-desk">
       {pane("gex", "gex", "Raw structural wall anchor; weighting changes cells, not walls",
-        "USD/1% move", compareLock?.gex || null, multi ? "raw" : metric)}
-      {multi && pane("delta", "gex", "Same snapshot and raw structural wall, absolute-delta weighting",
-        "USD/1% move · own scale", compareLock?.delta || null, "delta")}
-      {pane("vex", "vex", "Vanna exposure; delta weighting N/A here",
+        "USD/1% move", compareLock?.gex || null, gexBasis)}
+      {(multi || isRawDelta) && pane("delta", "gex", "Same symbol, snapshot, raw wall and scope; absolute-delta weighting",
+        "USD/1% move · own scale", compareLock?.delta || null, deltaBasis)}
+      {!isRawDelta && pane("vex", "vex", "Vanna exposure; delta weighting N/A here",
         "USD/+1 vol pt · own scale", compareLock?.vex || null)}
       {multi && pane("charm", "charm", "Declared Charm convention, same snapshot; not economically interchangeable with GEX",
         "declared Charm units · own scale", compareLock?.charm || null)}
@@ -236,10 +244,12 @@ function SkylitDashboard({
   // scale can never color a new symbol/metric/view.
   const [liveScale, setLiveScale] = useState(null);
   const [scaleLock, setScaleLock] = useState(null);
-  // R7-04 compare desk: Single (default, unchanged) vs GEX+VEX. One
+  // R7-04 compare desk: Single (default, unchanged) vs GEX+VEX vs Raw+Δ.
+  // One snapshot/request; the clicked pane owns the readout.
+  const [compareMode, setCompareMode] = useState(false);
+  const [comparePair, setComparePair] = useState("gexvex");
   // snapshot/request drives both panes; the active pane owns the readout
   // while wall identity stays raw-anchored. Per-pane scales lock together.
-  const [compareMode, setCompareMode] = useState(false);
   const [activePane, setActivePane] = useState("gex");
   const [compareScales, setCompareScales] = useState({ gex: null, delta: null, vex: null, charm: null });
   const [compareLock, setCompareLock] = useState(null);
@@ -408,8 +418,14 @@ function SkylitDashboard({
   const [priceHistoryOpen, setPriceHistoryOpen] = useState(false);
   const multi = layout === "multi";
   const panes = compareMode || multi;
+  // Raw+Δ pair: left is always raw structure; right is the active GEX
+  // adjustment (delta when the active basis is raw itself).
+  const rightBasis = metric === "raw" ? "delta" : metric;
+  const rawDelta = compareMode && comparePair === "rawdelta" && !multi;
   const activeView = panes ? (activePane === "delta" ? "gex" : activePane) : viewMode;
-  const activeMetric = panes && multi ? (activePane === "delta" ? "delta" : "raw") : ["gex", "skylit"].includes(activeView) ? metric : "raw";
+  const activeMetric = panes && multi ? (activePane === "delta" ? "delta" : "raw")
+    : rawDelta ? (activePane === "delta" ? rightBasis : "raw")
+    : ["gex", "skylit"].includes(activeView) ? metric : "raw";
   const basisStatus = useMemo(() => Object.fromEntries(ALL_BASES.map(b => [b.id, surfaceStatus(visibleData, b.id).status])), [visibleData]);
   const loadedExpiries = visibleData?.grid?.expiries || [];
   const resolvedWall = resolveSelectedWall(visibleData, selectedCell).wall || null;
@@ -487,8 +503,8 @@ function SkylitDashboard({
       const wall_id = followWall && followWallId
         ? (hit?.wall_id === followWallId ? hit?.wall_id : followWallId)
         : (hit?.wall_id || null);
-      const paneView = pane === "delta" ? "gex" : pane;
-            const paneMetric = multi ? (pane === "delta" ? "delta" : "raw") : ["gex", "skylit"].includes(pane) ? metric : "raw";
+        const paneView = pane === "delta" ? "gex" : pane;
+            const paneMetric = multi ? (pane === "delta" ? "delta" : "raw") : rawDelta ? (pane === "delta" ? rightBasis : "raw") : ["gex", "skylit"].includes(pane) ? metric : "raw";
             const sel = { strike, colKey, value, ...snap, wall_id, view: paneView, metric: paneMetric };
       // R7-F12: historical/study clicks NEVER reach the live Trade handler.
       // Both the call boundary (here) and the arming control (below) enforce
@@ -499,7 +515,7 @@ function SkylitDashboard({
         setSelectedCell(sel);
       }
     },
-    [tradeMode,onCellClick,visibleData,ticker,isReplay,followWall,followWallId,activeView,metric,multi]
+    [tradeMode,onCellClick,visibleData,ticker,isReplay,followWall,followWallId,activeView,metric,multi,compareMode,comparePair]
   );
   // Clear ticker-dependent selection on symbol change (F18).
   useEffect(() => { setSelectedCell(null); setActivePane("gex"); }, [ticker]);
@@ -676,7 +692,8 @@ function SkylitDashboard({
         <span className="skylit-canvas-title">2D Grid</span>
         <select aria-label="Canvas layout" className="skylit-tf-select" value={layout} onChange={e => { setLayout(e.target.value); setCompareMode(false); setActivePane("gex"); }}>
           <option value="focus">Focus Matrix</option><option value="profile">Matrix + Profile</option>
-          <option value="multi">Multi-map</option><option value="calendar">Calendar Overview</option>
+          <option value="multi" title="Four metric panes over one symbol and snapshot — not multi-symbol monitoring">Multi-map</option><option value="calendar">Calendar Overview</option>
+          <option value="symbols" title="Independent per-symbol maps, axes and inspector — one request per symbol">Symbol maps</option>
         </select>
         <button className="skylit-trade-mode-btn" onClick={() => setReplayPanelOpen(o => !o)} aria-expanded={replayPanelOpen}>Replay</button>
         <button
@@ -713,19 +730,27 @@ function SkylitDashboard({
             }
           }}
           title={compareMode
-            ? (compareLock ? "Unlock per-pane comparison scales" : "Lock per-pane GEX+VEX scales for replay comparison (clears on scope change)")
+            ? (compareLock ? "Unlock per-pane comparison scales" : "Lock per-pane comparison scales for replay comparison (clears on scope change)")
             : (scaleLock ? "Unlock comparison scale — back to relative" : "Lock the current color scale for replay comparison (clears on scope change)")}
           data-testid="skylit-scale-lock"
         >
           {compareMode ? (compareLock ? "Scales locked" : "Lock scales") : (scaleLock ? "Scale locked" : "Lock scale")}
         </button>
         <button
-          className={`skylit-trade-mode-btn${compareMode ? " active" : ""}`}
-          onClick={() => { setLayout("focus"); setCompareMode((m) => !m); setActivePane("gex"); }}
-          title={compareMode ? "Back to single grid (keeps symbol and wall)" : "Compare GEX + VEX side by side (one snapshot, no extra request)"}
+          className={`skylit-trade-mode-btn${compareMode && comparePair === "gexvex" ? " active" : ""}`}
+          onClick={() => { setLayout("focus"); if (compareMode && comparePair === "gexvex") { setCompareMode(false); } else { setComparePair("gexvex"); setCompareMode(true); } setActivePane("gex"); }}
+          title={compareMode && comparePair === "gexvex" ? "Back to single grid (keeps symbol and wall)" : "Compare GEX + VEX side by side (one snapshot, no extra request)"}
           data-testid="skylit-compare-toggle"
         >
           GEX+VEX
+        </button>
+        <button
+          className={`skylit-trade-mode-btn${compareMode && comparePair === "rawdelta" ? " active" : ""}`}
+          onClick={() => { setLayout("focus"); if (compareMode && comparePair === "rawdelta") { setCompareMode(false); } else { setComparePair("rawdelta"); setCompareMode(true); } setActivePane("gex"); }}
+          title={compareMode && comparePair === "rawdelta" ? "Back to single grid (keeps symbol and wall)" : "Compare Raw OI (left) against the active GEX adjustment (right) — one symbol, one snapshot, no extra request"}
+          data-testid="skylit-rawdelta-toggle"
+        >
+          Raw+Δ
         </button>
         <button className={`skylit-trade-mode-btn${followSpot ? " active" : ""}`} data-testid="skylit-follow-spot-toggle"
           aria-pressed={followSpot} title="Manual scrolling pauses following; resume explicitly. Replay spot is frozen."
@@ -828,8 +853,20 @@ function SkylitDashboard({
               onStrikeClick={handleStrikeClick}
               onPaneScale={paneScaleReady}
               compareLock={compareLock}
+              pair={compareMode ? comparePair : "gexvex"} rightBasis={rightBasis}
               multi={multi} selected={gridSelection} wallBand={resolvedWall} anchorStrike={anchorStrike} onManualScroll={pauseFollow}
             />
+          ) : layout === "symbols" ? (
+          <SolsticeSymbolMaps
+            ticker={ticker}
+            data={displayData}
+            metric={metric}
+            viewMode={viewMode}
+            mode={["scalp", "1m"].includes(timeframe) ? "scalp" : ["swing", "1h"].includes(timeframe) ? "swing" : "day"}
+            expiries={expiries}
+            dte={dte}
+            replay={isReplay}
+          />
           ) : (
           <SkylitHeatmapGrid
             data={displayData}
@@ -1007,6 +1044,7 @@ function SkylitDashboard({
                   onStrikeClick={handleStrikeClick}
                   onPaneScale={paneScaleReady}
                   compareLock={compareLock}
+                  pair={compareMode ? comparePair : "gexvex"} rightBasis={rightBasis}
                   multi={multi} selected={gridSelection} wallBand={resolvedWall}
                 />
               ) : (

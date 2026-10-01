@@ -1,4 +1,5 @@
 """Bounded, on-demand research scanner. No scheduler or legacy leaderboard writes."""
+import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query
@@ -7,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from auth import require_api_key
 from services import solstice_scan
 from services.solstice_rank import RANK_VERSION, fuse_one
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/solstice/scan", tags=["solstice"])
 
@@ -45,9 +48,11 @@ def _rank_observation(ticker, heat, opportunity):
         if alerts:
             source = alerts[0].get("asof_ts")
             flow = {"conviction": alerts[0].get("conviction"), "key": alerts[0].get("key")}
-    except Exception:
-        # An unavailable feed stays absent, not a measured zero.
-        pass
+    except Exception as exc:
+        # An unavailable feed stays absent, not a measured zero — and the
+        # failure is logged so operators can see it (never a silent pass).
+        log.warning("solstice scan flow feed unavailable for %s: %s",
+                    ticker, exc)
     heat = heat or {}
     row = fuse_one(ticker, flow=flow, opportunity=opportunity,
                    snapshot_id=heat.get("snapshotId"), asof=heat.get("asof"))

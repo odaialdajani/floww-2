@@ -509,6 +509,52 @@ test("R7-04: compare toggle mounts two real panes over one snapshot; back to one
   expect(screen.queryByTestId("skylit-compare-desk")).not.toBeInTheDocument();
 });
 
+test("R11: Raw+Δ toggle mounts raw-left/adjustment-right over one snapshot", async () => {
+  const data = {
+    ticker: "SPY", asof: "2026-09-03T00:00:00Z", spot: 650, exposure_basis: "OI",
+    strikes: [{ strike: 650, gex: 1000 }],
+    grid: { expiries: ["2026-09-18"], strikes: [650], grid: { "2026-09-18": { 650: 1000 } } },
+    metrics: { walls: [], grids: { delta: { expiries: ["2026-09-18"], grid: { "2026-09-18": { 650: 500 } } } } },
+    quality: { state: "usable", reasonCodes: [], setupEligible: true },
+  };
+  await act(async () => {
+    render(<SkylitDashboard ticker="SPY" data={data} spot={650} />);
+  });
+  await act(async () => { fireEvent.click(screen.getByTestId("skylit-rawdelta-toggle")); });
+  expect(screen.getByTestId("skylit-compare-desk")).toBeInTheDocument();
+  expect(screen.queryAllByTestId("mock-heatmap").length).toBe(2);
+  // Raw left, adjustment right — same symbol panes, never multi-symbol.
+  expect(screen.getByTestId("skylit-pane-gex-header").textContent).toContain("Raw OI");
+  expect(screen.getByTestId("skylit-pane-delta-header").textContent).toContain("Δ-weighted OI");
+  expect(screen.getByTestId("skylit-pane-delta-header").textContent).toContain("USD/1% move");
+  expect(screen.queryByTestId("skylit-pane-vex")).not.toBeInTheDocument();
+  // Clicking the right pane makes it own the readout with its own basis:
+  // the readout resolves 500 (Δ surface), not 1000 (raw surface).
+  const cells = screen.getAllByTestId("mock-heatmap-cell");
+  await act(async () => { fireEvent.click(cells[1]); });
+  expect(screen.getByTestId("skylit-selected-cell").textContent).toContain("500.0");
+  await act(async () => { fireEvent.click(screen.getByTestId("skylit-rawdelta-toggle")); });
+  expect(screen.queryAllByTestId("mock-heatmap").length).toBe(1);
+  expect(screen.queryByTestId("skylit-compare-desk")).not.toBeInTheDocument();
+});
+
+test("R11: Raw+Δ right pane follows the active adjustment basis", async () => {
+  const data = {
+    ticker: "SPY", asof: "2026-09-03T00:00:00Z", spot: 650, exposure_basis: "OI",
+    strikes: [{ strike: 650, gex: 1000 }],
+    grid: { expiries: ["2026-09-18"], strikes: [650], grid: { "2026-09-18": { 650: 1000 } } },
+    metrics: { walls: [], grids: {} },
+    quality: { state: "usable", reasonCodes: [], setupEligible: true },
+  };
+  await act(async () => {
+    render(<SkylitDashboard ticker="SPY" data={data} spot={650} />);
+  });
+  await act(async () => { fireEvent.click(screen.getByTestId("mock-activity")); });
+  await act(async () => { fireEvent.click(screen.getByTestId("skylit-rawdelta-toggle")); });
+  expect(screen.getByTestId("skylit-pane-gex-header").textContent).toContain("Raw OI");
+  expect(screen.getByTestId("skylit-pane-delta-header").textContent).toContain("Session volume");
+});
+
 test("R7-04: clicking the VEX pane makes it own the readout; scroll syncs", async () => {
   const data = {
     ticker: "SPY", asof: "2026-09-03T00:00:00Z", spot: 650, exposure_basis: "OI",

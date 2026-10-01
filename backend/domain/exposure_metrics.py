@@ -141,6 +141,10 @@ class ExposureResult:
     invalid: int
     basis: str
     formula_version: str = FORMULA_VERSION
+    # Invalid delta readings (boolean, nonfinite, out-of-range) are NOT
+    # missing observations. Canonical delta-weighted calculations count them
+    # here so "unknown" and "unusable" never look alike downstream.
+    invalid_delta: int = 0
 
 
 def resolve_multiplier(contract: dict[str, Any]) -> tuple[float | None, str | None]:
@@ -246,7 +250,7 @@ def compute_raw_oi(contracts: list[dict[str, Any]], spot: float) -> ExposureResu
 def compute_delta_weighted_oi(contracts: list[dict[str, Any]], spot: float) -> ExposureResult:
     """dadgex_gross_v1 / dadgex_net_v1: Σ u N |δ| with conventional sign."""
     gross = net = call = put = 0.0
-    usable = missing_delta = missing_oi = invalid = 0
+    usable = missing_delta = missing_oi = invalid = invalid_delta = 0
     spot_f = is_valid_measurement(spot)
     for c in contracts:
         if not isinstance(c, dict):
@@ -272,9 +276,12 @@ def compute_delta_weighted_oi(contracts: list[dict[str, Any]], spot: float) -> E
         if sign is None:
             invalid += 1
             continue
-        ad, _reason = abs_delta(delta)
+        ad, reason = abs_delta(delta)
         if ad is None:
-            missing_delta += 1
+            if reason == "DELTA_MISSING":
+                missing_delta += 1
+            else:
+                invalid_delta += 1
             continue
         mult = _resolve_mult(c)
         if mult is None:
@@ -293,7 +300,8 @@ def compute_delta_weighted_oi(contracts: list[dict[str, Any]], spot: float) -> E
         else:
             put += w
         usable += 1
-    return ExposureResult(gross, net, call, put, usable, missing_delta, missing_oi, invalid, "OI_DELTA_WEIGHTED")
+    return ExposureResult(gross, net, call, put, usable, missing_delta, missing_oi, invalid,
+                          "OI_DELTA_WEIGHTED", invalid_delta=invalid_delta)
 
 
 def compute_volume_gamma(contracts: list[dict[str, Any]], spot: float) -> ExposureResult:
@@ -360,7 +368,7 @@ def compute_session_delta_volume_gamma(
     USD per 1% spot move, VOLUME_DELTA_WEIGHTED basis.
     """
     gross = net = call = put = 0.0
-    usable = missing_delta = missing_vol = invalid = 0
+    usable = missing_delta = missing_vol = invalid = invalid_delta = 0
     spot_f = is_valid_measurement(spot)
     for c in contracts:
         if not isinstance(c, dict):
@@ -386,9 +394,12 @@ def compute_session_delta_volume_gamma(
         if sign is None:
             invalid += 1
             continue
-        ad, _reason = abs_delta(delta)
+        ad, reason = abs_delta(delta)
         if ad is None:
-            missing_delta += 1
+            if reason == "DELTA_MISSING":
+                missing_delta += 1
+            else:
+                invalid_delta += 1
             continue
         mult = _resolve_mult(c)
         if mult is None:
@@ -408,7 +419,7 @@ def compute_session_delta_volume_gamma(
             put += w
         usable += 1
     return ExposureResult(gross, net, call, put, usable, missing_delta, missing_vol, invalid,
-                          "VOLUME_DELTA_WEIGHTED")
+                          "VOLUME_DELTA_WEIGHTED", invalid_delta=invalid_delta)
 
 
 def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str, Any]],
@@ -429,6 +440,7 @@ def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str,
             members = set()
         dg = dn = vg = vn = 0.0
         usable = missing = invalid = vn_n = 0
+        daddex_invalid = 0
         volume_usable = volume_missing = volume_invalid = 0
         session_dv_gross = session_dv_net = 0.0
         session_dv_usable = session_dv_missing = session_dv_invalid = 0
@@ -506,9 +518,12 @@ def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str,
                 continue
             if oi_f == 0:
                 continue
-            ad, _reason = abs_delta(c.get("delta", c.get("δ")))
+            ad, reason = abs_delta(c.get("delta", c.get("δ")))
             if ad is None:
-                missing += 1
+                if reason == "DELTA_MISSING":
+                    missing += 1
+                else:
+                    daddex_invalid += 1
             elif not math.isfinite(u * ad * oi_f):
                 invalid += 1
             else:
@@ -519,6 +534,7 @@ def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str,
             "daddex_gross": dg if math.isfinite(dg) else None,
             "daddex_net": dn if math.isfinite(dn) else None,
             "daddex_usable": usable, "daddex_missing": missing,
+            "daddex_invalid": daddex_invalid,
             "volume_gross": vg if math.isfinite(vg) else None,
             "volume_net": vn if math.isfinite(vn) else None, "volume_n": vn_n,
             "volume_usable": volume_usable, "volume_missing": volume_missing,

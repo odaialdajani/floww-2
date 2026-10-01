@@ -1,0 +1,774 @@
+{
+  "zoomMethod": "CSS zoom simulation; actual browser UI zoom acceptance remains pending",
+  "sourceCommit": "72cdd943f4f2d254589badfb45fc835cba592007",
+  "fixtureHash": "a2743cbd943068c01b3d77b96e60ee24eb01c836bc06503a60056cf10e6235cd",
+  "bundleHashes": {
+    "main.css": "f4598851386b6547002d9ea44109f52f237f6b6cccb4e8035a2599e3f504dd54",
+    "main.js": "267f361f0fe957767cc23d8e37731491b08d444da396ba63cde1a74ae35e4de9",
+    "static/js/415.34df0ce4.chunk.js": "48d91bcce41053d197315b3d2d270ae761f77121989bf4b83e0388f79fa5f157",
+    "static/js/248.517a2a31.chunk.js": "a989bff8cf146299b2f3722ae275f99130eeef3f5031c185f3853eaa122e32a5",
+    "static/js/537.613479e6.chunk.js": "7edae7a915322aaab4cbcfaab2236d462a31fb91aabdeaab712bc7d459bc85fd"
+  },
+  "fixtureOnly": true,
+  "externalRequestsBlocked": [
+    {
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    }
+  ],
+  "pageErrors": [],
+  "warnings": [
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    }
+  ],
+  "viewports": [
+    {
+      "name": "solstice-focus",
+      "width": 1920,
+      "zoom": 1,
+      "height": 1000,
+      "documentWidth": 1920,
+      "documentHeight": 1000,
+      "grids": [
+        {
+          "width": 1137.5,
+          "height": 512.5
+        }
+      ],
+      "toolbar": {
+        "x": 571.25,
+        "y": 302.25,
+        "width": 1337.5,
+        "height": 36,
+        "top": 302.25,
+        "right": 1908.75,
+        "bottom": 338.25,
+        "left": 571.25
+      }
+    },
+    {
+      "name": "solstice-focus",
+      "width": 1440,
+      "zoom": 1,
+      "height": 1000,
+      "documentWidth": 1440,
+      "documentHeight": 1000,
+      "grids": [
+        {
+          "width": 712,
+          "height": 489.5
+        }
+      ],
+      "toolbar": {
+        "x": 571.25,
+        "y": 326.75,
+        "width": 857.5,
+        "height": 36,
+        "top": 326.75,
+        "right": 1428.75,
+        "bottom": 362.75,
+        "left": 571.25
+      }
+    },
+    {
+      "name": "solstice-focus",
+      "width": 1024,
+      "zoom": 1,
+      "height": 1000,
+      "documentWidth": 1024,
+      "documentHeight": 1000,
+      "grids": [
+        {
+          "width": 712,
+          "height": 466.5
+        }
+      ],
+      "toolbar": {
+        "x": 492,
+        "y": 334,
+        "width": 520,
+        "height": 36,
+        "top": 334,
+        "right": 1012,
+        "bottom": 370,
+        "left": 492
+      }
+    },
+    {
+      "name": "solstice-focus",
+      "width": 768,
+      "zoom": 1,
+      "height": 1000,
+      "documentWidth": 768,
+      "documentHeight": 1000,
+      "grids": [
+        {
+          "width": 710,
+          "height": 437.5
+        }
+      ],
+      "toolbar": {
+        "x": 329.5,
+        "y": 372.5,
+        "width": 428,
+        "height": 36,
+        "top": 372.5,
+        "right": 757.5,
+        "bottom": 408.5,
+        "left": 329.5
+      }
+    },
+    {
+      "name": "solstice-focus",
+      "width": 390,
+      "zoom": 1,
+      "height": 1000,
+      "documentWidth": 390,
+      "documentHeight": 1000,
+      "grids": [
+        {
+          "width": 710,
+          "height": 283
+        }
+      ],
+      "toolbar": {
+        "x": 71,
+        "y": 526.5,
+        "width": 312,
+        "height": 41,
+        "top": 526.5,
+        "right": 383,
+        "bottom": 567.5,
+        "left": 71
+      }
+    },
+    {
+      "name": "solstice-focus",
+      "width": 768,
+      "zoom": 2,
+      "height": 1000,
+      "documentWidth": 768,
+      "documentHeight": 2000,
+      "grids": [
+        {
+          "width": 1420,
+          "height": 566
+        }
+      ],
+      "toolbar": {
+        "x": 629,
+        "y": 1503.234375,
+        "width": 118,
+        "height": 72,
+        "top": 1503.234375,
+        "right": 747,
+        "bottom": 1575.234375,
+        "left": 629
+      }
+    },
+    {
+      "name": "solstice-profile",
+      "width": 1440,
+      "zoom": 1,
+      "height": 1000,
+      "documentWidth": 1440,
+      "documentHeight": 1000,
+      "grids": [
+        {
+          "width": 902,
+          "height": 526
+        }
+      ],
+      "toolbar": {
+        "x": 395.25,
+        "y": 302.25,
+        "width": 1033.5,
+        "height": 36,
+        "top": 302.25,
+        "right": 1428.75,
+        "bottom": 338.25,
+        "left": 395.25
+      }
+    },
+    {
+      "name": "solstice-multi",
+      "width": 1920,
+      "zoom": 1,
+      "height": 1000,
+      "documentWidth": 1920,
+      "documentHeight": 1000,
+      "grids": [
+        {
+          "width": 712,
+          "height": 512.5
+        },
+        {
+          "width": 712,
+          "height": 512.5
+        },
+        {
+          "width": 712,
+          "height": 512.5
+        },
+        {
+          "width": 712,
+          "height": 512.5
+        }
+      ],
+      "toolbar": {
+        "x": 395.25,
+        "y": 302.25,
+        "width": 1513.5,
+        "height": 36,
+        "top": 302.25,
+        "right": 1908.75,
+        "bottom": 338.25,
+        "left": 395.25
+      }
+    },
+    {
+      "name": "solstice-symbols",
+      "width": 1440,
+      "zoom": 1,
+      "height": 1000,
+      "documentWidth": 1440,
+      "documentHeight": 1000,
+      "grids": [
+        {
+          "width": 712,
+          "height": 1432.5
+        },
+        {
+          "width": 712,
+          "height": 1432.5
+        }
+      ],
+      "toolbar": {
+        "x": 395.25,
+        "y": 302.25,
+        "width": 1033.5,
+        "height": 36,
+        "top": 302.25,
+        "right": 1428.75,
+        "bottom": 338.25,
+        "left": 395.25
+      }
+    },
+    {
+      "name": "solstice-calendar",
+      "width": 1440,
+      "zoom": 1,
+      "height": 1000,
+      "documentWidth": 1440,
+      "documentHeight": 1000,
+      "grids": [
+        {
+          "width": 833.5,
+          "height": 526
+        }
+      ],
+      "toolbar": {
+        "x": 395.25,
+        "y": 302.25,
+        "width": 1033.5,
+        "height": 36,
+        "top": 302.25,
+        "right": 1428.75,
+        "bottom": 338.25,
+        "left": 395.25
+      }
+    },
+    {
+      "name": "triad",
+      "width": 1440,
+      "zoom": 1,
+      "height": 1000,
+      "documentWidth": 1440,
+      "documentHeight": 1055,
+      "grids": [
+        {
+          "width": 712,
+          "height": 1432.5
+        },
+        {
+          "width": 712,
+          "height": 1409.5
+        }
+      ]
+    },
+    {
+      "name": "triad",
+      "width": 768,
+      "zoom": 1,
+      "height": 1000,
+      "documentWidth": 768,
+      "documentHeight": 1156,
+      "grids": [
+        {
+          "width": 710,
+          "height": 1596.25
+        },
+        {
+          "width": 710,
+          "height": 1570.5
+        }
+      ]
+    },
+    {
+      "name": "triad",
+      "width": 390,
+      "zoom": 1,
+      "height": 1000,
+      "documentWidth": 390,
+      "documentHeight": 1617,
+      "grids": [
+        {
+          "width": 710,
+          "height": 1596.25
+        },
+        {
+          "width": 0,
+          "height": 0
+        }
+      ]
+    }
+  ],
+  "resizeTrace": [
+    {
+      "iteration": 0,
+      "width": 1440,
+      "height": 900,
+      "canvas": 456.5
+    },
+    {
+      "iteration": 1,
+      "width": 1024,
+      "height": 900,
+      "canvas": 411.5
+    },
+    {
+      "iteration": 2,
+      "width": 800,
+      "height": 900,
+      "canvas": 349.5
+    },
+    {
+      "iteration": 3,
+      "width": 640,
+      "height": 900,
+      "canvas": 381.015625
+    },
+    {
+      "iteration": 4,
+      "width": 390,
+      "height": 900,
+      "canvas": 187.5
+    },
+    {
+      "iteration": 5,
+      "width": 768,
+      "height": 900,
+      "canvas": 368.875
+    },
+    {
+      "iteration": 6,
+      "width": 1440,
+      "height": 900,
+      "canvas": 457.03125
+    },
+    {
+      "iteration": 7,
+      "width": 1024,
+      "height": 900,
+      "canvas": 411.5
+    },
+    {
+      "iteration": 8,
+      "width": 800,
+      "height": 900,
+      "canvas": 349.5
+    },
+    {
+      "iteration": 9,
+      "width": 640,
+      "height": 900,
+      "canvas": 380.140625
+    },
+    {
+      "iteration": 10,
+      "width": 390,
+      "height": 900,
+      "canvas": 187.5
+    },
+    {
+      "iteration": 11,
+      "width": 768,
+      "height": 900,
+      "canvas": 368.28125
+    },
+    {
+      "iteration": 12,
+      "width": 1440,
+      "height": 900,
+      "canvas": 457.546875
+    },
+    {
+      "iteration": 13,
+      "width": 1024,
+      "height": 900,
+      "canvas": 411.5
+    },
+    {
+      "iteration": 14,
+      "width": 800,
+      "height": 900,
+      "canvas": 349.5
+    },
+    {
+      "iteration": 15,
+      "width": 640,
+      "height": 900,
+      "canvas": 381.484375
+    },
+    {
+      "iteration": 16,
+      "width": 390,
+      "height": 900,
+      "canvas": 187.5
+    },
+    {
+      "iteration": 17,
+      "width": 768,
+      "height": 900,
+      "canvas": 370
+    },
+    {
+      "iteration": 18,
+      "width": 1440,
+      "height": 900,
+      "canvas": 457.59375
+    },
+    {
+      "iteration": 19,
+      "width": 1024,
+      "height": 900,
+      "canvas": 411.5
+    },
+    {
+      "iteration": 20,
+      "width": 800,
+      "height": 900,
+      "canvas": 349.5
+    },
+    {
+      "iteration": 21,
+      "width": 640,
+      "height": 900,
+      "canvas": 380.140625
+    },
+    {
+      "iteration": 22,
+      "width": 390,
+      "height": 900,
+      "canvas": 187.5
+    },
+    {
+      "iteration": 23,
+      "width": 768,
+      "height": 900,
+      "canvas": 370
+    },
+    {
+      "iteration": 24,
+      "width": 1440,
+      "height": 900,
+      "canvas": 456.5
+    },
+    {
+      "iteration": 25,
+      "width": 1024,
+      "height": 900,
+      "canvas": 411.5
+    },
+    {
+      "iteration": 26,
+      "width": 800,
+      "height": 900,
+      "canvas": 349.5
+    },
+    {
+      "iteration": 27,
+      "width": 640,
+      "height": 900,
+      "canvas": 381.953125
+    },
+    {
+      "iteration": 28,
+      "width": 390,
+      "height": 900,
+      "canvas": 187.5
+    },
+    {
+      "iteration": 29,
+      "width": 768,
+      "height": 900,
+      "canvas": 369.28125
+    },
+    {
+      "iteration": 30,
+      "width": 1440,
+      "height": 900,
+      "canvas": 457.03125
+    },
+    {
+      "iteration": 31,
+      "width": 1024,
+      "height": 900,
+      "canvas": 411.5
+    },
+    {
+      "iteration": 32,
+      "width": 800,
+      "height": 900,
+      "canvas": 349.5
+    },
+    {
+      "iteration": 33,
+      "width": 640,
+      "height": 900,
+      "canvas": 381
+    },
+    {
+      "iteration": 34,
+      "width": 390,
+      "height": 900,
+      "canvas": 187.5
+    },
+    {
+      "iteration": 35,
+      "width": 768,
+      "height": 900,
+      "canvas": 369.28125
+    },
+    {
+      "iteration": 36,
+      "width": 1440,
+      "height": 900,
+      "canvas": 457.546875
+    },
+    {
+      "iteration": 37,
+      "width": 1024,
+      "height": 900,
+      "canvas": 411.5
+    },
+    {
+      "iteration": 38,
+      "width": 800,
+      "height": 900,
+      "canvas": 349.5
+    },
+    {
+      "iteration": 39,
+      "width": 640,
+      "height": 900,
+      "canvas": 380.125
+    },
+    {
+      "iteration": 40,
+      "width": 390,
+      "height": 900,
+      "canvas": 187.5
+    },
+    {
+      "iteration": 41,
+      "width": 768,
+      "height": 900,
+      "canvas": 369.28125
+    },
+    {
+      "iteration": 42,
+      "width": 1440,
+      "height": 900,
+      "canvas": 457.546875
+    },
+    {
+      "iteration": 43,
+      "width": 1024,
+      "height": 900,
+      "canvas": 411.5
+    },
+    {
+      "iteration": 44,
+      "width": 800,
+      "height": 900,
+      "canvas": 349.5
+    },
+    {
+      "iteration": 45,
+      "width": 640,
+      "height": 900,
+      "canvas": 381
+    },
+    {
+      "iteration": 46,
+      "width": 390,
+      "height": 900,
+      "canvas": 187.5
+    },
+    {
+      "iteration": 47,
+      "width": 768,
+      "height": 900,
+      "canvas": 368.8125
+    },
+    {
+      "iteration": 48,
+      "width": 1440,
+      "height": 900,
+      "canvas": 457.03125
+    },
+    {
+      "iteration": 49,
+      "width": 1024,
+      "height": 900,
+      "canvas": 411.5
+    },
+    {
+      "iteration": 50,
+      "width": 800,
+      "height": 900,
+      "canvas": 349.5
+    },
+    {
+      "iteration": 51,
+      "width": 640,
+      "height": 900,
+      "canvas": 381.8125
+    },
+    {
+      "iteration": 52,
+      "width": 390,
+      "height": 900,
+      "canvas": 187.5
+    },
+    {
+      "iteration": 53,
+      "width": 768,
+      "height": 900,
+      "canvas": 369.65625
+    },
+    {
+      "iteration": 54,
+      "width": 1440,
+      "height": 900,
+      "canvas": 457.546875
+    },
+    {
+      "iteration": 55,
+      "width": 1024,
+      "height": 900,
+      "canvas": 411.5
+    },
+    {
+      "iteration": 56,
+      "width": 800,
+      "height": 900,
+      "canvas": 349.5
+    },
+    {
+      "iteration": 57,
+      "width": 640,
+      "height": 900,
+      "canvas": 380.171875
+    },
+    {
+      "iteration": 58,
+      "width": 390,
+      "height": 900,
+      "canvas": 187.5
+    },
+    {
+      "iteration": 59,
+      "width": 768,
+      "height": 900,
+      "canvas": 369.65625
+    }
+  ],
+  "keyboard": [
+    "ArrowDown retains matrix focus",
+    "Enter selects and opens inspector",
+    "Escape closes inspector",
+    "Independent QQQ axis/selection drives its own inspector"
+  ],
+  "screenshots": [
+    {
+      "file": "solstice-focus-1920.png",
+      "sha256": "ba0c6c6198c5e12786cde4ce50c0d3f77b3b3541b7b5acf381c61ca4af2b6f4e"
+    },
+    {
+      "file": "solstice-focus-1440.png",
+      "sha256": "1896668f1d0c8e5ab7331ff3f86efe945c3ab42cd372c9c90684eea62fa8a8bf"
+    },
+    {
+      "file": "solstice-focus-1024.png",
+      "sha256": "ca35b01e15e13c867b9d527cfc53f13184c165be5b288d3a3c6ad3a067b23156"
+    },
+    {
+      "file": "solstice-focus-768.png",
+      "sha256": "eb6b3b71c9ca64fc673eca6f897576effe1fe710e3fb25ab9455ebe636204e75"
+    },
+    {
+      "file": "solstice-focus-390.png",
+      "sha256": "8c8055d90fbb05684df24c77bf146e2c728aa9fa67a826e4048790b315b55c1a"
+    },
+    {
+      "file": "solstice-focus-768-zoom200.png",
+      "sha256": "eeb7da497bb99a7dbf774c5e3b215f2aba312ba2cb56d7c12488a78e2e22ae63"
+    },
+    {
+      "file": "solstice-profile-1440.png",
+      "sha256": "72dc198bc381412fb8c3f5ffdc430a827dcdb3b3345bc5de37f61db04b752615"
+    },
+    {
+      "file": "solstice-multi-1920.png",
+      "sha256": "9eaa10a5638cbf68ae7bfebaa53f54b5100617b4a4f2475550282a7e1b1244f2"
+    },
+    {
+      "file": "solstice-symbols-1440.png",
+      "sha256": "f61f3056b91ab1ab8555256ae69c8467226885f3a9efa190cc61286dd2a03e21"
+    },
+    {
+      "file": "solstice-calendar-1440.png",
+      "sha256": "dc7f91cfab2147dfc6d03f399961ef5fce4046a47e9cb7d533da71342596c5db"
+    },
+    {
+      "file": "triad-1440.png",
+      "sha256": "9ae3b9004b7d1f559291f40b475c09870fde1697a6b28d4248b0266d6f45a4c0"
+    },
+    {
+      "file": "triad-768.png",
+      "sha256": "c792db7549e4d70e5a5479d268022e6c9c4b3700bb222e6eddb41841f4645674"
+    },
+    {
+      "file": "triad-390.png",
+      "sha256": "e91b43339bbea5a29e6dfdfb18d3ff43e2129169d1dab3db6d53b5aa0fc12eb1"
+    }
+  ],
+  "browser": "148.0.7778.96",
+  "profileGeometry": {
+    "bars": 21,
+    "zeroSignAlignment": true
+  },
+  "status": "passed_fixture_browser_checks"
+}

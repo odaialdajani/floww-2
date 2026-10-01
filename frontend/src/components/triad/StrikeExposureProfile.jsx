@@ -17,7 +17,7 @@ export default function StrikeExposureProfile({ data, basis, wall, onSelect }) {
       const selected = wall && s >= wall.low && s <= wall.high;
       return <tr key={key} className={selected ? "selected" : ""}>
         <td><button onClick={() => onSelect(s)} aria-label={`Select raw wall at strike ${s}`}>{s}</button></td>
-        <td><ProfileBars raw={r} adj={a} rawMax={max} adjMax={max} adjLabel={baseDef(basis)?.label || basis} partial={adj.partial[key] || 0} /></td>
+        <td><ProfileBars raw={r} adj={a} rawMax={max} adjMax={max} adjLabel={baseDef(basis)?.label || basis} partial={adj.partial[key] || 0} invalid={adj.invalid[key] || 0} /></td>
         <td title={`Raw ${fmtUsdCompact(r)}; ${basis} ${fmtUsdCompact(a)}`}>{fmtUsdCompact(r)}</td>
       </tr>;
     })}</tbody></table>

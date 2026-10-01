@@ -128,6 +128,38 @@
   pointer-events: auto;
 }
 
+/* Viewport-bound shell (heatseeker only, all widths): the AppShell column
+   becomes exactly the viewport height and the layout fills the remainder
+   after the header/notice/footer keep their natural heights. Without this
+   the grid measuring box is content-sized, so row capacity chases its own
+   content across layout switches (resize oscillation). Inner panes own
+   their scroll at every width; the document stays exactly stable. */
+.min-h-screen > main:has(.heatseeker-layout) {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+}
+/* The page wrapper between main and the layout joins the flex chain. */
+.min-h-screen > main:has(.heatseeker-layout) > div {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* Shell chrome above/below the layout keeps natural height (the search
+   notice unmounts when complete; flex reclaims the space automatically). */
+.min-h-screen > main:has(.heatseeker-layout) .ap-header,
+.min-h-screen > main:has(.heatseeker-layout) [role="status"] {
+  flex-shrink: 0;
+}
+/* The heatseeker grid itself is a flex filler at every width, so the
+   measuring box stays viewport-derived on mobile too. */
+.min-h-screen > main:has(.heatseeker-layout) .heatseeker-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
 /* ===== TABLET (768px+) ===== */
 @media (min-width: 768px) {
   /* Solstice: left sidebar visible, right sidebar hidden */
@@ -136,6 +168,8 @@
     grid-template-columns: 240px 1fr;
     grid-template-rows: 1fr;
     min-height: 0;
+    height: auto;
+    flex: 1 1 auto;
     overflow: hidden;
   }
 
@@ -208,7 +242,9 @@
   .heatseeker-layout {
     display: grid;
     grid-template-columns: auto 1fr;
-    height: 100%;
+    /* Height comes from the 768px viewport-bound rule (flex filler);
+       100% of the auto-height shell would collapse back to content. */
+    height: auto;
     max-width: 100%;
     overflow: hidden;
   }

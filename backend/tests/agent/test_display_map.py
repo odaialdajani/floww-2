@@ -176,3 +176,39 @@ def test_solstice_flip_priority_matches_visible_sidebar():
     raw["flip_zones"] = [{"price": 97}]
     facts, _ = display_facts(raw, {**selection(), "page": "heatseeker"}, "SPY", NOW)
     assert next(f["value"] for f in facts if f["metric"] == "Displayed flip") == 97
+
+
+def _v2_screen(**over):
+    screen = dict(
+        contextVersion=2, page="heatseeker", ticker="SPY",
+        snapshotId="snap1", provider="recorded test source", formula="gex.v2",
+        activePane="gex", metric="gex", overlayMetric="raw", displayMode="live",
+        mapQuery=QUERY, mapVersion=NOW.isoformat(),
+        mapStrikes=[95, 100, 105], mapExpiries=["2026-09-18"],
+    )
+    screen.update(over)
+    return screen
+
+
+def _v2_raw():
+    raw = cached()
+    raw.update(snapshotId="snap1", formula_version="gex.v2", metrics={"walls": []})
+    return raw
+
+
+def test_v2_live_raw_context_is_admitted():
+    facts, gaps = display_facts(_v2_raw(), _v2_screen(), "SPY", NOW)
+    assert facts, "live raw context must resolve display facts"
+    assert gaps == []
+
+
+def test_v2_adjusted_overlay_stays_unavailable_with_reason():
+    facts, gaps = display_facts(_v2_raw(), _v2_screen(overlayMetric="delta"), "SPY", NOW)
+    assert facts == []
+    assert gaps == ["Adjusted/replay evidence resolution remains unavailable"]
+
+
+def test_v2_replay_mode_stays_unavailable_with_reason():
+    facts, gaps = display_facts(_v2_raw(), _v2_screen(displayMode="replay"), "SPY", NOW)
+    assert facts == []
+    assert gaps == ["Adjusted/replay evidence resolution remains unavailable"]

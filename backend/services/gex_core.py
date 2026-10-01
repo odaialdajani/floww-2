@@ -1166,10 +1166,12 @@ def compute_gex_grid_delta_weighted(spot: float, contracts: list[dict[str, Any]]
     grid: dict[str, dict[float, float]] = {}
     totals: dict[float, float] = {}
     missing = 0
+    invalid_delta = 0
     quarantined = 0
     invalid_type = 0
     usable = 0
     cell_missing: dict[str, dict[float, int]] = {}
+    cell_invalid: dict[str, dict[float, int]] = {}
     for c in contracts:
         if c.get("adjusted") or c.get("nonstandard"):
             quarantined += 1
@@ -1180,10 +1182,14 @@ def compute_gex_grid_delta_weighted(spot: float, contracts: list[dict[str, Any]]
         gamma = _vendor_gamma(c)
         if gamma is None:
             continue
-        ad = _grid_abs_delta(c.get("delta"))
+        ad, exclusion = _grid_abs_delta(c.get("delta"))
         if ad is None:
-            missing += 1
-            _mark_cell_missing(cell_missing, c)
+            if exclusion == "invalid":
+                invalid_delta += 1
+                _mark_cell_excluded(cell_invalid, c)
+            else:
+                missing += 1
+                _mark_cell_excluded(cell_missing, c)
             continue
         strike = safe_float_or_none(c.get("strike"))
         if strike is None or strike <= 0:
@@ -1218,44 +1224,51 @@ def compute_gex_grid_delta_weighted(spot: float, contracts: list[dict[str, Any]]
         "strike_totals": [{"strike": k, "gex": v} for k, v in sorted(totals.items())],
         "exposure_basis": "OI_DELTA_WEIGHTED",
         "missing_delta": missing,
+        "invalid_delta": invalid_delta,
         "quarantined": quarantined,
         "invalid_type": invalid_type,
-        # R11-H01: population that actually produced cells, plus a sparse
-        # per-cell map of contracts excluded for unknown delta, so a partial
-        # cell and a "contracts exist but delta unknown" cell are visible.
+        # R11-H01: population that actually produced cells, plus sparse
+        # per-cell maps of excluded contracts. Missing (unknown) and invalid
+        # (unusable reading) exclusions stay distinct, so a partial cell and
+        # a "contracts exist but delta unknown/unusable" cell are visible.
         "usable": usable,
         "cell_missing_delta": {e: {_k(k): n for k, n in col.items()} for e, col in cell_missing.items()},
+        "cell_invalid_delta": {e: {_k(k): n for k, n in col.items()} for e, col in cell_invalid.items()},
         "formula_version": "gex.v2",
         "status": "ok" if expiries else "unavailable",
-        "reason": None if expiries else ("DELTA_UNKNOWN" if missing else "NO_COVERAGE"),
+        "reason": None if expiries else ("DELTA_UNKNOWN" if (missing or invalid_delta) else "NO_COVERAGE"),
     }
 
 
-def _grid_abs_delta(d_raw: Any) -> float | None:
-    """|δ| for grid kernels under the registered tolerance, else None.
+def _grid_abs_delta(d_raw: Any) -> tuple[float | None, str | None]:
+    """|δ| for grid kernels under the registered tolerance, plus exclusion kind.
 
-    Booleans and nonfinite values are not delta readings; a tiny binary
-    overshoot (≤ 1+1e-9) normalises to 1.0; a material violation is unknown
-    (counted by the caller), never clamped.
+    Returns (value, None) when usable. Otherwise (None, "missing") for an
+    absent reading and (None, "invalid") for a present-but-unusable one
+    (booleans, non-numeric, nonfinite, materially out of range). A tiny
+    binary overshoot (≤ 1+1e-9) normalises to 1.0; a material violation is
+    unknown (counted by the caller), never clamped.
     """
-    if d_raw is None or isinstance(d_raw, bool):
-        return None
+    if d_raw is None:
+        return None, "missing"
+    if isinstance(d_raw, bool):
+        return None, "invalid"
     try:
         ad = abs(float(d_raw))
     except (TypeError, ValueError):
-        return None
+        return None, "invalid"
     if not math.isfinite(ad) or ad > 1.0 + 1e-9:
-        return None
-    return min(ad, 1.0)
+        return None, "invalid"
+    return min(ad, 1.0), None
 
 
-def _mark_cell_missing(cell_missing: dict[str, dict[float, int]], c: dict[str, Any]) -> None:
-    """Record an unknown-delta exclusion against its (expiry, strike) cell."""
+def _mark_cell_excluded(cell_map: dict[str, dict[float, int]], c: dict[str, Any]) -> None:
+    """Record a delta exclusion against its (expiry, strike) cell."""
     strike = safe_float_or_none(c.get("strike"))
     expiry = c.get("expiry") or ""
     if strike is None or strike <= 0 or not expiry:
         return
-    col = cell_missing.setdefault(str(expiry), {})
+    col = cell_map.setdefault(str(expiry), {})
     col[strike] = col.get(strike, 0) + 1
 
 
@@ -1403,8 +1416,10 @@ def compute_gex_grid_session_delta_volume(spot: float, contracts: list[dict[str,
     quarantined = 0
     invalid_type = 0
     missing_delta = 0
+    invalid_delta = 0
     usable = 0
     cell_missing: dict[str, dict[float, int]] = {}
+    cell_invalid: dict[str, dict[float, int]] = {}
     for c in contracts:
         if c.get("adjusted") or c.get("nonstandard"):
             quarantined += 1
@@ -1415,10 +1430,14 @@ def compute_gex_grid_session_delta_volume(spot: float, contracts: list[dict[str,
         gamma = _vendor_gamma(c)
         if gamma is None:
             continue
-        ad = _grid_abs_delta(c.get("delta"))
+        ad, exclusion = _grid_abs_delta(c.get("delta"))
         if ad is None:
-            missing_delta += 1
-            _mark_cell_missing(cell_missing, c)
+            if exclusion == "invalid":
+                invalid_delta += 1
+                _mark_cell_excluded(cell_invalid, c)
+            else:
+                missing_delta += 1
+                _mark_cell_excluded(cell_missing, c)
             continue
         strike = safe_float_or_none(c.get("strike"))
         if strike is None or strike <= 0:
@@ -1452,12 +1471,15 @@ def compute_gex_grid_session_delta_volume(spot: float, contracts: list[dict[str,
         "exposure_basis": "VOLUME_DELTA_WEIGHTED",
         "usable": usable,
         "cell_missing_delta": {e: {_k(k): n for k, n in col.items()} for e, col in cell_missing.items()},
+        "cell_invalid_delta": {e: {_k(k): n for k, n in col.items()} for e, col in cell_invalid.items()},
         "missing_delta": missing_delta,
+        "invalid_delta": invalid_delta,
         "quarantined": quarantined,
         "invalid_type": invalid_type,
         "formula_version": "gex.v2",
         "status": "ok" if expiries else "unavailable",
-        "reason": None if expiries else ("DELTA_UNKNOWN" if missing_delta else "NO_VOLUME_COVERAGE"),
+        "reason": None if expiries else ("DELTA_UNKNOWN" if (missing_delta or invalid_delta)
+                                         else "NO_VOLUME_COVERAGE"),
     }
 
 

@@ -652,6 +652,10 @@ export default function App() {
     const handler = (e) => {
       if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
       if (e.metaKey || e.ctrlKey) return;
+      // The strike matrix and modal dialogs own their keys: arrow-key cell
+      // navigation (and review controls) must never cycle tickers or flip
+      // pages/views out from under focused widgets.
+      if (e.target.closest && e.target.closest('[role="grid"], [role="dialog"]')) return;
 
       switch (e.key) {
         case "1": setPage("trinity"); break;

@@ -76,6 +76,25 @@ test("partial and delta-unknown cells are marked, never shown as zero", () => {
   expect(unknown[0].textContent).not.toMatch(/\$0/);
 });
 
+test("invalid delta cells carry the distinct δ! marker, never merged into missing", () => {
+  const d = data();
+  d.metrics = { grids: { delta: {
+    exposure_basis: "OI_DELTA_WEIGHTED", expiries: EXPS, strikes: STRIKES,
+    grid: { [EXPS[0]]: { 650: 500 } },
+    cell_missing_delta: { [EXPS[0]]: { 652: 1 } },
+    cell_invalid_delta: { [EXPS[0]]: { 650: 1, 648: 2 } },
+  } } };
+  const { container } = render(<SkylitHeatmapGrid data={d} spot={651} ticker="SPY" metric="delta" />);
+  const marked = container.querySelectorAll("td.trin-invalid");
+  expect(marked).toHaveLength(2); // valued cell keeps its exclusion note; absent cell is unavailable, not zero
+  expect(marked[0].getAttribute("aria-label")).toMatch(/1 excluded for invalid delta/);
+  expect(container.querySelectorAll("td.trin-partial")).toHaveLength(0);
+  const bad = Array.from(container.querySelectorAll("td.trin-missing"))
+    .filter((td) => /delta invalid/.test(td.getAttribute("aria-label")));
+  expect(bad).toHaveLength(1); // value-less cell with invalid readings: unavailable, not zero
+  expect(bad[0].textContent).toContain("δ!");
+});
+
 test("profile column: rows align with strikes, zero axis at 50%, negatives left, gaps empty", () => {
   const d = data();
   delete d.grid.grid[EXPS[0]]["642"];

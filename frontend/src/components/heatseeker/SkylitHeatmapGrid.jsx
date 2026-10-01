@@ -15,7 +15,9 @@ import "./SolsticeWorkspace.css";
  *    the nearest-strike chip stays, so spot and selection never look alike
  *  - selected cell + selected strike outline; selected wall band on the rail
  *  - partial-cell marker from `cell_missing_delta` (contracts excluded for
- *    unknown delta) and a "δ unknown" state for cells with no usable input
+ *    unknown delta), invalid-cell marker from `cell_invalid_delta`
+ *    (contracts excluded for unusable delta readings) and a "δ unknown" /
+ *    "δ invalid" state for cells with no usable input
  *  - optional aligned signed profile column (Raw under, adjusted over) that
  *    sums one surface over one declared expiry scope (see solsticeMetrics)
  *  - rows are memoised: a spot tick or selection change re-renders only the
@@ -98,7 +100,7 @@ function moveFocus(ev) {
 }
 
 /** Signed profile bar pair: raw underneath (muted), adjusted over (bright). */
-export function ProfileBars({ raw, adj, rawMax, adjMax, adjLabel, partial }) {
+export function ProfileBars({ raw, adj, rawMax, adjMax, adjLabel, partial, invalid }) {
   const bar = (v, max, cls) => {
     if (v == null || !(max > 0)) return null;
     const w = Math.min(50, (Math.abs(v) / max) * 50);
@@ -109,6 +111,7 @@ export function ProfileBars({ raw, adj, rawMax, adjMax, adjLabel, partial }) {
     raw == null ? "Raw: no cell in scope (gap, not zero)" : `Raw ${fmtK(raw)}`,
     adjLabel ? (adj == null ? `${adjLabel}: unavailable (gap)` : `${adjLabel} ${fmtK(adj)}`) : null,
     partial ? `${partial} contract(s) excluded for unknown δ` : null,
+    invalid ? `${invalid} contract(s) excluded for invalid δ (unusable reading)` : null,
   ].filter(Boolean).join(" · ");
   return (
     <span className="trin-prof" title={title}>
@@ -116,13 +119,14 @@ export function ProfileBars({ raw, adj, rawMax, adjMax, adjLabel, partial }) {
       {bar(raw, rawMax, "raw")}
       {adjLabel ? bar(adj, adjMax, "adj") : null}
       {partial ? <span className="trin-prof-partial" aria-hidden="true" /> : null}
+      {invalid ? <span className="trin-prof-invalid" aria-hidden="true" /> : null}
     </span>
   );
 }
 
 const GridRow = memo(function GridRow({
   strike, r, cells, minV, range, kingExp, rowBadges, isSpot, spot, conc, concPct,
-  selExp, selStrike, inWall, rowMiss, prof, onCell, onStrike,
+  selExp, selStrike, inWall, rowMiss, rowInv, prof, onCell, onStrike,
 }) {
   const sk = strikeKey(strike);
   const spotOffset = isSpot && spot != null ? Number(spot) - strike : null;
@@ -153,19 +157,21 @@ const GridRow = memo(function GridRow({
         const isKing = kingExp === e;
         const pct = rowBadges[e];
         const miss = rowMiss ? (rowMiss[e] || 0) : 0;
+        const inv = rowInv ? (rowInv[e] || 0) : 0;
         const partial = has ? miss : 0;
         const absent = has ? 0 : miss;
+        const absentInv = has ? 0 : inv;
         const sel = selExp === e && selStrike;
         const txt = fmtK(v);
         const label = has
-          ? `${strike} by ${e}, value ${txt || "$0"}${isKing ? ", largest cell" : ""}${partial ? `, partial: ${partial} excluded for unknown delta` : ""}${sel ? ", selected" : ""}`
-          : `${strike} by ${e}, ${absent ? "delta unknown" : "no data"}`;
+          ? `${strike} by ${e}, value ${txt || "$0"}${isKing ? ", largest cell" : ""}${partial ? `, partial: ${partial} excluded for unknown delta` : ""}${inv ? `, ${inv} excluded for invalid delta` : ""}${sel ? ", selected" : ""}`
+          : `${strike} by ${e}, ${absent ? "delta unknown" : absentInv ? "delta invalid (unusable reading)" : "no data"}`;
         return (
           <td
             key={e}
             data-r={r}
             data-c={c}
-            className={`trin-cell${isKing ? " trin-king" : ""}${!has ? " trin-missing" : ""}${isZero ? " trin-zero" : ""}${partial ? " trin-partial" : ""}${sel ? " trin-selected" : ""}`}
+            className={`trin-cell${isKing ? " trin-king" : ""}${!has ? " trin-missing" : ""}${isZero ? " trin-zero" : ""}${partial ? " trin-partial" : ""}${inv ? " trin-invalid" : ""}${sel ? " trin-selected" : ""}`}
             style={{
               background: has ? (isZero ? "rgba(13,17,23,0.95)" : viridis(t)) : "rgba(13,17,23,0.85)",
               color: has ? (bright ? "#000" : "#fff") : "#3a4566",
@@ -184,13 +190,14 @@ const GridRow = memo(function GridRow({
             aria-selected={sel ? true : undefined}
             aria-label={label}
             title={has
-              ? `${strike} · ${e} · ${txt || "$0"}${partial ? ` · partial (${partial} δ-unknown excluded)` : ""} (largest cell ★ = max |cell|)`
-              : `${strike} · ${e} · ${absent ? `${absent} contract(s), delta unknown — not zero` : "no data (not zero)"}`}
+              ? `${strike} · ${e} · ${txt || "$0"}${partial ? ` · partial (${partial} δ-unknown excluded)` : ""}${inv ? ` · ${inv} δ-invalid excluded (unusable reading)` : ""} (largest cell ★ = max |cell|)`
+              : `${strike} · ${e} · ${absent ? `${absent} contract(s), delta unknown — not zero` : absentInv ? `${absentInv} contract(s), delta invalid — not zero` : "no data (not zero)"}`}
           >
             {pct != null && (
               <span className={`trin-pct ${pct > 0 ? "up" : "down"}`}>{pct > 0 ? "+" : ""}{pct}%</span>
             )}
             {absent ? <span className="trin-absent" aria-hidden="true">δ?</span> : null}
+            {(!absent && absentInv) ? <span className="trin-absent" aria-hidden="true">δ!</span> : null}
             <span className={isKing ? "trin-val-bold" : undefined}>
               {txt}
               {isKing && <span className="trin-star">★</span>}
@@ -260,7 +267,9 @@ function SkylitHeatmapGrid({
   );
   const matrix = useMemo(() => (g?.[gridKey] || {}), [g, gridKey]);
   // Sparse per-cell coverage from the backend (only overlay sections carry it).
+  // Missing (unknown δ) and invalid (unusable δ reading) stay distinct.
   const cellMissing = useMemo(() => (useOverlay && overlay?.cell_missing_delta) || EMPTY, [useOverlay, overlay]);
+  const cellInvalid = useMemo(() => (useOverlay && overlay?.cell_invalid_delta) || EMPTY, [useOverlay, overlay]);
 
   const strikes = useMemo(() => {
     const src = g?.strikes?.length
@@ -417,7 +426,7 @@ function SkylitHeatmapGrid({
     return out;
   }, [strikes, expiries, matrix]);
 
-  // Partial / absent (δ unknown) cell maps keyed by strike key.
+  // Partial / absent (δ unknown) and invalid (δ unusable) cell maps keyed by strike key.
   const partialByRow = useMemo(() => {
     const partial = {};
     for (const e of Object.keys(cellMissing)) {
@@ -428,6 +437,16 @@ function SkylitHeatmapGrid({
     }
     return partial;
   }, [cellMissing]);
+  const invalidByRow = useMemo(() => {
+    const inv = {};
+    for (const e of Object.keys(cellInvalid)) {
+      const col = cellInvalid[e] || {};
+      for (const k of Object.keys(col)) {
+        if (col[k] > 0) (inv[k] || (inv[k] = {}))[e] = col[k];
+      }
+    }
+    return inv;
+  }, [cellInvalid]);
 
   const profRows = useMemo(() => {
     if (!profile || !profile.raw) return null;
@@ -444,6 +463,7 @@ function SkylitHeatmapGrid({
         rawMax, adjMax,
         adjLabel: profile.adj ? profile.adjLabel : null,
         partial: profile.adj?.partial?.[k] || 0,
+        invalid: profile.adj?.invalid?.[k] || 0,
       };
     }
     return out;
@@ -537,6 +557,7 @@ function SkylitHeatmapGrid({
         selStrike={isSelStrike}
         inWall={wLo != null && wHi != null && strike >= wLo && strike <= wHi}
         rowMiss={partialByRow[sk] || null}
+        rowInv={invalidByRow[sk] || null}
         prof={profRows ? profRows[sk] : null}
         onCell={onCellClick}
         onStrike={onStrikeClick}

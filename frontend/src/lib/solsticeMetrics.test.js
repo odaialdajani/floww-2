@@ -63,6 +63,20 @@ test("surfaceStatus prefers backend coverage and keeps partial visible", () => {
   expect(surfaceStatus(p, "window").status).toBe("unavailable");
 });
 
+test("surfaceStatus keeps invalid delta distinct from missing", () => {
+  const p = payload();
+  p.metrics.surface_coverage.delta = { status: "partial", usable: 1, missing_delta: 1, invalid_delta: 2 };
+  expect(surfaceStatus(p, "delta")).toMatchObject({ status: "partial", missing: 1, invalidDelta: 2 });
+  // Older packet: section-level invalid_delta also forces partial.
+  delete p.metrics.surface_coverage;
+  p.metrics.grids.delta = { expiries: [EXP1], grid: { [EXP1]: { 100: 50000 } },
+    missing_delta: 0, invalid_delta: 2, status: "ok" };
+  const s = surfaceStatus(p, "delta");
+  expect(s.status).toBe("partial");
+  expect(s.invalidDelta).toBe(2);
+  expect(s.missing).toBe(0);
+});
+
 test("sumProfile sums one surface over the declared scope; gaps stay null", () => {
   const p = payload();
   const all = sumProfile(p, "raw", [EXP1, EXP2]);
@@ -78,6 +92,17 @@ test("sumProfile sums one surface over the declared scope; gaps stay null", () =
   expect(sumProfile(p, "window", [EXP1]).available).toBe(false);
 });
 
+test("sumProfile accumulates invalid delta cells separately from missing", () => {
+  const p = payload();
+  p.metrics.grids.delta.cell_invalid_delta = { [EXP1]: { 100: 1, 110: 3 } };
+  const d = sumProfile(p, "delta", [EXP1, EXP2]);
+  expect(d.values["100"]).toBe(50000); // valid cell value untouched
+  expect(d.invalid["100"]).toBe(1);
+  expect(d.invalid["110"]).toBe(3);
+  expect(d.partial["110"]).toBeUndefined();
+  expect(d.partial["105"]).toBe(1);
+});
+
 test("wallValues reads same-wall families; zero usable is unknown not $0", () => {
   const p = payload();
   const v1 = wallValues(p, { wall_id: "w1", gross: 150000, net: 150000 });
@@ -87,6 +112,16 @@ test("wallValues reads same-wall families; zero usable is unknown not $0", () =>
   expect(v2.delta.net).toBeNull();
   expect(v2.delta.missing).toBe(1);
   expect(v2.session_delta_volume).toBeNull(); // older packet: no sdv fields
+});
+
+test("wallValues carries wall-local invalid delta distinctly", () => {
+  const p = payload();
+  p.metrics.wall_metrics.w3 = { daddex_gross: 50000, daddex_net: 50000, daddex_usable: 1,
+    daddex_missing: 1, daddex_invalid: 2 };
+  const v3 = wallValues(p, { wall_id: "w3", gross: 150000, net: 150000 });
+  expect(v3.delta.net).toBe(50000);
+  expect(v3.delta.missing).toBe(1);
+  expect(v3.delta.invalid).toBe(2);
 });
 
 const OK_Q = { setupEligible: true, reasonCodes: [] };

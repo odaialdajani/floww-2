@@ -1279,6 +1279,18 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                         log.info(f"build_heatmap: cvserver full-chain enrichment for {ticker} — {len(raw['contracts'])} contracts, {cv_unique} unique strikes")
             except Exception as e:
                 log.debug(f"build_heatmap: cvserver enrichment failed for {ticker}: {e}")
+    # Listed-date scope bound: the requested count applies to listed expiry
+    # dates, never calendar-day substitutes. Sparse enrichment above may
+    # return a deeper chain for strike density; the loaded population stays
+    # bounded by the request — earliest listed dates first.
+    if max_expiries is not None and max_expiries > 0:
+        _listed = sorted({c.get("expiry") for c in raw.get("contracts", []) if c.get("expiry")})
+        if len(_listed) > max_expiries:
+            _keep = set(_listed[:max_expiries])
+            raw["contracts"] = [c for c in raw["contracts"] if c.get("expiry") in _keep]
+            raw["expiries"] = sorted(_keep)
+            log.info(f"build_heatmap: scoped {ticker} to {max_expiries} listed expiries "
+                     f"({len(_listed)} returned)")
     spot = raw["spot"]
     if not spot or spot != spot or not raw["contracts"]:  # spot != spot catches NaN
         raise HTTPException(404, f"No options data for {ticker}")
@@ -2015,7 +2027,19 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                          "coverage": _cov,
                                          "quality": payload.get("quality", {}),
                                          "scenarios": payload.get("scenarios", [])[:12],
-                                         "interactions": payload.get("interactions", [])[:12]},
+                                         "interactions": payload.get("interactions", [])[:12],
+                                         # R7-03 context travels with the
+                                         # record so replay restores the
+                                         # inspector (session/scout/regime/
+                                         # patterns/vanna/moneyness), not
+                                         # just cells.
+                                         "session": payload.get("session"),
+                                         "playbook": payload.get("playbook"),
+                                         "scout": payload.get("scout"),
+                                         "gamma_regime_v1": payload.get("gamma_regime_v1"),
+                                         "patterns_v1": payload.get("patterns_v1"),
+                                         "vanna_v1": payload.get("vanna_v1"),
+                                         "moneyness": payload.get("moneyness")},
                 f"{ticker}:{mode}:{dte}:{scalp}",
                 payload.get("snapshotId") or None))
             _background_tasks.add(_t2)
