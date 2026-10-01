@@ -108,6 +108,9 @@ def display_facts(raw, screen, ticker, now):
         grid_key = {"gex": "grid", "skylit": "grid", "vex": "vex_grid", "charm": "charm_grid"}.get(metric)
         if not grid_key or not isinstance(grid.get(grid_key), dict):
             return [], ["The selected display measure is unavailable"]
+        if v2 and screen.get("selectedContract") is not None:
+            from services.agent.contract_facts import contract_facts
+            return contract_facts(raw, screen, ticker, now)
         matrix = grid[grid_key]
         scope = hashlib.sha256(canonical([key, strikes, expiries, metric, overlay, screen.get("activePane"),
                                           screen.get("selectedWall"), "replay" if replay else "live"]).encode()).hexdigest()
@@ -232,8 +235,7 @@ def display_facts(raw, screen, ticker, now):
                                 gaps.append("Selected adjusted wall is partial; excluded members remain unknown or invalid")
                     else:
                         gaps.append("Selected raw wall has no usable adjusted observation")
-            if screen.get("selectedContract"):
-                gaps.append("Exact contract evidence is not admitted to model answers yet; inspect the read-only contract drawer")
+
         if screen.get("page") == "flowseeker-pro" and metric == "gex":
             # The dealer chart sums each shown expiry, in ascending strike order.
             if strikes != sorted(strikes):

@@ -232,6 +232,13 @@ function SkylitDashboard({
 }) {
   const [tradeMode, setTradeMode] = useState(false);
   const [selectedCell, setSelectedCell] = useState(null);
+  const [contractSelection, setContractSelection] = useState(null);
+  const onContractSelection = useCallback(selection => {
+    setContractSelection(selection);
+    if (selection?.status === "resolved") setSelectedCell(c => !c || c.ticker !== selection.ticker || c.wall_id !== selection.wallId
+      || (c.strike === Number(selection.identity.strike) && c.colKey === selection.identity.expiry) ? c
+      : { ...c, strike: Number(selection.identity.strike), colKey: selection.identity.expiry, value: null });
+  }, []);
   // T04: metric overlay state — same snapshot, raw wall identity locked while
   // viewing activity (walls come from the payload, never recomputed per tab).
   const [metric, setMetric] = useState("raw");
@@ -452,7 +459,12 @@ function SkylitDashboard({
       setSelectedCell(selectedCell.wall_id ? {...selectedCell,colKey:null,value:null} : null);
     }
   }, [selectedCell,selectedReading]);
+  const contractScope = `${activeView}|${activeMetric}|${panes ? activePane : "gex"}`;
+  const currentContract = contractSelection?.ticker === ticker && contractSelection.snapshotId === visibleData?.snapshotId
+    && contractSelection.wallId === (selectedCell?.wall_id || null) && contractSelection.replay === isReplay
+    && contractSelection.selectionScope === contractScope ? contractSelection : null;
   usePublishScreenContext({contextVersion:2,page:"heatseeker",ticker,
+        selectedContract:priceHistoryOpen ? null : currentContract?.identity || null, contractResolution:currentContract?.status || null,
         provider:visibleData?.data_source || null, formula:visibleData?.formula_version || visibleData?.metrics?.formula_version || null,
         activePane:panes?activePane:"gex", selectedWall:selectedCell?.wall_id || null, layout,dte:dte==null?"all":dte===0?"0dte":`days:${dte}`,
       metric:activeView,overlayMetric:activeMetric,displayMode:priceHistoryOpen?"price-history":isReplay?"replay":"live",snapshotId:priceHistoryOpen?null:visibleData?.snapshotId || null,mode:timeframe,
@@ -928,7 +940,7 @@ function SkylitDashboard({
             metric={metric} replay={isReplay}
           />
           <details className="skylit-contract-details"><summary>Exact contract review · read-only</summary>
-            <ExactContractReview key={`${ticker}|${selectedCell?.wall_id || ""}|${visibleData?.snapshotId || ""}`} ticker={ticker} data={visibleData} wall={resolvedWall} cell={selectedCell} replay={isReplay} />
+            <ExactContractReview key={`${ticker}|${selectedCell?.wall_id || ""}|${visibleData?.snapshotId || ""}`} ticker={ticker} data={visibleData} wall={resolvedWall} cell={selectedCell} replay={isReplay} selectionScope={contractScope} onSelection={onContractSelection} />
           </details>
           {/* R8-04: review journal state for the current snapshot's decision */}
           <div className="skylit-review-pill" data-testid="skylit-review-pill">

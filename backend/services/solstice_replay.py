@@ -1,4 +1,5 @@
 """Recorded GEX projection for research; never reconstruct from present-day sources."""
+import math
 from copy import deepcopy
 
 from services.agent.display_map import map_cache_key
@@ -34,5 +35,10 @@ def recorded_display(rep, ticker, snapshot_id):
                   formula_version=main.get("formula_version"), exposure_basis=main.get("exposure_basis")),
         metrics={**rep["metrics_full"], "walls": rep.get("walls") or [],
                  "grids": {k: v for k, v in grids.items() if k not in {"grid", "version"} and isinstance(v, dict) and "grid" in v}},
+        # Nullable DOUBLEs returned through pandas may be NaN. Preserve unknown
+        # as null at this projection seam, never a numeric zero or live quote.
+        contracts=[{key: None if isinstance(value, float) and not math.isfinite(value) else value
+                    for key, value in row.items()} for row in rep.get("contracts") or []],
+        contract_coverage=rep.get("coverage"),
         quality=rep.get("quality"), interactions=rep.get("interactions") or [], scenarios=rep.get("scenarios") or [],
     ))

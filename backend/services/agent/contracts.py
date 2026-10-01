@@ -149,10 +149,8 @@ def request_spec(body):
     mode, overlay = screen.get("displayMode", "live"), screen.get("overlayMetric", "raw")
     if mode not in (None, "live", "replay") or overlay not in {"raw", "delta", "activity", "session_delta_volume"}:
         raise ValueError("Research for this display is unavailable; unsupported surface or view")
-    if (mode == "replay" or overlay != "raw") and screen.get("contextVersion") != 2:
+    if (mode == "replay" or overlay != "raw" or isinstance(screen.get("selectedContract"), dict)) and screen.get("contextVersion") != 2:
         raise ValueError("Research for this display is unavailable; exact v2 observation context is required")
-    if screen.get("contextVersion") == 2 and screen.get("selectedContract") is not None:
-        raise ValueError("Exact contract research is unavailable; use the authoritative read-only contract drawer")
     explicit = re.findall(r"\$([A-Za-z][A-Za-z0-9.-]{0,9})\b", question)
     # Unambiguous uppercase symbols in a market question; ordinary short words excluded.
     if not explicit:
@@ -219,8 +217,11 @@ def request_spec(body):
         horizon = normalize_horizon(f"range:{0 if lo is None else lo}:{3660 if hi is None else hi}")
     if screen.get("selectedExpiry"):
         date.fromisoformat(screen["selectedExpiry"])
-    if mode != "replay" and screen.get("contextVersion") == 2 and overlay != "raw" and tickers != [screen.get("ticker")]:
+    if mode != "replay" and screen.get("contextVersion") == 2 and (overlay != "raw" or screen.get("selectedContract") is not None) and tickers != [screen.get("ticker")]:
         raise ValueError("Selected surface research must stay within its displayed symbol")
+    if screen.get("contextVersion") == 2 and screen.get("selectedContract") is not None and question_scope is not None:
+        if question_scope.get("selected_expiry") != screen.get("selectedExpiry"):
+            raise ValueError("Selected contract research must stay within its listed expiry scope")
     if mode == "replay":
         if tickers != [screen.get("ticker")] or (question_scope is not None and
                 question_scope.get("selected_expiry") not in screen.get("mapExpiries", [])):

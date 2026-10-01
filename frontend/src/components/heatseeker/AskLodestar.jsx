@@ -10,8 +10,8 @@ import { useAgent } from "../../agent/AgentProvider";
  * Admission is honest about the current server guard
  * (backend services/agent/contracts.py request_spec): research answers are
  * admitted for live raw, verified adjusted v2 selections and recorded GEX
- * replay with complete identity. Window/exact-contract/price-history remain
- * unavailable. This is a selector guard; only the server can resolve facts.
+ * replay with complete identity, plus resolved listed-contract selectors.
+ * Window/price-history remain unavailable. Only the server resolves facts.
  * The published screen context (not these props)
  * is what the server validates; client values are never numeric evidence.
  */
@@ -24,7 +24,14 @@ export const STARTERS = [
 export function admissionBlock({ context, overlayMetric, displayMode }) {
   if (displayMode === "price-history") return "Close the price-history chart to ask about the live map.";
   if (context && !context.ticker) return "No published selection for this screen.";
-  if (context?.selectedContract) return "Exact contract answers remain unavailable — use the authoritative read-only contract drawer.";
+  if (context?.selectedContract) {
+    const c = context.selectedContract;
+    const exact = context.contextVersion === 2 && context.snapshotId && context.mapQuery && context.mapVersion && context.provider && context.formula
+      && context.contractResolution === "resolved" && c.osi && c.strike && c.expiry && c.type
+      && Number(c.strike) === context.selectedStrike && c.expiry === context.selectedExpiry
+      && context.mapStrikes?.includes(Number(c.strike)) && context.mapExpiries?.includes(c.expiry);
+    if (!exact) return "Exact contract selection is incomplete, changed or unresolved — use the authoritative read-only contract drawer.";
+  }
   if (!["raw", "delta", "session_delta_volume", "activity"].includes(overlayMetric || "raw")) return "This adjusted basis remains explicitly unavailable to Lodestar.";
   if ((context?.overlayMetric && context.overlayMetric !== overlayMetric) || (context?.displayMode && context.displayMode !== displayMode)) return "Published selection changed — wait for the current pane and basis.";
   const advanced = displayMode === "replay" || (overlayMetric && overlayMetric !== "raw");
