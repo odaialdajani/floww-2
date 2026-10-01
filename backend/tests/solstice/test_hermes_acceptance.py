@@ -107,8 +107,9 @@ def test_grids_quarantine_adjusted_and_map_invalid_cells(contracts):
     delta = compute_gex_grid_delta_weighted(200.0, contracts)
     assert delta["quarantined"] == 1
     assert delta["usable"] == 2  # 200, 210
-    assert delta["missing_delta"] == 2  # @220 None + @240 bad multiplier (retained bucketing, see note)
+    assert delta["missing_delta"] == 1  # only @220 None
     assert delta["invalid_delta"] == 1  # @230 boolean
+    assert delta["invalid_mult"] == 1  # @240 explicit-zero multiplier
     assert delta["cell_missing_delta"][EXP] == {"220": 1}
     assert delta["cell_invalid_delta"][EXP] == {"230": 1}
     assert math.isclose(delta["grid"][EXP]["200"], 40_000.0, rel_tol=1e-9)
@@ -134,10 +135,10 @@ def test_wall_row_keeps_each_family_distinct(contracts):
     assert row["daddex_missing"] == 1
     assert row["daddex_invalid"] == 1
     assert row["sdv_usable"] == 3
-    # Wall-local sdv counts zero-volume members too (@220 V=0 with unknown
-    # delta still records a missing-delta exclusion here, unlike the
-    # volume-gated canonical/grid kernels). Retained, not asserted equal.
-    assert row["sdv_missing_delta"] == 1
+    # Zero-volume @220 with unknown delta weights nothing and is skipped
+    # silently (canonical/grid parity); it still counts volume_usable.
+    assert row["sdv_missing_delta"] == 0
+    assert row["session_delta_volume_missing"] == 0
     assert row["session_delta_volume_invalid"] == 2  # boolean delta + bad-mult u
     assert row["volume_usable"] == 5
     assert math.isclose(row["sdv_gross"], 16_000 + 24_000 + 5_000, rel_tol=1e-9)
@@ -175,10 +176,11 @@ def test_builder_grid_profile_and_inspector_agree_on_scope(contracts):
     assert math.isclose(grids["activity"]["grid"][EXP]["200"], 40_000.0, rel_tol=1e-9)
     assert math.isclose(grids["session_delta_volume"]["grid"][EXP]["200"], 16_000.0, rel_tol=1e-9)
     cov = out["metrics"]["surface_coverage"]
-    # @220 None -> missing; @230 boolean -> invalid; @240 bad multiplier lands
-    # in the retained missing bucket (mult-invalid is not a delta exclusion).
-    assert cov["delta"]["missing_delta"] == 2
+    # @220 None -> missing; @230 boolean -> invalid; @240 bad multiplier ->
+    # its own invalid_mult bucket (folded into coverage invalid).
+    assert cov["delta"]["missing_delta"] == 1
     assert cov["delta"]["invalid_delta"] == 1
+    assert cov["delta"]["invalid_mult"] == 1
     assert cov["delta"]["status"] == "partial"
     # Raw has two genuinely excluded members (bad multiplier, adjusted), so
     # partial is correct; the measured-zero @190 is skipped silently by the

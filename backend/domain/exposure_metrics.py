@@ -498,19 +498,29 @@ def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str,
                             vn_n += 1
                         # Same member contracts as unweighted volume; this
                         # fourth surface needs delta, never an OI substitute.
-                        ad_v, reason_v = abs_delta(c.get("delta", c.get("δ")))
-                        if ad_v is None:
-                            if reason_v == "DELTA_MISSING":
-                                session_dv_missing += 1
-                                sdv_missing_delta += 1
-                            else:
-                                session_dv_invalid += 1
-                        elif not math.isfinite(contribution * ad_v):
-                            session_dv_invalid += 1
+                        # A valid reported zero volume with a usable delta is
+                        # a measured zero (usable, adds 0). Zero volume with
+                        # an unknown/unusable delta weights nothing, so it is
+                        # skipped silently (canonical/grid parity) — it still
+                        # counts volume_usable above, and OI below still runs.
+                        if v_f == 0:
+                            ad_v, _ = abs_delta(c.get("delta", c.get("δ")))
+                            if ad_v is not None and math.isfinite(contribution * ad_v):
+                                session_dv_usable += 1
                         else:
-                            session_dv_gross += contribution * ad_v
-                            session_dv_net += sign * contribution * ad_v
-                            session_dv_usable += 1
+                            ad_v, reason_v = abs_delta(c.get("delta", c.get("δ")))
+                            if ad_v is None:
+                                if reason_v == "DELTA_MISSING":
+                                    session_dv_missing += 1
+                                    sdv_missing_delta += 1
+                                else:
+                                    session_dv_invalid += 1
+                            elif not math.isfinite(contribution * ad_v):
+                                session_dv_invalid += 1
+                            else:
+                                session_dv_gross += contribution * ad_v
+                                session_dv_net += sign * contribution * ad_v
+                                session_dv_usable += 1
 
             oi_f = is_valid_measurement(c.get("oi"))
             if oi_f is None or oi_f < 0:

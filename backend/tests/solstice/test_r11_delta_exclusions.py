@@ -152,3 +152,42 @@ def test_coverage_summary_counts_invalid_from_section():
     assert cov["delta"]["invalid_delta"] == 3
     assert cov["delta"]["missing_delta"] == 1
     assert cov["delta"]["status"] == "partial"
+
+
+def _mult_contract(strike, typ, mult):
+    return {"strike": float(strike), "expiry": EXP, "T": 30 / 365.0, "type": typ,
+            "oi": 100.0, "volume": 10.0, "gamma": 0.1, "delta": 0.5,
+            "iv": 0.25, "multiplier": mult, "bid": 1.0, "ask": 1.1}
+
+
+def test_explicit_invalid_multiplier_is_not_a_missing_delta():
+    """An explicitly invalid multiplier is its own exclusion, never lumped
+    into missing_delta (and never silently dropped on the sdv surface)."""
+    contracts = [_c(100, "call", 0.5), _mult_contract(110, "call", 0)]
+    delta = compute_gex_grid_delta_weighted(100.0, contracts)
+    assert delta["usable"] == 1
+    assert delta["missing_delta"] == 0
+    assert delta["invalid_mult"] == 1
+    sdv = compute_gex_grid_session_delta_volume(100.0, contracts)
+    assert sdv["usable"] == 1
+    assert sdv["missing_delta"] == 0
+    assert sdv["invalid_mult"] == 1
+    cov = build_surface_coverage(
+        {"grids": {"delta": delta, "session_delta_volume": sdv}}, {})
+    assert cov["delta"]["invalid_mult"] == 1
+    assert cov["delta"]["missing_delta"] == 0
+    assert cov["delta"]["status"] == "partial"
+    assert cov["session_delta_volume"]["invalid_mult"] == 1
+
+
+def test_wall_zero_volume_member_skips_delta_evaluation():
+    """A valid reported zero volume still counts volume_usable, but the
+    wall-local session-delta-volume surface must match the canonical/grid
+    kernels: no volume, no delta evaluation, no missing-delta exclusion."""
+    walls = [{"wall_id": "w", "members": [100, 105]}]
+    zero_vol = dict(_c(105, "put", None), volume=0.0)
+    row = wall_metric_breakdown(walls, [_c(100, "call", 0.5), zero_vol], 100.0)["w"]
+    assert row["volume_usable"] == 2
+    assert row["sdv_usable"] == 1
+    assert row["sdv_missing_delta"] == 0
+    assert row["session_delta_volume_missing"] == 0

@@ -103,7 +103,8 @@ def build_surface_coverage(metrics: dict[str, Any], grid: dict[str, Any] | None)
         sec = grids.get(key) or {}
         usable = _count(sec.get("usable"))
         missing = (_count(sec.get(missing_key)) or 0) if missing_key else 0
-        invalid = (_count(sec.get("invalid_type")) or 0) + (_count(sec.get("quarantined")) or 0)
+        invalid = ((_count(sec.get("invalid_type")) or 0) + (_count(sec.get("quarantined")) or 0)
+                   + (_count(sec.get("invalid_mult")) or 0))
         invalid_delta = (_count(sec.get("invalid_delta")) or 0) if missing_key else 0
         entry = {"metric_id": metric_id, "basis": sec.get("exposure_basis") or basis,
                  "formula_version": sec.get("formula_version") or "gex.v2",
@@ -114,6 +115,8 @@ def build_surface_coverage(metrics: dict[str, Any], grid: dict[str, Any] | None)
         if missing_key:
             entry["missing_delta"] = missing
             entry["invalid_delta"] = invalid_delta
+        if _count(sec.get("invalid_mult")) is not None:
+            entry["invalid_mult"] = _count(sec.get("invalid_mult"))
         return entry
 
     out["delta"] = overlay("delta", "dadgex_net_v1", "OI_DELTA_WEIGHTED", "missing_delta")

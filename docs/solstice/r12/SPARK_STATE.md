@@ -10,5 +10,8 @@
   inapplicable/harmful). Agent routes/auth/timeouts/spend-caps verified.
   One real find FIXED: Lodestar ask/session/turn fetches had no timeout
   (hung POST hung the UI forever) — 45s/15s/15s bounds + recoverable error.
-- Next: commit stream fix + this checkpoint, push PR90, final receipt.
-- Blockers: none. No deploy/orders/retrain/capture. External deps unchanged.
+- O1/O2 holes FIXED: explicit-invalid multiplier has its own invalid_mult
+  bucket on all grid kernels + coverage; wall zero-volume skips delta eval
+  unless measured zero (usable, +0). Hermes re-verified; review updated.
+- Next: commit, push PR90, merge on green CI. No deploy/orders/retrain.
+- Blockers: none. External deps unchanged.

@@ -1167,6 +1167,7 @@ def compute_gex_grid_delta_weighted(spot: float, contracts: list[dict[str, Any]]
     totals: dict[float, float] = {}
     missing = 0
     invalid_delta = 0
+    invalid_mult = 0
     quarantined = 0
     invalid_type = 0
     usable = 0
@@ -1199,7 +1200,9 @@ def compute_gex_grid_delta_weighted(spot: float, contracts: list[dict[str, Any]]
             continue
         mult = _resolve_mult(c)
         if mult is None:
-            missing += 1
+            # Explicit invalid multiplier is its own exclusion (never a
+            # missing delta, never silently dropped).
+            invalid_mult += 1
             continue
         # R7-F04: unknown option type is rejected (never default-put).
         sign = option_type_sign(c.get("type"))
@@ -1225,6 +1228,7 @@ def compute_gex_grid_delta_weighted(spot: float, contracts: list[dict[str, Any]]
         "exposure_basis": "OI_DELTA_WEIGHTED",
         "missing_delta": missing,
         "invalid_delta": invalid_delta,
+        "invalid_mult": invalid_mult,
         "quarantined": quarantined,
         "invalid_type": invalid_type,
         # R11-H01: population that actually produced cells, plus sparse
@@ -1348,6 +1352,7 @@ def compute_gex_grid_volume_vendor(spot: float, contracts: list[dict[str, Any]])
     totals: dict[float, float] = {}
     quarantined = 0
     invalid_type = 0
+    invalid_mult = 0
     usable = 0
     for c in contracts:
         if c.get("adjusted") or c.get("nonstandard"):
@@ -1367,6 +1372,7 @@ def compute_gex_grid_volume_vendor(spot: float, contracts: list[dict[str, Any]])
             continue
         mult = _resolve_mult(c)
         if mult is None:
+            invalid_mult += 1
             continue
         # R7-F04: unknown option type is rejected (never default-put).
         sign = option_type_sign(c.get("type"))
@@ -1392,6 +1398,7 @@ def compute_gex_grid_volume_vendor(spot: float, contracts: list[dict[str, Any]])
         "exposure_basis": "VOLUME",
         "quarantined": quarantined,
         "invalid_type": invalid_type,
+        "invalid_mult": invalid_mult,
         "usable": usable,
         "formula_version": "gex.v2",
         "status": "ok" if expiries else "unavailable",
@@ -1417,6 +1424,7 @@ def compute_gex_grid_session_delta_volume(spot: float, contracts: list[dict[str,
     invalid_type = 0
     missing_delta = 0
     invalid_delta = 0
+    invalid_mult = 0
     usable = 0
     cell_missing: dict[str, dict[float, int]] = {}
     cell_invalid: dict[str, dict[float, int]] = {}
@@ -1447,6 +1455,7 @@ def compute_gex_grid_session_delta_volume(spot: float, contracts: list[dict[str,
             continue
         mult = _resolve_mult(c)
         if mult is None:
+            invalid_mult += 1
             continue
         sign = option_type_sign(c.get("type"))
         if sign is None:
@@ -1474,6 +1483,7 @@ def compute_gex_grid_session_delta_volume(spot: float, contracts: list[dict[str,
         "cell_invalid_delta": {e: {_k(k): n for k, n in col.items()} for e, col in cell_invalid.items()},
         "missing_delta": missing_delta,
         "invalid_delta": invalid_delta,
+        "invalid_mult": invalid_mult,
         "quarantined": quarantined,
         "invalid_type": invalid_type,
         "formula_version": "gex.v2",

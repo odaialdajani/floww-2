@@ -67,13 +67,17 @@ inspector δ-invalid row. All pass.
 iterations with zero drift at every width, 0 page errors, signed-profile
 zero-axis geometry verified (21 bars). All 13 screenshots present.
 
-## Observations (low severity, non-blocking, future work)
+## Observations (re-verified after O1/O2 fixes)
 
-- O1: explicit-invalid multiplier lands in the `missing` bucket on the
-  delta grid (uncounted on the session-delta-volume grid); the raw vendor
-  grid has no quarantine count. Retained per queue; do not change silently.
-- O2: wall-local sdv counts zero-volume members toward `sdv_missing_delta`
-  while canonical/grid kernels volume-gate first. Pre-existing, retained.
+- O1 (FIXED): explicit-invalid multiplier now lands in its own `invalid_mult`
+  bucket on all three grid kernels (delta, session-delta-volume, activity),
+  folded into coverage `invalid` with a separate key. No longer lumped into
+  `missing` or silently dropped. Canonical fns and wall rows already used
+  generic `invalid` via shared multiplier provenance — unchanged.
+- O2 (FIXED): wall-local session-delta-volume skips delta evaluation for
+  zero-volume members with unknown/unusable delta (canonical/grid parity)
+  while preserving measured zero (zero volume + usable delta stays usable,
+  adds 0) and still counting `volume_usable` and running OI evaluation.
 - O3: the Zed strip-back backup lives at `/tmp/zed-wip-backup/` (patch +
   untracked tarball); kanban/BOTTLENECK_ALERTS.md is rewritten by an external
   watchdog (left untouched, excluded from commits).
