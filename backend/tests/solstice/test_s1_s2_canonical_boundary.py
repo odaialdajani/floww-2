@@ -92,7 +92,9 @@ def test_booleans_are_never_measurements():
     assert is_valid_measurement(float("inf")) is None
     assert compute_raw_oi([_c(gamma=True)], SPOT).invalid == 1
     assert compute_raw_oi([_c(oi=True)], SPOT).missing_oi == 1
-    assert compute_delta_weighted_oi([_c(delta=True)], SPOT).missing_delta == 1
+    # R11 item 1: a boolean delta is an invalid reading, not a missing one.
+    assert compute_delta_weighted_oi([_c(delta=True)], SPOT).missing_delta == 0
+    assert compute_delta_weighted_oi([_c(delta=True)], SPOT).invalid_delta == 1
     assert compute_volume_gamma([_c(volume=True)], SPOT).missing_oi == 1
     assert dollar_gamma_unit(0.01, 100, True) is None
     assert dollar_gamma_unit(0.01, 100, 0.0) is None

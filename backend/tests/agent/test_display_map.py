@@ -147,8 +147,68 @@ def test_visibly_stale_map_cannot_support_current_comparison_and_actual_query_is
     assert facts == [] and gaps
 
 
+@pytest.mark.parametrize("field,bad", [("snapshotId", "fake"), ("provider", "fake"), ("formula", "fake"), ("selectedWall", "fake")])
+def test_v2_selection_must_match_server_observation(field, bad):
+    raw = {**cached(), "snapshotId": "recorded-s1", "formula_version": "gex.v2",
+           "metrics": {"walls": [{"wall_id": "w1", "low": 99, "high": 101, "gross": 12, "net": 3}]}}
+    screen = {**selection(), "page": "trinity", "contextVersion": 2, "snapshotId": "recorded-s1",
+              "provider": raw["data_source"], "formula": "gex.v2", "activePane": "raw", "selectedWall": "w1"}
+    screen[field] = bad
+    facts, gaps = display_facts(raw, screen, "SPY", NOW)
+    assert facts == [] and gaps
+
+
+def test_v2_saved_wall_and_profile_values_use_registered_snapshot_not_client_numbers():
+    raw = {**cached(), "snapshotId": "recorded-s1", "formula_version": "gex.v2",
+           "metrics": {"walls": [{"wall_id": "w1", "low": 99, "high": 101, "gross": 12, "net": 3}]}}
+    screen = {**selection(), "page": "trinity", "contextVersion": 2, "snapshotId": "recorded-s1",
+              "provider": raw["data_source"], "formula": "gex.v2", "activePane": "raw", "selectedWall": "w1",
+              "selectedStrike": 100, "selectedExpiry": "2026-09-18", "selectedValue": 99999}
+    facts, _ = display_facts(raw, screen, "SPY", NOW)
+    values = {f["metric"]: f["value"] for f in facts}
+    assert values["Selected display cell"] == 3
+    assert values["Selected raw wall gross"] == 12
+    assert values["Displayed signed profile"] == [-4, 3, 8]
+
+
 def test_solstice_flip_priority_matches_visible_sidebar():
     raw = cached()
     raw["flip_zones"] = [{"price": 97}]
     facts, _ = display_facts(raw, {**selection(), "page": "heatseeker"}, "SPY", NOW)
     assert next(f["value"] for f in facts if f["metric"] == "Displayed flip") == 97
+
+
+def _v2_screen(**over):
+    screen = dict(
+        contextVersion=2, page="heatseeker", ticker="SPY",
+        snapshotId="snap1", provider="recorded test source", formula="gex.v2",
+        activePane="gex", metric="gex", overlayMetric="raw", displayMode="live",
+        mapQuery=QUERY, mapVersion=NOW.isoformat(),
+        mapStrikes=[95, 100, 105], mapExpiries=["2026-09-18"],
+    )
+    screen.update(over)
+    return screen
+
+
+def _v2_raw():
+    raw = cached()
+    raw.update(snapshotId="snap1", formula_version="gex.v2", metrics={"walls": []})
+    return raw
+
+
+def test_v2_live_raw_context_is_admitted():
+    facts, gaps = display_facts(_v2_raw(), _v2_screen(), "SPY", NOW)
+    assert facts, "live raw context must resolve display facts"
+    assert gaps == []
+
+
+def test_v2_adjusted_overlay_stays_unavailable_with_reason():
+    facts, gaps = display_facts(_v2_raw(), _v2_screen(overlayMetric="delta"), "SPY", NOW)
+    assert facts == []
+    assert gaps == ["Adjusted/replay evidence resolution remains unavailable"]
+
+
+def test_v2_replay_mode_stays_unavailable_with_reason():
+    facts, gaps = display_facts(_v2_raw(), _v2_screen(displayMode="replay"), "SPY", NOW)
+    assert facts == []
+    assert gaps == ["Adjusted/replay evidence resolution remains unavailable"]

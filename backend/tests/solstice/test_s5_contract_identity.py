@@ -156,6 +156,24 @@ def test_unparseable_and_future_timestamps_are_labelled():
     assert fut["age_reasons"]["bid"] == "FUTURE"
 
 
+def test_complete_prices_without_timestamps_are_not_fresh():
+    out = quote_state({"bid": 1.0, "ask": 1.1, "last": 1.05}, now=NOW)
+    assert out["stale"] is None
+    assert out["age_reasons"]["last"] == "NO_TIMESTAMP"
+
+
+def test_osi_does_not_override_a_conflicting_explicit_tuple():
+    out = resolve_contract(POP, {"osi": "A-300-C", "strike": "300.25",
+                                 "expiry": "2030-02-21", "type": "call"}, now=NOW)
+    assert out["status"] == "unavailable"
+    assert out["reason"] == REASON_NO_MATCH
+
+
+def test_multiplier_is_not_inferred_from_the_symbol():
+    out = resolve_contract(POP, {"osi": "A-300-C"}, now=NOW)
+    assert out["multiplier"] == {"value": None, "source": None, "status": "unknown"}
+
+
 def test_booleans_are_not_quotes():
     out = quote_state({"bid": True, "ask": True, "last": True}, now=NOW)
     assert (out["bid"], out["ask"], out["last"]) == (None, None, None)

@@ -141,6 +141,10 @@ class ExposureResult:
     invalid: int
     basis: str
     formula_version: str = FORMULA_VERSION
+    # Invalid delta readings (boolean, nonfinite, out-of-range) are NOT
+    # missing observations. Canonical delta-weighted calculations count them
+    # here so "unknown" and "unusable" never look alike downstream.
+    invalid_delta: int = 0
 
 
 def resolve_multiplier(contract: dict[str, Any]) -> tuple[float | None, str | None]:
@@ -246,7 +250,7 @@ def compute_raw_oi(contracts: list[dict[str, Any]], spot: float) -> ExposureResu
 def compute_delta_weighted_oi(contracts: list[dict[str, Any]], spot: float) -> ExposureResult:
     """dadgex_gross_v1 / dadgex_net_v1: Σ u N |δ| with conventional sign."""
     gross = net = call = put = 0.0
-    usable = missing_delta = missing_oi = invalid = 0
+    usable = missing_delta = missing_oi = invalid = invalid_delta = 0
     spot_f = is_valid_measurement(spot)
     for c in contracts:
         if not isinstance(c, dict):
@@ -272,9 +276,12 @@ def compute_delta_weighted_oi(contracts: list[dict[str, Any]], spot: float) -> E
         if sign is None:
             invalid += 1
             continue
-        ad, _reason = abs_delta(delta)
+        ad, reason = abs_delta(delta)
         if ad is None:
-            missing_delta += 1
+            if reason == "DELTA_MISSING":
+                missing_delta += 1
+            else:
+                invalid_delta += 1
             continue
         mult = _resolve_mult(c)
         if mult is None:
@@ -293,7 +300,8 @@ def compute_delta_weighted_oi(contracts: list[dict[str, Any]], spot: float) -> E
         else:
             put += w
         usable += 1
-    return ExposureResult(gross, net, call, put, usable, missing_delta, missing_oi, invalid, "OI_DELTA_WEIGHTED")
+    return ExposureResult(gross, net, call, put, usable, missing_delta, missing_oi, invalid,
+                          "OI_DELTA_WEIGHTED", invalid_delta=invalid_delta)
 
 
 def compute_volume_gamma(contracts: list[dict[str, Any]], spot: float) -> ExposureResult:
@@ -360,7 +368,7 @@ def compute_session_delta_volume_gamma(
     USD per 1% spot move, VOLUME_DELTA_WEIGHTED basis.
     """
     gross = net = call = put = 0.0
-    usable = missing_delta = missing_vol = invalid = 0
+    usable = missing_delta = missing_vol = invalid = invalid_delta = 0
     spot_f = is_valid_measurement(spot)
     for c in contracts:
         if not isinstance(c, dict):
@@ -386,9 +394,12 @@ def compute_session_delta_volume_gamma(
         if sign is None:
             invalid += 1
             continue
-        ad, _reason = abs_delta(delta)
+        ad, reason = abs_delta(delta)
         if ad is None:
-            missing_delta += 1
+            if reason == "DELTA_MISSING":
+                missing_delta += 1
+            else:
+                invalid_delta += 1
             continue
         mult = _resolve_mult(c)
         if mult is None:
@@ -408,7 +419,7 @@ def compute_session_delta_volume_gamma(
             put += w
         usable += 1
     return ExposureResult(gross, net, call, put, usable, missing_delta, missing_vol, invalid,
-                          "VOLUME_DELTA_WEIGHTED")
+                          "VOLUME_DELTA_WEIGHTED", invalid_delta=invalid_delta)
 
 
 def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str, Any]],
@@ -429,9 +440,11 @@ def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str,
             members = set()
         dg = dn = vg = vn = 0.0
         usable = missing = invalid = vn_n = 0
+        daddex_invalid = 0
         volume_usable = volume_missing = volume_invalid = 0
         session_dv_gross = session_dv_net = 0.0
         session_dv_usable = session_dv_missing = session_dv_invalid = 0
+        sdv_missing_delta = 0
         expiries: set = set()
         n_contracts = 0
         # Excluded population (resweep). A contract whose strike cannot be
@@ -485,18 +498,29 @@ def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str,
                             vn_n += 1
                         # Same member contracts as unweighted volume; this
                         # fourth surface needs delta, never an OI substitute.
-                        ad_v, reason_v = abs_delta(c.get("delta", c.get("δ")))
-                        if ad_v is None:
-                            if reason_v == "DELTA_MISSING":
-                                session_dv_missing += 1
-                            else:
-                                session_dv_invalid += 1
-                        elif not math.isfinite(contribution * ad_v):
-                            session_dv_invalid += 1
+                        # A valid reported zero volume with a usable delta is
+                        # a measured zero (usable, adds 0). Zero volume with
+                        # an unknown/unusable delta weights nothing, so it is
+                        # skipped silently (canonical/grid parity) — it still
+                        # counts volume_usable above, and OI below still runs.
+                        if v_f == 0:
+                            ad_v, _ = abs_delta(c.get("delta", c.get("δ")))
+                            if ad_v is not None and math.isfinite(contribution * ad_v):
+                                session_dv_usable += 1
                         else:
-                            session_dv_gross += contribution * ad_v
-                            session_dv_net += sign * contribution * ad_v
-                            session_dv_usable += 1
+                            ad_v, reason_v = abs_delta(c.get("delta", c.get("δ")))
+                            if ad_v is None:
+                                if reason_v == "DELTA_MISSING":
+                                    session_dv_missing += 1
+                                    sdv_missing_delta += 1
+                                else:
+                                    session_dv_invalid += 1
+                            elif not math.isfinite(contribution * ad_v):
+                                session_dv_invalid += 1
+                            else:
+                                session_dv_gross += contribution * ad_v
+                                session_dv_net += sign * contribution * ad_v
+                                session_dv_usable += 1
 
             oi_f = is_valid_measurement(c.get("oi"))
             if oi_f is None or oi_f < 0:
@@ -504,9 +528,12 @@ def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str,
                 continue
             if oi_f == 0:
                 continue
-            ad, _reason = abs_delta(c.get("delta", c.get("δ")))
+            ad, reason = abs_delta(c.get("delta", c.get("δ")))
             if ad is None:
-                missing += 1
+                if reason == "DELTA_MISSING":
+                    missing += 1
+                else:
+                    daddex_invalid += 1
             elif not math.isfinite(u * ad * oi_f):
                 invalid += 1
             else:
@@ -517,6 +544,7 @@ def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str,
             "daddex_gross": dg if math.isfinite(dg) else None,
             "daddex_net": dn if math.isfinite(dn) else None,
             "daddex_usable": usable, "daddex_missing": missing,
+            "daddex_invalid": daddex_invalid,
             "volume_gross": vg if math.isfinite(vg) else None,
             "volume_net": vn if math.isfinite(vn) else None, "volume_n": vn_n,
             "volume_usable": volume_usable, "volume_missing": volume_missing,
@@ -532,7 +560,15 @@ def wall_metric_breakdown(walls: list[dict[str, Any]], contracts: list[dict[str,
             "unreadable_strike": unreadable_strike,
             "not_a_member": not_a_member,
             "expiries": sorted(expiries),
+            # R11 short names are compatibility aliases of the same result.
+            "sdv_gross": session_dv_gross if session_dv_usable and math.isfinite(session_dv_gross) else None,
+            "sdv_net": session_dv_net if session_dv_usable and math.isfinite(session_dv_net) else None,
+            "sdv_usable": session_dv_usable, "sdv_missing_delta": sdv_missing_delta,
+            # `basis` is the legacy single label (kept for compatibility); it
+            # only ever described the daddex_* fields. `bases` names each family.
             "basis": "OI_DELTA_WEIGHTED", "formula_version": FORMULA_VERSION,
+            "bases": {"daddex": "OI_DELTA_WEIGHTED", "volume": "VOLUME",
+                      "session_delta_volume": "VOLUME_DELTA_WEIGHTED"},
         }
     return out
 

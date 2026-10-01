@@ -84,7 +84,7 @@ def contract_identity(contract: dict[str, Any] | None) -> dict[str, Any] | None:
     """
     if not isinstance(contract, dict):
         return None
-    strike = _exact(contract.get("strike"))
+    strike = _exact(contract.get("strike_exact") if contract.get("strike_exact") is not None else contract.get("strike"))
     expiry = _norm_str(contract.get("expiry"))
     otype = _norm_str(contract.get("type") or contract.get("opt_type"))
     osi = _norm_str(contract.get("osi"))
@@ -105,10 +105,13 @@ def contract_identity(contract: dict[str, Any] | None) -> dict[str, Any] | None:
 
 def _matches(identity: dict[str, Any], row_identity: dict[str, Any]) -> bool:
     """Identity equality: OSI when present, else the full tuple. No fuzzy match."""
-    if identity.get("osi") and row_identity.get("osi"):
-        return identity["osi"] == row_identity["osi"]
+    has_osi = identity.get("osi") is not None
+    if has_osi and identity["osi"] != row_identity.get("osi"):
+        return False
     for field in ("strike", "expiry", "type"):
         want, got = identity.get(field), row_identity.get(field)
+        if want is None and has_osi:
+            continue
         if want is None or got is None:
             return False
         if field == "strike":
@@ -145,6 +148,8 @@ def quote_state(contract: dict[str, Any] | None, *, now: datetime | None = None)
         "ages_s": {"bid": None, "ask": None, "last": None},
         "age_reasons": {"bid": "NO_TIMESTAMP", "ask": "NO_TIMESTAMP", "last": "NO_TIMESTAMP"},
         "quote_source": None, "side_has_aggressor_identity": False,
+        "timestamps": {"bid": None, "ask": None, "last": None},
+        "freshness_reason": "NO_DECLARED_FRESHNESS_POLICY",
         "note": "last-vs-quote is not buyer-minus-seller flow; no aggressor identity",
     }
     if not isinstance(contract, dict):
@@ -163,6 +168,7 @@ def quote_state(contract: dict[str, Any] | None, *, now: datetime | None = None)
                 out[leg] = val
                 break
         ts = contract.get(f"{leg}_timestamp") or contract.get(f"{leg}_ts")
+        out["timestamps"][leg] = str(ts) if ts else None
         age, reason = _age_s(ts, now)
         out["ages_s"][leg] = None if age is None else round(age, 3)
         out["age_reasons"][leg] = reason
@@ -173,9 +179,13 @@ def quote_state(contract: dict[str, Any] | None, *, now: datetime | None = None)
         # the percent before the mid made it permanently None.
         if out["mid"]:
             out["spread_percent"] = out["spread_absolute"] / out["mid"]
-    if out["last"] is not None and out["mid"] is not None:
-        out["stale"] = False
-    out["quote_source"] = _norm_str(contract.get("data_source") or contract.get("quote_source"))
+    if contract.get("quote_status") == "stale":
+        out["stale"] = True
+        out["freshness_reason"] = "SOURCE_DECLARED_STALE"
+    elif any(out["age_reasons"][leg] for leg in ("bid", "ask")):
+        out["freshness_reason"] = "SOURCE_TIME_UNKNOWN_OR_INVALID"
+    out["quote_source"] = _norm_str(
+        contract.get("data_source") or contract.get("quote_source") or contract.get("provider"))
     return out
 
 
@@ -219,7 +229,16 @@ def resolve_contract(
                 sorted(str(contract_identity(c).get("osi")) for c in hits),
                 "note": "identity is not unique in this population"}
     row = hits[0]
+    multiplier = _exact(row.get("multiplier"))
+    if multiplier is None or multiplier <= 0:
+        multiplier_state = {"value": None, "source": None, "status": "unknown"}
+    else:
+        source = _norm_str(row.get("multiplier_source"))
+        multiplier_state = {"value": str(multiplier), "source": source,
+                            "status": ("registered_assumption" if source == "DEFAULT_STANDARD" else
+                                                                   "observed" if source else "source_unknown")}
     return {**base, "status": "ok", "reason": None,
+            "multiplier": multiplier_state,
             "matched_identity": contract_identity(row),
             "quote": quote_state(row, now=now),
             "n_population": len(rows), "n_matched": 1, "candidates": []}

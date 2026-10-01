@@ -47,6 +47,16 @@ def display_facts(raw, screen, ticker, now):
             return [], [missing]
         if raw.get("map_query") != screen["mapQuery"]:
             return [], [missing]
+        if screen.get("contextVersion") == 2:
+            if any(screen.get(field) != expected or expected is None for field, expected in (
+                ("snapshotId", raw.get("snapshotId") or raw.get("snapshot_id")),
+                ("provider", raw.get("data_source")),
+                ("formula", raw.get("formula_version") or (raw.get("metrics") or {}).get("formula_version")),
+            )):
+                return [], [missing]
+            walls = (raw.get("metrics") or {}).get("walls") or []
+            if screen.get("selectedWall") and not any(w.get("wall_id") == screen["selectedWall"] for w in walls):
+                return [], ["The selected wall is not in this recorded observation"]
         grid = raw.get("grid") or {}
         strikes, expiries = screen.get("mapStrikes"), screen.get("mapExpiries")
         if (
@@ -140,6 +150,28 @@ def display_facts(raw, screen, ticker, now):
                 add("Selected display cell", value, unit, contract=f"{selected_expiry}:{selected_strike}:{metric}")
             else:
                 gaps.append("The selected display cell has no reading")
+        if screen.get("contextVersion") == 2:
+            if screen.get("overlayMetric", "raw") != "raw" or screen.get("displayMode", "live") != "live":
+                return [], ["Adjusted/replay evidence resolution remains unavailable"]
+            add("Display basis", "Raw OI" if metric in {"gex", "skylit"} else metric.upper(), "basis")
+            profile = []
+            for strike in strikes:
+                values = [cell(e, strike) for e in expiries]
+                profile.append(None if any(v is None for v in values) else sum(values))
+            add("Displayed signed profile", profile, unit)
+            if any(v is None for v in profile):
+                gaps.append("Missing cells remain gaps in the signed profile")
+            wall = next((w for w in (raw.get("metrics") or {}).get("walls", [])
+                         if w.get("wall_id") == screen.get("selectedWall")), None)
+            if wall:
+                for key, label, units in (("gross", "Selected raw wall gross", "USD/1% spot move"),
+                                          ("net", "Selected raw wall net", "USD/1% spot move"),
+                                          ("low", "Selected wall lower bound", "USD"),
+                                          ("high", "Selected wall upper bound", "USD")):
+                    if finite(wall.get(key)):
+                        add(label, wall[key], units, whole_map=True, contract=wall["wall_id"])
+            if screen.get("selectedContract"):
+                gaps.append("Exact contract evidence is not admitted to model answers yet; inspect the read-only contract drawer")
         if screen.get("page") == "flowseeker-pro" and metric == "gex":
             # The dealer chart sums each shown expiry, in ascending strike order.
             if strikes != sorted(strikes):

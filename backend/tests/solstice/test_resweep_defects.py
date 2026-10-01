@@ -149,7 +149,7 @@ def test_cache_hit_reports_the_live_cursor_and_labels_the_stale_one():
         payload_position = first["cursor"]["payload_position"]
 
         # Move the live cursor on (as a resumed sweep would), then hit the cache.
-        asyncio.run(scan._advance_cursor("popular:None:2", payload_position + 4))
+        asyncio.run(scan._advance_cursor(first["cursor"]["scope"], payload_position + 4))
         second = asyncio.run(scan.run_scan(universe="popular", limit=2, opportunity_fn=None))
         assert second["cache"] == "hit"
         assert second["cursor"]["position"] == payload_position + 4, (

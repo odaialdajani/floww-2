@@ -221,7 +221,9 @@ def window_activity_surface(
                                       "n_comparable_contracts": 0,
                                       "n_missing_delta": int(kernel.get("missing_delta") or 0),
                                       "n_no_baseline": 0,
-                                      "n_mixed_pair": int(kernel.get("mixed_pair") or 0)})
+                                      "n_mixed_pair": int(kernel.get("mixed_pair") or 0),
+                                      "n_invalid": int(kernel.get("invalid") or 0),
+                                      "n_invalid_type": int(kernel.get("invalid_type") or 0)})
 
     by_strike: dict[str, dict[str, Any]] = {}
     cells: dict[tuple[str, str], float] = {}
@@ -272,6 +274,9 @@ def window_activity_surface(
             "n_missing_delta": int(kernel.get("missing_delta") or 0),
             "n_no_baseline": 0,
             "n_mixed_pair": int(kernel.get("mixed_pair") or 0),
+            # R11-H01: typed/nonfinite exclusions are counted, not dropped.
+            "n_invalid": int(kernel.get("invalid") or 0),
+            "n_invalid_type": int(kernel.get("invalid_type") or 0),
             "note": "surface is complete only over the comparable population",
         },
     }

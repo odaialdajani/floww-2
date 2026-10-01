@@ -136,16 +136,24 @@ def window_contract_activity(prev: list[dict], cur: list[dict],
     missing_delta = 0
     mixed_pair = 0
     invalid = 0
+    invalid_type = 0
     for c in cur or []:
         if not isinstance(c, dict):
             continue
         p = before.get(_contract_key(c))
         if p is None:
             continue  # NO_PRIOR baseline: not comparable, not ranked
-        d, _ = abs_delta(p.get("delta"))
-        current_delta, _ = abs_delta(c.get("delta"))
+        # Validate both observations before admitting this counter step.
+        d, old_reason = abs_delta(p.get("delta"))
+        current_delta, new_reason = abs_delta(c.get("delta"))
         if d is None or current_delta is None:
-            missing_delta += 1
+            if old_reason == "DELTA_MISSING" or new_reason == "DELTA_MISSING":
+                missing_delta += 1
+            else:
+                invalid += 1
+            continue
+        if isinstance(p.get("volume"), bool) or isinstance(c.get("volume"), bool):
+            invalid += 1
             continue
         chk = check_volume_window(p.get("volume"), c.get("volume"))
         if not chk["valid"]:
@@ -164,10 +172,13 @@ def window_contract_activity(prev: list[dict], cur: list[dict],
         if gsrc != dsrc:
             mixed_pair += 1
             continue
+        sign = option_type_sign(p.get("type"))
+        if sign is None:
+            invalid_type += 1
+            continue
         m, _ = resolve_multiplier(p)
         u = dollar_gamma_unit(p.get("gamma"), m, spot_f)
-        sign = option_type_sign(p.get("type"))
-        if u is None or sign is None or not math.isfinite(u * d * dv):
+        if u is None or not math.isfinite(u * d * dv):
             invalid += 1
             continue
         rows.append({"osi": c.get("osi"), "expiry": c.get("expiry"),
@@ -176,7 +187,8 @@ def window_contract_activity(prev: list[dict], cur: list[dict],
                      "pair": f"{gsrc}/{dsrc}"})
     rows.sort(key=lambda r: abs(r["window_daddex"]), reverse=True)
     return {"status": "ok", "contracts": rows,
-            "missing_delta": missing_delta, "mixed_pair": mixed_pair, "invalid": invalid,
+            "missing_delta": missing_delta, "mixed_pair": mixed_pair,
+            "invalid": invalid, "invalid_type": invalid_type,
             "note": "turnover, not positioning"}
 
 

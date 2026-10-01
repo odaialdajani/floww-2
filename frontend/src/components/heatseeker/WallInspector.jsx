@@ -204,9 +204,12 @@ function CompareTable({ wall, metrics, displayGrid }) {
   // zero — show "—" with the reason instead of $0.
   const dUsable = usableCount(wb?.daddex_usable);
   const dMissing = usableCount(wb?.daddex_missing);
+  const dInvalidDelta = usableCount(wb?.daddex_invalid);
+  const dAbsentNote = [dMissing > 0 ? `${dMissing} δ-missing` : null,
+    dInvalidDelta > 0 ? `${dInvalidDelta} δ-invalid (unusable reading)` : null].filter(Boolean).join(", ");
   const dVal = !wb ? "—"
     : dUsable > 0 ? `${cell(wb.daddex_gross)} / ${cell(wb.daddex_net)}`
-    : dMissing > 0 ? `— (${dMissing} δ-missing)` : "—";
+    : dAbsentNote ? `— (${dAbsentNote})` : "—";
   const vN = usableCount(Object.hasOwn(wb || {},"volume_usable") ? wb.volume_usable : wb?.volume_n);
   const vMissing=usableCount(wb?.volume_missing);
   const vInvalid=usableCount(wb?.volume_invalid);
@@ -231,7 +234,7 @@ function CompareTable({ wall, metrics, displayGrid }) {
   const rows = [
     ["Raw gross / net", `${cell(wall.gross)} / ${cell(wall.net)}`, "OI · gex.v2"],
     ["Δ gross / net", dVal,
-      wb ? `OI Δ-weighted · ${dUsable ?? "unknown"} usable${dMissing ? ` · ${dMissing} δ-missing` : ""}${wb.invalid ? ` · ${wb.invalid} invalid` : ""}` : "no wall breakdown"],
+      wb ? `OI Δ-weighted · ${dUsable ?? "unknown"} usable${dMissing ? ` · ${dMissing} δ-missing` : ""}${dInvalidDelta ? ` · ${dInvalidDelta} δ-invalid (unusable reading)` : ""}${wb.invalid ? ` · ${wb.invalid} invalid` : ""}` : "no wall breakdown"],
     ["VEX gross / net", vexNet == null ? "—" : `${cell(vexGross)} / ${cell(vexNet)}`,
       vexBasis],
     ["Session activity", vVal,

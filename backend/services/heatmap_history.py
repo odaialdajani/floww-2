@@ -195,6 +195,13 @@ def ensure_tables(conn) -> None:
             conn.execute(f"ALTER TABLE heatmap_snapshots_v2 ADD COLUMN IF NOT EXISTS {col} VARCHAR")
         except Exception as e:
             log.warning("heatmap_history migrate %s failed: %s", col, e)
+    # Keep source decimal identity and contract-spec provenance alongside the
+    # legacy DOUBLE arithmetic columns. Old observations remain explicitly old.
+    for col in ("strike_exact", "multiplier_source", "series"):
+        try:
+            conn.execute(f"ALTER TABLE contract_observations_v2 ADD COLUMN IF NOT EXISTS {col} VARCHAR")
+        except Exception as e:
+            log.warning("heatmap_history contract migration %s failed: %s", col, e)
     # R8-05: policy_version keys outcome idempotency (decision/horizon/
     # policy/version); price_paths_v1 stores the worker's price observations.
     for col in ("policy_version",):
@@ -460,19 +467,26 @@ def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
             for c in contracts:
                 if not isinstance(c, dict):
                     continue
+                from domain.exposure_metrics import resolve_multiplier
+
+                multiplier, multiplier_reason = resolve_multiplier(c)
                 conn.execute(
-                    "INSERT INTO contract_observations_v2 VALUES ("
+                    "INSERT INTO contract_observations_v2 (snapshot_id, ticker, osi, expiry, strike, opt_type, "
+                    "multiplier, bid, ask, last, bid_ts, ask_ts, last_ts, received_at, volume, oi, oi_effective_date, "
+                    "iv, delta, gamma, theta, vega, greeks_source, provider, exposure_basis, calculated_at, "
+                    "strike_exact, multiplier_source, series) VALUES ("
                     + ",".join([_esc(sid), _esc(payload.get("ticker")), _esc(c.get("osi")),
                                 _esc(c.get("expiry")), _esc(c.get("strike")), _esc(c.get("type")),
-                                _esc(c.get("multiplier", 100.0)), _esc(c.get("bid")), _esc(c.get("ask")),
+                                _esc(multiplier), _esc(c.get("bid")), _esc(c.get("ask")),
                                 _esc(c.get("last")), _esc(c.get("bid_timestamp")),
                                 _esc(c.get("ask_timestamp")), _esc(c.get("last_timestamp")),
                                 _esc(c.get("received_at")), _esc(c.get("volume")), _esc(c.get("oi")),
                                 _esc(c.get("oi_effective_date")), _esc(c.get("iv")), _esc(c.get("delta")),
                                 _esc(c.get("gamma")), _esc(c.get("theta")), _esc(c.get("vega")),
-                                _esc(c.get("greeks_source")), _esc(c.get("oi_source", "public_api")),
+                                _esc(c.get("greeks_source")), _esc(c.get("data_source") or payload.get("data_source")),
                                 _esc(c.get("exposure_basis", payload.get("exposure_basis"))),
-                                _esc(payload.get("asof"))]) + ")")
+                                _esc(payload.get("asof")), _esc(c.get("strike_exact", c.get("strike"))),
+                                _esc(c.get("multiplier_source") or multiplier_reason), _esc(c.get("series"))]) + ")")
             # Hard COMMIT: a failed commit is never acknowledged — control
             # falls to ROLLBACK + None below, leaving zero half-records.
             conn.execute("COMMIT")

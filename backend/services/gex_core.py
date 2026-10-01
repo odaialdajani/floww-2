@@ -1166,8 +1166,13 @@ def compute_gex_grid_delta_weighted(spot: float, contracts: list[dict[str, Any]]
     grid: dict[str, dict[float, float]] = {}
     totals: dict[float, float] = {}
     missing = 0
+    invalid_delta = 0
+    invalid_mult = 0
     quarantined = 0
     invalid_type = 0
+    usable = 0
+    cell_missing: dict[str, dict[float, int]] = {}
+    cell_invalid: dict[str, dict[float, int]] = {}
     for c in contracts:
         if c.get("adjusted") or c.get("nonstandard"):
             quarantined += 1
@@ -1178,18 +1183,15 @@ def compute_gex_grid_delta_weighted(spot: float, contracts: list[dict[str, Any]]
         gamma = _vendor_gamma(c)
         if gamma is None:
             continue
-        d_raw = c.get("delta")
-        if isinstance(d_raw, bool):
-            ad = None
-        else:
-            try:
-                ad = abs(float(d_raw)) if d_raw is not None else None
-            except (TypeError, ValueError):
-                ad = None
-        if ad is None or not math.isfinite(ad) or ad > 1.0 + 1e-9:
-            missing += 1
+        ad, exclusion = _grid_abs_delta(c.get("delta"))
+        if ad is None:
+            if exclusion == "invalid":
+                invalid_delta += 1
+                _mark_cell_excluded(cell_invalid, c)
+            else:
+                missing += 1
+                _mark_cell_excluded(cell_missing, c)
             continue
-        ad = min(ad, 1.0)
         strike = safe_float_or_none(c.get("strike"))
         if strike is None or strike <= 0:
             continue
@@ -1198,7 +1200,9 @@ def compute_gex_grid_delta_weighted(spot: float, contracts: list[dict[str, Any]]
             continue
         mult = _resolve_mult(c)
         if mult is None:
-            missing += 1
+            # Explicit invalid multiplier is its own exclusion (never a
+            # missing delta, never silently dropped).
+            invalid_mult += 1
             continue
         # R7-F04: unknown option type is rejected (never default-put).
         sign = option_type_sign(c.get("type"))
@@ -1209,6 +1213,7 @@ def compute_gex_grid_delta_weighted(spot: float, contracts: list[dict[str, Any]]
         d = grid.setdefault(expiry, {})
         d[strike] = d.get(strike, 0.0) + cell
         totals[strike] = totals.get(strike, 0.0) + cell
+        usable += 1
     expiries = sorted(grid.keys())
     strikes = sorted(totals.keys())
 
@@ -1222,12 +1227,53 @@ def compute_gex_grid_delta_weighted(spot: float, contracts: list[dict[str, Any]]
         "strike_totals": [{"strike": k, "gex": v} for k, v in sorted(totals.items())],
         "exposure_basis": "OI_DELTA_WEIGHTED",
         "missing_delta": missing,
+        "invalid_delta": invalid_delta,
+        "invalid_mult": invalid_mult,
         "quarantined": quarantined,
         "invalid_type": invalid_type,
+        # R11-H01: population that actually produced cells, plus sparse
+        # per-cell maps of excluded contracts. Missing (unknown) and invalid
+        # (unusable reading) exclusions stay distinct, so a partial cell and
+        # a "contracts exist but delta unknown/unusable" cell are visible.
+        "usable": usable,
+        "cell_missing_delta": {e: {_k(k): n for k, n in col.items()} for e, col in cell_missing.items()},
+        "cell_invalid_delta": {e: {_k(k): n for k, n in col.items()} for e, col in cell_invalid.items()},
         "formula_version": "gex.v2",
         "status": "ok" if expiries else "unavailable",
-        "reason": None if expiries else ("DELTA_UNKNOWN" if missing else "NO_COVERAGE"),
+        "reason": None if expiries else ("DELTA_UNKNOWN" if (missing or invalid_delta) else "NO_COVERAGE"),
     }
+
+
+def _grid_abs_delta(d_raw: Any) -> tuple[float | None, str | None]:
+    """|δ| for grid kernels under the registered tolerance, plus exclusion kind.
+
+    Returns (value, None) when usable. Otherwise (None, "missing") for an
+    absent reading and (None, "invalid") for a present-but-unusable one
+    (booleans, non-numeric, nonfinite, materially out of range). A tiny
+    binary overshoot (≤ 1+1e-9) normalises to 1.0; a material violation is
+    unknown (counted by the caller), never clamped.
+    """
+    if d_raw is None:
+        return None, "missing"
+    if isinstance(d_raw, bool):
+        return None, "invalid"
+    try:
+        ad = abs(float(d_raw))
+    except (TypeError, ValueError):
+        return None, "invalid"
+    if not math.isfinite(ad) or ad > 1.0 + 1e-9:
+        return None, "invalid"
+    return min(ad, 1.0), None
+
+
+def _mark_cell_excluded(cell_map: dict[str, dict[float, int]], c: dict[str, Any]) -> None:
+    """Record a delta exclusion against its (expiry, strike) cell."""
+    strike = safe_float_or_none(c.get("strike"))
+    expiry = c.get("expiry") or ""
+    if strike is None or strike <= 0 or not expiry:
+        return
+    col = cell_map.setdefault(str(expiry), {})
+    col[strike] = col.get(strike, 0) + 1
 
 
 def _resolve_mult(c: dict[str, Any]) -> float | None:
@@ -1306,6 +1352,8 @@ def compute_gex_grid_volume_vendor(spot: float, contracts: list[dict[str, Any]])
     totals: dict[float, float] = {}
     quarantined = 0
     invalid_type = 0
+    invalid_mult = 0
+    usable = 0
     for c in contracts:
         if c.get("adjusted") or c.get("nonstandard"):
             quarantined += 1
@@ -1324,6 +1372,7 @@ def compute_gex_grid_volume_vendor(spot: float, contracts: list[dict[str, Any]])
             continue
         mult = _resolve_mult(c)
         if mult is None:
+            invalid_mult += 1
             continue
         # R7-F04: unknown option type is rejected (never default-put).
         sign = option_type_sign(c.get("type"))
@@ -1334,6 +1383,7 @@ def compute_gex_grid_volume_vendor(spot: float, contracts: list[dict[str, Any]])
         d = grid.setdefault(expiry, {})
         d[strike] = d.get(strike, 0.0) + cell
         totals[strike] = totals.get(strike, 0.0) + cell
+        usable += 1
     expiries = sorted(grid.keys())
     strikes = sorted(totals.keys())
 
@@ -1348,6 +1398,8 @@ def compute_gex_grid_volume_vendor(spot: float, contracts: list[dict[str, Any]])
         "exposure_basis": "VOLUME",
         "quarantined": quarantined,
         "invalid_type": invalid_type,
+        "invalid_mult": invalid_mult,
+        "usable": usable,
         "formula_version": "gex.v2",
         "status": "ok" if expiries else "unavailable",
         "reason": None if expiries else "NO_VOLUME_COVERAGE",
@@ -1371,6 +1423,11 @@ def compute_gex_grid_session_delta_volume(spot: float, contracts: list[dict[str,
     quarantined = 0
     invalid_type = 0
     missing_delta = 0
+    invalid_delta = 0
+    invalid_mult = 0
+    usable = 0
+    cell_missing: dict[str, dict[float, int]] = {}
+    cell_invalid: dict[str, dict[float, int]] = {}
     for c in contracts:
         if c.get("adjusted") or c.get("nonstandard"):
             quarantined += 1
@@ -1381,18 +1438,15 @@ def compute_gex_grid_session_delta_volume(spot: float, contracts: list[dict[str,
         gamma = _vendor_gamma(c)
         if gamma is None:
             continue
-        d_raw = c.get("delta")
-        if isinstance(d_raw, bool):
-            ad = None
-        else:
-            try:
-                ad = abs(float(d_raw)) if d_raw is not None else None
-            except (TypeError, ValueError):
-                ad = None
-        if ad is None or not math.isfinite(ad) or ad > 1.0 + 1e-9:
-            missing_delta += 1
+        ad, exclusion = _grid_abs_delta(c.get("delta"))
+        if ad is None:
+            if exclusion == "invalid":
+                invalid_delta += 1
+                _mark_cell_excluded(cell_invalid, c)
+            else:
+                missing_delta += 1
+                _mark_cell_excluded(cell_missing, c)
             continue
-        ad = min(ad, 1.0)
         strike = safe_float_or_none(c.get("strike"))
         if strike is None or strike <= 0:
             continue
@@ -1401,6 +1455,7 @@ def compute_gex_grid_session_delta_volume(spot: float, contracts: list[dict[str,
             continue
         mult = _resolve_mult(c)
         if mult is None:
+            invalid_mult += 1
             continue
         sign = option_type_sign(c.get("type"))
         if sign is None:
@@ -1410,6 +1465,7 @@ def compute_gex_grid_session_delta_volume(spot: float, contracts: list[dict[str,
         d = grid.setdefault(expiry, {})
         d[strike] = d.get(strike, 0.0) + cell
         totals[strike] = totals.get(strike, 0.0) + cell
+        usable += 1
     expiries = sorted(grid.keys())
     strikes = sorted(totals.keys())
 
@@ -1422,12 +1478,18 @@ def compute_gex_grid_session_delta_volume(spot: float, contracts: list[dict[str,
         "grid": {e: {_k(k): v for k, v in grid[e].items()} for e in expiries},
         "strike_totals": [{"strike": k, "gex": v} for k, v in sorted(totals.items())],
         "exposure_basis": "VOLUME_DELTA_WEIGHTED",
+        "usable": usable,
+        "cell_missing_delta": {e: {_k(k): n for k, n in col.items()} for e, col in cell_missing.items()},
+        "cell_invalid_delta": {e: {_k(k): n for k, n in col.items()} for e, col in cell_invalid.items()},
         "missing_delta": missing_delta,
+        "invalid_delta": invalid_delta,
+        "invalid_mult": invalid_mult,
         "quarantined": quarantined,
         "invalid_type": invalid_type,
         "formula_version": "gex.v2",
         "status": "ok" if expiries else "unavailable",
-        "reason": None if expiries else ("DELTA_UNKNOWN" if missing_delta else "NO_VOLUME_COVERAGE"),
+        "reason": None if expiries else ("DELTA_UNKNOWN" if (missing_delta or invalid_delta)
+                                         else "NO_VOLUME_COVERAGE"),
     }
 
 

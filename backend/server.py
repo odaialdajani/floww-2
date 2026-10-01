@@ -1279,6 +1279,18 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                         log.info(f"build_heatmap: cvserver full-chain enrichment for {ticker} — {len(raw['contracts'])} contracts, {cv_unique} unique strikes")
             except Exception as e:
                 log.debug(f"build_heatmap: cvserver enrichment failed for {ticker}: {e}")
+    # Listed-date scope bound: the requested count applies to listed expiry
+    # dates, never calendar-day substitutes. Sparse enrichment above may
+    # return a deeper chain for strike density; the loaded population stays
+    # bounded by the request — earliest listed dates first.
+    if max_expiries is not None and max_expiries > 0:
+        _listed = sorted({c.get("expiry") for c in raw.get("contracts", []) if c.get("expiry")})
+        if len(_listed) > max_expiries:
+            _keep = set(_listed[:max_expiries])
+            raw["contracts"] = [c for c in raw["contracts"] if c.get("expiry") in _keep]
+            raw["expiries"] = sorted(_keep)
+            log.info(f"build_heatmap: scoped {ticker} to {max_expiries} listed expiries "
+                     f"({len(_listed)} returned)")
     spot = raw["spot"]
     if not spot or spot != spot or not raw["contracts"]:  # spot != spot catches NaN
         raise HTTPException(404, f"No options data for {ticker}")
@@ -1436,6 +1448,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             compute_gex_grid_vendor,
             compute_gex_grid_volume_vendor,
         )
+        from services.solstice_metric_contract import window_grid_section as _window_grid_section
         from services.wall_structure import discover_walls, nearest_by_side, nearest_walls
         raw_m = compute_raw_oi(raw["contracts"], spot)
         dw_m = compute_delta_weighted_oi(raw["contracts"], spot)
@@ -1473,8 +1486,10 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             "session_delta_volume_missing_vol": sess_dvol_m.missing_oi,
             "session_delta_volume_invalid": sess_dvol_m.invalid,
             "window_dadgex_v1": None, "window_dadgex_reason": "HISTORY_NOT_YET_RECORDED",
-            "window_daddex_reason": "HISTORY_NOT_YET_RECORDED",
             # §28.3 registry name alias (same unavailable state, both keys).
+            # R11-H01: the alias must carry the reason too — the inspector
+            # read `window_daddex_reason`, which was never populated.
+            "window_daddex_v1": None, "window_daddex_reason": "HISTORY_NOT_YET_RECORDED",
             "window_delta_weighted_volume_v1": None,
             # R6-2: per-wall window aggregation lands here when a comparable
             # baseline exists; absent means unavailable, never scope-total.
@@ -1494,7 +1509,11 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             # vendor path never emitted.
             "grids": {"raw": None, "delta": delta_grid, "activity": activity_grid,
                       "session_delta_volume": sess_dvol_grid,
-                      "vendor": vendor_grid},
+                      "vendor": vendor_grid,
+                      # R11-H03: governed window surface in grid shape;
+                      # unavailable (with reason) until a comparable
+                      # baseline exists — never zero, never raw.
+                      "window": _window_grid_section(None)},
             "formula_version": "gex.v2",
         })
         sol_scope = {"symbol": ticker, "formula": "gex.v2"}
@@ -1583,6 +1602,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                             metrics["window_daddex_v1"] = metrics["window_dadgex_v1"]
                             metrics["window_daddex_reason"] = None
                             metrics["window_dadgex_reason"] = None
+                            metrics["grids"]["window"] = _window_grid_section(_w)
                             metrics["window_contracts"] = _wrows[:20]
                             metrics["window_missing_delta"] = _w["coverage"]["n_missing_delta"]
                             metrics["window_mixed_pair"] = _w["coverage"]["n_mixed_pair"]
@@ -1613,6 +1633,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                             metrics["window_daddex_reason"] = _wr
                             metrics["window_contracts"] = []
                             metrics["wall_window"] = {}
+                            metrics["grids"]["window"] = _window_grid_section(_w)
         except Exception as we:
             log.debug("window activity attach failed: %s", we)
     except Exception as me:
@@ -1702,6 +1723,15 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         # Solstice read-only desk (T04–T10/T15–T20, deterministic, no execution)
         "metrics": metrics,
     }
+    # R11-H01: per-surface population + status summary (no arithmetic; reads
+    # the sections the kernels already produced). Additive key.
+    try:
+        from services.solstice_metric_contract import CONTRACT_VERSION as _mc_ver
+        from services.solstice_metric_contract import build_surface_coverage
+        metrics["surface_coverage"] = build_surface_coverage(metrics, grid)
+        metrics["metric_contract_version"] = _mc_ver
+    except Exception as _cov_e:
+        log.debug("surface coverage summary failed: %s", _cov_e)
     # R5-A: one issued observation ID for this build (content + asof + ticker).
     # Interactions, scenarios, evidence and recorder rows all join on this ID;
     # wall events must never be written with a blank snapshot link.
@@ -1997,7 +2027,19 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                          "coverage": _cov,
                                          "quality": payload.get("quality", {}),
                                          "scenarios": payload.get("scenarios", [])[:12],
-                                         "interactions": payload.get("interactions", [])[:12]},
+                                         "interactions": payload.get("interactions", [])[:12],
+                                         # R7-03 context travels with the
+                                         # record so replay restores the
+                                         # inspector (session/scout/regime/
+                                         # patterns/vanna/moneyness), not
+                                         # just cells.
+                                         "session": payload.get("session"),
+                                         "playbook": payload.get("playbook"),
+                                         "scout": payload.get("scout"),
+                                         "gamma_regime_v1": payload.get("gamma_regime_v1"),
+                                         "patterns_v1": payload.get("patterns_v1"),
+                                         "vanna_v1": payload.get("vanna_v1"),
+                                         "moneyness": payload.get("moneyness")},
                 f"{ticker}:{mode}:{dte}:{scalp}",
                 payload.get("snapshotId") or None))
             _background_tasks.add(_t2)
@@ -3613,6 +3655,10 @@ from routes.solstice_review import register_review_routes
 register_review_routes(solstice_router)
 
 app.include_router(solstice_router, tags=["solstice"])
+
+from routes.solstice_scan import router as solstice_scan_router
+
+app.include_router(solstice_scan_router)
 
 from routes.public_api import router as public_api_router
 

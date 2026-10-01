@@ -27,6 +27,9 @@ function heatmapFixture() {
         delta: { expiries: ["2026-10-02"], strikes: [760, 765], grid: { "2026-10-02": { 760: 3000000, 765: 5400000 } } },
       },
     },
+    scout: { shortlist: { CALLS: [
+      { osi: "SPY261002C00760000", type: "call", strike: 760, expiry: "2026-10-02", bid: 1.2, ask: 1.35, delta: .55 },
+    ], PUTS: [] } },
     scenarios: [
       { wall_id: "w1", wall_position: "below", name: "Bounce watch", type: "reversal_watch", confirmation: "reclaim and hold above 760", invalidation: "sustained acceptance below 760" },
       { wall_id: "w1", wall_position: "below", name: "Breakdown continuation", type: "continuation", confirmation: "acceptance beyond zone", invalidation: "reclaim and hold above 760" },
@@ -46,7 +49,7 @@ beforeEach(() => {
   axios.get.mockImplementation(async (url) => {
     const u = String(url);
     if (u.includes("/api/heatmap/")) return { data: heatmapFixture() };
-    if (u.includes("universe/leaderboard")) return { data: { leaderboard: LEADERBOARD } };
+    if (u.includes("solstice/scan/leaderboard")) return { data: { leaderboard: LEADERBOARD, status: "ready" } };
     if (u.includes("/api/contract/")) {
       return { data: { ticker: "SPY", contracts: [
         { osi: "SPY261002C00760000", type: "call", strike: 760, expiry: "2026-10-02", bid: 1.2, ask: 1.35, iv: 0.2, delta: 0.55, open_interest: 1200 },
@@ -85,7 +88,7 @@ test("handoff selects the wall and shows its two-sided scenario", async () => {
   expect(window.sessionStorage.getItem("solstice.triadHandoff")).toBeNull();
 });
 
-test("wall chips select; contract drawer shows identity/spread from the detail route", async () => {
+test("wall chips select; drawer lists recorded candidates before any exact-detail request", async () => {
   await act(async () => { render(<TrinityView />); });
   await waitFor(() => expect(screen.getByTestId("triad-walls")).toBeInTheDocument());
   await act(async () => { fireEvent.click(screen.getByTestId("triad-wall-w1")); });
@@ -96,6 +99,7 @@ test("wall chips select; contract drawer shows identity/spread from the detail r
   expect(row.textContent).toContain("SPY261002C00760000");
   expect(row.textContent).toContain("0.55");
   expect(row.textContent).toContain("0.15"); // spread 1.35-1.20
+  expect(axios.get.mock.calls.some(([url]) => String(url).includes('/api/contract/'))).toBe(false);
 });
 
 test("missing adjusted surface renders unavailable, raw untouched", async () => {
@@ -106,7 +110,7 @@ test("missing adjusted surface renders unavailable, raw untouched", async () => 
       delete f.metrics.grids.delta;
       return { data: f };
     }
-    if (u.includes("universe/leaderboard")) return { data: { leaderboard: [] } };
+    if (u.includes("solstice/scan/leaderboard")) return { data: { leaderboard: [], status: "not-scanned" } };
     if (u.includes("/decisions")) return { data: { decisions: [] } };
     return { data: {} };
   });
@@ -130,7 +134,7 @@ test("review saves through the journal with frozen context", async () => {
   axios.get.mockImplementation(async (url) => {
     const u = String(url);
     if (u.includes("/api/heatmap/")) return { data: heatmapFixture() };
-    if (u.includes("universe/leaderboard")) return { data: { leaderboard: [] } };
+    if (u.includes("solstice/scan/leaderboard")) return { data: { leaderboard: [], status: "not-scanned" } };
     if (u.includes("/decisions")) {
       return { data: { decisions: [{ decision_id: "d9", snapshot_id: "snap-triad-1", review_state: null }] } };
     }

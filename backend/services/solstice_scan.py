@@ -59,14 +59,14 @@ REASON_ENTITLEMENT_UNVERIFIED = "ENTITLEMENT_UNVERIFIED"
 
 def cache_key_for(tickers, *, universe: str, dte: int | None, max_expiries: int,
                   provider: str = "public_api", formula: str = "gex.v2",
-                  mode: str = "day", scalp: int | None = None) -> str:
+                  mode: str = "day", scalp: int | None = None, limit: int | None = None) -> str:
     """The full sweep identity. Two sweeps differing in ANY of these are
     different entries — the legacy single-payload cache defect (dte /
     max_expiries ignored) cannot occur here."""
     return scan_cache_key(
         universe=universe,
         tickers=list(tickers or []),
-        scope={"dte": dte, "max_expiries": max_expiries, "mode": mode, "scalp": scalp},
+        scope={"dte": dte, "max_expiries": max_expiries, "mode": mode, "scalp": scalp, "limit": limit},
         provider=provider,
         formula=formula,
     )
@@ -110,6 +110,7 @@ async def run_scan(
     flow_alert_tickers: set[str] | None = None,
     build_heatmap_fn=None,
     opportunity_fn=None,
+    conviction_fn=None,
     scan_cancelled: asyncio.Event | None = None,
     now: float | None = None,
 ) -> dict[str, Any]:
@@ -131,8 +132,8 @@ async def run_scan(
         limit=limit,
     )
     ordered = [r["ticker"] for r in pre["ordered"]]
-    scope = f"{universe}:{dte}:{max_expiries}"
-    key = cache_key_for(ordered, universe=universe, dte=dte, max_expiries=max_expiries)
+    key = cache_key_for(ordered, universe=universe, dte=dte, max_expiries=max_expiries, limit=limit)
+    scope = key
 
     async def _compute() -> dict[str, Any]:
         try:
@@ -194,7 +195,9 @@ async def run_scan(
 
         swept = await scan_batch(
             batch,
+            build_heatmap_fn=build_heatmap_fn,
             opportunity_fn=opportunity_fn,
+            conviction_fn=conviction_fn,
             max_expiries=max_expiries,
             dte=dte,
             pace_sec=0.0,
@@ -203,13 +206,32 @@ async def run_scan(
         # a fused score is passed through intact (rank_rows preserves its
         # score, tier, direction and evidence); a row carrying raw scorer
         # payloads is fused here exactly once.
-        rows = rank_rows([_rank_input(r) for r in (swept.get("rows") or [])])
+        ranked = rank_rows([_rank_input(r) for r in (swept.get("rows") or [])])
+        availability = []
+        rows = []
+        for row in ranked:
+            evidence = row.get("evidence") or {}
+            eligible = any(evidence.get(f"{name}_status") == "ok" for name in ("flow", "opportunity", "confluence", "ml"))
+            availability.append({"ticker": row.get("ticker"), "status": "usable" if eligible else "unavailable",
+                                 "reason": None if eligible else "NO_RANK_INPUTS",
+                                 "asof": row.get("asof"), "inputs": evidence})
+            if eligible:
+                rows.append(row)
+        for i, row in enumerate(rows, 1):
+            row["rank"] = i
+        skipped = swept.get("skipped") or []
+        availability.extend({**r, "status": "unavailable"} for r in skipped)
+        status = ("partial-budget" if any("BUDGET" in str(r.get("reason")) for r in skipped) else
+                  "source-error" if skipped and not rows else "partial" if skipped else
+                  "ready" if rows else "no-eligible-rows")
         await _advance_cursor(scope, next_cursor)
         return {
             "schema_version": SCHEMA_VERSION,
             "coordinator_version": COORDINATOR_VERSION,
             "scope": _scope_block(universe, dte, max_expiries, ordered),
             "rows": rows,
+            "availability": availability,
+            "status": status,
             "coverage": {
                 "requested": len(batch),
                 "returned": len(swept.get("rows") or []),
@@ -284,6 +306,8 @@ def _scope_block(universe, dte, max_expiries, ordered) -> dict[str, Any]:
         "formula_version": "gex.v2",
         "provider": "public_api",
         "n_candidates": len(ordered),
+        "ordered_symbols": list(ordered),
+        "mode": "day", "scalp": None,
     }
 
 
@@ -291,6 +315,29 @@ def _iso(now: float | None) -> str:
     from datetime import UTC, datetime
 
     return datetime.fromtimestamp(now if now is not None else time.time(), tz=UTC).isoformat()
+
+
+def peek_scan(*, universe: str = "popular", limit: int = 20, dte: int | None = None,
+              max_expiries: int = 2) -> dict[str, Any]:
+    """Copy-only read of this process' exact scan scope; never builds or debits."""
+    from services.movers import POPULAR_UNIVERSE
+    from services.universe_scan import prefilter_universe
+
+    names = list(POPULAR_UNIVERSE) if universe == "popular" else [universe]
+    pre = prefilter_universe(names, limit=limit)
+    ordered = [r["ticker"] for r in pre["ordered"]]
+    key = cache_key_for(ordered, universe=universe, dte=dte, max_expiries=max_expiries, limit=limit)
+    out = _CACHE.get(key, allow_stale=True)
+    if out is None:
+        return {"schema_version": SCHEMA_VERSION, "status": "not-scanned", "rows": [],
+                "scope": _scope_block(universe, dte, max_expiries, ordered),
+                "availability": pre["excluded"], "computed_at": None,
+                "durability": "process_memory_only"}
+    out["cache"] = "hit"
+    if time.time() - out["cached_at"] > 300:
+        out["status"] = "stale"
+    out["durability"] = "process_memory_only"
+    return out
 
 
 def health() -> dict[str, Any]:

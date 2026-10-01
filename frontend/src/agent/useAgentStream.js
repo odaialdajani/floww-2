@@ -2,6 +2,23 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { API } from "../config/api";
 import {requestFailureText} from "./requestFailure";
 const terminal = new Set(["completed", "done", "failed", "error", "cancelled", "interrupted"]);
+// Bounded waits: a hung session/admission/turn read must surface a
+// recoverable error, never leave the UI hanging with no outcome.
+const SESSION_TIMEOUT_MS = 15000;
+const ASK_TIMEOUT_MS = 45000;
+const TURN_TIMEOUT_MS = 15000;
+const timed = (ms) => (typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(ms) : null);
+// Manual signal union: AbortSignal.any is not universally available, and the
+// timeout must never be silently dropped when it is missing.
+const combine = (...signals) => {
+ const live = signals.filter(Boolean);
+ if (!live.length) return undefined;
+ if (live.length === 1) return live[0];
+ const c = new AbortController();
+ const onAbort = () => { if (!c.signal.aborted) c.abort(); };
+ live.forEach((s) => { if (s.aborted) onAbort(); else s.addEventListener("abort", onAbort, { once: true }); });
+ return c.signal;
+};
 function requestIdentity() {
  const bytes=crypto.getRandomValues(new Uint8Array(16)); bytes[6]=(bytes[6]&15)|64; bytes[8]=(bytes[8]&63)|128;
  const hex=Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("");
@@ -39,13 +56,13 @@ export default function useAgentStream({onEvent}={}) {
   stop();setState("asking");
   const watch={stopped:false,source:null,id:null,cancelRequested:false,cancellation:null};observer.current=watch;
   try {
-   const session=await fetch(`${API}/agent/session`,{method:"POST",credentials:"include"});
+   const session=await fetch(`${API}/agent/session`,{method:"POST",credentials:"include",signal:timed(SESSION_TIMEOUT_MS)});
    if(watch.stopped)return null;
    if(!session.ok)throw new Error("Local session unavailable");
    if(watch.cancelRequested){finish(watch,{status:"cancelled",error:"Cancelled before research started"});return null;}
    const request_id=requestIdentity();
    const requestController=new AbortController();
-   const response=await fetch(`${API}/agent/ask`,{signal:requestController.signal,method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({...body,request_id})});
+   const response=await fetch(`${API}/agent/ask`,{signal:combine(requestController.signal,timed(ASK_TIMEOUT_MS)),method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({...body,request_id})});
    if(!response.ok){
     let failure;
     if(response.status===422){
@@ -78,7 +95,7 @@ export default function useAgentStream({onEvent}={}) {
    setState("running");emit("started",{turn_id,screen:body.screen});
    const read=async()=>{
     if(watch.stopped)return true;
-    const res=await fetch(`${API}/agent/turn/${encodeURIComponent(turn_id)}`,{credentials:"include"});
+    const res=await fetch(`${API}/agent/turn/${encodeURIComponent(turn_id)}`,{credentials:"include",signal:timed(TURN_TIMEOUT_MS)});
     if(watch.stopped)return true;
     if(!res.ok)throw new Error("Saved answer unavailable");
     const data=await res.json();if(watch.stopped)return true;
@@ -101,7 +118,17 @@ export default function useAgentStream({onEvent}={}) {
    }
    if(!watch.stopped)finish(watch,{status:"interrupted",error:"Connection lost. Reopen history to recover the saved request."});
    return turn_id;
-  } catch(error){if(!watch.stopped)finish(watch,{status:"error",error:error.message});return null;}
+  } catch(error){
+   if(!watch.stopped){
+    // A timeout abort (not a user cancel) is a recoverable transport
+    // failure: the turn may still complete server-side under its id.
+    const timedOut=error && error.name==="AbortError" && !watch.cancelRequested;
+    finish(watch,{status:"error",error:timedOut
+     ? "Research request timed out. Reopen history to recover the saved request."
+     : error.message});
+   }
+   return null;
+  }
  },[stop,emit,finish,cancelKnown]);
  const cancel=useCallback(async()=>{
   const watch=observer.current;if(!watch || watch.stopped)return;

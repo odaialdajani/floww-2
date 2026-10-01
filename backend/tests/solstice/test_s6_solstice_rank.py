@@ -72,11 +72,19 @@ def test_ml_confidence_zero_stays_zero():
     assert up["evidence"]["components"]["ml"] == down["evidence"]["components"]["ml"]
 
 
+def test_missing_fields_are_not_measured_neutral_or_zero():
+    out = fuse_one("SPY", opportunity={}, confluence={}, ml={"prediction": "UP"})
+    assert out["evidence"]["opportunity_status"] == "missing"
+    assert out["evidence"]["confluence_status"] == "missing"
+    assert out["evidence"]["ml_status"] == "missing"
+    assert norm_ml_strict("UP")[1] == "missing"
+
+
 def test_cache_key_distinguishes_scope():
     a = scan_cache_key(universe="popular", tickers=["SPY"], scope={"dte": 0, "max_expiries": 1})
     b = scan_cache_key(universe="popular", tickers=["SPY"], scope={"dte": 30, "max_expiries": 4})
     assert a != b
-    assert scan_cache_key(universe="u", tickers=["QQQ", "SPY"]) == scan_cache_key(
+    assert scan_cache_key(universe="u", tickers=["QQQ", "SPY"]) != scan_cache_key(
         universe="u", tickers=["SPY", "QQQ"]
     )
 

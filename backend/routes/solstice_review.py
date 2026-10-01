@@ -8,6 +8,7 @@ Adds:
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -111,7 +112,7 @@ def register_review_routes(router: APIRouter) -> None:
     async def contract_detail(
         ticker: str,
         osi: str | None = Query(None),
-        strike: float | None = Query(None),
+        strike: str | None = Query(None),
         expiry: str | None = Query(None),
         type: str | None = Query(None),
         snapshot_id: str | None = Query(None),
@@ -171,6 +172,29 @@ def register_review_routes(router: APIRouter) -> None:
             return {"ticker": ticker.upper(), "status": "unavailable",
                     "reason": "REPLAY_FAILED", "scope": scope,
                     "snapshot_id": sid, "quote": None}
+        snapshot = replayed.get("snapshot") or {}
+        if not snapshot:
+            return {"ticker": ticker.upper(), "status": "unavailable",
+                    "reason": "NO_RECORDED_SNAPSHOT", "snapshot_id": sid,
+                    "scope": None, "quote": None}
+        if str(snapshot.get("ticker", "")).upper() != ticker.upper():
+            return {"ticker": ticker.upper(), "status": "unavailable",
+                    "reason": "SNAPSHOT_TICKER_MISMATCH", "snapshot_id": sid,
+                    "scope": None, "quote": None}
+        try:
+            expiries_used = json.loads(snapshot.get("expiries") or "[]")
+        except (TypeError, ValueError):
+            expiries_used = []
+        scope = {**scope, "source": "recorded_snapshot",
+                 "expiries_requested": None, "is_true_zero_dte": None,
+                 "zero_dte_note": "use the recorded expiry dates and session; not inferred",
+                 "expiries_used": expiries_used,
+                 "query_key": snapshot.get("query_key"),
+                 "provider": snapshot.get("data_source"),
+                 "formula_version": snapshot.get("formula_version"),
+                 "basis": snapshot.get("exposure_basis"),
+                 "observed_at": snapshot.get("asof_ts"),
+                 "received_at": snapshot.get("received_at")}
         resolved = resolve_contract(
             replayed.get("contracts") or [],
             {"osi": osi, "strike": strike, "expiry": expiry, "type": type},

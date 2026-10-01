@@ -526,9 +526,10 @@ class TestSignalReasonersAsync:
 class TestTickerNormalization:
     @pytest.mark.asyncio
     async def test_gex_regime_uppercases_ticker(self, hub, monkeypatch):
-        fake_heatseeker = MagicMock()
-        fake_heatseeker.compute_gex_profile = AsyncMock(return_value={})
-        monkeypatch.setitem(sys.modules, "services.heatseeker", fake_heatseeker)
+        from services import public_api_adapter
+
+        fetch = AsyncMock(return_value=None)
+        monkeypatch.setattr(public_api_adapter, "fetch_chain_from_public_api", fetch)
 
         await hub.init()
         gex_fn = None
@@ -539,6 +540,7 @@ class TestTickerNormalization:
 
         result = await gex_fn(ticker="spy")
         assert result["ticker"] == "SPY"
+        fetch.assert_awaited_once_with("SPY", max_expiries=4)
 
     @pytest.mark.asyncio
     async def test_vpin_uppercases_ticker(self, hub, monkeypatch):
