@@ -139,3 +139,36 @@ test('a stalled validation body has a bounded wait without admitting any researc
   jest.useRealTimers();
  }
 });
+
+test('a hung research request times out with a recoverable error',async()=>{
+ // jsdom lacks AbortSignal.timeout; polyfill it with a fake-clock-driven
+ // timer so the test drives the same abort the platform timeout produces.
+ const realTimeoutFn=AbortSignal.timeout;
+ if(typeof realTimeoutFn!=='function'){
+  AbortSignal.timeout=(ms)=>{const c=new AbortController();setTimeout(()=>c.abort(),ms);return c.signal;};
+ }
+ jest.useFakeTimers();
+ const events=[];
+ global.fetch=jest.fn(async(url,opts)=>{
+  if(String(url).endsWith('/session'))return reply({});
+  if(String(url).endsWith('/ask'))return new Promise((_,reject)=>{
+   opts.signal.addEventListener('abort',()=>reject(new DOMException('The operation was aborted.','AbortError')));
+  });
+  throw new Error('unexpected fetch '+url);
+ });
+ const {result}=renderHook(()=>useAgentStream({onEvent:(kind,data)=>events.push([kind,data])}));
+ try {
+  let settled='pending';
+  act(()=>{result.current.ask({question:'hung'}).then(v=>{settled=v;});});
+  await act(async()=>{}); // flush session resolution so the hung ask (and its timer) is reached
+  await act(async()=>{jest.advanceTimersByTime(46000);});
+  expect(settled).toBeNull();
+  expect(result.current.state).toBe('error');
+  const errors=events.filter(([kind])=>kind==='error');
+  expect(errors).toHaveLength(1);
+  expect(String(errors[0][1]?.error||'')).toMatch(/timed out|recover/i);
+ } finally {
+  jest.useRealTimers();
+  if(typeof realTimeoutFn!=='function')delete AbortSignal.timeout;
+ }
+});

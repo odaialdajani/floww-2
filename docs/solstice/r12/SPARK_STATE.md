@@ -1,8 +1,14 @@
 # SPARK_STATE — Solstice R11/R12 implementation (Spark owner post-Zed handoff)
 
-- HEAD: `72cdd943` on `solstice/r11-opus` (== origin). Base `origin/main` = `ca3dd8b5`. PR90 OPEN, mergeable, UNSTABLE (lint job fails only on silent-except gate: `backend/routes/solstice_scan.py:50`).
-- Zed WIP (67 dirty paths, strip-back direction) backed up to `/tmp/zed-wip-backup/` (patch verified re-appliable; untracked tarball). Checkout restored to clean HEAD. Untracked user files kept in place (2 local coverage tests, evidence/, SolsticeSymbolMaps, r11 scripts).
-- Hermes baseline worktree: `/tmp/floww2-head` (detached @72cdd943).
-- Done: items 1 (invalid-vs-missing delta split: canonical, kernels, coverage, profiles, grid/inspector UI, docs), 2 (scan feed warning + red test; gate clean; API docs 373 paths current; PR89 behaviors green), 3 (indigo layout verified vs fixture receipt), 4 (Raw+Δ 2-pane compare; listed-date scope bound; replay context restore), 5 (App arrow-key hijack fixed; shell 100dvh binding kills fitRows feedback; full browser receipt passes 13 views + 60 resizes).
-- Next: item 6 — Lodestar context gating (extend only with snapshot-resolved acceptance tests, else explicit unavailable).
-- Blockers: none on implementation. No deploy/orders/retrain.
+- HEAD: `a8d6a822` on `solstice/r11-opus` (== origin; updates draft PR90, not
+  merged). Base `origin/main` = `ca3dd8b5`. PR90 CI on a8d6a822: backend-tests
+  SUCCESS, ruff SUCCESS (silent-except + API-docs gates green), frontend-build
+  SUCCESS. Prior lint failure fixed and proven in CI.
+- Resweep (dual harness): repo-real Lodestar audit — no Ethereum beacon
+  surface exists in this repo (AskLodestar = research assistant; the
+  localhost:9596 harness + infinite loop + paid-AI rewrite were declined as
+  inapplicable/harmful). Agent routes/auth/timeouts/spend-caps verified.
+  One real find FIXED: Lodestar ask/session/turn fetches had no timeout
+  (hung POST hung the UI forever) — 45s/15s/15s bounds + recoverable error.
+- Next: commit stream fix + this checkpoint, push PR90, final receipt.
+- Blockers: none. No deploy/orders/retrain/capture. External deps unchanged.
