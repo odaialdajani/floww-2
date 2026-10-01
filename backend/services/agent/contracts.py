@@ -147,10 +147,12 @@ def request_spec(body):
         raise ValueError("Invalid screen selection")
     validate_screen_context(screen)
     mode, overlay = screen.get("displayMode", "live"), screen.get("overlayMetric", "raw")
-    if mode not in (None, "live", "replay") or overlay not in {"raw", "delta", "activity", "session_delta_volume"}:
+    if mode not in (None, "live", "replay") or overlay not in {"raw", "delta", "activity", "session_delta_volume", "window"}:
         raise ValueError("Research for this display is unavailable; unsupported surface or view")
     if (mode == "replay" or overlay != "raw" or isinstance(screen.get("selectedContract"), dict)) and screen.get("contextVersion") != 2:
         raise ValueError("Research for this display is unavailable; exact v2 observation context is required")
+    if overlay == "window" and (not isinstance(screen.get("windowBaselineId"), str) or not screen["windowBaselineId"]):
+        raise ValueError("Window research is unavailable; a recorded baseline identity is required")
     explicit = re.findall(r"\$([A-Za-z][A-Za-z0-9.-]{0,9})\b", question)
     # Unambiguous uppercase symbols in a market question; ordinary short words excluded.
     if not explicit:

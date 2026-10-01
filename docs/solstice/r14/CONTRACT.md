@@ -12,9 +12,17 @@ PR89/90/R13 calculations, unknown/invalid/zero/exclusion conventions, Next liste
 - The existing review publishes only selectors and resolution state to the existing Solstice context/drawer. Its generation/key ownership rejects late success/error and conflicting response headers, clears pane ownership without another request, and keeps quote age/multiplier/source visible with AI closed. Resolved identity aligns the actual selected cell. No new panel/tab/polling or trade wiring.
 - Regression: backend 18 failures before patch → focused suite green; frontend five failures → green, plus mounted publisher isolation. Current module acceptance: **99 backend checks**; **five frontend suites / 32 tests**; focused Ruff and whitespace pass. No assertion weakened or skip added. Browser and final integration/hosted CI are **pending**, not implied by mocked tests.
 
-## Next families — not yet admitted
+## Unit 2 — comparable stored-window activity (focused acceptance)
 
-Comparable stored-window activity and complete registered VEX/Charm replay are next independent units. Missing baseline/old metadata will remain explicitly unavailable. No recomputed/live replay Greeks, aggressor-signed flow, cross-metric magnitude equivalence or invented outcomes.
+- The actual producer reads one bounded stored baseline, verifies the full query/provider/formula/source-clock/New York session identity and available-at ordering, then delegates the existing frozen-open kernel. Retractions refuse the window; unchanged valid counters are measured zero. A failed baseline read is explicit `BASELINE_READ_FAILED`, never silently substituted session volume.
+- Additive typed recorder inputs preserve missing versus invalid delta (including bool/nonfinite), with partial per-cell/profile/surface coverage and original valid contributions. Legacy arithmetic/quote/multiplier columns remain compatible. Old records without typed inputs/baseline/clocks remain unavailable.
+- Window research reads the exact current and previous records only. Server-owned comparison/interval/coverage/convention/policy must match displayed selectors. Client numerical values are ignored; no live baseline/Greek/quote substitution. No aggressor/dealer-intent claim.
+- Existing mounted context/Ask publishes baseline and interval selectors only; absent/conflicting identity remains unavailable, changed basis clears them. No new panels/tabs/polling.
+- Regression: original15 backend failures; actual producer5 and mounted2 failures → green. Focused104 backend and2 suites/56 frontend; self-review edge/recorder sweep49 backend; Ruff/whitespace pass. Native browser/final integration remains pending.
+
+## Next family — not yet admitted
+
+Complete registered VEX/Charm replay is next. Missing baseline/old metadata remains explicitly unavailable. No recomputed/live replay Greeks, aggressor-signed flow, cross-metric magnitude equivalence or invented outcomes.
 
 ## Boundaries
 

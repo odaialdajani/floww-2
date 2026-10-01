@@ -33,7 +33,7 @@ jest.mock("./SkylitTickerBar",       () => (props) => (
   <div data-testid="mock-ticker-bar" data-tickers={JSON.stringify(props.tickers ?? null)} />
 ));
 jest.mock("./SkylitControlBar",      () => (props) => (
-  <div data-testid="mock-control-bar" data-tickers={JSON.stringify(props.tickers ?? null)} data-spot={JSON.stringify(props.spot ?? null)} data-live={String(props.isLive)}><button data-testid="mock-activity" onClick={()=>props.onMetricChange("activity")}>Activity</button></div>
+  <div data-testid="mock-control-bar" data-tickers={JSON.stringify(props.tickers ?? null)} data-spot={JSON.stringify(props.spot ?? null)} data-live={String(props.isLive)}><button data-testid="mock-activity" onClick={()=>props.onMetricChange("activity")}>Activity</button><button data-testid="mock-window" onClick={()=>props.onMetricChange("window")}>Window</button></div>
 ));
 jest.mock("./SkylitHeatmapGrid",     () => ({ onCellClick, onStrikeClick, windowRows, density, spot }) => (
   <div data-testid="mock-heatmap" data-window={windowRows} data-density={density} data-spot={JSON.stringify(spot ?? null)}>
@@ -94,6 +94,23 @@ function selectionMap(value = 123.4, asof = "2026-09-11T18:00:00Z") {
  return {ticker:"SPY",asof,map_query:{expiries:4,mode:"day",dte:null},strikes:[{strike:650}],
    grid:{strikes:[650],expiries:["2026-09-18"],grid:{"2026-09-18":{"650":value}}}};
 }
+
+test("window context carries server baseline/interval selectors and clears them with basis change", () => {
+ const section={strikes:[650],expiries:["2026-09-18"],grid:{"2026-09-18":{"650":0}},status:"ok",
+   comparison:{previous_snapshot_id:"prior"},interval:{start:"2026-09-11T17:59:00Z",end:"2026-09-11T18:00:00Z"}};
+ const data={...selectionMap(),snapshotId:"current",data_source:"fixture",formula_version:"gex.v2",metrics:{grids:{window:section}}};
+ const mounted=render(<><SkylitDashboard ticker="SPY" data={data} spot={650}/><ResearchSelection/></>);
+ fireEvent.click(screen.getByTestId("mock-window"));
+ fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+ const current=()=>JSON.parse(screen.getByTestId("research-selection").textContent);
+ expect(current()).toMatchObject({overlayMetric:"window",windowBaselineId:"prior",windowInterval:section.interval,selectedStrike:650});
+ expect(current()).not.toHaveProperty("windowNet");
+ mounted.rerender(<><SkylitDashboard ticker="SPY" data={{...data,metrics:{grids:{window:{status:"unavailable",reason:"NO_BASELINE"}}}}} spot={650}/><ResearchSelection/></>);
+ expect(current().windowBaselineId).toBeNull();
+ expect(current().selectedStrike).toBeNull();
+ fireEvent.click(screen.getByTestId("mock-activity"));
+ expect(current().windowInterval).toBeNull();
+});
 
 test("same-scope polling retains the selected cell with the latest displayed value and map version",()=>{
  const mounted=render(<><SkylitDashboard ticker="SPY" data={selectionMap()} spot={650}/><ResearchSelection/></>);

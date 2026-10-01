@@ -73,7 +73,7 @@ def display_facts(raw, screen, ticker, now):
             return [], [missing]
         metric = screen.get("metric", "gex")
         metric_id = {"raw": "gex_net_v1", "delta": "dadgex_net_v1", "activity": "volume_gamma_v1",
-                     "session_delta_volume": "session_delta_volume_gamma_v1"}.get(overlay)
+                     "session_delta_volume": "session_delta_volume_gamma_v1", "window": "window_dadgex_v1"}.get(overlay)
         if overlay != "raw" and (not v2 or metric not in {"gex", "skylit"} or metric_id is None):
             return [], ["The selected adjusted basis is unavailable"]
         if v2:
@@ -81,6 +81,12 @@ def display_facts(raw, screen, ticker, now):
                 ({"gex", "raw"} if metric in {"gex", "skylit"} else {"gex", metric}) if overlay == "raw" else {"gex", "delta", "adjusted"})
             if screen.get("activePane") not in panes:
                 return [], ["Selected pane conflicts with its display basis"]
+        window = None
+        if overlay == "window":
+            from services.agent.window_facts import window_evidence
+            window, window_gaps = window_evidence(raw, screen, now)
+            if window_gaps:
+                return [], window_gaps
         grid = (raw.get("grid") or {}) if overlay == "raw" else ((raw.get("metrics") or {}).get("grids") or {}).get(overlay)
         if not isinstance(grid, dict) or grid.get("status") == "unavailable":
             return [], ["Adjusted/replay evidence resolution remains unavailable"]
@@ -156,6 +162,13 @@ def display_facts(raw, screen, ticker, now):
             col = matrix.get(expiry) or {}
             return number(col.get(str(int(strike)) if float(strike).is_integer() else str(strike)))
 
+        if window:
+            for field in ("start", "end"):
+                add("Window interval " + field, window["interval"][field], "source timestamp")
+            add("Window previous snapshot", window["comparison"]["previous_snapshot_id"], "observation identity")
+            add("Window volume correction policy", window["comparison"]["volume_correction_policy"], "policy")
+            add("Window Greek convention", window["greek_convention"], "convention")
+            gaps.append("Two recorded observations only; " + window.get("provenance_note", "activity is not aggressor-signed flow"))
         add("Displayed strikes", strikes, "USD")
         add("Displayed expiry dates", expiries, "dates")
         spot = number(raw.get("spot"))
@@ -221,7 +234,15 @@ def display_facts(raw, screen, ticker, now):
                         add(label, wall[key], units, whole_map=True, contract=wall["wall_id"])
                 if finite(selected_strike) and not wall.get("low", selected_strike) <= selected_strike <= wall.get("high", selected_strike):
                     return [], ["Selected cell conflicts with its raw structural wall"]
-                if overlay != "raw":
+                if overlay == "window":
+                    row = ((raw.get("metrics") or {}).get("wall_window") or {}).get(wall["wall_id"]) or {}
+                    value = number(row.get("window_daddex"))
+                    if value is not None:
+                        add("Selected adjusted wall net", value, unit, whole_map=True, contract=wall["wall_id"],
+                            reason="Same raw wall over the recorded comparable window; not dealer intent or signed flow")
+                    else:
+                        gaps.append("Selected raw wall has no usable comparable window observation")
+                elif overlay != "raw":
                     row = ((raw.get("metrics") or {}).get("wall_metrics") or {}).get(wall["wall_id"]) or {}
                     prefix = {"delta": "daddex", "activity": "volume", "session_delta_volume": "sdv"}[overlay]
                     if finite(row.get(prefix + "_usable")) and row[prefix + "_usable"] > 0:

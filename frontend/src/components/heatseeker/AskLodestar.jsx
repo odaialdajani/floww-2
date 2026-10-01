@@ -11,7 +11,8 @@ import { useAgent } from "../../agent/AgentProvider";
  * (backend services/agent/contracts.py request_spec): research answers are
  * admitted for live raw, verified adjusted v2 selections and recorded GEX
  * replay with complete identity, plus resolved listed-contract selectors.
- * Window/price-history remain unavailable. Only the server resolves facts.
+ * Comparable stored windows require their baseline/interval selectors.
+ * Price-history remains unavailable. Only the server resolves facts.
  * The published screen context (not these props)
  * is what the server validates; client values are never numeric evidence.
  */
@@ -32,13 +33,16 @@ export function admissionBlock({ context, overlayMetric, displayMode }) {
       && context.mapStrikes?.includes(Number(c.strike)) && context.mapExpiries?.includes(c.expiry);
     if (!exact) return "Exact contract selection is incomplete, changed or unresolved — use the authoritative read-only contract drawer.";
   }
-  if (!["raw", "delta", "session_delta_volume", "activity"].includes(overlayMetric || "raw")) return "This adjusted basis remains explicitly unavailable to Lodestar.";
+  if (!["raw", "delta", "session_delta_volume", "activity", "window"].includes(overlayMetric || "raw")) return "This adjusted basis remains explicitly unavailable to Lodestar.";
   if ((context?.overlayMetric && context.overlayMetric !== overlayMetric) || (context?.displayMode && context.displayMode !== displayMode)) return "Published selection changed — wait for the current pane and basis.";
   const advanced = displayMode === "replay" || (overlayMetric && overlayMetric !== "raw");
   const bound = context?.contextVersion === 2 && context.snapshotId && context.mapQuery && context.mapVersion && context.provider && context.formula;
   if (advanced && !bound) return displayMode === "replay"
     ? "Replay answers need a complete recorded-snapshot resolution identity; older records remain unavailable — return to Live."
     : "Adjusted answers need a complete server-side surface identity — use Raw OI until this observation resolves.";
+  if (overlayMetric === "window" && (!context?.windowBaselineId || context.windowBaselineId === context.snapshotId
+    || !context.windowInterval?.start || !context.windowInterval?.end
+    || !(Date.parse(context.windowInterval.start) < Date.parse(context.windowInterval.end)))) return "Window activity unavailable: a comparable recorded baseline and declared interval are required.";
   if (displayMode === "replay" && context?.metric && !["gex", "skylit"].includes(context.metric)) return "Recorded replay answers for this metric remain unavailable.";
   if (displayMode && !["live", "replay"].includes(displayMode)) return "This display is unavailable to Lodestar.";
   return null;

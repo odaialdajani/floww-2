@@ -42,6 +42,14 @@ test("unsupported window and exact-contract contexts remain explicitly unavailab
   expect(admissionBlock({ context: { ...complete, selectedContract: { osi: "X" } }, overlayMetric: "delta", displayMode: "live" })).toMatch(/contract/i);
 });
 
+test("window admission requires the owning recorded baseline and declared interval", () => {
+  const window = { ...complete, overlayMetric: "window", windowBaselineId: "prior", windowInterval: { start: "2026-10-01T13:59:00Z", end: "2026-10-01T14:00:00Z" } };
+  expect(admissionBlock({ context: window, overlayMetric: "window", displayMode: "live" })).toBeNull();
+  expect(admissionBlock({ context: { ...window, windowBaselineId: null }, overlayMetric: "window", displayMode: "live" })).toMatch(/unavailable|baseline/i);
+  expect(admissionBlock({ context: { ...window, windowInterval: null }, overlayMetric: "window", displayMode: "live" })).toMatch(/unavailable|interval/i);
+  expect(admissionBlock({ context: { ...window, windowBaselineId: "snap1" }, overlayMetric: "window", displayMode: "live" })).toMatch(/unavailable|baseline/i);
+});
+
 test("missing published selection stays unavailable", () => {
   expect(admissionBlock({ context: {}, overlayMetric: "raw", displayMode: "live" }))
     .toMatch(/No published selection/);

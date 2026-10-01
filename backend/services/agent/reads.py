@@ -263,7 +263,7 @@ class ResearchReads:
         # Exact displayed surface only: no unrelated chain/flow/volatility reads.
         replay = screen.get("displayMode") == "replay"
         raw, gaps = None, []
-        record_only = replay or screen.get("selectedContract") is not None
+        record_only = replay or screen.get("selectedContract") is not None or screen.get("overlayMetric") == "window"
         callback = self._read_recorded_map if record_only else self._peek_map
         selection = screen.get("snapshotId") if record_only else screen.get("mapQuery")
         label = "Recorded snapshot" if record_only else "Adjusted displayed observation"
@@ -277,6 +277,17 @@ class ResearchReads:
                 gaps.append(label + " resolution failed; no substitute was read")
         if raw is None:
             gaps.append(label + " unavailable; no substitute was read")
+        if raw is not None and screen.get("overlayMetric") == "window" and callback is not None:
+            comparison = (((raw.get("metrics") or {}).get("grids") or {}).get("window") or {}).get("comparison") or {}
+            previous_id = comparison.get("previous_snapshot_id")
+            if previous_id and previous_id != selection:
+                try:
+                    raw["window_baseline"] = copy.deepcopy(await current_budget().sync(
+                        "map", ticker, callback, ticker, previous_id, scope={"window_baseline": previous_id}))
+                except ReadActivityUnavailable:
+                    raise
+                except Exception:
+                    gaps.append("Window baseline record resolution failed; no substitute was read")
         facts, missing = display_facts(raw, screen, ticker, now)
         gaps.extend(missing)
         identity = hashlib.sha256(canonical([screen, raw]).encode()).hexdigest()
