@@ -343,9 +343,9 @@ class PricePathProducer:
         with self._lock:
             self.last_tick_at = now
             self.last_latency_ms = latency_ms
-            # Mirror per-tick deltas into cumulative counters the health packet reads.
-            self.gaps += out["gaps"]
-            # duplicates/out_of_order/closed already incremented inline above.
+            # All cumulative counters are incremented inline above (exactly once
+            # per event); nothing is mirrored here. A previous revision mirrored
+            # gaps a second time (double-count); pinned by regression test.
         out["latency_ms"] = latency_ms
         return out
 

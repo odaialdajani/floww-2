@@ -39,12 +39,14 @@ _PREFLIGHT_CACHE: dict[str, dict[str, Any]] = {}
 
 __all__ = [
     "INTENT_VERSION",
+    "PREFLIGHT_TTL_S",
     "intent_hash",
     "validate_intent",
     "create_approval",
     "verify_approval",
     "submit",
     "reconcile",
+    "reconcile_all",
     "replace",
     "preflight",
     "protection_status",
@@ -235,6 +237,14 @@ def validate_intent(intent: dict[str, Any], ctx: dict[str, Any]) -> tuple[bool, 
         for wf in _NATIVE_WORKFLOWS:
             if str(wf.get("status") or "").upper() == "OPEN":
                 return False, "OVERLAP_NATIVE"
+    # Optional context binding: when both sides pin a context digest (e.g.
+    # observation + session + policy fingerprint), a mismatch means the market
+    # context moved under a reviewed plan — the draft must be re-reviewed.
+    intent_ctx = intent.get("context_hash")
+    ctx_ctx = ctx.get("context_hash")
+    if intent_ctx is not None and ctx_ctx is not None:
+        if str(intent_ctx) != str(ctx_ctx):
+            return False, "CONTEXT_CHANGED"
     if is_entry_pause(now):
         return False, "ENTRY_PAUSE"
     return True, "ok"
@@ -313,18 +323,48 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
+PREFLIGHT_TTL_S = 60
+
+
+def _ctx_fingerprint(ctx: dict[str, Any]) -> str:
+    """Market-context fingerprint: quotes + account + session policy.
+
+    Preflight estimates are only valid for the market + account + policy they
+    were quoted in. Intent-hash alone would reuse a stale estimate after the
+    market moves; fingerprinting forces expiry on relevant changes.
+    """
+    quotes = ctx.get("quotes") or {}
+    account = ctx.get("account") or {}
+    session_policy = (ctx.get("session_policy") or {})
+    blob = json.dumps({
+        "bid": quotes.get("bid"), "ask": quotes.get("ask"),
+        "bid_ts": quotes.get("bid_ts"), "ask_ts": quotes.get("ask_ts"),
+        "entitlement": account.get("entitlement"),
+        "options_level": account.get("options_level"),
+        "margin": account.get("margin"),
+        "session_policy": session_policy,
+        "supported_expiries": ctx.get("supported_expiries"),
+    }, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+
+
 async def preflight(intent: dict[str, Any], ctx: dict[str, Any], broker: Any) -> dict[str, Any]:
-    """Fresh cost-aware preflight; expires on any intent change. No vendor default."""
+    """Fresh cost-aware preflight; expires on intent OR market-context change.
+
+    Cache key = intent_hash + ctx fingerprint, TTL 60s. No vendor default.
+    """
     if intent.get("cash_margin_choice") not in ("CASH", "MARGIN"):
         return {"ok": False, "reason": "UNRESOLVED_MARGIN"}
     try:
-        key = intent_hash(intent)
+        key = intent_hash(intent) + "|" + _ctx_fingerprint(ctx)
     except (TypeError, ValueError) as exc:
         return {"ok": False, "reason": f"BAD_CONTRACT:{exc}"}
-    if key in _PREFLIGHT_CACHE:
-        cached = dict(_PREFLIGHT_CACHE[key])
-        cached["cached"] = True
-        return cached
+    now_epoch = _now_epoch(ctx.get("now"))
+    cached = _PREFLIGHT_CACHE.get(key)
+    if cached is not None and (now_epoch - float(cached.get("at_epoch", 0.0))) < PREFLIGHT_TTL_S:
+        out = dict(cached["receipt"])
+        out["cached"] = True
+        return out
     contract = intent.get("contract") or {}
     estimate = await _maybe_await(broker.preflight_single_leg(
         account_id=intent.get("account_id"),
@@ -336,24 +376,46 @@ async def preflight(intent: dict[str, Any], ctx: dict[str, Any], broker: Any) ->
         use_margin=(intent.get("cash_margin_choice") == "MARGIN"),
     ))
     out = {"ok": True, "estimate": estimate, "intent_hash": key, "cached": False}
-    _PREFLIGHT_CACHE[key] = dict(out)
+    _PREFLIGHT_CACHE[key] = {"receipt": dict(out), "at_epoch": now_epoch}
     return out
 
 
+def _now_epoch(value: Any) -> float:
+    if isinstance(value, datetime):
+        dt = value
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt.timestamp()
+    parsed = _parse_ts(value)
+    if parsed is not None:
+        return parsed.timestamp()
+    import time as _time
+
+    return _time.time()
+
+
 async def submit(
-    intent: dict[str, Any], ctx: dict[str, Any], broker: Any, armed: bool = False
+    intent: dict[str, Any], ctx: dict[str, Any], broker: Any, armed: bool = False,
+    approval: dict[str, Any] | None = None, require_approval: bool = False,
+    approval_scope: str = "single-entry",
 ) -> dict[str, Any]:
-    """Deterministic submit: validate → idempotent ownership → single placement.
+    """Deterministic submit: validate → approval → idempotent ownership → placement.
 
     `armed=False` (default) refuses before any broker access. Retries reuse the
     original broker orderId + payload. Ambiguous transport is preserved as
-    UNKNOWN for reconciliation, never guessed.
+    UNKNOWN for reconciliation, never guessed. Production callers pass
+    `require_approval=True` with a server-validated approval; tests default to
+    validation-only so intent logic stays pinnable without an approval desk.
     """
     if not armed:
         return {"ok": False, "reason": "DISARMED"}
     ok, reason = validate_intent(intent, ctx)
     if not ok:
         return {"ok": False, "reason": reason}
+    if require_approval:
+        now = ctx.get("now") if isinstance(ctx.get("now"), datetime) else None
+        if not verify_approval(intent, approval, scope=approval_scope, now=now):
+            return {"ok": False, "reason": "APPROVAL_INVALID"}
     try:
         digest = intent_hash(intent)
     except (TypeError, ValueError) as exc:
@@ -382,6 +444,7 @@ async def submit(
     _INTENTS[intent_id] = {
         "intent": dict(intent), "intent_hash": digest, "order_id": order_id,
         "payload": dict(payload), "state": "SUBMITTED",
+        "approval": dict(approval) if isinstance(approval, dict) else None,
     }
     try:
         receipt = await _maybe_await(broker.place_order(**payload))
@@ -415,6 +478,21 @@ async def reconcile(intent_id: str, broker: Any) -> dict[str, Any]:
     rec["observed"] = observed
     return {"intent_id": intent_id, "order_id": rec["order_id"], "status": status,
             "filled": (status == "FILLED")}
+
+
+async def reconcile_all(broker: Any) -> list[dict[str, Any]]:
+    """Restart/resume helper: reconcile every open/unknown record by orderId.
+
+    Call before any new entry after a restart. Read-only; truthful states only.
+    """
+    out: list[dict[str, Any]] = []
+    for intent_id, rec in list(_INTENTS.items()):
+        if str(rec.get("state") or "") in ("FILLED", "REJECTED", "CANCELED"):
+            continue
+        if not rec.get("order_id"):
+            continue
+        out.append(await reconcile(intent_id, broker))
+    return out
 
 
 async def replace(intent_id: str, changes: dict[str, Any], broker: Any) -> dict[str, Any]:

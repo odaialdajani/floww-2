@@ -334,3 +334,66 @@ def test_native_overlap_blocks_backend_entry():
     lc._reset_for_tests()
     ok, _ = lc.validate_intent(_base_intent(execution_owner="FLOWW_BACKEND"), _ctx())
     assert ok is True
+
+
+def test_reject_changed_context_when_binding_present():
+    import services.public_execution_lifecycle as lc
+
+    bound = _base_intent(context_hash="ctx-a")
+    assert lc.validate_intent(bound, _ctx(context_hash="ctx-a")) == (True, "ok")
+    assert lc.validate_intent(bound, _ctx(context_hash="ctx-b")) == (False, "CONTEXT_CHANGED")
+    # Unbound intents (no context_hash) keep backward-compatible behavior.
+    assert lc.validate_intent(_base_intent(), _ctx(context_hash="ctx-b")) == (True, "ok")
+
+
+def test_preflight_expires_on_market_move_not_just_intent_change():
+    import asyncio
+
+    import services.public_execution_lifecycle as lc
+
+    broker = _FakeBroker()
+    intent = _base_intent()
+    assert asyncio.run(lc.preflight(intent, _ctx(), broker))["ok"] is True
+    assert broker.preflight_calls == 1
+    moved = _ctx(quotes={"bid": "3.30", "ask": "3.40",
+                         "bid_ts": "2026-10-02T14:59:40+00:00",
+                         "ask_ts": "2026-10-02T14:59:41+00:00"})
+    assert asyncio.run(lc.preflight(intent, moved, broker))["ok"] is True
+    assert broker.preflight_calls == 2  # same intent, moved market → refreshed
+
+
+def test_submit_with_required_approval_enforces_binding():
+    import asyncio
+    from datetime import timedelta
+
+    import services.public_execution_lifecycle as lc
+
+    broker = _FakeBroker()
+    intent = _base_intent()
+    now = datetime(2026, 10, 2, 15, 0, tzinfo=UTC)
+    ctx = _ctx(now=now)
+    refused = asyncio.run(lc.submit(intent, ctx, broker, armed=True, require_approval=True))
+    assert refused["ok"] is False and refused["reason"] == "APPROVAL_INVALID"
+    assert broker.calls == []
+    appr = lc.create_approval(lc.intent_hash(intent), account_id="TEST-ACCT",
+                              scope="single-entry",
+                              valid_until=now + timedelta(minutes=30),
+                              approved_by="nav", now=now)
+    out = asyncio.run(lc.submit(intent, ctx, broker, armed=True,
+                                approval=appr, require_approval=True))
+    assert out["ok"] is True
+
+
+def test_reconcile_all_covers_restart_before_new_entry():
+    import asyncio
+
+    import services.public_execution_lifecycle as lc
+
+    broker = _FakeBroker()
+    first = asyncio.run(lc.submit(_base_intent(), _ctx(), broker, armed=True))
+    assert first["ok"] is True
+    broker.orders[first["order_id"]]["status"] = "PARTIAL"
+    results = asyncio.run(lc.reconcile_all(broker))
+    assert len(results) == 1
+    assert results[0]["status"] == "PARTIAL"
+    assert results[0]["filled"] is False

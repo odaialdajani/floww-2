@@ -404,3 +404,34 @@ def test_five_minute_path_cannot_claim_intraminute_resolution():
 
     assert prod.RESOLUTION_CLAIM == "5min-swing-only"
     assert "0DTE-intraminute" in prod.RESOLUTION_LIMIT
+
+
+def test_cumulative_counters_equal_sum_of_tick_receipts_no_double_count():
+    """Regression: gaps were incremented inline AND mirrored at tick end."""
+    import services.solstice_price_producer as prod
+
+    conn = duckdb.connect(":memory:")
+    ensure_tables(conn)
+    calls = {"n": 0}
+
+    def fetch(sym):
+        calls["n"] += 1
+        if sym == "SPY":
+            return _obs("SPY", 2000.0 + calls["n"], 500.0)
+        return None  # QQQ always gaps
+
+    p = prod.PricePathProducer(
+        conn=conn, symbols=["SPY", "QQQ"], fetch_one=fetch,
+        session_gate=lambda sym, now: (True, "open"),
+    )
+    totals = {"written": 0, "gaps": 0, "duplicates": 0, "out_of_order": 0,
+              "closed_skips": 0, "budget_refusals": 0, "errors": 0}
+    for i in range(3):
+        out = p.tick(now_epoch=2001.0 + i)
+        for key in totals:
+            totals[key] += out[key]
+    h = p.health()
+    assert h["captures"] == totals["written"] == 3
+    assert h["gaps"] == totals["gaps"] == 3  # one QQQ gap per tick, counted once
+    assert h["duplicates"] == totals["duplicates"] == 0
+    assert h["errors"] == totals["errors"] == 0
