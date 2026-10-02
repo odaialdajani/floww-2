@@ -62,7 +62,13 @@ kanban/watchdog files. No new task platform created.
   package edit — ownership with Zed lane).
 - M2 durable recorder preflight/recovery → `heatmap_history.py`,
   `recorder_health.py`, `duckdb_engine.py`, existing restart/restore/fallback/
-  locking tests → temp-DB dry-run packet → READY (gap check not yet run).
+  locking tests → DONE (no code change; gap check run 2 Oct 2026 at exact head:
+  37 focused checks pass — lineage/reopen, health route, duckdb durability seam,
+  outcome worker, decision/outcome lineage, gap receipts. Contention experiment:
+  4×5 concurrent `record_snapshot` on a shared temp-file connection passes WITH
+  the lock; no-op-lock probe in an isolated process also reached 20/20 rows, so
+  a new threading test would pin nothing — discarded, not committed. Lock stays
+  as the code invariant on all writer paths. Dry-run packet §7 below).
 - M3 review→episode→price-path→outcome lineage → `solstice_review.py`,
   `episode_policy.py`, `solstice_labels.py`, `heatmap_history.outcome_close_tick`,
   `routes/solstice.py outcomes/close` → READY (trace not yet run).
@@ -165,15 +171,48 @@ Activation state: OFF. No deployment, restart, daemon startup, capture/outcome
 worker activation, orders, credential changes, retraining, messages, or paid calls
 by this lane. `SOLSTICE_OUTCOME_WORKER`/`FLOWW_RECORDER_WORKER` untouched (unset).
 
-## 6. Assumptions / next action / handoff
+## 7. M2 dry-run commissioning packet (exact tested commands, nothing activated)
+
+All commands read-only/dry-run; no env change, no service start, no production
+DB copy. Local interpreter is Python 3.14 (ship/hosted pin is 3.12) — disclosed.
+
+- Focused evidence (run 2 Oct 2026, head `1530ccd7`, worktree
+  `.worktrees/spark-closeout` with main-checkout `.venv` deps only):
+  `python -m pytest tests/solstice/test_s4_recorder_lineage.py
+  tests/solstice/test_s4_recorder_health.py
+  tests/solstice/test_s4_recorder_health_route.py
+  tests/services/test_duckdb_engine_durability.py
+  tests/solstice/test_r8_05_outcome_worker.py
+  tests/solstice/test_s7_decision_outcome_lineage.py
+  tests/solstice/test_r4_p07_red.py -q` → **37 passed**.
+- Restart proof (manual, approval request must record outputs):
+  `DUCKDB_PATH=/tmp/solstice_preflight.duckdb` on a THROWAWAY backend; two fresh
+  builds one symbol; `GET /api/solstice/manifest/{ticker}` → 2 snapshots, 0
+  unexplained gaps; restart process; `GET /api/solstice/replay/{id}` → identical
+  strikes/walls/contracts/cells/quality/scenarios. Replica of package §5.
+- Backup/restore: stop writer → `cp ~/floww-data/solstice.duckdb
+  ~/floww-data/solstice.duckdb.bak` → restore = replace file + restart +
+  `manifest` gap check. Mid-write copy discarded, never repaired (no WAL replay).
+- Expected load/budget: 78 scheduled snapshots/symbol/session (156 for two) at
+  5-min cadence; writer-lock serialized background writes; shared public budget
+  10/s documented, 8/s refill, cap 60, inflight 4 — measure one week of disk
+  growth before retention tiers.
+- Stop/rollback: unset `DUCKDB_PATH` (or stop service) → `:memory:`, analytics
+  continue, `recorder_health.durable=false`; code rollback to pre-merge SHA is
+  safe (additive migrations, old readers ignore new columns).
+- Unresolved prerequisites (BLOCKED, external): Nav authorization for durable
+  path + long-lived process; scheduled price-path recorder uncommissioned;
+  SPX entitlement; participant study; empirical sessions. Fallback memory is
+  NOT persistent — never labeled as such.
+
+## 8. Assumptions / next action / handoff
 
 - Assumptions: harness baseline SHAs trusted after independent `git fetch` +
   log/diff verification; PR-body CI links taken as published evidence (main CI
   re-inspection deferred to pre-merge gate); running dev server is another
   party's process (observed, not owned).
-- Next exact action: commit this file on `solstice/spark-closeout`, push branch
-  for review, then M2 gap check (read existing restart/restore/fallback/locking
-  tests + R14 readiness evidence before adding anything; temp DBs only).
+- Next exact action: commit M2 checkpoint on `solstice/spark-closeout`, push,
+  then M3 lineage trace (producer/storage/job/readback chain on exact head).
 - Handoff needs: none blocking. Note for Zed: `FLOWW_RECORDER_WORKER` absent in
   production tree (no `register_capture` caller) — only relevant if your lane
   wires a capture path; shared schema/route changes need coordination first.
