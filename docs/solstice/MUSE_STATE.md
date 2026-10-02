@@ -70,8 +70,16 @@ kanban/watchdog files. No new task platform created.
   a new threading test would pin nothing — discarded, not committed. Lock stays
   as the code invariant on all writer paths. Dry-run packet §7 below).
 - M3 review→episode→price-path→outcome lineage → `solstice_review.py`,
-  `episode_policy.py`, `solstice_labels.py`, `heatmap_history.outcome_close_tick`,
-  `routes/solstice.py outcomes/close` → READY (trace not yet run).
+  `episode_policy.py`, `solstice_labels.close_episodes/label_touch`,
+  `heatmap_history.record_price_path/price_paths_since/outcome_close_tick/
+  record_decision/record_outcome/list_decisions/save_decision_review`,
+  `routes/solstice.py outcomes/close` → DONE (traced + 47 focused checks pass,
+  no code change; chain §9. Auth-gate concern RESOLVED for docs: gate is global
+  `auth_middleware→verify_api_key` (POST protected, fail-closed 503), not
+  per-route Depends. Genuinely missing producer: scheduled price-path recorder
+  (storage seam tested; worker only closes decisions WITH stored paths; R14
+  fixtures explicitly synthetic) → BLOCKED-external commissioning item, not
+  implemented — no agreement, activation-adjacent).
 - M4 reproducible research prep → existing replay/ablation harness +
   `FROZEN_PROTOCOL.md` + `scripts/r14_fixture.py`/`r14_answer.py` → READY
   (valid-session census not yet run; insufficient-evidence outcome allowed).
@@ -205,14 +213,53 @@ DB copy. Local interpreter is Python 3.14 (ship/hosted pin is 3.12) — disclose
   SPX entitlement; participant study; empirical sessions. Fallback memory is
   NOT persistent — never labeled as such.
 
-## 8. Assumptions / next action / handoff
+## 9. M3 lineage trace (exact head `1530ccd7`, code-read + 47 checks green)
+
+- Producer: heatmap build (`server.py`) → `record_snapshot` (dedup-verify on
+  observation/snapshot id: header+contracts complete → return; crash-mid-write
+  → rewrite; failed COMMIT → ROLLBACK + None, zero half-records); decisions via
+  `record_decision` (uuid or supplied id) with frozen features
+  (zone/target/stop/horizon/policy_version). No target/stop invented:
+  `layout_from_features` and `close_episodes` agree on NEED_EPISODE for
+  missing/nonfinite/degenerate layouts.
+- Storage: `scenario_decisions_v1`, `candidate_quotes_v1`,
+  `outcome_labels_v1` keyed (decision, horizon, policy, `LABEL_VERSION`
+ =`outcome.v1`), `decision_reviews_v1`, append-only `price_paths_v1` (no dedup;
+  non-finite rejected; ordering/gaps/available-at belong to labeling layer).
+- Job: `POST outcomes/close` (caller-supplied paths, sanitized: non-finite→None
+  censor, corrupt→(0.0,None) censor; episodeless→NEED_EPISODE pending, never
+  labeled; idempotent rerun; attach outcomes to decisions) + `outcome_close_tick`
+  (pure function of stored data; default-disabled scheduler; decisions WITHOUT
+  stored paths are skipped by the worker, never force-closed).
+- Readback: `replay_snapshot` (known-at reconstruction), `list_decisions`
+  (journal: frozen features + quotes + outcome labels + review state),
+  `GET decisions` (state filter), `POST review` (pending/reviewed/waiting/
+  skipped allowlist, 422 unknown).
+- Barrier semantics (`label_touch`): encounter-anchored window
+  [encounter_t, +horizon]; prefix-stable first passage; same-bar dual barrier →
+  `simultaneous_unknown` (censored); gaps > max_gap_s → censor
+  (OBSERVATION_GAP; no-touch requires gap-free coverage); touch-without-barrier
+  in a covered window → indeterminate TOUCH_NO_BARRIER (never no_touch);
+  terminal = any non-censored label (idempotent skip); censored reprocessed only
+  on longer path (path_end_t dedup). Horizons expand per decision (60/180/300/900).
+- Query scope: ticker-scoped; worker tick optionally ticker-filtered.
+  Event/availability clocks enforced at the R14 admission/read layer; the job
+  trusts stored features (documented layering, not a hole).
+- Fixtures: `r14_fixture.py` self-declares synthetic
+  ("not a market/participant/outcome observation"); fixture HTTP exercises the
+  REAL admission/answer modules with caller-supplied paths. No scheduled
+  price-path producer exists anywhere (fixture, worker, or route) — the one
+  genuinely missing producer, already a commissioning item.
+
+## 10. Assumptions / next action / handoff
 
 - Assumptions: harness baseline SHAs trusted after independent `git fetch` +
   log/diff verification; PR-body CI links taken as published evidence (main CI
   re-inspection deferred to pre-merge gate); running dev server is another
   party's process (observed, not owned).
-- Next exact action: commit M2 checkpoint on `solstice/spark-closeout`, push,
-  then M3 lineage trace (producer/storage/job/readback chain on exact head).
+- Next exact action: commit M3 checkpoint on `solstice/spark-closeout`, push,
+  then M4 research prep (replay/ablation harness + frozen protocol; census of
+  valid recorded sessions; insufficient-evidence + runnable protocol if absent).
 - Handoff needs: none blocking. Note for Zed: `FLOWW_RECORDER_WORKER` absent in
   production tree (no `register_capture` caller) — only relevant if your lane
   wires a capture path; shared schema/route changes need coordination first.
