@@ -405,3 +405,69 @@ selectors, server records supply facts): `metric-record.v1`
 - Handoff needs: none blocking. Note for Zed: `FLOWW_RECORDER_WORKER` absent in
   production tree (no `register_capture` caller) — only relevant if your lane
   wires a capture path; shared schema/route changes need coordination first.
+
+## 16. Resweep receipt (2 Oct 2026, second pass — holes/gaps recheck)
+
+Motivation: prior §§1–15 were doc-accurate but left four procedures
+described-not-executed (restart proof, migration proof, lock probe under real
+threads, lineage edge probes) and subset-only test scopes. This pass executes
+them at exact base `1530ccd7` in worktree `.worktrees/spark-closeout` with
+main-checkout `.venv` (Python 3.14.6 vs ship 3.12 — disclosed wherever local
+results are cited). No code changed; this file only.
+
+- Reconciliation: `origin/main` still `1530ccd7` (fetch clean, no new commits,
+  no open PRs). Branch `solstice/spark-closeout` = `449f7f9a` (5 doc-only
+  commits, remote in sync, unmerged by design). Main-checkout dirty files +
+  Zed worktree dirty states preserved untouched. Protected manifest 71/71
+  byte-identical re-verified (`git hash-object` per manifest line).
+- M1: package table re-verified row-by-row against code (`SCHEMA_VERSION="2"`,
+  `DUCKDB_PATH` unset→`:memory:` + unusable-path fallback, `cadence_s=300`,
+  budget 10/s doc + 8/s refill + cap 60 + inflight 4, health superset incl.
+  `capture` block, `FLOWW_RECORDER_WORKER` absent in prod tree / tests-only,
+  `SOLSTICE_OUTCOME_WORKER` default-off, caller-supplied paths +
+  `NEED_EPISODE` + `simultaneous_unknown`). Auth re-verified fail-closed
+  (`auth_middleware→verify_api_key`, 503 when unconfigured, 401 on mismatch);
+  `research_path` bypass scoped to `/api/agent/*` only — `POST
+  /api/solstice/outcomes/close` stays gated. No package edit (Zed-owned).
+- M2 executed proofs (throwaway file DBs, nothing activated): restart —
+  2 snapshots written, process-close + reopen, count 2→2 and digests identical
+  plus `replay_snapshot` round-trip keys verified; migration — old-schema DB
+  (15 cols, 1 legacy row) opened via `ensure_tables` → 23 cols, legacy row
+  preserved, new write coexists (2 rows total); lock — 4 threads × 5
+  `record_snapshot` on one shared connection → 20/20 rows, zero errors;
+  non-durable reporting — `:memory:` and bad-path both report
+  `durable=false`/`mode=memory`, never claim durable. Focused 37 re-pass;
+  full `tests/solstice/` 530 passed; ruff clean on touched-adjacent modules.
+- M3: lineage re-traced + edge-probed (episodeless→`NEED_EPISODE` pending, never
+  labeled; `label_touch` same-timestamp dual-barrier→`simultaneous_unknown`
+  pinned by `test_t11_labels_first_passage` + canary tests; terminal idempotent,
+  censored reprocessed only on longer path; `outcome_close_tick` pure of stored
+  state, skips decisions without stored paths). Missing producer unchanged:
+  no scheduler feeds `price_paths_v1` anywhere (route takes caller paths;
+  worker only closes WITH stored paths) — BLOCKED-external, not implemented.
+- M4: census re-run — tracked DBs hold 0 solstice tables/rows; vertical fixture
+  self-declares synthetic; ladder smoke (`abl.v1` keys + cost 20 bps) +
+  walk-forward 3-fold embargo split execute; frozen protocol untouched.
+  Conclusion unchanged: INSUFFICIENT EVIDENCE, no session/cost/comparative
+  claim. 30–60 sessions remains a collection target.
+- M5: envelope versions re-pinned (`outcome.v1`, `abl.v1`,
+  `recorder-health.v1` + contract/replay/policy versions per §13); fixture
+  sha256 recomputed `8fefacf5…` = published; browser receipts bound to source
+  `269b387b` (not human/live validation). Zed overlap: `solstice/zed-r14`
+  diff vs `origin/main` is EMPTY (merged content, nothing new to re-verify);
+  `solstice/zed-r13` touches shared backend/frontend files but is a separate
+  unmerged lane — zero overlap with this branch (`MUSE_STATE.md` only), no
+  conflict from this side. Route-handler count 387 (vs PR92's 373-path audit —
+  counting-method delta, not drift; no surface change by this lane).
+- Genuine defect found: NONE requiring a code change. What this resweep fixed
+  was evidence depth, not code: four described-not-executed procedures are now
+  executed with receipts above. Statement unchanged: no blocking finding
+  within the inspected scope — never "no possible holes", never profitability.
+- Activation state: OFF (all flags unset; no deployment/restart/daemon/
+  capture/worker/order/credential/retraining/message/paid-call by this lane).
+- Next exact action: commit this §16, push `solstice/spark-closeout` (no merge;
+  merge only under existing authorization after exact-head gates +
+  Zed-overlap recheck). Later sessions resume here; all remaining items are
+  external BLOCKED (durable activation + restart-proof record in approval
+  request, price-path recorder unassigned, SPX entitlement, participant study,
+  empirical sessions, data rights, Zed integration + Nav visual review).
