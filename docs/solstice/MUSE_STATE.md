@@ -260,3 +260,12 @@ until Zed returns or genuine external input is required.
 - [DONE] R15-8 Lodestar brief handoff spec — `docs/solstice/SPARK_R15_BRIEF_HANDOFF.md`
   + `r15/evidence/lodestar_brief_v1.json` (exact backend fields, freshness/
   refusal semantics, explicit non-claims; model config stays with Zed).
+- [DONE] R15-9 Network boundary pin — `backend/tests/solstice/test_r15_network_boundary.py`
+  (4 tests): new lifecycle/producer/fetch/route modules carry no ambient network
+  imports, no direct broker/HTTP construction, adapter use inside the fetch seam
+  only, no venue-flag reads in the lifecycle. First run caught two over-broad
+  test tokens (fixed in the test, not the product).
+- [DONE] R15-10 Outcome census re-run — `docs/solstice/SPARK_R15_CENSUS.md`
+  (read-only): configured store is `:memory:`/`durable:false` (clear refusal),
+  tracked DBs hold 0 solstice rows, all flags unset. Verdict unchanged:
+  INSUFFICIENT EVIDENCE.

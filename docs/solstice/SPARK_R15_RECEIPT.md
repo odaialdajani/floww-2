@@ -20,7 +20,7 @@ NEW (unmounted-or-read-only services, default-off):
   Hole-fix: ctx-fingerprinted preflight TTL, `CONTEXT_CHANGED` binding,
   opt-in approval gate, `reconcile_all`.
 - Tests: `test_r15_price_producer` (17), `test_r15_execution_lifecycle` (20),
-  `test_r15_price_wiring` (7).
+  `test_r15_price_wiring` (7), `test_r15_network_boundary` (4).
 
 SHARED-FILE EXCEPTION (writer: Spark, default lifecycle/mount owner):
 - `backend/server.py` ONLY: price-paths router mount + lifespan
@@ -45,8 +45,8 @@ worktrees/checkpoints, protected 71/71, frozen artifacts, watchdog, all flags.
 
 ## Verification (exact head, local Python 3.14.6 vs ship 3.12 disclosed)
 
-- `tests/solstice/` from `backend/`: **574 passed** (530 R14 historical + 44 new).
-- New focused: 17 + 20 + 7 = **44 passed**.
+- `tests/solstice/` from `backend/`: **578 passed** (530 R14 historical + 48 new).
+- New focused: 17 + 20 + 7 + 4 = **48 passed**.
 - Public brokerage gates (gate/auth/portfolio/disamrmed): **32 passed**.
 - `truth_audit.sh`: **227 passed, 0 failed** (+1 vs PR92 from new read-only routes).
 - `ruff check backend`: **clean**. Bandit medium-gate on touched files: **clean**.
