@@ -16,11 +16,10 @@ Base: `1530ccd7`. Contract: `public-capability.v1` (27 ops, docs reviewed
 - Every brokerage endpoint requires master key (`Depends(require_api_key)`,
   401 without/mismatch). Global `verify_api_key` is fail-closed 503 when
   unconfigured; `research_path` bypass is `/api/agent/*` only.
-- `services/public_capability.py:37` prose
-  (`"PublicBroker.place_order (UNGATED LIVE — disarmed, no route)"`) is STALE:
-  the route exists and is gated. Queued fix (one-line prose + `writes:true`
-  already correct) — NOT applied in this increment to keep the diff
-  services-only. Zed: treat the code + this note as truth, not the old string.
+- `services/public_capability.py:37` prose FIXED in the hole-fix pass
+  (`"gated LIVE — POST /api/public/order, FLOWW_ENABLE_LIVE_PUBLIC==1"`).
+  Text-only truth fix, no logic change; no test or frontend asserted the old
+  string (verified by repo-wide search).
 - `services/public_api_adapter.py` stays data-only (pinned by
   `test_adapter_has_no_order_method`). No MCP execution tools to browser/Lodestar.
 - Alpaca PAPER is a separate venue/account (`routes/alpaca.py` → paper host,

@@ -141,8 +141,10 @@ Contract versions: `metric-record.v1`, `solstice-metric-contract.v1`,
 `calendar.v1`, NEW `price-path-producer.v1`, NEW `execution-intent.v1`.
 
 - [DONE] R15-1 Public capability + auth truth matrix — `docs/solstice/SPARK_R15_PUBLIC_MATRIX.md` +
-  `r15/evidence/public_matrix_v1.json` (27 ops). Stale `public_capability.py:37`
-  prose noted, fix deferred to Zed-acked follow-up (zero behavior edits here).
+  `r15/evidence/public_matrix_v1.json` (27 ops, regenerated after fix).
+  Improvement pass: stale `public_capability.py:37` prose FIXED (text-only,
+  `"gated LIVE — POST /api/public/order, FLOWW_ENABLE_LIVE_PUBLIC==1"`; no test
+  or frontend asserted the old string). Bandit clean on all touched files.
 - [DONE] R15-2 Default-off scheduled price-path producer —
   `backend/services/solstice_price_producer.py` + 17 tests +
   `backend/services/solstice_price_fetch.py` (real Public-quote seam) +
@@ -235,3 +237,15 @@ are separate jobs with separate flags/states; `routes/solstice.py` untouched
 Next exact action: refresh `SPARK_R15_RECEIPT.md` counts, commit hole-fix pass,
 push PR94 (no merge/deploy/activate), continue combined-candidate readiness
 until Zed returns or genuine external input is required.
+
+## 8. Improvement pass (2 Oct 2026, Zed still down)
+
+1. `public_capability.py:37` stale prose FIXED (text-only truth fix; behavior
+   identical; matrix JSON regenerated to match). `SPARK_R15_PUBLIC_MATRIX.md`
+   updated.
+2. Bandit medium-gate run over all touched backend files: CLEAN.
+3. Env skew noted: local venv has `pandas-market-calendars` 5.4.0 while
+   `backend/requirements.txt` pins 4.6.1. The XNYS session gate uses only
+   stable `get_calendar/schedule` APIs; no code change, disclosed here and in
+   the receipt. Zed/Nav: align the pin only via the owned dependency lane
+   (frontend/dependency edits belong to Zed; backend pins need operator review).

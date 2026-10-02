@@ -4,7 +4,7 @@
   "docs_base": "https://public.com/api/docs",
   "operations": [
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "authorization/create-personal-access-token",
       "entitlement": "commissioning_required",
@@ -19,7 +19,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "list-accounts/get-accounts",
       "entitlement": "commissioning_required",
@@ -36,7 +36,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "account-details/get-account-portfolio-v2",
       "entitlement": "commissioning_required",
@@ -55,7 +55,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "account-details/get-history",
       "entitlement": "commissioning_required",
@@ -73,7 +73,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "tax-lot-selling/get-unrealized-tax-lots",
       "entitlement": "commissioning_required",
@@ -90,7 +90,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "tax-lot-selling/get-unrealized-tax-lots-for-symbol",
       "entitlement": "commissioning_required",
@@ -105,7 +105,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "tax-lot-selling/get-unrealized-tax-lots-csv",
       "entitlement": "commissioning_required",
@@ -120,7 +120,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "instrument-details/get-all-instruments",
       "entitlement": "commissioning_required",
@@ -138,7 +138,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "instrument-details/get-instrument",
       "entitlement": "commissioning_required",
@@ -155,7 +155,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "instrument-details/search-bonds",
       "entitlement": "commissioning_required",
@@ -170,7 +170,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "market-data/get-quotes",
       "entitlement": "commissioning_required",
@@ -189,7 +189,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "market-data/get-bond-details",
       "entitlement": "commissioning_required",
@@ -204,7 +204,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "market-data/get-option-expirations",
       "entitlement": "commissioning_required",
@@ -222,7 +222,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "market-data/get-option-chain",
       "entitlement": "commissioning_required",
@@ -241,7 +241,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "market-data/get-bars-v2",
       "entitlement": "commissioning_required",
@@ -258,7 +258,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "market-data/get-bars-v2-with-aggregation",
       "entitlement": "commissioning_required",
@@ -275,7 +275,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "order-placement/preflight-single-leg",
       "entitlement": "commissioning_required",
@@ -292,7 +292,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "order-placement/preflight-multi-leg",
       "entitlement": "commissioning_required",
@@ -309,7 +309,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "order-placement/place-order",
       "entitlement": "commissioning_required",
@@ -322,11 +322,11 @@
       "op": "place_order",
       "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
       "tests": "mocked_only",
-      "wrapper": "PublicBroker.place_order (UNGATED LIVE \u2014 disarmed, no route)",
+      "wrapper": "PublicBroker.place_order (gated LIVE \u2014 POST /api/public/order, FLOWW_ENABLE_LIVE_PUBLIC==1)",
       "writes": true
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "order-placement/replace-order",
       "entitlement": "commissioning_required",
@@ -343,7 +343,7 @@
       "writes": true
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "order-placement/search-orders",
       "entitlement": "commissioning_required",
@@ -361,7 +361,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "order-placement/get-order-v2",
       "entitlement": "commissioning_required",
@@ -379,7 +379,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "order-placement/place-multileg-order",
       "entitlement": "commissioning_required",
@@ -396,7 +396,7 @@
       "writes": true
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "order-placement/get-order",
       "entitlement": "commissioning_required",
@@ -414,7 +414,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "order-placement/cancel-order",
       "entitlement": "commissioning_required",
@@ -431,7 +431,7 @@
       "writes": true
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "option-details/get-option-greeks",
       "entitlement": "commissioning_required",
@@ -448,7 +448,7 @@
       "writes": false
     },
     {
-      "checked_at": "2026-10-02T19:00:00Z",
+      "checked_at": "2026-10-02T20:30:00Z",
       "coverage": "offline-mocked-no-live-calls",
       "docs": "option-details/get-strategy-quote",
       "entitlement": "commissioning_required",

@@ -27,9 +27,8 @@ the lane PR if the boundary is wrong.
    diff to `server.py` mounts + lifespan only.)
 4. `docs/api/openapi.json` + `docs/api/README.md` — regenerated (373→375 paths,
    +2 read-only GETs).
-5. DEFERRED `backend/services/public_capability.py:37` one-line prose fix — still
-   NOT applied (Zed owns the human-readable integration contract; the stale
-   string is documented in `SPARK_R15_PUBLIC_MATRIX.md` instead).
+5. APPLIED (improvement pass, text-only): `backend/services/public_capability.py:37`
+   prose truth fix (no logic change; no test or frontend asserted the old string).
 
 ## Still NOT in scope
 

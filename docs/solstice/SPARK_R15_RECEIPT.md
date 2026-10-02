@@ -37,7 +37,7 @@ record), `r15/evidence/` (`price_path_swing5m_v1.json` digest `146ebfa4e0be`,
 `execution_intent_v1.json` `in_5c8c5dcd3b07`).
 
 Untouched: `routes/public_brokerage.py`, `routes/public_api.py`,
-`routes/solstice.py`, `public_capability.py` (stale prose documented, not edited),
+`routes/solstice.py`,
 `backend/services/agent/**`, `backend/routes/agent.py`, `frontend/`, Zed
 worktrees/checkpoints, protected 71/71, frozen artifacts, watchdog, all flags.
 
@@ -47,10 +47,12 @@ worktrees/checkpoints, protected 71/71, frozen artifacts, watchdog, all flags.
 - New focused: 17 + 20 + 7 = **44 passed**.
 - Public brokerage gates (gate/auth/portfolio/disamrmed): **32 passed**.
 - `truth_audit.sh`: **227 passed, 0 failed** (+1 vs PR92 from new read-only routes).
-- `ruff check backend`: **clean**.
+- `ruff check backend`: **clean**. Bandit medium-gate on touched files: **clean**.
 - `check_silent_excepts.py`: **OK, 351 files** (+2 services/+1 route vs 347 at PR92).
 - `generate_api_docs.py`: **375 paths** (+2 read-only), regenerated.
 - Protected manifest: **71/71 git-hash identical** (base and head).
+- Env skew disclosed: local `pandas-market-calendars` 5.4.0 vs
+  `backend/requirements.txt` pin 4.6.1 (stable calendar APIs only; no change).
 - Full `tests/` + frontend + Docker: NOT rerun (no submission-path behavior
   change; PR92 main CI remains head-acceptance). Combined-candidate verification
   with Zed pending (Zed paused).
