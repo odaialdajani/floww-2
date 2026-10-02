@@ -171,8 +171,9 @@ Contract versions: `metric-record.v1`, `solstice-metric-contract.v1`,
   zero durable records = insufficient evidence).
 - [IN_PROGRESS] R15-6 Exact-head backend receipt + combined-candidate acceptance —
   `docs/solstice/SPARK_R15_RECEIPT.md` (refresh pending for hole-fix head);
-  PR94 OPEN (review only). Evidence: `tests/solstice/` 574 passed from `backend/`;
-  new focused 44 passed; brokerage gates 32 passed; truth 227/0; ruff clean;
+  PR94 OPEN (review only). Evidence: `tests/solstice/` 584 passed from `backend/`;
+  new focused 54 passed; brokerage gates 32 passed; truth 227/0; ruff + bandit
+  clean;
   silent 351 OK; API 375 paths (+2 read-only). Next: refresh receipt, commit,
   push PR94, participate in Zed's isolated verification (Zed paused — proceed,
   ack pending).
@@ -269,3 +270,20 @@ until Zed returns or genuine external input is required.
   (read-only): configured store is `:memory:`/`durable:false` (clear refusal),
   tracked DBs hold 0 solstice rows, all flags unset. Verdict unchanged:
   INSUFFICIENT EVIDENCE.
+
+## 10. Third improvement pass (2 Oct 2026, Zed still down)
+
+Lifecycle transitions the prompt requires but the first cut left as refusal-only:
+- [DONE] `cancel(intent_id, broker)` — exits need no arming and ignore the
+  entry pause by design; `CANCEL_PENDING`/empty answers stay non-terminal
+  (pending is NOT canceled), so new entries stay blocked until final reconcile.
+- [DONE] `supersede(old, new, ...)` — the intentional transition for changed
+  orders: cancel-old-first, enter-new-only-on-CANCELED, parent-linked, fresh
+  broker identity; pending old blocks with `SUPERSEDE_BLOCKED` (no double entry).
+  In-place `replace` stays refused.
+- [DONE] `require_fresh_preflight` submit gate → `STALE_PREFLIGHT` without a
+  cached intent+ctx estimate; `has_fresh_preflight` helper; preflight receipt
+  now reports `intent_hash` (pure digest) + `ctx_fingerprint` separately.
+- [DONE] Producer `_seen` fast-path bounded (`_SEEN_MAX=10000`, oldest-first
+  prune); DB recheck still covers restarts/evictions (regression test).
+- Structural non-merges documented in §7 stand (different domains/jobs/files).

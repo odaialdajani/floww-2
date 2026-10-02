@@ -18,8 +18,9 @@ NEW (unmounted-or-read-only services, default-off):
 - `backend/services/public_execution_lifecycle.py` (`execution-intent.v1`,
   Decimal-exact, approval-bound, single-owner idempotent, read-only reconcile).
   Hole-fix: ctx-fingerprinted preflight TTL, `CONTEXT_CHANGED` binding,
-  opt-in approval gate, `reconcile_all`.
-- Tests: `test_r15_price_producer` (17), `test_r15_execution_lifecycle` (20),
+  opt-in approval gate, `reconcile_all`, `cancel`/`supersede` transitions,
+  `require_fresh_preflight` gate, bounded `_seen` fast-path.
+- Tests: `test_r15_price_producer` (18), `test_r15_execution_lifecycle` (25),
   `test_r15_price_wiring` (7), `test_r15_network_boundary` (4).
 
 SHARED-FILE EXCEPTION (writer: Spark, default lifecycle/mount owner):
@@ -45,8 +46,8 @@ worktrees/checkpoints, protected 71/71, frozen artifacts, watchdog, all flags.
 
 ## Verification (exact head, local Python 3.14.6 vs ship 3.12 disclosed)
 
-- `tests/solstice/` from `backend/`: **578 passed** (530 R14 historical + 48 new).
-- New focused: 17 + 20 + 7 + 4 = **48 passed**.
+- `tests/solstice/` from `backend/`: **584 passed** (530 R14 historical + 54 new).
+- New focused: 18 + 25 + 7 + 4 = **54 passed**.
 - Public brokerage gates (gate/auth/portfolio/disamrmed): **32 passed**.
 - `truth_audit.sh`: **227 passed, 0 failed** (+1 vs PR92 from new read-only routes).
 - `ruff check backend`: **clean**. Bandit medium-gate on touched files: **clean**.

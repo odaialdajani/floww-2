@@ -58,6 +58,9 @@ RESOLUTION_LIMIT = "not suitable for 0DTE-intraminute reaction or stop-ordering 
 POLICY_NOTE = "swing-5min; NOT intraminute-0DTE"
 ET = ZoneInfo("America/New_York")
 MAX_SYMBOLS = 32
+# In-process duplicate fast-path bound: restart idempotency always rechecks the
+# DB, so dropping old keys here only costs one SELECT per re-observation.
+_SEEN_MAX = 10000
 
 __all__ = [
     "PRODUCER_VERSION",
@@ -336,6 +339,10 @@ class PricePathProducer:
                 self.captures += 1
                 if is_ooo:
                     self.out_of_order += 1
+                if len(self._seen) > _SEEN_MAX:
+                    # Drop oldest observations first; DB recheck covers restarts.
+                    for old in sorted(self._seen, key=lambda item: item[1])[: len(self._seen) - _SEEN_MAX]:
+                        self._seen.discard(old)
             out["written"] += 1
             if is_ooo:
                 out["out_of_order"] += 1

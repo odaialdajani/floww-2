@@ -47,8 +47,11 @@ __all__ = [
     "submit",
     "reconcile",
     "reconcile_all",
+    "cancel",
+    "supersede",
     "replace",
     "preflight",
+    "has_fresh_preflight",
     "protection_status",
     "is_entry_pause",
     "cancel_allowed_during_pause",
@@ -356,7 +359,8 @@ async def preflight(intent: dict[str, Any], ctx: dict[str, Any], broker: Any) ->
     if intent.get("cash_margin_choice") not in ("CASH", "MARGIN"):
         return {"ok": False, "reason": "UNRESOLVED_MARGIN"}
     try:
-        key = intent_hash(intent) + "|" + _ctx_fingerprint(ctx)
+        digest = intent_hash(intent)
+        key = digest + "|" + _ctx_fingerprint(ctx)
     except (TypeError, ValueError) as exc:
         return {"ok": False, "reason": f"BAD_CONTRACT:{exc}"}
     now_epoch = _now_epoch(ctx.get("now"))
@@ -375,9 +379,22 @@ async def preflight(intent: dict[str, Any], ctx: dict[str, Any], broker: Any) ->
         limit_price=str(intent.get("limit_price")),
         use_margin=(intent.get("cash_margin_choice") == "MARGIN"),
     ))
-    out = {"ok": True, "estimate": estimate, "intent_hash": key, "cached": False}
+    out = {"ok": True, "estimate": estimate, "intent_hash": digest,
+           "ctx_fingerprint": key.split("|", 1)[1], "cached": False}
     _PREFLIGHT_CACHE[key] = {"receipt": dict(out), "at_epoch": now_epoch}
     return out
+
+
+def has_fresh_preflight(intent: dict[str, Any], ctx: dict[str, Any]) -> bool:
+    """True only when a cached preflight covers this exact intent + context."""
+    try:
+        key = intent_hash(intent) + "|" + _ctx_fingerprint(ctx)
+    except (TypeError, ValueError):
+        return False
+    cached = _PREFLIGHT_CACHE.get(key)
+    if cached is None:
+        return False
+    return (_now_epoch(ctx.get("now")) - float(cached.get("at_epoch", 0.0))) < PREFLIGHT_TTL_S
 
 
 def _now_epoch(value: Any) -> float:
@@ -397,15 +414,16 @@ def _now_epoch(value: Any) -> float:
 async def submit(
     intent: dict[str, Any], ctx: dict[str, Any], broker: Any, armed: bool = False,
     approval: dict[str, Any] | None = None, require_approval: bool = False,
-    approval_scope: str = "single-entry",
+    approval_scope: str = "single-entry", require_fresh_preflight: bool = False,
 ) -> dict[str, Any]:
-    """Deterministic submit: validate → approval → idempotent ownership → placement.
+    """Deterministic submit: validate → approval → preflight → ownership → placement.
 
     `armed=False` (default) refuses before any broker access. Retries reuse the
     original broker orderId + payload. Ambiguous transport is preserved as
     UNKNOWN for reconciliation, never guessed. Production callers pass
-    `require_approval=True` with a server-validated approval; tests default to
-    validation-only so intent logic stays pinnable without an approval desk.
+    `require_approval=True` with a server-validated approval (and
+    `require_fresh_preflight=True` once a preflight desk exists); tests default
+    to validation-only so intent logic stays pinnable without an approval desk.
     """
     if not armed:
         return {"ok": False, "reason": "DISARMED"}
@@ -416,6 +434,8 @@ async def submit(
         now = ctx.get("now") if isinstance(ctx.get("now"), datetime) else None
         if not verify_approval(intent, approval, scope=approval_scope, now=now):
             return {"ok": False, "reason": "APPROVAL_INVALID"}
+    if require_fresh_preflight and not has_fresh_preflight(intent, ctx):
+        return {"ok": False, "reason": "STALE_PREFLIGHT"}
     try:
         digest = intent_hash(intent)
     except (TypeError, ValueError) as exc:
@@ -498,6 +518,60 @@ async def reconcile_all(broker: Any) -> list[dict[str, Any]]:
 async def replace(intent_id: str, changes: dict[str, Any], broker: Any) -> dict[str, Any]:
     """Refused: a changed order requires a new intent lifecycle transition."""
     raise ValueError("changed order requires a new intent (no in-place reuse with new fields)")
+
+
+async def cancel(intent_id: str, broker: Any) -> dict[str, Any]:
+    """Authenticated cancellation of one owned order (exits stay available).
+
+    No arming requirement and no entry-pause check: risk exits and cancels are
+    independent of new-entry gates by design. A pending/empty broker answer is
+    recorded as CANCEL_PENDING — pending cancellation is NOT canceled; the
+    record stays non-terminal until a later reconcile observes CANCELED, so a
+    new entry remains blocked meanwhile.
+    """
+    rec = _INTENTS.get(intent_id)
+    if rec is None or not rec.get("order_id"):
+        return {"intent_id": intent_id, "order_id": None, "status": "UNKNOWN",
+                "cancelled": False, "reason": "unknown-intent"}
+    try:
+        receipt = await _maybe_await(broker.cancel_order(rec["intent"]["account_id"], rec["order_id"]))
+    except Exception as exc:
+        return {"intent_id": intent_id, "order_id": rec["order_id"], "status": rec.get("state", "UNKNOWN"),
+                "cancelled": False, "reason": f"CANCEL_FAILED:{type(exc).__name__}"}
+    status = str((receipt or {}).get("status") or "").upper()
+    if status == "CANCELED":
+        rec["state"] = "CANCELED"
+        return {"intent_id": intent_id, "order_id": rec["order_id"], "status": "CANCELED", "cancelled": True}
+    rec["state"] = "CANCEL_PENDING"
+    rec["cancel_receipt"] = receipt
+    return {"intent_id": intent_id, "order_id": rec["order_id"], "status": "CANCEL_PENDING",
+            "cancelled": False, "reason": "pending-not-canceled"}
+
+
+async def supersede(
+    old_intent_id: str, new_intent: dict[str, Any], ctx: dict[str, Any], broker: Any,
+    armed: bool = False,
+) -> dict[str, Any]:
+    """Intentional lifecycle transition for a changed order: cancel old, enter new.
+
+    The old order is cancelled first (never reused with new fields); the new
+    intent submits only after the old record reaches CANCELED. Any other outcome
+    (pending, unknown, still open) blocks entry with an explicit reason instead
+    of double-entering. Returns the new submit receipt with `supersedes` set.
+    """
+    old = _INTENTS.get(old_intent_id)
+    if old is None or not old.get("order_id"):
+        return {"ok": False, "reason": "unknown-intent"}
+    cancelled = await cancel(old_intent_id, broker)
+    if not cancelled.get("cancelled"):
+        return {"ok": False, "reason": "SUPERSEDE_BLOCKED",
+                "detail": cancelled.get("status"), "old_intent_id": old_intent_id}
+    new_intent = dict(new_intent)
+    new_intent["supersedes"] = old_intent_id
+    out = await submit(new_intent, ctx, broker, armed=armed)
+    if isinstance(out, dict):
+        out["supersedes"] = old_intent_id
+    return out
 
 
 def protection_status(intent_id: str) -> dict[str, Any]:

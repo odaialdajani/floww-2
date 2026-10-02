@@ -103,6 +103,16 @@ class _FakeBroker:
             return {"order_id": order_id, "status": "UNKNOWN", "raw": {}}
         return {"order_id": order_id, "status": rec["status"], "fills": rec["fills"], "raw": rec}
 
+    async def cancel_order(self, account_id, order_id):
+        rec = self.orders.get(order_id)
+        if rec is None:
+            return {"orderId": order_id, "status": "UNKNOWN"}
+        if rec.get("cancel_pending_once"):
+            rec["cancel_pending_once"] = False
+            return {"orderId": order_id, "status": "CANCEL_PENDING", "raw_empty": True}
+        rec["status"] = "CANCELED"
+        return {"orderId": order_id, "status": "CANCELED"}
+
 
 def test_intent_hash_is_deterministic_and_precision_exact():
     import services.public_execution_lifecycle as lc
@@ -397,3 +407,83 @@ def test_reconcile_all_covers_restart_before_new_entry():
     assert len(results) == 1
     assert results[0]["status"] == "PARTIAL"
     assert results[0]["filled"] is False
+
+
+def test_cancel_marks_canceled_and_pending_is_not_canceled():
+    import asyncio
+
+    import services.public_execution_lifecycle as lc
+
+    broker = _FakeBroker()
+    first = asyncio.run(lc.submit(_base_intent(), _ctx(), broker, armed=True))
+    out = asyncio.run(lc.cancel(first["intent_id"], broker))
+    assert out["cancelled"] is True and out["status"] == "CANCELED"
+
+    broker2 = _FakeBroker()
+    second = asyncio.run(lc.submit(_base_intent(observation_id="obs_cancel2"), _ctx(), broker2, armed=True))
+    broker2.orders[second["order_id"]]["cancel_pending_once"] = True
+    pending = asyncio.run(lc.cancel(second["intent_id"], broker2))
+    assert pending["cancelled"] is False
+    assert pending["status"] == "CANCEL_PENDING"  # pending is NOT canceled
+    # Still non-terminal: a new entry stays blocked until final reconcile.
+    blocked = asyncio.run(lc.submit(
+        _base_intent(observation_id="obs_cancel3", limit_price="3.25"), _ctx(), broker2, armed=True))
+    assert blocked["ok"] is False and blocked["reason"] == "OVERLAP_OPEN_NEEDS_RECONCILE"
+
+
+def test_cancel_needs_no_arm_and_works_during_entry_pause():
+    import asyncio
+
+    import services.public_execution_lifecycle as lc
+
+    broker = _FakeBroker()
+    first = asyncio.run(lc.submit(_base_intent(), _ctx(), broker, armed=True))
+    paused_noon = datetime(2026, 10, 2, 16, 0, tzinfo=UTC)  # 12:00 ET
+    assert lc.is_entry_pause(paused_noon) is True
+    out = asyncio.run(lc.cancel(first["intent_id"], broker))
+    assert out["cancelled"] is True  # exits independent of the pause
+
+
+def test_supersede_cancels_old_then_enters_new_with_link():
+    import asyncio
+
+    import services.public_execution_lifecycle as lc
+
+    broker = _FakeBroker()
+    first = asyncio.run(lc.submit(_base_intent(), _ctx(), broker, armed=True))
+    new_intent = _base_intent(observation_id="obs_sup", limit_price="3.25")
+    out = asyncio.run(lc.supersede(first["intent_id"], new_intent, _ctx(), broker, armed=True))
+    assert out["ok"] is True
+    assert out["supersedes"] == first["intent_id"]
+    assert out["order_id"] != first["order_id"]  # new broker identity, never reused
+    assert len(broker.calls) == 2
+
+
+def test_supersede_blocked_when_old_cancel_stays_pending():
+    import asyncio
+
+    import services.public_execution_lifecycle as lc
+
+    broker = _FakeBroker()
+    first = asyncio.run(lc.submit(_base_intent(), _ctx(), broker, armed=True))
+    broker.orders[first["order_id"]]["cancel_pending_once"] = True
+    out = asyncio.run(lc.supersede(
+        first["intent_id"], _base_intent(observation_id="obs_sup2", limit_price="3.25"),
+        _ctx(), broker, armed=True))
+    assert out["ok"] is False and out["reason"] == "SUPERSEDE_BLOCKED"
+    assert len(broker.calls) == 1  # no double entry
+
+
+def test_submit_with_fresh_preflight_gate():
+    import asyncio
+
+    import services.public_execution_lifecycle as lc
+
+    broker = _FakeBroker()
+    intent, ctx = _base_intent(), _ctx()
+    refused = asyncio.run(lc.submit(intent, ctx, broker, armed=True, require_fresh_preflight=True))
+    assert refused["ok"] is False and refused["reason"] == "STALE_PREFLIGHT"
+    assert broker.calls == []
+    assert asyncio.run(lc.preflight(intent, ctx, broker))["ok"] is True
+    out = asyncio.run(lc.submit(intent, ctx, broker, armed=True, require_fresh_preflight=True))
+    assert out["ok"] is True

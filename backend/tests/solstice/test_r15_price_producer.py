@@ -435,3 +435,37 @@ def test_cumulative_counters_equal_sum_of_tick_receipts_no_double_count():
     assert h["gaps"] == totals["gaps"] == 3  # one QQQ gap per tick, counted once
     assert h["duplicates"] == totals["duplicates"] == 0
     assert h["errors"] == totals["errors"] == 0
+
+
+def test_seen_fast_path_is_bounded_db_recheck_covers_restarts():
+    import services.solstice_price_producer as prod
+
+    conn = duckdb.connect(":memory:")
+    ensure_tables(conn)
+    old_max, prod._SEEN_MAX = prod._SEEN_MAX, 4
+    try:
+        seq = iter(range(10))
+
+        def fetch(sym):
+            return _obs("SPY", 3000.0 + next(seq), 500.0)
+
+        p = prod.PricePathProducer(
+            conn=conn, symbols=["SPY"], fetch_one=fetch,
+            session_gate=lambda sym, now: (True, "open"),
+        )
+        for i in range(6):
+            assert p.tick(now_epoch=3010.0 + i)["written"] == 1
+        assert len(p._seen) <= 4  # bounded fast path
+        assert len(price_paths_since(conn, "SPY")) == 6  # storage complete
+        # Evicted keys still dedup via the DB recheck, never rewritten.
+        p._seen.clear()
+        p2_at = price_paths_since(conn, "SPY")[0][0]
+        dup = prod.PricePathProducer(
+            conn=conn, symbols=["SPY"],
+            fetch_one=lambda sym: _obs("SPY", p2_at, 500.0),
+            session_gate=lambda sym, now: (True, "open"),
+        )
+        assert dup.tick(now_epoch=3020.0)["duplicates"] == 1
+        assert len(price_paths_since(conn, "SPY")) == 6
+    finally:
+        prod._SEEN_MAX = old_max
