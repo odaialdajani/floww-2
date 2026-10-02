@@ -85,9 +85,11 @@ kanban/watchdog files. No new task platform created.
   → DONE as INSUFFICIENT EVIDENCE + runnable protocol (harness runs offline —
   16 focused checks pass + ladder/split smoke executes; census §11: ZERO durable
   admitted records exist, so no profitability/session claim is made or implied).
-- M5 Zed handoff/integration review → field/availability contract + fixture IDs
-  for admitted wall/windows/review/outcomes → READY, coordinated (no Zed-owned
-  edits; verify producer→record→projection→consumer after Zed publishes diff).
+- M5 Zed handoff/integration review → versioned field/availability contract +
+  fixture IDs §13 → DONE (this lane changed no shared field: branch is doc-only
+  `MUSE_STATE.md`, zero overlap with Zed's frontend/`ZED_STATE.md`/
+  `.final-acceptance/`; no new published Zed diff since PR92 — re-verify
+  producer→record→projection→consumer when Zed publishes).
 - External (not engineering): SPX entitlement, durable activation/service auth,
   participant study, empirical multi-session validation, data rights →
   BLOCKED (external dependencies; prep scripts/checklists only, no messages,
@@ -292,15 +294,114 @@ DB copy. Local interpreter is Python 3.14 (ship/hosted pin is 3.12) — disclose
   no human data, no live market in this lane. Nothing here is validation or
   profitability. FROZEN_PROTOCOL untouched (frozen means frozen).
 
-## 12. Assumptions / next action / handoff
+## 13. M5 handoff contract (Spark → Zed, versioned fields + fixture IDs)
+
+Envelope versions (producers → stored records → projections; clients send
+selectors, server records supply facts): `metric-record.v1`
+(`recordedMetricVersion` gate), `solstice-metric-contract.v1`, formula
+`gex.v2`, outcome `outcome.v1`, policy `research_barriers.v1` (+ read-only
+`setup_review.v1`), ablation `abl.v1`, `recorder-health.v1`, `movers.v2`.
+
+- Exact contract facts (`agent/contract_facts.py`): OSI/exact decimal strike/
+  listed expiry/type, per-leg quotes+clocks, multiplier + provenance, owning
+  snapshot/query/pane/wall/cell. Refuse on partial population, series/cell/wall/
+  snapshot/provider conflicts, absent multiplier provenance, missing/invalid/
+  crossed quotes, before-available-at reads. Unknown≠zero; measured-zero stays
+  zero; stale keeps actual ages. Fixture: 12 facts + 1 gap.
+- Comparable window facts (`agent/window_facts.py` + `solstice_window.py`):
+  exact stored pair, declared interval/full query/provider/formula/NY session/
+  source/availability identity; zero/partial/retraction retained; baseline read
+  failure = `BASELINE_READ_FAILED` (never silent substitution). Fixture: 18 + 5.
+- VEX/Charm replay (`agent/metric_replay.py`): complete registered stored
+  envelopes only (metric/unit/model/weight/query/axes/source clocks); VEX =
+  USD delta-notional/+1vol-pt, Charm = dollar_charm_1pct_per_year (no cross
+  magnitude equivalence); old incomplete envelopes unavailable; absent cells =
+  null gaps; measured zero survives. Fixture: VEX 17 + 3, Charm 17 + 3.
+- Review/outcome records: `scenario_decisions_v1` (frozen features) →
+  `decision_reviews_v1` (pending/reviewed/waiting/skipped, 422 unknown) →
+  `outcome_labels_v1` keyed (decision, horizon, policy, `outcome.v1`) →
+  attached back to journal rows. Fixture: 4 decisions + review receipt.
+- Fact envelope keys: metric/value/unit/ticker/source/snapshot_id/event_time/
+  received_at/horizon/contract/status/reason/version/parents (selection-bound
+  horizon digest; client quote/multiplier fields never enter the ledger).
+- Fixture IDs: `docs/solstice/r14/evidence/vertical-fixture.json`
+  sha256 `8fefacf5c52d58c0271fcabd535c7eea61d5fb0ab24b134ba89b75aa5c821f12`
+  (matches PR92-published browser-tested fixture); source/build/browser commit
+  `269b387b`; build-receipt `5ac84a4b…`, browser-receipt `0663206d…`.
+- Mounted consumers (Zed-owned, untouched): `AskLodestar.jsx` (+
+  `ExactContractReview.jsx`, admission tests), `SkylitDashboard.jsx` (decisions/
+  review fetch+post), `solsticeReplay.js`, `triad/useReviewJournal.js`;
+  journal routes `GET/POST …/decisions[/…/review]`; fixture `lodestar_facts`.
+- Chain status at head: producer→record→projection→consumer intact per PR92
+  evidence + M3 trace; this lane altered NO shared field, so no consumer
+  re-verification was triggered from my side. Conflicts: NONE within inspected
+  scope (my branch = `MUSE_STATE.md` only; Zed areas preserved untouched).
+- Pending Zed publication: its `.final-acceptance/` WIP + dirty `ZED_STATE.md`
+  are uncommitted in its worktree — when Zed publishes a diff touching shared
+  schemas/routes/registries, re-verify affected fields end-to-end and report
+  conflicts with exact paths + reproductions. No frontend redesign or second
+  explainer from this lane.
+
+## 14. Assumptions / next action / handoff
+
+- Assumptions: harness baseline SHAs trusted after independent `git fetch` +
+  log/diff verification; PR-body CI links taken as published evidence (main CI
+  re-inspection deferred to pre-merge gate); running dev server is another
+  party's process (observed, not owned); local Python 3.14 vs ship 3.12
+  disclosed wherever local results are cited.
+- Next exact action: commit M5 + final receipt on `solstice/spark-closeout`,
+  push, open review PR (no merge — merge only under existing authorization after
+  exact-head gates). Later sessions resume at §15 receipt (all remaining items
+  are external BLOCKED; re-verify Zed diff overlap before any merge).
+- Handoff needs: none blocking. Note for Zed: `FLOWW_RECORDER_WORKER` absent in
+  production tree (no `register_capture` caller) — only relevant if your lane
+  wires a capture path; shared schema/route changes need coordination first.
+
+## 15. Final exact-head receipt (Spark closeout lane, 2 Oct 2026)
+
+- Base: `origin/main` `1530ccd7f52a0de03512f383283463525a44134b` (PR92 merge).
+  Head: `solstice/spark-closeout` (5 doc-only commits on exact base; no PR
+  opened yet — review PR to follow, NO merge claimed or performed).
+- Actual changes: `docs/solstice/MUSE_STATE.md` ONLY (new file; 71/71 protected
+  paths byte-identical, verified per commit via manifest-gated status).
+  No backend/frontend/route/schema/registry/CI/model/config change by this lane.
+- Verification scopes (all at exact base head, local Python 3.14/Node env
+  disclosed vs ship/hosted 3.12/20): M2 37 passed; M3 47 passed; M4 10 + 6
+  passed + abl.v1/embargo-split smoke; protected-manifest status empty ×5;
+  fixture sha256 recomputed = published `8fefacf5…`. Full-suite reruns NOT
+  performed (no code changed; PR92 main CI/CD+lint SUCCESS remains the
+  head-acceptance record: backend 7070/38 skips, frontend 121/1035 + build,
+  truth 226/0, silent 347, API 373, Docker executed).
+- Source-bound evidence: all code claims read at `1530ccd7` tree (§§4,9,11,13);
+  live observations are dated read-only probes of another party's dev process
+  (memory-mode recorder, capture absent) — operational context, not acceptance.
+- COMPLETED engineering (this lane): reconciliation + ownership ledger (M1);
+  recorder preflight gap check + dry-run packet (M2); outcome-lineage trace +
+  auth-gate verification (M3); research census + runnable protocol (M4);
+  versioned handoff contract + fixture IDs (M5). Genuine defect found: NONE
+  requiring a code change (lock-contention probe and auth-gate concern both
+  resolved without edits). Statement: no blocking finding within the inspected
+  scope — never "no possible holes", never profitability.
+- NOT completed (separate dependencies, owners): durable activation/service
+  auth (Nav/operator + restart proof); scheduled price-path recorder
+  (unassigned); SPX entitlement (Nav/vendor); participant study (Nav/
+  participants); empirical 30–60 sessions (post-activation collection); data
+  rights; Zed frontend/Lodestar-Public integration + Nav visual review
+  (Zed/Nav). Browser acceptance stays bound to source `269b387b` fixture
+  evidence (not human/live validation).
+- Unmerged work: this branch (reviewable, unmerged by design); Zed's
+  `.final-acceptance/` WIP + dirty states in its worktrees (preserved, not
+  mine). Activation state: OFF (all flags unset; no deployment/restart/daemon/
+  capture/worker/order/credential/retraining/message/paid-call by this lane).
 
 - Assumptions: harness baseline SHAs trusted after independent `git fetch` +
   log/diff verification; PR-body CI links taken as published evidence (main CI
   re-inspection deferred to pre-merge gate); running dev server is another
   party's process (observed, not owned).
-- Next exact action: commit M4 checkpoint on `solstice/spark-closeout`, push,
-  then M5 handoff contract (versioned field/availability contract + fixture IDs
-  for admitted wall/windows/review/outcomes; read Zed's diff when published).
+- Next exact action: commit M5 + final receipt on `solstice/spark-closeout`,
+  push, open review PR (no merge — merge only under existing authorization after
+  exact-head gates). Later sessions resume at §15 receipt + highest READY item
+  (currently: none engineering-READY; all remaining are external BLOCKED).
 - Handoff needs: none blocking. Note for Zed: `FLOWW_RECORDER_WORKER` absent in
   production tree (no `register_capture` caller) — only relevant if your lane
   wires a capture path; shared schema/route changes need coordination first.
