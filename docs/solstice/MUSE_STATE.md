@@ -80,9 +80,11 @@ kanban/watchdog files. No new task platform created.
   (storage seam tested; worker only closes decisions WITH stored paths; R14
   fixtures explicitly synthetic) → BLOCKED-external commissioning item, not
   implemented — no agreement, activation-adjacent).
-- M4 reproducible research prep → existing replay/ablation harness +
-  `FROZEN_PROTOCOL.md` + `scripts/r14_fixture.py`/`r14_answer.py` → READY
-  (valid-session census not yet run; insufficient-evidence outcome allowed).
+- M4 reproducible research prep → `solstice_ablation.run_ladder` (abl.v1),
+  `solstice_research` Q1–Q3 + sizing, `walk_forward_splits`, `FROZEN_PROTOCOL.md`
+  → DONE as INSUFFICIENT EVIDENCE + runnable protocol (harness runs offline —
+  16 focused checks pass + ladder/split smoke executes; census §11: ZERO durable
+  admitted records exist, so no profitability/session claim is made or implied).
 - M5 Zed handoff/integration review → field/availability contract + fixture IDs
   for admitted wall/windows/review/outcomes → READY, coordinated (no Zed-owned
   edits; verify producer→record→projection→consumer after Zed publishes diff).
@@ -251,15 +253,54 @@ DB copy. Local interpreter is Python 3.14 (ship/hosted pin is 3.12) — disclose
   price-path producer exists anywhere (fixture, worker, or route) — the one
   genuinely missing producer, already a commissioning item.
 
-## 10. Assumptions / next action / handoff
+## 11. M4 research census + runnable protocol (2 Oct 2026, head `1530ccd7`)
+
+- Census (read-only): tracked `backend/data/gflows.duckdb` (1 table, 0 solstice
+  tables) and `data/research_kg.duckdb` (29 tables, 0 solstice tables) hold ZERO
+  snapshots/decisions/outcomes/price-paths. `r14/evidence/vertical-fixture.json`
+  self-declares synthetic ("not a market/participant/outcome observation").
+  The running dev server's in-memory SPY snapshots are ephemeral (memory mode,
+  pre-R14 tree, another party's process) — not admitted records, not harvested.
+  Frozen-protocol inventory (23 Sep: 2 snapshots, 0 outcome events) has no newer
+  durable successor. Conclusion: INSUFFICIENT EVIDENCE for any session-level,
+  costed, or comparative claim. Thirty–sixty sessions remains a collection
+  target, not a result.
+- Harness runnable (offline, exact head): `test_r4_p10_red` + `test_r4_p12_red`
+  + `test_r8_01_e2e_frozen_fixture` → 10 passed; slice2 ablation/research/
+  migration/fallback subset → 6 passed. Ladder smoke on synthetic shape:
+  abl.v1 L0 1 signal / L1 NO_WALL_NEAR / L2 DELTA_SHARE_BELOW_SUPPORT / L3
+  NO_WINDOW_ACTIVITY abstentions explicit; walk-forward splits embargo-correct
+  (3 folds, 1-session embargo, never split within a day); horizons 60/180/300/900,
+  `outcome.v1`. Smoke proves the protocol EXECUTES, nothing more.
+- Runnable protocol (exact, for the day valid sessions exist):
+  1. census: `duckdb.connect(path, read_only=True)` count
+     `heatmap_snapshots_v2`/`scenario_decisions_v1`/`outcome_labels_v1`/
+     `price_paths_v1` by ticker/day; require ≥30 sessions with gap receipts.
+  2. Separate ablations per admitted snapshot: raw-wall baseline (L0/L1),
+     delta-weighted OI (L2), unweighted volume gamma vs volume×|delta| vs window
+     ΔV (distinct formulas/bases/units — never pooled); comparable
+     populations or disclosed exclusions.
+  3. Outcomes only via `close_episodes` on stored caller paths at decision-time
+     clocks (no lookahead: inputs/baselines available at decision time; no
+     same-observation fills); costs = measured fills or frozen 20 bps premium
+     assumption stated per result; censoring preserved (data_gap/indeterminate/
+     simultaneous_unknown stay non-profitable).
+  4. Report independent (deduped) event counts + session-block uncertainty +
+     regime coverage; SPY/QQQ first, SPX gated. Frozen hypotheses/parameters
+     unchanged — any change needs a new version + re-freeze, never silent edit.
+- Disclosures: no observed fills, no measured latency/costs, no real sessions,
+  no human data, no live market in this lane. Nothing here is validation or
+  profitability. FROZEN_PROTOCOL untouched (frozen means frozen).
+
+## 12. Assumptions / next action / handoff
 
 - Assumptions: harness baseline SHAs trusted after independent `git fetch` +
   log/diff verification; PR-body CI links taken as published evidence (main CI
   re-inspection deferred to pre-merge gate); running dev server is another
   party's process (observed, not owned).
-- Next exact action: commit M3 checkpoint on `solstice/spark-closeout`, push,
-  then M4 research prep (replay/ablation harness + frozen protocol; census of
-  valid recorded sessions; insufficient-evidence + runnable protocol if absent).
+- Next exact action: commit M4 checkpoint on `solstice/spark-closeout`, push,
+  then M5 handoff contract (versioned field/availability contract + fixture IDs
+  for admitted wall/windows/review/outcomes; read Zed's diff when published).
 - Handoff needs: none blocking. Note for Zed: `FLOWW_RECORDER_WORKER` absent in
   production tree (no `register_capture` caller) — only relevant if your lane
   wires a capture path; shared schema/route changes need coordination first.
