@@ -249,3 +249,14 @@ until Zed returns or genuine external input is required.
    stable `get_calendar/schedule` APIs; no code change, disclosed here and in
    the receipt. Zed/Nav: align the pin only via the owned dependency lane
    (frontend/dependency edits belong to Zed; backend pins need operator review).
+
+## 9. Second improvement pass (2 Oct 2026, Zed still down)
+
+- [DONE] R15-7 Operator commissioning policy + rollback —
+  `docs/solstice/SPARK_R15_COMMISSIONING.md` (activation prerequisites, exact
+  reversible steps, kill-switch drill, what commissioning never grants; policy
+  only, nothing performed). Complements Zed's `COMMISSIONING_PACKAGE.md`
+  (read-only here) for the R15 additions.
+- [DONE] R15-8 Lodestar brief handoff spec — `docs/solstice/SPARK_R15_BRIEF_HANDOFF.md`
+  + `r15/evidence/lodestar_brief_v1.json` (exact backend fields, freshness/
+  refusal semantics, explicit non-claims; model config stays with Zed).

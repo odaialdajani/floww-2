@@ -1,0 +1,67 @@
+{
+  "approval": {
+    "note": "server-bound; client boolean never accepted",
+    "scope": "single-entry",
+    "validity_min": 30
+  },
+  "base": "1530ccd7",
+  "budget": {
+    "asof": "2026-10-02T15:00:00+00:00",
+    "fees": "3.20",
+    "preflight_total": "318.20"
+  },
+  "cash_margin_choice": "CASH",
+  "confirmation": {
+    "mode": "quoted",
+    "risk_policy_version": "research_barriers.v1"
+  },
+  "contract": "lodestar-brief.v1",
+  "correlation_ref": "in_5c8c5dcd3b07",
+  "dated": "2026-10-02",
+  "entry_pause": {
+    "paused": false,
+    "window_et": "11:30-14:00"
+  },
+  "evidence_timestamps": {
+    "available_at": "2026-10-02T15:59:01+00:00",
+    "event_time": "2026-10-02T15:59:00+00:00",
+    "fetched_at": "2026-10-02T15:59:00.400+00:00"
+  },
+  "exact_contract": {
+    "expiry": "2026-09-04",
+    "multiplier": "100",
+    "multiplier_provenance": "vendor-instrument",
+    "option_type": "CALL",
+    "osi": "SPY260904C00760000",
+    "strike_exact": "760.00"
+  },
+  "execution_owner": "FLOWW_BACKEND",
+  "expiry_policy": {
+    "allowlisted": true,
+    "expiry": "2026-09-04"
+  },
+  "outcome_linkage": {
+    "censoring": "preserved",
+    "decision": "scenario_decisions_v1",
+    "label": "outcome.v1",
+    "price_path": "price_paths_v1"
+  },
+  "protection": {
+    "protected": false,
+    "reason": "no-verified-protection"
+  },
+  "quote_pair": {
+    "ask": "3.20",
+    "ask_ts": "2026-10-02T14:59:41+00:00",
+    "bid": "3.10",
+    "bid_ts": "2026-10-02T14:59:40+00:00"
+  },
+  "selected_wall": {
+    "metric": "display-GEX S2",
+    "snapshot_id": "s-example",
+    "ticker": "SPY",
+    "unit": "USD",
+    "wall_id": "w_spy_760_call"
+  },
+  "synthetic_note": "fixture only \u2014 not a market, participant, or outcome observation"
+}

@@ -30,11 +30,13 @@ SHARED-FILE EXCEPTION (writer: Spark, default lifecycle/mount owner):
 - `docs/api/openapi.json` + `docs/api/README.md`: regenerated 373→375 (+2
   read-only GETs).
 
-Checkpoints/contracts (Spark-owned docs): `MUSE_STATE.md` (§7 hole-fix pass),
-`SPARK_R15_PUBLIC_MATRIX.md` + 27-op JSON, `SPARK_R15_ACCOUNT_CONTRACTS.md`,
-`SPARK_R15_OUTCOME_PROTOCOL.md`, `SPARK_R15_MOUNT_PROPOSAL.md` (now applied
-record), `r15/evidence/` (`price_path_swing5m_v1.json` digest `146ebfa4e0be`,
-`execution_intent_v1.json` `in_5c8c5dcd3b07`).
+Checkpoints/contracts (Spark-owned docs): `MUSE_STATE.md` (§7 hole-fix, §8–9
+improvement passes), `SPARK_R15_PUBLIC_MATRIX.md` + 27-op JSON,
+`SPARK_R15_ACCOUNT_CONTRACTS.md`, `SPARK_R15_OUTCOME_PROTOCOL.md`,
+`SPARK_R15_MOUNT_PROPOSAL.md` (applied record), `SPARK_R15_COMMISSIONING.md`
+(operator policy + rollback, nothing performed), `SPARK_R15_BRIEF_HANDOFF.md` +
+`r15/evidence/` (`price_path_swing5m_v1.json` digest `146ebfa4e0be`,
+`execution_intent_v1.json` `in_5c8c5dcd3b07`, `lodestar_brief_v1.json` fixture).
 
 Untouched: `routes/public_brokerage.py`, `routes/public_api.py`,
 `routes/solstice.py`,
