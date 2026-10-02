@@ -1,0 +1,47 @@
+{
+  "cadence_s": 300,
+  "contract": "price-path-producer.v1",
+  "digest": "146ebfa4e0be0d6f78cae61534776152480cc6c6606107623141ac37c2697a48",
+  "freshness": "event_time(vendor) vs received_at(fetch) separated",
+  "gaps": "none-in-fixture; real gaps stay unknown",
+  "points": [
+    {
+      "at_ts": 1700000000.0,
+      "event_time": "2023-11-14T22:13:20+00:00",
+      "price": 500.0,
+      "received_at": "2023-11-14T22:13:20.400000+00:00",
+      "source": "public-mid"
+    },
+    {
+      "at_ts": 1700000300.0,
+      "event_time": "2023-11-14T22:18:20+00:00",
+      "price": 500.5,
+      "received_at": "2023-11-14T22:18:20.400000+00:00",
+      "source": "public-mid"
+    },
+    {
+      "at_ts": 1700000600.0,
+      "event_time": "2023-11-14T22:23:20+00:00",
+      "price": 501.0,
+      "received_at": "2023-11-14T22:23:20.400000+00:00",
+      "source": "public-mid"
+    },
+    {
+      "at_ts": 1700000900.0,
+      "event_time": "2023-11-14T22:28:20+00:00",
+      "price": 501.5,
+      "received_at": "2023-11-14T22:28:20.400000+00:00",
+      "source": "public-mid"
+    },
+    {
+      "at_ts": 1700001200.0,
+      "event_time": "2023-11-14T22:33:20+00:00",
+      "price": 502.0,
+      "received_at": "2023-11-14T22:33:20.400000+00:00",
+      "source": "public-mid"
+    }
+  ],
+  "policy": "swing-5min; NOT intraminute-0DTE",
+  "resolution": "5min-swing-only",
+  "ticker": "SPY"
+}
