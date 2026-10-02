@@ -56,6 +56,8 @@ def window_grid_section(window: dict[str, Any] | None) -> dict[str, Any]:
         "greek_convention": (window or {}).get("greek_convention"),
         "interval": (window or {}).get("interval"),
         "provenance_note": (window or {}).get("provenance_note"),
+        "comparison": (window or {}).get("comparison"),
+        "coverage": (window or {}).get("coverage"),
     }
     if not window or window.get("status") != "ok":
         return {**base, "status": "unavailable",
@@ -75,12 +77,26 @@ def window_grid_section(window: dict[str, Any] | None) -> dict[str, Any]:
         grid.setdefault(exp, {})[key] = grid.get(exp, {}).get(key, 0.0) + float(v)
         strikes.add(float(key))
     cov = window.get("coverage") or {}
+    missing_cells, invalid_cells = {}, {}
+    for row in window.get("exclusions") or []:
+        key = _strike_key(row.get("strike"))
+        exp = row.get("expiry")
+        if key is None or not isinstance(exp, str) or not exp:
+            continue
+        strikes.add(float(key))
+        target = missing_cells if row.get("reason") == "DELTA_MISSING" else invalid_cells if row.get("reason") == "DELTA_INVALID" else None
+        if target is not None:
+            target.setdefault(exp, {})[key] = target.get(exp, {}).get(key, 0) + 1
     return {**base, "status": "ok" if grid else "unavailable",
             "reason": None if grid else "NO_COMPARABLE_OBSERVATIONS",
             "grid": grid or None, "expiries": sorted(grid), "strikes": sorted(strikes),
             "usable": _count(cov.get("n_comparable_contracts")) or 0,
             "missing_delta": _count(cov.get("n_missing_delta")) or 0,
             "invalid": (_count(cov.get("n_invalid")) or 0) + (_count(cov.get("n_invalid_type")) or 0),
+            "invalid_delta": _count(cov.get("n_invalid_delta")) or 0,
+            "no_baseline": _count(cov.get("n_no_baseline")) or 0,
+            "missing_volume": _count(cov.get("n_missing_volume")) or 0,
+            "cell_missing_delta": missing_cells, "cell_invalid_delta": invalid_cells,
             "mixed_pair": _count(cov.get("n_mixed_pair")) or 0}
 
 
@@ -126,10 +142,14 @@ def build_surface_coverage(metrics: dict[str, Any], grid: dict[str, Any] | None)
 
     win = grids.get("window") or {}
     w_usable = _count(win.get("usable"))
-    w_excl = (_count(win.get("missing_delta")) or 0) + (_count(win.get("invalid")) or 0)
+    w_excl = sum(_count(win.get(k)) or 0 for k in ("missing_delta", "invalid", "mixed_pair", "no_baseline", "missing_volume"))
     out["window"] = {"metric_id": "window_dadgex_v1", "basis": "VOLUME_WINDOW",
                      "formula_version": "gex.v2", "usable": w_usable,
                      "missing_delta": _count(win.get("missing_delta")) or 0,
+                     "invalid_delta": _count(win.get("invalid_delta")) or 0,
+                     "no_baseline": _count(win.get("no_baseline")) or 0,
+                     "missing_volume": _count(win.get("missing_volume")) or 0,
+                     "mixed_pair": _count(win.get("mixed_pair")) or 0,
                      "invalid": _count(win.get("invalid")) or 0,
                      "interval": win.get("interval"),
                      "status": _status(w_usable, w_excl, win.get("status") or "unavailable"),

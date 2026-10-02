@@ -1059,18 +1059,14 @@ def _display_surfaces(spot: float, contracts: list[dict[str, Any]], ticker: str,
         grid["charm_grid"] = _cg["grid"]
         grid["charm_meta"] = {key: value for key, value in _cg.items()
                               if key not in {"grid", "expiries", "strikes"}}
-        try:
-            grid["vex_grid"] = _vg.get("grid", {})
-            grid["vex_strike_gross"] = _vg.get("strike_gross", [])
-            grid["vex_meta"] = {"exposure_basis": _vg.get("exposure_basis"),
-                                "model": _vg.get("model"),
-                                "status": _vg.get("status"),
-                                "reason": _vg.get("reason"),
-                                "missing_vanna_inputs": _vg.get("missing_vanna_inputs", 0),
-                                "quarantined": _vg.get("quarantined", 0),
-                                "invalid_type": _vg.get("invalid_type", 0)}
-        except Exception:
-            pass  # silent by design: VEX attach is additive metadata — GEX surfaces already computed
+        from domain.exposure_metrics import METRIC_REGISTRY
+        grid["vex_grid"] = _vg.get("grid", {})
+        grid["vex_strike_gross"] = _vg.get("strike_gross", [])
+        grid["vex_meta"] = {key: value for key, value in _vg.items()
+                            if key not in {"grid", "expiries", "strikes", "strike_gross"}}
+        for _metric, _id in (("vex", "vex_net_1volpt"), ("charm", "charm_net_1pct_year_v1")):
+            grid[_metric + "_meta"].update(metric_id=_id, unit=METRIC_REGISTRY[_id]["units"])
+        grid["vex_meta"]["weight_basis"] = "OI"
         return grid
     if scalp:
         from services.gex_core import (
@@ -1577,100 +1573,48 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         except Exception as le:
             log.debug("offscreen landmarks failed: %s", le)
             metrics["offscreen_landmarks"] = []
-        # R5-B: live window delta-weighted activity from the recorder's
-        # previous snapshot. Epoch/scope-bound: same query scope
-        # (ticker/mode/dte/scalp), same session day, same provider. Anything
-        # else is not a comparable epoch — the surface stays unavailable
-        # (never zero-filled, never raw fallback). Rebase quarantines.
+        # One bounded stored baseline. Source clocks, NY session and the FULL
+        # request identity govern comparison; build time is only availability.
+        from services.solstice_window import recorded_window_activity
+        _w = recorded_window_activity(None, {}, spot)
         try:
-            import contextlib as _ctxw
-            with _ctxw.suppress(Exception):
-                from services.duckdb_engine import db as _ddb_win
-                from services.heatmap_history import normalize_stored_contract, replay_snapshot
-                _wconn = getattr(_ddb_win, "conn", None)
-                if _wconn is not None:
-                    _scope_key = f"{ticker}:{mode}:{dte}:{scalp}"
-                    from services.connection_guard import query_rows
-                    _prev_rows = query_rows(_wconn,
-                        "SELECT snapshot_id, asof_ts, data_source FROM heatmap_snapshots_v2 "
-                        "WHERE ticker = '" + str(ticker).replace("'", "''") + "' AND query_key = '"
-                        + _scope_key.replace("'", "''") + "' ORDER BY asof_ts DESC LIMIT 1")
-                    if _prev_rows:
-                        _pid = _prev_rows[0][0]
-                        _prep = replay_snapshot(_wconn, _pid)
-                        _praw = (_prep or {}).get("contracts") or []
-                        _pcontracts = [normalize_stored_contract(r) for r in _praw]
-                        _psnap = (_prep or {}).get("snapshot") or {}
-                        import datetime as _dtw
-                        _today = _dtw.datetime.now(_dtw.UTC).date().isoformat()
-                        # S2: the comparability gate is now shared, declared and
-                        # reasoned. The legacy pair of inline booleans
-                        # (_same_day/_same_src) reported nothing when it
-                        # refused, so a session roll and a provider change were
-                        # indistinguishable from "no prior snapshot".
-                        from services.solstice_window import window_activity_surface
-                        _w = window_activity_surface(
-                            {
-                                "ticker": ticker,
-                                "data_source": _psnap.get("data_source") or "",
-                                "scope_key": _scope_key,
-                                "formula_version": _psnap.get("formula_version") or "gex.v2",
-                                "session_date": str(_psnap.get("asof_ts") or "")[:10],
-                                "asof": _psnap.get("asof_ts"),
-                            },
-                            {
-                                "ticker": ticker,
-                                "data_source": raw.get("data_source", "yfinance") or "",
-                                "scope_key": _scope_key,
-                                "formula_version": "gex.v2",
-                                "session_date": _today,
-                                "asof": raw.get("asof"),
-                            },
-                            _pcontracts, raw["contracts"], spot,
-                        )
-                        if _w.get("status") == "ok" and _w.get("contracts"):
-                            from services.solstice_enrichment import aggregate_window_by_wall
-                            _wrows = _w["contracts"]
-                            metrics["window_dadgex_v1"] = _w.get("window_net")
-                            metrics["window_delta_weighted_volume_v1"] = _w.get("window_net")
-                            # Registry canonical name kept in sync (alias).
-                            metrics["window_daddex_v1"] = metrics["window_dadgex_v1"]
-                            metrics["window_daddex_reason"] = None
-                            metrics["window_dadgex_reason"] = None
-                            metrics["grids"]["window"] = _window_grid_section(_w)
-                            metrics["window_contracts"] = _wrows[:20]
-                            metrics["window_missing_delta"] = _w["coverage"]["n_missing_delta"]
-                            metrics["window_mixed_pair"] = _w["coverage"]["n_mixed_pair"]
-                            # S2: declared Greek observation convention, actual
-                            # interval, per-strike/expiry surface and the
-                            # observed population. A consumer can no longer
-                            # read a window number without its scope.
-                            metrics["window_surface"] = _w["surface"]
-                            metrics["window_coverage"] = _w["coverage"]
-                            metrics["window_greek_convention"] = _w["greek_convention"]
-                            metrics["window_interval"] = _w["interval"]
-                            metrics["window_provenance_note"] = _w["provenance_note"]
-                            # R6-2: wall-local window aggregation over the
-                            # FULL row list (before the display cut above);
-                            # a truncated sample is not a population.
-                            metrics["wall_window"] = aggregate_window_by_wall(
-                                sol_walls, _wrows)
-                        else:
-                            # Every refusal now names itself. Previously only
-                            # VOLUME_REBASE was reported, so a session roll, a
-                            # provider change or a formula change all looked
-                            # like "no prior snapshot".
-                            _wr = _w.get("reason") or "NO_PRIOR_SNAPSHOT"
-                            metrics["window_dadgex_v1"] = None
-                            metrics["window_daddex_v1"] = None
-                            metrics["window_delta_weighted_volume_v1"] = None
-                            metrics["window_dadgex_reason"] = _wr
-                            metrics["window_daddex_reason"] = _wr
-                            metrics["window_contracts"] = []
-                            metrics["wall_window"] = {}
-                            metrics["grids"]["window"] = _window_grid_section(_w)
+            from services.connection_guard import query_rows
+            from services.duckdb_engine import db as _ddb_win
+            from services.heatmap_history import replay_snapshot
+            _wconn = getattr(_ddb_win, "conn", None)
+            if _wconn is not None:
+                _scope_key = cache_key if scope_selection else f"{ticker}:{mode}:{dte}:{scalp}"
+                _prev_rows = query_rows(_wconn,
+                    "SELECT snapshot_id FROM heatmap_snapshots_v2 "
+                    "WHERE ticker = '" + str(ticker).replace("'", "''") + "' AND query_key = '"
+                    + _scope_key.replace("'", "''") + "' ORDER BY asof_ts DESC LIMIT 1")
+                if _prev_rows:
+                    _w = recorded_window_activity(replay_snapshot(_wconn, _prev_rows[0][0]), {
+                        "ticker": ticker, "data_source": raw.get("data_source"),
+                        "formula_version": "gex.v2", "map_query": requested_map_query,
+                        "event_time": raw.get("event_time") or raw.get("observed_at"),
+                        "fetched_at": raw.get("fetched_at"), "asof": datetime.now(UTC).isoformat(),
+                        "contracts": raw["contracts"],
+                    }, spot)
         except Exception as we:
-            log.debug("window activity attach failed: %s", we)
+            log.warning("window baseline read failed: %s", we)
+            _w["reason"] = "BASELINE_READ_FAILED"
+        _wrows = _w.get("contracts") or []
+        _wr = None if _w.get("status") == "ok" and _wrows else _w.get("reason") or "NO_COMPARABLE_OBSERVATIONS"
+        for _alias in ("window_dadgex_v1", "window_daddex_v1", "window_delta_weighted_volume_v1"):
+            metrics[_alias] = _w.get("window_net") if _wr is None else None
+        metrics["window_daddex_reason"] = metrics["window_dadgex_reason"] = _wr
+        metrics["grids"]["window"] = _window_grid_section(_w)
+        metrics["window_contracts"] = _wrows[:20]
+        metrics["window_surface"] = _w["surface"]
+        metrics["window_coverage"] = _w["coverage"]
+        metrics["window_missing_delta"] = _w["coverage"]["n_missing_delta"]
+        metrics["window_mixed_pair"] = _w["coverage"]["n_mixed_pair"]
+        metrics["window_greek_convention"] = _w["greek_convention"]
+        metrics["window_interval"] = _w.get("interval")
+        metrics["window_provenance_note"] = _w["provenance_note"]
+        from services.solstice_enrichment import aggregate_window_by_wall
+        metrics["wall_window"] = aggregate_window_by_wall(sol_walls, _wrows) if _wr is None else {}
     except Exception as me:
         log.debug("solstice metrics surfaces failed (non-fatal): %s", me)
         metrics["error"] = "METRICS_UNAVAILABLE"
@@ -1759,6 +1703,20 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         # Solstice read-only desk (T04–T10/T15–T20, deterministic, no execution)
         "metrics": metrics,
     }
+    # New records declare each existing metric's complete observation envelope.
+    # Missing source clocks stay missing; older records are not backfilled.
+    for _metric in ("vex", "charm"):
+        _meta = grid.get(_metric + "_meta")
+        if isinstance(_meta, dict):
+            _meta.update(record_version="metric-record.v1", data_source=payload["data_source"],
+                         map_query=requested_map_query, event_time=payload["event_time"],
+                         fetched_at=payload["fetched_at"], available_at=payload["asof"],
+                         scope={"strikes": grid.get("strikes"), "expiries": grid.get("expiries")})
+    # Bind the newly materialized window to this owning payload's availability,
+    # before hashing/recording. Source interval clocks remain unchanged.
+    _comparison = ((metrics.get("grids") or {}).get("window") or {}).get("comparison")
+    if isinstance(_comparison, dict):
+        _comparison["current"]["available_at"] = payload["asof"]
     # R11-H01: per-surface population + status summary (no arithmetic; reads
     # the sections the kernels already produced). Additive key.
     try:

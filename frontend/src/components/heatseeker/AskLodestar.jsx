@@ -10,8 +10,9 @@ import { useAgent } from "../../agent/AgentProvider";
  * Admission is honest about the current server guard
  * (backend services/agent/contracts.py request_spec): research answers are
  * admitted for live raw, verified adjusted v2 selections and recorded GEX
- * replay with complete identity. Window/exact-contract/price-history remain
- * unavailable. This is a selector guard; only the server can resolve facts.
+ * replay with complete identity, plus resolved listed-contract selectors.
+ * Comparable stored windows require their baseline/interval selectors.
+ * Price-history remains unavailable. Only the server resolves facts.
  * The published screen context (not these props)
  * is what the server validates; client values are never numeric evidence.
  */
@@ -24,15 +25,26 @@ export const STARTERS = [
 export function admissionBlock({ context, overlayMetric, displayMode }) {
   if (displayMode === "price-history") return "Close the price-history chart to ask about the live map.";
   if (context && !context.ticker) return "No published selection for this screen.";
-  if (context?.selectedContract) return "Exact contract answers remain unavailable — use the authoritative read-only contract drawer.";
-  if (!["raw", "delta", "session_delta_volume", "activity"].includes(overlayMetric || "raw")) return "This adjusted basis remains explicitly unavailable to Lodestar.";
+  if (context?.selectedContract) {
+    const c = context.selectedContract;
+    const exact = context.contextVersion === 2 && context.snapshotId && context.mapQuery && context.mapVersion && context.provider && context.formula
+      && context.contractResolution === "resolved" && c.osi && c.strike && c.expiry && c.type
+      && Number(c.strike) === context.selectedStrike && c.expiry === context.selectedExpiry
+      && context.mapStrikes?.includes(Number(c.strike)) && context.mapExpiries?.includes(c.expiry);
+    if (!exact) return "Exact contract selection is incomplete, changed or unresolved — use the authoritative read-only contract drawer.";
+  }
+  if (!["raw", "delta", "session_delta_volume", "activity", "window"].includes(overlayMetric || "raw")) return "This adjusted basis remains explicitly unavailable to Lodestar.";
   if ((context?.overlayMetric && context.overlayMetric !== overlayMetric) || (context?.displayMode && context.displayMode !== displayMode)) return "Published selection changed — wait for the current pane and basis.";
   const advanced = displayMode === "replay" || (overlayMetric && overlayMetric !== "raw");
   const bound = context?.contextVersion === 2 && context.snapshotId && context.mapQuery && context.mapVersion && context.provider && context.formula;
   if (advanced && !bound) return displayMode === "replay"
     ? "Replay answers need a complete recorded-snapshot resolution identity; older records remain unavailable — return to Live."
     : "Adjusted answers need a complete server-side surface identity — use Raw OI until this observation resolves.";
-  if (displayMode === "replay" && context?.metric && !["gex", "skylit"].includes(context.metric)) return "Recorded replay answers for this metric remain unavailable.";
+  if (overlayMetric === "window" && (!context?.windowBaselineId || context.windowBaselineId === context.snapshotId
+    || !context.windowInterval?.start || !context.windowInterval?.end
+    || !(Date.parse(context.windowInterval.start) < Date.parse(context.windowInterval.end)))) return "Window activity unavailable: a comparable recorded baseline and declared interval are required.";
+  if (displayMode === "replay" && context?.metric && !["gex", "skylit"].includes(context.metric)
+    && (!["vex", "charm"].includes(context.metric) || context.recordedMetricVersion !== "metric-record.v1")) return "Recorded replay answers for this metric remain unavailable: the complete stored metric envelope is required.";
   if (displayMode && !["live", "replay"].includes(displayMode)) return "This display is unavailable to Lodestar.";
   return null;
 }

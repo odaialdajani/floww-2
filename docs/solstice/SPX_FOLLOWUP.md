@@ -12,6 +12,10 @@ Account: LEVEL_2 options (IDs redacted). Read-only market-data probes only.
   commissioning; 2,296 over 6 expiries in OI dating), 32 SPY expiries, Greeks,
   bars, and instrument metadata all return normally.
 
+## Current dependency (R14, 1 Oct 2026)
+
+Draft remains unsent in this continuation; the observations above were not reprobed. ETF fixture acceptance does not confer SPX entitlement, index-specific chain/provenance or live/research commissioning. Keep SPX an explicit unavailable capability until the account owner obtains the vendor answer and separately authorizes a bounded read-only commissioning check. No credentials, repeated probes or messages were sent.
+
 ## Questions
 1. Which symbol + instrument-type combination returns SPX/SPXW option
    expirations and chains for an Individual Trader API account at LEVEL_2?

@@ -73,7 +73,7 @@ def display_facts(raw, screen, ticker, now):
             return [], [missing]
         metric = screen.get("metric", "gex")
         metric_id = {"raw": "gex_net_v1", "delta": "dadgex_net_v1", "activity": "volume_gamma_v1",
-                     "session_delta_volume": "session_delta_volume_gamma_v1"}.get(overlay)
+                     "session_delta_volume": "session_delta_volume_gamma_v1", "window": "window_dadgex_v1"}.get(overlay)
         if overlay != "raw" and (not v2 or metric not in {"gex", "skylit"} or metric_id is None):
             return [], ["The selected adjusted basis is unavailable"]
         if v2:
@@ -81,6 +81,18 @@ def display_facts(raw, screen, ticker, now):
                 ({"gex", "raw"} if metric in {"gex", "skylit"} else {"gex", metric}) if overlay == "raw" else {"gex", "delta", "adjusted"})
             if screen.get("activePane") not in panes:
                 return [], ["Selected pane conflicts with its display basis"]
+        recorded_metric = None
+        if replay and metric in {"vex", "charm"} and screen.get("selectedContract") is None:
+            from services.agent.metric_replay import metric_evidence
+            recorded_metric, metric_gaps = metric_evidence(raw, screen, now)
+            if metric_gaps:
+                return [], metric_gaps
+        window = None
+        if overlay == "window":
+            from services.agent.window_facts import window_evidence
+            window, window_gaps = window_evidence(raw, screen, now)
+            if window_gaps:
+                return [], window_gaps
         grid = (raw.get("grid") or {}) if overlay == "raw" else ((raw.get("metrics") or {}).get("grids") or {}).get(overlay)
         if not isinstance(grid, dict) or grid.get("status") == "unavailable":
             return [], ["Adjusted/replay evidence resolution remains unavailable"]
@@ -108,6 +120,9 @@ def display_facts(raw, screen, ticker, now):
         grid_key = {"gex": "grid", "skylit": "grid", "vex": "vex_grid", "charm": "charm_grid"}.get(metric)
         if not grid_key or not isinstance(grid.get(grid_key), dict):
             return [], ["The selected display measure is unavailable"]
+        if v2 and screen.get("selectedContract") is not None:
+            from services.agent.contract_facts import contract_facts
+            return contract_facts(raw, screen, ticker, now)
         matrix = grid[grid_key]
         scope = hashlib.sha256(canonical([key, strikes, expiries, metric, overlay, screen.get("activePane"),
                                           screen.get("selectedWall"), "replay" if replay else "live"]).encode()).hexdigest()
@@ -124,10 +139,12 @@ def display_facts(raw, screen, ticker, now):
             status = "stale"
             gaps.append("Displayed map is marked out of date")
         if replay:
-            status = "degraded"
+            status = "stale" if recorded_metric and status == "stale" else "degraded"
             gaps.append("Recorded snapshot evidence only; not a live observation or current trading context")
         coverage = ((raw.get("metrics") or {}).get("surface_coverage") or {}).get(overlay) or {}
-        if coverage.get("status") == "partial" or grid.get("status") == "partial":
+        if (coverage.get("status") == "partial" or grid.get("status") == "partial"
+                or recorded_metric and (recorded_metric.get("status") == "partial" or any(recorded_metric.get(k, 0)
+                    for k in ("missing_vanna_inputs", "missing_charm_inputs", "quarantined", "invalid_type")))):
             status = "degraded" if status == "ok" else status
             gaps.append("Displayed surface is partial; excluded observations were not filled with zero")
         facts = []
@@ -153,6 +170,20 @@ def display_facts(raw, screen, ticker, now):
             col = matrix.get(expiry) or {}
             return number(col.get(str(int(strike)) if float(strike).is_integer() else str(strike)))
 
+        if recorded_metric:
+            add("Recorded owning observation", raw["recorded_snapshot_id"], "observation identity")
+            add("Recorded metric convention", recorded_metric["metric_id"], "registered convention")
+            add("Recorded Greek model", recorded_metric["model"], "model convention")
+            add("Recorded metric weight", recorded_metric["weight_basis"], "basis")
+            add("Recorded source age", (now - datetime.fromisoformat(observed)).total_seconds(), "seconds")
+            gaps.append("Metric-specific units/scales; no cross-metric magnitude equivalence, recomputed Greeks or dealer-intent claim")
+        if window:
+            for field in ("start", "end"):
+                add("Window interval " + field, window["interval"][field], "source timestamp")
+            add("Window previous snapshot", window["comparison"]["previous_snapshot_id"], "observation identity")
+            add("Window volume correction policy", window["comparison"]["volume_correction_policy"], "policy")
+            add("Window Greek convention", window["greek_convention"], "convention")
+            gaps.append("Two recorded observations only; " + window.get("provenance_note", "activity is not aggressor-signed flow"))
         add("Displayed strikes", strikes, "USD")
         add("Displayed expiry dates", expiries, "dates")
         spot = number(raw.get("spot"))
@@ -181,7 +212,7 @@ def display_facts(raw, screen, ticker, now):
             )
         else:
             gaps.append("The displayed map has no verified flip level")
-        unit = (METRIC_REGISTRY[metric_id]["units"] if overlay != "raw" else
+        unit = (recorded_metric["unit"] if recorded_metric else METRIC_REGISTRY[metric_id]["units"] if overlay != "raw" else
                 "display gamma units" if metric in {"gex", "skylit"} else f"display {metric} units")
         selected_strike, selected_expiry = screen.get("selectedStrike"), screen.get("selectedExpiry")
         if finite(selected_strike) and selected_strike in strikes and selected_expiry in expiries:
@@ -218,7 +249,15 @@ def display_facts(raw, screen, ticker, now):
                         add(label, wall[key], units, whole_map=True, contract=wall["wall_id"])
                 if finite(selected_strike) and not wall.get("low", selected_strike) <= selected_strike <= wall.get("high", selected_strike):
                     return [], ["Selected cell conflicts with its raw structural wall"]
-                if overlay != "raw":
+                if overlay == "window":
+                    row = ((raw.get("metrics") or {}).get("wall_window") or {}).get(wall["wall_id"]) or {}
+                    value = number(row.get("window_daddex"))
+                    if value is not None:
+                        add("Selected adjusted wall net", value, unit, whole_map=True, contract=wall["wall_id"],
+                            reason="Same raw wall over the recorded comparable window; not dealer intent or signed flow")
+                    else:
+                        gaps.append("Selected raw wall has no usable comparable window observation")
+                elif overlay != "raw":
                     row = ((raw.get("metrics") or {}).get("wall_metrics") or {}).get(wall["wall_id"]) or {}
                     prefix = {"delta": "daddex", "activity": "volume", "session_delta_volume": "sdv"}[overlay]
                     if finite(row.get(prefix + "_usable")) and row[prefix + "_usable"] > 0:
@@ -232,8 +271,7 @@ def display_facts(raw, screen, ticker, now):
                                 gaps.append("Selected adjusted wall is partial; excluded members remain unknown or invalid")
                     else:
                         gaps.append("Selected raw wall has no usable adjusted observation")
-            if screen.get("selectedContract"):
-                gaps.append("Exact contract evidence is not admitted to model answers yet; inspect the read-only contract drawer")
+
         if screen.get("page") == "flowseeker-pro" and metric == "gex":
             # The dealer chart sums each shown expiry, in ascending strike order.
             if strikes != sorted(strikes):

@@ -44,6 +44,7 @@ export function replayToDisplay(rep, ticker) {
   const grids = rep.grids || {};
   const main = grids.grid || {};
   const dataGrid = {
+    ...main, // recorded metric cells/envelopes, never rebuilt from live Greeks
     expiries: main.expiries || Object.keys(main.grid || {}),
     strikes: main.strikes || strikes.map((s) => s.strike),
     grid: main.grid || {},
@@ -53,7 +54,7 @@ export function replayToDisplay(rep, ticker) {
   const metricGrids = {};
   for (const [name, section] of Object.entries(grids)) {
     if (name === "grid" || name === "version") continue;
-    if (section && typeof section === "object" && section.grid) metricGrids[name] = section;
+    if (section && typeof section === "object" && (section.grid || section.status === "unavailable")) metricGrids[name] = section;
   }
   // R7-03: restore wall-local comparison inputs + visible context recorded
   // alongside the cells (metrics_full/context); pre-migration records lack

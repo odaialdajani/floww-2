@@ -5,6 +5,14 @@ a separate final authorization. This document is the reviewable change + rollbac
 plan for that approval request. No service, cron, launchd entry, credential or
 deployment change has been made.
 
+## R14 readiness / activation boundary (1 Oct 2026)
+
+- Offline engineering acceptance is separate from activation: source event/fetched/available clocks, complete/partial/missing/stale records, exact listed identity, comparable window baseline and registered replay envelopes are required. Older incomplete records stay refused; no live substitutes or invented baseline/outcome.
+- The historical table below describes build-time recording, not a new default-on scheduled service. `SOLSTICE_OUTCOME_WORKER` remains explicit opt-in (`1`); default-disabled lifecycle test passes. This task changes no environment, path, worker registration, service or deployment.
+- Recorder restart durability, review journal, episode lineage and outcome worker/attachment fixtures are checked separately. Missing episode/barriers/price path stays pending; incomplete coverage stays censored; same-bar dual barrier stays `simultaneous_unknown`. Review is not calibration or an outcome claim.
+- Participant preparation: use existing `scripts/solstice_comprehension.py --selftest` for answer-key plumbing only. An actual participant run must separately identify source/fixture, tasks, responses, confidence and consent; do not count scripted answers/native Chromium zoom as human comprehension. No study participant or live session has been commissioned here.
+- External acceptance remains SPX entitlement, durable capture/service authorization, participant study and empirical multi-session validation. Obtain data rights and commissioning approval before activation; this document is preparation, not authorization.
+
 ## 1. Exact configuration
 
 | Item | Value |

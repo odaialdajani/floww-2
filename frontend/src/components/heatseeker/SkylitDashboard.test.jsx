@@ -33,7 +33,7 @@ jest.mock("./SkylitTickerBar",       () => (props) => (
   <div data-testid="mock-ticker-bar" data-tickers={JSON.stringify(props.tickers ?? null)} />
 ));
 jest.mock("./SkylitControlBar",      () => (props) => (
-  <div data-testid="mock-control-bar" data-tickers={JSON.stringify(props.tickers ?? null)} data-spot={JSON.stringify(props.spot ?? null)} data-live={String(props.isLive)}><button data-testid="mock-activity" onClick={()=>props.onMetricChange("activity")}>Activity</button></div>
+  <div data-testid="mock-control-bar" data-tickers={JSON.stringify(props.tickers ?? null)} data-spot={JSON.stringify(props.spot ?? null)} data-live={String(props.isLive)}><button data-testid="mock-activity" onClick={()=>props.onMetricChange("activity")}>Activity</button><button data-testid="mock-window" onClick={()=>props.onMetricChange("window")}>Window</button></div>
 ));
 jest.mock("./SkylitHeatmapGrid",     () => ({ onCellClick, onStrikeClick, windowRows, density, spot }) => (
   <div data-testid="mock-heatmap" data-window={windowRows} data-density={density} data-spot={JSON.stringify(spot ?? null)}>
@@ -94,6 +94,23 @@ function selectionMap(value = 123.4, asof = "2026-09-11T18:00:00Z") {
  return {ticker:"SPY",asof,map_query:{expiries:4,mode:"day",dte:null},strikes:[{strike:650}],
    grid:{strikes:[650],expiries:["2026-09-18"],grid:{"2026-09-18":{"650":value}}}};
 }
+
+test("window context carries server baseline/interval selectors and clears them with basis change", () => {
+ const section={strikes:[650],expiries:["2026-09-18"],grid:{"2026-09-18":{"650":0}},status:"ok",
+   comparison:{previous_snapshot_id:"prior"},interval:{start:"2026-09-11T17:59:00Z",end:"2026-09-11T18:00:00Z"}};
+ const data={...selectionMap(),snapshotId:"current",data_source:"fixture",formula_version:"gex.v2",metrics:{grids:{window:section}}};
+ const mounted=render(<><SkylitDashboard ticker="SPY" data={data} spot={650}/><ResearchSelection/></>);
+ fireEvent.click(screen.getByTestId("mock-window"));
+ fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+ const current=()=>JSON.parse(screen.getByTestId("research-selection").textContent);
+ expect(current()).toMatchObject({overlayMetric:"window",windowBaselineId:"prior",windowInterval:section.interval,selectedStrike:650});
+ expect(current()).not.toHaveProperty("windowNet");
+ mounted.rerender(<><SkylitDashboard ticker="SPY" data={{...data,metrics:{grids:{window:{status:"unavailable",reason:"NO_BASELINE"}}}}} spot={650}/><ResearchSelection/></>);
+ expect(current().windowBaselineId).toBeNull();
+ expect(current().selectedStrike).toBeNull();
+ fireEvent.click(screen.getByTestId("mock-activity"));
+ expect(current().windowInterval).toBeNull();
+});
 
 test("same-scope polling retains the selected cell with the latest displayed value and map version",()=>{
  const mounted=render(<><SkylitDashboard ticker="SPY" data={selectionMap()} spot={650}/><ResearchSelection/></>);
@@ -437,6 +454,26 @@ test("R7-03: false eligibility without reasons shows a generic blocker, not perm
   expect(setup.textContent).toContain("Wait");
   expect(setup.textContent).not.toContain("Observe");
   expect(setup.title).not.toContain("No blockers");
+});
+
+test.each(["vex", "charm"])("%s mounted replay publishes its stored envelope, value and independent owning identity", async metric => {
+ const main={...selectionMap().grid,[metric+"_grid"]:{"2026-09-18":{"650":-7}},[metric+"_meta"]:{record_version:"metric-record.v1",status:"ok"}};
+ axios.get.mockImplementation(async url=>({data:String(url).includes("/manifest/") ? {snapshots:[{id:"record"}]} : String(url).includes("/replay/") ? {
+   snapshot:{ticker:"SPY",snapshot_id:"record",asof_ts:"2026-09-11T18:00:00Z",spot:650,data_source:"fixture",formula_version:"gex.v2"},
+   grids:{grid:main},metrics_full:{},context:{display:{map_query:selectionMap().map_query}},strikes:[{strike:650}]
+ } : {}}));
+ const mounted=render(<><SkylitDashboard ticker="SPY" data={selectionMap(999)} spot={650} viewMode={metric}/><ResearchSelection/></>);
+ await act(async()=>fireEvent.click(screen.getByTestId("solstice-replay-load")));
+ await act(async()=>fireEvent.click(screen.getByTestId("solstice-replay-next")));
+ fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+ expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("-7.0");
+ const current=()=>JSON.parse(screen.getByTestId("research-selection").textContent);
+ expect(current()).toMatchObject({metric,displayMode:"replay",snapshotId:"record",recordedMetricVersion:"metric-record.v1",selectedStrike:650});
+ mounted.rerender(<><SkylitDashboard ticker="SPY" data={selectionMap(12345)} spot={700} viewMode={metric}/><ResearchSelection/></>);
+ expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("-7.0");
+ fireEvent.click(screen.getByTestId("solstice-replay-exit"));
+ expect(current().recordedMetricVersion).toBeNull();
+ expect(current().selectedStrike).toBeNull();
 });
 
 test("R7-03: replay clicks never reach the live Trade callback; Trade disabled in replay", async () => {

@@ -35,6 +35,7 @@ activity, or dealer inventory. Signed option delta is a Greek, not flow.
 
 from __future__ import annotations
 
+import json
 import math
 from typing import Any
 
@@ -211,7 +212,9 @@ def window_activity_surface(
                             coverage={"n_current_contracts": len(cur_contracts or []),
                                       "n_comparable_contracts": 0,
                                       "n_missing_delta": int(kernel.get("missing_delta") or 0),
-                                      "n_no_baseline": 0,
+                                      "n_no_baseline": int(kernel.get("no_baseline") or 0),
+                                      "n_missing_volume": int(kernel.get("missing_volume") or 0),
+                                      "n_invalid_delta": int(kernel.get("invalid_delta") or 0),
                                       "n_mixed_pair": int(kernel.get("mixed_pair") or 0)})
 
     rows = kernel.get("contracts") or []
@@ -220,7 +223,9 @@ def window_activity_surface(
                             coverage={"n_current_contracts": len(cur_contracts or []),
                                       "n_comparable_contracts": 0,
                                       "n_missing_delta": int(kernel.get("missing_delta") or 0),
-                                      "n_no_baseline": 0,
+                                      "n_no_baseline": int(kernel.get("no_baseline") or 0),
+                                      "n_missing_volume": int(kernel.get("missing_volume") or 0),
+                                      "n_invalid_delta": int(kernel.get("invalid_delta") or 0),
                                       "n_mixed_pair": int(kernel.get("mixed_pair") or 0),
                                       "n_invalid": int(kernel.get("invalid") or 0),
                                       "n_invalid_type": int(kernel.get("invalid_type") or 0)})
@@ -260,6 +265,7 @@ def window_activity_surface(
         "provenance_note": NOT_FLOW_NOTE,
         "interval": interval,
         "contracts": rows,
+        "exclusions": kernel.get("exclusions") or [],
         "surface": {
             "strikes": strikes,
             "cells": [
@@ -272,7 +278,9 @@ def window_activity_surface(
             "n_current_contracts": len(cur_contracts or []),
             "n_comparable_contracts": len(rows),
             "n_missing_delta": int(kernel.get("missing_delta") or 0),
-            "n_no_baseline": 0,
+            "n_no_baseline": int(kernel.get("no_baseline") or 0),
+            "n_missing_volume": int(kernel.get("missing_volume") or 0),
+            "n_invalid_delta": int(kernel.get("invalid_delta") or 0),
             "n_mixed_pair": int(kernel.get("mixed_pair") or 0),
             # R11-H01: typed/nonfinite exclusions are counted, not dropped.
             "n_invalid": int(kernel.get("invalid") or 0),
@@ -280,6 +288,63 @@ def window_activity_surface(
             "note": "surface is complete only over the comparable population",
         },
     }
+
+
+def window_observation(payload):
+    """Declared source clock/scope identity, not a build-time replacement clock."""
+    from zoneinfo import ZoneInfo
+
+    from services.agent.contracts import instant
+    from services.agent.display_map import map_cache_key
+
+    try:
+        ticker, query = payload.get("ticker"), payload.get("map_query")
+        key = map_cache_key(ticker, query)
+        event, received, available = (instant(payload.get(k)) for k in ("event_time", "fetched_at", "asof"))
+        if not all((event, received, available)):
+            return None, "IDENTITY_UNDECLARED"
+        if _asof(event) > _asof(received) or _asof(received) > _asof(available):
+            return None, "SOURCE_CLOCK_INVALID"
+        return dict(ticker=ticker, data_source=payload.get("data_source"), scope_key=key,
+                    formula_version=payload.get("formula_version"), map_query=query,
+                    session_date=_asof(event).astimezone(ZoneInfo("America/New_York")).date().isoformat(),
+                    asof=event, received_at=received, available_at=available), None
+    except (TypeError, ValueError):
+        return None, "IDENTITY_UNDECLARED"
+
+
+def recorded_window_activity(previous, current, spot):
+    """One stored baseline plus current producer inputs, frozen by its recorder."""
+    if not previous or not previous.get("snapshot"):
+        return _unavailable("NO_BASELINE")
+    snap = previous["snapshot"]
+    display = (previous.get("context") or {}).get("display") or {}
+    before = {**display, "ticker": snap.get("ticker"), "data_source": snap.get("data_source"),
+              "formula_version": snap.get("formula_version"), "asof": snap.get("asof_ts")}
+    pmeta, preason = window_observation(before)
+    cmeta, creason = window_observation(current)
+    if preason or creason:
+        return _unavailable(preason or creason)
+    reason, detail = check_window_comparability(pmeta, cmeta)
+    if reason:
+        return _unavailable(reason, reason_detail=detail)
+    if not _asof(pmeta["available_at"]) < _asof(cmeta["available_at"]):
+        return _unavailable("AVAILABLE_AT_CONFLICT")
+    coverage = previous.get("coverage") or {}
+    stored = previous.get("contracts") or []
+    try:
+        rows = [json.loads(r.get("window_inputs_json")) for r in stored]
+    except (TypeError, ValueError):
+        return _unavailable("WINDOW_CONTRACT_INPUTS_UNAVAILABLE")
+    if (coverage.get("truncated") is not False or coverage.get("returned") != coverage.get("requested")
+            or coverage.get("returned") != len(rows)):
+        return _unavailable("BASELINE_POPULATION_PARTIAL")
+    if not rows or any(not isinstance(r, dict) for r in rows):
+        return _unavailable("WINDOW_CONTRACT_INPUTS_UNAVAILABLE")
+    packet = window_activity_surface(pmeta, cmeta, rows, current.get("contracts"), spot)
+    packet["comparison"] = {"previous_snapshot_id": snap.get("snapshot_id"), "previous": pmeta, "current": cmeta,
+                            "volume_correction_policy": "refuse-retraction"}
+    return packet
 
 
 __all__ = [
