@@ -1,0 +1,15 @@
+{
+ "content_digest": null,
+ "query": {
+  "as_of_ny": "2026-10-05",
+  "max_dte": 14,
+  "min_dte": 60
+ },
+ "record_id": null,
+ "refusals": [
+  "REVERSED_WINDOW"
+ ],
+ "status": "refused",
+ "symbol": "SPY",
+ "version": "range-analytics.v1"
+}

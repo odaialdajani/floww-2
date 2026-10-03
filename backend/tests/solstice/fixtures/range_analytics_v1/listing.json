@@ -1,0 +1,18 @@
+{
+  "ticker": "SPY",
+  "synthetic": true,
+  "note": "Deterministic vendor expiry LISTING fixture for range-analytics.v1 tests. Owning NY date is 2026-10-05. Contains one expired date (2026-10-02), the same-day 0DTE (2026-10-05, BELOW_WINDOW for 14-60), one unparseable entry (NOT-A-DATE), four in-window expiries (21/35/59/60 DTE) and one above-window date (61 DTE) so BOTH window edges are observed.",
+  "expiries": [
+    "2026-10-05",
+    "2026-10-02",
+    "NOT-A-DATE",
+    "2026-10-26",
+    "2026-11-09",
+    "2026-12-04",
+    "2026-12-05"
+  ],
+  "n_listed": 7,
+  "listing_capped": false,
+  "received_at": "2026-10-05T13:59:00+00:00",
+  "data_source": "public_api"
+}
