@@ -51,8 +51,8 @@ backend-tests PASS, docker-build PASS, frontend-build PASS, ruff PASS
 (lint workflow). Full `tests/` + coverage ran there, not just the local slice.
 
 Local (same head, before §11 doc-only updates):
-- `tests/solstice/` from `backend/`: **584 passed** (530 R14 historical + 54 new).
-- New focused: 18 + 25 + 7 + 4 = **54 passed**.
+- `tests/solstice/` from `backend/`: **597 passed** (530 R14 historical + 67 new).
+- New focused: 19 + 35 + 8 + 5 = **67 passed** (per-file collected counts).
 - Public brokerage gates (gate/auth/portfolio/disamrmed): **32 passed**.
 - `truth_audit.sh`: **227 passed, 0 failed** (+1 vs PR92 from new read-only routes).
 - `ruff check backend`: **clean**. Bandit medium-gate on touched files: **clean**.
