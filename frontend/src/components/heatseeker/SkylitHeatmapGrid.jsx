@@ -45,6 +45,17 @@ function viridis(t) {
   return `rgb(${Math.round(r1 + (r2 - r1) * f)}, ${Math.round(g1 + (g2 - g1) * f)}, ${Math.round(b1 + (b2 - b1) * f)})`;
 }
 
+export function cellPalette(t) {
+  const background = viridis(t);
+  const rgb = background.match(/\d+/g).map(Number).map(value => {
+    const s = value / 255;
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  });
+  const luminance = rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
+  const white = 1.05 / (luminance + 0.05), black = (luminance + 0.05) / 0.05;
+  return {background, foreground: black > white ? "#000" : "#fff", contrast: Math.max(black, white)};
+}
+
 // en-US grouping without Intl per cell (same output as toLocaleString with
 // one fraction digit; ~20× cheaper across a few thousand cells).
 function group1(n) {
@@ -153,7 +164,7 @@ const GridRow = memo(function GridRow({
         const has = v != null && !Number.isNaN(v);
         const isZero = has && v === 0;
         const t = has && range > 0 ? (v - minV) / range : 0.5;
-        const bright = has && !isZero && t > 0.55;
+        const palette = has && !isZero ? cellPalette(t) : null;
         const isKing = kingExp === e;
         const pct = rowBadges[e];
         const miss = rowMiss ? (rowMiss[e] || 0) : 0;
@@ -173,8 +184,8 @@ const GridRow = memo(function GridRow({
             data-c={c}
             className={`trin-cell${isKing ? " trin-king" : ""}${!has ? " trin-missing" : ""}${isZero ? " trin-zero" : ""}${partial ? " trin-partial" : ""}${inv ? " trin-invalid" : ""}${sel ? " trin-selected" : ""}`}
             style={{
-              background: has ? (isZero ? "rgba(13,17,23,0.95)" : viridis(t)) : "rgba(13,17,23,0.85)",
-              color: has ? (bright ? "#000" : "#fff") : "#3a4566",
+              background: has ? (palette?.background || "rgba(13,17,23,0.95)") : "rgba(13,17,23,0.85)",
+              color: has ? (palette?.foreground || "#fff") : "#9baab9",
             }}
             onClick={has && onCell ? () => onCell(strike, e, v) : undefined}
             onKeyDown={(ev) => {
@@ -199,7 +210,7 @@ const GridRow = memo(function GridRow({
             {absent ? <span className="trin-absent" aria-hidden="true">δ?</span> : null}
             {(!absent && absentInv) ? <span className="trin-absent" aria-hidden="true">δ!</span> : null}
             <span className={isKing ? "trin-val-bold" : undefined}>
-              {txt}
+              {has ? txt : !absent && !absentInv ? "—" : ""}
               {isKing && <span className="trin-star">★</span>}
             </span>
           </td>
@@ -233,6 +244,7 @@ function SkylitHeatmapGrid({
   anchorStrike = null,
   // F15: stable zero-anchor scale. `{min,max,locked:true}` = fixed range.
   scale = null,
+  axes = null,
   onScaleReady,
   // R11 selection: {strike, expiry} — outline only, no value is stored here.
   selected = null,
@@ -262,8 +274,8 @@ function SkylitHeatmapGrid({
     ? (metric === "delta" ? "OI_DELTA_WEIGHTED" : (overlay.exposure_basis || "VOLUME"))
     : (data?.exposure_basis || "OI");
   const expiries = useMemo(
-    () => (g?.expiries?.length ? [...g.expiries] : [...((data?.grid || {}).expiries || [])]),
-    [g, data]
+    () => axes?.expiries ? [...axes.expiries] : (g?.expiries?.length ? [...g.expiries] : [...((data?.grid || {}).expiries || [])]),
+    [g, data, axes]
   );
   const matrix = useMemo(() => (g?.[gridKey] || {}), [g, gridKey]);
   // Sparse per-cell coverage from the backend (only overlay sections carry it).
@@ -272,13 +284,13 @@ function SkylitHeatmapGrid({
   const cellInvalid = useMemo(() => (useOverlay && overlay?.cell_invalid_delta) || EMPTY, [useOverlay, overlay]);
 
   const strikes = useMemo(() => {
-    const src = g?.strikes?.length
+    const src = axes?.strikes || (g?.strikes?.length
       ? g.strikes
       : (((data?.grid || {}).strikes || []).length
         ? data.grid.strikes
-        : (data?.strikes || []).map((s) => s.strike));
+        : (data?.strikes || []).map((s) => s.strike)));
     return [...new Set(src)].filter((s) => s != null).sort((a, b) => b - a);
-  }, [g, data]);
+  }, [g, data, axes]);
 
   const [minV, maxV, scaleMode] = useMemo(() => {
     if (scale && Number.isFinite(scale.min) && Number.isFinite(scale.max) && scale.max > scale.min) {

@@ -4,7 +4,7 @@
 <!-- Regenerate: python3 qc/audit/generate_api_docs.py -->
 <!-- Verify:     python3 qc/audit/generate_api_docs.py --check -->
 
-Total endpoints: 385
+Total endpoints: 387
 Route groups: 104
 
 Generated from the live FastAPI app, so every path below is a real,
@@ -35,7 +35,7 @@ callable route rather than a hand-copied guess.
 |--------|------|---------|
 | GET | `/api/advanced/{ticker}` | Advanced Analytics |
 
-## agent (14 endpoints)
+## agent (16 endpoints)
 
 | Method | Path | Summary |
 |--------|------|---------|
@@ -43,6 +43,8 @@ callable route rather than a hand-copied guess.
 | GET | `/api/agent/budget` | Budget |
 | POST | `/api/agent/cancel/{turn_id}` | Cancel |
 | GET | `/api/agent/claims` | Claims |
+| GET | `/api/agent/handoffs` | Native Handoff History |
+| POST | `/api/agent/handoffs` | Save Native Handoff |
 | GET | `/api/agent/history` | History |
 | GET | `/api/agent/models` | Models |
 | GET | `/api/agent/prefs` | Prefs |

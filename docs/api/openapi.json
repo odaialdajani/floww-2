@@ -1182,6 +1182,66 @@
         ]
       }
     },
+    "/api/agent/handoffs": {
+      "get": {
+        "operationId": "get_api_agent_handoffs",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Native Handoff History",
+        "tags": [
+          "agent",
+          "agent"
+        ]
+      },
+      "post": {
+        "operationId": "post_api_agent_handoffs",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Native Handoff",
+        "tags": [
+          "agent",
+          "agent"
+        ]
+      }
+    },
     "/api/agent/history": {
       "get": {
         "operationId": "get_api_agent_history",

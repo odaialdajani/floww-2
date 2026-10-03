@@ -15,7 +15,17 @@ export default function AgentPanelAnswer({turn}){
   {chart && !generic && <p>{primary}</p>}
   {chart ? <section aria-label="Saved chart reading">{chart.map((line,i)=><p key={i}>{line.text}</p>)}</section> : <p>{primary}</p>}
   {answer?.model_status && <small>{answer.model_status}</small>}
-  {(answer?.usage || []).filter(u=>u.provider).map((u,i)=><p key={`usage-${i}`} className="lodestar-ai-usage">
+  {(answer?.usage || []).filter(u=>u.provider).map((u,i)=>u.trace ? <section key={`usage-${i}`} className="lodestar-ai-usage" aria-label="Grounded model dispatch">
+   <p>Requested: {u.trace.requested.model} · {THINKING_LABELS[u.trace.requested.effort] || u.trace.requested.effort}</p>
+   <p>{u.trace.effective ? `Effective: ${u.trace.effective.model} · ${THINKING_LABELS[u.trace.effective.effort] || u.trace.effective.effort}` : "Effective dispatch unverified — no fallback claimed."}</p>
+   <details><summary>Dispatch trace</summary>
+    <dl><dt>Correlation</dt><dd>{u.trace.correlation_id}</dd><dt>Context hash</dt><dd>{u.trace.context_hash}</dd>
+     <dt>Observations</dt><dd>{u.trace.observation_ids.join(", ") || "None"}</dd><dt>Evidence</dt><dd>{u.trace.evidence_ids.join(", ") || "None"}</dd>
+     <dt>Status / latency</dt><dd>{u.trace.status} · {u.trace.latency_ms} ms</dd>
+     <dt>Speed</dt><dd>{u.trace.effective?.speed || "Unverified"}</dd>
+    </dl><p>Dollar cost: {u.trace.actual_cost == null ? "unknown" : u.trace.actual_cost}. Uses your ChatGPT allowance.</p>
+   </details>
+  </section> : <p key={`usage-${i}`} className="lodestar-ai-usage">
    {u.provider} · {u.model}{u.effort && ` · ${THINKING_LABELS[u.effort] || u.effort} thinking`}{u.speed && ` · ${SPEED_LABELS[u.speed] || u.speed} speed`}
    {u.accounting==="subscription_usage" && <small>Uses your ChatGPT allowance; dollar cost is not reported.</small>}
   </p>)}

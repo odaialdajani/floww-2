@@ -52,11 +52,9 @@ test("every nav icon exists in the Sidebar ICONS map", () => {
   expect(missing).toEqual([]);
 });
 
-// Anything the sidebar can navigate to must survive a page reload via ?page=.
-test("every nav id is accepted by the App.js ?page= whitelist", () => {
+// Runtime deep-link/refresh behavior for every NAV_ITEMS id lives in the hook suite.
+test("App mounts the registry-backed browser navigation hook", () => {
   const app = fs.readFileSync(path.join(__dirname, "..", "App.js"), "utf8");
-  const line = app.split("\n").find((l) => l.includes("includes(q)"));
-  const allowed = new Set([...line.matchAll(/"([a-z0-9-]+)"/g)].map((m) => m[1]));
-  const missing = NAV_ITEMS.filter((i) => !allowed.has(i.id)).map((i) => i.id);
-  expect(missing).toEqual([]);
+  expect(app).toContain('import useWorkspaceNavigation from "./shell/useWorkspaceNavigation"');
+  expect(app).toContain('const [page, setPage] = useWorkspaceNavigation();');
 });

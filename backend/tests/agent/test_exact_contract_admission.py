@@ -51,6 +51,15 @@ def by_metric(facts):
     return {f["metric"]: f for f in facts}
 
 
+def test_owned_tidehunter_bridge_context_admits_exact_record_but_not_unmarked_pro_context():
+    selected = {**screen(), "page": "flowseeker-pro", "bridgeVersion": "tidehunter-public-review.v1"}
+    assert request_spec({"question": "Review this recorded contract", "screen": selected})["screen"] == selected
+    facts, _ = display_facts(record(), selected, "SPY", NOW)
+    assert by_metric(facts)["Exact contract OSI"]["value"] == OSI
+    with pytest.raises(ValueError, match="bridge|owner"):
+        request_spec({"question": "Review this contract", "screen": {**selected, "bridgeVersion": None}})
+
+
 def test_exact_contract_request_admitted_only_with_v2_symbol_scope():
     assert request_spec({"question": "What confirms this selection?", "screen": screen()})["screen"]["selectedContract"] == {"osi": OSI}
     with pytest.raises(ValueError, match="symbol|selected|contract"):

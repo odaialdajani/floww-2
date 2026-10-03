@@ -79,6 +79,10 @@ def contract_facts(raw, screen, ticker, now):
         ("multiplier source", mult["source"], "provenance"),
     ):
         add("Exact contract " + label, value, unit)
+    if wall and finite(wall.get("low")) and finite(wall.get("high")):
+        add("Exact contract selected wall id", wall["wall_id"], "wall identity")
+        add("Exact contract selected wall low", wall["low"], "USD")
+        add("Exact contract selected wall high", wall["high"], "USD")
     for leg, ts in clocks.items():
         add("Exact contract " + leg, quote[leg], "USD", ts)
         add("Exact contract " + leg + " age", quote["ages_s"][leg], "seconds at research read", ts)

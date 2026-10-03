@@ -1,0 +1,19 @@
+.public-handoff-review { min-width: 0; padding: 14px 0; border-top: 1px solid #25444b; color: #c8dce0; font-size: 12px; line-height: 1.55; }
+.public-handoff-review h3 { margin: 0 0 6px; color: #e7f1f1; font-size: 14px; font-weight: 600; }
+.public-handoff-review label { display: grid; gap: 5px; margin: 10px 0; }
+.public-handoff-review input, .public-handoff-review select, .public-handoff-review textarea { width: 100%; min-width: 0; padding: 8px; color: #e7f1f1; background: #0b1d23; border: 1px solid #37575f; border-radius: 4px; font: inherit; }
+.public-handoff-review textarea { resize: vertical; }
+.public-handoff-review button { padding: 7px 10px; border: 1px solid #37575f; border-radius: 4px; background: #14313a; color: #e7f1f1; font: inherit; }
+.public-handoff-review button:disabled { color: #a2b7bf; background: #10242b; cursor: not-allowed; }
+.public-handoff-review a { display: inline-block; margin: 8px; color: #9cd4ce; text-decoration: underline; }
+.public-handoff-review :focus-visible { outline: 2px solid #e2bf73; outline-offset: 3px; }
+.public-handoff-review details { margin: 12px 0; }
+.public-handoff-review summary { cursor: pointer; }
+.public-handoff-review dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 12px; }
+.public-handoff-review dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.public-handoff-review small { display: block; margin-top: 6px; color: #acc0c7; }
+.lodestar-ai-usage dl { overflow-wrap: anywhere; }
+.tidehunter-public-bridge { margin: 12px; padding: 12px 16px; background: #0b1d23; color: #c8dce0; border: 1px solid #25444b; border-radius: 5px; }
+.tidehunter-public-bridge > button { padding: 8px 12px; background: #14313a; color: #e7f1f1; border: 1px solid #37575f; border-radius: 4px; }
+.tidehunter-public-bridge p { font-size: 12px; line-height: 1.5; }
+@media (max-width: 640px) { .public-handoff-review dl { grid-template-columns: minmax(0, 1fr); } }

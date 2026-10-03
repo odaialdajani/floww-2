@@ -11,6 +11,7 @@ from services.agent.access.horizon import horizon_window
 from services.agent.answer_sections import build_answer_sections, merge_history_section
 from services.agent.contracts import INTERPRETATIONS, finite, validate_model_answer
 from services.agent.narrative import request_limit
+from services.agent.plan_draft import build_plan_draft
 from services.agent.read_budget import ReadActivityUnavailable, ReadBudget, ReadDenied, budget_scope, current_budget
 from services.agent.saved_history import history_facts
 
@@ -182,6 +183,8 @@ class ResearchService:
                             raise
                         except Exception:
                             answer["model_status"] = "Interpretation unavailable; showing saved market readings"
+                    if not spec.get("price_only"):
+                        answer["plan_draft"] = build_plan_draft(answer, turn_id)
                     await self.repository.finish(owner, turn_id, "completed", answer=answer,
                                                  read_activity=budget.close())
         except asyncio.CancelledError:
@@ -233,7 +236,8 @@ class ResearchService:
                 allow_inspect=not inspected,
                 history_note=history_note,
                 repair=repaired,
-                **({"owner": owner, "settings": spec["ai_settings"]} if "ai_settings" in spec else {}),
+                **({"owner": owner, "settings": spec["ai_settings"], "context": spec["screen"]}
+                                   if "ai_settings" in spec else {}),
             )
             answer["usage"].append(
                 {
@@ -246,7 +250,7 @@ class ResearchService:
                         "model",
                         "provider",
                         "policy_version",
-                        "effort", "speed", "tokens",
+                        "effort", "speed", "tokens", "trace",
                     )
                     if k in result
                 }

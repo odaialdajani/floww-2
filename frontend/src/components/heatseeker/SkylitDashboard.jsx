@@ -20,6 +20,7 @@ import { ALL_BASES, surfaceStatus, sumProfile } from "../../lib/solsticeMetrics"
 import AskLodestar from "./AskLodestar";
 
 import ExactContractReview from "./ExactContractReview";
+import { GroundedPublicReview } from "../public/PublicHandoffReview";
 
 import SolsticeSymbolMaps from "./SolsticeSymbolMaps";
 import { resolveSelectedWall, wallPositionOf } from "../../lib/solsticeSelection";
@@ -212,6 +213,8 @@ function SkylitDashboard({
   data = null,
   viewMode = "gex",
   dte = null,
+  expiryScope = "loaded",
+  localView = null,
   onViewModeChange,
   timeframe = "5m",
   onTimeframeChange,
@@ -242,7 +245,10 @@ function SkylitDashboard({
   // T04: metric overlay state — same snapshot, raw wall identity locked while
   // viewing activity (walls come from the payload, never recomputed per tab).
   const [metric, setMetric] = useState("raw");
-  const [layout, setLayout] = useState("focus");
+  const [layout, setLayout] = useState("profile");
+  useEffect(() => {
+    if (localView) setLayout(localView === "profile" ? "profile" : "focus");
+  }, [localView]);
   const [replayPanelOpen, setReplayPanelOpen] = useState(false);
   const [followSpot, setFollowSpot] = useState(true);
   const [anchorStrike, setAnchorStrike] = useState(null);
@@ -379,11 +385,11 @@ function SkylitDashboard({
   const [expData, setExpData] = useState(null);
   const [expLoading, setExpLoading] = useState(false);
   const [expWidened, setExpWidened] = useState(false);
-  const expQueryKey = `${ticker}|${timeframe}|${expiries}|${dte ?? ""}|${expWidened ? "wide" : "same"}`;
+  const expQueryKey = `${ticker}|${timeframe}|${expiries}|${dte ?? ""}|${expiryScope}|${expWidened ? "wide" : "same"}`;
   useEffect(() => {
     setExpData(null);
     setExpWidened(false);
-  }, [ticker, timeframe, expiries, dte]);
+  }, [ticker, timeframe, expiries, dte, expiryScope]);
   // R5-B resweep: closing the overlay drops expanded data so stale
   // expanded scope can never drive inline clicks after close. Reopening
   // refetches under the current scope (loading state, never old pixels).
@@ -406,7 +412,7 @@ function SkylitDashboard({
     // Preserve full analytical scope (R4-15): mode + dte + scalp travel with
     // the expand fetch; widening expiries is the only explicit scope change.
     const modeParam = ["scalp", "1m"].includes(timeframe) ? "scalp" : ["swing", "1h"].includes(timeframe) ? "swing" : "day";
-    const dteParam = dte != null ? `&dte=${encodeURIComponent(dte)}` : "";
+    const dteParam = expiryScope === "next" ? "&expiry_scope=next" : dte != null ? `&dte=${encodeURIComponent(dte)}` : "";
     const scalpParam = modeParam === "scalp" ? "&scalp=true" : "";
     axios
       .get(`${BACKEND_API}/heatmap/${encodeURIComponent(ticker)}?mode=${modeParam}&expiries=${expWidened ? 8 : expiries}${dteParam}${scalpParam}${widen && expWidened ? "" : ""}`, {
@@ -419,7 +425,7 @@ function SkylitDashboard({
       .catch(() => { /* fallback to in-frame data below */ })
       .finally(() => { if (!cancelled && myKey === expQueryKey) setExpLoading(false); });
     return () => { cancelled = true; ctrl.abort(); };
-  }, [expanded, ticker, timeframe, expiries, dte, expWidened, expQueryKey, isReplay]);
+  }, [expanded, ticker, timeframe, expiries, dte, expiryScope, expWidened, expQueryKey, isReplay]);
   const overlayData = isReplay ? displayData : (expData?.ticker === ticker ? expData : baseData);
   const visibleData = expanded ? overlayData : displayData;
   const [priceHistoryOpen, setPriceHistoryOpen] = useState(false);
@@ -708,13 +714,14 @@ function SkylitDashboard({
 
       {/* 2.5 Trade Mode bar */}
       <div className="skylit-col-bar" role="toolbar" aria-label="Canvas controls">
-        <span className="skylit-canvas-title">2D Grid</span>
+        <span className="skylit-canvas-title">Matrix</span>
         <select aria-label="Canvas layout" className="skylit-tf-select" value={layout} onChange={e => { setLayout(e.target.value); setCompareMode(false); setActivePane("gex"); }}>
           <option value="focus">Focus Matrix</option><option value="profile">Matrix + Profile</option>
           <option value="multi" title="Four metric panes over one symbol and snapshot — not multi-symbol monitoring">Multi-map</option><option value="calendar">Calendar Overview</option>
           <option value="symbols" title="Independent per-symbol maps, axes and inspector — one request per symbol">Symbol maps</option>
         </select>
         <button className="skylit-trade-mode-btn" onClick={() => setReplayPanelOpen(o => !o)} aria-expanded={replayPanelOpen}>Replay</button>
+        <details className="skylit-control-overflow"><summary>Display</summary><div>
         <button
           className="skylit-trade-mode-btn"
           onClick={zoomOut}
@@ -755,6 +762,7 @@ function SkylitDashboard({
         >
           {compareMode ? (compareLock ? "Scales locked" : "Lock scales") : (scaleLock ? "Scale locked" : "Lock scale")}
         </button>
+        </div></details>
         <button
           className={`skylit-trade-mode-btn${compareMode && comparePair === "gexvex" ? " active" : ""}`}
           onClick={() => { setLayout("focus"); if (compareMode && comparePair === "gexvex") { setCompareMode(false); } else { setComparePair("gexvex"); setCompareMode(true); } setActivePane("gex"); }}
@@ -945,6 +953,8 @@ function SkylitDashboard({
           <details className="skylit-contract-details"><summary>Exact contract review · read-only</summary>
             <ExactContractReview key={`${ticker}|${selectedCell?.wall_id || ""}|${visibleData?.snapshotId || ""}`} ticker={ticker} data={visibleData} wall={resolvedWall} cell={selectedCell} replay={isReplay} selectionScope={contractScope} onSelection={onContractSelection} />
           </details>
+          <AskLodestar subject={`${ticker} · exact contract review`} overlayMetric={activeMetric} displayMode={isReplay ? "replay" : "live"} compact />
+          <GroundedPublicReview />
           {/* R8-04: review journal state for the current snapshot's decision */}
           <div className="skylit-review-pill" data-testid="skylit-review-pill">
             {reviewLoading && (
