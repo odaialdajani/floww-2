@@ -999,3 +999,14 @@ a lane merge from here). PR103 hosted ruff/frontend green, backend running.
 Header-edit defect recurred on §42 (repaired + verified immediately).
 Filing correction: §§41/42 are chronologically swapped in this file
 (cosmetic only — content and heads intact; renumbering would churn more).
+
+## 44. Mount audit + decision fixture (3 Oct 2026)
+
+- Mount-collision audit for the unmounted `execution_admission` router:
+  no `/admission` prefix or path clashes anywhere in routes/server;
+  endpoint set (`policies`, `approvals`, `revoke`, `operators`,
+  `risk/evaluate`, `decision`) collision-free. Ready for Zed's mount.
+- `commissioned-decision.v1` fixture generated from a live temp-DB run
+  (ADMIT on full pass / `OPERATOR_UNKNOWN` refusal) — deterministic,
+  redacted, test-labeled. No code references; zero regression surface.
+- Lane-only push; combined/CI untouched by design.
