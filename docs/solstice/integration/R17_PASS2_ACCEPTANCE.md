@@ -1,4 +1,6 @@
-# R17 pass 2 — combined engineering verified; commissioning HOLD
+# R17 pass 2 — historical combined engineering receipt
+
+Current combined runtime is recorded in [R17_PASS3_ACCEPTANCE](R17_PASS3_ACCEPTANCE.md), CODEef911f37 including Spark044ca009. Pass-2 hosted gates all passed at03a1db39; the linked closure records them. Shared screenshot/browser paths now contain pass-3 evidence; retrieve pass-2 evidence from03a1db39. Counts/hashes below remain historical.
 
 ## Fixed candidate and ownership
 

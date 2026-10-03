@@ -1,7 +1,7 @@
 {
   "version": "floww-browser-receipt.v1",
   "fixtureOnly": true,
-  "sourceCommit": "90c58939f14f734c83844b80b82c6f8bd9d70090",
+  "sourceCommit": "ef911f37b221ce647d4dd254ff44afc337710cb3",
   "sourceHashes": {
     "frontend/src/App.css": "e2909affc171c429033191d863572ddef0b35e2fe7f7698c22318cbbfafef19f",
     "frontend/src/App.egress-invariant.test.js": "6676cedac81158c8f415359cfd73119d3c6564278bc9d27636ac7e4bb6a76f35",
@@ -66,8 +66,8 @@
     "frontend/src/components/PortfolioPanel.jsx": "0ca4d20472587e10096fb8c2396220f32ad54a61a13d1cd9f75b32ee430e2114",
     "frontend/src/components/PositionSizing.jsx": "cfea97a2cc9c468cd55e5f7f667a5c3f10fbf3300dd23eb8ec2855d14df6ff0f",
     "frontend/src/components/PositionSizing.test.jsx": "a401e5c74a28abe8bf1768174c1b494339227917f3c525cf3cf8425266da0b11",
-    "frontend/src/components/PublicPanel.jsx": "5ef7b56fb43eceb16d43ea9ffd0d67603126b275158cacaa66a569ebd1af9760",
-    "frontend/src/components/PublicPanel.test.jsx": "d3e4849b8abd514212ac24da86d70e608c22c55cee7134f9a75855c86c67db4a",
+    "frontend/src/components/PublicPanel.jsx": "302a74f6059ca36aa1e7a9f7046ea7d76f880eeb52c435e0a50d375666677030",
+    "frontend/src/components/PublicPanel.test.jsx": "b388d2cc9461d5ad8b68e41646755f89cccd4c9aa74fa2beb576de1e7bdfe599",
     "frontend/src/components/QuickTradePanel.jsx": "edd1e41f6affbd84644fff682ac88f3330ee53a8e3e8baa272de2c12b3523f09",
     "frontend/src/components/RetryButton.js": "89b3757d353ff8e1255d30e0a94f5ef4538c7c4cf4d4f52b7f87b81ae64e7da9",
     "frontend/src/components/RetryButton.test.jsx": "d71c70f88ea131969787f26afcb109f05b240809f28eee6cf55559a62cbfa322",
@@ -258,7 +258,8 @@
     "frontend/src/components/public/PublicHandoffReview.jsx": "7b3d64e8ef24e740117f20c5b079016e6390961c874fa178e6715a9682c47fdd",
     "frontend/src/components/public/PublicHandoffReview.stories.jsx": "f426cddbbfd9ac737813a48ace25b146a48a57082cedc60f0893f01fb1f9d9d5",
     "frontend/src/components/public/PublicHandoffReview.test.jsx": "4a0902b95929c907df6a341ee940c7ff21a3534a98684df482e3999f5dfc1c73",
-    "frontend/src/components/public/PublicPanel.stories.jsx": "245a14af972309b93d86d8d34d2dd8812af0dd24dc1c3224ea7bab443ac4fa8a",
+    "frontend/src/components/public/PublicLifecycleInventory.jsx": "e5492bae1b4e94736059a73e48626aac672a5990f1c939161a148cd56f60f899",
+    "frontend/src/components/public/PublicPanel.stories.jsx": "16f5695516eb95f7a860158fbabd8a8376b1888d5ad7dc61564d2781ac382613",
     "frontend/src/components/public/PublicReview.css": "219238f051a7213c198777a621fb968024af8eb9d11f9cd4682bd365e399445a",
     "frontend/src/components/public/TidehunterPublicBridge.jsx": "7bb01cb0091c56ce6e25c275d161889d5c04b1fffacd2bc9adf49da9158675e1",
     "frontend/src/components/public/TidehunterPublicBridge.test.jsx": "5772bde45af4f32c4b8f63919e1a899afd1d7037c4b7057a097a4a0119b33b46",
@@ -270,6 +271,7 @@
     "frontend/src/context/AuthContext.js": "557091020b9865d62d5fce96f94c81769ec97231f03e8e5dd6e5a218d4ab743c",
     "frontend/src/context/ThemeContext.js": "3ed049e0050dfdcd91457bee1cace6bc8259c4e11e570c59268438afa1250922",
     "frontend/src/fixtures/integration/coverage-read.v1.json": "3b47655a3a7fbbf3a4dbdd0d305fb17b0a4a84addef8cdf395320a48ba479c49",
+    "frontend/src/fixtures/integration/lifecycle-inventory.v1.json": "84945bfc809991bc4a45ed12cb1cc0348c06f62de678080f27ec338455d562e7",
     "frontend/src/fixtures/integration/solstice-display.v1.json": "41a2a84bab0649beca599c880ff40468156f9e2570412c8b60bd37537ae92c78",
     "frontend/src/heatseeker-routing.test.js": "1e0db2e04e02b3a3e2ed9942cfea8bcb69f95a6608a1aa8a8f0b63b23b4767f2",
     "frontend/src/hooks/useDebounce.js": "3203faba1a0dbd657693a6936954fbf0f62f65a34d043dba178a868a00937ad6",
@@ -511,7 +513,7 @@
     "backend/services/public_api_adapter.py": "3ed54060a67adb7b6da6797db1e053c83b5a0fab948c9032fe35eb9410175e52",
     "backend/services/public_budget.py": "a9973850c78cec0ee462bf48a06549d73ff36c88d10856de8582cc66d716575f",
     "backend/services/public_capability.py": "fa8ede163c776fca2bd4ecffaae90674684d8dad3d447c0e2500f9de466bdd6e",
-    "backend/services/public_execution_lifecycle.py": "3b624ed08108d1d6d65bdcb9fb1ef8f0b2b62684ffb35d29c026342b52485bf3",
+    "backend/services/public_execution_lifecycle.py": "001a8f2fe8b1800249b5e8c5dcec5531282202e3b509a989761e6edafd932859",
     "backend/services/public_release_watch.py": "fd9ca1484f7914e7c00addf69cc6049028551beb390e174b274444ebb77013c8",
     "backend/services/public_request_pacer.py": "eb981033378583483fe6c381e905ff29de1a50675eec6151f3aa02c31f281fbe",
     "backend/services/public_scanner.py": "11b81450d3cc87c719aa4a6f0d487a4d0a088483d7800a52006504fb444416ba",
@@ -649,7 +651,7 @@
     "backend/routes/preferences.py": "c0d9b2590aa135900ac6551d78d034abf8504d7983621a6eecff2ea878fcd3eb",
     "backend/routes/price_history.py": "d34bd9ba7a09656b845cf8f5d05032303e6ae2af7ea10c0764ce88103c2d7921",
     "backend/routes/public_api.py": "8bd5b862a823c2e7e39182f64e62766fefefaed07b6f462c97fded85c397a145",
-    "backend/routes/public_brokerage.py": "de3b639330c2a0c96e2911c406ea53a0be778fdc06ccb4c0ce252ea5508130a6",
+    "backend/routes/public_brokerage.py": "27b2336bdae9da0bf28c5e51ad1044f586f78e28d4958c4cf8352a99add69dfb",
     "backend/routes/quant.py": "b7b767f919b269dd840f7de7fee56fb990b0213a719b664dcbfe6a69c2f34355",
     "backend/routes/quant_full.py": "a1caf4fd7ea87cd19f1ecacad02e515cc47ec0955800735f05d1160b79bba082",
     "backend/routes/replay.py": "20fe430c6351bc9d35d0a37a9f9dd5b05d92bfc6e0a28349585d497de1676ed5",
@@ -670,7 +672,7 @@
   },
   "bundleHashes": {
     "main.css": "4e04ddd1ca5107cd2f9526af27eaabe14e0e4978761acc06b8c851d49dfa76b0",
-    "main.js": "64258badf34742cd026fe32ddfe6a2c38cf8d22abf9a0a067f02a0c1511818de",
+    "main.js": "383b90ee5272ddf03952b5b2550f8f63b36d103179a41813d149582eca2fee91",
     "static/js/415.34df0ce4.chunk.js": "48d91bcce41053d197315b3d2d270ae761f77121989bf4b83e0388f79fa5f157",
     "static/js/248.517a2a31.chunk.js": "a989bff8cf146299b2f3722ae275f99130eeef3f5031c185f3853eaa122e32a5",
     "static/js/537.613479e6.chunk.js": "7edae7a915322aaab4cbcfaab2236d462a31fb91aabdeaab712bc7d459bc85fd"
@@ -821,15 +823,15 @@
   "screenshots": [
     {
       "file": "solstice-1440.png",
-      "sha256": "f229286d5317bfaed44b7496cc39e7cd4fc42183f16fe63bd2b4bfeb54963203"
+      "sha256": "07f8b314ed6c459cd45899a842cc4e85de966d1bfc5392225eb2d6b9408e6639"
     },
     {
       "file": "solstice-1280.png",
-      "sha256": "9751f2716b1d047a9a3aa2a925e5eed255577e8d16997750f6404041432e2c6c"
+      "sha256": "52c069087e396b1e96713325fc54edf64796a54e0290b8fd64a730914294ade1"
     },
     {
       "file": "solstice-390.png",
-      "sha256": "7bf395c4dab0b4d0e78246930b4f5cda7deef910cfe3988d4908ff0209faf80f"
+      "sha256": "4768deec5ef9d37ffb33dbade02223a0a85952b00dee1d7ffa85165155619ab5"
     },
     {
       "file": "triad-1440.png",
@@ -837,11 +839,11 @@
     },
     {
       "file": "triad-1280.png",
-      "sha256": "f07e337ec5bb39fe2e798f71340814885724dee022c2cc2dc49852a293f395d2"
+      "sha256": "704aab36a91af128b774c617797de54b6024de77532d0091ec7efcc21d66a824"
     },
     {
       "file": "triad-390.png",
-      "sha256": "b56d306e7326da16e111171198ea1cbd1d5434fe8a51f643894b4e50383b4449"
+      "sha256": "62525fff3b4e70ddbc3c5f160d988156d2ca45e08e754dd371952824d95f0ad4"
     }
   ],
   "externalRequestsBlocked": [
@@ -1031,16 +1033,17 @@
         "ev8874951e1a20fbd90c99d7e0e5bf19730c94def90e3d27613ba40f9c29361320",
         "evfbf34dcfb0724cc739fe1bd40489dd58756a118fe6e6723b44087afdf6abe228",
         "eve1571a858b30bdf95fbf5304472bf375fdd49a4d0dca15bf5419b7d0b2c7f2ee",
-        "ev2e2d71266bb2ef536069b305eb124164ce7cc1d75c773976ddfa314fc821b875",
+        "eve9d54b75c8bc7b9ca52ae846e4148a0176277c63275599eecad1d82fbd95ce53",
         "evf24eb0f0dade1194059259f976d84dcda1a0d0d5c969aad785c5c80232f8c1c3",
-        "evd5d3b3ed6026c6e11abf9edcbc3f17579df642297c03441880ef64d9120daf05",
+        "ev0f7a03301081d34c54a7cfd461af31fe02f2b1b56994fedf716f5dc9c309c3c8",
         "evb82df435a0bd94d44d2306799363228e77f44a97b7d8080678a2a7c644ca8965"
       ],
-      "draft_id": "draft_1b710dffa4136e158cb948d78f66a3f9b43ac47799f2d9ca0085152378d712f6",
+      "draft_id": "draft_ce32b7d2bf3710e9e8840e39a430f3dcd0f4aa19a9ef7cf2b65afa16372446bd",
       "executable": false
     }
   ],
   "checks": [
+    "on-demand local lifecycle inventory; unknown/protection/native/account limits unverified; GET only",
     "browser back/forward + query/hash preservation",
     "Expand restores selected strike and layout",
     "count-limited read-only14–60 expiry admission; map selection unchanged",
@@ -1075,6 +1078,13 @@
     {
       "path": "/api/solstice/price-paths/comparable",
       "query": "?baseline_id=snap_b65e71e600355fb0&snapshot_id=snap_f1bbaa8d0e56cb65",
+      "method": "GET"
+    }
+  ],
+  "lifecycleFixtureHash": "84945bfc809991bc4a45ed12cb1cc0348c06f62de678080f27ec338455d562e7",
+  "lifecycleReads": [
+    {
+      "path": "/api/public/execution-lifecycle/inventory",
       "method": "GET"
     }
   ],
