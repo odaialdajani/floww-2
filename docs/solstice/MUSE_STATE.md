@@ -443,3 +443,721 @@ Contract versions (unchanged + new): `execution-intent.v1`,
   is one commit stale: 602/40 vs current 604/43). No hostile edits, no gate
   weakening — staleness only. Merge decision stays with Nav/Zed; my lane does
   not touch their branch.
+
+## 20. R17 READY queue (3 Oct 2026 — Zed combined report answered)
+
+Base: `origin/main` `6eaa3343` (PR102 merge). Lane: `solstice/spark-r17` (clean,
+protected 71/71 at base). Zed's new report verified: e5ee1404 green everywhere,
+replay defects fixed in Zed-owned `solsticeReplay.js`, API-doc blocker closed by
+Spark-taken regen (376 paths on main). Remaining Spark-assigned gaps from that
+report are taken as the queue below. Packet + Triad + prompt-library deltas
+absorbed (intent states, affordability, session caps, brief rows — R16 did most;
+this queue finishes the rest).
+
+Contract versions: `execution-intent.v1`, `execution-receipt.v1`,
+`intent-draft.v1`, `price-path-producer.v1`, NEW `coverage-read.v1`.
+
+- [DONE] R17-1 Stored-session enumeration — owned: read-only
+  `GET /api/solstice/price-paths/sessions?ticker=` (stored NY session days +
+  per-day snapshot counts, gaps via existing manifest). No writes. Evidence: 6-test file green with sessions/comparable/expiries.
+- [DONE] R17-2 Admitted expiry-range query — owned: read-only
+  `GET /api/solstice/price-paths/expiries?ticker=&min_dte=14&max_dte=60`
+  (listed expirations + DTE + ADMITTED/excluded + reasons; existing `dte≤30`
+  display filter in `market_data.py` untouched). Reuses cached adapter fetch.
+  Evidence: window verdicts incl. 0DTE BELOW_WINDOW + 502 path.
+- [DONE] R17-3 Comparable-pair admission verdict — owned: read-only
+  `GET /api/solstice/price-paths/comparable?baseline_id=&snapshot_id=`
+  running the exact `check_window_comparability` gate over two replayed stored
+  snapshots (IDENTITY_UNDECLARED/SESSION_ROLL/OUT_OF_ORDER preserved).
+  Evidence: TICKER_MISMATCH/SESSION_ROLL/OUT_OF_ORDER/NO_BASELINE pinned.
+- [DONE] R17-4 Receipt + PR + Zed re-verification — owned: `SPARK_R17_RECEIPT.md`,
+  PR (review-only), Zed-branch overlap recheck. Receipt updated with actual
+  hosted results (see §21). PR103 OPEN, all four hosted gates green at
+  `611f3c2f`. Merge decision with Nav/Zed — BLOCKED_EXTERNAL there.
+
+## 21. Session checkpoint (3 Oct 2026 — packet re-verification + queue close)
+
+Resume-prompt cycle: harness + shared contract re-read from
+`/Users/nav/Documents/Codex/2026-10-02/he/outputs/`.
+
+- R14 receipt VERIFIED: `solstice/spark-closeout` @ `2f134e03`,
+  `docs/solstice/MUSE_STATE.md` §16 — 530 Solstice tests + 37 focused,
+  restart/migration/lock/lineage proofs executed on throwaway file DBs,
+  fixture digest `8fefacf5…`, zero durable admitted records, activation OFF.
+  Held as historical per packet rule (no unchanged resweep re-run).
+- Drift: `origin/main` advanced from packet baseline `1530ccd7` to
+  `6eaa3343` via Spark lane PRs 96/98/99/102 (R15 producer/lifecycle,
+  R16 submit lock + fills/drafts/guards). PR93 (R14 closeout docs) still
+  OPEN/unmerged at `2f134e03` — its §16 content lives only on that branch.
+  Zed lanes (PR100/101 combined) carry this lane's content verbatim; audited
+  §19. No unaccounted remote commits.
+- Harness 6-item queue status (all engineering DONE on main/PR103):
+  1. Public matrix/auth — R15: `SPARK_R15_PUBLIC_MATRIX.md` + 27-op JSON,
+     auth fail-closed proven. DONE.
+  2. Default-off price-path producer — `services/solstice_price_producer.py`
+     (`price-path-producer.v1`, `FLOWW_PRICE_PATH_PRODUCER` default-off,
+     swing-only 300s, XNYS-gated, budget-aware) + second-process reopen
+     proof (`test_second_process_reopens_file_db_with_identical_paths_and_replay`)
+     + migration/restart/contention tests. DONE. Admitted production records
+     = external (activation).
+  3. Immutable intents/execution lifecycle —
+     `services/public_execution_lifecycle.py` (`execution-intent.v1`,
+     `intent-draft.v1`, Decimal-exact, approval-bound, submit lock,
+     disarmed-supersede guard, read-only reconcile). DONE. Live = external.
+  4. Account/portfolio/protection/expiry contracts —
+     `SPARK_R15_ACCOUNT_CONTRACTS.md`, R17 `coverage-read.v1` routes. DONE.
+  5. Outcome protocol — `SPARK_R15_OUTCOME_PROTOCOL.md`; zero durable
+     records → INSUFFICIENT EVIDENCE; 30–60 sessions = collection target,
+     not edge proof. DONE protocol, empirics external.
+  6. Exact-head receipt + combined acceptance — PR103 all gates green;
+     combined merge decision with Nav/Zed. BLOCKED_EXTERNAL only there.
+- Supplied to Zed (via this checkpoint): contract versions
+  `execution-intent.v1`, `execution-receipt.v1`, `intent-draft.v1`,
+  `price-path-producer.v1`, `coverage-read.v1`, `outcome.v1`, `abl.v1`,
+  `recorder-health.v1`, `calendar.v1`, `budget-check.v1`; routes
+  `GET /api/solstice/price-paths/{status,points,sessions,expiries,comparable}`;
+  fixtures `r15/evidence/` (`price_path_swing5m_v1.json` `146ebfa4e0be`,
+  `execution_intent_v1.json` `in_5c8c5dcd3b07`, `lodestar_brief_v1.json`);
+  honest net outcomes = INSUFFICIENT EVIDENCE, no edge claim.
+- Activation state: OFF. No flag/order/service/credential changes this
+  session. Protected 71/71 untouched; no Zed-owned file touched (PR103 diff:
+  6 Spark-owned paths only).
+- Next exact action: none READY-owned remains. Await Nav/Zed merge decision
+  on PR103 (and PR93 closeout docs), then combined exact-head acceptance
+  with Zed's lane head. True external blockers unchanged: SPX entitlement,
+  licensed feeds, fixed account/risk policy, Public native activation,
+  participant recruitment, durable production capture, real-money record,
+  Nav visual review.
+
+## 22. Take-over sweep (3 Oct 2026 — Cline assumes the Muse lane)
+
+Nav handed the lane over; packet re-read from
+`/Users/nav/Documents/Codex/2026-10-02/he/outputs/FLOWW-Zed-Spark-Muse-Integration-Packet`.
+Sweep verified the §21/R17 claims at the exact head `611f3c2f`:
+
+- Local (Python 3.14.6, disclosed): r17 **6 passed**; r17+wiring **14 passed**;
+  `ruff check` touched files clean; `openapi.json` 376→**379** purely additive
+  (added `/api/solstice/price-paths/{sessions,expiries,comparable}`, removed
+  none); `docs/api/README.md` 387→390, solstice group 20→23.
+- Hosted PR103 gates all **PASS** at `611f3c2f`: backend-tests + frontend-build
+  + docker-build (run 37096664993), ruff (run 37096665007). PR100 and PR101
+  hosted checks also all PASS (previously pending in Zed's report).
+- PR truth: PR99 MERGED `bec8ac8c`; PR102 MERGED `53d2a051`; `origin/main` =
+  `6eaa3343`. PR93 still OPEN `2f134e03`. PR101 MERGEABLE/CLEAN; PR101's 20
+  files, PR102's 4 files and this lane's 6 files are pairwise disjoint — no
+  merge conflict.
+- Protection: `git diff --name-only 6eaa3343..611f3c2f` is exactly the 6
+  Spark-owned paths — no frontend, agent-tree, TideHunter/Flowseeker, frozen
+  artifact or watchdog files touched. Worktree dirty files were limited to the
+  two Muse-owned docs; committed this pass.
+- Hole found (flagged, Zed-owned docs untouched): the combined candidate
+  `dcbc1492` (PR101) predates PR102's `90f96227` disarmed-supersede fix —
+  tested SHA `e5ee1404` does not include it, so "backend matches the tested
+  candidate" is stale vs `main` `6eaa3343`. Combined acceptance must re-sync
+  at `main` + Zed head `75c160c2` and re-verify before PR100/PR101 merge.
+- Activation state: OFF unchanged. No flags, orders, services, credentials or
+  paid calls. `market_data.py` `dte≤30` display filter and the unfiltered
+  `dte_max` expiry-count loading both unchanged (distinct constraints).
+- Next exact action: Nav/Zed merge decision on PR103 (and PR93 closeout docs);
+  Zed re-syncs the combined acceptance at `6eaa3343` + `75c160c2`.
+
+## 23. Take-over pass 2 (3 Oct 2026 — Zed's residual producer requests)
+
+Zed's PR103 comment (mrbeast1179-sketch, candidate `4bcc6f39` = main
+`6eaa3343` + PR101 `dcbc1492` + frozen PR103 `611f3c2f`) asked for three
+concrete producer items and an in-checkpoint acknowledgement. Acknowledged
+here as READY-owned engineering, not solely external:
+
+1. [DONE this pass] Session-index normalization: `/sessions` now attributes
+   days by the stored `asof_ts` timestamp prefix — the SAME attribution the
+   owning `session_manifest`/`compare_snapshots` match with `LIKE day%` — and
+   reports ET-normalized `ny_date` (null when non-uniform) plus an
+   `overnight` flag for exactly the offset/naive cases. Overnight/offset
+   fixtures pinned (02:00Z crossing ET midnight; naive 00:30 adopting the
+   owning UTC convention; ET-local never flags).
+2. [DONE this pass] Expiries range completion: reversed bounds refuse 422
+   `REVERSED_WINDOW` before any fetch; owning display envelope (`dte le=30`,
+   `market_data.py`) projected per row as `display_envelope` — a DIFFERENT
+   constraint from the admitted 14–60 policy window; honest `coverage` block
+   (requested/n_listed/n_display_envelope/listing_capped/lower+upper edge
+   observed) replaces the silent firstN verdict; listings default 6→12,
+   le 12→16 (budget 2+N fail-closed, CAPACITY 60). Both refusals now return
+   structured JSONResponse bodies — the app's global exception handler
+   stringifies dict details (server.py:231), which would bury the refusal
+   code in a repr string; server.py itself untouched (shared-file protocol).
+3. [DONE this pass] Authenticated/default-deny stored approvals/preflight +
+   account-wide limits/native/open/unknown inventory/protection/recovery
+   boundary: new read-only `lifecycle_inventory()` in
+   `public_execution_lifecycle.py` (known/open/UNKNOWN records with
+   conservative protection truth, draft stages, native workflows, redacted
+   preflight counts, honest recovery boundary — storeless is never claimed as
+   no-orders-open; account-wide limits UNSET) served by the new
+   `GET /api/public/execution-lifecycle/inventory` on the already-mounted
+   public_brokerage router — authenticated via `require_api_key`
+   (503 unconfigured / 401 bad key), NO server.py edit, no live path, no
+   recovery executed, no broker call. 5 focused tests green.
+
+Verification (exact head, Python 3.14.6, disclosed): r17 9 tests + wiring 8 =
+**17 passed**; lifecycle inventory 5 + existing lifecycle 42 = **47 passed**;
+ruff touched files clean; openapi regenerated 379→**380** paths (+1
+inventory route, purely additive); protected 71/71 and Zed-owned files
+untouched.
+
+Coordination note: PR103 carries `gsd:escalated` (gsd-loop review pass: no
+linked issue — the repo has issues disabled; non-`gsd/NNN-*` branch → labels
+only, no verdict posted, per the review playbook). The label is honest: the
+merge decision is Nav's; remove it when linkage exists. Zed's combined
+candidate froze `611f3c2f`; new lane heads require re-composition before the
+combined acceptance.
+
+- Activation state: OFF. No flags/orders/services/credentials/paid calls.
+  All three of Zed's residual producer requests are now DONE engineering;
+  the harness 6-item queue remains complete.
+- Next exact action: combined exact-head acceptance with Zed's re-composed
+  lane head (Zed's candidate froze `611f3c2f`; re-compose at this lane head),
+  plus the Nav/Zed merge decision on PR103/PR101/PR100 and PR93 closeout
+  docs. True externals unchanged.
+
+## 24. Hardening pass (3 Oct 2026 — "continue, no duplicates, reverify, improve")
+
+Duplicate audit (code-read, no new abstraction): `recorder_health`
+(register_capture/start_worker for the capture job) vs
+`solstice_price_producer` (same names for the price-path job) are separate
+jobs with separate flags/states — not merged. `execution_engine.py`
+(equities Almgren-Chriss math) vs `public_execution_lifecycle.py` (Public
+options intent lifecycle) are different domains — not merged.
+`routes/solstice.py` untouched; new reads live in `routes/solstice_price_paths.py`
+only. No duplicate polling path added (one fetch per symbol per tick).
+
+Holes found + fixed (TDD: 4 failing first, then green; all Spark-owned,
+no shared-file edit, no route surface change, no activation):
+1. `supersede()` bypassed approval/preflight gates and cancelled before
+   checking: new params `approval/require_approval/approval_scope/
+   require_fresh_preflight`, deterministic gates pre-validated on the final
+   candidate (with `supersedes`) BEFORE any cancel — a refused transition
+   never strands a cancelled order. Pinned by 2 tests (old stays OPEN,
+   zero new broker calls on refusal).
+2. `lifecycle_inventory()` counted memory drafts only: now unions durable
+   `intent_drafts_v1` rows (deduped by intent_hash) — a restarted process
+   reports stored drafts honestly. Pinned.
+3. `validate_intent` max_positions used memory-only `_open_records()`:
+   new `_open_count()` takes max(memory, durable nonterminal) — a fresh
+   process without recover still refuses over-limit entry, never
+   undercounts; no double-count after recover. Pinned.
+4. `/sessions` ET-edge: prefix-valid but ET-unparseable stamps (or a mix)
+   now disclose `overnight True / ny_date None` instead of silently keeping
+   the prior day. Pinned via direct ZZU seed.
+5. Producer restart OOO: `_last_at` high-water seeds from
+   `MAX(at_ts)` per ticker on first encounter — a restarted producer flags
+   late observations instead of resetting the sequence. Pinned.
+
+Verification (exact head, Python 3.14.6 disclosed, backend CWD):
+new `test_r17_hardening.py` **6 passed**; adjacent
+(r17 reads 9 + inventory 5 + hardening 6 + wiring 8 + lifecycle 42) **70
+passed**; full `tests/solstice/` **624 passed**; `ruff` touched clean;
+`generate_api_docs.py --check` **380 paths current** (service-only fixes,
+no regen needed).
+
+- Activation state: OFF. No flags/orders/services/credentials/paid calls.
+  Zed's `ef911f37` already merges `044ca009` verbatim + consumer-only files;
+  this pass adds a new lane head requiring Zed re-composition before the
+  combined acceptance.
+- Next exact action: commit + push lane only (no merge/deploy/activate);
+  Zed re-composes at the new head; Nav merge decision on
+  PR103/PR104/PR101/PR100 + PR93 docs. True externals unchanged.
+
+## 25. Execution-controls pass (3 Oct 2026 — Zed residual controls)
+
+Zed's pass-3 receipt keeps commissioning HOLD on Spark-owned controls:
+complete 14–60 analytical projection + authenticated/default-deny
+account-wide approval, risk, ownership, protection, recovery. Delivered as
+additive, default-deny, fixture-proven service truth (no live calls, no
+venue-flag change, no new route, no server.py edit):
+
+1. `range_map` on `/expiries` (additive): sorted admitted expiries/DTEs,
+   min/max admitted DTE, `complete` (true when uncapped or both edges
+   observed) else `LISTING_CAPPED_WINDOW_MAY_EXTEND`. Existing
+   `expiries/coverage` fields byte-identical in shape; openapi regen is
+   description-only (380 paths).
+2. Account-wide policy registry (`account-policy.v1`, single active row,
+   memory + durable): `set/get/clear_account_policy` (operator required);
+   `validate_intent` enforces stored ceilings (quantity/notional/positions/
+   allowed products) in addition to per-call ctx — ctx narrows, never widens.
+   Absent stays UNSET.
+3. Stored + revocable approvals: `store_approval` (shape-validated, operator
+   required, memory + durable `approvals_v1`), `revoke_approval`,
+   `verify_approval` fails closed on mismatch/expiry/scope AND revocation
+   (memory or durable). `submit(require_approval=True)` inherits revocation
+   enforcement; `supersede` pre-validates gates before any cancel (§24).
+4. Recovery-before-entry: `submit` refuses `RECOVERY_REQUIRED` when the
+   registry is empty but durable nonterminal rows exist — production flow is
+   `recover_open()` + `reconcile_all()` first. Pinned.
+5. Native protection truth: `NATIVE_PROTECTION_MATRIX` + `native_protection_support()`
+   (conservative: all current combinations report unsupported/
+   unverified-native-support, never offered). `lifecycle_inventory` reports
+   `approvals` counts, `protection.native_support`, `policy` set-state and
+   the RECOVERY_REQUIRED boundary — counts only, no secrets.
+6. Fixture `r15/evidence/execution_controls_v1.json` (`execution-controls.v1`)
+   for Zed's consumer lane.
+
+Verification (exact head, Python 3.14.6 disclosed, backend CWD):
+`test_r17_hardening.py` **12 passed** (6 §24 + 6 new); adjacent
+(r17 9 + inventory 5 + hardening 12 + wiring 8 + lifecycle 42) **76 passed**;
+full `tests/solstice/` **630 passed**; `ruff` touched clean;
+`generate_api_docs.py --check` **380 paths current** after description-only
+regen.
+
+- Activation state: OFF. No flags/orders/services/credentials/paid calls.
+  No Zed-owned file touched. This head supersedes `c10361ac`; Zed
+  re-composes the combined candidate here.
+- Next exact action per Nav "merge commit everything": publish a combined
+  review-only candidate (main + Spark lane + Zed `7ea8cbff`) with exact-head
+  evidence; main merge/deploy/activation decisions stay Nav's.
+
+## 26. Combined candidate (3 Oct 2026 — Nav "merge commit everything")
+
+- Combined branch `solstice/combined-r17-20261003` from `origin/main`
+  `6eaa3343`: merged Zed `7ea8cbff` (frontend/consumers/receipts; hosted
+  4-gate green at tested `ef911f37`, receipt metadata-only on top) then
+  Spark `e3937674` (§25 controls). Both merges clean, no conflicts.
+  Combined head `4dc3c0e7`, 52 files vs main (12 Spark + 49 Zed − 9 overlap).
+- Verification at combined head (Python 3.14.6, backend CWD):
+  `tests/solstice/` **630 passed**; focused 76 passed; `ruff` clean;
+  `generate_api_docs --check` **380 current**. Frontend tree identical to
+  Zed's tested head (`git diff 7ea8cbff...HEAD -- frontend/` empty), so his
+  126-suite/1137 receipt stands for the consumer tree.
+- Published review-only PR105 (combined branch → main). No main merge, no
+  deploy, no service restart, no activation, no orders, no paid calls.
+  Commissioning HOLD; policy UNSET except operator-installed test policies;
+  zero durable admitted records → INSUFFICIENT EVIDENCE; no profitability
+  claim. Protected/frozen/watchdog untouched.
+
+## 27. Resweep (3 Oct 2026 — CI red → green, revocation/freshness hardening)
+
+- PR105 ruff job FAILED on the silent-except gate: 7 new unjustified
+  `except: pass` sites from §25, all in `public_execution_lifecycle.py`.
+  Fixed with `silent by design` reasons (memory-authoritative, durable
+  best-effort); local gate now OK (353 files).
+- Hardened three cross-process holes in the new controls (TDD, +3 tests):
+  re-storing a revoked approval never resurrects it; durable revocation is
+  honored over a stale memory copy; account policy resolves newest write
+  across registries by updated_at.
+- Verification: hardening **15 passed**; adjacent **79 passed**; full
+  `tests/solstice/` **633 passed**; ruff + silent-gate + truth 226/0 green.
+- Lane `a4abe216` pushed (PR103); combined re-composed to `ae716ce0` and
+  pushed (PR105 CI re-running). Activation OFF; no live calls.
+
+Resweep catch (same session): the new ZZU session test created a partial
+`heatmap_snapshots_v2` stub (`CREATE TABLE IF NOT EXISTS` with 3 columns),
+breaking `record_snapshot` for any test file running after it in the same
+process — order-dependent, my miss. Fixed to `ensure_tables()` + DELETE
+(lane `667993ff`); both file orders green. Combined re-merged to `084774bb`,
+full `tests/solstice/` **633 passed** there too. Receipt addendum above
+covers §24–§27; `range_map` is an expiry-list projection, NOT a persisted
+analytical grid; range-map analytics and execution activation stay disabled.
+
+## 28. Zed consumed the lane (3 Oct 2026 — no pause, no touch)
+
+Zed's `98ab205a` merged this lane through `1e43c00a` himself (merges
+`b6e24961`, `52e59a7c`) — Spark files verified verbatim
+(`git diff 1e43c00a..98ab205a -- backend/services backend/routes
+MUSE_STATE SPARK_R17_RECEIPT` empty). On top he built read-only consumers
+for the §25 controls (policy/approval/native-support/recovery reports,
+admitted-listing projection) with 99-test + 28-storybook receipts and a
+PASS on the repaired silent gate. His branch is the freshest composition:
+main `6eaa3343` + Spark lane + his consumers. This lane changes nothing of
+his; combined re-composed by merging his head (code) — backend identical
+to the 633-green tree, frontend identical to his tested head.
+
+## 29. Exact-head backend receipt + all-green combined (3 Oct 2026)
+
+- Full backend suite at combined `daa31c7c` (local, Mongo up, unmasked):
+  **7099 passed, 37 skipped** (pre-existing count), 0 failures, 669s.
+  Covers the §24/§25/§27 lifecycle + producer + route changes that postdate
+  Zed's older full-suite receipts.
+- Hosted PR105 gates at `daa31c7c` ALL PASS: backend-tests 16m37s (run
+  37114933740), docker-build, frontend-build, ruff (run 37114933714) —
+  including the previously-failing silent-except gate.
+- Zed published pass-4 docs `0d8452d7` (acceptance/evidence/screenshots
+  only — zero runtime files). Runtime tree unchanged; no re-composition
+  needed and none done, so hosted green stands as posted.
+- Activation OFF; no deploy/orders/paid calls. INSUFFICIENT EVIDENCE; no
+  profitability claim. Main-merge call stays Nav's.
+
+## 30. Strict stored-approval mode (3 Oct 2026 — Zed pass-4 blocker closed)
+
+Zed: "the isolated current-runtime probe still accepts a supplied approval
+with no authoritative stored row." Closed with opt-in `require_stored_approval`
+on `submit`/`supersede` (forwarded + pre-validated before cancel): the
+approval must resolve to a durable, unrevoked row binding the presented
+intent. `APPROVAL_NOT_STORED` (missing/storeless), `APPROVAL_INVALID`
+(revoked/mismatch), `APPROVAL_STORE_UNAVAILABLE` (query failure,
+fail-closed). Default validation-only behavior unchanged; no live calls, no
+new route, no server.py edit.
+Verification: hardening **19 passed**; full `tests/solstice/` **637
+passed**; ruff + silent-gate + truth green. Lane `35939a6e`; combined
+`47576f67` (PR105 CI re-running). Activation OFF.
+
+## 31. Resweep — recovery surplus + count dedup (3 Oct 2026)
+
+Full-pattern audit (except-handlers, env reads, TODOs, duplicate routes/
+services/mounts): clean — single definitions, single mounts, no venue-flag
+reads in the lifecycle, no TODOs. Two refinements, both TDD-pinned:
+1. `RECOVERY_REQUIRED` now fires on durable surplus over known memory opens,
+   not just empty registries — a process holding only settled history still
+   refuses new entry while foreign durable opens go unrecovered.
+2. New `_durable_open_count()` helper removes the duplicated durable-count
+   query (`_open_count` + submit gate shared it); inventory approval counts
+   are now unique-by-ID unions across memory + durable instead of max().
+Verification: hardening **21 passed**; full `tests/solstice/` **639
+passed**; ruff + silent-gate (353) + truth + API-380 green. Combined
+re-composed; PR105 CI re-running. Activation OFF.
+
+## 32. Spark resumes — Cline takeover closed, full-lane resweep (3 Oct 2026)
+
+Spark stopped mid-session yesterday; Cline took over (§§22–23: take-over
+sweep + Zed's 3 residual requests at `93dc0ef0`/`044ca009`) and is now out.
+Cline's work is preserved as history and was re-verified claim-by-claim in
+this pass: session-prefix attribution, `REVERSED_WINDOW`/coverage semantics,
+and the inventory route all match the code; the `server.py:231` handler was
+read and confirms the JSONResponse rationale (dict details are stringified
+there); neither Cline commit touches `server.py`. Takeover complete — the
+lane drives as Spark from here; no Cline-owned branches, worktrees, or
+pending edits remain in this lane's path.
+
+Resweep verdict (fresh eyes over the whole lane `main...a9e794ca`):
+pre-existing seams (`record_price_path`, `price_paths_since`,
+`outcome_close_tick`, replay/manifest) hold and stay untouched — tested,
+out of the owned queue, changing them buys nothing. Lane↔combined
+coherence verified (backend identical, no conflict markers, 12 lane files
+all Spark-owned + taken boundary). Full `tests/solstice/` **639 passed**
+at combined `d5a8b469` too. No new engineering: the owned READY queue is
+empty; pre-existing outcomes evidence stands (zero durable admitted
+records → INSUFFICIENT EVIDENCE).
+Deliberately NOT merged to combined yet: PR105 CI is running on `d5a8b469`
+and a docs push would restart it for zero code gain. Merge this record with
+the next code change, or after green.
+
+## 33. All-green combined + full-suite receipt (3 Oct 2026)
+
+- Hosted PR105 gates at combined `d5a8b469` ALL PASS: backend-tests 19m10s
+  (run 37136912635), docker-build, frontend-build, ruff (run 37136912574).
+- Local full backend suite at the same head (Mongo up, unmasked):
+  **7105 passed, 37 skipped** (pre-existing), 0 failures — covers strict
+  stored-approval mode + recovery-surplus + dedup on top of the earlier 7099.
+- Zed unmoved at `0d8452d7` (docs/evidence-only pass-4); his consumers sit
+  on the lane verbatim. This §33 stays lane-only: merging a docs record
+  into the green combined head would restart hosted CI for nothing.
+- Activation OFF; INSUFFICIENT EVIDENCE; no profitability claim.
+  Main-merge call stays Nav's.
+
+## 34. Fixture completion (3 Oct 2026 — lane-only, green head preserved)
+
+- `execution-controls.v1` fixture extended (lane `79ccf1e5`, docs-only):
+  strict-mode semantics + all 28 submit/coverage refusal codes + stated
+  limitations (listing-projection, inventory-reports-only). Validated JSON.
+  No test, route, or service references it — Zed consumes it on his next
+  lane merge, his established pattern.
+- Verified untouched: budget raises (never returns False), cancel signature
+  matches `PublicBroker.cancel_order(account_id, order_id)`, calendar
+  half-days, bandit clean on touched files.
+- Combined stays at green `d5a8b469` deliberately: a docs-only merge+push
+  would restart hosted CI for zero runtime gain. Next recomposition batches
+  this fixture with the next code change or Zed's merge.
+
+## 35. Zed pass-5 absorbed (3 Oct 2026 — docs restored, runtime untouched)
+
+Zed's pass-5 (`aadea4ac` code / `77b8a127` receipt, PR104 all-green):
+runtime + receipt verified identical to this lane
+(`git diff` empty on backend/services, routes, tests, openapi, receipt).
+Two deltas, both mine-postdating-his-base (his composition branched at
+§33): my §34 MUSE record and the extended `execution-controls.v1` fixture
+were absent on his side — restored here verbatim, his files untouched.
+Combined re-composed from his receipt head + this lane; PR105 CI runs once
+on the result. No code change in this section.
+
+## 36. Three-agent adoption (3 Oct 2026 — S1/S2/S3 reopened READY)
+
+Adopted `FLOWW-Three-Agent-Ownership-and-Contracts.md` + backlog + the
+OpenCode/Spark harness. Prior notes calling this boundary external/complete
+are historical; S1–S3 are engineering READY again.
+Owned: `public_execution_lifecycle.py`, new execution-admission/account-risk
+modules, `public_brokerage.py`, executor tests, namespace migrations.
+NOT owned (read-only): frontend, agent tree, Cline's adapter/range/recorder
+files (`public_api_adapter`, `market_data`, `solstice_price_paths`,
+`heatmap_history`, `recorder_health`, `solstice_price_producer`,
+`solstice_price_fetch`), `server.py`, generated API docs, protected/frozen
+files, other checkpoints. Route mounts/patches go to Zed as unmounted
+proposals; no combined recompose on checkpoint-only edits (Zed batches).
+Lane: this worktree/branch. No live/paid/activation work authorized.
+
+## 37. S1 DONE — required durable admission (3 Oct 2026)
+
+New `backend/services/execution_admission.py` (`execution-admission.v1`)
++ `backend/tests/solstice/test_s18_admission.py` (11 tests, failed-first:
+1 red on purge scope, fixed to unconditional fail-closed purge).
+Durable-first policy/approval/revocation writes (memory purged on failure);
+storeless/DLL/query failures refuse (`STORE/POLICY_STORE/APPROVAL_STORE_
+UNAVAILABLE`); corrupt census rows refuse `RECOVERY_INCOMPLETE`; unknown
+counts refuse `RECOVERY_UNKNOWN`; unknown-state opens refuse
+`UNKNOWN_ORDERS_PENDING`. Account-keyed `account_policy_v2` + explicit
+`migrate_account_policy_v1` (no guessed accounts, no silent overwrite).
+`admit_production_entry` decides ADMIT/REFUSE with zero broker calls in
+every path (exploding-broker pinned). Legacy lifecycle functions untouched.
+Verification: new 11 + full `tests/solstice/` **650 passed**; ruff + silent
+gate (354) + API-380-current green. S4 handoff: Zed mounts/integrates;
+no combined recompose from here (Zed batches heads).
+
+## 38. S2 DONE — commissioned admission + risk ledger (3 Oct 2026)
+
+- `backend/services/operator_registry.py` (`operator-registry.v1`):
+  durable-only operator→accounts binding. No memory authority anywhere in
+  this registry. Duplicate refuses `OPERATOR_EXISTS`; corrupt allowlist
+  refuses distinctly from unknown operator.
+- `backend/services/account_risk_ledger.py` (`account-risk-ledger.v1`):
+  FIFO realized, exposure, premium/fees, fill-dedup from injected facts;
+  missing/unknown/uncovered facts refuse, breaches refuse with detail.
+  Exact Decimal, floats rejected.
+- `admit_commissioned_entry` layers operator auth + S1 authority + ledger
+  vs required policy + verified remote native census (absent/unverifiable
+  → `NATIVE_CENSUS_UNAVAILABLE`; remote OPEN → `OVERLAP_NATIVE`). Zero
+  broker calls in every path (exploding-broker pinned).
+- `backend/routes/execution_admission.py`: UNMOUNTED proposal patch
+  (policies/approvals/revoke/operators/risk/decision, all `require_api_key`,
+  no broker use). Tested via test-local app. Zed reviews the mount.
+  `server.py` untouched, openapi 380 untouched.
+- Known residual (documented, not hidden): the mounted `POST /order`
+  route calls the broker without admission — changing that live path needs
+  Nav/Zed review, so it ships as a proposed patch, not a unilateral edit.
+Verification: new 5 + full `tests/solstice/` **655 passed**; ruff +
+silent-gate + bandit + API-380 green. Next READY: S3 (deployment
+exclusion proof with separate processes).
+
+## 39. S3 DONE — exclusion lease + protection/expiry admission (3 Oct 2026)
+
+- `backend/services/execution_lease.py` (`execution-lease.v1`): atomic
+  single-executor lease (O_CREAT|O_EXCL winner, heartbeat, owner-only
+  release, expiry steal). Proven with REAL OS processes: 4-way serialized
+  holds, simultaneous single-winner, crash→expiry-steal, foreign
+  release/heartbeat refused, expired heartbeat refused. Wiring into submit
+  is a Zed/Nav-reviewed proposal, not done unilaterally.
+- `backend/services/execution_protection.py`
+  (`execution-protection.v1`): protection refuses `PROTECTION_UNVERIFIED`
+  for every combination (no documented mechanism exists); policy-driven
+  expiry guard (`EXPIRY_TOO_NEAR`/`GUARD_UNCONFIGURED`/`EXPIRY_INVALID`,
+  same-day cutoff, assignment exposure disclosed).
+- Pinned cancel/reconcile availability during the 11:30–14:00 entry pause.
+- Process note (my repeated miss, now a rule): stop issuing edits whose
+  old/new strings differ only by trailing newline — it joins the header to
+  the next line. Every edit now re-verified with grep before proceeding.
+Verification: new 8 + full `tests/solstice/` **663 passed**; ruff +
+silent-gate + bandit + API-380 green. S4 handoff: lane heads + refusal
+matrix published here; Zed assembles the combined successor. No combined
+recompose, no mount, no main push from this lane.
+
+## 40. S4 DONE — acceptance matrix + handoff (3 Oct 2026)
+
+`docs/solstice/SPARK_S18_ACCEPTANCE.md`: exact head/contracts/fixtures
+(with sha256) / layered test matrix (service 45+64, adapter-observation 63,
+full solstice 663, lint/security/docs) / full refusal codes / Zed mount
+notes / remaining externals. Process correction: the trailing-newline edit
+mistake recurred twice more (§§37/39 headers) — repaired immediately both
+times; headers verified healthy (§§36–39). Rule stands: edits always carry
+following-line context and are grep-verified. S1–S4 complete; owned READY
+queue empty pending genuine external input.
+
+## 42. Branch pins, no new bugs (3 Oct 2026)
+
+Function map showed every S1–S3 function referenced by tests; this pass
+pinned the untested BRANCHES: ledger daily-loss breach (`-2.00` FIFO) +
+missing-day refusal, corrupt-allowlist distinct refusal, corrupt lease-file
+refusal. All passed immediately — regression pins, not fixes, reported as
+such. Full `tests/solstice/` **670 passed**; ruff clean. PR103 hosted CI
+running on the prior head; this pushes branch pins only.
+
+## 41. Resweep fixes — ceilings enforced + migrate label (3 Oct 2026)
+
+Exhaustive function-coverage audit found two real gaps (fixed, TDD-pinned):
+1. S1 `admit_production_entry` checked policy EXISTENCE but never enforced
+   its ceilings — added `_enforce_account_ceilings` (quantity/notional/
+   products/positions, fail-closed on parse failure).
+2. Corrupt v1 JSON in migration reported `POLICY_STORE_UNAVAILABLE`;
+   now correctly `POLICY_CORRUPT`.
+Plus direct unit tests for `has_fresh_preflight`/`ensure_lifecycle_tables`/
+`_durable_open_count` (storeless→None, not zero).
+Verification: admission **15 passed**; full `tests/solstice/` **667
+passed**; ruff + silent-gate (359) + truth + API-380 green.
+Process: the trailing-newline edit defect recurred on §40 (repaired,
+verified). No header-only edits from here — append-only with context.
+
+## 43. Full-suite lane receipt (3 Oct 2026)
+
+Full backend suite at lane `ba14cc38` (Mongo up, unmasked): **7136 passed,
+37 skipped** (pre-existing), 0 failures, ~11 min. Note: combined `d5a8b469`
+predates S1–S4 (Zed composes it next — his call per ownership contract, not
+a lane merge from here). PR103 hosted ruff/frontend green, backend running.
+Header-edit defect recurred on §42 (repaired + verified immediately).
+Filing correction: §§41/42 are chronologically swapped in this file
+(cosmetic only — content and heads intact; renumbering would churn more).
+
+## 44. Mount audit + decision fixture (3 Oct 2026)
+
+- Mount-collision audit for the unmounted `execution_admission` router:
+  no `/admission` prefix or path clashes anywhere in routes/server;
+  endpoint set (`policies`, `approvals`, `revoke`, `operators`,
+  `risk/evaluate`, `decision`) collision-free. Ready for Zed's mount.
+- `commissioned-decision.v1` fixture generated from a live temp-DB run
+  (ADMIT on full pass / `OPERATOR_UNKNOWN` refusal) — deterministic,
+  redacted, test-labeled. No code references; zero regression surface.
+- Lane-only push; combined/CI untouched by design.
+
+## 45. R18 repairs S5–S10 (3 Oct 2026) — state split
+
+DELIVERED (this lane, green): S5 resurrection/conflict guards (admission +
+legacy, TDD); S6 fence generations + `fenced_action` + `deployment_scope`
++ spawn/barrier contention proof; S7 ledger rewrite (carried lots, dedup
+once, multiplier, required fees/ts/multiplier/status, affordability,
+complete-policy mode); S8 OSI cross-check + commissioned expiry/protection
+gates + armed `/order` repair (policy-gated order approvals); S9
+approved_by binding + evidence grades (route forces client-asserted) +
+single-store enforcement; S10 spawn isolation + contender inspection +
+bounded joins. Fixture now 55 refusal codes. PR103 title/body corrected.
+REVIEW-PENDING (Zed): unmounted admission mount, lease wiring into submit,
+`/order` full-enforcement when UNSET, analytical grid consumption.
+ACCEPTED: R17 strict/surplus/inventory repairs (Zed pass-3/4/5 receipts).
+COMMISSIONING (external HOLD): NAV-ACCOUNT/CAPTURE/NATIVE/MODEL/VISUAL/
+RELEASE. Zero durable admitted records → INSUFFICIENT EVIDENCE.
+Verification: full `tests/solstice/` **682 passed**; ruff + silent-gate +
+bandit + API-380 + truth green.
+
+## 46. R18 repair continuation — S5–S10 regression pass (3 Oct 2026)
+
+Environment (recorded, not assumed): OpenCode 1.18.34, provider/model
+`muse-spark-1.3-contributor-free` (Muse Spark 1.3; no xhigh effort knob
+exposed in this host — executed as the connected implementation model),
+tool access read/write/edit/bash/grep/glob verified working, lane
+`.worktrees/spark-r17` at `5ac192df`. Packet + ownership contract +
+R18 handoff re-read from
+`/Users/nav/Documents/Codex/2026-10-02/he/outputs/
+FLOWW-Zed-OpenCode-Cline-Three-Agent-Packet/`. PR103 description already
+corrected (review-only + known limits). No live/paid/activation work.
+
+- [VERIFIED, no change] S5 APPROVAL: store→revoke→re-store stays revoked
+  in BOTH paths (admission refuses APPROVAL_INVALID, legacy returns the
+  revoked row with no durable/memory reset), conflicting identity refuses
+  (APPROVAL_CONFLICT / ValueError) without touching authority, strict
+  query-failure stays default-deny. Pinned by
+  `test_required_restore_never_resurrects_revoked`,
+  `test_required_restore_refuses_conflicting_identity`,
+  `test_store_approval_never_resurrects_revoked`,
+  `test_legacy_store_refuses_conflicting_identity`.
+- [FIXED] S6 OWNERSHIP: the expired-takeover path was last-writer-wins —
+  an 8-contender spawn barrier probe showed 5–8 simultaneous acquire-ok
+  (every loser believed it owned the lease; the old test redefined
+  "winner" via post-sleep heartbeat). `acquire_lease` steal is now a
+  flock-serialized compare-and-swap: exactly one acquire-ok per race
+  (probe 1/8 across fresh + expired trials), losers observe the live
+  owner and refuse LEASE_HELD. Heartbeat/release re-verify the token
+  under the same lock (stale tokens neither extend nor delete — pinned
+  by `test_stale_token_cannot_clobber_new_owner`). Fence generations
+  stay monotonic across release via a lock sidecar (pinned).
+  `deployment_scope()` now states the flock mechanism, POSIX requirement
+  (`MULTIPROCESS_SAFE`), and single-host-volume boundary.
+- [VERIFIED + pinned] S7 RISK: FIFO lot carryover, one-time fill dedup,
+  multiplier in exposure/premium, required fees/ts/multiplier/status,
+  affordability (proposed + open-order reservation vs buying power),
+  complete-policy mode. New pins: quantity1 × 3.30 × 100 → exposure
+  330.00 / fees 0.65; previous-day lot sale daily P&L with duplicate
+  ignored (already present, re-verified).
+- [VERIFIED] S8 EXECUTOR: expired Sep-4 at Oct-2 refuses
+  EXPIRY_TOO_NEAR/EXPIRY_INVALID in the commissioned sequence (was the
+  regression positive — now a refusal test); missing protection ack
+  refuses PROTECTION_UNVERIFIED; armed `/order` has the progressive
+  policy-gated approval repair (legacy only when NO store/policy;
+  fail-closed otherwise); cancel/reconcile stay available during the
+  11:30–14:00 entry pause (pinned). Full-enforcement-when-UNSET stays
+  REVIEW-PENDING (production-behavior change for Nav/Zed).
+- [FIXED + pinned] S9 AUTHORITY: commissioned path now enforces
+  broker-fact provenance — `account_id` (= intent account),
+  `source`, and `asof` within `FACTS_MAX_AGE_S` (300s) of the decision
+  clock; stale/foreign/unsourced facts refuse (STALE_FACTS /
+  RISK_FACTS_INCOMPLETE) with zero broker calls. Malformed native
+  census rows refuse NATIVE_CENSUS_UNAVAILABLE (were silently skipped).
+  `/admission/decision` forces `evidence_grade="client-asserted"` so the
+  research surface NEVER admits (pinned). Single-store (STORE_MISMATCH)
+  and approved_by==operator binding re-verified. Known limitation
+  recorded for Zed/Nav: operators are registry-bound but authenticated
+  only via the shared master API key — per-operator credentials do not
+  exist in this app.
+- [FIXED/PROVEN] S10 CI: deployment tests run spawn-only with matched
+  Queue/Barrier/Event context, bounded joins + exit-code asserts (no
+  fork, no curl_cffi inheritance); barrier test now inspects contender
+  ACQUIRE results (exactly one ok, losers LEASE_HELD). Ship-runtime
+  proof: Python 3.12 + pinned `requirements.txt` scratch venv —
+  deployment 14/14 and admission/commissioned/hardening/lifecycle 94
+  passed. (Bare system 3.12 without deps fail-closes SESSION_CLOSED on
+  the missing calendar — correct default-deny, env gap only.)
+- Fixture `execution-controls.v1` now 56 codes (+STALE_FACTS),
+  sha256 `ac0be623…`. `SPARK_S18_ACCEPTANCE.md` refreshed (counts 18/
+  15/14/22, full 687, ship-3.12 evidence, corrected `/order` notes,
+  concrete Zed mount/context/integration notes).
+- Verification (backend CWD): full `tests/solstice/` **687 passed**;
+  ruff clean; silent-gate 359 OK; bandit touched clean; openapi 380
+  current (no route surface change — admission router stays unmounted).
+  Fail-first proven for each fix (stashed-service reruns fail, restored
+  runs pass); the route-never-admits pin holds both ways by design.
+- State split: DELIVERED = this §46 (lane branch only, PR103 push);
+  REVIEW-PENDING = Zed mount/lease-wiring/UNSET-enforcement + his
+  composed executor review (boundary notes in SPARK_S18_ACCEPTANCE.md);
+  ACCEPTED = prior R17 receipts (untouched); COMMISSIONED = external
+  HOLD (NAV-ACCOUNT/CAPTURE/NATIVE/MODEL/VISUAL/RELEASE). Activation
+  OFF. INSUFFICIENT EVIDENCE. No profitability claim.
+- Next exact action: push lane to `solstice/spark-r17` (no merge); Zed
+  re-composes the combined candidate at the new head; Nav merge
+  decision on PR103/PR105. Pre-existing dirty
+  `kanban/BOTTLENECK_ALERTS.md` (watchdog) left untouched.
+
+## 47. Resweep — executable-path + fail-open audit (3 Oct 2026)
+
+Full-pattern re-read of every owned S18 file (services + routes +
+tests). Holes found and fixed, all TDD with stash-proven fail-first
+(6/6 new regression tests fail on the pre-fix tree, pass after):
+
+1. S8 EXECUTABLE GAP (real): order approvals could be minted for expired
+   option contracts and the armed `/order` path verified only the
+   fingerprint — no expiry/protection check anywhere on the
+   broker-reachable sequence. `create_order_approval` and
+   `verify_order_approval` now both run `_option_order_guards` (OSI
+   expiry vs required-policy `min_entry_dte` + `allow_unprotected_entry`
+   ack, server clock): creation refuses, and a policy narrowed between
+   creation and placement refuses at verify — no riding out the ≤24h
+   validity window. Malformed OSI refuses BAD_CONTRACT (never the
+   equity skip-path). Equities (non-OSI) stay kill-switch + fingerprint
+   (disclosed; tightening is Nav's production-behavior call).
+2. PROTECTION CLOCK: DTE used the UTC date — the 00:00–04:00 UTC window
+   undercounts ET days (fail-open). Now ET calendar days (pinned).
+   Malformed `same_day_cutoff_et` string-compared unpredictably
+   (fail-open); now strictly `HH:MM`-validated else GUARD_UNCONFIGURED.
+3. LEDGER LOSS NET: daily loss ignored same-day fees (gross −200 vs net
+   −201 — fail-open for fee-sized margins). `day_realized` is now net
+   of `day_fees` (new snapshot field). Short positions refuse
+   RISK_FACTS_INCOMPLETE (long-lot model cannot price them; refusing
+   beats mispricing).
+4. OPERATOR LIFECYCLE: registry had no removal — added
+   `remove_operator` (+ unmounted route + pins); unknown removal
+   refuses, never silent.
+5. CEILINGS PRODUCT: `_enforce_account_ceilings` hardcoded OPTION —
+   now derived from the intent contract (CALL/PUT → OPTION else
+   EQUITY), pinned both directions.
+6. SCOPE ASSERT: deployment-scope test no longer assumes POSIX — asserts
+   the reported flag equals `MULTIPROCESS_SAFE`.
+
+Verification (backend CWD): full `tests/solstice/` **693 passed**;
+focused s18+hardening+lifecycle+brokerage **79 passed** (3.14) and
+**121 passed** on ship Python 3.12 + pinned-requirements scratch venv;
+ruff clean; silent-gate 359 OK; bandit touched clean; truth 227/0;
+openapi 380 current (new remove route is on the UNMOUNTED proposal
+router — no surface change). No new refusal codes (fixture stays 56).
+Delivered/review/accepted/commissioned split from §46 stands; this §47
+is DELIVERED lane work for Zed's re-composition. Activation OFF.
+INSUFFICIENT EVIDENCE. No profitability claim.

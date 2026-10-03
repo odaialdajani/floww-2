@@ -17,6 +17,9 @@ POST /api/public/order — place a single-leg order.
 
 POST /api/public/order/{order_id}/cancel — cancel an open order.
 
+GET /api/public/execution-lifecycle/inventory — read-only lifecycle inventory
+  (authenticated, default-deny): the stored execution boundary with no live path.
+
 Auth: every endpoint requires the master key (X-API-Key, see auth.py).
 Public.com orders are LIVE, not a paper simulation. New submissions are
 disabled unless FLOWW_ENABLE_LIVE_PUBLIC is exactly 1 after explicit operator
@@ -58,6 +61,56 @@ def _require_live_trading_enabled() -> None:
                 "Set FLOWW_ENABLE_LIVE_PUBLIC=1 on the backend to arm it."
             ),
         })
+
+
+def _admission_store_conn() -> Any | None:
+    """Durable handle for admission reads (monkeypatchable in tests).
+
+    None (no engine) means the deployment has no admission store: the
+    legacy kill-switch-only path applies and is disclosed as such.
+    """
+    try:
+        from services.duckdb_engine import db as eng
+
+        return eng.conn if hasattr(eng, "conn") else None
+    except Exception:
+        return None
+
+
+def _require_order_admission_if_policy(
+    account_id: str, symbol: str, side: str, quantity: float,
+    limit_price: float | None, request: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Progressive admission enforcement on the broker-reachable path (S8).
+
+    - No admission store → None (legacy kill-switch-only path; disclosed).
+    - Store present but policy lookup fails → refusal (fail closed).
+    - Required v2 policy present → a body approval_id must verify against
+      the server-recomputed order fingerprint, else refusal. Cancellation
+      and reconciliation paths are untouched by this gate.
+    Returns None when placement may proceed, else a refusal detail dict.
+    """
+    from services import execution_admission as adm
+
+    conn = _admission_store_conn()
+    if conn is None:
+        return None
+    policy = adm.get_account_policy_required(conn, account_id)
+    if policy.get("reason") == "POLICY_UNSET":
+        return None
+    if not policy.get("ok"):
+        return {"error": policy.get("reason", "POLICY_STORE_UNAVAILABLE"),
+                "message": "Admission store unreadable; refusing live submission."}
+    approval_id = request.get("approval_id")
+    verified = adm.verify_order_approval(
+        conn, approval_id, account_id, symbol, side, quantity, limit_price)
+    if not verified.get("ok"):
+        return {"error": verified.get("reason", "APPROVAL_INVALID"),
+                "message": "A stored order approval bound to these exact order "
+                           "fields is required while an account policy is installed. "
+                           "Create one via POST /admission/order-approvals.",
+                "detail": verified.get("detail")}
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -395,6 +448,15 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
         if account is None:
             raise HTTPException(status_code=502, detail={"error": "no_account"})
 
+        # Admission gate AFTER account resolution (needs the account) and
+        # BEFORE any broker placement. Legacy behavior holds where no
+        # required policy is installed; refusals carry machine-readable codes.
+        admission_refusal = _require_order_admission_if_policy(
+            getattr(account, "account_id", ""), symbol, side, quantity,
+            limit_price, request)
+        if admission_refusal is not None:
+            raise HTTPException(status_code=403, detail=admission_refusal)
+
         order = await broker.place_order(
             account_id=account.account_id,
             symbol=symbol,
@@ -474,3 +536,22 @@ async def cancel_order(order_id: str) -> dict[str, Any]:
             "error": "api_error",
             "message": f"Public.com API error: {exc}",
         }) from exc
+
+
+@router.get("/execution-lifecycle/inventory", dependencies=[Depends(require_api_key)])
+async def execution_lifecycle_inventory() -> dict[str, Any]:
+    """Read-only lifecycle inventory (authenticated, default-deny; R17-4).
+
+    Reports the stored execution boundary — known/open/unknown intent records
+    with conservative protection truth, draft stages (stored approvals and
+    preflight states are draft rows, never client booleans), native workflow
+    registrations, the NEW-ENTRY protection window and the recovery boundary —
+    without executing recovery, any broker call or any new live path. The
+    live-submission arm state is disclosed; account-wide limits stay UNSET.
+    """
+    from services.public_execution_lifecycle import lifecycle_inventory
+
+    inventory = lifecycle_inventory()
+    inventory["live_submission_armed"] = (
+        os.environ.get("FLOWW_ENABLE_LIVE_PUBLIC", "") == "1")
+    return inventory

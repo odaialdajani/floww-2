@@ -1,0 +1,117 @@
+{
+ "account_policy": {
+  "applies_when": "installed only; absent stays UNSET and per-call ctx limits still apply; newest write across registries governs",
+  "example": {
+   "max_notional": "5000",
+   "max_positions": 3,
+   "max_quantity": 2
+  },
+  "version": "account-policy.v1"
+ },
+ "approvals": {
+  "detail": "server-validated, stored, revocable; verification fails closed on mismatch/expiry/revocation; re-store never resurrects revoked",
+  "strict_mode": {
+   "param": "require_stored_approval=True on submit/supersede (pre-validated before cancel)",
+   "refusals": {
+    "APPROVAL_INVALID": "revoked, mismatched binding, or expired",
+    "APPROVAL_NOT_STORED": "no authoritative stored row (storeless always refuses)",
+    "APPROVAL_STORE_UNAVAILABLE": "durable lookup failed; fail-closed"
+   }
+  },
+  "version": "execution-receipt.v1"
+ },
+ "coverage_refusals": {
+  "REVERSED_WINDOW": "422, min_dte above max_dte, before any fetch",
+  "chain_unavailable": "502, listed expirations unavailable"
+ },
+ "native_protection": {
+  "OPTION_SINGLE_LEG_LIMIT": {
+   "reason": "unverified-native-support",
+   "supported": false
+  },
+  "detail": "conservative: nothing offered until vendor documents the exact combination and the account is verified eligible"
+ },
+ "ownership": {
+  "detail": "per-intent orderId ownership + native-workflow overlap block; single-process submit lock; cross-process same-intent guard via durable row"
+ },
+ "range_map": {
+  "complete": true,
+  "example": {
+   "admitted_dtes": [
+    20,
+    45
+   ],
+   "admitted_expiries": [
+    "2026-10-30",
+    "2026-11-16"
+   ],
+   "max_admitted_dte": 45,
+   "min_admitted_dte": 20
+  },
+  "incomplete_reason": "LISTING_CAPPED_WINDOW_MAY_EXTEND",
+  "limitation": "expiry-list projection from observed listings, NOT a persisted analytical grid",
+  "version": "coverage-read.v1"
+ },
+ "recovery": {
+  "gate": "RECOVERY_REQUIRED when durable nonterminal rows exceed known memory opens; flow is recover_open() + reconcile_all() first"
+ },
+ "submit_refusals": [
+  "DISARMED",
+  "BAD_CONTRACT",
+  "UNSUPPORTED_PRODUCT",
+  "UNSUPPORTED_EXPIRY",
+  "MISSING_QUOTE_SIDES",
+  "STALE_QUOTE",
+  "MISSING_POLICY",
+  "UNRESOLVED_MARGIN",
+  "INSUFFICIENT_BUDGET",
+  "UNAUTHORIZED_REPLAY",
+  "ENTITLEMENT_UNAVAILABLE",
+  "BAD_TICK",
+  "RISK_QUANTITY_EXCEEDED",
+  "RISK_NOTIONAL_EXCEEDED",
+  "RISK_MAX_POSITIONS_EXCEEDED",
+  "OVERLAP_NATIVE",
+  "CONTEXT_CHANGED",
+  "SESSION_CLOSED",
+  "ENTRY_PAUSE",
+  "APPROVAL_INVALID",
+  "APPROVAL_NOT_STORED",
+  "APPROVAL_STORE_UNAVAILABLE",
+  "STALE_PREFLIGHT",
+  "STORE_UNAVAILABLE",
+  "OVERLAP_OPEN_NEEDS_RECONCILE",
+  "RECOVERY_REQUIRED",
+  "AMBIGUOUS_NEEDS_RECONCILE",
+  "SUPERSEDE_BLOCKED",
+  "POLICY_INCOMPLETE",
+  "POLICY_EXISTS",
+  "POLICY_CORRUPT",
+  "APPROVAL_CONFLICT",
+  "STORE_MISMATCH",
+  "EVIDENCE_UNVERIFIED",
+  "OPERATOR_UNKNOWN",
+  "OPERATOR_UNAUTHORIZED",
+  "OPERATOR_EXISTS",
+  "OPERATOR_STORE_UNAVAILABLE",
+  "RISK_DAILY_LOSS_EXCEEDED",
+  "PROTECTION_UNVERIFIED",
+  "EXPIRY_TOO_NEAR",
+  "EXPIRY_INVALID",
+  "GUARD_UNCONFIGURED",
+  "NATIVE_CENSUS_UNAVAILABLE",
+  "UNKNOWN_ORDERS_PENDING",
+  "RECOVERY_UNKNOWN",
+  "RECOVERY_INCOMPLETE",
+  "LEASE_HELD",
+  "LEASE_NOT_OWNER",
+  "LEASE_EXPIRED",
+  "LEASE_ABSENT",
+  "LEASE_CORRUPT_HOLDER",
+  "LEASE_IO_ERROR",
+   "FENCED_OUT",
+   "FENCED_ACTION_FAILED",
+   "STALE_FACTS"
+  ],
+ "version": "execution-controls.v1"
+}
