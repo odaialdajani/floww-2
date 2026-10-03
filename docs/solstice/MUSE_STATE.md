@@ -797,3 +797,18 @@ new route, no server.py edit.
 Verification: hardening **19 passed**; full `tests/solstice/` **637
 passed**; ruff + silent-gate + truth green. Lane `35939a6e`; combined
 `47576f67` (PR105 CI re-running). Activation OFF.
+
+## 31. Resweep — recovery surplus + count dedup (3 Oct 2026)
+
+Full-pattern audit (except-handlers, env reads, TODOs, duplicate routes/
+services/mounts): clean — single definitions, single mounts, no venue-flag
+reads in the lifecycle, no TODOs. Two refinements, both TDD-pinned:
+1. `RECOVERY_REQUIRED` now fires on durable surplus over known memory opens,
+   not just empty registries — a process holding only settled history still
+   refuses new entry while foreign durable opens go unrecovered.
+2. New `_durable_open_count()` helper removes the duplicated durable-count
+   query (`_open_count` + submit gate shared it); inventory approval counts
+   are now unique-by-ID unions across memory + durable instead of max().
+Verification: hardening **21 passed**; full `tests/solstice/` **639
+passed**; ruff + silent-gate (353) + truth + API-380 green. Combined
+re-composed; PR105 CI re-running. Activation OFF.

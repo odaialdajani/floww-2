@@ -960,6 +960,20 @@ def _verify_stored_approval(
     return False, "APPROVAL_INVALID"
 
 
+def _durable_open_count() -> int | None:
+    """Durable nonterminal intent rows, or None when unknown (storeless/error)."""
+    if _STORE is None:
+        return None
+    try:
+        ensure_lifecycle_tables(_STORE)
+        row = _STORE.execute(
+            "SELECT COUNT(*) FROM execution_intents_v1 "
+            "WHERE state NOT IN ('FILLED', 'REJECTED', 'CANCELED')").fetchone()
+        return int(row[0]) if row else 0
+    except Exception:
+        return None
+
+
 def _open_records(exclude_id: str | None = None) -> list[dict[str, Any]]:
     terminal = {"FILLED", "REJECTED", "CANCELED"}
     out = []
@@ -981,13 +995,8 @@ def _open_count() -> int:
     mem = len(_open_records())
     if _STORE is None:
         return mem
-    try:
-        ensure_lifecycle_tables(_STORE)
-        row = _STORE.execute(
-            "SELECT COUNT(*) FROM execution_intents_v1 "
-            "WHERE state NOT IN ('FILLED', 'REJECTED', 'CANCELED')").fetchone()
-        durable = int(row[0]) if row else 0
-    except Exception:
+    durable = _durable_open_count()
+    if durable is None:
         return mem
     return max(mem, durable)
 
@@ -1167,18 +1176,21 @@ async def submit(
             # Fresh process with a durable store: unknown durable opens must be
             # recovered + reconciled before any new entry. Call recover_open()
             # then reconcile_all() first; this refusal is the gate.
-            try:
-                ensure_lifecycle_tables(_STORE)
-                row = _STORE.execute(
-                    "SELECT COUNT(*) FROM execution_intents_v1 "
-                    "WHERE state NOT IN ('FILLED', 'REJECTED', 'CANCELED')").fetchone()
-                if row and int(row[0]) > 0:
-                    return {"ok": False, "reason": "RECOVERY_REQUIRED",
-                            "intent_id": intent_id,
-                            "detail": "durable nonterminal rows exist; "
-                                      "recover_open() + reconcile_all() first"}
-            except Exception:  # silent by design: fail-closed count falls back to memory overlap check
-                pass
+            if (_durable_open_count() or 0) > 0:
+                return {"ok": False, "reason": "RECOVERY_REQUIRED",
+                        "intent_id": intent_id,
+                        "detail": "durable nonterminal rows exist; "
+                                  "recover_open() + reconcile_all() first"}
+        else:
+            # A process holding only terminal/settled records may still face
+            # foreign durable opens it never recovered (another writer). Any
+            # durable surplus over known memory opens blocks new entry.
+            durable = _durable_open_count()
+            if durable is not None and durable > len(_open_records()):
+                return {"ok": False, "reason": "RECOVERY_REQUIRED",
+                        "intent_id": intent_id,
+                        "detail": "durable nonterminal rows exceed known memory "
+                                  "opens; recover_open() + reconcile_all() first"}
         if _open_records(exclude_id=intent_id):
             return {"ok": False, "reason": "OVERLAP_OPEN_NEEDS_RECONCILE"}
         order_id = str(uuid.uuid4())
@@ -1449,18 +1461,22 @@ def lifecycle_inventory() -> dict[str, Any]:
         stage = str(draft.get("stage") or "DRAFT")
         by_stage[stage] = by_stage.get(stage, 0) + 1
     stored_policy = get_account_policy()
-    n_approvals = len(_APPROVALS)
-    n_revoked = sum(1 for a in _APPROVALS.values() if a.get("revoked") is True)
+    approval_ids: set[str] = set(_APPROVALS.keys())
+    revoked_ids: set[str] = {k for k, v in _APPROVALS.items() if v.get("revoked") is True}
     if _STORE is not None:
         try:
             ensure_lifecycle_tables(_STORE)
-            row = _STORE.execute("SELECT COUNT(*) FROM approvals_v1").fetchone()
-            n_approvals = max(n_approvals, int(row[0]) if row else 0)
-            row = _STORE.execute(
-                "SELECT COUNT(*) FROM approvals_v1 WHERE revoked = TRUE").fetchone()
-            n_revoked = max(n_revoked, int(row[0]) if row else 0)
+            for id_row in _STORE.execute(
+                "SELECT approval_id, revoked FROM approvals_v1").fetchall() or []:
+                if not id_row or not id_row[0]:
+                    continue
+                approval_ids.add(str(id_row[0]))
+                if len(id_row) > 1 and bool(id_row[1]):
+                    revoked_ids.add(str(id_row[0]))
         except Exception:  # silent by design: inventory stays available on memory counts alone
             pass
+    n_approvals = len(approval_ids)
+    n_revoked = len(revoked_ids & approval_ids)
     return {
         "version": INVENTORY_VERSION,
         "durable": _STORE is not None,

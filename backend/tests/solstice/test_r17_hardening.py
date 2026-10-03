@@ -519,3 +519,52 @@ def test_supersede_strict_mode_never_cancels_on_refusal():
         assert len(broker.calls) == 1
     finally:
         conn.close()
+
+
+def test_recovery_required_on_foreign_durable_surplus():
+    import asyncio
+
+    import duckdb
+
+    import services.public_execution_lifecycle as lc
+
+    conn = duckdb.connect(":memory:")
+    try:
+        assert lc.register_store(conn) is True
+        # Settled local history only; a foreign OPEN row exists durably.
+        lc._INTENTS["in_old_settled"] = {
+            "intent": {"ticker": "SPY", "execution_owner": "FLOWW_BACKEND"},
+            "intent_hash": "h", "order_id": "ord-old", "state": "CANCELED",
+        }
+        conn.execute(
+            "INSERT INTO execution_intents_v1 "
+            "(intent_id, intent_hash, ticker, owner, state, order_id, record_json, updated_at) "
+            "VALUES ('in_foreign1', 'h', 'SPY', 'FLOWW_BACKEND', 'OPEN', 'ord-9', "
+            "'{\"order_id\": \"ord-9\", \"intent\": {\"ticker\": \"SPY\"}}', 'now')")
+        broker = _FakeBroker()
+        out = asyncio.run(lc.submit(_base_intent(), _ctx(), broker, armed=True))
+        assert out["ok"] is False and out["reason"] == "RECOVERY_REQUIRED"
+        assert broker.calls == []
+    finally:
+        conn.close()
+
+
+def test_inventory_counts_unique_approvals_once():
+    import duckdb
+
+    import services.public_execution_lifecycle as lc
+
+    conn = duckdb.connect(":memory:")
+    try:
+        assert lc.register_store(conn) is True
+        stored, _ = _stored_appr(lc, _base_intent())
+        assert stored["approval_id"] in lc._APPROVALS
+        body = lc.lifecycle_inventory()
+        assert body["approvals"]["n_stored"] == 1
+        assert body["approvals"]["n_revoked"] == 0
+        assert lc.revoke_approval(stored["approval_id"], "op-1")["ok"] is True
+        body = lc.lifecycle_inventory()
+        assert body["approvals"]["n_stored"] == 1
+        assert body["approvals"]["n_revoked"] == 1
+    finally:
+        conn.close()
