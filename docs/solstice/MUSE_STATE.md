@@ -850,3 +850,17 @@ the next code change, or after green.
   into the green combined head would restart hosted CI for nothing.
 - Activation OFF; INSUFFICIENT EVIDENCE; no profitability claim.
   Main-merge call stays Nav's.
+
+## 34. Fixture completion (3 Oct 2026 — lane-only, green head preserved)
+
+- `execution-controls.v1` fixture extended (lane `79ccf1e5`, docs-only):
+  strict-mode semantics + all 28 submit/coverage refusal codes + stated
+  limitations (listing-projection, inventory-reports-only). Validated JSON.
+  No test, route, or service references it — Zed consumes it on his next
+  lane merge, his established pattern.
+- Verified untouched: budget raises (never returns False), cancel signature
+  matches `PublicBroker.cancel_order(account_id, order_id)`, calendar
+  half-days, bandit clean on touched files.
+- Combined stays at green `d5a8b469` deliberately: a docs-only merge+push
+  would restart hosted CI for zero runtime gain. Next recomposition batches
+  this fixture with the next code change or Zed's merge.
