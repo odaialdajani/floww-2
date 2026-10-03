@@ -443,3 +443,32 @@ Contract versions (unchanged + new): `execution-intent.v1`,
   is one commit stale: 602/40 vs current 604/43). No hostile edits, no gate
   weakening — staleness only. Merge decision stays with Nav/Zed; my lane does
   not touch their branch.
+
+## 20. R17 READY queue (3 Oct 2026 — Zed combined report answered)
+
+Base: `origin/main` `6eaa3343` (PR102 merge). Lane: `solstice/spark-r17` (clean,
+protected 71/71 at base). Zed's new report verified: e5ee1404 green everywhere,
+replay defects fixed in Zed-owned `solsticeReplay.js`, API-doc blocker closed by
+Spark-taken regen (376 paths on main). Remaining Spark-assigned gaps from that
+report are taken as the queue below. Packet + Triad + prompt-library deltas
+absorbed (intent states, affordability, session caps, brief rows — R16 did most;
+this queue finishes the rest).
+
+Contract versions: `execution-intent.v1`, `execution-receipt.v1`,
+`intent-draft.v1`, `price-path-producer.v1`, NEW `coverage-read.v1`.
+
+- [DONE] R17-1 Stored-session enumeration — owned: read-only
+  `GET /api/solstice/price-paths/sessions?ticker=` (stored NY session days +
+  per-day snapshot counts, gaps via existing manifest). No writes. Evidence: 6-test file green with sessions/comparable/expiries.
+- [DONE] R17-2 Admitted expiry-range query — owned: read-only
+  `GET /api/solstice/price-paths/expiries?ticker=&min_dte=14&max_dte=60`
+  (listed expirations + DTE + ADMITTED/excluded + reasons; existing `dte≤30`
+  display filter in `market_data.py` untouched). Reuses cached adapter fetch.
+  Evidence: window verdicts incl. 0DTE BELOW_WINDOW + 502 path.
+- [DONE] R17-3 Comparable-pair admission verdict — owned: read-only
+  `GET /api/solstice/price-paths/comparable?baseline_id=&snapshot_id=`
+  running the exact `check_window_comparability` gate over two replayed stored
+  snapshots (IDENTITY_UNDECLARED/SESSION_ROLL/OUT_OF_ORDER preserved).
+  Evidence: TICKER_MISMATCH/SESSION_ROLL/OUT_OF_ORDER/NO_BASELINE pinned.
+- [IN_PROGRESS] R17-4 Receipt + PR + Zed re-verification — owned: `SPARK_R17_RECEIPT.md`,
+  PR (review-only), Zed-branch overlap recheck. Next: last.
