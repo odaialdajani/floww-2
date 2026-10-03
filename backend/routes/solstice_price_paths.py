@@ -221,7 +221,9 @@ async def price_path_expiries(
     two never silently mix. ``coverage`` answers the listing honestly: when
     the upper window edge was not observed in the requested listings, in-range
     expiries may exist beyond the cap and the coverage says so instead of a
-    silent firstN verdict. Expired dates refuse as EXPIRED; in-range dates
+    silent firstN verdict. ``range_map`` projects the admitted window from the
+    observed listings (sorted admitted expiries/DTEs + completeness flag).
+    Expired dates refuse as EXPIRED; in-range dates
     admit; anything else names its reason. 0DTE is kept by the chain with
     exact T but falls BELOW_WINDOW here (the display envelope keeps it).
     """
@@ -269,18 +271,35 @@ async def price_path_expiries(
         rows.append({"expiry": exp_date.isoformat(), "dte": dte,
                      "admitted": verdict, "reason": reason,
                      "display_envelope": 0 <= dte <= 30})
+    admitted = sorted(
+        (r for r in rows if r["admitted"] and r["dte"] is not None),
+        key=lambda r: r["dte"])
+    lower_observed = any(
+        r["dte"] is not None and r["dte"] < min_dte for r in rows)
+    upper_observed = any(
+        r["dte"] is not None and r["dte"] > max_dte for r in rows)
+    capped = len(rows) >= expirations
+    complete = (not capped) or (lower_observed and upper_observed)
     return {"version": COVERAGE_VERSION, "ticker": ticker.upper(),
             "window": {"min_dte": min_dte, "max_dte": max_dte},
-            "expiries": rows, "n_admitted": sum(1 for r in rows if r["admitted"]),
+            "expiries": rows, "n_admitted": len(admitted),
             "coverage": {
                 "requested_expiries": expirations,
                 "n_listed": len(rows),
                 "n_display_envelope": sum(1 for r in rows if r["display_envelope"]),
-                "listing_capped": len(rows) >= expirations,
-                "lower_edge_observed": any(
-                    r["dte"] is not None and r["dte"] < min_dte for r in rows),
-                "upper_edge_observed": any(
-                    r["dte"] is not None and r["dte"] > max_dte for r in rows),
+                "listing_capped": capped,
+                "lower_edge_observed": lower_observed,
+                "upper_edge_observed": upper_observed,
+            },
+            "range_map": {
+                "version": COVERAGE_VERSION,
+                "window": {"min_dte": min_dte, "max_dte": max_dte},
+                "admitted_expiries": [r["expiry"] for r in admitted],
+                "admitted_dtes": [r["dte"] for r in admitted],
+                "min_admitted_dte": admitted[0]["dte"] if admitted else None,
+                "max_admitted_dte": admitted[-1]["dte"] if admitted else None,
+                "complete": complete,
+                "reason": None if complete else "LISTING_CAPPED_WINDOW_MAY_EXTEND",
             },
             "spot": result.get("spot"), "fetched_at": result.get("fetched_at"),
             "stale": bool(result.get("stale", False)), "data_source": "public_api"}

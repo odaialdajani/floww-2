@@ -665,3 +665,51 @@ no regen needed).
 - Next exact action: commit + push lane only (no merge/deploy/activate);
   Zed re-composes at the new head; Nav merge decision on
   PR103/PR104/PR101/PR100 + PR93 docs. True externals unchanged.
+
+## 25. Execution-controls pass (3 Oct 2026 — Zed residual controls)
+
+Zed's pass-3 receipt keeps commissioning HOLD on Spark-owned controls:
+complete 14–60 analytical projection + authenticated/default-deny
+account-wide approval, risk, ownership, protection, recovery. Delivered as
+additive, default-deny, fixture-proven service truth (no live calls, no
+venue-flag change, no new route, no server.py edit):
+
+1. `range_map` on `/expiries` (additive): sorted admitted expiries/DTEs,
+   min/max admitted DTE, `complete` (true when uncapped or both edges
+   observed) else `LISTING_CAPPED_WINDOW_MAY_EXTEND`. Existing
+   `expiries/coverage` fields byte-identical in shape; openapi regen is
+   description-only (380 paths).
+2. Account-wide policy registry (`account-policy.v1`, single active row,
+   memory + durable): `set/get/clear_account_policy` (operator required);
+   `validate_intent` enforces stored ceilings (quantity/notional/positions/
+   allowed products) in addition to per-call ctx — ctx narrows, never widens.
+   Absent stays UNSET.
+3. Stored + revocable approvals: `store_approval` (shape-validated, operator
+   required, memory + durable `approvals_v1`), `revoke_approval`,
+   `verify_approval` fails closed on mismatch/expiry/scope AND revocation
+   (memory or durable). `submit(require_approval=True)` inherits revocation
+   enforcement; `supersede` pre-validates gates before any cancel (§24).
+4. Recovery-before-entry: `submit` refuses `RECOVERY_REQUIRED` when the
+   registry is empty but durable nonterminal rows exist — production flow is
+   `recover_open()` + `reconcile_all()` first. Pinned.
+5. Native protection truth: `NATIVE_PROTECTION_MATRIX` + `native_protection_support()`
+   (conservative: all current combinations report unsupported/
+   unverified-native-support, never offered). `lifecycle_inventory` reports
+   `approvals` counts, `protection.native_support`, `policy` set-state and
+   the RECOVERY_REQUIRED boundary — counts only, no secrets.
+6. Fixture `r15/evidence/execution_controls_v1.json` (`execution-controls.v1`)
+   for Zed's consumer lane.
+
+Verification (exact head, Python 3.14.6 disclosed, backend CWD):
+`test_r17_hardening.py` **12 passed** (6 §24 + 6 new); adjacent
+(r17 9 + inventory 5 + hardening 12 + wiring 8 + lifecycle 42) **76 passed**;
+full `tests/solstice/` **630 passed**; `ruff` touched clean;
+`generate_api_docs.py --check` **380 paths current** after description-only
+regen.
+
+- Activation state: OFF. No flags/orders/services/credentials/paid calls.
+  No Zed-owned file touched. This head supersedes `c10361ac`; Zed
+  re-composes the combined candidate here.
+- Next exact action per Nav "merge commit everything": publish a combined
+  review-only candidate (main + Spark lane + Zed `7ea8cbff`) with exact-head
+  evidence; main merge/deploy/activation decisions stay Nav's.
