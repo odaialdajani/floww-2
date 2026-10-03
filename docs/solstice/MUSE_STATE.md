@@ -755,3 +755,16 @@ process — order-dependent, my miss. Fixed to `ensure_tables()` + DELETE
 full `tests/solstice/` **633 passed** there too. Receipt addendum above
 covers §24–§27; `range_map` is an expiry-list projection, NOT a persisted
 analytical grid; range-map analytics and execution activation stay disabled.
+
+## 28. Zed consumed the lane (3 Oct 2026 — no pause, no touch)
+
+Zed's `98ab205a` merged this lane through `1e43c00a` himself (merges
+`b6e24961`, `52e59a7c`) — Spark files verified verbatim
+(`git diff 1e43c00a..98ab205a -- backend/services backend/routes
+MUSE_STATE SPARK_R17_RECEIPT` empty). On top he built read-only consumers
+for the §25 controls (policy/approval/native-support/recovery reports,
+admitted-listing projection) with 99-test + 28-storybook receipts and a
+PASS on the repaired silent gate. His branch is the freshest composition:
+main `6eaa3343` + Spark lane + his consumers. This lane changes nothing of
+his; combined re-composed by merging his head (code) — backend identical
+to the 633-green tree, frontend identical to his tested head.
