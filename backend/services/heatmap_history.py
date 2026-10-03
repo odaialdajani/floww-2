@@ -20,7 +20,7 @@ import threading
 from datetime import UTC, datetime
 from typing import Any
 
-from services.connection_guard import guarded_connection
+from services.connection_guard import connection_lock, guarded_connection
 
 log = logging.getLogger(__name__)
 
@@ -1163,3 +1163,129 @@ def save_decision_review(conn, decision_id: str, state: str,
     except Exception as e:
         log.warning("save_decision_review failed for %s: %s", decision_id, e)
         return None
+
+
+# ── R18-C2: owning analytical range-envelope persistence ─────────────
+#
+# Additive, namespace-specific table (Cline-owned analytical/recorder schema).
+# record_snapshot / replay_snapshot and every existing table/migration above
+# are untouched; range_analytics_envelopes_v1 stores the IMMUTABLE
+# range-analytics.v1 envelope itself, so replay restores the exact admitted
+# display (axes/cells/clocks/coverage) instead of reprojecting current data.
+
+_RANGE_DDL = """
+    CREATE TABLE IF NOT EXISTS range_analytics_envelopes_v1 (
+        record_id VARCHAR PRIMARY KEY, ticker VARCHAR, window_min INTEGER,
+        window_max INTEGER, asof_date VARCHAR, received_at VARCHAR,
+        status VARCHAR, digest VARCHAR, envelope_json VARCHAR, recorded_at VARCHAR
+    )
+"""
+
+_RANGE_REQUIRED = ("version", "status", "symbol", "record_id", "content_digest",
+                   "query", "axes", "grids", "metric_registry", "clocks",
+                   "coverage", "provenance")
+
+
+def _canonical_range(envelope: dict[str, Any]) -> str:
+    return json.dumps(envelope, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def ensure_range_tables(conn) -> None:
+    with connection_lock(conn):
+        try:
+            conn.execute(_RANGE_DDL)
+        except Exception as e:
+            log.warning("range_analytics_envelopes_v1 create failed: %s", e)
+
+
+def record_range_envelope(conn, envelope: dict[str, Any]) -> dict[str, Any]:
+    """Persist one OWNING range-analytics.v1 envelope (idempotent by identity).
+
+    Required fields are validated up front. A repeat of the same record_id
+    with the same digest is a no-op duplicate; the same record_id with a
+    DIFFERENT digest is an identity conflict and refuses. Store/write
+    failures return an explicit refusal — required persistence never falls
+    back to a false success.
+    """
+    if not isinstance(envelope, dict):
+        return {"status": "refused", "reason": "NOT_AN_ENVELOPE"}
+    missing = [k for k in _RANGE_REQUIRED if envelope.get(k) in (None, "")]
+    q = envelope.get("query") or {}
+    bad_window = not isinstance(q.get("min_dte"), int) \
+        or not isinstance(q.get("max_dte"), int)
+    if missing or bad_window or envelope.get("status") == "refused":
+        return {"status": "refused", "reason": "IDENTITY_INCOMPLETE",
+                "detail": {"missing": missing, "bad_window": bad_window,
+                           "envelope_status": envelope.get("status")}}
+
+    record_id = str(envelope["record_id"])
+    digest = str(envelope["content_digest"])
+    asof = str(q.get("as_of_ny") or "")
+    received_at = str((envelope.get("clocks") or {}).get("received_at") or "")
+    recorded_at = _now_iso()
+    try:
+        with connection_lock(conn):
+            with _RECORDER_LOCK:
+                ensure_range_tables(conn)
+                rows = conn.execute(
+                    "SELECT digest FROM range_analytics_envelopes_v1 "
+                    "WHERE record_id = " + _esc(record_id)).fetchall()
+                if rows:
+                    if str(rows[0][0]) == digest:
+                        return {"status": "duplicate", "record_id": record_id,
+                                "digest": digest, "recorded_at": recorded_at,
+                                "replay_identity": record_id}
+                    return {"status": "refused", "reason": "IDENTITY_CONFLICT",
+                            "record_id": record_id}
+                conn.execute(
+                    "INSERT INTO range_analytics_envelopes_v1 VALUES ("
+                    + ",".join([_esc(record_id), _esc(envelope.get("symbol")),
+                                _esc(q.get("min_dte")), _esc(q.get("max_dte")),
+                                _esc(asof), _esc(received_at),
+                                _esc(envelope.get("status")), _esc(digest),
+                                _esc(_canonical_range(envelope)),
+                                _esc(recorded_at)]) + ")")
+        return {"status": "recorded", "record_id": record_id, "digest": digest,
+                "recorded_at": recorded_at, "replay_identity": record_id}
+    except Exception as e:
+        log.warning("record_range_envelope failed for %s: %s", record_id, e)
+        return {"status": "refused", "reason": "STORE_WRITE_FAILED",
+                "record_id": record_id, "detail": str(e)}
+
+
+def replay_range_envelope(conn, record_id: str) -> dict[str, Any] | None:
+    """Restore the EXACT stored range-analytics.v1 envelope by record identity.
+
+    No recomputation, no reprojection of present-day chains. Returns None when
+    the identity is unknown; a payload that fails to parse is surfaced as an
+    explicit CORRUPT_PAYLOAD refusal, never a silent empty map.
+    """
+    try:
+        with connection_lock(conn):
+            rows = conn.execute(
+                "SELECT record_id, ticker, window_min, window_max, asof_date, "
+                "received_at, status, digest, envelope_json, recorded_at "
+                "FROM range_analytics_envelopes_v1 WHERE record_id = "
+                + _esc(record_id)).fetchall()
+    except Exception as e:
+        log.warning("replay_range_envelope query failed for %s: %s", record_id, e)
+        return {"record_id": record_id, "envelope": None,
+                "error": "STORE_READ_FAILED", "detail": str(e)}
+    if not rows:
+        return None
+    (rid, ticker, wmin, wmax, asof, received_at, status, digest,
+     envelope_json, recorded_at) = rows[0]
+    try:
+        envelope = json.loads(envelope_json) if envelope_json else None
+    except (TypeError, ValueError):
+        envelope = None
+    if not isinstance(envelope, dict):
+        return {"record_id": rid, "digest": digest, "envelope": None,
+                "error": "CORRUPT_PAYLOAD"}
+    return {
+        "record_id": rid, "ticker": ticker,
+        "window": {"min_dte": wmin, "max_dte": wmax},
+        "asof_date": asof, "received_at": received_at, "status": status,
+        "digest": digest, "recorded_at": recorded_at, "envelope": envelope,
+        "replay_note": "exact stored envelope restored; no recomputation",
+    }
