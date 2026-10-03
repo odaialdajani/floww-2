@@ -46,6 +46,14 @@ Combined exact command (this head):
 `python3 -m pytest backend/tests/solstice/test_r18_*.py backend/tests/test_public_api_only.py backend/tests/services/test_public_api_adapter_regressions.py backend/tests/test_public_spot_validation.py backend/tests/routes/test_public_api_chain_routes.py backend/tests/solstice/test_r12_recovery_kernel.py backend/tests/solstice/test_r13_recorded_display.py backend/tests/solstice/test_r13_next_listed.py backend/tests/solstice/test_r14_window_producer.py backend/tests/solstice/test_r14_vertical_slice.py backend/tests/solstice/test_r11_metric_contract.py backend/tests/solstice/test_r15_execution_lifecycle.py backend/tests/solstice/test_r17_lifecycle_inventory.py backend/tests/solstice/test_r17_hardening.py backend/tests/solstice/test_r17_reads.py backend/tests/solstice/test_r15_price_producer.py backend/tests/solstice/test_r15_price_wiring.py backend/tests/solstice/test_evidence_packet_redaction.py -q`
 → **313 passed, 0 failed**. `ruff check backend/` clean.
 
+Local CI-gate parity at c085f8fb: `ruff check backend/` clean; bandit with
+the CI's exact flags clean; `qc/audit/check_silent_excepts.py` OK (355 files);
+`qc/audit/truth_audit.sh` 228 passed/0 failed. Hosted gates at c085f8fb:
+frontend-build PASS; lint run 37160242517 fails ONLY on docs/api freshness
+(openapi.json + README.md — the recorded Zed-owned regeneration handoff);
+backend-tests pending at publication time (no CI polling per instructions;
+Zed verifies hosted gates when assembling the combined candidate).
+
 Resume: continue READY work only if new scope appears; otherwise the C queue
 is complete and remaining items are NAV-* external (account/policy/capture
 approval) — report HOLD for those with the exact input required.
