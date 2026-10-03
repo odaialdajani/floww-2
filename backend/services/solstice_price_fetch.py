@@ -56,10 +56,14 @@ async def fetch_one_public_quote(symbol: str) -> dict[str, Any] | None:
     fetched_at = row.get("spot_fetched_at")
     if not isinstance(fetched_at, str) or not fetched_at:
         fetched_at = datetime.now(UTC).isoformat()
+    # Missing vendor clocks stay unknown — they are NEVER backfilled with fetch
+    # time. The producer refuses observations without a vendor event time.
+    if not isinstance(event_time, str) or not event_time:
+        event_time = None
     return {
         "ticker": ticker,
         "price": price_f,
-        "event_time": event_time if isinstance(event_time, str) and event_time else fetched_at,
+        "event_time": event_time,
         "fetched_at": fetched_at,
         "source": str(row.get("spot_source") or "public-quote"),
     }

@@ -287,3 +287,33 @@ Lifecycle transitions the prompt requires but the first cut left as refusal-only
 - [DONE] Producer `_seen` fast-path bounded (`_SEEN_MAX=10000`, oldest-first
   prune); DB recheck still covers restarts/evictions (regression test).
 - Structural non-merges documented in §7 stand (different domains/jobs/files).
+
+## 11. Re-verification + combined-candidate check (3 Oct 2026)
+
+- Packet files STILL absent (repo/worktree-wide search, 3 Oct) — prompt body
+  remains the harness; no contracts invented.
+- No `origin/main` drift (still `1530ccd7`). PR93 still OPEN doc-only.
+- PR94 CI ran on the EXACT lane head `1fdf403d` (run 37061874706): backend-tests
+  PASS, docker-build PASS, frontend-build PASS, ruff PASS. Hosted exact-head
+  evidence; full `tests/` + coverage ran in CI, not just the local Solstice slice.
+- Zed published PR95 DRAFT (`solstice/zed-integration-20261002` @ `483704fc`,
+  "grounded frontend and disarmed Public handoff"). Overlap audit (77 files):
+  ZERO file overlap with this lane (all Zed-owned: agent tree, frontend,
+  `FLOWW_INTEGRATION_CONTRACT.md`, `integration/`, ZED_STATE, scripts). No
+  shared-file conflict from either side; my only shared edit stays `server.py`
+  mounts/lifespan (Zed ack still pending).
+- Zed-diff audit (read-only): no new order-submission path (only a mocked GET
+  `/api/public/orders` fixture with null money + PARTIAL shape — matches my
+  contracts); no auth/gate edits; Alpaca PAPER labeling + Public gate explicitly
+  preserved; backend entry unavailable in their UI pending accepted producers.
+  No price-paths route references yet — my routes are additive, nothing to break.
+- Scratch combined verification (read-only worktree `/tmp/zed-combined` @
+  `483704fc`, thrown away after): Zed's 4 agent suites (native_handoff,
+  plan_draft, exact_contract_admission, codex_model) → **46 passed** with this
+  repo's venv. Their `solstice-display.v1.json` carries `source_fixture`+sha,
+  `snapshotId`, OSI/strike/expiry, zero bid/ask (quote-free display fixture —
+  consistent with `MISSING_QUOTE_SIDES` refusal, not a conflict).
+- Verdict: lanes are compatible AND independently green; integration proof still
+  requires Zed's merge + a combined-head CI run (their PR is DRAFT, mine
+  unmerged by design). A green backend lane alone is not claimed as integrated
+  UI proof.

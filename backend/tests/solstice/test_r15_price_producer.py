@@ -469,3 +469,19 @@ def test_seen_fast_path_is_bounded_db_recheck_covers_restarts():
         assert len(price_paths_since(conn, "SPY")) == 6
     finally:
         prod._SEEN_MAX = old_max
+
+
+def test_missing_vendor_time_is_a_gap_never_fetch_time_as_event():
+    import services.solstice_price_producer as prod
+
+    conn = duckdb.connect(":memory:")
+    ensure_tables(conn)
+    no_vendor_clock = {"ticker": "SPY", "price": 505.0, "event_time": None,
+                       "fetched_at": _iso(900.0), "source": "public-mid"}
+    p = prod.PricePathProducer(
+        conn=conn, symbols=["SPY"], fetch_one=lambda sym: dict(no_vendor_clock),
+        session_gate=lambda sym, now: (True, "open"),
+    )
+    out = p.tick(now_epoch=901.0)
+    assert out["written"] == 0 and out["gaps"] == 1
+    assert price_paths_since(conn, "SPY") == []
