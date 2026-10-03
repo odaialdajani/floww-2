@@ -30,7 +30,10 @@ watchdog, all flags.
 - `ruff check` touched files: **clean** (2 auto-fixed).
 - `generate_api_docs.py --check` equivalent: **379 paths**, regenerated.
 - Full `tests/solstice/`, truth, silent, bandit, frontend, Docker: run at PR
-  head via hosted CI (this receipt is pre-PR; results recorded on the PR).
+  head via hosted CI. Recorded at exact head `611f3c2f` (PR103, OPEN,
+  review-only): CI/CD backend-tests SUCCESS + frontend-build SUCCESS +
+  docker-build SUCCESS (run 37096664993), lint ruff SUCCESS (run
+  37096665007). All four hosted gates green at the posted head.
 
 ## Net outcomes (honest)
 
@@ -43,6 +46,11 @@ reports windows, it does not set them.
 
 Zed's combined report (e5ee1404 green) + PR100/PR101 drafts acknowledged; zero
 file overlap with this lane's 4 touched paths expected (recheck at PR).
+Take-over sweep rechecked overlap: PR101 (20 files), PR102 (4 files) and this
+lane (6 files) are pairwise disjoint — no conflict. Hole: `dcbc1492`/`e5ee1404`
+predate PR102's disarmed-supersede fix `90f96227`; the combined acceptance is
+stale vs `main` `6eaa3343` and must re-sync at main + Zed head `75c160c2`
+before merge.
 Remaining externals: SPX, feeds, fixed account/risk policy, native activation,
 participants, durable production capture with admitted records, real-money
 record, Nav visual review.
