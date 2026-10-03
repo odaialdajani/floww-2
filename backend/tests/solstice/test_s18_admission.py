@@ -330,3 +330,113 @@ def test_admit_refuses_corrupt_unknown_and_open_census():
         assert broker.calls == [] and broker.cancels == []
     finally:
         conn.close()
+
+
+def _stored_appr(lc, intent, operator="op-1"):
+    from datetime import timedelta
+
+    now = datetime(2026, 10, 2, 15, 0, tzinfo=UTC)
+    appr = lc.create_approval(
+        lc.intent_hash(intent), intent["account_id"], "single-entry",
+        now + timedelta(hours=1), operator, now=now)
+    return appr, now
+
+
+def _admittable(conn, lc, adm, policy):
+    """Prime policy + stored approval + fresh preflight; returns (intent, ctx, appr)."""
+    import asyncio
+
+    assert adm.set_account_policy_required(conn, "ACCT-1", policy, "op-1")["ok"] is True
+    intent, ctx = _base_intent(), _ctx()
+    appr, _ = _stored_appr(lc, intent)
+    assert adm.store_approval_required(conn, appr, "op-1")["ok"] is True
+    primer = _PrimerBroker()
+    assert asyncio.run(lc.preflight(intent, ctx, primer))["ok"] is True
+    return intent, ctx, appr
+
+
+class _PrimerBroker:
+    async def preflight_single_leg(self, **kw):
+        return {"total": "318.20", "fees": "3.20", "buying_power_ok": True}
+
+
+def test_admit_enforces_account_ceilings():
+    import services.execution_admission as adm
+    import services.public_execution_lifecycle as lc
+
+    conn = _memdb()
+    try:
+        lc.register_store(conn)
+        broker = _FakeBroker()
+        intent, ctx, appr = _admittable(conn, lc, adm, {"max_quantity": 1})
+        assert adm.admit_production_entry(
+            conn, intent, ctx, broker, approval=appr)["decision"] == "ADMIT"
+        # Same ceiling, bigger intent with its own bound approval → ceiling fires.
+        big = _base_intent(quantity=5)
+        big_appr, _ = _stored_appr(lc, big)
+        assert adm.store_approval_required(conn, big_appr, "op-1")["ok"] is True
+        primer = _PrimerBroker()
+        import asyncio
+
+        assert asyncio.run(lc.preflight(big, _ctx(), primer))["ok"] is True
+        out = adm.admit_production_entry(conn, big, _ctx(), broker, approval=big_appr)
+        assert out["reason"] == "RISK_QUANTITY_EXCEEDED", out
+        assert broker.calls == []
+    finally:
+        conn.close()
+
+
+def test_admit_enforces_notional_and_products():
+    import services.execution_admission as adm
+    import services.public_execution_lifecycle as lc
+
+    conn = _memdb()
+    try:
+        lc.register_store(conn)
+        broker = _FakeBroker()
+        intent, ctx, appr = _admittable(conn, lc, adm, {"max_notional": "100"})
+        out = adm.admit_production_entry(conn, intent, ctx, broker, approval=appr)
+        assert out["reason"] == "RISK_NOTIONAL_EXCEEDED", out  # 3.15*1*100=315
+        assert broker.calls == []
+        intent2, ctx2, appr2 = _admittable(
+            conn, lc, adm, {"allowed_products": ["EQUITY"]})
+        # Policy row replaced per account (INSERT OR REPLACE); ceiling now product-only.
+        out = adm.admit_production_entry(conn, intent2, ctx2, broker, approval=appr2)
+        assert out["reason"] == "UNSUPPORTED_PRODUCT", out
+    finally:
+        conn.close()
+
+
+def test_migrate_corrupt_v1_reports_corrupt():
+    import services.execution_admission as adm
+
+    conn = _memdb()
+    try:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS account_policy_v1 "
+            "(id VARCHAR PRIMARY KEY, version VARCHAR, policy_json VARCHAR, updated_at VARCHAR)")
+        conn.execute(
+            "INSERT INTO account_policy_v1 (id, version, policy_json, updated_at) "
+            "VALUES ('active', 'account-policy.v1', 'broken{{{', 'now')")
+        assert adm.migrate_account_policy_v1(conn, "ACCT-1", "op-1")["reason"] == "POLICY_CORRUPT"
+    finally:
+        conn.close()
+
+
+def test_direct_unit_gaps():
+    import time
+
+    import services.public_execution_lifecycle as lc
+
+    conn = _memdb()
+    try:
+        lc.register_store(conn)
+        lc.ensure_lifecycle_tables(conn)  # idempotent, no raise
+        lc.ensure_lifecycle_tables(conn)
+        assert lc._durable_open_count() == 0
+        assert lc.has_fresh_preflight(_base_intent(), _ctx()) is False
+    finally:
+        conn.close()
+    lc._reset_for_tests()
+    assert lc._durable_open_count() is None  # storeless unknown, not zero
+    assert lc.get_account_policy() is None

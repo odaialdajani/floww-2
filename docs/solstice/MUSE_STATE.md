@@ -965,3 +965,18 @@ mistake recurred twice more (§§37/39 headers) — repaired immediately both
 times; headers verified healthy (§§36–39). Rule stands: edits always carry
 following-line context and are grep-verified. S1–S4 complete; owned READY
 queue empty pending genuine external input.
+
+## 41. Resweep fixes — ceilings enforced + migrate label (3 Oct 2026)
+
+Exhaustive function-coverage audit found two real gaps (fixed, TDD-pinned):
+1. S1 `admit_production_entry` checked policy EXISTENCE but never enforced
+   its ceilings — added `_enforce_account_ceilings` (quantity/notional/
+   products/positions, fail-closed on parse failure).
+2. Corrupt v1 JSON in migration reported `POLICY_STORE_UNAVAILABLE`;
+   now correctly `POLICY_CORRUPT`.
+Plus direct unit tests for `has_fresh_preflight`/`ensure_lifecycle_tables`/
+`_durable_open_count` (storeless→None, not zero).
+Verification: admission **15 passed**; full `tests/solstice/` **667
+passed**; ruff + silent-gate (359) + truth + API-380 green.
+Process: the trailing-newline edit defect recurred on §40 (repaired,
+verified). No header-only edits from here — append-only with context.

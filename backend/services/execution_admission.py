@@ -209,9 +209,12 @@ def migrate_account_policy_v1(
             "WHERE id = 'active'").fetchone()
         if not legacy or not legacy[0]:
             return {"ok": False, "reason": "POLICY_UNSET"}
-        policy = json.loads(legacy[0]) if isinstance(legacy[0], str) else {}
     except Exception:
         return {"ok": False, "reason": "POLICY_STORE_UNAVAILABLE"}
+    try:
+        policy = json.loads(legacy[0]) if isinstance(legacy[0], str) else {}
+    except (TypeError, ValueError):
+        return {"ok": False, "reason": "POLICY_CORRUPT"}
     if not isinstance(policy, dict):
         return {"ok": False, "reason": "POLICY_CORRUPT"}
     return set_account_policy_required(conn, str(account_id), policy,
@@ -391,6 +394,10 @@ def admit_production_entry(
     if int(census.get("nonterminal") or 0) > 0:
         return {"decision": "REFUSE", "reason": "OVERLAP_OPEN_NEEDS_RECONCILE",
                 "version": ADMISSION_VERSION}
+    ceiling = _enforce_account_ceilings(intent, pol.get("policy") or {})
+    if ceiling is not None:
+        return {"decision": "REFUSE", "reason": ceiling,
+                "version": ADMISSION_VERSION}
     try:
         digest = lc.intent_hash(intent)
     except (TypeError, ValueError) as exc:
@@ -399,6 +406,44 @@ def admit_production_entry(
     return {"decision": "ADMIT", "reason": None, "version": ADMISSION_VERSION,
             "intent_hash": digest, "account_id": account_id,
             "policy_version": pol.get("version")}
+
+
+def _enforce_account_ceilings(intent: dict[str, Any], policy: dict[str, Any]) -> str | None:
+    """Enforce required account-policy ceilings on one intent (S1 admit path).
+
+    Returns a refusal code or None. Runs AFTER validate_intent, so contract
+    shapes are already proven; any residual parse failure still refuses
+    (fail-closed) rather than skipping the ceiling.
+    """
+    from services import public_execution_lifecycle as lc
+
+    try:
+        qty = int(intent.get("quantity"))
+        contract = intent.get("contract") or {}
+        limit = Decimal(str(intent.get("limit_price")))
+        mult = Decimal(str(contract.get("multiplier")))
+    except Exception:
+        return "RISK_FACTS_INCOMPLETE"
+    try:
+        if policy.get("max_quantity") is not None and qty > int(policy["max_quantity"]):
+            return "RISK_QUANTITY_EXCEEDED"
+    except (TypeError, ValueError):
+        return "RISK_FACTS_INCOMPLETE"
+    try:
+        if policy.get("max_notional") is not None:
+            if limit * Decimal(qty) * mult > Decimal(str(policy["max_notional"])):
+                return "RISK_NOTIONAL_EXCEEDED"
+    except Exception:
+        return "RISK_FACTS_INCOMPLETE"
+    allowed = policy.get("allowed_products")
+    if allowed is not None and "OPTION" not in list(allowed or []):
+        return "UNSUPPORTED_PRODUCT"
+    try:
+        if policy.get("max_positions") is not None and lc._open_count() >= int(policy["max_positions"]):
+            return "RISK_MAX_POSITIONS_EXCEEDED"
+    except (TypeError, ValueError):
+        return "RISK_FACTS_INCOMPLETE"
+    return None
 
 
 def admit_commissioned_entry(
