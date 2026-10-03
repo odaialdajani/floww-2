@@ -932,3 +932,25 @@ no combined recompose from here (Zed batches heads).
 Verification: new 5 + full `tests/solstice/` **655 passed**; ruff +
 silent-gate + bandit + API-380 green. Next READY: S3 (deployment
 exclusion proof with separate processes).
+
+## 39. S3 DONE — exclusion lease + protection/expiry admission (3 Oct 2026)
+
+- `backend/services/execution_lease.py` (`execution-lease.v1`): atomic
+  single-executor lease (O_CREAT|O_EXCL winner, heartbeat, owner-only
+  release, expiry steal). Proven with REAL OS processes: 4-way serialized
+  holds, simultaneous single-winner, crash→expiry-steal, foreign
+  release/heartbeat refused, expired heartbeat refused. Wiring into submit
+  is a Zed/Nav-reviewed proposal, not done unilaterally.
+- `backend/services/execution_protection.py`
+  (`execution-protection.v1`): protection refuses `PROTECTION_UNVERIFIED`
+  for every combination (no documented mechanism exists); policy-driven
+  expiry guard (`EXPIRY_TOO_NEAR`/`GUARD_UNCONFIGURED`/`EXPIRY_INVALID`,
+  same-day cutoff, assignment exposure disclosed).
+- Pinned cancel/reconcile availability during the 11:30–14:00 entry pause.
+- Process note (my repeated miss, now a rule): stop issuing edits whose
+  old/new strings differ only by trailing newline — it joins the header to
+  the next line. Every edit now re-verified with grep before proceeding.
+Verification: new 8 + full `tests/solstice/` **663 passed**; ruff +
+silent-gate + bandit + API-380 green. S4 handoff: lane heads + refusal
+matrix published here; Zed assembles the combined successor. No combined
+recompose, no mount, no main push from this lane.
