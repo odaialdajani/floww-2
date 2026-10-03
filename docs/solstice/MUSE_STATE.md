@@ -907,3 +907,28 @@ every path (exploding-broker pinned). Legacy lifecycle functions untouched.
 Verification: new 11 + full `tests/solstice/` **650 passed**; ruff + silent
 gate (354) + API-380-current green. S4 handoff: Zed mounts/integrates;
 no combined recompose from here (Zed batches heads).
+
+## 38. S2 DONE — commissioned admission + risk ledger (3 Oct 2026)
+
+- `backend/services/operator_registry.py` (`operator-registry.v1`):
+  durable-only operator→accounts binding. No memory authority anywhere in
+  this registry. Duplicate refuses `OPERATOR_EXISTS`; corrupt allowlist
+  refuses distinctly from unknown operator.
+- `backend/services/account_risk_ledger.py` (`account-risk-ledger.v1`):
+  FIFO realized, exposure, premium/fees, fill-dedup from injected facts;
+  missing/unknown/uncovered facts refuse, breaches refuse with detail.
+  Exact Decimal, floats rejected.
+- `admit_commissioned_entry` layers operator auth + S1 authority + ledger
+  vs required policy + verified remote native census (absent/unverifiable
+  → `NATIVE_CENSUS_UNAVAILABLE`; remote OPEN → `OVERLAP_NATIVE`). Zero
+  broker calls in every path (exploding-broker pinned).
+- `backend/routes/execution_admission.py`: UNMOUNTED proposal patch
+  (policies/approvals/revoke/operators/risk/decision, all `require_api_key`,
+  no broker use). Tested via test-local app. Zed reviews the mount.
+  `server.py` untouched, openapi 380 untouched.
+- Known residual (documented, not hidden): the mounted `POST /order`
+  route calls the broker without admission — changing that live path needs
+  Nav/Zed review, so it ships as a proposed patch, not a unilateral edit.
+Verification: new 5 + full `tests/solstice/` **655 passed**; ruff +
+silent-gate + bandit + API-380 green. Next READY: S3 (deployment
+exclusion proof with separate processes).
