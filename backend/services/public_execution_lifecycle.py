@@ -248,7 +248,7 @@ def load_draft(intent: dict[str, Any]) -> dict[str, Any] | None:
                 return {"intent_hash": digest, "stage": row[0],
                         "approved": bool(row[1]), "reason": row[2],
                         "version": DRAFT_VERSION, "updated_at": row[3]}
-        except Exception:
+        except Exception:  # silent by design: fall through to the memory registry
             pass
     cached = _DRAFTS.get(digest)
     if cached is not None:

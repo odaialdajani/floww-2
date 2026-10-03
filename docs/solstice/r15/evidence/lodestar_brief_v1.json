@@ -1,4 +1,8 @@
 {
+  "affordability": {
+    "note": "real briefs carry INSUFFICIENT_BUDGET gate result",
+    "verdict": "unchecked-fixture"
+  },
   "approval": {
     "note": "server-bound; client boolean never accepted",
     "scope": "single-entry",
@@ -14,6 +18,14 @@
   "confirmation": {
     "mode": "quoted",
     "risk_policy_version": "research_barriers.v1"
+  },
+  "consecutive_bid_check": {
+    "count": null,
+    "freshness_s": null,
+    "interval_s": null,
+    "note": "incomplete policy in fixture",
+    "reset": null,
+    "threshold": null
   },
   "contract": "lodestar-brief.v1",
   "correlation_ref": "in_5c8c5dcd3b07",
@@ -63,5 +75,10 @@
     "unit": "USD",
     "wall_id": "w_spy_760_call"
   },
+  "session_loss_cap": {
+    "note": "unset in fixture; enforced only against measured fills",
+    "value": null
+  },
+  "spread_limit_ticks": 4,
   "synthetic_note": "fixture only \u2014 not a market, participant, or outcome observation"
 }
