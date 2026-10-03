@@ -864,3 +864,14 @@ the next code change, or after green.
 - Combined stays at green `d5a8b469` deliberately: a docs-only merge+push
   would restart hosted CI for zero runtime gain. Next recomposition batches
   this fixture with the next code change or Zed's merge.
+
+## 35. Zed pass-5 absorbed (3 Oct 2026 — docs restored, runtime untouched)
+
+Zed's pass-5 (`aadea4ac` code / `77b8a127` receipt, PR104 all-green):
+runtime + receipt verified identical to this lane
+(`git diff` empty on backend/services, routes, tests, openapi, receipt).
+Two deltas, both mine-postdating-his-base (his composition branched at
+§33): my §34 MUSE record and the extended `execution-controls.v1` fixture
+were absent on his side — restored here verbatim, his files untouched.
+Combined re-composed from his receipt head + this lane; PR105 CI runs once
+on the result. No code change in this section.
