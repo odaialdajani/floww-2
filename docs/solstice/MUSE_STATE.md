@@ -768,3 +768,18 @@ PASS on the repaired silent gate. His branch is the freshest composition:
 main `6eaa3343` + Spark lane + his consumers. This lane changes nothing of
 his; combined re-composed by merging his head (code) — backend identical
 to the 633-green tree, frontend identical to his tested head.
+
+## 29. Exact-head backend receipt + all-green combined (3 Oct 2026)
+
+- Full backend suite at combined `daa31c7c` (local, Mongo up, unmasked):
+  **7099 passed, 37 skipped** (pre-existing count), 0 failures, 669s.
+  Covers the §24/§25/§27 lifecycle + producer + route changes that postdate
+  Zed's older full-suite receipts.
+- Hosted PR105 gates at `daa31c7c` ALL PASS: backend-tests 16m37s (run
+  37114933740), docker-build, frontend-build, ruff (run 37114933714) —
+  including the previously-failing silent-except gate.
+- Zed published pass-4 docs `0d8452d7` (acceptance/evidence/screenshots
+  only — zero runtime files). Runtime tree unchanged; no re-composition
+  needed and none done, so hosted green stands as posted.
+- Activation OFF; no deploy/orders/paid calls. INSUFFICIENT EVIDENCE; no
+  profitability claim. Main-merge call stays Nav's.
