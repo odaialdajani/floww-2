@@ -180,11 +180,10 @@ def test_sessions_flags_et_unparseable_divergence():
     from services.duckdb_engine import db as eng
 
     conn = eng.conn
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS heatmap_snapshots_v2 "
-        "(ticker VARCHAR, snapshot_id VARCHAR, asof_ts VARCHAR)")
-    conn.execute(
-        "DELETE FROM heatmap_snapshots_v2 WHERE ticker = 'ZZU'")
+    from services.heatmap_history import ensure_tables
+
+    ensure_tables(conn)
+    conn.execute("DELETE FROM heatmap_snapshots_v2 WHERE ticker = 'ZZU'")
     conn.execute(
         "INSERT INTO heatmap_snapshots_v2 (ticker, snapshot_id, asof_ts) VALUES "
         "('ZZU', 's-zzu-good', '2030-01-08T15:00:00+00:00'), "
