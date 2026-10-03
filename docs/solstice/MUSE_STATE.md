@@ -783,3 +783,17 @@ to the 633-green tree, frontend identical to his tested head.
   needed and none done, so hosted green stands as posted.
 - Activation OFF; no deploy/orders/paid calls. INSUFFICIENT EVIDENCE; no
   profitability claim. Main-merge call stays Nav's.
+
+## 30. Strict stored-approval mode (3 Oct 2026 — Zed pass-4 blocker closed)
+
+Zed: "the isolated current-runtime probe still accepts a supplied approval
+with no authoritative stored row." Closed with opt-in `require_stored_approval`
+on `submit`/`supersede` (forwarded + pre-validated before cancel): the
+approval must resolve to a durable, unrevoked row binding the presented
+intent. `APPROVAL_NOT_STORED` (missing/storeless), `APPROVAL_INVALID`
+(revoked/mismatch), `APPROVAL_STORE_UNAVAILABLE` (query failure,
+fail-closed). Default validation-only behavior unchanged; no live calls, no
+new route, no server.py edit.
+Verification: hardening **19 passed**; full `tests/solstice/` **637
+passed**; ruff + silent-gate + truth green. Lane `35939a6e`; combined
+`47576f67` (PR105 CI re-running). Activation OFF.
