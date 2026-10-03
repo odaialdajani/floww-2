@@ -837,3 +837,16 @@ records → INSUFFICIENT EVIDENCE).
 Deliberately NOT merged to combined yet: PR105 CI is running on `d5a8b469`
 and a docs push would restart it for zero code gain. Merge this record with
 the next code change, or after green.
+
+## 33. All-green combined + full-suite receipt (3 Oct 2026)
+
+- Hosted PR105 gates at combined `d5a8b469` ALL PASS: backend-tests 19m10s
+  (run 37136912635), docker-build, frontend-build, ruff (run 37136912574).
+- Local full backend suite at the same head (Mongo up, unmasked):
+  **7105 passed, 37 skipped** (pre-existing), 0 failures — covers strict
+  stored-approval mode + recovery-surplus + dedup on top of the earlier 7099.
+- Zed unmoved at `0d8452d7` (docs/evidence-only pass-4); his consumers sit
+  on the lane verbatim. This §33 stays lane-only: merging a docs record
+  into the green combined head would restart hosted CI for nothing.
+- Activation OFF; INSUFFICIENT EVIDENCE; no profitability claim.
+  Main-merge call stays Nav's.
