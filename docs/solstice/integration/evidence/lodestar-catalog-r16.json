@@ -1,0 +1,20 @@
+{
+  "version": "lodestar-catalog-receipt.v1",
+  "scope": "read-only product CodexBridge.catalog during 3 October 2026 continuation",
+  "source_code": "08f3793c242d943ab3b61b84e5394ce4602daa0a",
+  "operation": "catalog-only",
+  "requested": {"label": "GPT-6.1-Sol", "effort": "xhigh"},
+  "catalog_match": {
+    "id": "gpt-6.1-sol",
+    "label": "GPT-6.1-Sol",
+    "efforts": ["low", "medium", "high", "xhigh", "max"],
+    "default_effort": "low",
+    "speeds": ["default", "priority"]
+  },
+  "preferences_saved": false,
+  "model_turn_performed": false,
+  "effective_product_settings": null,
+  "effective_dispatch": null,
+  "monetary_cost": null,
+  "blocker": "Authenticated owner preference save and separately authorized grounded dispatch required; catalog support is not effective dispatch proof."
+}

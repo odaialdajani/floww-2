@@ -17,6 +17,9 @@ POST /api/public/order — place a single-leg order.
 
 POST /api/public/order/{order_id}/cancel — cancel an open order.
 
+GET /api/public/execution-lifecycle/inventory — read-only lifecycle inventory
+  (authenticated, default-deny): the stored execution boundary with no live path.
+
 Auth: every endpoint requires the master key (X-API-Key, see auth.py).
 Public.com orders are LIVE, not a paper simulation. New submissions are
 disabled unless FLOWW_ENABLE_LIVE_PUBLIC is exactly 1 after explicit operator
@@ -474,3 +477,22 @@ async def cancel_order(order_id: str) -> dict[str, Any]:
             "error": "api_error",
             "message": f"Public.com API error: {exc}",
         }) from exc
+
+
+@router.get("/execution-lifecycle/inventory", dependencies=[Depends(require_api_key)])
+async def execution_lifecycle_inventory() -> dict[str, Any]:
+    """Read-only lifecycle inventory (authenticated, default-deny; R17-4).
+
+    Reports the stored execution boundary — known/open/unknown intent records
+    with conservative protection truth, draft stages (stored approvals and
+    preflight states are draft rows, never client booleans), native workflow
+    registrations, the NEW-ENTRY protection window and the recovery boundary —
+    without executing recovery, any broker call or any new live path. The
+    live-submission arm state is disclosed; account-wide limits stay UNSET.
+    """
+    from services.public_execution_lifecycle import lifecycle_inventory
+
+    inventory = lifecycle_inventory()
+    inventory["live_submission_armed"] = (
+        os.environ.get("FLOWW_ENABLE_LIVE_PUBLIC", "") == "1")
+    return inventory

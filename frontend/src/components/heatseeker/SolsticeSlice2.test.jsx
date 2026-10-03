@@ -221,8 +221,9 @@ test("wall inspector shows interaction state and touches", () => {
 test("replay strip loads manifest", async () => {
   const axios = require("axios");
   axios.get.mockImplementation(async (url) => {
+    if (String(url).includes("/price-paths/comparable")) return { data: { version: "coverage-read.v1", admitted: true, baseline_id: "s0", snapshot_id: "s1" } };
     if (String(url).includes("/attribute/")) {
-      return { data: { status: "ok",
+      return { data: { status: "ok", ticker: "SPY",
         from: { id: "s0", asof: "2026-09-03T13:00:00Z" }, to: { id: "s1", asof: "2026-09-03T14:00:00Z" },
         strike_deltas: [{ strike: 500, delta: 1 }], walls_added: ["w_b"], walls_removed: [], volume_deltas: [], volume_rebased: [] } };
     }

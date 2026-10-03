@@ -964,7 +964,7 @@ export default function App() {
                     <button type="button" className={`btn ${expiryScope === "next" && mode === "day" ? "active" : ""}`} onClick={() => { setMode("day"); setDte(null); setExpiryScope("next"); }}>Next listed · day</button>
                     <button type="button" className="btn" disabled aria-describedby="solstice-range-blocker">14–60 DTE</button>
                   </div>
-                  <small id="solstice-range-blocker">14–60 DTE unavailable: current endpoint caps DTE at 30 and has no admitted lower bound.</small>
+                  <small id="solstice-range-blocker">14–60 DTE map unavailable: listed coverage is read-only; the display query still caps DTE at 30 and has no range projection.</small>
                   <div className="text-slate-500 mb-1 text-[10px]">Expiries</div>
                   <div className="flex gap-1">
                     {[2,4,6,8,12].map(n => (
