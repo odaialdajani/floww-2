@@ -531,7 +531,7 @@ def validate_intent(intent: dict[str, Any], ctx: dict[str, Any]) -> tuple[bool, 
     max_positions = risk_limits.get("max_positions")
     if max_positions is not None:
         try:
-            if len(_open_records()) >= int(max_positions):
+            if _open_count() >= int(max_positions):
                 return False, "RISK_MAX_POSITIONS_EXCEEDED"
         except (TypeError, ValueError):
             return False, "RISK_MAX_POSITIONS_EXCEEDED"
@@ -636,6 +636,27 @@ def _open_records(exclude_id: str | None = None) -> list[dict[str, Any]]:
         if str(rec.get("state") or "") not in terminal:
             out.append(rec)
     return out
+
+
+def _open_count() -> int:
+    """Non-terminal open count, durable-aware across restarts.
+
+    Memory is authoritative after recover_open(); before any recover the
+    registry is empty but durable rows may exist. max() avoids double-counting
+    the recovered rows while never undercounting a fresh process.
+    """
+    mem = len(_open_records())
+    if _STORE is None:
+        return mem
+    try:
+        ensure_lifecycle_tables(_STORE)
+        row = _STORE.execute(
+            "SELECT COUNT(*) FROM execution_intents_v1 "
+            "WHERE state NOT IN ('FILLED', 'REJECTED', 'CANCELED')").fetchone()
+        durable = int(row[0]) if row else 0
+    except Exception:
+        return mem
+    return max(mem, durable)
 
 
 async def _maybe_await(value: Any) -> Any:
@@ -941,6 +962,8 @@ async def cancel(intent_id: str, broker: Any) -> dict[str, Any]:
 async def supersede(
     old_intent_id: str, new_intent: dict[str, Any], ctx: dict[str, Any], broker: Any,
     armed: bool = False,
+    approval: dict[str, Any] | None = None, require_approval: bool = False,
+    approval_scope: str = "single-entry", require_fresh_preflight: bool = False,
 ) -> dict[str, Any]:
     """Intentional lifecycle transition for a changed order: cancel old, enter new.
 
@@ -949,20 +972,35 @@ async def supersede(
     (pending, unknown, still open) blocks entry with an explicit reason instead
     of double-entering. Returns the new submit receipt with `supersedes` set.
     Disarmed supersede refuses BEFORE cancelling: a refused transition must
-    never leave the old order cancelled with no replacement.
+    never leave the old order cancelled with no replacement. Deterministic
+    gates (validation, approval, fresh preflight) are pre-checked BEFORE
+    cancelling for the same reason: a predictably refused new intent must not
+    strand a cancelled order with no replacement.
     """
     if not armed:
         return {"ok": False, "reason": "DISARMED", "old_intent_id": old_intent_id}
     old = _INTENTS.get(old_intent_id)
     if old is None or not old.get("order_id"):
         return {"ok": False, "reason": "unknown-intent"}
+    candidate = dict(new_intent)
+    candidate["supersedes"] = old_intent_id
+    ok, reason = validate_intent(candidate, ctx)
+    if not ok:
+        return {"ok": False, "reason": reason, "old_intent_id": old_intent_id}
+    if require_approval:
+        now = ctx.get("now") if isinstance(ctx.get("now"), datetime) else None
+        if not verify_approval(candidate, approval, scope=approval_scope, now=now):
+            return {"ok": False, "reason": "APPROVAL_INVALID", "old_intent_id": old_intent_id}
+    if require_fresh_preflight and not has_fresh_preflight(candidate, ctx):
+        return {"ok": False, "reason": "STALE_PREFLIGHT", "old_intent_id": old_intent_id}
     cancelled = await cancel(old_intent_id, broker)
     if not cancelled.get("cancelled"):
         return {"ok": False, "reason": "SUPERSEDE_BLOCKED",
                 "detail": cancelled.get("status"), "old_intent_id": old_intent_id}
-    new_intent = dict(new_intent)
-    new_intent["supersedes"] = old_intent_id
-    out = await submit(new_intent, ctx, broker, armed=armed)
+    out = await submit(candidate, ctx, broker, armed=armed,
+                       approval=approval, require_approval=require_approval,
+                       approval_scope=approval_scope,
+                       require_fresh_preflight=require_fresh_preflight)
     if isinstance(out, dict):
         out["supersedes"] = old_intent_id
     return out
@@ -1026,6 +1064,18 @@ def lifecycle_inventory() -> dict[str, Any]:
         except Exception:
             durable_nonterminal = None
     drafts = list(_DRAFTS.values())
+    if _STORE is not None:
+        try:
+            _STORE.execute(DRAFT_DDL)
+            for hash_row in _STORE.execute(
+                "SELECT intent_hash, stage FROM intent_drafts_v1").fetchall() or []:
+                digest = hash_row[0] if hash_row else None
+                stage = hash_row[1] if len(hash_row) > 1 else "DRAFT"
+                if digest is not None and digest in _DRAFTS:
+                    continue  # same logical draft in both registries: count once
+                drafts.append({"stage": stage})
+        except Exception:
+            pass
     by_stage: dict[str, int] = {}
     for draft in drafts:
         stage = str(draft.get("stage") or "DRAFT")

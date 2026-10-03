@@ -617,3 +617,51 @@ combined acceptance.
   lane head (Zed's candidate froze `611f3c2f`; re-compose at this lane head),
   plus the Nav/Zed merge decision on PR103/PR101/PR100 and PR93 closeout
   docs. True externals unchanged.
+
+## 24. Hardening pass (3 Oct 2026 — "continue, no duplicates, reverify, improve")
+
+Duplicate audit (code-read, no new abstraction): `recorder_health`
+(register_capture/start_worker for the capture job) vs
+`solstice_price_producer` (same names for the price-path job) are separate
+jobs with separate flags/states — not merged. `execution_engine.py`
+(equities Almgren-Chriss math) vs `public_execution_lifecycle.py` (Public
+options intent lifecycle) are different domains — not merged.
+`routes/solstice.py` untouched; new reads live in `routes/solstice_price_paths.py`
+only. No duplicate polling path added (one fetch per symbol per tick).
+
+Holes found + fixed (TDD: 4 failing first, then green; all Spark-owned,
+no shared-file edit, no route surface change, no activation):
+1. `supersede()` bypassed approval/preflight gates and cancelled before
+   checking: new params `approval/require_approval/approval_scope/
+   require_fresh_preflight`, deterministic gates pre-validated on the final
+   candidate (with `supersedes`) BEFORE any cancel — a refused transition
+   never strands a cancelled order. Pinned by 2 tests (old stays OPEN,
+   zero new broker calls on refusal).
+2. `lifecycle_inventory()` counted memory drafts only: now unions durable
+   `intent_drafts_v1` rows (deduped by intent_hash) — a restarted process
+   reports stored drafts honestly. Pinned.
+3. `validate_intent` max_positions used memory-only `_open_records()`:
+   new `_open_count()` takes max(memory, durable nonterminal) — a fresh
+   process without recover still refuses over-limit entry, never
+   undercounts; no double-count after recover. Pinned.
+4. `/sessions` ET-edge: prefix-valid but ET-unparseable stamps (or a mix)
+   now disclose `overnight True / ny_date None` instead of silently keeping
+   the prior day. Pinned via direct ZZU seed.
+5. Producer restart OOO: `_last_at` high-water seeds from
+   `MAX(at_ts)` per ticker on first encounter — a restarted producer flags
+   late observations instead of resetting the sequence. Pinned.
+
+Verification (exact head, Python 3.14.6 disclosed, backend CWD):
+new `test_r17_hardening.py` **6 passed**; adjacent
+(r17 reads 9 + inventory 5 + hardening 6 + wiring 8 + lifecycle 42) **70
+passed**; full `tests/solstice/` **624 passed**; `ruff` touched clean;
+`generate_api_docs.py --check` **380 paths current** (service-only fixes,
+no regen needed).
+
+- Activation state: OFF. No flags/orders/services/credentials/paid calls.
+  Zed's `ef911f37` already merges `044ca009` verbatim + consumer-only files;
+  this pass adds a new lane head requiring Zed re-composition before the
+  combined acceptance.
+- Next exact action: commit + push lane only (no merge/deploy/activate);
+  Zed re-composes at the new head; Nav merge decision on
+  PR103/PR104/PR101/PR100 + PR93 docs. True externals unchanged.

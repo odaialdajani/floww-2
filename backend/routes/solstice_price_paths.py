@@ -171,19 +171,32 @@ async def price_path_sessions(
         if day is None:
             continue
         ny = _ny_date(asof_ts)
-        entry = days.setdefault(day, {"date": day, "ny_date": ny,
-                                      "overnight": ny is not None and ny != day,
-                                      "n_snapshots": 0,
-                                      "first_asof": asof_ts, "last_asof": asof_ts,
-                                      "latest_snapshot_id": snapshot_id})
+        if day not in days:
+            days[day] = {"date": day, "ny_date": ny,
+                         "overnight": ny is not None and ny != day,
+                         "n_snapshots": 0,
+                         "first_asof": asof_ts, "last_asof": asof_ts,
+                         "latest_snapshot_id": snapshot_id}
+        entry = days[day]
         entry["n_snapshots"] += 1
         entry["last_asof"] = asof_ts
         entry["latest_snapshot_id"] = snapshot_id
-        if (ny is not None and entry["ny_date"] is not None
-                and ny != entry["ny_date"]):
+        if ny is None:
+            # ET-unparseable stamp alongside parseable ones is itself a
+            # divergence: disclose it rather than silently keeping the prior day.
+            if entry["ny_date"] is not None:
+                entry["ny_date"] = None
+                entry["overnight"] = True
+        elif entry["ny_date"] is None:
+            # Previously unparseable-or-mixed day meets a parseable stamp:
+            # non-uniform by construction — disclose, never silently adopt.
+            entry["overnight"] = True
+        elif ny != entry["ny_date"]:
             # Non-uniform ET attribution inside one prefix day — disclose the
             # offset instead of silently picking a single normalized day.
             entry["ny_date"] = None
+            entry["overnight"] = True
+        elif ny != day:
             entry["overnight"] = True
     ordered = [days[d] for d in sorted(days)]
     return {"version": COVERAGE_VERSION, "ticker": ticker.upper(),
