@@ -954,3 +954,14 @@ Verification: new 8 + full `tests/solstice/` **663 passed**; ruff +
 silent-gate + bandit + API-380 green. S4 handoff: lane heads + refusal
 matrix published here; Zed assembles the combined successor. No combined
 recompose, no mount, no main push from this lane.
+
+## 40. S4 DONE — acceptance matrix + handoff (3 Oct 2026)
+
+`docs/solstice/SPARK_S18_ACCEPTANCE.md`: exact head/contracts/fixtures
+(with sha256) / layered test matrix (service 45+64, adapter-observation 63,
+full solstice 663, lint/security/docs) / full refusal codes / Zed mount
+notes / remaining externals. Process correction: the trailing-newline edit
+mistake recurred twice more (§§37/39 headers) — repaired immediately both
+times; headers verified healthy (§§36–39). Rule stands: edits always carry
+following-line context and are grep-verified. S1–S4 complete; owned READY
+queue empty pending genuine external input.
