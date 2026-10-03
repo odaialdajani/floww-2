@@ -404,3 +404,118 @@ def test_account_policy_newest_durable_write_governs():
         assert (ok, reason) == (False, "RISK_QUANTITY_EXCEEDED")
     finally:
         conn.close()
+
+
+def _stored_appr(lc, intent, operator="op-1"):
+    from datetime import timedelta
+
+    now = datetime(2026, 10, 2, 15, 0, tzinfo=UTC)
+    appr = lc.create_approval(
+        lc.intent_hash(intent), intent["account_id"], "single-entry",
+        now + timedelta(hours=1), operator, now=now)
+    return lc.store_approval(appr, operator), now
+
+
+def test_strict_stored_approval_accepts_authoritative_row():
+    import asyncio
+
+    import duckdb
+
+    import services.public_execution_lifecycle as lc
+
+    conn = duckdb.connect(":memory:")
+    try:
+        assert lc.register_store(conn) is True
+        intent, ctx = _base_intent(), _ctx()
+        stored, _ = _stored_appr(lc, intent)
+        out = asyncio.run(lc.submit(
+            intent, ctx, _FakeBroker(), armed=True,
+            approval=stored, require_approval=True,
+            require_stored_approval=True))
+        assert out["ok"] is True
+    finally:
+        conn.close()
+
+
+def test_strict_refuses_supplied_but_unstored_approval():
+    import asyncio
+
+    import duckdb
+
+    import services.public_execution_lifecycle as lc
+
+    conn = duckdb.connect(":memory:")
+    try:
+        assert lc.register_store(conn) is True
+        intent, ctx = _base_intent(), _ctx()
+        from datetime import timedelta
+
+        now = datetime(2026, 10, 2, 15, 0, tzinfo=UTC)
+        supplied = lc.create_approval(
+            lc.intent_hash(intent), intent["account_id"], "single-entry",
+            now + timedelta(hours=1), "op-1", now=now)
+        # Pure verification would accept this well-formed copy; strict mode
+        # refuses: no authoritative stored row exists.
+        assert lc.verify_approval(intent, supplied, scope="single-entry", now=now) is True
+        broker = _FakeBroker()
+        out = asyncio.run(lc.submit(
+            intent, ctx, broker, armed=True,
+            approval=supplied, require_approval=True,
+            require_stored_approval=True))
+        assert out["ok"] is False and out["reason"] == "APPROVAL_NOT_STORED"
+        assert broker.calls == []
+    finally:
+        conn.close()
+
+
+def test_strict_refuses_when_store_query_fails():
+    import asyncio
+
+    import duckdb
+
+    import services.public_execution_lifecycle as lc
+
+    conn = duckdb.connect(":memory:")
+    assert lc.register_store(conn) is True
+    intent, ctx = _base_intent(), _ctx()
+    stored, _ = _stored_appr(lc, intent)
+    conn.close()  # durable queries now fail; strict mode fails closed
+    broker = _FakeBroker()
+    out = asyncio.run(lc.submit(
+        intent, ctx, broker, armed=True,
+        approval=stored, require_approval=True,
+        require_stored_approval=True))
+    assert out["ok"] is False and out["reason"] == "APPROVAL_STORE_UNAVAILABLE"
+    assert broker.calls == []
+
+
+def test_supersede_strict_mode_never_cancels_on_refusal():
+    import asyncio
+
+    import duckdb
+
+    import services.public_execution_lifecycle as lc
+
+    conn = duckdb.connect(":memory:")
+    try:
+        assert lc.register_store(conn) is True
+        broker = _FakeBroker()
+        first = asyncio.run(lc.submit(_base_intent(), _ctx(), broker, armed=True))
+        assert first["ok"] is True
+        from datetime import timedelta
+
+        now = datetime(2026, 10, 2, 15, 0, tzinfo=UTC)
+        new_intent = _base_intent(observation_id="obs_sup_strict", limit_price="3.25")
+        unstored = lc.create_approval(
+            lc.intent_hash({**new_intent, "supersedes": first["intent_id"]}),
+            new_intent["account_id"], "single-entry",
+            now + timedelta(hours=1), "op-1", now=now)
+        out = asyncio.run(lc.supersede(
+            first["intent_id"], new_intent, _ctx(), broker, armed=True,
+            approval=unstored, require_approval=True,
+            require_stored_approval=True))
+        assert out["ok"] is False and out["reason"] == "APPROVAL_NOT_STORED"
+        assert broker.orders[first["order_id"]]["status"] == "OPEN"
+        assert len(broker.calls) == 1
+    finally:
+        conn.close()

@@ -915,6 +915,51 @@ def verify_approval(
     return not (moment > valid_until or approved_at > moment)
 
 
+def _verify_stored_approval(
+    intent: dict[str, Any], approval: Any, scope: str, now: datetime | None = None
+) -> tuple[bool, str]:
+    """Strict mode: the approval must resolve to an authoritative stored row.
+
+    A well-formed caller-supplied copy is never enough on its own: the row
+    must exist in the durable approvals table, be unrevoked, and bind the
+    presented intent (hash/account/scope/expiry). Store/query failures fail
+    closed — never treated as absent approval.
+    """
+    if not isinstance(approval, dict):
+        return False, "APPROVAL_INVALID"
+    approval_id = approval.get("approval_id")
+    if not isinstance(approval_id, str) or not approval_id:
+        return False, "APPROVAL_NOT_STORED"
+    if _STORE is None:
+        # Storeless registries cannot produce an authoritative row; a memory
+        # copy alone is never accepted in strict mode.
+        return False, "APPROVAL_NOT_STORED"
+    try:
+        ensure_lifecycle_tables(_STORE)
+        row = _STORE.execute(
+            "SELECT approval_json, revoked FROM approvals_v1 "
+            "WHERE approval_id = ?", [approval_id]).fetchone()
+    except Exception:
+        return False, "APPROVAL_STORE_UNAVAILABLE"
+    if not row:
+        return False, "APPROVAL_NOT_STORED"
+    try:
+        rec = json.loads(row[0]) if isinstance(row[0], str) else {}
+    except (TypeError, ValueError):
+        return False, "APPROVAL_NOT_STORED"
+    if not isinstance(rec, dict):
+        return False, "APPROVAL_NOT_STORED"
+    rec["revoked"] = bool(row[1]) if len(row) > 1 else bool(rec.get("revoked"))
+    if rec.get("revoked") is True:
+        return False, "APPROVAL_INVALID"
+    for field in ("intent_hash", "account_id", "scope"):
+        if approval.get(field) != rec.get(field):
+            return False, "APPROVAL_INVALID"
+    if verify_approval(intent, rec, scope=scope, now=now):
+        return True, "ok"
+    return False, "APPROVAL_INVALID"
+
+
 def _open_records(exclude_id: str | None = None) -> list[dict[str, Any]]:
     terminal = {"FILLED", "REJECTED", "CANCELED"}
     out = []
@@ -1068,6 +1113,7 @@ async def submit(
     intent: dict[str, Any], ctx: dict[str, Any], broker: Any, armed: bool = False,
     approval: dict[str, Any] | None = None, require_approval: bool = False,
     approval_scope: str = "single-entry", require_fresh_preflight: bool = False,
+    require_stored_approval: bool = False,
 ) -> dict[str, Any]:
     """Deterministic submit: validate → approval → preflight → ownership → placement.
 
@@ -1077,6 +1123,10 @@ async def submit(
     `require_approval=True` with a server-validated approval (and
     `require_fresh_preflight=True` once a preflight desk exists); tests default
     to validation-only so intent logic stays pinnable without an approval desk.
+    Strict callers additionally pass `require_stored_approval=True`: the
+    approval must then resolve to an authoritative stored, unrevoked row
+    (APPROVAL_NOT_STORED / APPROVAL_STORE_UNAVAILABLE otherwise) — a
+    well-formed caller-supplied copy alone is refused.
     """
     if not armed:
         return {"ok": False, "reason": "DISARMED"}
@@ -1087,6 +1137,12 @@ async def submit(
         now = ctx.get("now") if isinstance(ctx.get("now"), datetime) else None
         if not verify_approval(intent, approval, scope=approval_scope, now=now):
             return {"ok": False, "reason": "APPROVAL_INVALID"}
+    if require_stored_approval:
+        now = ctx.get("now") if isinstance(ctx.get("now"), datetime) else None
+        ok_s, reason_s = _verify_stored_approval(
+            intent, approval, scope=approval_scope, now=now)
+        if not ok_s:
+            return {"ok": False, "reason": reason_s}
     if require_fresh_preflight and not has_fresh_preflight(intent, ctx):
         return {"ok": False, "reason": "STALE_PREFLIGHT"}
     try:
@@ -1268,6 +1324,7 @@ async def supersede(
     armed: bool = False,
     approval: dict[str, Any] | None = None, require_approval: bool = False,
     approval_scope: str = "single-entry", require_fresh_preflight: bool = False,
+    require_stored_approval: bool = False,
 ) -> dict[str, Any]:
     """Intentional lifecycle transition for a changed order: cancel old, enter new.
 
@@ -1277,9 +1334,9 @@ async def supersede(
     of double-entering. Returns the new submit receipt with `supersedes` set.
     Disarmed supersede refuses BEFORE cancelling: a refused transition must
     never leave the old order cancelled with no replacement. Deterministic
-    gates (validation, approval, fresh preflight) are pre-checked BEFORE
-    cancelling for the same reason: a predictably refused new intent must not
-    strand a cancelled order with no replacement.
+    gates (validation, approval, stored approval, fresh preflight) are
+    pre-checked BEFORE cancelling for the same reason: a predictably refused
+    new intent must not strand a cancelled order with no replacement.
     """
     if not armed:
         return {"ok": False, "reason": "DISARMED", "old_intent_id": old_intent_id}
@@ -1295,6 +1352,12 @@ async def supersede(
         now = ctx.get("now") if isinstance(ctx.get("now"), datetime) else None
         if not verify_approval(candidate, approval, scope=approval_scope, now=now):
             return {"ok": False, "reason": "APPROVAL_INVALID", "old_intent_id": old_intent_id}
+    if require_stored_approval:
+        now = ctx.get("now") if isinstance(ctx.get("now"), datetime) else None
+        ok_s, reason_s = _verify_stored_approval(
+            candidate, approval, scope=approval_scope, now=now)
+        if not ok_s:
+            return {"ok": False, "reason": reason_s, "old_intent_id": old_intent_id}
     if require_fresh_preflight and not has_fresh_preflight(candidate, ctx):
         return {"ok": False, "reason": "STALE_PREFLIGHT", "old_intent_id": old_intent_id}
     cancelled = await cancel(old_intent_id, broker)
@@ -1304,7 +1367,8 @@ async def supersede(
     out = await submit(candidate, ctx, broker, armed=armed,
                        approval=approval, require_approval=require_approval,
                        approval_scope=approval_scope,
-                       require_fresh_preflight=require_fresh_preflight)
+                       require_fresh_preflight=require_fresh_preflight,
+                       require_stored_approval=require_stored_approval)
     if isinstance(out, dict):
         out["supersedes"] = old_intent_id
     return out
