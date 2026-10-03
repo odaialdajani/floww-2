@@ -16,7 +16,7 @@ Existing research catalog/preferences/session/history routes are consumed under 
 
 Existing Quick Trade is Alpaca PAPER; Public quotes are data provenance, not execution venue. Public live submission has its own server gate. Do not weaken or relabel either path.
 
-Spark PR94 publishes account/intent/price-path specs and fixtures; publication is not acceptance or route availability. Reviewed head `1fdf403d878378eb2d4c42d517071fe9559186b7` still has producer gaps noted in ZED_STATE. Required producer contracts:
+Spark's PR96/97/98 fixes are merged at verified main `08f3793c242d943ab3b61b84e5394ce4602daa0a`; generated API docs include376 paths. The old PR94 review is historical, not the current producer checklist. PR99 head `c16e7f688ffd3f3150e2be67504c70c77702b2aa` is a separate advisory lifecycle/draft improvement candidate. Publication, pure-service tests and editable briefs do not establish an authenticated mounted executor or trading approval. Current engineering/operational boundaries are in `integration/COMMISSIONING.md` and the current ZED_STATE. Required producer contracts:
 
 | Contract | Required identity / refusal behavior |
 |---|---|
@@ -37,7 +37,7 @@ Consumers must not repair mismatches by editing producer files. Schema/route cha
 - `native-handoff.v1`: authenticated private operator report under `/api/agent/handoffs`; bound to the owner's completed exact-contract draft/context hash, idempotent content identity, explicit native owner, editable dated brief/reference/reported status. Broker verification is false, activation unverified, approval null. Reads are owner-scoped; revocation clears frontend views/late responses.
 - `tidehunter-public-review.v1`: owned separate review consumes Pro's published selector, resolves a NEW bounded owning record and exact contract before opening, then uses the existing owner-token screen store/active lifecycle. Ckey/premium/conviction are never execution facts. Unmarked Pro v2 contexts remain refused.
 
-The current `/heatmap` next-listed scope is day-only and does not combine with DTE/scalp/swing. The `/data` polling alias has no expiry_scope parameter; the consumer uses `/heatmap` for Next rather than silently accepting loaded scope. Current DTE is cumulative and capped at30; a distinct admitted14–60 range/session inventory remains a Spark producer dependency, not a frontend-calculated substitute.
+The current `/heatmap` next-listed scope is day-only and does not combine with DTE/scalp/swing. The `/data` polling alias has no expiry_scope parameter; the consumer uses `/heatmap` for Next rather than silently accepting loaded scope. The optional cumulative DTE query is validated at30 by the route; unfiltered returned expiries are count-based and are not globally capped at30DTE. A distinct admitted14–60 lower/upper range and stored-session inventory remain Spark producer dependencies, not frontend-calculated substitutes. Replay rejects missing owning ticker/record identity and restores persisted staleness/age, leaving historical freshness unknown when absent. The coarse last-two `/attribute` comparison is not a source/scope/model/population admission contract; matched-pair/refusal metadata must precede production comparability acceptance.
 
 ## Native Public handoff
 
