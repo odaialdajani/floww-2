@@ -1,4 +1,36 @@
-# ZED_STATE — FLOWW integration, 2 October 2026
+# ZED_STATE — FLOWW integration continuation
+
+## Current checkpoint — verified merged main, 3 October 2026
+
+- Owner Zed; isolated lane `.worktrees/zed-main-acceptance-20261003`, branch `solstice/zed-main-acceptance-20261003`.
+- Base/initial HEAD `08f3793c242d943ab3b61b84e5394ce4602daa0a`, fetched current `origin/main`. PR96 MERGED at `df1bf1cea8396be7fa5fcff6a2666a67e7984992`; PR98 MERGED at this base. PR95 is still OPEN and is superseded for runtime code. Runtime frontend/agent changes from its code head are already on main; reverse branch diff includes missing Spark files, not new Zed runtime work.
+- Merge-head lint run37091898108 SUCCESS; CI/CD run37091898123 IN_PROGRESS at initial inspection. PR98 source-head green is not merge-head green. User reports7063/37 skips/68.83% merged-main stress; not rerun or adopted as this lane's receipt yet.
+- Authority `floww-integration.v1`; `lodestar-trace.v1`, `trade-plan-draft.v1`, `native-handoff.v1` remain unchanged. Read shared/integration harness + implementation/toolbox/QA/prompt packet, current checkpoints and planning read-only. Historical sections below are superseded only by specific new evidence, not silently deleted.
+- Actually exposed: file/search/edit, terminal, fetch, skills. Editor identifies GPT-6.1-Sol; no effective editor effort receipt. No browser/Storybook/Sentry/Public/Codex-task MCP in this chat. Attached front2/frontend/readmegrill read; local Superpowers TDD/debugging/verification/plans and frontend/React guidance read. Local CLI checks do not imply connected/authenticated connectors.
+- Owned write set: this checkpoint; own integration contract/commissioning/acceptance docs; non-protected frontend replay/Public/model consumers, stories/tests if an actual owned defect is reproduced; local bounded verification scripts/evidence. No package, App.js, runtime route/schema/server, Spark checkpoint, protected/frozen files or watchdog edit planned without a proven need and the agreed boundary.
+- Spark has ACTIVE uncommitted R16 work in `.worktrees/spark-r16`: lifecycle/tests/checkpoint. Its queue includes cross-process dedup, affordability, fill reporting/draft registry, brief specs. These are NOT on this pinned main and require a separate candidate/combined review. No other worktree is mutated.
+
+### Bounded ordered queue
+
+| ID | Owned task | Status | Exact next action / evidence |
+|---|---|---|---|
+| Z1 | Main baseline, preserved navigation/context | DONE | Confirmed merged runtime diff and eight-route implementation remains present; preserve existing worktrees and active services. Fresh navigation test/browser receipt belongs to Z5. |
+| Z2 | Replay/date-scope consumer acceptance | REVIEW_REQUIRED | Fixed missing owning ticker/ID admission and dropped recorded staleness/age:5 new regressions failed before patch; replay/Triad sweep30 passed, full frontend1096 passed. Legacy complete identity may remain partial; missing identity is refused. Producer session enumeration/admitted14–60/comparable-pair contract still missing; Spark owns them. |
+| Z3 | Lodestar effective settings | BLOCKED_EXTERNAL | Fresh product `CodexBridge.catalog()` confirms actual ID `gpt-6.1-sol`, xhigh support, default low, speeds default/priority. No preferences/turn changed. Next: authenticated operator uses AI choices→Sol/Extra high→Save, then separately approves one grounded turn and retains its effective trace; Zed does not guess owner or bypass auth. |
+| Z4 | Public/TideHunter commissioning boundary | REVIEW_REQUIRED | Own commissioning/interface docs now distinguish merged closures from remaining unmounted/authenticated/risk/protection requirements and PR99 advisory improvements. Existing native manual review and PAPER venue remain truthful; all policy values UNSET. Protected71/71 verified. Next: provider/account/rights/Nav visual review after final independent engineering. |
+| Z5 | Current combined acceptance | IN_PROGRESS | Fresh UNMASKED main backend7063/37/68.83% in415.52s; full patched frontend126 suites/1096, Storybook/axe16+build, Ruff0.15.22/Bandit/truth227/silent/API376/protected71 pass. Merge-head CI/CD37091898123 and lint37091898108 SUCCESS at08f3793c. Freeze PR99 c16e7f68, publish owned patch, then integrate in a separate combined worktree and run full combined gates/browser. |
+
+### Coordination / exact next action
+
+Spark took the two generated API-doc files under Nav's authorization (MUSE_STATE §12), merged with PR96; old docs-writer blocker is superseded, no new regeneration permission needed for an already completed change. Do not re-edit these shared files.
+
+Current code still declares `dte: Query(None, ge=0, le=30)` in both `/heatmap/{ticker}` and `/trinity`. This is a request-parameter maximum, NOT a universal expiry-column cap: unfiltered producer coverage is count-based and can include longer expiries. An admitted14–60 query with lower bound remains missing engineering, not just a risk-policy value. Spark owns producer/API support; Zed will keep consumer unavailable rather than synthesize it.
+
+Next: commit the tested owned replay patch/doc reconciliation on this lane, publish it for review, then create a separate combined candidate with frozen Spark PR99 c16e7f68; run combined gates/browser and publish linked remaining producer requests. Live capture/price workers, execution, native workflow activation, deployment and paid model turns remain OFF/not performed. No profitability or production durability claim. Durable live records, actual owner preferences, account/policy/rights and Nav visual review remain separate gates.
+
+## Historical checkpoint — 2 October 2026, pre-merge
+
+The remaining sections retain the earlier candidate's evidence and HOLDs. They describe their stated heads, not current main.
 
 ## Lane and authority
 
