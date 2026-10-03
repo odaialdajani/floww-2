@@ -560,3 +560,53 @@ Sweep verified the §21/R17 claims at the exact head `611f3c2f`:
   `dte_max` expiry-count loading both unchanged (distinct constraints).
 - Next exact action: Nav/Zed merge decision on PR103 (and PR93 closeout docs);
   Zed re-syncs the combined acceptance at `6eaa3343` + `75c160c2`.
+
+## 23. Take-over pass 2 (3 Oct 2026 — Zed's residual producer requests)
+
+Zed's PR103 comment (mrbeast1179-sketch, candidate `4bcc6f39` = main
+`6eaa3343` + PR101 `dcbc1492` + frozen PR103 `611f3c2f`) asked for three
+concrete producer items and an in-checkpoint acknowledgement. Acknowledged
+here as READY-owned engineering, not solely external:
+
+1. [DONE this pass] Session-index normalization: `/sessions` now attributes
+   days by the stored `asof_ts` timestamp prefix — the SAME attribution the
+   owning `session_manifest`/`compare_snapshots` match with `LIKE day%` — and
+   reports ET-normalized `ny_date` (null when non-uniform) plus an
+   `overnight` flag for exactly the offset/naive cases. Overnight/offset
+   fixtures pinned (02:00Z crossing ET midnight; naive 00:30 adopting the
+   owning UTC convention; ET-local never flags).
+2. [DONE this pass] Expiries range completion: reversed bounds refuse 422
+   `REVERSED_WINDOW` before any fetch; owning display envelope (`dte le=30`,
+   `market_data.py`) projected per row as `display_envelope` — a DIFFERENT
+   constraint from the admitted 14–60 policy window; honest `coverage` block
+   (requested/n_listed/n_display_envelope/listing_capped/lower+upper edge
+   observed) replaces the silent firstN verdict; listings default 6→12,
+   le 12→16 (budget 2+N fail-closed, CAPACITY 60). Both refusals now return
+   structured JSONResponse bodies — the app's global exception handler
+   stringifies dict details (server.py:231), which would bury the refusal
+   code in a repr string; server.py itself untouched (shared-file protocol).
+3. [READY, next] Authenticated/default-deny stored approvals/preflight +
+   account-wide limits/native/open/unknown inventory/protection/recovery
+   boundary. Lifecycle service (`public_execution_lifecycle.py`, 977 lines:
+   validate_intent, create/verify_approval, mark_preflighted, recover_open,
+   register_native_workflow, is_entry_pause) is still UNMOUNTED — server.py
+   lifecycle/mounts are Spark-owned by default. Next exact action: mount a
+   default-off, authenticated, read-only lifecycle inventory + stored
+   approvals/preflight route with fail-closed auth, then focused tests.
+   No executor wiring, no new broker path.
+
+Verification (exact head, Python 3.14.6, disclosed): r17 9 tests + wiring 8 =
+**17 passed** (was 14); ruff touched files clean; openapi regenerated 379
+paths (diff exactly the /expiries+/sessions docstring/schema updates; README
+counts unchanged); protected 71/71 and Zed-owned files untouched.
+
+Coordination note: PR103 carries `gsd:escalated` (gsd-loop review pass: no
+linked issue — the repo has issues disabled; non-`gsd/NNN-*` branch → labels
+only, no verdict posted, per the review playbook). The label is honest: the
+merge decision is Nav's; remove it when linkage exists. Zed's combined
+candidate froze `611f3c2f`; new lane heads require re-composition before the
+combined acceptance.
+
+- Activation state: OFF. No flags/orders/services/credentials/paid calls.
+- Next exact action: item 3 above (mount default-off lifecycle route), then
+  combined exact-head acceptance with Zed's re-composed lane head.

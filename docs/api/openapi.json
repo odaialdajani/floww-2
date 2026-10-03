@@ -16911,7 +16911,7 @@
     },
     "/api/solstice/price-paths/expiries": {
       "get": {
-        "description": "Admitted expiry-range query over listed expirations (R17-2).\n\nReports each listed expiry with its DTE and an ADMITTED/excluded verdict\nfor the requested window \u2014 it never narrows the stored chain. The existing\n`dte\u226430` display filter in `market_data.py` is untouched. Expired dates\nrefuse as EXPIRED; in-range dates admit; anything else names its reason.\n0DTE is kept by the chain with exact T but falls BELOW_WINDOW here.",
+        "description": "Admitted expiry-range query over listed expirations (R17-2).\n\nReports each listed expiry with its DTE and an ADMITTED/excluded verdict\nfor the requested lower/upper window \u2014 it never narrows the stored chain.\nReversed bounds (``min_dte > max_dte``) refuse as 422 REVERSED_WINDOW\nbefore any fetch. The owning display envelope (the ``dte le=30`` filter\n``market_data.py`` enforces) is projected per row as ``display_envelope`` \u2014\na DIFFERENT constraint from the admitted policy window, disclosed so the\ntwo never silently mix. ``coverage`` answers the listing honestly: when\nthe upper window edge was not observed in the requested listings, in-range\nexpiries may exist beyond the cap and the coverage says so instead of a\nsilent firstN verdict. Expired dates refuse as EXPIRED; in-range dates\nadmit; anything else names its reason. 0DTE is kept by the chain with\nexact T but falls BELOW_WINDOW here (the display envelope keeps it).",
         "operationId": "get_api_solstice_price-paths_expiries",
         "parameters": [
           {
@@ -16959,9 +16959,9 @@
             "name": "expirations",
             "required": false,
             "schema": {
-              "default": 6,
+              "default": 12,
               "description": "Listed expirations requested",
-              "maximum": 12,
+              "maximum": 16,
               "minimum": 1,
               "title": "Expirations",
               "type": "integer"
@@ -17073,7 +17073,7 @@
     },
     "/api/solstice/price-paths/sessions": {
       "get": {
-        "description": "Stored-session enumeration: NY session days with snapshot counts (R17-1).\n\nRead-only index over recorded snapshots. Coverage gaps within a day are\nanswered by the existing manifest route, not invented here; a ticker with\nno stored sessions returns an empty day list (empty state, never an error).",
+        "description": "Stored-session enumeration: session days with snapshot counts (R17-1).\n\nDay attribution is the stored ``asof_ts`` timestamp prefix \u2014 the SAME\nattribution the owning ``session_manifest``/``compare_snapshots`` routes\nmatch with ``LIKE day%`` \u2014 so this index, the manifest and the gaps can\nnever disagree about which day owns a snapshot. Each day also reports its\nET-normalized ``ny_date`` (null when the day's snapshots do not normalize\nuniformly) and an ``overnight`` flag for exactly the case the two\nattributions differ (offset/naive stamps crossing ET midnight); the prefix\nstays canonical and the divergence is disclosed, never silently mixed.\nRead-only. Coverage gaps within a day are answered by the existing\nmanifest route, not invented here; a ticker with no stored sessions\nreturns an empty day list (empty state, never an error).",
         "operationId": "get_api_solstice_price-paths_sessions",
         "parameters": [
           {
