@@ -1,7 +1,7 @@
 {
   "version": "floww-browser-receipt.v1",
   "fixtureOnly": true,
-  "sourceCommit": "4bcc6f39c814abc6e40084af9c8b89a5c0983296",
+  "sourceCommit": "90c58939f14f734c83844b80b82c6f8bd9d70090",
   "sourceHashes": {
     "frontend/src/App.css": "e2909affc171c429033191d863572ddef0b35e2fe7f7698c22318cbbfafef19f",
     "frontend/src/App.egress-invariant.test.js": "6676cedac81158c8f415359cfd73119d3c6564278bc9d27636ac7e4bb6a76f35",
@@ -168,7 +168,7 @@
     "frontend/src/components/heatseeker/DualGEXBadge.test.jsx": "ba546c1b4c5a72b6a7c533e58e61885313fc407d68cf7487edca1be113f2d123",
     "frontend/src/components/heatseeker/ExactContractReview.admission.test.jsx": "cc5e86d7f2512d83a02a5bc649c85756ddf8b3c429401127adfcbbfabe25a8e6",
     "frontend/src/components/heatseeker/ExactContractReview.jsx": "370687ce0e90da83d8167bc0d07f05cc7b192e9788833f29b500a5a1767b733a",
-    "frontend/src/components/heatseeker/ExpiryCoverage.jsx": "18b2bb344444db8d12863c3a08c59c56a7c1b236e4d25ed415e6966cdb2c7ba4",
+    "frontend/src/components/heatseeker/ExpiryCoverage.jsx": "bf6fbcb3cffde8e2ce73fef51e585350d8b33f29c4a80ba443c112f804836fc3",
     "frontend/src/components/heatseeker/ExposureStrip.css": "a5c6d9c5cc04326e04597f14caf93393f40b4bd3a7e4ca609504f1fa68433ad9",
     "frontend/src/components/heatseeker/ExposureStrip.jsx": "d2684713483b4ac583bb81b1637ab537434a6aa2906c8f00d19776077f0f1a8f",
     "frontend/src/components/heatseeker/ExposureStrip.test.jsx": "9855aa187e4cd1d8b675ed8f650da28efe1370474b7ce3bed2127c8484af6c1f",
@@ -196,8 +196,8 @@
     "frontend/src/components/heatseeker/RainbowRoadIndicator.test.jsx": "75c6e365ec65b82136fb861fd19c2e7b443e6d806cc9d4e99f69405ecee2c494",
     "frontend/src/components/heatseeker/RecoveryR12.test.jsx": "b80ade3055b90c187fad5151b3f10aba50a812f9e2af7edae10e32b2eca3e3b3",
     "frontend/src/components/heatseeker/RegimeCoverage.test.jsx": "6f19d9f7d161c7c750d3925729fc5fba9c35eaba48d8ea7e1bfa0a97523ac666",
-    "frontend/src/components/heatseeker/ReplayStrip.jsx": "4a73b4b503d70d1b034d9661c865b6cc5386abfa3508cdb04259915cfcc816b2",
-    "frontend/src/components/heatseeker/ReplayStrip.test.jsx": "1845fd25dff830b589b3f92544e48e76fc84791efea231e1d3380574ab2b32df",
+    "frontend/src/components/heatseeker/ReplayStrip.jsx": "0be025904d36caad27cfc7fd337ad7d10dcfbfdae8c8158b6da201c82c40a463",
+    "frontend/src/components/heatseeker/ReplayStrip.test.jsx": "d8baba43982f58a7bab5f4b22cf55401eedf69fd05dd468f8f82e7214c826b64",
     "frontend/src/components/heatseeker/ReverseRugIndicator.jsx": "9b6f91d676f4dcd6ec17f6621cf84fe3366a155bbdaf71283dd01a1be8fee6f4",
     "frontend/src/components/heatseeker/ReverseRugIndicator.test.jsx": "2dd4285e8ebfd0bcd5250a0c7206f8b4b1efe448b2f61bf27f776204a4a604a6",
     "frontend/src/components/heatseeker/RndDensityPanel.jsx": "eb0f91f590353b45295d68e27bd696c578bd76422ef6b0caff1730bada08ca6f",
@@ -207,7 +207,7 @@
     "frontend/src/components/heatseeker/SkylitControlBar.jsx": "6e9ee426312bcd7b1b359d833b387688ea8d0f26685c3bac4b33e8b59d36c07f",
     "frontend/src/components/heatseeker/SkylitControlBar.test.jsx": "37c34a2df0e2453f77b4491b895aab4468cd553d2a5d20bb484efcbe5c977cf6",
     "frontend/src/components/heatseeker/SkylitDashboard.jsx": "148874ac1777cfd822ed915c10ca74880b364a97953a78991529ccdabb65e09a",
-    "frontend/src/components/heatseeker/SkylitDashboard.test.jsx": "e366e25d92c4321876bdacb411b260da05afcd0688cb470b65021ffba46c767a",
+    "frontend/src/components/heatseeker/SkylitDashboard.test.jsx": "b106f2f0931b33419b7f51fdf6c8d9c9046dac8c8405c6cb48bf8e482f5e4859",
     "frontend/src/components/heatseeker/SkylitHeatmapGrid.jsx": "3edfa25fb91d122c5b2af81615c31b57f1fd43f53dad5004b492237ca5d5207f",
     "frontend/src/components/heatseeker/SkylitHeatmapGrid.palette.test.js": "7bbe1dfedb7fb60c41a96c798d218854247fb295771235c81526e2d7840d7664",
     "frontend/src/components/heatseeker/SkylitHeatmapGrid.r11.test.jsx": "fad784bbf335c75855db8e64b338138643547d482f890bba53fea2353115c81e",
@@ -219,7 +219,7 @@
     "frontend/src/components/heatseeker/SkylitTickerBar.paging.test.jsx": "bc471735e114b63be42a7b7d7041cf286a306e779119a21bb84a312ec83ed871",
     "frontend/src/components/heatseeker/SkylitTickerBar.test.jsx": "fc5ff3c369cc127a56179083d4ecb2469dce29e0d1d61cbd142e01a408e508df",
     "frontend/src/components/heatseeker/SolsticeCanvas.r11.test.jsx": "cc8e86950bbc931834ccc102e9bdfd07fd719af2966cd9cbdd6265683cc359a4",
-    "frontend/src/components/heatseeker/SolsticeDesk.stories.jsx": "de266b9ce6aca0bd2c0fa6bf39270366ab43496b40bd96f54044848924d4f071",
+    "frontend/src/components/heatseeker/SolsticeDesk.stories.jsx": "55da69a3e5ea7475dfdc4f77e8e89f719391694bc5c5298248ce6107d3663799",
     "frontend/src/components/heatseeker/SolsticeLeaderboard.jsx": "595a9213ffcc0a564757ec0301981e44d887c92e51af803ee9d9ac4deea9fe6d",
     "frontend/src/components/heatseeker/SolsticeLeaderboard.r11.test.jsx": "6ae3c49026dfa1057ba3f98937785571855a510fefd5c697b58bccba329e5a00",
     "frontend/src/components/heatseeker/SolsticeSlice2.test.jsx": "3ac5bb4ad5b5fd6cd04dcc3a1289855be2a4f05456b388594493d4140cd6f105",
@@ -269,7 +269,7 @@
     "frontend/src/config/api.js": "39b564ccf6e7b270d7e96669f37a4c6d93a4fc781f32ed71ec80d62b61d29f58",
     "frontend/src/context/AuthContext.js": "557091020b9865d62d5fce96f94c81769ec97231f03e8e5dd6e5a218d4ab743c",
     "frontend/src/context/ThemeContext.js": "3ed049e0050dfdcd91457bee1cace6bc8259c4e11e570c59268438afa1250922",
-    "frontend/src/fixtures/integration/coverage-read.v1.json": "86051a7e89a86319dc26e2793d3f0b5a6653f8990600a0a72aa9b5e56ad9f641",
+    "frontend/src/fixtures/integration/coverage-read.v1.json": "3b47655a3a7fbbf3a4dbdd0d305fb17b0a4a84addef8cdf395320a48ba479c49",
     "frontend/src/fixtures/integration/solstice-display.v1.json": "41a2a84bab0649beca599c880ff40468156f9e2570412c8b60bd37537ae92c78",
     "frontend/src/heatseeker-routing.test.js": "1e0db2e04e02b3a3e2ed9942cfea8bcb69f95a6608a1aa8a8f0b63b23b4767f2",
     "frontend/src/hooks/useDebounce.js": "3203faba1a0dbd657693a6936954fbf0f62f65a34d043dba178a868a00937ad6",
@@ -656,7 +656,7 @@
     "backend/routes/retail_flow.py": "3f6cb1b0665acc54858cac1429df1f01532ebfd7a533926631875f3e9916406b",
     "backend/routes/social_flow.py": "5c02db74bef18b7054e4992815fc777158ca1a792105a7ec50835cc4ee1d5c06",
     "backend/routes/solstice.py": "c014dfa3e259a982d319b55abea950951197b5b7ebd94fe1055b361fa69d1233",
-    "backend/routes/solstice_price_paths.py": "d8767bd8cf0613ab9f5ae3774f73d166dc317c04bb32e7f7291308f0e192d1f9",
+    "backend/routes/solstice_price_paths.py": "011e92e751bbd7b13de6ffd486933b33af295dff532df56e68f0f074d967a3cc",
     "backend/routes/solstice_review.py": "f5fabb02224a4f192e1ebe2e21093b6e89b3c2649c9f24610dca878490cfa385",
     "backend/routes/solstice_scan.py": "2bb279eadc7262592aacd16d10ea25cc5051288c5c7244ea3c4e03d7f54f21f0",
     "backend/routes/steal_three.py": "bad494cac6e849303e568ecb79d8baaa4823750a3b876de68e7850a156469848",
@@ -670,7 +670,7 @@
   },
   "bundleHashes": {
     "main.css": "4e04ddd1ca5107cd2f9526af27eaabe14e0e4978761acc06b8c851d49dfa76b0",
-    "main.js": "4f4878b4c23420d1d6b94b57825de1b372e03afe8c6dc28ae7e61b5a0787cf76",
+    "main.js": "64258badf34742cd026fe32ddfe6a2c38cf8d22abf9a0a067f02a0c1511818de",
     "static/js/415.34df0ce4.chunk.js": "48d91bcce41053d197315b3d2d270ae761f77121989bf4b83e0388f79fa5f157",
     "static/js/248.517a2a31.chunk.js": "a989bff8cf146299b2f3722ae275f99130eeef3f5031c185f3853eaa122e32a5",
     "static/js/537.613479e6.chunk.js": "7edae7a915322aaab4cbcfaab2236d462a31fb91aabdeaab712bc7d459bc85fd"
@@ -821,27 +821,27 @@
   "screenshots": [
     {
       "file": "solstice-1440.png",
-      "sha256": "0d35d908b55d36630ecf7df1fe2422616d457be46fba07a6d69a83ac2a971a5b"
+      "sha256": "f229286d5317bfaed44b7496cc39e7cd4fc42183f16fe63bd2b4bfeb54963203"
     },
     {
       "file": "solstice-1280.png",
-      "sha256": "b03f33477f55267cc4505a408f38af93a26b3ab48f59ad896b5bb842adf26c7e"
+      "sha256": "9751f2716b1d047a9a3aa2a925e5eed255577e8d16997750f6404041432e2c6c"
     },
     {
       "file": "solstice-390.png",
-      "sha256": "62aade46ee13074da8e9502754be937fdd673cb224fcf79c4bb6b69142e8bc77"
+      "sha256": "7bf395c4dab0b4d0e78246930b4f5cda7deef910cfe3988d4908ff0209faf80f"
     },
     {
       "file": "triad-1440.png",
-      "sha256": "b89cc404ea0c2ddcb41167c016ff9f4609cb14c8dd9c5d6ce11bbd58fc577900"
+      "sha256": "826767eeccd55f01e2fd6d79e516edae24ec10bffb9e18db65222c10bf1b1272"
     },
     {
       "file": "triad-1280.png",
-      "sha256": "7e5bd76c8928e0b9a62264a394ba4f547f82bbe77987ff2f41d722133ea4caf4"
+      "sha256": "f07e337ec5bb39fe2e798f71340814885724dee022c2cc2dc49852a293f395d2"
     },
     {
       "file": "triad-390.png",
-      "sha256": "4de1c187cec8973e9b837d6e7e94740b2d55513a89486d36a70c149bd8505ff1"
+      "sha256": "b56d306e7326da16e111171198ea1cbd1d5434fe8a51f643894b4e50383b4449"
     }
   ],
   "externalRequestsBlocked": [
@@ -1031,12 +1031,12 @@
         "ev8874951e1a20fbd90c99d7e0e5bf19730c94def90e3d27613ba40f9c29361320",
         "evfbf34dcfb0724cc739fe1bd40489dd58756a118fe6e6723b44087afdf6abe228",
         "eve1571a858b30bdf95fbf5304472bf375fdd49a4d0dca15bf5419b7d0b2c7f2ee",
-        "ev00599039fe2f6400c42ace6521597479359de5725c5a9842b7253ce296e8af0d",
+        "ev2e2d71266bb2ef536069b305eb124164ce7cc1d75c773976ddfa314fc821b875",
         "evf24eb0f0dade1194059259f976d84dcda1a0d0d5c969aad785c5c80232f8c1c3",
-        "ev6e7eba5766cb099471020760c7099ca164fb7033d33684b9b380f9851fabfaad",
+        "evd5d3b3ed6026c6e11abf9edcbc3f17579df642297c03441880ef64d9120daf05",
         "evb82df435a0bd94d44d2306799363228e77f44a97b7d8080678a2a7c644ca8965"
       ],
-      "draft_id": "draft_7658497d9b39cb0820224267713cc7fc7ddceb28f53c08b7a298f721e1cc7752",
+      "draft_id": "draft_1b710dffa4136e158cb948d78f66a3f9b43ac47799f2d9ca0085152378d712f6",
       "executable": false
     }
   ],
@@ -1044,16 +1044,22 @@
     "browser back/forward + query/hash preservation",
     "Expand restores selected strike and layout",
     "count-limited read-only14–60 expiry admission; map selection unchanged",
-    "stored NY session enumeration + dated load + admitted/refused exact record pair",
+    "overnight attribution disclosed; manifest uses stored prefix, not normalized NY date (index-only fixture)",
+    "stored day enumeration with declared NY attribution + dated load + admitted/refused exact record pair",
     "recorded play/pause/scrub",
     "stored manifest, step both directions, deliberate Live exit",
     "owning-contract deterministic draft + manual native brief, no execution"
   ],
-  "coverageFixtureHash": "86051a7e89a86319dc26e2793d3f0b5a6653f8990600a0a72aa9b5e56ad9f641",
+  "coverageFixtureHash": "3b47655a3a7fbbf3a4dbdd0d305fb17b0a4a84addef8cdf395320a48ba479c49",
   "coverageReads": [
     {
       "path": "/api/solstice/price-paths/expiries",
       "query": "?ticker=SPY&min_dte=14&max_dte=60&expirations=12",
+      "method": "GET"
+    },
+    {
+      "path": "/api/solstice/price-paths/sessions",
+      "query": "?ticker=SPY",
       "method": "GET"
     },
     {

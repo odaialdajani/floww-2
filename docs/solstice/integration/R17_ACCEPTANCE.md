@@ -1,4 +1,6 @@
-# R17 combined acceptance — reviewable, commissioning HOLD
+# R17 pass 1 — historical combined acceptance
+
+Superseded for current runtime by [R17_PASS2_ACCEPTANCE](R17_PASS2_ACCEPTANCE.md), tested CODE90c58939 with producer93dc0ef0. The shared preview evidence paths now contain pass-2 captures; retrieve this historical report's evidence from its recorded commit. The counts and hashes below remain historical, not new-head proof.
 
 ## Exact composition
 
