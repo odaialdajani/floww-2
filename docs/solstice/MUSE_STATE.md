@@ -317,3 +317,15 @@ Lifecycle transitions the prompt requires but the first cut left as refusal-only
   requires Zed's merge + a combined-head CI run (their PR is DRAFT, mine
   unmerged by design). A green backend lane alone is not claimed as integrated
   UI proof.
+
+## 12. API-doc boundary decision (3 Oct 2026, Nav authorized Spark takeover)
+
+Zed's review asked: authorize Zed to regenerate ONLY `docs/api/openapi.json` +
+`docs/api/README.md` with the existing generator, or Spark takes the boundary.
+Decision (Nav: "take over, finish everything"): **Spark takes it.** Writer:
+Spark; exact boundary: run `python3 qc/audit/generate_api_docs.py` on the
+combined head, commit ONLY those two generated files — no runtime
+schema/registry/server/route change, all Spark and Zed paths preserved.
+Verified: diff is exactly the `/api/agent/handoffs` GET/POST surface (Zed's
+owned agent route, untouched); 375→376 paths; `--check` passes. Zed's
+checkpoint need not change; disagreement can still be posted on PR94/96.
