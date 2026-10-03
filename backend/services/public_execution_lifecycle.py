@@ -38,6 +38,7 @@ from zoneinfo import ZoneInfo
 INTENT_VERSION = "execution-intent.v1"
 RECEIPT_VERSION = "execution-receipt.v1"
 DRAFT_VERSION = "intent-draft.v1"
+ACCOUNT_POLICY_VERSION = "account-policy.v1"
 RISK_POLICY = "research_barriers.v1"
 ET = ZoneInfo("America/New_York")
 FRESHNESS_DEFAULT_S = 30
@@ -52,10 +53,47 @@ LIFECYCLE_DDL = """
     )
 """
 
+ACCOUNT_POLICY_DDL = """
+    CREATE TABLE IF NOT EXISTS account_policy_v1 (
+        id VARCHAR PRIMARY KEY, version VARCHAR,
+        policy_json VARCHAR, updated_at VARCHAR
+    )
+"""
+
+APPROVAL_STORE_DDL = """
+    CREATE TABLE IF NOT EXISTS approvals_v1 (
+        approval_id VARCHAR PRIMARY KEY, intent_hash VARCHAR,
+        account_id VARCHAR, scope VARCHAR, valid_until VARCHAR,
+        approved_by VARCHAR, approved_at VARCHAR, revoked BOOLEAN,
+        approval_json VARCHAR, updated_at VARCHAR
+    )
+"""
+
+# Broker-native protection support as DOCUMENTED + account-eligibility gated.
+# Conservative by design: nothing is offered until both the vendor documents
+# the exact product/order combination AND the account is verified eligible.
+# An unverified combination is never called protected.
+NATIVE_PROTECTION_MATRIX: dict[str, dict[str, Any]] = {
+    "OPTION_SINGLE_LEG_LIMIT": {
+        "BRACKET": False, "OCO": False, "OTO": False,
+        "reason": "unverified-native-support",
+    },
+    "OPTION_SPREAD_LIMIT": {
+        "BRACKET": False, "OCO": False, "OTO": False,
+        "reason": "unverified-native-support",
+    },
+    "EQUITY_LIMIT": {
+        "BRACKET": False, "OCO": False, "OTO": False,
+        "reason": "unverified-native-support",
+    },
+}
+
 _INTENTS: dict[str, dict[str, Any]] = {}
 _NATIVE_WORKFLOWS: list[dict[str, Any]] = []
 _PREFLIGHT_CACHE: dict[str, dict[str, Any]] = {}
 _DRAFTS: dict[str, dict[str, Any]] = {}
+_ACCOUNT_POLICY: dict[str, Any] | None = None
+_APPROVALS: dict[str, dict[str, Any]] = {}
 _STORE: Any = None
 # Single-process ownership lock: the check-then-insert in submit() must be
 # atomic across threads, or two racing clicks place two orders. The critical
@@ -68,13 +106,24 @@ __all__ = [
     "INTENT_VERSION",
     "RECEIPT_VERSION",
     "DRAFT_VERSION",
+    "ACCOUNT_POLICY_VERSION",
     "PREFLIGHT_TTL_S",
     "LIFECYCLE_DDL",
+    "ACCOUNT_POLICY_DDL",
+    "APPROVAL_STORE_DDL",
     "DRAFT_DDL",
+    "NATIVE_PROTECTION_MATRIX",
     "intent_hash",
     "validate_intent",
     "create_approval",
     "verify_approval",
+    "store_approval",
+    "revoke_approval",
+    "stored_approval",
+    "set_account_policy",
+    "get_account_policy",
+    "clear_account_policy",
+    "native_protection_support",
     "submit",
     "reconcile",
     "reconcile_all",
@@ -99,17 +148,25 @@ __all__ = [
 
 
 def _reset_for_tests() -> None:
-    global _STORE
+    global _STORE, _ACCOUNT_POLICY
     _INTENTS.clear()
     _NATIVE_WORKFLOWS.clear()
     _PREFLIGHT_CACHE.clear()
     _DRAFTS.clear()
+    _APPROVALS.clear()
+    _ACCOUNT_POLICY = None
     _STORE = None
 
 
 def ensure_lifecycle_tables(conn: Any) -> None:
-    """Create the intent ownership table (additive; never alters existing tables)."""
+    """Create intent/policy/approval tables (additive; never alters existing tables)."""
+    import contextlib as _ctxlib
+
     conn.execute(LIFECYCLE_DDL)
+    with _ctxlib.suppress(Exception):
+        conn.execute(ACCOUNT_POLICY_DDL)
+    with _ctxlib.suppress(Exception):
+        conn.execute(APPROVAL_STORE_DDL)
 
 
 def register_store(conn: Any) -> bool:
@@ -128,6 +185,174 @@ def register_store(conn: Any) -> bool:
         return False
     _STORE = conn
     return True
+
+
+def set_account_policy(policy: dict[str, Any], operator: str) -> dict[str, Any]:
+    """Install the account-wide execution policy (default-deny, versioned).
+
+    The operator identity is required (authenticated at the route layer; the
+    service refuses an empty operator). Absent policy means UNSET: per-call
+    ctx limits still apply, but no account-wide ceiling is claimed. Returns
+    the stored row.
+    """
+    global _ACCOUNT_POLICY
+    if not isinstance(policy, dict):
+        raise TypeError("policy must be a dict")
+    if not str(operator or "").strip():
+        raise ValueError("operator is required")
+    row = {
+        "version": ACCOUNT_POLICY_VERSION,
+        "policy": dict(policy),
+        "set_by": str(operator),
+        "updated_at": datetime.now(UTC).isoformat(),
+    }
+    _ACCOUNT_POLICY = row
+    if _STORE is not None:
+        try:
+            ensure_lifecycle_tables(_STORE)
+            _STORE.execute(
+                "INSERT OR REPLACE INTO account_policy_v1 "
+                "(id, version, policy_json, updated_at) VALUES (?, ?, ?, ?)",
+                ["active", ACCOUNT_POLICY_VERSION,
+                 json.dumps(dict(policy), default=str), row["updated_at"]],
+            )
+        except Exception:
+            pass
+    return dict(row)
+
+
+def get_account_policy() -> dict[str, Any] | None:
+    """Current account-wide policy, if any (memory first, then durable)."""
+    if _ACCOUNT_POLICY is not None:
+        return dict(_ACCOUNT_POLICY)
+    if _STORE is None:
+        return None
+    try:
+        ensure_lifecycle_tables(_STORE)
+        row = _STORE.execute(
+            "SELECT policy_json, updated_at FROM account_policy_v1 "
+            "WHERE id = 'active'").fetchone()
+        if not row:
+            return None
+        return {"version": ACCOUNT_POLICY_VERSION,
+                "policy": json.loads(row[0]) if row[0] else {},
+                "updated_at": row[1] if len(row) > 1 else None}
+    except Exception:
+        return None
+
+
+def clear_account_policy() -> None:
+    """Remove the account-wide policy (tests/operator reset; never silent)."""
+    global _ACCOUNT_POLICY
+    _ACCOUNT_POLICY = None
+    if _STORE is not None:
+        try:
+            ensure_lifecycle_tables(_STORE)
+            _STORE.execute("DELETE FROM account_policy_v1 WHERE id = 'active'")
+        except Exception:
+            pass
+
+
+def store_approval(approval: dict[str, Any], operator: str) -> dict[str, Any]:
+    """Persist a server-validated approval (default-deny, revocable).
+
+    The operator identity is required. The approval must carry the standard
+    bound fields; malformed approvals are refused, never stored. Returns the
+    stored row.
+    """
+    if not str(operator or "").strip():
+        raise ValueError("operator is required")
+    if not isinstance(approval, dict):
+        raise TypeError("approval must be a dict")
+    for field in ("intent_hash", "account_id", "scope", "valid_until",
+                  "approved_by", "approved_at"):
+        if field not in approval:
+            raise ValueError(f"approval missing {field}")
+    approval_id = str(approval.get("approval_id") or "") or hashlib.sha256(
+        json.dumps(approval, sort_keys=True, default=str).encode()).hexdigest()[:16]
+    row = dict(approval)
+    row["approval_id"] = approval_id
+    row["revoked"] = False
+    row["stored_by"] = str(operator)
+    _APPROVALS[approval_id] = dict(row)
+    if _STORE is not None:
+        try:
+            ensure_lifecycle_tables(_STORE)
+            now = datetime.now(UTC).isoformat()
+            _STORE.execute(
+                "INSERT OR REPLACE INTO approvals_v1 "
+                "(approval_id, intent_hash, account_id, scope, valid_until, "
+                "approved_by, approved_at, revoked, approval_json, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [approval_id, row.get("intent_hash"), row.get("account_id"),
+                 row.get("scope"), row.get("valid_until"), row.get("approved_by"),
+                 row.get("approved_at"), False,
+                 json.dumps(row, default=str), now],
+            )
+        except Exception:
+            pass
+    return dict(row)
+
+
+def stored_approval(approval_id: str) -> dict[str, Any] | None:
+    """Read one stored approval by ID (memory first, then durable)."""
+    if approval_id in _APPROVALS:
+        return dict(_APPROVALS[approval_id])
+    if _STORE is None:
+        return None
+    try:
+        ensure_lifecycle_tables(_STORE)
+        row = _STORE.execute(
+            "SELECT approval_json, revoked FROM approvals_v1 "
+            "WHERE approval_id = ?", [approval_id]).fetchone()
+        if not row:
+            return None
+        rec = json.loads(row[0]) if isinstance(row[0], str) else {}
+        if isinstance(rec, dict):
+            rec["revoked"] = bool(row[1]) if len(row) > 1 else bool(rec.get("revoked"))
+            return rec
+        return None
+    except Exception:
+        return None
+
+
+def revoke_approval(approval_id: str, operator: str) -> dict[str, Any]:
+    """Revoke a stored approval (operator required; unknown IDs refuse)."""
+    if not str(operator or "").strip():
+        raise ValueError("operator is required")
+    rec = stored_approval(approval_id)
+    if rec is None:
+        return {"ok": False, "reason": "unknown-approval"}
+    rec["revoked"] = True
+    rec["revoked_by"] = str(operator)
+    _APPROVALS[approval_id] = dict(rec)
+    if _STORE is not None:
+        try:
+            ensure_lifecycle_tables(_STORE)
+            _STORE.execute(
+                "UPDATE approvals_v1 SET revoked = TRUE WHERE approval_id = ?",
+                [approval_id])
+        except Exception:
+            pass
+    return {"ok": True, "approval_id": approval_id}
+
+
+def native_protection_support(product: str, order_type: str) -> dict[str, Any]:
+    """Broker-native protection truth for one product/order combination.
+
+    Conservative: only a documented + eligible combination reports supported.
+    Everything in the current matrix reports unsupported with the unverified
+    reason — never offered, never silently enabled.
+    """
+    key = f"{str(product or '').upper()}_{str(order_type or '').upper()}"
+    mat = NATIVE_PROTECTION_MATRIX.get(key)
+    if mat is None:
+        return {"product": product, "order_type": order_type,
+                "supported": False, "types": {},
+                "reason": "unknown-product-combination"}
+    return {"product": product, "order_type": order_type,
+            "supported": False, "types": {k: False for k in ("BRACKET", "OCO", "OTO")},
+            "reason": str(mat.get("reason") or "unverified-native-support")}
 
 
 def _persist(intent_id: str) -> bool:
@@ -531,10 +756,38 @@ def validate_intent(intent: dict[str, Any], ctx: dict[str, Any]) -> tuple[bool, 
     max_positions = risk_limits.get("max_positions")
     if max_positions is not None:
         try:
-            if len(_open_records()) >= int(max_positions):
+            if _open_count() >= int(max_positions):
                 return False, "RISK_MAX_POSITIONS_EXCEEDED"
         except (TypeError, ValueError):
             return False, "RISK_MAX_POSITIONS_EXCEEDED"
+    # Account-wide policy (when installed): per-call ctx limits narrow, never
+    # widen, the stored ceiling. Absent policy stays UNSET (reported, not invented).
+    stored = get_account_policy()
+    if stored is not None:
+        pol = stored.get("policy") or {}
+        try:
+            sq = pol.get("max_quantity")
+            if sq is not None and int(qty) > int(sq):
+                return False, "RISK_QUANTITY_EXCEEDED"
+        except (TypeError, ValueError):
+            return False, "RISK_QUANTITY_EXCEEDED"
+        try:
+            sn = pol.get("max_notional")
+            if sn is not None:
+                notional = limit * Decimal(str(int(qty))) * mult
+                if notional > Decimal(str(sn)):
+                    return False, "RISK_NOTIONAL_EXCEEDED"
+        except (InvalidOperation, ValueError, TypeError):
+            return False, "RISK_NOTIONAL_EXCEEDED"
+        try:
+            sp = pol.get("max_positions")
+            if sp is not None and _open_count() >= int(sp):
+                return False, "RISK_MAX_POSITIONS_EXCEEDED"
+        except (TypeError, ValueError):
+            return False, "RISK_MAX_POSITIONS_EXCEEDED"
+        allowed = pol.get("allowed_products")
+        if allowed is not None and "OPTION" not in list(allowed):
+            return False, "UNSUPPORTED_PRODUCT"
     # A native workflow created outside FLOWW cannot be controlled by a local
     # lease; unresolved overlap blocks backend entry.
     if intent.get("execution_owner") == "FLOWW_BACKEND":
@@ -608,6 +861,13 @@ def verify_approval(
     for field in ("intent_hash", "account_id", "scope", "valid_until", "approved_by", "approved_at"):
         if field not in approval:
             return False
+    if approval.get("revoked") is True:
+        return False
+    approval_id = approval.get("approval_id")
+    if isinstance(approval_id, str) and approval_id:
+        stored = stored_approval(approval_id)
+        if stored is not None and stored.get("revoked") is True:
+            return False
     try:
         if intent_hash(intent) != approval["intent_hash"]:
             return False
@@ -636,6 +896,27 @@ def _open_records(exclude_id: str | None = None) -> list[dict[str, Any]]:
         if str(rec.get("state") or "") not in terminal:
             out.append(rec)
     return out
+
+
+def _open_count() -> int:
+    """Non-terminal open count, durable-aware across restarts.
+
+    Memory is authoritative after recover_open(); before any recover the
+    registry is empty but durable rows may exist. max() avoids double-counting
+    the recovered rows while never undercounting a fresh process.
+    """
+    mem = len(_open_records())
+    if _STORE is None:
+        return mem
+    try:
+        ensure_lifecycle_tables(_STORE)
+        row = _STORE.execute(
+            "SELECT COUNT(*) FROM execution_intents_v1 "
+            "WHERE state NOT IN ('FILLED', 'REJECTED', 'CANCELED')").fetchone()
+        durable = int(row[0]) if row else 0
+    except Exception:
+        return mem
+    return max(mem, durable)
 
 
 async def _maybe_await(value: Any) -> Any:
@@ -798,6 +1079,22 @@ async def submit(
                     "intent_id": intent_id, "order_id": existing["order_id"],
                     "status": existing.get("state", "OPEN"), "duplicate": True,
                     "persist_error": bool(existing.get("persist_error"))}
+        if not _INTENTS and _STORE is not None:
+            # Fresh process with a durable store: unknown durable opens must be
+            # recovered + reconciled before any new entry. Call recover_open()
+            # then reconcile_all() first; this refusal is the gate.
+            try:
+                ensure_lifecycle_tables(_STORE)
+                row = _STORE.execute(
+                    "SELECT COUNT(*) FROM execution_intents_v1 "
+                    "WHERE state NOT IN ('FILLED', 'REJECTED', 'CANCELED')").fetchone()
+                if row and int(row[0]) > 0:
+                    return {"ok": False, "reason": "RECOVERY_REQUIRED",
+                            "intent_id": intent_id,
+                            "detail": "durable nonterminal rows exist; "
+                                      "recover_open() + reconcile_all() first"}
+            except Exception:
+                pass
         if _open_records(exclude_id=intent_id):
             return {"ok": False, "reason": "OVERLAP_OPEN_NEEDS_RECONCILE"}
         order_id = str(uuid.uuid4())
@@ -941,6 +1238,8 @@ async def cancel(intent_id: str, broker: Any) -> dict[str, Any]:
 async def supersede(
     old_intent_id: str, new_intent: dict[str, Any], ctx: dict[str, Any], broker: Any,
     armed: bool = False,
+    approval: dict[str, Any] | None = None, require_approval: bool = False,
+    approval_scope: str = "single-entry", require_fresh_preflight: bool = False,
 ) -> dict[str, Any]:
     """Intentional lifecycle transition for a changed order: cancel old, enter new.
 
@@ -949,20 +1248,35 @@ async def supersede(
     (pending, unknown, still open) blocks entry with an explicit reason instead
     of double-entering. Returns the new submit receipt with `supersedes` set.
     Disarmed supersede refuses BEFORE cancelling: a refused transition must
-    never leave the old order cancelled with no replacement.
+    never leave the old order cancelled with no replacement. Deterministic
+    gates (validation, approval, fresh preflight) are pre-checked BEFORE
+    cancelling for the same reason: a predictably refused new intent must not
+    strand a cancelled order with no replacement.
     """
     if not armed:
         return {"ok": False, "reason": "DISARMED", "old_intent_id": old_intent_id}
     old = _INTENTS.get(old_intent_id)
     if old is None or not old.get("order_id"):
         return {"ok": False, "reason": "unknown-intent"}
+    candidate = dict(new_intent)
+    candidate["supersedes"] = old_intent_id
+    ok, reason = validate_intent(candidate, ctx)
+    if not ok:
+        return {"ok": False, "reason": reason, "old_intent_id": old_intent_id}
+    if require_approval:
+        now = ctx.get("now") if isinstance(ctx.get("now"), datetime) else None
+        if not verify_approval(candidate, approval, scope=approval_scope, now=now):
+            return {"ok": False, "reason": "APPROVAL_INVALID", "old_intent_id": old_intent_id}
+    if require_fresh_preflight and not has_fresh_preflight(candidate, ctx):
+        return {"ok": False, "reason": "STALE_PREFLIGHT", "old_intent_id": old_intent_id}
     cancelled = await cancel(old_intent_id, broker)
     if not cancelled.get("cancelled"):
         return {"ok": False, "reason": "SUPERSEDE_BLOCKED",
                 "detail": cancelled.get("status"), "old_intent_id": old_intent_id}
-    new_intent = dict(new_intent)
-    new_intent["supersedes"] = old_intent_id
-    out = await submit(new_intent, ctx, broker, armed=armed)
+    out = await submit(candidate, ctx, broker, armed=armed,
+                       approval=approval, require_approval=require_approval,
+                       approval_scope=approval_scope,
+                       require_fresh_preflight=require_fresh_preflight)
     if isinstance(out, dict):
         out["supersedes"] = old_intent_id
     return out
@@ -1026,10 +1340,35 @@ def lifecycle_inventory() -> dict[str, Any]:
         except Exception:
             durable_nonterminal = None
     drafts = list(_DRAFTS.values())
+    if _STORE is not None:
+        try:
+            _STORE.execute(DRAFT_DDL)
+            for hash_row in _STORE.execute(
+                "SELECT intent_hash, stage FROM intent_drafts_v1").fetchall() or []:
+                digest = hash_row[0] if hash_row else None
+                stage = hash_row[1] if len(hash_row) > 1 else "DRAFT"
+                if digest is not None and digest in _DRAFTS:
+                    continue  # same logical draft in both registries: count once
+                drafts.append({"stage": stage})
+        except Exception:
+            pass
     by_stage: dict[str, int] = {}
     for draft in drafts:
         stage = str(draft.get("stage") or "DRAFT")
         by_stage[stage] = by_stage.get(stage, 0) + 1
+    stored_policy = get_account_policy()
+    n_approvals = len(_APPROVALS)
+    n_revoked = sum(1 for a in _APPROVALS.values() if a.get("revoked") is True)
+    if _STORE is not None:
+        try:
+            ensure_lifecycle_tables(_STORE)
+            row = _STORE.execute("SELECT COUNT(*) FROM approvals_v1").fetchone()
+            n_approvals = max(n_approvals, int(row[0]) if row else 0)
+            row = _STORE.execute(
+                "SELECT COUNT(*) FROM approvals_v1 WHERE revoked = TRUE").fetchone()
+            n_revoked = max(n_revoked, int(row[0]) if row else 0)
+        except Exception:
+            pass
     return {
         "version": INVENTORY_VERSION,
         "durable": _STORE is not None,
@@ -1051,17 +1390,33 @@ def lifecycle_inventory() -> dict[str, Any]:
             "n_cached_contexts": len(_PREFLIGHT_CACHE),
             "detail": "redacted: contexts are counted, never returned",
         },
+        "approvals": {
+            "n_stored": n_approvals,
+            "n_revoked": n_revoked,
+            "detail": "server-validated approvals are stored + revocable; "
+                      "records are counted, never returned with secrets",
+        },
         "protection": {
             "entry_pause_now": is_entry_pause(now),
             "cancel_allowed_during_pause": cancel_allowed_during_pause(),
             "window": "11:30-14:00 America/New_York NEW-ENTRY pause (weekdays)",
+            "native_support": {
+                k: {"supported": False,
+                    "reason": str(v.get("reason") or "unverified-native-support")}
+                for k, v in NATIVE_PROTECTION_MATRIX.items()
+            },
         },
         "recovery": {
             "durable_nonterminal_rows": durable_nonterminal,
-            "detail": "read-only count; recovery rehydrates and is not executed here",
+            "detail": "read-only count; recovery rehydrates and is not executed here; "
+                      "fresh processes refuse new entry until recover_open() + "
+                      "reconcile_all() (RECOVERY_REQUIRED)",
         },
         "policy": {
-            "account_wide_limits": "UNSET",
+            "account_wide_limits": (
+                "UNSET" if stored_policy is None
+                else {"version": ACCOUNT_POLICY_VERSION, "set": True,
+                      "updated_at": stored_policy.get("updated_at")}),
             "detail": "policy values are commissioning inputs; this inventory "
                       "reports the boundary, it does not set policy",
         },
