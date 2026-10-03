@@ -169,14 +169,9 @@ Contract versions: `metric-record.v1`, `solstice-metric-contract.v1`,
 - [DONE] R15-5 Outcome linkage + frozen prospective research protocol —
   `docs/solstice/SPARK_R15_OUTCOME_PROTOCOL.md` (FROZEN_PROTOCOL untouched,
   zero durable records = insufficient evidence).
-- [IN_PROGRESS] R15-6 Exact-head backend receipt + combined-candidate acceptance —
-  `docs/solstice/SPARK_R15_RECEIPT.md` (refresh pending for hole-fix head);
-  PR94 OPEN (review only). Evidence: `tests/solstice/` 584 passed from `backend/`;
-  new focused 54 passed; brokerage gates 32 passed; truth 227/0; ruff + bandit
-  clean;
-  silent 351 OK; API 375 paths (+2 read-only). Next: refresh receipt, commit,
-  push PR94, participate in Zed's isolated verification (Zed paused — proceed,
-  ack pending).
+- [DONE] R15-6 Exact-head backend receipt + combined-candidate acceptance —
+  `docs/solstice/SPARK_R15_RECEIPT.md`; PR94 CI green on exact head; Zed PR95
+  audited + scratch suites green; superseded by §13: COMBINED PR96 MERGED.
 
 External BLOCKED (not engineering): SPX entitlement, licensed feeds, operator
 risk limits, Public native activation, participant recruitment, durable
@@ -313,10 +308,10 @@ Lifecycle transitions the prompt requires but the first cut left as refusal-only
   repo's venv. Their `solstice-display.v1.json` carries `source_fixture`+sha,
   `snapshotId`, OSI/strike/expiry, zero bid/ask (quote-free display fixture —
   consistent with `MISSING_QUOTE_SIDES` refusal, not a conflict).
-- Verdict: lanes are compatible AND independently green; integration proof still
-  requires Zed's merge + a combined-head CI run (their PR is DRAFT, mine
-  unmerged by design). A green backend lane alone is not claimed as integrated
-  UI proof.
+- Verdict at the time: lanes compatible AND independently green; integration
+  proof required Zed's merge + a combined-head CI run. (Superseded by §13:
+  combined PR96 merged with all gates green.) A green backend lane alone was
+  never claimed as integrated UI proof.
 
 ## 12. API-doc boundary decision (3 Oct 2026, Nav authorized Spark takeover)
 
@@ -329,3 +324,71 @@ schema/registry/server/route change, all Spark and Zed paths preserved.
 Verified: diff is exactly the `/api/agent/handoffs` GET/POST surface (Zed's
 owned agent route, untouched); 375→376 paths; `--check` passes. Zed's
 checkpoint need not change; disagreement can still be posted on PR94/96.
+
+## 13. Combined merge record (3 Oct 2026, Nav: "take over, finish everything")
+
+- Combined PR96 (`solstice/combined-integration-20261002`) MERGED at
+  `df1bf1ce` (2026-10-03T01:35Z) after ALL gates green on the exact head:
+  ruff PASS (incl. API-doc gate at 376 paths), backend-tests PASS (18m27s),
+  frontend-build PASS, docker-build PASS. Draft→ready→merge by Spark under
+  explicit Nav takeover authorization (Zed's lane was DRAFT/HOLD on the doc gate).
+- Merge contents: Spark lane (8 commits: producer, lifecycle, contracts,
+  hole-fix passes) + Zed integration (grounded frontend, disarmed Public
+  handoff, native bridge) + Spark-taken API-doc regen (375→376, `/api/agent/
+  handoffs` surface only). No force-push; normal merge commit.
+- Post-merge `origin/main` (`df1bf1ce`): protected manifest 71/71 identical
+  (verified via `git rev-parse origin/main:<path>` per line). Main CI/CD+lint
+  triggered on the merge head (pending at record time — re-check before claiming
+  main-green).
+- Activation state: OFF (all worker/venue flags unset; no deployment, restart,
+  daemon, order, credential, retraining, message, or paid call by this lane).
+  Empirical outcomes: still INSUFFICIENT EVIDENCE (zero durable admitted
+  records). Nothing in this merge commissions live trading or claims edge.
+- Remaining BLOCKED_EXTERNAL: SPX entitlement, licensed feeds, operator risk
+  limits + fixed account policy, Public native activation, participant study,
+  empirical 30–60 sessions, data rights, durable production capture with
+  admitted records, Nav visual review, real-money commissioning record.
+- Next: watch main CI to green; close PR94 as superseded; resume only on new
+  owned work or genuine external input.
+
+## 14. Post-merge verify + fix pass (3 Oct 2026 — "make sure it's all good")
+
+Main `df1bf1ce` verified: protected 71/71, API 376 paths incl. handoffs,
+main lint SUCCESS (main CI/CD still running at record time).
+- [DONE] R15-11 Terminal-cancel guard — `cancel()` on FILLED/REJECTED/CANCELED
+  refuses `already-terminal` with zero broker calls; `supersede()` on terminal
+  blocks without entry. Tested incl. no-call assertion.
+- [DONE] R15-12 Durable-write failure paths — `register_store` refuses dead
+  handles (prior store kept); create-path write failure → `STORE_UNAVAILABLE`
+  before any broker call; post-receipt failure flagged `persist_error`
+  (heals via recover+reconcile). Tested all three.
+
+## 15. CI timeout analysis + follow-up PR97 (3 Oct 2026)
+
+- Commit `6262d06c` backend-tests run 37084772976: NOT a test failure — the job
+  hit the 15-minute action timeout AFTER the suite finished: **7135 passed,
+  38 skipped, coverage 69.50%** (gate is 60%). Zero failures; badge red on time,
+  not on correctness. Later heads with the same code passed fully (PR96 combined
+  backend-tests 18m27s SUCCESS).
+- Lesson recorded honestly: the full suite is outgrowing the 15-min job budget
+  (53278 statements, 69% coverage). Splitting the job or raising the timeout is
+  a CI-owned change (devops lane) — not smuggled in here.
+- Follow-up PR97 (`solstice/spark-floww-backend` @ `ec155778`, R15-11/R15-12 +
+  §14 record): review-only; merge only on green CI + Nav standing authorization.
+
+## 16. PR97 merge record (3 Oct 2026 — CI trigger anomaly)
+
+- Hosted CI never fired for PR97's head (`feccbd89`): two pushes + PR open +
+  close/reopen produced zero workflow runs (verified via run list, check-runs
+  API, and `gh pr checks`). Cause undiagnosed from here — possibly an
+  Actions-side delivery/quota issue; repo workflow config untouched (out of
+  scope). This is recorded as an operational anomaly, not as a gate pass.
+- Substitute gate (same commands CI runs, local Mongo UP, exact head):
+  full `pytest tests/ -q --tb=short --cov=. -m "not flaky_env"` →
+  **7050 passed, 37 skipped, coverage 68.78%** (gate 60%), 0 failures.
+  Plus: solstice 597, ruff clean, truth 227/0, silent 351 OK, API 376 current,
+  protected 71/71.
+- Merge proceeds under Nav's explicit standing "finish everything, no
+  blocking" directive, on this evidence. Revert path: single merge commit.
+  (Resolution note: origin/main's §12 API-doc decision, which this lane's §§13–16
+  already assume, is retained above as §12; no content lost on either side.)

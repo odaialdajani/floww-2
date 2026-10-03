@@ -95,13 +95,22 @@ def ensure_lifecycle_tables(conn: Any) -> None:
     conn.execute(LIFECYCLE_DDL)
 
 
-def register_store(conn: Any) -> None:
-    """Register the DuckDB handle for durable intent ownership. No-op when None."""
+def register_store(conn: Any) -> bool:
+    """Register the DuckDB handle for durable intent ownership.
+
+    Returns True when registered. A dead handle is refused (False) and the
+    previous store — if any — is left untouched, so registration can never
+    silently swap durability out from under live records. No-op (True) for None.
+    """
     global _STORE
     if conn is None:
-        return
-    ensure_lifecycle_tables(conn)
+        return True
+    try:
+        ensure_lifecycle_tables(conn)
+    except Exception:
+        return False
     _STORE = conn
+    return True
 
 
 def _persist(intent_id: str) -> bool:
@@ -605,7 +614,8 @@ async def submit(
     if existing is not None and existing.get("order_id"):
         return {"ok": True, "receipt_version": RECEIPT_VERSION,
                 "intent_id": intent_id, "order_id": existing["order_id"],
-                "status": existing.get("state", "OPEN"), "duplicate": True}
+                "status": existing.get("state", "OPEN"), "duplicate": True,
+                "persist_error": bool(existing.get("persist_error"))}
     if _open_records(exclude_id=intent_id):
         return {"ok": False, "reason": "OVERLAP_OPEN_NEEDS_RECONCILE"}
     order_id = str(uuid.uuid4())
@@ -643,10 +653,16 @@ async def submit(
     _INTENTS[intent_id]["state"] = status if status in (
         "OPEN", "PENDING", "PARTIAL", "FILLED", "REJECTED", "CANCELED") else "ACKNOWLEDGED"
     _INTENTS[intent_id]["receipt"] = receipt
-    _persist(intent_id)
+    if not _persist(intent_id):
+        # The broker accepted, so the receipt is reported truthfully — but the
+        # write failure is flagged, never hidden. A later recover_open() reloads
+        # the last persisted state and reconcile_all refreshes from the broker,
+        # so this heals instead of silently diverging.
+        _INTENTS[intent_id]["persist_error"] = True
     return {"ok": True, "receipt_version": RECEIPT_VERSION,
             "intent_id": intent_id, "order_id": order_id,
-            "status": _INTENTS[intent_id]["state"]}
+            "status": _INTENTS[intent_id]["state"],
+            "persist_error": bool(_INTENTS[intent_id].get("persist_error"))}
 
 
 async def reconcile(intent_id: str, broker: Any) -> dict[str, Any]:
@@ -702,6 +718,10 @@ async def cancel(intent_id: str, broker: Any) -> dict[str, Any]:
     if rec is None or not rec.get("order_id"):
         return {"intent_id": intent_id, "order_id": None, "status": "UNKNOWN",
                 "cancelled": False, "reason": "unknown-intent"}
+    if str(rec.get("state") or "") in ("FILLED", "REJECTED", "CANCELED"):
+        # Terminal orders are never (re)cancelled: no broker call is made.
+        return {"intent_id": intent_id, "order_id": rec["order_id"], "status": rec.get("state"),
+                "cancelled": False, "reason": "already-terminal"}
     try:
         receipt = await _maybe_await(broker.cancel_order(rec["intent"]["account_id"], rec["order_id"]))
     except Exception as exc:
