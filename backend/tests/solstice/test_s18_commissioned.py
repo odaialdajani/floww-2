@@ -94,6 +94,21 @@ def _memdb():
     return duckdb.connect(":memory:")
 
 
+def test_operator_remove_revokes_future_authorization():
+    import services.operator_registry as operators
+
+    conn = _memdb()
+    try:
+        assert operators.register_operator(conn, "op-7", ["ACCT-1"], "root")["ok"] is True
+        assert operators.authorize_operator(conn, "op-7", "ACCT-1")["ok"] is True
+        assert operators.remove_operator(conn, "op-7")["ok"] is True
+        assert operators.authorize_operator(conn, "op-7", "ACCT-1")["reason"] == "OPERATOR_UNKNOWN"
+        assert operators.remove_operator(conn, "op-7")["reason"] == "OPERATOR_UNKNOWN"
+        assert operators.remove_operator(None, "op-7")["reason"] == "STORE_UNAVAILABLE"
+    finally:
+        conn.close()
+
+
 def test_operator_register_authorize_and_refusals():
     import services.operator_registry as operators
 
@@ -164,8 +179,10 @@ def test_ledger_previous_day_lots_carry_into_today():
         ]),
         {"max_daily_loss": "500", "today": "2026-10-02"})
     assert out["ok"] is True, out
-    # Yesterday's basis carries: 2 × (2.00 − 3.00) × 100, duplicate ignored.
-    assert out["snapshot"]["day_realized"] == "-200.00"
+    # Yesterday's basis carries: 2 × (2.00 − 3.00) × 100, duplicate ignored,
+    # NET of the same-day sell fee (1.00): commissions count against the day.
+    assert out["snapshot"]["day_realized"] == "-201.00"
+    assert out["snapshot"]["day_fees"] == "1.00"
     assert out["snapshot"]["duplicate_fills_ignored"] == 1
     out = ledger.evaluate_account_risk(
         _facts(fills=[
@@ -321,6 +338,67 @@ def test_commissioned_refuses_expired_and_unprotected():
         conn.close()
 
 
+def test_order_approval_guards_expiry_and_protection():
+    """Executable-path guards: approvals cannot be minted for expired /
+    near-expiry / unacknowledged-unprotected option contracts, and a
+    policy narrowing between creation and placement refuses at verify.
+    Equity (non-OSI) symbols skip the option expiry gate. Zero broker
+    calls anywhere (service layer never touches a broker).
+    """
+    import services.execution_admission as adm
+    import services.public_execution_lifecycle as lc
+
+    conn = _memdb()
+    try:
+        lc.register_store(conn)
+        full = {"max_quantity": 5, "max_notional": "100000",
+                "max_positions": 10, "max_daily_loss": "10000",
+                "today": "2026-10-02", "min_entry_dte": 5,
+                "allow_unprotected_entry": True}
+        assert adm.set_account_policy_required(conn, "ACCT-1", full, "op-1")["ok"] is True
+        # Expired Sep-4 OSI (real clock is Oct 2026): creation refuses.
+        out = adm.create_order_approval(
+            conn, "ACCT-1", "SPY260904C00760000", "BUY", 1, 3.15, "op-1")
+        assert out["ok"] is False and out["reason"] in (
+            "EXPIRY_INVALID", "EXPIRY_TOO_NEAR"), out
+        # Far-future OSI mints fine under the acknowledging policy.
+        created = adm.create_order_approval(
+            conn, "ACCT-1", "SPY271217C00760000", "BUY", 1, 3.15, "op-1")
+        assert created["ok"] is True, created
+        verified = adm.verify_order_approval(
+            conn, created["approval_id"], "ACCT-1",
+            "SPY271217C00760000", "BUY", 1, 3.15)
+        assert verified["ok"] is True, verified
+        # Policy narrows (ack removed): the live approval now refuses.
+        narrowed = dict(full)
+        del narrowed["allow_unprotected_entry"]
+        assert adm.set_account_policy_required(conn, "ACCT-1", narrowed, "op-1")["ok"] is True
+        out = adm.verify_order_approval(
+            conn, created["approval_id"], "ACCT-1",
+            "SPY271217C00760000", "BUY", 1, 3.15)
+        assert out["reason"] == "PROTECTION_UNVERIFIED", out
+        out = adm.create_order_approval(
+            conn, "ACCT-1", "SPY271217C00760000", "BUY", 1, 3.15, "op-1")
+        assert out["reason"] == "PROTECTION_UNVERIFIED", out
+        # Policy without an expiry floor: creation refuses unconfigured.
+        nofloor = {"max_quantity": 5}
+        assert adm.set_account_policy_required(conn, "ACCT-1", nofloor, "op-1")["ok"] is True
+        out = adm.create_order_approval(
+            conn, "ACCT-1", "SPY271217C00760000", "BUY", 1, 3.15, "op-1")
+        assert out["reason"] == "GUARD_UNCONFIGURED", out
+        # Equity ticker: no option expiry concept, still mints + verifies.
+        eq = adm.create_order_approval(conn, "ACCT-1", "SPY", "BUY", 1, 3.15, "op-1")
+        assert eq["ok"] is True, eq
+        assert adm.verify_order_approval(
+            conn, eq["approval_id"], "ACCT-1", "SPY", "BUY", 1, 3.15)["ok"] is True
+        # Malformed OSI (month 13): refuses instead of riding the equity path.
+        out = adm.create_order_approval(
+            conn, "ACCT-1", "SPY261300C00760000", "BUY", 1, 3.15, "op-1")
+        assert out["reason"] == "BAD_CONTRACT", out
+    finally:
+        conn.close()
+
+
 def _stored_appr_for(lc, intent, operator="op-1"):
     from datetime import timedelta
 
@@ -413,6 +491,16 @@ def test_commissioned_refuses_stale_foreign_unsourced_facts():
         conn.close()
 
 
+def test_ledger_refuses_short_positions():
+    import services.account_risk_ledger as ledger
+
+    out = ledger.evaluate_account_risk(
+        _facts(positions=[{"symbol": "SPY", "quantity": -1,
+                           "market_price": "3.30", "multiplier": "100"}]), {})
+    assert out["reason"] == "RISK_FACTS_INCOMPLETE", out
+    assert "short" in out["detail"], out
+
+
 def test_ledger_single_lot_exposure_multiplier():
     import services.account_risk_ledger as ledger
 
@@ -487,6 +575,9 @@ def test_route_patch_decision_and_risk_shapes(monkeypatch):
     r = client.post("/admission/decision", json={"nope": True},
                     headers={"X-API-Key": "wrong-key"})
     assert r.status_code in (401, 503), r.text
+    r = client.post("/admission/operators/never-registered/remove",
+                    headers=headers)
+    assert r.status_code == 404, r.text  # unknown removal refuses, never silent
 
 
 def test_route_decision_never_admits_client_asserted():

@@ -26,6 +26,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import re
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -36,6 +37,8 @@ ACCOUNT_POLICY_V2 = "account-policy.v2"
 # the decision clock refuse STALE_FACTS (server compares, never trusts a
 # client "fresh" flag). Documented constant, not a silent default.
 FACTS_MAX_AGE_S = 300.0
+# Option OSI shape: root + YYMMDD + C/P + strike×1000 (same as lifecycle).
+_ORDER_OSI_RE = re.compile(r"^[A-Z0-9.]{1,12}(\d{6})([CP])(\d{8})$")
 
 ACCOUNT_POLICY_V2_DDL = """
     CREATE TABLE IF NOT EXISTS account_policy_v2 (
@@ -480,8 +483,14 @@ def _enforce_account_ceilings(intent: dict[str, Any], policy: dict[str, Any]) ->
     except Exception:
         return "RISK_FACTS_INCOMPLETE"
     allowed = policy.get("allowed_products")
-    if allowed is not None and "OPTION" not in list(allowed or []):
-        return "UNSUPPORTED_PRODUCT"
+    if allowed is not None:
+        # Product derived from the intent contract, never assumed: options
+        # carry an explicit CALL/PUT type, anything else is non-option.
+        contract = intent.get("contract") or {}
+        product = ("OPTION" if str(contract.get("option_type") or "").upper()
+                   in ("CALL", "PUT") else "EQUITY")
+        if product not in list(allowed or []):
+            return "UNSUPPORTED_PRODUCT"
     try:
         if policy.get("max_positions") is not None and lc._open_count() >= int(policy["max_positions"]):
             return "RISK_MAX_POSITIONS_EXCEEDED"
@@ -674,6 +683,80 @@ def _check_facts_provenance(
     return None
 
 
+def _osi_expiry_iso(symbol: str) -> str | None:
+    """Option expiry from an OSI symbol, or None for non-option symbols.
+
+    Returns YYYY-MM-DD for a well-formed option OSI with a real calendar
+    date; None for equity tickers and malformed option symbols (expiry
+    then stays unknown, never guessed). Same shape as the lifecycle
+    cross-check; years are 20YY like listed options.
+    """
+    match = _ORDER_OSI_RE.match(str(symbol or "").upper().strip())
+    if match is None:
+        return None
+    yymmdd = match.group(1)
+    try:
+        return datetime.strptime(f"20{yymmdd[:2]}-{yymmdd[2:4]}-{yymmdd[4:6]}",
+                                 "%Y-%m-%d").strftime("%Y-%m-%d")
+    except ValueError:
+        return None
+
+
+def _is_malformed_osi(symbol: str) -> bool:
+    """An OSI-shaped symbol whose embedded date is not a real calendar day.
+
+    Malformed option symbols refuse BAD_CONTRACT at approval creation
+    instead of riding the equity skip-path into a broker rejection.
+    """
+    text = str(symbol or "").upper().strip()
+    return _ORDER_OSI_RE.match(text) is not None and _osi_expiry_iso(text) is None
+
+
+def _option_order_guards(
+    conn: Any, account_id: str, symbol: str,
+) -> dict[str, Any] | None:
+    """Expiry + protection gates for option order approvals (S8).
+
+    Runs at approval CREATION and again at VERIFICATION (placement), so a
+    policy installed, narrowed, or expired between the two still refuses.
+    Non-OSI symbols (equities) skip the expiry gate — no expiry concept —
+    and stay under kill-switch + fingerprint approval (disclosed
+    limitation: equity protection has no verified mechanism in this lane;
+    tightening that path is a Nav production-behavior decision).
+    Unverified option protection refuses unless the required account
+    policy explicitly acknowledges unprotected entry.
+    Returns a refusal dict or None (pass).
+    """
+    from services import execution_protection as prot
+
+    if _is_malformed_osi(symbol):
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": "option symbol has no valid expiry date"}
+    expiry = _osi_expiry_iso(symbol)
+    if expiry is None:
+        return None
+    pol = get_account_policy_required(conn, str(account_id or "").strip())
+    if not pol.get("ok"):
+        return {"ok": False, "reason": pol.get("reason", "POLICY_STORE_UNAVAILABLE"),
+                "detail": "no required account policy for option order"}
+    policy = pol.get("policy") or {}
+    if policy.get("min_entry_dte") is None:
+        return {"ok": False, "reason": "GUARD_UNCONFIGURED",
+                "detail": "required policy lacks min_entry_dte"}
+    guard = prot.entry_expiry_guard(
+        expiry, datetime.now(UTC),
+        {"min_entry_dte": policy.get("min_entry_dte"),
+         "same_day_cutoff_et": policy.get("same_day_cutoff_et", "13:00")})
+    if not guard.get("ok"):
+        return {"ok": False, "reason": guard.get("reason"),
+                "detail": guard.get("detail")}
+    if policy.get("allow_unprotected_entry") is True:
+        return None
+    return {"ok": False, "reason": "PROTECTION_UNVERIFIED",
+            "detail": "no verified protection mechanism; policy does not "
+                      "acknowledge unprotected entry"}
+
+
 def _canon_number(value: Any) -> str:
     try:
         return f"{float(value):.6f}"
@@ -705,7 +788,11 @@ def create_order_approval(
     """Create + store an order-bound approval (server timestamps only).
 
     Validity window is server-computed (1–24h); client clocks are never
-    trusted. Returns the stored row including approval_id.
+    trusted. Option OSI symbols additionally pass the required-policy
+    expiry guard and protection acknowledgment at creation (S8) — an
+    approval can never be minted for an expired/near-expiry or
+    unacknowledged-unprotected contract. Returns the stored row
+    including approval_id.
     """
     if conn is None:
         return {"ok": False, "reason": "STORE_UNAVAILABLE"}
@@ -731,6 +818,9 @@ def create_order_approval(
     }
     if not approval["account_id"] or not approval["symbol"] or not approval["approved_by"]:
         return {"ok": False, "reason": "BAD_CONTRACT"}
+    gate = _option_order_guards(conn, approval["account_id"], approval["symbol"])
+    if gate is not None:
+        return gate
     stored = store_approval_required(conn, approval, str(operator or "").strip())
     if not stored.get("ok"):
         return stored
@@ -745,7 +835,11 @@ def verify_order_approval(
 
     Refuses APPROVAL_NOT_STORED (missing/storeless), APPROVAL_INVALID
     (revoked, expired, or fingerprint mismatch), APPROVAL_STORE_UNAVAILABLE
-    (query failure). Never raises.
+    (query failure). Option OSI symbols re-pass the required-policy expiry
+    guard and protection acknowledgment against CURRENT policy and server
+    time — an approval minted before expiry, a policy narrowing, or an ack
+    removal cannot ride out its validity window into placement. Never
+    raises.
     """
     from services import public_execution_lifecycle as lc
 
@@ -784,4 +878,8 @@ def verify_order_approval(
         return {"ok": False, "reason": "APPROVAL_INVALID", "detail": "bad timestamps"}
     if moment > valid_until or approved_at > moment:
         return {"ok": False, "reason": "APPROVAL_INVALID", "detail": "expired"}
+    gate = _option_order_guards(conn, str(account_id or ""),
+                                rec.get("symbol") or symbol)
+    if gate is not None:
+        return gate
     return {"ok": True, "approval_id": approval_id}

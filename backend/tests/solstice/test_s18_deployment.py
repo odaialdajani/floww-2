@@ -319,7 +319,8 @@ def test_deployment_scope_is_single_host_volume():
     scope = lease.deployment_scope()
     assert scope["scope"] == "single host with one shared filesystem volume"
     assert "multi-host" in scope["not_scope"]
-    assert scope["multiprocess_safe"] is True  # POSIX flock on ship hosts
+    # Ship/CI hosts are POSIX (flock); the flag is reported, not assumed.
+    assert scope["multiprocess_safe"] == lease.MULTIPROCESS_SAFE
 
 
 def test_protection_refuses_unverified_everywhere():
@@ -349,6 +350,32 @@ def test_entry_expiry_guard_policy_driven():
         "2026-10-02", late, {"min_entry_dte": 0})["reason"] == "EXPIRY_TOO_NEAR"
     ok = prot.entry_expiry_guard("2026-10-09", friday, {"min_entry_dte": 5})
     assert ok == {"ok": True, "dte": 7, "version": "execution-protection.v1"}
+
+
+def test_expiry_guard_uses_et_calendar_days():
+    import services.execution_protection as prot
+
+    # 00:30 UTC Oct 3 is still Oct 2 in New York: DTE to an Oct-3 expiry
+    # is 1 ET day, not 0 UTC days (UTC math would undercount → fail-open).
+    overnight = datetime(2026, 10, 3, 0, 30, tzinfo=UTC)
+    out = prot.entry_expiry_guard("2026-10-03", overnight, {"min_entry_dte": 1})
+    assert out == {"ok": True, "dte": 1, "version": "execution-protection.v1"}
+
+
+def test_expiry_guard_refuses_malformed_cutoff():
+    import services.execution_protection as prot
+
+    # Same-day expiry at 10:00 ET with a garbage cutoff must refuse, not
+    # string-compare its way to an admission.
+    morning = datetime(2026, 10, 2, 14, 0, tzinfo=UTC)  # 10:00 ET
+    out = prot.entry_expiry_guard(
+        "2026-10-02", morning,
+        {"min_entry_dte": 0, "same_day_cutoff_et": "1pm"})
+    assert out["reason"] == "GUARD_UNCONFIGURED", out
+    out = prot.entry_expiry_guard(
+        "2026-10-02", morning,
+        {"min_entry_dte": 0, "same_day_cutoff_et": "13:00"})
+    assert out["ok"] is True, out
 
 
 def test_cancel_and_reconcile_stay_available_during_entry_pause():

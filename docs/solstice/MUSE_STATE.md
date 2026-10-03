@@ -1116,3 +1116,48 @@ corrected (review-only + known limits). No live/paid/activation work.
   re-composes the combined candidate at the new head; Nav merge
   decision on PR103/PR105. Pre-existing dirty
   `kanban/BOTTLENECK_ALERTS.md` (watchdog) left untouched.
+
+## 47. Resweep — executable-path + fail-open audit (3 Oct 2026)
+
+Full-pattern re-read of every owned S18 file (services + routes +
+tests). Holes found and fixed, all TDD with stash-proven fail-first
+(6/6 new regression tests fail on the pre-fix tree, pass after):
+
+1. S8 EXECUTABLE GAP (real): order approvals could be minted for expired
+   option contracts and the armed `/order` path verified only the
+   fingerprint — no expiry/protection check anywhere on the
+   broker-reachable sequence. `create_order_approval` and
+   `verify_order_approval` now both run `_option_order_guards` (OSI
+   expiry vs required-policy `min_entry_dte` + `allow_unprotected_entry`
+   ack, server clock): creation refuses, and a policy narrowed between
+   creation and placement refuses at verify — no riding out the ≤24h
+   validity window. Malformed OSI refuses BAD_CONTRACT (never the
+   equity skip-path). Equities (non-OSI) stay kill-switch + fingerprint
+   (disclosed; tightening is Nav's production-behavior call).
+2. PROTECTION CLOCK: DTE used the UTC date — the 00:00–04:00 UTC window
+   undercounts ET days (fail-open). Now ET calendar days (pinned).
+   Malformed `same_day_cutoff_et` string-compared unpredictably
+   (fail-open); now strictly `HH:MM`-validated else GUARD_UNCONFIGURED.
+3. LEDGER LOSS NET: daily loss ignored same-day fees (gross −200 vs net
+   −201 — fail-open for fee-sized margins). `day_realized` is now net
+   of `day_fees` (new snapshot field). Short positions refuse
+   RISK_FACTS_INCOMPLETE (long-lot model cannot price them; refusing
+   beats mispricing).
+4. OPERATOR LIFECYCLE: registry had no removal — added
+   `remove_operator` (+ unmounted route + pins); unknown removal
+   refuses, never silent.
+5. CEILINGS PRODUCT: `_enforce_account_ceilings` hardcoded OPTION —
+   now derived from the intent contract (CALL/PUT → OPTION else
+   EQUITY), pinned both directions.
+6. SCOPE ASSERT: deployment-scope test no longer assumes POSIX — asserts
+   the reported flag equals `MULTIPROCESS_SAFE`.
+
+Verification (backend CWD): full `tests/solstice/` **693 passed**;
+focused s18+hardening+lifecycle+brokerage **79 passed** (3.14) and
+**121 passed** on ship Python 3.12 + pinned-requirements scratch venv;
+ruff clean; silent-gate 359 OK; bandit touched clean; truth 227/0;
+openapi 380 current (new remove route is on the UNMOUNTED proposal
+router — no surface change). No new refusal codes (fixture stays 56).
+Delivered/review/accepted/commissioned split from §46 stands; this §47
+is DELIVERED lane work for Zed's re-composition. Activation OFF.
+INSUFFICIENT EVIDENCE. No profitability claim.

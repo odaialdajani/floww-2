@@ -109,6 +109,20 @@ async def register_operator(
     return out
 
 
+@router.post("/operators/{operator_id}/remove")
+async def remove_operator(
+    operator_id: str, _: bool = Depends(require_api_key),
+) -> dict[str, Any]:
+    """Remove an operator binding (unknown IDs refuse, never silent)."""
+    from services import operator_registry as operators
+
+    out = operators.remove_operator(_store_conn(), operator_id)
+    if not out.get("ok"):
+        status = 404 if out.get("reason") == "OPERATOR_UNKNOWN" else 503
+        raise HTTPException(status_code=status, detail=out)
+    return out
+
+
 @router.post("/risk/evaluate")
 async def evaluate_risk(body: dict[str, Any], _: bool = Depends(require_api_key)) -> dict[str, Any]:
     """Evaluate the account risk ledger from injected broker facts (pure)."""

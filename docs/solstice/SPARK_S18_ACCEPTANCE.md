@@ -31,15 +31,15 @@ No merge, no deploy, no activation, no orders, no flag changes.
 
 | Layer | Suite | Result |
 |---|---|---|
-| Service (S1/S5/S9 admission) | `test_s18_admission` (18) | **passed** |
-| Service (S2/S7/S8/S9 commissioned) | `test_s18_commissioned` (15) | **passed** |
-| Service (S3/S6/S10 deployment) | `test_s18_deployment` (14, spawn-isolated real processes) | **passed** |
+| Service (S1/S5/S9 admission) | `test_s18_admission` (19) | **passed** |
+| Service (S2/S7/S8/S9 commissioned) | `test_s18_commissioned` (18) | **passed** |
+| Service (S3/S6/S10 deployment) | `test_s18_deployment` (16, spawn-isolated real processes) | **passed** |
 | Service (hardening/resurrection) | `test_r17_hardening` (22) | **passed** |
 | Service (legacy lifecycle) | `test_r15_execution_lifecycle` (42) + wiring (8) + r17 reads (9) + inventory (5) | **passed** |
 | Mounted-route guards | existing brokerage/agent disarmed suites + `test_public_brokerage_admission` | green (in full run) |
 | Real read-only adapter observations | `test_public_api_only` + `test_public_spot_validation` + `test_solstice_exec_disarmed` | **63 passed** |
-| Full `tests/solstice/` (backend CWD) | unmasked | **687 passed** |
-| Ship-runtime check (Python 3.12 + pinned `requirements.txt` scratch venv) | s18 deployment (14/14) + admission/commissioned/hardening/lifecycle (94) | **passed** |
+| Full `tests/solstice/` (backend CWD) | unmasked | **693 passed** |
+| Ship-runtime check (Python 3.12 + pinned `requirements.txt` scratch venv) | s18 deployment/admission/commissioned/hardening/lifecycle/brokerage-admission (121) | **passed** |
 | Lint/security/docs | ruff + silent-except (359 files) + bandit (touched) + openapi `--check` | clean / OK / clean / **380 paths current** |
 | External commissioning | live account, entitlement, production capture, paid turns | NOT RUN — labeled, see below |
 
@@ -72,8 +72,16 @@ S1–S3 codes: `STORE_UNAVAILABLE`, `POLICY_STORE_UNAVAILABLE`,
   admission store or NO account policy installed it keeps the legacy
   kill-switch-only path (disclosed); with a required v2 policy installed it
   demands a stored `approval_id` verified against the server-recomputed
-  order fingerprint (403 otherwise). Full-enforcement-when-UNSET is a
-  production-behavior change — needs Nav/your sign-off, not a lane edit.
+  order fingerprint (403 otherwise). Option OSI approvals additionally
+  pass the required-policy expiry guard + protection acknowledgment at
+  CREATION and re-pass them at VERIFICATION (placement), so an approval
+  minted before expiry, a policy narrowing, or an ack removal cannot ride
+  out its validity window — expired/near-expiry/unacknowledged option
+  orders refuse even when armed. Malformed OSI refuses BAD_CONTRACT.
+  Equity (non-OSI) symbols skip the option expiry gate (no expiry
+  concept; disclosed limitation — tightening the equity path is a Nav
+  production-behavior decision). Full-enforcement-when-UNSET is likewise
+  a production-behavior change — needs Nav/your sign-off, not a lane edit.
 - Mount context you must provide (server.py, your ownership):
   1. ONE DuckDB handle shared by the admission route, the `/public/order`
      gate (`_admission_store_conn`), and `lc.register_store` — mixing
@@ -99,7 +107,12 @@ S1–S3 codes: `STORE_UNAVAILABLE`, `POLICY_STORE_UNAVAILABLE`,
 - Broker-fact provenance now enforced on the commissioned path:
   `risk_facts` need `account_id` (= intent account), `source`, and `asof`
   within 300s (`FACTS_MAX_AGE_S`) of the decision clock — stale/foreign/
-  unsourced facts refuse with zero broker calls.
+  unsourced facts refuse with zero broker calls. Daily loss is NET of
+  same-day fill fees (`day_realized` minus `day_fees`); short positions
+  refuse (long-lot model only, fail-closed). DTE is measured in ET
+  calendar days; malformed same-day cutoffs refuse GUARD_UNCONFIGURED.
+  Operators can be removed (`POST /admission/operators/{id}/remove`;
+  unknown refuses 404).
 - Fixture + refusal codes above are the consumer contract; additive only.
 
 ## Remaining externals (HOLD, not engineering)

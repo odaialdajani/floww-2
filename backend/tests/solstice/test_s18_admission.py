@@ -407,6 +407,23 @@ def test_admit_enforces_notional_and_products():
         conn.close()
 
 
+def test_ceilings_derive_product_from_contract():
+    import services.execution_admission as adm
+
+    option_intent = {"quantity": 1, "limit_price": "3.15",
+                     "contract": {"multiplier": "100", "option_type": "CALL"}}
+    equity_intent = {"quantity": 1, "limit_price": "3.15",
+                     "contract": {"multiplier": "1"}}
+    # Option intent under equity-only policy refuses; equity intent passes it.
+    assert adm._enforce_account_ceilings(
+        option_intent, {"allowed_products": ["EQUITY"]}) == "UNSUPPORTED_PRODUCT"
+    assert adm._enforce_account_ceilings(
+        equity_intent, {"allowed_products": ["EQUITY"]}) is None
+    # And the mirror: equity intent under option-only policy refuses.
+    assert adm._enforce_account_ceilings(
+        equity_intent, {"allowed_products": ["OPTION"]}) == "UNSUPPORTED_PRODUCT"
+
+
 def test_migrate_corrupt_v1_reports_corrupt():
     import services.execution_admission as adm
 

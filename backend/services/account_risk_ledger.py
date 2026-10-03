@@ -11,6 +11,12 @@ module never calls a broker, never invents missing values:
 - Fills normalize ONCE (dedup by fill_id, chronological sort) and a single
   FIFO walk carries lot basis across days, so previous-day lots sold today
   attribute correctly and duplicates never double-count anywhere.
+- Daily loss is NET of same-day fill fees: commissions count against the
+  day (gross gains would understate a loss — fail-open). Fees on fills
+  timestamped today reduce today's realized figure.
+- Short (negative-quantity) positions are refused: the FIFO model prices
+  long lots only, and silently mispricing a short book would be worse
+  than refusing admission until shorts are modeled.
 - Exposure and premiums include the contract multiplier declared per
   position/fill (options notional is qty × price × multiplier).
 - Open positions REQUIRE market_price and multiplier; orders REQUIRE
@@ -122,6 +128,9 @@ def _evaluate(
         qty = _dec(pos.get("quantity"), f"{symbol}.quantity")
         if qty == 0:
             continue
+        if qty < 0:
+            raise _refuse("RISK_FACTS_INCOMPLETE",
+                          f"short position {symbol} unsupported by the long-lot model")
         symbols.add(symbol)
         if pos.get("market_price") is None:
             raise _refuse("RISK_FACTS_INCOMPLETE",
@@ -141,10 +150,13 @@ def _evaluate(
     fees_paid = Decimal("0")
     realized = Decimal("0")
     day_realized: dict[str, Decimal] = {}
+    day_fees: dict[str, Decimal] = {}
     lots: dict[str, list] = {}
     for ev in events:
         symbol, side, qty, price, fee, ts, mult = ev
         fees_paid += fee
+        day = ts[:10]
+        day_fees[day] = day_fees.get(day, Decimal("0")) + fee
         amount = qty * price * mult
         if side == "BUY":
             premium_paid += amount
@@ -158,7 +170,6 @@ def _evaluate(
                 take = min(lot_qty, need)
                 gain = take * (price - lot_price) * lot_mult
                 realized += gain
-                day = ts[:10]
                 day_realized[day] = day_realized.get(day, Decimal("0")) + gain
                 lot_qty -= take
                 need -= take
@@ -169,7 +180,6 @@ def _evaluate(
             if need > 0:
                 raise _refuse("RISK_FACTS_INCOMPLETE",
                               f"sell of uncovered quantity at {ts}")
-
     snapshot = {
         "buying_power": str(buying_power),
         "n_open_positions": len(symbols),
@@ -195,8 +205,12 @@ def _evaluate(
             return {"ok": False, "reason": "RISK_FACTS_INCOMPLETE",
                     "detail": "max_daily_loss set but no evaluation day",
                     "version": RISK_LEDGER_VERSION}
-        loss = day_realized.get(str(day), Decimal("0"))
+        # NET day figure: same-day fill fees count against the day, so a
+        # gross gain can never hide a net loss from the loss gate.
+        loss = (day_realized.get(str(day), Decimal("0"))
+                - day_fees.get(str(day), Decimal("0")))
         snapshot["day_realized"] = str(loss)
+        snapshot["day_fees"] = str(day_fees.get(str(day), Decimal("0")))
         if loss < 0 and abs(loss) > Decimal(str(max_daily_loss)):
             breaches.append("RISK_DAILY_LOSS_EXCEEDED")
     if breaches:
