@@ -216,29 +216,44 @@ def set_account_policy(policy: dict[str, Any], operator: str) -> dict[str, Any]:
                 ["active", ACCOUNT_POLICY_VERSION,
                  json.dumps(dict(policy), default=str), row["updated_at"]],
             )
-        except Exception:
+        except Exception:  # silent by design: memory row is authoritative; durable is best-effort
             pass
     return dict(row)
 
 
 def get_account_policy() -> dict[str, Any] | None:
-    """Current account-wide policy, if any (memory first, then durable)."""
-    if _ACCOUNT_POLICY is not None:
-        return dict(_ACCOUNT_POLICY)
+    """Current account-wide policy (newest of memory and durable wins).
+
+    A second process may install a tighter policy while this process holds a
+    stale memory copy: when a store is present the durable row is compared by
+    updated_at and the newer side governs, so ceilings only move toward the
+    latest operator write, never toward a stale copy.
+    """
+    mem = dict(_ACCOUNT_POLICY) if _ACCOUNT_POLICY is not None else None
     if _STORE is None:
-        return None
+        return mem
     try:
         ensure_lifecycle_tables(_STORE)
         row = _STORE.execute(
             "SELECT policy_json, updated_at FROM account_policy_v1 "
             "WHERE id = 'active'").fetchone()
-        if not row:
-            return None
-        return {"version": ACCOUNT_POLICY_VERSION,
-                "policy": json.loads(row[0]) if row[0] else {},
-                "updated_at": row[1] if len(row) > 1 else None}
     except Exception:
-        return None
+        return mem
+    if not row:
+        return mem
+    try:
+        durable = {"version": ACCOUNT_POLICY_VERSION,
+                   "policy": json.loads(row[0]) if row[0] else {},
+                   "updated_at": row[1] if len(row) > 1 else None}
+    except (TypeError, ValueError):
+        return mem
+    if mem is None:
+        return durable
+    mem_ts = str(mem.get("updated_at") or "")
+    dur_ts = str(durable.get("updated_at") or "")
+    if dur_ts and dur_ts >= mem_ts:
+        return durable
+    return mem
 
 
 def clear_account_policy() -> None:
@@ -249,7 +264,7 @@ def clear_account_policy() -> None:
         try:
             ensure_lifecycle_tables(_STORE)
             _STORE.execute("DELETE FROM account_policy_v1 WHERE id = 'active'")
-        except Exception:
+        except Exception:  # silent by design: memory clear already applied; durable best-effort
             pass
 
 
@@ -270,6 +285,10 @@ def store_approval(approval: dict[str, Any], operator: str) -> dict[str, Any]:
             raise ValueError(f"approval missing {field}")
     approval_id = str(approval.get("approval_id") or "") or hashlib.sha256(
         json.dumps(approval, sort_keys=True, default=str).encode()).hexdigest()[:16]
+    prior = stored_approval(approval_id)
+    if prior is not None and prior.get("revoked") is True:
+        # A revoked approval is never resurrected by re-storing: revocation wins.
+        return dict(prior)
     row = dict(approval)
     row["approval_id"] = approval_id
     row["revoked"] = False
@@ -289,31 +308,40 @@ def store_approval(approval: dict[str, Any], operator: str) -> dict[str, Any]:
                  row.get("approved_at"), False,
                  json.dumps(row, default=str), now],
             )
-        except Exception:
+        except Exception:  # silent by design: memory row is authoritative; durable is best-effort
             pass
     return dict(row)
 
 
 def stored_approval(approval_id: str) -> dict[str, Any] | None:
-    """Read one stored approval by ID (memory first, then durable)."""
-    if approval_id in _APPROVALS:
-        return dict(_APPROVALS[approval_id])
+    """Read one stored approval by ID (memory first, then durable).
+
+    Revocation is authoritative across registries: when a store is present the
+    durable revoked flag is consulted even on a memory hit, so a revocation
+    recorded by another process is never masked by a stale memory copy.
+    """
+    mem = _APPROVALS.get(approval_id)
     if _STORE is None:
-        return None
+        return dict(mem) if mem is not None else None
     try:
         ensure_lifecycle_tables(_STORE)
         row = _STORE.execute(
             "SELECT approval_json, revoked FROM approvals_v1 "
             "WHERE approval_id = ?", [approval_id]).fetchone()
-        if not row:
-            return None
-        rec = json.loads(row[0]) if isinstance(row[0], str) else {}
-        if isinstance(rec, dict):
-            rec["revoked"] = bool(row[1]) if len(row) > 1 else bool(rec.get("revoked"))
-            return rec
-        return None
     except Exception:
-        return None
+        return dict(mem) if mem is not None else None
+    if not row:
+        return dict(mem) if mem is not None else None
+    try:
+        rec = json.loads(row[0]) if isinstance(row[0], str) else {}
+    except (TypeError, ValueError):
+        return dict(mem) if mem is not None else None
+    if not isinstance(rec, dict):
+        return dict(mem) if mem is not None else None
+    rec["revoked"] = bool(row[1]) if len(row) > 1 else bool(rec.get("revoked"))
+    if mem is not None and not rec.get("revoked") and mem.get("revoked") is True:
+        rec["revoked"] = True
+    return rec
 
 
 def revoke_approval(approval_id: str, operator: str) -> dict[str, Any]:
@@ -332,7 +360,7 @@ def revoke_approval(approval_id: str, operator: str) -> dict[str, Any]:
             _STORE.execute(
                 "UPDATE approvals_v1 SET revoked = TRUE WHERE approval_id = ?",
                 [approval_id])
-        except Exception:
+        except Exception:  # silent by design: memory revocation already applied; durable best-effort
             pass
     return {"ok": True, "approval_id": approval_id}
 
@@ -1093,7 +1121,7 @@ async def submit(
                             "intent_id": intent_id,
                             "detail": "durable nonterminal rows exist; "
                                       "recover_open() + reconcile_all() first"}
-            except Exception:
+            except Exception:  # silent by design: fail-closed count falls back to memory overlap check
                 pass
         if _open_records(exclude_id=intent_id):
             return {"ok": False, "reason": "OVERLAP_OPEN_NEEDS_RECONCILE"}
@@ -1350,7 +1378,7 @@ def lifecycle_inventory() -> dict[str, Any]:
                 if digest is not None and digest in _DRAFTS:
                     continue  # same logical draft in both registries: count once
                 drafts.append({"stage": stage})
-        except Exception:
+        except Exception:  # silent by design: inventory stays available on memory rows alone
             pass
     by_stage: dict[str, int] = {}
     for draft in drafts:
@@ -1367,7 +1395,7 @@ def lifecycle_inventory() -> dict[str, Any]:
             row = _STORE.execute(
                 "SELECT COUNT(*) FROM approvals_v1 WHERE revoked = TRUE").fetchone()
             n_revoked = max(n_revoked, int(row[0]) if row else 0)
-        except Exception:
+        except Exception:  # silent by design: inventory stays available on memory counts alone
             pass
     return {
         "version": INVENTORY_VERSION,

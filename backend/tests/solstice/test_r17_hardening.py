@@ -180,11 +180,10 @@ def test_sessions_flags_et_unparseable_divergence():
     from services.duckdb_engine import db as eng
 
     conn = eng.conn
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS heatmap_snapshots_v2 "
-        "(ticker VARCHAR, snapshot_id VARCHAR, asof_ts VARCHAR)")
-    conn.execute(
-        "DELETE FROM heatmap_snapshots_v2 WHERE ticker = 'ZZU'")
+    from services.heatmap_history import ensure_tables
+
+    ensure_tables(conn)
+    conn.execute("DELETE FROM heatmap_snapshots_v2 WHERE ticker = 'ZZU'")
     conn.execute(
         "INSERT INTO heatmap_snapshots_v2 (ticker, snapshot_id, asof_ts) VALUES "
         "('ZZU', 's-zzu-good', '2030-01-08T15:00:00+00:00'), "
@@ -340,3 +339,68 @@ def test_native_protection_stays_conservative():
     assert ans["reason"] == "unverified-native-support"
     body = lc.lifecycle_inventory()
     assert body["protection"]["native_support"]["OPTION_SINGLE_LEG_LIMIT"]["supported"] is False
+
+
+def test_store_approval_never_resurrects_revoked():
+    from datetime import timedelta
+
+    import services.public_execution_lifecycle as lc
+
+    intent = _base_intent()
+    digest = lc.intent_hash(intent)
+    now = datetime(2026, 10, 2, 15, 0, tzinfo=UTC)
+    appr = lc.create_approval(digest, intent["account_id"], "single-entry",
+                              now + timedelta(hours=1), "op-1", now=now)
+    stored = lc.store_approval(appr, "op-1")
+    assert lc.revoke_approval(stored["approval_id"], "op-1")["ok"] is True
+    again = lc.store_approval(appr, "op-1")
+    assert again["revoked"] is True
+    assert lc.verify_approval(intent, again, scope="single-entry", now=now) is False
+
+
+def test_stored_approval_sees_cross_process_revocation():
+    from datetime import timedelta
+
+    import duckdb
+
+    import services.public_execution_lifecycle as lc
+
+    conn = duckdb.connect(":memory:")
+    try:
+        assert lc.register_store(conn) is True
+        intent = _base_intent()
+        digest = lc.intent_hash(intent)
+        now = datetime(2026, 10, 2, 15, 0, tzinfo=UTC)
+        appr = lc.create_approval(digest, intent["account_id"], "single-entry",
+                                  now + timedelta(hours=1), "op-1", now=now)
+        stored = lc.store_approval(appr, "op-1")
+        # Another process revokes directly in the durable table; this process
+        # still holds an unrevoked memory copy.
+        conn.execute("UPDATE approvals_v1 SET revoked = TRUE WHERE approval_id = ?",
+                     [stored["approval_id"]])
+        seen = lc.stored_approval(stored["approval_id"])
+        assert seen is not None and seen["revoked"] is True
+        assert lc.verify_approval(intent, stored, scope="single-entry", now=now) is False
+    finally:
+        conn.close()
+
+
+def test_account_policy_newest_durable_write_governs():
+    import duckdb
+
+    import services.public_execution_lifecycle as lc
+
+    conn = duckdb.connect(":memory:")
+    try:
+        assert lc.register_store(conn) is True
+        lc.set_account_policy({"max_quantity": 100}, "op-1")
+        # A newer, tighter write lands durably from another process.
+        conn.execute(
+            "UPDATE account_policy_v1 SET policy_json = ?, updated_at = ? WHERE id = 'active'",
+            ['{"max_quantity": 1}', "2099-01-01T00:00:00+00:00"])
+        got = lc.get_account_policy()
+        assert got is not None and got["policy"].get("max_quantity") == 1
+        ok, reason = lc.validate_intent(_base_intent(quantity=5), _ctx())
+        assert (ok, reason) == (False, "RISK_QUANTITY_EXCEEDED")
+    finally:
+        conn.close()

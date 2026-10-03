@@ -731,3 +731,27 @@ regen.
   Commissioning HOLD; policy UNSET except operator-installed test policies;
   zero durable admitted records → INSUFFICIENT EVIDENCE; no profitability
   claim. Protected/frozen/watchdog untouched.
+
+## 27. Resweep (3 Oct 2026 — CI red → green, revocation/freshness hardening)
+
+- PR105 ruff job FAILED on the silent-except gate: 7 new unjustified
+  `except: pass` sites from §25, all in `public_execution_lifecycle.py`.
+  Fixed with `silent by design` reasons (memory-authoritative, durable
+  best-effort); local gate now OK (353 files).
+- Hardened three cross-process holes in the new controls (TDD, +3 tests):
+  re-storing a revoked approval never resurrects it; durable revocation is
+  honored over a stale memory copy; account policy resolves newest write
+  across registries by updated_at.
+- Verification: hardening **15 passed**; adjacent **79 passed**; full
+  `tests/solstice/` **633 passed**; ruff + silent-gate + truth 226/0 green.
+- Lane `a4abe216` pushed (PR103); combined re-composed to `ae716ce0` and
+  pushed (PR105 CI re-running). Activation OFF; no live calls.
+
+Resweep catch (same session): the new ZZU session test created a partial
+`heatmap_snapshots_v2` stub (`CREATE TABLE IF NOT EXISTS` with 3 columns),
+breaking `record_snapshot` for any test file running after it in the same
+process — order-dependent, my miss. Fixed to `ensure_tables()` + DELETE
+(lane `667993ff`); both file orders green. Combined re-merged to `084774bb`,
+full `tests/solstice/` **633 passed** there too. Receipt addendum above
+covers §24–§27; `range_map` is an expiry-list projection, NOT a persisted
+analytical grid; range-map analytics and execution activation stay disabled.
