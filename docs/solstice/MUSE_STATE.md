@@ -875,3 +875,35 @@ Two deltas, both mine-postdating-his-base (his composition branched at
 were absent on his side — restored here verbatim, his files untouched.
 Combined re-composed from his receipt head + this lane; PR105 CI runs once
 on the result. No code change in this section.
+
+## 36. Three-agent adoption (3 Oct 2026 — S1/S2/S3 reopened READY)
+
+Adopted `FLOWW-Three-Agent-Ownership-and-Contracts.md` + backlog + the
+OpenCode/Spark harness. Prior notes calling this boundary external/complete
+are historical; S1–S3 are engineering READY again.
+Owned: `public_execution_lifecycle.py`, new execution-admission/account-risk
+modules, `public_brokerage.py`, executor tests, namespace migrations.
+NOT owned (read-only): frontend, agent tree, Cline's adapter/range/recorder
+files (`public_api_adapter`, `market_data`, `solstice_price_paths`,
+`heatmap_history`, `recorder_health`, `solstice_price_producer`,
+`solstice_price_fetch`), `server.py`, generated API docs, protected/frozen
+files, other checkpoints. Route mounts/patches go to Zed as unmounted
+proposals; no combined recompose on checkpoint-only edits (Zed batches).
+Lane: this worktree/branch. No live/paid/activation work authorized.
+
+## 37. S1 DONE — required durable admission (3 Oct 2026)
+
+New `backend/services/execution_admission.py` (`execution-admission.v1`)
++ `backend/tests/solstice/test_s18_admission.py` (11 tests, failed-first:
+1 red on purge scope, fixed to unconditional fail-closed purge).
+Durable-first policy/approval/revocation writes (memory purged on failure);
+storeless/DLL/query failures refuse (`STORE/POLICY_STORE/APPROVAL_STORE_
+UNAVAILABLE`); corrupt census rows refuse `RECOVERY_INCOMPLETE`; unknown
+counts refuse `RECOVERY_UNKNOWN`; unknown-state opens refuse
+`UNKNOWN_ORDERS_PENDING`. Account-keyed `account_policy_v2` + explicit
+`migrate_account_policy_v1` (no guessed accounts, no silent overwrite).
+`admit_production_entry` decides ADMIT/REFUSE with zero broker calls in
+every path (exploding-broker pinned). Legacy lifecycle functions untouched.
+Verification: new 11 + full `tests/solstice/` **650 passed**; ruff + silent
+gate (354) + API-380-current green. S4 handoff: Zed mounts/integrates;
+no combined recompose from here (Zed batches heads).
