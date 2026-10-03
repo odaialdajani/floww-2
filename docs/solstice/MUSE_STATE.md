@@ -812,3 +812,41 @@ reads in the lifecycle, no TODOs. Two refinements, both TDD-pinned:
 Verification: hardening **21 passed**; full `tests/solstice/` **639
 passed**; ruff + silent-gate (353) + truth + API-380 green. Combined
 re-composed; PR105 CI re-running. Activation OFF.
+
+## 32. Spark resumes — Cline takeover closed, full-lane resweep (3 Oct 2026)
+
+Spark stopped mid-session yesterday; Cline took over (§§22–23: take-over
+sweep + Zed's 3 residual requests at `93dc0ef0`/`044ca009`) and is now out.
+Cline's work is preserved as history and was re-verified claim-by-claim in
+this pass: session-prefix attribution, `REVERSED_WINDOW`/coverage semantics,
+and the inventory route all match the code; the `server.py:231` handler was
+read and confirms the JSONResponse rationale (dict details are stringified
+there); neither Cline commit touches `server.py`. Takeover complete — the
+lane drives as Spark from here; no Cline-owned branches, worktrees, or
+pending edits remain in this lane's path.
+
+Resweep verdict (fresh eyes over the whole lane `main...a9e794ca`):
+pre-existing seams (`record_price_path`, `price_paths_since`,
+`outcome_close_tick`, replay/manifest) hold and stay untouched — tested,
+out of the owned queue, changing them buys nothing. Lane↔combined
+coherence verified (backend identical, no conflict markers, 12 lane files
+all Spark-owned + taken boundary). Full `tests/solstice/` **639 passed**
+at combined `d5a8b469` too. No new engineering: the owned READY queue is
+empty; pre-existing outcomes evidence stands (zero durable admitted
+records → INSUFFICIENT EVIDENCE).
+Deliberately NOT merged to combined yet: PR105 CI is running on `d5a8b469`
+and a docs push would restart it for zero code gain. Merge this record with
+the next code change, or after green.
+
+## 33. All-green combined + full-suite receipt (3 Oct 2026)
+
+- Hosted PR105 gates at combined `d5a8b469` ALL PASS: backend-tests 19m10s
+  (run 37136912635), docker-build, frontend-build, ruff (run 37136912574).
+- Local full backend suite at the same head (Mongo up, unmasked):
+  **7105 passed, 37 skipped** (pre-existing), 0 failures — covers strict
+  stored-approval mode + recovery-surplus + dedup on top of the earlier 7099.
+- Zed unmoved at `0d8452d7` (docs/evidence-only pass-4); his consumers sit
+  on the lane verbatim. This §33 stays lane-only: merging a docs record
+  into the green combined head would restart hosted CI for nothing.
+- Activation OFF; INSUFFICIENT EVIDENCE; no profitability claim.
+  Main-merge call stays Nav's.
