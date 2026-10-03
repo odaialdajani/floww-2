@@ -875,3 +875,138 @@ Two deltas, both mine-postdating-his-base (his composition branched at
 were absent on his side — restored here verbatim, his files untouched.
 Combined re-composed from his receipt head + this lane; PR105 CI runs once
 on the result. No code change in this section.
+
+## 36. Three-agent adoption (3 Oct 2026 — S1/S2/S3 reopened READY)
+
+Adopted `FLOWW-Three-Agent-Ownership-and-Contracts.md` + backlog + the
+OpenCode/Spark harness. Prior notes calling this boundary external/complete
+are historical; S1–S3 are engineering READY again.
+Owned: `public_execution_lifecycle.py`, new execution-admission/account-risk
+modules, `public_brokerage.py`, executor tests, namespace migrations.
+NOT owned (read-only): frontend, agent tree, Cline's adapter/range/recorder
+files (`public_api_adapter`, `market_data`, `solstice_price_paths`,
+`heatmap_history`, `recorder_health`, `solstice_price_producer`,
+`solstice_price_fetch`), `server.py`, generated API docs, protected/frozen
+files, other checkpoints. Route mounts/patches go to Zed as unmounted
+proposals; no combined recompose on checkpoint-only edits (Zed batches).
+Lane: this worktree/branch. No live/paid/activation work authorized.
+
+## 37. S1 DONE — required durable admission (3 Oct 2026)
+
+New `backend/services/execution_admission.py` (`execution-admission.v1`)
++ `backend/tests/solstice/test_s18_admission.py` (11 tests, failed-first:
+1 red on purge scope, fixed to unconditional fail-closed purge).
+Durable-first policy/approval/revocation writes (memory purged on failure);
+storeless/DLL/query failures refuse (`STORE/POLICY_STORE/APPROVAL_STORE_
+UNAVAILABLE`); corrupt census rows refuse `RECOVERY_INCOMPLETE`; unknown
+counts refuse `RECOVERY_UNKNOWN`; unknown-state opens refuse
+`UNKNOWN_ORDERS_PENDING`. Account-keyed `account_policy_v2` + explicit
+`migrate_account_policy_v1` (no guessed accounts, no silent overwrite).
+`admit_production_entry` decides ADMIT/REFUSE with zero broker calls in
+every path (exploding-broker pinned). Legacy lifecycle functions untouched.
+Verification: new 11 + full `tests/solstice/` **650 passed**; ruff + silent
+gate (354) + API-380-current green. S4 handoff: Zed mounts/integrates;
+no combined recompose from here (Zed batches heads).
+
+## 38. S2 DONE — commissioned admission + risk ledger (3 Oct 2026)
+
+- `backend/services/operator_registry.py` (`operator-registry.v1`):
+  durable-only operator→accounts binding. No memory authority anywhere in
+  this registry. Duplicate refuses `OPERATOR_EXISTS`; corrupt allowlist
+  refuses distinctly from unknown operator.
+- `backend/services/account_risk_ledger.py` (`account-risk-ledger.v1`):
+  FIFO realized, exposure, premium/fees, fill-dedup from injected facts;
+  missing/unknown/uncovered facts refuse, breaches refuse with detail.
+  Exact Decimal, floats rejected.
+- `admit_commissioned_entry` layers operator auth + S1 authority + ledger
+  vs required policy + verified remote native census (absent/unverifiable
+  → `NATIVE_CENSUS_UNAVAILABLE`; remote OPEN → `OVERLAP_NATIVE`). Zero
+  broker calls in every path (exploding-broker pinned).
+- `backend/routes/execution_admission.py`: UNMOUNTED proposal patch
+  (policies/approvals/revoke/operators/risk/decision, all `require_api_key`,
+  no broker use). Tested via test-local app. Zed reviews the mount.
+  `server.py` untouched, openapi 380 untouched.
+- Known residual (documented, not hidden): the mounted `POST /order`
+  route calls the broker without admission — changing that live path needs
+  Nav/Zed review, so it ships as a proposed patch, not a unilateral edit.
+Verification: new 5 + full `tests/solstice/` **655 passed**; ruff +
+silent-gate + bandit + API-380 green. Next READY: S3 (deployment
+exclusion proof with separate processes).
+
+## 39. S3 DONE — exclusion lease + protection/expiry admission (3 Oct 2026)
+
+- `backend/services/execution_lease.py` (`execution-lease.v1`): atomic
+  single-executor lease (O_CREAT|O_EXCL winner, heartbeat, owner-only
+  release, expiry steal). Proven with REAL OS processes: 4-way serialized
+  holds, simultaneous single-winner, crash→expiry-steal, foreign
+  release/heartbeat refused, expired heartbeat refused. Wiring into submit
+  is a Zed/Nav-reviewed proposal, not done unilaterally.
+- `backend/services/execution_protection.py`
+  (`execution-protection.v1`): protection refuses `PROTECTION_UNVERIFIED`
+  for every combination (no documented mechanism exists); policy-driven
+  expiry guard (`EXPIRY_TOO_NEAR`/`GUARD_UNCONFIGURED`/`EXPIRY_INVALID`,
+  same-day cutoff, assignment exposure disclosed).
+- Pinned cancel/reconcile availability during the 11:30–14:00 entry pause.
+- Process note (my repeated miss, now a rule): stop issuing edits whose
+  old/new strings differ only by trailing newline — it joins the header to
+  the next line. Every edit now re-verified with grep before proceeding.
+Verification: new 8 + full `tests/solstice/` **663 passed**; ruff +
+silent-gate + bandit + API-380 green. S4 handoff: lane heads + refusal
+matrix published here; Zed assembles the combined successor. No combined
+recompose, no mount, no main push from this lane.
+
+## 40. S4 DONE — acceptance matrix + handoff (3 Oct 2026)
+
+`docs/solstice/SPARK_S18_ACCEPTANCE.md`: exact head/contracts/fixtures
+(with sha256) / layered test matrix (service 45+64, adapter-observation 63,
+full solstice 663, lint/security/docs) / full refusal codes / Zed mount
+notes / remaining externals. Process correction: the trailing-newline edit
+mistake recurred twice more (§§37/39 headers) — repaired immediately both
+times; headers verified healthy (§§36–39). Rule stands: edits always carry
+following-line context and are grep-verified. S1–S4 complete; owned READY
+queue empty pending genuine external input.
+
+## 42. Branch pins, no new bugs (3 Oct 2026)
+
+Function map showed every S1–S3 function referenced by tests; this pass
+pinned the untested BRANCHES: ledger daily-loss breach (`-2.00` FIFO) +
+missing-day refusal, corrupt-allowlist distinct refusal, corrupt lease-file
+refusal. All passed immediately — regression pins, not fixes, reported as
+such. Full `tests/solstice/` **670 passed**; ruff clean. PR103 hosted CI
+running on the prior head; this pushes branch pins only.
+
+## 41. Resweep fixes — ceilings enforced + migrate label (3 Oct 2026)
+
+Exhaustive function-coverage audit found two real gaps (fixed, TDD-pinned):
+1. S1 `admit_production_entry` checked policy EXISTENCE but never enforced
+   its ceilings — added `_enforce_account_ceilings` (quantity/notional/
+   products/positions, fail-closed on parse failure).
+2. Corrupt v1 JSON in migration reported `POLICY_STORE_UNAVAILABLE`;
+   now correctly `POLICY_CORRUPT`.
+Plus direct unit tests for `has_fresh_preflight`/`ensure_lifecycle_tables`/
+`_durable_open_count` (storeless→None, not zero).
+Verification: admission **15 passed**; full `tests/solstice/` **667
+passed**; ruff + silent-gate (359) + truth + API-380 green.
+Process: the trailing-newline edit defect recurred on §40 (repaired,
+verified). No header-only edits from here — append-only with context.
+
+## 43. Full-suite lane receipt (3 Oct 2026)
+
+Full backend suite at lane `ba14cc38` (Mongo up, unmasked): **7136 passed,
+37 skipped** (pre-existing), 0 failures, ~11 min. Note: combined `d5a8b469`
+predates S1–S4 (Zed composes it next — his call per ownership contract, not
+a lane merge from here). PR103 hosted ruff/frontend green, backend running.
+Header-edit defect recurred on §42 (repaired + verified immediately).
+Filing correction: §§41/42 are chronologically swapped in this file
+(cosmetic only — content and heads intact; renumbering would churn more).
+
+## 44. Mount audit + decision fixture (3 Oct 2026)
+
+- Mount-collision audit for the unmounted `execution_admission` router:
+  no `/admission` prefix or path clashes anywhere in routes/server;
+  endpoint set (`policies`, `approvals`, `revoke`, `operators`,
+  `risk/evaluate`, `decision`) collision-free. Ready for Zed's mount.
+- `commissioned-decision.v1` fixture generated from a live temp-DB run
+  (ADMIT on full pass / `OPERATOR_UNKNOWN` refusal) — deterministic,
+  redacted, test-labeled. No code references; zero regression surface.
+- Lane-only push; combined/CI untouched by design.
