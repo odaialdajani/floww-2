@@ -16,7 +16,11 @@ Owned files: `frontend/src/components/public/TidehunterPublicBridge.jsx`, its te
 6. Changed symbols/selection and unmount abort/invalidate pending resolution. No owned bridge polling/SSE loop duplicates Pro. The ordinary Pro UI clock is not an additional feed or broker connection.
 7. Lodestar uses the same provider/context/auth/history machinery; Public handoff remains non-executable, separately reviewed, and never calls an order route from this bridge.
 
-## Evidence and limits
+## R16 continuation — current recheck
+
+At tested combined CODE `e5ee1404b5461a994befd2703e57627f5dca7ff5`, protected71/71 hashes remain identical; full frontend126 suites/1096 tests and compiled8-route browser passed, including Pro entry/refresh and unchanged active lifecycle tests. No protected/friend code or source/bridge implementation changed this pass. The synthetic/browser versus live-feed distinction below still applies. Current combined proof/remaining commissioning HOLDs: [R16_ACCEPTANCE](R16_ACCEPTANCE.md).
+
+## Historical implementation evidence and limits
 
 - New bridge tests passed: ckey exclusion/exact-contract-before-review, conflicting identity refusal, late-response abort on symbol change, and restoration of published Pro context on close.
 - Existing protected `BlademapActiveMount` and the full frontend suite passed unchanged, including active feed ownership/cleanup and existing no-feed states. The wider suite still emits pre-existing React act/fake-timer/open-handle warnings; they were not suppressed by changing protected tests.

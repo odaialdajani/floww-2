@@ -1,6 +1,6 @@
 # FLOWW integration review
 
-Current continuation: `.worktrees/zed-main-acceptance-20261003`, branch `solstice/zed-main-acceptance-20261003`, base `08f3793c242d943ab3b61b84e5394ce4602daa0a`. Earlier Zed/Spark runtime code is merged through PR96/97/98; main's exact-head CI/CD and lint are green. Fresh local main backend7063/37 existing skips/68.83% and patched frontend126 suites/1096 tests passed. New Spark [PR99](https://github.com/odaialdajani/floww-2/pull/99) at frozen review head `c16e7f688ffd3f3150e2be67504c70c77702b2aa` remains separate from main. No automatic merge, deployment or activation. Exact current publication/combined receipts are maintained in [ZED_STATE](../ZED_STATE.md); [COMBINED_ACCEPTANCE](COMBINED_ACCEPTANCE.md) retains the old047153ec receipt as historical.
+Current accepted CODE: `e5ee1404b5461a994befd2703e57627f5dca7ff5`, draft [PR101](https://github.com/odaialdajani/floww-2/pull/101), isolated `.worktrees/combined-r16-20261003`. It combines owned Zed [PR100](https://github.com/odaialdajani/floww-2/pull/100) replay fixes with actual Spark c16e7f68. Full combined backend7069/37 existing skips/68.88%, frontend126 suites/1096, Storybook/axe16/build and eight-route compiled browser/native200% passed. Exact CODE hosted CI/CD37093482826 and lint37093482841, including Docker, succeeded. During verification Spark merged PR99 to newer main `aea1ed95ad02fe43a06df6a81fb7cf91e6079242`; runtime/tests are identical to the tested producer input. Its subsequent receipt corrections are preserved verbatim. Zed has not merged a PR, deployed or activated anything. See [R16_ACCEPTANCE](R16_ACCEPTANCE.md) for exact heads, source/metadata distinction and remaining HOLDs; [ZED_STATE](../ZED_STATE.md) for continuation. [COMBINED_ACCEPTANCE](COMBINED_ACCEPTANCE.md) retains the old047153ec receipt as historical.
 
 ## Reviewable production behavior
 
@@ -36,7 +36,7 @@ Storybook uses the already inspected 10.6.1/React-Vite setup, with locally pinne
 
 ## Historical lane validation and known limits
 
-The receipts in this section describe the original pre-merge lane, not the current continuation or PR99 combined candidate. Current checks are recorded in ZED_STATE.
+The receipts in this section describe the original pre-merge lane, not the current continuation or PR99 combined candidate. Current checks are recorded in R16_ACCEPTANCE and ZED_STATE.
 
 Working-tree milestone: frontend126 suites/1091 tests passed; owned backend agent+Solstice1052 passed; Ruff/Bandit clean; production and Storybook builds passed; truth audit226/0; protected71/71 unchanged. An earlier full backend run logged6996 passed,37 pre-existing skips,68.66% coverage. Its shell command accidentally masked the pytest exit code; the log was explicitly checked, and the required full command must be rerun UNMASKED at the exact combined candidate. No skip/xfail was added. Counts/head-specific receipts must not be promoted to new heads without verification.
 
