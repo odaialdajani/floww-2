@@ -966,6 +966,15 @@ times; headers verified healthy (§§36–39). Rule stands: edits always carry
 following-line context and are grep-verified. S1–S4 complete; owned READY
 queue empty pending genuine external input.
 
+## 42. Branch pins, no new bugs (3 Oct 2026)
+
+Function map showed every S1–S3 function referenced by tests; this pass
+pinned the untested BRANCHES: ledger daily-loss breach (`-2.00` FIFO) +
+missing-day refusal, corrupt-allowlist distinct refusal, corrupt lease-file
+refusal. All passed immediately — regression pins, not fixes, reported as
+such. Full `tests/solstice/` **670 passed**; ruff clean. PR103 hosted CI
+running on the prior head; this pushes branch pins only.
+
 ## 41. Resweep fixes — ceilings enforced + migrate label (3 Oct 2026)
 
 Exhaustive function-coverage audit found two real gaps (fixed, TDD-pinned):

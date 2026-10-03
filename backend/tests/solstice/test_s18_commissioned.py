@@ -223,6 +223,40 @@ class _PrimerBroker:
         return {"total": "318.20", "fees": "3.20", "buying_power_ok": True}
 
 
+def test_ledger_daily_loss_breach_and_missing_day():
+    import services.account_risk_ledger as ledger
+
+    day_fills = [
+        {"fill_id": "d1", "symbol": "SPY", "side": "BUY", "quantity": 2,
+         "price": "3.00", "ts": "2026-10-02T15:00:00+00:00"},
+        {"fill_id": "d2", "symbol": "SPY", "side": "SELL", "quantity": 2,
+         "price": "2.00", "ts": "2026-10-02T15:01:00+00:00"},
+    ]
+    out = ledger.evaluate_account_risk(
+        _facts(fills=day_fills), {"max_daily_loss": "1", "today": "2026-10-02"})
+    assert out["reason"] == "RISK_DAILY_LOSS_EXCEEDED", out
+    assert out["snapshot"]["day_realized"] == "-2.00"
+    out = ledger.evaluate_account_risk(_facts(fills=day_fills), {"max_daily_loss": "1"})
+    assert out["reason"] == "RISK_FACTS_INCOMPLETE", out
+    out = ledger.evaluate_account_risk(
+        _facts(fills=day_fills), {"max_daily_loss": "100", "today": "2026-10-02"})
+    assert out["ok"] is True
+
+
+def test_operator_corrupt_allowlist_refuses_distinctly():
+    import services.operator_registry as operators
+
+    conn = _memdb()
+    try:
+        assert operators.register_operator(conn, "op-9", ["ACCT-1"], "root")["ok"] is True
+        conn.execute(
+            "UPDATE operators_v1 SET allowed_accounts = 'broken{{{' WHERE operator_id = 'op-9'")
+        out = operators.authorize_operator(conn, "op-9", "ACCT-1")
+        assert out["reason"] == "OPERATOR_STORE_UNAVAILABLE", out
+    finally:
+        conn.close()
+
+
 def test_route_patch_decision_and_risk_shapes(monkeypatch):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient

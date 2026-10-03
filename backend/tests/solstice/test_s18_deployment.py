@@ -153,6 +153,16 @@ def test_expired_lease_cannot_heartbeat_back(tmp_path):
     assert lease.heartbeat_lease(path, first["token"])["reason"] == "LEASE_EXPIRED"
 
 
+def test_corrupt_holder_file_refuses_explicitly(tmp_path):
+    from services import execution_lease as lease
+
+    path = _tmp_path(tmp_path)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("not-json{{{")
+    assert lease.acquire_lease(path, "anyone")["reason"] == "LEASE_CORRUPT_HOLDER"
+    assert lease.read_lease(path) == {"present": False}
+
+
 def test_protection_refuses_unverified_everywhere():
     import services.execution_protection as prot
 
