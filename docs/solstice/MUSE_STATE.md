@@ -350,3 +350,16 @@ main lint SUCCESS (main CI/CD still running at record time).
   handles (prior store kept); create-path write failure → `STORE_UNAVAILABLE`
   before any broker call; post-receipt failure flagged `persist_error`
   (heals via recover+reconcile). Tested all three.
+
+## 15. CI timeout analysis + follow-up PR97 (3 Oct 2026)
+
+- Commit `6262d06c` backend-tests run 37084772976: NOT a test failure — the job
+  hit the 15-minute action timeout AFTER the suite finished: **7135 passed,
+  38 skipped, coverage 69.50%** (gate is 60%). Zero failures; badge red on time,
+  not on correctness. Later heads with the same code passed fully (PR96 combined
+  backend-tests 18m27s SUCCESS).
+- Lesson recorded honestly: the full suite is outgrowing the 15-min job budget
+  (53278 statements, 69% coverage). Splitting the job or raising the timeout is
+  a CI-owned change (devops lane) — not smuggled in here.
+- Follow-up PR97 (`solstice/spark-floww-backend` @ `ec155778`, R15-11/R15-12 +
+  §14 record): review-only; merge only on green CI + Nav standing authorization.
