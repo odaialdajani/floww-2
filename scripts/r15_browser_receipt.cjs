@@ -8,6 +8,8 @@ const fixturePath=path.join(root,'docs/solstice/r14/evidence/vertical-fixture.js
 const fixture=JSON.parse(fs.readFileSync(fixturePath));
 const coveragePath=path.join(frontend,'src/fixtures/integration/coverage-read.v1.json');
 const coverage=JSON.parse(fs.readFileSync(coveragePath));
+const lifecyclePath=path.join(frontend,'src/fixtures/integration/lifecycle-inventory.v1.json');
+const lifecycle=JSON.parse(fs.readFileSync(lifecyclePath));
 const python=process.argv[2],executablePath=process.argv[3];
 assert(python && executablePath,'Provide verified interpreter and browser executable paths');
 const hash=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
@@ -23,7 +25,7 @@ execFileSync('npm',['run','build'],{cwd:frontend,env:{...process.env,CI:'true'},
 assert.deepStrictEqual(sourceHashes(),source,'Owned source changed during compilation');
 const manifest=JSON.parse(fs.readFileSync(path.join(build,'asset-manifest.json')));
 const bundleHashes=Object.fromEntries(Object.entries(manifest.files).filter(([key])=>/\.(js|css)$/.test(key)).map(([key,value])=>[key,hash(fs.readFileSync(path.join(build,value.replace(/^\//,''))))]));
-const receipt={version:'floww-browser-receipt.v1',fixtureOnly:true,sourceCommit:execFileSync('git',['--no-pager','rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),sourceHashes:source,bundleHashes,fixtureHash:hash(fs.readFileSync(fixturePath)),routes:[],viewports:[],screenshots:[],externalRequestsBlocked:[],forbiddenMutations:[],pageErrors:[],warnings:[],research:[],checks:[],coverageFixtureHash:hash(fs.readFileSync(coveragePath)),coverageReads:[]};
+const receipt={version:'floww-browser-receipt.v1',fixtureOnly:true,sourceCommit:execFileSync('git',['--no-pager','rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),sourceHashes:source,bundleHashes,fixtureHash:hash(fs.readFileSync(fixturePath)),routes:[],viewports:[],screenshots:[],externalRequestsBlocked:[],forbiddenMutations:[],pageErrors:[],warnings:[],research:[],checks:[],coverageFixtureHash:hash(fs.readFileSync(coveragePath)),coverageReads:[],lifecycleFixtureHash:hash(fs.readFileSync(lifecyclePath)),lifecycleReads:[]};
 let lastTurn=null,refuseComparison=false,overnightSessions=false;
 function body(url){
  const p=url.pathname;
@@ -47,6 +49,7 @@ function body(url){
  if(p==='/api/agent/session')return {status:'fixture-only',persistent:false};
  if(p.includes('/agent/turn/'))return lastTurn;
  if(p==='/api/agent/handoffs')return {handoffs:[]};
+ if(p==='/api/public/execution-lifecycle/inventory')return lifecycle.inventory;
  if(p==='/api/public/account')return {ok:true,account_id:'FIXTURE-ACCOUNT'};
  if(p==='/api/public/portfolio')return {ok:true,account_id:'FIXTURE-ACCOUNT',cash:null,buying_power:null,portfolio_value:null,positions:[],position_count:0};
  if(p==='/api/public/orders')return {ok:true,orders:[{order_id:'fixture-partial',symbol:'SPY261008C00100000',side:'BUY',quantity:3,filled_quantity:1,status:'PARTIAL'}]};
@@ -77,6 +80,7 @@ const server=http.createServer((req,res)=>{
     return route.fulfill({json:{turn_id:lastTurn.turn_id,status:'completed'}});
    }
    if(url.pathname.startsWith('/api/')){
+    if(url.pathname==='/api/public/execution-lifecycle/inventory')receipt.lifecycleReads.push({path:url.pathname,method:request.method()});
     if(url.pathname.includes('/price-paths/'))receipt.coverageReads.push({path:url.pathname,query:url.search,method:request.method()});
     if(url.pathname==='/api/preferences/theme' && request.method()==='POST')return route.fulfill({json:{ok:true,fixture_only:true}});
     if(url.pathname.endsWith('/alerts/stream'))return route.fulfill({contentType:'text/event-stream',body:'retry: 300000\n: fixture no-feed\n\n'});
@@ -103,6 +107,7 @@ const server=http.createServer((req,res)=>{
    await navigate(id);await page.locator('nav').getByRole('button',{name:label,exact:true}).waitFor();assert.strictEqual(await page.locator('nav').getByRole('button',{name:label,exact:true}).getAttribute('aria-current'),'page');
    await page.reload();await page.waitForTimeout(200);assert(new URL(page.url()).searchParams.get('page')===id);receipt.routes.push({id,direct:true,refresh:true,active:true});
   }
+  await navigate('public');assert.strictEqual(receipt.lifecycleReads.length,0,'Inventory must be on demand');await page.getByText('Local lifecycle inventory · read-only',{exact:true}).click();await page.getByRole('button',{name:'Read local lifecycle inventory',exact:true}).click();await page.getByRole('table',{name:'Process-local intent records'}).waitFor();const localReview=await page.getByRole('region',{name:'Local lifecycle review'}).textContent();assert(localReview.includes('Account attribution unavailable') && localReview.includes('UNKNOWN') && localReview.includes('Account-wide limits UNSET') && localReview.includes('not verified remote workflows'));assert(receipt.lifecycleReads.every(r=>r.method==='GET'));receipt.checks.push('on-demand local lifecycle inventory; unknown/protection/native/account limits unverified; GET only');
   await navigate('heatseeker');await page.getByRole('grid').first().waitFor();
   await page.locator('nav').getByRole('button',{name:'Triad',exact:true}).click();await page.getByTestId('trinity-view').waitFor();
   assert(new URL(page.url()).searchParams.get('evidence')==='keep');assert(new URL(page.url()).hash==='#selection');

@@ -1,5 +1,20 @@
 # ZED_STATE — FLOWW integration continuation
 
+## R17 pass 3 — read-only lifecycle review
+
+- Pass-2 final receipt03a1db39 has all4 hosted gates SUCCESS (CI/CD37107360660/lint37107360667); linked closure updated. Its CODE90c58939 does not cover later producer044ca009.
+- Spark committed PR103 `044ca009b5343bd1013d446718516be63c393235` while hosted verification ran. Its clean checkpoint now specifies exact boundary: Spark writes `GET /api/public/execution-lifecycle/inventory` in already-mounted `backend/routes/public_brokerage.py`, calling read-only lifecycle inventory under existing `require_api_key` (503 unconfigured/401 rejected); no server.py edit, approval write, recovery execution or broker call. Zed ACKNOWLEDGES THIS READ-ONLY BOUNDARY ONLY. It does not authorize executor wiring or commission authenticated approval/account-wide risk/protection.
+- Important producer meaning: process-local intents/drafts/native registrations and an optional durable nonterminal count; no account ID, producer observation timestamp, authenticated approval record, verified remote native workflow census, enforced account-wide policy or holiday/early-close admission is supplied. `durable=true` means a store handle exists, not actual restart proof. Weekday pause status is not exchange-calendar enforcement. Range-filter/listing metadata still does not supply analytical14–60 projection. Spark's claim that all residual requests are DONE is not combined acceptance of these missing controls.
+- Owned write set: PublicPanel mount + new guarded read-only inventory disclosure/tests/stories/fixture/browser checks and own contracts/receipts. Producer, server, schemas, protected files and watchdog stay untouched. Current base main6eaa3343; composition `cd65b8ac879ca851025d7a82641bf58e1d70b763` includes committed044ca009. Producer files/checkpoint preserved verbatim.
+
+| ID | Task | Status | Exact next action |
+|---|---|---|---|
+| R17-P3-1 | Read-only Public lifecycle review | IN_PROGRESS | Nine regressions failed before the read-only consumer; two additional object-field regressions failed before strict text validation. All18 PublicPanel tests now pass. On-demand authenticated GET, storeless/unrehydrated counts, UNKNOWN/protection/native/approval limitations, version/count refusal, key-revocation/unmount races covered. Account/connection changes reset via guarded props; no account-attribution claim. Finish fixture/stories/browser + full combined gates. |
+| R17-P3-2 | New combined acceptance | READY | Compose committed044ca009, finish guarded consumer and full exact-code/head gates; previous7079/1126 receipt stays historical. |
+| R17-P3-3 | Genuine missing execution/range/model/live requirements | REVIEW_REQUIRED | Send precise remaining control requirements to Spark. Consume only accepted committed contracts; owner dispatch/live records/policy/Nav review remain separate. |
+
+Next exact action: commit guarded inventory consumer and then full combined gates. New synthetic lifecycle fixture, two story states and finite browser GET-only/on-demand checks prepared. [Exact producer acknowledgment and residual-control request](https://github.com/odaialdajani/floww-2/pull/103#issuecomment-5967056209) published. Finite local tools only; no new MCP/model exposure or activation.
+
 ## Current R17 pass 2 — 3 October 2026
 
 - Continuing PR104 in the same isolated Zed lane. Verified main still `6eaa3343655a30fd38c40abaa6a903e8d3814530`; prior receipt `7c55fd2ab50f0b93da87389f7e865df6b9285de0` now has all4 hosted gates SUCCESS (CI/CD37101652097/lint37101652118). Those are historical for any new runtime composition.

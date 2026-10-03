@@ -51,6 +51,14 @@ Current frozen producer PR103 `93dc0ef018e444e45e82b5335394590545134a16` (acknow
 
 Resolved at93dc0ef0: session index now uses the owning stored prefix and discloses uniform/mixed NY attribution; reversed expiry bounds refuse422 before fetch. Residual producer issues: firstN listing may contain no14–60 dates despite later listings. Count/edge/filter metadata does not supply a complete admitted range-map analytical projection; comparable query identity does not add independent metric-population metadata. Spark owns these; no live durability claim follows from index counts or fixture admission. Fixtures are explicitly synthetic in `frontend/src/fixtures/integration/coverage-read.v1.json`.
 
+## lifecycle-inventory.v1 — authenticated read-only review
+
+Committed Spark PR103 `044ca009b5343bd1013d446718516be63c393235` adds `GET /api/public/execution-lifecycle/inventory` to the already-mounted public_brokerage router under existing `require_api_key` (unconfigured503, rejected401). Spark's MUSE_STATE §23 supplies the exact writer/route boundary; ZED_STATE acknowledges this read-only boundary only. No server.py edit, approval write, recovery or broker transport is authorized by this consumer.
+
+The on-demand Public review validates the version, literal arm/store/protection flags and local count/row shapes. It resets on account/connection changes, key/session revocation and unmount, aborts pending reads and discards obsolete responses. Current account attribution is explicitly unavailable because this producer supplies no account ID; receipt time is a local client clock, not vendor/producer observation time.
+
+Intent rows, approval fields, drafts, cached contexts and native registrations are process-local reports. The optional stored nonterminal count is not rehydrated/reconciled here. `durable=true` denotes a registered store, not production restart proof. Empty/storeless/local terminal data does not establish no broker orders/positions or safe ownership. Approval fields are not authenticated permission; native registrations are not verified remote workflows. Account-wide limits remain UNSET. Weekday pause status is not exchange-calendar enforcement. Reported arm state is disclosed but cannot be changed by the UI; FLOWW_BACKEND entry remains unavailable. This inventory does not close the authenticated/default-deny account-wide execution/protection/recovery contract.
+
 ## Native Public handoff
 
 Until official create/invoke/continuous external-GEX support is verified, an editable dated brief is manual handoff only. Clipboard success = copied, not delivered/active. Workflow reference/status is operator-reported unless supported external evidence verifies it. Public native model is independent of Lodestar. All production policy fields start UNSET; no NRG/KTOS sample defaults.

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { API } from "../config/api";
 import { storedAppKeyHeaders } from "../utils/appKey";
+import PublicLifecycleInventory from "./public/PublicLifecycleInventory";
 
 const numberOrNull = value => {
   if (value === null || value === undefined || typeof value === "boolean" || (typeof value === "string" && !value.trim())) return null;
@@ -117,6 +118,7 @@ export default function PublicPanel() {
     <div className="panel p-4 space-y-3" data-testid="public-panel">
       <div className="label">Public Broker · {account?.account_id || "—"}</div>
       <p className="text-sm">Public live account reads · no entry approval or activation from this page. Quick Trade elsewhere remains Alpaca PAPER.</p>
+      <PublicLifecycleInventory accountId={account?.account_id} connected={!error} />
       {receivedAt && <p className="text-xs">Received at {receivedAt} · not a broker event clock.</p>}
       {error && <p role="status">Refresh failed. Showing the last received account data.</p>}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[12px] mono">
