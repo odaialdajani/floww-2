@@ -124,17 +124,44 @@ async def admission_decision(
 ) -> dict[str, Any]:
     """Commissioned admission decision (never dispatches, never cancels).
 
-    Requires primed preflight context (deterministic lifecycle preflight);
-    without it the decision is STALE_PREFLIGHT by design.
+    Review/simulation surface: body facts arrive client-asserted, so the
+    decision carries EVIDENCE_UNVERIFIED for executable purposes by design.
+    Strictness scope is server-fixed (client `approval_scope` ignored).
+    Requires primed preflight context; without it STALE_PREFLIGHT.
     """
     from services import execution_admission as adm
 
     ctx = dict(body.get("ctx") or {})
     ctx["now"] = _parse_now(ctx.get("now"))
-    return adm.admit_commissioned_entry(
+    out = adm.admit_commissioned_entry(
         _store_conn(), body.get("intent"), ctx, broker=None,
         approval=body.get("approval"),
-        approval_scope=body.get("approval_scope", "single-entry"),
+        approval_scope="single-entry",
         operator_id=body.get("operator_id"),
         risk_facts=body.get("risk_facts"),
-        remote_native=body.get("remote_native"))
+        remote_native=body.get("remote_native"),
+        evidence_grade="client-asserted")
+    out["evidence_grade"] = "client-asserted"
+    return out
+
+
+@router.post("/order-approvals")
+async def create_order_approval(
+    body: dict[str, Any], _: bool = Depends(require_api_key),
+) -> dict[str, Any]:
+    """Create a single-leg order approval bound to exact order fields.
+
+    Validity is server-stamped (1–24h). The armed `POST /public/order` path
+    verifies the approval_id against a server-recomputed fingerprint when a
+    required account policy is installed.
+    """
+    from services import execution_admission as adm
+
+    out = adm.create_order_approval(
+        _store_conn(), body.get("account_id"), body.get("symbol"),
+        body.get("side", "BUY"), body.get("quantity", 1),
+        body.get("limit_price"), body.get("operator"),
+        body.get("validity_hours", 1.0))
+    if not out.get("ok"):
+        raise HTTPException(status_code=503, detail=out)
+    return out

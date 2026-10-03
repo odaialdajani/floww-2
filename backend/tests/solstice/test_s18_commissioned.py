@@ -29,8 +29,8 @@ def _base_intent(**kw):
         "replay_id": None,
         "ticker": "SPY",
         "contract": {
-            "osi": "SPY260904C00760000",
-            "expiry": "2026-09-04",
+            "osi": "SPY261218C00760000",
+            "expiry": "2026-12-18",
             "option_type": "CALL",
             "strike_exact": "760.00",
             "multiplier": "100",
@@ -62,7 +62,7 @@ def _ctx(**kw):
         "now": datetime(2026, 10, 2, 15, 0, tzinfo=UTC),
         "account": {"options_level": "2", "entitlement": "verified", "margin": True},
         "snapshot_id": "snap_1",
-        "supported_expiries": ["2026-09-04"],
+        "supported_expiries": ["2026-12-18"],
         "supported_products": ["OPTION", "EQUITY"],
     }
     base.update(kw)
@@ -113,28 +113,68 @@ def test_ledger_fifo_realized_exposure_and_breaches():
 
     ok = ledger.evaluate_account_risk(
         _facts(
-            positions=[{"symbol": "SPY", "quantity": 2, "market_price": "3.30"}],
+            positions=[{"symbol": "SPY", "quantity": 2, "market_price": "3.30",
+                        "multiplier": "100"}],
             fills=[
                 {"fill_id": "f1", "symbol": "SPY", "side": "BUY", "quantity": 2,
-                 "price": "3.15", "fees": "1.00", "ts": "2026-10-02T15:00:00+00:00"},
+                 "price": "3.15", "fees": "1.00", "ts": "2026-10-02T15:00:00+00:00",
+                 "multiplier": "100"},
                 {"fill_id": "f1", "symbol": "SPY", "side": "BUY", "quantity": 2,
-                 "price": "3.15", "ts": "2026-10-02T15:00:00+00:00"},
+                 "price": "3.15", "fees": "1.00", "ts": "2026-10-02T15:00:00+00:00",
+                 "multiplier": "100"},
                 {"fill_id": "f2", "symbol": "SPY", "side": "SELL", "quantity": 1,
-                 "price": "3.25", "ts": "2026-10-02T15:01:00+00:00"},
+                 "price": "3.25", "fees": "0.50", "ts": "2026-10-02T15:01:00+00:00",
+                 "multiplier": "100"},
             ]),
         {"max_positions": 5, "max_notional": "1000"})
     assert ok["ok"] is True, ok
     snap = ok["snapshot"]
-    assert snap["realized"] == "0.10" and snap["exposure"] == "6.60"
-    assert snap["fees_paid"] == "1.00" and snap["duplicate_fills_ignored"] == 1
+    assert snap["realized"] == "10.00" and snap["exposure"] == "660.00"
+    assert snap["premium_paid"] == "630.00" and snap["fees_paid"] == "1.50"
+    assert snap["duplicate_fills_ignored"] == 1
     breach = ledger.evaluate_account_risk(
-        _facts(positions=[{"symbol": "SPY", "quantity": 2, "market_price": "3.30"}]),
+        _facts(positions=[{"symbol": "SPY", "quantity": 2, "market_price": "3.30",
+                           "multiplier": "100"}]),
         {"max_positions": 1})
     assert breach["reason"] == "RISK_MAX_POSITIONS_EXCEEDED"
     breach = ledger.evaluate_account_risk(
-        _facts(positions=[{"symbol": "SPY", "quantity": 2, "market_price": "3.30"}]),
+        _facts(positions=[{"symbol": "SPY", "quantity": 2, "market_price": "3.30",
+                           "multiplier": "100"}]),
         {"max_notional": "5"})
     assert breach["reason"] == "RISK_NOTIONAL_EXCEEDED"
+
+
+def test_ledger_previous_day_lots_carry_into_today():
+    import services.account_risk_ledger as ledger
+
+    out = ledger.evaluate_account_risk(
+        _facts(fills=[
+            {"fill_id": "yd1", "symbol": "SPY", "side": "BUY", "quantity": 2,
+             "price": "3.00", "fees": "1.00", "ts": "2026-10-01T15:00:00+00:00",
+             "multiplier": "100"},
+            {"fill_id": "td1", "symbol": "SPY", "side": "SELL", "quantity": 2,
+             "price": "2.00", "fees": "1.00", "ts": "2026-10-02T15:01:00+00:00",
+             "multiplier": "100"},
+            {"fill_id": "td1", "symbol": "SPY", "side": "SELL", "quantity": 2,
+             "price": "2.00", "fees": "1.00", "ts": "2026-10-02T15:01:00+00:00",
+             "multiplier": "100"},
+        ]),
+        {"max_daily_loss": "500", "today": "2026-10-02"})
+    assert out["ok"] is True, out
+    # Yesterday's basis carries: 2 × (2.00 − 3.00) × 100, duplicate ignored.
+    assert out["snapshot"]["day_realized"] == "-200.00"
+    assert out["snapshot"]["duplicate_fills_ignored"] == 1
+    out = ledger.evaluate_account_risk(
+        _facts(fills=[
+            {"fill_id": "yd1", "symbol": "SPY", "side": "BUY", "quantity": 2,
+             "price": "3.00", "fees": "1.00", "ts": "2026-10-01T15:00:00+00:00",
+             "multiplier": "100"},
+            {"fill_id": "td1", "symbol": "SPY", "side": "SELL", "quantity": 2,
+             "price": "2.00", "fees": "1.00", "ts": "2026-10-02T15:01:00+00:00",
+             "multiplier": "100"},
+        ]),
+        {"max_daily_loss": "100", "today": "2026-10-02"})
+    assert out["reason"] == "RISK_DAILY_LOSS_EXCEEDED", out
 
 
 def test_ledger_refuses_missing_unknown_and_uncovered():
@@ -146,11 +186,12 @@ def test_ledger_refuses_missing_unknown_and_uncovered():
         _facts(open_orders=[{"order_id": "o1", "status": "UNKNOWN"}]),
         {})["reason"] == "UNKNOWN_ORDERS_PENDING"
     assert ledger.evaluate_account_risk(
-        _facts(positions=[{"symbol": "SPY", "quantity": 1}]),
-        {})["reason"] == "RISK_FACTS_INCOMPLETE"
+        _facts(positions=[{"symbol": "SPY", "quantity": 1, "multiplier": "100"}]),
+        {})["reason"] == "RISK_FACTS_INCOMPLETE"  # no market price
     out = ledger.evaluate_account_risk(
         _facts(fills=[{"fill_id": "f9", "symbol": "SPY", "side": "SELL",
-                       "quantity": 1, "price": "3.25"}]), {})
+                       "quantity": 1, "price": "3.25", "fees": "0.50",
+                       "ts": "2026-10-02T15:00:00+00:00", "multiplier": "100"}]), {})
     assert out["reason"] == "RISK_FACTS_INCOMPLETE"  # uncovered sale
 
 
@@ -173,7 +214,11 @@ def test_commissioned_admit_full_stack_and_each_refusal():
             conn, intent, ctx, broker, operator_id="op-1")
         assert out["reason"] == "POLICY_UNSET", out
         assert adm.set_account_policy_required(
-            conn, "ACCT-1", {"max_quantity": 5}, "op-1")["ok"] is True
+            conn, "ACCT-1", {"max_quantity": 5, "max_notional": "100000",
+                             "max_positions": 10, "max_daily_loss": "10000",
+                             "today": "2026-10-02", "min_entry_dte": 5,
+                             "allow_unprotected_entry": True},
+            "op-1")["ok"] is True
         from datetime import timedelta
 
         now = datetime(2026, 10, 2, 15, 0, tzinfo=UTC)
@@ -218,29 +263,117 @@ def test_commissioned_admit_full_stack_and_each_refusal():
         conn.close()
 
 
+def test_commissioned_refuses_expired_and_unprotected():
+    import asyncio
+
+    import services.execution_admission as adm
+    import services.operator_registry as operators
+    import services.public_execution_lifecycle as lc
+
+    conn = _memdb()
+    try:
+        lc.register_store(conn)
+        assert operators.register_operator(conn, "op-1", ["ACCT-1"], "root")["ok"] is True
+        assert adm.set_account_policy_required(
+            conn, "ACCT-1", {"max_quantity": 5, "max_notional": "100000",
+                             "max_positions": 10, "max_daily_loss": "10000",
+                             "today": "2026-10-02", "min_entry_dte": 5,
+                             "allow_unprotected_entry": True},
+            "op-1")["ok"] is True
+        # Expired Sep-4 contract at Oct-2 now: regression, never a pass.
+        old = _base_intent()
+        old["contract"] = dict(old["contract"], osi="SPY260904C00760000",
+                               expiry="2026-09-04")
+        ctx = _ctx(supported_expiries=["2026-09-04", "2026-12-18"])
+        appr, _ = _stored_appr_for(lc, old)
+        assert adm.store_approval_required(conn, appr, "op-1")["ok"] is True
+        primer = _PrimerBroker()
+        assert asyncio.run(lc.preflight(old, ctx, primer))["ok"] is True
+        broker = _ExplodingBroker()
+        out = adm.admit_commissioned_entry(
+            conn, old, ctx, broker, approval=appr, operator_id="op-1",
+            risk_facts=_facts(), remote_native={"workflows": []})
+        assert out["reason"] in ("EXPIRY_TOO_NEAR", "EXPIRY_INVALID"), out
+        # Same December intent, identical setup, minus the protection ack.
+        assert adm.set_account_policy_required(
+            conn, "ACCT-1", {"max_quantity": 5, "max_notional": "100000",
+                             "max_positions": 10, "max_daily_loss": "10000",
+                             "today": "2026-10-02", "min_entry_dte": 5},
+            "op-1")["ok"] is True
+        dec = _base_intent()
+        ctx2 = _ctx()
+        appr2, _ = _stored_appr_for(lc, dec)
+        assert adm.store_approval_required(conn, appr2, "op-1")["ok"] is True
+        assert asyncio.run(lc.preflight(dec, ctx2, primer))["ok"] is True
+        out = adm.admit_commissioned_entry(
+            conn, dec, ctx2, broker, approval=appr2, operator_id="op-1",
+            risk_facts=_facts(), remote_native={"workflows": []})
+        assert out["reason"] == "PROTECTION_UNVERIFIED", out
+    finally:
+        conn.close()
+
+
+def _stored_appr_for(lc, intent, operator="op-1"):
+    from datetime import timedelta
+
+    now = datetime(2026, 10, 2, 15, 0, tzinfo=UTC)
+    appr = lc.create_approval(
+        lc.intent_hash(intent), intent["account_id"], "single-entry",
+        now + timedelta(hours=1), operator, now=now)
+    return appr, now
+
+
+def test_commissioned_affordability_and_complete_policy():
+    import services.account_risk_ledger as ledger
+    import services.execution_admission as adm
+    import services.public_execution_lifecycle as lc
+
+    conn = _memdb()
+    try:
+        lc.register_store(conn)
+        full = {"max_quantity": 5, "max_notional": "100000",
+                "max_daily_loss": "10000", "today": "2026-10-02"}
+        assert adm.set_account_policy_required(conn, "ACCT-1", full, "op-1")["ok"] is True
+        intent = _base_intent(quantity=100)
+        out = ledger.check_affordability(intent, _facts())
+        assert out["reason"] == "INSUFFICIENT_BUDGET", out  # 31500 > 10000
+        out = ledger.check_affordability(
+            intent, _facts(buying_power="100000",
+                           open_orders=[{"order_id": "r1", "status": "OPEN",
+                                         "quantity": 1, "limit_price": "3.00",
+                                         "multiplier": "100"}]))
+        assert out["ok"] is True and out["reserved"] == "300.00", out
+        out = ledger.check_affordability(
+            _base_intent(), _facts(open_orders=[{"order_id": "r2", "status": "OPEN"}]))
+        assert out["reason"] == "RISK_FACTS_INCOMPLETE", out  # no reservation data
+        out = ledger.evaluate_account_risk(_facts(), {"max_quantity": 5},
+                                           require_complete_policy=True)
+        assert out["reason"] == "POLICY_INCOMPLETE", out
+    finally:
+        conn.close()
+
+
 class _PrimerBroker:
     async def preflight_single_leg(self, **kw):
         return {"total": "318.20", "fees": "3.20", "buying_power_ok": True}
 
 
-def test_ledger_daily_loss_breach_and_missing_day():
+def test_ledger_missing_fees_time_multiplier_and_status_refuse():
     import services.account_risk_ledger as ledger
 
-    day_fills = [
-        {"fill_id": "d1", "symbol": "SPY", "side": "BUY", "quantity": 2,
-         "price": "3.00", "ts": "2026-10-02T15:00:00+00:00"},
-        {"fill_id": "d2", "symbol": "SPY", "side": "SELL", "quantity": 2,
-         "price": "2.00", "ts": "2026-10-02T15:01:00+00:00"},
-    ]
-    out = ledger.evaluate_account_risk(
-        _facts(fills=day_fills), {"max_daily_loss": "1", "today": "2026-10-02"})
-    assert out["reason"] == "RISK_DAILY_LOSS_EXCEEDED", out
-    assert out["snapshot"]["day_realized"] == "-2.00"
-    out = ledger.evaluate_account_risk(_facts(fills=day_fills), {"max_daily_loss": "1"})
-    assert out["reason"] == "RISK_FACTS_INCOMPLETE", out
-    out = ledger.evaluate_account_risk(
-        _facts(fills=day_fills), {"max_daily_loss": "100", "today": "2026-10-02"})
-    assert out["ok"] is True
+    good = {"fill_id": "g1", "symbol": "SPY", "side": "BUY", "quantity": 1,
+            "price": "3.15", "fees": "0.50", "ts": "2026-10-02T15:00:00+00:00",
+            "multiplier": "100"}
+    for drop in ("fees", "ts", "multiplier"):
+        bad = dict(good)
+        del bad[drop]
+        out = ledger.evaluate_account_risk(_facts(fills=[bad]), {})
+        assert out["reason"] == "RISK_FACTS_INCOMPLETE", (drop, out)
+    assert ledger.evaluate_account_risk(
+        _facts(open_orders=[{"order_id": "o1"}]), {})["reason"] == "RISK_FACTS_INCOMPLETE"
+    assert ledger.evaluate_account_risk(
+        _facts(open_orders=[{"order_id": "o1", "status": ""}]),
+        {})["reason"] == "RISK_FACTS_INCOMPLETE"
 
 
 def test_operator_corrupt_allowlist_refuses_distinctly():
@@ -281,3 +414,55 @@ def test_route_patch_decision_and_risk_shapes(monkeypatch):
     r = client.post("/admission/decision", json={"nope": True},
                     headers={"X-API-Key": "wrong-key"})
     assert r.status_code in (401, 503), r.text
+
+
+def test_commissioned_binds_approved_by_and_evidence():
+    import services.execution_admission as adm
+    import services.operator_registry as operators
+    import services.public_execution_lifecycle as lc
+
+    conn = _memdb()
+    try:
+        lc.register_store(conn)
+        assert operators.register_operator(conn, "op-1", ["ACCT-1"], "root")["ok"] is True
+        assert adm.set_account_policy_required(
+            conn, "ACCT-1", {"max_quantity": 5, "max_notional": "100000",
+                             "max_positions": 10, "max_daily_loss": "10000",
+                             "today": "2026-10-02", "min_entry_dte": 5,
+                             "allow_unprotected_entry": True},
+            "op-1")["ok"] is True
+        intent, ctx = _base_intent(), _ctx()
+        spoofed, _ = _stored_appr_for(lc, intent, operator="mallory")
+        assert adm.store_approval_required(conn, spoofed, "mallory")["ok"] is True
+        primer = _PrimerBroker()
+        import asyncio
+
+        assert asyncio.run(lc.preflight(intent, ctx, primer))["ok"] is True
+        broker = _ExplodingBroker()
+        out = adm.admit_commissioned_entry(
+            conn, intent, ctx, broker, approval=spoofed, operator_id="op-1",
+            risk_facts=_facts(), remote_native={"workflows": []})
+        assert out["reason"] == "APPROVAL_INVALID", out
+        honest, _ = _stored_appr_for(lc, intent, operator="op-1")
+        assert adm.store_approval_required(conn, honest, "op-1")["ok"] is True
+        out = adm.admit_commissioned_entry(
+            conn, intent, ctx, broker, approval=honest, operator_id="op-1",
+            risk_facts=_facts(), remote_native={"workflows": []},
+            evidence_grade="client-asserted")
+        assert out["reason"] == "EVIDENCE_UNVERIFIED", out
+    finally:
+        conn.close()
+
+
+def test_single_store_mismatch_refuses():
+    import services.execution_admission as adm
+    import services.public_execution_lifecycle as lc
+
+    first, second = _memdb(), _memdb()
+    try:
+        lc.register_store(first)
+        out = adm.admit_production_entry(second, _base_intent(), _ctx(), None)
+        assert out["reason"] == "STORE_MISMATCH", out
+    finally:
+        first.close()
+        second.close()

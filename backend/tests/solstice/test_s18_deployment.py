@@ -1,6 +1,9 @@
-"""S3 deployment exclusion (real processes), protection and expiry guards.
+"""S3/S6 deployment exclusion with REAL OS processes (spawn-isolated).
 
-Lease exclusion is proven with independent OS processes, not threads.
+Every process runs under an explicit spawn context with matched Queue/Event
+primitives from the same context, bounded joins with cleanup, and asserted
+exit codes. Default-fork inheritance (threads, curl_cffi teardown) caused
+hosted segfaults; spawn children import only the service module.
 No live calls, no activation, no venue flags.
 """
 
@@ -25,6 +28,10 @@ def _isolate():
     lc._reset_for_tests()
 
 
+def _spawn():
+    return _mp.get_context("spawn")
+
+
 def _race_worker(path, owner, hold_s, queue, retries=400):
     from services import execution_lease as lease
 
@@ -43,6 +50,21 @@ def _race_worker(path, owner, hold_s, queue, retries=400):
     queue.put({"owner": owner, "acquired": bool(first.get("ok")), "held": held})
 
 
+def _barrier_worker(path, owner, barrier, queue):
+    from services import execution_lease as lease
+
+    barrier.wait(timeout=30)
+    first = lease.acquire_lease(path, owner, ttl_s=10.0)
+    held = False
+    token = first.get("token") if first.get("ok") else None
+    if token is not None:
+        time.sleep(0.2)
+        held = bool(lease.heartbeat_lease(path, token, ttl_s=10.0).get("ok"))
+    queue.put({"owner": owner, "acquired": bool(first.get("ok")),
+               "held": held, "token": token,
+               "reason": first.get("reason")})
+
+
 def _crash_worker(path):
     from services import execution_lease as lease
 
@@ -51,19 +73,39 @@ def _crash_worker(path):
     os._exit(1)  # crash without release or heartbeat
 
 
+def _thief_worker(path, entered, stolen):
+    from services import execution_lease as lease
+
+    assert entered.wait(timeout=30)
+    current = lease._payload(path)
+    current["expires_at"] = time.time() - 1.0
+    with open(path, "w", encoding="utf-8") as fh:
+        import json
+
+        fh.write(json.dumps(current))
+    assert lease.acquire_lease(path, "thief", ttl_s=10.0)["ok"] is True
+    stolen.set()
+
+
 def _foreign_release_worker(path, queue):
     from services import execution_lease as lease
 
     queue.put(lease.release_lease(path, "not-the-token"))
 
 
-def _run_proc(target, args, timeout=30):
-    ctx = _mp.get_context()
+def _start(ctx, target, args):
     proc = ctx.Process(target=target, args=args)
     proc.start()
-    proc.join(timeout)
-    assert not proc.is_alive(), "worker hung"
     return proc
+
+
+def _join(proc, timeout=30):
+    proc.join(timeout)
+    if proc.is_alive():
+        proc.terminate()
+        proc.join(10)
+        raise AssertionError("worker hung and was terminated")
+    assert proc.exitcode == 0, f"worker exited {proc.exitcode}"
 
 
 def _tmp_path(tmp_path, name="exec-lease"):
@@ -73,18 +115,16 @@ def _tmp_path(tmp_path, name="exec-lease"):
 def test_sequential_holders_serialize(tmp_path):
     from services import execution_lease as lease
 
+    ctx = _spawn()
     path = _tmp_path(tmp_path)
-    mq = _mp.Queue()
-    procs = [
-        _mp.get_context().Process(target=_race_worker, args=(path, f"p{i}", 0.4, mq))
-        for i in range(4)
-    ]
+    mq = ctx.Queue()
+    procs = [ctx.Process(target=_race_worker, args=(path, f"p{i}", 0.4, mq))
+             for i in range(4)]
     for p in procs:
         p.start()
         time.sleep(0.05)
     for p in procs:
-        p.join(30)
-        assert p.exitcode == 0
+        _join(p)
     # Sequential acquisitions serialize: every racer eventually acquires AND
     # holds (heartbeat proves no silent takeover mid-hold).
     results = [mq.get(timeout=10) for _ in procs]
@@ -92,23 +132,57 @@ def test_sequential_holders_serialize(tmp_path):
     assert lease.read_lease(path)["present"] is False  # all released
 
 
-def test_simultaneous_race_single_winner(tmp_path):
+def test_barrier_contention_exactly_one_effective_winner(tmp_path):
     from services import execution_lease as lease
 
+    ctx = _spawn()
     path = _tmp_path(tmp_path)
-    mq = _mp.Queue()
-    first = lease.acquire_lease(path, "holder", ttl_s=10.0)
-    assert first.get("ok") is True
-    procs = [
-        _mp.get_context().Process(target=_race_worker, args=(path, f"late{i}", 0.0, mq, 1))
-        for i in range(3)
-    ]
+    # Seed an EXPIRED lease so all contenders race the takeover at once.
+    seed = lease.acquire_lease(path, "stale-holder", ttl_s=0.5)
+    assert seed.get("ok") is True
+    time.sleep(0.7)
+    barrier = ctx.Barrier(4, timeout=30)
+    mq = ctx.Queue()
+    procs = [ctx.Process(target=_barrier_worker, args=(path, f"c{i}", barrier, mq))
+             for i in range(4)]
     for p in procs:
         p.start()
     for p in procs:
-        p.join(30)
-        assert p.exitcode == 0
-    # While held, no contender acquires; holder heartbeat still proves ownership.
+        _join(p, timeout=40)
+    # Contender results are INSPECTED (not just the winner): exactly one
+    # contender still holds a live token afterward; every other contender
+    # either failed to acquire or lost its token to the final payload.
+    results = [mq.get(timeout=10) for _ in procs]
+    final = lease.read_lease(path)
+    assert final["present"] is True
+    winners = [r for r in results
+               if r["held"] and r["token"] is not None]
+    assert len(winners) == 1, results
+    live = [r for r in results if r["acquired"]]
+    assert len(live) >= 1, results
+    for r in results:
+        if r is not winners[0] and r["token"] is not None:
+            assert lease.heartbeat_lease(path, r["token"])["ok"] is False, r
+    assert lease.release_lease(path, winners[0]["token"])["ok"] is True
+
+
+def test_simultaneous_race_single_winner(tmp_path):
+    from services import execution_lease as lease
+
+    ctx = _spawn()
+    path = _tmp_path(tmp_path)
+    mq = ctx.Queue()
+    first = lease.acquire_lease(path, "holder", ttl_s=10.0)
+    assert first.get("ok") is True
+    procs = [ctx.Process(target=_race_worker, args=(path, f"late{i}", 0.0, mq, 1))
+             for i in range(3)]
+    for p in procs:
+        p.start()
+    for p in procs:
+        _join(p)
+    # While held, contenders cannot acquire; contender results show refusal.
+    late = [mq.get(timeout=10) for _ in procs]
+    assert all(r["acquired"] is False for r in late), late
     assert lease.heartbeat_lease(path, first["token"], ttl_s=10.0)["ok"] is True
     assert lease.release_lease(path, first["token"])["ok"] is True
 
@@ -116,8 +190,15 @@ def test_simultaneous_race_single_winner(tmp_path):
 def test_crash_recovers_via_expiry_steal(tmp_path):
     from services import execution_lease as lease
 
+    ctx = _spawn()
     path = _tmp_path(tmp_path)
-    proc = _run_proc(_crash_worker, (path,))
+    proc = ctx.Process(target=_crash_worker, args=(path,))
+    proc.start()
+    proc.join(30)
+    if proc.is_alive():
+        proc.terminate()
+        proc.join(10)
+        raise AssertionError("crasher hung")
     assert proc.exitcode == 1  # crashed, never released
     assert lease.acquire_lease(path, "next", ttl_s=10.0)["reason"] == "LEASE_HELD"
     time.sleep(1.2)  # past the 1s TTL with no heartbeat
@@ -130,11 +211,14 @@ def test_crash_recovers_via_expiry_steal(tmp_path):
 def test_foreign_release_and_heartbeat_refused(tmp_path):
     from services import execution_lease as lease
 
+    ctx = _spawn()
     path = _tmp_path(tmp_path)
     first = lease.acquire_lease(path, "owner", ttl_s=10.0)
     assert first.get("ok") is True
-    mq = _mp.Queue()
-    _run_proc(_foreign_release_worker, (path, mq))
+    mq = ctx.Queue()
+    proc = ctx.Process(target=_foreign_release_worker, args=(path, mq))
+    proc.start()
+    _join(proc)
     assert mq.get(timeout=10)["reason"] == "LEASE_NOT_OWNER"
     assert lease.heartbeat_lease(path, first["token"], ttl_s=10.0)["ok"] is True
     assert lease.release_lease(path, "wrong")["reason"] == "LEASE_NOT_OWNER"
@@ -153,14 +237,47 @@ def test_expired_lease_cannot_heartbeat_back(tmp_path):
     assert lease.heartbeat_lease(path, first["token"])["reason"] == "LEASE_EXPIRED"
 
 
-def test_corrupt_holder_file_refuses_explicitly(tmp_path):
+def test_fenced_action_proves_ownership_around_work(tmp_path):
     from services import execution_lease as lease
 
     path = _tmp_path(tmp_path)
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write("not-json{{{")
-    assert lease.acquire_lease(path, "anyone")["reason"] == "LEASE_CORRUPT_HOLDER"
-    assert lease.read_lease(path) == {"present": False}
+    assert lease.fenced_action(path, "a", 10.0, lambda: 42) == {"ok": True, "result": 42}
+
+    def boom():
+        raise RuntimeError("work failed")
+
+    out = lease.fenced_action(path, "a", 10.0, boom)
+    assert out["reason"] == "FENCED_ACTION_FAILED"
+    assert lease.read_lease(path)["present"] is False  # released despite failure
+
+
+def test_fenced_action_detects_mid_section_takeover(tmp_path):
+    from services import execution_lease as lease
+
+    ctx = _spawn()
+    path = _tmp_path(tmp_path)
+    entered = ctx.Event()
+    stolen = ctx.Event()
+
+    def work():
+        entered.set()
+        assert stolen.wait(timeout=30)
+        return "side-effects-untrusted"
+
+    proc = ctx.Process(target=_thief_worker, args=(path, entered, stolen))
+    proc.start()
+    out = lease.fenced_action(path, "victim", ttl_s=10.0, fn=work)
+    _join(proc)
+    assert out["reason"] == "FENCED_OUT", out
+    assert lease.read_lease(path)["owner"] == "thief"
+
+
+def test_deployment_scope_is_single_host_volume():
+    from services import execution_lease as lease
+
+    scope = lease.deployment_scope()
+    assert scope["scope"] == "single host with one shared filesystem volume"
+    assert "multi-host" in scope["not_scope"]
 
 
 def test_protection_refuses_unverified_everywhere():

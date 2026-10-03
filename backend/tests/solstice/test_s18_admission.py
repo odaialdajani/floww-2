@@ -440,3 +440,60 @@ def test_direct_unit_gaps():
     lc._reset_for_tests()
     assert lc._durable_open_count() is None  # storeless unknown, not zero
     assert lc.get_account_policy() is None
+
+
+def test_required_restore_never_resurrects_revoked():
+    import services.execution_admission as adm
+    import services.public_execution_lifecycle as lc
+
+    conn = _memdb()
+    try:
+        lc.register_store(conn)
+        intent = _base_intent()
+        appr, _ = _stored_appr(lc, intent)
+        stored = adm.store_approval_required(conn, appr, "op-1")
+        assert stored["ok"] is True
+        assert adm.revoke_approval_required(
+            conn, stored["approval_id"], "op-1")["ok"] is True
+        again = adm.store_approval_required(conn, appr, "op-1")
+        assert again["ok"] is False and again["reason"] == "APPROVAL_INVALID"
+        assert lc.stored_approval(stored["approval_id"])["revoked"] is True
+    finally:
+        conn.close()
+
+
+def test_required_restore_refuses_conflicting_identity():
+    import services.execution_admission as adm
+    import services.public_execution_lifecycle as lc
+
+    conn = _memdb()
+    try:
+        lc.register_store(conn)
+        intent = _base_intent()
+        appr, _ = _stored_appr(lc, intent)
+        stored = adm.store_approval_required(conn, appr, "op-1")
+        assert stored["ok"] is True
+        impostor = dict(appr)
+        impostor["intent_hash"] = "0" * 64
+        out = adm.store_approval_required(conn, impostor, "op-1")
+        assert out["ok"] is False and out["reason"] == "APPROVAL_CONFLICT"
+        assert lc.stored_approval(
+            stored["approval_id"])["intent_hash"] == appr["intent_hash"]
+    finally:
+        conn.close()
+
+
+def test_legacy_store_refuses_conflicting_identity():
+    import pytest
+
+    import services.public_execution_lifecycle as lc
+
+    intent = _base_intent()
+    appr, _ = _stored_appr(lc, intent)
+    lc._APPROVALS.clear()
+    first = lc.store_approval(appr, "op-1")
+    assert first["revoked"] is False
+    impostor = dict(appr)
+    impostor["account_id"] = "OTHER-ACCT"
+    with pytest.raises(ValueError, match="different intent/account/scope"):
+        lc.store_approval(impostor, "op-1")

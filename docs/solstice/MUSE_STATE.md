@@ -1010,3 +1010,22 @@ Filing correction: §§41/42 are chronologically swapped in this file
   (ADMIT on full pass / `OPERATOR_UNKNOWN` refusal) — deterministic,
   redacted, test-labeled. No code references; zero regression surface.
 - Lane-only push; combined/CI untouched by design.
+
+## 45. R18 repairs S5–S10 (3 Oct 2026) — state split
+
+DELIVERED (this lane, green): S5 resurrection/conflict guards (admission +
+legacy, TDD); S6 fence generations + `fenced_action` + `deployment_scope`
++ spawn/barrier contention proof; S7 ledger rewrite (carried lots, dedup
+once, multiplier, required fees/ts/multiplier/status, affordability,
+complete-policy mode); S8 OSI cross-check + commissioned expiry/protection
+gates + armed `/order` repair (policy-gated order approvals); S9
+approved_by binding + evidence grades (route forces client-asserted) +
+single-store enforcement; S10 spawn isolation + contender inspection +
+bounded joins. Fixture now 55 refusal codes. PR103 title/body corrected.
+REVIEW-PENDING (Zed): unmounted admission mount, lease wiring into submit,
+`/order` full-enforcement when UNSET, analytical grid consumption.
+ACCEPTED: R17 strict/surplus/inventory repairs (Zed pass-3/4/5 receipts).
+COMMISSIONING (external HOLD): NAV-ACCOUNT/CAPTURE/NATIVE/MODEL/VISUAL/
+RELEASE. Zero durable admitted records → INSUFFICIENT EVIDENCE.
+Verification: full `tests/solstice/` **682 passed**; ruff + silent-gate +
+bandit + API-380 + truth green.

@@ -38,7 +38,26 @@ __all__ = [
     "heartbeat_lease",
     "release_lease",
     "read_lease",
+    "fenced_action",
+    "deployment_scope",
 ]
+
+
+def deployment_scope() -> dict[str, Any]:
+    """Declared applicability boundary (S6).
+
+    The lease is enforced by OS file creation/replace atomicity. It holds
+    only where all executor processes share ONE filesystem volume on ONE
+    host (or a strongly consistent shared volume with atomic create).
+    It is NOT universal distributed ownership across hosts, containers
+    with isolated volumes, or network filesystems without atomic O_EXCL.
+    """
+    return {
+        "mechanism": "atomic file create (O_CREAT|O_EXCL) + atomic replace",
+        "scope": "single host with one shared filesystem volume",
+        "not_scope": "multi-host, isolated container volumes, or NFS without atomic O_EXCL",
+        "version": LEASE_VERSION,
+    }
 
 
 def _payload(path: str) -> dict[str, Any] | None:
@@ -71,6 +90,7 @@ def acquire_lease(path: str, owner: str, ttl_s: float = DEFAULT_TTL_S) -> dict[s
     token = uuid.uuid4().hex
     body = json.dumps({"owner": str(owner), "token": token,
                        "acquired_at": now, "expires_at": now + ttl,
+                       "fence": _next_fence(path, now),
                        "version": LEASE_VERSION})
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
     try:
@@ -97,6 +117,15 @@ def acquire_lease(path: str, owner: str, ttl_s: float = DEFAULT_TTL_S) -> dict[s
         return {"ok": False, "reason": "LEASE_IO_ERROR"}
     return {"ok": True, "owner": str(owner), "token": token,
             "stole_expired": False}
+
+
+def _next_fence(path: str, now: float) -> int:
+    """Monotonic generation: max(existing fence, 0) + 1 (best-effort read)."""
+    current = _payload(path)
+    try:
+        return int(current.get("fence", 0)) + 1 if current else 1
+    except (TypeError, ValueError, AttributeError):
+        return 1
 
 
 def _stage(path: str, body: str) -> str:
@@ -155,4 +184,33 @@ def read_lease(path: str) -> dict[str, Any]:
         return {"present": False}
     return {"present": True, "owner": current.get("owner"),
             "expired": _expired(current, time.time()),
+            "fence": current.get("fence"),
             "version": current.get("version")}
+
+
+def fenced_action(path: str, owner: str, ttl_s: float, fn: Any,
+                  *args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Run fn inside verified lease ownership (S6 critical-section fencing).
+
+    Verifies the owner token immediately BEFORE and AFTER fn: a takeover in
+    between reports FENCED_OUT instead of blessing results produced without
+    ownership. The lease is released afterward either way (best-effort).
+    fn exceptions release the lease, then report FENCED_ACTION_FAILED —
+    never a success.
+    """
+    acquired = acquire_lease(path, owner, ttl_s)
+    if not acquired.get("ok"):
+        return {"ok": False, "reason": acquired.get("reason", "LEASE_HELD"),
+                "holder": acquired.get("holder")}
+    try:
+        result = fn(*args, **kwargs)
+    except Exception as exc:
+        release_lease(path, acquired["token"])
+        return {"ok": False, "reason": "FENCED_ACTION_FAILED",
+                "detail": f"{type(exc).__name__}: {exc}"}
+    post = heartbeat_lease(path, acquired["token"], ttl_s)
+    release_lease(path, acquired["token"])
+    if not post.get("ok"):
+        return {"ok": False, "reason": "FENCED_OUT",
+                "detail": "ownership lost during the critical section"}
+    return {"ok": True, "result": result}
