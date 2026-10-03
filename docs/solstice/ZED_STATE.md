@@ -1,6 +1,14 @@
 # ZED_STATE — FLOWW integration continuation
 
-## Current checkpoint — verified merged main, 3 October 2026
+## Published continuation — combined checkpoint is authoritative
+
+Owned CODE `0f8127ce6b4935f3eadbb343de0b2b2a4aa699eb` is published in draft PR100; all four hosted checks succeeded on that exact CODE. Actual frozen Sparkc16e7f68 was composed/tested as combined CODE `e5ee1404b5461a994befd2703e57627f5dca7ff5`, draft PR101. Full combined backend7069/37 existing skips/68.88%, frontend126/1096, Storybook/axe16+build, production build/browser8 routes/native200%, Ruff/Bandit/truth228/API376/protected71 passed; hosted CI/CD37093482826 and lint37093482841 SUCCESS including Docker. No Zed merge/deploy/activation/order/paid turn.
+
+Spark merged PR99 during verification to newer main `aea1ed95ad02fe43a06df6a81fb7cf91e6079242`; combined backend/runtime/tests match it, with only owned replay differences. Their doc-only corrections were preserved verbatim through local combined composition head924a59cc. Code-head verification is distinct from later receipt metadata HEADs. Effective owner Sol/xhigh dispatch, producer session/range/comparability/approval-risk/protection requirements and operational commissioning remain held; all policy values UNSET.
+
+**Resume in `.worktrees/combined-r16-20261003`, not this older source-lane checkpoint.** Its `docs/solstice/ZED_STATE.md` contains the final queue/next action and `docs/solstice/integration/R16_ACCEPTANCE.md` contains exact receipts/fixture hashes/producer owners. PR101 is the consolidated review. Producer request: https://github.com/odaialdajani/floww-2/pull/99#issuecomment-5965084203. Exact next command there: `git fetch origin`, then `gh pr view 101 --json headRefOid,state,statusCheckRollup` and inspect Spark's checkpoint before writes. No owned READY implementation remains unblocked; do not repeat unchanged R14 proofs, guess an authenticated owner or substitute policy input for missing producer engineering.
+
+## Earlier source-lane checkpoint — superseded by combined continuation
 
 - Owner Zed; isolated lane `.worktrees/zed-main-acceptance-20261003`, branch `solstice/zed-main-acceptance-20261003`.
 - Base/initial HEAD `08f3793c242d943ab3b61b84e5394ce4602daa0a`, fetched current `origin/main`. PR96 MERGED at `df1bf1cea8396be7fa5fcff6a2666a67e7984992`; PR98 MERGED at this base. PR95 is still OPEN and is superseded for runtime code. Runtime frontend/agent changes from its code head are already on main; reverse branch diff includes missing Spark files, not new Zed runtime work.
