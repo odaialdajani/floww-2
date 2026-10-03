@@ -74,6 +74,145 @@ jest.mock("./RndDensityPanel",              () => () => <div data-testid="hs-rnd
 // Import AFTER mocks are set up.
 import SkylitDashboard from "./SkylitDashboard";
 import useScreenContext from "../../agent/useScreenContext";
+import coverageFixture from "../../fixtures/integration/coverage-read.v1.json";
+
+test('listed expiry admission is an explicit read, not a new map or selection', async () => {
+  axios.get.mockResolvedValue({ data: coverageFixture.expiries });
+  render(<SkylitDashboard ticker="SPY" data={selectionMap()} />);
+  const before = screen.getByTestId('skylit-loaded-scope').textContent;
+  fireEvent.click(screen.getByText('Listed 14–60 DTE coverage'));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read listed coverage' })));
+  expect(axios.get).toHaveBeenCalledWith(expect.stringContaining('/price-paths/expiries?ticker=SPY&min_dte=14&max_dte=60&expirations=12'), expect.objectContaining({ signal: expect.anything() }));
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('2026-10-30');
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('28 DTE');
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('BELOW_WINDOW');
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('first 12 listed');
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('2026-10-02T14:05:00Z');
+  expect(screen.getByTestId('skylit-loaded-scope')).toHaveTextContent(before);
+});
+
+test.each([
+  [{ ticker: 'QQQ' }, 'EXPIRY_IDENTITY_MISMATCH'],
+  [{ version: 'coverage-read.v2' }, 'COVERAGE_VERSION_UNSUPPORTED'],
+  [{ window: { min_dte: 0, max_dte: 30 } }, 'EXPIRY_WINDOW_MISMATCH'],
+  [{ stale: true }, 'EXPIRY_OBSERVATION_STALE'],
+  [{ stale: null }, 'EXPIRY_FRESHNESS_UNKNOWN'],
+  [{ fetched_at: null }, 'EXPIRY_OBSERVATION_UNDECLARED'],
+])('expiry disclosure refuses mismatched or non-fresh inventory', async (override, reason) => {
+  axios.get.mockResolvedValue({ data: { ...coverageFixture.expiries, ...override } });
+  render(<SkylitDashboard ticker="SPY" data={selectionMap()} />);
+  fireEvent.click(screen.getByText('Listed 14–60 DTE coverage'));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read listed coverage' })));
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent(reason);
+  expect(screen.queryByRole('table', { name: 'Listed expiry admission' })).toBeNull();
+});
+
+test('ticker change aborts expiry inventory and discards late success', async () => {
+  let release;
+  axios.get.mockImplementation(url => String(url).includes('/price-paths/expiries') ? new Promise(resolve => { release = resolve; }) : Promise.resolve({ data: {} }));
+  const ui = render(<SkylitDashboard ticker="SPY" data={selectionMap()} />);
+  fireEvent.click(screen.getByText('Listed 14–60 DTE coverage'));
+  fireEvent.click(screen.getByRole('button', { name: 'Read listed coverage' }));
+  const signal = axios.get.mock.calls.find(([url]) => String(url).includes('/price-paths/expiries'))[1].signal;
+  ui.rerender(<SkylitDashboard ticker="QQQ" data={{ ...selectionMap(), ticker: 'QQQ' }} />);
+  expect(signal.aborted).toBe(true);
+  await act(async () => release({ data: coverageFixture.expiries }));
+  expect(screen.queryByRole('table', { name: 'Listed expiry admission' })).toBeNull();
+});
+
+function expandedCoverage() {
+  const rows = coverageFixture.expiries.expiries.slice(0, 2).map(row => ({ ...row, display_envelope: true }));
+  rows.push({ expiry: '2026-11-16', dte: 45, admitted: true, reason: 'ADMITTED', display_envelope: false });
+  return { ...coverageFixture.expiries, range_map: undefined, expiries: rows, n_admitted: 2, coverage: {
+    requested_expiries: 12, n_listed: 3, n_display_envelope: 2,
+    listing_capped: false, lower_edge_observed: true, upper_edge_observed: false,
+  } };
+}
+
+async function readExpiryResponse(data) {
+  axios.get.mockResolvedValue({ data });
+  render(<SkylitDashboard ticker="SPY" data={selectionMap()} />);
+  fireEvent.click(screen.getByText('Listed 14–60 DTE coverage'));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read listed coverage' })));
+}
+
+test('expiry metadata distinguishes policy admission, optional filter and unobserved range edge', async () => {
+  await readExpiryResponse(expandedCoverage());
+  const table = screen.getByRole('table', { name: 'Listed expiry admission' });
+  expect(table).toHaveTextContent('≤30 DTE filter');
+  expect(table.querySelector('tbody').lastChild).toHaveTextContent('45 DTEADMITTEDOutside');
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('3 returned / 12 requested');
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('Upper edge not observed');
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('not complete range coverage');
+});
+
+test('capped expiry listing is disclosed without claiming an exhaustive range', async () => {
+  const data = expandedCoverage();
+  const rows = Array.from({ length: 12 }, (_, i) => ({ ...data.expiries[1], expiry: `2026-10-${String(20 + i).padStart(2, '0')}` }));
+  await readExpiryResponse({ ...data, expiries: rows, n_admitted: 12, coverage: { ...data.coverage, n_listed: 12, n_display_envelope: 12, listing_capped: true, lower_edge_observed: false } });
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('Listing capped');
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('Lower edge not observed');
+});
+
+test('legacy expiry metadata remains unknown rather than complete or filter-eligible', async () => {
+  await readExpiryResponse({ ...coverageFixture.expiries, coverage: undefined, expiries: coverageFixture.expiries.expiries.map(({ display_envelope, ...row }) => row) });
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('Coverage metadata unavailable');
+  expect(screen.getByRole('table', { name: 'Listed expiry admission' })).toHaveTextContent('Unknown');
+});
+
+test.each([
+  ['count mismatch', { n_listed: 99 }],
+  ['string admission flag', { upper_edge_observed: 'true' }],
+  ['different requested cap', { requested_expiries: 16 }],
+])('invalid expiry coverage is refused: %s', async (_name, override) => {
+  const data = expandedCoverage();
+  await readExpiryResponse({ ...data, coverage: { ...data.coverage, ...override } });
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('EXPIRY_COVERAGE_UNAVAILABLE');
+  expect(screen.queryByRole('table', { name: 'Listed expiry admission' })).toBeNull();
+});
+
+test.each(['chain_unavailable', 'REVERSED_WINDOW'])('structured top-level refusal stays visible: %s', async error => {
+  axios.get.mockRejectedValue({ response: { status: error === 'chain_unavailable' ? 502 : 422, data: { version: 'coverage-read.v1', error } } });
+  render(<SkylitDashboard ticker="SPY" data={selectionMap()} />);
+  fireEvent.click(screen.getByText('Listed 14–60 DTE coverage'));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read listed coverage' })));
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent(error);
+});
+
+function listingProjection() {
+  const data = expandedCoverage();
+  return { ...data, range_map: { version: 'coverage-read.v1', window: { min_dte: 14, max_dte: 60 }, admitted_expiries: ['2026-10-30', '2026-11-16'], admitted_dtes: [28, 45], min_admitted_dte: 28, max_admitted_dte: 45, complete: true, reason: null } };
+}
+
+test('admitted projection lists exact pairs but never claims an analytical range map', async () => {
+  await readExpiryResponse(listingProjection());
+  const projection = screen.getByTestId('solstice-expiry-projection');
+  expect(projection).toHaveTextContent('Listed admission projection · 28–45 DTE');
+  expect(projection).toHaveTextContent('2026-10-30 · 28 DTE');
+  expect(projection).toHaveTextContent('2026-11-16 · 45 DTE');
+  expect(projection).toHaveTextContent('Producer reports complete listing; exhaustive coverage unverified');
+  expect(projection).toHaveTextContent('No analytical grid or owning display record');
+});
+
+test('reported incomplete projection retains its exact reason', async () => {
+  const data = listingProjection();
+  await readExpiryResponse({ ...data, range_map: { ...data.range_map, complete: false, reason: 'LISTING_CAPPED_WINDOW_MAY_EXTEND' } });
+  expect(screen.getByTestId('solstice-expiry-projection')).toHaveTextContent('LISTING_CAPPED_WINDOW_MAY_EXTEND');
+});
+
+test.each([
+  ['version', { version: 'coverage-read.v2' }],
+  ['window', { window: { min_dte: 0, max_dte: 30 } }],
+  ['foreign expiry', { admitted_expiries: ['2026-10-31', '2026-11-16'] }],
+  ['wrong DTE pairing', { admitted_dtes: [29, 45] }],
+  ['wrong bounds', { max_admitted_dte: 60 }],
+  ['string complete', { complete: 'true' }],
+])('malformed listing projection refuses %s', async (_label, override) => {
+  const data = listingProjection();
+  await readExpiryResponse({ ...data, range_map: { ...data.range_map, ...override } });
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('EXPIRY_PROJECTION_UNAVAILABLE');
+  expect(screen.queryByTestId('solstice-expiry-projection')).not.toBeInTheDocument();
+});
 
 test('R12: strike review callback requires explicitly armed Trade mode', () => {
   const onStrikeClick = jest.fn();

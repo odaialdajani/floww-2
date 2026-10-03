@@ -14,6 +14,7 @@ import ScenarioStrip from "./ScenarioStrip";
 import ExposureStrip from "./ExposureStrip";
 import { usePublishScreenContext } from "../../agent/useScreenContext";
 import ReplayStrip from "./ReplayStrip";
+import ExpiryCoverage from "./ExpiryCoverage";
 import AlertEngineStrip from "../flowseeker/AlertEngineStrip";
 import { shownMapStrikes, mapSurface } from "./shownMapStrikes";
 import { ALL_BASES, surfaceStatus, sumProfile } from "../../lib/solsticeMetrics";
@@ -834,6 +835,7 @@ function SkylitDashboard({
         <span data-testid="skylit-loaded-scope" title="Exact loaded dates; geometry changes never fetch an unbounded expiry universe">
           All loaded · {loadedExpiries.length} expiries · {loadedExpiries.join(", ") || "unavailable"}
         </span>
+        <ExpiryCoverage ticker={ticker} replay={isReplay} />
         {selectedReading && !tradeMode && <SelectedCellReadout selectedCell={selectedReading} displayData={visibleData} metric={activeMetric} viewMode={activeView} />}
         <AskLodestar subject={`${ticker}${selectedCell ? ` · wall ${selectedCell.wall_id || "none"} · strike ${selectedCell.strike}` : ""}`} overlayMetric={activeMetric} displayMode={priceHistoryOpen ? "price-history" : isReplay ? "replay" : "live"} compact />
       </div>

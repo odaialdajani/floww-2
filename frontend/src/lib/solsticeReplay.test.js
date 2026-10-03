@@ -15,6 +15,26 @@ test("recorded request and provenance restore without deriving a live identity",
   expect(old.map_query).toBeNull();
 });
 
+test.each([
+  { snapshot_id: "record", spot: 100 },
+  { ticker: "SPY", spot: 100 },
+  { ticker: "", snapshot_id: "record" },
+  { ticker: "SPY", snapshot_id: "" },
+])("replay refuses missing owning identity instead of borrowing the selected symbol: %j", snapshot => {
+  expect(replayToDisplay({ snapshot, grids: {}, context: {} }, "SPY")).toBeNull();
+});
+
+test("replay restores recorded staleness without labelling unknown historical freshness live", () => {
+  const snapshot = { ticker: "SPY", snapshot_id: "record" };
+  const display = { stale: true, stale_age_s: 120 };
+  const restored = replayToDisplay({ snapshot, context: { display } }, "SPY");
+  expect(restored.stale).toBe(true);
+  expect(restored.stale_age_s).toBe(120);
+  const unknown = replayToDisplay({ snapshot, context: {} }, "SPY");
+  expect(unknown.stale).toBeNull();
+  expect(unknown.stale_age_s).toBeNull();
+});
+
 test("VEX and Charm replay preserve stored signed cells and conventions without fallback", () => {
  const main={strikes:[100],expiries:["2026-10-02"],grid:{"2026-10-02":{"100":999}},
    vex_grid:{"2026-10-02":{"100":0}},charm_grid:{"2026-10-02":{"100":-7}},

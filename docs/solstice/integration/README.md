@@ -1,15 +1,15 @@
 # FLOWW integration review
 
-Owned Zed lane: `.worktrees/zed-integration-20261002`, branch `solstice/zed-integration-20261002`, base `1530ccd7f52a0de03512f383283463525a44134b`. Spark candidate: [PR94](https://github.com/odaialdajani/floww-2/pull/94), observed head `1fdf403d878378eb2d4c42d517071fe9559186b7`. Neither lane is automatically merged or deployed. Exact publication/combined receipts are maintained in `../ZED_STATE.md`.
+Current tested combined CODE: **`aadea4ac833e35b14375f9f36243c7da1f526d7f`**, draft [PR104](https://github.com/odaialdajani/floww-2/pull/104), isolated `.worktrees/zed-r17-integration-20261003`. Includes main6eaa3343/PR102 safety fix, prior Zed integration and committed Spark PR103d8ba5b7b (strict35939a6e/recovery-surplus a9e794ca), plus the owned durable-surplus warning. Full local backend7105/37 existing skips/68.99%, frontend126/1155, stories/axe29/builds and8-route compiled browser/native200% pass. Strict missing-row/query-failure approval refusal is closed for strict callers, not authenticated execution. Inventory is not permission and the expiry listing is not an analytical map. Read [R17_PASS5_ACCEPTANCE](R17_PASS5_ACCEPTANCE.md), [exact-head hosted closure](https://github.com/odaialdajani/floww-2/pull/104#issuecomment-5971763877) and [ZED_STATE](../ZED_STATE.md). Earlier receipts are historical; shared screenshots/browser receipt now belong to pass5. No Zed PR merge, deployment, existing-service restart, paid turn or activation. Commissioning remains HOLD.
 
 ## Reviewable production behavior
 
 - All eight current workspace IDs are registry-backed, URL-authoritative and browser-history aware. Zenith and Steal Three mounts/calculations remain intact.
-- Solstice defaults to Matrix + Profile; left Profile changes geometry without discarding selection. Legacy Volume Profile remains accessible separately. GEX+VEX, Raw+adjusted, Multi-map, Calendar, Follow and Expand remain working. Next listed uses the admitted day-only server query; polling avoids the legacy loaded-only data alias. Four columns are not four DTE. The unsupported 14–60DTE range is visibly unavailable.
+- Solstice defaults to Matrix + Profile; left Profile changes geometry without discarding selection. Legacy Volume Profile remains accessible separately. GEX+VEX, Raw+adjusted, Multi-map, Calendar, Follow and Expand remain working. Next listed uses the admitted day-only server query; polling avoids the legacy loaded-only data alias. Four columns are not four DTE. Read-only 14–60DTE listing admission and exact sorted date/DTE projection are disclosed with count/edge limits; producer-reported completeness is not independently exhaustive coverage. The analytical range map remains visibly unavailable.
 - Triad requests same-session scope and session Volume × |delta|, distinguishes the actually admitted scope, shares raw/adjusted strike/expiry rails and display range, and publishes exact contract selection. Unknown volume/window/Greeks stay unavailable; no copied OI. Shared symbol changes clear impossible selections without navigating away from Triad.
-- Replay uses actual manifest and owning-record routes, a selected date, generation/abort/record-identity guards and persisted display projection. The displayed Raw/Adjusted pair is restored without today's Greeks. Current producer does not enumerate stored session dates or establish durable live recorder readiness; comparison uses only admitted records/refusals.
+- Replay uses actual manifest and owning-record routes, a selected date, generation/abort/record-identity guards and persisted display projection. The displayed Raw/Adjusted pair is restored without today's Greeks. The producer enumerates stored timestamp-prefix days, with separate NY/overnight attribution; the consumer keeps the owning request key and refuses stale/foreign responses. Owning identity/recorded staleness stay guarded. Coarse last-two numbers now require exact stored-pair admission; source/query/formula/session/order refusals hide numbers. Stored-prefix normalization is resolved; complete range-map projection and actual durable live readiness remain producer/operational follow-ups. Read-only14–60 first12 listing disclosure does not enable a range map.
 - Lodestar retains bounded authenticated research, usage reservation and cancellation. Catalog-bound Sol/xhigh preset requires explicit owner save; requested/effective trace fields are distinct. Typed drafts use backend-owned contract/wall facts, never model-generated prices, quantities or permission.
-- Public handoff is editable, dated, context-bound and manual. Operator reports are privately saved, not broker verification or activation. Actual Public account reads/partial fills stay separate from Alpaca PAPER, local portfolio estimates and journal outcomes. Backend entry is unavailable pending accepted producers.
+- Public handoff is editable, dated, context-bound and manual. Operator reports are privately saved, not broker verification or activation. Actual Public account reads/partial fills stay separate from Alpaca PAPER, local portfolio estimates and journal outcomes. On-demand local lifecycle review discloses UNKNOWN/open/store counts, installed-policy metadata, stored/revoked approval counts, conservative native support and durable-surplus recovery review even with settled local history or partial recovery, without account/permission/remote-ownership inference. Backend entry is unavailable pending accepted producers.
 - TideHunter files remain untouched. An owned bridge consumes published selectors, treats ckey/premium/conviction as display-only, resolves a separate exact current record before opening review, suspends Pro through its supported `active` prop, and resumes it on close. No duplicate automatic feed or new order path is added.
 
 ## Preview evidence — synthetic, not live readiness
@@ -18,7 +18,7 @@ These screenshots are the compiled complete React app with API/WebSocket traffic
 
 - [Solstice 1440](evidence/solstice-1440.png) · [1280](evidence/solstice-1280.png) · [narrow](evidence/solstice-390.png)
 - [Triad 1440](evidence/triad-1440.png) · [1280](evidence/triad-1280.png) · [narrow](evidence/triad-390.png)
-- [Native 200% zoom](evidence/solstice-native200.png) · [Lodestar](evidence/lodestar-1440.png) · [Manual Public handoff](evidence/public-handoff-1440.png)
+- [Native 200% zoom](evidence/solstice-native200.png) · [Lodestar](evidence/lodestar-1440.png) · [Manual Public handoff](evidence/public-handoff-1440.png) · [Public control inventory](evidence/public-inventory-1440.png)
 - [Browser source/bundle/fixture receipt](evidence/browser-receipt.json): eight direct links/refreshes, back/forward, query/hash preservation, Expand/selection, replay steps/Live exit, contract/draft/handoff and six viewport captures. Native zoom is `chrome.tabs.setZoom(2)`, verified by 720 CSS pixels, DPR2, CSS zoom1 and visual scale1; not pinch/CSS emulation.
 
 Local Storybook can be opened with `npm run storybook` from the lane `frontend`. This receipt does not claim that a server remains running after the finite checks. Useful story IDs:
@@ -27,14 +27,29 @@ Local Storybook can be opened with `npm run storybook` from the lane `frontend`.
 - `solstice-production-desk--missing-same-day-expiry`
 - `solstice-production-desk--missing-activity`
 - `solstice-production-desk--replay-gap`
+- `solstice-production-desk--stored-sessions`
+- `solstice-production-desk--comparison-refused`
+- `solstice-production-desk--listed-range-admission`
+- `solstice-production-desk--historical-range-unavailable`
+- `solstice-production-desk--overnight-stored-day`
+- `solstice-production-desk--capped-expiry-listing`
+- `solstice-production-desk--chain-read-refused`
 - `public-manual-reviewed-handoff--native-brief`
 - `public-manual-reviewed-handoff--backend-blocked`
 - `public-account-reads--partial-fill`
 - `public-account-reads--account-connection-failure`
+- `public-account-reads--local-lifecycle-review`
+- `public-account-reads--storeless-lifecycle`
+- `public-account-reads--stored-control-reports`
+- `public-account-reads--recovery-review-required`
+- `public-account-reads--settled-history-recovery-surplus`
+- `solstice-production-desk--listing-projection-only`
 
-Storybook uses the already inspected 10.6.1/React-Vite setup, with locally pinned Vitest/Playwright and no MCP addon/second app provider. State interactions and axe checks passed16/16. Installed is not connected: this Zed chat exposes no Storybook/browser/Sentry/Public MCP connector. Finite local Chrome-for-Testing acceptance is available; Sentry authentication/remote trace delivery remain unverified.
+Storybook uses the already inspected 10.6.1/React-Vite setup, with locally pinned Vitest/Playwright and no MCP addon/second app provider. State interactions and axe checks passed29/29. Installed is not connected: this Zed chat exposes no Storybook/browser/Sentry/Public MCP connector. Finite local Chrome-for-Testing acceptance is available; Sentry authentication/remote trace delivery remain unverified.
 
-## Validation scope and known limits
+## Historical lane validation and known limits
+
+The receipts in this section describe the original pre-merge lane, not the current continuation or PR99 combined candidate. Current checks are recorded in R17_PASS5_ACCEPTANCE and ZED_STATE.
 
 Working-tree milestone: frontend126 suites/1091 tests passed; owned backend agent+Solstice1052 passed; Ruff/Bandit clean; production and Storybook builds passed; truth audit226/0; protected71/71 unchanged. An earlier full backend run logged6996 passed,37 pre-existing skips,68.66% coverage. Its shell command accidentally masked the pytest exit code; the log was explicitly checked, and the required full command must be rerun UNMASKED at the exact combined candidate. No skip/xfail was added. Counts/head-specific receipts must not be promoted to new heads without verification.
 

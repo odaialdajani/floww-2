@@ -20,6 +20,19 @@
 .skylit-selection-strip { display: flex; align-items: center; gap: 12px; min-height: 30px; padding: 4px 12px; flex-shrink: 0; border-bottom: 1px solid #20283b; font-size: 11px; color: #94a3b8; font-variant-numeric: tabular-nums; }
 .skylit-selection-strip > :first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .skylit-selection-strip .lodestar-ask { margin-left: auto; }
+.solstice-expiry-coverage { position: relative; flex-shrink: 0; color: #c8dce0; }
+.solstice-expiry-coverage summary { cursor: pointer; padding: 5px; }
+.solstice-expiry-coverage > div { position: absolute; top: 100%; left: 0; z-index: 90; width: min(380px, 85vw); max-height: 55vh; overflow: auto; padding: 12px; background: #10262e; border: 1px solid #37575f; line-height: 1.5; overflow-wrap: anywhere; }
+.solstice-expiry-coverage p { margin: 0 0 8px; }
+.solstice-expiry-coverage table { width: 100%; text-align: left; font-variant-numeric: tabular-nums; }
+.solstice-expiry-coverage th, .solstice-expiry-coverage td { padding: 4px; border-bottom: 1px solid #29454d; }
+.solstice-expiry-coverage :focus-visible, .skylit-replay-strip :focus-visible { outline: 2px solid #e2bf73; outline-offset: 2px; }
+.skylit-replay-strip select, .skylit-replay-strip input[type="date"] { max-width: 100%; background: #10262e; color: #d7e6e8; border: 1px solid #37575f; padding: 4px; font-size: 12px; }
+.skylit-replay-strip [role="status"], .skylit-replay-strip [role="alert"] { overflow-wrap: anywhere; }
+@media (max-width: 800px) {
+  .skylit-selection-strip { flex-wrap: wrap; }
+  .solstice-expiry-coverage > div { position: static; }
+}
 .skylit-replay-panel { flex-shrink: 0; }
 .skylit-compare-workspace { min-height: 0; min-width: 0; height: 100%; }
 .skylit-compare-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }

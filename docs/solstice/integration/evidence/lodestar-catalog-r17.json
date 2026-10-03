@@ -1,0 +1,27 @@
+{
+  "verified_at": "2026-10-03T05:47:37.530242+00:00",
+  "catalog_only": true,
+  "requested_model": "GPT-6.1-Sol",
+  "requested_effort": "xhigh",
+  "catalog_model": {
+    "id": "gpt-6.1-sol",
+    "label": "GPT-6.1-Sol",
+    "efforts": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default_effort": "low",
+    "speeds": [
+      "default",
+      "priority"
+    ]
+  },
+  "supported": true,
+  "owner_settings_verified": false,
+  "effective_dispatch_verified": false,
+  "preference_save_performed": false,
+  "paid_turn_performed": false
+}

@@ -1,0 +1,118 @@
+{
+  "version": "strict-approval-probe.v1",
+  "fixtureOnly": true,
+  "sourceCommit": "9b6573f52a8d7e2794920ad088335f961539bb19",
+  "sourceSha256": "18ca1f7cf8864012c5ac9a5f93482a754f363c295b2b8c1ec5356576f2d404d1",
+  "scope": "approval binding only; minimal synthetic identity, not validate_intent or trading admission",
+  "cases": [
+    {
+      "case": "legacy-well-formed-copy",
+      "actual": true,
+      "expected": true
+    },
+    {
+      "case": "strict-storeless-copy",
+      "actual": [
+        false,
+        "APPROVAL_NOT_STORED"
+      ],
+      "expected": [
+        false,
+        "APPROVAL_NOT_STORED"
+      ]
+    },
+    {
+      "case": "strict-missing-row",
+      "actual": [
+        false,
+        "APPROVAL_NOT_STORED"
+      ],
+      "expected": [
+        false,
+        "APPROVAL_NOT_STORED"
+      ]
+    },
+    {
+      "case": "strict-authoritative-row",
+      "actual": [
+        true,
+        "ok"
+      ],
+      "expected": [
+        true,
+        "ok"
+      ]
+    },
+    {
+      "case": "strict-other-intent",
+      "actual": [
+        false,
+        "APPROVAL_INVALID"
+      ],
+      "expected": [
+        false,
+        "APPROVAL_INVALID"
+      ]
+    },
+    {
+      "case": "strict-other-account",
+      "actual": [
+        false,
+        "APPROVAL_INVALID"
+      ],
+      "expected": [
+        false,
+        "APPROVAL_INVALID"
+      ]
+    },
+    {
+      "case": "strict-other-scope",
+      "actual": [
+        false,
+        "APPROVAL_INVALID"
+      ],
+      "expected": [
+        false,
+        "APPROVAL_INVALID"
+      ]
+    },
+    {
+      "case": "strict-expired-row",
+      "actual": [
+        false,
+        "APPROVAL_INVALID"
+      ],
+      "expected": [
+        false,
+        "APPROVAL_INVALID"
+      ]
+    },
+    {
+      "case": "strict-revoked-row",
+      "actual": [
+        false,
+        "APPROVAL_INVALID"
+      ],
+      "expected": [
+        false,
+        "APPROVAL_INVALID"
+      ]
+    },
+    {
+      "case": "strict-query-failure",
+      "actual": [
+        false,
+        "APPROVAL_STORE_UNAVAILABLE"
+      ],
+      "expected": [
+        false,
+        "APPROVAL_STORE_UNAVAILABLE"
+      ]
+    }
+  ],
+  "brokerCalls": 0,
+  "routeInvocations": 0,
+  "modelTurns": 0,
+  "store": "isolated-duckdb-memory",
+  "status": "passed"
+}

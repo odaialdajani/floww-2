@@ -6,6 +6,10 @@ const root=path.resolve(__dirname,'..'),frontend=path.join(root,'frontend'),buil
 const evidence=path.join(root,'docs/solstice/integration/evidence');
 const fixturePath=path.join(root,'docs/solstice/r14/evidence/vertical-fixture.json');
 const fixture=JSON.parse(fs.readFileSync(fixturePath));
+const coveragePath=path.join(frontend,'src/fixtures/integration/coverage-read.v1.json');
+const coverage=JSON.parse(fs.readFileSync(coveragePath));
+const lifecyclePath=path.join(frontend,'src/fixtures/integration/lifecycle-inventory.v1.json');
+const lifecycle=JSON.parse(fs.readFileSync(lifecyclePath));
 const python=process.argv[2],executablePath=process.argv[3];
 assert(python && executablePath,'Provide verified interpreter and browser executable paths');
 const hash=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
@@ -21,8 +25,9 @@ execFileSync('npm',['run','build'],{cwd:frontend,env:{...process.env,CI:'true'},
 assert.deepStrictEqual(sourceHashes(),source,'Owned source changed during compilation');
 const manifest=JSON.parse(fs.readFileSync(path.join(build,'asset-manifest.json')));
 const bundleHashes=Object.fromEntries(Object.entries(manifest.files).filter(([key])=>/\.(js|css)$/.test(key)).map(([key,value])=>[key,hash(fs.readFileSync(path.join(build,value.replace(/^\//,''))))]));
-const receipt={version:'floww-browser-receipt.v1',fixtureOnly:true,sourceCommit:execFileSync('git',['--no-pager','rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),sourceHashes:source,bundleHashes,fixtureHash:hash(fs.readFileSync(fixturePath)),routes:[],viewports:[],screenshots:[],externalRequestsBlocked:[],forbiddenMutations:[],pageErrors:[],warnings:[],research:[],checks:[]};
-let lastTurn=null;
+const receipt={version:'floww-browser-receipt.v1',fixtureOnly:true,sourceCommit:execFileSync('git',['--no-pager','rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),sourceHashes:source,bundleHashes,fixtureHash:hash(fs.readFileSync(fixturePath)),routes:[],viewports:[],screenshots:[],externalRequestsBlocked:[],forbiddenMutations:[],pageErrors:[],warnings:[],research:[],checks:[],coverageFixtureHash:hash(fs.readFileSync(coveragePath)),coverageReads:[],lifecycleFixtureHash:hash(fs.readFileSync(lifecyclePath)),lifecycleReads:[]};
+let lastTurn=null,refuseComparison=false,overnightSessions=false,recoveryReview=false;
+const controlledInventory={...lifecycle.inventory,...lifecycle.control_additions,protection:{...lifecycle.inventory.protection,...lifecycle.control_additions.protection}};
 function body(url){
  const p=url.pathname;
  if(/\/heatmap\/SPY|\/data\/SPY/.test(p))return fixture.display;
@@ -30,9 +35,13 @@ function body(url){
  if(/\/heatmap\/|\/data\//.test(p))return {ticker:p.split('/').pop(),strikes:[],grid:{},quality:{state:'unavailable',setupEligible:false,reasonCodes:['NO_ENTITLED_FIXTURE']}};
  if(/\/solstice\/replay\//.test(p))return p.endsWith(fixture.baseline.snapshot.snapshot_id)?fixture.baseline:fixture.replay;
  if(/\/solstice\/SPY\/contract/.test(p))return fixture.contract;
- if(/\/manifest\//.test(p))return {day:'2026-10-02',snapshots:[{id:fixture.baseline.snapshot.snapshot_id,asof:fixture.baseline.snapshot.asof_ts},{id:fixture.display.snapshotId,asof:fixture.display.asof}],gaps:[{reason:'FIXTURE_GAP'}]};
+ if(/\/manifest\//.test(p) && url.searchParams.get('day')==='2026-10-02')return {ticker:'SPY',day:'2026-10-02',snapshots:[],gaps:[{reason:'FIXTURE_INDEX_ONLY'}]};
+  if(/\/manifest\//.test(p))return {ticker:'SPY',day:'2026-10-01',snapshots:[{id:fixture.baseline.snapshot.snapshot_id,asof:fixture.baseline.snapshot.asof_ts},{id:fixture.display.snapshotId,asof:fixture.display.asof}],gaps:[{reason:'FIXTURE_GAP'}]};
  if(p.endsWith('/recorder_health'))return {durable:false,backing:'memory',capture:{worker_state:'wired_off'}};
- if(p.includes('/attribute/'))return {status:'unavailable',reason:'FIXTURE_COMPARISON_NOT_ADMITTED'};
+ if(p.endsWith('/price-paths/sessions'))return overnightSessions?coverage.overnight_sessions:{...coverage.sessions,days:[{...coverage.sessions.days[0],date:'2026-10-01',ny_date:'2026-10-01',first_asof:fixture.baseline.snapshot.asof_ts,last_asof:fixture.display.asof,latest_snapshot_id:fixture.display.snapshotId}]};
+ if(p.endsWith('/price-paths/expiries'))return coverage.expiries;
+ if(p.endsWith('/price-paths/comparable'))return {...(refuseComparison?coverage.refused_comparison:coverage.comparison),baseline_id:fixture.baseline.snapshot.snapshot_id,snapshot_id:fixture.display.snapshotId};
+ if(p.includes('/attribute/'))return {ticker:'SPY',day:'2026-10-01',status:'ok',from:{id:fixture.baseline.snapshot.snapshot_id,asof:fixture.baseline.snapshot.asof_ts},to:{id:fixture.display.snapshotId,asof:fixture.display.asof},strike_deltas:[],walls_added:[],walls_removed:[],volume_deltas:[]};
  if(/\/solstice\/scan/.test(p))return {status:'not-scanned',leaderboard:[],availability:[],rank_method:'solstice-rank.v1'};
  if(p.includes('/tickers'))return {popular:['SPY','QQQ'],default:['SPY','QQQ'],trinity:['SPY','QQQ','^SPX'],tickers:['SPY','QQQ']};
  if(p.includes('/decisions'))return {decisions:fixture.decisions};
@@ -41,6 +50,7 @@ function body(url){
  if(p==='/api/agent/session')return {status:'fixture-only',persistent:false};
  if(p.includes('/agent/turn/'))return lastTurn;
  if(p==='/api/agent/handoffs')return {handoffs:[]};
+ if(p==='/api/public/execution-lifecycle/inventory')return recoveryReview?{...controlledInventory,intents:{n_known:0,n_open:0,n_unknown:0,open:[],unknown:[]}}:controlledInventory;
  if(p==='/api/public/account')return {ok:true,account_id:'FIXTURE-ACCOUNT'};
  if(p==='/api/public/portfolio')return {ok:true,account_id:'FIXTURE-ACCOUNT',cash:null,buying_power:null,portfolio_value:null,positions:[],position_count:0};
  if(p==='/api/public/orders')return {ok:true,orders:[{order_id:'fixture-partial',symbol:'SPY261008C00100000',side:'BUY',quantity:3,filled_quantity:1,status:'PARTIAL'}]};
@@ -71,6 +81,8 @@ const server=http.createServer((req,res)=>{
     return route.fulfill({json:{turn_id:lastTurn.turn_id,status:'completed'}});
    }
    if(url.pathname.startsWith('/api/')){
+    if(url.pathname==='/api/public/execution-lifecycle/inventory')receipt.lifecycleReads.push({path:url.pathname,method:request.method()});
+    if(url.pathname.includes('/price-paths/'))receipt.coverageReads.push({path:url.pathname,query:url.search,method:request.method()});
     if(url.pathname==='/api/preferences/theme' && request.method()==='POST')return route.fulfill({json:{ok:true,fixture_only:true}});
     if(url.pathname.endsWith('/alerts/stream'))return route.fulfill({contentType:'text/event-stream',body:'retry: 300000\n: fixture no-feed\n\n'});
     if(request.method()!=='GET' && url.pathname!=='/api/agent/session'){
@@ -96,6 +108,7 @@ const server=http.createServer((req,res)=>{
    await navigate(id);await page.locator('nav').getByRole('button',{name:label,exact:true}).waitFor();assert.strictEqual(await page.locator('nav').getByRole('button',{name:label,exact:true}).getAttribute('aria-current'),'page');
    await page.reload();await page.waitForTimeout(200);assert(new URL(page.url()).searchParams.get('page')===id);receipt.routes.push({id,direct:true,refresh:true,active:true});
   }
+  await navigate('public');assert.strictEqual(receipt.lifecycleReads.length,0,'Inventory must be on demand');await page.getByText('Local lifecycle inventory · read-only',{exact:true}).click();await page.getByRole('button',{name:'Read local lifecycle inventory',exact:true}).click();await page.getByRole('table',{name:'Process-local intent records'}).waitFor();const localReview=await page.getByRole('region',{name:'Local lifecycle review'}).textContent();assert(localReview.includes('Account attribution unavailable') && localReview.includes('UNKNOWN') && localReview.includes('Account policy installed · account-policy.v1') && localReview.includes('4 stored approvals · 1 revoked') && localReview.includes('not verified remote workflows') && localReview.includes('Recovery review required · RECOVERY_REQUIRED') && localReview.includes('Stored nonterminal rows exceed local open and unknown records'));assert(receipt.lifecycleReads.every(r=>r.method==='GET'));receipt.checks.push('on-demand local lifecycle inventory; durable surplus over local open/unknown records requires read-only recovery review; installed policy and stored/revoked counts are not permission; GET only');await page.getByRole('table',{name:'Reported native protection support'}).waitFor();await page.screenshot({path:path.join(evidence,'public-inventory-1440.png'),fullPage:true});receipt.screenshots.push({file:'public-inventory-1440.png',sha256:hash(fs.readFileSync(path.join(evidence,'public-inventory-1440.png')))});recoveryReview=true;await page.getByRole('button',{name:'Read local lifecycle inventory',exact:true}).click();await page.getByText(/Recovery review required.*RECOVERY_REQUIRED/).waitFor();assert.strictEqual(await page.getByRole('table',{name:'Process-local intent records'}).count(),0);receipt.checks.push('empty local registry with stored rows discloses recovery review; no recovery or entry mutation');
   await navigate('heatseeker');await page.getByRole('grid').first().waitFor();
   await page.locator('nav').getByRole('button',{name:'Triad',exact:true}).click();await page.getByTestId('trinity-view').waitFor();
   assert(new URL(page.url()).searchParams.get('evidence')==='keep');assert(new URL(page.url()).hash==='#selection');
@@ -106,7 +119,10 @@ const server=http.createServer((req,res)=>{
   await page.getByRole('gridcell',{name:/^100 by/}).first().click();
   await page.getByTestId('skylit-drawer-close').click();const selected=await page.getByTestId('skylit-selected-cell').textContent();
   await page.getByTestId('skylit-expand-btn').click();await page.getByRole('dialog',{name:'Expanded heatmap grid'}).waitFor();await page.getByTestId('skylit-expand-close').click();assert.strictEqual(await page.getByTestId('skylit-selected-cell').textContent(),selected);receipt.checks.push('Expand restores selected strike and layout');
-  await page.getByRole('button',{name:'Replay',exact:true}).click();await page.getByTestId('solstice-replay-load').click();await page.getByTestId('solstice-replay-next').click();await page.getByTestId('solstice-replay-banner').waitFor();
+  await page.getByText('Listed 14–60 DTE coverage',{exact:true}).click();await page.getByRole('button',{name:'Read listed coverage',exact:true}).click();await page.getByRole('table',{name:'Listed expiry admission'}).waitFor();assert((await page.getByTestId('solstice-expiry-coverage').textContent()).includes('3 returned / 12 requested'));assert((await page.getByTestId('solstice-expiry-coverage').textContent()).includes('Upper edge not observed'));assert((await page.getByRole('table',{name:'Listed expiry admission'}).textContent()).includes('45 DTEADMITTEDOutside'));const projection=await page.getByTestId('solstice-expiry-projection').textContent();assert(projection.includes('Producer reports complete listing; exhaustive coverage unverified') && projection.includes('2026-11-16 · 45 DTE') && projection.includes('No analytical grid or owning display record'));await page.getByText('Listed 14–60 DTE coverage',{exact:true}).click();receipt.checks.push('count-limited exact admitted-expiry projection is listing-only; analytical range map unavailable; selection unchanged');
+  await page.getByRole('button',{name:'Replay',exact:true}).click();overnightSessions=true;await page.getByRole('button',{name:'Stored sessions',exact:true}).click();await page.getByLabel('Recorded sessions').selectOption('2026-10-02');assert((await page.getByTestId('solstice-session-attribution').textContent()).includes('Stored day 2026-10-02 · NY date 2026-10-01'));const overnightRequest=page.waitForRequest(r=>r.url().includes('/manifest/SPY?day=2026-10-02'));await page.getByTestId('solstice-replay-load').click();await overnightRequest;receipt.checks.push('overnight attribution disclosed; manifest uses stored prefix, not normalized NY date (index-only fixture)');overnightSessions=false;await page.getByRole('button',{name:'Stored sessions',exact:true}).click();await page.getByLabel('Recorded sessions').selectOption('2026-10-01');assert.strictEqual(await page.getByLabel('Stored session date').inputValue(),'2026-10-01');await page.getByTestId('solstice-replay-load').click();
+  await page.getByTestId('solstice-compare-btn').click();await page.getByTestId('solstice-compare-result').waitFor();refuseComparison=true;await page.getByTestId('solstice-compare-btn').click();await page.getByText(/Comparison unavailable.*SCOPE_MISMATCH/).waitFor();assert.strictEqual(await page.getByTestId('solstice-compare-result').count(),0);receipt.checks.push('stored day enumeration with declared NY attribution + dated load + admitted/refused exact record pair');
+  await page.getByTestId('solstice-replay-play').click();await page.getByTestId('solstice-replay-banner').waitFor();await page.getByRole('button',{name:'Pause',exact:true}).click();await page.getByTestId('solstice-replay-scrub').fill('1');await page.getByTestId('solstice-replay-next').click();receipt.checks.push('recorded play/pause/scrub');
   await page.getByTestId('solstice-replay-prev').click();await page.getByTestId('solstice-replay-next').click();await page.getByTestId('solstice-replay-exit').click();receipt.checks.push('stored manifest, step both directions, deliberate Live exit');
   await page.getByRole('gridcell',{name:/^100 by/}).first().click();await page.getByRole('button',{name:'Review',exact:true}).click();await page.getByText('Exact contract review · read-only',{exact:true}).click();
   await page.getByLabel('Exact strike',{exact:true}).fill('100');await page.getByLabel('Listed expiry',{exact:true}).selectOption(fixture.contract.matched_identity.expiry);await page.getByLabel('Option type',{exact:true}).selectOption(fixture.contract.matched_identity.type);await page.getByRole('button',{name:'Resolve exact contract',exact:true}).click();await page.getByTestId('exact-contract-result').waitFor();
