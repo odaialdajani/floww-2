@@ -742,3 +742,65 @@ def test_cross_process_submit_reuses_stored_order_id():
         assert broker_b.calls == []  # no second placement anywhere
         conn_b.close()
     lc._reset_for_tests()
+
+
+def test_reject_unaffordable_intent():
+    import services.public_execution_lifecycle as lc
+
+    # Budget total 318.20 fits 1000.00 but not 300.00; absent power skips.
+    assert lc.validate_intent(_base_intent(), _ctx(buying_power="1000.00")) == (True, "ok")
+    assert lc.validate_intent(_base_intent(), _ctx(buying_power="300.00")) == (False, "INSUFFICIENT_BUDGET")
+    assert lc.validate_intent(_base_intent(), _ctx()) == (True, "ok")
+
+
+def test_reconcile_reports_fills_and_remaining():
+    import asyncio
+
+    import services.public_execution_lifecycle as lc
+
+    broker = _FakeBroker()
+    intent = _base_intent(quantity=3)
+    out = asyncio.run(lc.submit(intent, _ctx(), broker, armed=True))
+    assert out["ok"] is True
+    broker.orders[out["order_id"]]["status"] = "PARTIAL"
+    broker.orders[out["order_id"]]["fills"] = 1
+    rec = asyncio.run(lc.reconcile(out["intent_id"], broker))
+    assert rec["status"] == "PARTIAL" and rec["filled"] is False
+    assert rec["filled_quantity"] == 1 and rec["remaining_quantity"] == 2
+
+
+def test_draft_lifecycle_happy_path_and_illegal_jumps():
+    import services.public_execution_lifecycle as lc
+
+    intent = _base_intent()
+    row = lc.record_draft(intent)
+    assert row["stage"] == "DRAFT" and row["version"] == "intent-draft.v1"
+    assert lc.mark_preflighted(intent)["reason"] == "illegal-transition:DRAFT->PREFLIGHTED"
+    assert lc.review_draft(intent, approved=False, reason="weak-premise")["ok"] is True
+    assert lc.load_draft(intent)["approved"] is False
+    assert lc.mark_preflighted(intent)["reason"] == "unapproved-draft"
+    assert lc.review_draft(intent, approved=True)["ok"] is False  # no re-review
+    ok_intent = _base_intent(observation_id="obs_draft2")
+    lc.record_draft(ok_intent)
+    assert lc.review_draft(ok_intent, approved=True)["ok"] is True
+    assert lc.mark_preflighted(ok_intent)["ok"] is True
+    assert lc.mark_awaiting(ok_intent)["ok"] is True
+    assert lc.load_draft(ok_intent)["stage"] == "AWAITING"
+    assert lc.load_draft(_base_intent(observation_id="obs_missing")) is None
+
+
+def test_drafts_persist_across_registry_wipe_with_store():
+    import duckdb
+
+    import services.public_execution_lifecycle as lc
+
+    conn = duckdb.connect(":memory:")
+    lc.register_store(conn)
+    intent = _base_intent(observation_id="obs_draft3")
+    lc.record_draft(intent)
+    lc.review_draft(intent, approved=True)
+    lc._INTENTS.clear()
+    lc._DRAFTS.clear()
+    loaded = lc.load_draft(intent)
+    assert loaded is not None and loaded["stage"] == "REVIEWED"
+    assert lc.mark_preflighted(intent)["ok"] is True
