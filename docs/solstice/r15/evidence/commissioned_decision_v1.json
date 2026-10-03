@@ -1,0 +1,29 @@
+{
+ "version": "commissioned-decision.v1",
+ "fixture_only": true,
+ "admit_example": {
+  "decision": "ADMIT",
+  "reason": null,
+  "version": "execution-admission.v1",
+  "intent_hash": "932e3627162ed0380fb11ed60b882ddd578a5d91a89713f6e4e98d636e7529fb",
+  "account_id": "ACCT-1",
+  "policy_version": "account-policy.v2",
+  "operator_id": "op-1",
+  "risk_snapshot": {
+   "buying_power": "10000",
+   "n_open_positions": 0,
+   "n_open_orders": 0,
+   "exposure": "0",
+   "premium_paid": "0",
+   "premium_received": "0",
+   "fees_paid": "0",
+   "realized": "0",
+   "duplicate_fills_ignored": 0
+  }
+ },
+ "refuse_example": {
+  "decision": "REFUSE",
+  "reason": "OPERATOR_UNKNOWN",
+  "version": "execution-admission.v1"
+ }
+}

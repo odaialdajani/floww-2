@@ -1,0 +1,44 @@
+{
+  "fixture_only": true,
+  "contract": "coverage-read.v1",
+  "sessions": {
+    "version": "coverage-read.v1",
+    "ticker": "SPY",
+    "n_days": 1,
+    "days": [{ "date": "2026-10-02", "ny_date": "2026-10-02", "overnight": false, "n_snapshots": 2, "first_asof": "2026-10-02T14:00:00Z", "last_asof": "2026-10-02T14:05:00Z", "latest_snapshot_id": "fixture-current" }]
+  },
+  "expiries": {
+    "version": "coverage-read.v1",
+    "ticker": "SPY",
+    "window": { "min_dte": 14, "max_dte": 60 },
+    "expiries": [
+      { "expiry": "2026-10-02", "dte": 0, "admitted": false, "reason": "BELOW_WINDOW", "display_envelope": true },
+      { "expiry": "2026-10-30", "dte": 28, "admitted": true, "reason": "ADMITTED", "display_envelope": true },
+            { "expiry": "2026-11-16", "dte": 45, "admitted": true, "reason": "ADMITTED", "display_envelope": false }
+    ],
+    "n_admitted": 2,
+        "coverage": { "requested_expiries": 12, "n_listed": 3, "n_display_envelope": 2, "listing_capped": false, "lower_edge_observed": true, "upper_edge_observed": false },
+    "range_map": {
+      "version": "coverage-read.v1", "window": { "min_dte": 14, "max_dte": 60 },
+      "admitted_expiries": ["2026-10-30", "2026-11-16"], "admitted_dtes": [28, 45],
+      "min_admitted_dte": 28, "max_admitted_dte": 45, "complete": true, "reason": null
+    },
+    "spot": 100,
+    "fetched_at": "2026-10-02T14:05:00Z",
+    "stale": false,
+    "data_source": "public_api"
+  },
+  "overnight_sessions": {
+    "version": "coverage-read.v1", "ticker": "SPY", "n_days": 1,
+    "days": [{ "date": "2026-10-02", "ny_date": "2026-10-01", "overnight": true, "n_snapshots": 2, "first_asof": "2026-10-02T00:20:00Z", "last_asof": "2026-10-02T00:25:00Z", "latest_snapshot_id": "fixture-overnight" }]
+  },
+  "refused_expiries": { "version": "coverage-read.v1", "error": "chain_unavailable" },
+  "comparison": {
+    "version": "coverage-read.v1", "admitted": true, "reason": null, "detail": null,
+    "baseline_id": "fixture-baseline", "snapshot_id": "fixture-current"
+  },
+  "refused_comparison": {
+    "version": "coverage-read.v1", "admitted": false, "reason": "SCOPE_MISMATCH",
+    "detail": "scope_key differs", "baseline_id": "fixture-baseline", "snapshot_id": "fixture-current"
+  }
+}

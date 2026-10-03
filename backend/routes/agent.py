@@ -251,6 +251,8 @@ async def save_prefs(body: dict, request: Request):
             body["ai_settings"] = await model.validate_settings(body["ai_settings"])
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from None
+        except Exception:
+            raise HTTPException(503, "AI choices are unavailable") from None
     await storage_result(service(request).repository.save_preferences(identity, body))
     return {"saved": True}
 

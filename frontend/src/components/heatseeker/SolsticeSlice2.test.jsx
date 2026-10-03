@@ -27,6 +27,28 @@ const data = {
   quality: { setupEligible: true, reasonCodes: [], state: "usable" },
 };
 
+test('analytical range is an exclusive Solstice canvas and returns to the legacy map',async()=>{
+  require('axios').get.mockImplementation(async()=>({data}));
+  await act(async()=>{render(<SkylitDashboard ticker="SPY" data={data} spot={500}/>);});
+  fireEvent.click(screen.getByRole('button',{name:'Analytical range · 14–60 DTE'}));
+  expect(screen.getByRole('region',{name:'Solstice analytical range'})).toBeInTheDocument();
+  expect(screen.queryByLabelText('Canvas layout')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Return to current map'}));
+  expect(screen.getByLabelText('Canvas layout')).toBeInTheDocument();
+  expect(screen.queryByRole('region',{name:'Solstice analytical range'})).not.toBeInTheDocument();
+});
+
+test('sidebar-controlled range mode unmounts legacy controls and publishes the toggle request',async()=>{
+ require('axios').get.mockImplementation(async()=>({data}));
+ const change=jest.fn();let view;
+ await act(async()=>{view=render(<SkylitDashboard ticker="SPY" data={data} analyticalRangeOpen={false} onAnalyticalRangeChange={change}/>);});
+ view.rerender(<SkylitDashboard ticker="SPY" data={data} analyticalRangeOpen onAnalyticalRangeChange={change}/>);
+ expect(screen.getByRole('region',{name:'Solstice analytical range'})).toBeInTheDocument();
+ expect(screen.queryByLabelText('Canvas layout')).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Return to current map'}));
+ expect(change).toHaveBeenCalledWith(false);
+});
+
 test("metric switch renders and changes overlay basis", async () => {
   const axios = require("axios");
   axios.get.mockImplementation(async () => ({ data }));
@@ -221,8 +243,9 @@ test("wall inspector shows interaction state and touches", () => {
 test("replay strip loads manifest", async () => {
   const axios = require("axios");
   axios.get.mockImplementation(async (url) => {
+    if (String(url).includes("/price-paths/comparable")) return { data: { version: "coverage-read.v1", admitted: true, baseline_id: "s0", snapshot_id: "s1" } };
     if (String(url).includes("/attribute/")) {
-      return { data: { status: "ok",
+      return { data: { status: "ok", ticker: "SPY",
         from: { id: "s0", asof: "2026-09-03T13:00:00Z" }, to: { id: "s1", asof: "2026-09-03T14:00:00Z" },
         strike_deltas: [{ strike: 500, delta: 1 }], walls_added: ["w_b"], walls_removed: [], volume_deltas: [], volume_rebased: [] } };
     }

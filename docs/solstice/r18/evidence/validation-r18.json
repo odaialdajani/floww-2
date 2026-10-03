@@ -1,0 +1,182 @@
+{
+  "version": "floww-combined-validation.v1",
+  "sourceCommit": "bb13f96ae3e97e0bbd6ef92f2a3020998119bcb9",
+  "consumerRuntimeCommit": "47abd27b182f1996a2d1ae8dafcb9bc7f5db66d4",
+  "baseCommit": "6eaa3343655a30fd38c40abaa6a903e8d3814530",
+  "commonBaselineCommit": "22df6fe67463acc8a41283804e710d07dff105bd",
+  "sparkCommit": "a73f79b9e5dc202f496dfa9b554e466155bf2b5a",
+  "clineCommit": "e6d35745061bdd83071047823aa5b12fb11e14e0",
+  "reviewedUncomposedSparkCommit": "5ac192dff14ddcab73316f01296ceff52b11c20f",
+  "engineeringAcceptance": "HOLD_PRODUCER_CONTRACTS",
+  "commissioning": "HOLD",
+  "activation": "OFF",
+  "policy": "UNSET",
+  "profitability": "INSUFFICIENT_EVIDENCE",
+  "fixtureOnlyBrowser": true,
+  "paidModelTurn": false,
+  "results": {
+    "backend": {
+      "passed": 7176,
+      "existingSkips": 37,
+      "warnings": 2831,
+      "coveragePercent": 69.29
+    },
+    "frontend": {
+      "suites": 128,
+      "passed": 1183
+    },
+    "storybook": {
+      "passed": 33
+    },
+    "routeCensus": {
+      "version": "floww-route-census.v1",
+      "paths": 381,
+      "operations": 392,
+      "collisions": {},
+      "execution_admission_mounted": false,
+      "range_paths": [
+        "/api/heatmap/{ticker}/range-analytics"
+      ]
+    },
+    "protectedFilesUnchanged": 71,
+    "browser": {
+      "routes": 8,
+      "viewports": 8,
+      "warnings": 20,
+      "pageExceptions": 0,
+      "executionMutations": 0,
+      "sourceHashesMatched": 683,
+      "nativeZoom": {
+        "method": "chrome.tabs.setZoom; no CSS/pinch emulation",
+        "factor": 2,
+        "before": {
+          "width": 1440,
+          "dpr": 1
+        },
+        "after": {
+          "width": 720,
+          "dpr": 2,
+          "cssZoom": "1",
+          "visualScale": 1
+        }
+      },
+      "rangeNativeZoom": {
+        "factor": 2,
+        "width": 720,
+        "documentWidth": 720
+      }
+    },
+    "truth": {
+      "passed": 227,
+      "failed": 0
+    },
+    "silentExceptFiles": 361,
+    "ruff": "PASS",
+    "bandit": "PASS",
+    "productionBuild": "PASS",
+    "storybookBuild": "PASS",
+    "ownerProvider": {
+      "passed": 16,
+      "actualProvider": false,
+      "productionRestart": false
+    },
+    "hostedFinalReceipt": "PENDING_AT_PREPARATION_SEE_PR104_CLOSURE"
+  },
+  "commands": {
+    "backend": "From backend: DB_NAME=test_r18_zed_combined_20261003 MONGO_URL=mongodb://127.0.0.1:27017 DUCKDB_PATH=:memory: FLOWW_AGENT_DISABLED=0 FLOWW_SOLSTICE_CAPTURE=0 FLOWW_PRICE_PATHS_WORKER=0 FLOWW_EXECUTION_WORKER=0 FLOWW_ENABLE_LIVE_PUBLIC=0; CI vendor keys empty/test-key-ci; root backend/.venv/bin/python -m pytest tests/ -q --tb=short --cov=.",
+    "frontend": "From frontend: CI=true npm test -- --watchAll=false --runInBand",
+    "stories": "From frontend: CI=true npm run test-storybook",
+    "storybook_build": "From frontend: CI=true npm run build-storybook",
+    "production_browser": "node scripts/r15_browser_receipt.cjs /Users/nav/Documents/GitHub/floww-2/backend/.venv/bin/python '/Users/nav/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing' docs/solstice/r18/evidence",
+    "ruff": "From backend: ruff check . --output-format=github",
+    "bandit": "From backend: root backend/.venv/bin/python -m bandit -r . --severity-level medium -q --exclude ./.venv,./tests --skip B101,B108,B301,B310,B313,B314,B324,B604,B608,B614,B615",
+    "truth": "bash qc/audit/truth_audit.sh",
+    "silent": "root backend/.venv/bin/python qc/audit/check_silent_excepts.py",
+    "api_red": "root backend/.venv/bin/python qc/audit/generate_api_docs.py --check (before regeneration, exit1)",
+    "api_generated": "root backend/.venv/bin/python qc/audit/generate_api_docs.py (one regeneration)",
+    "api_green": "root backend/.venv/bin/python qc/audit/generate_api_docs.py --check"
+  },
+  "logs": {
+    "backend": {
+      "path": ".verification/r18-backend-full.log",
+      "sha256": "2a5e69d1babe875c2d9de355fca6c2cc7c79ee17fc2bf67fe1905f0aecc299ec"
+    },
+    "frontend": {
+      "path": ".verification/r18-frontend-code.log",
+      "sha256": "fef5f61f159d1d27c1233e24a972a19ce99ab074469131c3b407145fbbcda02b"
+    },
+    "stories": {
+      "path": ".verification/r18-stories-code.log",
+      "sha256": "6177b84efab4953e20a18a5e62ebdb9b31ea04c40f894e18b6257ad91a4cea22"
+    },
+    "storybook_build": {
+      "path": ".verification/r18-storybook-build.log",
+      "sha256": "e94f79eed73d4cb6e2c0764daa71f9ae309c02b435d2baf9411a34dd57f54255"
+    },
+    "production_browser": {
+      "path": ".verification/r18-browser-code.log",
+      "sha256": "dc685a71888bfc57525ab66ff0b1a91b5d18a39fd44c6158f25499c70b01e57b"
+    },
+    "ruff": {
+      "path": ".verification/r18-ruff.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bandit": {
+      "path": ".verification/r18-bandit.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "truth": {
+      "path": ".verification/r18-truth.log",
+      "sha256": "148767700dc2ab1855176a024159cd3cef01ac9c82690032741b448226f7a630"
+    },
+    "silent": {
+      "path": ".verification/r18-silent.log",
+      "sha256": "6e9db5d8d17beba22aa5411fb22ae17ce48224c840fc0c483aa46db7e27178b2"
+    },
+    "api_red": {
+      "path": ".verification/r18-api-red.log",
+      "sha256": "b4bcb5e6bd2b5b1179555b813f778e58e096f652e76325915c7516ed681b6112"
+    },
+    "api_generated": {
+      "path": ".verification/r18-api-generate.log",
+      "sha256": "1bd60456fcf89d14aa162f5a94dec4bda1b99cc306e71a110f341e43efbdf934"
+    },
+    "api_green": {
+      "path": ".verification/r18-api-green.log",
+      "sha256": "d4cc19974c7c474257a69a63e7dc64b81bfd21dac0140fb460a06fa687382573"
+    },
+    "route_census": {
+      "path": ".verification/r18-route-census.log",
+      "sha256": "36b006d344e9c6850de13b555a1539f1929231a20b7ce6413e03e621a8e655fe"
+    },
+    "owner_provider": {
+      "path": ".verification/r18-lodestar-confirmed.log",
+      "sha256": "66c557b36fb9551faa15245549c9644079875fd5e4da474becd82f04d8f8798e"
+    },
+    "range_backend_refusal": {
+      "path": ".verification/r18-range-backend-refusal.log",
+      "sha256": "fa289acb8d24125ca5afbc90f3e13d9c6f4e77a950704cf73bdbce6fde37b407"
+    },
+    "range_parent_red": {
+      "path": ".verification/r18-range-parent-red.log",
+      "sha256": "487747d8a4e144b4bf1ad54737b71561f796e59a4c013219e161bc1bcc3b3bdf"
+    },
+    "range_guards_red": {
+      "path": ".verification/r18-range-guards-red.log",
+      "sha256": "d9518fc258a2312069d341cc55e1d1a0045861170f3eb97d905dab73ca9a8ab4"
+    },
+    "range_population_red": {
+      "path": ".verification/r18-range-population-red.log",
+      "sha256": "3f8f8dac0f9a3e93c45cf8d9f9367e76052534e078173c95e0397b1706318e2c"
+    },
+    "range_controlled_red": {
+      "path": ".verification/r18-range-controlled-red.log",
+      "sha256": "388913c36c8891040c616125d2c4f9877eec90a7c265977687e493ad74e07ad5"
+    },
+    "native_brief_red": {
+      "path": ".verification/r18-native-brief-red.log",
+      "sha256": "8a08ec60ebe9fece4b74bfb16a5462b64330953eacd7c64adf03e4a67a0eab5f"
+    }
+  },
+  "browserReceiptSha256": "20bc619054e90af77e5b8140e18eb26eef72371f69cd8c2affdbf630fc4c7cf5"
+}

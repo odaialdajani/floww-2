@@ -283,3 +283,63 @@ async def uoa(
         raise HTTPException(404, f"No options data for {ticker}")
     result = calc_uoa(spot, raw["contracts"], t, min_premium, limit)
     return _sanitize(result)
+
+
+@router.get("/heatmap/{ticker}/range-analytics", response_model=None)
+async def heatmap_range_analytics(
+    ticker: str,
+    min_dte: int = Query(14, ge=0, le=365),
+    max_dte: int = Query(60, ge=0, le=365),
+    as_of: str | None = Query(
+        None, description="Owning NY date; must equal today — a current fetch "
+                          "can never recreate a historical observation"),
+    persist: bool = Query(
+        False, description="Opt-in: persist the admitted owning envelope in the "
+                           "recorder store. Default False — reads never write."),
+):
+    """Owning 14–60 DTE analytical range map (contract range-analytics.v1).
+
+    ADDITIVE and distinct from coverage-read.v1 (an expiry LISTING verdict)
+    and from the existing `dte le=30` display envelope on /heatmap. Returns
+    the owned axes/cells/basis/units/coverage/clocks envelope from
+    services.solstice_range_analytics. Refusals stay machine-readable:
+    REVERSED_WINDOW → 422; vendor/listing unavailable → 502; zero admitted
+    expiries → 200 with status "refused" (an honest empty window answer).
+    Execution policy is unchanged — this is research data, not entry
+    permission. A partial map is research only and never execution-eligible.
+    """
+    from fastapi.responses import JSONResponse
+
+    from services.solstice_range_analytics import CONTRACT_VERSION, fetch_range_analytics
+
+    t = ticker.strip().upper()
+    if min_dte > max_dte:
+        # Structured JSONResponse, same reason as coverage-read.v1: the global
+        # handler stringifies dict details, burying the refusal code.
+        return JSONResponse(status_code=422, content={
+            "error": "REVERSED_WINDOW",
+            "message": f"min_dte {min_dte} is above max_dte {max_dte} — "
+                       "no expiry can satisfy a reversed window.",
+            "version": CONTRACT_VERSION,
+        })
+    conn = None
+    if persist:
+        try:
+            from services.duckdb_engine import db as eng
+            conn = eng.conn if hasattr(eng, "conn") else None
+        except Exception:
+            conn = None
+        if conn is None:
+            return JSONResponse(status_code=503, content={
+                "error": "recorder_unavailable",
+                "message": "persist=true requires the owning recorder store; "
+                           "it is not connected.",
+                "version": CONTRACT_VERSION,
+            })
+    envelope = await fetch_range_analytics(t, min_dte, max_dte, as_of=as_of,
+                                           persist_conn=conn)
+    if envelope.get("status") == "refused" and \
+            "VENDOR_UNAVAILABLE" in (envelope.get("refusals") or []):
+        return JSONResponse(status_code=502, content=envelope)
+    return envelope
+

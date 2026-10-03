@@ -8578,6 +8578,101 @@
         ]
       }
     },
+    "/api/heatmap/{ticker}/range-analytics": {
+      "get": {
+        "description": "Owning 14\u201360 DTE analytical range map (contract range-analytics.v1).\n\nADDITIVE and distinct from coverage-read.v1 (an expiry LISTING verdict)\nand from the existing `dte le=30` display envelope on /heatmap. Returns\nthe owned axes/cells/basis/units/coverage/clocks envelope from\nservices.solstice_range_analytics. Refusals stay machine-readable:\nREVERSED_WINDOW \u2192 422; vendor/listing unavailable \u2192 502; zero admitted\nexpiries \u2192 200 with status \"refused\" (an honest empty window answer).\nExecution policy is unchanged \u2014 this is research data, not entry\npermission. A partial map is research only and never execution-eligible.",
+        "operationId": "get_api_heatmap_ticker_range-analytics",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "title": "Ticker",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_dte",
+            "required": false,
+            "schema": {
+              "default": 14,
+              "maximum": 365,
+              "minimum": 0,
+              "title": "Min Dte",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_dte",
+            "required": false,
+            "schema": {
+              "default": 60,
+              "maximum": 365,
+              "minimum": 0,
+              "title": "Max Dte",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Owning NY date; must equal today \u2014 a current fetch can never recreate a historical observation",
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owning NY date; must equal today \u2014 a current fetch can never recreate a historical observation",
+              "title": "As Of"
+            }
+          },
+          {
+            "description": "Opt-in: persist the admitted owning envelope in the recorder store. Default False \u2014 reads never write.",
+            "in": "query",
+            "name": "persist",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Opt-in: persist the admitted owning envelope in the recorder store. Default False \u2014 reads never write.",
+              "title": "Persist",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Heatmap Range Analytics",
+        "tags": [
+          "market_data"
+        ]
+      }
+    },
     "/api/heatseeker/air-pockets": {
       "get": {
         "description": "Contiguous strike ranges with |GEX| below 20% of the local median.",
@@ -15003,6 +15098,31 @@
         ]
       }
     },
+    "/api/public/execution-lifecycle/inventory": {
+      "get": {
+        "description": "Read-only lifecycle inventory (authenticated, default-deny; R17-4).\n\nReports the stored execution boundary \u2014 known/open/unknown intent records\nwith conservative protection truth, draft stages (stored approvals and\npreflight states are draft rows, never client booleans), native workflow\nregistrations, the NEW-ENTRY protection window and the recovery boundary \u2014\nwithout executing recovery, any broker call or any new live path. The\nlive-submission arm state is disclosed; account-wide limits stay UNSET.",
+        "operationId": "get_api_public_execution-lifecycle_inventory",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Execution Lifecycle Inventory Api Public Execution Lifecycle Inventory Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Execution Lifecycle Inventory",
+        "tags": [
+          "public_brokerage",
+          "public_brokerage"
+        ]
+      }
+    },
     "/api/public/expirations/{ticker}": {
       "get": {
         "description": "Listed option expirations from Public API.",
@@ -16850,6 +16970,155 @@
         ]
       }
     },
+    "/api/solstice/price-paths/comparable": {
+      "get": {
+        "description": "Comparable-pair admission verdict over two stored snapshots (R17-3).\n\nRuns the exact `check_window_comparability` gate on the replayed records'\ndeclared identity (ticker/data_source/scope_key/formula_version/session_date\n+ asof ordering). A missing record refuses as NO_BASELINE; undeclared\nfields refuse as IDENTITY_UNDECLARED \u2014 never a silent comparable number.",
+        "operationId": "get_api_solstice_price-paths_comparable",
+        "parameters": [
+          {
+            "description": "Owning baseline snapshot ID",
+            "in": "query",
+            "name": "baseline_id",
+            "required": true,
+            "schema": {
+              "description": "Owning baseline snapshot ID",
+              "title": "Baseline Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Current snapshot ID",
+            "in": "query",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "description": "Current snapshot ID",
+              "title": "Snapshot Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Price Path Comparable Api Solstice Price Paths Comparable Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Price Path Comparable",
+        "tags": [
+          "solstice",
+          "solstice"
+        ]
+      }
+    },
+    "/api/solstice/price-paths/expiries": {
+      "get": {
+        "description": "Admitted expiry-range query over listed expirations (R17-2).\n\nReports each listed expiry with its DTE and an ADMITTED/excluded verdict\nfor the requested lower/upper window \u2014 it never narrows the stored chain.\nReversed bounds (``min_dte > max_dte``) refuse as 422 REVERSED_WINDOW\nbefore any fetch. The owning display envelope (the ``dte le=30`` filter\n``market_data.py`` enforces) is projected per row as ``display_envelope`` \u2014\na DIFFERENT constraint from the admitted policy window, disclosed so the\ntwo never silently mix. ``coverage`` answers the listing honestly: when\nthe upper window edge was not observed in the requested listings, in-range\nexpiries may exist beyond the cap and the coverage says so instead of a\nsilent firstN verdict. ``range_map`` projects the admitted window from the\nobserved listings (sorted admitted expiries/DTEs + completeness flag).\nExpired dates refuse as EXPIRED; in-range dates\nadmit; anything else names its reason. 0DTE is kept by the chain with\nexact T but falls BELOW_WINDOW here (the display envelope keeps it).",
+        "operationId": "get_api_solstice_price-paths_expiries",
+        "parameters": [
+          {
+            "description": "Underlying symbol, e.g. SPY",
+            "in": "query",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "description": "Underlying symbol, e.g. SPY",
+              "title": "Ticker",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Admitted window lower bound (DTE)",
+            "in": "query",
+            "name": "min_dte",
+            "required": false,
+            "schema": {
+              "default": 14,
+              "description": "Admitted window lower bound (DTE)",
+              "maximum": 730,
+              "minimum": 0,
+              "title": "Min Dte",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Admitted window upper bound (DTE)",
+            "in": "query",
+            "name": "max_dte",
+            "required": false,
+            "schema": {
+              "default": 60,
+              "description": "Admitted window upper bound (DTE)",
+              "maximum": 730,
+              "minimum": 0,
+              "title": "Max Dte",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Listed expirations requested",
+            "in": "query",
+            "name": "expirations",
+            "required": false,
+            "schema": {
+              "default": 12,
+              "description": "Listed expirations requested",
+              "maximum": 16,
+              "minimum": 1,
+              "title": "Expirations",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Price Path Expiries Api Solstice Price Paths Expiries Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Price Path Expiries",
+        "tags": [
+          "solstice",
+          "solstice"
+        ]
+      }
+    },
     "/api/solstice/price-paths/points": {
       "get": {
         "description": "Read-only ordered (t, price) observations for a ticker (no writes).",
@@ -16916,6 +17185,54 @@
           }
         },
         "summary": "Price Path Points",
+        "tags": [
+          "solstice",
+          "solstice"
+        ]
+      }
+    },
+    "/api/solstice/price-paths/sessions": {
+      "get": {
+        "description": "Stored-session enumeration: session days with snapshot counts (R17-1).\n\nDay attribution is the stored ``asof_ts`` timestamp prefix \u2014 the SAME\nattribution the owning ``session_manifest``/``compare_snapshots`` routes\nmatch with ``LIKE day%`` \u2014 so this index, the manifest and the gaps can\nnever disagree about which day owns a snapshot. Each day also reports its\nET-normalized ``ny_date`` (null when the day's snapshots do not normalize\nuniformly) and an ``overnight`` flag for exactly the case the two\nattributions differ (offset/naive stamps crossing ET midnight); the prefix\nstays canonical and the divergence is disclosed, never silently mixed.\nRead-only. Coverage gaps within a day are answered by the existing\nmanifest route, not invented here; a ticker with no stored sessions\nreturns an empty day list (empty state, never an error).",
+        "operationId": "get_api_solstice_price-paths_sessions",
+        "parameters": [
+          {
+            "description": "Underlying symbol, e.g. SPY",
+            "in": "query",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "description": "Underlying symbol, e.g. SPY",
+              "title": "Ticker",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Price Path Sessions Api Solstice Price Paths Sessions Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Price Path Sessions",
         "tags": [
           "solstice",
           "solstice"

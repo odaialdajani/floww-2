@@ -1,0 +1,27 @@
+{
+  "fixture_only": true,
+  "control_additions": {
+    "approvals": { "n_stored": 4, "n_revoked": 1 },
+    "policy": { "account_wide_limits": { "version": "account-policy.v1", "set": true, "updated_at": "2026-10-03T14:00:00Z" } },
+    "protection": { "native_support": { "OPTION_SINGLE_LEG_LIMIT": { "supported": false, "reason": "unverified-native-support" } } }
+  },
+  "inventory": {
+    "version": "lifecycle-inventory.v1",
+    "durable": true,
+    "storeless": false,
+    "live_submission_armed": false,
+    "intents": {
+      "n_known": 2,
+      "n_open": 1,
+      "n_unknown": 1,
+      "open": [{ "intent_id": "local-open", "ticker": "SPY", "state": "OPEN", "order_id": "order-open", "owner": "FLOWW_BACKEND", "has_approval": true, "protection": { "protected": false, "reason": "no-verified-protection" } }],
+      "unknown": [{ "intent_id": "local-unknown", "ticker": "SPY", "state": "UNKNOWN", "order_id": "order-unknown", "owner": "FLOWW_BACKEND", "has_approval": false, "protection": { "protected": false, "reason": "no-verified-protection" } }]
+    },
+    "drafts": { "n_staged": 0, "by_stage": {}, "stages": ["DRAFT"] },
+    "native_workflows": [{ "strategy": "local-swing", "venue": "public", "status": "REVIEW_PENDING", "correlation": "fixture-correlation" }],
+    "preflight": { "n_cached_contexts": 0 },
+    "protection": { "entry_pause_now": false, "cancel_allowed_during_pause": true, "window": "11:30-14:00 America/New_York NEW-ENTRY pause (weekdays)" },
+    "recovery": { "durable_nonterminal_rows": 3 },
+    "policy": { "account_wide_limits": "UNSET" }
+  }
+}

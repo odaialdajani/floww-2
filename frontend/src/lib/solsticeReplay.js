@@ -38,7 +38,9 @@ export function shouldIgnoreLive(isReplayActive) {
 export function replayToDisplay(rep, ticker) {
   if (!rep || rep.error) return null;
   const snap = rep.snapshot || {};
-  if (ticker && snap.ticker && ticker !== snap.ticker) return null;
+  if (typeof snap.ticker !== "string" || !snap.ticker.trim()
+    || typeof snap.snapshot_id !== "string" || !snap.snapshot_id.trim()) return null;
+  if (ticker && ticker !== snap.ticker) return null;
   const strikes = rep.strikes || [];
   const walls = rep.walls || [];
   const grids = rep.grids || {};
@@ -68,7 +70,7 @@ export function replayToDisplay(rep, ticker) {
   if (!Object.keys(metricGrids).length && !(main.grid && Object.keys(main.grid).length)) missing.push("grids");
   const sid = snap.snapshot_id || null;
   return {
-    ticker: snap.ticker || ticker || null,
+    ticker: snap.ticker,
     asof: snap.asof_ts || snap.asof || null,
     spot: snap.spot ?? null,
     data_source: snap.data_source || null,
@@ -77,6 +79,8 @@ export function replayToDisplay(rep, ticker) {
     scope_selection: ctx?.display?.scope_selection || null,
     event_time: ctx?.display?.event_time || ctx?.display?.observed_at || null,
     fetched_at: ctx?.display?.fetched_at || null,
+    stale: ctx?.display?.stale ?? null,
+    stale_age_s: ctx?.display?.stale_age_s ?? null,
     spot_source: ctx?.display?.spot_source || null,
     spot_event_time: ctx?.display?.spot_event_time || null,
     spot_fetched_at: ctx?.display?.spot_fetched_at || null,
