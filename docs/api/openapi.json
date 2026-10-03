@@ -8578,6 +8578,101 @@
         ]
       }
     },
+    "/api/heatmap/{ticker}/range-analytics": {
+      "get": {
+        "description": "Owning 14\u201360 DTE analytical range map (contract range-analytics.v1).\n\nADDITIVE and distinct from coverage-read.v1 (an expiry LISTING verdict)\nand from the existing `dte le=30` display envelope on /heatmap. Returns\nthe owned axes/cells/basis/units/coverage/clocks envelope from\nservices.solstice_range_analytics. Refusals stay machine-readable:\nREVERSED_WINDOW \u2192 422; vendor/listing unavailable \u2192 502; zero admitted\nexpiries \u2192 200 with status \"refused\" (an honest empty window answer).\nExecution policy is unchanged \u2014 this is research data, not entry\npermission. A partial map is research only and never execution-eligible.",
+        "operationId": "get_api_heatmap_ticker_range-analytics",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "title": "Ticker",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_dte",
+            "required": false,
+            "schema": {
+              "default": 14,
+              "maximum": 365,
+              "minimum": 0,
+              "title": "Min Dte",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_dte",
+            "required": false,
+            "schema": {
+              "default": 60,
+              "maximum": 365,
+              "minimum": 0,
+              "title": "Max Dte",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Owning NY date; must equal today \u2014 a current fetch can never recreate a historical observation",
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owning NY date; must equal today \u2014 a current fetch can never recreate a historical observation",
+              "title": "As Of"
+            }
+          },
+          {
+            "description": "Opt-in: persist the admitted owning envelope in the recorder store. Default False \u2014 reads never write.",
+            "in": "query",
+            "name": "persist",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Opt-in: persist the admitted owning envelope in the recorder store. Default False \u2014 reads never write.",
+              "title": "Persist",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Heatmap Range Analytics",
+        "tags": [
+          "market_data"
+        ]
+      }
+    },
     "/api/heatseeker/air-pockets": {
       "get": {
         "description": "Contiguous strike ranges with |GEX| below 20% of the local median.",

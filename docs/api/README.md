@@ -4,7 +4,7 @@
 <!-- Regenerate: python3 qc/audit/generate_api_docs.py -->
 <!-- Verify:     python3 qc/audit/generate_api_docs.py --check -->
 
-Total endpoints: 391
+Total endpoints: 392
 Route groups: 104
 
 Generated from the live FastAPI app, so every path below is a real,
@@ -412,11 +412,12 @@ callable route rather than a hand-copied guess.
 | GET | `/api/health` | Health Check |
 | GET | `/health` | Health Alias |
 
-## heatmap (1 endpoints)
+## heatmap (2 endpoints)
 
 | Method | Path | Summary |
 |--------|------|---------|
 | GET | `/api/heatmap/{ticker}` | Heatmap |
+| GET | `/api/heatmap/{ticker}/range-analytics` | Heatmap Range Analytics |
 
 ## heatseeker (18 endpoints)
 
