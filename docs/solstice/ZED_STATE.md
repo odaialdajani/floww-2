@@ -1,10 +1,75 @@
-# ZED_STATE — Revision 2, sole-owner checkpoint
+# ZED_STATE — FLOWW integration, 2 October 2026
 
-- Owner Zed only; no agents/models/retired queues. Isolated `.worktrees/zed-solstice-r14`, branch `solstice/zed-r14`; base/main `3d39ca0975ab9e4758fa694e75adb25b7dbadac0` (PR91), verified unchanged remotely. Last source/build/browser HEAD `269b387bfa87e6676318cacfe406b11fd400250f`; upcoming commit is evidence/checkpoint only, not a self-naming commit.
-- A DONE: PR91 candidate37a7e715 CI36921298580 backend6987/38 existing skips, frontend120/1022+build, Docker EXECUTED/SUCCESS; lint36921298552. Merge ancestry/zero-diff tree verified. Merged-main CI36926053378 all3 jobs/lint36926053385 SUCCESS inspected separately.
-- B/C DONE focused: record-only exact listed contracts, comparable stored-window baseline/interval/source/NY session/full query, recorded VEX/Charm conventions/envelopes → existing context/drawer. Missing/invalid/partial/zero/retraction/old-record/conflict/late-response/isolation preserved. No live replay substitutes or paid calls. D DONE offline readiness: recorder/review/outcome73 checks, default-off; prep existing support/commissioning/study docs; selftest25/25 ≠ participants.
-- Full initial local backend FAILED import_walk (6956 pass/37 skips/68.57%). Fixed new recorder import crossing research graph without weakening test; focused60 pass. Separate legitimate loopback26 pass. Frontend121 suites/1035 tests+build pass; application frontend unchanged since those checks. Final integration/hosted exact-head gates PENDING; do not merge yet.
-- NEW R14 browser PASSED at269b387b: source/build/served hashes verified, fixture8fefacf5c52d58c0271fcabd535c7eea61d5fb0ab24b134ba89b75aa5c821f12;16 viewport/20 total shots,60 resizes,21 signed bars, linked scroll/selection/Follow, four real record-only answer families over fixture HTTP, native Chromium200% (1440→720/DPR1→2/CSS1/pinch1),35 paint-hit cells,0 page errors/3 blocked-font warnings. No live/durable/human claim; old receipts unchanged.
-- NEXT: exact-path publish evidence/checkpoint + draft R14 PR; final offline/backend/frontend/build/audit/protected/source-binding/hosted Docker gate; sole-owner self-review; authorized merge ONLY if exact-head green, verify main tree afterward. No source mutation while candidate CI runs.
-- Dirty ownership: new browser/build receipts20 PNGs + this checkpoint/acceptance doc. Watchdog `kanban/BOTTLENECK_ALERTS.md` is unrelated—never stage. Original Spark checkpoint/services/other worktrees/backups/friend commits preserved. All71 protected/frozen paths unchanged.
-- External/limits: incomplete old records and absent provider remain explicit; SPX entitlement, durable commissioning/capture, participant study, empirical session/strategy validation. Existing PWA notice may overlay lower narrow/zoom viewport; matrix access verified, not a claim every control is simultaneously visible. No deploy/restart/daemon/capture/orders/credentials/retraining.
+## Lane and authority
+
+- Owner: Zed. Worktree `.worktrees/zed-integration-20261002`; branch `solstice/zed-integration-20261002`.
+- Verified base/current HEAD: `1530ccd7f52a0de03512f383283463525a44134b` (`origin/main`, fetched this session). PR92 merged. PR93 OPEN, Spark closeout head `2f134e035bfecb1c8b1f289eb8c11b972ca334ac`, docs-only.
+- New authority: `FLOWW-Shared-Integration-Contract.md` prepared 2026-10-02, plus visual implementation packet. Consumer integration version: `floww-integration.v1` (no producer schema change implied).
+- Read R14 checkpoint and Spark MUSE_STATE §1–3/13–16 read-only. Their old completed queue is not reopened. Their tests/browser/CI receipts are historical, not this candidate's acceptance.
+- Preserve dirty shared checkout, original R14 recovery state, Spark checkpoint, protected 71-path manifest, frozen ML/config files, watchdog and running services. No reset/clean/force push/main push/merge/deploy/restart/activation.
+
+## Actual exposure
+
+- This editor reports GPT-6.1-Sol. Requested editor effort xhigh is user-selected; this tool interface does not expose an effective-effort receipt.
+- Exposed: project file/search/edit tools, terminal, fetch, skills; no browser/Storybook/Sentry/Public/Figma/Context7/Codex-task MCP tools in this chat. No connector authentication claimed.
+- Loaded front2/frontend/readmegrill. Read local frontend-design, using-superpowers, writing-plans, TDD, systematic-debugging, verification-before-completion, executing-plans and React guidance. No global installation/configuration changes.
+- Local Node `24.14.1`, Python `3.14.6`, Ruff `0.15.22`; ship/CI Python3.12/Node20. Local checks do not establish hosted-runtime acceptance.
+- Packet under `/Users/nav/Documents/Codex/2026-10-02/he/outputs`; read-only source, local `.integration-reference/` copy for visual inspection, not production analytics.
+
+## Owned boundaries
+
+- Frontend: `frontend/src/shell/`, existing `frontend/src/agent/`, non-protected heatseeker/Triad components, stories/styles/tests and consumer adapters. Necessary surgical `frontend/src/App.js` mount/navigation integrations authorized by this packet; no rewrite.
+- Backend: `backend/services/agent/` research/context/model files and `backend/routes/agent.py` plus directly associated tests.
+- Documents: this checkpoint, `docs/solstice/FLOWW_INTEGRATION_CONTRACT.md`, Zed commissioning/acceptance receipts.
+- Default Spark writer: Public services/routes/tests, recorder/DuckDB/price paths/episodes/outcomes/research, server.py/shared schemas. No exception requested or manufactured.
+- Frontend dependency work stays isolated; do not stage/copy dirty dependency additions blindly. No overlapping libraries.
+
+## Ordered queue
+
+| ID | Task | Status | Exact next action / evidence |
+|---|---|---|---|
+| Z1 | Baseline, whole-app navigation, stable shared context | DONE | All 8 production route IDs passed compiled direct-link/refresh/active-state and back/forward/query/hash smoke. Shared Triad symbol follows header and does not navigate away on local focus. Prior-selection answers and old-owner cleanup are guarded. Latest frontend126 suites/1091 tests passed. |
+| Z2 | Solstice/Triad production controls and replay | REVIEW_REQUIRED | Matrix+Profile/left Profile, separate retained Volume Profile, replay date/abort/identity, Triad stored pair, common axes/range and truthful same-day/activity admission implemented. Follow/Expand/GEX+VEX/Multi-map/Calendar preserved. Next listed day query/poll/expand scope preserved; /data alias cannot admit it, so Next polls /heatmap. 14–60DTE disabled with actual DTE≤30/no-lower-bound reason. Browser1440/1280/narrow/native200% passed; final Nav visual review and Spark session-inventory/range/durable-live producers remain separate gates. |
+| Z3 | Lodestar supported model/context/typed plan | REVIEW_REQUIRED | Catalog verified id `gpt-6.1-sol`, efforts low/medium/high/xhigh/max, default low, speeds default/priority. Catalog-ID preset/explicit save/refusal, requested-vs-effective trace, current-context guards and deterministic non-executable draft with server-owned wall bounds/contract implemented. No owner preference/real paid turn changed; exact next operational step is actual authenticated owner save and separately authorized substantive dispatch receipt. |
+| Z4 | Reviewed Public handoff, portfolio/journal, TideHunter bridge | REVIEW_REQUIRED | Disarmed manual native brief, authenticated private reports/history, real venue/partial-fill/account-identity reads, separate local Portfolio/Journal and owned Pro bridge implemented. Protected71/71 unchanged; boundary receipt in integration/TIDEHUNTER_BOUNDARY.md. FLOWW_BACKEND entry remains unavailable pending accepted Spark durable/authenticated/risk-enforced producer; no broker order path added. |
+| Z5 | Combined acceptance and commissioning packet | IN_PROGRESS | Concrete integration/COMMISSIONING.md has all policy values UNSET and explicit requested new-entry pause/rollback. Latest owned backend1052 tests + Ruff/Bandit passed; frontend1091, Storybook/axe16 and compiled browser8 routes/6 viewport captures/native200% passed. Next stage exact owned files, commit/push lane PR, combine frozen PR94 head in a separate checkout, run UNMASKED full CI gate set and exact-head hosted Docker checks. No PR merge/deploy/activation. |
+
+## 2 October owned milestone and coordination
+
+- Z2 replay/Triad + Z3 catalog preset focused sweep: 4 suites / 33 tests passed. Trace UI/model settings: 2 suites / 26 tests passed; production CRA build passed (existing bundle-size warning). Backend draft/trace/private reporting: 21 focused tests passed; Ruff owned tree/routes/tests passed. Wider draft/model/research sweep42 passed. These are dirty-lane receipts, not exact-head combined acceptance.
+- Added `lodestar-trace.v1` requested/effective, grounded/input hashes, evidence/observation IDs, correlation, measured latency/usage/failure and unknown cost. Real dispatch still NOT performed. Added deterministic `trade-plan-draft.v1`, always non-executable with policy/account/owner/confirmation/preflight/approval UNSET. Added authenticated private `native-handoff.v1` operator-report history under `/api/agent/handoffs`; this never verifies native activation or authorizes execution. Frontend consumer in progress.
+- Spark new lane discovered, read-only checkpoint + account contracts/mount proposal inspected. PR94 OPEN at observed `1fdf403d878378eb2d4c42d517071fe9559186b7`; moving head must be frozen for combined tests. PR93 remains historical docs-only.
+- Packet clarification for Spark: original shared/harness packets are at `/Users/nav/Documents/Codex/2026-10-02/he/outputs/FLOWW-Shared-Integration-Contract.md` and `Spark-Muse-1.3-Xhigh-FLOWW-Integration-Harness.md`. Read-only copies also at this lane's `.integration-reference/`. Consumer contract `floww-integration.v1` derives from that authority, not guessed producer APIs.
+- Zed acknowledges Spark as writer for the exact one-line capability prose correction in `SPARK_R15_MOUNT_PROPOSAL.md` §8 item3, and a read-only price-path status endpoint per item2. No new execution route or safety weakening. The server lifecycle mount in item1 remains REVIEW_REQUIRED: final patch must name an actual bounded quotes seam, explicit symbol configuration, exchange session gate, writer/lock ownership and default-OFF tests, rather than placeholder startup arguments. Spark must record its acknowledgment in its own checkpoint before shared-file edits. Zed does not edit server.py or Spark files.
+
+### Spark candidate review — new implementation gaps (not an authorization blocker)
+
+Observed PR94 head `1fdf403d878378eb2d4c42d517071fe9559186b7` has green hosted backend/frontend/ruff/Docker checks. Code review nevertheless finds commissioning blockers: `public_execution_lifecycle.py` keeps intent/native/preflight state in process-global dictionaries (restart reconciliation cannot discover lost orders); approval verification accepts caller-supplied identity/fields rather than an authenticated stored approval; approval/preflight are opt-in on `submit`; no premium/daily-loss/exposure/max-position policy enforcement; entry-pause validation applies unconditionally even to CLOSE intents rather than new entries only; broker returns an `Order` dataclass while lifecycle reads `.get()` as if a dict. `solstice_price_fetch.py:62` substitutes fetch time when vendor event time is missing, contrary to the clock contract. Zed will not wire or fix these Spark-owned producers. Spark: supply durable/authenticated/default-deny/risk-enforced producer and real-adapter contract tests; missing vendor clock must remain missing or be refused.
+
+Spark §7 reports server.py edits made while acknowledgment was pending. That is not prior agreement and is not retroactively claimed as such. The actual patch needs review at the frozen combined candidate; the previously placeholder-only proposal is not an acceptance receipt. Existing flags/gates remain unchanged; backend UI submission stays unavailable.
+
+## Producer handoff requested — Spark
+
+New packet transfers scheduled price paths and Public commissioning engineering to Spark. Please publish accepted integration-lane base/head and consumer contracts/committed fixtures for authenticated account/entitlement, exact preflight, immutable intent+approval, execution receipt+reconciliation, native/backend ownership inventory, session/cutoff enforcement and recorder durability/price paths. Include refusal codes and restart proof, a stored-session date inventory and an admitted bounded14–60DTE range (current heatmap caps DTE30 with no lower bound). PR93 is docs-only and cannot satisfy those new producer requirements. No acknowledgment assumed; do not alter Zed files to manufacture compatibility.
+
+## External readiness (not engineering completion)
+
+- Nav/provider: exact account, entitlement/data rights and commissioning policy values remain UNSET; execution/capture stay disarmed.
+- Catalog availability is VERIFIED for `gpt-6.1-sol/xhigh` through the product bridge. Effective authenticated owner preference and real dispatch remain unverified; no guessed identifier, paid turn or silent fallback.
+- Browser/Sentry/Storybook/Public MCP unavailable in this chat. Finite local Storybook/Vitest/Chrome-for-Testing are now verified usable; remote connector/Sentry authentication remains unverified.
+- No durable admitted live recorder records are established by this lane. Throwaway restart fixtures do not commission capture.
+- No trading/profitability, activation, live model-turn, or combined acceptance claim.
+
+## Current milestone / continuation
+
+Current committed HEAD at this checkpoint is still base `1530ccd7f52a0de03512f383283463525a44134b`; code is dirty owned work, not published. Current Spark PR94 observed head remains `1fdf403d878378eb2d4c42d517071fe9559186b7`. No main drift was observed on the latest fetch.
+
+Touched owned scope: surgical App.js navigation/symbol/next-scope/local-Profile/Portfolio/Journal/Pro-active mounts; shell navigation hook/tests; AgentProvider/contextIdentity/conversation/model-settings/answer trace + tests; ReplayStrip/TrinityView/SkylitDashboard/HeatmapGrid/control labels/shared display styles/tests; heatmapQuery adapter; new components/public bridge/review/history/stories/tests; lane Storybook/Vitest/package/lockfile work; agent grounding/draft/contract facts/trace/repository/private handoff route/tests; finite r15 fixture/browser scripts; own interface/commissioning/boundary/preview docs. No Spark code, protected file, frozen artifact, watchdog or other checkpoint edited. A watchdog-written `kanban/BOTTLENECK_ALERTS.md` dirty file is left unstaged/untouched.
+
+Fresh lane npm ci and explicitly pinned Storybook dev tooling succeeded; shared dependency/MCP setup stayed untouched. Package-lock v3 retained; one existing transitive version changed (sourcemap-codec1.5.5→1.6.0), plus tooling/optional nodes and metadata churn. The lane's npm install also updated its yarn.lock; this is owned dependency work, not the shared user's dirty lockfile. No connector or Sentry authentication is claimed.
+
+Latest source working-tree receipts: frontend126 suites/1091 tests green; backend agent+Solstice1052 green; Storybook/axe16 states green; production/Storybook builds green; protected71/71 unchanged. Compiled browser smoke passed8 routes,6 viewport captures, native200% (actual Chrome tabs API), zero uncaught page errors or execution mutations. The fixture hash and per-source/bundle hashes are recorded in integration/evidence/browser-receipt.json. These are fixture/working-tree receipts, NOT yet exact combined-head acceptance, live model settings, live Public account or durable capture.
+
+Earlier full backend log:6996 passed/37 pre-existing skips/68.66% coverage. I accidentally masked that shell exit status with a trailing assignment; checked the pytest summary explicitly, but will rerun the required command UNMASKED at the combined candidate. No skip/xfail added. Local Docker daemon is absent, so hosted exact-head image checks remain required. Existing act/fake-timer/open-handle and bundle-size warnings were not suppressed. Initial browser harness fixes concerned deliberately dismissed inspector and benign theme preference POST classification; product behavior was not weakened.
+
+Exact next action: `git --no-pager diff --check`, stage ONLY the owned paths above (exclude .integration-reference, test logs and watchdog file), commit/push this lane, open review PR; create separate combined lane from verified main/frozen Spark head and run full backend coverage/frontend/lint/security/truth/build/browser gates. Record actual heads/PR URLs and policy verdict before stopping. No background-work claim.

@@ -1,4 +1,18 @@
 /* Bounded research desk: each matrix owns its scrolling; geometry never widens scope. */
+.skylit-full-dashboard, .trinity-layout { --desk-bg: #0a1b21; --desk-panel: #10262e; --desk-border: #29454d; color: #d7e6e8; background: var(--desk-bg); }
+.skylit-full-dashboard .skylit-control-bar, .skylit-full-dashboard .skylit-col-bar, .skylit-full-dashboard .skylit-selection-strip, .trinity-layout .triad-desk-toolbar { background: #0d222a; border-color: var(--desk-border); }
+.skylit-full-dashboard .skylit-main-area, .skylit-full-dashboard .skylit-heatmap-area { background: var(--desk-bg); }
+.skylit-full-dashboard .skylit-canvas-title, .skylit-full-dashboard .skylit-trade-mode-btn, .skylit-full-dashboard .skylit-tf-select, .trinity-layout .triad-desk-toolbar { font-size: 12px; }
+.skylit-full-dashboard .skylit-drawer, .trinity-layout .triad-drawer { background: #0d222a; color: #d7e6e8; border-color: var(--desk-border); }
+.skylit-control-overflow { position: relative; font-size: 12px; }
+.skylit-control-overflow summary { cursor: pointer; padding: 6px 9px; border: 1px solid #37575f; border-radius: 4px; color: #c8dce0; }
+.skylit-control-overflow > div { display: flex; gap: 5px; padding: 5px 0; }
+.skylit-control-overflow[open] { background: #10262e; }
+.skylit-control-overflow :focus-visible { outline: 2px solid #e2bf73; outline-offset: 2px; }
+.trinity-layout .triad-pane-header, .trinity-layout .triad-profile { background: #10262e; color: #d7e6e8; }
+.skylit-full-dashboard .skylit-col-bar { flex-wrap: wrap; overflow: visible; }
+.skylit-full-dashboard .skylit-drawer { width: min(390px, 100%); }
+.trinity-layout .triad-drawer { width: min(420px, 100%); }
 .skylit-full-dashboard { min-width: 0; }
 .skylit-canvas-title { color: #cbd5e1; font-size: 11px; font-weight: 650; white-space: nowrap; }
 .skylit-col-bar { min-height: 36px; flex-wrap: nowrap; }

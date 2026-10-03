@@ -19,6 +19,9 @@ export default function AgentConversation(){
   {busy && <p role="status">{a.state==="reconnecting"?"Reconnecting to your saved request":a.progress || "Checking evidence"}</p>}
   {a.error && <p role="alert">{a.error}</p>}
   {a.sessionNotice && <p role="status">{a.sessionNotice}</p>}
+  {a.activeTurn && a.answerContextStatus!=="current" && <p className="lodestar-context" role="status">
+   {a.answerContextStatus==="previous_selection"?"Previous selection — saved research, not a current trade plan. Ask again for the selected observation.":"Saved history — current selection grounding is unverified. Ask again before preparing a trade plan."}
+  </p>}
   <AgentPanelAnswer turn={a.activeTurn}/>
   {a.turns.length>0 && <details><summary>History ({a.turns.length})</summary>{a.turns.map(t=><button key={t.turn_id} onClick={()=>a.setActiveTurn(t)}>{t.ticker} · {t.question || "Saved answer"}</button>)}</details>}
  </div>;

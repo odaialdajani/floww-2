@@ -23,6 +23,24 @@ function mockFetchOnce(account = ACCOUNT, portfolio = PORTFOLIO, orders = ORDERS
 
 afterEach(() => { jest.restoreAllMocks(); window.localStorage.clear(); });
 
+test('partial fill keeps actual filled and remaining quantities, not acknowledgment as fill',async()=>{
+ window.localStorage.setItem('floww_app_key','test-key');
+ mockFetchOnce(ACCOUNT,PORTFOLIO,{orders:[{order_id:'partial-1',symbol:'SPY261002C00500000',side:'BUY',quantity:3,filled_quantity:1,status:'PARTIAL'}]});
+ await act(async()=>render(<PublicPanel/>));
+ expect(screen.getByLabelText('Filled quantity for partial-1')).toHaveTextContent('1');
+ expect(screen.getByLabelText('Remaining quantity for partial-1')).toHaveTextContent('2');
+ expect(screen.getByText(/Received at .*not a broker event clock/)).toBeVisible();
+ expect(screen.getByText(/Public live account reads.*no entry approval/)).toBeVisible();
+});
+
+test('account/portfolio identity conflict refuses the combined account view',async()=>{
+ window.localStorage.setItem('floww_app_key','test-key');
+ mockFetchOnce(ACCOUNT,{...PORTFOLIO,account_id:'OTHER-ACCOUNT'});
+ await act(async()=>render(<PublicPanel/>));
+ expect(screen.getByTestId('public-panel-error')).toHaveTextContent('ACCOUNT_IDENTITY_MISMATCH');
+ expect(screen.queryByTestId('public-panel')).not.toBeInTheDocument();
+});
+
 test('renders account, positions, and orders from the brokerage endpoints', async () => {
   window.localStorage.setItem('floww_app_key', 'test-key');
   mockFetchOnce();

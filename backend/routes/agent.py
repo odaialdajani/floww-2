@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.encoders import jsonable_encoder
@@ -252,6 +253,41 @@ async def save_prefs(body: dict, request: Request):
             raise HTTPException(422, str(exc)) from None
     await storage_result(service(request).repository.save_preferences(identity, body))
     return {"saved": True}
+
+
+@router.post("/handoffs")
+async def save_native_handoff(body: dict, request: Request):
+    identity = await owner(request)
+    fields = {"turn_id", "context_hash", "execution_owner", "brief", "workflow_reference", "reported_status"}
+    if (set(body) != fields or len(json.dumps(body)) > 12000
+            or any(not isinstance(value, str) for value in body.values())
+            or not re.fullmatch(r"[a-f0-9]{64}", body["context_hash"])
+            or not 1 <= len(body["turn_id"]) <= 128
+            or not 1 <= len(body["brief"].strip()) <= 10000
+            or len(body["workflow_reference"]) > 256
+            or body["execution_owner"] != "PUBLIC_NATIVE_AGENT"
+            or body["reported_status"] not in {"prepared", "reviewed", "reported_active", "reported_paused"}):
+        raise HTTPException(422, "Unsupported manual handoff; execution approval cannot be recorded here")
+    repository = service(request).repository
+    turn = await storage_result(repository.read(identity, body["turn_id"]))
+    if turn is None:
+        raise HTTPException(404, "Saved research not found")
+    draft = (turn.get("answer") or {}).get("plan_draft") or {}
+    if (turn.get("status") != "completed" or draft.get("version") != "trade-plan-draft.v1"
+            or not draft.get("contract") or draft.get("context_hash") != body["context_hash"]):
+        raise HTTPException(409, "Handoff requires the owning saved exact-contract draft")
+    # Operator reporting is private research history, never broker verification
+    # or authority to activate a native workflow or a backend executor.
+    record = {**body, "version": "native-handoff.v1", "draft_id": draft["draft_id"],
+              "broker_verified": False, "activation": "unverified", "approval": None}
+    return public_turn(await storage_result(repository.save_native_handoff(identity, record)))
+
+
+@router.get("/handoffs")
+async def native_handoff_history(request: Request):
+    identity = await owner(request)
+    records = await storage_result(service(request).repository.native_handoff_history(identity))
+    return {"handoffs": [public_turn(record) for record in records]}
 
 
 @router.get("/claims")
