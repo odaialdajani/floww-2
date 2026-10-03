@@ -1182,6 +1182,66 @@
         ]
       }
     },
+    "/api/agent/handoffs": {
+      "get": {
+        "operationId": "get_api_agent_handoffs",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Native Handoff History",
+        "tags": [
+          "agent",
+          "agent"
+        ]
+      },
+      "post": {
+        "operationId": "post_api_agent_handoffs",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Native Handoff",
+        "tags": [
+          "agent",
+          "agent"
+        ]
+      }
+    },
     "/api/agent/history": {
       "get": {
         "operationId": "get_api_agent_history",
@@ -16784,6 +16844,103 @@
           }
         },
         "summary": "Patterns",
+        "tags": [
+          "solstice",
+          "solstice"
+        ]
+      }
+    },
+    "/api/solstice/price-paths/points": {
+      "get": {
+        "description": "Read-only ordered (t, price) observations for a ticker (no writes).",
+        "operationId": "get_api_solstice_price-paths_points",
+        "parameters": [
+          {
+            "description": "Underlying symbol, e.g. SPY",
+            "in": "query",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "description": "Underlying symbol, e.g. SPY",
+              "title": "Ticker",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Epoch seconds lower bound (vendor time)",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "default": 0.0,
+              "description": "Epoch seconds lower bound (vendor time)",
+              "title": "Since",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 1000,
+              "maximum": 100000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Price Path Points Api Solstice Price Paths Points Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Price Path Points",
+        "tags": [
+          "solstice",
+          "solstice"
+        ]
+      }
+    },
+    "/api/solstice/price-paths/status": {
+      "get": {
+        "description": "Producer health + store durability, reported separately (R15-2).",
+        "operationId": "get_api_solstice_price-paths_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Price Paths Status Api Solstice Price Paths Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Price Paths Status",
         "tags": [
           "solstice",
           "solstice"

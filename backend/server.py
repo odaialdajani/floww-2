@@ -3661,6 +3661,13 @@ from routes.solstice_scan import router as solstice_scan_router
 
 app.include_router(solstice_scan_router)
 
+# R15-2 (Spark): read-only price-path status/reads. No writes, no activation,
+# no broker access. Shared-file writer: Spark (default mount owner); Zed ack
+# pending — no behavior change while FLOWW_PRICE_PATH_PRODUCER is unset.
+from routes.solstice_price_paths import router as solstice_price_paths_router
+
+app.include_router(solstice_price_paths_router, tags=["solstice"])
+
 from routes.public_api import router as public_api_router
 
 app.include_router(public_api_router, tags=["public_api"])
@@ -4083,6 +4090,45 @@ async def shutdown_solstice_capture() -> None:
                 await _solstice_capture_task
     except Exception as e:
         log.warning("Solstice capture shutdown error: %s", e)
+
+
+# ============ Solstice Price-Path Producer (R15-2, Spark, default OFF) ============
+# Wires the missing scheduled price-path producer WITHOUT activating it.
+# Startup registers the file/memory store + Public-quote capture seam, then
+# calls start_worker(), which refuses with {"started": False,
+# reason: "FLOWW_PRICE_PATH_PRODUCER!=1"} unless the operator explicitly arms
+# it. Shutdown stops the thread if running. Shared-file writer: Spark
+# (default lifecycle owner); Zed ack pending. No orders, no activation.
+@app.on_event("startup")
+async def startup_solstice_price_paths() -> None:
+    try:
+        from services import solstice_price_producer as _ppp
+        from services.solstice_price_fetch import fetch_one_public_quote, symbols_from_env
+
+        _ppp.register_store(duckdb_engine.conn if "duckdb_engine" in globals() else None)
+        from services import public_budget as _pb
+
+        _ppp.register_capture(
+            symbols=symbols_from_env(),
+            fetch_one=fetch_one_public_quote,
+            session_gate=None,  # default XNYS calendar gate
+            cadence_s=300,
+            budget=_pb.budget,
+        )
+        receipt = _ppp.start_worker()
+        log.info("Solstice price-path producer startup: %s", receipt)
+    except Exception as e:
+        log.warning("Solstice price-path producer startup failed (non-fatal): %s", e)
+
+
+@app.on_event("shutdown")
+async def shutdown_solstice_price_paths() -> None:
+    try:
+        from services import solstice_price_producer as _ppp
+
+        _ppp.stop_worker()
+    except Exception as e:
+        log.warning("Solstice price-path producer shutdown error: %s", e)
 
 
 # ============ Paper Trading Engine ============

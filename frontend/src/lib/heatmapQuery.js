@@ -13,17 +13,24 @@
 //   - metric: gex | gross | dadgex | activity (client-selected overlay; server
 //     basis stays explicit via exposure_basis)
 // `dte` uses a `!= null` check: 0 (0DTE) is a real value and must be sent.
-export function buildHeatmapQuery({ expiries, mode, dte, scalp } = {}) {
+export function buildHeatmapQuery({ expiries, mode, dte, scalp, expiryScope } = {}) {
   const parts = [
     `expiries=${expiries != null ? expiries : 4}`,
     `mode=${mode || "day"}`,
   ];
-  if (dte != null) parts.push(`dte=${dte}`);
+  if (expiryScope === "next") parts.push("expiry_scope=next");
+  else if (dte != null) parts.push(`dte=${dte}`);
   if (scalp != null) parts.push(`scalp=${scalp ? "true" : "false"}`);
   return parts.join("&");
 }
 
+// The legacy /data alias has no expiry_scope parameter. Next must poll the
+// admitted /heatmap endpoint rather than silently returning the loaded scope.
+export function heatmapReadPath(ticker, {poll = false, expiryScope = "loaded"} = {}) {
+  return `${poll && expiryScope !== "next" ? "data" : "heatmap"}/${encodeURIComponent(ticker)}`;
+}
+
 // Query identity for snapshot-linked selection (F19): generation id + scope.
-export function heatmapQueryKey({ ticker, expiries, mode, dte, scalp }) {
-  return [ticker, expiries ?? 4, mode || "day", dte ?? "-", scalp ? "scalp" : "oi"].join("|");
+export function heatmapQueryKey({ ticker, expiries, mode, dte, scalp, expiryScope }) {
+  return [ticker, expiries ?? 4, mode || "day", expiryScope === "next" ? "next" : dte ?? "-", scalp ? "scalp" : "oi"].join("|");
 }

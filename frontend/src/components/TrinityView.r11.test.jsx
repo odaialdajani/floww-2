@@ -1,6 +1,6 @@
 /** @jest-environment jsdom */
 import React from "react";
-import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import axios from "axios";
 import TrinityView from "./TrinityView";
@@ -24,6 +24,65 @@ beforeEach(() => {
   axios.get.mockImplementation(async url => String(url).includes("/heatmap/") ? { data: packet(String(url).includes("QQQ") ? "QQQ" : "SPY") } : { data: { decisions: [], frames: [], rows: [] } });
 });
 const mount = async () => { await act(async () => render(<><TrinityView /><Context /></>)); };
+
+test("Triad follows the shared symbol and clears a wall on a header symbol change",async()=>{
+ let view;
+ await act(async()=>{view=render(<><TrinityView ticker="QQQ"/><Context/></>);});
+ expect(JSON.parse(screen.getByTestId("r11-context").textContent).ticker).toBe("QQQ");
+ fireEvent.click(screen.getByTestId("triad-wall-wall"));
+ await act(async()=>view.rerender(<><TrinityView ticker="SPY"/><Context/></>));
+ expect(JSON.parse(screen.getByTestId("r11-context").textContent)).toMatchObject({ticker:"SPY",selectedWall:null,selectedContract:null});
+});
+
+test("Triad starts with same-session scope and session Volume × absolute delta, not copied OI", async () => {
+ await mount();
+ expect(screen.getByLabelText("Triad expiry scope")).toHaveValue("0dte");
+ expect(screen.getByLabelText("Adjusted context")).toHaveValue("session_delta_volume");
+ expect(screen.getByTestId("triad-activity-coverage")).toHaveTextContent("Volume window: unavailable");
+ expect(axios.get.mock.calls.some(([url])=>String(url).includes("dte=0"))).toBe(true);
+ expect(screen.getByTestId("triad-pane-adjusted")).toHaveTextContent("$5.0K");
+});
+
+test("a requested 0DTE scope cannot relabel an explicitly loaded multi-expiry observation",async()=>{
+ const ordinary=axios.get.getMockImplementation();
+ axios.get.mockImplementation(async(url,opts)=>String(url).includes("/heatmap/")?{data:{...packet(),map_query:{mode:"day",expiries:4,dte:null}}}:ordinary(url,opts));
+ await mount();
+ expect(screen.getByTestId("triad-scope-admission")).toHaveTextContent("Same-day admission unavailable");
+ expect(JSON.parse(screen.getByTestId("r11-context").textContent).dte).toBe("all");
+});
+
+test("Raw and adjusted share expiry/strike rails and a zero-anchored range without borrowing missing activity",async()=>{
+ await mount();
+ const raw=screen.getByTestId("triad-pane-raw"),adjusted=screen.getByTestId("triad-pane-adjusted");
+ expect(within(adjusted).getByRole("gridcell",{name:new RegExp(`^101 by ${E1},`)})).toHaveTextContent("—");
+ const labels=p=>[...p.querySelectorAll(".trin-legend-label")].map(e=>e.textContent);
+ expect(labels(adjusted)).toEqual(labels(raw));
+ expect(raw.querySelector(".trin-legend-scale")).toHaveTextContent("locked scale");
+});
+
+test("Triad timeline restores the stored pair without fetching live Greeks and returns deliberately to live", async () => {
+ const p=packet();
+ const ordinary=axios.get.getMockImplementation();
+ axios.get.mockImplementation(async(url,opts)=>{
+  if(String(url).includes("/manifest/"))return {data:{day:"2031-01-16",snapshots:[{id:"stored-pair",asof:p.asof}],gaps:[]}};
+  if(String(url).includes("/replay/stored-pair"))return {data:{snapshot:{snapshot_id:"stored-pair",ticker:"SPY",asof_ts:p.asof,spot:p.spot},
+   grids:{grid:p.grid,...p.metrics.grids},metrics_full:p.metrics,walls:p.metrics.walls,strikes:p.strikes,
+   context:{display:{map_query:{dte:0,mode:"day",expiries:4}}}}};
+  return ordinary(url,opts);
+ });
+ await mount();
+ await act(async()=>fireEvent.click(screen.getByTestId("solstice-replay-load")));
+ const liveReads=axios.get.mock.calls.filter(([url])=>String(url).includes("/heatmap/")).length;
+ await act(async()=>fireEvent.click(screen.getByTestId("solstice-replay-play")));
+ expect(JSON.parse(screen.getByTestId("r11-context").textContent)).toMatchObject({displayMode:"replay",snapshotId:"stored-pair"});
+ expect(screen.getByTestId("triad-pane-adjusted")).toHaveTextContent("$5.0K");
+ expect(screen.getByTestId("triad-pane-raw")).toHaveTextContent("$100.0K");
+ expect(axios.get.mock.calls.filter(([url])=>String(url).includes("/heatmap/")).length).toBe(liveReads);
+ expect(axios.get.mock.calls.some(([url])=>/greeks|quotes/.test(String(url)))).toBe(false);
+ await act(async()=>fireEvent.click(screen.getByTestId("solstice-replay-exit")));
+ expect(JSON.parse(screen.getByTestId("r11-context").textContent)).toMatchObject({displayMode:"live",snapshotId:"SPY-snap"});
+ expect(axios.get.mock.calls.filter(([url])=>String(url).includes("/heatmap/")).length).toBe(liveReads+1);
+});
 
 test("Next listed requests server-owned scope and never sends a guessed date or zero DTE", async () => {
   await mount();
@@ -54,6 +113,7 @@ test("recorded Next listed scope restores without a second fetch or a live subst
 
 test("raw-wall-first desk exposes top profile, one adjustment selector, and honest readiness", async () => {
   await mount();
+  fireEvent.change(screen.getByLabelText("Adjusted context"), { target: { value: "delta" } });
   expect(screen.getByTestId("triad-signed-profile")).toBeInTheDocument();
   expect(screen.getByLabelText("Adjusted context")).toBeInTheDocument();
   await act(async () => { fireEvent.click(screen.getByTestId("triad-wall-wall")); });
@@ -63,6 +123,19 @@ test("raw-wall-first desk exposes top profile, one adjustment selector, and hone
   expect(screen.getByTestId("triad-pane-adjusted")).toHaveTextContent("$5.0K");
   expect(screen.getByTestId("triad-pane-raw").querySelector(".trin-wall-member")).not.toBeNull();
   expect(screen.getByTestId("triad-pane-adjusted").querySelector(".trin-wall-member")).not.toBeNull();
+});
+
+test("resolved contract becomes the canonical Triad selection and basis changes invalidate it",async()=>{
+ const ordinary=axios.get.getMockImplementation();
+ axios.get.mockImplementation(async(url,opts)=>String(url).includes("/contract")?{data:{status:"ok",ticker:"SPY",snapshot_id:"SPY-snap",matched_identity:{...contract,strike:String(contract.strike)}}}:ordinary(url,opts));
+ await mount();
+ fireEvent.click(screen.getByTestId("triad-wall-wall"));
+ fireEvent.click(screen.getByTestId("triad-contracts-btn"));
+ fireEvent.click(screen.getByRole("button",{name:`Review ${contract.osi}`}));
+ const current=()=>JSON.parse(screen.getByTestId("r11-context").textContent);
+ await waitFor(()=>expect(current()).toMatchObject({selectedContract:{osi:contract.osi},selectedStrike:100.5,selectedExpiry:E2,contractResolution:"resolved"}));
+ fireEvent.change(screen.getByLabelText("Adjusted context"),{target:{value:"delta"}});
+ expect(current().selectedContract).toBeNull();
 });
 
 test("contract review requires choosing listed identity, not midpoint or first expiry", async () => {

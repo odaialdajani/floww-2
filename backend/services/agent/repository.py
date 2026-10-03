@@ -45,6 +45,7 @@ class AgentRepository:
         self.snapshots = database["agent_structure_snapshots"]
         self.budgets = database["agent_budget_accounts"]
         self.collection_jobs = database["agent_collection_jobs"]
+        self.handoffs = database["agent_native_handoffs"]
 
     async def initialize(self):
         await self.turns.create_index(
@@ -55,6 +56,7 @@ class AgentRepository:
         await self.sessions.create_index("capability_hash", unique=True)
         await self.sessions.create_index("expires_at", expireAfterSeconds=0)
         await self.preferences.create_index("owner", unique=True)
+        await self.handoffs.create_index([("owner", 1), ("created_at", -1)])
         await self.claims.create_index("claim_id", unique=True)
         await self.claim_paths.create_index([("owner", 1), ("claim_id", 1), ("recorded_at", -1)])
         await self.snapshots.create_index([("owner", 1), ("ticker", 1), ("created_at", -1)])
@@ -65,6 +67,19 @@ class AgentRepository:
                 doc["owner"], doc["turn_id"], "interrupted", error="Server restarted; work was not repeated"
             )
         await self.project_claims()
+
+    async def save_native_handoff(self, owner, record):
+        digest = hashlib.sha256(canonical({"owner": owner, **record}).encode()).hexdigest()
+        await self.handoffs.update_one(
+            {"_id": digest, "owner": owner},
+            {"$setOnInsert": {**record, "owner": owner, "handoff_id": "handoff_" + digest,
+                              "created_at": utcnow()}},
+            upsert=True,
+        )
+        return await self.handoffs.find_one({"_id": digest, "owner": owner})
+
+    async def native_handoff_history(self, owner):
+        return await self.handoffs.find({"owner": owner}).sort("created_at", -1).limit(20).to_list(length=20)
 
     async def session(self, capability=None):
         now = utcnow()
