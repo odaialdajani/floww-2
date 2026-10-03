@@ -1,7 +1,7 @@
 {
   "version": "floww-browser-receipt.v1",
   "fixtureOnly": true,
-  "sourceCommit": "047153ec74d903b8c2c08d5bbfdfd176e6207a30",
+  "sourceCommit": "e5ee1404b5461a994befd2703e57627f5dca7ff5",
   "sourceHashes": {
     "frontend/src/App.css": "e2909affc171c429033191d863572ddef0b35e2fe7f7698c22318cbbfafef19f",
     "frontend/src/App.egress-invariant.test.js": "6676cedac81158c8f415359cfd73119d3c6564278bc9d27636ac7e4bb6a76f35",
@@ -294,8 +294,8 @@
     "frontend/src/lib/solsticeExplain.test.js": "c3db0c024558c87a455a2e5f4a38c59b423fd784b86ffa32744375bcfe3b56a4",
     "frontend/src/lib/solsticeMetrics.js": "a46256ecc853cedc841a6d3404b2bededb7ca335d6fe87dda83e84f588a8efea",
     "frontend/src/lib/solsticeMetrics.test.js": "b0d3d6472251bc5d082d4c447f3e58ecf9336de754058ca489b9241145799836",
-    "frontend/src/lib/solsticeReplay.js": "7e76addc3ddaf1f8b98a40ddea622b5be8bcbd45c09a8338d08e5c06ce5c2f8f",
-    "frontend/src/lib/solsticeReplay.test.js": "e940a8c59c4cc88d55d9e7c5026ff29f4d9bd0db728a8a08dd8ddff8c387e2ff",
+    "frontend/src/lib/solsticeReplay.js": "f2542adfeb6cd5c2476e132c8dbd9adc9fda818e515ff8520e61ec768e4315d3",
+    "frontend/src/lib/solsticeReplay.test.js": "65cd92bed088b4d600767cb48db9b16ce9f3224efeaae04fae842ec0a768cf85",
     "frontend/src/lib/solsticeSelection.js": "f2d60533623dba5be5110c28df304f27e782a82a427758bf35b203f79f5121b9",
     "frontend/src/lib/solsticeSelection.test.js": "266d4d475810ba097c1af3a7a3fc07648a6b9344b2348d88483617b8482c8b18",
     "frontend/src/setupTests.js": "833d01eb305e1f4d63c0307ca1255789e3223853a24ac50d2de04613f3059ae9",
@@ -509,7 +509,7 @@
     "backend/services/public_api_adapter.py": "3ed54060a67adb7b6da6797db1e053c83b5a0fab948c9032fe35eb9410175e52",
     "backend/services/public_budget.py": "a9973850c78cec0ee462bf48a06549d73ff36c88d10856de8582cc66d716575f",
     "backend/services/public_capability.py": "fa8ede163c776fca2bd4ecffaae90674684d8dad3d447c0e2500f9de466bdd6e",
-    "backend/services/public_execution_lifecycle.py": "364fa94c970e9eeeb35895f957bdae5eb99f34f827e6283b719032c1ce996e99",
+    "backend/services/public_execution_lifecycle.py": "b4e5925d17cc5bfe100e244b24563e1a283ac5d09142ff0a0ff2f9e06ca56ae9",
     "backend/services/public_release_watch.py": "fd9ca1484f7914e7c00addf69cc6049028551beb390e174b274444ebb77013c8",
     "backend/services/public_request_pacer.py": "eb981033378583483fe6c381e905ff29de1a50675eec6151f3aa02c31f281fbe",
     "backend/services/public_scanner.py": "11b81450d3cc87c719aa4a6f0d487a4d0a088483d7800a52006504fb444416ba",
@@ -558,8 +558,8 @@
     "backend/services/solstice_metric_contract.py": "61ecab17db03e90303e595abd5ec8d00b27f3e33ecff619f9ac4918c8b1a66b6",
     "backend/services/solstice_missed.py": "3f7e7b45117e4ba484670bc0d709cc2b0a898ee78cab3ee90baa3a18f1ba5c1a",
     "backend/services/solstice_patterns.py": "168fb38191a795a5bc58edace3633e884776af97bb8847f004c30a933dd03842",
-    "backend/services/solstice_price_fetch.py": "6b688d48cf8c51157f85f919e978a4510e3d1f7baa8f95d3955c12c7c9ae4c39",
-    "backend/services/solstice_price_producer.py": "19ae25bc9d9092767ab9db4d42116150e94cad2b110ec464f628cb07021b2874",
+    "backend/services/solstice_price_fetch.py": "c06ca4a83d98c5fe6b90e7fb3d67f257837438ac6d89f46fb9394e7b0297073a",
+    "backend/services/solstice_price_producer.py": "88e93bcc1f5d5f57f014862907041023fa8922ad11dd3568f51bf536ca484479",
     "backend/services/solstice_provenance.py": "54dae9d7133bb2fdb7d95d17ba8bafa28353580d3498758d76c7c96d9018dc4e",
     "backend/services/solstice_rank.py": "80c40714bb8d5eb290bab1f0f4ff6effe59563b4052371b8a985992ab29ef2fb",
     "backend/services/solstice_regime.py": "383bccc6316f9646eae12560e0a6a867c47933e4c66a5f163c87f7e8f2023e2c",
@@ -668,7 +668,7 @@
   },
   "bundleHashes": {
     "main.css": "8159faf11e11106920412606a5341b9163c1e1db536eadb4e774edff684b4dc6",
-    "main.js": "433297bd751f49b3b89efef02b2762f8113e1b33723d57868e1edd8120395522",
+    "main.js": "0fe99c6c4eb652a4b91feaae74f58c3e239fb255619de1006f935cb842c66418",
     "static/js/415.34df0ce4.chunk.js": "48d91bcce41053d197315b3d2d270ae761f77121989bf4b83e0388f79fa5f157",
     "static/js/248.517a2a31.chunk.js": "a989bff8cf146299b2f3722ae275f99130eeef3f5031c185f3853eaa122e32a5",
     "static/js/537.613479e6.chunk.js": "7edae7a915322aaab4cbcfaab2236d462a31fb91aabdeaab712bc7d459bc85fd"
@@ -819,27 +819,27 @@
   "screenshots": [
     {
       "file": "solstice-1440.png",
-      "sha256": "ff1f08cc324f08f455d34c9f1ded0024c1d811a43b537d359f9b0db3439bc2db"
+      "sha256": "3ac9ae8ce7e9039fd773ae091882a0b94a0cf1f2b870e9c31ce330b94b4660f4"
     },
     {
       "file": "solstice-1280.png",
-      "sha256": "589ba22836700343758a5c25667fe356a78f18c95273652c85678aac5e05b955"
+      "sha256": "ebca9ca9bbfe150f088e1324cf6f872738dd5d3ce38e7f982180c7da18c577d5"
     },
     {
       "file": "solstice-390.png",
-      "sha256": "8a8f0c0e4cb81799b5a974cfdb6671099ef5ef6c167371ba16dc8e81830aa9ee"
+      "sha256": "86536060df659fc322fd7b31afadb4f95883b54367e779b7e921c529a05e6538"
     },
     {
       "file": "triad-1440.png",
-      "sha256": "0de0f2bcacbb2ee3504dd5580e3ebbe8b29cf401c5ca99094e7886ef4b912bc6"
+      "sha256": "d3e0bfbda8da0c55336a8c9e49adcb08eeb4e177b7c67e43a1eddeafda53759b"
     },
     {
       "file": "triad-1280.png",
-      "sha256": "fa133b5902ee62f724bd7e83f91519273e3602991a904f5bbfb6beb687cd76a7"
+      "sha256": "12a2278e25a68904cd86683e48bac93285bc9732d841e076fd3aecdbabcdf2d6"
     },
     {
       "file": "triad-390.png",
-      "sha256": "cf24811a2a0997c7f661e5d125dc729848a289d4038c81349fdd26ec901c30d8"
+      "sha256": "e29708e831e3ece51a34b19a423af735c349e8b11b50b71ba39501a80857c9f0"
     }
   ],
   "externalRequestsBlocked": [
@@ -931,6 +931,7 @@
     "Failed to load resource: net::ERR_FAILED",
     "Failed to load resource: net::ERR_FAILED",
     "Failed to load resource: net::ERR_FAILED",
+    "Error while trying to use the following icon from the Manifest: http://127.0.0.1:64296/icons/icon.svg (Download error or resource isn't a valid image)",
     "Failed to load resource: net::ERR_FAILED",
     "Failed to load resource: net::ERR_FAILED",
     "Failed to load resource: net::ERR_FAILED",
@@ -1030,12 +1031,12 @@
         "evc508a5b70918b8842d53a8e4bf834490fe203da3f97bca9022333ca2ceca745a",
         "ev360cd9125853112c00338fdbea8bbb429eb918fd43bd32497fbcec43958a8d72",
         "evd790d60ffb7c0f9c755e487a54d84f9061c53a569ee3ef61d71cb9fccf5c9593",
-        "eve2b5f4fc87fd04b6f959dbdb1ca5084372c1bd8eecf4c10e8ddaef21877df69e",
+        "ev2154eace33a4a778caf38482c92be1e8f680ab1ad9696a87971531f4a84122d6",
         "ev16ea3ce39ed5419aaff9e0e96dd158930f49eb7d37655a545467424738dfce32",
-        "ev0b0b274dc62bd9860c76845fa2bdc8ba6844d5e5ae24d3682e109ba893d7150c",
+        "evbb8b83a347a17c9ec64989ce48212e6d895593ea4bc5a63f37c69e09359f4f0c",
         "eva06f0b578a913188cb92da15d48938f94b2463db8e53c5876e2e77cc900a0bea"
       ],
-      "draft_id": "draft_21911de298841a01dd7c32abe3f3ce649da5941c4dfea82cf20079c202223092",
+      "draft_id": "draft_4cb9d4a43809327fbb01c4ab16c159709661db927a45fa45df01a94cc7e5e311",
       "executable": false
     }
   ],
