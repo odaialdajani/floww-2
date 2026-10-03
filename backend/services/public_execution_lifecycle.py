@@ -27,6 +27,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import threading
 import uuid
 from collections.abc import Awaitable
 from datetime import UTC, datetime
@@ -56,6 +57,12 @@ _NATIVE_WORKFLOWS: list[dict[str, Any]] = []
 _PREFLIGHT_CACHE: dict[str, dict[str, Any]] = {}
 _DRAFTS: dict[str, dict[str, Any]] = {}
 _STORE: Any = None
+# Single-process ownership lock: the check-then-insert in submit() must be
+# atomic across threads, or two racing clicks place two orders. The critical
+# section holds no awaits (broker I/O stays outside). Cross-PROCESS races are
+# NOT excluded by this lock — see the DB-backed same-intent guard and the
+# documented residual in MUSE_STATE.
+_SUBMIT_LOCK = threading.Lock()
 
 __all__ = [
     "INTENT_VERSION",
@@ -778,42 +785,43 @@ async def submit(
     except (TypeError, ValueError) as exc:
         return {"ok": False, "reason": f"BAD_CONTRACT:{exc}"}
     intent_id = f"in_{digest[:12]}"
-    existing = _INTENTS.get(intent_id)
-    if (existing is None or not existing.get("order_id")) and _STORE is not None:
-        # Cross-process guard: another process may own this intent already.
-        loaded = _load_record(intent_id)
-        if loaded is not None:
-            _INTENTS[intent_id] = loaded
-            existing = loaded
-    if existing is not None and existing.get("order_id"):
-        return {"ok": True, "receipt_version": RECEIPT_VERSION,
-                "intent_id": intent_id, "order_id": existing["order_id"],
-                "status": existing.get("state", "OPEN"), "duplicate": True,
-                "persist_error": bool(existing.get("persist_error"))}
-    if _open_records(exclude_id=intent_id):
-        return {"ok": False, "reason": "OVERLAP_OPEN_NEEDS_RECONCILE"}
-    order_id = str(uuid.uuid4())
-    contract = intent.get("contract") or {}
-    payload = {
-        "account_id": intent.get("account_id"),
-        "order_id": order_id,
-        "symbol": contract.get("osi"),
-        "side": intent.get("side"),
-        "order_type": "LIMIT",
-        "quantity": float(intent.get("quantity")),
-        "limit_price": str(intent.get("limit_price")),
-        "time_in_force": "DAY",
-        "instrument_type": "OPTION",
-        "use_margin": (intent.get("cash_margin_choice") == "MARGIN"),
-    }
-    _INTENTS[intent_id] = {
-        "intent": dict(intent), "intent_hash": digest, "order_id": order_id,
-        "payload": dict(payload), "state": "SUBMITTED",
-        "approval": dict(approval) if isinstance(approval, dict) else None,
-    }
-    if not _persist(intent_id):
-        del _INTENTS[intent_id]
-        return {"ok": False, "reason": "STORE_UNAVAILABLE", "intent_id": intent_id}
+    with _SUBMIT_LOCK:
+        existing = _INTENTS.get(intent_id)
+        if (existing is None or not existing.get("order_id")) and _STORE is not None:
+            # Cross-process guard: another process may own this intent already.
+            loaded = _load_record(intent_id)
+            if loaded is not None:
+                _INTENTS[intent_id] = loaded
+                existing = loaded
+        if existing is not None and existing.get("order_id"):
+            return {"ok": True, "receipt_version": RECEIPT_VERSION,
+                    "intent_id": intent_id, "order_id": existing["order_id"],
+                    "status": existing.get("state", "OPEN"), "duplicate": True,
+                    "persist_error": bool(existing.get("persist_error"))}
+        if _open_records(exclude_id=intent_id):
+            return {"ok": False, "reason": "OVERLAP_OPEN_NEEDS_RECONCILE"}
+        order_id = str(uuid.uuid4())
+        contract = intent.get("contract") or {}
+        payload = {
+            "account_id": intent.get("account_id"),
+            "order_id": order_id,
+            "symbol": contract.get("osi"),
+            "side": intent.get("side"),
+            "order_type": "LIMIT",
+            "quantity": float(intent.get("quantity")),
+            "limit_price": str(intent.get("limit_price")),
+            "time_in_force": "DAY",
+            "instrument_type": "OPTION",
+            "use_margin": (intent.get("cash_margin_choice") == "MARGIN"),
+        }
+        _INTENTS[intent_id] = {
+            "intent": dict(intent), "intent_hash": digest, "order_id": order_id,
+            "payload": dict(payload), "state": "SUBMITTED",
+            "approval": dict(approval) if isinstance(approval, dict) else None,
+        }
+        if not _persist(intent_id):
+            del _INTENTS[intent_id]
+            return {"ok": False, "reason": "STORE_UNAVAILABLE", "intent_id": intent_id}
     try:
         receipt = await _maybe_await(broker.place_order(**payload))
     except Exception as exc:

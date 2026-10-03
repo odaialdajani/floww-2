@@ -804,3 +804,28 @@ def test_drafts_persist_across_registry_wipe_with_store():
     loaded = lc.load_draft(intent)
     assert loaded is not None and loaded["stage"] == "REVIEWED"
     assert lc.mark_preflighted(intent)["ok"] is True
+
+
+def test_concurrent_submits_place_exactly_once():
+    import asyncio
+    import threading
+
+    import services.public_execution_lifecycle as lc
+
+    broker = _FakeBroker()
+    prices = ["3.15", "3.20", "3.25", "3.30", "3.35"]
+    results = [None] * len(prices)
+
+    def attempt(i):
+        intent = _base_intent(observation_id=f"obs_race{i}", limit_price=prices[i])
+        results[i] = asyncio.run(lc.submit(intent, _ctx(), broker, armed=True))
+
+    threads = [threading.Thread(target=attempt, args=(i,)) for i in range(len(prices))]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    placed = [r for r in results if r["ok"] is True and not r.get("duplicate")]
+    refused = [r for r in results if r.get("reason") == "OVERLAP_OPEN_NEEDS_RECONCILE"]
+    assert len(placed) == 1 and len(refused) == 4
+    assert len(broker.calls) == 1  # one lease, one placement
