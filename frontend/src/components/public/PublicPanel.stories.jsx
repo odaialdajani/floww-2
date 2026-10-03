@@ -35,4 +35,10 @@ export const RecoveryReviewRequired={beforeEach:mockedReads(false,{...controlled
  const c=within(canvasElement);await userEvent.click(await c.findByText('Local lifecycle inventory · read-only'));await userEvent.click(c.getByRole('button',{name:'Read local lifecycle inventory'}));
  await expect(c.getByRole('region',{name:'Local lifecycle review'})).toHaveTextContent('Recovery review required · RECOVERY_REQUIRED');
 }};
+export const SettledHistoryRecoverySurplus={beforeEach:mockedReads(false,{...controlledInventory,intents:{n_known:4,n_open:0,n_unknown:0,open:[],unknown:[]}}),async play({canvasElement}){
+ const c=within(canvasElement);await userEvent.click(await c.findByText('Local lifecycle inventory · read-only'));await userEvent.click(c.getByRole('button',{name:'Read local lifecycle inventory'}));
+ await expect(c.getByRole('region',{name:'Local lifecycle review'})).toHaveTextContent('Recovery review required · RECOVERY_REQUIRED');
+ await expect(c.getByRole('region',{name:'Local lifecycle review'})).toHaveTextContent('4 process-local known records · 0 local open · 0 local unknown');
+ await expect(c.getByRole('region',{name:'Local lifecycle review'})).toHaveTextContent('this read executes neither');
+}};
 export const AccountConnectionFailure={beforeEach:mockedReads(true),async play({canvasElement}){await expect(await within(canvasElement).findByTestId('public-panel-error')).toBeInTheDocument();}};

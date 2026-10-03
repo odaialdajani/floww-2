@@ -114,6 +114,26 @@ test('unrehydrated durable rows disclose recovery review without offering a reco
 });
 
 test.each([
+  ['settled local history', { n_known: 4, n_open: 0, n_unknown: 0, open: [], unknown: [] }],
+  ['partially recovered open and unknown records', { ...inventory().intents, n_known: 4 }],
+])('durable surplus over %s requires read-only recovery review', async (_label, intents) => {
+  const data = { ...controlsInventory(), intents };
+  await readInventory(data);
+  const review = screen.getByRole('region', { name: 'Local lifecycle review' });
+  expect(review).toHaveTextContent('Recovery review required · RECOVERY_REQUIRED');
+  expect(review).toHaveTextContent('Stored nonterminal rows exceed local open and unknown records');
+  expect(review).toHaveTextContent('this read executes neither');
+  for (const durable_nonterminal_rows of [intents.n_open + intents.n_unknown, null]) {
+    global.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ ...data, recovery: { durable_nonterminal_rows } }) });
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read local lifecycle inventory' })));
+    expect(review).not.toHaveTextContent('RECOVERY_REQUIRED');
+    expect(review).toHaveTextContent('Entry remains unavailable');
+    if (durable_nonterminal_rows === null) expect(review).toHaveTextContent('Stored nonterminal count unavailable');
+  }
+  expect(global.fetch.mock.calls.every(([,options]) => !options.method || options.method === 'GET')).toBe(true);
+});
+
+test.each([
   ['unsupported policy', { policy: { account_wide_limits: { version: 'account-policy.v2', set: true, updated_at: '2026-10-03T14:00:00Z' } } }],
   ['approval count mismatch', { approvals: { n_stored: 1, n_revoked: 2 } }],
   ['string approval count', { approvals: { n_stored: '4', n_revoked: 1 } }],

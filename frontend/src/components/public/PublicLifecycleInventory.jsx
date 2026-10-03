@@ -91,7 +91,7 @@ export default function PublicLifecycleInventory({ accountId, connected = false 
       {data && <>
         <p>Received {result.receivedAt} · not a producer or broker clock.</p>
         <p>{data.storeless ? "Storeless; open broker inventory unknown" : "Store registered; restart survival unverified"}. {data.recovery.durable_nonterminal_rows === null ? "Stored nonterminal count unavailable" : `${data.recovery.durable_nonterminal_rows} stored nonterminal rows; count only, not rehydrated or reconciled here`}.</p>
-        {data.durable && data.recovery.durable_nonterminal_rows > 0 && data.intents.n_known === 0 && <p role="status">Recovery review required · RECOVERY_REQUIRED. Rehydrate and reconcile through the approved server boundary; this read executes neither.</p>}
+        {data.durable && data.recovery.durable_nonterminal_rows > data.intents.n_open + data.intents.n_unknown && <p role="status">Recovery review required · RECOVERY_REQUIRED. Stored nonterminal rows exceed local open and unknown records. Rehydrate and reconcile through the approved server boundary; this read executes neither.</p>}
         <p>{data.intents.n_known} process-local known records · {data.intents.n_open} local open · {data.intents.n_unknown} local unknown. Filled records are not a positions census.</p>
         {[...data.intents.open, ...data.intents.unknown].length > 0 && <div style={{ overflowX: "auto" }}><table aria-label="Process-local intent records" className="w-full text-xs" style={{ minWidth: 680 }}>
           <thead><tr><th>Intent / order</th><th>Symbol / owner</th><th>Local state</th><th>Approval field</th><th>Protection report</th></tr></thead>
