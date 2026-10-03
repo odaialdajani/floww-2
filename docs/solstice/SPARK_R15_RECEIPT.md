@@ -46,6 +46,11 @@ worktrees/checkpoints, protected 71/71, frozen artifacts, watchdog, all flags.
 
 ## Verification (exact head, local Python 3.14.6 vs ship 3.12 disclosed)
 
+Hosted exact-head CI on `1fdf403d` (actions run 37061874706, 2 Oct 2026):
+backend-tests PASS, docker-build PASS, frontend-build PASS, ruff PASS
+(lint workflow). Full `tests/` + coverage ran there, not just the local slice.
+
+Local (same head, before §11 doc-only updates):
 - `tests/solstice/` from `backend/`: **584 passed** (530 R14 historical + 54 new).
 - New focused: 18 + 25 + 7 + 4 = **54 passed**.
 - Public brokerage gates (gate/auth/portfolio/disamrmed): **32 passed**.
@@ -56,6 +61,13 @@ worktrees/checkpoints, protected 71/71, frozen artifacts, watchdog, all flags.
 - Protected manifest: **71/71 git-hash identical** (base and head).
 - Env skew disclosed: local `pandas-market-calendars` 5.4.0 vs
   `backend/requirements.txt` pin 4.6.1 (stable calendar APIs only; no change).
+
+Combined-candidate (read-only, 3 Oct 2026): Zed PR95 DRAFT @ `483704fc` has
+ZERO file overlap with this lane; Zed-diff audit finds no new submission path,
+no gate weakening, PAPER/gate labeling preserved; Zed's 4 agent suites pass
+(46) on a scratch worktree; display fixture shapes compatible (quote-free,
+`snapshotId` spelling supported by replay). Lanes compatible; integrated proof
+awaits Zed's merge + combined-head CI.
 - Full `tests/` + frontend + Docker: NOT rerun (no submission-path behavior
   change; PR92 main CI remains head-acceptance). Combined-candidate verification
   with Zed pending (Zed paused).
