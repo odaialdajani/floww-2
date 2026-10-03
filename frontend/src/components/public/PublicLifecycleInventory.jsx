@@ -5,9 +5,13 @@ import { storedAppKeyHeaders } from "../../utils/appKey";
 const count = value => Number.isInteger(value) && value >= 0;
 const text = value => typeof value === "string" && value.trim().length > 0;
 const optionalText = value => value == null || typeof value === "string";
+const object = value => value !== null && typeof value === "object" && !Array.isArray(value);
 function refusal(data) {
   if (data?.version !== "lifecycle-inventory.v1") return "INVENTORY_VERSION_UNSUPPORTED";
   const intents = data.intents;
+  const policy = data.policy?.account_wide_limits;
+  const approvals = data.approvals;
+  const support = data.protection?.native_support;
   if (typeof data.durable !== "boolean" || typeof data.storeless !== "boolean" || data.durable === data.storeless
     || typeof data.live_submission_armed !== "boolean"
     || !intents || !count(intents.n_known) || !Array.isArray(intents.open) || !Array.isArray(intents.unknown)
@@ -22,7 +26,10 @@ function refusal(data) {
     || !count(data.preflight?.n_cached_contexts) || !data.recovery
     || (data.recovery.durable_nonterminal_rows !== null && !count(data.recovery.durable_nonterminal_rows))
     || typeof data.protection?.entry_pause_now !== "boolean" || typeof data.protection?.cancel_allowed_during_pause !== "boolean"
-    || data.policy?.account_wide_limits !== "UNSET") return "INVENTORY_SHAPE_UNAVAILABLE";
+    || (policy !== "UNSET" && (!object(policy) || policy.version !== "account-policy.v1" || policy.set !== true
+          || !text(policy.updated_at) || !Number.isFinite(Date.parse(policy.updated_at))))
+        || (approvals !== undefined && (!object(approvals) || !count(approvals.n_stored) || !count(approvals.n_revoked) || approvals.n_revoked > approvals.n_stored))
+        || (support !== undefined && (!object(support) || Object.entries(support).some(([product, row]) => !text(product) || !object(row) || typeof row.supported !== "boolean" || !optionalText(row.reason))))) return "INVENTORY_SHAPE_UNAVAILABLE";
   return null;
 }
 
@@ -71,6 +78,7 @@ export default function PublicLifecycleInventory({ accountId, connected = false 
     }
   }, [connected, clear]);
   const data = result?.data;
+  const installedPolicy = data?.policy?.account_wide_limits !== "UNSET" ? data?.policy?.account_wide_limits : null;
   return <section aria-label="Local lifecycle review" className="space-y-2 text-sm">
     <details>
       <summary>Local lifecycle inventory · read-only</summary>
@@ -83,6 +91,7 @@ export default function PublicLifecycleInventory({ accountId, connected = false 
       {data && <>
         <p>Received {result.receivedAt} · not a producer or broker clock.</p>
         <p>{data.storeless ? "Storeless; open broker inventory unknown" : "Store registered; restart survival unverified"}. {data.recovery.durable_nonterminal_rows === null ? "Stored nonterminal count unavailable" : `${data.recovery.durable_nonterminal_rows} stored nonterminal rows; count only, not rehydrated or reconciled here`}.</p>
+        {data.durable && data.recovery.durable_nonterminal_rows > 0 && data.intents.n_known === 0 && <p role="status">Recovery review required · RECOVERY_REQUIRED. Rehydrate and reconcile through the approved server boundary; this read executes neither.</p>}
         <p>{data.intents.n_known} process-local known records · {data.intents.n_open} local open · {data.intents.n_unknown} local unknown. Filled records are not a positions census.</p>
         {[...data.intents.open, ...data.intents.unknown].length > 0 && <div style={{ overflowX: "auto" }}><table aria-label="Process-local intent records" className="w-full text-xs" style={{ minWidth: 680 }}>
           <thead><tr><th>Intent / order</th><th>Symbol / owner</th><th>Local state</th><th>Approval field</th><th>Protection report</th></tr></thead>
@@ -95,7 +104,12 @@ export default function PublicLifecycleInventory({ accountId, connected = false 
         <p>{data.drafts.n_staged} local draft rows · {data.preflight.n_cached_contexts} cached contexts; neither count establishes fresh preflight or permission.</p>
         <p>{data.native_workflows.length} local native registrations; not verified remote workflows. Workflows created outside FLOWW may still trade.</p>
         {data.native_workflows.length > 0 && <ul>{data.native_workflows.map((row, index) => <li key={index}>{row.strategy} · {row.venue} · reported {row.status}</li>)}</ul>}
-        <p>Account-wide limits UNSET. Server submission flag {data.live_submission_armed ? "ON" : "OFF"}; this review cannot submit or change it.</p>
+        <p>{data.approvals ? `${data.approvals.n_stored} stored approvals · ${data.approvals.n_revoked} revoked` : "Approval counts unavailable"}. Counts do not authorize an intent or establish authenticated current permission.</p>
+        {data.protection.native_support ? <div style={{ overflowX: "auto" }}><table aria-label="Reported native protection support" className="w-full text-xs">
+          <thead><tr><th>Product / order</th><th>Reported support</th><th>Reason</th></tr></thead>
+          <tbody>{Object.entries(data.protection.native_support).map(([product, row]) => <tr key={product}><td>{product}</td><td>{row.supported ? "Reported supported; eligibility unverified" : "Unavailable"}</td><td>{row.reason || "Reason unavailable"}</td></tr>)}</tbody>
+        </table></div> : <p>Native support declarations unavailable; protection remains unverified.</p>}
+        <p>{installedPolicy ? `Account policy installed · ${installedPolicy.version} · updated ${installedPolicy.updated_at}. Account binding, values and enforcement are not verified by this inventory` : "Account-wide limits UNSET"}. Server submission flag {data.live_submission_armed ? "ON" : "OFF"}; this review cannot submit or change it.</p>
         <p>Weekday new-entry pause report: {data.protection.entry_pause_now ? "in window" : "outside window"} · 11:30–14:00 America/New_York. This is not exchange-calendar enforcement; holidays, early closes and expiry safeguards remain unverified. Cancellation allowed during pause: {data.protection.cancel_allowed_during_pause ? "reported yes" : "reported no"}; no cancellation, protection or recovery is executed here.</p>
       </>}
     </details>

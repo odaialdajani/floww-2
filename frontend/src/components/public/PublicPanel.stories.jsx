@@ -24,4 +24,15 @@ export const StorelessLifecycle={beforeEach:mockedReads(false,{...lifecycle.inve
  const c=within(canvasElement);await userEvent.click(await c.findByText('Local lifecycle inventory · read-only'));await userEvent.click(c.getByRole('button',{name:'Read local lifecycle inventory'}));
  await expect(c.getByRole('region',{name:'Local lifecycle review'})).toHaveTextContent('Storeless; open broker inventory unknown');
 }};
+const controlledInventory={...lifecycle.inventory,...lifecycle.control_additions,protection:{...lifecycle.inventory.protection,...lifecycle.control_additions.protection}};
+export const StoredControlReports={beforeEach:mockedReads(false,controlledInventory),async play({canvasElement}){
+ const c=within(canvasElement);await userEvent.click(await c.findByText('Local lifecycle inventory · read-only'));await userEvent.click(c.getByRole('button',{name:'Read local lifecycle inventory'}));
+ await expect(c.getByRole('region',{name:'Local lifecycle review'})).toHaveTextContent('4 stored approvals · 1 revoked');
+ await expect(c.getByRole('region',{name:'Local lifecycle review'})).toHaveTextContent('Account policy installed · account-policy.v1');
+ await expect(c.getByRole('table',{name:'Reported native protection support'})).toHaveTextContent('Unavailable');
+}};
+export const RecoveryReviewRequired={beforeEach:mockedReads(false,{...controlledInventory,intents:{n_known:0,n_open:0,n_unknown:0,open:[],unknown:[]}}),async play({canvasElement}){
+ const c=within(canvasElement);await userEvent.click(await c.findByText('Local lifecycle inventory · read-only'));await userEvent.click(c.getByRole('button',{name:'Read local lifecycle inventory'}));
+ await expect(c.getByRole('region',{name:'Local lifecycle review'})).toHaveTextContent('Recovery review required · RECOVERY_REQUIRED');
+}};
 export const AccountConnectionFailure={beforeEach:mockedReads(true),async play({canvasElement}){await expect(await within(canvasElement).findByTestId('public-panel-error')).toBeInTheDocument();}};

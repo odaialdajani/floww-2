@@ -1,5 +1,23 @@
 # ZED_STATE — FLOWW integration continuation
 
+## R17 pass 4 — committed control disclosures
+
+- Resumed from final pass-3 receipt7ea8cbff; its all4 hosted gates are green, CODEef911f37 historical for new producer runtime. Re-read packet integration harness/shared contract, current checkpoint/planning and Spark §25/26 read-only. Main still6eaa3343. PR1054dc3c0e7 is OPEN, not main-merged; its lint37113386208 fails7 silent lifecycle handlers. Spark active dirty lifecycle/tests stay untouched; only committed8e226a5d (runtimee3937674) is admitted for composition.
+- Tools remain file/search/edit/terminal/fetch/skills; no connected MCP/browser/Sentry/Public/Codex-task tool. Attached front2/frontend/readmegrill/jfej guidance applies; no duplicate providers, plugin installs, nested agents, schedules or paid model turns. Editor model GPT-6.1-Sol; effective editor effort not exposed. Product support catalog and owner/effective dispatch remain distinct.
+- Owned files: ExpiryCoverage, PublicLifecycleInventory, associated tests/stories/synthetic fixtures/browser harness, own integration/commissioning/acceptance/ZED_STATE. No App.js/dependency/producer/schema/server/protected/frozen/watchdog edits planned. Spark default ownership unchanged; read-only GET boundary only acknowledged.
+- New producer meaning: range_map is sorted admitted expiry/DTE LISTING, not owning analytical axes/metric grids/Greeks/population/display record. complete=(uncapped OR both edges) is a reported listing heuristic, not independent exhaustive coverage. Account-policy registry, stored/revocable approvals, recovery gate and conservative support matrix are additive service controls; no new authenticated write/accepted executor path or actual remote account census is supplied. Existing submission gates remain preserved and UI entry unavailable.
+
+| ID | Task | Status | Exact next action |
+|---|---|---|---|
+| R17-P4-1 | Control inventory consumer | IN_PROGRESS | Installed-policy/stored-revoked/native-support/recovery/legacy-unknown consumers implemented;15 new failures across inventory/projection before patch,99 focused pass after (one additional unsupported-policy compatibility guard already passed). No writes/entry controls. Run full combined gates. |
+| R17-P4-2 | Admitted expiry listing projection | IN_PROGRESS | Exact version/window/date/DTE pairing/sorted-bounds/boolean guards implemented. Reported completeness explicitly not exhaustive or analytical admission.28 Storybook/axe states pass; browser assertions prepared. |
+| R17-P4-3 | Combined acceptance + producer gate repair | READY | Consume committed Spark repair of7 silent handlers, then full repository/local/hosted/protected/build/story/browser gates at new composition. Do not patch producer files or substitute630 Solstice tests for full backend. |
+| R17-P4-4 | Owner/model/live commissioning | BLOCKED_EXTERNAL | Authenticated owner save/authorized effective dispatch, actual production restart records, exact account/rights/policy/native review/Nav visual remain required; no auth bypass or guessed settings/policy. |
+
+Current composition `52e59a7c5536ab7c917f2aae4412d210af74e70f` consumes committed Spark `1e43c00aa601d5736cec4abdaca4ac253eab64ab` (runtime667993ff): seven silent handlers documented, revocation/newest-policy hardening and order-independent real snapshot test schema. Local silent-except gate now passes353 files. Spark §27 now explicitly acknowledges range_map listing-only; producer docs/checkpoint preserved verbatim. Probe at earlier e393 accepted an unstored supplied approval; no broker/store/auth route invoked. [Exact fail-closed request](https://github.com/odaialdajani/floww-2/pull/103#issuecomment-5967906047) remains open; documented best-effort persistence is not commissioned fail-closed execution.
+
+Next exact action: commit owned consumers with99 focused/28 story evidence, then full new combined backend/frontend/security/API/protected/build/browser + exact-head hosted gates. No source or receipt claims yet for this new composition. [Producer CI/semantic request](https://github.com/odaialdajani/floww-2/pull/103#issuecomment-5967881158). Existing-service restart/deploy/main merge/activation/order remain unauthorized; commissioning HOLD.
+
 ## R17 pass 3 — read-only lifecycle review
 
 - Pass-2 final receipt03a1db39 has all4 hosted gates SUCCESS (CI/CD37107360660/lint37107360667); linked closure updated. Its CODE90c58939 does not cover later producer044ca009.

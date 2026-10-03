@@ -18,6 +18,11 @@
     ],
     "n_admitted": 2,
         "coverage": { "requested_expiries": 12, "n_listed": 3, "n_display_envelope": 2, "listing_capped": false, "lower_edge_observed": true, "upper_edge_observed": false },
+    "range_map": {
+      "version": "coverage-read.v1", "window": { "min_dte": 14, "max_dte": 60 },
+      "admitted_expiries": ["2026-10-30", "2026-11-16"], "admitted_dtes": [28, 45],
+      "min_admitted_dte": 28, "max_admitted_dte": 45, "complete": true, "reason": null
+    },
     "spot": 100,
     "fetched_at": "2026-10-02T14:05:00Z",
     "stale": false,
