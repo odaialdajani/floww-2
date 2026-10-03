@@ -470,5 +470,93 @@ Contract versions: `execution-intent.v1`, `execution-receipt.v1`,
   running the exact `check_window_comparability` gate over two replayed stored
   snapshots (IDENTITY_UNDECLARED/SESSION_ROLL/OUT_OF_ORDER preserved).
   Evidence: TICKER_MISMATCH/SESSION_ROLL/OUT_OF_ORDER/NO_BASELINE pinned.
-- [IN_PROGRESS] R17-4 Receipt + PR + Zed re-verification — owned: `SPARK_R17_RECEIPT.md`,
-  PR (review-only), Zed-branch overlap recheck. Next: last.
+- [DONE] R17-4 Receipt + PR + Zed re-verification — owned: `SPARK_R17_RECEIPT.md`,
+  PR (review-only), Zed-branch overlap recheck. Receipt updated with actual
+  hosted results (see §21). PR103 OPEN, all four hosted gates green at
+  `611f3c2f`. Merge decision with Nav/Zed — BLOCKED_EXTERNAL there.
+
+## 21. Session checkpoint (3 Oct 2026 — packet re-verification + queue close)
+
+Resume-prompt cycle: harness + shared contract re-read from
+`/Users/nav/Documents/Codex/2026-10-02/he/outputs/`.
+
+- R14 receipt VERIFIED: `solstice/spark-closeout` @ `2f134e03`,
+  `docs/solstice/MUSE_STATE.md` §16 — 530 Solstice tests + 37 focused,
+  restart/migration/lock/lineage proofs executed on throwaway file DBs,
+  fixture digest `8fefacf5…`, zero durable admitted records, activation OFF.
+  Held as historical per packet rule (no unchanged resweep re-run).
+- Drift: `origin/main` advanced from packet baseline `1530ccd7` to
+  `6eaa3343` via Spark lane PRs 96/98/99/102 (R15 producer/lifecycle,
+  R16 submit lock + fills/drafts/guards). PR93 (R14 closeout docs) still
+  OPEN/unmerged at `2f134e03` — its §16 content lives only on that branch.
+  Zed lanes (PR100/101 combined) carry this lane's content verbatim; audited
+  §19. No unaccounted remote commits.
+- Harness 6-item queue status (all engineering DONE on main/PR103):
+  1. Public matrix/auth — R15: `SPARK_R15_PUBLIC_MATRIX.md` + 27-op JSON,
+     auth fail-closed proven. DONE.
+  2. Default-off price-path producer — `services/solstice_price_producer.py`
+     (`price-path-producer.v1`, `FLOWW_PRICE_PATH_PRODUCER` default-off,
+     swing-only 300s, XNYS-gated, budget-aware) + second-process reopen
+     proof (`test_second_process_reopens_file_db_with_identical_paths_and_replay`)
+     + migration/restart/contention tests. DONE. Admitted production records
+     = external (activation).
+  3. Immutable intents/execution lifecycle —
+     `services/public_execution_lifecycle.py` (`execution-intent.v1`,
+     `intent-draft.v1`, Decimal-exact, approval-bound, submit lock,
+     disarmed-supersede guard, read-only reconcile). DONE. Live = external.
+  4. Account/portfolio/protection/expiry contracts —
+     `SPARK_R15_ACCOUNT_CONTRACTS.md`, R17 `coverage-read.v1` routes. DONE.
+  5. Outcome protocol — `SPARK_R15_OUTCOME_PROTOCOL.md`; zero durable
+     records → INSUFFICIENT EVIDENCE; 30–60 sessions = collection target,
+     not edge proof. DONE protocol, empirics external.
+  6. Exact-head receipt + combined acceptance — PR103 all gates green;
+     combined merge decision with Nav/Zed. BLOCKED_EXTERNAL only there.
+- Supplied to Zed (via this checkpoint): contract versions
+  `execution-intent.v1`, `execution-receipt.v1`, `intent-draft.v1`,
+  `price-path-producer.v1`, `coverage-read.v1`, `outcome.v1`, `abl.v1`,
+  `recorder-health.v1`, `calendar.v1`, `budget-check.v1`; routes
+  `GET /api/solstice/price-paths/{status,points,sessions,expiries,comparable}`;
+  fixtures `r15/evidence/` (`price_path_swing5m_v1.json` `146ebfa4e0be`,
+  `execution_intent_v1.json` `in_5c8c5dcd3b07`, `lodestar_brief_v1.json`);
+  honest net outcomes = INSUFFICIENT EVIDENCE, no edge claim.
+- Activation state: OFF. No flag/order/service/credential changes this
+  session. Protected 71/71 untouched; no Zed-owned file touched (PR103 diff:
+  6 Spark-owned paths only).
+- Next exact action: none READY-owned remains. Await Nav/Zed merge decision
+  on PR103 (and PR93 closeout docs), then combined exact-head acceptance
+  with Zed's lane head. True external blockers unchanged: SPX entitlement,
+  licensed feeds, fixed account/risk policy, Public native activation,
+  participant recruitment, durable production capture, real-money record,
+  Nav visual review.
+
+## 22. Take-over sweep (3 Oct 2026 — Cline assumes the Muse lane)
+
+Nav handed the lane over; packet re-read from
+`/Users/nav/Documents/Codex/2026-10-02/he/outputs/FLOWW-Zed-Spark-Muse-Integration-Packet`.
+Sweep verified the §21/R17 claims at the exact head `611f3c2f`:
+
+- Local (Python 3.14.6, disclosed): r17 **6 passed**; r17+wiring **14 passed**;
+  `ruff check` touched files clean; `openapi.json` 376→**379** purely additive
+  (added `/api/solstice/price-paths/{sessions,expiries,comparable}`, removed
+  none); `docs/api/README.md` 387→390, solstice group 20→23.
+- Hosted PR103 gates all **PASS** at `611f3c2f`: backend-tests + frontend-build
+  + docker-build (run 37096664993), ruff (run 37096665007). PR100 and PR101
+  hosted checks also all PASS (previously pending in Zed's report).
+- PR truth: PR99 MERGED `bec8ac8c`; PR102 MERGED `53d2a051`; `origin/main` =
+  `6eaa3343`. PR93 still OPEN `2f134e03`. PR101 MERGEABLE/CLEAN; PR101's 20
+  files, PR102's 4 files and this lane's 6 files are pairwise disjoint — no
+  merge conflict.
+- Protection: `git diff --name-only 6eaa3343..611f3c2f` is exactly the 6
+  Spark-owned paths — no frontend, agent-tree, TideHunter/Flowseeker, frozen
+  artifact or watchdog files touched. Worktree dirty files were limited to the
+  two Muse-owned docs; committed this pass.
+- Hole found (flagged, Zed-owned docs untouched): the combined candidate
+  `dcbc1492` (PR101) predates PR102's `90f96227` disarmed-supersede fix —
+  tested SHA `e5ee1404` does not include it, so "backend matches the tested
+  candidate" is stale vs `main` `6eaa3343`. Combined acceptance must re-sync
+  at `main` + Zed head `75c160c2` and re-verify before PR100/PR101 merge.
+- Activation state: OFF unchanged. No flags, orders, services, credentials or
+  paid calls. `market_data.py` `dte≤30` display filter and the unfiltered
+  `dte_max` expiry-count loading both unchanged (distinct constraints).
+- Next exact action: Nav/Zed merge decision on PR103 (and PR93 closeout docs);
+  Zed re-syncs the combined acceptance at `6eaa3343` + `75c160c2`.
