@@ -829,3 +829,21 @@ def test_concurrent_submits_place_exactly_once():
     refused = [r for r in results if r.get("reason") == "OVERLAP_OPEN_NEEDS_RECONCILE"]
     assert len(placed) == 1 and len(refused) == 4
     assert len(broker.calls) == 1  # one lease, one placement
+
+
+def test_disarmed_supersede_cancels_nothing():
+    import asyncio
+
+    import services.public_execution_lifecycle as lc
+
+    broker = _FakeBroker()
+    first = asyncio.run(lc.submit(_base_intent(), _ctx(), broker, armed=True))
+    assert first["ok"] is True
+    out = asyncio.run(lc.supersede(
+        first["intent_id"], _base_intent(observation_id="obs_sup3", limit_price="3.25"),
+        _ctx(), broker, armed=False))
+    assert out["ok"] is False and out["reason"] == "DISARMED"
+    # Old order untouched: no cancel call, still OPEN.
+    assert broker.orders[first["order_id"]]["status"] == "OPEN"
+    rec = asyncio.run(lc.reconcile(first["intent_id"], broker))
+    assert rec["status"] == "OPEN"
