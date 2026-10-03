@@ -487,3 +487,144 @@ def test_submit_with_fresh_preflight_gate():
     assert asyncio.run(lc.preflight(intent, ctx, broker))["ok"] is True
     out = asyncio.run(lc.submit(intent, ctx, broker, armed=True, require_fresh_preflight=True))
     assert out["ok"] is True
+
+
+def test_reject_closed_session_before_entry_pause():
+    import services.public_execution_lifecycle as lc
+
+    saturday = datetime(2026, 10, 3, 15, 0, tzinfo=UTC)  # Saturday: no session
+    assert lc.is_entry_pause(saturday) is False
+    ctx = _ctx(
+        now=saturday,
+        quotes={"bid": "3.10", "ask": "3.20",
+                "bid_ts": "2026-10-03T14:59:40+00:00",
+                "ask_ts": "2026-10-03T14:59:41+00:00"},
+    )
+    assert lc.validate_intent(_base_intent(), ctx) == (False, "SESSION_CLOSED")
+
+
+def test_reject_risk_limit_breaches():
+    import services.public_execution_lifecycle as lc
+
+    assert lc.validate_intent(
+        _base_intent(quantity=5), _ctx(risk_limits={"max_quantity": 2})) == (False, "RISK_QUANTITY_EXCEEDED")
+    # Notional = 3.15 * 1 * 100 = 315 > 300.
+    assert lc.validate_intent(
+        _base_intent(), _ctx(risk_limits={"max_notional": "300"})) == (False, "RISK_NOTIONAL_EXCEEDED")
+    assert lc.validate_intent(
+        _base_intent(), _ctx(risk_limits={"max_quantity": 10, "max_notional": "100000"})) == (True, "ok")
+
+
+def test_receipts_carry_versioned_envelope():
+    import asyncio
+
+    import services.public_execution_lifecycle as lc
+
+    broker = _FakeBroker()
+    out = asyncio.run(lc.submit(_base_intent(), _ctx(), broker, armed=True))
+    assert out["receipt_version"] == "execution-receipt.v1"
+    rec = asyncio.run(lc.reconcile(out["intent_id"], broker))
+    assert rec["receipt_version"] == "execution-receipt.v1"
+    cancelled = asyncio.run(lc.cancel(out["intent_id"], broker))
+    assert cancelled["receipt_version"] == "execution-receipt.v1"
+
+
+def test_durable_intents_survive_process_restart():
+    import asyncio
+
+    import duckdb
+
+    import services.public_execution_lifecycle as lc
+
+    conn = duckdb.connect(":memory:")
+    lc.register_store(conn)
+    broker = _FakeBroker()
+    out = asyncio.run(lc.submit(_base_intent(), _ctx(), broker, armed=True))
+    assert out["ok"] is True
+    n = conn.execute("SELECT COUNT(*) FROM execution_intents_v1").fetchone()[0]
+    assert n == 1
+    # Simulate a process restart: memory is wiped, the DB is not.
+    lc._INTENTS.clear()
+    assert lc.recover_open() == [out["intent_id"]]
+    # The recovered open order blocks a new entry before any reconcile.
+    blocked = asyncio.run(lc.submit(
+        _base_intent(observation_id="obs_restart", limit_price="3.25"), _ctx(), broker, armed=True))
+    assert blocked["ok"] is False and blocked["reason"] == "OVERLAP_OPEN_NEEDS_RECONCILE"
+    rec = asyncio.run(lc.reconcile(out["intent_id"], broker))
+    assert rec["status"] == "OPEN"
+    state = conn.execute("SELECT state FROM execution_intents_v1 WHERE intent_id = ?",
+                         [out["intent_id"]]).fetchone()[0]
+    assert state == "OPEN"
+
+
+def test_recover_open_with_no_store_recovers_nothing():
+    import services.public_execution_lifecycle as lc
+
+    assert lc.recover_open() == []  # storeless registry proves nothing about open orders
+
+
+def test_close_exits_ignore_entry_pause():
+    import services.public_execution_lifecycle as lc
+
+    paused_noon = datetime(2026, 10, 2, 16, 0, tzinfo=UTC)  # 12:00 ET
+    ctx = _ctx(
+        now=paused_noon,
+        quotes={"bid": "3.10", "ask": "3.20",
+                "bid_ts": "2026-10-02T15:59:40+00:00",
+                "ask_ts": "2026-10-02T15:59:41+00:00"},
+    )
+    assert lc.validate_intent(_base_intent(open_close="OPEN"), ctx) == (False, "ENTRY_PAUSE")
+    assert lc.validate_intent(_base_intent(open_close="CLOSE"), ctx) == (True, "ok")
+
+
+def test_broker_dataclass_receipts_read_by_attribute():
+    import asyncio
+    from dataclasses import dataclass, field
+
+    import services.public_execution_lifecycle as lc
+
+    @dataclass
+    class Order:
+        order_id: str
+        account_id: str = "TEST-ACCT"
+        symbol: str = "SPY260904C00760000"
+        side: str = "BUY"
+        order_type: str = "LIMIT"
+        quantity: float = 1.0
+        status: str = "OPEN"
+        raw: dict = field(default_factory=dict)
+
+    class _DataclassBroker(_FakeBroker):
+        async def place_order(self, **kw):
+            self.calls.append(dict(kw))
+            order = Order(order_id=kw.get("order_id"), status="OPEN")
+            self.orders[order.order_id] = {"status": "OPEN", "order_obj": order,
+                                           "fills": 0, "quantity": kw.get("quantity")}
+            return order
+
+        async def get_order(self, account_id, order_id):
+            rec = self.orders.get(order_id)
+            if rec is None or "order_obj" not in rec:
+                return {"order_id": order_id, "status": "UNKNOWN", "raw": {}}
+            return rec["order_obj"]
+
+    broker = _DataclassBroker()
+    out = asyncio.run(lc.submit(_base_intent(), _ctx(), broker, armed=True))
+    assert out["ok"] is True and out["status"] == "OPEN"
+    rec = asyncio.run(lc.reconcile(out["intent_id"], broker))
+    assert rec["status"] == "OPEN" and rec["filled"] is False
+
+
+def test_reject_max_positions():
+    import asyncio
+
+    import services.public_execution_lifecycle as lc
+
+    broker = _FakeBroker()
+    ctx = _ctx(risk_limits={"max_positions": 1})
+    first = asyncio.run(lc.submit(_base_intent(), ctx, broker, armed=True))
+    assert first["ok"] is True
+    second = asyncio.run(lc.submit(
+        _base_intent(observation_id="obs_pos2", limit_price="3.25"), ctx, broker, armed=True))
+    assert second["ok"] is False
+    assert second["reason"] in ("RISK_MAX_POSITIONS_EXCEEDED", "OVERLAP_OPEN_NEEDS_RECONCILE")

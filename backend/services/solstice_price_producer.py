@@ -289,8 +289,8 @@ class PricePathProducer:
             at_ts = _parse_epoch(obs.get("event_time"))
             fetched_at = obs.get("fetched_at")
             if at_ts is None:
-                at_ts = _parse_epoch(fetched_at)
-            if at_ts is None:
+                # No vendor observation time: refuse, never substitute fetch time
+                # as a source event. Gaps stay gaps.
                 out["gaps"] += 1
                 with self._lock:
                     self.gaps += 1

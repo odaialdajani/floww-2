@@ -87,3 +87,31 @@ def test_lifecycle_never_reads_venue_flag():
     assert "os.environ" not in src
     assert "os.getenv" not in src
     assert "getenv" not in src
+
+
+def test_no_production_callers_of_lifecycle_transitions():
+    """Fail-closed approval stance, pinned: no route/service/caller in the tree
+    reaches a lifecycle transition, so no unapproved path exists. The day a
+    production caller is added, this test names it and the commissioning
+    contract (require_approval=True + venue gate) must cover it."""
+    import re
+
+    hits: dict[str, list[str]] = {}
+    for path in sorted((REPO_ROOT / "backend").rglob("*.py")):
+        rel = str(path.relative_to(REPO_ROOT))
+        if "/tests/" in rel or "test_" in path.name:
+            continue
+        if rel in ("backend/services/public_execution_lifecycle.py",):
+            continue
+        try:
+            src = path.read_text()
+        except OSError:
+            continue
+        found = re.findall(
+            r"(?:lifecycle|execution_lifecycle|lc)\s*\.\s*"
+            r"(submit|reconcile(?:_all)?|cancel|supersede|preflight)\s*\(",
+            src,
+        )
+        if found:
+            hits[rel] = sorted(set(found))
+    assert not hits, f"production lifecycle callers (need approval-desk cover): {hits}"

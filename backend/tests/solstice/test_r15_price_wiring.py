@@ -108,3 +108,22 @@ def test_producer_flag_defaults_off_in_server_process():
     from services import solstice_price_producer as prod
 
     assert prod.worker_enabled() is False
+
+
+def test_fetch_seam_keeps_missing_vendor_clock_unknown():
+    import asyncio
+    from unittest.mock import patch
+
+    import services.public_api_adapter as ada
+    from services import solstice_price_fetch as fetch_mod
+
+    async def no_clock(symbol):
+        return {symbol: {"spot": 500.25, "spot_event_time": None,
+                         "spot_fetched_at": "2026-10-02T15:59:00.400+00:00",
+                         "spot_source": "public-mid"}}
+
+    with patch.object(ada, "fetch_quotes_from_public_api", side_effect=no_clock):
+        obs = asyncio.run(fetch_mod.fetch_one_public_quote("SPY"))
+    assert obs is not None
+    assert obs["event_time"] is None  # unknown stays unknown, never fetch time
+    assert obs["fetched_at"] == "2026-10-02T15:59:00.400+00:00"

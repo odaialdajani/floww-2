@@ -12,6 +12,14 @@ caller that already passed `FLOWW_ENABLE_LIVE_PUBLIC==1`).
 Money precision uses `Decimal` strings end-to-end. Client floats are rejected.
 A stop is never called a guaranteed ceiling; an acknowledged order is never
 called filled; incomplete protection is never called protected.
+
+Durability: intent ownership lives in `_INTENTS` (process memory) and, when a
+store is registered via `register_store(conn)`, in the additive
+`execution_intents_v1` table. Every state transition persists before it is
+reported; a persistence failure refuses the transition (`STORE_UNAVAILABLE`)
+instead of reporting unwritten ownership. After a restart, `recover_open()`
+rehydrates non-terminal records so open/unknown orders block new entry before
+any reconcile — the registry is never trusted empty on a fresh process.
 """
 
 from __future__ import annotations
@@ -27,19 +35,31 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 INTENT_VERSION = "execution-intent.v1"
+RECEIPT_VERSION = "execution-receipt.v1"
 RISK_POLICY = "research_barriers.v1"
 ET = ZoneInfo("America/New_York")
 FRESHNESS_DEFAULT_S = 30
 
 _OSI_RE = re.compile(r"^[A-Z0-9\.]{1,12}(\d{6})([CP])(\d{8})$")
 
+LIFECYCLE_DDL = """
+    CREATE TABLE IF NOT EXISTS execution_intents_v1 (
+        intent_id VARCHAR PRIMARY KEY, intent_hash VARCHAR, ticker VARCHAR,
+        owner VARCHAR, state VARCHAR, order_id VARCHAR,
+        record_json VARCHAR, updated_at VARCHAR
+    )
+"""
+
 _INTENTS: dict[str, dict[str, Any]] = {}
 _NATIVE_WORKFLOWS: list[dict[str, Any]] = []
 _PREFLIGHT_CACHE: dict[str, dict[str, Any]] = {}
+_STORE: Any = None
 
 __all__ = [
     "INTENT_VERSION",
+    "RECEIPT_VERSION",
     "PREFLIGHT_TTL_S",
+    "LIFECYCLE_DDL",
     "intent_hash",
     "validate_intent",
     "create_approval",
@@ -56,13 +76,86 @@ __all__ = [
     "is_entry_pause",
     "cancel_allowed_during_pause",
     "register_native_workflow",
+    "register_store",
+    "ensure_lifecycle_tables",
+    "recover_open",
 ]
 
 
 def _reset_for_tests() -> None:
+    global _STORE
     _INTENTS.clear()
     _NATIVE_WORKFLOWS.clear()
     _PREFLIGHT_CACHE.clear()
+    _STORE = None
+
+
+def ensure_lifecycle_tables(conn: Any) -> None:
+    """Create the intent ownership table (additive; never alters existing tables)."""
+    conn.execute(LIFECYCLE_DDL)
+
+
+def register_store(conn: Any) -> None:
+    """Register the DuckDB handle for durable intent ownership. No-op when None."""
+    global _STORE
+    if conn is None:
+        return
+    ensure_lifecycle_tables(conn)
+    _STORE = conn
+
+
+def _persist(intent_id: str) -> bool:
+    """Write one record to the registered store. True when durable or storeless."""
+    if _STORE is None:
+        return True
+    rec = _INTENTS.get(intent_id)
+    if rec is None:
+        return False
+    try:
+        ensure_lifecycle_tables(_STORE)
+        now = datetime.now(UTC).isoformat()
+        blob = json.dumps(rec, default=str)
+        _STORE.execute(
+            "INSERT OR REPLACE INTO execution_intents_v1 "
+            "(intent_id, intent_hash, ticker, owner, state, order_id, record_json, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [intent_id, rec.get("intent_hash"), rec.get("intent", {}).get("ticker"),
+             rec.get("intent", {}).get("execution_owner"), rec.get("state"),
+             rec.get("order_id"), blob, now],
+        )
+        return True
+    except Exception:
+        return False
+
+
+def recover_open(store: Any | None = None) -> list[str]:
+    """Rehydrate non-terminal records after a restart (durable → memory).
+
+    Returns the recovered intent IDs. Terminal rows (FILLED/REJECTED/CANCELED)
+    stay history and are not reloaded. Without a store there is nothing to
+    recover — and the empty registry is reported as storeless, never as proof
+    that no orders are open.
+    """
+    conn = store if store is not None else _STORE
+    if conn is None:
+        return []
+    try:
+        ensure_lifecycle_tables(conn)
+        rows = conn.execute(
+            "SELECT intent_id, record_json FROM execution_intents_v1 "
+            "WHERE state NOT IN ('FILLED', 'REJECTED', 'CANCELED')").fetchall() or []
+    except Exception:
+        return []
+    recovered: list[str] = []
+    for intent_id, blob in rows:
+        try:
+            rec = json.loads(blob) if isinstance(blob, str) else {}
+        except (TypeError, ValueError):
+            continue
+        if isinstance(rec, dict) and rec.get("order_id"):
+            _INTENTS[str(intent_id)] = rec
+            recovered.append(str(intent_id))
+    return recovered
 
 
 def _money(value: Any, field: str) -> Decimal:
@@ -234,6 +327,30 @@ def validate_intent(intent: dict[str, Any], ctx: dict[str, Any]) -> tuple[bool, 
             return False, "BAD_TICK"
     except (InvalidOperation, ValueError):
         return False, "BAD_TICK"
+    # Operator risk limits (commissioning-owned; absent = no check, documented).
+    risk_limits = ctx.get("risk_limits") or {}
+    max_qty = risk_limits.get("max_quantity")
+    if max_qty is not None:
+        try:
+            if int(qty) > int(max_qty):
+                return False, "RISK_QUANTITY_EXCEEDED"
+        except (TypeError, ValueError):
+            return False, "RISK_QUANTITY_EXCEEDED"
+    max_notional = risk_limits.get("max_notional")
+    if max_notional is not None:
+        try:
+            notional = limit * Decimal(str(int(qty))) * mult
+            if notional > Decimal(str(max_notional)):
+                return False, "RISK_NOTIONAL_EXCEEDED"
+        except (InvalidOperation, ValueError, TypeError):
+            return False, "RISK_NOTIONAL_EXCEEDED"
+    max_positions = risk_limits.get("max_positions")
+    if max_positions is not None:
+        try:
+            if len(_open_records()) >= int(max_positions):
+                return False, "RISK_MAX_POSITIONS_EXCEEDED"
+        except (TypeError, ValueError):
+            return False, "RISK_MAX_POSITIONS_EXCEEDED"
     # A native workflow created outside FLOWW cannot be controlled by a local
     # lease; unresolved overlap blocks backend entry.
     if intent.get("execution_owner") == "FLOWW_BACKEND":
@@ -248,9 +365,26 @@ def validate_intent(intent: dict[str, Any], ctx: dict[str, Any]) -> tuple[bool, 
     if intent_ctx is not None and ctx_ctx is not None:
         if str(intent_ctx) != str(ctx_ctx):
             return False, "CONTEXT_CHANGED"
-    if is_entry_pause(now):
+    # Exchange session (fail-closed): entries only on an open XNYS day. The pause
+    # window below refines the open session; holidays/weekends refuse outright.
+    if not _session_open(now):
+        return False, "SESSION_CLOSED"
+    # New-entry pause: OPEN intents (entries, long or short) wait; CLOSE intents
+    # are risk exits and are never stopped by the pause.
+    if intent.get("open_close") == "OPEN" and is_entry_pause(now):
         return False, "ENTRY_PAUSE"
     return True, "ok"
+
+
+def _session_open(now: datetime) -> bool:
+    """XNYS calendar gate for entries (fail-closed on holiday/unknown)."""
+    try:
+        from services.solstice_calendar import exchange_day_info
+
+        info = exchange_day_info(now.astimezone(ET).strftime("%Y-%m-%d"))
+        return bool(info.get("is_open"))
+    except Exception:
+        return False
 
 
 def create_approval(
@@ -324,6 +458,32 @@ async def _maybe_await(value: Any) -> Any:
     if isinstance(value, Awaitable):
         return await value
     return value
+
+
+def _rget(receipt: Any, *names: str, default: Any = None) -> Any:
+    """Read one field off a broker receipt that may be a dict OR a dataclass.
+
+    The real `PublicBroker` returns an `Order` dataclass (`order_id`, `status`
+    attributes); fixtures and the portfolio path return plain dicts. Both shapes
+    are admitted without inventing values — missing stays missing.
+    """
+    if receipt is None:
+        return default
+    if isinstance(receipt, dict):
+        for name in names:
+            if receipt.get(name) is not None:
+                return receipt[name]
+        return default
+    for name in names:
+        value = getattr(receipt, name, None)
+        if value is not None:
+            return value
+    raw = getattr(receipt, "raw", None)
+    if isinstance(raw, dict):
+        for name in names:
+            if raw.get(name) is not None:
+                return raw[name]
+    return default
 
 
 PREFLIGHT_TTL_S = 60
@@ -443,7 +603,8 @@ async def submit(
     intent_id = f"in_{digest[:12]}"
     existing = _INTENTS.get(intent_id)
     if existing is not None and existing.get("order_id"):
-        return {"ok": True, "intent_id": intent_id, "order_id": existing["order_id"],
+        return {"ok": True, "receipt_version": RECEIPT_VERSION,
+                "intent_id": intent_id, "order_id": existing["order_id"],
                 "status": existing.get("state", "OPEN"), "duplicate": True}
     if _open_records(exclude_id=intent_id):
         return {"ok": False, "reason": "OVERLAP_OPEN_NEEDS_RECONCILE"}
@@ -466,18 +627,25 @@ async def submit(
         "payload": dict(payload), "state": "SUBMITTED",
         "approval": dict(approval) if isinstance(approval, dict) else None,
     }
+    if not _persist(intent_id):
+        del _INTENTS[intent_id]
+        return {"ok": False, "reason": "STORE_UNAVAILABLE", "intent_id": intent_id}
     try:
         receipt = await _maybe_await(broker.place_order(**payload))
     except Exception as exc:
         _INTENTS[intent_id]["state"] = "UNKNOWN"
         _INTENTS[intent_id]["error"] = f"{type(exc).__name__}: {exc}"
+        _persist(intent_id)
         return {"ok": False, "reason": "AMBIGUOUS_NEEDS_RECONCILE",
+                "receipt_version": RECEIPT_VERSION,
                 "intent_id": intent_id, "order_id": order_id}
-    status = str((receipt or {}).get("status") or "UNKNOWN").upper()
+    status = str(_rget(receipt, "status", default="UNKNOWN") or "UNKNOWN").upper()
     _INTENTS[intent_id]["state"] = status if status in (
         "OPEN", "PENDING", "PARTIAL", "FILLED", "REJECTED", "CANCELED") else "ACKNOWLEDGED"
     _INTENTS[intent_id]["receipt"] = receipt
-    return {"ok": True, "intent_id": intent_id, "order_id": order_id,
+    _persist(intent_id)
+    return {"ok": True, "receipt_version": RECEIPT_VERSION,
+            "intent_id": intent_id, "order_id": order_id,
             "status": _INTENTS[intent_id]["state"]}
 
 
@@ -491,13 +659,14 @@ async def reconcile(intent_id: str, broker: Any) -> dict[str, Any]:
     except Exception as exc:
         return {"intent_id": intent_id, "order_id": rec["order_id"],
                 "status": "UNKNOWN", "filled": False, "error": str(exc)}
-    status = str((observed or {}).get("status") or "UNKNOWN").upper()
+    status = str(_rget(observed, "status", default="UNKNOWN") or "UNKNOWN").upper()
     if status not in ("OPEN", "PENDING", "PARTIAL", "FILLED", "REJECTED", "CANCELED", "UNKNOWN"):
         status = "UNKNOWN"
     rec["state"] = status
     rec["observed"] = observed
+    _persist(intent_id)
     return {"intent_id": intent_id, "order_id": rec["order_id"], "status": status,
-            "filled": (status == "FILLED")}
+            "filled": (status == "FILLED"), "receipt_version": RECEIPT_VERSION}
 
 
 async def reconcile_all(broker: Any) -> list[dict[str, Any]]:
@@ -538,14 +707,18 @@ async def cancel(intent_id: str, broker: Any) -> dict[str, Any]:
     except Exception as exc:
         return {"intent_id": intent_id, "order_id": rec["order_id"], "status": rec.get("state", "UNKNOWN"),
                 "cancelled": False, "reason": f"CANCEL_FAILED:{type(exc).__name__}"}
-    status = str((receipt or {}).get("status") or "").upper()
+    status = str(_rget(receipt, "status", default="") or "").upper()
     if status == "CANCELED":
         rec["state"] = "CANCELED"
-        return {"intent_id": intent_id, "order_id": rec["order_id"], "status": "CANCELED", "cancelled": True}
+        _persist(intent_id)
+        return {"intent_id": intent_id, "order_id": rec["order_id"], "status": "CANCELED",
+                "cancelled": True, "receipt_version": RECEIPT_VERSION}
     rec["state"] = "CANCEL_PENDING"
     rec["cancel_receipt"] = receipt
+    _persist(intent_id)
     return {"intent_id": intent_id, "order_id": rec["order_id"], "status": "CANCEL_PENDING",
-            "cancelled": False, "reason": "pending-not-canceled"}
+            "cancelled": False, "reason": "pending-not-canceled",
+            "receipt_version": RECEIPT_VERSION}
 
 
 async def supersede(
