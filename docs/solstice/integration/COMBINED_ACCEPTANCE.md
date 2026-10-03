@@ -1,6 +1,6 @@
 # Historical combined candidate — 2 October acceptance HOLD
 
-This report describes CODE `047153ec` and its then-current HOLDs. PR96 was later merged and Spark fixed generated docs/producer issues in PR97/98; current merged base is `08f3793c242d943ab3b61b84e5394ce4602daa0a`, with CI/CD37091898123 and lint37091898108 SUCCESS. Do not treat the old API-doc blocker below as still open. Current continuation, remaining producer requirements and model/operational blockers are in [ZED_STATE](../ZED_STATE.md) and [COMMISSIONING](COMMISSIONING.md); a fresh PR99 combined receipt will be published separately.
+This report describes CODE `047153ec` and its then-current HOLDs. PR96 was later merged and Spark fixed generated docs/producer issues in PR97/98; current merged base is `08f3793c242d943ab3b61b84e5394ce4602daa0a`, with CI/CD37091898123 and lint37091898108 SUCCESS. Do not treat the old API-doc blocker below as still open. Current continuation, remaining producer requirements and model/operational blockers are in [ZED_STATE](../ZED_STATE.md) and [COMMISSIONING](COMMISSIONING.md); current [R17_ACCEPTANCE](R17_ACCEPTANCE.md) supersedes the R16 candidate, includes main6eaa3343/PR102 and PR103 coverage consumers. The old report below remains historical.
 
 ## Integrated sources
 
