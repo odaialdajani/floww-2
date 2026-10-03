@@ -989,3 +989,13 @@ Verification: admission **15 passed**; full `tests/solstice/` **667
 passed**; ruff + silent-gate (359) + truth + API-380 green.
 Process: the trailing-newline edit defect recurred on §40 (repaired,
 verified). No header-only edits from here — append-only with context.
+
+## 43. Full-suite lane receipt (3 Oct 2026)
+
+Full backend suite at lane `ba14cc38` (Mongo up, unmasked): **7136 passed,
+37 skipped** (pre-existing), 0 failures, ~11 min. Note: combined `d5a8b469`
+predates S1–S4 (Zed composes it next — his call per ownership contract, not
+a lane merge from here). PR103 hosted ruff/frontend green, backend running.
+Header-edit defect recurred on §42 (repaired + verified immediately).
+Filing correction: §§41/42 are chronologically swapped in this file
+(cosmetic only — content and heads intact; renumbering would churn more).
