@@ -20,6 +20,40 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
   const [health, setHealth] = useState(null);
   const [day, setDay] = useState("");
   const [refusal, setRefusal] = useState(null);
+  const [sessions, setSessions] = useState(null);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const sessionController = useRef(null);
+  const sessionGeneration = useRef(0);
+  useEffect(() => {
+    sessionGeneration.current += 1;
+    setSessions(null);
+    setSessionsLoading(false);
+    setDay("");
+    return () => { sessionGeneration.current += 1; sessionController.current?.abort(); };
+  }, [ticker]);
+  const loadSessions = useCallback(async () => {
+    const generation = ++sessionGeneration.current;
+    sessionController.current?.abort();
+    const ctrl = new AbortController();
+    sessionController.current = ctrl;
+    setSessions(null);
+    setSessionsLoading(true);
+    try {
+      const { data } = await axios.get(`${BACKEND_API}/solstice/price-paths/sessions?ticker=${encodeURIComponent(ticker)}`, { timeout: 15000, signal: ctrl.signal });
+      if (sessionGeneration.current !== generation) return;
+      const error = data?.error || (data?.version !== "coverage-read.v1" ? "COVERAGE_VERSION_UNSUPPORTED"
+        : data.ticker !== ticker ? "SESSION_IDENTITY_MISMATCH"
+        : !Array.isArray(data.days) || data.n_days !== data.days.length || data.days.some(entry =>
+          !/^\d{4}-\d{2}-\d{2}$/.test(entry?.date || "") || !Number.isInteger(entry.n_snapshots) || entry.n_snapshots < 1
+          || !entry.latest_snapshot_id || !entry.first_asof || !entry.last_asof)
+          ? "SESSION_INDEX_UNAVAILABLE" : null);
+      setSessions(error ? { error } : data);
+    } catch (e) {
+      if (sessionGeneration.current === generation) setSessions({ error: "SESSION_READ_FAILED" });
+    } finally {
+      if (sessionGeneration.current === generation) setSessionsLoading(false);
+    }
+  }, [ticker]);
   const requestController = useRef(null);
   const beginRequest = useCallback(() => {
     requestController.current?.abort();
@@ -53,6 +87,8 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
     const myTicker = ticker;
     const ctrl = beginRequest();
     setLoading(true);
+    setPlaying(false);
+    setCompare(null);
     setRefusal(null);
     try {
       const query = day ? `?day=${encodeURIComponent(day)}` : "";
@@ -81,11 +117,24 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
     const myTicker = ticker;
     const ctrl = beginRequest();
     setLoading(true);
+    setPlaying(false);
+    setCompare(null);
     try {
       const query = day ? `?day=${encodeURIComponent(day)}` : "";
       const r = await axios.get(`${BACKEND_API}/solstice/attribute/${encodeURIComponent(ticker)}${query}`, { timeout: 15000, signal: ctrl.signal });
       if (genRef.current !== myGen || myTicker !== ticker) return;
-      setCompare(r.data);
+      if (r.data?.status !== "ok") { setCompare(r.data || { status: "unavailable", reason: "COMPARISON_UNAVAILABLE" }); return; }
+      const baseline = r.data.from?.id, snapshot = r.data.to?.id;
+      if (!baseline || !snapshot || r.data.ticker !== ticker || (day && r.data.day !== day)) {
+        setCompare({ status: "unavailable", reason: "COMPARISON_IDENTITY_MISMATCH" }); return;
+      }
+      // Attribute supplies arithmetic; only the owning-pair gate can admit it.
+      const { data: admission } = await axios.get(`${BACKEND_API}/solstice/price-paths/comparable?baseline_id=${encodeURIComponent(baseline)}&snapshot_id=${encodeURIComponent(snapshot)}`, { timeout: 15000, signal: ctrl.signal });
+      if (genRef.current !== myGen) return;
+      const reason = admission?.version !== "coverage-read.v1" ? "COVERAGE_VERSION_UNSUPPORTED"
+        : admission.admitted !== true ? admission.reason || "COMPARISON_NOT_ADMITTED"
+        : admission.baseline_id !== baseline || admission.snapshot_id !== snapshot ? "COMPARISON_IDENTITY_MISMATCH" : null;
+      setCompare(reason ? { status: "unavailable", reason, detail: admission?.detail } : r.data);
     } catch (e) {
       if (genRef.current !== myGen) return;
       setCompare({ status: "error" });
@@ -100,6 +149,7 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
     const myTicker = ticker;
     const ctrl = beginRequest();
     setLoading(true);
+    setCompare(null);
     setRefusal(null);
     try {
       const r = await axios.get(`${BACKEND_API}/solstice/replay/${encodeURIComponent(id)}`, { timeout: 15000, signal: ctrl.signal });
@@ -132,7 +182,11 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
     // re-enter replay after the user chose Live.
     genRef.current += 1;
     requestController.current?.abort();
+    sessionGeneration.current += 1;
+    sessionController.current?.abort();
+    setSessionsLoading(false);
     setLoading(false);
+    setCompare(null);
     setRefusal(null);
     setCurrentId(null);
     setReplayAsOf(null);
@@ -178,6 +232,14 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
   return (
     <div className="skylit-replay-strip" data-testid="solstice-replay-strip"
       title="Deterministic replay — what was available at decision time">
+      <button className="skylit-trade-mode-btn" onClick={loadSessions} disabled={sessionsLoading}>Stored sessions</button>
+      {sessionsLoading && <span role="status">Reading stored sessions…</span>}
+      {sessions && <span role="status" data-testid="solstice-session-status">{sessions.error || (sessions.days.length ? `${sessions.days.length} stored sessions · America/New_York` : "No stored sessions — capture not established")}</span>}
+      {sessions?.days?.length > 0 && <label>Recorded <select aria-label="Recorded sessions" value={sessions.days.some(entry => entry.date === day) ? day : ""}
+        onChange={e => { exitReplay(); setDay(e.target.value); }}>
+        <option value="">Choose a stored session</option>
+        {sessions.days.map(entry => <option key={entry.date} value={entry.date}>{entry.date} · {entry.n_snapshots} observations</option>)}
+      </select></label>}
       <label>Session <input type="date" aria-label="Stored session date" value={day}
         onChange={e => { exitReplay(); setDay(e.target.value); }} /></label>
       <button className="skylit-trade-mode-btn" onClick={load} data-testid="solstice-replay-load"
@@ -234,7 +296,7 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
       {refusal && <span role="alert">{refusal}</span>}
       {manifest?.error && <span role="alert">Replay unavailable · {manifest.error}</span>}
       {health?.error && <span>Recorder health unavailable</span>}
-      {compare && !["ok", "history_unavailable"].includes(compare.status) && <span role="status">Comparison unavailable · {compare.reason || compare.error || compare.status}</span>}
+      {compare && !["ok", "history_unavailable"].includes(compare.status) && <span role="status" title={compare.detail || "Comparable identity, source, scope, formula, session and ordering are required"}>Comparison unavailable · {compare.reason || compare.error || compare.status || "COMPARISON_UNAVAILABLE"}</span>}
       {compare && compare.status === "ok" && (
         <span data-testid="solstice-compare-result"
           title={`Prior ${compare.from?.asof || "?"} → current ${compare.to?.asof || "?"}; coarse wall-level comparison; use the counterfactual for spot/IV/time/OI decomposition`}>

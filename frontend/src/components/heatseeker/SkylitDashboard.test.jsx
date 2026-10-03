@@ -74,6 +74,51 @@ jest.mock("./RndDensityPanel",              () => () => <div data-testid="hs-rnd
 // Import AFTER mocks are set up.
 import SkylitDashboard from "./SkylitDashboard";
 import useScreenContext from "../../agent/useScreenContext";
+import coverageFixture from "../../fixtures/integration/coverage-read.v1.json";
+
+test('listed expiry admission is an explicit read, not a new map or selection', async () => {
+  axios.get.mockResolvedValue({ data: coverageFixture.expiries });
+  render(<SkylitDashboard ticker="SPY" data={selectionMap()} />);
+  const before = screen.getByTestId('skylit-loaded-scope').textContent;
+  fireEvent.click(screen.getByText('Listed 14–60 DTE coverage'));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read listed coverage' })));
+  expect(axios.get).toHaveBeenCalledWith(expect.stringContaining('/price-paths/expiries?ticker=SPY&min_dte=14&max_dte=60&expirations=12'), expect.objectContaining({ signal: expect.anything() }));
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('2026-10-30');
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('28 DTE');
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('BELOW_WINDOW');
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('first 12 listed');
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('2026-10-02T14:05:00Z');
+  expect(screen.getByTestId('skylit-loaded-scope')).toHaveTextContent(before);
+});
+
+test.each([
+  [{ ticker: 'QQQ' }, 'EXPIRY_IDENTITY_MISMATCH'],
+  [{ version: 'coverage-read.v2' }, 'COVERAGE_VERSION_UNSUPPORTED'],
+  [{ window: { min_dte: 0, max_dte: 30 } }, 'EXPIRY_WINDOW_MISMATCH'],
+  [{ stale: true }, 'EXPIRY_OBSERVATION_STALE'],
+  [{ stale: null }, 'EXPIRY_FRESHNESS_UNKNOWN'],
+  [{ fetched_at: null }, 'EXPIRY_OBSERVATION_UNDECLARED'],
+])('expiry disclosure refuses mismatched or non-fresh inventory', async (override, reason) => {
+  axios.get.mockResolvedValue({ data: { ...coverageFixture.expiries, ...override } });
+  render(<SkylitDashboard ticker="SPY" data={selectionMap()} />);
+  fireEvent.click(screen.getByText('Listed 14–60 DTE coverage'));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read listed coverage' })));
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent(reason);
+  expect(screen.queryByRole('table', { name: 'Listed expiry admission' })).toBeNull();
+});
+
+test('ticker change aborts expiry inventory and discards late success', async () => {
+  let release;
+  axios.get.mockImplementation(url => String(url).includes('/price-paths/expiries') ? new Promise(resolve => { release = resolve; }) : Promise.resolve({ data: {} }));
+  const ui = render(<SkylitDashboard ticker="SPY" data={selectionMap()} />);
+  fireEvent.click(screen.getByText('Listed 14–60 DTE coverage'));
+  fireEvent.click(screen.getByRole('button', { name: 'Read listed coverage' }));
+  const signal = axios.get.mock.calls.find(([url]) => String(url).includes('/price-paths/expiries'))[1].signal;
+  ui.rerender(<SkylitDashboard ticker="QQQ" data={{ ...selectionMap(), ticker: 'QQQ' }} />);
+  expect(signal.aborted).toBe(true);
+  await act(async () => release({ data: coverageFixture.expiries }));
+  expect(screen.queryByRole('table', { name: 'Listed expiry admission' })).toBeNull();
+});
 
 test('R12: strike review callback requires explicitly armed Trade mode', () => {
   const onStrikeClick = jest.fn();
