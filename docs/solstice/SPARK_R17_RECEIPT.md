@@ -95,3 +95,40 @@ Remaining: externals unchanged: SPX, feeds, fixed account/risk policy, native
 activation, participants, durable production capture with admitted records,
 real-money record, Nav visual review. Combined acceptance: Zed re-composes at
 this lane head; merge decisions are Nav's.
+
+## Addendum (3 Oct 2026 — hardening §24, controls §25, gate fix §27)
+
+Lane heads: `c10361ac` (§24) → `e3937674` (§25) → `a4abe216` (silent-gate
+fix) → this receipt. Base stays `origin/main` `6eaa3343`.
+PR103 OPEN (review-only). Combined branch `solstice/combined-r17-20261003`
+(main + Zed `7ea8cbff` + this lane) re-composed at publication — exact
+combined SHA is PR105's head, not this lane. PR105 OPEN, hosted CI
+re-running at publication. Main unmerged; no deploy/activation/orders.
+
+- §24: supersede pre-validates approval/preflight before cancel; inventory
+  unions durable drafts; `_open_count()` = max(memory, durable); sessions
+  ET-unparseable disclosure; producer high-water seeding. 6 tests.
+- §25: `range_map` on `/expiries` (LIMITATION STATED: an expiry-list
+  projection from observed listings — sorted admitted expiries/DTEs +
+  completeness flag — NOT a persisted analytical grid; range-map analytics
+  and execution activation stay disabled); account-policy registry
+  (`account-policy.v1`) enforced in validation; stored + revocable
+  approvals; `RECOVERY_REQUIRED` before entry on fresh processes;
+  conservative native-protection matrix; inventory counts. 6 tests.
+  Fixture `r15/evidence/execution_controls_v1.json`.
+- §27: PR105 lint failed on 7 unjustified silent handlers in the §25
+  lifecycle code (mine) — all justified; plus revocation resurrection,
+  cross-process revocation masking, and stale-policy holes closed. 3 tests.
+- OpenAPI stays **380 paths** (one description-only regen for the
+  `range_map` docstring under the taken boundary).
+
+Verification (exact lane head `a4abe216`, Python 3.14.6 disclosed, backend
+CWD): hardening **15 passed**; adjacent (r17 9 + inventory 5 + hardening 15
++ wiring 8 + lifecycle 42) **79 passed**; full `tests/solstice/` **633
+passed**; `ruff` touched clean; silent-except gate OK (353 files); truth
+audit 226/0; `generate_api_docs --check` current.
+
+Net outcomes (unchanged): ZERO durable admitted records → INSUFFICIENT
+EVIDENCE. Read-only inventory reports approval/risk/ownership/protection/
+recovery state; it does not close those controls and authorizes nothing.
+Activation OFF. No profitability claim.
