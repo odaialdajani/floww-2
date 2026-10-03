@@ -175,7 +175,7 @@ class ResearchService:
                     if (
                         not spec.get("price_only")
                         and self.model is not None
-                        and any(f["metric"] == "Underlying price" for f in answer["facts"])
+                        and any(f["metric"] in {"Underlying price", "Exact contract OSI"} for f in answer["facts"])
                     ):
                         try:
                             await self._interpret(owner, turn_id, spec, answer, snapshots)

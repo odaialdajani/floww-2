@@ -24,6 +24,7 @@ import ExactContractReview from "./ExactContractReview";
 import { GroundedPublicReview } from "../public/PublicHandoffReview";
 
 import SolsticeSymbolMaps from "./SolsticeSymbolMaps";
+import RangeAnalyticsWorkspace from "./RangeAnalyticsWorkspace";
 import { resolveSelectedWall, wallPositionOf } from "../../lib/solsticeSelection";
 
 /**
@@ -226,6 +227,8 @@ function SkylitDashboard({
   onCellClick,
   onStrikeClick,
   onReplayChange,
+  analyticalRangeOpen,
+  onAnalyticalRangeChange,
   isLive = false,
   regime = null,
   loading = false,
@@ -234,6 +237,8 @@ function SkylitDashboard({
   // control bar so arrows/buttons/search traverse everything, not fallbacks.
   tickers = null,
 }) {
+  const [localRangeOpen, setLocalRangeOpen] = useState(false);
+  const rangeOpen = analyticalRangeOpen ?? localRangeOpen;
   const [tradeMode, setTradeMode] = useState(false);
   const [selectedCell, setSelectedCell] = useState(null);
   const [contractSelection, setContractSelection] = useState(null);
@@ -470,7 +475,12 @@ function SkylitDashboard({
   const currentContract = contractSelection?.ticker === ticker && contractSelection.snapshotId === visibleData?.snapshotId
     && contractSelection.wallId === (selectedCell?.wall_id || null) && contractSelection.replay === isReplay
     && contractSelection.selectionScope === contractScope ? contractSelection : null;
-  usePublishScreenContext({contextVersion:2,page:"heatseeker",ticker,
+  useEffect(() => {
+    setSelectedCell(null); setContractSelection(null); setReplaySnap(null);
+    setReplayPanelOpen(false); setReplayOpenRequest(null); setExpanded(false);
+    setFollowWall(false); setFollowWallId(null); setDrawerOpen(false); setPriceHistoryOpen(false);
+  }, [rangeOpen]);
+  usePublishScreenContext(rangeOpen ? null : {contextVersion:2,page:"heatseeker",ticker,
         selectedContract:priceHistoryOpen ? null : currentContract?.identity || null, contractResolution:currentContract?.status || null,
         recordedMetricVersion:!priceHistoryOpen && isReplay && ["vex", "charm"].includes(activeView) ? visibleData?.grid?.[activeView + "_meta"]?.record_version || null : null,
         windowBaselineId:!priceHistoryOpen && activeMetric === "window" ? visibleData?.metrics?.grids?.window?.comparison?.previous_snapshot_id || null : null,
@@ -657,6 +667,11 @@ function SkylitDashboard({
       />
 
       <StockDirectory onSelect={onTickerChange} />
+      <button type="button" className="range-mode-toggle" aria-pressed={rangeOpen} onClick={() => {
+        if (onAnalyticalRangeChange) onAnalyticalRangeChange(!rangeOpen);
+        else setLocalRangeOpen(!rangeOpen);
+      }}>{rangeOpen ? "Return to current map" : "Analytical range · 14–60 DTE"}</button>
+      {rangeOpen ? <RangeAnalyticsWorkspace ticker={ticker} /> : <>
       <PriceNodeHistory ticker={ticker} open={priceHistoryOpen} onOpenChange={setPriceHistoryOpen} />
 
       {/* 2. Control Bar */}
@@ -1127,6 +1142,7 @@ function SkylitDashboard({
           )}
         </div>
       </div>
+      </>}
     </div>
   );
 }

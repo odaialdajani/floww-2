@@ -37,6 +37,19 @@ test("native brief requires explicit owner; copy is not activation and policy st
  expect(screen.getByText(/Saved operator report — broker status and activation remain unverified/)).toBeVisible();
 });
 
+test('manual draft contains explicit unresolved entry, expiry, notification and risk instructions without inventing a limit',()=>{
+ render(<PublicHandoffReview selection={selection} turn={turn} grounded/>);
+ fireEvent.change(screen.getByLabelText('Execution owner'),{target:{value:'PUBLIC_NATIVE_AGENT'}});
+ fireEvent.click(screen.getByRole('button',{name:'Prepare dated brief'}));
+ const brief=screen.getByLabelText('Editable Public brief').value;
+ for(const field of ['Limit price: UNSET','Quantity: UNSET','Entry conditions: UNSET','Trading window: UNSET','Expiry handling: UNSET','Notifications: UNSET'])expect(brief).toContain(field);
+ expect(brief).toContain('Recorded symbol: SPY');
+ expect(brief).toContain('Account entitlement and current broker support: UNVERIFIED');
+ expect(brief).toContain('Risks: premium loss, liquidity/spread, gap/slippage, expiration and assignment');
+ expect(brief).not.toContain('Limit price: 1.1');
+ expect(global.fetch).not.toHaveBeenCalled();
+});
+
 test("backend owner refuses without immutable preflight, policy, approval and overlap inventory",()=>{
  render(<PublicHandoffReview selection={selection} turn={turn} grounded/>);
  fireEvent.change(screen.getByLabelText("Execution owner"),{target:{value:"FLOWW_BACKEND"}});

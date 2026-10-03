@@ -3,13 +3,15 @@ const fs=require('fs'),path=require('path'),http=require('http'),crypto=require(
 const {execFileSync}=require('child_process');
 const {chromium}=require('../frontend/node_modules/playwright');
 const root=path.resolve(__dirname,'..'),frontend=path.join(root,'frontend'),build=path.join(frontend,'build');
-const evidence=path.join(root,'docs/solstice/integration/evidence');
+const evidence=path.resolve(root,process.argv[4] || 'docs/solstice/integration/evidence');
 const fixturePath=path.join(root,'docs/solstice/r14/evidence/vertical-fixture.json');
 const fixture=JSON.parse(fs.readFileSync(fixturePath));
 const coveragePath=path.join(frontend,'src/fixtures/integration/coverage-read.v1.json');
 const coverage=JSON.parse(fs.readFileSync(coveragePath));
 const lifecyclePath=path.join(frontend,'src/fixtures/integration/lifecycle-inventory.v1.json');
 const lifecycle=JSON.parse(fs.readFileSync(lifecyclePath));
+const rangePath=path.join(frontend,'src/fixtures/integration/range-analytics.v1/complete.json');
+const rangeComplete=JSON.parse(fs.readFileSync(rangePath)),rangePartial=JSON.parse(fs.readFileSync(path.join(frontend,'src/fixtures/integration/range-analytics.v1/partial.json')));
 const python=process.argv[2],executablePath=process.argv[3];
 assert(python && executablePath,'Provide verified interpreter and browser executable paths');
 const hash=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
@@ -26,10 +28,12 @@ assert.deepStrictEqual(sourceHashes(),source,'Owned source changed during compil
 const manifest=JSON.parse(fs.readFileSync(path.join(build,'asset-manifest.json')));
 const bundleHashes=Object.fromEntries(Object.entries(manifest.files).filter(([key])=>/\.(js|css)$/.test(key)).map(([key,value])=>[key,hash(fs.readFileSync(path.join(build,value.replace(/^\//,''))))]));
 const receipt={version:'floww-browser-receipt.v1',fixtureOnly:true,sourceCommit:execFileSync('git',['--no-pager','rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),sourceHashes:source,bundleHashes,fixtureHash:hash(fs.readFileSync(fixturePath)),routes:[],viewports:[],screenshots:[],externalRequestsBlocked:[],forbiddenMutations:[],pageErrors:[],warnings:[],research:[],checks:[],coverageFixtureHash:hash(fs.readFileSync(coveragePath)),coverageReads:[],lifecycleFixtureHash:hash(fs.readFileSync(lifecyclePath)),lifecycleReads:[]};
-let lastTurn=null,refuseComparison=false,overnightSessions=false,recoveryReview=false;
+receipt.rangeFixtureHash=hash(fs.readFileSync(rangePath));receipt.rangeReads=[];
+let lastTurn=null,refuseComparison=false,overnightSessions=false,recoveryReview=false,partialRange=false;
 const controlledInventory={...lifecycle.inventory,...lifecycle.control_additions,protection:{...lifecycle.inventory.protection,...lifecycle.control_additions.protection}};
 function body(url){
  const p=url.pathname;
+ if(p==='/api/heatmap/SPY/range-analytics')return partialRange?rangePartial:rangeComplete;
  if(/\/heatmap\/SPY|\/data\/SPY/.test(p))return fixture.display;
  if(/\/heatmap\/QQQ|\/data\/QQQ/.test(p))return fixture.secondary_display;
  if(/\/heatmap\/|\/data\//.test(p))return {ticker:p.split('/').pop(),strikes:[],grid:{},quality:{state:'unavailable',setupEligible:false,reasonCodes:['NO_ENTITLED_FIXTURE']}};
@@ -83,6 +87,7 @@ const server=http.createServer((req,res)=>{
    if(url.pathname.startsWith('/api/')){
     if(url.pathname==='/api/public/execution-lifecycle/inventory')receipt.lifecycleReads.push({path:url.pathname,method:request.method()});
     if(url.pathname.includes('/price-paths/'))receipt.coverageReads.push({path:url.pathname,query:url.search,method:request.method()});
+    if(url.pathname.endsWith('/range-analytics')){assert.strictEqual(url.searchParams.get('persist'),'false');receipt.rangeReads.push({path:url.pathname,query:url.search,method:request.method()});}
     if(url.pathname==='/api/preferences/theme' && request.method()==='POST')return route.fulfill({json:{ok:true,fixture_only:true}});
     if(url.pathname.endsWith('/alerts/stream'))return route.fulfill({contentType:'text/event-stream',body:'retry: 300000\n: fixture no-feed\n\n'});
     if(request.method()!=='GET' && url.pathname!=='/api/agent/session'){
@@ -132,6 +137,20 @@ const server=http.createServer((req,res)=>{
   await lodestar.getByRole('button',{name:'Close',exact:true}).click();
   const handoff=page.getByRole('region',{name:'Public agent review'});await handoff.getByLabel('Execution owner').selectOption('PUBLIC_NATIVE_AGENT');await handoff.getByRole('button',{name:'Prepare dated brief'}).click();assert((await handoff.getByLabel('Editable Public brief').inputValue()).includes('Premium budget: UNSET'));await page.screenshot({path:path.join(evidence,'public-handoff-1440.png'),fullPage:true});receipt.checks.push('owning-contract deterministic draft + manual native brief, no execution');
   await page.keyboard.press('Escape');
+  await navigate('heatseeker');
+  await page.getByRole('button',{name:'Analytical range · 14–60 DTE',exact:true}).click();
+  assert.strictEqual(await page.getByLabel('Canvas layout').count(),0);assert.strictEqual(receipt.rangeReads.length,0,'Range read is explicit');
+  await page.getByRole('button',{name:'Load analytical range',exact:true}).click();await page.getByRole('grid',{name:'Raw OI GEX · strike by expiry'}).waitFor();
+  const rangeFirst=page.getByRole('button',{name:/^590 · 2026-10-26/});await rangeFirst.click();await page.keyboard.press('ArrowRight');
+  assert(await page.getByRole('button',{name:/^590 · 2026-11-09/}).evaluate(e=>e===document.activeElement),'Range arrow focus');
+  await page.getByLabel('Range metric').selectOption('delta_weighted');assert((await page.getByRole('complementary',{name:'Range selection review'}).textContent()).includes('Select an available cell'));
+  await page.getByLabel('Range metric').selectOption('window');await page.getByText(/Window volume.*HISTORY_NOT_YET_RECORDED/).waitFor();assert.strictEqual(await page.getByRole('grid').count(),0);
+  await page.getByLabel('Range metric').selectOption('raw_oi');partialRange=true;await page.getByRole('button',{name:'Load analytical range',exact:true}).click();await page.getByText(/Partial expiry coverage/).waitFor();
+  assert((await page.getByRole('region',{name:'Solstice analytical range'}).textContent()).includes(rangePartial.coverage.skipped[0].reason));
+  assert(await page.getByRole('button',{name:'Range replay unavailable',exact:true}).isDisabled());
+  for(const width of [1440,390])await capture('range-partial',width);
+  await page.getByRole('button',{name:'Return to current map',exact:true}).click();await page.getByLabel('Canvas layout').waitFor();
+  assert(receipt.rangeReads.every(r=>r.method==='GET'));receipt.checks.push('owning analytical range: exclusive canvas; explicit persist=false read; basis invalidation; arrow focus; null skipped coverage; unavailable window/replay; wide and small-screen readability');
   await navigate('trinity');for(const width of [1440,1280,390])await capture('triad',width);
   await navigate('heatseeker');await page.setViewportSize({width:1440,height:1000});await page.getByRole('grid').first().waitFor();
   const worker=context.serviceWorkers()[0] || await context.waitForEvent('serviceworker',{timeout:15000});
@@ -142,6 +161,10 @@ const server=http.createServer((req,res)=>{
   assert.strictEqual(factor,2);assert(after.width<=before.width*.51);assert.strictEqual(after.cssZoom,'1');assert.strictEqual(after.visualScale,1);
   receipt.nativeZoom={method:'chrome.tabs.setZoom; no CSS/pinch emulation',factor,before,after};
   await page.getByRole('grid').first().evaluate(e=>e.scrollIntoView({block:'center'}));const cdp=await context.newCDPSession(page);const native=await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false,fromSurface:true});fs.writeFileSync(path.join(evidence,'solstice-native200.png'),Buffer.from(native.data,'base64'));await cdp.detach();
+  await page.getByRole('button',{name:'Analytical range · 14–60 DTE',exact:true}).click();await page.getByRole('button',{name:'Load analytical range',exact:true}).click();await page.getByRole('grid',{name:'Raw OI GEX · strike by expiry'}).waitFor();
+  assert.strictEqual(await worker.evaluate(async id=>chrome.tabs.getZoom(id),tab),2);const rangeZoom=await page.evaluate(()=>({width:innerWidth,documentWidth:document.documentElement.scrollWidth}));
+  assert(rangeZoom.documentWidth<=rangeZoom.width+1,'Range page must not overflow at native200%');
+  const rangeCdp=await context.newCDPSession(page);const rangeShot=await rangeCdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false,fromSurface:true});fs.writeFileSync(path.join(evidence,'range-native200.png'),Buffer.from(rangeShot.data,'base64'));await rangeCdp.detach();receipt.rangeNativeZoom={factor:2,...rangeZoom};
   assert.strictEqual(receipt.pageErrors.length,0,receipt.pageErrors.join('; '));assert.strictEqual(receipt.forbiddenMutations.length,0);assert.deepStrictEqual(sourceHashes(),source);
   receipt.status='passed_fixture_full_app_browser';
  }catch(error){receipt.status='failed';receipt.failure=error.message;console.error(error.stack);process.exitCode=1;}

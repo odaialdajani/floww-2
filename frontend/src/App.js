@@ -498,6 +498,7 @@ export default function App() {
   const { theme, toggleTheme } = useTheme();
   const [tradeSelection, setTradeSelection] = useState(null);
   const [heatmapReplay, setHeatmapReplay] = useState(false);
+  const [analyticalRangeOpen, setAnalyticalRangeOpen] = useState(false);
   const [tideReviewActive, setTideReviewActive] = useState(false);
   // Use auth context for user info
   const userEmail = user?.email || null;
@@ -863,8 +864,8 @@ export default function App() {
             <aside className={`heatseeker-sidebar-left ${showLeftSidebar ? 'open' : ''}`}>
               <div className="p-2 space-y-2">
                 {/* Ticker Summary */}
-                {heatmapReplay ? <div className="panel p-3" data-testid="replay-summary">
-                  Recorded view · current quote and summary hidden during replay.
+                {heatmapReplay || analyticalRangeOpen ? <div className="panel p-3" data-testid="replay-summary">
+                  Owning evidence view · current quote and summary hidden; read the displayed record clocks.
                 </div> : <div className="panel p-3">
                   <div className="flex justify-between items-baseline mb-2">
                     <div className="text-[13px] font-bold tracking-wider">{ticker.replace("^", "")}</div>
@@ -962,9 +963,9 @@ export default function App() {
                   </div>
                   <div className="flex gap-1 mb-2">
                     <button type="button" className={`btn ${expiryScope === "next" && mode === "day" ? "active" : ""}`} onClick={() => { setMode("day"); setDte(null); setExpiryScope("next"); }}>Next listed · day</button>
-                    <button type="button" className="btn" disabled aria-describedby="solstice-range-blocker">14–60 DTE</button>
+                    <button type="button" className={`btn ${analyticalRangeOpen ? "active" : ""}`} aria-pressed={analyticalRangeOpen} onClick={() => { setView("profile"); setAnalyticalRangeOpen(value => !value); }}>14–60 DTE analytical</button>
                   </div>
-                  <small id="solstice-range-blocker">14–60 DTE map unavailable: listed coverage is read-only; the display query still caps DTE at 30 and has no range projection.</small>
+                  <small>Analytical range is a separate research canvas with its owning clocks and coverage. Current-map DTE filters do not change that query.</small>
                   <div className="text-slate-500 mb-1 text-[10px]">Expiries</div>
                   <div className="flex gap-1">
                     {[2,4,6,8,12].map(n => (
@@ -973,8 +974,8 @@ export default function App() {
                   </div>
                 </div>
 
-                {!heatmapReplay && <Movers onPick={(t) => setTicker(t)} />}
-                {!heatmapReplay && <SolsticeLeaderboard onPick={setTicker} dte={dte} />}
+                {!heatmapReplay && !analyticalRangeOpen && <Movers onPick={(t) => setTicker(t)} />}
+                {!heatmapReplay && !analyticalRangeOpen && <SolsticeLeaderboard onPick={setTicker} dte={dte} />}
                 <HistoryPanel ticker={ticker} />
                 <SettingsPanel
                   refreshMs={refreshMs}
@@ -1002,6 +1003,8 @@ export default function App() {
                   expiryScope={effectiveExpiryScope}
                   localView={view}
                   onReplayChange={setHeatmapReplay}
+                  analyticalRangeOpen={analyticalRangeOpen}
+                  onAnalyticalRangeChange={setAnalyticalRangeOpen}
                   ticker={ticker}
                   spot={livespot?.spot ?? data?.spot}
                   change={livespot?.change ?? data?.change}
@@ -1028,6 +1031,8 @@ export default function App() {
                   expiryScope={effectiveExpiryScope}
                   localView={view}
                   onReplayChange={setHeatmapReplay}
+                  analyticalRangeOpen={analyticalRangeOpen}
+                  onAnalyticalRangeChange={setAnalyticalRangeOpen}
                   ticker={ticker}
                   spot={livespot?.spot ?? data?.spot}
                   change={livespot?.change ?? data?.change}

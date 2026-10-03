@@ -36,6 +36,7 @@ export default function AgentProvider({children}){
  const askQuestion=useCallback(async(question)=>{
   if(busy.current || ending.current || !question.trim())return;
   if(!context.ticker){setError("Open the Solstice grid or Tidehunter to ask about the current selection.");return;}
+  if(context.displayMode?.startsWith('range-') || context.rangeVersion){setError('RANGE_RESEARCH_UNAVAILABLE: the owning stored range resolver is pending; no current-chain substitute or model turn.');return;}
   busy.current=true;setError(null);setSessionNotice(null);setProgress("Starting research");
   frozen.current=JSON.parse(JSON.stringify(context));
   const epoch=historyEpoch.current;
