@@ -399,3 +399,67 @@ def admit_production_entry(
     return {"decision": "ADMIT", "reason": None, "version": ADMISSION_VERSION,
             "intent_hash": digest, "account_id": account_id,
             "policy_version": pol.get("version")}
+
+
+def admit_commissioned_entry(
+    conn: Any, intent: dict[str, Any], ctx: dict[str, Any], broker: Any,
+    approval: dict[str, Any] | None = None,
+    approval_scope: str = "single-entry",
+    operator_id: str | None = None,
+    risk_facts: dict[str, Any] | None = None,
+    remote_native: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Commissioned admission: S1 authority + operator + risk + remote census.
+
+    Layers on top of `admit_production_entry` (same fail-closed semantics):
+    - operator_id must be registered AND allowed for the intent account
+      (OPERATOR_UNKNOWN / OPERATOR_UNAUTHORIZED). A bare string proves
+      nothing without the registry row.
+    - risk_facts (injected verified broker facts) are evaluated against the
+      required account policy; missing/incomplete facts and any breach
+      refuse. The ledger never runs without facts.
+    - remote_native is the verified remote native-workflow census
+      ({workflows: [{strategy, status, ...}]}). Absent/unverifiable census
+      refuses NATIVE_CENSUS_UNAVAILABLE; any OPEN remote workflow refuses
+      OVERLAP_NATIVE. An empty local list proves nothing here.
+    Zero broker calls in every path.
+    """
+    from services import account_risk_ledger as ledger
+    from services import operator_registry as operators
+
+    if conn is None:
+        return {"decision": "REFUSE", "reason": "STORE_UNAVAILABLE",
+                "version": ADMISSION_VERSION}
+    if not isinstance(intent, dict):
+        return {"decision": "REFUSE", "reason": "BAD_CONTRACT",
+                "version": ADMISSION_VERSION}
+    account_id = str(intent.get("account_id") or "")
+    auth = operators.authorize_operator(conn, operator_id or "", account_id)
+    if not auth.get("ok"):
+        return {"decision": "REFUSE", "reason": auth.get("reason"),
+                "version": ADMISSION_VERSION}
+    base = admit_production_entry(conn, intent, ctx, broker, approval,
+                                  approval_scope)
+    if base.get("decision") != "ADMIT":
+        return base
+    if not isinstance(risk_facts, dict):
+        return {"decision": "REFUSE", "reason": "RISK_FACTS_INCOMPLETE",
+                "detail": "no injected broker facts", "version": ADMISSION_VERSION}
+    pol = get_account_policy_required(conn, account_id)
+    risk = ledger.evaluate_account_risk(
+        risk_facts, pol.get("policy") if pol.get("ok") else {})
+    if not risk.get("ok"):
+        return {"decision": "REFUSE", "reason": risk.get("reason"),
+                "detail": risk.get("detail"), "version": ADMISSION_VERSION}
+    if not isinstance(remote_native, dict) or not isinstance(
+            remote_native.get("workflows"), list):
+        return {"decision": "REFUSE", "reason": "NATIVE_CENSUS_UNAVAILABLE",
+                "version": ADMISSION_VERSION}
+    for wf in remote_native["workflows"]:
+        if isinstance(wf, dict) and str(wf.get("status") or "").upper() == "OPEN":
+            return {"decision": "REFUSE", "reason": "OVERLAP_NATIVE",
+                    "detail": f"remote workflow {wf.get('strategy')} OPEN",
+                    "version": ADMISSION_VERSION}
+    base["operator_id"] = auth.get("operator_id")
+    base["risk_snapshot"] = risk.get("snapshot")
+    return base
