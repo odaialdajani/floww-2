@@ -57,8 +57,7 @@ record, Nav visual review.
 
 ## Take-over additions (3 Oct 2026 — Cline, pass 2)
 
-Addressing Zed's PR103 residual requests (1) and (2); (3) remains READY-owned
-next:
+Addressing Zed's PR103 residual requests (1), (2) and (3):
 
 - `/sessions` (coverage-read.v1): day attribution is now the stored `asof_ts`
   timestamp prefix — the same attribution `session_manifest`/
@@ -76,13 +75,23 @@ next:
   refusal before fetch, display-envelope + coverage projection).
 - `docs/api/openapi.json` regenerated (taken boundary, precedent §12): diff is
   exactly the /expiries+/sessions schema updates; 379 paths; README unchanged.
+- Item (3): new read-only `lifecycle_inventory()` in
+  `public_execution_lifecycle.py` (known/open/UNKNOWN records with
+  conservative protection truth, draft stages, native workflows, redacted
+  preflight counts, honest recovery boundary — storeless never claimed as
+  no-orders-open; account-wide limits UNSET) served by new
+  `GET /api/public/execution-lifecycle/inventory` on the already-mounted
+  public_brokerage router: authenticated via `require_api_key` (503
+  unconfigured / 401 bad key), NO server.py edit, no live path, no recovery
+  executed, no broker call. `test_r17_lifecycle_inventory.py` 5 tests.
+- `docs/api/openapi.json` regenerated again: 379→**380** paths (+1 inventory
+  route, purely additive); README counts updated by the generator.
 
 Verification (exact head, Python 3.14.6 disclosed): r17 9 + wiring 8 = **17
-passed**; ruff touched clean; protected 71/71; no Zed-owned file touched.
+passed**; lifecycle inventory 5 + existing lifecycle 42 = **47 passed**; ruff
+touched clean; protected 71/71; no Zed-owned file touched.
 
-Remaining: item (3) authenticated/default-deny stored approvals/preflight +
-account-wide limits/inventory/protection/recovery boundary (lifecycle still
-unmounted; server.py mounts are Spark-owned) — next exact action. Externals
-unchanged: SPX, feeds, fixed account/risk policy, native activation,
-participants, durable production capture with admitted records, real-money
-record, Nav visual review.
+Remaining: externals unchanged: SPX, feeds, fixed account/risk policy, native
+activation, participants, durable production capture with admitted records,
+real-money record, Nav visual review. Combined acceptance: Zed re-composes at
+this lane head; merge decisions are Nav's.

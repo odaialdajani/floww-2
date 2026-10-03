@@ -975,3 +975,94 @@ def protection_status(intent_id: str) -> dict[str, Any]:
         return {"protected": False, "reason": "unknown-intent"}
     # No bracket/OCO linkage has been verified in this lane; never overstate.
     return {"protected": False, "reason": "no-verified-protection", "state": rec.get("state")}
+
+
+INVENTORY_VERSION = "lifecycle-inventory.v1"
+
+
+def lifecycle_inventory() -> dict[str, Any]:
+    """Read-only lifecycle inventory (R17-4, Zed request 3).
+
+    Aggregates the stored execution boundary without executing recovery,
+    any broker call or any new live path: known/open/unknown intent records
+    with conservative protection truth, draft stages (stored approvals and
+    preflight states are draft rows, never client booleans), native workflow
+    registrations, the NEW-ENTRY protection window and the honest recovery
+    boundary. A storeless registry is reported as storeless — never as proof
+    that no orders are open. Preflight context is counted, never returned
+    (redacted). Account-wide limits stay UNSET: this reports the boundary,
+    it does not set policy.
+    """
+    now = datetime.now(UTC)
+    terminal = {"FILLED", "REJECTED", "CANCELED"}
+    open_rows: list[dict[str, Any]] = []
+    unknown_rows: list[dict[str, Any]] = []
+    for intent_id, rec in _INTENTS.items():
+        state = str(rec.get("state") or "")
+        if state in terminal:
+            continue
+        intent = rec.get("intent") or {}
+        row = {
+            "intent_id": intent_id,
+            "ticker": intent.get("ticker"),
+            "state": state,
+            "order_id": rec.get("order_id"),
+            "owner": intent.get("execution_owner"),
+            "has_approval": rec.get("approval") is not None,
+            "protection": protection_status(intent_id),
+        }
+        if state == "UNKNOWN":
+            row["error"] = rec.get("error")
+            unknown_rows.append(row)
+        else:
+            open_rows.append(row)
+    durable_nonterminal: int | None = None
+    if _STORE is not None:
+        try:
+            counted = _STORE.execute(
+                "SELECT COUNT(*) FROM execution_intents_v1 "
+                "WHERE state NOT IN ('FILLED', 'REJECTED', 'CANCELED')").fetchone()
+            durable_nonterminal = int(counted[0]) if counted else 0
+        except Exception:
+            durable_nonterminal = None
+    drafts = list(_DRAFTS.values())
+    by_stage: dict[str, int] = {}
+    for draft in drafts:
+        stage = str(draft.get("stage") or "DRAFT")
+        by_stage[stage] = by_stage.get(stage, 0) + 1
+    return {
+        "version": INVENTORY_VERSION,
+        "durable": _STORE is not None,
+        "storeless": _STORE is None,
+        "intents": {
+            "n_known": len(_INTENTS),
+            "n_open": len(open_rows),
+            "open": open_rows,
+            "n_unknown": len(unknown_rows),
+            "unknown": unknown_rows,
+        },
+        "drafts": {
+            "n_staged": len(drafts),
+            "by_stage": by_stage,
+            "stages": list(_DRAFT_STAGES),
+        },
+        "native_workflows": list(_NATIVE_WORKFLOWS),
+        "preflight": {
+            "n_cached_contexts": len(_PREFLIGHT_CACHE),
+            "detail": "redacted: contexts are counted, never returned",
+        },
+        "protection": {
+            "entry_pause_now": is_entry_pause(now),
+            "cancel_allowed_during_pause": cancel_allowed_during_pause(),
+            "window": "11:30-14:00 America/New_York NEW-ENTRY pause (weekdays)",
+        },
+        "recovery": {
+            "durable_nonterminal_rows": durable_nonterminal,
+            "detail": "read-only count; recovery rehydrates and is not executed here",
+        },
+        "policy": {
+            "account_wide_limits": "UNSET",
+            "detail": "policy values are commissioning inputs; this inventory "
+                      "reports the boundary, it does not set policy",
+        },
+    }

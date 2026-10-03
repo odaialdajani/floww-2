@@ -15003,6 +15003,31 @@
         ]
       }
     },
+    "/api/public/execution-lifecycle/inventory": {
+      "get": {
+        "description": "Read-only lifecycle inventory (authenticated, default-deny; R17-4).\n\nReports the stored execution boundary \u2014 known/open/unknown intent records\nwith conservative protection truth, draft stages (stored approvals and\npreflight states are draft rows, never client booleans), native workflow\nregistrations, the NEW-ENTRY protection window and the recovery boundary \u2014\nwithout executing recovery, any broker call or any new live path. The\nlive-submission arm state is disclosed; account-wide limits stay UNSET.",
+        "operationId": "get_api_public_execution-lifecycle_inventory",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Execution Lifecycle Inventory Api Public Execution Lifecycle Inventory Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Execution Lifecycle Inventory",
+        "tags": [
+          "public_brokerage",
+          "public_brokerage"
+        ]
+      }
+    },
     "/api/public/expirations/{ticker}": {
       "get": {
         "description": "Listed option expirations from Public API.",

@@ -585,20 +585,23 @@ here as READY-owned engineering, not solely external:
    structured JSONResponse bodies — the app's global exception handler
    stringifies dict details (server.py:231), which would bury the refusal
    code in a repr string; server.py itself untouched (shared-file protocol).
-3. [READY, next] Authenticated/default-deny stored approvals/preflight +
+3. [DONE this pass] Authenticated/default-deny stored approvals/preflight +
    account-wide limits/native/open/unknown inventory/protection/recovery
-   boundary. Lifecycle service (`public_execution_lifecycle.py`, 977 lines:
-   validate_intent, create/verify_approval, mark_preflighted, recover_open,
-   register_native_workflow, is_entry_pause) is still UNMOUNTED — server.py
-   lifecycle/mounts are Spark-owned by default. Next exact action: mount a
-   default-off, authenticated, read-only lifecycle inventory + stored
-   approvals/preflight route with fail-closed auth, then focused tests.
-   No executor wiring, no new broker path.
+   boundary: new read-only `lifecycle_inventory()` in
+   `public_execution_lifecycle.py` (known/open/UNKNOWN records with
+   conservative protection truth, draft stages, native workflows, redacted
+   preflight counts, honest recovery boundary — storeless is never claimed as
+   no-orders-open; account-wide limits UNSET) served by the new
+   `GET /api/public/execution-lifecycle/inventory` on the already-mounted
+   public_brokerage router — authenticated via `require_api_key`
+   (503 unconfigured / 401 bad key), NO server.py edit, no live path, no
+   recovery executed, no broker call. 5 focused tests green.
 
 Verification (exact head, Python 3.14.6, disclosed): r17 9 tests + wiring 8 =
-**17 passed** (was 14); ruff touched files clean; openapi regenerated 379
-paths (diff exactly the /expiries+/sessions docstring/schema updates; README
-counts unchanged); protected 71/71 and Zed-owned files untouched.
+**17 passed**; lifecycle inventory 5 + existing lifecycle 42 = **47 passed**;
+ruff touched files clean; openapi regenerated 379→**380** paths (+1
+inventory route, purely additive); protected 71/71 and Zed-owned files
+untouched.
 
 Coordination note: PR103 carries `gsd:escalated` (gsd-loop review pass: no
 linked issue — the repo has issues disabled; non-`gsd/NNN-*` branch → labels
@@ -608,5 +611,9 @@ candidate froze `611f3c2f`; new lane heads require re-composition before the
 combined acceptance.
 
 - Activation state: OFF. No flags/orders/services/credentials/paid calls.
-- Next exact action: item 3 above (mount default-off lifecycle route), then
-  combined exact-head acceptance with Zed's re-composed lane head.
+  All three of Zed's residual producer requests are now DONE engineering;
+  the harness 6-item queue remains complete.
+- Next exact action: combined exact-head acceptance with Zed's re-composed
+  lane head (Zed's candidate froze `611f3c2f`; re-compose at this lane head),
+  plus the Nav/Zed merge decision on PR103/PR101/PR100 and PR93 closeout
+  docs. True externals unchanged.
