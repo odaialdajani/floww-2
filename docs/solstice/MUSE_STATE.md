@@ -425,3 +425,11 @@ Contract versions (unchanged + new): `execution-intent.v1`,
 - [READY] R16-5 Receipt + combined acceptance — owned: `SPARK_R16_RECEIPT.md`
   (new), PR (review-only), Zed combined verification. BLOCKED_EXTERNAL on Zed
   merge; proceed to open PR only. Next: last.
+
+## 18. R16-6 submit-ownership lock (3 Oct 2026)
+
+- [DONE] Single-process atomic submit: idempotent/overlap/insert under
+  `_SUBMIT_LOCK` (no awaits inside); 5-thread same-instant test places exactly
+  once (stable 3/3). Cross-process races stay documented residual (advisory
+  DB guard + broker orderId truth). Multi-process DuckDB writers still NOT
+  claimed safe — single-writer lifecycle only.
