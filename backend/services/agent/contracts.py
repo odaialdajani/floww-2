@@ -105,7 +105,10 @@ def validate_screen_context(screen):
         raise ValueError("Unsupported screen context version")
     if version == 1:
         return
-    if screen.get("page") not in {"heatseeker", "trinity"}:
+    if screen.get("page") == "flowseeker-pro":
+        if screen.get("bridgeVersion") != "tidehunter-public-review.v1":
+            raise ValueError("Unsupported v2 Tidehunter bridge owner")
+    elif screen.get("page") not in {"heatseeker", "trinity"}:
         raise ValueError("Unsupported v2 screen context owner")
     for field in ("snapshotId", "provider", "formula", "activePane"):
         value = screen.get(field)

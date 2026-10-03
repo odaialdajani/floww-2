@@ -245,6 +245,7 @@ function SkylitControlBar({
         <div className="skylit-tf-dropdown">
           <select
             value={timeframe}
+            aria-label="Research horizon"
             onChange={(e) => onTimeframeChange && onTimeframeChange(e.target.value)}
             className="skylit-tf-select"
           >
@@ -262,6 +263,7 @@ function SkylitControlBar({
         <div className="skylit-tf-dropdown">
           <select
             value={expiries}
+            aria-label="Listed expiry columns"
             onChange={(e) => onExpiriesChange && onExpiriesChange(Number(e.target.value))}
             className="skylit-tf-select"
           >

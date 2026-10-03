@@ -52,6 +52,52 @@ async function loadStrip(onReplay = jest.fn()) {
   return { utils, onReplay };
 }
 
+test('selecting a dated session resets replay and uses the same date for manifest and comparison', async () => {
+ const {onReplay}=await loadStrip();
+ await act(async()=>fireEvent.click(screen.getByTestId('solstice-replay-play')));
+ await waitFor(()=>expect(onReplay).toHaveBeenLastCalledWith(expect.objectContaining({snapshotId:'s1'})));
+ fireEvent.change(screen.getByLabelText('Stored session date'),{target:{value:'2026-09-25'}});
+ expect(onReplay).toHaveBeenLastCalledWith(null);
+ expect(screen.queryByTestId('solstice-replay-scrub')).toBeNull();
+ await act(async()=>fireEvent.click(screen.getByTestId('solstice-replay-load')));
+ expect(axios.get).toHaveBeenCalledWith('/api/solstice/manifest/SPY?day=2026-09-25',expect.objectContaining({signal:expect.anything()}));
+ await act(async()=>fireEvent.click(screen.getByTestId('solstice-compare-btn')));
+ expect(axios.get).toHaveBeenCalledWith('/api/solstice/attribute/SPY?day=2026-09-25',expect.objectContaining({signal:expect.anything()}));
+});
+
+test('symbol changes and unmount abort a pending replay and discard late success', async()=>{
+ const {utils,onReplay}=await loadStrip();
+ let release;
+ axios.get.mockImplementation(()=>new Promise(resolve=>{release=resolve;}));
+ fireEvent.click(screen.getByTestId('solstice-replay-play'));
+ const pending=axios.get.mock.calls.at(-1)[1].signal;
+ utils.rerender(<ReplayStrip ticker="QQQ" onReplay={onReplay}/>);
+ expect(pending.aborted).toBe(true);
+ await act(async()=>release({data:replayPacket('s1')}));
+ expect(onReplay.mock.calls.filter(([display])=>display?.snapshotId==='s1')).toHaveLength(0);
+ fireEvent.click(screen.getByTestId('solstice-replay-load'));
+ const manifestSignal=axios.get.mock.calls.at(-1)[1].signal;
+ utils.unmount();
+ expect(manifestSignal.aborted).toBe(true);
+});
+
+test('absent gap metadata is unknown, never reported as zero',async()=>{
+ const original=axios.get.getMockImplementation();
+ axios.get.mockImplementation((url,opts)=>String(url).includes('/manifest/')?Promise.resolve({data:{day:'2026-09-28',snapshots:SNAPS}}):original(url,opts));
+ await loadStrip();
+ expect(screen.getByTestId('solstice-replay-strip')).toHaveTextContent('gap coverage unknown');
+ expect(screen.getByTestId('solstice-replay-strip')).not.toHaveTextContent('0 declared gaps');
+});
+
+test('a replay response for a different owning record is refused visibly', async()=>{
+ const {onReplay}=await loadStrip();
+ axios.get.mockResolvedValue({data:replayPacket('wrong-record')});
+ await act(async()=>fireEvent.click(screen.getByTestId('solstice-replay-play')));
+ expect(onReplay).not.toHaveBeenCalled();
+ expect(screen.getByRole('alert')).toHaveTextContent('RECORD_IDENTITY_MISMATCH');
+ expect(screen.getByTestId('solstice-replay-play')).toHaveTextContent('Play');
+});
+
 test('Play advances recorded snapshots in order and stops at the last record', async () => {
   const { onReplay } = await loadStrip();
   await act(async () => {

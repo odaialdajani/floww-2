@@ -8,6 +8,7 @@ Codex owns its transport; one app dispatch does not claim one upstream attempt.
 import asyncio
 import contextlib
 import copy
+import hashlib
 import time
 import uuid
 from datetime import UTC, datetime
@@ -18,6 +19,7 @@ from pymongo.errors import DuplicateKeyError
 from services.agent.codex_bridge import CodexBridge
 from services.agent.contracts import canonical, relationship_text
 from services.agent.explanations import compact_explanation_menu
+from services.agent.grounding import grounding_hash
 from services.agent.model import ANSWER_TOOL, MAX_BODY_BYTES
 
 DEFAULT_SETTINGS = {"model": "gpt-5.6-terra", "effort": "medium", "speed": "default"}
@@ -59,7 +61,7 @@ class OAuthUsage:
     def __init__(self, collection, daily_limit=40):
         self.collection, self.daily_limit = collection, daily_limit
 
-    async def reserve(self, owner, turn_id, settings):
+    async def reserve(self, owner, turn_id, settings, *, trace=None):
         day = datetime.now(UTC).date().isoformat()
         key = "day:" + day
         request_id = str(uuid.uuid4())
@@ -87,6 +89,7 @@ class OAuthUsage:
             reserved_at=datetime.now(UTC),
             actual_cost=None,
             accounting="subscription_usage",
+            trace=copy.deepcopy(trace),
         )
         result = await self.collection.find_one_and_update(
             {"_id": key, "calls": {"$lt": self.daily_limit}, f"turns.{turn_id}": {"$exists": False}},
@@ -151,12 +154,20 @@ class CodexModel:
         return dict(prefs.get("ai_settings", DEFAULT_SETTINGS))
 
     async def once(
-        self, question, facts, turn_id, *, owner, settings, allow_inspect=True, history_note=None, repair=False
+        self, question, facts, turn_id, *, owner, settings, allow_inspect=True, history_note=None, repair=False,
+                context=None
     ):
+        started = time.monotonic()
+        trace = dict(
+            version="lodestar-trace.v1", correlation_id=turn_id,
+            requested=dict(settings), effective=None,
+            context_hash=grounding_hash(context or {}, facts),
+            evidence_ids=sorted({f["id"] for f in facts}),
+            observation_ids=sorted({f["snapshot_id"] for f in facts if f.get("snapshot_id")}),
+            status="not_dispatched", latency_ms=0, tokens=None, actual_cost=None,
+        )
         info = dict(
-            model=settings["model"],
-            effort=settings["effort"],
-            speed=settings["speed"],
+            trace=trace,
             provider="ChatGPT login",
             accounting="subscription_usage",
             actual_cost=None,
@@ -167,7 +178,9 @@ class CodexModel:
             allowed_relationships=allowed_relationships(facts),
             **compact_explanation_menu(facts),
         ))
+        trace["input_hash"] = hashlib.sha256(content.encode()).hexdigest()
         if len(content.encode()) > MAX_BODY_BYTES:
+            trace.update(status="input_refused", latency_ms=round((time.monotonic() - started) * 1000))
             return dict(status="unavailable", reason="Evidence exceeds the bounded model input", **info)
         reservation = None
         try:
@@ -178,8 +191,10 @@ class CodexModel:
                     available = await bridge.catalog()
                     if not any(m["id"] == settings["model"] for m in available):
                         raise ValueError("Model is no longer available")
-                    reservation = await self.spend.reserve(owner, turn_id, settings)
+                    trace["status"] = "reserved_dispatch_unknown"
+                    reservation = await self.spend.reserve(owner, turn_id, settings, trace=trace)
                     if not reservation:
+                        trace["status"] = "admission_refused"
                         return dict(
                             status="cost_limited", reason="Daily AI call limit reached or request already used", **info
                         )
@@ -189,7 +204,11 @@ class CodexModel:
                         for relation in data["relationships"]:
                             if isinstance(relation, dict) and relation.get("other_fact_id", 1) is None:
                                 del relation["other_fact_id"]
-                    info.update(tokens=usage, generation_id=model_turn_id)
+                    # answer() only returns after checking the provider's model,
+                    # effort/speed and no-reroute/tool policy; failed work is not proof.
+                    trace.update(effective=dict(settings), status="completed", tokens=usage,
+                                 latency_ms=round((time.monotonic() - started) * 1000))
+                    info.update(**settings, tokens=usage, generation_id=model_turn_id)
                     await self.spend.finish(
                         reservation,
                         status="completed",
@@ -197,13 +216,23 @@ class CodexModel:
                         thread_id=thread_id,
                         generation_id=model_turn_id,
                         completed_at=datetime.now(UTC),
+                        trace=trace,
                     )
                     return dict(status="ok", name="research_answer", data=data, **info)
         except asyncio.CancelledError:
             # Admission remains counted; cancellation does not prove unused quota.
+            trace["status"] = "cancelled_dispatch_unknown"
             raise
         except Exception:
+            trace["status"] = "unavailable"
             return dict(status="unavailable", reason="ChatGPT interpretation unavailable; no automatic retry", **info)
+        finally:
+            trace["latency_ms"] = round((time.monotonic() - started) * 1000)
+            if reservation:
+                # The reservation already retains grounded/requested identity if
+                # shutdown or storage failure prevents this terminal trace write.
+                with contextlib.suppress(Exception):
+                    await self.spend.finish(reservation, trace=trace)
 
     async def reconcile(self):
         # ChatGPT subscription usage has no dollar-cost lookup. Unknown work

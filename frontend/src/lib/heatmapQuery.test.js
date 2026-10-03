@@ -1,10 +1,22 @@
-import { buildHeatmapQuery, heatmapQueryKey } from "./heatmapQuery";
+import { buildHeatmapQuery, heatmapQueryKey, heatmapReadPath } from "./heatmapQuery";
 
 // Contract: the ONE query string used by BOTH the 25s /api/data poll and the
 // manual-refresh /api/heatmap fetch, so the DTE + Expiries + mode controls
 // survive every poll tick (Round-8 regression: naked `/data/${ticker}` poll
 // overwrote the parameterized fetch with backend defaults).
+test("Next listed polling uses the supported heatmap route, not the loaded-only data alias",()=>{
+  expect(heatmapReadPath("SPY",{poll:true,expiryScope:"next"})).toBe("heatmap/SPY");
+  expect(heatmapReadPath("SPY",{poll:true,expiryScope:"loaded"})).toBe("data/SPY");
+  expect(heatmapReadPath("^SPX")).toBe("heatmap/%5ESPX");
+});
+
 describe("buildHeatmapQuery", () => {
+  test("Next listed has a distinct server-owned query and suppresses a stale cumulative DTE",()=>{
+    const query=buildHeatmapQuery({expiries:4,mode:"day",dte:0,expiryScope:"next"});
+    expect(query).toBe("expiries=4&mode=day&expiry_scope=next");
+    expect(heatmapQueryKey({ticker:"SPY",expiries:4,mode:"day",expiryScope:"next"})).not.toBe(heatmapQueryKey({ticker:"SPY",expiries:4,mode:"day"}));
+  });
+
   test("defaults: expiries + mode only, no dte", () => {
     expect(buildHeatmapQuery({ expiries: 4, mode: "day", dte: null })).toBe(
       "expiries=4&mode=day"

@@ -64,6 +64,8 @@ beforeEach(() => {
 test("renders backend packet values verbatim with units; no invented fields", async () => {
   await act(async () => { render(<TrinityView />); });
   await waitFor(() => expect(screen.getByTestId("triad-raw-adjusted")).toBeInTheDocument());
+  // Delta OI remains a distinct selectable surface, not the session-volume default.
+  fireEvent.change(screen.getByLabelText("Adjusted context"), { target: { value: "delta" } });
   // Raw pane header names the metric + units; adjusted pane too.
   expect(screen.getByTestId("triad-pane-raw").textContent).toContain("USD/1% move");
   expect(screen.getByTestId("triad-pane-adjusted").textContent).toContain("dadgex");

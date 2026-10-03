@@ -2,6 +2,19 @@ import React from "react";
 import {render, screen, within} from "@testing-library/react";
 import AgentPanelAnswer from "./AgentPanelAnswer";
 
+test.each([false,true])("trace identifies requested versus verified effective settings (%s)",effective=>{
+ const settings={model:"catalog-sol-id",effort:"xhigh",speed:"default"};
+ render(<AgentPanelAnswer turn={{ticker:"SPY",status:"completed",answer:{usage:[{provider:"ChatGPT login",trace:{
+  version:"lodestar-trace.v1",requested:settings,effective:effective?settings:null,context_hash:"context-hash",
+  correlation_id:"correlation-1",observation_ids:["observation-1"],evidence_ids:["evidence-1"],latency_ms:120,
+  status:effective?"completed":"unavailable",actual_cost:null,
+ }}]}}}/>);
+ expect(screen.getByText(/Requested: catalog-sol-id · Extra high/)).toBeVisible();
+ expect(screen.getByText(effective?/Effective: catalog-sol-id · Extra high/:/Effective dispatch unverified/)).toBeVisible();
+ expect(screen.getByText(/correlation-1/)).toBeInTheDocument();
+ expect(screen.getByText(/Dollar cost: unknown/)).toBeInTheDocument();
+});
+
 test("answer heading uses the saved expiry scope instead of broad request alias",()=>{
  render(<AgentPanelAnswer turn={{ticker:"SPY",horizon:"all",status:"completed",answer:{snapshots:[{ticker:"SPY",window:{start:"2026-09-18",end:"2026-09-18"}}]}}}/>);
  expect(screen.getByRole("heading").textContent).toBe("SPY · 2026-09-18");

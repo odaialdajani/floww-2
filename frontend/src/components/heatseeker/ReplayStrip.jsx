@@ -18,6 +18,15 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
   const [currentId, setCurrentId] = useState(null);
   const [replayAsOf, setReplayAsOf] = useState(null);
   const [health, setHealth] = useState(null);
+  const [day, setDay] = useState("");
+  const [refusal, setRefusal] = useState(null);
+  const requestController = useRef(null);
+  const beginRequest = useCallback(() => {
+    requestController.current?.abort();
+    const ctrl = new AbortController();
+    requestController.current = ctrl;
+    return ctrl;
+  }, []);
   // O3 Play: auto-advance through RECORDED snapshots only. Chained timeouts
   // (not an interval) so each step waits for the previous snapshot to land;
   // reaching the last record stops playback by itself. Never arms live.
@@ -35,13 +44,19 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
     setReplayAsOf(null);
     setHealth(null);
     setPlaying(false);
-  }, [ticker]);
+    setLoading(false);
+    setRefusal(null);
+    return () => { genRef.current += 1; requestController.current?.abort(); };
+  }, [ticker, day]);
   const load = useCallback(async () => {
     const myGen = ++genRef.current;
     const myTicker = ticker;
+    const ctrl = beginRequest();
     setLoading(true);
+    setRefusal(null);
     try {
-      const r = await axios.get(`${BACKEND_API}/solstice/manifest/${encodeURIComponent(ticker)}`, { timeout: 15000 });
+      const query = day ? `?day=${encodeURIComponent(day)}` : "";
+      const r = await axios.get(`${BACKEND_API}/solstice/manifest/${encodeURIComponent(ticker)}${query}`, { timeout: 15000, signal: ctrl.signal });
       // Discard late manifest/health after a ticker switch or exit.
       if (genRef.current !== myGen || myTicker !== ticker) return;
       setManifest(r.data);
@@ -53,20 +68,22 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
     }
     // R6-3 recorder badge: actual backing + durability, never path inference.
     try {
-      const h = await axios.get(`${BACKEND_API}/solstice/recorder_health`, { timeout: 15000 });
+      const h = await axios.get(`${BACKEND_API}/solstice/recorder_health`, { timeout: 15000, signal: ctrl.signal });
       if (genRef.current !== myGen || myTicker !== ticker) return;
       setHealth(h.data);
     } catch (e) {
       if (genRef.current !== myGen) return;
       setHealth({ error: "health_unavailable" });
     }
-  }, [ticker]);
+  }, [ticker, day, beginRequest]);
   const compareLastTwo = useCallback(async () => {
     const myGen = ++genRef.current;
     const myTicker = ticker;
+    const ctrl = beginRequest();
     setLoading(true);
     try {
-      const r = await axios.get(`${BACKEND_API}/solstice/attribute/${encodeURIComponent(ticker)}`, { timeout: 15000 });
+      const query = day ? `?day=${encodeURIComponent(day)}` : "";
+      const r = await axios.get(`${BACKEND_API}/solstice/attribute/${encodeURIComponent(ticker)}${query}`, { timeout: 15000, signal: ctrl.signal });
       if (genRef.current !== myGen || myTicker !== ticker) return;
       setCompare(r.data);
     } catch (e) {
@@ -75,31 +92,37 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
     } finally {
       if (genRef.current === myGen) setLoading(false);
     }
-  }, [ticker]);
+  }, [ticker, day, beginRequest]);
   const snaps = manifest?.snapshots || [];
   const openSnap = useCallback(async (id) => {
     if (!id || !onReplay) return;
     const myGen = ++genRef.current;
     const myTicker = ticker;
-    const ctrl = new AbortController();
+    const ctrl = beginRequest();
     setLoading(true);
+    setRefusal(null);
     try {
       const r = await axios.get(`${BACKEND_API}/solstice/replay/${encodeURIComponent(id)}`, { timeout: 15000, signal: ctrl.signal });
       // Discard late responses: ticker switched or replay exited since request.
       if (genRef.current !== myGen || myTicker !== ticker) return;
       const disp = replayToDisplay(r.data, myTicker);
-      if (disp) {
+      if (disp && disp.snapshotId === id) {
         setCurrentId(id);
         setReplayAsOf(disp.asof);
         onReplay(disp);
+      } else {
+        setPlaying(false);
+        setRefusal(disp ? "RECORD_IDENTITY_MISMATCH" : "REPLAY_ENVELOPE_UNAVAILABLE");
       }
     } catch (e) {
-      /* replay unavailable — stay live, never partial grid */
-      if (genRef.current === myGen) setPlaying(false);
+      if (genRef.current === myGen) {
+        setPlaying(false);
+        setRefusal("REPLAY_READ_FAILED — previous display retained; no live substitution");
+      }
     } finally {
       if (genRef.current === myGen) setLoading(false);
     }
-  }, [ticker, onReplay]);
+  }, [ticker, onReplay, beginRequest]);
   const step = useCallback((dir) => {
     const nxt = stepReplay(snaps, currentId, dir);
     if (nxt) openSnap(nxt.id);
@@ -108,6 +131,9 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
     // Invalidate in-flight snapshot fetches so a late response can never
     // re-enter replay after the user chose Live.
     genRef.current += 1;
+    requestController.current?.abort();
+    setLoading(false);
+    setRefusal(null);
     setCurrentId(null);
     setReplayAsOf(null);
     setPlaying(false);
@@ -152,8 +178,10 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
   return (
     <div className="skylit-replay-strip" data-testid="solstice-replay-strip"
       title="Deterministic replay — what was available at decision time">
+      <label>Session <input type="date" aria-label="Stored session date" value={day}
+        onChange={e => { exitReplay(); setDay(e.target.value); }} /></label>
       <button className="skylit-trade-mode-btn" onClick={load} data-testid="solstice-replay-load"
-        title="Load today's recorded session manifest">
+        title="Load the selected recorded session; empty date uses the recorder's current day">
         {loading ? "Loading…" : `Replay ${ticker}`}
       </button>
       <button className="skylit-trade-mode-btn" onClick={compareLastTwo} data-testid="solstice-compare-btn"
@@ -201,7 +229,12 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
           REC {health.durable ? "● durable" : "○ memory"}
         </span>
       )}
-      {manifest?.error && <span>replay unavailable</span>}
+      {manifest?.day && <span>Stored session {manifest.day} · {Array.isArray(manifest.gaps) ? `${manifest.gaps.length} declared gaps` : "gap coverage unknown"}</span>}
+      {health?.capture && <span>Capture {health.capture.worker_state || "state unknown"}</span>}
+      {refusal && <span role="alert">{refusal}</span>}
+      {manifest?.error && <span role="alert">Replay unavailable · {manifest.error}</span>}
+      {health?.error && <span>Recorder health unavailable</span>}
+      {compare && !["ok", "history_unavailable"].includes(compare.status) && <span role="status">Comparison unavailable · {compare.reason || compare.error || compare.status}</span>}
       {compare && compare.status === "ok" && (
         <span data-testid="solstice-compare-result"
           title={`Prior ${compare.from?.asof || "?"} → current ${compare.to?.asof || "?"}; coarse wall-level comparison; use the counterfactual for spot/IV/time/OI decomposition`}>
