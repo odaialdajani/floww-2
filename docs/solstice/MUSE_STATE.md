@@ -713,3 +713,21 @@ regen.
 - Next exact action per Nav "merge commit everything": publish a combined
   review-only candidate (main + Spark lane + Zed `7ea8cbff`) with exact-head
   evidence; main merge/deploy/activation decisions stay Nav's.
+
+## 26. Combined candidate (3 Oct 2026 — Nav "merge commit everything")
+
+- Combined branch `solstice/combined-r17-20261003` from `origin/main`
+  `6eaa3343`: merged Zed `7ea8cbff` (frontend/consumers/receipts; hosted
+  4-gate green at tested `ef911f37`, receipt metadata-only on top) then
+  Spark `e3937674` (§25 controls). Both merges clean, no conflicts.
+  Combined head `4dc3c0e7`, 52 files vs main (12 Spark + 49 Zed − 9 overlap).
+- Verification at combined head (Python 3.14.6, backend CWD):
+  `tests/solstice/` **630 passed**; focused 76 passed; `ruff` clean;
+  `generate_api_docs --check` **380 current**. Frontend tree identical to
+  Zed's tested head (`git diff 7ea8cbff...HEAD -- frontend/` empty), so his
+  126-suite/1137 receipt stands for the consumer tree.
+- Published review-only PR105 (combined branch → main). No main merge, no
+  deploy, no service restart, no activation, no orders, no paid calls.
+  Commissioning HOLD; policy UNSET except operator-installed test policies;
+  zero durable admitted records → INSUFFICIENT EVIDENCE; no profitability
+  claim. Protected/frozen/watchdog untouched.
