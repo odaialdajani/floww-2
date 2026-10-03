@@ -1,4 +1,6 @@
-# R17 pass 3 — Public local inventory integrated; commissioning HOLD
+# R17 pass 3 — historical local inventory receipt
+
+Current runtime is recorded in [R17_PASS4_ACCEPTANCE](R17_PASS4_ACCEPTANCE.md), CODE98ab205a with Spark1e43c00a. Pass-3 all4 hosted gates passed at7ea8cbff; retrieve its historical evidence from that commit. Shared preview/browser paths now contain pass-4 evidence. Counts/hashes below remain historical.
 
 ## Exact combined candidate
 
