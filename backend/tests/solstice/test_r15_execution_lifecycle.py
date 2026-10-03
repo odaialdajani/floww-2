@@ -711,3 +711,121 @@ def test_persist_error_flagged_never_hidden():
     assert out["ok"] is True and out["persist_error"] is True
     assert real_persist(out["intent_id"]) is True  # store was fine; flag heals
     lc._reset_for_tests()
+
+
+def test_cross_process_submit_reuses_stored_order_id():
+    import asyncio
+    import tempfile
+
+    import duckdb
+
+    import services.public_execution_lifecycle as lc
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = f"{tmp}/intents.duckdb"
+        # Process A: submit with a file-backed store.
+        conn_a = duckdb.connect(path)
+        lc.register_store(conn_a)
+        broker_a = _FakeBroker()
+        first = asyncio.run(lc.submit(_base_intent(), _ctx(), broker_a, armed=True))
+        assert first["ok"] is True and len(broker_a.calls) == 1
+        conn_a.close()
+
+        # Process B: fresh registry, fresh broker, same file.
+        lc._INTENTS.clear()
+        conn_b = duckdb.connect(path)
+        lc.register_store(conn_b)
+        broker_b = _FakeBroker()
+        second = asyncio.run(lc.submit(_base_intent(), _ctx(), broker_b, armed=True))
+        assert second["ok"] is True and second.get("duplicate") is True
+        assert second["order_id"] == first["order_id"]
+        assert broker_b.calls == []  # no second placement anywhere
+        conn_b.close()
+    lc._reset_for_tests()
+
+
+def test_reject_unaffordable_intent():
+    import services.public_execution_lifecycle as lc
+
+    # Budget total 318.20 fits 1000.00 but not 300.00; absent power skips.
+    assert lc.validate_intent(_base_intent(), _ctx(buying_power="1000.00")) == (True, "ok")
+    assert lc.validate_intent(_base_intent(), _ctx(buying_power="300.00")) == (False, "INSUFFICIENT_BUDGET")
+    assert lc.validate_intent(_base_intent(), _ctx()) == (True, "ok")
+
+
+def test_reconcile_reports_fills_and_remaining():
+    import asyncio
+
+    import services.public_execution_lifecycle as lc
+
+    broker = _FakeBroker()
+    intent = _base_intent(quantity=3)
+    out = asyncio.run(lc.submit(intent, _ctx(), broker, armed=True))
+    assert out["ok"] is True
+    broker.orders[out["order_id"]]["status"] = "PARTIAL"
+    broker.orders[out["order_id"]]["fills"] = 1
+    rec = asyncio.run(lc.reconcile(out["intent_id"], broker))
+    assert rec["status"] == "PARTIAL" and rec["filled"] is False
+    assert rec["filled_quantity"] == 1 and rec["remaining_quantity"] == 2
+
+
+def test_draft_lifecycle_happy_path_and_illegal_jumps():
+    import services.public_execution_lifecycle as lc
+
+    intent = _base_intent()
+    row = lc.record_draft(intent)
+    assert row["stage"] == "DRAFT" and row["version"] == "intent-draft.v1"
+    assert lc.mark_preflighted(intent)["reason"] == "illegal-transition:DRAFT->PREFLIGHTED"
+    assert lc.review_draft(intent, approved=False, reason="weak-premise")["ok"] is True
+    assert lc.load_draft(intent)["approved"] is False
+    assert lc.mark_preflighted(intent)["reason"] == "unapproved-draft"
+    assert lc.review_draft(intent, approved=True)["ok"] is False  # no re-review
+    ok_intent = _base_intent(observation_id="obs_draft2")
+    lc.record_draft(ok_intent)
+    assert lc.review_draft(ok_intent, approved=True)["ok"] is True
+    assert lc.mark_preflighted(ok_intent)["ok"] is True
+    assert lc.mark_awaiting(ok_intent)["ok"] is True
+    assert lc.load_draft(ok_intent)["stage"] == "AWAITING"
+    assert lc.load_draft(_base_intent(observation_id="obs_missing")) is None
+
+
+def test_drafts_persist_across_registry_wipe_with_store():
+    import duckdb
+
+    import services.public_execution_lifecycle as lc
+
+    conn = duckdb.connect(":memory:")
+    lc.register_store(conn)
+    intent = _base_intent(observation_id="obs_draft3")
+    lc.record_draft(intent)
+    lc.review_draft(intent, approved=True)
+    lc._INTENTS.clear()
+    lc._DRAFTS.clear()
+    loaded = lc.load_draft(intent)
+    assert loaded is not None and loaded["stage"] == "REVIEWED"
+    assert lc.mark_preflighted(intent)["ok"] is True
+
+
+def test_concurrent_submits_place_exactly_once():
+    import asyncio
+    import threading
+
+    import services.public_execution_lifecycle as lc
+
+    broker = _FakeBroker()
+    prices = ["3.15", "3.20", "3.25", "3.30", "3.35"]
+    results = [None] * len(prices)
+
+    def attempt(i):
+        intent = _base_intent(observation_id=f"obs_race{i}", limit_price=prices[i])
+        results[i] = asyncio.run(lc.submit(intent, _ctx(), broker, armed=True))
+
+    threads = [threading.Thread(target=attempt, args=(i,)) for i in range(len(prices))]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    placed = [r for r in results if r["ok"] is True and not r.get("duplicate")]
+    refused = [r for r in results if r.get("reason") == "OVERLAP_OPEN_NEEDS_RECONCILE"]
+    assert len(placed) == 1 and len(refused) == 4
+    assert len(broker.calls) == 1  # one lease, one placement

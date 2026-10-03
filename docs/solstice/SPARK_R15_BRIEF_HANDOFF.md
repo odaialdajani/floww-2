@@ -14,8 +14,12 @@ chain-of-thought stay out of logs and briefs.
 | `evidence_timestamps` (`event_time` vendor, `fetched_at`, `available_at`) | stored record clocks | vendor vs fetch kept separate; stale keeps actual ages |
 | `exact_contract` (OSI, expiry, type, `strike_exact`, multiplier + provenance) | `contract_facts` admission | incomplete/conflict/missing provenance → typed refusal; unknown≠zero |
 | `quote_pair` (bid×ask + `bid_ts`/`ask_ts`, spread_ticks) | `candidate_quotes_v1` at decision time | stale/missing/crossed → `STALE_QUOTE`/`MISSING_QUOTE_SIDES`; never mid-fabricated |
+| `spread_limit_ticks` (max spread in ticks for the brief) | operator review policy | breached → brief marked unexecutable; counted, not hidden |
 | `cash_margin_choice` (`CASH`\|`MARGIN`) | operator, explicit | absent → `UNRESOLVED_MARGIN`; no vendor default inherited |
 | `budget` (preflight total/fees/buying-power, `asof`) | `preflight_*` at intent hash + ctx fingerprint, 60s TTL | expired on any change; estimates are NOT fills |
+| `affordability` (budget total vs buying power) | `INSUFFICIENT_BUDGET` gate | unaffordable → no place, notify; absent power skips, never invented |
+| `session_loss_cap` (per-session loss limit or explicit none) | operator commissioning policy | unset → labeled unset; enforced only against measured fills, never estimates |
+| `consecutive_bid_check` (threshold, interval, count, freshness, reset) | reviewed stop policy | any field missing → policy incomplete, no default thresholds |
 | `confirmation` (quoted/observed + policy version) | session policy + risk policy | missing policy → `MISSING_POLICY` |
 | `entry_pause` (11:30–14:00 ET state at brief time) | `is_entry_pause` | paused → `ENTRY_PAUSE` for new entries; cancels/exits unaffected |
 | `protection` (native type + eligible quantity, or explicit none) | broker-native support × account eligibility | unverified → `protected:false`; stop ≠ guaranteed ceiling |

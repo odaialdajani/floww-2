@@ -27,6 +27,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import threading
 import uuid
 from collections.abc import Awaitable
 from datetime import UTC, datetime
@@ -36,6 +37,7 @@ from zoneinfo import ZoneInfo
 
 INTENT_VERSION = "execution-intent.v1"
 RECEIPT_VERSION = "execution-receipt.v1"
+DRAFT_VERSION = "intent-draft.v1"
 RISK_POLICY = "research_barriers.v1"
 ET = ZoneInfo("America/New_York")
 FRESHNESS_DEFAULT_S = 30
@@ -53,13 +55,22 @@ LIFECYCLE_DDL = """
 _INTENTS: dict[str, dict[str, Any]] = {}
 _NATIVE_WORKFLOWS: list[dict[str, Any]] = []
 _PREFLIGHT_CACHE: dict[str, dict[str, Any]] = {}
+_DRAFTS: dict[str, dict[str, Any]] = {}
 _STORE: Any = None
+# Single-process ownership lock: the check-then-insert in submit() must be
+# atomic across threads, or two racing clicks place two orders. The critical
+# section holds no awaits (broker I/O stays outside). Cross-PROCESS races are
+# NOT excluded by this lock — see the DB-backed same-intent guard and the
+# documented residual in MUSE_STATE.
+_SUBMIT_LOCK = threading.Lock()
 
 __all__ = [
     "INTENT_VERSION",
     "RECEIPT_VERSION",
+    "DRAFT_VERSION",
     "PREFLIGHT_TTL_S",
     "LIFECYCLE_DDL",
+    "DRAFT_DDL",
     "intent_hash",
     "validate_intent",
     "create_approval",
@@ -72,6 +83,11 @@ __all__ = [
     "replace",
     "preflight",
     "has_fresh_preflight",
+    "record_draft",
+    "review_draft",
+    "mark_preflighted",
+    "mark_awaiting",
+    "load_draft",
     "protection_status",
     "is_entry_pause",
     "cancel_allowed_during_pause",
@@ -87,6 +103,7 @@ def _reset_for_tests() -> None:
     _INTENTS.clear()
     _NATIVE_WORKFLOWS.clear()
     _PREFLIGHT_CACHE.clear()
+    _DRAFTS.clear()
     _STORE = None
 
 
@@ -157,14 +174,161 @@ def recover_open(store: Any | None = None) -> list[str]:
         return []
     recovered: list[str] = []
     for intent_id, blob in rows:
-        try:
-            rec = json.loads(blob) if isinstance(blob, str) else {}
-        except (TypeError, ValueError):
-            continue
-        if isinstance(rec, dict) and rec.get("order_id"):
+        rec = _decode_record(intent_id, blob)
+        if rec is not None:
             _INTENTS[str(intent_id)] = rec
             recovered.append(str(intent_id))
     return recovered
+
+
+def _decode_record(intent_id: Any, blob: Any) -> dict[str, Any] | None:
+    """Parse one stored intent row. Corrupt rows are skipped, never trusted."""
+    try:
+        rec = json.loads(blob) if isinstance(blob, str) else {}
+    except (TypeError, ValueError):
+        return None
+    if isinstance(rec, dict) and rec.get("order_id"):
+        return rec
+    return None
+
+
+DRAFT_DDL = """
+    CREATE TABLE IF NOT EXISTS intent_drafts_v1 (
+        intent_hash VARCHAR PRIMARY KEY, stage VARCHAR, approved BOOLEAN,
+        reason VARCHAR, draft_json VARCHAR, updated_at VARCHAR
+    )
+"""
+
+_DRAFT_STAGES = ("DRAFT", "REVIEWED", "PREFLIGHTED", "AWAITING")
+
+
+def _draft_store() -> Any:
+    return _STORE
+
+
+def record_draft(intent: dict[str, Any]) -> dict[str, Any]:
+    """Record a reviewed-plan draft (advisory; submit stays independent).
+
+    A model plan remains a draft until deterministic checks pass elsewhere;
+    this registry only tracks where the review stands. Returns the draft row.
+    """
+    digest = intent_hash(intent)
+    row = {"intent_hash": digest, "stage": "DRAFT", "approved": False,
+           "reason": None, "version": DRAFT_VERSION,
+           "updated_at": datetime.now(UTC).isoformat()}
+    _write_draft(digest, row, intent)
+    return dict(row)
+
+
+def _write_draft(digest: str, row: dict[str, Any], intent: dict[str, Any]) -> None:
+    store = _draft_store()
+    if store is None:
+        _DRAFTS[digest] = dict(row)
+        return
+    try:
+        store.execute(DRAFT_DDL)
+        store.execute(
+            "INSERT OR REPLACE INTO intent_drafts_v1 "
+            "(intent_hash, stage, approved, reason, draft_json, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            [digest, row["stage"], 1 if row["approved"] else 0,
+             row.get("reason"), json.dumps(intent, default=str), row["updated_at"]],
+        )
+    except Exception:
+        _DRAFTS[digest] = dict(row)
+
+
+def load_draft(intent: dict[str, Any]) -> dict[str, Any] | None:
+    """Read a draft row by intent (durable when a store is registered)."""
+    try:
+        digest = intent_hash(intent)
+    except (TypeError, ValueError):
+        return None
+    store = _draft_store()
+    if store is not None:
+        try:
+            store.execute(DRAFT_DDL)
+            row = store.execute(
+                "SELECT stage, approved, reason, updated_at FROM intent_drafts_v1 "
+                "WHERE intent_hash = ?", [digest]).fetchone()
+            if row:
+                return {"intent_hash": digest, "stage": row[0],
+                        "approved": bool(row[1]), "reason": row[2],
+                        "version": DRAFT_VERSION, "updated_at": row[3]}
+        except Exception:  # silent by design: fall through to the memory registry
+            pass
+    cached = _DRAFTS.get(digest)
+    if cached is not None:
+        return dict(cached)
+    return None
+
+
+def _advance_draft(intent: dict[str, Any], want: str,
+                   approved: bool | None = None, reason: str | None = None) -> dict[str, Any]:
+    current = load_draft(intent)
+    if current is None:
+        return {"ok": False, "reason": "unknown-draft"}
+    order = list(_DRAFT_STAGES)
+    try:
+        idx = order.index(current["stage"])
+    except ValueError:
+        return {"ok": False, "reason": "unknown-draft"}
+    if order.index(want) != idx + 1:
+        return {"ok": False, "reason": f"illegal-transition:{current['stage']}->{want}"}
+    # REVIEWED with approved=False is a recorded rejection (never dropped);
+    # downstream gates (mark_preflighted) refuse unapproved drafts.
+    row = dict(current)
+    row.update({"stage": want, "updated_at": datetime.now(UTC).isoformat()})
+    if approved is not None:
+        row["approved"] = bool(approved)
+    if reason is not None:
+        row["reason"] = reason
+    _write_draft(current["intent_hash"], row, intent)
+    return {"ok": True, **{k: v for k, v in row.items() if k != "version"},
+            "version": DRAFT_VERSION}
+
+
+def review_draft(intent: dict[str, Any], approved: bool, reason: str | None = None) -> dict[str, Any]:
+    """DRAFT → REVIEWED. Rejection is recorded, never silently dropped."""
+    return _advance_draft(intent, "REVIEWED", approved=approved, reason=reason)
+
+
+def mark_preflighted(intent: dict[str, Any]) -> dict[str, Any]:
+    """REVIEWED(approved) → PREFLIGHTED."""
+    current = load_draft(intent)
+    if current is None or current.get("stage") != "REVIEWED":
+        have = current.get("stage") if current else None
+        return {"ok": False, "reason": f"illegal-transition:{have}->PREFLIGHTED"}
+    if not current.get("approved"):
+        return {"ok": False, "reason": "unapproved-draft"}
+    return _advance_draft(intent, "PREFLIGHTED")
+
+
+def mark_awaiting(intent: dict[str, Any]) -> dict[str, Any]:
+    """PREFLIGHTED → AWAITING (armed-submission readiness, still no order)."""
+    return _advance_draft(intent, "AWAITING")
+
+
+def _load_record(intent_id: str) -> dict[str, Any] | None:
+    """Advisory cross-process read: one intent row by ID from the store.
+
+    Lets a second process (or a fresh registry) reuse the owning broker orderId
+    instead of placing a duplicate. Best-effort: a concurrent writer may still
+    win a race — callers treat this as advisory and the broker orderId stays
+    the single source of reconciliation truth.
+    """
+    if _STORE is None:
+        return None
+    try:
+        ensure_lifecycle_tables(_STORE)
+        row = _STORE.execute(
+            "SELECT record_json FROM execution_intents_v1 WHERE intent_id = ?",
+            [intent_id]).fetchone()
+    except Exception:
+        return None
+    if not row:
+        return None
+    return _decode_record(intent_id, row[0])
 
 
 def _money(value: Any, field: str) -> Decimal:
@@ -325,6 +489,17 @@ def validate_intent(intent: dict[str, Any], ctx: dict[str, Any]) -> tuple[bool, 
         return False, "MISSING_POLICY"
     if intent.get("cash_margin_choice") not in ("CASH", "MARGIN"):
         return False, "UNRESOLVED_MARGIN"
+    # Affordability: when the caller supplies account buying power, the budgeted
+    # total (premium + costs) must fit it — even one unaffordable contract
+    # refuses instead of placing. Absent buying power skips (never invents it).
+    buying_power = ctx.get("buying_power")
+    budget_total = (intent.get("budget") or {}).get("preflight_total")
+    if buying_power is not None and budget_total is not None:
+        try:
+            if Decimal(str(budget_total)) > Decimal(str(buying_power)):
+                return False, "INSUFFICIENT_BUDGET"
+        except (InvalidOperation, ValueError, TypeError):
+            return False, "INSUFFICIENT_BUDGET"
     if intent.get("replay_id") is not None and not str(intent.get("replay_authorization") or "").strip():
         return False, "UNAUTHORIZED_REPLAY"
     account = ctx.get("account") or {}
@@ -610,36 +785,43 @@ async def submit(
     except (TypeError, ValueError) as exc:
         return {"ok": False, "reason": f"BAD_CONTRACT:{exc}"}
     intent_id = f"in_{digest[:12]}"
-    existing = _INTENTS.get(intent_id)
-    if existing is not None and existing.get("order_id"):
-        return {"ok": True, "receipt_version": RECEIPT_VERSION,
-                "intent_id": intent_id, "order_id": existing["order_id"],
-                "status": existing.get("state", "OPEN"), "duplicate": True,
-                "persist_error": bool(existing.get("persist_error"))}
-    if _open_records(exclude_id=intent_id):
-        return {"ok": False, "reason": "OVERLAP_OPEN_NEEDS_RECONCILE"}
-    order_id = str(uuid.uuid4())
-    contract = intent.get("contract") or {}
-    payload = {
-        "account_id": intent.get("account_id"),
-        "order_id": order_id,
-        "symbol": contract.get("osi"),
-        "side": intent.get("side"),
-        "order_type": "LIMIT",
-        "quantity": float(intent.get("quantity")),
-        "limit_price": str(intent.get("limit_price")),
-        "time_in_force": "DAY",
-        "instrument_type": "OPTION",
-        "use_margin": (intent.get("cash_margin_choice") == "MARGIN"),
-    }
-    _INTENTS[intent_id] = {
-        "intent": dict(intent), "intent_hash": digest, "order_id": order_id,
-        "payload": dict(payload), "state": "SUBMITTED",
-        "approval": dict(approval) if isinstance(approval, dict) else None,
-    }
-    if not _persist(intent_id):
-        del _INTENTS[intent_id]
-        return {"ok": False, "reason": "STORE_UNAVAILABLE", "intent_id": intent_id}
+    with _SUBMIT_LOCK:
+        existing = _INTENTS.get(intent_id)
+        if (existing is None or not existing.get("order_id")) and _STORE is not None:
+            # Cross-process guard: another process may own this intent already.
+            loaded = _load_record(intent_id)
+            if loaded is not None:
+                _INTENTS[intent_id] = loaded
+                existing = loaded
+        if existing is not None and existing.get("order_id"):
+            return {"ok": True, "receipt_version": RECEIPT_VERSION,
+                    "intent_id": intent_id, "order_id": existing["order_id"],
+                    "status": existing.get("state", "OPEN"), "duplicate": True,
+                    "persist_error": bool(existing.get("persist_error"))}
+        if _open_records(exclude_id=intent_id):
+            return {"ok": False, "reason": "OVERLAP_OPEN_NEEDS_RECONCILE"}
+        order_id = str(uuid.uuid4())
+        contract = intent.get("contract") or {}
+        payload = {
+            "account_id": intent.get("account_id"),
+            "order_id": order_id,
+            "symbol": contract.get("osi"),
+            "side": intent.get("side"),
+            "order_type": "LIMIT",
+            "quantity": float(intent.get("quantity")),
+            "limit_price": str(intent.get("limit_price")),
+            "time_in_force": "DAY",
+            "instrument_type": "OPTION",
+            "use_margin": (intent.get("cash_margin_choice") == "MARGIN"),
+        }
+        _INTENTS[intent_id] = {
+            "intent": dict(intent), "intent_hash": digest, "order_id": order_id,
+            "payload": dict(payload), "state": "SUBMITTED",
+            "approval": dict(approval) if isinstance(approval, dict) else None,
+        }
+        if not _persist(intent_id):
+            del _INTENTS[intent_id]
+            return {"ok": False, "reason": "STORE_UNAVAILABLE", "intent_id": intent_id}
     try:
         receipt = await _maybe_await(broker.place_order(**payload))
     except Exception as exc:
@@ -681,8 +863,23 @@ async def reconcile(intent_id: str, broker: Any) -> dict[str, Any]:
     rec["state"] = status
     rec["observed"] = observed
     _persist(intent_id)
-    return {"intent_id": intent_id, "order_id": rec["order_id"], "status": status,
+    out: dict[str, Any] = {"intent_id": intent_id, "order_id": rec["order_id"], "status": status,
             "filled": (status == "FILLED"), "receipt_version": RECEIPT_VERSION}
+    # Fill accounting: filled and remaining quantities when the broker reports
+    # them; unknown stays unknown (never derived from price or sign).
+    try:
+        ordered_qty = int(rec.get("intent", {}).get("quantity") or 0)
+    except (TypeError, ValueError):
+        ordered_qty = 0
+    filled_qty = _rget(observed, "filled_quantity", "filledQuantity", "filledAmount", "fills")
+    try:
+        filled_qty = int(float(filled_qty)) if filled_qty is not None else None
+    except (TypeError, ValueError):
+        filled_qty = None
+    if filled_qty is not None and ordered_qty:
+        out["filled_quantity"] = filled_qty
+        out["remaining_quantity"] = max(0, ordered_qty - filled_qty)
+    return out
 
 
 async def reconcile_all(broker: Any) -> list[dict[str, Any]]:

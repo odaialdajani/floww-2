@@ -392,3 +392,44 @@ main lint SUCCESS (main CI/CD still running at record time).
   blocking" directive, on this evidence. Revert path: single merge commit.
   (Resolution note: origin/main's §12 API-doc decision, which this lane's §§13–16
   already assume, is retained above as §12; no content lost on either side.)
+
+## 17. R16 READY queue (3 Oct 2026 — second prompt cycle, packet fully read)
+
+Base: `origin/main` `08f3793c` (PR98 merge). Lane: `solstice/spark-r16` (clean,
+protected 71/71 at base). Main CI/CD on base still running at publication;
+main lint SUCCESS; prior head fully green. Zed working again: no new published
+diff (their 3 branch commits are docs/evidence-only vs main; all their code is
+integrated). Packet now fully read: both harnesses, shared contract, Triad
+contract, prompt library, toolbox (skimmed for backend relevance), START-HERE.
+
+Contract versions (unchanged + new): `execution-intent.v1`,
+`execution-receipt.v1`, `price-path-producer.v1`, `outcome.v1`, `abl.v1`,
+`recorder-health.v1`, `calendar.v1`, NEW `intent-draft.v1`, NEW `budget-check.v1`.
+
+- [READY] R16-1 Cross-process same-intent guard — owned:
+  `backend/services/public_execution_lifecycle.py` (DB-backed submit dedup when
+  a store is registered) + focused tests (two instances, one file DB —
+  second submit reuses orderId, single broker call). Contract unchanged.
+  Evidence: new tests + full R15 focused rerun. Next: implement first.
+- [READY] R16-2 Affordability gate — owned: lifecycle `INSUFFICIENT_BUDGET`
+  refusal (intent budget total vs ctx buying_power) + brief-spec row + tests.
+  Prompt-library requirement: unaffordable → no place. Next: after R16-1.
+- [READY] R16-3 Fill/remaining reporting + draft registry — owned: reconcile
+  reports `filled_quantity`/`remaining_quantity` via `_rget`; advisory
+  `intent-draft.v1` states DRAFT→REVIEWED→PREFLIGHTED→AWAITING (linked by
+  intent_hash; submit stays independent) + tests. Next: after R16-2.
+- [READY] R16-4 Brief-spec extension — owned:
+  `docs/solstice/SPARK_R15_BRIEF_HANDOFF.md` (spread limits, session-loss cap,
+  consecutive-bid-check params, affordability) + fixture row. Docs-only.
+  Next: after R16-3.
+- [READY] R16-5 Receipt + combined acceptance — owned: `SPARK_R16_RECEIPT.md`
+  (new), PR (review-only), Zed combined verification. BLOCKED_EXTERNAL on Zed
+  merge; proceed to open PR only. Next: last.
+
+## 18. R16-6 submit-ownership lock (3 Oct 2026)
+
+- [DONE] Single-process atomic submit: idempotent/overlap/insert under
+  `_SUBMIT_LOCK` (no awaits inside); 5-thread same-instant test places exactly
+  once (stable 3/3). Cross-process races stay documented residual (advisory
+  DB guard + broker orderId truth). Multi-process DuckDB writers still NOT
+  claimed safe — single-writer lifecycle only.
