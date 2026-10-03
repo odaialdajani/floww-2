@@ -25,6 +25,16 @@ const fixture = () => ({ ticker: "SPY", spot: 100.25, asof: "2031-01-16T15:00:00
 beforeEach(() => { axios.get.mockResolvedValue({ data: { snapshots: [], decisions: [] } }); });
 const mount = async () => { await act(async () => render(<SkylitDashboard ticker="SPY" spot={100.25} data={fixture()} />)); };
 
+test("Matrix + Profile is the default and local view changes preserve the owning selection",async()=>{
+ let view;
+ await act(async()=>{view=render(<SkylitDashboard ticker="SPY" spot={100.25} data={fixture()} localView="profile"/>);});
+ expect(screen.getByLabelText("Canvas layout")).toHaveValue("profile");
+ fireEvent.click(screen.getByRole("gridcell",{name:/^100 by 2031-01-17,/}));
+ await act(async()=>view.rerender(<SkylitDashboard ticker="SPY" spot={100.25} data={fixture()} localView="grid"/>));
+ expect(screen.getByLabelText("Canvas layout")).toHaveValue("focus");
+ expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("100000.0");
+});
+
 test("profile layout sums the exact loaded scope, aligns selection, and does not fetch a new exposure", async () => {
   await mount();
   const calls = axios.get.mock.calls.length;

@@ -15,6 +15,36 @@ beforeEach(()=>{
  });
 });
 
+test("requested Sol xhigh uses the returned catalog identifier and explicit owner save",async()=>{
+ const catalog=[...models,{id:"catalog-native-sol-id",label:"GPT-6.1-Sol",efforts:["low","xhigh"],default_effort:"low",speeds:["default"]}];
+ global.fetch.mockImplementation(async(url,opts)=>{
+  if(String(url).endsWith("/prefs")){selected=JSON.parse(opts.body).ai_settings;return {ok:true};}
+  return {ok:true,json:async()=>({models:catalog,selected})};
+ });
+ render(<AgentModelSettings/>);fireEvent.click(screen.getByRole("button",{name:/AI choices/}));
+ await screen.findByLabelText("Model");
+ fireEvent.click(screen.getByRole("button",{name:"Use GPT-6.1-Sol · Extra high"}));
+ expect(screen.getByLabelText("Model")).toHaveValue("catalog-native-sol-id");
+ expect(screen.getByLabelText("Thinking depth")).toHaveValue("xhigh");
+ expect(global.fetch.mock.calls.some(([url])=>String(url).endsWith("/prefs"))).toBe(false);
+ fireEvent.click(screen.getByRole("button",{name:"Save AI choice"}));
+ await screen.findByText("Saved for your next question.");
+ expect(selected).toEqual({model:"catalog-native-sol-id",effort:"xhigh",speed:"default"});
+});
+
+test.each([
+ [models,"GPT-6.1-Sol is not offered by this login"],
+ [[...models,{id:"sol-without-depth",label:"GPT-6.1-Sol",efforts:["low"],default_effort:"low",speeds:["default"]}],"GPT-6.1-Sol does not offer xhigh"],
+])("requested model/depth has a visible blocker and never saves a fallback",async(catalog,reason)=>{
+ global.fetch.mockResolvedValue({ok:true,json:async()=>({models:catalog,selected})});
+ render(<AgentModelSettings/>);fireEvent.click(screen.getByRole("button",{name:/AI choices/}));
+ await screen.findByLabelText("Model");
+ expect(screen.getByRole("button",{name:"Use GPT-6.1-Sol · Extra high"})).toBeDisabled();
+ expect(screen.getByText(reason,{exact:false})).toBeInTheDocument();
+ expect(screen.getByLabelText("Model")).toHaveValue("first");
+ expect(global.fetch.mock.calls.some(([url])=>String(url).endsWith("/prefs"))).toBe(false);
+});
+
 test("loads supported choices and saves them for the next question",async()=>{
  const saving=jest.fn();const view=render(<AgentModelSettings onSaving={saving}/>);
  fireEvent.click(screen.getByRole("button",{name:/AI choices/}));
