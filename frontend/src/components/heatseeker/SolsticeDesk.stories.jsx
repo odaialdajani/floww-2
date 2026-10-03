@@ -7,11 +7,11 @@ import ReplayStrip from './ReplayStrip';
 import ExpiryCoverage from './ExpiryCoverage';
 import coverage from '../../fixtures/integration/coverage-read.v1.json';
 
-const mockReads=()=>{
+const mockReads=({parameters={}}={})=>{
  const original=axios.get;
  axios.get=async url=>({data:String(url).includes('/manifest/')?{day:'2026-10-02',snapshots:[{id:fixture.display.snapshotId,asof:fixture.display.asof}],gaps:[{reason:'MISSING_CAPTURE'}]}:
-  String(url).includes('/price-paths/sessions')?coverage.sessions:
-  String(url).includes('/price-paths/expiries')?coverage.expiries:
+  String(url).includes('/price-paths/sessions')?(parameters.coverageSessions || coverage.sessions):
+  String(url).includes('/price-paths/expiries')?parameters.coverageRefusal?await Promise.reject({response:{status:502,data:coverage.refused_expiries}}):(parameters.coverageExpiries || coverage.expiries):
   String(url).includes('/price-paths/comparable')?coverage.refused_comparison:
   String(url).includes('/attribute/')?{ticker:'SPY',status:'ok',from:{id:'fixture-baseline'},to:{id:'fixture-current'},strike_deltas:[]}:
   String(url).includes('/replay/')?fixture.replay:String(url).includes('recorder_health')?{worker_state:'wired_off',store:{durable:false,backing:'memory'}}:{snapshots:[],decisions:[],rows:[],tickers:[]}});
@@ -38,6 +38,11 @@ export const StoredSessions={render:()=> <ReplayStrip ticker="SPY" onReplay={()=
  await userEvent.selectOptions(c.getByLabelText('Recorded sessions'),'2026-10-02');
  await expect(c.getByLabelText('Stored session date')).toHaveValue('2026-10-02');
 }};
+export const OvernightStoredDay={...StoredSessions,parameters:{coverageSessions:coverage.overnight_sessions},async play(context){
+ await StoredSessions.play(context);const c=within(context.canvasElement);
+ await expect(c.getByTestId('solstice-session-attribution')).toHaveTextContent('Stored day 2026-10-02 · NY date 2026-10-01');
+ await expect(c.getByTestId('solstice-session-attribution')).toHaveTextContent('Overnight');
+}};
 export const ComparisonRefused={render:()=> <ReplayStrip ticker="SPY"/>,async play({canvasElement}){
  const c=within(canvasElement);await userEvent.click(c.getByTestId('solstice-compare-btn'));
  await expect(c.getByTestId('solstice-replay-strip')).toHaveTextContent('SCOPE_MISMATCH');
@@ -47,6 +52,17 @@ export const ListedRangeAdmission={render:()=> <ExpiryCoverage ticker="SPY"/>,as
  const c=within(canvasElement);await userEvent.click(c.getByText('Listed 14–60 DTE coverage'));
  await userEvent.click(c.getByRole('button',{name:'Read listed coverage'}));
  await expect(c.getByRole('table',{name:'Listed expiry admission'})).toHaveTextContent('28 DTE');
+}};
+const cappedRows=Array.from({length:12},(_,index)=>({expiry:`2026-10-${String(16+index).padStart(2,'0')}`,dte:14+index,admitted:true,reason:'ADMITTED',display_envelope:true}));
+export const CappedExpiryListing={...ListedRangeAdmission,parameters:{coverageExpiries:{...coverage.expiries,expiries:cappedRows,n_admitted:12,coverage:{requested_expiries:12,n_listed:12,n_display_envelope:12,listing_capped:true,lower_edge_observed:false,upper_edge_observed:false}}},async play({canvasElement}){
+ const c=within(canvasElement);await userEvent.click(c.getByText('Listed 14–60 DTE coverage'));await userEvent.click(c.getByRole('button',{name:'Read listed coverage'}));
+ await expect(c.getByTestId('solstice-expiry-coverage')).toHaveTextContent('Listing capped');
+ await expect(c.getByTestId('solstice-expiry-coverage')).toHaveTextContent('Lower edge not observed');
+}};
+export const ChainReadRefused={...ListedRangeAdmission,parameters:{coverageRefusal:true},async play({canvasElement}){
+ const c=within(canvasElement);await userEvent.click(c.getByText('Listed 14–60 DTE coverage'));await userEvent.click(c.getByRole('button',{name:'Read listed coverage'}));
+ await expect(c.getByTestId('solstice-expiry-coverage')).toHaveTextContent('chain_unavailable');
+ await expect(c.queryByRole('table')).not.toBeInTheDocument();
 }};
 export const HistoricalRangeUnavailable={render:()=> <ExpiryCoverage ticker="SPY" replay/>,async play({canvasElement}){
  const c=within(canvasElement);await userEvent.click(c.getByText('Listed 14–60 DTE coverage'));

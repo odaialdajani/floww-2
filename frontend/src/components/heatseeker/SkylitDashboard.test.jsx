@@ -120,6 +120,65 @@ test('ticker change aborts expiry inventory and discards late success', async ()
   expect(screen.queryByRole('table', { name: 'Listed expiry admission' })).toBeNull();
 });
 
+function expandedCoverage() {
+  const rows = coverageFixture.expiries.expiries.slice(0, 2).map(row => ({ ...row, display_envelope: true }));
+  rows.push({ expiry: '2026-11-16', dte: 45, admitted: true, reason: 'ADMITTED', display_envelope: false });
+  return { ...coverageFixture.expiries, expiries: rows, n_admitted: 2, coverage: {
+    requested_expiries: 12, n_listed: 3, n_display_envelope: 2,
+    listing_capped: false, lower_edge_observed: true, upper_edge_observed: false,
+  } };
+}
+
+async function readExpiryResponse(data) {
+  axios.get.mockResolvedValue({ data });
+  render(<SkylitDashboard ticker="SPY" data={selectionMap()} />);
+  fireEvent.click(screen.getByText('Listed 14–60 DTE coverage'));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read listed coverage' })));
+}
+
+test('expiry metadata distinguishes policy admission, optional filter and unobserved range edge', async () => {
+  await readExpiryResponse(expandedCoverage());
+  const table = screen.getByRole('table', { name: 'Listed expiry admission' });
+  expect(table).toHaveTextContent('≤30 DTE filter');
+  expect(table.querySelector('tbody').lastChild).toHaveTextContent('45 DTEADMITTEDOutside');
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('3 returned / 12 requested');
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('Upper edge not observed');
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('not complete range coverage');
+});
+
+test('capped expiry listing is disclosed without claiming an exhaustive range', async () => {
+  const data = expandedCoverage();
+  const rows = Array.from({ length: 12 }, (_, i) => ({ ...data.expiries[1], expiry: `2026-10-${String(20 + i).padStart(2, '0')}` }));
+  await readExpiryResponse({ ...data, expiries: rows, n_admitted: 12, coverage: { ...data.coverage, n_listed: 12, n_display_envelope: 12, listing_capped: true, lower_edge_observed: false } });
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('Listing capped');
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('Lower edge not observed');
+});
+
+test('legacy expiry metadata remains unknown rather than complete or filter-eligible', async () => {
+  await readExpiryResponse({ ...coverageFixture.expiries, coverage: undefined, expiries: coverageFixture.expiries.expiries.map(({ display_envelope, ...row }) => row) });
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('Coverage metadata unavailable');
+  expect(screen.getByRole('table', { name: 'Listed expiry admission' })).toHaveTextContent('Unknown');
+});
+
+test.each([
+  ['count mismatch', { n_listed: 99 }],
+  ['string admission flag', { upper_edge_observed: 'true' }],
+  ['different requested cap', { requested_expiries: 16 }],
+])('invalid expiry coverage is refused: %s', async (_name, override) => {
+  const data = expandedCoverage();
+  await readExpiryResponse({ ...data, coverage: { ...data.coverage, ...override } });
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('EXPIRY_COVERAGE_UNAVAILABLE');
+  expect(screen.queryByRole('table', { name: 'Listed expiry admission' })).toBeNull();
+});
+
+test.each(['chain_unavailable', 'REVERSED_WINDOW'])('structured top-level refusal stays visible: %s', async error => {
+  axios.get.mockRejectedValue({ response: { status: error === 'chain_unavailable' ? 502 : 422, data: { version: 'coverage-read.v1', error } } });
+  render(<SkylitDashboard ticker="SPY" data={selectionMap()} />);
+  fireEvent.click(screen.getByText('Listed 14–60 DTE coverage'));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read listed coverage' })));
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent(error);
+});
+
 test('R12: strike review callback requires explicitly armed Trade mode', () => {
   const onStrikeClick = jest.fn();
   render(<SkylitDashboard ticker="SPY" data={selectionMap()} onStrikeClick={onStrikeClick} />);

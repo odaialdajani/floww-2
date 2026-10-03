@@ -13,6 +13,14 @@ function refusal(data, ticker) {
     typeof row?.expiry !== "string" || !row.expiry || typeof row.admitted !== "boolean" || !row.reason
     || (row.admitted && (!Number.isInteger(row.dte) || row.dte < 14 || row.dte > 60 || row.reason !== "ADMITTED")))
     || data.n_admitted !== data.expiries.filter(row => row.admitted).length) return "EXPIRY_INVENTORY_UNAVAILABLE";
+  const coverage = data.coverage;
+  if (data.expiries.some(row => row.display_envelope !== undefined && typeof row.display_envelope !== "boolean")) return "EXPIRY_COVERAGE_UNAVAILABLE";
+  if (coverage !== undefined && (!coverage || coverage.requested_expiries !== 12
+    || coverage.n_listed !== data.expiries.length || coverage.n_listed > 12
+    || data.expiries.some(row => typeof row.display_envelope !== "boolean")
+    || coverage.n_display_envelope !== data.expiries.filter(row => row.display_envelope).length
+    || typeof coverage.listing_capped !== "boolean" || coverage.listing_capped !== (coverage.n_listed === 12)
+    || typeof coverage.lower_edge_observed !== "boolean" || typeof coverage.upper_edge_observed !== "boolean")) return "EXPIRY_COVERAGE_UNAVAILABLE";
   return null;
 }
 
@@ -43,7 +51,7 @@ export default function ExpiryCoverage({ ticker, replay = false }) {
       const reason = refusal(data, ticker);
       setResult(reason ? { reason } : { data });
     } catch (error) {
-      if (generation.current === id) setResult({ reason: error.response?.data?.detail?.error || "EXPIRY_READ_FAILED" });
+      if (generation.current === id) setResult({ reason: error.response?.data?.error || error.response?.data?.detail?.error || "EXPIRY_READ_FAILED" });
     } finally {
       if (generation.current === id) setLoading(false);
     }
@@ -59,9 +67,11 @@ export default function ExpiryCoverage({ ticker, replay = false }) {
       {result?.reason && <p role="status">Coverage unavailable · {result.reason}</p>}
       {result?.data && <>
         <p>{result.data.data_source} · fetched {result.data.fetched_at} · {result.data.n_admitted} admitted in this listing</p>
+        {result.data.coverage ? <p role="status">{result.data.coverage.n_listed} returned / {result.data.coverage.requested_expiries} requested · {result.data.coverage.n_display_envelope} within the optional ≤30 DTE filter · {result.data.coverage.listing_capped ? "Listing capped" : "Listing below request limit; completeness unknown"} · {result.data.coverage.lower_edge_observed ? "Lower edge observed" : "Lower edge not observed"} · {result.data.coverage.upper_edge_observed ? "Upper edge observed" : "Upper edge not observed"}. Edge observations do not establish exhaustive coverage.</p> : <p role="status">Coverage metadata unavailable; listing completeness unknown.</p>}
+        <p>The ≤30 DTE filter is separate from 14–60 DTE admission. It is not a persisted analytical envelope or a range-map projection.</p>
         {result.data.expiries.length ? <table aria-label="Listed expiry admission">
-          <thead><tr><th>Expiry</th><th>DTE</th><th>Admission</th></tr></thead>
-          <tbody>{result.data.expiries.map((row, index) => <tr key={`${row.expiry}:${index}`}><td>{row.expiry}</td><td>{row.dte == null ? "unknown" : `${row.dte} DTE`}</td><td>{row.reason}</td></tr>)}</tbody>
+          <thead><tr><th>Expiry</th><th>DTE</th><th>Admission</th><th>≤30 DTE filter</th></tr></thead>
+          <tbody>{result.data.expiries.map((row, index) => <tr key={`${row.expiry}:${index}`}><td>{row.expiry}</td><td>{row.dte == null ? "unknown" : `${row.dte} DTE`}</td><td>{row.reason}</td><td>{row.display_envelope === true ? "Within" : row.display_envelope === false ? "Outside" : "Unknown"}</td></tr>)}</tbody>
         </table> : <p>No expiries returned in this count-limited listing; range absence is not established.</p>}
       </>}
     </div>

@@ -45,7 +45,9 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
         : data.ticker !== ticker ? "SESSION_IDENTITY_MISMATCH"
         : !Array.isArray(data.days) || data.n_days !== data.days.length || data.days.some(entry =>
           !/^\d{4}-\d{2}-\d{2}$/.test(entry?.date || "") || !Number.isInteger(entry.n_snapshots) || entry.n_snapshots < 1
-          || !entry.latest_snapshot_id || !entry.first_asof || !entry.last_asof)
+          || !entry.latest_snapshot_id || !entry.first_asof || !entry.last_asof
+                    || (entry.ny_date !== undefined && entry.ny_date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(entry.ny_date))
+                    || (entry.overnight !== undefined && typeof entry.overnight !== "boolean"))
           ? "SESSION_INDEX_UNAVAILABLE" : null);
       setSessions(error ? { error } : data);
     } catch (e) {
@@ -219,6 +221,11 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
     if (stepOnce()) setPlaying(true);
   }, [playing, stepOnce]);
   const scrubIndex = replayIndexOf(snaps, currentId);
+  const selectedSession = sessions?.days?.find(entry => entry.date === day);
+  const attribution = selectedSession?.ny_date === undefined || typeof selectedSession?.overnight !== "boolean"
+    ? "NY attribution unavailable"
+    : selectedSession.ny_date === null ? "NY dates mixed/unknown"
+    : `NY date ${selectedSession.ny_date}`;
   // R8-04: external replay jump (Next-to-review list). Same generation
   // guards as stepping: ticker switches and exits invalidate the request.
   const lastOpened = useRef(null);
@@ -234,12 +241,13 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
       title="Deterministic replay — what was available at decision time">
       <button className="skylit-trade-mode-btn" onClick={loadSessions} disabled={sessionsLoading}>Stored sessions</button>
       {sessionsLoading && <span role="status">Reading stored sessions…</span>}
-      {sessions && <span role="status" data-testid="solstice-session-status">{sessions.error || (sessions.days.length ? `${sessions.days.length} stored sessions · America/New_York` : "No stored sessions — capture not established")}</span>}
+      {sessions && <span role="status" data-testid="solstice-session-status">{sessions.error || (sessions.days.length ? `${sessions.days.length} stored sessions · stored day index` : "No stored sessions — capture not established")}</span>}
       {sessions?.days?.length > 0 && <label>Recorded <select aria-label="Recorded sessions" value={sessions.days.some(entry => entry.date === day) ? day : ""}
         onChange={e => { exitReplay(); setDay(e.target.value); }}>
         <option value="">Choose a stored session</option>
         {sessions.days.map(entry => <option key={entry.date} value={entry.date}>{entry.date} · {entry.n_snapshots} observations</option>)}
       </select></label>}
+      {day && <span data-testid="solstice-session-attribution">Stored day {day} · {attribution}{selectedSession?.overnight === true ? " · Overnight attribution differs; stored day remains the replay key" : ""}</span>}
       <label>Session <input type="date" aria-label="Stored session date" value={day}
         onChange={e => { exitReplay(); setDay(e.target.value); }} /></label>
       <button className="skylit-trade-mode-btn" onClick={load} data-testid="solstice-replay-load"

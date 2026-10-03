@@ -113,7 +113,7 @@ function coverageReads({ sessions = sessionIndex, admitted = true, reason = null
   });
 }
 
-test('stored sessions enumerate NY dates and choosing one resets replay without inventing a current session', async () => {
+test('stored day index selection resets replay without inventing a current session', async () => {
   coverageReads();
   const { onReplay } = await loadStrip();
   await act(async () => fireEvent.click(screen.getByTestId('solstice-replay-play')));
@@ -138,6 +138,31 @@ test.each([
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stored sessions' })));
   expect(screen.getByTestId('solstice-session-status')).toHaveTextContent(message);
   expect(screen.queryByRole('option', { name: /3 observations/ })).toBeNull();
+});
+
+test.each([
+  ['uniform overnight', '2026-09-24', 'NY date 2026-09-24'],
+  ['mixed NY attribution', null, 'NY dates mixed/unknown'],
+])('%s retains the owning stored day key and discloses NY attribution', async (_name, ny_date, label) => {
+  coverageReads({ sessions: { ...sessionIndex, days: [{ ...sessionIndex.days[0], ny_date, overnight: true }] } });
+  await loadStrip();
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stored sessions' })));
+  expect(screen.getByTestId('solstice-session-status')).not.toHaveTextContent('America/New_York');
+  fireEvent.change(screen.getByLabelText('Recorded sessions'), { target: { value: '2026-09-25' } });
+  expect(screen.getByTestId('solstice-session-attribution')).toHaveTextContent(label);
+  expect(screen.getByTestId('solstice-session-attribution')).toHaveTextContent('Stored day 2026-09-25');
+  expect(screen.getByLabelText('Stored session date')).toHaveValue('2026-09-25');
+  await act(async () => fireEvent.click(screen.getByTestId('solstice-replay-load')));
+  expect(axios.get).toHaveBeenCalledWith('/api/solstice/manifest/SPY?day=2026-09-25', expect.objectContaining({ signal: expect.anything() }));
+  expect(axios.get.mock.calls.some(([url]) => String(url).includes('day=2026-09-24'))).toBe(false);
+});
+
+test('an old day index cannot assert a timezone it did not declare', async () => {
+  coverageReads();
+  await loadStrip();
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stored sessions' })));
+  fireEvent.change(screen.getByLabelText('Recorded sessions'), { target: { value: '2026-09-25' } });
+  expect(screen.getByTestId('solstice-session-attribution')).toHaveTextContent('NY attribution unavailable');
 });
 
 test('symbol change resets dated scope and discards a late session inventory', async () => {
