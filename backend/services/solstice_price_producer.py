@@ -319,6 +319,22 @@ class PricePathProducer:
             except Exception as exc:
                 log.debug("price producer duplicate check failed for %s: %s", symbol, exc)
             prev_max = self._last_at.get(symbol)
+            if prev_max is None:
+                # Fresh process: seed the high-water mark from the durable store
+                # so a restarted producer still flags out-of-order observations
+                # instead of silently resetting the sequence.
+                try:
+                    row = self.conn.execute(
+                        "SELECT MAX(at_ts) FROM price_paths_v1 WHERE ticker = ?",
+                        [symbol],
+                    ).fetchone()
+                    if row and row[0] is not None:
+                        prev_max = float(row[0])
+                        with self._lock:
+                            self._last_at[symbol] = prev_max
+                except Exception as exc:
+                    log.debug("price producer high-water seed failed for %s: %s", symbol, exc)
+                    prev_max = self._last_at.get(symbol)
             is_ooo = prev_max is not None and float(at_ts) < prev_max
             try:
                 ok = record_price_path(self.conn, symbol, float(at_ts), float(price_f), source, received_at)

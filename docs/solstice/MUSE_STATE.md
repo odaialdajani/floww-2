@@ -617,3 +617,99 @@ combined acceptance.
   lane head (Zed's candidate froze `611f3c2f`; re-compose at this lane head),
   plus the Nav/Zed merge decision on PR103/PR101/PR100 and PR93 closeout
   docs. True externals unchanged.
+
+## 24. Hardening pass (3 Oct 2026 — "continue, no duplicates, reverify, improve")
+
+Duplicate audit (code-read, no new abstraction): `recorder_health`
+(register_capture/start_worker for the capture job) vs
+`solstice_price_producer` (same names for the price-path job) are separate
+jobs with separate flags/states — not merged. `execution_engine.py`
+(equities Almgren-Chriss math) vs `public_execution_lifecycle.py` (Public
+options intent lifecycle) are different domains — not merged.
+`routes/solstice.py` untouched; new reads live in `routes/solstice_price_paths.py`
+only. No duplicate polling path added (one fetch per symbol per tick).
+
+Holes found + fixed (TDD: 4 failing first, then green; all Spark-owned,
+no shared-file edit, no route surface change, no activation):
+1. `supersede()` bypassed approval/preflight gates and cancelled before
+   checking: new params `approval/require_approval/approval_scope/
+   require_fresh_preflight`, deterministic gates pre-validated on the final
+   candidate (with `supersedes`) BEFORE any cancel — a refused transition
+   never strands a cancelled order. Pinned by 2 tests (old stays OPEN,
+   zero new broker calls on refusal).
+2. `lifecycle_inventory()` counted memory drafts only: now unions durable
+   `intent_drafts_v1` rows (deduped by intent_hash) — a restarted process
+   reports stored drafts honestly. Pinned.
+3. `validate_intent` max_positions used memory-only `_open_records()`:
+   new `_open_count()` takes max(memory, durable nonterminal) — a fresh
+   process without recover still refuses over-limit entry, never
+   undercounts; no double-count after recover. Pinned.
+4. `/sessions` ET-edge: prefix-valid but ET-unparseable stamps (or a mix)
+   now disclose `overnight True / ny_date None` instead of silently keeping
+   the prior day. Pinned via direct ZZU seed.
+5. Producer restart OOO: `_last_at` high-water seeds from
+   `MAX(at_ts)` per ticker on first encounter — a restarted producer flags
+   late observations instead of resetting the sequence. Pinned.
+
+Verification (exact head, Python 3.14.6 disclosed, backend CWD):
+new `test_r17_hardening.py` **6 passed**; adjacent
+(r17 reads 9 + inventory 5 + hardening 6 + wiring 8 + lifecycle 42) **70
+passed**; full `tests/solstice/` **624 passed**; `ruff` touched clean;
+`generate_api_docs.py --check` **380 paths current** (service-only fixes,
+no regen needed).
+
+- Activation state: OFF. No flags/orders/services/credentials/paid calls.
+  Zed's `ef911f37` already merges `044ca009` verbatim + consumer-only files;
+  this pass adds a new lane head requiring Zed re-composition before the
+  combined acceptance.
+- Next exact action: commit + push lane only (no merge/deploy/activate);
+  Zed re-composes at the new head; Nav merge decision on
+  PR103/PR104/PR101/PR100 + PR93 docs. True externals unchanged.
+
+## 25. Execution-controls pass (3 Oct 2026 — Zed residual controls)
+
+Zed's pass-3 receipt keeps commissioning HOLD on Spark-owned controls:
+complete 14–60 analytical projection + authenticated/default-deny
+account-wide approval, risk, ownership, protection, recovery. Delivered as
+additive, default-deny, fixture-proven service truth (no live calls, no
+venue-flag change, no new route, no server.py edit):
+
+1. `range_map` on `/expiries` (additive): sorted admitted expiries/DTEs,
+   min/max admitted DTE, `complete` (true when uncapped or both edges
+   observed) else `LISTING_CAPPED_WINDOW_MAY_EXTEND`. Existing
+   `expiries/coverage` fields byte-identical in shape; openapi regen is
+   description-only (380 paths).
+2. Account-wide policy registry (`account-policy.v1`, single active row,
+   memory + durable): `set/get/clear_account_policy` (operator required);
+   `validate_intent` enforces stored ceilings (quantity/notional/positions/
+   allowed products) in addition to per-call ctx — ctx narrows, never widens.
+   Absent stays UNSET.
+3. Stored + revocable approvals: `store_approval` (shape-validated, operator
+   required, memory + durable `approvals_v1`), `revoke_approval`,
+   `verify_approval` fails closed on mismatch/expiry/scope AND revocation
+   (memory or durable). `submit(require_approval=True)` inherits revocation
+   enforcement; `supersede` pre-validates gates before any cancel (§24).
+4. Recovery-before-entry: `submit` refuses `RECOVERY_REQUIRED` when the
+   registry is empty but durable nonterminal rows exist — production flow is
+   `recover_open()` + `reconcile_all()` first. Pinned.
+5. Native protection truth: `NATIVE_PROTECTION_MATRIX` + `native_protection_support()`
+   (conservative: all current combinations report unsupported/
+   unverified-native-support, never offered). `lifecycle_inventory` reports
+   `approvals` counts, `protection.native_support`, `policy` set-state and
+   the RECOVERY_REQUIRED boundary — counts only, no secrets.
+6. Fixture `r15/evidence/execution_controls_v1.json` (`execution-controls.v1`)
+   for Zed's consumer lane.
+
+Verification (exact head, Python 3.14.6 disclosed, backend CWD):
+`test_r17_hardening.py` **12 passed** (6 §24 + 6 new); adjacent
+(r17 9 + inventory 5 + hardening 12 + wiring 8 + lifecycle 42) **76 passed**;
+full `tests/solstice/` **630 passed**; `ruff` touched clean;
+`generate_api_docs.py --check` **380 paths current** after description-only
+regen.
+
+- Activation state: OFF. No flags/orders/services/credentials/paid calls.
+  No Zed-owned file touched. This head supersedes `c10361ac`; Zed
+  re-composes the combined candidate here.
+- Next exact action per Nav "merge commit everything": publish a combined
+  review-only candidate (main + Spark lane + Zed `7ea8cbff`) with exact-head
+  evidence; main merge/deploy/activation decisions stay Nav's.
