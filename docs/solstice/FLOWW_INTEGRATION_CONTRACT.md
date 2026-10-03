@@ -1,6 +1,18 @@
 # FLOWW consumer integration contract — floww-integration.v1
 
-Authority: 2 October 2026 `FLOWW-Shared-Integration-Contract.md` and `Solstice-Triad-Implementation-Contract.md`. Zed writes this consumer/interface document; Spark owns Public/recorder producers. Additive consumer contract only: no new route or shared schema is asserted to exist.
+Authority: 2 October 2026 `FLOWW-Shared-Integration-Contract.md`/`Solstice-Triad-Implementation-Contract.md`, superseded in ownership by the R18 three-agent harness/contract. Zed writes consumers/agent/shared mounts/generated docs; Spark owns execution/risk/broker authority; Cline owns market-data/range/history/recorder producers. Additive consumer contract only: requested interfaces are not asserted to exist.
+
+## R18 current contract admission
+
+Tested candidatebb13f96a/runtime47abd27b on main6eaa3343/common22df6fe6 consumes Clinee6d35745/Sparka73f79b9. [R18 acceptance](r18/ZED_R18_ACCEPTANCE.md) supersedes historical range-unavailable/source-head statements below. One successor PR104; no main merge or privileged authority mount. Generated API docs381 paths/392 operations/no collisions are Zed-owned in this three-agent continuation.
+
+`range-analytics.v1` is consumed **verbatim** from the real owning `GET /api/heatmap/{ticker}/range-analytics?min_dte=14&max_dte=60&persist=false` producer. Axes are ordered `strike_keys` plus expiry/DTE rows; grids are dense `cells[expiry][strike]` with finite values or null. Raw OI / delta-weighted OI / cumulative volume gamma / unavailable window-volume delta-adjusted gamma stay distinct. Registry/formula/population/coverage/clocks/nulls are not coerced into another metric or execution signal. Listing-only `coverage-read.v1` is separate.
+
+Range screen selection adds `rangeVersion`, `rangeRecordId`, `rangeDigest`, `rangeMetric`, `rangeBasis`, `rangeStatus`, owning query/received version and `range-live`/`range-replay` identity. Shape/record-prefix validation is **not** full cryptographic evidence integrity or permission. No classified wall/OSI is invented; selectedContract remains null. The current backend research contract does not admit range contexts: frontend refuses before requests and a complete v2 selector probe refuses unsupported mode/surface before reads/provider. Range research and replay stay explicitly unavailable pending Cline's stored-only integrity/read/index/resolver contract. Existing legacy replay namespace is not rga1.
+
+`lodestar-trace.v1` now carries explicit policy_version as well as requested/effective settings, context/input hashes, evidence/observation linkage and terminal usage state. Authenticated scripted-provider tests establish exact Sol/xhigh/default dispatch, never actual paid production settings. Private native handoff remains manual editable copy/operator review with local correlated workflow reference; no Public receipt/remote trace ingestion is asserted.
+
+Spark newer5ac192df is independently reviewed, not composed or accepted as executable authority. Body/shared-key actor facts and pure ADMIT helpers cannot confer commissioned permission. Required durable approver immutability, atomic lease/exact payload/server preflight/risk/census and closed existing/order bypass defects are in the linked R18 acceptance/producer request. Browser/model cannot set armed/strict flags. Policy UNSET, activation OFF and protected exits/cancel/reconcile retained.
 
 ## Preserved boundaries
 
