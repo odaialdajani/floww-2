@@ -169,14 +169,9 @@ Contract versions: `metric-record.v1`, `solstice-metric-contract.v1`,
 - [DONE] R15-5 Outcome linkage + frozen prospective research protocol —
   `docs/solstice/SPARK_R15_OUTCOME_PROTOCOL.md` (FROZEN_PROTOCOL untouched,
   zero durable records = insufficient evidence).
-- [IN_PROGRESS] R15-6 Exact-head backend receipt + combined-candidate acceptance —
-  `docs/solstice/SPARK_R15_RECEIPT.md` (refresh pending for hole-fix head);
-  PR94 OPEN (review only). Evidence: `tests/solstice/` 584 passed from `backend/`;
-  new focused 54 passed; brokerage gates 32 passed; truth 227/0; ruff + bandit
-  clean;
-  silent 351 OK; API 375 paths (+2 read-only). Next: refresh receipt, commit,
-  push PR94, participate in Zed's isolated verification (Zed paused — proceed,
-  ack pending).
+- [DONE] R15-6 Exact-head backend receipt + combined-candidate acceptance —
+  `docs/solstice/SPARK_R15_RECEIPT.md`; PR94 CI green on exact head; Zed PR95
+  audited + scratch suites green; superseded by §13: COMBINED PR96 MERGED.
 
 External BLOCKED (not engineering): SPX entitlement, licensed feeds, operator
 risk limits, Public native activation, participant recruitment, durable
@@ -317,3 +312,29 @@ Lifecycle transitions the prompt requires but the first cut left as refusal-only
   requires Zed's merge + a combined-head CI run (their PR is DRAFT, mine
   unmerged by design). A green backend lane alone is not claimed as integrated
   UI proof.
+
+## 13. Combined merge record (3 Oct 2026, Nav: "take over, finish everything")
+
+- Combined PR96 (`solstice/combined-integration-20261002`) MERGED at
+  `df1bf1ce` (2026-10-03T01:35Z) after ALL gates green on the exact head:
+  ruff PASS (incl. API-doc gate at 376 paths), backend-tests PASS (18m27s),
+  frontend-build PASS, docker-build PASS. Draft→ready→merge by Spark under
+  explicit Nav takeover authorization (Zed's lane was DRAFT/HOLD on the doc gate).
+- Merge contents: Spark lane (8 commits: producer, lifecycle, contracts,
+  hole-fix passes) + Zed integration (grounded frontend, disarmed Public
+  handoff, native bridge) + Spark-taken API-doc regen (375→376, `/api/agent/
+  handoffs` surface only). No force-push; normal merge commit.
+- Post-merge `origin/main` (`df1bf1ce`): protected manifest 71/71 identical
+  (verified via `git rev-parse origin/main:<path>` per line). Main CI/CD+lint
+  triggered on the merge head (pending at record time — re-check before claiming
+  main-green).
+- Activation state: OFF (all worker/venue flags unset; no deployment, restart,
+  daemon, order, credential, retraining, message, or paid call by this lane).
+  Empirical outcomes: still INSUFFICIENT EVIDENCE (zero durable admitted
+  records). Nothing in this merge commissions live trading or claims edge.
+- Remaining BLOCKED_EXTERNAL: SPX entitlement, licensed feeds, operator risk
+  limits + fixed account policy, Public native activation, participant study,
+  empirical 30–60 sessions, data rights, durable production capture with
+  admitted records, Nav visual review, real-money commissioning record.
+- Next: watch main CI to green; close PR94 as superseded; resume only on new
+  owned work or genuine external input.
