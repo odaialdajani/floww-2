@@ -628,3 +628,86 @@ def test_reject_max_positions():
         _base_intent(observation_id="obs_pos2", limit_price="3.25"), ctx, broker, armed=True))
     assert second["ok"] is False
     assert second["reason"] in ("RISK_MAX_POSITIONS_EXCEEDED", "OVERLAP_OPEN_NEEDS_RECONCILE")
+
+
+def test_cancel_on_terminal_order_makes_no_broker_call():
+    import asyncio
+
+    import services.public_execution_lifecycle as lc
+
+    class _CountingBroker(_FakeBroker):
+        def __init__(self):
+            super().__init__()
+            self.cancel_calls = 0
+
+        async def cancel_order(self, account_id, order_id):
+            self.cancel_calls += 1
+            return await super().cancel_order(account_id, order_id)
+
+    broker = _CountingBroker()
+    out = asyncio.run(lc.submit(_base_intent(), _ctx(), broker, armed=True))
+    broker.orders[out["order_id"]]["status"] = "FILLED"
+    assert asyncio.run(lc.reconcile(out["intent_id"], broker))["status"] == "FILLED"
+    refused = asyncio.run(lc.cancel(out["intent_id"], broker))
+    assert refused["cancelled"] is False
+    assert refused["status"] == "FILLED" and refused["reason"] == "already-terminal"
+    assert broker.cancel_calls == 0
+    # Superseding a terminal order is likewise blocked without new entry.
+    blocked = asyncio.run(lc.supersede(
+        out["intent_id"], _base_intent(observation_id="obs_term", limit_price="3.25"),
+        _ctx(), broker, armed=True))
+    assert blocked["ok"] is False and blocked["reason"] == "SUPERSEDE_BLOCKED"
+    assert len(broker.calls) == 1
+
+
+def test_persist_error_flagged_never_hidden():
+    import asyncio
+    from unittest.mock import patch
+
+    import duckdb
+
+    import services.public_execution_lifecycle as lc
+
+    # Create-path write failure refuses BEFORE any broker call (fail-closed).
+    class _FailingStore:
+        def execute(self, *args, **kwargs):
+            raise RuntimeError("disk gone")
+
+    assert lc.register_store(_FailingStore()) is False  # dead handle refused
+    assert lc._STORE is None
+
+    # A store that dies AFTER registration: create-path refuses before broker.
+    import duckdb
+
+    conn = duckdb.connect(":memory:")
+    assert lc.register_store(conn) is True
+
+    class _DyingStore:
+        def __init__(self, inner):
+            self._inner = inner
+            self.dead = False
+
+        def execute(self, *args, **kwargs):
+            if self.dead:
+                raise RuntimeError("disk gone mid-write")
+            return self._inner.execute(*args, **kwargs)
+
+    dying = _DyingStore(conn)
+    assert lc.register_store(dying) is True
+    dying.dead = True
+    broker = _FakeBroker()
+    refused = asyncio.run(lc.submit(_base_intent(), _ctx(), broker, armed=True))
+    assert refused["ok"] is False and refused["reason"] == "STORE_UNAVAILABLE"
+    assert broker.calls == []
+    dying.dead = False
+    lc._reset_for_tests()
+
+    # Post-receipt write failure: the broker accepted, so the receipt stays
+    # truthful AND the failure is flagged (heals via recover+reconcile later).
+    lc.register_store(duckdb.connect(":memory:"))
+    real_persist = lc._persist
+    with patch.object(lc, "_persist", side_effect=[True, False]) as _:
+        out = asyncio.run(lc.submit(_base_intent(), _ctx(), broker, armed=True))
+    assert out["ok"] is True and out["persist_error"] is True
+    assert real_persist(out["intent_id"]) is True  # store was fine; flag heals
+    lc._reset_for_tests()

@@ -338,3 +338,15 @@ Lifecycle transitions the prompt requires but the first cut left as refusal-only
   admitted records, Nav visual review, real-money commissioning record.
 - Next: watch main CI to green; close PR94 as superseded; resume only on new
   owned work or genuine external input.
+
+## 14. Post-merge verify + fix pass (3 Oct 2026 — "make sure it's all good")
+
+Main `df1bf1ce` verified: protected 71/71, API 376 paths incl. handoffs,
+main lint SUCCESS (main CI/CD still running at record time).
+- [DONE] R15-11 Terminal-cancel guard — `cancel()` on FILLED/REJECTED/CANCELED
+  refuses `already-terminal` with zero broker calls; `supersede()` on terminal
+  blocks without entry. Tested incl. no-call assertion.
+- [DONE] R15-12 Durable-write failure paths — `register_store` refuses dead
+  handles (prior store kept); create-path write failure → `STORE_UNAVAILABLE`
+  before any broker call; post-receipt failure flagged `persist_error`
+  (heals via recover+reconcile). Tested all three.
