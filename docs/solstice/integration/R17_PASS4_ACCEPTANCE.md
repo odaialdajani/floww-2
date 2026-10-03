@@ -1,4 +1,6 @@
-# R17 pass 4 — committed control disclosures; commissioning HOLD
+# Historical R17 pass 4 — committed control disclosures; commissioning HOLD
+
+Superseded by [R17_PASS5_ACCEPTANCE](R17_PASS5_ACCEPTANCE.md). The results and hashes below describe CODE98ab205a/receipt0d8452d7 only. Shared preview files and browser-receipt.json are now pass-5 evidence; retrieve their historical bytes from receipt0d8452d7. The strict approval repair closes the old missing-row/query-failure blocker for strict callers only; this historical record is not a current unresolved-defect list.
 
 ## Exact combined candidate
 

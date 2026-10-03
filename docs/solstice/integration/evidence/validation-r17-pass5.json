@@ -1,0 +1,137 @@
+{
+  "version": "floww-combined-validation.v1",
+  "sourceCommit": "aadea4ac833e35b14375f9f36243c7da1f526d7f",
+  "baseCommit": "6eaa3343655a30fd38c40abaa6a903e8d3814530",
+  "sparkCommit": "d8ba5b7b533667520274a6396b7b73da4db9bad2",
+  "fixtureOnlyBrowser": true,
+  "activation": "OFF",
+  "commissioning": "HOLD",
+  "results": {
+    "backend": {
+      "passed": 7105,
+      "existingSkips": 37,
+      "coveragePercent": 68.99
+    },
+    "frontend": {
+      "suites": 126,
+      "passed": 1155
+    },
+    "storybook": {
+      "files": 4,
+      "passed": 29
+    },
+    "truth": {
+      "passed": 227,
+      "failed": 0
+    },
+    "silentExceptFiles": 353,
+    "apiPaths": 380,
+    "protectedFilesUnchanged": 71,
+    "browser": {
+      "routes": 8,
+      "viewports": 6,
+      "warnings": 20,
+      "pageExceptions": 0,
+      "executionMutations": 0,
+      "sourceHashes": 666,
+      "nativeZoom": {
+        "method": "chrome.tabs.setZoom; no CSS/pinch emulation",
+        "factor": 2,
+        "before": {
+          "width": 1440,
+          "dpr": 1
+        },
+        "after": {
+          "width": 720,
+          "dpr": 2,
+          "cssZoom": "1",
+          "visualScale": 1
+        }
+      }
+    }
+  },
+  "logs": {
+    "backend": {
+      "path": ".verification/pass5-backend-code.log",
+      "sha256": "e6b55bdf1dc27528282c10662c5fce94cc2fdce61b02256b55e910d283e3b03e"
+    },
+    "frontend": {
+      "path": ".verification/pass5-frontend-code.log",
+      "sha256": "a92c19801f3885401fd46a830ca1415e7cda7ddeec5ed56e7962379cfbdb1e64"
+    },
+    "stories": {
+      "path": ".verification/pass5-stories-code.log",
+      "sha256": "6a54079a9f7d44e4a769f4ce22dd094ccded7ea5305fb836fc66b9f6d93e9dba"
+    },
+    "storybook": {
+      "path": ".verification/pass5-storybook-code.log",
+      "sha256": "040cc9a81d9cb5245e4bcea4dc53a391dbcf440efca819350ef3eb6bd3e9c6ed"
+    },
+    "browser": {
+      "path": ".verification/pass5-browser-code.log",
+      "sha256": "cd7de9df749e08133895a27b3dde1dfbe64290be52b01b90cd201fb91e313222"
+    },
+    "truth": {
+      "path": ".verification/pass5-truth-code.log",
+      "sha256": "c71c9be951282f9518d61b5b0288167e2a45717b18c275e5eae7f8321ab281de"
+    },
+    "silent": {
+      "path": ".verification/pass5-silent-code.log",
+      "sha256": "18907c84f6f745a1fb9ba601cf4cae6cbbb56d50e3b549d1b45c5b12bba94264"
+    },
+    "api": {
+      "path": ".verification/pass5-api-code.log",
+      "sha256": "4acafc6527c07a9296a74e7c382eedd983f17aade07db9e9e99204ab98cbf85f"
+    },
+    "ruff": {
+      "path": ".verification/pass5-ruff-code.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bandit": {
+      "path": ".verification/pass5-bandit-code.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "recoveryRed": {
+      "path": ".verification/pass5-recovery-red.log",
+      "sha256": "80721d6ecd33aad8bda6240493a4042b27cec6f372edb4424f2584a803ea5d5d"
+    },
+    "recoveryGreen": {
+      "path": ".verification/pass5-recovery-green.log",
+      "sha256": "ded176f804f3c76107e7db105ae94eb0dd1c1eb27b35979d361ddbdf6f65e1b8"
+    },
+    "initialBackendFailure": {
+      "path": ".verification/pass5-backend.log",
+      "sha256": "467fafba2dfd771c767101a4898bf85d3b2875f08db6ca10a8f0b23dd7bef5c8"
+    },
+    "initialFrontendTimeout": {
+      "path": ".verification/pass5-frontend.log",
+      "sha256": "1493e1f53941d4dbe5445b98ebcbaf060ad9e9e8399828dd705bb9b491c58d06"
+    }
+  },
+  "evidenceSha256": {
+    "public-inventory-1440.png": "83df906f0c9958b0c557e2482d2fe67503d74f247a2301a861255fb71dd8abcc",
+    "solstice-1280.png": "0a673c1659bc9593b9bff4c28bfc5ef2c33af9123e3d639c1d52dbb575e5db63",
+    "browser-receipt.json": "af6a6f836fa1aeb79ed01a0f66e03459ed128d8504734d61c465f1f9b1aae18f",
+    "solstice-1440.png": "d2bd13afb2fed60772f2cb1e03692ed1c14e4e8f5f8fcdcbb3e5fb1f8be280cd",
+    "solstice-390.png": "36cca9ee29bf2c1da90b3ce77afc8e90d74c774548a71b5d4bbc7b8b9078a4aa",
+    "strict-approval-r17.json": "364daa3a333f1af9063236cce6e739ade6c953d3b271a3500d3e3354cec8c919",
+    "solstice-native200.png": "6276a7072ed89e4bdb73c8ace98adb93d7119cfbfd7cd80f4c427eaf32996d97",
+    "triad-1280.png": "9a1d4268401b074a514bab35083eb3cfba116f67430742dbec99681efad6d83d",
+    "lodestar-catalog-r16.json": "cdb8cd277f97a4882c273867d8ec7b744641e67931a072c2cc66741db5b10a1a",
+    "triad-390.png": "67305a622b333768d2a276188ea87aec68ce68fc6666daab5ba25c47b4bc8a00",
+    "public-handoff-1440.png": "2aad375b530b85781a66d33a7993ecb7699c442e892bfd244a393a653c304612",
+    "triad-1440.png": "b89cc404ea0c2ddcb41167c016ff9f4609cb14c8dd9c5d6ce11bbd58fc577900",
+    "lodestar-catalog-r17.json": "c2ddecd0762a277eff2e84ae4c148360a78bebf10a31023f166019daf9ec664a",
+    "lodestar-1440.png": "4ecf8406465eed1d47bd3a37ece58c2f3c821bebcb17b6d9dcbfdee80efc47e0"
+  },
+  "protectedManifestSha256": "c5bea4270f1b6a79d60c22468db261644d43dcf2ee5aeb653cad4a3fff1e6e94",
+  "hostedChecks": "pending final receipt-head publication; verify actual headSha separately",
+  "notes": [
+    "Raw logs remain local under .verification; hashes do not claim remote availability.",
+    "Two new consumer regressions failed before fix; filtered tests were not skip decorators.",
+    "Initial16 backend failures were caused by test-only FLOWW_AGENT_DISABLED=1, corrected without source changes.",
+    "Initial frontend/browser/audit contention timeouts retained; final sequential runs passed.",
+    "Legacy approval/default flags unchanged; strict durable approval refusal is opt-in.",
+    "No live account/model turn/production replay/order/activation evidence."
+  ]
+}
