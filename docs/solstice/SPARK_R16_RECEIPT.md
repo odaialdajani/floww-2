@@ -25,8 +25,8 @@ distinct: envelope version vs contract object — not a duplicate.)
 
 ## Verification (exact lane head, Python 3.14.6 vs ship 3.12 disclosed)
 
-- `tests/solstice/` from `backend/`: **603 passed** (530 R14 + 73: 67 R15 + 6 R16).
-- R16 focused: lifecycle file **42 passed** (35 + 7 new: cross-process, affordability, fills, 3× draft, race-lock).
+- `tests/solstice/` from `backend/`: **604 passed** (530 R14 + 74: 67 R15 + 7 R16).
+- R16 focused: lifecycle file **43 passed** (35 + 8 new: cross-process, affordability, fills, 3× draft, race-lock, disarmed-supersede).
 - `truth_audit.sh`: **227 passed, 0 failed**.
 - `check_silent_excepts.py`: **OK, 353 files** (one new `silent by design` note).
 - `ruff check` touched files: **clean**.

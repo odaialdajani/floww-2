@@ -433,3 +433,13 @@ Contract versions (unchanged + new): `execution-intent.v1`,
   once (stable 3/3). Cross-process races stay documented residual (advisory
   DB guard + broker orderId truth). Multi-process DuckDB writers still NOT
   claimed safe — single-writer lifecycle only.
+
+## 19. R16-7 disarmed-supersede guard + PR101 audit (3 Oct 2026, Zed active)
+
+- [DONE] Disarmed `supersede()` refuses BEFORE cancelling (a refused transition
+  never strands a cancelled order with no replacement); zero-call assertion.
+- PR101 (`combined-r16`, all 4 hosted gates green) audited read-only: it carries
+  my R16 content verbatim (lifecycle + tests + fixture identical; receipt copy
+  is one commit stale: 602/40 vs current 604/43). No hostile edits, no gate
+  weakening — staleness only. Merge decision stays with Nav/Zed; my lane does
+  not touch their branch.

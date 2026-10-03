@@ -948,7 +948,11 @@ async def supersede(
     intent submits only after the old record reaches CANCELED. Any other outcome
     (pending, unknown, still open) blocks entry with an explicit reason instead
     of double-entering. Returns the new submit receipt with `supersedes` set.
+    Disarmed supersede refuses BEFORE cancelling: a refused transition must
+    never leave the old order cancelled with no replacement.
     """
+    if not armed:
+        return {"ok": False, "reason": "DISARMED", "old_intent_id": old_intent_id}
     old = _INTENTS.get(old_intent_id)
     if old is None or not old.get("order_id"):
         return {"ok": False, "reason": "unknown-intent"}
