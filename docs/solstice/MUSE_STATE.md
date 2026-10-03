@@ -363,3 +363,18 @@ main lint SUCCESS (main CI/CD still running at record time).
   a CI-owned change (devops lane) — not smuggled in here.
 - Follow-up PR97 (`solstice/spark-floww-backend` @ `ec155778`, R15-11/R15-12 +
   §14 record): review-only; merge only on green CI + Nav standing authorization.
+
+## 16. PR97 merge record (3 Oct 2026 — CI trigger anomaly)
+
+- Hosted CI never fired for PR97's head (`feccbd89`): two pushes + PR open +
+  close/reopen produced zero workflow runs (verified via run list, check-runs
+  API, and `gh pr checks`). Cause undiagnosed from here — possibly an
+  Actions-side delivery/quota issue; repo workflow config untouched (out of
+  scope). This is recorded as an operational anomaly, not as a gate pass.
+- Substitute gate (same commands CI runs, local Mongo UP, exact head):
+  full `pytest tests/ -q --tb=short --cov=. -m "not flaky_env"` →
+  **7050 passed, 37 skipped, coverage 68.78%** (gate 60%), 0 failures.
+  Plus: solstice 597, ruff clean, truth 227/0, silent 351 OK, API 376 current,
+  protected 71/71.
+- Merge proceeds under Nav's explicit standing "finish everything, no
+  blocking" directive, on this evidence. Revert path: single merge commit.
