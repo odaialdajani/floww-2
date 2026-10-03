@@ -54,3 +54,35 @@ before merge.
 Remaining externals: SPX, feeds, fixed account/risk policy, native activation,
 participants, durable production capture with admitted records, real-money
 record, Nav visual review.
+
+## Take-over additions (3 Oct 2026 — Cline, pass 2)
+
+Addressing Zed's PR103 residual requests (1) and (2); (3) remains READY-owned
+next:
+
+- `/sessions` (coverage-read.v1): day attribution is now the stored `asof_ts`
+  timestamp prefix — the same attribution `session_manifest`/
+  `compare_snapshots` match with `LIKE day%` — plus ET-normalized `ny_date`
+  (null when non-uniform) and an `overnight` flag. Prefix stays canonical;
+  divergence is disclosed, never mixed. Overnight/offset fixtures pinned.
+- `/expiries` (coverage-read.v1): reversed bounds refuse 422 `REVERSED_WINDOW`
+  before any fetch; owning display envelope (`dte le=30` in `market_data.py`)
+  projected per row as `display_envelope` — a DIFFERENT constraint from the
+  admitted 14–60 window; honest `coverage` block replaces the silent firstN
+  verdict; listings default 6→12, le 16. Both refusals return structured
+  JSONResponse bodies (the global handler stringifies dict details —
+  server.py untouched, shared-file protocol).
+- `test_r17_reads.py` +3 tests (overnight/offset attribution, reversed-bounds
+  refusal before fetch, display-envelope + coverage projection).
+- `docs/api/openapi.json` regenerated (taken boundary, precedent §12): diff is
+  exactly the /expiries+/sessions schema updates; 379 paths; README unchanged.
+
+Verification (exact head, Python 3.14.6 disclosed): r17 9 + wiring 8 = **17
+passed**; ruff touched clean; protected 71/71; no Zed-owned file touched.
+
+Remaining: item (3) authenticated/default-deny stored approvals/preflight +
+account-wide limits/inventory/protection/recovery boundary (lifecycle still
+unmounted; server.py mounts are Spark-owned) — next exact action. Externals
+unchanged: SPX, feeds, fixed account/risk policy, native activation,
+participants, durable production capture with admitted records, real-money
+record, Nav visual review.

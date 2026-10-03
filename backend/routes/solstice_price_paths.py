@@ -15,7 +15,8 @@ from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
+from fastapi.responses import JSONResponse
 
 router = APIRouter(prefix="/api/solstice/price-paths", tags=["solstice"])
 
@@ -42,6 +43,23 @@ def _ny_date(value: Any) -> str | None:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
     return dt.astimezone(ET).strftime("%Y-%m-%d")
+
+
+def _prefix_day(value: Any) -> str | None:
+    """Stored timestamp-prefix day — the owning manifest's attribution.
+
+    ``session_manifest``/``compare_snapshots`` match snapshots with
+    ``LIKE day%`` on the raw stored string, so the session index must use the
+    same key to stay coherent with them.
+    """
+    if not isinstance(value, str) or len(value.strip()) < 10:
+        return None
+    candidate = value.strip()[:10]
+    try:
+        datetime.strptime(candidate, "%Y-%m-%d")
+    except ValueError:
+        return None
+    return candidate
 
 
 @router.get("/status")
@@ -117,11 +135,19 @@ async def price_path_points(
 async def price_path_sessions(
     ticker: str = Query(..., description="Underlying symbol, e.g. SPY"),
 ) -> dict[str, Any]:
-    """Stored-session enumeration: NY session days with snapshot counts (R17-1).
+    """Stored-session enumeration: session days with snapshot counts (R17-1).
 
-    Read-only index over recorded snapshots. Coverage gaps within a day are
-    answered by the existing manifest route, not invented here; a ticker with
-    no stored sessions returns an empty day list (empty state, never an error).
+    Day attribution is the stored ``asof_ts`` timestamp prefix — the SAME
+    attribution the owning ``session_manifest``/``compare_snapshots`` routes
+    match with ``LIKE day%`` — so this index, the manifest and the gaps can
+    never disagree about which day owns a snapshot. Each day also reports its
+    ET-normalized ``ny_date`` (null when the day's snapshots do not normalize
+    uniformly) and an ``overnight`` flag for exactly the case the two
+    attributions differ (offset/naive stamps crossing ET midnight); the prefix
+    stays canonical and the divergence is disclosed, never silently mixed.
+    Read-only. Coverage gaps within a day are answered by the existing
+    manifest route, not invented here; a ticker with no stored sessions
+    returns an empty day list (empty state, never an error).
     """
     conn = _store_conn()
     if conn is None:
@@ -141,15 +167,24 @@ async def price_path_sessions(
                 "error": "recorder_unavailable"}
     days: dict[str, dict[str, Any]] = {}
     for asof_ts, snapshot_id in rows or []:
-        day = _ny_date(asof_ts)
+        day = _prefix_day(asof_ts)
         if day is None:
             continue
-        entry = days.setdefault(day, {"date": day, "n_snapshots": 0,
+        ny = _ny_date(asof_ts)
+        entry = days.setdefault(day, {"date": day, "ny_date": ny,
+                                      "overnight": ny is not None and ny != day,
+                                      "n_snapshots": 0,
                                       "first_asof": asof_ts, "last_asof": asof_ts,
                                       "latest_snapshot_id": snapshot_id})
         entry["n_snapshots"] += 1
         entry["last_asof"] = asof_ts
         entry["latest_snapshot_id"] = snapshot_id
+        if (ny is not None and entry["ny_date"] is not None
+                and ny != entry["ny_date"]):
+            # Non-uniform ET attribution inside one prefix day — disclose the
+            # offset instead of silently picking a single normalized day.
+            entry["ny_date"] = None
+            entry["overnight"] = True
     ordered = [days[d] for d in sorted(days)]
     return {"version": COVERAGE_VERSION, "ticker": ticker.upper(),
             "days": ordered, "n_days": len(ordered)}
@@ -160,24 +195,45 @@ async def price_path_expiries(
     ticker: str = Query(..., description="Underlying symbol, e.g. SPY"),
     min_dte: int = Query(14, ge=0, le=730, description="Admitted window lower bound (DTE)"),
     max_dte: int = Query(60, ge=0, le=730, description="Admitted window upper bound (DTE)"),
-    expirations: int = Query(6, ge=1, le=12, description="Listed expirations requested"),
+    expirations: int = Query(12, ge=1, le=16, description="Listed expirations requested"),
 ) -> dict[str, Any]:
     """Admitted expiry-range query over listed expirations (R17-2).
 
     Reports each listed expiry with its DTE and an ADMITTED/excluded verdict
-    for the requested window — it never narrows the stored chain. The existing
-    `dte≤30` display filter in `market_data.py` is untouched. Expired dates
-    refuse as EXPIRED; in-range dates admit; anything else names its reason.
-    0DTE is kept by the chain with exact T but falls BELOW_WINDOW here.
+    for the requested lower/upper window — it never narrows the stored chain.
+    Reversed bounds (``min_dte > max_dte``) refuse as 422 REVERSED_WINDOW
+    before any fetch. The owning display envelope (the ``dte le=30`` filter
+    ``market_data.py`` enforces) is projected per row as ``display_envelope`` —
+    a DIFFERENT constraint from the admitted policy window, disclosed so the
+    two never silently mix. ``coverage`` answers the listing honestly: when
+    the upper window edge was not observed in the requested listings, in-range
+    expiries may exist beyond the cap and the coverage says so instead of a
+    silent firstN verdict. Expired dates refuse as EXPIRED; in-range dates
+    admit; anything else names its reason. 0DTE is kept by the chain with
+    exact T but falls BELOW_WINDOW here (the display envelope keeps it).
     """
     from services.public_api_adapter import fetch_chain_from_public_api
 
+    if min_dte > max_dte:
+        # Structured JSONResponse, not HTTPException: the app's global handler
+        # stringifies dict details, which would bury the refusal code in a
+        # repr string. A refused window must stay machine-readable.
+        return JSONResponse(status_code=422, content={
+            "error": "REVERSED_WINDOW",
+            "message": f"min_dte {min_dte} is above max_dte {max_dte} — "
+                       "no expiry can satisfy a reversed window.",
+            "version": COVERAGE_VERSION,
+        })
     result = await fetch_chain_from_public_api(ticker.upper(), max_expiries=expirations)
     if result is None:
-        raise HTTPException(status_code=502, detail={
+        # Structured JSONResponse (same reason as the reversed refusal): the
+        # global handler stringifies dict details; the 502 body stays
+        # machine-readable with the refusal code at the top level.
+        return JSONResponse(status_code=502, content={
             "error": "chain_unavailable",
             "message": f"Listed expirations unavailable for {ticker.upper()} — "
                        "key may be missing or the API call failed.",
+            "version": COVERAGE_VERSION,
         })
     today = datetime.now(ET).date()
     rows: list[dict[str, Any]] = []
@@ -185,8 +241,8 @@ async def price_path_expiries(
         try:
             exp_date = datetime.strptime(str(exp)[:10], "%Y-%m-%d").date()
         except (TypeError, ValueError):
-            rows.append({"expiry": str(exp), "dte": None,
-                         "admitted": False, "reason": "UNPARSEABLE_EXPIRY"})
+            rows.append({"expiry": str(exp), "dte": None, "admitted": False,
+                         "reason": "UNPARSEABLE_EXPIRY", "display_envelope": False})
             continue
         dte = (exp_date - today).days
         if dte < 0:
@@ -198,10 +254,21 @@ async def price_path_expiries(
         else:
             verdict, reason = True, "ADMITTED"
         rows.append({"expiry": exp_date.isoformat(), "dte": dte,
-                     "admitted": verdict, "reason": reason})
+                     "admitted": verdict, "reason": reason,
+                     "display_envelope": 0 <= dte <= 30})
     return {"version": COVERAGE_VERSION, "ticker": ticker.upper(),
             "window": {"min_dte": min_dte, "max_dte": max_dte},
             "expiries": rows, "n_admitted": sum(1 for r in rows if r["admitted"]),
+            "coverage": {
+                "requested_expiries": expirations,
+                "n_listed": len(rows),
+                "n_display_envelope": sum(1 for r in rows if r["display_envelope"]),
+                "listing_capped": len(rows) >= expirations,
+                "lower_edge_observed": any(
+                    r["dte"] is not None and r["dte"] < min_dte for r in rows),
+                "upper_edge_observed": any(
+                    r["dte"] is not None and r["dte"] > max_dte for r in rows),
+            },
             "spot": result.get("spot"), "fetched_at": result.get("fetched_at"),
             "stale": bool(result.get("stale", False)), "data_source": "public_api"}
 
