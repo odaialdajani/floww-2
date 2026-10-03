@@ -75,6 +75,9 @@ def _facts(**kw):
         "positions": [],
         "open_orders": [],
         "fills": [],
+        "account_id": "ACCT-1",
+        "source": "fake-broker",
+        "asof": "2026-10-02T14:59:00+00:00",
     }
     facts.update(kw)
     return facts
@@ -248,6 +251,11 @@ def test_commissioned_admit_full_stack_and_each_refusal():
         assert out["reason"] == "OVERLAP_NATIVE", out
         out = adm.admit_commissioned_entry(
             conn, intent, ctx, broker, approval=appr, operator_id="op-1",
+            risk_facts=_facts(),
+            remote_native={"workflows": ["garbage", {"strategy": "s"}]})
+        assert out["reason"] == "NATIVE_CENSUS_UNAVAILABLE", out
+        out = adm.admit_commissioned_entry(
+            conn, intent, ctx, broker, approval=appr, operator_id="op-1",
             risk_facts=_facts())
         assert out["reason"] == "NATIVE_CENSUS_UNAVAILABLE", out
         out = adm.admit_commissioned_entry(
@@ -358,6 +366,71 @@ class _PrimerBroker:
         return {"total": "318.20", "fees": "3.20", "buying_power_ok": True}
 
 
+def test_commissioned_refuses_stale_foreign_unsourced_facts():
+    import services.execution_admission as adm
+    import services.operator_registry as operators
+    import services.public_execution_lifecycle as lc
+
+    conn = _memdb()
+    try:
+        lc.register_store(conn)
+        assert operators.register_operator(conn, "op-1", ["ACCT-1"], "root")["ok"] is True
+        assert adm.set_account_policy_required(
+            conn, "ACCT-1", {"max_quantity": 5, "max_notional": "100000",
+                             "max_positions": 10, "max_daily_loss": "10000",
+                             "today": "2026-10-02", "min_entry_dte": 5,
+                             "allow_unprotected_entry": True},
+            "op-1")["ok"] is True
+        intent, ctx = _base_intent(), _ctx()
+        appr, _ = _stored_appr_for(lc, intent)
+        assert adm.store_approval_required(conn, appr, "op-1")["ok"] is True
+        primer = _PrimerBroker()
+        import asyncio
+
+        assert asyncio.run(lc.preflight(intent, ctx, primer))["ok"] is True
+        broker = _ExplodingBroker()
+        good_native = {"workflows": []}
+        # Stale facts (previous day) refuse even though everything else passes.
+        out = adm.admit_commissioned_entry(
+            conn, intent, ctx, broker, approval=appr, operator_id="op-1",
+            risk_facts=_facts(asof="2026-10-01T15:00:00+00:00"),
+            remote_native=good_native)
+        assert out["reason"] == "STALE_FACTS", out
+        # Foreign-account facts refuse.
+        out = adm.admit_commissioned_entry(
+            conn, intent, ctx, broker, approval=appr, operator_id="op-1",
+            risk_facts=_facts(account_id="ACCT-9"),
+            remote_native=good_native)
+        assert out["reason"] == "RISK_FACTS_INCOMPLETE", out
+        # Missing source refuses.
+        facts = _facts()
+        del facts["source"]
+        out = adm.admit_commissioned_entry(
+            conn, intent, ctx, broker, approval=appr, operator_id="op-1",
+            risk_facts=facts, remote_native=good_native)
+        assert out["reason"] == "RISK_FACTS_INCOMPLETE", out
+    finally:
+        conn.close()
+
+
+def test_ledger_single_lot_exposure_multiplier():
+    import services.account_risk_ledger as ledger
+
+    # Quantity 1 x price 3.30 x multiplier 100 exposure, fees counted.
+    out = ledger.evaluate_account_risk(
+        _facts(
+            positions=[{"symbol": "SPY", "quantity": 1, "market_price": "3.30",
+                        "multiplier": "100"}],
+            fills=[{"fill_id": "e1", "symbol": "SPY", "side": "BUY",
+                     "quantity": 1, "price": "3.30", "fees": "0.65",
+                     "ts": "2026-10-02T15:00:00+00:00", "multiplier": "100"}]),
+        {})
+    assert out["ok"] is True, out
+    assert out["snapshot"]["exposure"] == "330.00"
+    assert out["snapshot"]["premium_paid"] == "330.00"
+    assert out["snapshot"]["fees_paid"] == "0.65"
+
+
 def test_ledger_missing_fees_time_multiplier_and_status_refuse():
     import services.account_risk_ledger as ledger
 
@@ -414,6 +487,46 @@ def test_route_patch_decision_and_risk_shapes(monkeypatch):
     r = client.post("/admission/decision", json={"nope": True},
                     headers={"X-API-Key": "wrong-key"})
     assert r.status_code in (401, 503), r.text
+
+
+def test_route_decision_never_admits_client_asserted():
+    """Research decision surface is labeled non-dispatch (S9).
+
+    Even a fully valid body returns EVIDENCE_UNVERIFIED, never ADMIT:
+    client-asserted facts cannot produce executable authority.
+    """
+    import os
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import services.public_execution_lifecycle as lc
+    from routes.execution_admission import router
+
+    os.environ["API_SECRET_KEY"] = "test-secret-key"
+    headers = {"X-API-Key": "test-secret-key"}
+    lc._reset_for_tests()
+    app = FastAPI()
+    app.include_router(router)
+    client = TestClient(app, raise_server_exceptions=False)
+    body = {
+        "intent": _base_intent(), "ctx": {
+            "quotes": {"bid": "3.10", "ask": "3.20",
+                       "bid_ts": "2026-10-02T14:59:40+00:00",
+                       "ask_ts": "2026-10-02T14:59:41+00:00"},
+            "now": "2026-10-02T15:00:00+00:00",
+            "account": {"entitlement": "verified"},
+            "supported_expiries": ["2026-12-18"],
+            "supported_products": ["OPTION", "EQUITY"]},
+        "approval": {"intent_hash": "x"}, "operator_id": "op-1",
+        "risk_facts": _facts(), "remote_native": {"workflows": []},
+    }
+    r = client.post("/admission/decision", json=body, headers=headers)
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["decision"] == "REFUSE", out
+    assert out["reason"] == "EVIDENCE_UNVERIFIED", out
+    assert out["evidence_grade"] == "client-asserted", out
 
 
 def test_commissioned_binds_approved_by_and_evidence():

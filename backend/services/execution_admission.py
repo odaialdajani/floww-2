@@ -32,6 +32,10 @@ from typing import Any
 
 ADMISSION_VERSION = "execution-admission.v1"
 ACCOUNT_POLICY_V2 = "account-policy.v2"
+# Commissioned broker-fact freshness bound: facts older than this versus
+# the decision clock refuse STALE_FACTS (server compares, never trusts a
+# client "fresh" flag). Documented constant, not a silent default.
+FACTS_MAX_AGE_S = 300.0
 
 ACCOUNT_POLICY_V2_DDL = """
     CREATE TABLE IF NOT EXISTS account_policy_v2 (
@@ -47,6 +51,7 @@ _TERMINAL = ("FILLED", "REJECTED", "CANCELED")
 __all__ = [
     "ADMISSION_VERSION",
     "ACCOUNT_POLICY_V2",
+    "FACTS_MAX_AGE_S",
     "ACCOUNT_POLICY_V2_DDL",
     "ensure_admission_tables",
     "set_account_policy_required",
@@ -583,6 +588,9 @@ def admit_commissioned_entry(
     if not isinstance(risk_facts, dict):
         return {"decision": "REFUSE", "reason": "RISK_FACTS_INCOMPLETE",
                 "detail": "no injected broker facts", "version": ADMISSION_VERSION}
+    provenance = _check_facts_provenance(risk_facts, account_id, ctx)
+    if provenance is not None:
+        return provenance
     pol = get_account_policy_required(conn, account_id)
     today = None
     now_dt = ctx.get("now")
@@ -607,13 +615,63 @@ def admit_commissioned_entry(
         return {"decision": "REFUSE", "reason": "NATIVE_CENSUS_UNAVAILABLE",
                 "version": ADMISSION_VERSION}
     for wf in remote_native["workflows"]:
-        if isinstance(wf, dict) and str(wf.get("status") or "").upper() == "OPEN":
+        # Malformed rows refuse: an unverifiable census is not an empty one.
+        if not isinstance(wf, dict) or not str(wf.get("status") or "").strip():
+            return {"decision": "REFUSE", "reason": "NATIVE_CENSUS_UNAVAILABLE",
+                    "detail": "remote native census has malformed rows",
+                    "version": ADMISSION_VERSION}
+        if str(wf.get("status") or "").upper() == "OPEN":
             return {"decision": "REFUSE", "reason": "OVERLAP_NATIVE",
                     "detail": f"remote workflow {wf.get('strategy')} OPEN",
                     "version": ADMISSION_VERSION}
     base["operator_id"] = auth.get("operator_id")
     base["risk_snapshot"] = risk.get("snapshot")
     return base
+
+
+def _check_facts_provenance(
+    risk_facts: dict[str, Any], account_id: str, ctx: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Source/account/clock binding for injected broker facts (S9).
+
+    Returns a REFUSE decision or None (pass). Facts must name their
+    account (must equal the intent account — foreign facts refuse),
+    their source (missing source refuses), and an asof clock the server
+    compares against the decision clock (missing/unparseable refuses;
+    older than FACTS_MAX_AGE_S refuses STALE_FACTS). No client freshness
+    assertion is trusted.
+    """
+    facts_account = risk_facts.get("account_id")
+    if not isinstance(facts_account, str) or not facts_account.strip():
+        return {"decision": "REFUSE", "reason": "RISK_FACTS_INCOMPLETE",
+                "detail": "facts missing account_id", "version": ADMISSION_VERSION}
+    if facts_account.strip() != str(account_id or ""):
+        return {"decision": "REFUSE", "reason": "RISK_FACTS_INCOMPLETE",
+                "detail": f"foreign facts for {facts_account.strip()}",
+                "version": ADMISSION_VERSION}
+    if not str(risk_facts.get("source") or "").strip():
+        return {"decision": "REFUSE", "reason": "RISK_FACTS_INCOMPLETE",
+                "detail": "facts missing source", "version": ADMISSION_VERSION}
+    asof_raw = risk_facts.get("asof")
+    try:
+        asof = (asof_raw if isinstance(asof_raw, datetime)
+                else datetime.fromisoformat(str(asof_raw).strip().replace("Z", "+00:00")))
+        if asof.tzinfo is None:
+            asof = asof.replace(tzinfo=UTC)
+    except (TypeError, ValueError, AttributeError):
+        return {"decision": "REFUSE", "reason": "RISK_FACTS_INCOMPLETE",
+                "detail": "facts missing/unparseable asof", "version": ADMISSION_VERSION}
+    now_dt = ctx.get("now")
+    if not isinstance(now_dt, datetime):
+        return {"decision": "REFUSE", "reason": "RISK_FACTS_INCOMPLETE",
+                "detail": "no decision clock for freshness",
+                "version": ADMISSION_VERSION}
+    moment = now_dt if now_dt.tzinfo is not None else now_dt.replace(tzinfo=UTC)
+    if abs((moment - asof).total_seconds()) > FACTS_MAX_AGE_S:
+        return {"decision": "REFUSE", "reason": "STALE_FACTS",
+                "detail": f"facts asof {asof.isoformat()} vs decision clock",
+                "version": ADMISSION_VERSION}
+    return None
 
 
 def _canon_number(value: Any) -> str:

@@ -109,8 +109,9 @@
   "LEASE_ABSENT",
   "LEASE_CORRUPT_HOLDER",
   "LEASE_IO_ERROR",
-  "FENCED_OUT",
-  "FENCED_ACTION_FAILED"
- ],
+   "FENCED_OUT",
+   "FENCED_ACTION_FAILED",
+   "STALE_FACTS"
+  ],
  "version": "execution-controls.v1"
 }

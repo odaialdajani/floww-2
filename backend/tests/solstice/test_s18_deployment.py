@@ -54,11 +54,13 @@ def _barrier_worker(path, owner, barrier, queue):
     from services import execution_lease as lease
 
     barrier.wait(timeout=30)
+    # EXACTLY ONE acquire attempt: a correct lease grants one winner.
+    # Retries are forbidden here — every extra ok True would be a second
+    # executor inside the critical section.
     first = lease.acquire_lease(path, owner, ttl_s=10.0)
     held = False
     token = first.get("token") if first.get("ok") else None
     if token is not None:
-        time.sleep(0.2)
         held = bool(lease.heartbeat_lease(path, token, ttl_s=10.0).get("ok"))
     queue.put({"owner": owner, "acquired": bool(first.get("ok")),
                "held": held, "token": token,
@@ -150,19 +152,20 @@ def test_barrier_contention_exactly_one_effective_winner(tmp_path):
     for p in procs:
         _join(p, timeout=40)
     # Contender results are INSPECTED (not just the winner): exactly one
-    # contender still holds a live token afterward; every other contender
-    # either failed to acquire or lost its token to the final payload.
+    # single acquire attempt succeeds — the losers observe the live owner
+    # and refuse LEASE_HELD. No contender receives a success it then loses.
     results = [mq.get(timeout=10) for _ in procs]
     final = lease.read_lease(path)
     assert final["present"] is True
-    winners = [r for r in results
-               if r["held"] and r["token"] is not None]
+    winners = [r for r in results if r["acquired"]]
     assert len(winners) == 1, results
-    live = [r for r in results if r["acquired"]]
-    assert len(live) >= 1, results
-    for r in results:
-        if r is not winners[0] and r["token"] is not None:
-            assert lease.heartbeat_lease(path, r["token"])["ok"] is False, r
+    assert winners[0]["held"] is True
+    assert winners[0]["token"] is not None
+    losers = [r for r in results if not r["acquired"]]
+    assert len(losers) == 3, results
+    assert all(r["reason"] == "LEASE_HELD" for r in losers), results
+    for r in losers:
+        assert r["token"] is None, r
     assert lease.release_lease(path, winners[0]["token"])["ok"] is True
 
 
@@ -272,12 +275,51 @@ def test_fenced_action_detects_mid_section_takeover(tmp_path):
     assert lease.read_lease(path)["owner"] == "thief"
 
 
+def test_stale_token_cannot_clobber_new_owner(tmp_path):
+    from services import execution_lease as lease
+
+    path = _tmp_path(tmp_path)
+    first = lease.acquire_lease(path, "owner-a", ttl_s=10.0)
+    assert first.get("ok") is True
+    # Force-expiry behind the lease's back (crash/no-heartbeat equivalent).
+    current = lease._payload(path)
+    current["expires_at"] = time.time() - 1.0
+    with open(path, "w", encoding="utf-8") as fh:
+        import json
+
+        fh.write(json.dumps(current))
+    second = lease.acquire_lease(path, "owner-b", ttl_s=10.0)
+    assert second.get("ok") is True and second.get("stole_expired") is True
+    # The stale token now refuses everywhere AND leaves B's payload intact.
+    assert lease.heartbeat_lease(path, first["token"])["reason"] == "LEASE_NOT_OWNER"
+    assert lease.release_lease(path, first["token"])["reason"] == "LEASE_NOT_OWNER"
+    live = lease._payload(path)
+    assert live["owner"] == "owner-b"
+    assert lease.heartbeat_lease(path, second["token"])["ok"] is True
+    assert lease.release_lease(path, second["token"])["ok"] is True
+
+
+def test_fence_generation_survives_release(tmp_path):
+    from services import execution_lease as lease
+
+    path = _tmp_path(tmp_path)
+    first = lease.acquire_lease(path, "a", ttl_s=10.0)
+    assert first.get("ok") is True
+    fence_a = lease.read_lease(path)["fence"]
+    assert lease.release_lease(path, first["token"])["ok"] is True
+    second = lease.acquire_lease(path, "b", ttl_s=10.0)
+    assert second.get("ok") is True
+    assert lease.read_lease(path)["fence"] > fence_a
+    assert lease.release_lease(path, second["token"])["ok"] is True
+
+
 def test_deployment_scope_is_single_host_volume():
     from services import execution_lease as lease
 
     scope = lease.deployment_scope()
     assert scope["scope"] == "single host with one shared filesystem volume"
     assert "multi-host" in scope["not_scope"]
+    assert scope["multiprocess_safe"] is True  # POSIX flock on ship hosts
 
 
 def test_protection_refuses_unverified_everywhere():

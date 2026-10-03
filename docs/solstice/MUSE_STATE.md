@@ -1029,3 +1029,90 @@ COMMISSIONING (external HOLD): NAV-ACCOUNT/CAPTURE/NATIVE/MODEL/VISUAL/
 RELEASE. Zero durable admitted records → INSUFFICIENT EVIDENCE.
 Verification: full `tests/solstice/` **682 passed**; ruff + silent-gate +
 bandit + API-380 + truth green.
+
+## 46. R18 repair continuation — S5–S10 regression pass (3 Oct 2026)
+
+Environment (recorded, not assumed): OpenCode 1.18.34, provider/model
+`muse-spark-1.3-contributor-free` (Muse Spark 1.3; no xhigh effort knob
+exposed in this host — executed as the connected implementation model),
+tool access read/write/edit/bash/grep/glob verified working, lane
+`.worktrees/spark-r17` at `5ac192df`. Packet + ownership contract +
+R18 handoff re-read from
+`/Users/nav/Documents/Codex/2026-10-02/he/outputs/
+FLOWW-Zed-OpenCode-Cline-Three-Agent-Packet/`. PR103 description already
+corrected (review-only + known limits). No live/paid/activation work.
+
+- [VERIFIED, no change] S5 APPROVAL: store→revoke→re-store stays revoked
+  in BOTH paths (admission refuses APPROVAL_INVALID, legacy returns the
+  revoked row with no durable/memory reset), conflicting identity refuses
+  (APPROVAL_CONFLICT / ValueError) without touching authority, strict
+  query-failure stays default-deny. Pinned by
+  `test_required_restore_never_resurrects_revoked`,
+  `test_required_restore_refuses_conflicting_identity`,
+  `test_store_approval_never_resurrects_revoked`,
+  `test_legacy_store_refuses_conflicting_identity`.
+- [FIXED] S6 OWNERSHIP: the expired-takeover path was last-writer-wins —
+  an 8-contender spawn barrier probe showed 5–8 simultaneous acquire-ok
+  (every loser believed it owned the lease; the old test redefined
+  "winner" via post-sleep heartbeat). `acquire_lease` steal is now a
+  flock-serialized compare-and-swap: exactly one acquire-ok per race
+  (probe 1/8 across fresh + expired trials), losers observe the live
+  owner and refuse LEASE_HELD. Heartbeat/release re-verify the token
+  under the same lock (stale tokens neither extend nor delete — pinned
+  by `test_stale_token_cannot_clobber_new_owner`). Fence generations
+  stay monotonic across release via a lock sidecar (pinned).
+  `deployment_scope()` now states the flock mechanism, POSIX requirement
+  (`MULTIPROCESS_SAFE`), and single-host-volume boundary.
+- [VERIFIED + pinned] S7 RISK: FIFO lot carryover, one-time fill dedup,
+  multiplier in exposure/premium, required fees/ts/multiplier/status,
+  affordability (proposed + open-order reservation vs buying power),
+  complete-policy mode. New pins: quantity1 × 3.30 × 100 → exposure
+  330.00 / fees 0.65; previous-day lot sale daily P&L with duplicate
+  ignored (already present, re-verified).
+- [VERIFIED] S8 EXECUTOR: expired Sep-4 at Oct-2 refuses
+  EXPIRY_TOO_NEAR/EXPIRY_INVALID in the commissioned sequence (was the
+  regression positive — now a refusal test); missing protection ack
+  refuses PROTECTION_UNVERIFIED; armed `/order` has the progressive
+  policy-gated approval repair (legacy only when NO store/policy;
+  fail-closed otherwise); cancel/reconcile stay available during the
+  11:30–14:00 entry pause (pinned). Full-enforcement-when-UNSET stays
+  REVIEW-PENDING (production-behavior change for Nav/Zed).
+- [FIXED + pinned] S9 AUTHORITY: commissioned path now enforces
+  broker-fact provenance — `account_id` (= intent account),
+  `source`, and `asof` within `FACTS_MAX_AGE_S` (300s) of the decision
+  clock; stale/foreign/unsourced facts refuse (STALE_FACTS /
+  RISK_FACTS_INCOMPLETE) with zero broker calls. Malformed native
+  census rows refuse NATIVE_CENSUS_UNAVAILABLE (were silently skipped).
+  `/admission/decision` forces `evidence_grade="client-asserted"` so the
+  research surface NEVER admits (pinned). Single-store (STORE_MISMATCH)
+  and approved_by==operator binding re-verified. Known limitation
+  recorded for Zed/Nav: operators are registry-bound but authenticated
+  only via the shared master API key — per-operator credentials do not
+  exist in this app.
+- [FIXED/PROVEN] S10 CI: deployment tests run spawn-only with matched
+  Queue/Barrier/Event context, bounded joins + exit-code asserts (no
+  fork, no curl_cffi inheritance); barrier test now inspects contender
+  ACQUIRE results (exactly one ok, losers LEASE_HELD). Ship-runtime
+  proof: Python 3.12 + pinned `requirements.txt` scratch venv —
+  deployment 14/14 and admission/commissioned/hardening/lifecycle 94
+  passed. (Bare system 3.12 without deps fail-closes SESSION_CLOSED on
+  the missing calendar — correct default-deny, env gap only.)
+- Fixture `execution-controls.v1` now 56 codes (+STALE_FACTS),
+  sha256 `ac0be623…`. `SPARK_S18_ACCEPTANCE.md` refreshed (counts 18/
+  15/14/22, full 687, ship-3.12 evidence, corrected `/order` notes,
+  concrete Zed mount/context/integration notes).
+- Verification (backend CWD): full `tests/solstice/` **687 passed**;
+  ruff clean; silent-gate 359 OK; bandit touched clean; openapi 380
+  current (no route surface change — admission router stays unmounted).
+  Fail-first proven for each fix (stashed-service reruns fail, restored
+  runs pass); the route-never-admits pin holds both ways by design.
+- State split: DELIVERED = this §46 (lane branch only, PR103 push);
+  REVIEW-PENDING = Zed mount/lease-wiring/UNSET-enforcement + his
+  composed executor review (boundary notes in SPARK_S18_ACCEPTANCE.md);
+  ACCEPTED = prior R17 receipts (untouched); COMMISSIONED = external
+  HOLD (NAV-ACCOUNT/CAPTURE/NATIVE/MODEL/VISUAL/RELEASE). Activation
+  OFF. INSUFFICIENT EVIDENCE. No profitability claim.
+- Next exact action: push lane to `solstice/spark-r17` (no merge); Zed
+  re-composes the combined candidate at the new head; Nav merge
+  decision on PR103/PR105. Pre-existing dirty
+  `kanban/BOTTLENECK_ALERTS.md` (watchdog) left untouched.
