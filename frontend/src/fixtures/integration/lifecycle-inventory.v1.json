@@ -1,5 +1,10 @@
 {
   "fixture_only": true,
+  "control_additions": {
+    "approvals": { "n_stored": 4, "n_revoked": 1 },
+    "policy": { "account_wide_limits": { "version": "account-policy.v1", "set": true, "updated_at": "2026-10-03T14:00:00Z" } },
+    "protection": { "native_support": { "OPTION_SINGLE_LEG_LIMIT": { "supported": false, "reason": "unverified-native-support" } } }
+  },
   "inventory": {
     "version": "lifecycle-inventory.v1",
     "durable": true,

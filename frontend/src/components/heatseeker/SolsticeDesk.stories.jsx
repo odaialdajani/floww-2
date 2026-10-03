@@ -54,7 +54,7 @@ export const ListedRangeAdmission={render:()=> <ExpiryCoverage ticker="SPY"/>,as
  await expect(c.getByRole('table',{name:'Listed expiry admission'})).toHaveTextContent('28 DTE');
 }};
 const cappedRows=Array.from({length:12},(_,index)=>({expiry:`2026-10-${String(16+index).padStart(2,'0')}`,dte:14+index,admitted:true,reason:'ADMITTED',display_envelope:true}));
-export const CappedExpiryListing={...ListedRangeAdmission,parameters:{coverageExpiries:{...coverage.expiries,expiries:cappedRows,n_admitted:12,coverage:{requested_expiries:12,n_listed:12,n_display_envelope:12,listing_capped:true,lower_edge_observed:false,upper_edge_observed:false}}},async play({canvasElement}){
+export const CappedExpiryListing={...ListedRangeAdmission,parameters:{coverageExpiries:{...coverage.expiries,expiries:cappedRows,n_admitted:12,range_map:undefined,coverage:{requested_expiries:12,n_listed:12,n_display_envelope:12,listing_capped:true,lower_edge_observed:false,upper_edge_observed:false}}},async play({canvasElement}){
  const c=within(canvasElement);await userEvent.click(c.getByText('Listed 14–60 DTE coverage'));await userEvent.click(c.getByRole('button',{name:'Read listed coverage'}));
  await expect(c.getByTestId('solstice-expiry-coverage')).toHaveTextContent('Listing capped');
  await expect(c.getByTestId('solstice-expiry-coverage')).toHaveTextContent('Lower edge not observed');
@@ -63,6 +63,11 @@ export const ChainReadRefused={...ListedRangeAdmission,parameters:{coverageRefus
  const c=within(canvasElement);await userEvent.click(c.getByText('Listed 14–60 DTE coverage'));await userEvent.click(c.getByRole('button',{name:'Read listed coverage'}));
  await expect(c.getByTestId('solstice-expiry-coverage')).toHaveTextContent('chain_unavailable');
  await expect(c.queryByRole('table')).not.toBeInTheDocument();
+}};
+export const ListingProjectionOnly={...ListedRangeAdmission,async play(context){
+ await ListedRangeAdmission.play(context);const c=within(context.canvasElement);
+ await expect(c.getByTestId('solstice-expiry-projection')).toHaveTextContent('Producer reports complete listing; exhaustive coverage unverified');
+ await expect(c.getByTestId('solstice-expiry-projection')).toHaveTextContent('No analytical grid or owning display record');
 }};
 export const HistoricalRangeUnavailable={render:()=> <ExpiryCoverage ticker="SPY" replay/>,async play({canvasElement}){
  const c=within(canvasElement);await userEvent.click(c.getByText('Listed 14–60 DTE coverage'));

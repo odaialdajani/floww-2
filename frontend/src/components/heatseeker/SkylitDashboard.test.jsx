@@ -123,7 +123,7 @@ test('ticker change aborts expiry inventory and discards late success', async ()
 function expandedCoverage() {
   const rows = coverageFixture.expiries.expiries.slice(0, 2).map(row => ({ ...row, display_envelope: true }));
   rows.push({ expiry: '2026-11-16', dte: 45, admitted: true, reason: 'ADMITTED', display_envelope: false });
-  return { ...coverageFixture.expiries, expiries: rows, n_admitted: 2, coverage: {
+  return { ...coverageFixture.expiries, range_map: undefined, expiries: rows, n_admitted: 2, coverage: {
     requested_expiries: 12, n_listed: 3, n_display_envelope: 2,
     listing_capped: false, lower_edge_observed: true, upper_edge_observed: false,
   } };
@@ -177,6 +177,41 @@ test.each(['chain_unavailable', 'REVERSED_WINDOW'])('structured top-level refusa
   fireEvent.click(screen.getByText('Listed 14–60 DTE coverage'));
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read listed coverage' })));
   expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent(error);
+});
+
+function listingProjection() {
+  const data = expandedCoverage();
+  return { ...data, range_map: { version: 'coverage-read.v1', window: { min_dte: 14, max_dte: 60 }, admitted_expiries: ['2026-10-30', '2026-11-16'], admitted_dtes: [28, 45], min_admitted_dte: 28, max_admitted_dte: 45, complete: true, reason: null } };
+}
+
+test('admitted projection lists exact pairs but never claims an analytical range map', async () => {
+  await readExpiryResponse(listingProjection());
+  const projection = screen.getByTestId('solstice-expiry-projection');
+  expect(projection).toHaveTextContent('Listed admission projection · 28–45 DTE');
+  expect(projection).toHaveTextContent('2026-10-30 · 28 DTE');
+  expect(projection).toHaveTextContent('2026-11-16 · 45 DTE');
+  expect(projection).toHaveTextContent('Producer reports complete listing; exhaustive coverage unverified');
+  expect(projection).toHaveTextContent('No analytical grid or owning display record');
+});
+
+test('reported incomplete projection retains its exact reason', async () => {
+  const data = listingProjection();
+  await readExpiryResponse({ ...data, range_map: { ...data.range_map, complete: false, reason: 'LISTING_CAPPED_WINDOW_MAY_EXTEND' } });
+  expect(screen.getByTestId('solstice-expiry-projection')).toHaveTextContent('LISTING_CAPPED_WINDOW_MAY_EXTEND');
+});
+
+test.each([
+  ['version', { version: 'coverage-read.v2' }],
+  ['window', { window: { min_dte: 0, max_dte: 30 } }],
+  ['foreign expiry', { admitted_expiries: ['2026-10-31', '2026-11-16'] }],
+  ['wrong DTE pairing', { admitted_dtes: [29, 45] }],
+  ['wrong bounds', { max_admitted_dte: 60 }],
+  ['string complete', { complete: 'true' }],
+])('malformed listing projection refuses %s', async (_label, override) => {
+  const data = listingProjection();
+  await readExpiryResponse({ ...data, range_map: { ...data.range_map, ...override } });
+  expect(screen.getByTestId('solstice-expiry-coverage')).toHaveTextContent('EXPIRY_PROJECTION_UNAVAILABLE');
+  expect(screen.queryByTestId('solstice-expiry-projection')).not.toBeInTheDocument();
 });
 
 test('R12: strike review callback requires explicitly armed Trade mode', () => {

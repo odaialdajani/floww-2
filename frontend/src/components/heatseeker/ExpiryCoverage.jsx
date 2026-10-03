@@ -21,6 +21,16 @@ function refusal(data, ticker) {
     || coverage.n_display_envelope !== data.expiries.filter(row => row.display_envelope).length
     || typeof coverage.listing_capped !== "boolean" || coverage.listing_capped !== (coverage.n_listed === 12)
     || typeof coverage.lower_edge_observed !== "boolean" || typeof coverage.upper_edge_observed !== "boolean")) return "EXPIRY_COVERAGE_UNAVAILABLE";
+  const projection = data.range_map;
+  if (projection !== undefined) {
+    const admitted = data.expiries.filter(row => row.admitted).sort((a, b) => a.dte - b.dte);
+    if (!projection || projection.version !== "coverage-read.v1" || projection.window?.min_dte !== 14 || projection.window?.max_dte !== 60
+      || !Array.isArray(projection.admitted_expiries) || !Array.isArray(projection.admitted_dtes)
+      || projection.admitted_expiries.length !== admitted.length || projection.admitted_dtes.length !== admitted.length
+      || admitted.some((row, index) => row.expiry !== projection.admitted_expiries[index] || row.dte !== projection.admitted_dtes[index])
+      || projection.min_admitted_dte !== (admitted[0]?.dte ?? null) || projection.max_admitted_dte !== (admitted.at(-1)?.dte ?? null)
+      || typeof projection.complete !== "boolean" || (projection.complete ? projection.reason !== null : typeof projection.reason !== "string" || !projection.reason)) return "EXPIRY_PROJECTION_UNAVAILABLE";
+  }
   return null;
 }
 
@@ -69,6 +79,11 @@ export default function ExpiryCoverage({ ticker, replay = false }) {
         <p>{result.data.data_source} · fetched {result.data.fetched_at} · {result.data.n_admitted} admitted in this listing</p>
         {result.data.coverage ? <p role="status">{result.data.coverage.n_listed} returned / {result.data.coverage.requested_expiries} requested · {result.data.coverage.n_display_envelope} within the optional ≤30 DTE filter · {result.data.coverage.listing_capped ? "Listing capped" : "Listing below request limit; completeness unknown"} · {result.data.coverage.lower_edge_observed ? "Lower edge observed" : "Lower edge not observed"} · {result.data.coverage.upper_edge_observed ? "Upper edge observed" : "Upper edge not observed"}. Edge observations do not establish exhaustive coverage.</p> : <p role="status">Coverage metadata unavailable; listing completeness unknown.</p>}
         <p>The ≤30 DTE filter is separate from 14–60 DTE admission. It is not a persisted analytical envelope or a range-map projection.</p>
+        {result.data.range_map && <section aria-label="Admitted listing projection" data-testid="solstice-expiry-projection">
+          <p>Listed admission projection · {result.data.range_map.min_admitted_dte === null ? "No admitted dates returned" : `${result.data.range_map.min_admitted_dte}–${result.data.range_map.max_admitted_dte} DTE`}</p>
+          <p>{result.data.range_map.complete ? "Producer reports complete listing; exhaustive coverage unverified" : `Listing incomplete · ${result.data.range_map.reason}`}. No analytical grid or owning display record; range-map playback remains unavailable.</p>
+          <ul>{result.data.range_map.admitted_expiries.map((expiry, index) => <li key={`${expiry}:${index}`}>{expiry} · {result.data.range_map.admitted_dtes[index]} DTE</li>)}</ul>
+        </section>}
         {result.data.expiries.length ? <table aria-label="Listed expiry admission">
           <thead><tr><th>Expiry</th><th>DTE</th><th>Admission</th><th>≤30 DTE filter</th></tr></thead>
           <tbody>{result.data.expiries.map((row, index) => <tr key={`${row.expiry}:${index}`}><td>{row.expiry}</td><td>{row.dte == null ? "unknown" : `${row.dte} DTE`}</td><td>{row.reason}</td><td>{row.display_envelope === true ? "Within" : row.display_envelope === false ? "Outside" : "Unknown"}</td></tr>)}</tbody>
