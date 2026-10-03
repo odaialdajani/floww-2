@@ -157,14 +157,44 @@ def recover_open(store: Any | None = None) -> list[str]:
         return []
     recovered: list[str] = []
     for intent_id, blob in rows:
-        try:
-            rec = json.loads(blob) if isinstance(blob, str) else {}
-        except (TypeError, ValueError):
-            continue
-        if isinstance(rec, dict) and rec.get("order_id"):
+        rec = _decode_record(intent_id, blob)
+        if rec is not None:
             _INTENTS[str(intent_id)] = rec
             recovered.append(str(intent_id))
     return recovered
+
+
+def _decode_record(intent_id: Any, blob: Any) -> dict[str, Any] | None:
+    """Parse one stored intent row. Corrupt rows are skipped, never trusted."""
+    try:
+        rec = json.loads(blob) if isinstance(blob, str) else {}
+    except (TypeError, ValueError):
+        return None
+    if isinstance(rec, dict) and rec.get("order_id"):
+        return rec
+    return None
+
+
+def _load_record(intent_id: str) -> dict[str, Any] | None:
+    """Advisory cross-process read: one intent row by ID from the store.
+
+    Lets a second process (or a fresh registry) reuse the owning broker orderId
+    instead of placing a duplicate. Best-effort: a concurrent writer may still
+    win a race — callers treat this as advisory and the broker orderId stays
+    the single source of reconciliation truth.
+    """
+    if _STORE is None:
+        return None
+    try:
+        ensure_lifecycle_tables(_STORE)
+        row = _STORE.execute(
+            "SELECT record_json FROM execution_intents_v1 WHERE intent_id = ?",
+            [intent_id]).fetchone()
+    except Exception:
+        return None
+    if not row:
+        return None
+    return _decode_record(intent_id, row[0])
 
 
 def _money(value: Any, field: str) -> Decimal:
@@ -611,6 +641,12 @@ async def submit(
         return {"ok": False, "reason": f"BAD_CONTRACT:{exc}"}
     intent_id = f"in_{digest[:12]}"
     existing = _INTENTS.get(intent_id)
+    if (existing is None or not existing.get("order_id")) and _STORE is not None:
+        # Cross-process guard: another process may own this intent already.
+        loaded = _load_record(intent_id)
+        if loaded is not None:
+            _INTENTS[intent_id] = loaded
+            existing = loaded
     if existing is not None and existing.get("order_id"):
         return {"ok": True, "receipt_version": RECEIPT_VERSION,
                 "intent_id": intent_id, "order_id": existing["order_id"],

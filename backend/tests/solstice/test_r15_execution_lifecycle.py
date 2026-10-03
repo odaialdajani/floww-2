@@ -711,3 +711,34 @@ def test_persist_error_flagged_never_hidden():
     assert out["ok"] is True and out["persist_error"] is True
     assert real_persist(out["intent_id"]) is True  # store was fine; flag heals
     lc._reset_for_tests()
+
+
+def test_cross_process_submit_reuses_stored_order_id():
+    import asyncio
+    import tempfile
+
+    import duckdb
+
+    import services.public_execution_lifecycle as lc
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = f"{tmp}/intents.duckdb"
+        # Process A: submit with a file-backed store.
+        conn_a = duckdb.connect(path)
+        lc.register_store(conn_a)
+        broker_a = _FakeBroker()
+        first = asyncio.run(lc.submit(_base_intent(), _ctx(), broker_a, armed=True))
+        assert first["ok"] is True and len(broker_a.calls) == 1
+        conn_a.close()
+
+        # Process B: fresh registry, fresh broker, same file.
+        lc._INTENTS.clear()
+        conn_b = duckdb.connect(path)
+        lc.register_store(conn_b)
+        broker_b = _FakeBroker()
+        second = asyncio.run(lc.submit(_base_intent(), _ctx(), broker_b, armed=True))
+        assert second["ok"] is True and second.get("duplicate") is True
+        assert second["order_id"] == first["order_id"]
+        assert broker_b.calls == []  # no second placement anywhere
+        conn_b.close()
+    lc._reset_for_tests()
