@@ -1,4 +1,4 @@
-# range-analytics.v1 — Cline producer contract (R18-C1)
+# range-analytics.v1 — Cline producer contract (R18, post-repair head)
 
 Prepared 2026-10-03 in lane `cline/r18-analytics` (worktree
 `.worktrees/cline-c1-r18`), base `22df6fe67463acc8a41283804e710d07dff105bd`
@@ -10,61 +10,84 @@ edit on either lane).
 not a map. The existing `dte le=30` display envelope on `/heatmap` is
 unchanged. Nothing here admits execution.
 
+## Content integrity (R18-C6) — `content_schema: rga-content.v2`
+
+The canonical evidence content digest now covers the COMPLETE payload:
+version, status, refusals, symbol, query, axes, grids (metric identity,
+units, model, populations, dense cells), metric_registry, clocks, coverage,
+provenance, grounding and synthetic. Explicitly EXCLUDED transport/storage
+fields: `record_id`, `content_digest`, `persistence`. The digest is
+recomputed on WRITE and on REPLAY; supplied digests are never trusted.
+Typed refusals: `INCOMPATIBLE_CONTENT_SCHEMA`, `DIGEST_MISMATCH`,
+`RECORD_ID_MISMATCH`, `ROW_HEADER_MISMATCH`, `STORED_DIGEST_MISMATCH`,
+`STORED_RECORD_CORRUPT`, `IDENTITY_CONFLICT`, `CORRUPT_PAYLOAD`,
+`STORE_READ_FAILED`. `record_id = "rga1-" + digest[:24]`.
+
+Pre-repair v1 digests (recorded at head e6d35745) are SUPERSEDED by
+rga-content.v2 and listed here for provenance only:
+`c5ca4b61…` (complete), `b63650aa…` (partial), `0af9a715…` (refused,
+unchanged — refusal envelopes carry no evidence content).
+
+## Population truth (R18-C7)
+
+Each grid section carries `population` from the REGISTERED aggregates
+(`domain.exposure_metrics` ExposureResult): genuine raw `input_contracts`
+and per-reason exclusions (`missing_oi`, `missing_delta`, `invalid`,
+`invalid_delta`, `missing_volume`), plus kernel-reported `quarantined` /
+`invalid_mult` / `invalid_type`. A finite cell or an overall ok map NEVER
+admits a metric: `metric_admitted` is true only for a clean `ok` section,
+and `metrics.{admitted,partial,unavailable}` summarize per-surface truth.
+
 ## Route and persisted identity
 
-- `GET /api/heatmap/{ticker}/range-analytics?min_dte=14&max_dte=60[&as_of=YYYY-MM-DD][&persist=false]`
-  (additive route on the already-mounted `market_data` router — no server.py
-  change required; Zed owns any further mounting decisions).
+- Producer: `GET /api/heatmap/{ticker}/range-analytics?min_dte=14&max_dte=60[&as_of=YYYY-MM-DD][&persist=false]`
+  (additive route on the already-mounted `market_data` router).
+- **Capture guard (R18-C10):** `persist=true` writes only under the explicit
+  capture policy — env `FLOWW_RANGE_CAPTURE_ENABLED` AND authenticated
+  `X-API-Key`. Otherwise 503 `CAPTURE_DISABLED` / 401. Default reads never
+  write. Real capture remains an operator commissioning step.
+- **Replay API (R18-C9, read-only, `range-records.v1`):**
+  `GET /api/solstice/price-paths/range-records` (identity-bound filters
+  `ticker/min_dte/max_dte/as_of/status`, bounded `limit≤200&offset`, per-row
+  `integrity` verdict) and `GET /api/solstice/price-paths/range-records/{record_id}`
+  (404 unknown identity, 422 typed integrity refusal). Never fetches current
+  chains; legacy snapshot replay routes are untouched.
 - `as_of` must equal the owning America/New_York date or the request refuses
-  `SESSION_DATE_MISMATCH` — current quotes/Greeks never recreate history.
-- `persist=true` records the admitted envelope via
-  `heatmap_history.record_range_envelope` (namespace
-  `range_analytics_envelopes_v1`); `replay_range_envelope(record_id)` restores
-  the exact stored display. Default is read-only (`persist=false`).
+  `SESSION_DATE_MISMATCH`.
+- Required budget-debit failure (malformed/unavailable budget service)
+  refuses with ZERO provider calls at all three adapter fetch seams (R18-C5).
 
-## Envelope
+## Grounding (R18-C10)
+
+`grounding.record_query_identity` is the stable Zed-facing resolver identity
+{symbol, min_dte, max_dte, as_of_ny}; `grounding.contract_population` gives
+per-expiry contract counts and `contracts_digest` binds the captured
+OSI/strike/type/quote-clock set. `grounding.contract_drafting.admitted` is
+FALSE (`RANGE_RECORD_REFERENCE_ONLY`) — records are research evidence, not a
+quote service for executable drafting.
+
+## Envelope (unchanged surface keys, now digest-covered)
 
 `version` = `range-analytics.v1`; `status` ∈ `ok | partial | refused`;
-`refusals[]` machine codes; `symbol`; `record_id` (`rga1-<digest[:24]>`) +
-`content_digest` bind symbol/window/owning NY date/received_at/axes/cells —
-another ticker/date/window/basis cannot reuse a record.
+`refusals[]`; `symbol`; `record_id` + `content_digest` + `content_schema`;
+`query`; `axes` (admitted expiries + ordered strike_keys; dense cells with
+explicit nulls); `grids` (raw_oi gex_net_v1/OI/BS-gamma, delta_weighted
+dadgex_net_v1/OI_DELTA_WEIGHTED, volume volume_gamma_v1/VOLUME, window
+window_dadgex_v1/VOLUME_WINDOW — unavailable until a recorded baseline);
+`metric_registry`; `clocks`; `coverage`; `provenance`; `grounding`;
+`synthetic`.
 
-- `query`: `min_dte`, `max_dte`, `as_of_ny` (owning NY session date).
-- `axes`: `expiries` `[{expiry, dte}]` (admitted, DTE-sorted) and
-  `strike_keys` (ordered union). Dense `cells[expiry][strike]` — unavailable
-  values are explicit `null`, never absent or zero.
-- `grids`: `raw_oi` (gex_net_v1, OI, display S², BS gamma),
-  `delta_weighted` (dadgex_net_v1, OI_DELTA_WEIGHTED, vendor gamma),
-  `volume` (volume_gamma_v1, VOLUME, vendor gamma),
-  `window` (window_dadgex_v1, VOLUME_WINDOW — UNAVAILABLE with
-  `HISTORY_NOT_YET_RECORDED` until a recorded baseline exists; never raw,
-  never zero). Each section carries metric_id/basis/formula_version(gex.v2)/
-  model/unit/status/reason/population counts (`usable`, `missing_delta`,
-  `invalid_delta`, `invalid_mult`, `quarantined`, `invalid_type`).
-- `clocks`: `received_at`, `fetched_at`, `chain_event_time` (Public supplies
-  no whole-chain OI/Greeks timestamp → null), spot source/event/fetched
-  clocks, bid/ask timestamp presence counts, per-contract OI effective dates.
-- `coverage`: requested window, n_listed/admitted/returned, `skipped[]` with
-  per-expiry reason, attempt/budget envelope, `complete` only when BOTH
-  listing edges observed AND zero skips AND admitted == returned; otherwise
-  `complete_reason` names the limit (never implied by a count cap).
-- `provenance`: data_source, stale, adapter identity, Greeks sources;
-  `synthetic` true for fixture-derived payloads.
-
-Refusals: `REVERSED_WINDOW`, `WINDOW_OUT_OF_RANGE`, `SESSION_DATE_MISMATCH`,
-`UNPARSEABLE_AS_OF`, `VENDOR_UNAVAILABLE` (HTTP 502), `CHAIN_UNAVAILABLE`,
-`NO_ADMITTED_EXPIRY`, `NO_CONTRACTS`. Partiality reasons: `STALE_CACHE`,
-`PARTIAL_COVERAGE`. A partial map is research-only, never execution-eligible.
-
-## Frozen consumer fixtures (synthetic; digests = sha256 of file bytes)
+## Frozen consumer fixtures (synthetic; sha256 of file bytes, rga-content.v2)
 
 | Fixture | sha256 | status |
 |---|---|---|
-| `docs/solstice/r18/fixtures/complete_v1.json` | `c5ca4b6107a6dd79a91b130e14ff15a38f3081dceedfd6c7c7a50b42dbe26b0f` | ok (`rga1-87fcea668dbcfc194e161130`) |
-| `docs/solstice/r18/fixtures/partial_skipped_v1.json` | `b63650aa0d38a140e1da0e8c672a3e1bda5cb2798a0d9e161e0cd56dd29c62ba` | partial |
-| `docs/solstice/r18/fixtures/refused_reversed_v1.json` | `0af9a715fb92c4776b0bd0b649e359a4120e3d5701d1564dce456e02209584b4` | refused |
+| `complete_v1.json` | `fa23ac1bdbce488163ed81d3f81dbe9bd75acb459ea6512420da21a1ae2e6909` | ok |
+| `partial_skipped_v1.json` | `217172922332a807520e3e0b6471441c0ff93e2c6fd468a7bc354d8a80a5a92a` | partial |
+| `refused_reversed_v1.json` | `0af9a715fb92c4776b0bd0b649e359a4120e3d5701d1564dce456e02209584b4` | refused |
+| `record_index_v1.json` | `2259e2f5b4b38b5dcf4de87ab17c90a1c86c048f27af5cafc47ebcb0e3ad7232` | ok |
+| `record_replay_v1.json` | `fc22360558e9bc1089fc3029540687154c5f2fc3bc68cbf6fdea0e542710df7e` | ok |
 
-Producer-side input fixtures (Zed may reuse):
-`backend/tests/solstice/fixtures/range_analytics_v1/{listing,chain_complete}.json`.
+(complete envelope record_id `rga1-54f0a823b635f938492cbfb3`.)
 
 Artifact *(Kimi K3 / Cline lane, isolated worktree cline-c1-r18)*.
+

@@ -239,6 +239,7 @@ def test_persistence_roundtrip_and_identity_conflict():
         env = _run(persist_conn=conn)
         assert env["persistence"]["status"] == "recorded"
         rep = replay_range_envelope(conn, env["record_id"])
+        assert rep["integrity"] == "verified"
         assert rep["digest"] == env["content_digest"]
         assert rep["envelope"]["axes"] == json.loads(json.dumps(env["axes"]))
         assert rep["envelope"]["grids"]["raw_oi"]["cells"] == \
@@ -246,10 +247,11 @@ def test_persistence_roundtrip_and_identity_conflict():
         assert rep["envelope"]["clocks"] == json.loads(json.dumps(env["clocks"]))
         # Same identity again → idempotent duplicate, not a second record.
         assert record_range_envelope(conn, env)["status"] == "duplicate"
-        # Same record_id with a tampered digest refuses as identity conflict.
+        # A supplied digest alone can never earn duplicate success: spoofing
+        # content_digest without recomputing payloads is refused on write.
         tampered = dict(env, content_digest="0" * 64)
         res = record_range_envelope(conn, tampered)
-        assert res["status"] == "refused" and res["reason"] == "IDENTITY_CONFLICT"
+        assert res["status"] == "refused" and res["reason"] == "DIGEST_MISMATCH"
         assert replay_range_envelope(conn, "rga1-nonexistent") is None
     finally:
         conn.close()
@@ -260,7 +262,8 @@ def test_refused_envelope_is_not_persisted():
     try:
         res = record_range_envelope(conn, {"status": "refused",
                                            "refusals": ["REVERSED_WINDOW"]})
-        assert res["status"] == "refused" and res["reason"] == "IDENTITY_INCOMPLETE"
+        assert res["status"] == "refused"
+        assert res["reason"] in ("IDENTITY_INCOMPLETE", "INCOMPATIBLE_CONTENT_SCHEMA")
     finally:
         conn.close()
 

@@ -1182,12 +1182,32 @@ _RANGE_DDL = """
 """
 
 _RANGE_REQUIRED = ("version", "status", "symbol", "record_id", "content_digest",
-                   "query", "axes", "grids", "metric_registry", "clocks",
-                   "coverage", "provenance")
+                   "content_schema", "query", "axes", "grids", "metric_registry",
+                   "clocks", "coverage", "provenance")
 
 
 def _canonical_range(envelope: dict[str, Any]) -> str:
     return json.dumps(envelope, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _validate_range_envelope(envelope: dict[str, Any]) -> str | None:
+    """R18-C6: canonical-content validation. Returns a typed refusal reason or
+    None. The digest is ALWAYS recomputed from the payload — a supplied digest
+    is never trusted on its own, and record identity must derive from the
+    recomputed digest. Pre-C6 (absent/legacy content_schema) is an explicit
+    schema refusal, not a silent upgrade.
+    """
+    from services.solstice_range_analytics import CONTENT_SCHEMA, compute_content_digest, record_id_for_digest
+
+    schema = envelope.get("content_schema")
+    if schema != CONTENT_SCHEMA:
+        return "INCOMPATIBLE_CONTENT_SCHEMA"
+    recomputed = compute_content_digest(envelope)
+    if envelope.get("content_digest") != recomputed:
+        return "DIGEST_MISMATCH"
+    if envelope.get("record_id") != record_id_for_digest(recomputed):
+        return "RECORD_ID_MISMATCH"
+    return None
 
 
 def ensure_range_tables(conn) -> None:
@@ -1209,6 +1229,11 @@ def record_range_envelope(conn, envelope: dict[str, Any]) -> dict[str, Any]:
     """
     if not isinstance(envelope, dict):
         return {"status": "refused", "reason": "NOT_AN_ENVELOPE"}
+    # C6: recompute and validate content identity BEFORE trusting anything.
+    defect = _validate_range_envelope(envelope)
+    if defect is not None:
+        return {"status": "refused", "reason": defect,
+                "detail": "write-side canonical validation failed"}
     missing = [k for k in _RANGE_REQUIRED if envelope.get(k) in (None, "")]
     q = envelope.get("query") or {}
     bad_window = not isinstance(q.get("min_dte"), int) \
@@ -1219,7 +1244,7 @@ def record_range_envelope(conn, envelope: dict[str, Any]) -> dict[str, Any]:
                            "envelope_status": envelope.get("status")}}
 
     record_id = str(envelope["record_id"])
-    digest = str(envelope["content_digest"])
+    digest = str(envelope["content_digest"])  # already recomputed-validated
     asof = str(q.get("as_of_ny") or "")
     received_at = str((envelope.get("clocks") or {}).get("received_at") or "")
     recorded_at = _now_iso()
@@ -1228,15 +1253,35 @@ def record_range_envelope(conn, envelope: dict[str, Any]) -> dict[str, Any]:
             with _RECORDER_LOCK:
                 ensure_range_tables(conn)
                 rows = conn.execute(
-                    "SELECT digest FROM range_analytics_envelopes_v1 "
+                    "SELECT digest, envelope_json FROM range_analytics_envelopes_v1 "
                     "WHERE record_id = " + _esc(record_id)).fetchall()
                 if rows:
-                    if str(rows[0][0]) == digest:
+                    # C6: duplicate detection compares RECOMPUTED digests of
+                    # both sides — a supplied digest alone can never earn a
+                    # duplicate success, and a corrupted stored duplicate is
+                    # surfaced, not overwritten.
+                    stored_digest = str(rows[0][0])
+                    try:
+                        stored_env = json.loads(rows[0][1]) if rows[0][1] else None
+                    except (TypeError, ValueError):
+                        stored_env = None
+                    if isinstance(stored_env, dict):
+                        from services.solstice_range_analytics import compute_content_digest
+                        stored_recomputed = compute_content_digest(stored_env)
+                    else:
+                        stored_recomputed = None
+                    if stored_recomputed is None:
+                        return {"status": "refused",
+                                "reason": "STORED_RECORD_CORRUPT",
+                                "record_id": record_id}
+                    if stored_recomputed == digest and stored_digest == digest:
                         return {"status": "duplicate", "record_id": record_id,
                                 "digest": digest, "recorded_at": recorded_at,
-                                "replay_identity": record_id}
+                                "replay_identity": record_id,
+                                "digest_recomputed": True}
                     return {"status": "refused", "reason": "IDENTITY_CONFLICT",
-                            "record_id": record_id}
+                            "record_id": record_id,
+                            "digest_recomputed": True}
                 conn.execute(
                     "INSERT INTO range_analytics_envelopes_v1 VALUES ("
                     + ",".join([_esc(record_id), _esc(envelope.get("symbol")),
@@ -1256,9 +1301,12 @@ def record_range_envelope(conn, envelope: dict[str, Any]) -> dict[str, Any]:
 def replay_range_envelope(conn, record_id: str) -> dict[str, Any] | None:
     """Restore the EXACT stored range-analytics.v1 envelope by record identity.
 
-    No recomputation, no reprojection of present-day chains. Returns None when
-    the identity is unknown; a payload that fails to parse is surfaced as an
-    explicit CORRUPT_PAYLOAD refusal, never a silent empty map.
+    C6: replay VALIDATES — the canonical content digest is recomputed from the
+    payload, record identity must derive from it, and the stored row headers
+    (ticker/window/asof/digest) must match the payload. Typed refusal dicts
+    (never a silent map): STORE_READ_FAILED / CORRUPT_PAYLOAD /
+    INCOMPATIBLE_CONTENT_SCHEMA / DIGEST_MISMATCH / RECORD_ID_MISMATCH /
+    ROW_HEADER_MISMATCH / STORED_DIGEST_MISMATCH. None = unknown identity.
     """
     try:
         with connection_lock(conn):
@@ -1275,17 +1323,120 @@ def replay_range_envelope(conn, record_id: str) -> dict[str, Any] | None:
         return None
     (rid, ticker, wmin, wmax, asof, received_at, status, digest,
      envelope_json, recorded_at) = rows[0]
+
+    def _refusal(reason: str, **extra: Any) -> dict[str, Any]:
+        return {"record_id": rid, "envelope": None, "error": reason, **extra}
+
     try:
         envelope = json.loads(envelope_json) if envelope_json else None
     except (TypeError, ValueError):
         envelope = None
     if not isinstance(envelope, dict):
-        return {"record_id": rid, "digest": digest, "envelope": None,
-                "error": "CORRUPT_PAYLOAD"}
+        return _refusal("CORRUPT_PAYLOAD", digest=digest)
+    defect = _validate_range_envelope(envelope)
+    if defect is not None:
+        return _refusal(defect, digest=digest)
+    # Row headers must match the validated payload — header tampering or a
+    # foreign record under a known id is refused, never served.
+    q = envelope.get("query") or {}
+    if (str(ticker or "") != str(envelope.get("symbol") or "")
+            or int(wmin) != int(q.get("min_dte"))
+            or int(wmax) != int(q.get("max_dte"))
+            or str(asof or "") != str(q.get("as_of_ny") or "")):
+        return _refusal("ROW_HEADER_MISMATCH", digest=digest)
+    if str(digest or "") != str(envelope.get("content_digest")):
+        return _refusal("STORED_DIGEST_MISMATCH", digest=digest)
     return {
         "record_id": rid, "ticker": ticker,
         "window": {"min_dte": wmin, "max_dte": wmax},
         "asof_date": asof, "received_at": received_at, "status": status,
         "digest": digest, "recorded_at": recorded_at, "envelope": envelope,
-        "replay_note": "exact stored envelope restored; no recomputation",
+        "integrity": "verified",
+        "replay_note": "exact stored envelope restored; canonical content "
+                       "digest recomputed and verified; no recomputation",
     }
+
+
+def list_range_envelopes(
+    conn,
+    *,
+    ticker: str | None = None,
+    min_dte: int | None = None,
+    max_dte: int | None = None,
+    as_of: str | None = None,
+    status: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict[str, Any]:
+    """R18-C9: read-only record INDEX over range_analytics_envelopes_v1.
+
+    Identity-bound filters (ticker/window/as_of/status), bounded pagination
+    (limit 1..200). Each row reports its `integrity` verdict — payload digests
+    are recomputed for the listed page, so tampered rows show up in the index
+    instead of masquerading as valid. Store failures are explicit refusals.
+    No writes; never fetches current chains for historical playback.
+    """
+    lim = max(1, min(int(limit or 50), 200))
+    off = max(0, int(offset or 0))
+    where: list[str] = []
+    params: list[Any] = []
+    if ticker:
+        where.append("ticker = ?")
+        params.append(str(ticker).upper())
+    if min_dte is not None:
+        where.append("window_min = ?")
+        params.append(int(min_dte))
+    if max_dte is not None:
+        where.append("window_max = ?")
+        params.append(int(max_dte))
+    if as_of:
+        where.append("asof_date = ?")
+        params.append(str(as_of)[:10])
+    if status:
+        where.append("status = ?")
+        params.append(str(status))
+    sql = ("SELECT record_id, ticker, window_min, window_max, asof_date, "
+           "received_at, status, digest, envelope_json, recorded_at "
+           "FROM range_analytics_envelopes_v1")
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY received_at DESC, record_id LIMIT ? OFFSET ?"
+    params += [lim, off]
+    try:
+        with connection_lock(conn):
+            rows = conn.execute(sql, params).fetchall()
+    except Exception as e:
+        log.warning("list_range_envelopes failed: %s", e)
+        return {"version": "range-records.v1", "status": "refused",
+                "reason": "STORE_READ_FAILED", "detail": str(e)}
+    out_rows: list[dict[str, Any]] = []
+    for (rid, tk, wmin, wmax, asof_d, recv, st, digest, envelope_json,
+         recorded_at) in rows:
+        integrity = "verified"
+        try:
+            payload = json.loads(envelope_json) if envelope_json else None
+        except (TypeError, ValueError):
+            payload = None
+        if not isinstance(payload, dict):
+            integrity = "corrupt"
+        else:
+            defect = _validate_range_envelope(payload)
+            if defect is not None:
+                integrity = f"refused:{defect}"
+            elif str(digest or "") != str(payload.get("content_digest")):
+                integrity = "refused:STORED_DIGEST_MISMATCH"
+        out_rows.append({
+            "record_id": rid, "ticker": tk,
+            "window": {"min_dte": wmin, "max_dte": wmax},
+            "asof_date": asof_d, "received_at": recv, "status": st,
+            "digest": digest, "recorded_at": recorded_at,
+            "integrity": integrity,
+            # Honest evidence classification for the inspector (C8).
+            "synthetic": (payload.get("synthetic")
+                          if isinstance(payload, dict) else None),
+        })
+    return {"version": "range-records.v1", "status": "ok",
+            "filters": {"ticker": ticker, "min_dte": min_dte, "max_dte": max_dte,
+                        "as_of": as_of, "status": status},
+            "limit": lim, "offset": off, "n_returned": len(out_rows),
+            "rows": out_rows}
