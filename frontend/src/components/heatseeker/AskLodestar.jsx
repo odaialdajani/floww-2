@@ -85,7 +85,7 @@ function AskLodestar({ subject = "", overlayMetric = "raw", displayMode = "live"
         aria-haspopup="menu" aria-expanded={open} disabled={busy}
         title={block || "Ask Lodestar about this selection — uses the same published evidence, no new data"}
         data-testid={`${testId}-btn`}
-        onClick={() => setOpen((o) => !o)}>
+        onClick={() => { setNote(null); setOpen((o) => !o); }}>
         ✦ Ask Lodestar
       </button>
       {open && (
@@ -104,7 +104,7 @@ function AskLodestar({ subject = "", overlayMetric = "raw", displayMode = "live"
       {((typeof displayMode === 'string' && displayMode.startsWith('range-'))
         || (typeof agent.context?.displayMode === 'string' && agent.context.displayMode.startsWith('range-'))
         || block?.startsWith('RANGE_RESEARCH_UNAVAILABLE')) && (
-        <span className="lodestar-ask-note" data-testid={`${testId}-range-disclosure`}>
+        <span className="lodestar-range-disclosure" data-testid={`${testId}-range-disclosure`}>
           Research only · raw population and full producer integrity qualification pending. Backend resolves stored facts; no crypto/production admission or native draft permission.
         </span>
       )}

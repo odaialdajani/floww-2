@@ -166,7 +166,7 @@ const server=http.createServer((req,res)=>{
   receipt.rangeAskDiagnostic=await page.getByTestId('range-ask-lodestar-btn').evaluate(button=>({title:button.title,rect:button.getBoundingClientRect().toJSON(),ancestors:[button.closest('.range-workspace'),button.closest('.skylit-full-dashboard')].map(element=>({overflow:getComputedStyle(element).overflow,height:element.clientHeight,scrollHeight:element.scrollHeight}))}));
   await Promise.all([
    page.waitForResponse(r=>r.url().includes('/api/agent/turn/') && r.request().method()==='GET'),
-   (async()=>{await page.getByTestId('range-ask-lodestar-btn').click();await page.getByTestId('range-ask-lodestar-q-0').click();})(),
+   (async()=>{receipt.rangeAskStage='before_button';await page.getByTestId('range-ask-lodestar-btn').click({timeout:10000});receipt.rangeAskStage='button_clicked';await page.getByTestId('range-ask-lodestar-q-0').click({timeout:10000});receipt.rangeAskStage='menu_clicked';})(),
   ]);
   const rangeResearch=page.getByRole('dialog',{name:'Lodestar research'});await rangeResearch.getByRole('article',{name:'Research answer for SPY'}).waitFor();
   assert(lastTurn.answer.facts.length>0 && lastTurn.answer.facts.every(f=>f.snapshot_id===rangeComplete.record_id && f.status==='degraded'));assert.strictEqual(lastTurn.answer.plan_draft.contract,null);assert.strictEqual(lastTurn.answer.plan_draft.executable,false);assert(lastTurn.answer.plan_draft.blockers.includes('RANGE_CONTRACT_UNAVAILABLE'));

@@ -11,6 +11,15 @@ beforeAll(()=>{Object.defineProperty(globalThis,'crypto',{value:require('crypto'
 beforeEach(()=>{global.fetch=jest.fn(async url=>({ok:true,json:async()=>String(url).endsWith('/session')?{}
  :String(url).endsWith('/ask')?{turn_id:'range-menu-turn'}:{turn_id:'range-menu-turn',status:'completed',ticker:'SPY',text:'Stored research only',contract:null,executable:false}}));});
 
+test('persistent range qualification disclosure is not a transient popup that can cover its menu',()=>{
+ publishScreenContext(rangeSelectionContext(rangeComplete,'raw_oi',{strike:'590',expiry:'2026-10-26'},'replay'));
+ render(<AgentProvider><AskLodestar overlayMetric="raw_oi" displayMode="range-replay"/></AgentProvider>);
+ const disclosure=screen.getByTestId('ask-lodestar-range-disclosure');
+ expect(disclosure).not.toHaveClass('lodestar-ask-note');
+ fireEvent.click(screen.getByTestId('ask-lodestar-btn'));
+ expect(screen.getByRole('menu')).toBeInTheDocument();expect(disclosure).toHaveTextContent('qualification pending');
+});
+
 test("live raw context is admitted", () => {
   expect(admissionBlock({ context: { ticker: "SPY" }, overlayMetric: "raw", displayMode: "live" })).toBeNull();
 });
