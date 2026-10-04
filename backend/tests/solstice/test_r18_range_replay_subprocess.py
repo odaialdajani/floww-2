@@ -123,16 +123,11 @@ def test_missing_schema_and_corrupt_rows_stay_explicit(tmp_path):
     ensure_range_tables(conn)
     assert replay_range_envelope(conn, "rga1-nonexistent") is None
     # Corrupt payload → explicit CORRUPT_PAYLOAD, never a fabricated map.
-    good = {"version": "range-analytics.v1", "status": "ok", "symbol": "SPY",
-            "record_id": "rga1-corrupt", "content_digest": "d" * 64,
-            "query": {"min_dte": 14, "max_dte": 60, "as_of_ny": "2026-10-05"},
-            "axes": {}, "grids": {}, "metric_registry": {},
-            "clocks": {"received_at": "2026-10-05T13:59:30+00:00"},
-            "coverage": {}, "provenance": {}}
+    good = _producer_envelope()
     assert record_range_envelope(conn, good)["status"] == "recorded"
     conn.execute("UPDATE range_analytics_envelopes_v1 SET envelope_json = '{bad' "
-                 "WHERE record_id = 'rga1-corrupt'")
-    corrupted = replay_range_envelope(conn, "rga1-corrupt")
+                 "WHERE record_id = '" + good["record_id"] + "'")
+    corrupted = replay_range_envelope(conn, good["record_id"])
     conn.close()
     assert corrupted["error"] == "CORRUPT_PAYLOAD"
     assert corrupted["envelope"] is None
@@ -145,4 +140,17 @@ def test_missing_schema_and_corrupt_rows_stay_explicit(tmp_path):
     result = replay_range_envelope(conn2, "rga1-anything")
     conn2.close()
     assert result is not None and result["error"] == "STORE_READ_FAILED"
+
+
+def _producer_envelope():
+    """Build a fresh canonical envelope from the frozen fixtures."""
+    from datetime import date
+
+    from services.solstice_range_analytics import build_range_envelope, select_window_expiries
+    listing = json.loads((FIXTURES / "listing.json").read_text())
+    chain = json.loads((FIXTURES / "chain_complete.json").read_text())
+    sel = select_window_expiries(listing["expiries"], 14, 60, date(2026, 10, 5))
+    return build_range_envelope(symbol="SPY", min_dte=14, max_dte=60,
+                                asof=date(2026, 10, 5), listing=listing,
+                                selection=sel, chain=chain)
 

@@ -356,3 +356,63 @@ async def price_path_comparable(
     return {"admitted": False, "reason": reason, "detail": detail,
             "baseline_id": baseline_id, "snapshot_id": snapshot_id,
             "version": COVERAGE_VERSION}
+
+
+# ── R18-C9: read-only owning range-record index/replay ──────────────
+#
+# Range-analytics.v1 records (rga1-*) live in their OWN namespace
+# (range_analytics_envelopes_v1). These routes only READ that namespace —
+# identity-bound filters, bounded pagination, typed refusals. They never
+# write, never fetch a current chain for historical playback, and the legacy
+# snapshot replay namespace above is untouched.
+
+@router.get("/range-records")
+async def range_record_index(
+    ticker: str | None = Query(None, description="Owning symbol filter"),
+    min_dte: int | None = Query(None, ge=0, le=365),
+    max_dte: int | None = Query(None, ge=0, le=365),
+    as_of: str | None = Query(None, description="Owning NY date YYYY-MM-DD"),
+    status: str | None = Query(None, pattern="^(ok|partial)$"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> dict[str, Any]:
+    """Record index with per-row integrity verdicts (range-records.v1)."""
+    from services.heatmap_history import list_range_envelopes
+
+    conn = _store_conn()
+    if conn is None:
+        return {"version": "range-records.v1", "status": "refused",
+                "reason": "recorder_unavailable", "rows": [], "n_returned": 0}
+    return list_range_envelopes(conn, ticker=ticker, min_dte=min_dte,
+                                max_dte=max_dte, as_of=as_of, status=status,
+                                limit=limit, offset=offset)
+
+
+@router.get("/range-records/{record_id}")
+async def range_record_replay(record_id: str) -> Any:
+    """Replay one owning rga1 envelope by identity — validated, never refetched.
+
+    Unknown identity → 404; integrity refusals (tamper/schema/header) stay
+    machine-readable with 422; a healthy record restores the stored display
+    exactly (no recomputation of present-day chains).
+    """
+    from services.heatmap_history import replay_range_envelope
+
+    conn = _store_conn()
+    if conn is None:
+        return JSONResponse(status_code=503, content={
+            "version": "range-records.v1",
+            "status": "refused", "reason": "recorder_unavailable",
+        })
+    rep = replay_range_envelope(conn, record_id)
+    if rep is None:
+        return JSONResponse(status_code=404, content={
+            "version": "range-records.v1", "status": "refused",
+            "reason": "NO_RECORD", "record_id": record_id})
+    if rep.get("error"):
+        code = 503 if rep["error"] == "STORE_READ_FAILED" else 422
+        return JSONResponse(status_code=code, content={
+            "version": "range-records.v1", "status": "refused",
+            "reason": rep["error"], "record_id": rep.get("record_id"),
+            "detail": rep.get("detail")})
+    return {"version": "range-records.v1", "status": "ok", **rep}

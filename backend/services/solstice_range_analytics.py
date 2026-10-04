@@ -54,10 +54,15 @@ _UNIT_S2 = "USD per 1% spot move (S^2 dealer-positive convention)"
 
 __all__ = [
     "CONTRACT_VERSION",
+    "CONTENT_SCHEMA",
+    "EXCLUDED_FROM_CONTENT",
     "MIN_DTE_LIMIT",
     "MAX_DTE_LIMIT",
     "build_range_envelope",
+    "canonical_content",
+    "compute_content_digest",
     "fetch_range_analytics",
+    "record_id_for_digest",
     "select_window_expiries",
     "ny_today",
 ]
@@ -69,6 +74,37 @@ def _canonical(obj: Any) -> str:
 
 def _sha(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+# ── R18-C6: canonical content contract ──────────────────────────────
+# The evidence content digest covers the COMPLETE analytical evidence:
+# axes, dense cells, metric identity (basis/formula/unit/model/status/
+# population), clocks, coverage, provenance, synthetic flag, query and
+# status. Explicitly EXCLUDED transport/storage fields (never part of
+# content identity): the record id/digest themselves, the persistence
+# receipt block, and remarks written after capture.
+CONTENT_SCHEMA = "rga-content.v2"
+_CONTENT_KEYS = (
+    "version", "status", "refusals", "symbol", "query", "axes", "grids",
+    "metric_registry", "clocks", "coverage", "provenance", "synthetic",
+    "grounding", "content_schema",
+)
+EXCLUDED_FROM_CONTENT = ("record_id", "content_digest", "persistence")
+
+
+def canonical_content(envelope: dict[str, Any]) -> dict[str, Any]:
+    """Canonical content projection (rga-content.v2) — the digest subject."""
+    if not isinstance(envelope, dict):
+        return {}
+    return {k: envelope.get(k) for k in _CONTENT_KEYS}
+
+
+def compute_content_digest(envelope: dict[str, Any]) -> str:
+    return _sha(_canonical(canonical_content(envelope)))
+
+
+def record_id_for_digest(digest: str) -> str:
+    return f"rga1-{digest[:24]}"
 
 
 def _strike_key(strike: Any) -> str | None:
@@ -142,11 +178,17 @@ def _dense_section(
     model: str,
     admitted_expiries: list[str],
     strike_keys: list[str],
+    population: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Dense {expiry: {strike_key: value|null}} cells over the OWNING axes.
+    """Dense {expiry: {strike_key: value|null}} cells over the OWNING axes,
+    with genuine GOVERNED population accounting (R18-C7).
 
-    An admitted expiry with zero kernel cells still gets a full null row —
-    unavailable values are explicit, never absent and never zero.
+    ``population`` comes from the registered kernels/aggregates — raw input
+    contract counts and per-reason exclusions, NOT a finite-cell recount.
+    Sections with exclusions or excluded-cell gaps are ``partial``; a surface
+    with zero usable inputs is ``unavailable`` with a reason. ``metric_admitted``
+    is true only for a clean ``ok`` section: a finite aggregate is never
+    sufficient on its own to admit a metric.
     """
     grid = kernel.get("grid") or {}
     cells: dict[str, dict[str, Any]] = {}
@@ -161,13 +203,22 @@ def _dense_section(
             n_available += 1 if ok else 0
         cells[exp] = dense_row
     n_cells = len(admitted_expiries) * len(strike_keys)
-    if n_available == 0:
+
+    pop = dict(population or {})
+    # Exclusion populations only — `usable`/`input_contracts` are legitimate
+    # counts, never exclusions.
+    n_exclusions = sum(v for k, v in pop.items()
+                       if k not in ("usable", "input_contracts", "input_known")
+                       and isinstance(v, int) and not isinstance(v, bool) and v > 0)
+    usable = pop.get("usable", kernel.get("usable"))
+    kernel_status = kernel.get("status")
+    if usable == 0 and not admitted_expiries:
         status = "unavailable"
         reason = kernel.get("reason") or "NO_COVERAGE"
-    elif kernel.get("status") == "unavailable":
+    elif usable == 0 and kernel_status == "unavailable" or usable is not None and usable == 0:
         status = "unavailable"
-        reason = kernel.get("reason")
-    elif n_available < n_cells:
+        reason = kernel.get("reason") or "NO_USABLE_INPUTS"
+    elif n_exclusions > 0 or n_available < n_cells:
         status = "partial"
         reason = None
     else:
@@ -181,9 +232,14 @@ def _dense_section(
         "unit": _UNIT_S2,
         "status": status,
         "reason": reason,
-        "usable": kernel.get("usable", n_available if status != "unavailable" else 0),
+        # R18-C7: a metric is admitted only when its own surface is clean;
+        # the overall map status never overrides this.
+        "metric_admitted": status == "ok",
+        "population": pop,
+        "usable": usable if usable is not None else n_available,
         "n_cells": n_cells,
         "n_available": n_available,
+        "cell_gaps": n_cells - n_available,
         "cells": cells,
     }
     # Registered exclusion populations pass through verbatim — missing
@@ -250,6 +306,16 @@ def build_range_envelope(
         strike_keys = sorted(seen, key=float)
 
     if spot_ok and contracts:
+        from domain.exposure_metrics import (
+            compute_delta_weighted_oi as _agg_delta,
+        )
+        from domain.exposure_metrics import (
+            compute_raw_oi as _agg_raw,
+        )
+        from domain.exposure_metrics import (
+            compute_volume_gamma as _agg_volume,
+        )
+
         kernels: dict[str, tuple[str, dict[str, Any], str]] = {
             "raw_oi": ("gex_net_v1",
                        {**compute_gex_grid(spot, contracts, symbol),
@@ -261,6 +327,31 @@ def build_range_envelope(
             "volume": ("volume_gamma_v1",
                        compute_gex_grid_volume_vendor(spot, contracts),
                        "vendor_gamma(session volume)"),
+        }
+        # R18-C7: genuine population accounting from the REGISTERED aggregates
+        # (domain.exposure_metrics ExposureResult) — raw input contract counts
+        # and per-reason exclusions, never a finite-cell recount. The volume
+        # aggregate reports missing VOLUME in its missing_oi slot (positional);
+        # it is relabeled here as missing_volume.
+        _raw_m = _agg_raw(contracts, spot)
+        _dw_m = _agg_delta(contracts, spot)
+        _vol_m = _agg_volume(contracts, spot)
+        populations: dict[str, dict[str, Any]] = {
+            "raw_oi": {"input_contracts": len(contracts), "usable": _raw_m.usable,
+                       "missing_oi": _raw_m.missing_oi, "invalid": _raw_m.invalid,
+                       "missing_delta": _raw_m.missing_delta,
+                       "invalid_delta": _raw_m.invalid_delta,
+                       "zero_oi_or_excluded_by_kernel": "cell nulls record "
+                       "BS iv/T exclusions the aggregate does not class"},
+            "delta_weighted": {"input_contracts": len(contracts), "usable": _dw_m.usable,
+                               "missing_oi": _dw_m.missing_oi,
+                               "missing_delta": _dw_m.missing_delta,
+                               "invalid": _dw_m.invalid,
+                               "invalid_delta": _dw_m.invalid_delta},
+            "volume": {"input_contracts": len(contracts), "usable": _vol_m.usable,
+                       "missing_volume": _vol_m.missing_oi,  # volume slot relabeled
+                       "invalid": _vol_m.invalid},
+            "window": {"input_contracts": 0, "usable": 0},
         }
     else:
         empty = {"expiries": [], "strikes": [], "grid": {}, "formula_version": "gex.v2",
@@ -274,6 +365,8 @@ def build_range_envelope(
             "volume": ("volume_gamma_v1", {**empty, "exposure_basis": "VOLUME"},
                        "vendor_gamma(session volume)"),
         }
+        populations = {name: {"input_contracts": len(contracts), "usable": 0}
+                       for name in kernels}
     # Window (session/window volume-adjusted) needs a comparable RECORDED
     # baseline; without it the surface is explicitly unavailable, never raw
     # and never zero — same rule as the display payload's governed section.
@@ -281,8 +374,11 @@ def build_range_envelope(
         "expiries": [], "strikes": [], "grid": {}, "exposure_basis": "VOLUME_WINDOW",
         "formula_version": "gex.v2", "status": "unavailable",
         "reason": "HISTORY_NOT_YET_RECORDED"}, "recorded baseline required")
+    if "window" not in populations:
+        populations["window"] = {"input_contracts": 0, "usable": 0}
 
-    grids = {name: _dense_section(name, metric_id, kernel, model, admitted, strike_keys)
+    grids = {name: _dense_section(name, metric_id, kernel, model, admitted,
+                                  strike_keys, populations.get(name))
              for name, (metric_id, kernel, model) in kernels.items()}
     metric_registry = {name: {"metric_id": metric_id,
                               "basis": grids[name]["basis"],
@@ -362,41 +458,69 @@ def build_range_envelope(
         refusals.append("PARTIAL_COVERAGE")
     status = "ok" if complete and not provenance["stale"] else "partial"
 
-    # Owning record identity binds symbol, window, owning NY date, source
-    # clocks and the canonical grid content — a different ticker/date/window/
-    # basis can never reuse this grid.
-    identity = {
-        "version": CONTRACT_VERSION,
-        "symbol": symbol,
-        "window": {"min_dte": min_dte, "max_dte": max_dte},
-        "as_of_ny": asof.isoformat(),
-        "received_at": clocks["received_at"],
-        "axes": {"expiries": admitted, "strike_keys": strike_keys},
-        "grids_digest": _sha(_canonical({
-            name: {"metric_id": sec["metric_id"], "basis": sec["basis"],
-                   "formula_version": sec["formula_version"], "cells": sec["cells"]}
-            for name, sec in grids.items()})),
+    # R18-C10: stable resolver/query identity + explicit contract capability.
+    # Range records carry contract POPULATION and an identity digest of the
+    # captured option contracts (OSI/strike/type/bid/ask/timestamps), never
+    # replayable tradable quotes — historical playback is research only.
+    contracts_digest = _sha(_canonical([
+        {k: c.get(k) for k in ("osi", "expiry", "type", "strike", "bid", "ask",
+                               "mid", "bid_timestamp", "ask_timestamp")}
+        for c in contracts]))
+    per_expiry: dict[str, dict[str, Any]] = {}
+    for c in contracts:
+        e = str(c.get("expiry") or "")
+        if not e:
+            continue
+        row = per_expiry.setdefault(e, {"n_contracts": 0, "n_call": 0, "n_put": 0})
+        row["n_contracts"] += 1
+        if c.get("type") == "call":
+            row["n_call"] += 1
+        elif c.get("type") == "put":
+            row["n_put"] += 1
+    grounding = {
+        "resolver": "range-resolver.v1",
+        "record_query_identity": {"symbol": symbol, "min_dte": min_dte,
+                                  "max_dte": max_dte, "as_of_ny": asof.isoformat()},
+        "contract_population": per_expiry,
+        "contracts_digest": contracts_digest,
+        # Honest capability: drafting an executable contract needs OSI + live
+        # quotes; this record carries reference identity only.
+        "contract_drafting": {"admitted": False,
+                              "reason": "RANGE_RECORD_REFERENCE_ONLY"},
     }
-    content_digest = _sha(_canonical(identity))
-    record_id = "rga1-" + content_digest[:24]
 
-    return {
+    # Owning record identity (rga-content.v2): the digest covers the FULL
+    # canonical evidence content — axes/cells/metric identity+populations/
+    # clocks/coverage/provenance/synthetic/query/status — with transport and
+    # storage fields explicitly excluded. Recomputed on write and replay.
+    envelope: dict[str, Any] = {
         "version": CONTRACT_VERSION,
+        "content_schema": CONTENT_SCHEMA,
         "status": status,
         "refusals": refusals,
         "symbol": symbol,
-        "record_id": record_id,
-        "content_digest": content_digest,
         "query": {"min_dte": min_dte, "max_dte": max_dte, "as_of_ny": asof.isoformat()},
         "axes": {"expiries": selection["admitted"], "strike_keys": strike_keys,
                  "n_strikes": len(strike_keys)},
         "grids": grids,
         "metric_registry": metric_registry,
+        # C7: overall map status never overrides a section's own admission.
+        "metrics": {"admitted": sorted(n for n, s in grids.items()
+                                       if s["metric_admitted"]),
+                    "partial": sorted(n for n, s in grids.items()
+                                      if s["status"] == "partial"),
+                    "unavailable": sorted(n for n, s in grids.items()
+                                          if s["status"] == "unavailable")},
         "clocks": clocks,
         "coverage": coverage,
         "provenance": provenance,
+        "grounding": grounding,
         "synthetic": bool(chain.get("synthetic")),
     }
+    content_digest = compute_content_digest(envelope)
+    envelope["content_digest"] = content_digest
+    envelope["record_id"] = record_id_for_digest(content_digest)
+    return envelope
 
 
 async def fetch_range_analytics(

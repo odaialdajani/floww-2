@@ -15,7 +15,7 @@ import asyncio
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 router = APIRouter()
 
@@ -288,14 +288,17 @@ async def uoa(
 @router.get("/heatmap/{ticker}/range-analytics", response_model=None)
 async def heatmap_range_analytics(
     ticker: str,
+    request: Request,
     min_dte: int = Query(14, ge=0, le=365),
     max_dte: int = Query(60, ge=0, le=365),
     as_of: str | None = Query(
         None, description="Owning NY date; must equal today — a current fetch "
                           "can never recreate a historical observation"),
     persist: bool = Query(
-        False, description="Opt-in: persist the admitted owning envelope in the "
-                           "recorder store. Default False — reads never write."),
+        False, description="Recorder write of the admitted owning envelope. "
+                           "R18-C10: requires the explicit capture policy "
+                           "(FLOWW_RANGE_CAPTURE_ENABLED) AND operator API-key "
+                           "auth. Default False — display reads never write."),
 ):
     """Owning 14–60 DTE analytical range map (contract range-analytics.v1).
 
@@ -324,6 +327,23 @@ async def heatmap_range_analytics(
         })
     conn = None
     if persist:
+        # R18-C10: capture mutation is default-off. It requires the explicit
+        # operator capture policy flag AND authenticated API-key admission on
+        # this GET; without both the write is refused, not performed. Real
+        # capture remains an operator commissioning step.
+        import os
+
+        from auth import require_api_key
+        if os.environ.get("FLOWW_RANGE_CAPTURE_ENABLED", "").lower() not in (
+                "1", "true", "yes"):
+            return JSONResponse(status_code=503, content={
+                "error": "CAPTURE_DISABLED",
+                "message": "Range-envelope capture is default-off. Set "
+                           "FLOWW_RANGE_CAPTURE_ENABLED through the accepted "
+                           "commissioning policy, and authenticate.",
+                "version": CONTRACT_VERSION,
+            })
+        await require_api_key(request)  # 401/503 when unauthenticated
         try:
             from services.duckdb_engine import db as eng
             conn = eng.conn if hasattr(eng, "conn") else None

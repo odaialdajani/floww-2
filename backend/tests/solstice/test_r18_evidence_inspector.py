@@ -16,12 +16,10 @@ sys.path.insert(0, "backend")
 import duckdb
 
 from services.heatmap_history import (
-    ensure_range_tables,
     ensure_tables,
     record_decision,
     record_outcome,
     record_price_path,
-    record_range_envelope,
 )
 from services.solstice_evidence_inspector import INSPECTOR_VERSION, inspect_recorder_store
 
@@ -56,17 +54,21 @@ def _populated_store(path: Path) -> None:
                            "features": {"source": "synthetic"}})
     record_outcome(conn, "d1", "SPY", 900, "bounce", censored=False)
     record_outcome(conn, "d2", "SPY", 900, "censored_end", censored=True)
-    # One owning range envelope (synthetic).
-    ensure_range_tables(conn)
-    env = {"version": "range-analytics.v1", "status": "ok", "symbol": "SPY",
-           "record_id": "rga1-" + "a" * 24, "content_digest": "b" * 64,
-           "query": {"min_dte": 14, "max_dte": 60, "as_of_ny": "2026-10-05"},
-           "axes": {"expiries": [{"expiry": "2026-10-26", "dte": 21}],
-                    "strike_keys": ["590"], "n_strikes": 1},
-           "grids": {"raw_oi": {"cells": {"2026-10-26": {"590": 1.5}}}},
-           "metric_registry": {}, "clocks": {"received_at": "2026-10-05T13:59:30+00:00"},
-           "coverage": {"complete": False}, "provenance": {"data_source": "public_api"},
-           "synthetic": True}
+    # One owning range envelope (synthetic, built by the real producer so the
+    # canonical content schema validates).
+    import json as _json
+    from datetime import date as _date
+    from pathlib import Path as _P
+
+    from services.heatmap_history import record_range_envelope
+    from services.solstice_range_analytics import build_range_envelope, select_window_expiries
+    fix = _P(__file__).parent / "fixtures" / "range_analytics_v1"
+    listing = _json.loads((fix / "listing.json").read_text())
+    chain = _json.loads((fix / "chain_complete.json").read_text())
+    sel = select_window_expiries(listing["expiries"], 14, 60, _date(2026, 10, 5))
+    env = build_range_envelope(symbol="SPY", min_dte=14, max_dte=60,
+                               asof=_date(2026, 10, 5), listing=listing,
+                               selection=sel, chain=chain)
     assert record_range_envelope(conn, env)["status"] == "recorded"
     conn.close()
 
@@ -119,3 +121,56 @@ def test_unlabelled_decisions_are_unknown_not_zero(tmp_path):
     assert rep["lineage"]["n_decisions_without_outcome"] == 1
     assert "never zero losses" in rep["lineage"]["note"]
     assert rep["outcome_sufficiency"]["verdict"] == "INSUFFICIENT EVIDENCE"
+
+
+def test_c8_ticker_scoping_and_classification(tmp_path):
+    """Ticker scope applies to every census; synthetic never counts as real."""
+    db = tmp_path / "store3.duckdb"
+    conn = duckdb.connect(str(db))
+    ensure_tables(conn)
+    base = 1796431200.0
+    for i in range(3):
+        record_price_path(conn, "SPY", base + 300.0 * i, 600.0 + i,
+                          "synthetic-fixture")
+        record_price_path(conn, "QQQ", base + 300.0 * i, 500.0 + i,
+                          "public-mid")
+    for i in range(30):
+        # 30 DISTINCT NY days of SYNTHETIC decisions + terminal labels.
+        record_decision(conn, {"decision_id": f"syn{i}", "ticker": "SPY",
+                               "scenario": "t", "side": "none",
+                               "eligible": False, "reason_codes": [],
+                               "features": {"synthetic": True,
+                                            "source": "synthetic-fixture"}})
+        conn.execute(
+            "INSERT INTO outcome_labels_v1 "
+            "(decision_id, ticker, horizon_s, label, label_version, at_ts, "
+            "censored, detail, policy_version) VALUES ("
+            f"'syn{i}', 'SPY', 900, 'bounce', 'outcome.v1', "
+            f"'2026-08-{i % 28 + 1:02d}T14:00:00+00:00', 0, '{{}}', NULL)")
+    record_decision(conn, {"decision_id": "q1", "ticker": "QQQ",
+                           "scenario": "t", "side": "none", "eligible": False,
+                           "reason_codes": [], "features": {"source": "public-mid"}})
+    conn.execute(
+        "INSERT INTO outcome_labels_v1 (decision_id, ticker, horizon_s, label, "
+        "label_version, at_ts, censored, detail, policy_version) VALUES ("
+        "'q1', 'QQQ', 900, 'flush', 'outcome.v1', "
+        "'2026-10-01T14:00:00+00:00', 0, '{}', NULL)")
+    conn.close()
+
+    rep_all = inspect_recorder_store(str(db))
+    assert rep_all["price_paths"]["classification"]["synthetic"] == 3
+    assert rep_all["price_paths"]["classification"]["production"] == 3
+    suf = rep_all["outcome_sufficiency"]
+    # 30 unqualified (synthetic) days must NOT yield sufficiency anywhere.
+    assert suf["verdict"] == "INSUFFICIENT EVIDENCE"
+    assert suf["n_sessions_observed_ny"] >= 28
+    assert suf["n_qualified_sessions"] == 1  # only the QQQ production-linked day
+    assert suf["n_unqualified_sessions"] >= 28
+
+    rep_spy = inspect_recorder_store(str(db), ticker="SPY")
+    assert rep_spy["price_paths"]["per_ticker"].get("QQQ") is None
+    assert rep_spy["price_paths"]["classification"]["production"] == 0
+    assert rep_spy["outcome_sufficiency"]["n_qualified_sessions"] == 0
+    rep_qqq = inspect_recorder_store(str(db), ticker="QQQ")
+    assert rep_qqq["outcome_sufficiency"]["n_qualified_sessions"] == 1
+    assert rep_qqq["outcome_sufficiency"]["verdict"] == "INSUFFICIENT EVIDENCE"

@@ -449,8 +449,13 @@ async def fetch_chain_from_public_api(
         except _public_budget.BudgetExhausted as exc:
             log.warning("Public budget refused %s chain fetch: %s", ticker, exc)
             return None
-        except Exception:
-            _debit_held = False
+        except Exception as exc:
+            # R18-C5: a failed REQUIRED debit (malformed/unavailable budget
+            # service) refuses with ZERO provider calls — never continue an
+            # unbudgeted vendor request.
+            log.warning("Public budget debit failed for %s — refusing fetch "
+                        "with zero vendor calls: %s", ticker, exc)
+            return None
         # D5: the success timestamp is the request start, so a stale
         # in-flight success cannot erase a sibling's fresher 429 contract.
         _fetch_t0 = time.monotonic()
@@ -760,8 +765,11 @@ async def fetch_option_expiry_listing(ticker: str) -> dict[str, Any] | None:
     except _public_budget.BudgetExhausted as exc:
         log.warning("Public budget refused %s expiry listing: %s", ticker, exc)
         return None
-    except Exception:
-        _debit_held = False
+    except Exception as exc:
+        # R18-C5: failed REQUIRED debit → refusal, zero vendor calls.
+        log.warning("Public budget debit failed for %s listing — refusing "
+                    "with zero vendor calls: %s", ticker, exc)
+        return None
     _fetch_t0 = time.monotonic()
     try:
         try:
@@ -847,8 +855,11 @@ async def fetch_chain_for_expiries(
         except _public_budget.BudgetExhausted as exc:
             log.warning("Public budget refused %s range chain fetch: %s", ticker, exc)
             return None
-        except Exception:
-            _debit_held = False
+        except Exception as exc:
+            # R18-C5: failed REQUIRED debit → refusal, zero vendor calls.
+            log.warning("Public budget debit failed for %s range fetch — "
+                        "refusing with zero vendor calls: %s", ticker, exc)
+            return None
         _fetch_t0 = time.monotonic()
         try:
             trading = pb.get_trading_account()

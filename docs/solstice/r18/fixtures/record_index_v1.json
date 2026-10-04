@@ -1,0 +1,31 @@
+{
+ "filters": {
+  "as_of": null,
+  "max_dte": null,
+  "min_dte": null,
+  "status": null,
+  "ticker": "SPY"
+ },
+ "limit": 50,
+ "n_returned": 1,
+ "offset": 0,
+ "rows": [
+  {
+   "asof_date": "2026-10-05",
+   "digest": "54f0a823b635f938492cbfb3e0531e638338fc29aa7117a38d9d18c360cb955c",
+   "integrity": "verified",
+   "received_at": "2026-10-05T13:59:30+00:00",
+   "record_id": "rga1-54f0a823b635f938492cbfb3",
+   "recorded_at": "2026-10-03T22:52:09.063928+00:00",
+   "status": "ok",
+   "synthetic": true,
+   "ticker": "SPY",
+   "window": {
+    "max_dte": 60,
+    "min_dte": 14
+   }
+  }
+ ],
+ "status": "ok",
+ "version": "range-records.v1"
+}

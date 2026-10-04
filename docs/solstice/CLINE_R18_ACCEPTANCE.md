@@ -46,10 +46,41 @@ evidence only; Zed owns the final combined acceptance at one frozen head.
 - Local Python 3.14.6 (ship runtime is CI's declared Python); deterministic
   fixtures, zero network/broker/worker activation.
 
+## R18 repair pass (C5–C10) — completed at this head
+
+- **C5 budget**: all three required-debit sites (legacy `fetch_chain_from_public_api`,
+  `fetch_option_expiry_listing`, `fetch_chain_for_expiries`) refuse with ZERO
+  vendor calls on any debit failure (BudgetExhausted or unexpected/malformed
+  budget service). Tests: `test_r18_repairs.py::test_c5_*` (3).
+- **C6 integrity**: `content_schema: rga-content.v2`; canonical digest covers
+  full evidence content (excluded transport/storage fields: `record_id`,
+  `content_digest`, `persistence`); recomputed+validated on write and replay;
+  tamper with valid JSON, digest spoofing, stale provenance, foreign headers,
+  altered axes/cells and corrupted duplicates all produce typed refusals
+  (`test_c6_*`, 3). Pre-C6 v1 digests recorded as superseded.
+- **C7 population**: governed `domain.exposure_metrics` aggregates supply
+  genuine input/exclusion counts; `metric_admitted` gates per section;
+  finite-cell aggregates no longer admit excluded metrics (`test_c7_*`, 2).
+- **C8 inspector**: ticker scope on every census; synthetic/production/unknown
+  classification; qualified-session sufficiency (NY-day + non-censored +
+  lineage + production class); 30 synthetic days stay INSUFFICIENT
+  (`test_c8_*` in `test_r18_evidence_inspector.py`).
+- **C9 replay API**: `range-records.v1` read-only index/replay routes with
+  identity filters, bounded pagination, per-row integrity, typed
+  404/422/503 refusals; legacy replay untouched (`test_c9_*`, service+mounted).
+- **C10 capture guard**: persist=true requires `FLOWW_RANGE_CAPTURE_ENABLED`
+  AND operator API key; default reads never write; grounding block gives Zed
+  a stable resolver identity and an explicit contract-drafting refusal
+  (`test_c10_*`).
+
+Focus receipts (this head): 36 new tests pass; full lane+guard sweep 313
+passed, 0 failed; `ruff check backend/` clean. Maintenance covers PR106's
+known lint drift (docs/api staleness, Zed-owned regeneration).
+
 ## Not done here (by design)
 
 No production capture/restart records (NAV-CAPTURE), no account/policy
 values (NAV-ACCOUNT), no server.py mount changes (Zed reviews; this lane's
-route rides the already-mounted market_data router), no frontend consumer
-(Z1), no main merge/deploy/activation. Policy UNSET; activation OFF;
-outcomes INSUFFICIENT EVIDENCE. Synthetic fixtures prove engineering only.
+routes ride already-mounted routers), no frontend consumer (Z1), no main
+merge/deploy/activation. Policy UNSET; activation OFF; outcomes
+INSUFFICIENT EVIDENCE. Synthetic fixtures prove engineering only.
