@@ -1195,3 +1195,26 @@ INSUFFICIENT EVIDENCE. No profitability claim.
   per-test proof); REVIEW-PENDING = Zed mount/wiring/combined gates +
   workflow-budget decision; ACCEPTED = prior receipts; COMMISSIONED =
   external HOLD (NAV-*). Activation OFF. INSUFFICIENT EVIDENCE.
+
+## 49. Resweep — fingerprint binding audit (4 Oct 2026)
+
+- Found live: the order fingerprint bound account/symbol/side/quantity/
+  limit but NOT stop_price or time_in_force — a tampered stop (or TIF)
+  verified against a stored approval and the armed route placed it
+  (proven: pre-fix stash runs the tampered orders through). Fingerprint
+  now covers limit+stop+TIF; the route threads request stop/TIF into
+  verification; creation/verification/route-approval endpoints accept
+  and bind the fields. Old approvals (narrower hash) fail closed.
+- Option approvals now require an explicit limit price at creation —
+  market options have unbounded slippage and the lifecycle admits limit
+  orders only. Equities keep market flexibility (disclosed).
+- Fixture coherence scripted: all 56 `execution-controls.v1` codes
+  present in owned code (no drift, no new codes this round).
+- Recorded open design point for Nav (not lane-changed): approvals are
+  reusable within their ≤24h window — single-use would break
+  retry-after-broker-failure without a defined exactly-once story.
+- Verification: full `tests/solstice/` **693 passed**; routes brokerage
+  gate+admission **13 passed**; ship-3.12 focused **123 passed**; ruff /
+  silent-359 / bandit (one pre-existing Low, gate-accepted) / truth-227
+  / openapi-380 green. 3/3 new regression tests fail pre-fix, pass
+  post-fix.

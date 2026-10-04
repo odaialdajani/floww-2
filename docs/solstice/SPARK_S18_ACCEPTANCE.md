@@ -79,11 +79,17 @@ S1–S3 codes: `STORE_UNAVAILABLE`, `POLICY_STORE_UNAVAILABLE`,
   CREATION and re-pass them at VERIFICATION (placement), so an approval
   minted before expiry, a policy narrowing, or an ack removal cannot ride
   out its validity window — expired/near-expiry/unacknowledged option
-  orders refuse even when armed. Malformed OSI refuses BAD_CONTRACT.
-  Equity (non-OSI) symbols skip the option expiry gate (no expiry
-  concept; disclosed limitation — tightening the equity path is a Nav
-  production-behavior decision). Full-enforcement-when-UNSET is likewise
-  a production-behavior change — needs Nav/your sign-off, not a lane edit.
+  orders refuse even when armed. The fingerprint binds account, symbol,
+  side, quantity, limit, stop AND time in force (stop/TIF tampering
+  refuses); malformed OSI refuses BAD_CONTRACT; option approvals
+  require an explicit limit price (no market options). Equity (non-OSI)
+  symbols skip the option expiry gate (no expiry concept; disclosed
+  limitation — tightening the equity path is a Nav
+  production-behavior decision). Approval reuse across placements stays
+  operator-bounded by the ≤24h window (single-use semantics is a Nav
+  decision — retries after broker failure need a defined story first).
+  Full-enforcement-when-UNSET is likewise a production-behavior change
+  — needs Nav/your sign-off, not a lane edit.
 - Mount context you must provide (server.py, your ownership):
   1. ONE DuckDB handle shared by the admission route, the `/public/order`
      gate (`_admission_store_conn`), and `lc.register_store` — mixing
