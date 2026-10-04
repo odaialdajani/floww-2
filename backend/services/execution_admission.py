@@ -90,9 +90,24 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+# Known account-policy fields with enforcement points (S07). Anything else
+# is a probable typo for a ceiling that would otherwise silently enforce
+# nothing, so installation refuses BAD_CONTRACT. Real operator values for
+# these ceilings remain NAV-ACCOUNT external (UNSET until installed); this
+# list admits the field, it never invents a value.
+_KNOWN_POLICY_FIELDS = frozenset({
+    "max_quantity", "max_notional", "max_positions", "max_daily_loss",
+    "today", "min_entry_dte", "allow_unprotected_entry",
+    "same_day_cutoff_et", "allowed_products",
+})
+
+
 def _validate_policy_shape(policy: Any) -> tuple[bool, str]:
     if not isinstance(policy, dict):
         return False, "policy must be a dict"
+    for field in policy:
+        if field not in _KNOWN_POLICY_FIELDS:
+            return False, f"unknown policy field: {field}"
     if "max_quantity" in policy:
         try:
             if int(policy["max_quantity"]) <= 0:
@@ -975,8 +990,9 @@ def order_fingerprint(account_id: str, symbol: str, side: str,
 
 def _enforce_order_ceilings(
     conn: Any, account_id: str, quantity: Any, limit_price: Any,
+    symbol: str | None = None, instrument: str | None = None,
 ) -> dict[str, Any] | None:
-    """Policy quantity/per-unit-notional ceilings for order approvals.
+    """Policy quantity/per-unit-notional/product ceilings for order approvals.
 
     Runs at creation AND verification, so a narrowing policy (or a
     raw-ingested row minted under looser limits) cannot ride into
@@ -985,6 +1001,7 @@ def _enforce_order_ceilings(
     store/query failure refuses instead of skipping. Full
     multiplier-aware notional lives on the intent paths that carry
     vendor multipliers; here limit x quantity is the per-unit bound.
+    Product allowlist binds when symbol+instrument are known.
     Returns a refusal dict or None (pass).
     """
     pol = get_account_policy_required(conn, str(account_id or "").strip())
@@ -1018,10 +1035,20 @@ def _enforce_order_ceilings(
             if bound > float(policy["max_notional"]):
                 return {"ok": False, "reason": "RISK_NOTIONAL_EXCEEDED",
                         "detail": f"order bound {bound} exceeds max_notional "
-                                 f"{policy['max_notional']} (per-unit basis)"}
+                                  f"{policy['max_notional']} (per-unit basis)"}
         except (TypeError, ValueError):
             return {"ok": False, "reason": "RISK_FACTS_INCOMPLETE",
                     "detail": "max_notional unparseable; failing closed"}
+    allowed = policy.get("allowed_products")
+    if allowed is not None and symbol is not None and instrument is not None:
+        try:
+            products = list(allowed)
+        except TypeError:
+            return {"ok": False, "reason": "RISK_FACTS_INCOMPLETE",
+                    "detail": "allowed_products unparseable; failing closed"}
+        if str(instrument) not in products:
+            return {"ok": False, "reason": "UNSUPPORTED_PRODUCT",
+                    "detail": f"{instrument} not in allowed_products"}
     return None
 
 
@@ -1120,7 +1147,8 @@ def create_order_approval(
         return {"ok": False, "reason": auth.get("reason", "OPERATOR_UNKNOWN"),
                 "detail": "authoring operator is not authorized for this account"}
     ceilings = _enforce_order_ceilings(conn, approval["account_id"],
-                                       quantity, limit_price)
+                                       quantity, limit_price,
+                                       symbol_c, instrument)
     if ceilings is not None:
         return ceilings
     gate = _option_order_guards(conn, approval["account_id"], approval["symbol"])
@@ -1217,7 +1245,8 @@ def verify_order_approval(
     if moment > valid_until or approved_at > moment:
         return {"ok": False, "reason": "APPROVAL_INVALID", "detail": "expired"}
     ceilings = _enforce_order_ceilings(conn, str(account_id or ""),
-                                       quantity, limit_price)
+                                       quantity, limit_price,
+                                       symbol_c, instrument)
     if ceilings is not None:
         return ceilings
     gate = _option_order_guards(conn, str(account_id or ""),
