@@ -440,3 +440,210 @@ def test_r4_cancel_during_lock_wait_spends_zero():
         asyncio.run(main())
     adapter.BROKER = None
     adapter._CHAIN_CACHE.clear()
+
+
+# ── R5 (C01): committed docs fixtures are PRODUCER-TRUE ─────────────────────
+
+DOCS_FIXTURES = Path(__file__).resolve().parents[3] / \
+    "docs/solstice/r18/fixtures"
+
+
+def test_r5_partial_fixture_is_honest_and_synthetic():
+    """The published partial fixture is regenerated from the real producer:
+    synthetic stays TRUE (a hand-made fixture can never claim production
+    provenance), admitted == returned + skipped, and the skipped expiry's
+    cells are explicit nulls over the owning axes — never a contradictory
+    n_admitted=3/returned=0/skipped=1 with synthetic=false (the review's
+    census-production blocker)."""
+    d = json.loads((DOCS_FIXTURES / "partial_skipped_v1.json").read_text())
+    cov = d["coverage"]
+    assert d["synthetic"] is True
+    assert d["status"] == "partial"
+    assert cov["n_admitted"] == 3
+    assert cov["n_returned_expiries"] + cov["n_skipped_expiries"] == \
+        cov["n_admitted"]
+    assert cov["complete"] is False
+    assert cov["complete_reason"] == "SKIPPED_EXPIRIES"
+    axes = {a["expiry"] for a in d["axes"]["expiries"]}
+    skipped = {s["expiry"] for s in cov["skipped"]}
+    assert skipped <= axes
+    for name, grid in d["grids"].items():
+        cells = grid["cells"]
+        # Cells span the OWNING axes exactly: the skipped expiry keeps
+        # explicit NULL cells (honest gaps), never dropped rows.
+        assert set(cells) == axes, name
+        for exp in skipped:
+            assert all(v is None for v in cells[exp].values()), (name, exp)
+    # The digest is content-true and identity derives from it.
+    assert d["content_digest"] == compute_content_digest(d)
+    assert d["record_id"] == record_id_for_digest(d["content_digest"])
+
+
+def test_r5_all_fixtures_stay_synthetic_and_self_consistent():
+    """Every committed envelope/wrapper fixture keeps synthetic provenance
+    and digest truth — fixtures, wrappers and the index agree, and no
+    fixture claims production."""
+    names = ("complete_v1.json", "partial_skipped_v1.json",
+             "record_replay_v1.json", "record_replay_partial_v1.json")
+    envelopes = {}
+    for name in names:
+        d = json.loads((DOCS_FIXTURES / name).read_text())
+        env = d.get("envelope", d)
+        if name.startswith("record_replay"):
+            assert d["version"] == "range-records.v1"
+            assert d["integrity"] == "verified"
+        assert env["synthetic"] is True, name
+        assert env["content_schema"] == "rga-content.v3", name
+        assert env["content_digest"] == compute_content_digest(env), name
+        assert env["record_id"] == record_id_for_digest(
+            env["content_digest"]), name
+        cov = env["coverage"]
+        assert cov["n_admitted"] == (cov["n_returned_expiries"]
+                                     + cov["n_skipped_expiries"]), name
+        envelopes[name] = env
+    # Wrapper envelopes are byte-identical to the bare fixtures.
+    assert envelopes["record_replay_v1.json"] == \
+        envelopes["complete_v1.json"]
+    assert envelopes["record_replay_partial_v1.json"] == \
+        envelopes["partial_skipped_v1.json"]
+    # The index lists both records as synthetic with verified integrity.
+    idx = json.loads((DOCS_FIXTURES / "record_index_v1.json").read_text())
+    assert idx["version"] == "range-records.v1" and idx["status"] == "ok"
+    assert idx["n_returned"] == 2
+    for row in idx["rows"]:
+        assert row["synthetic"] is True
+        assert row["integrity"] == "verified"
+    # Refusals stay typed and versioned.
+    ref = json.loads((DOCS_FIXTURES / "record_replay_refused_v1.json")
+                     .read_text())
+    assert ref["status"] == "refused" and ref["reason"] == "NO_RECORD"
+    assert ref["version"] == "range-records.v1"
+    rev = json.loads((DOCS_FIXTURES / "refused_reversed_v1.json").read_text())
+    assert rev["status"] == "refused" and \
+        rev["refusals"] == ["REVERSED_WINDOW"]
+
+
+def test_r5_generator_is_idempotent(tmp_path):
+    """The committed generator reproduces the frozen fixture bytes exactly
+    from the current producer — a materially changed producer shows up as
+    a hash diff instead of silent fixture drift."""
+    import hashlib
+    import subprocess
+
+    repo = Path(__file__).resolve().parents[3]
+    staging = tmp_path / "fixtures"
+    staging.mkdir()
+    gen = repo / "backend/tests/solstice/regen_r18_docs_fixtures.py"
+    proc = subprocess.run(
+        [sys.executable, str(gen), str(staging)],
+        capture_output=True, text=True, cwd=repo)
+    assert proc.returncode == 0, proc.stderr[-2000:]
+    hashes = json.loads(proc.stdout[:proc.stdout.index("}") + 1])
+    docs_dir = DOCS_FIXTURES
+    for name, digest in hashes.items():
+        current = hashlib.sha256((docs_dir / name).read_bytes()).hexdigest()
+        assert digest == current, \
+            f"{name}: committed fixture bytes diverged from the producer"
+
+
+# ── R6 (C06): delta/volume exclusions stay visible beside finite siblings ──
+
+def _chain_with_defects():
+    """Sibling-finite chain carrying one contract per silent-exclusion
+    class the vendor-gamma kernels drop WITHOUT their own counter."""
+    chain = json.loads((FIXTURES / "chain_complete.json").read_text())
+    contracts = list(chain["contracts"])
+    base = dict(contracts[0])
+
+    def with_expiry(exp):
+        c = dict(base)
+        c["expiry"] = exp
+        c["strike"] = 595.0
+        c["type"] = "call"
+        return c
+
+    no_gamma = with_expiry("2026-10-26")
+    no_gamma["gamma"] = None            # vendor gamma absent
+    no_oi = with_expiry("2026-10-26")
+    no_oi["oi"] = 0                     # OI missing/nonpositive
+    bad_strike = with_expiry("2026-10-26")
+    bad_strike["strike"] = 0            # strike invalid
+    no_expiry = with_expiry("")         # expiry absent
+    contracts += [no_gamma, no_oi, bad_strike, no_expiry]
+    chain["contracts"] = contracts
+    return chain
+
+
+def test_r6_missing_gamma_exclusion_stays_visible():
+    """The delta/volume kernels silently drop missing-vendor-gamma
+    contracts; the population must count them (review: 'exclusions hidden
+    behind sibling finite cells/status ok') and keep the metric partial —
+    finite sibling cells never admit the metric."""
+    env = _env(**{"contracts": _chain_with_defects()["contracts"]})
+    for name in ("delta_weighted", "volume"):
+        grid = env["grids"][name]
+        pop = grid["population"]
+        assert pop["gamma_missing"] == 1, (name, pop)
+        # Sibling cells are still finite — but the exclusion is VISIBLE
+        # and the metric stays partial/not-admitted (never 'ok').
+        assert grid["status"] == "partial", (name, grid["status"])
+        assert grid["metric_admitted"] is False, name
+        assert name in env["metrics"]["partial"], name
+        assert name not in env["metrics"]["admitted"], name
+
+
+def test_r6_oi_and_strike_and_expiry_exclusions_visible():
+    """Missing OI (delta kernel only), invalid strike and absent expiry
+    are kernel-order-faithful first-skip counters in both populations."""
+    env = _env(**{"contracts": _chain_with_defects()["contracts"]})
+    dw = env["grids"]["delta_weighted"]["population"]
+    vol = env["grids"]["volume"]["population"]
+    # Delta kernel consumes OI before gamma/delta: the no-OI contract is
+    # oi_missing; volume has no OI requirement at all.
+    assert dw["oi_missing_or_nonpositive"] == 1, dw
+    assert "oi_missing_or_nonpositive" not in vol, vol
+    # The no-OI contract never counts as gamma_missing/missing_delta.
+    assert dw["gamma_missing"] == 1, dw
+    assert dw["strike_invalid"] == 1, dw
+    assert dw["expiry_missing"] == 1, dw
+    # Volume kernel order: volume -> gamma -> strike -> expiry.
+    assert vol["strike_invalid"] == 1, vol
+    assert vol["expiry_missing"] == 1, vol
+    # Both stay partial despite finite siblings.
+    for name in ("delta_weighted", "volume"):
+        assert env["grids"][name]["metric_admitted"] is False, name
+
+
+def test_r6_raw_oi_bs_mirror_unaffected_by_missing_vendor_gamma():
+    """A contract with iv/T but no vendor gamma is USABLE to the BS raw
+    surface (the kernel computes gamma from iv) — the vendor-gamma mirrors
+    never contaminate the raw_oi population (C11 raw-BS truth preserved)."""
+    env = _env(**{"contracts": _chain_with_defects()["contracts"]})
+    raw = env["grids"]["raw_oi"]["population"]
+    assert "gamma_missing" not in raw, raw
+    # The BS mirror counts its own kernel-order exclusions only: the
+    # missing-gamma/no-OI/bad-strike/no-expiry contracts fall to their
+    # BS first-skip reasons (strike_invalid for bad_strike, etc.).
+    assert raw["strike_invalid"] == 1, raw
+    assert raw["usable"] >= 1, raw
+
+
+def test_r6_mirror_matches_kernel_counters():
+    """The mirrors reproduce every kernel-reported counter exactly —
+    correspondence, not just plausibility."""
+    from services.gex_core import (
+        compute_gex_grid_delta_weighted,
+        compute_gex_grid_volume_vendor,
+    )
+    contracts = _chain_with_defects()["contracts"]
+    spot = 600.0
+    dw_k = compute_gex_grid_delta_weighted(spot, contracts)
+    vol_k = compute_gex_grid_volume_vendor(spot, contracts)
+    env = _env(**{"contracts": contracts})
+    dw = env["grids"]["delta_weighted"]["population"]
+    vol = env["grids"]["volume"]["population"]
+    for key in ("usable", "missing_delta", "invalid_delta", "invalid_mult",
+                "quarantined", "invalid_type"):
+        assert dw[key] == dw_k.get(key), (key, dw[key], dw_k.get(key))
+    for key in ("usable", "quarantined", "invalid_mult", "invalid_type"):
+        assert vol[key] == vol_k.get(key), (key, vol[key], vol_k.get(key))

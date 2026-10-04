@@ -37,7 +37,7 @@
    "source": "public-mid"
   }
  },
- "content_digest": "3ae0977fcd69e869ac8e3a117536920f966c5ba57fe8f4f33c8094e36a4c0bb6",
+ "content_digest": "5abb7490bbf7feb0daebeb2c4eee84b7f82f4faf69bf52411143ccb3716e43c5",
  "content_schema": "rga-content.v3",
  "coverage": {
   "attempt_cap": 3,
@@ -137,12 +137,16 @@
    "n_available": 6,
    "n_cells": 6,
    "population": {
+    "expiry_missing": 0,
+    "gamma_missing": 0,
     "input_contracts": 12,
     "invalid_delta": 0,
     "invalid_mult": 0,
     "invalid_type": 0,
     "missing_delta": 0,
+    "oi_missing_or_nonpositive": 0,
     "quarantined": 0,
+    "strike_invalid": 0,
     "usable": 12
    },
    "quarantined": 0,
@@ -216,11 +220,14 @@
    "n_available": 6,
    "n_cells": 6,
    "population": {
+    "expiry_missing": 0,
+    "gamma_missing": 0,
     "input_contracts": 12,
     "invalid_mult": 0,
     "invalid_type": 0,
     "missing_volume": 0,
     "quarantined": 0,
+    "strike_invalid": 0,
     "usable": 12
    },
    "quarantined": 0,
@@ -348,7 +355,7 @@
   "max_dte": 60,
   "min_dte": 14
  },
- "record_id": "rga1-3ae0977fcd69e869ac8e3a11",
+ "record_id": "rga1-5abb7490bbf7feb0daebeb2c",
  "refusals": [],
  "status": "ok",
  "symbol": "SPY",

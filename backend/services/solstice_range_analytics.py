@@ -359,6 +359,120 @@ def _volume_missing_population(contracts: list[dict[str, Any]]) -> dict[str, int
     return {"missing_volume": missing}
 
 
+def _delta_vendor_population(contracts: list[dict[str, Any]]) -> dict[str, int]:
+    """R18-C12 (C06): kernel-CORRESPONDING population for delta_weighted.
+
+    Mirrors ``compute_gex_grid_delta_weighted``'s EXACT per-contract
+    filter order — quarantined -> oi -> vendor gamma -> delta -> strike ->
+    expiry -> multiplier -> type — counting only the first failing
+    reason. The kernel itself reports missing/invalid delta, multiplier,
+    quarantine and type counters but silently drops missing OI, missing
+    vendor gamma, invalid strikes and absent expiries; those exclusions
+    stay VISIBLE here (and drive partiality) even when sibling cells are
+    finite (review 5979463755: 'exclusions hidden behind sibling finite
+    cells/status ok').
+    """
+    from services.gex_core import (
+        _grid_abs_delta,
+        _resolve_mult,
+        _vendor_gamma,
+        option_type_sign,
+        safe_float_or_none,
+    )
+
+    pop = {"input_contracts": len(contracts or []), "usable": 0,
+           "quarantined": 0, "oi_missing_or_nonpositive": 0,
+           "gamma_missing": 0, "missing_delta": 0, "invalid_delta": 0,
+           "strike_invalid": 0, "expiry_missing": 0, "invalid_mult": 0,
+           "invalid_type": 0}
+    for c in contracts or []:
+        if not isinstance(c, dict):
+            pop["invalid_type"] += 1
+            continue
+        if c.get("adjusted") or c.get("nonstandard"):
+            pop["quarantined"] += 1
+            continue
+        oi = safe_float_or_none(c.get("oi", c.get("open_interest")))
+        if oi is None or oi <= 0:
+            pop["oi_missing_or_nonpositive"] += 1
+            continue
+        if _vendor_gamma(c) is None:
+            pop["gamma_missing"] += 1
+            continue
+        ad, exclusion = _grid_abs_delta(c.get("delta"))
+        if ad is None:
+            pop["invalid_delta" if exclusion == "invalid" else
+                "missing_delta"] += 1
+            continue
+        strike = safe_float_or_none(c.get("strike"))
+        if strike is None or strike <= 0:
+            pop["strike_invalid"] += 1
+            continue
+        if not (c.get("expiry") or ""):
+            pop["expiry_missing"] += 1
+            continue
+        if _resolve_mult(c) is None:
+            pop["invalid_mult"] += 1
+            continue
+        if option_type_sign(c.get("type")) is None:
+            pop["invalid_type"] += 1
+            continue
+        pop["usable"] += 1
+    return pop
+
+
+def _volume_vendor_population(contracts: list[dict[str, Any]]) -> dict[str, int]:
+    """R18-C12 (C06): kernel-CORRESPONDING population for the volume grid.
+
+    Mirrors ``compute_gex_grid_volume_vendor``'s EXACT per-contract filter
+    order — quarantined -> session volume -> vendor gamma -> strike ->
+    expiry -> multiplier -> type. The kernel silently drops missing-volume
+    (mirrored since C11), missing-gamma, invalid-strike and absent-expiry
+    contracts; every exclusion stays visible beside finite sibling cells.
+    The volume kernel has no OI requirement — ``oi_missing`` never appears.
+    """
+    from services.gex_core import (
+        _resolve_mult,
+        _vendor_gamma,
+        option_type_sign,
+        safe_float_or_none,
+    )
+
+    pop = {"input_contracts": len(contracts or []), "usable": 0,
+           "quarantined": 0, "missing_volume": 0, "gamma_missing": 0,
+           "strike_invalid": 0, "expiry_missing": 0, "invalid_mult": 0,
+           "invalid_type": 0}
+    for c in contracts or []:
+        if not isinstance(c, dict):
+            pop["invalid_type"] += 1
+            continue
+        if c.get("adjusted") or c.get("nonstandard"):
+            pop["quarantined"] += 1
+            continue
+        vol = safe_float_or_none(c.get("volume", c.get("V")))
+        if vol is None or vol <= 0:
+            pop["missing_volume"] += 1
+            continue
+        if _vendor_gamma(c) is None:
+            pop["gamma_missing"] += 1
+            continue
+        strike = safe_float_or_none(c.get("strike"))
+        if strike is None or strike <= 0:
+            pop["strike_invalid"] += 1
+            continue
+        if not (c.get("expiry") or ""):
+            pop["expiry_missing"] += 1
+            continue
+        if _resolve_mult(c) is None:
+            pop["invalid_mult"] += 1
+            continue
+        if option_type_sign(c.get("type")) is None:
+            pop["invalid_type"] += 1
+            continue
+        pop["usable"] += 1
+    return pop
+
+
 def build_range_envelope(
     *,
     symbol: str,
@@ -419,27 +533,15 @@ def build_range_envelope(
         # contract counted as admitted, and absent vendor gamma could zero
         # `usable` against finite BS cells. input_contracts stays the RAW
         # contract count; unknown counts remain unknown, never cell counts.
-        _dw_k = kernels["delta_weighted"][1]
-        _vol_k = kernels["volume"][1]
         populations: dict[str, dict[str, Any]] = {
             "raw_oi": _bs_population(contracts, spot, symbol),
-            "delta_weighted": {
-                "input_contracts": len(contracts),
-                "usable": int(_dw_k.get("usable") or 0),
-                "missing_delta": int(_dw_k.get("missing_delta") or 0),
-                "invalid_delta": int(_dw_k.get("invalid_delta") or 0),
-                "invalid_mult": int(_dw_k.get("invalid_mult") or 0),
-                "quarantined": int(_dw_k.get("quarantined") or 0),
-                "invalid_type": int(_dw_k.get("invalid_type") or 0),
-            },
-            "volume": {
-                "input_contracts": len(contracts),
-                "usable": int(_vol_k.get("usable") or 0),
-                **_volume_missing_population(contracts),
-                "quarantined": int(_vol_k.get("quarantined") or 0),
-                "invalid_mult": int(_vol_k.get("invalid_mult") or 0),
-                "invalid_type": int(_vol_k.get("invalid_type") or 0),
-            },
+            # R18-C12 (C06): kernel-order mirrors — every silent skip of
+            # the vendor-gamma kernels (missing OI/gamma/strike/expiry/
+            # volume) stays visible and drives partiality even when
+            # sibling cells are finite; the kernel-reported counters
+            # reproduce exactly (test_r6_mirror_matches_kernel_counters).
+            "delta_weighted": _delta_vendor_population(contracts),
+            "volume": _volume_vendor_population(contracts),
             "window": {"input_contracts": 0, "usable": 0},
         }
     else:
