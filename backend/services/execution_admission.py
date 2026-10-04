@@ -587,7 +587,8 @@ def _stored_approval_row(conn: Any, approval_id: str) -> dict[str, Any] | None:
     try:
         ensure_admission_tables(conn)
         row = conn.execute(
-            "SELECT approval_json, revoked FROM approvals_v1 "
+            "SELECT approval_json, revoked, intent_hash, account_id, scope, "
+            "approved_by, valid_until, approved_at FROM approvals_v1 "
             "WHERE approval_id = ?", [approval_id]).fetchone()
     except Exception:
         return None
@@ -599,6 +600,14 @@ def _stored_approval_row(conn: Any, approval_id: str) -> dict[str, Any] | None:
         return None
     if not isinstance(rec, dict):
         return None
+    if len(row) > 7:
+        for field, column in (("intent_hash", row[2]),
+                              ("account_id", row[3]), ("scope", row[4]),
+                              ("approved_by", row[5]),
+                              ("valid_until", row[6]),
+                              ("approved_at", row[7])):
+            if rec.get(field) != column:
+                return None
     rec["revoked"] = bool(row[1]) if len(row) > 1 else bool(rec.get("revoked"))
     rec["approval_id"] = approval_id
     return rec
@@ -1195,7 +1204,8 @@ def verify_order_approval(
     try:
         ensure_admission_tables(conn)
         row = conn.execute(
-            "SELECT approval_json, revoked FROM approvals_v1 "
+            "SELECT approval_json, revoked, intent_hash, account_id, scope, "
+            "approved_by, valid_until, approved_at FROM approvals_v1 "
             "WHERE approval_id = ?", [approval_id]).fetchone()
     except Exception:
         return {"ok": False, "reason": "APPROVAL_STORE_UNAVAILABLE"}
@@ -1209,6 +1219,17 @@ def verify_order_approval(
         return {"ok": False, "reason": "APPROVAL_NOT_STORED"}
     if bool(row[1]) if len(row) > 1 else bool(rec.get("revoked")):
         return {"ok": False, "reason": "APPROVAL_INVALID", "detail": "revoked"}
+    if len(row) > 7:
+        # S08: stored columns must agree with the stored payload — a
+        # same-ID raw-row alteration under either side refuses instead
+        # of verifying against a half-tampered authority.
+        bound = (("intent_hash", row[2]), ("account_id", row[3]),
+                 ("scope", row[4]), ("approved_by", row[5]),
+                 ("valid_until", row[6]), ("approved_at", row[7]))
+        for field, column in bound:
+            if rec.get(field) != column:
+                return {"ok": False, "reason": "APPROVAL_INVALID",
+                        "detail": "stored row diverges from stored payload"}
     if rec.get("scope") != "order-entry" or rec.get("account_id") != str(account_id or "").strip():
         return {"ok": False, "reason": "APPROVAL_INVALID", "detail": "binding mismatch"}
     symbol_c = str(symbol or "").upper().strip()
