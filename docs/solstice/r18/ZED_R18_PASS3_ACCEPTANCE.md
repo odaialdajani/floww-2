@@ -1,6 +1,6 @@
 # R18 stored replay + Lodestar — combined engineering HOLD
 
-Current tested candidate **`4bc20b69c599535a1c4e80fa21a5c62357e4284c`**. Consumer source `8810877e246b011918d1a0de120daae45ab57dbe`, research-boundary fix `67d697e20cf7c17ba7e2614f234eff3f07235da8`, scroll/menu fixes `c0747043155ba89fd08db46d22c361bf8fdd6fa5` / `9b9b1887e5d88c2ef11d7471beb79e27afe30272`. The later receipt is documentation/evidence only; exact SHA and hosted closure are recorded on PR104, not inferred.
+Current tested candidate **`4bc20b69c599535a1c4e80fa21a5c62357e4284c`**. Consumer source `8810877e246b011918d1a0de120daae45ab57dbe`, research-boundary fix `67d697e20cf7c17ba7e2614f234eff3f07235da8`, scroll/menu fixes `c0747043155ba89fd08db46d22c361bf8fdd6fa5` / `9b9b1887e5d88c2ef11d7471beb79e27afe30272`. Receipt d8078bad is documentation/evidence only. Its exact hosted CI/CD37201832931 printed7390pass/38skip at14m50 but failed the15m step deadline; Docker skipped, frontend/Ruff succeeded. A subsequent material CI budget repair grants20m full-suite completion while preserving45m job/per-test120s/assertions/coverage/filter/fail-on-error. Application/source bytes remain identical; new exact SHA/hosted results are recorded in PR104 closure, not inferred or labelled green from test counts.
 
 | Provenance | Exact identity / disposition |
 |---|---|

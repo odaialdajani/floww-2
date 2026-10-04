@@ -93,7 +93,10 @@ jobs:
           bandit -r . --severity-level medium -q --exclude ./.venv,./tests --skip B101,B108,B301,B310,B313,B314,B324,B604,B608,B614,B615
 
       - name: Run tests with coverage
-        timeout-minutes: 15
+        # R18's full suite printed 7390 passes at 14m50s, then the old 15m
+        # step expired before completion. Keep a bounded cleanup/coverage margin;
+        # the 45m job ceiling and pytest per-test timeout remain unchanged.
+        timeout-minutes: 20
         working-directory: ./backend
         env:
           MONGO_URL: mongodb://localhost:27017
