@@ -568,3 +568,57 @@ def test_inventory_counts_unique_approvals_once():
         assert body["approvals"]["n_revoked"] == 1
     finally:
         conn.close()
+
+
+def _valid_intent():
+    return {
+        "intent_version": "execution-intent.v1",
+        "ticker": "SPY",
+        "contract": {
+            "osi": "SPY260904C00760000",
+            "expiry": "2026-09-04",
+            "option_type": "CALL",
+            "strike_exact": "760.00",
+            "multiplier": "100",
+            "multiplier_provenance": "vendor-instrument",
+        },
+        "side": "BUY",
+        "open_close": "OPEN",
+        "quantity": 1,
+        "limit_price": "3.15",
+        "tick": "0.05",
+        "account_id": "TEST-ACCT",
+        "venue": "PUBLIC",
+        "cash_margin_choice": "CASH",
+        "session_policy": {"freshness_s": 30},
+        "risk_policy_version": "research_barriers.v1",
+        "execution_owner": "FLOWW_BACKEND",
+    }
+
+
+def _valid_ctx():
+    from datetime import UTC, datetime
+
+    return {
+        "quotes": {"bid": "3.10", "ask": "3.20", "bid_ts": "2026-10-02T14:59:40+00:00",
+                   "ask_ts": "2026-10-02T14:59:41+00:00"},
+        "now": datetime(2026, 10, 2, 15, 0, tzinfo=UTC),
+        "account": {"entitlement": "verified"},
+        "supported_expiries": ["2026-09-04", "2026-12-18"],
+        "supported_products": ["OPTION", "EQUITY"],
+    }
+
+
+def test_osi_mismatch_refuses_not_exact():
+    import services.public_execution_lifecycle as lc
+
+    assert lc.validate_intent(_valid_intent(), _valid_ctx()) == (True, "ok")
+    bad_date = _valid_intent()
+    bad_date["contract"] = dict(bad_date["contract"], osi="SPY261218C00760000")
+    assert lc.validate_intent(bad_date, _valid_ctx()) == (False, "BAD_CONTRACT")
+    bad_type = _valid_intent()
+    bad_type["contract"] = dict(bad_type["contract"], osi="SPY260904P00760000")
+    assert lc.validate_intent(bad_type, _valid_ctx()) == (False, "BAD_CONTRACT")
+    bad_strike = _valid_intent()
+    bad_strike["contract"] = dict(bad_strike["contract"], osi="SPY260904C00761000")
+    assert lc.validate_intent(bad_strike, _valid_ctx()) == (False, "BAD_CONTRACT")

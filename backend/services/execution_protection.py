@@ -16,12 +16,14 @@ a safe distance. Assignment/exercise exposure is disclosed, never priced.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
 PROTECTION_VERSION = "execution-protection.v1"
 ET = ZoneInfo("America/New_York")
+_CUTOFF_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
 __all__ = [
     "PROTECTION_VERSION",
@@ -94,7 +96,11 @@ def entry_expiry_guard(
     except (TypeError, ValueError):
         return {"ok": False, "reason": "GUARD_UNCONFIGURED",
                 "version": PROTECTION_VERSION}
-    dte = (exp - moment.date()).days
+    # DTE is measured in exchange (ET) calendar days, not UTC days: the
+    # 00:00–04:00 UTC window belongs to the prior ET session, and a UTC
+    # date would undercount DTE there (fail-open direction). ET is the
+    # conservative, correct clock.
+    dte = (exp - moment.astimezone(ET).date()).days
     if dte < 0:
         return {"ok": False, "reason": "EXPIRY_INVALID",
                 "version": PROTECTION_VERSION}
@@ -104,6 +110,12 @@ def entry_expiry_guard(
                           "exposure unresolved", "version": PROTECTION_VERSION}
     if dte == 0:
         cutoff = str(policy.get("same_day_cutoff_et") or "13:00")
+        # A malformed cutoff string-compares unpredictably (fail-open), so
+        # it refuses instead of guessing the operator's intent.
+        if not _CUTOFF_RE.match(cutoff):
+            return {"ok": False, "reason": "GUARD_UNCONFIGURED",
+                    "detail": f"malformed same_day_cutoff_et {cutoff!r}",
+                    "version": PROTECTION_VERSION}
         if moment.astimezone(ET).strftime("%H:%M") >= cutoff:
             return {"ok": False, "reason": "EXPIRY_TOO_NEAR",
                     "detail": f"past same-day cutoff {cutoff} ET",

@@ -45,6 +45,28 @@ FRESHNESS_DEFAULT_S = 30
 
 _OSI_RE = re.compile(r"^[A-Z0-9\.]{1,12}(\d{6})([CP])(\d{8})$")
 
+
+def _osi_matches_contract(osi: str, expiry: str, option_type: str, strike_exact: str) -> bool:
+    """Cross-check the OSI symbol against the declared exact contract.
+
+    The OSI embeds expiry date, call/put flag and strike (×1000); each must
+    equal the separately declared fields, or the contract is not exact.
+    """
+    match = _OSI_RE.match(osi)
+    if match is None:
+        return False
+    yymmdd, cp, strike8 = match.group(1), match.group(2), match.group(3)
+    if f"20{yymmdd[:2]}-{yymmdd[2:4]}-{yymmdd[4:6]}" != expiry:
+        return False
+    if (cp == "C") != (option_type == "CALL"):
+        return False
+    try:
+        if Decimal(strike8) != Decimal(str(strike_exact).strip()) * 1000:
+            return False
+    except (InvalidOperation, ValueError, AttributeError):
+        return False
+    return True
+
 LIFECYCLE_DDL = """
     CREATE TABLE IF NOT EXISTS execution_intents_v1 (
         intent_id VARCHAR PRIMARY KEY, intent_hash VARCHAR, ticker VARCHAR,
@@ -289,6 +311,10 @@ def store_approval(approval: dict[str, Any], operator: str) -> dict[str, Any]:
     if prior is not None and prior.get("revoked") is True:
         # A revoked approval is never resurrected by re-storing: revocation wins.
         return dict(prior)
+    if prior is not None and any(
+            approval.get(field) != prior.get(field)
+            for field in ("intent_hash", "account_id", "scope")):
+        raise ValueError("approval_id bound to a different intent/account/scope")
     row = dict(approval)
     row["approval_id"] = approval_id
     row["revoked"] = False
@@ -683,6 +709,9 @@ def validate_intent(intent: dict[str, Any], ctx: dict[str, Any]) -> tuple[bool, 
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", expiry):
         return False, "BAD_CONTRACT"
     if option_type not in ("CALL", "PUT"):
+        return False, "BAD_CONTRACT"
+    if not _osi_matches_contract(
+            osi.upper(), expiry, option_type, str(contract.get("strike_exact") or "")):
         return False, "BAD_CONTRACT"
     try:
         strike = _money(contract.get("strike_exact"), "strike_exact")

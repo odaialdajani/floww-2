@@ -30,6 +30,7 @@ __all__ = [
     "OPERATOR_REGISTRY_VERSION",
     "OPERATOR_DDL",
     "register_operator",
+    "remove_operator",
     "authorize_operator",
     "list_operators",
 ]
@@ -75,6 +76,31 @@ def register_operator(
         return {"ok": False, "reason": "OPERATOR_STORE_UNAVAILABLE"}
     return {"ok": True, "operator_id": str(operator_id),
             "allowed_accounts": accounts}
+
+
+def remove_operator(conn: Any, operator_id: str) -> dict[str, Any]:
+    """Remove an operator binding (durable delete).
+
+    Unknown IDs refuse OPERATOR_UNKNOWN (never a silent no-op success);
+    after removal the operator authorizes as UNKNOWN everywhere. There
+    is no memory copy in this registry, so nothing else needs purging.
+    """
+    if conn is None:
+        return {"ok": False, "reason": "STORE_UNAVAILABLE"}
+    if not str(operator_id or "").strip():
+        return {"ok": False, "reason": "OPERATOR_UNKNOWN"}
+    try:
+        _tables(conn)
+        row = conn.execute(
+            "SELECT operator_id FROM operators_v1 WHERE operator_id = ?",
+            [str(operator_id)]).fetchone()
+        if not row:
+            return {"ok": False, "reason": "OPERATOR_UNKNOWN"}
+        conn.execute("DELETE FROM operators_v1 WHERE operator_id = ?",
+                     [str(operator_id)])
+    except Exception:
+        return {"ok": False, "reason": "OPERATOR_STORE_UNAVAILABLE"}
+    return {"ok": True, "operator_id": str(operator_id)}
 
 
 def authorize_operator(conn: Any, operator_id: str, account_id: str) -> dict[str, Any]:
