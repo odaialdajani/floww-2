@@ -3,6 +3,7 @@ import useScreenContext from "./useScreenContext";
 import useAgentStream from "./useAgentStream";
 import {API} from "../config/api";
 import {contextIdentity} from "./contextIdentity";
+import {rangeResearchBlock} from '../lib/rangeAnalytics';
 const AgentContext=createContext(null);
 const SESSION_ENDED="floww-research-session-ended";
 export function useAgent(){return useContext(AgentContext);}
@@ -35,12 +36,17 @@ export default function AgentProvider({children}){
  },[clearSessionView]);
  const askQuestion=useCallback(async(question)=>{
   if(busy.current || ending.current || !question.trim())return;
+  const rangeBlock=rangeResearchBlock(context);
+  if(rangeBlock){setError(rangeBlock);return;}
   if(!context.ticker){setError("Open the Solstice grid or Tidehunter to ask about the current selection.");return;}
-  if(context.displayMode?.startsWith('range-') || context.rangeVersion){setError('RANGE_RESEARCH_UNAVAILABLE: the owning stored range resolver is pending; no current-chain substitute or model turn.');return;}
-  busy.current=true;setError(null);setSessionNotice(null);setProgress("Starting research");
+  busy.current=true;setError(null);setSessionNotice(context.displayMode === 'range-replay'
+   ? 'Research only · raw population and full producer integrity qualification pending. Backend resolves stored facts; no crypto/production admission or native draft permission.'
+   : null);setProgress("Starting research");
   frozen.current=JSON.parse(JSON.stringify(context));
   const epoch=historyEpoch.current;
-  try {await ask({question,ticker:frozen.current.ticker,horizon:frozen.current.dte,screen:frozen.current});}
+  const horizon=frozen.current.displayMode === 'range-replay'
+   ? `range:${frozen.current.mapQuery.min_dte}:${frozen.current.mapQuery.max_dte}` : frozen.current.dte;
+  try {await ask({question,ticker:frozen.current.ticker,horizon,screen:frozen.current});}
   finally{if(epoch===historyEpoch.current)busy.current=false;}
  },[ask,context]);
  const loadHistory=useCallback(async()=>{

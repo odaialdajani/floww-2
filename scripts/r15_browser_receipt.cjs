@@ -84,7 +84,7 @@ const server=http.createServer((req,res)=>{
   await context.route('**/*',async route=>{
    const request=route.request(),url=new URL(request.url());
    if(url.pathname==='/api/agent/ask'){
-    const asked=request.postDataJSON();lastTurn=JSON.parse(execFileSync(python,[path.join(root,'scripts/r15_fixture_answer.py'),fixturePath],{cwd:root,input:JSON.stringify(asked),encoding:'utf8',timeout:25000}));
+    const asked=request.postDataJSON();lastTurn=JSON.parse(execFileSync(python,[path.join(root,'scripts/r15_fixture_answer.py'),fixturePath,rangeTransportPath],{cwd:root,input:JSON.stringify(asked),encoding:'utf8',timeout:25000}));
     receipt.research.push({selector:asked.screen,turn_id:lastTurn.turn_id,fact_ids:lastTurn.answer.facts.map(f=>f.id),draft_id:lastTurn.answer.plan_draft.draft_id,executable:lastTurn.answer.plan_draft.executable});
     return route.fulfill({json:{turn_id:lastTurn.turn_id,status:'completed'}});
    }
@@ -162,6 +162,11 @@ const server=http.createServer((req,res)=>{
   for(const width of [1440,390])await capture('range-replay',width);
   corruptRange=true;await page.getByRole('button',{name:'Next frame',exact:true}).click();await page.getByText(/Stored range replay unavailable.*CORRUPT_PAYLOAD/).waitFor();assert.strictEqual(await page.getByRole('grid').count(),0,'Corrupt replay must clear owning grid');
   corruptRange=false;await page.getByLabel('Stored range record').selectOption(rangeComplete.record_id);await page.getByText(/Stored frame 2\/2/).waitFor();await page.getByRole('grid').waitFor();
+  await page.getByRole('button',{name:/^590 · 2026-10-26/}).click();const rangeAnswer=page.waitForResponse(r=>r.url().includes('/api/agent/turn/') && r.request().method()==='GET');
+  await page.getByTestId('range-ask-lodestar-btn').click();await page.getByTestId('range-ask-lodestar-q-0').click();await rangeAnswer;
+  const rangeResearch=page.getByRole('dialog',{name:'Lodestar research'});await rangeResearch.getByRole('article',{name:'Research answer for SPY'}).waitFor();
+  assert(lastTurn.answer.facts.length>0 && lastTurn.answer.facts.every(f=>f.snapshot_id===rangeComplete.record_id && f.status==='degraded'));assert.strictEqual(lastTurn.answer.plan_draft.contract,null);assert.strictEqual(lastTurn.answer.plan_draft.executable,false);assert(lastTurn.answer.plan_draft.blockers.includes('RANGE_CONTRACT_UNAVAILABLE'));
+  await rangeResearch.getByRole('button',{name:'Close',exact:true}).click();receipt.checks.push('range Lodestar uses same research route and actual stored-cell resolver; recorded degraded facts/digest/context; no legacy/current substitution, exact contract, native brief or provider turn');
   const liveReads=receipt.rangeReads.length;await page.getByRole('button',{name:'Live',exact:true}).click();assert.strictEqual(receipt.rangeReads.length,liveReads,'Live exit must not fetch current chain');assert.strictEqual(await page.getByRole('grid').count(),0);
   assert(receipt.rangeStoredReads.every(r=>r.method==='GET'));receipt.checks.push('separate stored rga1 namespace: actual offline stored-route fixture; index/select/play/pause/speed/step/scrub; partial/null; corrupt frame clears; deliberate Live exit does not refetch; qualification pending');
   await page.getByRole('button',{name:'Return to current map',exact:true}).click();await page.getByLabel('Canvas layout').waitFor();

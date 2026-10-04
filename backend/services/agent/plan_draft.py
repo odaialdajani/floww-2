@@ -46,7 +46,8 @@ def build_plan_draft(answer, turn_id, *, now=None) -> TradePlanDraft:
     if isinstance(selector, dict) and selector.get("osi") and complete:
         complete = selector["osi"] == ledger["OSI"]["value"]
     contract = None
-    if complete:
+    range_replay = context.get("displayMode") == "range-replay"
+    if complete and not range_replay:
         contract = {k: ledger.get(label, {}).get("value") for k, label in (
             ("osi", "OSI"), ("strike", "strike"), ("expiry", "expiry"), ("type", "type"),
             ("snapshot_id", "owning snapshot"), ("multiplier", "multiplier"),
@@ -63,7 +64,9 @@ def build_plan_draft(answer, turn_id, *, now=None) -> TradePlanDraft:
                 "EXECUTION_OWNER_UNSET", "ACCOUNT_UNSET", "AUTHENTICATED_INTENT_APPROVAL_REQUIRED"]
     if contract is None:
         blockers.insert(0, "EXACT_CONTRACT_REQUIRED")
-    if context.get("displayMode") == "replay":
+    if range_replay:
+        blockers.insert(0, "RANGE_CONTRACT_UNAVAILABLE")
+    if context.get("displayMode") in {"replay", "range-replay"}:
         blockers.insert(0, "REPLAY_NOT_EXECUTABLE")
     draft: TradePlanDraft = dict(
         version="trade-plan-draft.v1", correlation_id=turn_id,
@@ -72,7 +75,9 @@ def build_plan_draft(answer, turn_id, *, now=None) -> TradePlanDraft:
         selection=copy.deepcopy({k: context.get(k) for k in (
             "page", "ticker", "snapshotId", "selectedWall", "selectedStrike", "selectedExpiry",
             "metric", "overlayMetric", "activePane", "displayMode", "mapVersion",
-                        "observedAt", "sourceWorkspace", "sourceObservedAt",
+            "observedAt", "sourceWorkspace", "sourceObservedAt",
+            "rangeVersion", "rangeRecordId", "rangeDigest", "rangeMetric", "rangeBasis", "rangeStatus",
+            "provider", "formula", "mapQuery", "mapStrikes", "mapExpiries",
         )}),
         contract=contract, evidence_ids=evidence_ids,
         observation_ids=sorted({f["snapshot_id"] for f in facts if f.get("snapshot_id")}),

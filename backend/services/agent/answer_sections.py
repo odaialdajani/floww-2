@@ -82,7 +82,9 @@ def _reference(item):
 def _entry(name, snapshot, price_only=False):
     facts = [item for item in snapshot.get("facts", [])
              if item.get("ticker") == snapshot["ticker"]
-             and item.get("metric") in ({"Underlying price"} if price_only else METRICS[name])]
+             and (item.get("metric") in ({"Underlying price"} if price_only else METRICS[name])
+                  or not price_only and name == "Structure" and snapshot.get("range_observation")
+                  and item.get("metric", "").startswith("Recorded range cell "))]
     text = "; ".join(
         f"{item['metric']}: {_value_text(item['value'])} {item['unit']} "
         f"({item['status']}; observed {item.get('event_time') or 'time unknown'}; scope {item.get('horizon', 'all')})"

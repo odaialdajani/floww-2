@@ -3862,8 +3862,8 @@ try:
 
     @app.on_event("startup")
     async def startup_research():
-        # Composition owns the broad application dependencies. Research only
-        # receives these three fixed, copy-only read functions.
+        # Composition owns dependencies; research receives fixed cache/stored
+        # read functions, never a browser-selected provider or execution surface.
         import copy
 
         from routes.analytics import _cache as chain_cache
@@ -3882,6 +3882,11 @@ try:
             conn = getattr(duckdb_engine, "_conn", None)
             return recorded_display(replay_snapshot(conn, snapshot_id), ticker, snapshot_id) if conn is not None else None
 
+        def read_recorded_range(ticker, record_id):
+            from services.heatmap_history import replay_range_envelope
+            conn = getattr(duckdb_engine, "_conn", None)
+            return replay_range_envelope(conn, record_id) if conn is not None else None
+
         def read_alerts(ticker):
             from services.research_data_seam import stored_research_alerts
             return stored_research_alerts(duckdb_engine.query_strict, ticker)
@@ -3893,7 +3898,8 @@ try:
         try:
             repository = AgentRepository(db)
             await repository.initialize()
-            reads = ResearchReads(peek_chain, peek_map, read_alerts, read_recorded_map=read_recorded_map)
+            reads = ResearchReads(peek_chain, peek_map, read_alerts, read_recorded_map=read_recorded_map,
+                                  read_recorded_range=read_recorded_range)
             from services.agent.codex_model import CodexModel
             from services.agent.spend import SpendLedger, money_units
             spending = SpendLedger(repository.budgets, cap_units=money_units(os.getenv("AGENT_DAILY_BUDGET_USD", "20")), audit_collection=db["agent_budget_audit"])

@@ -238,6 +238,7 @@ function SkylitDashboard({
   tickers = null,
 }) {
   const [localRangeOpen, setLocalRangeOpen] = useState(false);
+  const [rangeIsReplay, setRangeIsReplay] = useState(false);
   const rangeOpen = analyticalRangeOpen ?? localRangeOpen;
   const [tradeMode, setTradeMode] = useState(false);
   const [selectedCell, setSelectedCell] = useState(null);
@@ -327,7 +328,7 @@ function SkylitDashboard({
   const baseData = data && (!data.ticker || data.ticker === ticker) ? data : null;
   const displayData = replaySnap?.ticker && replaySnap.ticker !== ticker ? null : (replaySnap || baseData);
   const isReplay = Boolean(replaySnap);
-  useEffect(() => { onReplayChange?.(isReplay); }, [isReplay, onReplayChange]);
+  useEffect(() => { onReplayChange?.(isReplay || (rangeOpen && rangeIsReplay)); }, [isReplay, rangeOpen, rangeIsReplay, onReplayChange]);
   useEffect(() => () => { onReplayChange?.(false); }, [onReplayChange]);
   // R5-B: in replay every data view renders the RECORDED spot; live keeps
   // the caller-supplied spot prop exactly (never the chain-build spot).
@@ -671,7 +672,7 @@ function SkylitDashboard({
         if (onAnalyticalRangeChange) onAnalyticalRangeChange(!rangeOpen);
         else setLocalRangeOpen(!rangeOpen);
       }}>{rangeOpen ? "Return to current map" : "Analytical range · 14–60 DTE"}</button>
-      {rangeOpen ? <RangeAnalyticsWorkspace ticker={ticker} /> : <>
+      {rangeOpen ? <RangeAnalyticsWorkspace ticker={ticker} onReplayModeChange={setRangeIsReplay} /> : <>
       <PriceNodeHistory ticker={ticker} open={priceHistoryOpen} onOpenChange={setPriceHistoryOpen} />
 
       {/* 2. Control Bar */}

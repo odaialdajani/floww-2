@@ -5,10 +5,11 @@ import {usePublishScreenContext} from '../../agent/useScreenContext';
 import {admitRangeEnvelope,rangeSelectionContext,RANGE_METRICS} from '../../lib/rangeAnalytics';
 import {cellPalette,fmtK} from './SkylitHeatmapGrid';
 import RangeReplayControls from './RangeReplayControls';
+import AskLodestar from './AskLodestar';
 import './RangeAnalyticsWorkspace.css';
 
 /** An explicit non-writing analytical read; no browser Greeks, contract or permission. */
-export default function RangeAnalyticsWorkspace({ticker}) {
+export default function RangeAnalyticsWorkspace({ticker,onReplayModeChange}) {
  const [minDte,setMinDte]=useState('14'),[maxDte,setMaxDte]=useState('60');
  const [metric,setMetric]=useState('raw_oi'),[result,setResult]=useState(null),[loading,setLoading]=useState(false);
  const [selection,setSelection]=useState(null),[expanded,setExpanded]=useState(false),[follow,setFollow]=useState(false);
@@ -23,7 +24,10 @@ export default function RangeAnalyticsWorkspace({ticker}) {
   // The owning symbol invalidates every field; no automatic data/model request.
   // eslint-disable-next-line react-hooks/exhaustive-deps
  },[ticker]);
- const envelope=result?.envelope,section=envelope?.grids[metric];
+ useEffect(()=>{onReplayModeChange?.(replayMode);},[replayMode,onReplayModeChange]);
+ useEffect(()=>()=>{onReplayModeChange?.(false);},[onReplayModeChange]);
+ const candidate=result?.envelope;
+ const envelope=candidate?.symbol===ticker && candidate.query.min_dte===Number(minDte) && candidate.query.max_dte===Number(maxDte)?candidate:null,section=envelope?.grids[metric];
  const context=rangeSelectionContext(envelope,metric,selection,replayMode?'replay':'live');
  usePublishScreenContext({...context,ticker});
  const read=async()=>{
@@ -112,7 +116,8 @@ export default function RangeAnalyticsWorkspace({ticker}) {
      <h3>Evidence / scenario</h3>
      <p>{typeof selectedRaw!=='number' || selectedRaw===0?'Raw wall direction unknown.':selectedRaw>0?'Positive raw: approach from below → review rejection; from above → review bounce.':'Negative raw: approach from below → review squeeze; from above → review flush.'} Owning price confirmation is required; sign alone is not an entry or proven dealer position.</p>
      <h3>Supported contract</h3><p>RANGE_CONTRACT_UNAVAILABLE · owning OSI, contract population and quote clocks are not supplied. No current-chain substitution.</p>
-     <h3>Lodestar</h3><p>Range record research resolver pending. No legacy observation or old actionable answer is reused.</p>
+     <h3>Lodestar</h3><p>{replayMode?'Select a stored cell for research-only interpretation. Full production integrity and raw population qualification remain pending; no contract or execution permission.':'Live range reads are not persisted research evidence. Select a stored replay record first; no current-chain or old answer substitute.'}</p>
+     <AskLodestar subject={`${ticker} recorded range`} overlayMetric={metric} displayMode={replayMode?'range-replay':'range-live'} compact testId="range-ask-lodestar" starters={['Explain the recorded cells','What limits this observation?','What confirms or invalidates?']}/>
      <h3>Public route</h3><p>Backend entry unavailable. Native drafts need an exact supported contract; copied references do not activate Public.</p>
     </aside>
    </div>

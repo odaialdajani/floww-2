@@ -2,9 +2,13 @@ import React from 'react';
 import {act,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import RangeAnalyticsWorkspace from './RangeAnalyticsWorkspace';
 import useScreenContext from '../../agent/useScreenContext';
+import AgentProvider from '../../agent/AgentProvider';
+import SkylitDashboard from './SkylitDashboard';
+jest.mock('axios');
 import complete from '../../fixtures/integration/range-analytics.v1/complete.json';
 import partial from '../../fixtures/integration/range-analytics.v1/partial.json';
 const response = data => ({ok:true,json:async()=>data});
+beforeAll(()=>{Object.defineProperty(globalThis,'crypto',{value:require('crypto').webcrypto,configurable:true});});
 function Context(){const [context]=useScreenContext();return <output data-testid="range-context">{JSON.stringify(context)}</output>;}
 beforeEach(()=>{global.fetch=jest.fn(async()=>response(complete));});
 
@@ -48,6 +52,38 @@ test('query changes abort an in-flight stored frame and reject its late envelope
  const signal=global.fetch.mock.calls[1][1].signal;fireEvent.change(screen.getByLabelText('Minimum DTE'),{target:{value:'30'}});
  expect(signal.aborted).toBe(true);await act(async()=>release(response(replay(partial))));
  expect(screen.queryByRole('grid')).not.toBeInTheDocument();expect(JSON.parse(screen.getByTestId('range-context').textContent).snapshotId).toBeNull();
+});
+
+test('stored selected cell asks the existing Lodestar route with its canonical record scope, never a native contract',async()=>{
+ let asked;
+ global.fetch.mockImplementation(async (url,options)=>{
+  if(String(url).endsWith('/session'))return response({});
+  if(String(url).endsWith('/ask')){asked=JSON.parse(options.body);return response({turn_id:'range-ui-turn'});}
+  if(String(url).includes('/agent/turn/'))return response({turn_id:'range-ui-turn',status:'completed',ticker:'SPY',answer:{context:asked.screen,facts:[],plan_draft:{contract:null,executable:false}}});
+  return response(String(url).includes('/range-records/')?replay(partial):index());
+ });
+ render(<AgentProvider><RangeAnalyticsWorkspace ticker="SPY"/></AgentProvider>);await loadStored();
+ fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:partial.record_id}});await screen.findByRole('grid');
+ fireEvent.click(screen.getByRole('button',{name:/^590 · 2026-10-26/}));
+ fireEvent.click(screen.getByTestId('range-ask-lodestar-btn'));fireEvent.click(screen.getByRole('menuitem',{name:'Explain the recorded cells'}));
+ await waitFor(()=>expect(asked).toBeTruthy());
+ expect(asked).toMatchObject({horizon:'range:14:60',screen:{displayMode:'range-replay',snapshotId:partial.record_id,rangeDigest:partial.content_digest,selectedStrike:590,selectedExpiry:'2026-10-26',selectedContract:null}});
+ expect(global.fetch.mock.calls.filter(([url])=>String(url).endsWith('/ask'))).toHaveLength(1);
+ expect(global.fetch.mock.calls.some(([url])=>String(url).includes('/heatmap/') || String(url).includes('/public/'))).toBe(false);
+ await act(async()=>{});
+});
+
+test('stored replay mode reports pause ownership until deliberate Live exit',async()=>{
+ const onReplayModeChange=jest.fn();global.fetch.mockImplementation(async url=>response(String(url).includes('/range-records/')?replay(partial):index()));
+ require('axios').get.mockResolvedValue({data:{rows:[],decisions:[],snapshots:[]}});
+ render(<SkylitDashboard ticker="SPY" analyticalRangeOpen onReplayChange={onReplayModeChange}/>);
+ fireEvent.click(screen.getByRole('button',{name:'Range replay',exact:true}));
+ fireEvent.click(screen.getByRole('button',{name:'Load stored range records'}));
+ await waitFor(()=>expect(screen.getByLabelText('Stored range record').options).toHaveLength(3));
+ fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:partial.record_id}});await screen.findByRole('grid');
+ expect(onReplayModeChange.mock.calls.at(-1)).toEqual([true]);
+ fireEvent.click(screen.getByRole('button',{name:'Live',exact:true}));
+ expect(onReplayModeChange.mock.calls.at(-1)).toEqual([false]);
 });
 
 test('blank window is invalid instead of silently becoming zero DTE',async()=>{

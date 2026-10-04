@@ -8,6 +8,8 @@ from services.agent.repository import utcnow
 
 
 async def history_facts(repository, owner, current, *, closing_only=False, previous_session=False):
+    if current.get("range_observation") is not None:
+        return [], "Recorded range cell observations are not comparable with current-chain history"
     close_time = (
         required_close(datetime.fromisoformat(current["captured_at"]), previous_session=previous_session)
         if closing_only

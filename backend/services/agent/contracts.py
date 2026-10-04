@@ -150,11 +150,16 @@ def request_spec(body):
         raise ValueError("Invalid screen selection")
     validate_screen_context(screen)
     mode, overlay = screen.get("displayMode", "live"), screen.get("overlayMetric", "raw")
-    if mode not in (None, "live", "replay") or overlay not in {"raw", "delta", "activity", "session_delta_volume", "window"}:
+    range_replay = mode == "range-replay"
+    if range_replay:
+        from services.agent.range_replay import validate_selection
+
+        validate_selection(screen)
+    elif mode not in (None, "live", "replay") or overlay not in {"raw", "delta", "activity", "session_delta_volume", "window"}:
         raise ValueError("Research for this display is unavailable; unsupported surface or view")
     if (mode == "replay" or overlay != "raw" or isinstance(screen.get("selectedContract"), dict)) and screen.get("contextVersion") != 2:
         raise ValueError("Research for this display is unavailable; exact v2 observation context is required")
-    if overlay == "window" and (not isinstance(screen.get("windowBaselineId"), str) or not screen["windowBaselineId"]):
+    if not range_replay and overlay == "window" and (not isinstance(screen.get("windowBaselineId"), str) or not screen["windowBaselineId"]):
         raise ValueError("Window research is unavailable; a recorded baseline identity is required")
     explicit = re.findall(r"\$([A-Za-z][A-Za-z0-9.-]{0,9})\b", question)
     # Unambiguous uppercase symbols in a market question; ordinary short words excluded.
@@ -179,7 +184,8 @@ def request_spec(body):
     ]
     if len(tickers) > 3 or any(not re.fullmatch(r"[A-Z][A-Z0-9.-]{0,9}", t) for t in tickers):
         raise ValueError("Choose at most three valid tickers")
-    horizon = normalize_horizon(body.get("horizon") or screen.get("horizon") or screen.get("dte") or "all")
+    horizon = (f"range:{screen['mapQuery']['min_dte']}:{screen['mapQuery']['max_dte']}" if range_replay else
+               normalize_horizon(body.get("horizon") or screen.get("horizon") or screen.get("dte") or "all"))
     question_scope = None
     named_scopes = [
         value
@@ -227,7 +233,14 @@ def request_spec(body):
     if screen.get("contextVersion") == 2 and screen.get("selectedContract") is not None and question_scope is not None:
         if question_scope.get("selected_expiry") != screen.get("selectedExpiry"):
             raise ValueError("Selected contract research must stay within its listed expiry scope")
-    if mode == "replay":
+    if range_replay:
+        require_scope = (tickers == [screen.get("ticker")] and (question_scope is None or
+                         question_scope.get("selected_expiry") == screen.get("selectedExpiry")))
+        if not require_scope or (body.get("horizon") is not None and body["horizon"] !=
+                                 f"range:{screen['mapQuery']['min_dte']}:{screen['mapQuery']['max_dte']}"):
+            raise ValueError("RANGE_SCOPE_MISMATCH: research must stay within the recorded selection")
+        horizon = f"range:{screen['mapQuery']['min_dte']}:{screen['mapQuery']['max_dte']}"
+    if mode in {"replay", "range-replay"}:
         if tickers != [screen.get("ticker")] or (question_scope is not None and
                 question_scope.get("selected_expiry") not in screen.get("mapExpiries", [])):
             raise ValueError("Replay research must stay within its recorded symbol and expiry scope")
@@ -239,7 +252,7 @@ def request_spec(body):
         screen=screen,
         context_conflict=bool(screen.get("ticker") and screen["ticker"] not in tickers),
         question_scope=question_scope,
-        price_only=mode != "replay" and is_price_lookup(question, tickers),
+        price_only=mode not in {"replay", "range-replay"} and is_price_lookup(question, tickers),
     )
 
 

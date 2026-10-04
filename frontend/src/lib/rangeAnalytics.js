@@ -64,10 +64,58 @@ export function admitRangeEnvelope(data,{symbol,minDte,maxDte,asOf,recordId}={})
  return {reason:null,envelope:data};
 }
 
+/** UI completeness guard only, not server permission or hash validation.
+ * The backend resolves the stored envelope and its actual selected-cell facts. */
+export function rangeResearchBlock(context) {
+ if(!object(context)) return null;
+ const rangeContext = (typeof context.displayMode === 'string' && context.displayMode.startsWith('range-'))
+  || ['rangeVersion','rangeRecordId','rangeDigest','rangeMetric','rangeBasis','rangeStatus'].some(key=>context[key] != null)
+  || (typeof context.snapshotId === 'string' && context.snapshotId.startsWith('rga1-'));
+ if(!rangeContext) return null;
+ const block = reason => `RANGE_RESEARCH_UNAVAILABLE: ${reason}`;
+ if(context.displayMode !== 'range-replay') return block('only stored range-replay research is available; live reads are not persisted evidence');
+ if(context.contextVersion !== 2 || context.page !== 'heatseeker' || context.activePane !== 'gex'
+  || context.metric !== 'gex' || context.rangeVersion !== 'range-analytics.v1'
+  || !text(context.ticker) || context.ticker !== context.ticker.trim()
+  || !text(context.provider) || context.provider.length > 128 || context.provider !== context.provider.trim()
+  || !timestamp(context.mapVersion) || !date(context.mapVersion.slice(0,10))
+  || (context.sourceWorkspace != null && context.sourceWorkspace !== 'heatseeker')) return block('RANGE_CONTEXT_INVALID');
+ if(typeof context.rangeDigest !== 'string' || !/^[a-f0-9]{64}$/.test(context.rangeDigest)
+  || typeof context.rangeRecordId !== 'string' || !/^rga1-[a-f0-9]{24}$/.test(context.rangeRecordId)
+  || context.rangeRecordId !== 'rga1-'+context.rangeDigest.slice(0,24)
+  || context.snapshotId !== context.rangeRecordId) return block('RANGE_IDENTITY_MISMATCH');
+ const metric=context.rangeMetric;
+ if(metric === 'window') return block('RANGE_WINDOW_UNAVAILABLE');
+ if(!['raw_oi','delta_weighted','volume'].includes(metric) || context.overlayMetric !== metric
+  || context.rangeBasis !== RANGE_METRICS[metric].basis || context.formula !== 'gex.v2') return block('RANGE_METRIC_MISMATCH');
+ if(!['ok','partial'].includes(context.rangeStatus)) return block('RANGE_CELL_UNAVAILABLE');
+ const query=context.mapQuery;
+ if(!keysEqual(query,['min_dte','max_dte','as_of_ny']) || !count(query.min_dte) || !count(query.max_dte)
+  || query.min_dte > query.max_dte || query.max_dte > 365 || !date(query.as_of_ny)) return block('RANGE_QUERY_INVALID');
+ const bounds=context.expiryRange;
+ if(bounds != null && !(Array.isArray(bounds) && bounds.length === 2
+  && ((bounds[0] === null && bounds[1] === null) || (bounds[0] === query.min_dte && bounds[1] === query.max_dte)))) return block('RANGE_SCOPE_MISMATCH');
+ const strikes=context.mapStrikes,expiries=context.mapExpiries;
+ if(!Array.isArray(strikes) || !strikes.length || strikes.length > 512
+  || strikes.some((strike,i)=>typeof strike !== 'number' || !Number.isFinite(strike) || strike <= 0 || (i > 0 && strike <= strikes[i-1]))
+  || !Array.isArray(expiries) || !expiries.length || expiries.length > 24
+  || expiries.some((expiry,i)=>!date(expiry) || (i > 0 && expiry <= expiries[i-1])
+   || (Date.parse(expiry)-Date.parse(query.as_of_ny))/86400000 < query.min_dte
+   || (Date.parse(expiry)-Date.parse(query.as_of_ny))/86400000 > query.max_dte)) return block('RANGE_AXES_INVALID');
+ if(context.selectedWall !== null || context.selectedContract !== null
+  || context.contractResolution !== 'RANGE_CONTRACT_UNAVAILABLE') return block('RANGE_CONTRACT_UNAVAILABLE');
+ if(typeof context.selectedStrike !== 'number' || !Number.isFinite(context.selectedStrike)
+  || !strikes.includes(context.selectedStrike) || !expiries.includes(context.selectedExpiry)) return block('RANGE_SELECTION_MISMATCH');
+ return null;
+}
+
 export function rangeSelectionContext(envelope,metric,selection,mode='live') {
  const section=envelope?.grids?.[metric];
- const available=section && section.status !== 'unavailable' && typeof section.cells?.[selection?.expiry]?.[selection?.strike] === 'number';
- return {contextVersion:2,page:'heatseeker',sourceWorkspace:'heatseeker',ticker:envelope?.symbol || null,
+ const cell=section?.cells?.[selection?.expiry]?.[selection?.strike];
+ const available=section && ['ok','partial'].includes(section.status) && typeof cell === 'number' && Number.isFinite(cell)
+  && envelope?.axes?.strike_keys?.includes(String(selection?.strike))
+  && envelope?.axes?.expiries?.some(row=>row.expiry === selection?.expiry);
+ return {contextVersion:2,page:'heatseeker',sourceWorkspace:'heatseeker',activePane:'gex',ticker:envelope?.symbol || null,
   displayMode:mode==='replay'?'range-replay':'range-live',metric:'gex',overlayMetric:metric,
   rangeRecordId:envelope?.record_id || null,rangeDigest:envelope?.content_digest || null,rangeMetric:metric,
   rangeBasis:section?.basis || null,rangeStatus:section?.status || null,rangeVersion:envelope?.version || null,
