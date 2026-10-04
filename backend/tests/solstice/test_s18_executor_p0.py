@@ -36,6 +36,15 @@ def _memdb():
     return duckdb.connect(":memory:")
 
 
+def _reg(conn, *operators, account="ACCT-1"):
+    """Register order-entry principals (S02 fixture; author binding still pinned)."""
+    import services.operator_registry as registry
+
+    for op in operators:
+        assert registry.register_operator(
+            conn, op, [account], "root")["ok"] is True
+
+
 def _intent(**kw):
     intent = {
         "intent_version": "execution-intent.v1",
@@ -227,6 +236,7 @@ def test_factory_and_verify_enforce_policy_ceilings():
     conn = _memdb()
     try:
         lc.register_store(conn)
+        _reg(conn, "op-1")
         assert adm.set_account_policy_required(
             conn, "ACCT-1", {"max_quantity": 1, "max_notional": "100000"},
             "op-1")["ok"] is True
@@ -258,6 +268,7 @@ def test_raw_ingested_incoherent_option_refused_at_verify():
     conn = _memdb()
     try:
         lc.register_store(conn)
+        _reg(conn, "op-1")
         assert adm.set_account_policy_required(
             conn, "ACCT-1", {"max_quantity": 5, "min_entry_dte": 5,
                              "allow_unprotected_entry": True},
@@ -323,6 +334,7 @@ def test_factory_constrains_instrument_coherence():
     conn = _memdb()
     try:
         lc.register_store(conn)
+        _reg(conn, "op-1")
         assert adm.set_account_policy_required(
             conn, "ACCT-1", {"max_quantity": 5, "min_entry_dte": 5,
                              "allow_unprotected_entry": True},
@@ -428,6 +440,7 @@ def test_factory_refuses_non_buy_sell_side_and_bool_quantity():
     conn = _memdb()
     try:
         lc.register_store(conn)
+        _reg(conn, "op-1")
         assert adm.set_account_policy_required(
             conn, "ACCT-1", {"max_quantity": 5}, "op-1")["ok"] is True
         for bad_side in ("HOLD", "", "BUYSELL", "BU Y"):
@@ -459,6 +472,7 @@ def test_verify_without_operator_always_refuses():
     conn = _memdb()
     try:
         lc.register_store(conn)
+        _reg(conn, "op-1")
         assert adm.set_account_policy_required(
             conn, "ACCT-1", {"max_quantity": 5}, "op-1")["ok"] is True
         created = adm.create_order_approval(

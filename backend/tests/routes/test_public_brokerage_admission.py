@@ -16,8 +16,17 @@ from routes import public_brokerage
 def _isolated_store(monkeypatch):
     import duckdb
 
+    from services import operator_registry as operators
+
     conn = duckdb.connect(":memory:")
     monkeypatch.setattr(public_brokerage, "_admission_store_conn", lambda: conn)
+    # S02: order-entry tests run with registered principals; presenter
+    # binding is still exercised (mallory is authorized here so the
+    # author-mismatch refusal pins authorship, not registry absence).
+    assert operators.register_operator(
+        conn, "op-1", ["ACCT-1"], "root")["ok"] is True
+    assert operators.register_operator(
+        conn, "mallory", ["ACCT-1"], "root")["ok"] is True
     return conn
 
 
@@ -224,9 +233,12 @@ def test_create_order_approval_binds_and_constrains_order_type():
     import duckdb
 
     from services import execution_admission as adm
+    from services import operator_registry as operators
 
     conn = duckdb.connect(":memory:")
     try:
+        assert operators.register_operator(
+            conn, "op-1", ["ACCT-1"], "root")["ok"] is True
         assert adm.set_account_policy_required(
             conn, "ACCT-1", {"max_quantity": 5, "min_entry_dte": 5,
                              "allow_unprotected_entry": True},

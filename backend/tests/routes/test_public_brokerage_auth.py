@@ -93,10 +93,13 @@ class TestOrderKillSwitch:
 
         import routes.public_brokerage as mod
         from services import execution_admission as adm
+        from services import operator_registry as operators
 
         conn = duckdb.connect(":memory:")
         monkeypatch.setattr(mod, "_admission_store_conn", lambda: conn)
         try:
+            assert operators.register_operator(
+                conn, "op-1", ["TEST-ACCT"], "root")["ok"] is True
             assert adm.set_account_policy_required(
                 conn, "TEST-ACCT", {"max_quantity": 5}, "op-1")["ok"] is True
             created = adm.create_order_approval(

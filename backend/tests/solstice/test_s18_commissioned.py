@@ -346,11 +346,14 @@ def test_order_approval_guards_expiry_and_protection():
     calls anywhere (service layer never touches a broker).
     """
     import services.execution_admission as adm
+    import services.operator_registry as operators
     import services.public_execution_lifecycle as lc
 
     conn = _memdb()
     try:
         lc.register_store(conn)
+        assert operators.register_operator(
+            conn, "op-1", ["ACCT-1"], "root")["ok"] is True
         full = {"max_quantity": 5, "max_notional": "100000",
                 "max_positions": 10, "max_daily_loss": "10000",
                 "today": "2026-10-02", "min_entry_dte": 5,

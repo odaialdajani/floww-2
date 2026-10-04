@@ -1039,7 +1039,10 @@ def create_order_approval(
     be finite when present. Order type, instrument and session are bound
     into the Decimal-exact fingerprint and constrained by
     `_order_coherence` (unknown types, MARKET/mis-declared options and
-    missing required prices refuse). Required-policy quantity/notional
+    missing required prices refuse). The authoring operator must be
+    registered AND allowed for the account (OPERATOR_UNKNOWN /
+    OPERATOR_UNAUTHORIZED) — a bare string behind the shared master key
+    mints nothing. Required-policy quantity/notional
     ceilings bind at creation; option OSI symbols additionally pass the
     expiry guard and protection acknowledgment (S8). Returns the stored
     row including approval_id.
@@ -1109,6 +1112,13 @@ def create_order_approval(
     }
     if not approval["account_id"] or not approval["symbol"] or not approval["approved_by"]:
         return {"ok": False, "reason": "BAD_CONTRACT"}
+    from services import operator_registry as operators
+
+    auth = operators.authorize_operator(
+        conn, approval["approved_by"], approval["account_id"])
+    if not auth.get("ok"):
+        return {"ok": False, "reason": auth.get("reason", "OPERATOR_UNKNOWN"),
+                "detail": "authoring operator is not authorized for this account"}
     ceilings = _enforce_order_ceilings(conn, approval["account_id"],
                                        quantity, limit_price)
     if ceilings is not None:
@@ -1134,15 +1144,18 @@ def verify_order_approval(
     Refuses APPROVAL_NOT_STORED (missing/storeless), APPROVAL_INVALID
     (revoked, expired, operator mismatch, or fingerprint mismatch —
     including order-type/instrument/session mismatch, so a LIMIT
-    approval never covers a MARKET placement), BAD_CONTRACT (presented
-    fields incoherent — the factory's type/instrument/price coherence
-    re-runs here, so raw-ingested rows it would refuse cannot pass
-    verify), APPROVAL_STORE_UNAVAILABLE (query failure), and policy
-    ceiling breaches against CURRENT policy (a narrowing between
-    creation and placement refuses). Option OSI symbols re-pass the
-    required-policy expiry guard and protection acknowledgment against
-    CURRENT policy and server time. `operator` is mandatory: the
-    stored approved_by must equal it — the presenter must be the
+    approval never covers a MARKET placement), OPERATOR_UNKNOWN /
+    OPERATOR_UNAUTHORIZED (presenter not registered/allowed for the
+    account — a shared-key-only string verifies nothing),
+    BAD_CONTRACT (presented fields incoherent — the factory's
+    type/instrument/price coherence re-runs here, so raw-ingested rows
+    it would refuse cannot pass verify), APPROVAL_STORE_UNAVAILABLE
+    (query failure), and policy ceiling breaches against CURRENT policy
+    (a narrowing between creation and placement refuses). Option OSI
+    symbols re-pass the required-policy expiry guard and protection
+    acknowledgment against CURRENT policy and server time. `operator`
+    is mandatory: the stored approved_by must equal it AND it must be
+    authorized for the account — the presenter must be the authorized
     author, with no anonymous verification. Never raises.
     """
     from services import public_execution_lifecycle as lc
@@ -1182,6 +1195,13 @@ def verify_order_approval(
     if rec.get("approved_by") != str(operator or "").strip():
         return {"ok": False, "reason": "APPROVAL_INVALID",
                 "detail": "presenter is not the stored approver"}
+    from services import operator_registry as operators
+
+    auth = operators.authorize_operator(
+        conn, str(operator or "").strip(), str(account_id or "").strip())
+    if not auth.get("ok"):
+        return {"ok": False, "reason": auth.get("reason", "OPERATOR_UNKNOWN"),
+                "detail": "presenter is not authorized for this account"}
     want = order_fingerprint(account_id, symbol_c, side_c, quantity,
                              limit_price, stop_price, time_in_force,
                              otype, instrument, session_c)
