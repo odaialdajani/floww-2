@@ -8635,13 +8635,13 @@
             }
           },
           {
-            "description": "Opt-in: persist the admitted owning envelope in the recorder store. Default False \u2014 reads never write.",
+            "description": "Recorder write of the admitted owning envelope. R18-C10: requires the explicit capture policy (FLOWW_RANGE_CAPTURE_ENABLED) AND operator API-key auth. Default False \u2014 display reads never write.",
             "in": "query",
             "name": "persist",
             "required": false,
             "schema": {
               "default": false,
-              "description": "Opt-in: persist the admitted owning envelope in the recorder store. Default False \u2014 reads never write.",
+              "description": "Recorder write of the admitted owning envelope. R18-C10: requires the explicit capture policy (FLOWW_RANGE_CAPTURE_ENABLED) AND operator API-key auth. Default False \u2014 display reads never write.",
               "title": "Persist",
               "type": "boolean"
             }
@@ -17185,6 +17185,199 @@
           }
         },
         "summary": "Price Path Points",
+        "tags": [
+          "solstice",
+          "solstice"
+        ]
+      }
+    },
+    "/api/solstice/price-paths/range-records": {
+      "get": {
+        "description": "Record index with per-row integrity verdicts (range-records.v1).",
+        "operationId": "get_api_solstice_price-paths_range-records",
+        "parameters": [
+          {
+            "description": "Owning symbol filter",
+            "in": "query",
+            "name": "ticker",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owning symbol filter",
+              "title": "Ticker"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_dte",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 365,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Dte"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_dte",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 365,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Max Dte"
+            }
+          },
+          {
+            "description": "Owning NY date YYYY-MM-DD",
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owning NY date YYYY-MM-DD",
+              "title": "As Of"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(ok|partial)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Range Record Index Api Solstice Price Paths Range Records Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Range Record Index",
+        "tags": [
+          "solstice",
+          "solstice"
+        ]
+      }
+    },
+    "/api/solstice/price-paths/range-records/{record_id}": {
+      "get": {
+        "description": "Replay one owning rga1 envelope by identity \u2014 validated, never refetched.\n\nUnknown identity \u2192 404; integrity refusals (tamper/schema/header) stay\nmachine-readable with 422; a healthy record restores the stored display\nexactly (no recomputation of present-day chains).",
+        "operationId": "get_api_solstice_price-paths_range-records_record_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Range Record Replay Api Solstice Price Paths Range Records  Record Id  Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Range Record Replay",
         "tags": [
           "solstice",
           "solstice"
