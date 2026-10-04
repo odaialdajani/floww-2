@@ -1072,6 +1072,20 @@ def _rget(receipt: Any, *names: str, default: Any = None) -> Any:
 PREFLIGHT_TTL_S = 60
 
 
+def _wall_now() -> float:
+    """Server wall clock for preflight freshness (S06).
+
+    Caller-supplied ``ctx["now"]`` is a fictitious decision clock in tests
+    and MUST be server-stamped at the entry boundary in production (the
+    mounted pipeline stamps it; pure helpers never trust it alone). TTL
+    enforcement additionally binds wall time so a frozen caller clock can
+    never keep a stale broker verdict fresh past the window.
+    """
+    import time as _time
+
+    return _time.time()
+
+
 def _ctx_fingerprint(ctx: dict[str, Any]) -> str:
     """Market-context fingerprint: quotes + account + session policy.
 
@@ -1107,11 +1121,13 @@ async def preflight(intent: dict[str, Any], ctx: dict[str, Any], broker: Any) ->
     except (TypeError, ValueError) as exc:
         return {"ok": False, "reason": f"BAD_CONTRACT:{exc}"}
     now_epoch = _now_epoch(ctx.get("now"))
+    wall = _wall_now()
     cached = _PREFLIGHT_CACHE.get(key)
     if cached is not None and (now_epoch - float(cached.get("at_epoch", 0.0))) < PREFLIGHT_TTL_S:
-        out = dict(cached["receipt"])
-        out["cached"] = True
-        return out
+        if (wall - float(cached.get("at_wall", wall))) < PREFLIGHT_TTL_S:
+            out = dict(cached["receipt"])
+            out["cached"] = True
+            return out
     contract = intent.get("contract") or {}
     estimate = await _maybe_await(broker.preflight_single_leg(
         account_id=intent.get("account_id"),
@@ -1124,7 +1140,8 @@ async def preflight(intent: dict[str, Any], ctx: dict[str, Any], broker: Any) ->
     ))
     out = {"ok": True, "estimate": estimate, "intent_hash": digest,
            "ctx_fingerprint": key.split("|", 1)[1], "cached": False}
-    _PREFLIGHT_CACHE[key] = {"receipt": dict(out), "at_epoch": now_epoch}
+    _PREFLIGHT_CACHE[key] = {"receipt": dict(out), "at_epoch": now_epoch,
+                             "at_wall": _wall_now()}
     return out
 
 
@@ -1132,10 +1149,12 @@ def preflight_gate(intent: dict[str, Any], ctx: dict[str, Any]) -> str | None:
     """Preflight admission gate: None when covered, else a refusal code.
 
     A cached preflight satisfies the gate only when it covers this exact
-    intent + market context, is inside the 60s TTL, AND carries a broker
+    intent + market context, is inside the 60s TTL on BOTH the decision
+    clock and the server wall clock, AND carries a broker
     verdict with buying_power_ok True. A failed/negative broker verdict
     never satisfies the gate (PREFLIGHT_UNAFFORDABLE) — freshness alone
-    is not affordability.
+    is not affordability. A frozen caller clock cannot extend freshness
+    past the wall-clock bound.
     """
     try:
         key = intent_hash(intent) + "|" + _ctx_fingerprint(ctx)
@@ -1150,6 +1169,13 @@ def preflight_gate(intent: dict[str, Any], ctx: dict[str, Any]) -> str | None:
     except (TypeError, ValueError):
         return "STALE_PREFLIGHT"
     if stale:
+        return "STALE_PREFLIGHT"
+    try:
+        wall_stale = (_wall_now() - float(
+            cached.get("at_wall", _wall_now()))) >= PREFLIGHT_TTL_S
+    except (TypeError, ValueError):
+        return "STALE_PREFLIGHT"
+    if wall_stale:
         return "STALE_PREFLIGHT"
     estimate = (cached.get("receipt") or {}).get("estimate") or {}
     if estimate.get("buying_power_ok") is not True:
