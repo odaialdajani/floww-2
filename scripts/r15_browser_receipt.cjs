@@ -162,8 +162,12 @@ const server=http.createServer((req,res)=>{
   for(const width of [1440,390])await capture('range-replay',width);
   corruptRange=true;await page.getByRole('button',{name:'Next frame',exact:true}).click();await page.getByText(/Stored range replay unavailable.*CORRUPT_PAYLOAD/).waitFor();assert.strictEqual(await page.getByRole('grid').count(),0,'Corrupt replay must clear owning grid');
   corruptRange=false;await page.getByLabel('Stored range record').selectOption(rangeComplete.record_id);await page.getByText(/Stored frame 2\/2/).waitFor();await page.getByRole('grid').waitFor();
-  await page.getByRole('button',{name:/^590 · 2026-10-26/}).click();const rangeAnswer=page.waitForResponse(r=>r.url().includes('/api/agent/turn/') && r.request().method()==='GET');
-  await page.getByTestId('range-ask-lodestar-btn').click();await page.getByTestId('range-ask-lodestar-q-0').click();await rangeAnswer;
+  await page.getByRole('button',{name:/^590 · 2026-10-26/}).click();
+  receipt.rangeAskDiagnostic=await page.getByTestId('range-ask-lodestar-btn').evaluate(button=>({title:button.title,rect:button.getBoundingClientRect().toJSON(),ancestors:[button.closest('.range-workspace'),button.closest('.skylit-full-dashboard')].map(element=>({overflow:getComputedStyle(element).overflow,height:element.clientHeight,scrollHeight:element.scrollHeight}))}));
+  await Promise.all([
+   page.waitForResponse(r=>r.url().includes('/api/agent/turn/') && r.request().method()==='GET'),
+   (async()=>{await page.getByTestId('range-ask-lodestar-btn').click();await page.getByTestId('range-ask-lodestar-q-0').click();})(),
+  ]);
   const rangeResearch=page.getByRole('dialog',{name:'Lodestar research'});await rangeResearch.getByRole('article',{name:'Research answer for SPY'}).waitFor();
   assert(lastTurn.answer.facts.length>0 && lastTurn.answer.facts.every(f=>f.snapshot_id===rangeComplete.record_id && f.status==='degraded'));assert.strictEqual(lastTurn.answer.plan_draft.contract,null);assert.strictEqual(lastTurn.answer.plan_draft.executable,false);assert(lastTurn.answer.plan_draft.blockers.includes('RANGE_CONTRACT_UNAVAILABLE'));
   await rangeResearch.getByRole('button',{name:'Close',exact:true}).click();receipt.checks.push('range Lodestar uses same research route and actual stored-cell resolver; recorded degraded facts/digest/context; no legacy/current substitution, exact contract, native brief or provider turn');
