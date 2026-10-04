@@ -54,6 +54,51 @@ frontend-build PASS; lint run 37160242517 fails ONLY on docs/api freshness
 backend-tests pending at publication time (no CI polling per instructions;
 Zed verifies hosted gates when assembling the combined candidate).
 
+## Session re-verification 2026-10-04 (at lane head 2d0aa703, tree clean)
+
+- Exact recorded sweep command re-run VERBATIM from the repo root →
+  **313 passed, 0 failed** (the record was already correct; a transient
+  mismatch during re-verification was the operator running a hand-stripped
+  path list from `backend/`, not a record defect). 36 new focused tests
+  re-run → 36 passed. Per-file counts re-derived from source:
+  15+2+4+4+11 = 36; at e6d35745: 15+2+3+4 = 24; the pre-adapter-seams "20"
+  was 15+2+3. No count was silently promoted.
+- Gate parity re-run at 2d0aa703: `ruff check . --select F841` clean;
+  `ruff check .` clean (backend/); bandit with the CI's exact flags clean;
+  `check_silent_excepts.py` OK (355 files). Truth audit is commit-subject
+  scoped: 228 passed/0 failed at c085f8fb (code head, as receipted);
+  226 passed/0 failed at 2d0aa703 (docs-only receipt head) — both 0 failed.
+- Protected71 re-check at 2d0aa703 via `git hash-object --stdin-paths`
+  against `docs/solstice/r11/PROTECTED_MANIFEST.txt`
+  (SHA256 c5bea4270f1b6a79d60c22468db261644d43dcf2ee5aeb653cad4a3fff1e6e94):
+  **71/71 identical**. Lane diff vs base 22df6fe6 touches only Cline-owned
+  paths (21 files, all under backend/services|routes|tests/solstice +
+  docs/solstice CLINE_* + r18 fixtures). No Spark/Zed/watchdog/frozen file
+  changed.
+- Visible writer→exit→reader proof re-run (synthetic fixtures only):
+  writer PID 75012, reader PID 75018, driver 75008 — all distinct;
+  content_digest equal both sides
+  `54f0a823b635f938492cbfb3e0531e638338fc29aa7117a38d9d18c360cb955c`
+  (rga-content.v2); axes (3 expiries 2026-10-26/11-09/12-04 × 2 strike
+  keys), clocks and raw_oi cells equal; `synthetic: true`; replay note
+  "exact stored envelope restored; canonical content digest recomputed and
+  verified; no recomputation". C5–C10 tests re-run by name: all PASS.
+- Hosted PR106 snapshot at 2d0aa703 (single check, no polling):
+  backend-tests **PASS** (12m8s), docker-build **PASS** (4m0s),
+  frontend-build **PASS** (3m0s); lint run 37160585839 FAILS ONLY the
+  "API docs match the app" step (stale docs/api/openapi.json + README.md —
+  Zed-owned; regenerate with `python3 qc/audit/generate_api_docs.py` in the
+  combined candidate). PR106 remains OPEN/draft; it is NOT all-green while
+  lint is red.
+- Runtime/model verification (per harness rule — record, never invent):
+  this host session's actual Cline provider config
+  (`~/.cline/data/settings/providers.json`) is `lastUsedProvider: nvidia`,
+  model `z-ai/glm-5.3`, reasoning effort `xhigh`. No Kimi/Moonshot provider
+  is configured on this host; the packet's "Kimi K3 / Max" label is not the
+  effective model. No global setting was changed. Tool permissions:
+  read/search/edit/commands available; no broker/MCP execution exposure;
+  runtime capture/activation remain OFF (no FLOWW_RANGE_CAPTURE_ENABLED set).
+
 Resume: continue READY work only if new scope appears; otherwise the C queue
 is complete and remaining items are NAV-* external (account/policy/capture
 approval) — report HOLD for those with the exact input required.
