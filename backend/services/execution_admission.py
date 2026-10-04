@@ -883,16 +883,19 @@ def _derive_instrument(symbol: str, instrument_type: Any) -> str:
 
 
 def _order_coherence(symbol: str, order_type: str, instrument: str,
-                     limit_price: Any, stop_price: Any,
+                     limit_price: Any, stop_price: Any, side: str,
                      ) -> dict[str, Any] | None:
-    """Type/instrument/price coherence for order approvals (S8).
+    """Type/side/instrument/price coherence for order approvals (S8).
 
     Runs at creation AND verification, so raw-ingested rows that the
-    factory would refuse cannot pass verify: unknown types, MARKET or
-    mis-declared options, LIMIT-family without limit, STOP-family
-    without stop, and incoherent instrument declarations all refuse
-    BAD_CONTRACT. Returns a refusal dict or None (pass).
+    factory would refuse cannot pass verify: unknown types, non-BUY/SELL
+    sides, MARKET or mis-declared options, LIMIT-family without limit,
+    STOP-family without stop, and incoherent instrument declarations all
+    refuse BAD_CONTRACT. Returns a refusal dict or None (pass).
     """
+    if str(side or "").upper().strip() not in ("BUY", "SELL"):
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": f"side must be BUY or SELL, got {side!r}"}
     if order_type not in ("MARKET", "LIMIT", "STOP", "STOP_LIMIT"):
         return {"ok": False, "reason": "BAD_CONTRACT",
                 "detail": f"unknown order_type {order_type!r}"}
@@ -1036,9 +1039,13 @@ def create_order_approval(
         return {"ok": False, "reason": "BAD_CONTRACT"}
     otype = str(order_type or "LIMIT").upper().strip() or "LIMIT"
     symbol_c = str(symbol or "").upper().strip()
+    side_c = str(side or "").upper().strip()
     instrument = _derive_instrument(symbol_c, instrument_type)
     session_c = str(equity_market_session
                     or "none").upper().strip() or "none"
+    if isinstance(quantity, bool):
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": "quantity must be a positive number, not a boolean"}
     try:
         qty = float(quantity)
     except (TypeError, ValueError):
@@ -1060,20 +1067,20 @@ def create_order_approval(
             return {"ok": False, "reason": "BAD_CONTRACT",
                     "detail": f"{label} must be finite"}
     coherent = _order_coherence(symbol_c, otype, instrument, limit_price,
-                                stop_price)
+                                stop_price, side_c)
     if coherent is not None:
         return coherent
     now = datetime.now(UTC)
     valid_until = now + timedelta(hours=hours)
     tif = str(time_in_force or "DAY").upper().strip() or "DAY"
     approval = {
-        "intent_hash": order_fingerprint(account_id, symbol_c, side,
+        "intent_hash": order_fingerprint(account_id, symbol_c, side_c,
                                          quantity, limit_price, stop_price,
                                          tif, otype, instrument, session_c),
         "account_id": str(account_id or "").strip(),
         "scope": "order-entry",
         "symbol": symbol_c,
-        "side": str(side or "").upper().strip(),
+        "side": side_c,
         "quantity": _canon_number(quantity),
         "limit_price": _canon_number(limit_price),
         "stop_price": _canon_number(stop_price),
@@ -1119,9 +1126,9 @@ def verify_order_approval(
     ceiling breaches against CURRENT policy (a narrowing between
     creation and placement refuses). Option OSI symbols re-pass the
     required-policy expiry guard and protection acknowledgment against
-    CURRENT policy and server time. `operator`: when given, the stored
-    approved_by must equal it — the presenter must be the author.
-    Never raises.
+    CURRENT policy and server time. `operator` is mandatory: the
+    stored approved_by must equal it — the presenter must be the
+    author, with no anonymous verification. Never raises.
     """
     from services import public_execution_lifecycle as lc
 
@@ -1149,17 +1156,18 @@ def verify_order_approval(
     if rec.get("scope") != "order-entry" or rec.get("account_id") != str(account_id or "").strip():
         return {"ok": False, "reason": "APPROVAL_INVALID", "detail": "binding mismatch"}
     symbol_c = str(symbol or "").upper().strip()
+    side_c = str(side or "").upper().strip()
     otype = str(order_type or "LIMIT").upper().strip() or "LIMIT"
     instrument = _derive_instrument(symbol_c, instrument_type)
     session_c = str(equity_market_session or "none").upper().strip() or "none"
     coherent = _order_coherence(symbol_c, otype, instrument, limit_price,
-                                stop_price)
+                                stop_price, side_c)
     if coherent is not None:
         return coherent
-    if operator is not None and rec.get("approved_by") != str(operator or "").strip():
+    if rec.get("approved_by") != str(operator or "").strip():
         return {"ok": False, "reason": "APPROVAL_INVALID",
                 "detail": "presenter is not the stored approver"}
-    want = order_fingerprint(account_id, symbol_c, side, quantity,
+    want = order_fingerprint(account_id, symbol_c, side_c, quantity,
                              limit_price, stop_price, time_in_force,
                              otype, instrument, session_c)
     if rec.get("intent_hash") != want:

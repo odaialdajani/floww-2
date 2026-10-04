@@ -432,6 +432,11 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
                 "error": "bad_quantity",
                 "message": f"quantity must be a number, got {request.get('quantity')!r}",
             }) from None
+        if isinstance(request.get("quantity", 1), bool):
+            raise HTTPException(status_code=422, detail={
+                "error": "bad_quantity",
+                "message": "quantity must be a number, not a boolean",
+            })
         if quantity <= 0 or not math.isfinite(quantity):
             raise HTTPException(status_code=422, detail={
                 "error": "bad_quantity",

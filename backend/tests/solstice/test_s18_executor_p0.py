@@ -245,7 +245,7 @@ def test_factory_and_verify_enforce_policy_ceilings():
             "op-1")["ok"] is True
         out = adm.verify_order_approval(
             conn, out["approval_id"], "ACCT-1", "SPY", "BUY", 1, 3.15,
-            order_type="LIMIT", instrument_type="EQUITY")
+            order_type="LIMIT", instrument_type="EQUITY", operator="op-1")
         assert out["reason"] == "RISK_NOTIONAL_EXCEEDED", out
     finally:
         conn.close()
@@ -417,5 +417,65 @@ def test_commissioned_binding_reads_stored_row_not_presented_copy():
             conn, intent, ctx, broker, approval=spoofed,
             operator_id="op-1", **kw)
         assert out["reason"] == "APPROVAL_INVALID", out
+    finally:
+        conn.close()
+
+
+def test_factory_refuses_non_buy_sell_side_and_bool_quantity():
+    import services.execution_admission as adm
+    import services.public_execution_lifecycle as lc
+
+    conn = _memdb()
+    try:
+        lc.register_store(conn)
+        assert adm.set_account_policy_required(
+            conn, "ACCT-1", {"max_quantity": 5}, "op-1")["ok"] is True
+        for bad_side in ("HOLD", "", "BUYSELL", "BU Y"):
+            out = adm.create_order_approval(
+                conn, "ACCT-1", "SPY", bad_side, 1, 3.15, "op-1",
+                order_type="LIMIT", instrument_type="EQUITY")
+            assert out["reason"] == "BAD_CONTRACT", (bad_side, out)
+        for bad_qty in (True, False):
+            out = adm.create_order_approval(
+                conn, "ACCT-1", "SPY", "BUY", bad_qty, 3.15, "op-1",
+                order_type="LIMIT", instrument_type="EQUITY")
+            assert out["reason"] == "BAD_CONTRACT", (bad_qty, out)
+        out = adm.create_order_approval(
+            conn, "ACCT-1", "SPY", "buy", 1, 3.15, "op-1",
+            order_type="LIMIT", instrument_type="EQUITY")
+        assert out["ok"] is True, out
+        presented = adm.verify_order_approval(
+            conn, out["approval_id"], "ACCT-1", "SPY", "HOLD", 1, 3.15,
+            order_type="LIMIT", instrument_type="EQUITY", operator="op-1")
+        assert presented["reason"] == "BAD_CONTRACT", presented
+    finally:
+        conn.close()
+
+
+def test_verify_without_operator_always_refuses():
+    import services.execution_admission as adm
+    import services.public_execution_lifecycle as lc
+
+    conn = _memdb()
+    try:
+        lc.register_store(conn)
+        assert adm.set_account_policy_required(
+            conn, "ACCT-1", {"max_quantity": 5}, "op-1")["ok"] is True
+        created = adm.create_order_approval(
+            conn, "ACCT-1", "SPY", "BUY", 1, 3.15, "op-1",
+            order_type="LIMIT", instrument_type="EQUITY")
+        assert created["ok"] is True, created
+        # No anonymous verification: omitted/blank presenter refuses even
+        # with otherwise exact fields.
+        for missing in (None, "", "  "):
+            out = adm.verify_order_approval(
+                conn, created["approval_id"], "ACCT-1", "SPY", "BUY", 1,
+                3.15, order_type="LIMIT", instrument_type="EQUITY",
+                operator=missing)
+            assert out["reason"] == "APPROVAL_INVALID", (missing, out)
+        ok = adm.verify_order_approval(
+            conn, created["approval_id"], "ACCT-1", "SPY", "BUY", 1, 3.15,
+            order_type="LIMIT", instrument_type="EQUITY", operator="op-1")
+        assert ok["ok"] is True, ok
     finally:
         conn.close()

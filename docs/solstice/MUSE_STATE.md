@@ -1428,3 +1428,30 @@ TDD (10-test `test_s18_executor_p0.py` fails 10/10 pre-fix):
   re-composition + lease→submit wiring + single-use/retry story +
   Nav merge decision; ACCEPTED = prior receipts; COMMISSIONED =
   external HOLD. Activation OFF. INSUFFICIENT EVIDENCE.
+
+## 55. Second hole-hunt — side/bool/operator hardening (4 Oct 2026)
+
+Prompted to keep improving: probed registry (empty/blank/ghost all
+fail closed — no change), lease TTL (0/negative/nan/inf/garbage all
+refuse — no change), and found two genuine factory gaps plus one
+service-level bypass:
+
+1. Side unvalidated: HOLD/'' minted approvals (fingerprint-bound
+   but incoherent). Creation AND verify now require BUY/SELL.
+2. Boolean quantity: True minted as 1 (type confusion). Creation
+   refuses bools; route 422s them before the kill-switch.
+3. Verify accepted anonymous presenters (operator=None skipped the
+   check — direct service callers bypassed author binding). Operator
+   is now mandatory at verify; the route always presents it.
+- Process note: two edit-tool line-join defects caught by
+  collection errors and repaired immediately (never issue
+  content-identical edits; append via file edit, not heredoc).
+- Verification: full `tests/solstice/` + admission routes =
+  **727 passed**; ship-3.12 P0+admission **26 passed**; ruff /
+  silent-6 / truth-226 / openapi-380 green. PR103 description
+  refreshed for full enforcement + author binding (behavior change
+  from §52 receipt noted).
+- State split: DELIVERED = §§45–55; REVIEW-PENDING = Zed
+  re-composition + lease→submit wiring + single-use/retry story +
+  Nav merge decision; ACCEPTED = prior receipts; COMMISSIONED =
+  external HOLD. Activation OFF. INSUFFICIENT EVIDENCE.

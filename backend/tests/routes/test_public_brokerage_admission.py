@@ -252,10 +252,10 @@ def test_create_order_approval_binds_and_constrains_order_type():
         assert created["ok"] is True, created
         assert adm.verify_order_approval(
             conn, created["approval_id"], "ACCT-1", "SPY", "BUY", 1, 3.15,
-            order_type="LIMIT")["ok"] is True
+            order_type="LIMIT", operator="op-1")["ok"] is True
         out = adm.verify_order_approval(
             conn, created["approval_id"], "ACCT-1", "SPY", "BUY", 1, 3.15,
-            order_type="MARKET")
+            order_type="MARKET", operator="op-1")
         assert out["reason"] == "APPROVAL_INVALID", out
     finally:
         conn.close()
@@ -324,7 +324,7 @@ async def test_nonfinite_quantity_and_prices_refuse_before_any_gate(monkeypatch)
     try:
         # Disarmed on purpose: validation precedes the kill-switch, so a
         # 422 here also pins that ordering.
-        for bad in ("nan", "inf", "-inf"):
+        for bad in ("nan", "inf", "-inf", True, False):
             with pytest.raises(HTTPException) as error:
                 await public_brokerage.place_order(_body(quantity=bad))
             assert error.value.status_code == 422
