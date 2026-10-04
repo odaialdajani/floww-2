@@ -1248,7 +1248,9 @@ def bind_range_row(rid: Any, ticker: Any, window_min: Any, window_max: Any,
     if defect is not None:
         return None, defect
     q = payload.get("query") or {}
-    if not isinstance(q, dict):
+    if not isinstance(q, dict) or not isinstance(payload.get("clocks"), dict):
+        # R18-C12: a list/str query or clocks block is a typed corruption —
+        # never an AttributeError raised out of the shared binder.
         return None, "CORRUPT_PAYLOAD"
     if str(rid or "") != str(payload.get("record_id") or ""):
         return None, "ROW_HEADER_MISMATCH"
@@ -1301,7 +1303,14 @@ def record_range_envelope(conn, envelope: dict[str, Any]) -> dict[str, Any]:
         return {"status": "refused", "reason": defect,
                 "detail": "write-side canonical validation failed"}
     missing = [k for k in _RANGE_REQUIRED if envelope.get(k) in (None, "")]
-    q = envelope.get("query") or {}
+    # R18-C12: clocks/query must be dicts — a list/str clock or query is a
+    # TYPED refusal, never an AttributeError out of the write path.
+    q = envelope.get("query")
+    clocks = envelope.get("clocks")
+    if not isinstance(q, dict) or not isinstance(clocks, dict):
+        return {"status": "refused", "reason": "IDENTITY_INCOMPLETE",
+                "detail": {"bad_query": not isinstance(q, dict),
+                           "bad_clocks": not isinstance(clocks, dict)}}
     bad_window = not isinstance(q.get("min_dte"), int) \
         or not isinstance(q.get("max_dte"), int)
     if missing or bad_window or envelope.get("status") == "refused":
@@ -1312,7 +1321,7 @@ def record_range_envelope(conn, envelope: dict[str, Any]) -> dict[str, Any]:
     record_id = str(envelope["record_id"])
     digest = str(envelope["content_digest"])  # already recomputed-validated
     asof = str(q.get("as_of_ny") or "")
-    received_at = str((envelope.get("clocks") or {}).get("received_at") or "")
+    received_at = str(clocks.get("received_at") or "")
     recorded_at = _now_iso()
     from services.solstice_range_analytics import compute_content_digest
     try:
@@ -1320,39 +1329,31 @@ def record_range_envelope(conn, envelope: dict[str, Any]) -> dict[str, Any]:
             with _RECORDER_LOCK:
                 ensure_range_tables(conn)
                 rows = conn.execute(
-                    "SELECT digest, envelope_json FROM range_analytics_envelopes_v1 "
+                    "SELECT ticker, window_min, window_max, asof_date, "
+                    "received_at, status, digest, envelope_json "
+                    "FROM range_analytics_envelopes_v1 "
                     "WHERE record_id = " + _esc(record_id)).fetchall()
                 if rows:
-                    # C6/C11: duplicate detection compares RECOMPUTED digests of
-                    # both sides — a supplied digest alone can never earn a
-                    # duplicate success. The STORED payload must also pass its
-                    # OWN canonical identity validation (schema + recomputed
-                    # digest + record identity): the content digest excludes
-                    # record_id, so without this check a stored payload whose
-                    # record_id field was tampered could still "duplicate".
-                    stored_digest = str(rows[0][0])
+                    # C6/C11/C12: duplicate detection compares RECOMPUTED
+                    # digests of both sides — a supplied digest alone can
+                    # never earn a duplicate success — and the STORED row
+                    # must pass the FULL shared row binder (canonical
+                    # identity + every header), exactly like index and
+                    # replay: a header-tampered row can never "duplicate".
+                    (s_tk, s_wmin, s_wmax, s_asof, s_recv, s_status,
+                     stored_digest, s_json) = rows[0]
                     try:
-                        stored_env = json.loads(rows[0][1]) if rows[0][1] else None
-                    except (TypeError, ValueError):
-                        stored_env = None
-                    if isinstance(stored_env, dict):
-                        stored_defect = None
-                        try:
-                            stored_defect = _validate_range_envelope(stored_env)
-                        except Exception:
-                            stored_defect = "CORRUPT_PAYLOAD"
-                        if stored_defect is not None:
-                            return {"status": "refused",
-                                    "reason": "STORED_RECORD_CORRUPT",
-                                    "record_id": record_id,
-                                    "stored_defect": stored_defect}
-                        stored_recomputed = compute_content_digest(stored_env)
-                    else:
-                        stored_recomputed = None
-                    if stored_recomputed is None:
+                        stored_env, stored_refusal = bind_range_row(
+                            record_id, s_tk, s_wmin, s_wmax, s_asof, s_recv,
+                            s_status, stored_digest, s_json)
+                    except Exception:
+                        stored_env, stored_refusal = None, "CORRUPT_PAYLOAD"
+                    if stored_refusal is not None:
                         return {"status": "refused",
                                 "reason": "STORED_RECORD_CORRUPT",
-                                "record_id": record_id}
+                                "record_id": record_id,
+                                "stored_defect": stored_refusal}
+                    stored_recomputed = compute_content_digest(stored_env)
                     if stored_recomputed == digest and stored_digest == digest:
                         return {"status": "duplicate", "record_id": record_id,
                                 "digest": digest, "recorded_at": recorded_at,
