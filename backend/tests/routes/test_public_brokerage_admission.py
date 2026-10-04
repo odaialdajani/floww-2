@@ -123,3 +123,66 @@ def test_order_fingerprint_is_canonical():
             == adm.order_fingerprint("ACCT-1", "SPY", "BUY", 1, 3.15))
     assert (adm.order_fingerprint("ACCT-1", "SPY", "BUY", 1, 3.15)
             != adm.order_fingerprint("ACCT-1", "SPY", "BUY", 2, 3.15))
+    # Stop and TIF are bound: tampering either breaks the identity.
+    base = adm.order_fingerprint("ACCT-1", "SPY", "BUY", 1, 3.15, 3.00, "DAY")
+    assert base != adm.order_fingerprint("ACCT-1", "SPY", "BUY", 1, 3.15, 2.95, "DAY")
+    assert base != adm.order_fingerprint("ACCT-1", "SPY", "BUY", 1, 3.15, 3.00, "GTC")
+    assert base == adm.order_fingerprint("ACCT-1", "SPY", "BUY", 1, 3.15, 3.00, "day")
+
+
+@pytest.mark.asyncio
+async def test_armed_stop_and_tif_tamper_refuse(monkeypatch):
+    from fastapi import HTTPException
+
+    from services import execution_admission as adm
+
+    monkeypatch.setenv("FLOWW_ENABLE_LIVE_PUBLIC", "1")
+    conn = _isolated_store(monkeypatch)
+    broker = _broker(monkeypatch)
+    try:
+        assert adm.set_account_policy_required(
+            conn, "ACCT-1", {"max_quantity": 5}, "op-1")["ok"] is True
+        created = adm.create_order_approval(
+            conn, "ACCT-1", "SPY", "BUY", 1, 3.15, "op-1",
+            stop_price=3.00, time_in_force="DAY")
+        assert created["ok"] is True
+        # Tampered stop refuses with zero placement.
+        with pytest.raises(HTTPException) as error:
+            await public_brokerage.place_order(
+                _body(limit_price=3.15, stop_price=2.95,
+                      approval_id=created["approval_id"]))
+        assert error.value.detail["error"] == "APPROVAL_INVALID"
+        # Tampered TIF refuses with zero placement.
+        with pytest.raises(HTTPException) as error2:
+            await public_brokerage.place_order(
+                _body(limit_price=3.15, stop_price=3.00,
+                      time_in_force="GTC",
+                      approval_id=created["approval_id"]))
+        assert error2.value.detail["error"] == "APPROVAL_INVALID"
+        broker.place_order.assert_not_awaited()
+        # Exact fields place exactly once.
+        out = await public_brokerage.place_order(
+            _body(limit_price=3.15, stop_price=3.00,
+                  approval_id=created["approval_id"]))
+        assert out["ok"] is True
+        broker.place_order.assert_awaited_once()
+    finally:
+        conn.close()
+
+
+def test_option_approval_requires_limit_price():
+    import duckdb
+
+    from services import execution_admission as adm
+
+    conn = duckdb.connect(":memory:")
+    try:
+        assert adm.set_account_policy_required(
+            conn, "ACCT-1", {"max_quantity": 5, "min_entry_dte": 5,
+                             "allow_unprotected_entry": True},
+            "op-1")["ok"] is True
+        out = adm.create_order_approval(
+            conn, "ACCT-1", "SPY271217C00760000", "BUY", 1, None, "op-1")
+        assert out["reason"] == "BAD_CONTRACT", out
+    finally:
+        conn.close()

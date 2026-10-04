@@ -80,13 +80,15 @@ def _admission_store_conn() -> Any | None:
 def _require_order_admission_if_policy(
     account_id: str, symbol: str, side: str, quantity: float,
     limit_price: float | None, request: dict[str, Any],
+    stop_price: float | None = None, time_in_force: str = "DAY",
 ) -> dict[str, Any] | None:
     """Progressive admission enforcement on the broker-reachable path (S8).
 
     - No admission store → None (legacy kill-switch-only path; disclosed).
     - Store present but policy lookup fails → refusal (fail closed).
     - Required v2 policy present → a body approval_id must verify against
-      the server-recomputed order fingerprint, else refusal. Cancellation
+      the server-recomputed order fingerprint (account/symbol/side/
+      quantity/limit/stop/TIF), else refusal. Cancellation
       and reconciliation paths are untouched by this gate.
     Returns None when placement may proceed, else a refusal detail dict.
     """
@@ -103,7 +105,8 @@ def _require_order_admission_if_policy(
                 "message": "Admission store unreadable; refusing live submission."}
     approval_id = request.get("approval_id")
     verified = adm.verify_order_approval(
-        conn, approval_id, account_id, symbol, side, quantity, limit_price)
+        conn, approval_id, account_id, symbol, side, quantity, limit_price,
+        stop_price=stop_price, time_in_force=time_in_force)
     if not verified.get("ok"):
         return {"error": verified.get("reason", "APPROVAL_INVALID"),
                 "message": "A stored order approval bound to these exact order "
@@ -453,7 +456,8 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
         # required policy is installed; refusals carry machine-readable codes.
         admission_refusal = _require_order_admission_if_policy(
             getattr(account, "account_id", ""), symbol, side, quantity,
-            limit_price, request)
+            limit_price, request, stop_price=stop_price,
+            time_in_force=time_in_force)
         if admission_refusal is not None:
             raise HTTPException(status_code=403, detail=admission_refusal)
 

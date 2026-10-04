@@ -765,11 +765,15 @@ def _canon_number(value: Any) -> str:
 
 
 def order_fingerprint(account_id: str, symbol: str, side: str,
-                      quantity: Any, limit_price: Any) -> str:
+                      quantity: Any, limit_price: Any,
+                      stop_price: Any = None,
+                      time_in_force: str = "DAY") -> str:
     """Canonical identity for a single-leg order approval (S8).
 
-    Binds account + symbol + side + exact quantity/limit. Server recomputes
-    this from the order body — a caller-supplied hash is never trusted.
+    Binds account + symbol + side + exact quantity/limit/stop + time in
+    force. Every price-affecting field is covered: a tampered stop (or
+    TIF) never matches a stored approval. Server recomputes this from
+    the order body — a caller-supplied hash is never trusted.
     """
     blob = "|".join([
         str(account_id or "").strip(),
@@ -777,6 +781,8 @@ def order_fingerprint(account_id: str, symbol: str, side: str,
         str(side or "").upper().strip(),
         _canon_number(quantity),
         _canon_number(limit_price),
+        _canon_number(stop_price),
+        str(time_in_force or "DAY").upper().strip(),
     ])
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
@@ -784,6 +790,7 @@ def order_fingerprint(account_id: str, symbol: str, side: str,
 def create_order_approval(
     conn: Any, account_id: str, symbol: str, side: str, quantity: Any,
     limit_price: Any, operator: str, validity_hours: float = 1.0,
+    stop_price: Any = None, time_in_force: str = "DAY",
 ) -> dict[str, Any]:
     """Create + store an order-bound approval (server timestamps only).
 
@@ -791,8 +798,9 @@ def create_order_approval(
     trusted. Option OSI symbols additionally pass the required-policy
     expiry guard and protection acknowledgment at creation (S8) — an
     approval can never be minted for an expired/near-expiry or
-    unacknowledged-unprotected contract. Returns the stored row
-    including approval_id.
+    unacknowledged-unprotected contract — and require an explicit limit
+    price (market options have unbounded slippage; the lifecycle admits
+    limit orders only). Returns the stored row including approval_id.
     """
     if conn is None:
         return {"ok": False, "reason": "STORE_UNAVAILABLE"}
@@ -804,20 +812,27 @@ def create_order_approval(
         return {"ok": False, "reason": "BAD_CONTRACT"}
     now = datetime.now(UTC)
     valid_until = now + timedelta(hours=hours)
+    tif = str(time_in_force or "DAY").upper().strip() or "DAY"
     approval = {
-        "intent_hash": order_fingerprint(account_id, symbol, side, quantity, limit_price),
+        "intent_hash": order_fingerprint(account_id, symbol, side, quantity,
+                                         limit_price, stop_price, tif),
         "account_id": str(account_id or "").strip(),
         "scope": "order-entry",
         "symbol": str(symbol or "").upper().strip(),
         "side": str(side or "").upper().strip(),
         "quantity": _canon_number(quantity),
         "limit_price": _canon_number(limit_price),
+        "stop_price": _canon_number(stop_price),
+        "time_in_force": tif,
         "valid_until": valid_until.isoformat(),
         "approved_by": str(operator or "").strip(),
         "approved_at": now.isoformat(),
     }
     if not approval["account_id"] or not approval["symbol"] or not approval["approved_by"]:
         return {"ok": False, "reason": "BAD_CONTRACT"}
+    if _osi_expiry_iso(approval["symbol"]) is not None and limit_price is None:
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": "option approvals require an explicit limit price"}
     gate = _option_order_guards(conn, approval["account_id"], approval["symbol"])
     if gate is not None:
         return gate
@@ -830,6 +845,7 @@ def create_order_approval(
 def verify_order_approval(
     conn: Any, approval_id: str, account_id: str, symbol: str, side: str,
     quantity: Any, limit_price: Any, now: datetime | None = None,
+    stop_price: Any = None, time_in_force: str = "DAY",
 ) -> dict[str, Any]:
     """Verify an order approval against the recomputed fingerprint.
 
@@ -866,7 +882,8 @@ def verify_order_approval(
         return {"ok": False, "reason": "APPROVAL_INVALID", "detail": "revoked"}
     if rec.get("scope") != "order-entry" or rec.get("account_id") != str(account_id or "").strip():
         return {"ok": False, "reason": "APPROVAL_INVALID", "detail": "binding mismatch"}
-    want = order_fingerprint(account_id, symbol, side, quantity, limit_price)
+    want = order_fingerprint(account_id, symbol, side, quantity,
+                              limit_price, stop_price, time_in_force)
     if rec.get("intent_hash") != want:
         return {"ok": False, "reason": "APPROVAL_INVALID", "detail": "order fields differ"}
     moment = now or datetime.now(UTC)

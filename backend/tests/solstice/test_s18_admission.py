@@ -112,6 +112,98 @@ def _appr(lc, intent, operator="op-1"):
     return appr, now
 
 
+def _restart_reader(db_path, intent, approval, now_iso, queue):
+    """Separate-process reader: proves file-durable authority (S1/S5).
+
+    Runs after the writer process "died" (closed + dropped all memory).
+    No memory is inherited under spawn — every fact below comes from
+    the file DB alone.
+    """
+    import duckdb
+
+    import services.execution_admission as adm
+    import services.public_execution_lifecycle as lc
+
+    conn = duckdb.connect(db_path)
+    try:
+        lc.register_store(conn)
+        now = datetime.fromisoformat(now_iso)
+        pol = adm.get_account_policy_required(conn, "ACCT-1")
+        strict = lc._verify_stored_approval(
+            intent, approval, scope="single-entry", now=now)
+        census = adm.census_required(conn)
+        revoked = adm.revoke_approval_required(
+            conn, approval["approval_id"], "op-child")
+        queue.put({
+            "policy_ok": bool(pol.get("ok")),
+            "policy": pol.get("policy") if pol.get("ok") else None,
+            "strict": [bool(strict[0]), strict[1]],
+            "census_complete": bool(census.get("complete")),
+            "revoked": bool(revoked.get("ok")),
+        })
+    finally:
+        conn.close()
+
+
+def test_required_authority_survives_process_restart(tmp_path):
+    """Durable-first across a real process boundary (S1/S5).
+
+    Process 1 writes the required policy + approval to a FILE db, then
+    dies (connection closed, all memory dropped). Process 2 (spawn, no
+    inherited memory) must verify strict approval from the file alone,
+    then revokes; process 1 reopens and observes the revocation with
+    strict verification now refusing. Zero broker calls throughout.
+    """
+    import multiprocessing as mp
+
+    import services.execution_admission as adm
+    import services.public_execution_lifecycle as lc
+
+    db_path = str(tmp_path / "authority.duckdb")
+    import duckdb
+
+    conn = duckdb.connect(db_path)
+    try:
+        lc.register_store(conn)
+        intent = _base_intent()
+        appr, now = _appr(lc, intent)
+        assert adm.set_account_policy_required(
+            conn, "ACCT-1", {"max_quantity": 5}, "op-1")["ok"] is True
+        assert adm.store_approval_required(conn, appr, "op-1")["ok"] is True
+    finally:
+        conn.close()
+    lc._reset_for_tests()  # the writer is dead; memory authority is gone
+
+    ctx = mp.get_context("spawn")
+    queue = ctx.Queue()
+    proc = ctx.Process(target=_restart_reader,
+                       args=(db_path, intent, appr, now.isoformat(), queue))
+    proc.start()
+    proc.join(60)
+    if proc.is_alive():
+        proc.terminate()
+        proc.join(10)
+        raise AssertionError("reader hung and was terminated")
+    assert proc.exitcode == 0, f"reader exited {proc.exitcode}"
+    seen = queue.get(timeout=10)
+    assert seen["policy_ok"] is True and seen["policy"] == {"max_quantity": 5}, seen
+    assert seen["strict"] == [True, "ok"], seen
+    assert seen["census_complete"] is True, seen
+    assert seen["revoked"] is True, seen
+
+    # Reopen after the other process wrote: revocation is durable and
+    # strict verification refuses it — no resurrection across restart.
+    conn = duckdb.connect(db_path)
+    try:
+        lc.register_store(conn)
+        assert lc.stored_approval(appr["approval_id"])["revoked"] is True
+        ok, reason = lc._verify_stored_approval(
+            intent, appr, scope="single-entry", now=now)
+        assert (ok, reason) == (False, "APPROVAL_INVALID")
+    finally:
+        conn.close()
+
+
 def test_policy_write_failure_purges_memory_authority():
     import services.execution_admission as adm
     import services.public_execution_lifecycle as lc

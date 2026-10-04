@@ -31,15 +31,17 @@ No merge, no deploy, no activation, no orders, no flag changes.
 
 | Layer | Suite | Result |
 |---|---|---|
-| Service (S1/S5/S9 admission) | `test_s18_admission` (19) | **passed** |
+| Service (S1/S5/S9 admission) | `test_s18_admission` (20, incl. cross-restart durability) | **passed** |
 | Service (S2/S7/S8/S9 commissioned) | `test_s18_commissioned` (18) | **passed** |
 | Service (S3/S6/S10 deployment) | `test_s18_deployment` (16, spawn-isolated real processes) | **passed** |
 | Service (hardening/resurrection) | `test_r17_hardening` (22) | **passed** |
 | Service (legacy lifecycle) | `test_r15_execution_lifecycle` (42) + wiring (8) + r17 reads (9) + inventory (5) | **passed** |
 | Mounted-route guards | existing brokerage/agent disarmed suites + `test_public_brokerage_admission` | green (in full run) |
 | Real read-only adapter observations | `test_public_api_only` + `test_public_spot_validation` + `test_solstice_exec_disarmed` | **63 passed** |
-| Full `tests/solstice/` (backend CWD) | unmasked | **693 passed** |
+| Full `tests/solstice/` (backend CWD) | unmasked | **694 passed** |
 | Ship-runtime check (Python 3.12 + pinned `requirements.txt` scratch venv) | s18 deployment/admission/commissioned/hardening/lifecycle/brokerage-admission (121) | **passed** |
+| Hosted Linux/Python 3.12 (PR103 run 37162537688 @ `23178787`) | all 17 `test_s18_deployment` passed in ~6s, suite 99% with zero failures | **per-test green; step killed by 15-min budget (infra HOLD, see below)** |
+| Hosted lint (same head) | ruff + gates | **passed** |
 | Lint/security/docs | ruff + silent-except (359 files) + bandit (touched) + openapi `--check` | clean / OK / clean / **380 paths current** |
 | External commissioning | live account, entitlement, production capture, paid turns | NOT RUN — labeled, see below |
 
@@ -77,11 +79,17 @@ S1–S3 codes: `STORE_UNAVAILABLE`, `POLICY_STORE_UNAVAILABLE`,
   CREATION and re-pass them at VERIFICATION (placement), so an approval
   minted before expiry, a policy narrowing, or an ack removal cannot ride
   out its validity window — expired/near-expiry/unacknowledged option
-  orders refuse even when armed. Malformed OSI refuses BAD_CONTRACT.
-  Equity (non-OSI) symbols skip the option expiry gate (no expiry
-  concept; disclosed limitation — tightening the equity path is a Nav
-  production-behavior decision). Full-enforcement-when-UNSET is likewise
-  a production-behavior change — needs Nav/your sign-off, not a lane edit.
+  orders refuse even when armed. The fingerprint binds account, symbol,
+  side, quantity, limit, stop AND time in force (stop/TIF tampering
+  refuses); malformed OSI refuses BAD_CONTRACT; option approvals
+  require an explicit limit price (no market options). Equity (non-OSI)
+  symbols skip the option expiry gate (no expiry concept; disclosed
+  limitation — tightening the equity path is a Nav
+  production-behavior decision). Approval reuse across placements stays
+  operator-bounded by the ≤24h window (single-use semantics is a Nav
+  decision — retries after broker failure need a defined story first).
+  Full-enforcement-when-UNSET is likewise a production-behavior change
+  — needs Nav/your sign-off, not a lane edit.
 - Mount context you must provide (server.py, your ownership):
   1. ONE DuckDB handle shared by the admission route, the `/public/order`
      gate (`_admission_store_conn`), and `lc.register_store` — mixing
@@ -117,6 +125,12 @@ S1–S3 codes: `STORE_UNAVAILABLE`, `POLICY_STORE_UNAVAILABLE`,
 
 ## Remaining externals (HOLD, not engineering)
 
+CI step budget (infra, for Zed/Nav): the serial 7000+ suite exceeds the
+15-min `Run tests with coverage` step on hosted runners (run
+37162537688 reached 99% with zero failures, then killed). Per-test
+evidence is green; no lane code slows the suite (owned spawn tests: 6s
+hosted). Decision (split or budget) belongs to the workflow owners —
+not a lane edit, never a hidden failure.
 NAV-ACCOUNT (exact account/rights/policy values), NAV-CAPTURE (approved
 storage + admitted production restart records), NAV-NATIVE (native
 workflow/position review), NAV-MODEL (owner save + authorized turn),

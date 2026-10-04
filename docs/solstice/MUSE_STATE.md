@@ -1161,3 +1161,76 @@ router — no surface change). No new refusal codes (fixture stays 56).
 Delivered/review/accepted/commissioned split from §46 stands; this §47
 is DELIVERED lane work for Zed's re-composition. Activation OFF.
 INSUFFICIENT EVIDENCE. No profitability claim.
+
+## 48. Hosted CI diagnosis + Zed composition review (4 Oct 2026)
+
+- PR103 CI/CD run 37162537688 on lane head `23178787`: FAILED — but NOT
+  on tests. Lint job green. Per-test evidence from the log: every owned
+  test PASSED on hosted Linux/Python 3.12, including all 17
+  `test_s18_deployment.py` in ~6s (23:53:40–46Z, zero segfaults/hangs —
+  spawn isolation proven on the exact CI runtime). Suite reached 99%
+  with zero failures, then the step `Run tests with coverage`
+  (`timeout-minutes: 15` in `ci.yml:96`, pytest serial over 7000+
+  tests) killed the job at 20:07 wall (`##[error] timed out after 15
+  minutes`). Per-test `pytest.ini` timeout (120s) never fired — no
+  single hang. This is suite-size vs step-budget infrastructure, the
+  same class MUSE_STATE §15 already assigned to the devops lane. The
+  workflow file is NOT lane-editable from here and S10 forbids
+  timeout-widening-alone as a fix: recorded + preserved, handed to
+  Zed/Nav as an explicit decision (split-by-directory or step budget,
+  their call). No test result hidden, no gate weakened.
+- Zed composition review (`aba5bc13`, PR104, read-only): CLEAN.
+  Includes this lane verbatim through `23178787` (empty diff on all 7
+  owned service/route files, MUSE_STATE, acceptance, fixtures) plus
+  Cline's C5–C10 analytical repairs and Zed consumers. No new
+  `place_order`/broker path (only evidence-doc mentions), no
+  `FLOWW_ENABLE_LIVE_PUBLIC`/`allow_market`/venue change, no
+  `server.py` mount — the admission-router mount and lease→submit
+  wiring remain REVIEW-PENDING his integration, as designed.
+  Cline's new services import stdlib only; `test_r18_repairs.py`
+  exercises Cline-owned modules, never execution services — no
+  cross-lane breakage surface in this direction. Combined-suite proof
+  stays Zed's frozen gate run to coordinate.
+- State unchanged: DELIVERED = §§46–47 lane work (now with hosted
+  per-test proof); REVIEW-PENDING = Zed mount/wiring/combined gates +
+  workflow-budget decision; ACCEPTED = prior receipts; COMMISSIONED =
+  external HOLD (NAV-*). Activation OFF. INSUFFICIENT EVIDENCE.
+
+## 49. Resweep — fingerprint binding audit (4 Oct 2026)
+
+- Found live: the order fingerprint bound account/symbol/side/quantity/
+  limit but NOT stop_price or time_in_force — a tampered stop (or TIF)
+  verified against a stored approval and the armed route placed it
+  (proven: pre-fix stash runs the tampered orders through). Fingerprint
+  now covers limit+stop+TIF; the route threads request stop/TIF into
+  verification; creation/verification/route-approval endpoints accept
+  and bind the fields. Old approvals (narrower hash) fail closed.
+- Option approvals now require an explicit limit price at creation —
+  market options have unbounded slippage and the lifecycle admits limit
+  orders only. Equities keep market flexibility (disclosed).
+- Fixture coherence scripted: all 56 `execution-controls.v1` codes
+  present in owned code (no drift, no new codes this round).
+- Recorded open design point for Nav (not lane-changed): approvals are
+  reusable within their ≤24h window — single-use would break
+  retry-after-broker-failure without a defined exactly-once story.
+- Verification: full `tests/solstice/` **693 passed**; routes brokerage
+  gate+admission **13 passed**; ship-3.12 focused **123 passed**; ruff /
+  silent-359 / bandit (one pre-existing Low, gate-accepted) / truth-227
+  / openapi-380 green. 3/3 new regression tests fail pre-fix, pass
+  post-fix.
+
+## 50. Cross-restart durability proof (4 Oct 2026)
+
+- The headline S1/S5 claim ("durable-first, no memory-only authority")
+  was proven in-process only. New spawn-isolated test
+  `test_required_authority_survives_process_restart`: writer process
+  persists required policy + approval to a FILE db and dies (closed +
+  memory dropped); a separate spawn process with zero inherited memory
+  verifies strict approval + policy + census completeness from the file
+  alone, then revokes; the writer reopens and observes durable
+  revocation with strict verification refusing. Stable 3/3 reruns,
+  green on ship 3.12. Non-vacuous by construction (spawn inherits no
+  memory — a memory-only implementation fails the child assertions).
+- Verification: full `tests/solstice/` **694 passed**; ruff / silent-359
+  / openapi-380 green. No service change (test-only proof); no new
+  refusal codes.

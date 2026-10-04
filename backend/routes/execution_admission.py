@@ -165,9 +165,12 @@ async def create_order_approval(
 ) -> dict[str, Any]:
     """Create a single-leg order approval bound to exact order fields.
 
-    Validity is server-stamped (1–24h). The armed `POST /public/order` path
-    verifies the approval_id against a server-recomputed fingerprint when a
-    required account policy is installed.
+    Validity is server-stamped (1–24h). The fingerprint covers account,
+    symbol, side, quantity, limit, stop and time in force; the armed
+    `POST /public/order` path verifies the approval_id against a
+    server-recomputed fingerprint when a required account policy is
+    installed. Option symbols additionally pass the policy expiry guard
+    and protection acknowledgment, and require an explicit limit price.
     """
     from services import execution_admission as adm
 
@@ -175,7 +178,9 @@ async def create_order_approval(
         _store_conn(), body.get("account_id"), body.get("symbol"),
         body.get("side", "BUY"), body.get("quantity", 1),
         body.get("limit_price"), body.get("operator"),
-        body.get("validity_hours", 1.0))
+        body.get("validity_hours", 1.0),
+        stop_price=body.get("stop_price"),
+        time_in_force=body.get("time_in_force", "DAY"))
     if not out.get("ok"):
         raise HTTPException(status_code=503, detail=out)
     return out
