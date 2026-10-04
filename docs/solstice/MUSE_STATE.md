@@ -1161,3 +1161,37 @@ router — no surface change). No new refusal codes (fixture stays 56).
 Delivered/review/accepted/commissioned split from §46 stands; this §47
 is DELIVERED lane work for Zed's re-composition. Activation OFF.
 INSUFFICIENT EVIDENCE. No profitability claim.
+
+## 48. Hosted CI diagnosis + Zed composition review (4 Oct 2026)
+
+- PR103 CI/CD run 37162537688 on lane head `23178787`: FAILED — but NOT
+  on tests. Lint job green. Per-test evidence from the log: every owned
+  test PASSED on hosted Linux/Python 3.12, including all 17
+  `test_s18_deployment.py` in ~6s (23:53:40–46Z, zero segfaults/hangs —
+  spawn isolation proven on the exact CI runtime). Suite reached 99%
+  with zero failures, then the step `Run tests with coverage`
+  (`timeout-minutes: 15` in `ci.yml:96`, pytest serial over 7000+
+  tests) killed the job at 20:07 wall (`##[error] timed out after 15
+  minutes`). Per-test `pytest.ini` timeout (120s) never fired — no
+  single hang. This is suite-size vs step-budget infrastructure, the
+  same class MUSE_STATE §15 already assigned to the devops lane. The
+  workflow file is NOT lane-editable from here and S10 forbids
+  timeout-widening-alone as a fix: recorded + preserved, handed to
+  Zed/Nav as an explicit decision (split-by-directory or step budget,
+  their call). No test result hidden, no gate weakened.
+- Zed composition review (`aba5bc13`, PR104, read-only): CLEAN.
+  Includes this lane verbatim through `23178787` (empty diff on all 7
+  owned service/route files, MUSE_STATE, acceptance, fixtures) plus
+  Cline's C5–C10 analytical repairs and Zed consumers. No new
+  `place_order`/broker path (only evidence-doc mentions), no
+  `FLOWW_ENABLE_LIVE_PUBLIC`/`allow_market`/venue change, no
+  `server.py` mount — the admission-router mount and lease→submit
+  wiring remain REVIEW-PENDING his integration, as designed.
+  Cline's new services import stdlib only; `test_r18_repairs.py`
+  exercises Cline-owned modules, never execution services — no
+  cross-lane breakage surface in this direction. Combined-suite proof
+  stays Zed's frozen gate run to coordinate.
+- State unchanged: DELIVERED = §§46–47 lane work (now with hosted
+  per-test proof); REVIEW-PENDING = Zed mount/wiring/combined gates +
+  workflow-budget decision; ACCEPTED = prior receipts; COMMISSIONED =
+  external HOLD (NAV-*). Activation OFF. INSUFFICIENT EVIDENCE.

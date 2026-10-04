@@ -40,6 +40,8 @@ No merge, no deploy, no activation, no orders, no flag changes.
 | Real read-only adapter observations | `test_public_api_only` + `test_public_spot_validation` + `test_solstice_exec_disarmed` | **63 passed** |
 | Full `tests/solstice/` (backend CWD) | unmasked | **693 passed** |
 | Ship-runtime check (Python 3.12 + pinned `requirements.txt` scratch venv) | s18 deployment/admission/commissioned/hardening/lifecycle/brokerage-admission (121) | **passed** |
+| Hosted Linux/Python 3.12 (PR103 run 37162537688 @ `23178787`) | all 17 `test_s18_deployment` passed in ~6s, suite 99% with zero failures | **per-test green; step killed by 15-min budget (infra HOLD, see below)** |
+| Hosted lint (same head) | ruff + gates | **passed** |
 | Lint/security/docs | ruff + silent-except (359 files) + bandit (touched) + openapi `--check` | clean / OK / clean / **380 paths current** |
 | External commissioning | live account, entitlement, production capture, paid turns | NOT RUN — labeled, see below |
 
@@ -117,6 +119,12 @@ S1–S3 codes: `STORE_UNAVAILABLE`, `POLICY_STORE_UNAVAILABLE`,
 
 ## Remaining externals (HOLD, not engineering)
 
+CI step budget (infra, for Zed/Nav): the serial 7000+ suite exceeds the
+15-min `Run tests with coverage` step on hosted runners (run
+37162537688 reached 99% with zero failures, then killed). Per-test
+evidence is green; no lane code slows the suite (owned spawn tests: 6s
+hosted). Decision (split or budget) belongs to the workflow owners —
+not a lane edit, never a hidden failure.
 NAV-ACCOUNT (exact account/rights/policy values), NAV-CAPTURE (approved
 storage + admitted production restart records), NAV-NATIVE (native
 workflow/position review), NAV-MODEL (owner save + authorized turn),
