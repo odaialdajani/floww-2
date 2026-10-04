@@ -1,8 +1,21 @@
 # FLOWW integration review
 
-Current tested combined CODE: **`aadea4ac833e35b14375f9f36243c7da1f526d7f`**, draft [PR104](https://github.com/odaialdajani/floww-2/pull/104), isolated `.worktrees/zed-r17-integration-20261003`. Includes main6eaa3343/PR102 safety fix, prior Zed integration and committed Spark PR103d8ba5b7b (strict35939a6e/recovery-surplus a9e794ca), plus the owned durable-surplus warning. Full local backend7105/37 existing skips/68.99%, frontend126/1155, stories/axe29/builds and8-route compiled browser/native200% pass. Strict missing-row/query-failure approval refusal is closed for strict callers, not authenticated execution. Inventory is not permission and the expiry listing is not an analytical map. Read [R17_PASS5_ACCEPTANCE](R17_PASS5_ACCEPTANCE.md), [exact-head hosted closure](https://github.com/odaialdajani/floww-2/pull/104#issuecomment-5971763877) and [ZED_STATE](../ZED_STATE.md). Earlier receipts are historical; shared screenshots/browser receipt now belong to pass5. No Zed PR merge, deployment, existing-service restart, paid turn or activation. Commissioning remains HOLD.
+## Current R18 production consumers
 
-## Reviewable production behavior
+Tested source **4bc20b69c599535a1c4e80fa21a5c62357e4284c**, single review-only PR104. [Acceptance](../r18/ZED_R18_PASS3_ACCEPTANCE.md), [commissioning](COMMISSIONING.md), [continuation](../r18/ZED_R18_CONTINUATION.md), [current checkpoint](../ZED_STATE.md). Stored owning range grid/replay/selected-cell Lodestar are now implemented; exact range contract/native drafting and producer authority/qualification remain engineering HOLD. PolicyUNSET, activationOFF; no merge/deploy/restart/order/paid turn.
+
+New local gates: backend7303/37existing skips/69.72%, frontend130suites/1369, stories36/a11y, both builds/security/truth227/silent362/API383/census394/protected71; actual compiled8routes/10captures/native200%,690source hashes,0exceptions/mutations. Hosted exact later receipt includingDocker comes from PR104 closure. Synthetic/scripted evidence is not production/owner/native/Nav approval;20warnings/install overlay remain.
+
+- [Owning partial range](../r18/replay-evidence/range-partial-1440.png) · [narrow](../r18/replay-evidence/range-partial-390.png)
+- [Stored range replay](../r18/replay-evidence/range-replay-1440.png) · [narrow replay](../r18/replay-evidence/range-replay-390.png) · [native200%](../r18/replay-evidence/range-native200.png)
+- [Actual source/bundle/stored-route/research browser receipt](../r18/replay-evidence/browser-receipt.json) · [machine validation](../r18/replay-evidence/validation-r18-final.json)
+- Story IDs: `solstice-analytical-range--complete`, `--partial-coverage`, `--window-unavailable`, `--reversed-window-refused`, `--stored-research-replay`, `--corrupt-stored-frame`, `--empty-stored-index`.
+
+## Historical R17 evidence below
+
+Historical tested combined CODE: **`aadea4ac833e35b14375f9f36243c7da1f526d7f`**, draft [PR104](https://github.com/odaialdajani/floww-2/pull/104), isolated `.worktrees/zed-r17-integration-20261003`. Includes main6eaa3343/PR102 safety fix, prior Zed integration and committed Spark PR103d8ba5b7b (strict35939a6e/recovery-surplus a9e794ca), plus the owned durable-surplus warning. Full local backend7105/37 existing skips/68.99%, frontend126/1155, stories/axe29/builds and8-route compiled browser/native200% pass. Strict missing-row/query-failure approval refusal is closed for strict callers, not authenticated execution. Inventory is not permission and the expiry listing is not an analytical map. Read [R17_PASS5_ACCEPTANCE](R17_PASS5_ACCEPTANCE.md), [exact-head hosted closure](https://github.com/odaialdajani/floww-2/pull/104#issuecomment-5971763877) and [ZED_STATE](../ZED_STATE.md). Earlier receipts are historical; shared screenshots/browser receipt now belong to pass5. No Zed PR merge, deployment, existing-service restart, paid turn or activation. Commissioning remains HOLD.
+
+## Historical R17 production behavior
 
 - All eight current workspace IDs are registry-backed, URL-authoritative and browser-history aware. Zenith and Steal Three mounts/calculations remain intact.
 - Solstice defaults to Matrix + Profile; left Profile changes geometry without discarding selection. Legacy Volume Profile remains accessible separately. GEX+VEX, Raw+adjusted, Multi-map, Calendar, Follow and Expand remain working. Next listed uses the admitted day-only server query; polling avoids the legacy loaded-only data alias. Four columns are not four DTE. Read-only 14–60DTE listing admission and exact sorted date/DTE projection are disclosed with count/edge limits; producer-reported completeness is not independently exhaustive coverage. The analytical range map remains visibly unavailable.

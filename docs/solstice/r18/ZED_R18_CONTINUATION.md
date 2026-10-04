@@ -1,4 +1,21 @@
-# R18 continuation — one successor, no activation
+# R18 current continuation — one successor, no activation
+
+Current tested source **4bc20b69c599535a1c4e80fa21a5c62357e4284c**; Spark1d340199 consumed, Clinea737df2d/runtimec085f8fb retained. Reviewed Clinev3a0c7fbc6 **rejected**, not silently coerced. [Current acceptance](ZED_R18_PASS3_ACCEPTANCE.md) / [commissioning](../integration/COMMISSIONING.md) / [checkpoint](../ZED_STATE.md) supersede historical queue below.
+
+| READY frontier / status | Exact next action |
+|---|---|
+| Owned production range/replay/Lodestar/native review consumers — REVIEW_REQUIRED | Implemented and locally verified:7303backend/37existing skips/69.72%,130frontend suites/1369,36stories/a11y, builds/security/truth227/silent362/API383/census394/no collisions, browser8routes/10captures/native200%/690source hashes/0exceptions/mutations, protected71. Exact final hosted/Docker closure and Nav visual review remain separate. |
+| Cline v3 integrity/population/capture/census — BLOCKED_PRODUCER | Fix partial fixture coverage3 versus0+1 and falsely non-synthetic classification; regenerate identity/wrappers. Restore coalesced debit and cancellation cleanup without pre-denial auth/accounts. Shared exception-safe write/duplicate/index/retrieve binder; real kernel exclusion/production/session qualification. Do not weaken existing strict guards or adopt inconsistent fixture. Request PR106#issuecomment-5979463755. |
+| Range exact-contract/native draft — BLOCKED_PRODUCER | Supply recoverable exact owning stored OSI/quotes/multiplier/clock resolver or retain honest unavailable. Current range drafts are contractNone/review_only/executablefalse. Never substitute current chain or friend score. |
+| Spark commissioned entry authority — BLOCKED_PRODUCER | Authoritative immutable/atomic stored approver, raw/factory/OSI/exact-payload closure, valid server preflight/clock/principal, every entry path mandatory default-deny policy/risk/lease/census/protection/recovery; preserve cancel/reconcile/exits. Request PR103#issuecomment-5979463886. No privileged mount based on pure ADMIT or checkpoint DONE. |
+| Final application acceptance — HOLD | Green source gates do not close producer defects. Next admitted material contract gets a new coherent composition and meaningful focused/full exact-code proof. No repeated unchanged resweeps or continuous CI polling. |
+| NAV-ACCOUNT/CAPTURE/MODEL/NATIVE/VISUAL/RELEASE — BLOCKED_EXTERNAL | Concrete commissioning inputs/receipts remain UNSET/unapproved. No real capture/restart/paid model/native workflow acknowledgement/release is fabricated. |
+
+Published owned slice sequence:47abd27b grid/settings/native brief; f951cad9 stored replay;8810877e stored research/server seam;67d697e2 pure import-boundary correction;c0747043/9b9b1887 reachable scroll/menu;4bc20b69 narrow reviewed Spark hardening. Failed backend and browser receipts retained. All source changes stay in existing isolated lane/PR104; dirty primary, all worktrees/watchdog/peer checkpoints/protected71/frozen paths preserved. Operational workers/entry remainOFF; policyUNSET; net outcomesINSUFFICIENT.
+
+Resume by checking exact Git/status/own checkpoint/hosted closure and material producer changes once. Do not merge overlapping PRs sequentially into main or consume dirty peer source. Coordinate versioned fields and writer acknowledgements before adapting validators/mounts. Current read-only research callbacks are fixed server composition, not browser-selected sources or trading authority.
+
+## Historical first-slice continuation
 
 Owner Zed. Branch `solstice/zed-r17-integration-20261003`; worktree `.worktrees/zed-r17-integration-20261003`. Main6eaa3343; composed Clinee6d35745/Sparka73f79b9; code47abd27b; tested generated-doc headbb13f96a. Later metadata receipt SHA comes from Git/PR104. See [acceptance](ZED_R18_ACCEPTANCE.md), own [checkpoint](../ZED_STATE.md) and [commissioning](../integration/COMMISSIONING.md).
 

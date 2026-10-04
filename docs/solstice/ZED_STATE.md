@@ -1,6 +1,26 @@
 # ZED_STATE — FLOWW integration continuation
 
-## R18 pass 3 — stored range Lodestar grounding
+## R18 current acceptance — frozen candidate4bc20b69
+
+Current tested source **4bc20b69c599535a1c4e80fa21a5c62357e4284c**, main6eaa3343/common22df6fe6. Consumed Spark1d340199 and Clinea737df2d/runtimec085f8fb. Clinev3a0c7fbc6 reviewed and REJECTED pending contradictory partial coverage/synthetic classification and adjacent budget/cancel/binding/population/qualification fixes; no silent schema coercion. PR104 remains the single successor, not sequential overlapping main merges. All producer checkpoints/source remain verbatim; primary9a6c0295 dirty, every worktree/watchdog/frozen/protected path preserved.
+
+**Current local proof:** full unmasked backend7303pass/37existing skips/3363warnings/69.72%, frontend130suites/1369, stories36/axe, production+Storybook builds, Ruff/Bandit/truth227/silent362/API383/census394/no collisions, protected71 committed+working unchanged. Compiled browser4bc20b69 covers8routes/10captures/stored rga1 list/select/play/pause/speed/step/scrub/corrupt/Live/actual stored-cell assistant/keyboard+navigation/native200%,690 matching source hashes,0exceptions/execution mutations;20warnings/install overlay retained. Actual model turn remains scripted/offline, editor effort unobservable; no actual owner settings/paid turn proof.
+
+Owned production grid/stored research replay/Lodestar/server seam/native legacy-contract review are delivered. Strict degraded facts, unknown clocks, no current-chain/inspection/history substitute and contractNone/executablefalse range drafts remain explicit. Header/digest checks are consistency, NOT full origin/population/production admission. Root import boundary restored by pinned pure v2 verifier+conformance, no test allowlist weakening. Browser found2251px clipped canvas and popup disclosure covering menu; normal scrolling/flow fixes pass real clicks, no forced interactions or removed warnings. Failed backend/import/browser receipts retained; no new skips/xfails/timeouts masked.
+
+[Current acceptance/previews](r18/ZED_R18_PASS3_ACCEPTANCE.md), [machine gate receipts](r18/replay-evidence/validation-r18-final.json), [continuation](r18/ZED_R18_CONTINUATION.md), [concrete commissioning packet](integration/COMMISSIONING.md) and consumer contract are current. Earlier pass1/2/3 proof remains historical at exact stated heads.
+
+| Frontier | Current status / exact next action |
+|---|---|
+| Owned range/replay/research/manual native consumers | REVIEW_REQUIRED; delivered source and local gates above, Nav visual remains external. |
+| Cline v3 full qualification + exact range contract | BLOCKED_PRODUCER; source/fixture/budget/cancellation/binder/population/production/session fixes plus recoverable exact stored contract/quote resolver. PR106#issuecomment-5979463755. Do not relax guards or reclassify source fixtures. |
+| Spark mandatory server-owned execution boundary | BLOCKED_PRODUCER; authoritative atomic immutable approver, usable preflight, every entry mandatory policy/risk/lease/census/protection/recovery, raw approval/OSI/remaining exact payload and named principal/time closures. PR103#issuecomment-5979463886. No privileged mount/arming. |
+| Combined application acceptance | ENGINEERING_HOLD despite green local gates; producer defects remain engineering, not operator-only. Next admitted material contract prompts focused/new full source proof, not unchanged resweeps. |
+| NAV-ACCOUNT/CAPTURE/MODEL/NATIVE/VISUAL/RELEASE | Separate BLOCKED_EXTERNAL; all actual policy/account/production/paid/native/release approvals UNSET/unverified. No profitability guarantee. |
+
+Next exact action: one documentation/evidence-only receipt commit/push, verify remote and source equality, rewrite combined PR104 body and one bounded exact-final-head hosted wait includingDocker. Update external closure with actual results without recursive receipt commits. Hosted status pending at preparation, not borrowed from prior greens. No main merge/deploy/existing-service restart/activation/order/paid turn; workers/entryOFF, policyUNSET, measured outcomesINSUFFICIENT. Do not continuously poll CI or peer heads; resume only after material admitted producer contract or separately authorized operator action.
+
+## Historical R18 pass 3 — stored range Lodestar grounding
 
 Continuing owned source from published replay checkpoint **f951cad9c11593c65169ab89ee21ef3817f29cb8**. Existing agent request/research/provider/history/draft path now admits strict stored `range-replay` only; `range-live` remains refused. Server's existing research factory receives a fixed `read_recorded_range(ticker,record_id)` callback to the recorder, not a browser-selected source or new route. Wrapper/envelope/request identity, digest consistency, schema/query/NY clocks/axes/registered metric/model/unit/count/selected-cell checks gate recorded facts. Omitted top metrics admission summary is never used as evidence; raw kernel population and production integrity remain unqualified.
 

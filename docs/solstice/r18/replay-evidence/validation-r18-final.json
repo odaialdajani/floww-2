@@ -1,0 +1,179 @@
+{
+  "version": "floww-combined-validation.v1",
+  "sourceCommit": "4bc20b69c599535a1c4e80fa21a5c62357e4284c",
+  "baseCommit": "6eaa3343655a30fd38c40abaa6a903e8d3814530",
+  "commonBaselineCommit": "22df6fe67463acc8a41283804e710d07dff105bd",
+  "sparkCommit": "1d3401990036415076874a862c9e3c97e5bf7875",
+  "clineCommit": "a737df2d6fba7bf992b221714a287869da1fb940",
+  "clineRuntimeCommit": "c085f8fb69204e4584b41bbf4adecc663456d12e",
+  "rejectedClineV3Commit": "a0c7fbc64c5d91513fcdaecfdeb783d5bdee3f34",
+  "engineeringAcceptance": "HOLD_PRODUCER_AUTHORITY_AND_QUALIFICATION",
+  "commissioning": "HOLD",
+  "activation": "OFF",
+  "policy": "UNSET",
+  "profitability": "INSUFFICIENT_EVIDENCE",
+  "fixtureOnlyBrowser": true,
+  "paidProductModelTurn": false,
+  "results": {
+    "backend": {
+      "passed": 7303,
+      "existingSkips": 37,
+      "warnings": 3363,
+      "coveragePercent": 69.72
+    },
+    "frontend": {
+      "suites": 130,
+      "passed": 1369
+    },
+    "storybook": {
+      "passed": 36
+    },
+    "productionBuild": "PASS",
+    "storybookBuild": "PASS",
+    "ruff": "PASS",
+    "bandit": "PASS",
+    "truth": {
+      "passed": 227,
+      "failed": 0
+    },
+    "silentExceptFiles": 362,
+    "routeCensus": {
+      "version": "floww-route-census.v1",
+      "paths": 383,
+      "operations": 394,
+      "collisions": {},
+      "execution_admission_mounted": false,
+      "range_paths": [
+        "/api/solstice/price-paths/range-records",
+        "/api/solstice/price-paths/range-records/{record_id}",
+        "/api/heatmap/{ticker}/range-analytics"
+      ]
+    },
+    "protectedCommittedAndWorkingFiles": 71,
+    "browser": {
+      "routes": 8,
+      "viewports": 10,
+      "warnings": 20,
+      "pageExceptions": 0,
+      "executionMutations": 0,
+      "sourceHashesMatched": 690,
+      "nativeZoom": {
+        "method": "chrome.tabs.setZoom; no CSS/pinch emulation",
+        "factor": 2,
+        "before": {
+          "width": 1440,
+          "dpr": 1
+        },
+        "after": {
+          "width": 720,
+          "dpr": 2,
+          "cssZoom": "1",
+          "visualScale": 1
+        }
+      },
+      "rangeNativeZoom": {
+        "factor": 2,
+        "width": 720,
+        "documentWidth": 720
+      },
+      "storedRangeReads": 8,
+      "rangeResearch": true
+    },
+    "hostedFinalReceipt": "PENDING_AT_PREPARATION_SEE_PR104_CLOSURE"
+  },
+  "commands": {
+    "backend": "From backend: isolated DB_NAME=test_r18_final_candidate; MONGO_URL=mongodb://127.0.0.1:27017; DUCKDB_PATH=:memory:; FLOWW_AGENT_DISABLED=0; capture/price/execution/live-public/range-capture flags=0; vendor keys empty/test-key-ci; root backend/.venv/bin/python -m pytest tests/ -q --tb=short --cov=.",
+    "frontend": "From frontend: CI=true npm test -- --watchAll=false --runInBand",
+    "stories": "From frontend: CI=true npm run test-storybook",
+    "storybook_build": "From frontend: CI=true npm run build-storybook",
+    "browser_build": "node scripts/r15_browser_receipt.cjs /Users/nav/Documents/GitHub/floww-2/backend/.venv/bin/python '/Users/nav/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing' docs/solstice/r18/replay-evidence",
+    "ruff": "From backend: ruff check . --output-format=github",
+    "bandit": "From backend: root backend/.venv/bin/python -m bandit -r . --severity-level medium -q --exclude ./.venv,./tests --skip B101,B108,B301,B310,B313,B314,B324,B604,B608,B614,B615",
+    "truth": "bash qc/audit/truth_audit.sh",
+    "silent": "root backend/.venv/bin/python qc/audit/check_silent_excepts.py",
+    "api": "root backend/.venv/bin/python qc/audit/generate_api_docs.py --check"
+  },
+  "logs": {
+    "backend": {
+      "path": ".verification/r18-final-backend.log",
+      "sha256": "cd4620488d239dddd6ff4c6191f2102695414fc6394d510eb9266596bdebeb4a"
+    },
+    "frontend": {
+      "path": ".verification/r18-final-frontend.log",
+      "sha256": "eb6702084aaf602adb903d84b501d7ea70cf4ff8b1f83dff94faa144153313a4"
+    },
+    "stories": {
+      "path": ".verification/r18-final-stories.log",
+      "sha256": "b8c32dff17ded318ace21da25d66a972d0ad1419e1bc49af84763cc9dc0bcede"
+    },
+    "storybook_build": {
+      "path": ".verification/r18-final-storybook-build.log",
+      "sha256": "3cdc8db31f89cef1f5730f6c0d89e0f06cc923721e4a4d93c5c9fde4d8f65f75"
+    },
+    "browser_build": {
+      "path": ".verification/r18-final-browser.log",
+      "sha256": "62a748d3c3600b9c2e6f895a7290e8f118d303e48d8bf8ca61003b47f849c0cb"
+    },
+    "ruff": {
+      "path": ".verification/r18-final-ruff.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bandit": {
+      "path": ".verification/r18-final-bandit.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "truth": {
+      "path": ".verification/r18-final-truth.log",
+      "sha256": "b3df662305560fbae13446cf528edd903159c06026025cd3a55cfa4d73346470"
+    },
+    "silent": {
+      "path": ".verification/r18-final-silent.log",
+      "sha256": "60f37eb3f615876bc5f64e98f98801c5126c315b263df6eff95558a1d9d7ecb3"
+    },
+    "api": {
+      "path": ".verification/r18-final-api-check.log",
+      "sha256": "6ffa2ab36f871b308da8f58abffea4804f3e67726bf96f82d59c47921da227e1"
+    },
+    "census": {
+      "path": ".verification/r18-pass3-route-census.log",
+      "sha256": "effaa025cda51645269f135ce067ce4c03e2d4d71397930c692014d32587c5df"
+    },
+    "failed_backend": {
+      "path": ".verification/r18-pass3-backend-full.log",
+      "sha256": "58c32c1ce473a68d4d6c063af649b71728114e0780320b6dcaca9523f67ec0fd"
+    },
+    "boundary_red": {
+      "path": ".verification/r18-range-import-red.log",
+      "sha256": "a75d5e164abd7071c946c20feeb27881ac3e669d97a1c439efd48aeb4be0cb73"
+    },
+    "digest_red": {
+      "path": ".verification/r18-range-digest-red.log",
+      "sha256": "3ba1568f92a118f8eb9913083ebaec4080067e388ae3bace7cbadaacba827717"
+    },
+    "boundary_green": {
+      "path": ".verification/r18-range-import-green.log",
+      "sha256": "ee0b2e20c7e1e765120bfb564b52c90b58f9f13ebf536aa3f250841bda29fa76"
+    },
+    "scroll_failure": {
+      "path": ".verification/r18-pass3-browser-diagnostic.log",
+      "sha256": "0aa7173da8e96e04f5be9e84a61e9eea10b5bf7a4c0c0aa3066cdfef2b2adb84"
+    },
+    "menu_failure": {
+      "path": ".verification/r18-pass3-browser-click-diagnostic.log",
+      "sha256": "33c1c4c03d20b64cd5ff8e3c98d0ad647fa6dc855e178a3bc74bc31525440251"
+    },
+    "disclosure_red": {
+      "path": ".verification/r18-range-disclosure-red.log",
+      "sha256": "1f49b5e43603d2ad8cad3d06d7c4b45e1a7a20ae9fc4c6c7d1801f2a437e0477"
+    },
+    "disclosure_green": {
+      "path": ".verification/r18-range-disclosure-green.log",
+      "sha256": "3d57166a026c49312283299b770fa8322d5a5b2c78f53a76c35882edf486fa26"
+    },
+    "model_range": {
+      "path": ".verification/r18-range-parent-final.log",
+      "sha256": "b169402682547ae4f07b45ed4a051a0727ac75ea47133d3e2c7919660d8a5b0c"
+    }
+  },
+  "browserReceiptSha256": "2c51b96a0eabb6ca74953ea7baea480741666e5b1f76d11d3f4efd820355e753"
+}

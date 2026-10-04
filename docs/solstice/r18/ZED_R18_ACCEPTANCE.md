@@ -1,4 +1,6 @@
-# R18 combined consumer acceptance — engineering HOLD
+# Historical R18 pass-1 consumer acceptance
+
+**Superseded by [current stored replay/Lodestar acceptance](ZED_R18_PASS3_ACCEPTANCE.md).** This receipt remains immutable historical evidence at its stated heads; its missing-replay statements do not describe the new application.
 
 Prepared 3 October 2026. This is a reviewable successor, **not completed application acceptance or permission to commission**. Green gates establish tested behavior; they do not validate unsafe authority or supply missing producer APIs.
 
