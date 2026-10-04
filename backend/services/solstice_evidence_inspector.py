@@ -101,6 +101,9 @@ def inspect_recorder_store(path: str | None, *, ticker: str | None = None) -> di
             "tables": {name: (_safe_count(conn, name) if name in tables
                               else {"rows": None, "status": "ABSENT"})
                        for name in _KNOWN_TABLES},
+            "tables_note": "row counts are store-wide; they are NOT "
+                           "ticker-scoped — a scoped report describes the "
+                           "censuses, not the whole store",
             "unknown_tables": [t for t in tables if t not in _KNOWN_TABLES],
             "limits": list(_LIMITS),
         }
@@ -116,17 +119,35 @@ def inspect_recorder_store(path: str | None, *, ticker: str | None = None) -> di
             conn.close()
 
 
-def _is_synthetic_source(value: Any) -> bool | None:
-    """Classification rule (honest): known-synthetic markers → True; known
-    live capture sources → False; anything else → None (UNKNOWN, not real)."""
+def _classify_source(value: Any) -> str:
+    """R18-C11 (consumer review): four-way source classification.
+
+    "synthetic" for known synthetic/fixture/test/fake markers; "paper" for
+    known paper/sandbox/demo/shadow markers (checked BEFORE live markers,
+    so a source like "public-paper" is PAPER, never production); then
+    "production" only for the known live capture families; everything
+    else is "unknown". Paper evidence is real engineering data but is NOT
+    production evidence and never qualifies outcome sessions.
+    """
     if not isinstance(value, str) or not value:
-        return None
+        return "unknown"
     v = value.lower()
     if "synthetic" in v or "fixture" in v or v.startswith(("test", "fake")):
-        return True
+        return "synthetic"
+    if ("paper" in v or "sandbox" in v or "demo" in v
+            or "shadow" in v or "practice" in v):
+        return "paper"
     if v.startswith(("public", "vendor", "databento")):
-        return False
-    return None
+        return "production"
+    return "unknown"
+
+
+def _is_synthetic_source(value: Any) -> bool | None:
+    """Back-compat tri-state view over _classify_source: True only for
+    known-synthetic, False only for known-live production, None otherwise
+    (paper/unknown stay None — never production)."""
+    cls = _classify_source(value)
+    return True if cls == "synthetic" else (False if cls == "production" else None)
 
 
 def _snapshots_census(conn, report: dict[str, Any]) -> None:
@@ -168,11 +189,10 @@ def _price_path_cadence(conn, report: dict[str, Any]) -> None:
     try:
         rows = conn.execute(sql, params).fetchall()
         per: dict[str, list[float]] = {}
-        synth = {"synthetic": 0, "production": 0, "unknown": 0}
+        synth = {"synthetic": 0, "production": 0, "paper": 0, "unknown": 0}
         for tk, ts, source in rows:
-            cls = _is_synthetic_source(source)
-            synth["synthetic" if cls is True else
-                  "production" if cls is False else "unknown"] += 1
+            cls = _classify_source(source)
+            synth[cls] += 1
             try:
                 per.setdefault(str(tk), []).append(float(ts))
             except (TypeError, ValueError):
@@ -196,7 +216,10 @@ def _price_path_cadence(conn, report: dict[str, Any]) -> None:
             "per_ticker": cadence,
             "classification": synth,
             "classification_note": "synthetic/fixture/test sources are NEVER "
-                                   "production; unrecognized sources are UNKNOWN",
+                                   "production; paper/sandbox/demo sources "
+                                   "are PAPER (real engineering data, never "
+                                   "production evidence); unrecognized "
+                                   "sources are UNKNOWN",
             "cadence_note": "scheduled producer is a 5-minute swing-oriented "
                             "source (price-path-producer.v1); it is NOT an "
                             "intraminute 0DTE confirmation/stop tape",
@@ -227,23 +250,22 @@ def _lineage_census(conn, report: dict[str, Any]) -> None:
     except Exception as e:
         report["lineage"] = {"status": "QUERY_FAILED", "error": str(e)}
         return
-    dec_class = {"synthetic": 0, "production": 0, "unknown": 0}
-    dec_ids: dict[str, bool | None] = {}
+    dec_class = {"synthetic": 0, "production": 0, "paper": 0, "unknown": 0}
+    dec_ids: dict[str, str] = {}
     for did, features in dec_rows:
-        cls = None
+        cls = "unknown"
         try:
             feat = json.loads(features) if features else None
         except (TypeError, ValueError):
             feat = None
         if isinstance(feat, dict):
             if feat.get("synthetic") is True:
-                cls = True
+                cls = "synthetic"
             else:
                 src = feat.get("source") or feat.get("data_source")
-                cls = _is_synthetic_source(src)
+                cls = _classify_source(src)
         dec_ids[str(did)] = cls
-        dec_class["synthetic" if cls is True else
-                  "production" if cls is False else "unknown"] += 1
+        dec_class[cls] += 1
     report["_decision_class"] = dec_ids  # internal: sufficiency qualification
     try:
         o_where = " WHERE ticker = ?" if ticker else ""
@@ -266,8 +288,8 @@ def _lineage_census(conn, report: dict[str, Any]) -> None:
         "n_decisions_without_outcome": (int(n_unlabelled)
                                         if n_unlabelled is not None else None),
         "note": "decisions without outcome labels are CENSORED/UNKNOWN — "
-                "never zero losses and never invented wins; synthetic and "
-                "unclassified decisions never qualify as production evidence",
+                "never zero losses and never invented wins; synthetic, paper "
+                "and unclassified decisions never qualify as production evidence",
     }
 
 
@@ -298,9 +320,13 @@ def _outcome_sufficiency(conn, report: dict[str, Any]) -> None:
         report["outcome_sufficiency"] = {"status": "ABSENT_OR_UNREADABLE",
                                          "error": str(e)}
         return
-    # C8 qualification: a session day counts only when at least one label on
-    # that ACTUAL NY day is non-censored AND lineage-linked to a decision
-    # classified production (synthetic/unknown/unlinked never qualify).
+    # C8/C11 qualification: a session day counts only when at least one
+    # label on that ACTUAL NY day is non-censored AND lineage-linked to a
+    # decision classified PRODUCTION (synthetic/paper/unknown/unlinked never
+    # qualify). Naive timestamps carry no offset: the recorder stamps UTC,
+    # so a naive value is interpreted as UTC before converting to the NY
+    # session date — a host-local assumption would silently mislabel days.
+    from datetime import UTC as _utc
     from zoneinfo import ZoneInfo
 
     _et = ZoneInfo("America/New_York")
@@ -312,12 +338,15 @@ def _outcome_sufficiency(conn, report: dict[str, Any]) -> None:
         ny_day = None
         try:
             s = str(at_ts).replace("Z", "+00:00")
-            ny_day = datetime.fromisoformat(s).astimezone(_et).strftime("%Y-%m-%d")
+            dt = datetime.fromisoformat(s)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=_utc)  # recorder stamps UTC
+            ny_day = dt.astimezone(_et).strftime("%Y-%m-%d")
         except (TypeError, ValueError):
             pass
         if ny_day is None:
             continue
-        qualified = (not censored) and dec_class.get(str(did)) is False
+        qualified = (not censored) and dec_class.get(str(did)) == "production"
         (qualified_days if qualified else unqualified_days).add(ny_day)
         if str(did) not in dec_class:
             n_refused_link += 1
@@ -344,46 +373,81 @@ def _outcome_sufficiency(conn, report: dict[str, Any]) -> None:
 
 
 def _range_envelope_census(conn, report: dict[str, Any]) -> None:
+    """R18-C11 (consumer review): integrity-validated envelope census.
+
+    Every listed group passes the SAME shared canonical row binder as the
+    replay/index/retrieve paths (services.heatmap_history.bind_range_row)
+    before it can count as evidence: a tampered payload — including one
+    whose synthetic flag was flipped — is refused_or_corrupt, NEVER
+    production. A verified envelope classifies by its synthetic flag AND
+    its provenance source (a paper/sandbox source is PAPER even when the
+    flag says live). The 500-group listing cap is disclosed, never silent.
+    """
     if report["tables"].get("range_analytics_envelopes_v1", {}).get("rows") is None:
         report["range_analytics"] = {"status": "ABSENT"}
         return
+    from services.heatmap_history import bind_range_row
+
     ticker = report.get("ticker")
-    sql = ("SELECT ticker, window_min, window_max, asof_date, status, "
-           "envelope_json, count(*) FROM range_analytics_envelopes_v1")
+    sql = ("SELECT record_id, ticker, window_min, window_max, asof_date, "
+           "received_at, status, digest, envelope_json, count(*) "
+           "FROM range_analytics_envelopes_v1")
     params: list[Any] = []
     if ticker:
         sql += " WHERE ticker = ?"
         params.append(ticker)
-    sql += (" GROUP BY ticker, window_min, window_max, asof_date, status, "
-            "envelope_json LIMIT 500")
+    sql += (" GROUP BY record_id, ticker, window_min, window_max, asof_date, "
+            "received_at, status, digest, envelope_json LIMIT 501")
     try:
         rows = conn.execute(sql, params).fetchall()
+        truncated = len(rows) > 500
         envs = []
-        classification = {"synthetic": 0, "production": 0, "unknown": 0,
-                          "refused_or_corrupt": 0}
-        for r in rows:
-            try:
-                payload = json.loads(r[5]) if r[5] else None
-            except (TypeError, ValueError):
-                payload = None
-            if isinstance(payload, dict):
-                syn = payload.get("synthetic")
-                key = ("synthetic" if syn is True else
-                       "production" if syn is False else "unknown")
-            else:
+        classification = {"synthetic": 0, "production": 0, "paper": 0,
+                          "unknown": 0, "refused_or_corrupt": 0}
+        for (rid, tk, wmin, wmax, asof_d, recv, st, digest, ej,
+             n) in rows[:500]:
+            payload, refusal = bind_range_row(rid, tk, wmin, wmax, asof_d,
+                                              recv, st, digest, ej)
+            if refusal is not None:
                 key = "refused_or_corrupt"
-            classification[key] += int(r[6])
-            envs.append({"ticker": r[0], "window": [r[1], r[2]],
-                         "asof_date": r[3], "status": r[4],
-                         "synthetic": payload.get("synthetic")
-                         if isinstance(payload, dict) else None,
-                         "n": int(r[6])})
+            else:
+                src_class = _classify_source(
+                    (payload.get("provenance") or {}).get("data_source"))
+                syn = payload.get("synthetic")
+                if src_class == "paper":
+                    key = "paper"
+                elif syn is True:
+                    key = "synthetic"
+                elif syn is False:
+                    key = "production"
+                else:
+                    key = "unknown"
+            classification[key] += int(n)
+            envs.append({"record_id": rid, "ticker": tk,
+                         "window": [wmin, wmax],
+                         "asof_date": asof_d, "status": st,
+                         "integrity": ("verified" if refusal is None
+                                       else f"refused:{refusal}"),
+                         "synthetic": (payload.get("synthetic")
+                                       if isinstance(payload, dict) else None),
+                         "n": int(n)})
         report["range_analytics"] = {
             "scope": ticker or "ALL",
             "envelopes": envs,
             "classification": classification,
-            "classification_note": "envelope.synthetic flag; missing/unreadable "
-                                   "payload is never counted as production",
+            "n_groups_listed": len(envs),
+            "listing_cap": 500,
+            "truncated": truncated,
+            "truncation_note": "groups beyond the 500-row census cap are "
+                               "not listed; these counts describe the "
+                               "listed page only, never the whole store",
+            "classification_note": "canonical integrity is validated first "
+                                   "(shared bind_range_row): a tampered "
+                                   "payload — including a flipped synthetic "
+                                   "flag — is refused_or_corrupt and never "
+                                   "counts as production; a paper/sandbox "
+                                   "provenance source is PAPER even with a "
+                                   "live flag",
         }
     except Exception as e:
         report["range_analytics"] = {"status": "QUERY_FAILED", "error": str(e)}

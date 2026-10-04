@@ -37,8 +37,8 @@
    "source": "public-mid"
   }
  },
- "content_digest": "54f0a823b635f938492cbfb3e0531e638338fc29aa7117a38d9d18c360cb955c",
- "content_schema": "rga-content.v2",
+ "content_digest": "3ae0977fcd69e869ac8e3a117536920f966c5ba57fe8f4f33c8094e36a4c0bb6",
+ "content_schema": "rga-content.v3",
  "coverage": {
   "attempt_cap": 3,
   "budget": {
@@ -138,10 +138,11 @@
    "n_cells": 6,
    "population": {
     "input_contracts": 12,
-    "invalid": 0,
     "invalid_delta": 0,
+    "invalid_mult": 0,
+    "invalid_type": 0,
     "missing_delta": 0,
-    "missing_oi": 0,
+    "quarantined": 0,
     "usable": 12
    },
    "quarantined": 0,
@@ -174,13 +175,15 @@
    "n_available": 6,
    "n_cells": 6,
    "population": {
+    "expiry_missing": 0,
+    "gamma_nonpositive": 0,
     "input_contracts": 12,
-    "invalid": 0,
-    "invalid_delta": 0,
-    "missing_delta": 0,
-    "missing_oi": 0,
-    "usable": 12,
-    "zero_oi_or_excluded_by_kernel": "cell nulls record BS iv/T exclusions the aggregate does not class"
+    "iv_missing_or_nonpositive": 0,
+    "oi_missing_or_nonpositive": 0,
+    "strike_invalid": 0,
+    "t_missing_or_nonpositive": 0,
+    "type_unknown": 0,
+    "usable": 12
    },
    "reason": null,
    "status": "ok",
@@ -214,8 +217,10 @@
    "n_cells": 6,
    "population": {
     "input_contracts": 12,
-    "invalid": 0,
+    "invalid_mult": 0,
+    "invalid_type": 0,
     "missing_volume": 0,
+    "quarantined": 0,
     "usable": 12
    },
    "quarantined": 0,
@@ -343,7 +348,7 @@
   "max_dte": 60,
   "min_dte": 14
  },
- "record_id": "rga1-54f0a823b635f938492cbfb3",
+ "record_id": "rga1-3ae0977fcd69e869ac8e3a11",
  "refusals": [],
  "status": "ok",
  "symbol": "SPY",

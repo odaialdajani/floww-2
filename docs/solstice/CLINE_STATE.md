@@ -32,6 +32,7 @@ Zed owns mounts/frontend/combined acceptance. Spark owns execution boundary.
 | C8 | Inspector: ticker scope, classification, qualification | DONE | All censuses accept ticker scope; synthetic/production/unknown classification for price paths, decisions, envelopes; sufficiency counts QUALIFIED (non-censored, lineage-linked, production-classified, actual NY-date) sessions only — 30 synthetic days → INSUFFICIENT EVIDENCE (tested). |
 | C9 | Read-only range record index/replay API | DONE | `GET /api/solstice/price-paths/range-records` (+`/{record_id}`), identity filters, bounded pagination (≤200), per-row integrity verdicts, 404/422/503 typed refusals; legacy replay namespace untouched; frozen list/replay fixtures published. |
 | C10 | Capture guard + grounding identity | DONE | persist=true ≈ now requires FLOWW_RANGE_CAPTURE_ENABLED + operator API key (503 CAPTURE_DISABLED / 401); default reads never write. `grounding` block: stable `record_query_identity` for Zed, per-expiry contract population + contracts_digest, contract drafting explicitly REFUSED (`RANGE_RECORD_REFERENCE_ONLY`). |
+| C11 | Consumer-review repairs (Zed 2026-10-04 PR106 qualification HOLD) | DONE | `rga-content.v3`: metrics summary joined the canonical digest (v2 refused, never upgraded). ONE shared exception-safe `bind_range_row` behind duplicate-write/replay/index: binds row record_id, ticker, window (NULL → typed refusal, no TypeError), asof, status, received_at AND stored digest to the payload; replay wrapper echoes only bound payload values; index verdicts == retrieve verdicts; duplicate write validates the STORED payload's own identity. Kernel-CORRESPONDING populations (BS mirror for raw_oi; kernel counters for delta/volume + mirrored missing_volume) — missing IV is an exclusion, absent vendor gamma never falsifies unavailable. Debit now PRECEDES cold `_get_broker()` auth/accounts at all three seams (warm-singleton cache serve stays debit-free). Inspector: `paper` class distinct from production ("public-paper" never production/qualified), envelope census integrity-validated via the shared binder (tampered/forged never production), 500-group cap disclosed (`truncated`), naive timestamps read as UTC (recorder contract), store-wide tables note. Full v3 ok/partial/refused replay fixtures with version+envelope for Zed. 19 new tests (`test_r18_consumer_repairs.py`). |
 
 ## Acceptance checks at this lane head (reconciled exact counts)
 
@@ -102,6 +103,52 @@ Zed verifies hosted gates when assembling the combined candidate).
 Resume: continue READY work only if new scope appears; otherwise the C queue
 is complete and remaining items are NAV-* external (account/policy/capture
 approval) — report HOLD for those with the exact input required.
+
+## C11 session (2026-10-04, consumer-review repairs at this head)
+
+Scope: every defect in Zed's 2026-10-04 PR106 review comment
+("Full qualification HOLD: …"). New focused suite
+`tests/solstice/test_r18_consumer_repairs.py`: **19 passed** (failed-first:
+each defect reproduced before its fix). Full lane+guard sweep at this head:
+**332 passed, 0 failed** (313 prior + 19 new). `ruff check .` clean.
+
+- Content schema bumped `rga-content.v2 → v3` (metrics summary in the
+  digest); v2 payloads/envelopes refuse `INCOMPATIBLE_CONTENT_SCHEMA`.
+  Superseded digest generations recorded in the contract doc.
+- New shared exception-safe `heatmap_history.bind_range_row` (row
+  record_id/ticker/window/asof/status/received_at/stored-digest ↔ payload);
+  used by record-duplicate, replay and index — verdict parity tested against
+  cell tamper, header tamper, digest-column tamper, NULL window and a fully
+  self-consistent forgery (all refused; forgery caught by the row
+  record_id/digest binding the v2 code never had).
+- Kernel-corresponding populations: raw_oi BS mirror
+  (`oi/iv/t_missing_or_nonpositive`, `strike_invalid`, `expiry_missing`,
+  `type_unknown`, `gamma_nonpositive`), delta/volume kernel counters +
+  mirrored `missing_volume`. Tests pin: missing IV → partial/not-admitted;
+  no vendor gamma + iv/T → raw_oi stays finite/admitted (never
+  "unavailable"), delta/volume honestly unavailable.
+- Adapter: required debit now precedes cold `_get_broker()` auth/accounts at
+  all three seams; tests assert `_get_broker` await_count == 0 when the
+  debit raises. Warm-singleton identity-bound cache serve stays debit-free
+  (tested under a raising budget). 2+N and per-expiry skip accounting
+  unchanged (`budget_pre_debit == 4` still pinned).
+- Inspector: four-way `_classify_source` (synthetic/paper/production/
+  unknown; "public-paper" → paper, never production, never qualifies);
+  envelope census integrity-validated via the shared binder + provenance
+  paper classification; `truncated`/`listing_cap`/`n_groups_listed`
+  disclosed at the 500-group cap; naive `at_ts` read as UTC (one-aware +
+  one-naive same-instant test collapses to ONE NY day); `tables_note` says
+  counts are store-wide.
+- Fixtures regenerated under v3 (complete/partial/index/replay) plus NEW
+  `record_replay_partial_v1.json` and `record_replay_refused_v1.json`;
+  `record_replay_v1.json` now carries `version` + the FULL bound envelope
+  (was metadata-only). Byte hashes in the contract doc; complete record
+  `rga1-3ae0977fcd69e869ac8e3a11`, digest
+  `3ae0977fcd69e869ac8e3a117536920f966c5ba57fe8f4f33c8094e36a4c0bb6`.
+- Zed consumer impact: REGENERATE/refresh any mounted v2 fixture copies —
+  v2 records now refuse `INCOMPATIBLE_CONTENT_SCHEMA` by design; the
+  wrapper/envelope cross-check Zed planned is now fixture-backed. Contract
+  version bump is the recorded handoff; routes and shapes are unchanged.
 
 ## External (not engineering): NAV-CAPTURE
 

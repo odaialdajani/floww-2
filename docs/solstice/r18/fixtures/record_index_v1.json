@@ -7,16 +7,31 @@
   "ticker": "SPY"
  },
  "limit": 50,
- "n_returned": 1,
+ "n_returned": 2,
  "offset": 0,
  "rows": [
   {
    "asof_date": "2026-10-05",
-   "digest": "54f0a823b635f938492cbfb3e0531e638338fc29aa7117a38d9d18c360cb955c",
+   "digest": "2213b262ffec0a9c11ac0ab35c5276071eedaca4f786bc0d07f1bc0fb24cb822",
    "integrity": "verified",
    "received_at": "2026-10-05T13:59:30+00:00",
-   "record_id": "rga1-54f0a823b635f938492cbfb3",
-   "recorded_at": "2026-10-03T22:52:09.063928+00:00",
+   "record_id": "rga1-2213b262ffec0a9c11ac0ab3",
+   "recorded_at": "2026-10-04T10:51:48.359875+00:00",
+   "status": "partial",
+   "synthetic": false,
+   "ticker": "SPY",
+   "window": {
+    "max_dte": 60,
+    "min_dte": 14
+   }
+  },
+  {
+   "asof_date": "2026-10-05",
+   "digest": "3ae0977fcd69e869ac8e3a117536920f966c5ba57fe8f4f33c8094e36a4c0bb6",
+   "integrity": "verified",
+   "received_at": "2026-10-05T13:59:30+00:00",
+   "record_id": "rga1-3ae0977fcd69e869ac8e3a11",
+   "recorded_at": "2026-10-04T10:51:48.351331+00:00",
    "status": "ok",
    "synthetic": true,
    "ticker": "SPY",

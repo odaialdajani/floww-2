@@ -79,15 +79,21 @@ def _sha(text: str) -> str:
 # ── R18-C6: canonical content contract ──────────────────────────────
 # The evidence content digest covers the COMPLETE analytical evidence:
 # axes, dense cells, metric identity (basis/formula/unit/model/status/
-# population), clocks, coverage, provenance, synthetic flag, query and
-# status. Explicitly EXCLUDED transport/storage fields (never part of
-# content identity): the record id/digest themselves, the persistence
-# receipt block, and remarks written after capture.
-CONTENT_SCHEMA = "rga-content.v2"
+# population), the derived metrics summary, clocks, coverage, provenance,
+# synthetic flag, query and status. Explicitly EXCLUDED transport/storage
+# fields (never part of content identity): the record id/digest themselves,
+# the persistence receipt block, and remarks written after capture.
+#
+# rga-content.v3 (R18-C11, consumer review): the top-level `metrics`
+# admitted/partial/unavailable summary joined the digest subject — under
+# v2 a tampered summary (e.g. a partial metric relabeled admitted) kept
+# a valid digest. v2 payloads are refused INCOMPATIBLE_CONTENT_SCHEMA,
+# never silently upgraded; v2 fixture digests are recorded superseded.
+CONTENT_SCHEMA = "rga-content.v3"
 _CONTENT_KEYS = (
     "version", "status", "refusals", "symbol", "query", "axes", "grids",
-    "metric_registry", "clocks", "coverage", "provenance", "synthetic",
-    "grounding", "content_schema",
+    "metric_registry", "metrics", "clocks", "coverage", "provenance",
+    "synthetic", "grounding", "content_schema",
 )
 EXCLUDED_FROM_CONTENT = ("record_id", "content_digest", "persistence")
 
@@ -268,6 +274,91 @@ def _refusal(symbol: str, min_dte: int, max_dte: int, asof: date,
 
 
 
+def _bs_population(contracts: list[dict[str, Any]], spot: float,
+                  ticker: str) -> dict[str, Any]:
+    """R18-C11: kernel-CORRESPONDING population for the raw_oi surface.
+
+    The raw surface's cells come from ``gex_core.compute_gex_grid`` — a
+    Black-Scholes gamma grid computed from per-contract iv/T (vendor gamma
+    is NOT an input to it, and it neither quarantines adjusted contracts
+    nor uses a multiplier). This mirror walks the SAME per-contract filter
+    order as that kernel's canonical Python path, counting only the first
+    failing reason, so the population reports exactly the contract set
+    that produced the cells. In particular: a contract missing IV is an
+    EXCLUSION here (the kernel drops it — never "admitted"), and a
+    contract with IV/T but no vendor gamma is USABLE here (the BS grid
+    admits it — finite BS cells never say "unavailable").
+    """
+    from services.gex_core import DIV_YIELD, bs_gamma, option_type_sign, safe_float
+
+    q = DIV_YIELD.get(ticker, 0.0)
+    pop: dict[str, Any] = {
+        "input_contracts": len(contracts or []),
+        "usable": 0,
+        "oi_missing_or_nonpositive": 0,
+        "iv_missing_or_nonpositive": 0,
+        "t_missing_or_nonpositive": 0,
+        "strike_invalid": 0,
+        "expiry_missing": 0,
+        "type_unknown": 0,
+        "gamma_nonpositive": 0,
+    }
+    for c in contracts or []:
+        if not isinstance(c, dict):
+            pop["type_unknown"] += 1
+            continue
+        if safe_float(c.get("oi")) <= 0:
+            pop["oi_missing_or_nonpositive"] += 1
+            continue
+        if safe_float(c.get("iv")) <= 0:
+            pop["iv_missing_or_nonpositive"] += 1
+            continue
+        if safe_float(c.get("T")) <= 0:
+            pop["t_missing_or_nonpositive"] += 1
+            continue
+        strike = safe_float(c.get("strike"))
+        if strike <= 0:
+            pop["strike_invalid"] += 1
+            continue
+        t, iv = safe_float(c.get("T")), safe_float(c.get("iv"))
+        if not (c.get("expiry") or ""):
+            pop["expiry_missing"] += 1
+            continue
+        if option_type_sign(c.get("type")) is None:
+            pop["type_unknown"] += 1
+            continue
+        try:
+            g = bs_gamma(spot, strike, t, iv, q=q)
+        except Exception:  # defensive: count as excluded, never crash the map
+            pop["gamma_nonpositive"] += 1
+            continue
+        if g <= 0:
+            pop["gamma_nonpositive"] += 1
+            continue
+        pop["usable"] += 1
+    return pop
+
+
+def _volume_missing_population(contracts: list[dict[str, Any]]) -> dict[str, int]:
+    """R18-C11: mirror of the volume kernel's silent first skip.
+
+    ``compute_gex_grid_volume_vendor`` drops contracts with no usable
+    session volume without a kernel counter; count them here so the
+    exclusion is visible and drives partiality instead of hiding in a
+    cell gap. Quarantined contracts are already counted by the kernel.
+    """
+    from services.gex_core import safe_float_or_none
+
+    missing = 0
+    for c in contracts or []:
+        if not isinstance(c, dict) or c.get("adjusted") or c.get("nonstandard"):
+            continue
+        vol = safe_float_or_none(c.get("volume", c.get("V")))
+        if vol is None or vol <= 0:
+            missing += 1
+    return {"missing_volume": missing}
+
+
 def build_range_envelope(
     *,
     symbol: str,
@@ -306,16 +397,6 @@ def build_range_envelope(
         strike_keys = sorted(seen, key=float)
 
     if spot_ok and contracts:
-        from domain.exposure_metrics import (
-            compute_delta_weighted_oi as _agg_delta,
-        )
-        from domain.exposure_metrics import (
-            compute_raw_oi as _agg_raw,
-        )
-        from domain.exposure_metrics import (
-            compute_volume_gamma as _agg_volume,
-        )
-
         kernels: dict[str, tuple[str, dict[str, Any], str]] = {
             "raw_oi": ("gex_net_v1",
                        {**compute_gex_grid(spot, contracts, symbol),
@@ -328,29 +409,37 @@ def build_range_envelope(
                        compute_gex_grid_volume_vendor(spot, contracts),
                        "vendor_gamma(session volume)"),
         }
-        # R18-C7: genuine population accounting from the REGISTERED aggregates
-        # (domain.exposure_metrics ExposureResult) — raw input contract counts
-        # and per-reason exclusions, never a finite-cell recount. The volume
-        # aggregate reports missing VOLUME in its missing_oi slot (positional);
-        # it is relabeled here as missing_volume.
-        _raw_m = _agg_raw(contracts, spot)
-        _dw_m = _agg_delta(contracts, spot)
-        _vol_m = _agg_volume(contracts, spot)
+        # R18-C11 (consumer review): kernel-CORRESPONDING populations. Each
+        # surface's population reports the counters of the kernel that
+        # actually produced its cells — or, where a kernel reports none (the
+        # BS grid) or skips silently (the volume kernel's missing-volume
+        # drop), a mirror of that kernel's exact per-contract filter order.
+        # The previous borrowed domain aggregates carried vendor-gamma
+        # semantics and mis-stated the BS surface twice: a missing-IV
+        # contract counted as admitted, and absent vendor gamma could zero
+        # `usable` against finite BS cells. input_contracts stays the RAW
+        # contract count; unknown counts remain unknown, never cell counts.
+        _dw_k = kernels["delta_weighted"][1]
+        _vol_k = kernels["volume"][1]
         populations: dict[str, dict[str, Any]] = {
-            "raw_oi": {"input_contracts": len(contracts), "usable": _raw_m.usable,
-                       "missing_oi": _raw_m.missing_oi, "invalid": _raw_m.invalid,
-                       "missing_delta": _raw_m.missing_delta,
-                       "invalid_delta": _raw_m.invalid_delta,
-                       "zero_oi_or_excluded_by_kernel": "cell nulls record "
-                       "BS iv/T exclusions the aggregate does not class"},
-            "delta_weighted": {"input_contracts": len(contracts), "usable": _dw_m.usable,
-                               "missing_oi": _dw_m.missing_oi,
-                               "missing_delta": _dw_m.missing_delta,
-                               "invalid": _dw_m.invalid,
-                               "invalid_delta": _dw_m.invalid_delta},
-            "volume": {"input_contracts": len(contracts), "usable": _vol_m.usable,
-                       "missing_volume": _vol_m.missing_oi,  # volume slot relabeled
-                       "invalid": _vol_m.invalid},
+            "raw_oi": _bs_population(contracts, spot, symbol),
+            "delta_weighted": {
+                "input_contracts": len(contracts),
+                "usable": int(_dw_k.get("usable") or 0),
+                "missing_delta": int(_dw_k.get("missing_delta") or 0),
+                "invalid_delta": int(_dw_k.get("invalid_delta") or 0),
+                "invalid_mult": int(_dw_k.get("invalid_mult") or 0),
+                "quarantined": int(_dw_k.get("quarantined") or 0),
+                "invalid_type": int(_dw_k.get("invalid_type") or 0),
+            },
+            "volume": {
+                "input_contracts": len(contracts),
+                "usable": int(_vol_k.get("usable") or 0),
+                **_volume_missing_population(contracts),
+                "quarantined": int(_vol_k.get("quarantined") or 0),
+                "invalid_mult": int(_vol_k.get("invalid_mult") or 0),
+                "invalid_type": int(_vol_k.get("invalid_type") or 0),
+            },
             "window": {"input_contracts": 0, "usable": 0},
         }
     else:

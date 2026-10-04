@@ -37,13 +37,13 @@
    "source": "public-mid"
   }
  },
- "content_digest": "095a355309252e0018e0cc78b1b96058b0578c4d9ef23ceb4e3c197632e56eb5",
- "content_schema": "rga-content.v2",
+ "content_digest": "2213b262ffec0a9c11ac0ab35c5276071eedaca4f786bc0d07f1bc0fb24cb822",
+ "content_schema": "rga-content.v3",
  "coverage": {
-  "attempt_cap": 3,
+  "attempt_cap": null,
   "budget": {
    "note": "2 + admitted-expiry shared Public request envelope (adapter C8 all-or-nothing debit)",
-   "pre_debit": 5
+   "pre_debit": null
   },
   "complete": false,
   "complete_reason": "SKIPPED_EXPIRIES",
@@ -95,9 +95,9 @@
   "lower_edge_observed": true,
   "n_admitted": 3,
   "n_contracts": 8,
-  "n_expired_dropped": 0,
+  "n_expired_dropped": null,
   "n_listed": 7,
-  "n_returned_expiries": 2,
+  "n_returned_expiries": 0,
   "n_skipped_expiries": 1,
   "requested_window": {
    "max_dte": 60,
@@ -115,7 +115,11 @@
   "delta_weighted": {
    "basis": "OI_DELTA_WEIGHTED",
    "cell_gaps": 2,
-   "cell_invalid_delta": {},
+   "cell_invalid_delta": {
+    "2026-11-09": {
+     "600": 1
+    }
+   },
    "cell_missing_delta": {},
    "cells": {
     "2026-10-26": {
@@ -124,7 +128,7 @@
     },
     "2026-11-09": {
      "590": 1542240.0,
-     "600": 1542240.0
+     "600": -4354560.0
     },
     "2026-12-04": {
      "590": null,
@@ -132,7 +136,7 @@
     }
    },
    "formula_version": "gex.v2",
-   "invalid_delta": 0,
+   "invalid_delta": 1,
    "invalid_mult": 0,
    "invalid_type": 0,
    "metric_admitted": false,
@@ -143,17 +147,18 @@
    "n_cells": 6,
    "population": {
     "input_contracts": 8,
-    "invalid": 0,
-    "invalid_delta": 0,
+    "invalid_delta": 1,
+    "invalid_mult": 0,
+    "invalid_type": 0,
     "missing_delta": 0,
-    "missing_oi": 0,
-    "usable": 8
+    "quarantined": 0,
+    "usable": 7
    },
    "quarantined": 0,
    "reason": null,
    "status": "partial",
    "unit": "USD per 1% spot move (S^2 dealer-positive convention)",
-   "usable": 8
+   "usable": 7
   },
   "raw_oi": {
    "basis": "OI",
@@ -179,13 +184,15 @@
    "n_available": 4,
    "n_cells": 6,
    "population": {
+    "expiry_missing": 0,
+    "gamma_nonpositive": 0,
     "input_contracts": 8,
-    "invalid": 0,
-    "invalid_delta": 0,
-    "missing_delta": 0,
-    "missing_oi": 0,
-    "usable": 8,
-    "zero_oi_or_excluded_by_kernel": "cell nulls record BS iv/T exclusions the aggregate does not class"
+    "iv_missing_or_nonpositive": 0,
+    "oi_missing_or_nonpositive": 0,
+    "strike_invalid": 0,
+    "t_missing_or_nonpositive": 0,
+    "type_unknown": 0,
+    "usable": 8
    },
    "reason": null,
    "status": "partial",
@@ -219,8 +226,10 @@
    "n_cells": 6,
    "population": {
     "input_contracts": 8,
-    "invalid": 0,
+    "invalid_mult": 0,
+    "invalid_type": 0,
     "missing_volume": 0,
+    "quarantined": 0,
     "usable": 8
    },
    "quarantined": 0,
@@ -331,7 +340,7 @@
  },
  "provenance": {
   "adapter": "public_api_adapter.fetch_chain_for_expiries",
-  "chain_instrument_type": "EQUITY_OPTION",
+  "chain_instrument_type": null,
   "data_source": "public_api",
   "greeks_sources": [
    "public_api"
@@ -343,12 +352,12 @@
   "max_dte": 60,
   "min_dte": 14
  },
- "record_id": "rga1-095a355309252e0018e0cc78",
+ "record_id": "rga1-2213b262ffec0a9c11ac0ab3",
  "refusals": [
   "PARTIAL_COVERAGE"
  ],
  "status": "partial",
  "symbol": "SPY",
- "synthetic": true,
+ "synthetic": false,
  "version": "range-analytics.v1"
 }

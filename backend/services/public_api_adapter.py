@@ -423,14 +423,47 @@ async def fetch_chain_from_public_api(
     coalescing; on upstream failure a stale entry is served when present.
     Returns None if Public API key missing or call fails with no cache.
     """
-    pb = await _get_broker()
-    if pb is None:
-        return None
-
     key = (ticker.upper(), max_expiries)
+    # R18-C11: WARM-singleton cache serve — no admission, zero provider
+    # calls (identity stays explicit: the cached broker IS the live one).
+    now = time.monotonic()
+    hit = _CHAIN_CACHE.get(key)
+    if hit is not None and BROKER is not None and hit[1] is BROKER \
+            and now - hit[0] < _CHAIN_CACHE_TTL:
+        return _cached_copy(hit[2], stale=False)
+
+    # R18-C11 (consumer review): admission BEFORE broker init. A cold
+    # _get_broker() performs vendor auth/accounts; a failed REQUIRED debit
+    # must therefore precede it — refusal at this gate spends ZERO provider
+    # calls, including cold auth/accounts. The debit is held until this
+    # attempt settles; a same-identity cache serve after admission
+    # releases it. Module-attribute access keeps the budget patchable.
+    _debit_held = False
+    try:
+        await _public_budget.budget.acquire_n(2 + max_expiries, "api.public.com")
+        _debit_held = True
+    except _public_budget.BudgetExhausted as exc:
+        log.warning("Public budget refused %s chain fetch: %s", ticker, exc)
+        return None
+    except Exception as exc:
+        # R18-C5/C11: a failed REQUIRED debit (malformed/unavailable budget
+        # service) refuses with ZERO vendor calls — never continue an
+        # unbudgeted vendor request.
+        log.warning("Public budget debit failed for %s — refusing fetch "
+                    "with zero vendor calls: %s", ticker, exc)
+        return None
+    pb = await _get_broker()  # admission held; cold auth/accounts allowed here
+    if pb is None:
+        if _debit_held:
+            with contextlib.suppress(Exception):
+                _public_budget.budget.release()
+        return None
     now = time.monotonic()
     hit = _CHAIN_CACHE.get(key)
     if hit is not None and hit[1] is pb and now - hit[0] < _CHAIN_CACHE_TTL:
+        if _debit_held:
+            with contextlib.suppress(Exception):
+                _public_budget.budget.release()
         return _cached_copy(hit[2], stale=False)
 
     async with _chain_lock(key):
@@ -438,24 +471,10 @@ async def fetch_chain_from_public_api(
         now = time.monotonic()
         hit = _CHAIN_CACHE.get(key)
         if hit is not None and hit[1] is pb and now - hit[0] < _CHAIN_CACHE_TTL:
+            if _debit_held:
+                with contextlib.suppress(Exception):
+                    _public_budget.budget.release()
             return _cached_copy(hit[2], stale=False)
-        # C8: debit the fan-out (2+N upstream calls) before any Public
-        # call. All-or-nothing: refusal spends zero and returns None.
-        # The in-flight slot releases when this attempt settles.
-        # Module-attribute access keeps the budget singleton patchable.
-        try:
-            await _public_budget.budget.acquire_n(2 + max_expiries, "api.public.com")
-            _debit_held = True
-        except _public_budget.BudgetExhausted as exc:
-            log.warning("Public budget refused %s chain fetch: %s", ticker, exc)
-            return None
-        except Exception as exc:
-            # R18-C5: a failed REQUIRED debit (malformed/unavailable budget
-            # service) refuses with ZERO provider calls — never continue an
-            # unbudgeted vendor request.
-            log.warning("Public budget debit failed for %s — refusing fetch "
-                        "with zero vendor calls: %s", ticker, exc)
-            return None
         # D5: the success timestamp is the request start, so a stale
         # in-flight success cannot erase a sibling's fresher 429 contract.
         _fetch_t0 = time.monotonic()
@@ -749,16 +768,14 @@ async def fetch_option_expiry_listing(ticker: str) -> dict[str, Any] | None:
     """
     from services.public_api import resolve_public_instrument_type
 
-    pb = await _get_broker()
-    if pb is None:
-        return None
-    trading = pb.get_trading_account()
-    if trading is None:
-        log.warning("No trading account for Public API")
-        return None
-    account_id = trading.account_id
     symbol = _normalize_symbol(ticker)
     chain_type = resolve_public_instrument_type(ticker, "chain")
+    # R18-C11 (consumer review): admission BEFORE broker init — a cold
+    # _get_broker() performs vendor auth/accounts, so a failed REQUIRED
+    # debit must precede it. Refusal at this gate spends ZERO provider
+    # calls, including cold auth/accounts. The debit is held until this
+    # attempt settles.
+    _debit_held = False
     try:
         await _public_budget.budget.acquire_n(1, "api.public.com")
         _debit_held = True
@@ -766,10 +783,24 @@ async def fetch_option_expiry_listing(ticker: str) -> dict[str, Any] | None:
         log.warning("Public budget refused %s expiry listing: %s", ticker, exc)
         return None
     except Exception as exc:
-        # R18-C5: failed REQUIRED debit → refusal, zero vendor calls.
+        # R18-C5/C11: failed REQUIRED debit → refusal, zero vendor calls.
         log.warning("Public budget debit failed for %s listing — refusing "
                     "with zero vendor calls: %s", ticker, exc)
         return None
+    pb = await _get_broker()  # admission held; cold auth/accounts allowed here
+    if pb is None:
+        if _debit_held:
+            with contextlib.suppress(Exception):
+                _public_budget.budget.release()
+        return None
+    trading = pb.get_trading_account()
+    if trading is None:
+        log.warning("No trading account for Public API")
+        if _debit_held:
+            with contextlib.suppress(Exception):
+                _public_budget.budget.release()
+        return None
+    account_id = trading.account_id
     _fetch_t0 = time.monotonic()
     try:
         try:
@@ -822,9 +853,8 @@ async def fetch_chain_for_expiries(
     """
     from services.public_api import resolve_public_instrument_type
 
-    pb = await _get_broker()
-    if pb is None:
-        return None
+    # Local date parsing first (no I/O) so admission precedes every
+    # provider-adjacent action.
     dates: list[str] = []
     for raw in expiry_dates or []:
         s = str(raw)[:10]
@@ -838,9 +868,44 @@ async def fetch_chain_for_expiries(
         return None
 
     key = ("RANGE", ticker.upper(), tuple(sorted(dates)))
+    # R18-C11: WARM-singleton cache serve — no admission, zero provider
+    # calls (identity stays explicit: the cached broker IS the live one).
+    now = time.monotonic()
+    hit = _CHAIN_CACHE.get(key)
+    if hit is not None and BROKER is not None and hit[1] is BROKER \
+            and now - hit[0] < _CHAIN_CACHE_TTL:
+        return _cached_copy(hit[2], stale=False)
+
+    # R18-C11 (consumer review): admission BEFORE broker init — a cold
+    # _get_broker() performs vendor auth/accounts, so a failed REQUIRED
+    # debit must precede it. Refusal at this gate spends ZERO provider
+    # calls, including cold auth/accounts. The debit is held until this
+    # attempt settles; a same-identity cache serve after admission
+    # releases it.
+    _debit_held = False
+    try:
+        await _public_budget.budget.acquire_n(2 + len(dates), "api.public.com")
+        _debit_held = True
+    except _public_budget.BudgetExhausted as exc:
+        log.warning("Public budget refused %s range chain fetch: %s", ticker, exc)
+        return None
+    except Exception as exc:
+        # R18-C5/C11: failed REQUIRED debit → refusal, zero vendor calls.
+        log.warning("Public budget debit failed for %s range fetch — "
+                    "refusing with zero vendor calls: %s", ticker, exc)
+        return None
+    pb = await _get_broker()  # admission held; cold auth/accounts allowed here
+    if pb is None:
+        if _debit_held:
+            with contextlib.suppress(Exception):
+                _public_budget.budget.release()
+        return None
     now = time.monotonic()
     hit = _CHAIN_CACHE.get(key)
     if hit is not None and hit[1] is pb and now - hit[0] < _CHAIN_CACHE_TTL:
+        if _debit_held:
+            with contextlib.suppress(Exception):
+                _public_budget.budget.release()
         return _cached_copy(hit[2], stale=False)
 
     async with _chain_lock(key):
@@ -848,18 +913,10 @@ async def fetch_chain_for_expiries(
         now = time.monotonic()
         hit = _CHAIN_CACHE.get(key)
         if hit is not None and hit[1] is pb and now - hit[0] < _CHAIN_CACHE_TTL:
+            if _debit_held:
+                with contextlib.suppress(Exception):
+                    _public_budget.budget.release()
             return _cached_copy(hit[2], stale=False)
-        try:
-            await _public_budget.budget.acquire_n(2 + len(dates), "api.public.com")
-            _debit_held = True
-        except _public_budget.BudgetExhausted as exc:
-            log.warning("Public budget refused %s range chain fetch: %s", ticker, exc)
-            return None
-        except Exception as exc:
-            # R18-C5: failed REQUIRED debit → refusal, zero vendor calls.
-            log.warning("Public budget debit failed for %s range fetch — "
-                        "refusing with zero vendor calls: %s", ticker, exc)
-            return None
         _fetch_t0 = time.monotonic()
         try:
             trading = pb.get_trading_account()

@@ -47,7 +47,6 @@ evidence only; Zed owns the final combined acceptance at one frozen head.
   fixtures, zero network/broker/worker activation.
 
 ## R18 repair pass (C5–C10) — completed at this head
-
 - **C5 budget**: all three required-debit sites (legacy `fetch_chain_from_public_api`,
   `fetch_option_expiry_listing`, `fetch_chain_for_expiries`) refuse with ZERO
   vendor calls on any debit failure (BudgetExhausted or unexpected/malformed
@@ -72,6 +71,44 @@ evidence only; Zed owns the final combined acceptance at one frozen head.
   AND operator API key; default reads never write; grounding block gives Zed
   a stable resolver identity and an explicit contract-drafting refusal
   (`test_c10_*`).
+
+## R18 consumer-review pass (C11) — Zed qualification-HOLD findings
+
+Zed's 2026-10-04 PR106 review listed concrete producer defects; each was
+reproduced failed-first, then fixed:
+
+- **rga-content.v3**: the top-level `metrics` summary joined the canonical
+  digest (v2 let a tampered admitted/partial summary keep a valid digest);
+  v2 payloads refuse `INCOMPATIBLE_CONTENT_SCHEMA`, never silently upgraded.
+- **Shared row binding**: `heatmap_history.bind_range_row` is the ONE
+  exception-safe validator behind duplicate-write, replay retrieval and the
+  index — row record_id/ticker/window/as-of/status/received-at/stored-digest
+  all bind to the canonical payload; NULL window is a typed refusal (the
+  review's TypeError); the replay wrapper echoes only bound values; index
+  and retrieve verdicts are provably identical; a fully self-consistent
+  forgery under another row refuses.
+- **Kernel-corresponding populations**: raw_oi reports a mirror of the BS
+  kernel's filter order (missing IV = exclusion, never admitted); delta/
+  volume report their kernels' own counters (+ mirrored missing volume);
+  absent vendor gamma can no longer zero `usable` against finite BS cells.
+- **Admission before broker init**: the required debit now precedes cold
+  `_get_broker()` auth/accounts at all three fetch seams; the warm-singleton
+  identity-bound cache serve stays debit-free (tested under a raising
+  budget). Zero-provider-call-on-failed-debit is now true at the seam.
+- **Inspector truth**: `paper` is a distinct class ("public-paper" is never
+  production and never qualifies a session); the envelope census validates
+  integrity through the shared binder before classifying (tampered/forged
+  → refused_or_corrupt); the 500-group cap is disclosed (`truncated`);
+  naive timestamps read as UTC per the recorder contract; table row counts
+  are labeled store-wide.
+- **Fixtures**: `record_replay_v1.json` now carries `version` + the FULL
+  bound envelope (was metadata-only); new `record_replay_partial_v1.json`
+  and `record_replay_refused_v1.json` complete the ok/partial/refused
+  response set in mounted-route shape. All consumer fixtures regenerated
+  under v3 with byte hashes in the contract doc.
+
+C11 receipts: `test_r18_consumer_repairs.py` 19 passed (failed-first);
+full lane+guard sweep **332 passed / 0 failed**; `ruff check .` clean.
 
 Focus receipts (this head): 36 new tests pass; full lane+guard sweep 313
 passed, 0 failed; `ruff check backend/` clean. Maintenance covers PR106's
