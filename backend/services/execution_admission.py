@@ -28,6 +28,7 @@ import hashlib
 import json
 import math
 import re
+import threading
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -51,6 +52,12 @@ ACCOUNT_POLICY_V2_DDL = """
 _REQUIRED_FIELDS = ("intent_hash", "account_id", "scope", "valid_until",
                     "approved_by", "approved_at")
 _TERMINAL = ("FILLED", "REJECTED", "CANCELED")
+
+# Single-process atomicity for approval SELECT+INSERT/UPDATE sequences (S01).
+# Threads racing revoke vs restore or same-ID conflicting writes serialize
+# here; multi-process writers remain single-writer by deployment boundary
+# (same as lifecycle: DuckDB multi-process writers are NOT claimed safe).
+_APPROVAL_STORE_LOCK = threading.Lock()
 
 __all__ = [
     "ADMISSION_VERSION",
@@ -242,9 +249,10 @@ def store_approval_required(
     failure purges the memory row and returns APPROVAL_STORE_UNAVAILABLE.
     An existing revoked row is never resurrected; a conflicting identity
     (same approval_id, different intent/account/scope/approver/validity
-    binding) refuses APPROVAL_CONFLICT instead of resetting
-    durable/memory authority. Approvals are immutable: same-ID field
-    mutation never overwrites, it conflicts.
+    binding INCLUDING approved_at) refuses APPROVAL_CONFLICT instead of
+    resetting durable/memory authority. Approvals are immutable: same-ID
+    field mutation never overwrites, it conflicts. SELECT+INSERT runs under
+    a single-process lock so threaded revoke/restore races cannot interleave.
     """
     from services import public_execution_lifecycle as lc
 
@@ -260,34 +268,36 @@ def store_approval_required(
     approval_id = str(approval.get("approval_id") or "") or hashlib.sha256(
         json.dumps(approval, sort_keys=True, default=str).encode()).hexdigest()[:16]
     try:
-        ensure_admission_tables(conn)
-        prior = conn.execute(
-            "SELECT intent_hash, account_id, scope, revoked, approved_by, "
-            "valid_until FROM approvals_v1 "
-            "WHERE approval_id = ?", [approval_id]).fetchone()
-        if prior is not None:
-            if bool(prior[3]):
-                return {"ok": False, "reason": "APPROVAL_INVALID",
-                        "detail": "approval revoked; re-store cannot resurrect"}
-            if (approval.get("intent_hash") != prior[0]
-                    or approval.get("account_id") != prior[1]
-                    or approval.get("scope") != prior[2]
-                    or approval.get("approved_by") != prior[4]
-                    or approval.get("valid_until") != prior[5]):
-                return {"ok": False, "reason": "APPROVAL_CONFLICT",
-                        "detail": "approval_id is immutable; same-ID field "
-                                  "mutation refuses instead of overwriting"}
-        conn.execute(
-            "INSERT OR REPLACE INTO approvals_v1 "
-            "(approval_id, intent_hash, account_id, scope, valid_until, "
-            "approved_by, approved_at, revoked, approval_json, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            [approval_id, approval.get("intent_hash"), approval.get("account_id"),
-             approval.get("scope"), approval.get("valid_until"),
-             approval.get("approved_by"), approval.get("approved_at"), False,
-             json.dumps({**approval, "approval_id": approval_id}, default=str),
-             _now_iso()],
-        )
+        with _APPROVAL_STORE_LOCK:
+            ensure_admission_tables(conn)
+            prior = conn.execute(
+                "SELECT intent_hash, account_id, scope, revoked, approved_by, "
+                "valid_until, approved_at FROM approvals_v1 "
+                "WHERE approval_id = ?", [approval_id]).fetchone()
+            if prior is not None:
+                if bool(prior[3]):
+                    return {"ok": False, "reason": "APPROVAL_INVALID",
+                            "detail": "approval revoked; re-store cannot resurrect"}
+                if (approval.get("intent_hash") != prior[0]
+                        or approval.get("account_id") != prior[1]
+                        or approval.get("scope") != prior[2]
+                        or approval.get("approved_by") != prior[4]
+                        or approval.get("valid_until") != prior[5]
+                        or approval.get("approved_at") != prior[6]):
+                    return {"ok": False, "reason": "APPROVAL_CONFLICT",
+                            "detail": "approval_id is immutable; same-ID field "
+                                      "mutation refuses instead of overwriting"}
+            conn.execute(
+                "INSERT OR REPLACE INTO approvals_v1 "
+                "(approval_id, intent_hash, account_id, scope, valid_until, "
+                "approved_by, approved_at, revoked, approval_json, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [approval_id, approval.get("intent_hash"), approval.get("account_id"),
+                 approval.get("scope"), approval.get("valid_until"),
+                 approval.get("approved_by"), approval.get("approved_at"), False,
+                 json.dumps({**approval, "approval_id": approval_id}, default=str),
+                 _now_iso()],
+            )
     except Exception:
         lc._APPROVALS.pop(approval_id, None)
         return {"ok": False, "reason": "APPROVAL_STORE_UNAVAILABLE"}
@@ -302,7 +312,11 @@ def store_approval_required(
 def revoke_approval_required(
     conn: Any, approval_id: str, operator: str,
 ) -> dict[str, Any]:
-    """Revoke with durable-first semantics: failure refuses, memory rolls back."""
+    """Revoke with durable-first semantics: failure refuses, memory rolls back.
+
+    Runs under the same single-process approval lock as store so a threaded
+    revoke cannot interleave a concurrent re-store SELECT+INSERT.
+    """
     from services import public_execution_lifecycle as lc
 
     if conn is None:
@@ -312,14 +326,15 @@ def revoke_approval_required(
     if not str(operator or "").strip():
         return {"ok": False, "reason": "unknown-approval"}
     try:
-        ensure_admission_tables(conn)
-        row = conn.execute(
-            "SELECT approval_id FROM approvals_v1 WHERE approval_id = ?",
-            [approval_id]).fetchone()
-        if not row:
-            return {"ok": False, "reason": "unknown-approval"}
-        conn.execute("UPDATE approvals_v1 SET revoked = TRUE WHERE approval_id = ?",
-                     [approval_id])
+        with _APPROVAL_STORE_LOCK:
+            ensure_admission_tables(conn)
+            row = conn.execute(
+                "SELECT approval_id FROM approvals_v1 WHERE approval_id = ?",
+                [approval_id]).fetchone()
+            if not row:
+                return {"ok": False, "reason": "unknown-approval"}
+            conn.execute("UPDATE approvals_v1 SET revoked = TRUE WHERE approval_id = ?",
+                         [approval_id])
     except Exception:
         mem = lc._APPROVALS.get(approval_id)
         if isinstance(mem, dict):

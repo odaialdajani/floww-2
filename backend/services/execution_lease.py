@@ -60,6 +60,7 @@ __all__ = [
     "release_lease",
     "read_lease",
     "fenced_action",
+    "effect_with_lease",
     "deployment_scope",
     "MULTIPROCESS_SAFE",
 ]
@@ -344,16 +345,26 @@ def fenced_action(path: str, owner: str, ttl_s: float, fn: Any,
                   *args: Any, **kwargs: Any) -> dict[str, Any]:
     """Run fn inside verified lease ownership (S6 critical-section fencing).
 
-    Verifies the owner token immediately BEFORE and AFTER fn: a takeover in
-    between reports FENCED_OUT instead of blessing results produced without
-    ownership. The lease is released afterward either way (best-effort).
-    fn exceptions release the lease, then report FENCED_ACTION_FAILED —
-    never a success.
+    Acquires, re-verifies ownership immediately BEFORE fn (a loss between
+    acquire and effect refuses without invoking fn — zero side effects),
+    runs fn, then verifies AFTER: a takeover in between reports FENCED_OUT
+    instead of blessing results produced without ownership. The lease is
+    released afterward either way (best-effort). fn exceptions release the
+    lease, then report FENCED_ACTION_FAILED — never a success. Callers must
+    prepare before acquiring and keep fn to the bare effect with TTL well
+    above effect duration; a TTL expiry mid-effect is detected after (the
+    effect already ran) — use effect_with_lease for preparation/effect
+    separation with a pre-effect gate.
     """
     acquired = acquire_lease(path, owner, ttl_s)
     if not acquired.get("ok"):
         return {"ok": False, "reason": acquired.get("reason", "LEASE_HELD"),
                 "holder": acquired.get("holder")}
+    pre = heartbeat_lease(path, acquired["token"], ttl_s)
+    if not pre.get("ok"):
+        release_lease(path, acquired["token"])
+        return {"ok": False, "reason": "FENCED_OUT",
+                "detail": "ownership lost before the critical section"}
     try:
         result = fn(*args, **kwargs)
     except Exception as exc:
@@ -365,4 +376,32 @@ def fenced_action(path: str, owner: str, ttl_s: float, fn: Any,
     if not post.get("ok"):
         return {"ok": False, "reason": "FENCED_OUT",
                 "detail": "ownership lost during the critical section"}
+    return {"ok": True, "result": result}
+
+
+def effect_with_lease(path: str, token: str, ttl_s: float, effect_fn: Any,
+                      *args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Invoke a broker effect only while lease ownership holds (S04).
+
+    Preparation must happen BEFORE acquiring; pass the acquired token here.
+    Verifies ownership immediately BEFORE effect_fn: a lost/expired/foreign
+    token refuses FENCED_OUT without invoking the effect (zero broker
+    placements). After the effect, re-verifies: a loss during refuses
+    FENCED_OUT instead of blessing the result. Does NOT release the lease —
+    the caller owns acquire/release around preparation/effect.
+    """
+    pre = heartbeat_lease(path, token, ttl_s)
+    if not pre.get("ok"):
+        return {"ok": False, "reason": "FENCED_OUT",
+                "detail": "ownership lost before the effect; refusing "
+                          "without placement"}
+    try:
+        result = effect_fn(*args, **kwargs)
+    except Exception as exc:
+        return {"ok": False, "reason": "FENCED_ACTION_FAILED",
+                "detail": f"{type(exc).__name__}: {exc}"}
+    post = heartbeat_lease(path, token, ttl_s)
+    if not post.get("ok"):
+        return {"ok": False, "reason": "FENCED_OUT",
+                "detail": "ownership lost during the effect"}
     return {"ok": True, "result": result}
