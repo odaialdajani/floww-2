@@ -889,14 +889,21 @@ def create_approval(
     approved_by: str,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Server-validated operator approval bound to the immutable intent hash."""
+    """Server-validated operator approval bound to the immutable intent hash.
+
+    The approval identity binds the author: the same intent approved by
+    two operators yields two distinct approval IDs. Same-author,
+    same-validity re-mints stay idempotent (approved_at is not part of
+    the identity).
+    """
     moment = now or datetime.now(UTC)
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=UTC)
     if valid_until.tzinfo is None:
         valid_until = valid_until.replace(tzinfo=UTC)
     approval_id = hashlib.sha256(
-        f"{intent_hash_hex}|{account_id}|{scope}|{valid_until.isoformat()}".encode()
+        f"{intent_hash_hex}|{account_id}|{scope}|{valid_until.isoformat()}|"
+        f"{str(approved_by or '').strip()}".encode()
     ).hexdigest()[:16]
     return {
         "approval_id": approval_id,
@@ -1121,16 +1128,38 @@ async def preflight(intent: dict[str, Any], ctx: dict[str, Any], broker: Any) ->
     return out
 
 
-def has_fresh_preflight(intent: dict[str, Any], ctx: dict[str, Any]) -> bool:
-    """True only when a cached preflight covers this exact intent + context."""
+def preflight_gate(intent: dict[str, Any], ctx: dict[str, Any]) -> str | None:
+    """Preflight admission gate: None when covered, else a refusal code.
+
+    A cached preflight satisfies the gate only when it covers this exact
+    intent + market context, is inside the 60s TTL, AND carries a broker
+    verdict with buying_power_ok True. A failed/negative broker verdict
+    never satisfies the gate (PREFLIGHT_UNAFFORDABLE) — freshness alone
+    is not affordability.
+    """
     try:
         key = intent_hash(intent) + "|" + _ctx_fingerprint(ctx)
     except (TypeError, ValueError):
-        return False
+        return "STALE_PREFLIGHT"
     cached = _PREFLIGHT_CACHE.get(key)
     if cached is None:
-        return False
-    return (_now_epoch(ctx.get("now")) - float(cached.get("at_epoch", 0.0))) < PREFLIGHT_TTL_S
+        return "STALE_PREFLIGHT"
+    try:
+        stale = (_now_epoch(ctx.get("now"))
+                 - float(cached.get("at_epoch", 0.0))) >= PREFLIGHT_TTL_S
+    except (TypeError, ValueError):
+        return "STALE_PREFLIGHT"
+    if stale:
+        return "STALE_PREFLIGHT"
+    estimate = (cached.get("receipt") or {}).get("estimate") or {}
+    if estimate.get("buying_power_ok") is not True:
+        return "PREFLIGHT_UNAFFORDABLE"
+    return None
+
+
+def has_fresh_preflight(intent: dict[str, Any], ctx: dict[str, Any]) -> bool:
+    """True only when a cached verdict-good preflight covers intent + ctx."""
+    return preflight_gate(intent, ctx) is None
 
 
 def _now_epoch(value: Any) -> float:
