@@ -26,6 +26,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import math
 import re
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -767,13 +768,17 @@ def _canon_number(value: Any) -> str:
 def order_fingerprint(account_id: str, symbol: str, side: str,
                       quantity: Any, limit_price: Any,
                       stop_price: Any = None,
-                      time_in_force: str = "DAY") -> str:
+                      time_in_force: str = "DAY",
+                      order_type: str = "LIMIT") -> str:
     """Canonical identity for a single-leg order approval (S8).
 
     Binds account + symbol + side + exact quantity/limit/stop + time in
-    force. Every price-affecting field is covered: a tampered stop (or
-    TIF) never matches a stored approval. Server recomputes this from
-    the order body — a caller-supplied hash is never trusted.
+    force + order type. Every execution-affecting field is covered: a
+    tampered stop (or TIF) never matches a stored approval, and a
+    price-capped LIMIT approval can never ride into an uncapped MARKET
+    placement. Server recomputes this from the order body — a
+    caller-supplied hash is never trusted. Pre-type approvals (narrower
+    hash) fail closed on mismatch.
     """
     blob = "|".join([
         str(account_id or "").strip(),
@@ -783,6 +788,7 @@ def order_fingerprint(account_id: str, symbol: str, side: str,
         _canon_number(limit_price),
         _canon_number(stop_price),
         str(time_in_force or "DAY").upper().strip(),
+        str(order_type or "LIMIT").upper().strip(),
     ])
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
@@ -791,16 +797,19 @@ def create_order_approval(
     conn: Any, account_id: str, symbol: str, side: str, quantity: Any,
     limit_price: Any, operator: str, validity_hours: float = 1.0,
     stop_price: Any = None, time_in_force: str = "DAY",
+    order_type: str = "LIMIT",
 ) -> dict[str, Any]:
     """Create + store an order-bound approval (server timestamps only).
 
     Validity window is server-computed (1–24h); client clocks are never
-    trusted. Option OSI symbols additionally pass the required-policy
-    expiry guard and protection acknowledgment at creation (S8) — an
-    approval can never be minted for an expired/near-expiry or
-    unacknowledged-unprotected contract — and require an explicit limit
-    price (market options have unbounded slippage; the lifecycle admits
-    limit orders only). Returns the stored row including approval_id.
+    trusted. Quantity must be finite and positive; limit/stop prices must
+    be finite when present. Order type is bound into the fingerprint and
+    constrained: unknown types refuse, LIMIT/STOP_LIMIT require a limit,
+    STOP/STOP_LIMIT require a stop, and option OSI symbols admit only
+    LIMIT/STOP_LIMIT (market options have unbounded slippage; the
+    lifecycle admits limit orders only). Option OSI symbols additionally
+    pass the required-policy expiry guard and protection acknowledgment
+    at creation (S8). Returns the stored row including approval_id.
     """
     if conn is None:
         return {"ok": False, "reason": "STORE_UNAVAILABLE"}
@@ -810,12 +819,42 @@ def create_order_approval(
             return {"ok": False, "reason": "BAD_CONTRACT"}
     except (TypeError, ValueError):
         return {"ok": False, "reason": "BAD_CONTRACT"}
+    otype = str(order_type or "LIMIT").upper().strip() or "LIMIT"
+    if otype not in ("MARKET", "LIMIT", "STOP", "STOP_LIMIT"):
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": f"unknown order_type {order_type!r}"}
+    try:
+        qty = float(quantity)
+    except (TypeError, ValueError):
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": "quantity must be a positive number"}
+    if not math.isfinite(qty) or qty <= 0:
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": "quantity must be a finite positive number"}
+    for label, price in (("limit_price", limit_price),
+                         ("stop_price", stop_price)):
+        if price is None:
+            continue
+        try:
+            finite = float(price)
+        except (TypeError, ValueError):
+            return {"ok": False, "reason": "BAD_CONTRACT",
+                    "detail": f"{label} must be a number"}
+        if not math.isfinite(finite):
+            return {"ok": False, "reason": "BAD_CONTRACT",
+                    "detail": f"{label} must be finite"}
+    if otype in ("LIMIT", "STOP_LIMIT") and limit_price is None:
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": f"{otype} approvals require an explicit limit price"}
+    if otype in ("STOP", "STOP_LIMIT") and stop_price is None:
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": f"{otype} approvals require an explicit stop price"}
     now = datetime.now(UTC)
     valid_until = now + timedelta(hours=hours)
     tif = str(time_in_force or "DAY").upper().strip() or "DAY"
     approval = {
         "intent_hash": order_fingerprint(account_id, symbol, side, quantity,
-                                         limit_price, stop_price, tif),
+                                         limit_price, stop_price, tif, otype),
         "account_id": str(account_id or "").strip(),
         "scope": "order-entry",
         "symbol": str(symbol or "").upper().strip(),
@@ -824,15 +863,16 @@ def create_order_approval(
         "limit_price": _canon_number(limit_price),
         "stop_price": _canon_number(stop_price),
         "time_in_force": tif,
+        "order_type": otype,
         "valid_until": valid_until.isoformat(),
         "approved_by": str(operator or "").strip(),
         "approved_at": now.isoformat(),
     }
     if not approval["account_id"] or not approval["symbol"] or not approval["approved_by"]:
         return {"ok": False, "reason": "BAD_CONTRACT"}
-    if _osi_expiry_iso(approval["symbol"]) is not None and limit_price is None:
+    if _osi_expiry_iso(approval["symbol"]) is not None and otype not in ("LIMIT", "STOP_LIMIT"):
         return {"ok": False, "reason": "BAD_CONTRACT",
-                "detail": "option approvals require an explicit limit price"}
+                "detail": "option approvals require LIMIT or STOP_LIMIT"}
     gate = _option_order_guards(conn, approval["account_id"], approval["symbol"])
     if gate is not None:
         return gate
@@ -846,14 +886,16 @@ def verify_order_approval(
     conn: Any, approval_id: str, account_id: str, symbol: str, side: str,
     quantity: Any, limit_price: Any, now: datetime | None = None,
     stop_price: Any = None, time_in_force: str = "DAY",
+    order_type: str = "LIMIT",
 ) -> dict[str, Any]:
     """Verify an order approval against the recomputed fingerprint.
 
     Refuses APPROVAL_NOT_STORED (missing/storeless), APPROVAL_INVALID
-    (revoked, expired, or fingerprint mismatch), APPROVAL_STORE_UNAVAILABLE
-    (query failure). Option OSI symbols re-pass the required-policy expiry
-    guard and protection acknowledgment against CURRENT policy and server
-    time — an approval minted before expiry, a policy narrowing, or an ack
+    (revoked, expired, or fingerprint mismatch — including order-type
+    mismatch, so a LIMIT approval never covers a MARKET placement).
+    Option OSI symbols re-pass the required-policy expiry guard and
+    protection acknowledgment against CURRENT policy and server time —
+    an approval minted before expiry, a policy narrowing, or an ack
     removal cannot ride out its validity window into placement. Never
     raises.
     """
@@ -883,7 +925,8 @@ def verify_order_approval(
     if rec.get("scope") != "order-entry" or rec.get("account_id") != str(account_id or "").strip():
         return {"ok": False, "reason": "APPROVAL_INVALID", "detail": "binding mismatch"}
     want = order_fingerprint(account_id, symbol, side, quantity,
-                              limit_price, stop_price, time_in_force)
+                              limit_price, stop_price, time_in_force,
+                              order_type)
     if rec.get("intent_hash") != want:
         return {"ok": False, "reason": "APPROVAL_INVALID", "detail": "order fields differ"}
     moment = now or datetime.now(UTC)

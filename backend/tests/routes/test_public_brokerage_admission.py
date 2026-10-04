@@ -186,3 +186,136 @@ def test_option_approval_requires_limit_price():
         assert out["reason"] == "BAD_CONTRACT", out
     finally:
         conn.close()
+
+
+def test_order_type_is_bound_in_fingerprint():
+    from services import execution_admission as adm
+
+    base = adm.order_fingerprint("ACCT-1", "SPY", "BUY", 1, 3.15,
+                                 None, "DAY", "LIMIT")
+    assert base != adm.order_fingerprint("ACCT-1", "SPY", "BUY", 1, 3.15,
+                                         None, "DAY", "MARKET")
+    assert base == adm.order_fingerprint("ACCT-1", "SPY", "BUY", 1, 3.15,
+                                         None, "DAY", "limit")
+    assert base == adm.order_fingerprint("ACCT-1", "SPY", "BUY", 1, 3.15)
+
+
+def test_create_order_approval_binds_and_constrains_order_type():
+    import duckdb
+
+    from services import execution_admission as adm
+
+    conn = duckdb.connect(":memory:")
+    try:
+        assert adm.set_account_policy_required(
+            conn, "ACCT-1", {"max_quantity": 5, "min_entry_dte": 5,
+                             "allow_unprotected_entry": True},
+            "op-1")["ok"] is True
+        # Unknown order types never mint.
+        out = adm.create_order_approval(
+            conn, "ACCT-1", "SPY", "BUY", 1, 3.15, "op-1", order_type="FOO")
+        assert out["reason"] == "BAD_CONTRACT", out
+        # Market options have unbounded slippage: never mintable.
+        out = adm.create_order_approval(
+            conn, "ACCT-1", "SPY271217C00760000", "BUY", 1, 3.15, "op-1",
+            order_type="MARKET")
+        assert out["reason"] == "BAD_CONTRACT", out
+        # STOP_LIMIT without a stop is incoherent.
+        out = adm.create_order_approval(
+            conn, "ACCT-1", "SPY", "BUY", 1, 3.15, "op-1",
+            order_type="STOP_LIMIT")
+        assert out["reason"] == "BAD_CONTRACT", out
+        # LIMIT-bound approval verifies only as LIMIT.
+        created = adm.create_order_approval(
+            conn, "ACCT-1", "SPY", "BUY", 1, 3.15, "op-1",
+            order_type="LIMIT")
+        assert created["ok"] is True, created
+        assert adm.verify_order_approval(
+            conn, created["approval_id"], "ACCT-1", "SPY", "BUY", 1, 3.15,
+            order_type="LIMIT")["ok"] is True
+        out = adm.verify_order_approval(
+            conn, created["approval_id"], "ACCT-1", "SPY", "BUY", 1, 3.15,
+            order_type="MARKET")
+        assert out["reason"] == "APPROVAL_INVALID", out
+    finally:
+        conn.close()
+
+
+def test_create_order_approval_refuses_nonfinite_and_nonpositive_quantity():
+    import duckdb
+
+    from services import execution_admission as adm
+
+    conn = duckdb.connect(":memory:")
+    try:
+        assert adm.set_account_policy_required(
+            conn, "ACCT-1", {"max_quantity": 5}, "op-1")["ok"] is True
+        for bad_qty in ("nan", "inf", "-inf", 0, -1, "0", "abc"):
+            out = adm.create_order_approval(
+                conn, "ACCT-1", "SPY", "BUY", bad_qty, 3.15, "op-1")
+            assert out["reason"] == "BAD_CONTRACT", (bad_qty, out)
+        for bad_price in ("nan", "inf"):
+            out = adm.create_order_approval(
+                conn, "ACCT-1", "SPY", "BUY", 1, bad_price, "op-1")
+            assert out["reason"] == "BAD_CONTRACT", (bad_price, out)
+    finally:
+        conn.close()
+
+
+@pytest.mark.asyncio
+async def test_armed_order_type_tamper_refuses(monkeypatch):
+    from fastapi import HTTPException
+
+    from services import execution_admission as adm
+
+    monkeypatch.setenv("FLOWW_ENABLE_LIVE_PUBLIC", "1")
+    conn = _isolated_store(monkeypatch)
+    broker = _broker(monkeypatch)
+    try:
+        assert adm.set_account_policy_required(
+            conn, "ACCT-1", {"max_quantity": 5}, "op-1")["ok"] is True
+        created = adm.create_order_approval(
+            conn, "ACCT-1", "SPY", "BUY", 1, 3.15, "op-1",
+            order_type="LIMIT")
+        assert created["ok"] is True
+        # A price-capped LIMIT approval replayed as MARKET refuses.
+        with pytest.raises(HTTPException) as error:
+            await public_brokerage.place_order(
+                _body(order_type="MARKET",
+                      approval_id=created["approval_id"]))
+        assert error.value.status_code == 403
+        assert error.value.detail["error"] == "APPROVAL_INVALID"
+        broker.place_order.assert_not_awaited()
+        # The exact bound type places exactly once.
+        out = await public_brokerage.place_order(
+            _body(order_type="LIMIT",
+                  approval_id=created["approval_id"]))
+        assert out["ok"] is True
+        broker.place_order.assert_awaited_once()
+    finally:
+        conn.close()
+
+
+@pytest.mark.asyncio
+async def test_nonfinite_quantity_and_prices_refuse_before_any_gate(monkeypatch):
+    from fastapi import HTTPException
+
+    broker = _broker(monkeypatch)
+    try:
+        # Disarmed on purpose: validation precedes the kill-switch, so a
+        # 422 here also pins that ordering.
+        for bad in ("nan", "inf", "-inf"):
+            with pytest.raises(HTTPException) as error:
+                await public_brokerage.place_order(_body(quantity=bad))
+            assert error.value.status_code == 422
+            assert error.value.detail["error"] == "bad_quantity"
+        with pytest.raises(HTTPException) as error:
+            await public_brokerage.place_order(_body(limit_price="nan"))
+        assert error.value.status_code == 422
+        with pytest.raises(HTTPException) as error:
+            await public_brokerage.place_order(
+                _body(order_type="STOP", stop_price="inf"))
+        assert error.value.status_code == 422
+        broker.place_order.assert_not_awaited()
+    finally:
+        pass
