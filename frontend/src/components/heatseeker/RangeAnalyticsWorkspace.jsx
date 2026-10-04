@@ -4,6 +4,7 @@ import {storedAppKeyHeaders} from '../../utils/appKey';
 import {usePublishScreenContext} from '../../agent/useScreenContext';
 import {admitRangeEnvelope,rangeSelectionContext,RANGE_METRICS} from '../../lib/rangeAnalytics';
 import {cellPalette,fmtK} from './SkylitHeatmapGrid';
+import RangeReplayControls from './RangeReplayControls';
 import './RangeAnalyticsWorkspace.css';
 
 /** An explicit non-writing analytical read; no browser Greeks, contract or permission. */
@@ -11,16 +12,19 @@ export default function RangeAnalyticsWorkspace({ticker}) {
  const [minDte,setMinDte]=useState('14'),[maxDte,setMaxDte]=useState('60');
  const [metric,setMetric]=useState('raw_oi'),[result,setResult]=useState(null),[loading,setLoading]=useState(false);
  const [selection,setSelection]=useState(null),[expanded,setExpanded]=useState(false),[follow,setFollow]=useState(false);
+ const [replayOpen,setReplayOpen]=useState(false),[replayMode,setReplayMode]=useState(false);
  const epoch=useRef(0),controller=useRef(null),cellRefs=useRef(new Map());
- const clear=()=>{epoch.current++;controller.current?.abort();setResult(null);setSelection(null);setLoading(false);};
+ const clear=()=>{epoch.current++;controller.current?.abort();setResult(null);setSelection(null);setLoading(false);setReplayMode(false);};
+ const acceptStored=record=>{epoch.current++;controller.current?.abort();setResult(record?{envelope:record}:null);setSelection(null);setLoading(false);if(record)setReplayMode(true);};
+ const validWindow=minDte.trim() && maxDte.trim() && Number.isInteger(Number(minDte)) && Number.isInteger(Number(maxDte)) && Number(minDte)>=0 && Number(maxDte)<=365 && Number(minDte)<=Number(maxDte);
  useEffect(()=>{
-  clear();setExpanded(false);setFollow(false);
+  clear();setExpanded(false);setFollow(false);setReplayOpen(false);
   return()=>{epoch.current++;controller.current?.abort();};
   // The owning symbol invalidates every field; no automatic data/model request.
   // eslint-disable-next-line react-hooks/exhaustive-deps
  },[ticker]);
  const envelope=result?.envelope,section=envelope?.grids[metric];
- const context=rangeSelectionContext(envelope,metric,selection);
+ const context=rangeSelectionContext(envelope,metric,selection,replayMode?'replay':'live');
  usePublishScreenContext({...context,ticker});
  const read=async()=>{
   clear();const id=++epoch.current,ctrl=new AbortController();controller.current=ctrl;
@@ -60,12 +64,14 @@ export default function RangeAnalyticsWorkspace({ticker}) {
    <h2>{ticker} · Analytical range</h2>
    <label>Minimum DTE<input aria-label="Minimum DTE" type="number" min="0" max="365" value={minDte} onChange={e=>queryChange(setMinDte,e.target.value)}/></label>
    <label>Maximum DTE<input aria-label="Maximum DTE" type="number" min="0" max="365" value={maxDte} onChange={e=>queryChange(setMaxDte,e.target.value)}/></label>
-   <button type="button" onClick={read} disabled={loading}>{loading?'Loading range…':'Load analytical range'}</button>
+   <button type="button" onClick={read} disabled={loading || replayOpen} title={replayOpen?'Exit stored replay with Live before requesting a current analytical range':undefined}>{loading?'Loading range…':'Load analytical range'}</button>
    <label>Metric<select aria-label="Range metric" value={metric} onChange={e=>{setSelection(null);setMetric(e.target.value);}}>{Object.entries(RANGE_METRICS).map(([key,value])=><option key={key} value={key}>{value.label}</option>)}</select></label>
    <button type="button" disabled={!envelope} aria-pressed={follow} onClick={followSpot}>Follow</button>
    <button type="button" disabled={!envelope} aria-pressed={expanded} onClick={()=>setExpanded(value=>!value)}>{expanded?'Return layout':'Expand range'}</button>
-   <button type="button" disabled title="RANGE_REPLAY_API_UNAVAILABLE: stored rga1 read/index API and full evidence-integrity admission are pending">Range replay unavailable</button>
+   <button type="button" disabled={!validWindow} aria-pressed={replayOpen} title={!validWindow?'WINDOW_OUT_OF_RANGE: choose an integer owning window first':'Stored rga1 research frames; full integrity/production qualification remain pending'} onClick={()=>{clear();setReplayOpen(value=>!value);}}>{replayOpen?'Close range replay':'Range replay'}</button>
   </header>
+  {replayOpen && <RangeReplayControls ticker={ticker} minDte={minDte.trim()?Number(minDte):NaN} maxDte={maxDte.trim()?Number(maxDte):NaN} onRecord={acceptStored} onLive={()=>{setReplayOpen(false);clear();}}/>}
+  {replayMode && <p className="range-note" role="status">Stored rga1 replay · no current-chain reconstruction; producer-reported integrity, full qualification pending.</p>}
   <p className="range-note">Research only · no execution eligibility. Listed dates are not trading permission; volume is not trade direction.</p>
   {loading && <p role="status">Reading the requested range; prior selection cleared.</p>}
   {result?.reason && <p role="status">Analytical range unavailable · {result.reason}</p>}

@@ -8,6 +8,48 @@ const response = data => ({ok:true,json:async()=>data});
 function Context(){const [context]=useScreenContext();return <output data-testid="range-context">{JSON.stringify(context)}</output>;}
 beforeEach(()=>{global.fetch=jest.fn(async()=>response(complete));});
 
+// Actual envelope fixtures with consumer transport wrappers; not producer/restart proof.
+const storedRow=e=>({record_id:e.record_id,ticker:e.symbol,window:{min_dte:14,max_dte:60},asof_date:e.query.as_of_ny,received_at:e.clocks.received_at,recorded_at:'2026-10-05T14:00:00+00:00',status:e.status,digest:e.content_digest,integrity:'verified',synthetic:e.synthetic});
+const index=()=>({version:'range-records.v1',status:'ok',filters:{ticker:'SPY',min_dte:14,max_dte:60,as_of:null,status:null},limit:50,offset:0,n_returned:2,rows:[storedRow(complete),storedRow(partial)]});
+const replay=e=>({version:'range-records.v1',...storedRow(e),envelope:e});
+const loadStored=async()=>{
+ fireEvent.click(screen.getByRole('button',{name:'Range replay',exact:true}));
+ fireEvent.click(screen.getByRole('button',{name:'Load stored range records'}));
+ await waitFor(()=>expect(screen.getByLabelText('Stored range record').options).toHaveLength(3));
+};
+
+test('owning stored range selection drives grid and shared context; Live clears without fetching current chains',async()=>{
+ global.fetch.mockImplementation(async url=>response(String(url).includes('/range-records/')?replay(partial):index()));
+ render(<><RangeAnalyticsWorkspace ticker="SPY"/><Context/></>);
+ await loadStored();fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:partial.record_id}});
+ await screen.findByRole('grid',{name:'Raw OI GEX · strike by expiry'});
+ expect(JSON.parse(screen.getByTestId('range-context').textContent)).toMatchObject({displayMode:'range-replay',snapshotId:partial.record_id});
+ fireEvent.click(screen.getByRole('button',{name:/^590 · 2026-10-26/}));
+ expect(JSON.parse(screen.getByTestId('range-context').textContent).selectedStrike).toBe(590);
+ expect(screen.getByRole('button',{name:'Load analytical range'})).toBeDisabled();
+ const calls=global.fetch.mock.calls.length;fireEvent.click(screen.getByRole('button',{name:'Live',exact:true}));
+ expect(screen.queryByRole('grid')).not.toBeInTheDocument();expect(global.fetch).toHaveBeenCalledTimes(calls);
+ expect(JSON.parse(screen.getByTestId('range-context').textContent)).toMatchObject({displayMode:'range-live',snapshotId:null});
+ expect(global.fetch.mock.calls.every(([url])=>String(url).includes('/solstice/price-paths/range-records'))).toBe(true);
+});
+
+test('a corrupt next frame clears the mounted grid and canonical record, never retains a mislabeled previous frame',async()=>{
+ let corrupt=false;global.fetch.mockImplementation(async url=>response(String(url).includes('/range-records/')?corrupt?{version:'range-records.v1',status:'refused',reason:'DIGEST_MISMATCH'}:replay(partial):index()));
+ render(<><RangeAnalyticsWorkspace ticker="SPY"/><Context/></>);await loadStored();
+ fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:partial.record_id}});await screen.findByRole('grid');
+ corrupt=true;fireEvent.click(screen.getByRole('button',{name:'Next frame'}));await screen.findByText(/Stored range replay unavailable.*DIGEST_MISMATCH/);
+ expect(screen.queryByRole('grid')).not.toBeInTheDocument();expect(JSON.parse(screen.getByTestId('range-context').textContent).snapshotId).toBeNull();
+});
+
+test('query changes abort an in-flight stored frame and reject its late envelope',async()=>{
+ let release;global.fetch.mockImplementation(async url=>String(url).includes('/range-records/')?await new Promise(resolve=>{release=resolve;}):response(index()));
+ render(<><RangeAnalyticsWorkspace ticker="SPY"/><Context/></>);await loadStored();
+ fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:partial.record_id}});
+ const signal=global.fetch.mock.calls[1][1].signal;fireEvent.change(screen.getByLabelText('Minimum DTE'),{target:{value:'30'}});
+ expect(signal.aborted).toBe(true);await act(async()=>release(response(replay(partial))));
+ expect(screen.queryByRole('grid')).not.toBeInTheDocument();expect(JSON.parse(screen.getByTestId('range-context').textContent).snapshotId).toBeNull();
+});
+
 test('blank window is invalid instead of silently becoming zero DTE',async()=>{
  render(<RangeAnalyticsWorkspace ticker="SPY"/>);
  fireEvent.change(screen.getByLabelText('Minimum DTE'),{target:{value:''}});

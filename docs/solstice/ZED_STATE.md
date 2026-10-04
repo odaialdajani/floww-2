@@ -1,6 +1,25 @@
 # ZED_STATE — FLOWW integration continuation
 
-## R18 — three-lane successor, 3 October 2026
+## R18 pass 2 — admitted stored research replay seam
+
+Resumed from receipte55a53f76035bbaa8cfb929e03c51246c50adee8. Exact hosted CI/CD37160126579: frontend/Ruff SUCCESS, backend FAILURE, Docker SKIPPED. Backend fork deployment tests failed, then the15-minute test step timed out; local7176 did not establish CI parity. No success claim or unchanged CI rerun. Main still6eaa3343.
+
+Both producers advanced. Clean reviewed composition **aba5bc1327cc0051d79b1b03e648a2e1e7439b8e** includes Cline2d0aa703/c085f8fb and Spark23178787 through lane merges68fb2175/aba5bc13, published to the same PR104. Frontend/scripts/own contracts and receipts byte-identical to e55 at composition. Peer producer/checkpoints remain verbatim; dirty files never consumed. Privileged execution admission remains UNMOUNTED, activation OFF.
+
+| Item | Current engineering admission / next action |
+|---|---|
+| Cline stored-read seam | Actual mounted-on-existing-router GET `/api/solstice/price-paths/range-records` plus `/{record_id}` admitted for RESEARCH consumer work. Default read-only and feature+API-key explicit capture guard credited. Exact transport/header checks and healthy partial status required. No new server mount. |
+| Cline residual integrity/population | Full qualification HOLD: unbound top metrics summary, inconsistent duplicate/index/retrieve header+identity validation and NULL header exception; raw BS population uses vendor-gamma aggregate; denied cold debit still authenticates/accounts first; inspector broad paper/source/tampered-synthetic qualification. Request PR106#issuecomment-5975910328. Stored exact contract resolver remains reference-only/unavailable. |
+| Spark reviewed repairs | Flock one-winner acquisition/persistent fence, fee-inclusive loss and header/malformed-row checks credited;57 offline committed-blob tests pass. Remaining presented-versus-durable approver, mutable/nonatomic row, effects after lease loss, failed preflight ADMIT, no-policy/order bypass, aggregate proposed exposure, unknown census, exact payload and raw stored symbol/OSI bypass remain concrete engineering HOLD. Request PR103#issuecomment-5975910558. No privileged mount/activation. |
+| Owned range replay consumer | Implemented stored-only index/select/play/pause/step/speed/scrub/explicit paging200-frame cap; body refusals vs empty, corrupt/missing/foreign/header/version/string-count/late-response guards, parent canonical record/grid clearing, Live exit without provider refresh. Chronological frames are not continuous time/capture completeness. Full integrity/production qualification remains visibly pending; no contract/model permission. |
+| Exact stored bytes | Replay helper returns original envelope verbatim, including metadata; UI uses only recorded axes/grids/clocks/coverage, not the unbound top metrics admission summary. No frontend Greeks/hash reconstruction/zero coercion or legacy namespace conflation. Complete/partial frontend fixtures updated byte-for-byte from producer. |
+| Verification next | Code checkpoint, then new compiled eight-route/replay/native200% browser, API regeneration/census after coherent source, full unmasked backend/frontend/stories/build/security/truth/silent/protected71 and exact final hostedDocker. Prior e55/bb13 receipts become historical for new modules. |
+
+Failed-first helper/control modules; additional count/shape guards red2 thenred4; exact envelope retention red5/99 then104pass. Parent mount/context/corrupt/query-race regression red3/5 then130pass; real offline stored-route fixture generated using synthetic in-memory DuckDB and actual FastAPI GET handlers returns exact2 records,404 missing,422 corrupt and empty index. This fixture is not production capture/restart proof and does not pretend Cline's incomplete replay metadata example was full. Focused frontend24suites/345pass; current stories36/axe pass. Repaired backend Cline write/read/subprocess+Spark deployment+Lodestar focused45pass/267 disclosed warnings. Protected HEAD+working71 unchanged. No new skip/xfail, dependencies/framework migration or producer edits.
+
+Next exact action: commit only owned replay/helper/UI/test/story/fixture/browser-harness/checkpoint paths, push existing lane, verify remote SHA; run compiled replay browser in new r18/replay-evidence directory without overwriting earlier evidence. Continue newly admitted READY work; no main merge/deploy/service restart/activation/order/paid model turn. All production policy values UNSET; engineering and NAV-* commissioning HOLD remain distinct.
+
+## Historical R18 pass 1 — three-lane successor, 3 October 2026
 
 Base/main6eaa3343; common tested baseline22df6fe67463acc8a41283804e710d07dff105bd; prior owned receipt77b8a127. Initial clean composition **4e261dd17a3c2e2e3abba5c767b0fbaf401b22c2** merges Clinee6d35745 and Sparka73f79b9 as reviewed branch deltas. Frontend/scripts match77b8a127 exactly at composition. PR103/104/105/106 OPEN/unmerged; select PR104 as the single successor candidate, not sequential main merges. Spark active dirty ledger/tests and all primary/recovery/watchdog files stay untouched.
 

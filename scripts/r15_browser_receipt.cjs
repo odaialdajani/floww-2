@@ -12,6 +12,8 @@ const lifecyclePath=path.join(frontend,'src/fixtures/integration/lifecycle-inven
 const lifecycle=JSON.parse(fs.readFileSync(lifecyclePath));
 const rangePath=path.join(frontend,'src/fixtures/integration/range-analytics.v1/complete.json');
 const rangeComplete=JSON.parse(fs.readFileSync(rangePath)),rangePartial=JSON.parse(fs.readFileSync(path.join(frontend,'src/fixtures/integration/range-analytics.v1/partial.json')));
+const rangeTransportPath=path.join(frontend,'src/fixtures/integration/range-analytics.v1/replay-transport.json');
+const rangeTransport=JSON.parse(fs.readFileSync(rangeTransportPath));
 const python=process.argv[2],executablePath=process.argv[3];
 assert(python && executablePath,'Provide verified interpreter and browser executable paths');
 const hash=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
@@ -19,7 +21,7 @@ function sourceHashes(){
  const result={};
  const walk=dir=>{for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const name=path.join(dir,entry.name);if(entry.isDirectory())walk(name);else if(/\.(jsx?|css|json|mjs|py)$/.test(name))result[path.relative(root,name)]=hash(fs.readFileSync(name));}};
  walk(path.join(frontend,'src'));walk(path.join(root,'backend/services'));walk(path.join(root,'backend/routes'));
- for(const rel of ['frontend/package.json','frontend/package-lock.json','backend/server.py','scripts/r15_fixture_answer.py'])result[rel]=hash(fs.readFileSync(path.join(root,rel)));
+ for(const rel of ['frontend/package.json','frontend/package-lock.json','backend/server.py','scripts/r15_fixture_answer.py','scripts/r18_range_transport_fixture.py'])result[rel]=hash(fs.readFileSync(path.join(root,rel)));
  return result;
 }
 const source=sourceHashes();
@@ -28,11 +30,13 @@ assert.deepStrictEqual(sourceHashes(),source,'Owned source changed during compil
 const manifest=JSON.parse(fs.readFileSync(path.join(build,'asset-manifest.json')));
 const bundleHashes=Object.fromEntries(Object.entries(manifest.files).filter(([key])=>/\.(js|css)$/.test(key)).map(([key,value])=>[key,hash(fs.readFileSync(path.join(build,value.replace(/^\//,''))))]));
 const receipt={version:'floww-browser-receipt.v1',fixtureOnly:true,sourceCommit:execFileSync('git',['--no-pager','rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),sourceHashes:source,bundleHashes,fixtureHash:hash(fs.readFileSync(fixturePath)),routes:[],viewports:[],screenshots:[],externalRequestsBlocked:[],forbiddenMutations:[],pageErrors:[],warnings:[],research:[],checks:[],coverageFixtureHash:hash(fs.readFileSync(coveragePath)),coverageReads:[],lifecycleFixtureHash:hash(fs.readFileSync(lifecyclePath)),lifecycleReads:[]};
-receipt.rangeFixtureHash=hash(fs.readFileSync(rangePath));receipt.rangeReads=[];
-let lastTurn=null,refuseComparison=false,overnightSessions=false,recoveryReview=false,partialRange=false;
+receipt.rangeFixtureHash=hash(fs.readFileSync(rangePath));receipt.rangeReads=[];receipt.rangeStoredReads=[];receipt.rangeTransportFixtureHash=hash(fs.readFileSync(rangeTransportPath));
+let lastTurn=null,refuseComparison=false,overnightSessions=false,recoveryReview=false,partialRange=false,corruptRange=false;
 const controlledInventory={...lifecycle.inventory,...lifecycle.control_additions,protection:{...lifecycle.inventory.protection,...lifecycle.control_additions.protection}};
 function body(url){
  const p=url.pathname;
+ if(p==='/api/solstice/price-paths/range-records')return rangeTransport.index;
+ if(p.startsWith('/api/solstice/price-paths/range-records/'))return corruptRange?rangeTransport.corrupt:rangeTransport.records[p.split('/').pop()] || rangeTransport.missing;
  if(p==='/api/heatmap/SPY/range-analytics')return partialRange?rangePartial:rangeComplete;
  if(/\/heatmap\/SPY|\/data\/SPY/.test(p))return fixture.display;
  if(/\/heatmap\/QQQ|\/data\/QQQ/.test(p))return fixture.secondary_display;
@@ -87,6 +91,7 @@ const server=http.createServer((req,res)=>{
    if(url.pathname.startsWith('/api/')){
     if(url.pathname==='/api/public/execution-lifecycle/inventory')receipt.lifecycleReads.push({path:url.pathname,method:request.method()});
     if(url.pathname.includes('/price-paths/'))receipt.coverageReads.push({path:url.pathname,query:url.search,method:request.method()});
+    if(url.pathname.includes('/price-paths/range-records'))receipt.rangeStoredReads.push({path:url.pathname,query:url.search,method:request.method()});
     if(url.pathname.endsWith('/range-analytics')){assert.strictEqual(url.searchParams.get('persist'),'false');receipt.rangeReads.push({path:url.pathname,query:url.search,method:request.method()});}
     if(url.pathname==='/api/preferences/theme' && request.method()==='POST')return route.fulfill({json:{ok:true,fixture_only:true}});
     if(url.pathname.endsWith('/alerts/stream'))return route.fulfill({contentType:'text/event-stream',body:'retry: 300000\n: fixture no-feed\n\n'});
@@ -147,10 +152,20 @@ const server=http.createServer((req,res)=>{
   await page.getByLabel('Range metric').selectOption('window');await page.getByText(/Window volume.*HISTORY_NOT_YET_RECORDED/).waitFor();assert.strictEqual(await page.getByRole('grid').count(),0);
   await page.getByLabel('Range metric').selectOption('raw_oi');partialRange=true;await page.getByRole('button',{name:'Load analytical range',exact:true}).click();await page.getByText(/Partial expiry coverage/).waitFor();
   assert((await page.getByRole('region',{name:'Solstice analytical range'}).textContent()).includes(rangePartial.coverage.skipped[0].reason));
-  assert(await page.getByRole('button',{name:'Range replay unavailable',exact:true}).isDisabled());
+  assert(await page.getByRole('button',{name:'Range replay',exact:true}).isEnabled());
   for(const width of [1440,390])await capture('range-partial',width);
+  await page.getByRole('button',{name:'Range replay',exact:true}).click();await page.getByRole('button',{name:'Load stored range records',exact:true}).click();
+  await page.getByLabel('Stored range record').selectOption(rangePartial.record_id);await page.getByText(/Stored frame 1\/2/).waitFor();await page.getByRole('grid').waitFor();
+  await page.getByLabel('Replay speed').selectOption('4');await page.getByRole('button',{name:'Play frames',exact:true}).click();await page.getByRole('button',{name:'Pause frames',exact:true}).click();
+  await page.getByRole('button',{name:'Next frame',exact:true}).click();await page.getByText(/Stored frame 2\/2/).waitFor();
+  await page.getByLabel('Replay frame',{exact:true}).fill('0');await page.getByText(/Stored frame 1\/2/).waitFor();
+  for(const width of [1440,390])await capture('range-replay',width);
+  corruptRange=true;await page.getByRole('button',{name:'Next frame',exact:true}).click();await page.getByText(/Stored range replay unavailable.*CORRUPT_PAYLOAD/).waitFor();assert.strictEqual(await page.getByRole('grid').count(),0,'Corrupt replay must clear owning grid');
+  corruptRange=false;await page.getByLabel('Stored range record').selectOption(rangeComplete.record_id);await page.getByText(/Stored frame 2\/2/).waitFor();await page.getByRole('grid').waitFor();
+  const liveReads=receipt.rangeReads.length;await page.getByRole('button',{name:'Live',exact:true}).click();assert.strictEqual(receipt.rangeReads.length,liveReads,'Live exit must not fetch current chain');assert.strictEqual(await page.getByRole('grid').count(),0);
+  assert(receipt.rangeStoredReads.every(r=>r.method==='GET'));receipt.checks.push('separate stored rga1 namespace: actual offline stored-route fixture; index/select/play/pause/speed/step/scrub; partial/null; corrupt frame clears; deliberate Live exit does not refetch; qualification pending');
   await page.getByRole('button',{name:'Return to current map',exact:true}).click();await page.getByLabel('Canvas layout').waitFor();
-  assert(receipt.rangeReads.every(r=>r.method==='GET'));receipt.checks.push('owning analytical range: exclusive canvas; explicit persist=false read; basis invalidation; arrow focus; null skipped coverage; unavailable window/replay; wide and small-screen readability');
+  assert(receipt.rangeReads.every(r=>r.method==='GET'));receipt.checks.push('owning analytical range: exclusive canvas; explicit persist=false read; basis invalidation; arrow focus; null skipped coverage; unavailable window; wide and small-screen readability');
   await navigate('trinity');for(const width of [1440,1280,390])await capture('triad',width);
   await navigate('heatseeker');await page.setViewportSize({width:1440,height:1000});await page.getByRole('grid').first().waitFor();
   const worker=context.serviceWorkers()[0] || await context.waitForEvent('serviceworker',{timeout:15000});
@@ -162,6 +177,7 @@ const server=http.createServer((req,res)=>{
   receipt.nativeZoom={method:'chrome.tabs.setZoom; no CSS/pinch emulation',factor,before,after};
   await page.getByRole('grid').first().evaluate(e=>e.scrollIntoView({block:'center'}));const cdp=await context.newCDPSession(page);const native=await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false,fromSurface:true});fs.writeFileSync(path.join(evidence,'solstice-native200.png'),Buffer.from(native.data,'base64'));await cdp.detach();
   await page.getByRole('button',{name:'Analytical range · 14–60 DTE',exact:true}).click();await page.getByRole('button',{name:'Load analytical range',exact:true}).click();await page.getByRole('grid',{name:'Raw OI GEX · strike by expiry'}).waitFor();
+  await page.getByRole('button',{name:'Range replay',exact:true}).click();await page.getByRole('button',{name:'Load stored range records',exact:true}).click();await page.getByLabel('Stored range record').selectOption(rangePartial.record_id);await page.getByRole('grid').waitFor();
   assert.strictEqual(await worker.evaluate(async id=>chrome.tabs.getZoom(id),tab),2);const rangeZoom=await page.evaluate(()=>({width:innerWidth,documentWidth:document.documentElement.scrollWidth}));
   assert(rangeZoom.documentWidth<=rangeZoom.width+1,'Range page must not overflow at native200%');
   const rangeCdp=await context.newCDPSession(page);const rangeShot=await rangeCdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false,fromSurface:true});fs.writeFileSync(path.join(evidence,'range-native200.png'),Buffer.from(rangeShot.data,'base64'));await rangeCdp.detach();receipt.rangeNativeZoom={factor:2,...rangeZoom};
