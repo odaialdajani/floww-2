@@ -31,14 +31,14 @@ No merge, no deploy, no activation, no orders, no flag changes.
 
 | Layer | Suite | Result |
 |---|---|---|
-| Service (S1/S5/S9 admission) | `test_s18_admission` (19) | **passed** |
+| Service (S1/S5/S9 admission) | `test_s18_admission` (20, incl. cross-restart durability) | **passed** |
 | Service (S2/S7/S8/S9 commissioned) | `test_s18_commissioned` (18) | **passed** |
 | Service (S3/S6/S10 deployment) | `test_s18_deployment` (16, spawn-isolated real processes) | **passed** |
 | Service (hardening/resurrection) | `test_r17_hardening` (22) | **passed** |
 | Service (legacy lifecycle) | `test_r15_execution_lifecycle` (42) + wiring (8) + r17 reads (9) + inventory (5) | **passed** |
 | Mounted-route guards | existing brokerage/agent disarmed suites + `test_public_brokerage_admission` | green (in full run) |
 | Real read-only adapter observations | `test_public_api_only` + `test_public_spot_validation` + `test_solstice_exec_disarmed` | **63 passed** |
-| Full `tests/solstice/` (backend CWD) | unmasked | **693 passed** |
+| Full `tests/solstice/` (backend CWD) | unmasked | **694 passed** |
 | Ship-runtime check (Python 3.12 + pinned `requirements.txt` scratch venv) | s18 deployment/admission/commissioned/hardening/lifecycle/brokerage-admission (121) | **passed** |
 | Hosted Linux/Python 3.12 (PR103 run 37162537688 @ `23178787`) | all 17 `test_s18_deployment` passed in ~6s, suite 99% with zero failures | **per-test green; step killed by 15-min budget (infra HOLD, see below)** |
 | Hosted lint (same head) | ruff + gates | **passed** |

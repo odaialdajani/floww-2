@@ -1218,3 +1218,19 @@ INSUFFICIENT EVIDENCE. No profitability claim.
   silent-359 / bandit (one pre-existing Low, gate-accepted) / truth-227
   / openapi-380 green. 3/3 new regression tests fail pre-fix, pass
   post-fix.
+
+## 50. Cross-restart durability proof (4 Oct 2026)
+
+- The headline S1/S5 claim ("durable-first, no memory-only authority")
+  was proven in-process only. New spawn-isolated test
+  `test_required_authority_survives_process_restart`: writer process
+  persists required policy + approval to a FILE db and dies (closed +
+  memory dropped); a separate spawn process with zero inherited memory
+  verifies strict approval + policy + census completeness from the file
+  alone, then revokes; the writer reopens and observes durable
+  revocation with strict verification refusing. Stable 3/3 reruns,
+  green on ship 3.12. Non-vacuous by construction (spawn inherits no
+  memory — a memory-only implementation fails the child assertions).
+- Verification: full `tests/solstice/` **694 passed**; ruff / silent-359
+  / openapi-380 green. No service change (test-only proof); no new
+  refusal codes.
