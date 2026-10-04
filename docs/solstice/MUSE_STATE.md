@@ -1327,12 +1327,45 @@ unpushed); REVIEW-PENDING = Zed mount/lease-wiring/UNSET-enforcement
 + combined gates + workflow-budget decision + his composed-executor
 integration; ACCEPTED = prior R17/R18 receipts (untouched);
 COMMISSIONED = external HOLD (NAV-ACCOUNT/CAPTURE/NATIVE/MODEL/
-VISUAL/RELEASE). Activation OFF. INSUFFICIENT EVIDENCE. No
-profitability claim. No automatic merge/deploy/activation/order.
+  VISUAL/RELEASE). Activation OFF. INSUFFICIENT EVIDENCE. No
+  profitability claim. No automatic merge/deploy/activation/order.
 - Next exact action: push this lane record to
   `solstice/spark-r17` (no merge); Zed re-composes at the new head;
   Nav merge decision on PR103/PR105. Engineering acceptance is
   otherwise exhausted — remaining input is operator-side only.
+
+## 53. Adversarial hole-hunt — order_type binding + finite fields (4 Oct 2026)
+
+Prompted "find holes and improve": fresh adversarial read of the
+broker-reachable path found two genuine holes, both fixed TDD (5 new
+regression tests fail pre-fix, pass post-fix):
+
+1. `order_type` was never in the approval fingerprint: a price-capped
+   LIMIT approval verified cleanly for a MARKET placement of the same
+   fields (limit-price protection bypass on the armed path).
+   Fingerprint now binds order type; creation constrains it (unknown
+   refuses; OSI admits LIMIT/STOP_LIMIT only; LIMIT/STOP_LIMIT need a
+   limit, STOP/STOP_LIMIT need a stop); the armed route threads the
+   request type into verification. Pre-type approvals fail closed.
+2. NaN/Inf quantity slipped past route validation (`nan <= 0` is
+   False) and non-finite prices/quantities minted into approvals.
+   Route 422s non-finite quantity/prices before the kill-switch;
+   creation refuses non-finite/non-positive quantity and non-finite
+   prices (BAD_CONTRACT).
+- Ledger adversarial probe (negative/zero/float/nan/inf fills): all
+  fail closed already — no change. OSI malformed-vs-equity routing
+  coherent — no change. Provenance fail-closes on missing clock;
+  mount notes gained item 5 (server MUST stamp `ctx["now"]` — a
+  caller-controlled decision clock defeats STALE_FACTS); acceptance
+  fingerprint paragraph refreshed for order-type binding.
+- Verification: routes admission+gate **18 passed**; full
+  `tests/solstice/` **694 passed**; ship-3.12 focused **49 passed**;
+  ruff / bandit-touched / silent-gate-6 / truth-226 / openapi-380
+  green. Committed as `e5295b55`, pushed (PR103 CI re-running).
+- State split: DELIVERED = §§45–53; REVIEW-PENDING = Zed
+  re-composition + mount/lease-wiring/UNSET-enforcement + Nav merge
+  decision; ACCEPTED = prior receipts; COMMISSIONED = external HOLD.
+  Activation OFF. INSUFFICIENT EVIDENCE.
 
 ## 52. PR103 all-green on the lane head (4 Oct 2026)
 

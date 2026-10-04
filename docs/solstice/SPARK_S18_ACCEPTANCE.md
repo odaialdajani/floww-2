@@ -80,9 +80,11 @@ S1–S3 codes: `STORE_UNAVAILABLE`, `POLICY_STORE_UNAVAILABLE`,
   minted before expiry, a policy narrowing, or an ack removal cannot ride
   out its validity window — expired/near-expiry/unacknowledged option
   orders refuse even when armed. The fingerprint binds account, symbol,
-  side, quantity, limit, stop AND time in force (stop/TIF tampering
-  refuses); malformed OSI refuses BAD_CONTRACT; option approvals
-  require an explicit limit price (no market options). Equity (non-OSI)
+  side, quantity, limit, stop, time in force AND order type (a LIMIT
+  approval never covers a MARKET placement; malformed OSI refuses
+  BAD_CONTRACT; option approvals require an explicit limit price
+  (no market options; STOP_LIMIT needs a stop too); non-finite
+  quantity/prices 422 at the route and refuse at creation. Equity (non-OSI)
   symbols skip the option expiry gate (no expiry concept; disclosed
   limitation — tightening the equity path is a Nav
   production-behavior decision). Approval reuse across placements stays
@@ -106,6 +108,12 @@ S1–S3 codes: `STORE_UNAVAILABLE`, `POLICY_STORE_UNAVAILABLE`,
      same path. Lease dir needs write for `<path>.lock` sidecars.
      Cross-host/container-isolated deployments are OUT of scope
      (`deployment_scope()`); do not wire multi-host submit on this lease.
+  5. Server-stamped decision clock: stamp `ctx["now"] =
+     datetime.now(UTC)` at decision time and NEVER thread client `now`
+     into an executable decision. The freshness check compares
+     facts-asof against this clock — a caller-controlled clock plus
+     caller-controlled facts defeats STALE_FACTS (missing clock fails
+     closed, but a backdated one is indistinguishable downstream).
 - Executor lease wiring into submit is a proposal, not code — review first.
 - Known limitation (needs Nav decision, not lane code): operator identity
   is registry-bound but authenticated only via the shared master API key;
