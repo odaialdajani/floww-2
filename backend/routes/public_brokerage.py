@@ -81,6 +81,7 @@ def _require_order_admission_if_policy(
     account_id: str, symbol: str, side: str, quantity: float,
     limit_price: float | None, request: dict[str, Any],
     stop_price: float | None = None, time_in_force: str = "DAY",
+    order_type: str = "LIMIT",
 ) -> dict[str, Any] | None:
     """Progressive admission enforcement on the broker-reachable path (S8).
 
@@ -88,7 +89,7 @@ def _require_order_admission_if_policy(
     - Store present but policy lookup fails → refusal (fail closed).
     - Required v2 policy present → a body approval_id must verify against
       the server-recomputed order fingerprint (account/symbol/side/
-      quantity/limit/stop/TIF), else refusal. Cancellation
+      quantity/limit/stop/TIF/order-type), else refusal. Cancellation
       and reconciliation paths are untouched by this gate.
     Returns None when placement may proceed, else a refusal detail dict.
     """
@@ -106,7 +107,8 @@ def _require_order_admission_if_policy(
     approval_id = request.get("approval_id")
     verified = adm.verify_order_approval(
         conn, approval_id, account_id, symbol, side, quantity, limit_price,
-        stop_price=stop_price, time_in_force=time_in_force)
+        stop_price=stop_price, time_in_force=time_in_force,
+        order_type=order_type)
     if not verified.get("ok"):
         return {"error": verified.get("reason", "APPROVAL_INVALID"),
                 "message": "A stored order approval bound to these exact order "
@@ -418,10 +420,10 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
                 "error": "bad_quantity",
                 "message": f"quantity must be a number, got {request.get('quantity')!r}",
             }) from None
-        if quantity <= 0:
+        if quantity <= 0 or not math.isfinite(quantity):
             raise HTTPException(status_code=422, detail={
                 "error": "bad_quantity",
-                "message": "quantity must be positive",
+                "message": "quantity must be a finite positive number",
             })
         limit_price = request.get("limit_price")
         stop_price = request.get("stop_price")
@@ -433,6 +435,13 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
                 "error": "bad_price",
                 "message": "limit_price/stop_price must be numbers",
             }) from None
+        if ((limit_price is not None and not math.isfinite(limit_price))
+                or (stop_price is not None
+                    and not math.isfinite(stop_price))):
+            raise HTTPException(status_code=422, detail={
+                "error": "bad_price",
+                "message": "limit_price/stop_price must be finite numbers",
+            })
         time_in_force = request.get("time_in_force", "DAY")
         instrument_type = request.get("instrument_type", "EQUITY")
         equity_market_session = request.get("equity_market_session")
@@ -457,7 +466,7 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
         admission_refusal = _require_order_admission_if_policy(
             getattr(account, "account_id", ""), symbol, side, quantity,
             limit_price, request, stop_price=stop_price,
-            time_in_force=time_in_force)
+            time_in_force=time_in_force, order_type=order_type)
         if admission_refusal is not None:
             raise HTTPException(status_code=403, detail=admission_refusal)
 
