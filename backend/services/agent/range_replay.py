@@ -5,11 +5,12 @@ uses a different kernel. Neither is evidence here. A checked content digest is
 only a consistency check, not proof of origin, population validity or authority.
 """
 
+import hashlib
+import json
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from services.agent.contracts import fact, finite, instant
-from services.solstice_range_analytics import compute_content_digest, record_id_for_digest
 
 VERSION = "range-analytics.v1"
 UNIT = "USD per 1% spot move (S^2 dealer-positive convention)"
@@ -19,6 +20,27 @@ IDENTITIES = {
     "volume": ("volume_gamma_v1", "VOLUME", "vendor_gamma(session volume)"),
     "window": ("window_dadgex_v1", "VOLUME_WINDOW", "recorded baseline required"),
 }
+
+
+# Pin the read-side rga-content.v2 wire contract without importing the
+# analytical producer or recorder into research's no-order dependency graph.
+# The omitted metrics summary remains unqualified; conformance tests detect
+# producer changes instead of silently broadening this projection.
+_CONTENT_KEYS_V2 = (
+    "version", "status", "refusals", "symbol", "query", "axes", "grids",
+    "metric_registry", "clocks", "coverage", "provenance", "synthetic",
+    "grounding", "content_schema",
+)
+
+
+def compute_content_digest(envelope):
+    projection = {key: envelope.get(key) for key in _CONTENT_KEYS_V2}
+    content = json.dumps(projection, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+def record_id_for_digest(digest):
+    return f"rga1-{digest[:24]}"
 
 
 def require(condition, reason):

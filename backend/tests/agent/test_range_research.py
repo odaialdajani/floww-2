@@ -88,6 +88,16 @@ def body(env, metric="delta_weighted", question="Explain SPY map structure since
     return {**request_body(), "question": question, "screen": selection(env, metric)}
 
 
+def test_read_side_digest_is_pinned_without_importing_the_analytical_producer():
+    from services.agent.range_replay import compute_content_digest as read_digest
+
+    assert read_digest.__module__ == "services.agent.range_replay"
+    env = envelope()
+    assert read_digest(env) == compute_content_digest(env) == env["content_digest"]
+    env["clocks"]["oi_effective_dates"] = []
+    assert read_digest(env) == compute_content_digest(env)
+
+
 @pytest.mark.parametrize("field,value", [("metric", "vex"), ("contractResolution", "resolved")])
 def test_range_request_refuses_mislabeled_metric_or_contract_claim(field, value):
     requested = body(envelope())
