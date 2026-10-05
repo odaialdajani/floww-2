@@ -30,11 +30,12 @@ both producer domains; this candidate is composed at the CURRENT lane heads.
 
 ## Hosted gates
 
-At `a55bd9ad` (recorded as observed; single checks, no polling loops):
-- frontend-build **PASS** 2m58s (failed at the pre-fix head with the v2 pin —
-  the fix is verified hosted-green now)
-- backend-tests / ruff / docker: pending at receipt time; the identical backend
-  content already passed 20m18s at `2afa846a` (run 37359471322).
+At `9efba64c` (receipt commit; hosted-verified 2026-10-05):
+- backend-tests **PASS** 19m16s (run 37376547066)
+- frontend-build **PASS** 3m02s
+- docker-build **PASS** 3m45s
+- ruff **PASS** 2m15s (docs/api gate green at 383 paths)
+ALL FOUR hosted gates green on the final combined candidate.
 
 ## Honest residuals (recorded, unchanged by this candidate)
 
