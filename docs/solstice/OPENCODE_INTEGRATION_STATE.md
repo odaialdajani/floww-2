@@ -239,3 +239,32 @@ I15 remains READY (finishes at frozen composition); these results are
 partial and exclude: replay paging edge-audit on admitted v3 fixtures,
 browser-route replay (I12 scope), contradiction between old/state docs vs
 latest code.
+
+## 2026-10-05 unmasked full gates at this lane head (time-bomb fix integrated)
+
+Owned heavy run over cb483298 + docs + receipt-only commits (this lane,
+Mongo local):
+
+- Backend full unmasked: `pytest tests/ -q -m "not flaky_env" --cov=.`
+  → **7303 passed, 37 skipped, 0 failed, coverage 69.75%**, 4m29s,
+  exit 0 (PR104 local receipt 7303/37/69.72% — identical totals;
+  the previously-failing asof time-bomb test now PASSES on this lane).
+- API docs `--check`: 383 paths current (stale-docs condition exists
+  only on PR106's lane; batched regen here at composition).
+- Frontend: `npm ci --legacy-peer-deps` (1156 pkgs, zero tracked-file
+  changes); `CI=true npx craco test --watchAll=false` → **130 suites /
+  1369 tests, all passed** (PR104 hosted match). `npm run build` →
+  Compiled successfully. Storybook build OK.
+- Storybook interactions + a11y (vitest browser, chromium headless):
+  **5 story files / 36 tests passed** (PR104's 36 stories match).
+  Playwright headless shell was installed lane-local
+  (PLAYWRIGHT_BROWSERS_PATH=0 → node_modules/.local-browsers; global
+  cache untouched).
+- UI preservation (I09): no frontend source diff vs cb483298; story
+  assets confirm SolsticeDesk / RangeAnalyticsWorkspace / PublicPanel /
+  PublicHandoffReview / SolsticeStatusStrip intact (the approved dark-teal
+  desk, expiry map, Wall→Contract→Lodestar→Public inspector rail).
+
+Note: these are lane-local receipts for a docs+tests-only head; they do
+not waive the final frozen composition + hosted four-gate requirement
+(I11). Engineering HOLD; six NAV HOLDs separate; activation OFF.
