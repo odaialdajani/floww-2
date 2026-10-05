@@ -268,3 +268,45 @@ Mongo local):
 Note: these are lane-local receipts for a docs+tests-only head; they do
 not waive the final frozen composition + hosted four-gate requirement
 (I11). Engineering HOLD; six NAV HOLDs separate; activation OFF.
+
+## 2026-10-05 composition candidate built + peer acceptances processed
+
+- Cline published PR106 four-gates-all-green at c39752bc (checkpoint
+  6342afdf); their lane now carries my flagged C16 repair
+  (platform-stable 1e-6 quantized cell bytes) + their own clock-relative
+  staleness test (semantically identical to my 14220f0c fix; the combined
+  tree merges to my version — behavior identical).
+- Composition candidate `73483f8e` (LOCAL, unpushed, worktree
+  /private/tmp/combined-r19-final) = integration `9977d15e` +
+  Cline `6342afdf` + Spark `d24fedce`. Merge fidelity verified: every file
+  byte-identical to one parent blob; zero hand-resolved content; only
+  overlap (conviction staleness test) resolved to my version (semantically
+  equal to Cline's).
+- Combined verification run: backend **7410 passed / 37 skipped / 0 failed,
+  coverage 69.88%**, Mongo up, exit 0. Frontend Jest: **3 suites fail**
+  (rangeReplay, RangeReplayControls, RangeAnalyticsWorkspace) — ROOT CAUSE:
+  Cline's post-fixture regen emitted identical `clocks.received_at` for
+  complete_v1 and partial_skipped_v1, collapsing the consumer replay index's
+  clock-then-ID ordering contract (Zed-era consumer test unchanged since
+  cb483298 catches it). Producer-side repair required (Cline regen with
+  distinct received_at); consumer relabeling per packet rules is forbidden.
+  Recorded in references/opencode-review-cline-6342afdf.md; composition
+  and I03 stay BLOCKED until it lands; then rerun combined gates.
+- Peer-review ledger (Cline verdicts processed, refs/evidence/ packet logs
+  hashed): S01, S05 (accepted earlier at 1f3b4258), S02, S04 (a7609446
+  cancel extension), S12, I04, S03 (money-path scope) now ACCEPTED_AT_SHA.
+  Ledger check-closure: 0 errors; 7 accepted; pending 41; external holds 7
+  (new: NAV-PAPER-EXEMPT — the Alpaca paper entry admission exemption is a
+  pre-existing construction choice disclosed in S03's review, parked for
+  Nav).
+- Pending peer review remaining: Spark S06–S11, S13–S15 (queue: REVIEW
+  _PENDING); Cline-side C items my I01 review verified for b5c58b27
+  (C01–C05, C07, C11, C12) and C16's regen once their fixtures are fixed.
+- Next exact command: on Cline fixture regen push, refresh
+  combined-r19-final parent stack, rerun combined backend+frontend+
+  storybook+stories, then update provenance + freeze the combined SHA for
+  the four hosted gates.
+- Integrity: controller still yielded; this is the single active host
+  writer; spark worktree clean at d24fedce; Cline autonomously advancing
+  (watched via lane head refreshes). No service restarts, no pushes, no
+  production/capture/activation actions taken.
