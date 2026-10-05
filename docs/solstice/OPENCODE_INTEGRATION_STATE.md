@@ -146,3 +146,50 @@ Multi-day continuation: read /Users/nav/Documents/Codex/2026-10-04/resume-check-
   seven enumerated entries) against the reviewed-named-production-change
   boundary; no production wiring, no live flags. Engineering HOLD
   remains; activation OFF; six NAV HOLDs unchanged.
+
+## 2026-10-05 same-turn continuation (first acceptances + I01 reciprocal review)
+
+- I04 mounted test-local full-stack delivered in Spark lane `d24fedce`:
+  one throwaway FastAPI app mounts BOTH routers (production-mounted
+  brokerage + still-unmounted admission — topology proven test-locally,
+  server.py untouched). Full operator workflow over HTTP places exactly
+  once; 9-denial matrix (kill-switch, key, bool-quantity, store, policy,
+  approval missing/misbound/foreign-operator/revoked) zero placements;
+  exits available disarmed; lifecycle DISARMED zero. queue.json I04 →
+  REVIEW_PENDING.
+- PEER REVIEW RECEIVED: Cline independent review ACCEPTED S01/S04/S05
+  at exact 1f3b4258 (references/cline-review-spark-s01-s04-s05-1f3b4258.md)
+  with real adversarial probes (OS-process rival claim, TTL-expiry steal,
+  stripped-revoked-flag presenter, 200x200 churn, injected store faults;
+  honest DuckDB single-writer scope note). Ledger updated: S01 + S05 →
+  ACCEPTED_AT_SHA 1f3b4258a092405edc9843fb219192cc40331db1 with hashed
+  evidence logs (references/evidence/). Closure checker: zero errors,
+  2 accepted / 46 pending / 6 holds. S04 lease-fence accepted at
+  1f3b4258; the a7609446 cancellation-during-effect extension is a new
+  material delta awaiting the same reviewer.
+- CLINE PUBLISHED NEW PR106 HEAD b5c58b271 (3 commits over rejected
+  a0c7fbc6). OpenCode reciprocal I01 review delivered
+  (references/opencode-review-cline-b5c58b271.md): VERIFIED C01 (fixture
+  truth: synthetic true; 3 = 2+1), C02 (warm zero, concurrent fan-out 4),
+  C03 (all 3 cancellation seams release), C04 (shared binder — my probe:
+  header tamper now refuses on duplicate/replay and is flagged
+  refused:ROW_HEADER_MISMATCH in the index), C05 (clocks-list typed
+  refusal, binder never raises), C07 (four-way classification; synthetic
+  never production), C11/C12 capture default-off gate ordering.
+  NOT accepted: hosted test_r5_generator_is_idempotent FAILED on CI
+  Python 3.12 (committed fixture bytes diverge from producer; passes on
+  local 3.14) — ship-runtime schema/hash contract is Cline's remaining
+  C16 repair. Author suites 49 passed + originals 7/7 at b5c58b27.
+- Environmental hosted-green blocker repaired in THIS lane `14220f0c`:
+  test_stale_observation_is_reported_as_stale hardcoded asof 2026-09-28
+  (expired 2026-10-05; fails at PR104 baseline too — pre-existing time
+  bomb). Clock-relative repair, same assertion contract; 24 passed,
+  ruff clean. Docs-staleness gate (market_data route change) remains
+  expected and MINE at batched composition (I10).
+- Lane heads: spark-r17 `d24fedce` (REVIEW_PENDING for S02-S14/S15/I04
+  + a7609446 extension), integration `14220f0c`. Preservation verified
+  71/71 protected, zero mismatches (packet preflight, all lanes).
+- Next exact command: Cline acts on the 3.12 fixture divergence (C16);
+  OpenCode next READY seam is the remaining S04/S12 extension review
+  packet and, on Cline admission of b5c58b271 repairs, I03 strict v3
+  consumer migration prep. Engineering HOLD remains; activation OFF.
