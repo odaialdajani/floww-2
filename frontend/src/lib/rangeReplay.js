@@ -103,7 +103,7 @@ export function admitRangeRecord(body,{symbol,minDte,maxDte,asOf,recordId}={}) {
  if(!status(body.status) || body.error || body.reason) return refuse(refusal(body,'RANGE_RECORD_REFUSED'));
  if(!header(body,query) || body.record_id !== recordId) return refuse('RANGE_RECORD_HEADER_INVALID');
  const envelope=body.envelope;
- if(!object(envelope) || envelope.content_schema !== 'rga-content.v2') return refuse('RANGE_CONTENT_SCHEMA_UNSUPPORTED');
+ if(!object(envelope) || envelope.content_schema !== 'rga-content.v3') return refuse('RANGE_CONTENT_SCHEMA_UNSUPPORTED');
  const admitted=admitRangeEnvelope(envelope,{...query,recordId});
  if(admitted.reason) return refuse(admitted.reason);
  if(body.record_id !== envelope.record_id || body.digest !== envelope.content_digest || body.ticker !== envelope.symbol

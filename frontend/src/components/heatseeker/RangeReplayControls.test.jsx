@@ -67,15 +67,19 @@ test('altered metrics pass through verbatim without a UI qualification or integr
  expect(screen.getByText(/Full integrity.*HOLD/i)).toBeInTheDocument();
 });
 test('previous, next, scrub and record select share owning stored retrieval',async()=>{
+ // v3: records load in CHRONOLOGICAL order (received_at ASC, record_id ASC),
+ // so the index list is [complete, partial] — derive the direction from the
+ // fixtures instead of baking the pre-v3 ID order.
+ const [first,second]=[complete,partial].sort((a,b)=>a.record_id<b.record_id?-1:1);
  mount();await load();
  fireEvent.click(screen.getByRole('button',{name:'Next frame'}));
- await waitFor(()=>expect(lastEnvelope()?.record_id).toBe(partial.record_id));
+ await waitFor(()=>expect(lastEnvelope()?.record_id).toBe(first.record_id));
  fireEvent.click(screen.getByRole('button',{name:'Next frame'}));expect(lastEnvelope()).toBeNull();
- await waitFor(()=>expect(lastEnvelope()?.record_id).toBe(complete.record_id));
+ await waitFor(()=>expect(lastEnvelope()?.record_id).toBe(second.record_id));
  fireEvent.click(screen.getByRole('button',{name:'Previous frame'}));
- await waitFor(()=>expect(lastEnvelope()?.record_id).toBe(partial.record_id));
+ await waitFor(()=>expect(lastEnvelope()?.record_id).toBe(first.record_id));
  fireEvent.change(screen.getByLabelText('Replay frame'),{target:{value:'1'}});
- await waitFor(()=>expect(lastEnvelope()?.record_id).toBe(complete.record_id));
+ await waitFor(()=>expect(lastEnvelope()?.record_id).toBe(second.record_id));
  expect(global.fetch.mock.calls.every(([url])=>String(url).includes('/solstice/price-paths/range-records'))).toBe(true);
 });
 test.each(['recorder_unavailable','STORE_READ_FAILED'])('HTTP-200 %s refusal never becomes empty history',async reason=>{
@@ -105,13 +109,13 @@ test('playback waits for each stored response, applies speed, pauses and stops a
  jest.useFakeTimers();mount();await load();
  fireEvent.change(screen.getByLabelText('Replay speed'),{target:{value:'2'}});
  fireEvent.click(screen.getByRole('button',{name:'Play frames'}));await settle();
- expect(lastEnvelope()?.record_id).toBe(partial.record_id);
+ expect(lastEnvelope()?.record_id).toBe(complete.record_id);
  await act(async()=>jest.advanceTimersByTime(999));expect(global.fetch).toHaveBeenCalledTimes(2);
  fireEvent.click(screen.getByRole('button',{name:'Pause frames'}));
  await act(async()=>jest.advanceTimersByTime(3000));expect(global.fetch).toHaveBeenCalledTimes(2);
  fireEvent.click(screen.getByRole('button',{name:'Play frames'}));
  await act(async()=>jest.advanceTimersByTime(1000));await settle();
- expect(lastEnvelope()?.record_id).toBe(complete.record_id);
+ expect(lastEnvelope()?.record_id).toBe(partial.record_id);
  expect(screen.getByRole('button',{name:'Play frames'})).toBeInTheDocument();
  await act(async()=>jest.advanceTimersByTime(10000));expect(global.fetch).toHaveBeenCalledTimes(3);
 });
@@ -201,7 +205,7 @@ test('slow frames never overlap requests or advance merely because wall time ela
  global.fetch.mockImplementationOnce(()=>new Promise(resolve=>{release=resolve;}));
  fireEvent.click(screen.getByRole('button',{name:'Play frames'}));
  await act(async()=>jest.advanceTimersByTime(6000));expect(global.fetch).toHaveBeenCalledTimes(2);
- await act(async()=>release(response(wrapper(partial))));
+ await act(async()=>release(response(wrapper(complete))));
  await act(async()=>jest.advanceTimersByTime(1999));expect(global.fetch).toHaveBeenCalledTimes(2);
  await act(async()=>jest.advanceTimersByTime(1));expect(global.fetch).toHaveBeenCalledTimes(3);
 });

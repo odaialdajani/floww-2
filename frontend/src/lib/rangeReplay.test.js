@@ -35,7 +35,9 @@ test('index admits partial rows and sorts received clock then record ID without 
  const body=index(), before=clone(body);
  const result=admitRangeIndex(body,query);
  expect(result.reason).toBeNull();
- expect(result.rows.map(r=>r.record_id)).toEqual([partial.record_id,complete.record_id]);
+ expect(result.rows.map(r=>r.record_id))
+  .toEqual([complete,partial].map(e=>e.record_id).sort((a,b)=>a<b?-1:a>b?1:0));
+ expect(result.rows[0].received_at<=result.rows[1].received_at).toBe(true);
  expect(body).toEqual(before);
  expect(result).toMatchObject({researchOnly:true,qualification:'pending',page:{limit:50,offset:0,nReturned:2,mayHaveMore:false}});
 });
@@ -126,8 +128,14 @@ test('altered unbound metrics are retained verbatim without upgrading research q
  expect(result.envelope.metrics).toBe(body.envelope.metrics);
  expect(body).toEqual(before);
 });
-test('metadata-only producer example is not pretended to be a full replay fixture', () => {
- expect(admitRangeRecord(metadataOnly,{...query,recordId:complete.record_id}).envelope).toBeNull();
+test('record_replay wrapper carries the full bound envelope under v3 (C11 deliverable)', () => {
+ // The old metadata-only wrapper shape WAS the C11 consumer-review defect:
+ // v3 wrappers carry the full digest-bound envelope, so a replay wrapper
+ // admits exactly like a stored record. It is never a bare metadata stub.
+ const result=admitRangeRecord(metadataOnly,{...query,recordId:metadataOnly.record_id});
+ expect(result.reason).toBeNull();
+ expect(result.envelope).toBe(metadataOnly.envelope);
+ expect(result.envelope.content_schema).toBe('rga-content.v3');
 });
 test.each([
  ['missing envelope', b=>{delete b.envelope;}],

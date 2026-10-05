@@ -38,9 +38,11 @@ test('owning stored range selection drives grid and shared context; Live clears 
 });
 
 test('a corrupt next frame clears the mounted grid and canonical record, never retains a mislabeled previous frame',async()=>{
- let corrupt=false;global.fetch.mockImplementation(async url=>response(String(url).includes('/range-records/')?corrupt?{version:'range-records.v1',status:'refused',reason:'DIGEST_MISMATCH'}:replay(partial):index()));
+ // v3 chronological order: complete loads first, so select IT and corrupt the
+ // NEXT frame (partial) — the pre-v3 order had partial first and Next disabled.
+ let corrupt=false;global.fetch.mockImplementation(async url=>response(String(url).includes('/range-records/')?corrupt?{version:'range-records.v1',status:'refused',reason:'DIGEST_MISMATCH'}:replay(complete):index()));
  render(<><RangeAnalyticsWorkspace ticker="SPY"/><Context/></>);await loadStored();
- fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:partial.record_id}});await screen.findByRole('grid');
+ fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:complete.record_id}});await screen.findByRole('grid');
  corrupt=true;fireEvent.click(screen.getByRole('button',{name:'Next frame'}));await screen.findByText(/Stored range replay unavailable.*DIGEST_MISMATCH/);
  expect(screen.queryByRole('grid')).not.toBeInTheDocument();expect(JSON.parse(screen.getByTestId('range-context').textContent).snapshotId).toBeNull();
 });
