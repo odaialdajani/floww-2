@@ -24,6 +24,7 @@ any reconcile — the registry is never trusted empty on a fresh process.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import re
@@ -1328,6 +1329,16 @@ async def submit(
             return {"ok": False, "reason": "STORE_UNAVAILABLE", "intent_id": intent_id}
     try:
         receipt = await _maybe_await(broker.place_order(**payload))
+    except asyncio.CancelledError:
+        # Cancellation during the effect await leaves the outcome unknowable:
+        # the broker may have executed before the cancel landed. Preserve the
+        # ambiguity truthfully (UNKNOWN + annotation, persisted) so a later
+        # duplicate/reconcile can never report a clean SUBMITTED certainty;
+        # the re-raised cancel keeps the caller's cancellation semantics.
+        _INTENTS[intent_id]["state"] = "UNKNOWN"
+        _INTENTS[intent_id]["error"] = "CancelledError: effect await cancelled"
+        _persist(intent_id)
+        raise
     except Exception as exc:
         _INTENTS[intent_id]["state"] = "UNKNOWN"
         _INTENTS[intent_id]["error"] = f"{type(exc).__name__}: {exc}"
