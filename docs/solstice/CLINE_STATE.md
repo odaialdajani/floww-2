@@ -218,11 +218,27 @@ backend/` clean. Pushed b5c58b27..b93242f5; hosted gates re-running at
 record time (single check, no polling). Known remaining red: docs/api
 freshness — the recorded OpenCode-owned regeneration handoff.
 
-Also this session: independent Cline-lane review of OpenCode's Spark
-S01/S04/S05 repairs at their head `1f3b4258` → ACCEPTED (see packet
-`references/cline-review-spark-s01-s04-s05-1f3b4258.md`); queue.json
-updated (S01/S04/S05 ACCEPTED, S15 REVIEW_PENDING publish-only, I01 READY
-with producer head b5c58b27).
+Hosted verification of the CI repairs (run 37303460988 at 61164572):
+backend-tests PASS 16m28s on the Linux runner — both repairs confirmed
+cross-platform. frontend-build PASS; ruff red remains ONLY the docs/api
+freshness handoff (OpenCode-owned).
+
+Independent Cline-lane reviews of OpenCode's Spark lane (packet
+references/): S01/S04/S05 at `1f3b4258` (ACCEPTED — see
+cline-review-spark-s01-s04-s05-1f3b4258.md); S04/S12 cancel truth at
+`a7609446` (ACCEPTED — real-task-cancellation probe: memory+durable
+UNKNOWN annotated, retry reconciles original identity, zero new
+placements); I04 mounted full-stack at `d24fedce` (ACCEPTED — matrix
+reproduced 4/4 + 49/49 over real HTTP; fingerprint tamper refused;
+CONFIRMED KNOWN GAP: same-approval replay places a 2nd order, the
+recorded single-use/lease->submit design point); S02 principal authority
+(ACCEPTED — cross-account mint OPERATOR_UNAUTHORIZED, removed-operator
+replay OPERATOR_UNKNOWN, zero placements; shared-key residual stays
+NAV-ACCOUNT); S03 entry enumeration (ACCEPTED for the Public.com money
+path; disclosed residual: pre-existing authenticated-but-unadmitted
+POST /api/alpaca/order PAPER entry, predates the lane, outside Spark
+ownership — Nav/OpenCode decision). Queue: S01-S05, S12, I04, S03
+ACCEPTED; S15 publish-only; I01 READY at producer head b5c58b27.
 
 ## External (not engineering): NAV-CAPTURE
 
