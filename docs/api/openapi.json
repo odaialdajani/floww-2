@@ -8578,6 +8578,101 @@
         ]
       }
     },
+    "/api/heatmap/{ticker}/range-analytics": {
+      "get": {
+        "description": "Owning 14\u201360 DTE analytical range map (contract range-analytics.v1).\n\nADDITIVE and distinct from coverage-read.v1 (an expiry LISTING verdict)\nand from the existing `dte le=30` display envelope on /heatmap. Returns\nthe owned axes/cells/basis/units/coverage/clocks envelope from\nservices.solstice_range_analytics. Refusals stay machine-readable:\nREVERSED_WINDOW \u2192 422; vendor/listing unavailable \u2192 502; zero admitted\nexpiries \u2192 200 with status \"refused\" (an honest empty window answer).\nExecution policy is unchanged \u2014 this is research data, not entry\npermission. A partial map is research only and never execution-eligible.",
+        "operationId": "get_api_heatmap_ticker_range-analytics",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "title": "Ticker",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_dte",
+            "required": false,
+            "schema": {
+              "default": 14,
+              "maximum": 365,
+              "minimum": 0,
+              "title": "Min Dte",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_dte",
+            "required": false,
+            "schema": {
+              "default": 60,
+              "maximum": 365,
+              "minimum": 0,
+              "title": "Max Dte",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Owning NY date; must equal today \u2014 a current fetch can never recreate a historical observation",
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owning NY date; must equal today \u2014 a current fetch can never recreate a historical observation",
+              "title": "As Of"
+            }
+          },
+          {
+            "description": "Recorder write of the admitted owning envelope. R18-C10: requires the explicit capture policy (FLOWW_RANGE_CAPTURE_ENABLED) AND operator API-key auth. Default False \u2014 display reads never write.",
+            "in": "query",
+            "name": "persist",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Recorder write of the admitted owning envelope. R18-C10: requires the explicit capture policy (FLOWW_RANGE_CAPTURE_ENABLED) AND operator API-key auth. Default False \u2014 display reads never write.",
+              "title": "Persist",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Heatmap Range Analytics",
+        "tags": [
+          "market_data"
+        ]
+      }
+    },
     "/api/heatseeker/air-pockets": {
       "get": {
         "description": "Contiguous strike ranges with |GEX| below 20% of the local median.",
@@ -17090,6 +17185,199 @@
           }
         },
         "summary": "Price Path Points",
+        "tags": [
+          "solstice",
+          "solstice"
+        ]
+      }
+    },
+    "/api/solstice/price-paths/range-records": {
+      "get": {
+        "description": "Record index with per-row integrity verdicts (range-records.v1).",
+        "operationId": "get_api_solstice_price-paths_range-records",
+        "parameters": [
+          {
+            "description": "Owning symbol filter",
+            "in": "query",
+            "name": "ticker",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owning symbol filter",
+              "title": "Ticker"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_dte",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 365,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Dte"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_dte",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 365,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Max Dte"
+            }
+          },
+          {
+            "description": "Owning NY date YYYY-MM-DD",
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Owning NY date YYYY-MM-DD",
+              "title": "As Of"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(ok|partial)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Range Record Index Api Solstice Price Paths Range Records Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Range Record Index",
+        "tags": [
+          "solstice",
+          "solstice"
+        ]
+      }
+    },
+    "/api/solstice/price-paths/range-records/{record_id}": {
+      "get": {
+        "description": "Replay one owning rga1 envelope by identity \u2014 validated, never refetched.\n\nUnknown identity \u2192 404; integrity refusals (tamper/schema/header) stay\nmachine-readable with 422; a healthy record restores the stored display\nexactly (no recomputation of present-day chains).",
+        "operationId": "get_api_solstice_price-paths_range-records_record_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Range Record Replay Api Solstice Price Paths Range Records  Record Id  Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Range Record Replay",
         "tags": [
           "solstice",
           "solstice"
