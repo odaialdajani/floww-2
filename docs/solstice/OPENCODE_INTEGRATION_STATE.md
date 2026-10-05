@@ -310,3 +310,33 @@ not waive the final frozen composition + hosted four-gate requirement
   writer; spark worktree clean at d24fedce; Cline autonomously advancing
   (watched via lane head refreshes). No service restarts, no pushes, no
   production/capture/activation actions taken.
+
+## 2026-10-05 C-line peer review completed at origin head 6342afdf
+
+Detatched review worktree /private/tmp/r18-review-6342afdf (Mongo up).
+Verified with exact-sha binding (packet evidence
+references/evidence/c-lane-6342afdf.log): C01 (fixture arithmetic +
+synthetic=true at this head; idempotence green on CI 3.12 at c39752bc),
+C02, C03, C04, C05, C06 (exclusion mirrors visible with finite siblings),
+C07 (four-way classification), C08 (Saturdays-with-snapshots never
+qualify, holidays/foreign-ticker refuse, open-days-with-owning-snapshot
+qualify), C09 (v2 typed refusal), C11 (capture default-off ordering),
+C12 (subprocess replay durability rerun at this head), C13 (adversarial
+synthetic-stamped inspector probe: 35 sessions produce 0 qualified +
+INSUFFICIENT EVIDENCE), C14 (originals + adjacent regressions), C15
+(zero producer/pacer/worker drift in the diff range).
+Ledger accepts at this head: C01-C09, C11, C12, C13, C14, C15.
+
+C16 (publish-quality receipts): NOT accepted — fixture regen under
+stable serialization collapsed received_at distinctness (complete_v1 and
+partial_skipped_v1 both = 2026-10-05T13:59:30+00:00), which breaks my
+consumer-side replay ordering suites on the composed tree. Producer-side
+regen with distinct received_at stamps requested; consumer relabeling is
+not permitted by packet rules. C10 remains pending NAV-CAPTURE.
+
+Composition: candidate `73483f8e` (integration 9977d15e + Cline 6342afdf
++ Spark d24fedce) merge-fidelity verified; backend 7410/0 fail/69.88%;
+combined frontend red ONLY on this fixture defect. After Cline regen:
+refresh parent stack, rerun combined backend+frontend+stories, record,
+then freeze for the four hosted gates. Still no push, no PR104 mutation,
+no live production action.
