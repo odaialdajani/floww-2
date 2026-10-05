@@ -188,6 +188,42 @@ Verification (repo `backend/` cwd, venv 3.14, disclosed):
   the Cline identity; its backup is at
   `~/.cline/data/sessions/backup/1791083843521_pihto`.
 
+## C12-CI session (2026-10-05, PR106 hosted-CI repairs at b93242f5)
+
+First hosted run of the pushed lane (run 37295235629/37295235622 at
+b5c58b27) failed backend-tests on two tests; both diagnosed from raw
+logs and repaired (failed-first pins included):
+
+1. `test_r5_generator_is_idempotent` — cross-platform byte divergence
+   (Cline-owned): `grids.raw_oi` cells were the only float-bearing content
+   in the canonical digest and carried raw 17-sig-digit double reprs; the
+   last ulp differs between macOS and Linux libms, so macOS-generated
+   fixtures could never byte-match the Linux producer. Fix: cells are
+   QUANTIZED to 1e-6 at `_dense_section` assembly (six orders coarser than
+   libm noise, far below decision thresholds) — envelope bytes and the
+   content digest are platform-stable by construction. New pin
+   `test_r5b_cell_bytes_are_platform_stable` (RED pre-fix, GREEN post).
+   All 7 docs fixtures regenerated; staging regen re-run byte-identical.
+   New hashes: complete `f67d84c2…`, partial `21c03bbf…`, record_id
+   `rga1-f2600391594368d7c17bd2c5`.
+2. `test_stale_observation_is_reported_as_stale` — wall-clock time bomb
+   (shared test, not lane code): hard-coded "fresh" asof 2026-09-28 crossed
+   the module's own 7-day staleness boundary on 2026-10-05 (age 642000s >
+   604800s). Fix: asof stamps computed relative to the wall clock
+   (30 days vs 1 hour old); semantics preserved forever.
+
+Verification at b93242f5 (venv 3.14 disclosed): R18 suites 82/0;
+lane+guard sweep 359/0 (24 files); conviction file 24/0; `ruff check
+backend/` clean. Pushed b5c58b27..b93242f5; hosted gates re-running at
+record time (single check, no polling). Known remaining red: docs/api
+freshness — the recorded OpenCode-owned regeneration handoff.
+
+Also this session: independent Cline-lane review of OpenCode's Spark
+S01/S04/S05 repairs at their head `1f3b4258` → ACCEPTED (see packet
+`references/cline-review-spark-s01-s04-s05-1f3b4258.md`); queue.json
+updated (S01/S04/S05 ACCEPTED, S15 REVIEW_PENDING publish-only, I01 READY
+with producer head b5c58b27).
+
 ## External (not engineering): NAV-CAPTURE
 
 Approved production capture/storage policy and admitted REAL records after a
