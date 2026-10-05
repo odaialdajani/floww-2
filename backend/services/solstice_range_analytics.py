@@ -482,6 +482,7 @@ def build_range_envelope(
     listing: dict[str, Any],
     selection: dict[str, Any],
     chain: dict[str, Any],
+    capture: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble the owning range-analytics.v1 envelope from a bounded chain.
 
@@ -641,6 +642,14 @@ def build_range_envelope(
         "greeks_sources": greeks_sources or None,
         "chain_instrument_type": chain.get("chain_instrument_type"),
     }
+    if capture is not None:
+        # R18-C12 (C07): capture-lineage attestation — the ONLY marker that
+        # can carry a record into the inspector's production bucket, and
+        # only the guarded capture path may supply it (route policy flag +
+        # authenticated operator). It lives INSIDE provenance, so the
+        # canonical content digest binds it: a tampered attestation
+        # invalidates the digest and the record refuses as corrupt.
+        provenance["capture"] = capture
 
     refusals: list[str] = []
     if provenance["stale"]:
@@ -724,11 +733,15 @@ async def fetch_range_analytics(
     window_fetcher: Callable[[str, list[str]], Awaitable[dict[str, Any] | None]] | None = None,
     now_utc: datetime | None = None,
     persist_conn: Any | None = None,
+    capture: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Bounded owning analytical range request (range-analytics.v1).
 
     Default fetchers are the additive adapter seams; tests inject deterministic
     fakes. ``persist_conn`` is explicit opt-in — the read path performs no
+    recorder writes unless a store is supplied. ``capture`` is the guarded
+    capture-lineage attestation; only the authorized persist route passes it
+    (default None — display reads and synthetic runs never carry it).
     recorder writes unless a store is supplied.
     """
     symbol = str(ticker or "").strip().upper()
@@ -784,7 +797,7 @@ async def fetch_range_analytics(
 
     envelope = build_range_envelope(
         symbol=symbol, min_dte=min_dte, max_dte=max_dte, asof=today,
-        listing=listing, selection=selection, chain=chain)
+        listing=listing, selection=selection, chain=chain, capture=capture)
 
     if persist_conn is not None:
         from services.heatmap_history import record_range_envelope

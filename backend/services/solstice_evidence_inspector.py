@@ -320,33 +320,72 @@ def _outcome_sufficiency(conn, report: dict[str, Any]) -> None:
         report["outcome_sufficiency"] = {"status": "ABSENT_OR_UNREADABLE",
                                          "error": str(e)}
         return
-    # C8/C11 qualification: a session day counts only when at least one
+    # C8/C11/C12 qualification: a session day counts only when at least one
     # label on that ACTUAL NY day is non-censored AND lineage-linked to a
     # decision classified PRODUCTION (synthetic/paper/unknown/unlinked never
-    # qualify). Naive timestamps carry no offset: the recorder stamps UTC,
+    # qualify). R18-C12 (C08, review 5979463755): the session must ALSO be
+    # an actual OPEN exchange session (pinned XNYS calendar — weekends and
+    # holidays never qualify; an unknown calendar is fail-closed) AND carry
+    # actual OWNING snapshot evidence for the scoped ticker on that NY day
+    # — 30 arbitrary label dates (Saturdays) with no observation never meet
+    # the target. Naive timestamps carry no offset: the recorder stamps UTC,
     # so a naive value is interpreted as UTC before converting to the NY
     # session date — a host-local assumption would silently mislabel days.
     from datetime import UTC as _utc
     from zoneinfo import ZoneInfo
 
+    from services.solstice_calendar import exchange_day_info
+
     _et = ZoneInfo("America/New_York")
+
+    def _ny_day(value: Any) -> str | None:
+        try:
+            s = str(value).replace("Z", "+00:00")
+            dt = datetime.fromisoformat(s)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=_utc)  # recorder stamps UTC
+            return dt.astimezone(_et).strftime("%Y-%m-%d")
+        except (TypeError, ValueError):
+            return None
+
+    # Owning snapshot evidence days for the scoped ticker (absent table ->
+    # no evidence at all, nothing qualifies).
+    snap_days: set[str] = set()
+    if report["tables"].get("heatmap_snapshots_v2", {}).get("rows") is not None:
+        s_sql = "SELECT asof_ts FROM heatmap_snapshots_v2"
+        s_params: list[Any] = []
+        if ticker:
+            s_sql += " WHERE ticker = ?"
+            s_params.append(ticker)
+        with contextlib.suppress(Exception):
+            for (ts,) in conn.execute(s_sql, s_params).fetchall():
+                day = _ny_day(ts)
+                if day:
+                    snap_days.add(day)
+
+    def _exchange_open(day: str) -> bool:
+        try:
+            return bool(exchange_day_info(day).get("is_open"))
+        except Exception:
+            return False  # fail-closed: unknown calendar never qualifies
+
     dec_class = report.get("_decision_class") or {}
     qualified_days: set[str] = set()
     unqualified_days: set[str] = set()
     n_refused_link = 0
+    n_nonexchange_rows = 0
+    n_rows_without_snapshot = 0
     for did, at_ts, censored in label_rows:
-        ny_day = None
-        try:
-            s = str(at_ts).replace("Z", "+00:00")
-            dt = datetime.fromisoformat(s)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=_utc)  # recorder stamps UTC
-            ny_day = dt.astimezone(_et).strftime("%Y-%m-%d")
-        except (TypeError, ValueError):
-            pass
+        ny_day = _ny_day(at_ts)
         if ny_day is None:
             continue
-        qualified = (not censored) and dec_class.get(str(did)) == "production"
+        if not _exchange_open(ny_day):
+            n_nonexchange_rows += 1
+        if ny_day not in snap_days:
+            n_rows_without_snapshot += 1
+        qualified = ((not censored)
+                     and dec_class.get(str(did)) == "production"
+                     and ny_day in snap_days and _exchange_open(ny_day))
         (qualified_days if qualified else unqualified_days).add(ny_day)
         if str(did) not in dec_class:
             n_refused_link += 1
@@ -361,10 +400,13 @@ def _outcome_sufficiency(conn, report: dict[str, Any]) -> None:
         "n_qualified_sessions": len(qualified_days),
         "n_unqualified_sessions": len(unqualified_days),
         "n_labels_without_decision_link": n_refused_link,
+        "n_label_rows_on_closed_days": n_nonexchange_rows,
+        "n_label_rows_without_owning_snapshot": n_rows_without_snapshot,
         "collection_target_sessions": "30-60",
         # 30 UNQUALIFIED days never yield sufficiency; only qualified
-        # production-linked days count, and even ≥30 is a SAMPLE COUNT — not
-        # profitability or option P&L.
+        # production-linked open sessions WITH owning snapshot evidence
+        # count, and even ≥30 is a SAMPLE COUNT — not profitability or
+        # option P&L.
         "verdict": ("SAMPLE_TARGET_MET" if len(qualified_days) >= 30
                     else "INSUFFICIENT EVIDENCE"),
         "note": "underlying labels are not option P&L; terminal labels measure "
@@ -403,7 +445,8 @@ def _range_envelope_census(conn, report: dict[str, Any]) -> None:
         truncated = len(rows) > 500
         envs = []
         classification = {"synthetic": 0, "production": 0, "paper": 0,
-                          "unknown": 0, "refused_or_corrupt": 0}
+                          "unknown": 0, "unattested": 0,
+                          "refused_or_corrupt": 0}
         for (rid, tk, wmin, wmax, asof_d, recv, st, digest, ej,
              n) in rows[:500]:
             payload, refusal = bind_range_row(rid, tk, wmin, wmax, asof_d,
@@ -411,15 +454,27 @@ def _range_envelope_census(conn, report: dict[str, Any]) -> None:
             if refusal is not None:
                 key = "refused_or_corrupt"
             else:
-                src_class = _classify_source(
-                    (payload.get("provenance") or {}).get("data_source"))
+                # R18-C12 (C07, review 5979463755): production requires ALL
+                # THREE — verified integrity (binder above), a recognized
+                # TRUSTED live capture family, and an actual capture-lineage
+                # attestation the guarded capture path stamped inside the
+                # digest-bound provenance block. synthetic=false alone is
+                # INSUFFICIENT (the rejected fixture's path to
+                # production=1): an unattested live-looking record counts
+                # `unattested`; unrecognized/fixture sources stay unknown/
+                # synthetic; paper stays paper.
+                prov = payload.get("provenance") or {}
+                src_class = _classify_source(prov.get("data_source"))
                 syn = payload.get("synthetic")
+                capture = prov.get("capture")
+                capture_ok = (isinstance(capture, dict)
+                              and capture.get("authorized") is True)
                 if src_class == "paper":
                     key = "paper"
-                elif syn is True:
+                elif src_class == "synthetic" or syn is True:
                     key = "synthetic"
-                elif syn is False:
-                    key = "production"
+                elif src_class == "production" and syn is False:
+                    key = "production" if capture_ok else "unattested"
                 else:
                     key = "unknown"
             classification[key] += int(n)
@@ -445,9 +500,13 @@ def _range_envelope_census(conn, report: dict[str, Any]) -> None:
                                    "(shared bind_range_row): a tampered "
                                    "payload — including a flipped synthetic "
                                    "flag — is refused_or_corrupt and never "
-                                   "counts as production; a paper/sandbox "
-                                   "provenance source is PAPER even with a "
-                                   "live flag",
+                                   "counts as production. Production requires "
+                                   "a recognized trusted live capture family "
+                                   "AND an actual capture-lineage attestation "
+                                   "in the digest-bound provenance block: "
+                                   "synthetic=false alone counts UNATTESTED. "
+                                   "A paper/sandbox provenance source is "
+                                   "PAPER even with a live flag",
         }
     except Exception as e:
         report["range_analytics"] = {"status": "QUERY_FAILED", "error": str(e)}

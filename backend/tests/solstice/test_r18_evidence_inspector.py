@@ -20,6 +20,7 @@ from services.heatmap_history import (
     record_decision,
     record_outcome,
     record_price_path,
+    record_snapshot,
 )
 from services.solstice_evidence_inspector import INSPECTOR_VERSION, inspect_recorder_store
 
@@ -155,6 +156,16 @@ def test_c8_ticker_scoping_and_classification(tmp_path):
         "label_version, at_ts, censored, detail, policy_version) VALUES ("
         "'q1', 'QQQ', 900, 'flush', 'outcome.v1', "
         "'2026-10-01T14:00:00+00:00', 0, '{}', NULL)")
+    # R18-C12: qualification ALSO needs actual owning snapshot evidence for
+    # the scoped ticker on that NY day (2026-10-01 is an open XNYS session).
+    record_snapshot(conn, {
+        "ticker": "QQQ", "snapshot_id": "snap-q1-owning",
+        "asof": "2026-10-01T14:00:00+00:00", "spot": 500.0,
+        "contracts": [], "strikes": [], "walls": [], "metrics": {},
+        "quality": {}, "scenarios": [], "interactions": [],
+        "coverage": {}, "expiries_used": [], "data_source": "public-mid",
+        "exposure_basis": "OI", "formula_version": "gex.v2"},
+        "q1-owning", "snap-q1-owning")
     conn.close()
 
     rep_all = inspect_recorder_store(str(db))

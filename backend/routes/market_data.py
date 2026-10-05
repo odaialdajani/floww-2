@@ -357,7 +357,15 @@ async def heatmap_range_analytics(
                 "version": CONTRACT_VERSION,
             })
     envelope = await fetch_range_analytics(t, min_dte, max_dte, as_of=as_of,
-                                           persist_conn=conn)
+                                           persist_conn=conn,
+                                           capture=(
+                                               {"authorized": True,
+                                                "policy":
+                                                    "FLOWW_RANGE_CAPTURE_ENABLED",
+                                                "operator": "api-key",
+                                                "route":
+                                                    "heatmap_range_analytics"}
+                                               if conn is not None else None))
     if envelope.get("status") == "refused" and \
             "VENDOR_UNAVAILABLE" in (envelope.get("refusals") or []):
         return JSONResponse(status_code=502, content=envelope)

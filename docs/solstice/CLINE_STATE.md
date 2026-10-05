@@ -150,6 +150,44 @@ each defect reproduced before its fix). Full lane+guard sweep at this head:
   wrapper/envelope cross-check Zed planned is now fixture-backed. Contract
   version bump is the recorded handoff; routes and shapes are unchanged.
 
+## C12 session (2026-10-04/05, review-5979463755 seam repairs, completed by coordinator)
+
+Scope: the interrupted C12 repair (started in-session, session stalled at
+11:19 EDT with "The operation timed out."; successor session cancelled at
+17:18 EDT mid-red-test). The exact unfinished task — RED
+`test_c8_ticker_scoping_and_classification` (`assert suf["n_qualified_sessions"]
+== 1` got 0) — was reproduced, diagnosed and completed at this head by the
+coordinator (Hermes GLM5.3) under the packet's takeover rule, preserving the
+whole uncommitted predecessor diff.
+
+Diagnosis: the uncommitted C12 qualification tightening requires a qualified
+session to carry (1) non-censored production-classified lineage, (2) an actual
+OPEN XNYS session day, and (3) actual OWNING snapshot evidence
+(`heatmap_snapshots_v2`) for the scoped ticker on that NY day. The c8 fixture
+seeded no owning snapshot, so the QQQ production day correctly stopped
+qualifying — fixture gap, not a code defect. Repair: seed the owning QQQ
+snapshot via the real `record_snapshot` seam (2026-10-01, verified open XNYS
+day); consumer-repairs fixture gained the same seed plus a no-snapshot
+negative store (qualified 0).
+
+Verification (repo `backend/` cwd, venv 3.14, disclosed):
+- R18 suites: **81 passed, 0 failed** (7 files incl. consumer/review repairs)
+- Lane+guard sweep: **277 passed, 0 failed** (16 adjacent files; total 358 =
+  332 baseline + 26 new/extended C12 tests)
+- Mutation pins: dropping the snapshot requirement →
+  `test_r8_open_days_need_owning_snapshot` RED; dropping the exchange-open
+  requirement → `test_r8_thirty_closed_days_never_meet_target` RED; restored
+  source passes 49/49. Non-vacuous.
+- Gates: `ruff check backend/` clean (ruff 0.15.22 CI-pinned); bandit with
+  CI's exact flags: 0 issues in services/routes/server.py (the two repo-root
+  B102/B104 findings are pre-existing in files untouched by this diff);
+  silent-excepts audit OK (355 files).
+- Effective host of record for this completion: Hermes (this coordinator)
+  on z-ai/glm-5.3, NOT the stalled Cline CLI session. The Cline session
+  `1791083843521_pihto` (nvidia/z-ai/glm-5.3/xhigh, user-confirmed) remains
+  the Cline identity; its backup is at
+  `~/.cline/data/sessions/backup/1791083843521_pihto`.
+
 ## External (not engineering): NAV-CAPTURE
 
 Approved production capture/storage policy and admitted REAL records after a

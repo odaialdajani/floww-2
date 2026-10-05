@@ -488,11 +488,41 @@ def test_c11_naive_timestamps_are_utc_not_host_local(tmp_path):
         "label, label_version, at_ts, censored, detail, policy_version) "
         "VALUES ('n1', 'SPY', 900, 'bounce', 'outcome.v1', "
         "'2026-08-15T02:00:00', 0, '{}', NULL)")
+    # R18-C12 (C08): qualification now also requires actual OWNING snapshot
+    # evidence on the NY session day (Friday 2026-08-14, an open XNYS day).
+    # Without this row the session stays observed but UNQUALIFIED.
+    conn.execute(
+        "INSERT INTO heatmap_snapshots_v2 (snapshot_id, ticker, query_key, "
+        "expiries, spot, data_source, exposure_basis, formula_version, "
+        "asof_ts, received_at, n_contracts, n_usable, digest, strikes_json, "
+        "walls_json) VALUES ('n1-snap', 'SPY', 'k', '[]', 600.0, "
+        "'public-mid', 'OI', 'gex.v2', '2026-08-15T02:00:00+00:00', "
+        "'2026-08-15T02:00:01+00:00', 1, 1, 'd', '[]', '[]')")
     conn.close()
     rep = inspect_recorder_store(str(db))
     suf = rep["outcome_sufficiency"]
     assert suf["n_sessions_observed_ny"] == 1
     assert suf["n_qualified_sessions"] == 1
+    # The same store WITHOUT the owning snapshot stays unqualified.
+    db2 = tmp_path / "naive_nosnap.duckdb"
+    conn = duckdb.connect(str(db2))
+    try:
+        ensure_range_tables(conn)
+        _legacy_tables(conn)
+        record_decision(conn, {"decision_id": "n1", "ticker": "SPY",
+                               "scenario": "t", "side": "none",
+                               "eligible": False, "reason_codes": [],
+                               "features": {"source": "public-mid"}})
+        conn.execute(
+            "INSERT INTO outcome_labels_v1 (decision_id, ticker, horizon_s, "
+            "label, label_version, at_ts, censored, detail, policy_version) "
+            "VALUES ('n1', 'SPY', 900, 'bounce', 'outcome.v1', "
+            "'2026-08-15T02:00:00+00:00', 0, '{}', NULL)")
+    finally:
+        conn.close()
+    suf2 = inspect_recorder_store(str(db2))["outcome_sufficiency"]
+    assert suf2["n_sessions_observed_ny"] == 1
+    assert suf2["n_qualified_sessions"] == 0
 
 
 # ── C11-8: frozen consumer fixtures carry full payloads ───────────────────

@@ -14,7 +14,7 @@ import asyncio
 import contextlib
 import json
 import sys
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -25,6 +25,7 @@ import duckdb
 import services.public_api_adapter as adapter
 from services.heatmap_history import (
     bind_range_row,
+    ensure_range_tables,
     list_range_envelopes,
     record_range_envelope,
     replay_range_envelope,
@@ -32,12 +33,14 @@ from services.heatmap_history import (
 from services.solstice_range_analytics import (
     build_range_envelope,
     compute_content_digest,
+    fetch_range_analytics,
     record_id_for_digest,
     select_window_expiries,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures" / "range_analytics_v1"
 TODAY = date(2026, 10, 5)
+NOW = datetime(2026, 10, 5, 14, 0, 0, tzinfo=UTC)
 
 
 def _env(**chain_over):
@@ -647,3 +650,279 @@ def test_r6_mirror_matches_kernel_counters():
         assert dw[key] == dw_k.get(key), (key, dw[key], dw_k.get(key))
     for key in ("usable", "quarantined", "invalid_mult", "invalid_type"):
         assert vol[key] == vol_k.get(key), (key, vol[key], vol_k.get(key))
+
+
+# ── R7 (C07): production classification needs trust + capture lineage ──────
+
+def _inspect(db):
+    from services.solstice_evidence_inspector import inspect_recorder_store
+    return inspect_recorder_store(str(db))
+
+
+def _env_with(**over):
+    """Envelope with overridden provenance/synthetic/capture and a
+    consistent digest/identity over the new content."""
+    env = _env()
+    prov = dict(env["provenance"])
+    prov.update(over.get("provenance", {}))
+    env["provenance"] = prov
+    if "synthetic" in over:
+        env["synthetic"] = over["synthetic"]
+    env["content_digest"] = compute_content_digest(env)
+    env["record_id"] = record_id_for_digest(env["content_digest"])
+    return env
+
+
+def test_r7_synthetic_false_alone_never_counts_production(tmp_path):
+    """The review's exact census defect: an integrity-verified envelope
+    with synthetic=false and a live-looking source — but NO capture
+    attestation (the old partial fixture) — counted production=1.
+    syntheticfalse alone is now INSUFFICIENT: it counts unattested."""
+    db = tmp_path / "census1.duckdb"
+    conn = duckdb.connect(str(db))
+    try:
+        ensure_range_tables(conn)
+        env = _env_with(provenance={"data_source": "public_api"},
+                        synthetic=False)
+        assert record_range_envelope(conn, env)["status"] == "recorded"
+    finally:
+        conn.close()
+    ra = _inspect(db)["range_analytics"]
+    cls = ra["classification"]
+    assert cls["production"] == 0, cls
+    assert cls["unattested"] == 1, cls
+    assert cls["synthetic"] == 0, cls
+
+
+def test_r7_unrecognized_source_never_counts_production(tmp_path):
+    """An unrecognized/untrusted source never reaches the production
+    bucket — with or without a capture attestation."""
+    db = tmp_path / "census2.duckdb"
+    conn = duckdb.connect(str(db))
+    try:
+        ensure_range_tables(conn)
+        plain = _env_with(provenance={"data_source": "mysterious-feed"},
+                          synthetic=False)
+        captured = _env_with(
+            provenance={"data_source": "mysterious-feed",
+                       "capture": {"authorized": True}},
+            synthetic=False)
+        for env in (plain, captured):
+            assert record_range_envelope(conn, env)["status"] == "recorded"
+    finally:
+        conn.close()
+    cls = _inspect(db)["range_analytics"]["classification"]
+    assert cls["production"] == 0, cls
+    assert cls["unknown"] == 2, cls
+
+
+def test_r7_production_requires_trusted_source_and_capture(tmp_path):
+    """Production census requires ALL THREE: verified integrity, a
+    recognized trusted live source family, and an actual capture
+    attestation — the only path to the production bucket. The captured
+    envelope comes from the real producer flow (fetch_range_analytics
+    with an authorized capture block)."""
+    import asyncio
+
+    async def run():
+        listing = json.loads((FIXTURES / "listing.json").read_text())
+        chain = json.loads((FIXTURES / "chain_complete.json").read_text())
+        chain.pop("synthetic", None)  # a live capture is not synthetic
+
+        async def fake_listing(symbol):
+            return listing
+
+        async def fake_window(symbol, dates):
+            return chain
+
+        return await fetch_range_analytics(
+            "SPY", 14, 60, listing_fetcher=fake_listing,
+            window_fetcher=fake_window, now_utc=NOW,
+            capture={"authorized": True,
+                     "policy": "FLOWW_RANGE_CAPTURE_ENABLED",
+                     "operator": "api-key"})
+
+    env = asyncio.run(run())
+    assert env["synthetic"] is False
+    assert env["provenance"]["capture"]["authorized"] is True
+    db = tmp_path / "census3.duckdb"
+    conn = duckdb.connect(str(db))
+    try:
+        ensure_range_tables(conn)
+        assert record_range_envelope(conn, env)["status"] == "recorded"
+    finally:
+        conn.close()
+    cls = _inspect(db)["range_analytics"]["classification"]
+    assert cls["production"] == 1, cls
+    assert cls["unattested"] == 0 and cls["unknown"] == 0, cls
+
+
+def test_r7_fixture_paper_and_corrupt_stay_excluded(tmp_path):
+    """Fixture-source, paper-source and corrupted records stay excluded
+    from production — each in its own visible bucket."""
+    db = tmp_path / "census4.duckdb"
+    conn = duckdb.connect(str(db))
+    try:
+        ensure_range_tables(conn)
+        fixture_env = _env_with(provenance={"data_source": "fixture-lab"},
+                                synthetic=False)
+        paper_env = _env_with(provenance={"data_source": "public-paper"},
+                              synthetic=False)
+        corrupt_env = _env()
+        for env in (fixture_env, paper_env, corrupt_env):
+            assert record_range_envelope(conn, env)["status"] == "recorded"
+        # Corrupt the last one's payload after write.
+        tampered = json.loads(json.dumps(corrupt_env))
+        tampered["synthetic"] = False  # the flipped-flag forgery
+        conn.execute(
+            "UPDATE range_analytics_envelopes_v1 SET envelope_json = ? "
+            "WHERE record_id = ?",
+            [json.dumps(tampered), corrupt_env["record_id"]])
+    finally:
+        conn.close()
+    cls = _inspect(db)["range_analytics"]["classification"]
+    assert cls["production"] == 0, cls
+    assert cls["synthetic"] == 1, cls       # fixture-source envelope
+    assert cls["paper"] == 1, cls           # paper-source envelope
+    assert cls["refused_or_corrupt"] == 1, cls  # flipped-flag forgery
+
+
+# ── R8 (C08): qualified sessions need calendar + owning snapshot ───────────
+
+_SNAP_COLS = ("snapshot_id, ticker, query_key, expiries, spot, data_source, "
+              "exposure_basis, formula_version, asof_ts, received_at, "
+              "n_contracts, n_usable, digest, strikes_json, walls_json")
+
+
+def _session_store(db, days, *, snapshots, ticker="SPY"):
+    """Stocked legacy recorder store: ONE production-classified decision,
+    one non-censored label per day, optional owning snapshots."""
+    from services.heatmap_history import ensure_tables, record_decision
+
+    conn = duckdb.connect(str(db))
+    try:
+        ensure_tables(conn)
+        ensure_range_tables(conn)
+        record_decision(conn, {"decision_id": "d1", "ticker": ticker,
+                               "scenario": "t", "side": "none",
+                               "eligible": False, "reason_codes": [],
+                               "features": {"source": "public-mid"}})
+        for i, day in enumerate(days):
+            conn.execute(
+                "INSERT INTO outcome_labels_v1 (decision_id, ticker, "
+                "horizon_s, label, label_version, at_ts, censored, detail, "
+                "policy_version) VALUES ('d1', ?, 900, 'bounce', "
+                "'outcome.v1', ?, 0, '{}', NULL)",
+                [ticker, f"{day}T15:00:00+00:00"])
+            if snapshots:
+                conn.execute(
+                    f"INSERT INTO heatmap_snapshots_v2 ({_SNAP_COLS}) "
+                    "VALUES (?, ?, 'k', '[]', 600.0, 'public-mid', 'OI', "
+                    "'gex.v2', ?, ?, 1, 1, 'd', '[]', '[]')",
+                    [f"snap-{i:03d}", ticker, f"{day}T15:00:00+00:00",
+                     f"{day}T15:00:01+00:00"])
+    finally:
+        conn.close()
+    return db
+
+
+def _saturdays(start="2026-08-01", n=30):
+    from datetime import timedelta
+
+    out = []
+    d = date.fromisoformat(start)
+    while len(out) < n:
+        if d.weekday() == 5:  # Saturday
+            out.append(d.isoformat())
+        d += timedelta(days=1)
+    return out
+
+
+def _open_weekdays(n=30):
+    from datetime import timedelta
+
+    from services.solstice_calendar import exchange_day_info
+
+    out = []
+    d = date(2026, 8, 3)
+    while len(out) < n:
+        if exchange_day_info(d.isoformat())["is_open"]:
+            out.append(d.isoformat())
+        d += timedelta(days=1)
+    return out
+
+
+def test_r8_thirty_closed_days_never_meet_target(tmp_path):
+    """30 Saturdays with labels, snapshots and production decisions are
+    STILL insufficient — closed exchange days never qualify (review:
+    '30 Saturdays with no snapshot proof reaches sample target')."""
+    db = _session_store(tmp_path / "saturdays.duckdb", _saturdays(),
+                        snapshots=True)
+    suf = _inspect(db)["outcome_sufficiency"]
+    assert suf["n_qualified_sessions"] == 0, suf
+    assert suf["verdict"] == "INSUFFICIENT EVIDENCE", suf
+
+
+def test_r8_open_days_need_owning_snapshot(tmp_path):
+    """Open sessions with labels + production decisions but NO owning
+    snapshot never qualify; the same days WITH owning snapshots meet the
+    SAMPLE TARGET (which is still a count, never profitability)."""
+    days = _open_weekdays(30)
+    bare = _session_store(tmp_path / "bare.duckdb", days, snapshots=False)
+    suf_bare = _inspect(bare)["outcome_sufficiency"]
+    assert suf_bare["n_qualified_sessions"] == 0, suf_bare
+    assert suf_bare["verdict"] == "INSUFFICIENT EVIDENCE"
+    stocked = _session_store(tmp_path / "stocked.duckdb", days, snapshots=True)
+    suf = _inspect(stocked)["outcome_sufficiency"]
+    assert suf["n_qualified_sessions"] == 30, suf
+    assert suf["verdict"] == "SAMPLE_TARGET_MET", suf
+
+
+def test_r8_holidays_and_foreign_ticker_snapshots_do_not_qualify(tmp_path):
+    """A holiday label with snapshot+decision stays unqualified, and a
+    snapshot under ANOTHER ticker never qualifies the scoped session."""
+    from services.heatmap_history import ensure_tables, record_decision
+
+    db = tmp_path / "holiday.duckdb"
+    conn = duckdb.connect(str(db))
+    try:
+        ensure_tables(conn)
+        ensure_range_tables(conn)
+        record_decision(conn, {"decision_id": "d1", "ticker": "SPY",
+                               "scenario": "t", "side": "none",
+                               "eligible": False, "reason_codes": [],
+                               "features": {"source": "public-mid"}})
+        # Thanksgiving 2026-11-26 (XNYS holiday): label + OWNING snapshot.
+        conn.execute(
+            "INSERT INTO outcome_labels_v1 (decision_id, ticker, horizon_s, "
+            "label, label_version, at_ts, censored, detail, policy_version) "
+            "VALUES ('d1', 'SPY', 900, 'bounce', 'outcome.v1', "
+            "'2026-11-26T15:00:00+00:00', 0, '{}', NULL)")
+        conn.execute(
+            f"INSERT INTO heatmap_snapshots_v2 ({_SNAP_COLS}) VALUES "
+            "('s1', 'SPY', 'k', '[]', 600.0, 'public-mid', 'OI', 'gex.v2', "
+            "'2026-11-26T15:00:00+00:00', '2026-11-26T15:00:01+00:00', "
+            "1, 1, 'd', '[]', '[]')")
+        # An open day whose ONLY snapshot belongs to another ticker.
+        conn.execute(
+            "INSERT INTO outcome_labels_v1 (decision_id, ticker, horizon_s, "
+            "label, label_version, at_ts, censored, detail, policy_version) "
+            "VALUES ('d1', 'SPY', 900, 'bounce', 'outcome.v1', "
+            "'2026-11-25T15:00:00+00:00', 0, '{}', NULL)")
+        conn.execute(
+            f"INSERT INTO heatmap_snapshots_v2 ({_SNAP_COLS}) VALUES "
+            "('s2', 'QQQ', 'k', '[]', 600.0, 'public-mid', 'OI', 'gex.v2', "
+            "'2026-11-25T15:00:00+00:00', '2026-11-25T15:00:01+00:00', "
+            "1, 1, 'd', '[]', '[]')")
+    finally:
+        conn.close()
+    # Scoped to SPY: the QQQ snapshot on 2026-11-25 is NOT owning evidence
+    # for SPY, so that open day stays unqualified; the holiday stays
+    # unqualified regardless.
+    from services.solstice_evidence_inspector import inspect_recorder_store
+    suf = inspect_recorder_store(
+        str(db), ticker="SPY")["outcome_sufficiency"]
+    assert suf["n_qualified_sessions"] == 0, suf
+    assert suf["n_sessions_observed_ny"] == 2, suf
+    assert suf["n_label_rows_on_closed_days"] == 1, suf
+    assert suf["verdict"] == "INSUFFICIENT EVIDENCE", suf
