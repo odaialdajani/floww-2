@@ -16,8 +16,17 @@ from routes import public_brokerage
 def _isolated_store(monkeypatch):
     import duckdb
 
+    from services import operator_registry as operators
+
     conn = duckdb.connect(":memory:")
     monkeypatch.setattr(public_brokerage, "_admission_store_conn", lambda: conn)
+    # S02: order-entry tests run with registered principals; presenter
+    # binding is still exercised (mallory is authorized here so the
+    # author-mismatch refusal pins authorship, not registry absence).
+    assert operators.register_operator(
+        conn, "op-1", ["ACCT-1"], "root")["ok"] is True
+    assert operators.register_operator(
+        conn, "mallory", ["ACCT-1"], "root")["ok"] is True
     return conn
 
 
@@ -44,16 +53,36 @@ def _body(**kw):
 
 
 @pytest.mark.asyncio
-async def test_armed_without_policy_keeps_legacy_path(monkeypatch):
+async def test_armed_without_policy_or_store_refuses(monkeypatch):
+    from fastapi import HTTPException
+
     monkeypatch.setenv("FLOWW_ENABLE_LIVE_PUBLIC", "1")
     conn = _isolated_store(monkeypatch)
     broker = _broker(monkeypatch)
     try:
-        out = await public_brokerage.place_order(_body())
-        assert out["ok"] is True and out["order_id"] == "ord-1"
-        broker.place_order.assert_awaited_once()
+        # Armed + store + no required policy: no legacy placement.
+        with pytest.raises(HTTPException) as error:
+            await public_brokerage.place_order(_body())
+        assert error.value.status_code == 403
+        assert error.value.detail["error"] == "POLICY_UNSET"
+        broker.place_order.assert_not_awaited()
     finally:
         conn.close()
+
+
+@pytest.mark.asyncio
+async def test_armed_without_store_refuses(monkeypatch):
+    from fastapi import HTTPException
+
+    monkeypatch.setenv("FLOWW_ENABLE_LIVE_PUBLIC", "1")
+    monkeypatch.setattr(public_brokerage, "_admission_store_conn",
+                        lambda: None)
+    broker = _broker(monkeypatch)
+    with pytest.raises(HTTPException) as error:
+        await public_brokerage.place_order(_body())
+    assert error.value.status_code == 403
+    assert error.value.detail["error"] == "POLICY_STORE_UNAVAILABLE"
+    broker.place_order.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -77,7 +106,7 @@ async def test_armed_with_policy_requires_bound_approval(monkeypatch):
             conn, "ACCT-1", "SPY", "BUY", 1, 3.15, "op-1")
         assert created["ok"] is True
         out = await public_brokerage.place_order(
-            _body(approval_id=created["approval_id"]))
+            _body(approval_id=created["approval_id"], operator="op-1"))
         assert out["ok"] is True
         broker.place_order.assert_awaited_once()
     finally:
@@ -149,20 +178,20 @@ async def test_armed_stop_and_tif_tamper_refuse(monkeypatch):
         # Tampered stop refuses with zero placement.
         with pytest.raises(HTTPException) as error:
             await public_brokerage.place_order(
-                _body(limit_price=3.15, stop_price=2.95,
+                _body(limit_price=3.15, stop_price=2.95, operator="op-1",
                       approval_id=created["approval_id"]))
         assert error.value.detail["error"] == "APPROVAL_INVALID"
         # Tampered TIF refuses with zero placement.
         with pytest.raises(HTTPException) as error2:
             await public_brokerage.place_order(
                 _body(limit_price=3.15, stop_price=3.00,
-                      time_in_force="GTC",
+                      time_in_force="GTC", operator="op-1",
                       approval_id=created["approval_id"]))
         assert error2.value.detail["error"] == "APPROVAL_INVALID"
         broker.place_order.assert_not_awaited()
         # Exact fields place exactly once.
         out = await public_brokerage.place_order(
-            _body(limit_price=3.15, stop_price=3.00,
+            _body(limit_price=3.15, stop_price=3.00, operator="op-1",
                   approval_id=created["approval_id"]))
         assert out["ok"] is True
         broker.place_order.assert_awaited_once()
@@ -204,9 +233,12 @@ def test_create_order_approval_binds_and_constrains_order_type():
     import duckdb
 
     from services import execution_admission as adm
+    from services import operator_registry as operators
 
     conn = duckdb.connect(":memory:")
     try:
+        assert operators.register_operator(
+            conn, "op-1", ["ACCT-1"], "root")["ok"] is True
         assert adm.set_account_policy_required(
             conn, "ACCT-1", {"max_quantity": 5, "min_entry_dte": 5,
                              "allow_unprotected_entry": True},
@@ -232,10 +264,10 @@ def test_create_order_approval_binds_and_constrains_order_type():
         assert created["ok"] is True, created
         assert adm.verify_order_approval(
             conn, created["approval_id"], "ACCT-1", "SPY", "BUY", 1, 3.15,
-            order_type="LIMIT")["ok"] is True
+            order_type="LIMIT", operator="op-1")["ok"] is True
         out = adm.verify_order_approval(
             conn, created["approval_id"], "ACCT-1", "SPY", "BUY", 1, 3.15,
-            order_type="MARKET")
+            order_type="MARKET", operator="op-1")
         assert out["reason"] == "APPROVAL_INVALID", out
     finally:
         conn.close()
@@ -281,14 +313,14 @@ async def test_armed_order_type_tamper_refuses(monkeypatch):
         # A price-capped LIMIT approval replayed as MARKET refuses.
         with pytest.raises(HTTPException) as error:
             await public_brokerage.place_order(
-                _body(order_type="MARKET",
+                _body(order_type="MARKET", operator="op-1",
                       approval_id=created["approval_id"]))
         assert error.value.status_code == 403
         assert error.value.detail["error"] == "APPROVAL_INVALID"
         broker.place_order.assert_not_awaited()
         # The exact bound type places exactly once.
         out = await public_brokerage.place_order(
-            _body(order_type="LIMIT",
+            _body(order_type="LIMIT", operator="op-1",
                   approval_id=created["approval_id"]))
         assert out["ok"] is True
         broker.place_order.assert_awaited_once()
@@ -304,7 +336,7 @@ async def test_nonfinite_quantity_and_prices_refuse_before_any_gate(monkeypatch)
     try:
         # Disarmed on purpose: validation precedes the kill-switch, so a
         # 422 here also pins that ordering.
-        for bad in ("nan", "inf", "-inf"):
+        for bad in ("nan", "inf", "-inf", True, False):
             with pytest.raises(HTTPException) as error:
                 await public_brokerage.place_order(_body(quantity=bad))
             assert error.value.status_code == 422
@@ -319,3 +351,69 @@ async def test_nonfinite_quantity_and_prices_refuse_before_any_gate(monkeypatch)
         broker.place_order.assert_not_awaited()
     finally:
         pass
+
+
+@pytest.mark.asyncio
+async def test_armed_approval_presenter_must_be_author(monkeypatch):
+    from fastapi import HTTPException
+
+    from services import execution_admission as adm
+
+    monkeypatch.setenv("FLOWW_ENABLE_LIVE_PUBLIC", "1")
+    conn = _isolated_store(monkeypatch)
+    broker = _broker(monkeypatch)
+    try:
+        assert adm.set_account_policy_required(
+            conn, "ACCT-1", {"max_quantity": 5}, "op-1")["ok"] is True
+        created = adm.create_order_approval(
+            conn, "ACCT-1", "SPY", "BUY", 1, 3.15, "mallory")
+        assert created["ok"] is True
+        # Mallory's approval presented as op-1 refuses.
+        with pytest.raises(HTTPException) as error:
+            await public_brokerage.place_order(
+                _body(operator="op-1",
+                      approval_id=created["approval_id"]))
+        assert error.value.status_code == 403
+        assert error.value.detail["error"] == "APPROVAL_INVALID"
+        broker.place_order.assert_not_awaited()
+        # The author presenting it places exactly once.
+        out = await public_brokerage.place_order(
+            _body(operator="mallory",
+                  approval_id=created["approval_id"]))
+        assert out["ok"] is True
+        broker.place_order.assert_awaited_once()
+    finally:
+        conn.close()
+
+
+@pytest.mark.asyncio
+async def test_armed_option_requires_declared_option_instrument(monkeypatch):
+    from fastapi import HTTPException
+
+    from services import execution_admission as adm
+
+    monkeypatch.setenv("FLOWW_ENABLE_LIVE_PUBLIC", "1")
+    conn = _isolated_store(monkeypatch)
+    broker = _broker(monkeypatch)
+    try:
+        assert adm.set_account_policy_required(
+            conn, "ACCT-1", {"max_quantity": 5, "min_entry_dte": 5,
+                             "allow_unprotected_entry": True},
+            "op-1")["ok"] is True
+        created = adm.create_order_approval(
+            conn, "ACCT-1", "SPY271217C00760000", "BUY", 1, 3.15, "op-1",
+            order_type="LIMIT", instrument_type="OPTION")
+        assert created["ok"] is True
+        # Route default instrument (EQUITY) is incoherent for the bound
+        # OPTION approval: coherence refuses before any placement.
+        with pytest.raises(HTTPException) as error:
+            await public_brokerage.place_order(
+                {"symbol": "SPY271217C00760000", "side": "BUY",
+                 "order_type": "LIMIT", "quantity": 1, "limit_price": 3.15,
+                 "time_in_force": "DAY", "instrument_type": "EQUITY",
+                 "operator": "op-1",
+                 "approval_id": created["approval_id"]})
+        assert error.value.detail["error"] == "BAD_CONTRACT"
+        broker.place_order.assert_not_awaited()
+    finally:
+        conn.close()

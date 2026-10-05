@@ -166,10 +166,11 @@ async def create_order_approval(
     """Create a single-leg order approval bound to exact order fields.
 
     Validity is server-stamped (1–24h). The fingerprint covers account,
-    symbol, side, quantity, limit, stop, time in force and order type;
-    the armed `POST /public/order` path verifies the approval_id against
-    a server-recomputed fingerprint when a required account policy is
-    installed. Option symbols admit LIMIT/STOP_LIMIT only, pass the
+    symbol, side, quantity, limit, stop, time in force, order type,
+    instrument and equity session; the armed `POST /public/order` path
+    verifies the approval_id against a server-recomputed fingerprint
+    when a required account policy is installed. Option symbols admit
+    LIMIT/STOP_LIMIT only, must declare instrument OPTION, pass the
     policy expiry guard and protection acknowledgment, and require an
     explicit limit price.
     """
@@ -182,7 +183,9 @@ async def create_order_approval(
         body.get("validity_hours", 1.0),
         stop_price=body.get("stop_price"),
         time_in_force=body.get("time_in_force", "DAY"),
-        order_type=body.get("order_type", "LIMIT"))
+        order_type=body.get("order_type", "LIMIT"),
+        instrument_type=body.get("instrument_type"),
+        equity_market_session=body.get("equity_market_session"))
     if not out.get("ok"):
         raise HTTPException(status_code=503, detail=out)
     return out

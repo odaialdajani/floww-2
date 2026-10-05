@@ -21,7 +21,7 @@ No merge, no deploy, no activation, no orders, no flag changes.
 
 ## Fixtures (sha256 at this head)
 
-- `execution_controls_v1.json` (56 refusal codes — strict mode, limits; sha256 in MUSE_STATE §46)
+- `execution_controls_v1.json` (57 refusal codes — strict mode, limits, +PREFLIGHT_UNAFFORDABLE; sha256 `07819a13…`)
 - `execution_intent_v1.json` `ae76c8d1…` — immutable intent example
 - `price_path_swing5m_v1.json` `91572712…` — swing-5m price-path example
 - `public_matrix_v1.json` `cfafa94f…` — 27-op capability matrix
@@ -47,7 +47,7 @@ No merge, no deploy, no activation, no orders, no flag changes.
 
 ## Refusal matrix
 
-56 codes in `execution-controls.v1` (verified against code);
+57 codes in `execution-controls.v1` (verified against code);
 S1–S3 codes: `STORE_UNAVAILABLE`, `POLICY_STORE_UNAVAILABLE`,
 `POLICY_UNSET`, `POLICY_CORRUPT`, `POLICY_EXISTS`, `APPROVAL_STORE_UNAVAILABLE`,
 `RECOVERY_UNKNOWN`, `RECOVERY_INCOMPLETE`, `UNKNOWN_ORDERS_PENDING`,
@@ -70,11 +70,13 @@ S1–S3 codes: `STORE_UNAVAILABLE`, `POLICY_STORE_UNAVAILABLE`,
 - `POST /admission/decision` is research-only: it forces
   `evidence_grade="client-asserted"`, so it returns EVIDENCE_UNVERIFIED and
   NEVER admits (pinned). Mounting it cannot authorize execution.
-- `POST /public/order` progressive repair (Spark-owned, live): with NO
-  admission store or NO account policy installed it keeps the legacy
-  kill-switch-only path (disclosed); with a required v2 policy installed it
-  demands a stored `approval_id` verified against the server-recomputed
-  order fingerprint (403 otherwise). Option OSI approvals additionally
+- `POST /public/order` full enforcement (Spark-owned, live): the gate
+  runs armed-only (kill-switch refuses first when disarmed). Armed +
+  missing store, unreadable store, or missing required policy refuses
+  (POLICY_STORE_UNAVAILABLE / POLICY_UNSET) — no legacy placement.
+  With a required v2 policy installed, a body approval_id must verify
+  against the server-recomputed fingerprint presented by its author
+  (`operator` must equal the stored approved_by), else 403. Option OSI approvals additionally
   pass the required-policy expiry guard + protection acknowledgment at
   CREATION and re-pass them at VERIFICATION (placement), so an approval
   minted before expiry, a policy narrowing, or an ack removal cannot ride

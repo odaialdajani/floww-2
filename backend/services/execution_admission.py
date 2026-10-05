@@ -28,6 +28,7 @@ import hashlib
 import json
 import math
 import re
+import threading
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -51,6 +52,12 @@ ACCOUNT_POLICY_V2_DDL = """
 _REQUIRED_FIELDS = ("intent_hash", "account_id", "scope", "valid_until",
                     "approved_by", "approved_at")
 _TERMINAL = ("FILLED", "REJECTED", "CANCELED")
+
+# Single-process atomicity for approval SELECT+INSERT/UPDATE sequences (S01).
+# Threads racing revoke vs restore or same-ID conflicting writes serialize
+# here; multi-process writers remain single-writer by deployment boundary
+# (same as lifecycle: DuckDB multi-process writers are NOT claimed safe).
+_APPROVAL_STORE_LOCK = threading.Lock()
 
 __all__ = [
     "ADMISSION_VERSION",
@@ -83,9 +90,24 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+# Known account-policy fields with enforcement points (S07). Anything else
+# is a probable typo for a ceiling that would otherwise silently enforce
+# nothing, so installation refuses BAD_CONTRACT. Real operator values for
+# these ceilings remain NAV-ACCOUNT external (UNSET until installed); this
+# list admits the field, it never invents a value.
+_KNOWN_POLICY_FIELDS = frozenset({
+    "max_quantity", "max_notional", "max_positions", "max_daily_loss",
+    "today", "min_entry_dte", "allow_unprotected_entry",
+    "same_day_cutoff_et", "allowed_products",
+})
+
+
 def _validate_policy_shape(policy: Any) -> tuple[bool, str]:
     if not isinstance(policy, dict):
         return False, "policy must be a dict"
+    for field in policy:
+        if field not in _KNOWN_POLICY_FIELDS:
+            return False, f"unknown policy field: {field}"
     if "max_quantity" in policy:
         try:
             if int(policy["max_quantity"]) <= 0:
@@ -241,8 +263,11 @@ def store_approval_required(
     Shape-validated, then INSERTed durably BEFORE memory authority. Durable
     failure purges the memory row and returns APPROVAL_STORE_UNAVAILABLE.
     An existing revoked row is never resurrected; a conflicting identity
-    (same approval_id, different intent/account/scope binding) refuses
-    APPROVAL_CONFLICT instead of resetting durable/memory authority.
+    (same approval_id, different intent/account/scope/approver/validity
+    binding INCLUDING approved_at) refuses APPROVAL_CONFLICT instead of
+    resetting durable/memory authority. Approvals are immutable: same-ID
+    field mutation never overwrites, it conflicts. SELECT+INSERT runs under
+    a single-process lock so threaded revoke/restore races cannot interleave.
     """
     from services import public_execution_lifecycle as lc
 
@@ -258,30 +283,36 @@ def store_approval_required(
     approval_id = str(approval.get("approval_id") or "") or hashlib.sha256(
         json.dumps(approval, sort_keys=True, default=str).encode()).hexdigest()[:16]
     try:
-        ensure_admission_tables(conn)
-        prior = conn.execute(
-            "SELECT intent_hash, account_id, scope, revoked FROM approvals_v1 "
-            "WHERE approval_id = ?", [approval_id]).fetchone()
-        if prior is not None:
-            if bool(prior[3]):
-                return {"ok": False, "reason": "APPROVAL_INVALID",
-                        "detail": "approval revoked; re-store cannot resurrect"}
-            if (approval.get("intent_hash") != prior[0]
-                    or approval.get("account_id") != prior[1]
-                    or approval.get("scope") != prior[2]):
-                return {"ok": False, "reason": "APPROVAL_CONFLICT",
-                        "detail": "approval_id bound to a different intent/account/scope"}
-        conn.execute(
-            "INSERT OR REPLACE INTO approvals_v1 "
-            "(approval_id, intent_hash, account_id, scope, valid_until, "
-            "approved_by, approved_at, revoked, approval_json, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            [approval_id, approval.get("intent_hash"), approval.get("account_id"),
-             approval.get("scope"), approval.get("valid_until"),
-             approval.get("approved_by"), approval.get("approved_at"), False,
-             json.dumps({**approval, "approval_id": approval_id}, default=str),
-             _now_iso()],
-        )
+        with _APPROVAL_STORE_LOCK:
+            ensure_admission_tables(conn)
+            prior = conn.execute(
+                "SELECT intent_hash, account_id, scope, revoked, approved_by, "
+                "valid_until, approved_at FROM approvals_v1 "
+                "WHERE approval_id = ?", [approval_id]).fetchone()
+            if prior is not None:
+                if bool(prior[3]):
+                    return {"ok": False, "reason": "APPROVAL_INVALID",
+                            "detail": "approval revoked; re-store cannot resurrect"}
+                if (approval.get("intent_hash") != prior[0]
+                        or approval.get("account_id") != prior[1]
+                        or approval.get("scope") != prior[2]
+                        or approval.get("approved_by") != prior[4]
+                        or approval.get("valid_until") != prior[5]
+                        or approval.get("approved_at") != prior[6]):
+                    return {"ok": False, "reason": "APPROVAL_CONFLICT",
+                            "detail": "approval_id is immutable; same-ID field "
+                                      "mutation refuses instead of overwriting"}
+            conn.execute(
+                "INSERT OR REPLACE INTO approvals_v1 "
+                "(approval_id, intent_hash, account_id, scope, valid_until, "
+                "approved_by, approved_at, revoked, approval_json, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [approval_id, approval.get("intent_hash"), approval.get("account_id"),
+                 approval.get("scope"), approval.get("valid_until"),
+                 approval.get("approved_by"), approval.get("approved_at"), False,
+                 json.dumps({**approval, "approval_id": approval_id}, default=str),
+                 _now_iso()],
+            )
     except Exception:
         lc._APPROVALS.pop(approval_id, None)
         return {"ok": False, "reason": "APPROVAL_STORE_UNAVAILABLE"}
@@ -296,7 +327,11 @@ def store_approval_required(
 def revoke_approval_required(
     conn: Any, approval_id: str, operator: str,
 ) -> dict[str, Any]:
-    """Revoke with durable-first semantics: failure refuses, memory rolls back."""
+    """Revoke with durable-first semantics: failure refuses, memory rolls back.
+
+    Runs under the same single-process approval lock as store so a threaded
+    revoke cannot interleave a concurrent re-store SELECT+INSERT.
+    """
     from services import public_execution_lifecycle as lc
 
     if conn is None:
@@ -306,14 +341,15 @@ def revoke_approval_required(
     if not str(operator or "").strip():
         return {"ok": False, "reason": "unknown-approval"}
     try:
-        ensure_admission_tables(conn)
-        row = conn.execute(
-            "SELECT approval_id FROM approvals_v1 WHERE approval_id = ?",
-            [approval_id]).fetchone()
-        if not row:
-            return {"ok": False, "reason": "unknown-approval"}
-        conn.execute("UPDATE approvals_v1 SET revoked = TRUE WHERE approval_id = ?",
-                     [approval_id])
+        with _APPROVAL_STORE_LOCK:
+            ensure_admission_tables(conn)
+            row = conn.execute(
+                "SELECT approval_id FROM approvals_v1 WHERE approval_id = ?",
+                [approval_id]).fetchone()
+            if not row:
+                return {"ok": False, "reason": "unknown-approval"}
+            conn.execute("UPDATE approvals_v1 SET revoked = TRUE WHERE approval_id = ?",
+                         [approval_id])
     except Exception:
         mem = lc._APPROVALS.get(approval_id)
         if isinstance(mem, dict):
@@ -426,8 +462,9 @@ def admit_production_entry(
     if not ok_s:
         return {"decision": "REFUSE", "reason": reason_s,
                 "version": ADMISSION_VERSION}
-    if not lc.has_fresh_preflight(intent, ctx):
-        return {"decision": "REFUSE", "reason": "STALE_PREFLIGHT",
+    gate_reason = lc.preflight_gate(intent, ctx)
+    if gate_reason is not None:
+        return {"decision": "REFUSE", "reason": gate_reason,
                 "version": ADMISSION_VERSION}
     census = census_required(conn)
     if not census.get("ok"):
@@ -541,6 +578,75 @@ def _commissioned_expiry_protection(
     return None
 
 
+def _stored_approval_row(conn: Any, approval_id: str) -> dict[str, Any] | None:
+    """Durable stored approval row by ID (None on missing/unreadable).
+
+    Authority reads go through here so presented copies can never confer
+    authorship, scope, or validity the durable row does not carry.
+    """
+    try:
+        ensure_admission_tables(conn)
+        row = conn.execute(
+            "SELECT approval_json, revoked, intent_hash, account_id, scope, "
+            "approved_by, valid_until, approved_at FROM approvals_v1 "
+            "WHERE approval_id = ?", [approval_id]).fetchone()
+    except Exception:
+        return None
+    if not row:
+        return None
+    try:
+        rec = json.loads(row[0]) if isinstance(row[0], str) else {}
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(rec, dict):
+        return None
+    if len(row) > 7:
+        for field, column in (("intent_hash", row[2]),
+                              ("account_id", row[3]), ("scope", row[4]),
+                              ("approved_by", row[5]),
+                              ("valid_until", row[6]),
+                              ("approved_at", row[7])):
+            if rec.get(field) != column:
+                return None
+    rec["revoked"] = bool(row[1]) if len(row) > 1 else bool(rec.get("revoked"))
+    rec["approval_id"] = approval_id
+    return rec
+
+
+def _enforce_aggregate_notional(
+    intent: dict[str, Any], snapshot: dict[str, Any], policy: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Existing + proposed notional vs max_notional (S7 aggregate).
+
+    Per-intent ceilings ignore what the account already holds: an
+    exposure-900 account admitting a 315 proposal under a 1000 ceiling
+    must refuse. Returns a REFUSE decision or None (pass). Unparseable
+    intent economics refuse instead of skipping the ceiling.
+    """
+    from decimal import Decimal
+
+    if not isinstance(policy, dict) or policy.get("max_notional") is None:
+        return None
+    try:
+        qty = Decimal(str(intent.get("quantity")))
+        limit = Decimal(str(intent.get("limit_price")))
+        mult = Decimal(str((intent.get("contract") or {}).get("multiplier")))
+        existing = Decimal(str((snapshot or {}).get("exposure", "0")))
+        ceiling = Decimal(str(policy["max_notional"]))
+    except Exception:
+        return {"decision": "REFUSE", "reason": "RISK_FACTS_INCOMPLETE",
+                "detail": "proposed notional unparseable; ceiling skipped "
+                          "never",
+                "version": ADMISSION_VERSION}
+    proposed = limit * qty * mult
+    if existing + proposed > ceiling:
+        return {"decision": "REFUSE", "reason": "RISK_NOTIONAL_EXCEEDED",
+                "detail": f"existing {existing} + proposed {proposed} "
+                          f"exceeds max_notional {ceiling}",
+                "version": ADMISSION_VERSION}
+    return None
+
+
 def admit_commissioned_entry(
     conn: Any, intent: dict[str, Any], ctx: dict[str, Any], broker: Any,
     approval: dict[str, Any] | None = None,
@@ -591,9 +697,22 @@ def admit_commissioned_entry(
                                   approval_scope)
     if base.get("decision") != "ADMIT":
         return base
-    if not isinstance(approval, dict) or approval.get("approved_by") != auth.get("operator_id"):
+    if not isinstance(approval, dict) or not isinstance(
+            approval.get("approval_id"), str) or not approval["approval_id"]:
         return {"decision": "REFUSE", "reason": "APPROVAL_INVALID",
-                "detail": "approval.approved_by must equal the authorized operator",
+                "detail": "no presented approval identity",
+                "version": ADMISSION_VERSION}
+    # The binding reads the DURABLE stored row, never the presented copy:
+    # a rewritten approved_by on a copied dict cannot spoof authorship.
+    stored = _stored_approval_row(conn, approval["approval_id"])
+    if stored is None:
+        return {"decision": "REFUSE", "reason": "APPROVAL_STORE_UNAVAILABLE",
+                "detail": "stored approval unreadable; failing closed",
+                "version": ADMISSION_VERSION}
+    if stored.get("approved_by") != auth.get("operator_id"):
+        return {"decision": "REFUSE", "reason": "APPROVAL_INVALID",
+                "detail": "stored approval author must equal the authorized "
+                          "operator",
                 "version": ADMISSION_VERSION}
     if not isinstance(risk_facts, dict):
         return {"decision": "REFUSE", "reason": "RISK_FACTS_INCOMPLETE",
@@ -617,6 +736,10 @@ def admit_commissioned_entry(
         return {"decision": "REFUSE", "reason": afford.get("reason"),
                 "detail": afford.get("detail"), "version": ADMISSION_VERSION}
     required = pol.get("policy") if pol.get("ok") else {}
+    aggregate = _enforce_aggregate_notional(
+        intent, risk.get("snapshot") or {}, required)
+    if aggregate is not None:
+        return aggregate
     guard = _commissioned_expiry_protection(intent, ctx, required)
     if guard is not None:
         return guard
@@ -759,26 +882,105 @@ def _option_order_guards(
 
 
 def _canon_number(value: Any) -> str:
-    try:
-        return f"{float(value):.6f}"
-    except (TypeError, ValueError):
+    """Decimal-exact canonical number (S8 rounding fix).
+
+    Float %.6f formatting collides distinct prices (3.15 vs 3.1500001),
+    so a cheaper approval could cover a dearer order. Decimal
+    normalization keeps type-juggled equals equal (1 == 1.0 == "1.00")
+    while keeping distinct values distinct. Non-finite/unparseable
+    renders "none" (creation refuses those before hashing).
+    """
+    from decimal import Decimal
+
+    if value is None:
         return "none"
+    try:
+        text = value.strip() if isinstance(value, str) else value
+        d = Decimal(str(text))
+    except Exception:
+        return "none"
+    if not d.is_finite():
+        return "none"
+    if d == 0:
+        return "0"
+    return format(d.normalize(), "f")
+
+
+def _derive_instrument(symbol: str, instrument_type: Any) -> str:
+    """Canonical instrument with symbol coherence (S8).
+
+    Explicit values must be known and coherent (OSI-valid option symbols
+    are OPTION, anything else is never OPTION). Omitted values derive
+    deterministically from the symbol — the executable route always
+    passes an explicit value, so derivation only comforts direct
+    service callers, never executable ambiguity.
+    """
+    text = str(instrument_type or "").upper().strip()
+    if not text:
+        return "OPTION" if _osi_expiry_iso(symbol) is not None else "EQUITY"
+    return text
+
+
+def _order_coherence(symbol: str, order_type: str, instrument: str,
+                     limit_price: Any, stop_price: Any, side: str,
+                     ) -> dict[str, Any] | None:
+    """Type/side/instrument/price coherence for order approvals (S8).
+
+    Runs at creation AND verification, so raw-ingested rows that the
+    factory would refuse cannot pass verify: unknown types, non-BUY/SELL
+    sides, MARKET or mis-declared options, LIMIT-family without limit,
+    STOP-family without stop, and incoherent instrument declarations all
+    refuse BAD_CONTRACT. Returns a refusal dict or None (pass).
+    """
+    if str(side or "").upper().strip() not in ("BUY", "SELL"):
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": f"side must be BUY or SELL, got {side!r}"}
+    if order_type not in ("MARKET", "LIMIT", "STOP", "STOP_LIMIT"):
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": f"unknown order_type {order_type!r}"}
+    if instrument not in ("EQUITY", "OPTION", "CRYPTO", "BOND"):
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": f"unknown instrument_type {instrument!r}"}
+    is_option = _osi_expiry_iso(symbol) is not None
+    if is_option and instrument != "OPTION":
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": "option symbols require instrument_type OPTION"}
+    if not is_option and not _is_malformed_osi(symbol) and instrument == "OPTION":
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": "non-option symbols cannot declare OPTION"}
+    if _is_malformed_osi(symbol):
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": "option symbol has no valid expiry date"}
+    if is_option and order_type not in ("LIMIT", "STOP_LIMIT"):
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": "option approvals require LIMIT or STOP_LIMIT"}
+    if order_type in ("LIMIT", "STOP_LIMIT") and limit_price is None:
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": f"{order_type} approvals require an explicit "
+                          "limit price"}
+    if order_type in ("STOP", "STOP_LIMIT") and stop_price is None:
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": f"{order_type} approvals require an explicit "
+                          "stop price"}
+    return None
 
 
 def order_fingerprint(account_id: str, symbol: str, side: str,
                       quantity: Any, limit_price: Any,
                       stop_price: Any = None,
                       time_in_force: str = "DAY",
-                      order_type: str = "LIMIT") -> str:
+                      order_type: str = "LIMIT",
+                      instrument_type: Any = None,
+                      equity_market_session: Any = None) -> str:
     """Canonical identity for a single-leg order approval (S8).
 
     Binds account + symbol + side + exact quantity/limit/stop + time in
-    force + order type. Every execution-affecting field is covered: a
-    tampered stop (or TIF) never matches a stored approval, and a
-    price-capped LIMIT approval can never ride into an uncapped MARKET
-    placement. Server recomputes this from the order body — a
-    caller-supplied hash is never trusted. Pre-type approvals (narrower
-    hash) fail closed on mismatch.
+    force + order type + instrument + equity session, with Decimal-exact
+    prices (no rounding collisions). A tampered stop (or TIF), a LIMIT
+    approval replayed as MARKET, a re-declared instrument/session, or a
+    rounded price never matches a stored approval. Server recomputes
+    this from the order body — a caller-supplied hash is never trusted.
+    Pre-binding approvals (narrower hash) fail closed on mismatch.
     """
     blob = "|".join([
         str(account_id or "").strip(),
@@ -789,27 +991,97 @@ def order_fingerprint(account_id: str, symbol: str, side: str,
         _canon_number(stop_price),
         str(time_in_force or "DAY").upper().strip(),
         str(order_type or "LIMIT").upper().strip(),
+        _derive_instrument(symbol, instrument_type),
+        str(equity_market_session or "none").upper().strip(),
     ])
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _enforce_order_ceilings(
+    conn: Any, account_id: str, quantity: Any, limit_price: Any,
+    symbol: str | None = None, instrument: str | None = None,
+) -> dict[str, Any] | None:
+    """Policy quantity/per-unit-notional/product ceilings for order approvals.
+
+    Runs at creation AND verification, so a narrowing policy (or a
+    raw-ingested row minted under looser limits) cannot ride into
+    placement. Skips only when no required policy is installed (the
+    progressive boundary — the armed route separately refuses UNSET);
+    store/query failure refuses instead of skipping. Full
+    multiplier-aware notional lives on the intent paths that carry
+    vendor multipliers; here limit x quantity is the per-unit bound.
+    Product allowlist binds when symbol+instrument are known.
+    Returns a refusal dict or None (pass).
+    """
+    pol = get_account_policy_required(conn, str(account_id or "").strip())
+    if pol.get("reason") == "POLICY_UNSET":
+        return None
+    if not pol.get("ok"):
+        return {"ok": False,
+                "reason": pol.get("reason", "POLICY_STORE_UNAVAILABLE"),
+                "detail": "policy unreadable; failing closed"}
+    policy = pol.get("policy") or {}
+    try:
+        qty = float(quantity)
+    except (TypeError, ValueError):
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": "quantity must be a positive number"}
+    if not math.isfinite(qty) or qty <= 0:
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": "quantity must be a finite positive number"}
+    try:
+        if (policy.get("max_quantity") is not None
+                and qty > float(policy["max_quantity"])):
+            return {"ok": False, "reason": "RISK_QUANTITY_EXCEEDED",
+                    "detail": f"quantity {qty} exceeds max_quantity "
+                             f"{policy['max_quantity']}"}
+    except (TypeError, ValueError):
+        return {"ok": False, "reason": "RISK_FACTS_INCOMPLETE",
+                "detail": "max_quantity unparseable; failing closed"}
+    if policy.get("max_notional") is not None and limit_price is not None:
+        try:
+            bound = float(limit_price) * qty
+            if bound > float(policy["max_notional"]):
+                return {"ok": False, "reason": "RISK_NOTIONAL_EXCEEDED",
+                        "detail": f"order bound {bound} exceeds max_notional "
+                                  f"{policy['max_notional']} (per-unit basis)"}
+        except (TypeError, ValueError):
+            return {"ok": False, "reason": "RISK_FACTS_INCOMPLETE",
+                    "detail": "max_notional unparseable; failing closed"}
+    allowed = policy.get("allowed_products")
+    if allowed is not None and symbol is not None and instrument is not None:
+        try:
+            products = list(allowed)
+        except TypeError:
+            return {"ok": False, "reason": "RISK_FACTS_INCOMPLETE",
+                    "detail": "allowed_products unparseable; failing closed"}
+        if str(instrument) not in products:
+            return {"ok": False, "reason": "UNSUPPORTED_PRODUCT",
+                    "detail": f"{instrument} not in allowed_products"}
+    return None
 
 
 def create_order_approval(
     conn: Any, account_id: str, symbol: str, side: str, quantity: Any,
     limit_price: Any, operator: str, validity_hours: float = 1.0,
     stop_price: Any = None, time_in_force: str = "DAY",
-    order_type: str = "LIMIT",
+    order_type: str = "LIMIT", instrument_type: Any = None,
+    equity_market_session: Any = None,
 ) -> dict[str, Any]:
     """Create + store an order-bound approval (server timestamps only).
 
     Validity window is server-computed (1–24h); client clocks are never
     trusted. Quantity must be finite and positive; limit/stop prices must
-    be finite when present. Order type is bound into the fingerprint and
-    constrained: unknown types refuse, LIMIT/STOP_LIMIT require a limit,
-    STOP/STOP_LIMIT require a stop, and option OSI symbols admit only
-    LIMIT/STOP_LIMIT (market options have unbounded slippage; the
-    lifecycle admits limit orders only). Option OSI symbols additionally
-    pass the required-policy expiry guard and protection acknowledgment
-    at creation (S8). Returns the stored row including approval_id.
+    be finite when present. Order type, instrument and session are bound
+    into the Decimal-exact fingerprint and constrained by
+    `_order_coherence` (unknown types, MARKET/mis-declared options and
+    missing required prices refuse). The authoring operator must be
+    registered AND allowed for the account (OPERATOR_UNKNOWN /
+    OPERATOR_UNAUTHORIZED) — a bare string behind the shared master key
+    mints nothing. Required-policy quantity/notional
+    ceilings bind at creation; option OSI symbols additionally pass the
+    expiry guard and protection acknowledgment (S8). Returns the stored
+    row including approval_id.
     """
     if conn is None:
         return {"ok": False, "reason": "STORE_UNAVAILABLE"}
@@ -820,9 +1092,14 @@ def create_order_approval(
     except (TypeError, ValueError):
         return {"ok": False, "reason": "BAD_CONTRACT"}
     otype = str(order_type or "LIMIT").upper().strip() or "LIMIT"
-    if otype not in ("MARKET", "LIMIT", "STOP", "STOP_LIMIT"):
+    symbol_c = str(symbol or "").upper().strip()
+    side_c = str(side or "").upper().strip()
+    instrument = _derive_instrument(symbol_c, instrument_type)
+    session_c = str(equity_market_session
+                    or "none").upper().strip() or "none"
+    if isinstance(quantity, bool):
         return {"ok": False, "reason": "BAD_CONTRACT",
-                "detail": f"unknown order_type {order_type!r}"}
+                "detail": "quantity must be a positive number, not a boolean"}
     try:
         qty = float(quantity)
     except (TypeError, ValueError):
@@ -843,36 +1120,46 @@ def create_order_approval(
         if not math.isfinite(finite):
             return {"ok": False, "reason": "BAD_CONTRACT",
                     "detail": f"{label} must be finite"}
-    if otype in ("LIMIT", "STOP_LIMIT") and limit_price is None:
-        return {"ok": False, "reason": "BAD_CONTRACT",
-                "detail": f"{otype} approvals require an explicit limit price"}
-    if otype in ("STOP", "STOP_LIMIT") and stop_price is None:
-        return {"ok": False, "reason": "BAD_CONTRACT",
-                "detail": f"{otype} approvals require an explicit stop price"}
+    coherent = _order_coherence(symbol_c, otype, instrument, limit_price,
+                                stop_price, side_c)
+    if coherent is not None:
+        return coherent
     now = datetime.now(UTC)
     valid_until = now + timedelta(hours=hours)
     tif = str(time_in_force or "DAY").upper().strip() or "DAY"
     approval = {
-        "intent_hash": order_fingerprint(account_id, symbol, side, quantity,
-                                         limit_price, stop_price, tif, otype),
+        "intent_hash": order_fingerprint(account_id, symbol_c, side_c,
+                                         quantity, limit_price, stop_price,
+                                         tif, otype, instrument, session_c),
         "account_id": str(account_id or "").strip(),
         "scope": "order-entry",
-        "symbol": str(symbol or "").upper().strip(),
-        "side": str(side or "").upper().strip(),
+        "symbol": symbol_c,
+        "side": side_c,
         "quantity": _canon_number(quantity),
         "limit_price": _canon_number(limit_price),
         "stop_price": _canon_number(stop_price),
         "time_in_force": tif,
         "order_type": otype,
+        "instrument_type": instrument,
+        "equity_market_session": session_c,
         "valid_until": valid_until.isoformat(),
         "approved_by": str(operator or "").strip(),
         "approved_at": now.isoformat(),
     }
     if not approval["account_id"] or not approval["symbol"] or not approval["approved_by"]:
         return {"ok": False, "reason": "BAD_CONTRACT"}
-    if _osi_expiry_iso(approval["symbol"]) is not None and otype not in ("LIMIT", "STOP_LIMIT"):
-        return {"ok": False, "reason": "BAD_CONTRACT",
-                "detail": "option approvals require LIMIT or STOP_LIMIT"}
+    from services import operator_registry as operators
+
+    auth = operators.authorize_operator(
+        conn, approval["approved_by"], approval["account_id"])
+    if not auth.get("ok"):
+        return {"ok": False, "reason": auth.get("reason", "OPERATOR_UNKNOWN"),
+                "detail": "authoring operator is not authorized for this account"}
+    ceilings = _enforce_order_ceilings(conn, approval["account_id"],
+                                       quantity, limit_price,
+                                       symbol_c, instrument)
+    if ceilings is not None:
+        return ceilings
     gate = _option_order_guards(conn, approval["account_id"], approval["symbol"])
     if gate is not None:
         return gate
@@ -886,18 +1173,27 @@ def verify_order_approval(
     conn: Any, approval_id: str, account_id: str, symbol: str, side: str,
     quantity: Any, limit_price: Any, now: datetime | None = None,
     stop_price: Any = None, time_in_force: str = "DAY",
-    order_type: str = "LIMIT",
+    order_type: str = "LIMIT", instrument_type: Any = None,
+    equity_market_session: Any = None, operator: str | None = None,
 ) -> dict[str, Any]:
     """Verify an order approval against the recomputed fingerprint.
 
     Refuses APPROVAL_NOT_STORED (missing/storeless), APPROVAL_INVALID
-    (revoked, expired, or fingerprint mismatch — including order-type
-    mismatch, so a LIMIT approval never covers a MARKET placement).
-    Option OSI symbols re-pass the required-policy expiry guard and
-    protection acknowledgment against CURRENT policy and server time —
-    an approval minted before expiry, a policy narrowing, or an ack
-    removal cannot ride out its validity window into placement. Never
-    raises.
+    (revoked, expired, operator mismatch, or fingerprint mismatch —
+    including order-type/instrument/session mismatch, so a LIMIT
+    approval never covers a MARKET placement), OPERATOR_UNKNOWN /
+    OPERATOR_UNAUTHORIZED (presenter not registered/allowed for the
+    account — a shared-key-only string verifies nothing),
+    BAD_CONTRACT (presented fields incoherent — the factory's
+    type/instrument/price coherence re-runs here, so raw-ingested rows
+    it would refuse cannot pass verify), APPROVAL_STORE_UNAVAILABLE
+    (query failure), and policy ceiling breaches against CURRENT policy
+    (a narrowing between creation and placement refuses). Option OSI
+    symbols re-pass the required-policy expiry guard and protection
+    acknowledgment against CURRENT policy and server time. `operator`
+    is mandatory: the stored approved_by must equal it AND it must be
+    authorized for the account — the presenter must be the authorized
+    author, with no anonymous verification. Never raises.
     """
     from services import public_execution_lifecycle as lc
 
@@ -908,7 +1204,8 @@ def verify_order_approval(
     try:
         ensure_admission_tables(conn)
         row = conn.execute(
-            "SELECT approval_json, revoked FROM approvals_v1 "
+            "SELECT approval_json, revoked, intent_hash, account_id, scope, "
+            "approved_by, valid_until, approved_at FROM approvals_v1 "
             "WHERE approval_id = ?", [approval_id]).fetchone()
     except Exception:
         return {"ok": False, "reason": "APPROVAL_STORE_UNAVAILABLE"}
@@ -922,11 +1219,41 @@ def verify_order_approval(
         return {"ok": False, "reason": "APPROVAL_NOT_STORED"}
     if bool(row[1]) if len(row) > 1 else bool(rec.get("revoked")):
         return {"ok": False, "reason": "APPROVAL_INVALID", "detail": "revoked"}
+    if len(row) > 7:
+        # S08: stored columns must agree with the stored payload — a
+        # same-ID raw-row alteration under either side refuses instead
+        # of verifying against a half-tampered authority.
+        bound = (("intent_hash", row[2]), ("account_id", row[3]),
+                 ("scope", row[4]), ("approved_by", row[5]),
+                 ("valid_until", row[6]), ("approved_at", row[7]))
+        for field, column in bound:
+            if rec.get(field) != column:
+                return {"ok": False, "reason": "APPROVAL_INVALID",
+                        "detail": "stored row diverges from stored payload"}
     if rec.get("scope") != "order-entry" or rec.get("account_id") != str(account_id or "").strip():
         return {"ok": False, "reason": "APPROVAL_INVALID", "detail": "binding mismatch"}
-    want = order_fingerprint(account_id, symbol, side, quantity,
-                              limit_price, stop_price, time_in_force,
-                              order_type)
+    symbol_c = str(symbol or "").upper().strip()
+    side_c = str(side or "").upper().strip()
+    otype = str(order_type or "LIMIT").upper().strip() or "LIMIT"
+    instrument = _derive_instrument(symbol_c, instrument_type)
+    session_c = str(equity_market_session or "none").upper().strip() or "none"
+    coherent = _order_coherence(symbol_c, otype, instrument, limit_price,
+                                stop_price, side_c)
+    if coherent is not None:
+        return coherent
+    if rec.get("approved_by") != str(operator or "").strip():
+        return {"ok": False, "reason": "APPROVAL_INVALID",
+                "detail": "presenter is not the stored approver"}
+    from services import operator_registry as operators
+
+    auth = operators.authorize_operator(
+        conn, str(operator or "").strip(), str(account_id or "").strip())
+    if not auth.get("ok"):
+        return {"ok": False, "reason": auth.get("reason", "OPERATOR_UNKNOWN"),
+                "detail": "presenter is not authorized for this account"}
+    want = order_fingerprint(account_id, symbol_c, side_c, quantity,
+                             limit_price, stop_price, time_in_force,
+                             otype, instrument, session_c)
     if rec.get("intent_hash") != want:
         return {"ok": False, "reason": "APPROVAL_INVALID", "detail": "order fields differ"}
     moment = now or datetime.now(UTC)
@@ -938,6 +1265,11 @@ def verify_order_approval(
         return {"ok": False, "reason": "APPROVAL_INVALID", "detail": "bad timestamps"}
     if moment > valid_until or approved_at > moment:
         return {"ok": False, "reason": "APPROVAL_INVALID", "detail": "expired"}
+    ceilings = _enforce_order_ceilings(conn, str(account_id or ""),
+                                       quantity, limit_price,
+                                       symbol_c, instrument)
+    if ceilings is not None:
+        return ceilings
     gate = _option_order_guards(conn, str(account_id or ""),
                                 rec.get("symbol") or symbol)
     if gate is not None:

@@ -81,26 +81,37 @@ def _require_order_admission_if_policy(
     account_id: str, symbol: str, side: str, quantity: float,
     limit_price: float | None, request: dict[str, Any],
     stop_price: float | None = None, time_in_force: str = "DAY",
-    order_type: str = "LIMIT",
+    order_type: str = "LIMIT", instrument_type: Any = None,
+    equity_market_session: Any = None, operator: str = "",
 ) -> dict[str, Any] | None:
-    """Progressive admission enforcement on the broker-reachable path (S8).
+    """Full admission enforcement on the broker-reachable path (S8).
 
-    - No admission store → None (legacy kill-switch-only path; disclosed).
-    - Store present but policy lookup fails → refusal (fail closed).
-    - Required v2 policy present → a body approval_id must verify against
-      the server-recomputed order fingerprint (account/symbol/side/
-      quantity/limit/stop/TIF/order-type), else refusal. Cancellation
-      and reconciliation paths are untouched by this gate.
+    This gate runs only AFTER the kill-switch, so it runs armed: every
+    store/policy problem refuses. No admission store, store-query
+    failure, or missing required policy refuses (fail closed) — the
+    legacy kill-switch-only path is closed on the armed route; it
+    survives only disarmed (kill-switch refuses first) and is disclosed
+    as such. With a required v2 policy installed, a body approval_id
+    must verify against the server-recomputed order fingerprint
+    (account/symbol/side/quantity/limit/stop/TIF/order-type/instrument/
+    session) presented by its author (operator must equal the stored
+    approved_by), else refusal. Cancellation and reconciliation paths
+    are untouched by this gate.
     Returns None when placement may proceed, else a refusal detail dict.
     """
     from services import execution_admission as adm
 
     conn = _admission_store_conn()
     if conn is None:
-        return None
+        return {"error": "POLICY_STORE_UNAVAILABLE",
+                "message": "No admission store; refusing live submission."}
     policy = adm.get_account_policy_required(conn, account_id)
     if policy.get("reason") == "POLICY_UNSET":
-        return None
+        return {"error": "POLICY_UNSET",
+                "message": "No required account policy installed; refusing "
+                           "live submission. Install one via "
+                           "POST /admission/policies, then present a bound "
+                           "order approval."}
     if not policy.get("ok"):
         return {"error": policy.get("reason", "POLICY_STORE_UNAVAILABLE"),
                 "message": "Admission store unreadable; refusing live submission."}
@@ -108,7 +119,8 @@ def _require_order_admission_if_policy(
     verified = adm.verify_order_approval(
         conn, approval_id, account_id, symbol, side, quantity, limit_price,
         stop_price=stop_price, time_in_force=time_in_force,
-        order_type=order_type)
+        order_type=order_type, instrument_type=instrument_type,
+        equity_market_session=equity_market_session, operator=operator)
     if not verified.get("ok"):
         return {"error": verified.get("reason", "APPROVAL_INVALID"),
                 "message": "A stored order approval bound to these exact order "
@@ -420,6 +432,11 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
                 "error": "bad_quantity",
                 "message": f"quantity must be a number, got {request.get('quantity')!r}",
             }) from None
+        if isinstance(request.get("quantity", 1), bool):
+            raise HTTPException(status_code=422, detail={
+                "error": "bad_quantity",
+                "message": "quantity must be a number, not a boolean",
+            })
         if quantity <= 0 or not math.isfinite(quantity):
             raise HTTPException(status_code=422, detail={
                 "error": "bad_quantity",
@@ -445,6 +462,7 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
         time_in_force = request.get("time_in_force", "DAY")
         instrument_type = request.get("instrument_type", "EQUITY")
         equity_market_session = request.get("equity_market_session")
+        operator = request.get("operator", "")
 
         # Kill-switch AFTER validation so 422 contracts hold while disarmed.
         _require_live_trading_enabled()
@@ -461,12 +479,18 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
             raise HTTPException(status_code=502, detail={"error": "no_account"})
 
         # Admission gate AFTER account resolution (needs the account) and
-        # BEFORE any broker placement. Legacy behavior holds where no
-        # required policy is installed; refusals carry machine-readable codes.
+        # BEFORE any broker placement. The gate runs armed only
+        # (kill-switch above refused otherwise): store/policy problems
+        # refuse, and a stored approval must verify against the
+        # server-recomputed fingerprint presented by its author.
+        # Cancellation and reconciliation paths are untouched.
         admission_refusal = _require_order_admission_if_policy(
             getattr(account, "account_id", ""), symbol, side, quantity,
             limit_price, request, stop_price=stop_price,
-            time_in_force=time_in_force, order_type=order_type)
+            time_in_force=time_in_force, order_type=order_type,
+            instrument_type=instrument_type,
+            equity_market_session=equity_market_session,
+            operator=operator)
         if admission_refusal is not None:
             raise HTTPException(status_code=403, detail=admission_refusal)
 

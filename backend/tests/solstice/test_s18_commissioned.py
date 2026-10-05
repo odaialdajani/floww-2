@@ -346,11 +346,14 @@ def test_order_approval_guards_expiry_and_protection():
     calls anywhere (service layer never touches a broker).
     """
     import services.execution_admission as adm
+    import services.operator_registry as operators
     import services.public_execution_lifecycle as lc
 
     conn = _memdb()
     try:
         lc.register_store(conn)
+        assert operators.register_operator(
+            conn, "op-1", ["ACCT-1"], "root")["ok"] is True
         full = {"max_quantity": 5, "max_notional": "100000",
                 "max_positions": 10, "max_daily_loss": "10000",
                 "today": "2026-10-02", "min_entry_dte": 5,
@@ -367,7 +370,7 @@ def test_order_approval_guards_expiry_and_protection():
         assert created["ok"] is True, created
         verified = adm.verify_order_approval(
             conn, created["approval_id"], "ACCT-1",
-            "SPY271217C00760000", "BUY", 1, 3.15)
+            "SPY271217C00760000", "BUY", 1, 3.15, operator="op-1")
         assert verified["ok"] is True, verified
         # Policy narrows (ack removed): the live approval now refuses.
         narrowed = dict(full)
@@ -375,7 +378,7 @@ def test_order_approval_guards_expiry_and_protection():
         assert adm.set_account_policy_required(conn, "ACCT-1", narrowed, "op-1")["ok"] is True
         out = adm.verify_order_approval(
             conn, created["approval_id"], "ACCT-1",
-            "SPY271217C00760000", "BUY", 1, 3.15)
+            "SPY271217C00760000", "BUY", 1, 3.15, operator="op-1")
         assert out["reason"] == "PROTECTION_UNVERIFIED", out
         out = adm.create_order_approval(
             conn, "ACCT-1", "SPY271217C00760000", "BUY", 1, 3.15, "op-1")
@@ -390,7 +393,8 @@ def test_order_approval_guards_expiry_and_protection():
         eq = adm.create_order_approval(conn, "ACCT-1", "SPY", "BUY", 1, 3.15, "op-1")
         assert eq["ok"] is True, eq
         assert adm.verify_order_approval(
-            conn, eq["approval_id"], "ACCT-1", "SPY", "BUY", 1, 3.15)["ok"] is True
+            conn, eq["approval_id"], "ACCT-1", "SPY", "BUY", 1, 3.15,
+            operator="op-1")["ok"] is True
         # Malformed OSI (month 13): refuses instead of riding the equity path.
         out = adm.create_order_approval(
             conn, "ACCT-1", "SPY261300C00760000", "BUY", 1, 3.15, "op-1")

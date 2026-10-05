@@ -1382,3 +1382,76 @@ regression tests fail pre-fix, pass post-fix):
   PR103/PR105; ACCEPTED = prior receipts; COMMISSIONED = external
   HOLD (NAV-ACCOUNT/CAPTURE/NATIVE/MODEL/VISUAL/RELEASE).
   Activation OFF. INSUFFICIENT EVIDENCE. No profitability claim.
+
+## 54. Zed-review P0 batch — executor authority hardening (4 Oct 2026)
+
+Zed stopped with PR104 HOLD; his review at `1d340199` (PR103
+comment) names exact remaining executor probes. Re-verified each
+empirically; all confirmed genuine except two cleared by probe
+(truncated-OSI-as-equity is self-consistent garbage the broker
+rejects, not an executable bypass; fenced post-loss detection is
+honest but lease→submit wiring stays a Nav/Zed decision). Fixed
+TDD (10-test `test_s18_executor_p0.py` fails 10/10 pre-fix):
+
+1. Bad-verdict preflight satisfied the freshness gate
+   (`buying_power_ok=false` cached → ADMIT). New
+   `lc.preflight_gate` (STALE_PREFLIGHT vs PREFLIGHT_UNAFFORDABLE);
+   S1 gate uses it; commissioned inherits via production entry.
+2. Commissioned aggregate ignored the proposal (900 + 315 under 1000
+   admitted). `_enforce_aggregate_notional`: existing exposure +
+   proposed vs max_notional.
+3. Factory/verify ignored policy ceilings (maxqty1 minted qty2).
+   `_enforce_order_ceilings` at creation AND verify (narrowing
+   refuses); per-unit notional basis documented (full multiplier
+   notional lives on intent paths carrying vendor multipliers).
+4. Raw-ingested MARKET/no-limit options passed verify (factory
+   constraints never re-ran). `_order_coherence` at creation AND
+   verify; instrument/session bound into the Decimal-exact
+   fingerprint (rounded-price collisions closed); route threads all
+   fields; OSI must declare OPTION, non-OSI never OPTION.
+5. Same-ID approver/validity overwrite + ID without author:
+   `create_approval` IDs now bind approved_by; same-ID field
+   mutation conflicts; commissioned binding reads the DURABLE row,
+   not the presented copy.
+6. Armed approval had no presenter binding (mallory's approval
+   placeable by anyone): route requires `operator` == stored
+   approved_by. Armed no-store/UNSET now refuses
+   (POLICY_STORE_UNAVAILABLE / POLICY_UNSET) — legacy placement
+   closed on the armed route; disarmed kill-switch path untouched.
+- Fixture now 57 codes (+PREFLIGHT_UNAFFORDABLE, sha `07819a13…`);
+  acceptance mount/fingerprint paragraphs refreshed (incl. server
+  clock mandate §53).
+- Verification: new 10 + routes 20 + full `tests/solstice/` =
+  **725 passed**; ship-3.12 focused **78 passed**; ruff / bandit /
+  silent-6 / truth-226 / openapi-380 green.
+- State split: DELIVERED = §§45–54; REVIEW-PENDING = Zed
+  re-composition + lease→submit wiring + single-use/retry story +
+  Nav merge decision; ACCEPTED = prior receipts; COMMISSIONED =
+  external HOLD. Activation OFF. INSUFFICIENT EVIDENCE.
+
+## 55. Second hole-hunt — side/bool/operator hardening (4 Oct 2026)
+
+Prompted to keep improving: probed registry (empty/blank/ghost all
+fail closed — no change), lease TTL (0/negative/nan/inf/garbage all
+refuse — no change), and found two genuine factory gaps plus one
+service-level bypass:
+
+1. Side unvalidated: HOLD/'' minted approvals (fingerprint-bound
+   but incoherent). Creation AND verify now require BUY/SELL.
+2. Boolean quantity: True minted as 1 (type confusion). Creation
+   refuses bools; route 422s them before the kill-switch.
+3. Verify accepted anonymous presenters (operator=None skipped the
+   check — direct service callers bypassed author binding). Operator
+   is now mandatory at verify; the route always presents it.
+- Process note: two edit-tool line-join defects caught by
+  collection errors and repaired immediately (never issue
+  content-identical edits; append via file edit, not heredoc).
+- Verification: full `tests/solstice/` + admission routes =
+  **727 passed**; ship-3.12 P0+admission **26 passed**; ruff /
+  silent-6 / truth-226 / openapi-380 green. PR103 description
+  refreshed for full enforcement + author binding (behavior change
+  from §52 receipt noted).
+- State split: DELIVERED = §§45–55; REVIEW-PENDING = Zed
+  re-composition + lease→submit wiring + single-use/retry story +
+  Nav merge decision; ACCEPTED = prior receipts; COMMISSIONED =
+  external HOLD. Activation OFF. INSUFFICIENT EVIDENCE.

@@ -24,6 +24,7 @@ any reconcile — the registry is never trusted empty on a fresh process.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import re
@@ -120,8 +121,9 @@ _STORE: Any = None
 # Single-process ownership lock: the check-then-insert in submit() must be
 # atomic across threads, or two racing clicks place two orders. The critical
 # section holds no awaits (broker I/O stays outside). Cross-PROCESS races are
-# NOT excluded by this lock — see the DB-backed same-intent guard and the
-# documented residual in MUSE_STATE.
+# guarded by the durable claim in `_persist`: the first write is a plain
+# INSERT (primary-key conflict refuses a second claim) and a foreign
+# order_id write is refused — see test_s18_cross_process_single_use.py.
 _SUBMIT_LOCK = threading.Lock()
 
 __all__ = [
@@ -410,7 +412,17 @@ def native_protection_support(product: str, order_type: str) -> dict[str, Any]:
 
 
 def _persist(intent_id: str) -> bool:
-    """Write one record to the registered store. True when durable or storeless."""
+    """Write one record to the registered store. True when durable or storeless.
+
+    The intent row IS the single-use durable reservation. The FIRST durable
+    write for an intent is a plain INSERT: a rival writer's committed row
+    makes it fail on the primary key instead of double-claiming — the
+    atomic claim precedes the broker effect. Later writes by the SAME owner
+    update in place. A write presenting a DIFFERENT order_id for an
+    already-claimed intent is a foreign ownership attempt: refused, never a
+    silent replacement of the original broker identity (the former
+    INSERT OR REPLACE let a racing second writer clobber the first).
+    """
     if _STORE is None:
         return True
     rec = _INTENTS.get(intent_id)
@@ -420,6 +432,21 @@ def _persist(intent_id: str) -> bool:
         ensure_lifecycle_tables(_STORE)
         now = datetime.now(UTC).isoformat()
         blob = json.dumps(rec, default=str)
+        row = _STORE.execute(
+            "SELECT order_id FROM execution_intents_v1 WHERE intent_id = ?",
+            [intent_id]).fetchone()
+        if row is None:
+            _STORE.execute(
+                "INSERT INTO execution_intents_v1 "
+                "(intent_id, intent_hash, ticker, owner, state, order_id, record_json, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                [intent_id, rec.get("intent_hash"), rec.get("intent", {}).get("ticker"),
+                 rec.get("intent", {}).get("execution_owner"), rec.get("state"),
+                 rec.get("order_id"), blob, now],
+            )
+            return True
+        if row[0] != rec.get("order_id"):
+            return False
         _STORE.execute(
             "INSERT OR REPLACE INTO execution_intents_v1 "
             "(intent_id, intent_hash, ticker, owner, state, order_id, record_json, updated_at) "
@@ -592,9 +619,10 @@ def _load_record(intent_id: str) -> dict[str, Any] | None:
     """Advisory cross-process read: one intent row by ID from the store.
 
     Lets a second process (or a fresh registry) reuse the owning broker orderId
-    instead of placing a duplicate. Best-effort: a concurrent writer may still
-    win a race — callers treat this as advisory and the broker orderId stays
-    the single source of reconciliation truth.
+    instead of placing a duplicate. The read is advisory for IDENTITY REUSE
+    only; ownership itself is enforced by the atomic first-write claim in
+    `_persist` — a rival's committed row refuses a second claim before any
+    broker effect, and the broker orderId stays the reconciliation truth.
     """
     if _STORE is None:
         return None
@@ -889,14 +917,21 @@ def create_approval(
     approved_by: str,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Server-validated operator approval bound to the immutable intent hash."""
+    """Server-validated operator approval bound to the immutable intent hash.
+
+    The approval identity binds the author: the same intent approved by
+    two operators yields two distinct approval IDs. Same-author,
+    same-validity re-mints stay idempotent (approved_at is not part of
+    the identity).
+    """
     moment = now or datetime.now(UTC)
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=UTC)
     if valid_until.tzinfo is None:
         valid_until = valid_until.replace(tzinfo=UTC)
     approval_id = hashlib.sha256(
-        f"{intent_hash_hex}|{account_id}|{scope}|{valid_until.isoformat()}".encode()
+        f"{intent_hash_hex}|{account_id}|{scope}|{valid_until.isoformat()}|"
+        f"{str(approved_by or '').strip()}".encode()
     ).hexdigest()[:16]
     return {
         "approval_id": approval_id,
@@ -1065,6 +1100,20 @@ def _rget(receipt: Any, *names: str, default: Any = None) -> Any:
 PREFLIGHT_TTL_S = 60
 
 
+def _wall_now() -> float:
+    """Server wall clock for preflight freshness (S06).
+
+    Caller-supplied ``ctx["now"]`` is a fictitious decision clock in tests
+    and MUST be server-stamped at the entry boundary in production (the
+    mounted pipeline stamps it; pure helpers never trust it alone). TTL
+    enforcement additionally binds wall time so a frozen caller clock can
+    never keep a stale broker verdict fresh past the window.
+    """
+    import time as _time
+
+    return _time.time()
+
+
 def _ctx_fingerprint(ctx: dict[str, Any]) -> str:
     """Market-context fingerprint: quotes + account + session policy.
 
@@ -1100,11 +1149,13 @@ async def preflight(intent: dict[str, Any], ctx: dict[str, Any], broker: Any) ->
     except (TypeError, ValueError) as exc:
         return {"ok": False, "reason": f"BAD_CONTRACT:{exc}"}
     now_epoch = _now_epoch(ctx.get("now"))
+    wall = _wall_now()
     cached = _PREFLIGHT_CACHE.get(key)
     if cached is not None and (now_epoch - float(cached.get("at_epoch", 0.0))) < PREFLIGHT_TTL_S:
-        out = dict(cached["receipt"])
-        out["cached"] = True
-        return out
+        if (wall - float(cached.get("at_wall", wall))) < PREFLIGHT_TTL_S:
+            out = dict(cached["receipt"])
+            out["cached"] = True
+            return out
     contract = intent.get("contract") or {}
     estimate = await _maybe_await(broker.preflight_single_leg(
         account_id=intent.get("account_id"),
@@ -1117,20 +1168,52 @@ async def preflight(intent: dict[str, Any], ctx: dict[str, Any], broker: Any) ->
     ))
     out = {"ok": True, "estimate": estimate, "intent_hash": digest,
            "ctx_fingerprint": key.split("|", 1)[1], "cached": False}
-    _PREFLIGHT_CACHE[key] = {"receipt": dict(out), "at_epoch": now_epoch}
+    _PREFLIGHT_CACHE[key] = {"receipt": dict(out), "at_epoch": now_epoch,
+                             "at_wall": _wall_now()}
     return out
 
 
-def has_fresh_preflight(intent: dict[str, Any], ctx: dict[str, Any]) -> bool:
-    """True only when a cached preflight covers this exact intent + context."""
+def preflight_gate(intent: dict[str, Any], ctx: dict[str, Any]) -> str | None:
+    """Preflight admission gate: None when covered, else a refusal code.
+
+    A cached preflight satisfies the gate only when it covers this exact
+    intent + market context, is inside the 60s TTL on BOTH the decision
+    clock and the server wall clock, AND carries a broker
+    verdict with buying_power_ok True. A failed/negative broker verdict
+    never satisfies the gate (PREFLIGHT_UNAFFORDABLE) — freshness alone
+    is not affordability. A frozen caller clock cannot extend freshness
+    past the wall-clock bound.
+    """
     try:
         key = intent_hash(intent) + "|" + _ctx_fingerprint(ctx)
     except (TypeError, ValueError):
-        return False
+        return "STALE_PREFLIGHT"
     cached = _PREFLIGHT_CACHE.get(key)
     if cached is None:
-        return False
-    return (_now_epoch(ctx.get("now")) - float(cached.get("at_epoch", 0.0))) < PREFLIGHT_TTL_S
+        return "STALE_PREFLIGHT"
+    try:
+        stale = (_now_epoch(ctx.get("now"))
+                 - float(cached.get("at_epoch", 0.0))) >= PREFLIGHT_TTL_S
+    except (TypeError, ValueError):
+        return "STALE_PREFLIGHT"
+    if stale:
+        return "STALE_PREFLIGHT"
+    try:
+        wall_stale = (_wall_now() - float(
+            cached.get("at_wall", _wall_now()))) >= PREFLIGHT_TTL_S
+    except (TypeError, ValueError):
+        return "STALE_PREFLIGHT"
+    if wall_stale:
+        return "STALE_PREFLIGHT"
+    estimate = (cached.get("receipt") or {}).get("estimate") or {}
+    if estimate.get("buying_power_ok") is not True:
+        return "PREFLIGHT_UNAFFORDABLE"
+    return None
+
+
+def has_fresh_preflight(intent: dict[str, Any], ctx: dict[str, Any]) -> bool:
+    """True only when a cached verdict-good preflight covers intent + ctx."""
+    return preflight_gate(intent, ctx) is None
 
 
 def _now_epoch(value: Any) -> float:
@@ -1246,6 +1329,16 @@ async def submit(
             return {"ok": False, "reason": "STORE_UNAVAILABLE", "intent_id": intent_id}
     try:
         receipt = await _maybe_await(broker.place_order(**payload))
+    except asyncio.CancelledError:
+        # Cancellation during the effect await leaves the outcome unknowable:
+        # the broker may have executed before the cancel landed. Preserve the
+        # ambiguity truthfully (UNKNOWN + annotation, persisted) so a later
+        # duplicate/reconcile can never report a clean SUBMITTED certainty;
+        # the re-raised cancel keeps the caller's cancellation semantics.
+        _INTENTS[intent_id]["state"] = "UNKNOWN"
+        _INTENTS[intent_id]["error"] = "CancelledError: effect await cancelled"
+        _persist(intent_id)
+        raise
     except Exception as exc:
         _INTENTS[intent_id]["state"] = "UNKNOWN"
         _INTENTS[intent_id]["error"] = f"{type(exc).__name__}: {exc}"
