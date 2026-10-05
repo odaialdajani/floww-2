@@ -240,6 +240,16 @@ POST /api/alpaca/order PAPER entry, predates the lane, outside Spark
 ownership — Nav/OpenCode decision). Queue: S01-S05, S12, I04, S03
 ACCEPTED; S15 publish-only; I01 READY at producer head b5c58b27.
 
+Full-suite receipt (2026-10-05, coordinator, at 9bc8ec39 tree): the
+ENTIRE backend suite `pytest tests/ -q` → **7190 passed, 37 skipped
+(pre-existing), 0 failures** in 4m03s (Mongo up, venv 3.14 disclosed) —
+no cross-module regression from the quantization or clock-relative
+staleness edits anywhere outside the 24-file lane sweep. Protected71
+re-verified at this tree via `git hash-object` per manifest line:
+**71/71 identical**. Hosted at 61164572 (identical code content):
+backend-tests PASS 16m28s + frontend PASS; only docs/api freshness red
+(OpenCode-owned handoff).
+
 ## External (not engineering): NAV-CAPTURE
 
 Approved production capture/storage policy and admitted REAL records after a
