@@ -116,6 +116,18 @@ def main(argv: list[str] | None = None) -> int:
     partial = build_range_envelope(symbol="SPY", min_dte=14, max_dte=60,
                                    asof=TODAY, listing=listing,
                                    selection=sel, chain=_partial_chain())
+    # v3: the partial envelope is captured SECONDS after the complete one —
+    # the skipped 12-04 fetch attempt happens between the two. A shared
+    # received_at drops the chronological replay tiebreak to record_id alone;
+    # give partial its own later receive clock so both records carry distinct
+    # owning clocks (host the regression that the previous v2 fixture masked).
+    _pf = dict(partial["clocks"])
+    _pf["received_at"] = "2026-10-05T13:59:35+00:00"
+    partial["clocks"] = _pf
+    # Re-seal after the clock override so the digest covers the true bytes.
+    from services.solstice_range_analytics import compute_content_digest, record_id_for_digest as _rid
+    partial["content_digest"] = compute_content_digest(partial)
+    partial["record_id"] = _rid(partial["content_digest"])
     _assert_invariants(complete, "complete_v1")
     _assert_invariants(partial, "partial_skipped_v1")
     assert complete["status"] == "ok", complete["status"]

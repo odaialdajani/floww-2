@@ -29,7 +29,7 @@
   "oi_effective_dates": [
    "2026-10-03"
   ],
-  "received_at": "2026-10-05T13:59:30+00:00",
+  "received_at": "2026-10-05T13:59:35+00:00",
   "spot": {
    "event_time": "2026-10-05T13:59:00+00:00",
    "fetched_at": "2026-10-05T13:59:05+00:00",
@@ -37,7 +37,7 @@
    "source": "public-mid"
   }
  },
- "content_digest": "fcdb9bcb22b9cdc6ca0995eb9c2ce0bbf317beda7d833804909ca500f863e879",
+ "content_digest": "33843c65d6c088edd57e71125481892e8c1aaadc464627297e94d9e5e550cdd4",
  "content_schema": "rga-content.v3",
  "coverage": {
   "attempt_cap": 3,
@@ -359,7 +359,7 @@
   "max_dte": 60,
   "min_dte": 14
  },
- "record_id": "rga1-fcdb9bcb22b9cdc6ca0995eb",
+ "record_id": "rga1-33843c65d6c088edd57e7112",
  "refusals": [
   "PARTIAL_COVERAGE"
  ],

@@ -12,12 +12,12 @@
  "rows": [
   {
    "asof_date": "2026-10-05",
-   "digest": "f2600391594368d7c17bd2c5380c947b35c4b93fe72837c11c27a0ac39c05fce",
+   "digest": "33843c65d6c088edd57e71125481892e8c1aaadc464627297e94d9e5e550cdd4",
    "integrity": "verified",
-   "received_at": "2026-10-05T13:59:30+00:00",
-   "record_id": "rga1-f2600391594368d7c17bd2c5",
+   "received_at": "2026-10-05T13:59:35+00:00",
+   "record_id": "rga1-33843c65d6c088edd57e7112",
    "recorded_at": "2026-10-05T14:00:01+00:00",
-   "status": "ok",
+   "status": "partial",
    "synthetic": true,
    "ticker": "SPY",
    "window": {
@@ -27,12 +27,12 @@
   },
   {
    "asof_date": "2026-10-05",
-   "digest": "fcdb9bcb22b9cdc6ca0995eb9c2ce0bbf317beda7d833804909ca500f863e879",
+   "digest": "f2600391594368d7c17bd2c5380c947b35c4b93fe72837c11c27a0ac39c05fce",
    "integrity": "verified",
    "received_at": "2026-10-05T13:59:30+00:00",
-   "record_id": "rga1-fcdb9bcb22b9cdc6ca0995eb",
+   "record_id": "rga1-f2600391594368d7c17bd2c5",
    "recorded_at": "2026-10-05T14:00:01+00:00",
-   "status": "partial",
+   "status": "ok",
    "synthetic": true,
    "ticker": "SPY",
    "window": {

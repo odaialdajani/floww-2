@@ -35,8 +35,11 @@ test('index admits partial rows and sorts received clock then record ID without 
  const body=index(), before=clone(body);
  const result=admitRangeIndex(body,query);
  expect(result.reason).toBeNull();
+ // v3 with distinct received_at: complete (13:59:30) precedes partial (13:59:35),
+ // so chronological order is received_at ASC; the record_id tiebreak only applies
+ // on equal clocks.
  expect(result.rows.map(r=>r.record_id))
-  .toEqual([complete,partial].map(e=>e.record_id).sort((a,b)=>a<b?-1:a>b?1:0));
+  .toEqual([complete.record_id, partial.record_id]);
  expect(result.rows[0].received_at<=result.rows[1].received_at).toBe(true);
  expect(body).toEqual(before);
  expect(result).toMatchObject({researchOnly:true,qualification:'pending',page:{limit:50,offset:0,nReturned:2,mayHaveMore:false}});

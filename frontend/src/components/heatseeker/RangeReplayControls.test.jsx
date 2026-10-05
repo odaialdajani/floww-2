@@ -70,7 +70,11 @@ test('previous, next, scrub and record select share owning stored retrieval',asy
  // v3: records load in CHRONOLOGICAL order (received_at ASC, record_id ASC),
  // so the index list is [complete, partial] — derive the direction from the
  // fixtures instead of baking the pre-v3 ID order.
- const [first,second]=[complete,partial].sort((a,b)=>a.record_id<b.record_id?-1:1);
+ // v3: chronological — received_at ASC, record_id ASC tiebreak; the fixtures now
+ // carry DISTINCT received_at so this follows the true producer order.
+ const [first,second]=[complete,partial].sort(
+  (a,b)=>(Date.parse(a.clocks.received_at)-Date.parse(b.clocks.received_at))
+         || (a.record_id<b.record_id?-1:1));
  mount();await load();
  fireEvent.click(screen.getByRole('button',{name:'Next frame'}));
  await waitFor(()=>expect(lastEnvelope()?.record_id).toBe(first.record_id));
