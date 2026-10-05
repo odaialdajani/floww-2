@@ -193,3 +193,49 @@ Multi-day continuation: read /Users/nav/Documents/Codex/2026-10-04/resume-check-
   OpenCode next READY seam is the remaining S04/S12 extension review
   packet and, on Cline admission of b5c58b271 repairs, I03 strict v3
   consumer migration prep. Engineering HOLD remains; activation OFF.
+
+## 2026-10-05 I15 omission-sweep concrete partials (no full resweep)
+
+Fast local gates on changed spark files: bandit medium+ clean on
+public_execution_lifecycle.py and execution_admission.py; truth_audit.sh
+226 passed (claim-driven count varies with lane head; PR104's 227 was
+computed at cb483298); python3.12 ship-pin py_compile OK on all five
+changed spark files plus the integration time-bomb fix.
+
+- Mount/route delta: `git diff ba95e118..d24fedce -- backend/server.py
+  backend/routes/` = EMPTY (no new mounts; admission router remains
+  unmounted in server.py; mounted full-stack proof is test-local only).
+  API docs remain current at 383 paths for the integration baseline per
+  earlier `--check`; the sole stale-docs condition is Cline's
+  market_data.py route change on PR106 (batched regenerate is mine at
+  composition, I10).
+- Background jobs census (server.py static): request-scoped fanouts
+  (_revalidate_heatmap, realized-vol/iv-rank pair, save_snapshot,
+  to_thread fetch, _prefetch_paid_oi) + persistent loops
+  _scheduler_loop, _warm_default_heatmaps, _vpin_autofeed_loop,
+  _public_sweep_loop + _solstice_capture_loop (env-gated, default OFF;
+  verified at startup_solstice_capture: cfg None -> no task). None are
+  broker-placement jobs; entry enumeration holds.
+- Skip/xfail delta: zero @pytest.mark.skip|skipif|xfail markers in
+  backend/tests at ba95e118 and d24fedce and at cb483298 vs HEAD
+  (flaky_env is marker-filtered by the CI command, not counted skips).
+  The hosted "38 skipped" are runtime env-gated skips (e.g., Mongo),
+  unchanged by my lanes; full -rs enumeration belongs to the frozen
+  combined run (I11), not a repeated unchanged sweep.
+- Changed-callee audit (my commits): _persist, submit effect-await,
+  cancellation branch — all covered by the two new suites plus the
+  190/775 neighbor sweeps at their head commits; no untested changed
+  callee remains in my lanes.
+- PR-comment reconciliation now READ: 5979463886 (S-lane review at
+  1d340199) demands map to ledger S01..S15 — all repaired & evidence'd
+  this cycle; 5979894024 (PR104 closure) pins hosted baseline (7390
+  passed/38 skips/70.45%cov/14m51, 227 truth, 362 silent, 383 API,
+  394 census, 71 protected) and requires no borrowed evidence.
+- Open-issue inventory (references/open-issue-inventory.json): 8 open
+  PR-issues exist, zero plain issue tickets — continued local-queue
+  discipline, no duplicate publications.
+
+I15 remains READY (finishes at frozen composition); these results are
+partial and exclude: replay paging edge-audit on admitted v3 fixtures,
+browser-route replay (I12 scope), contradiction between old/state docs vs
+latest code.
