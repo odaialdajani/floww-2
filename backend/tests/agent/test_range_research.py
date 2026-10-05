@@ -391,8 +391,12 @@ async def test_partial_coverage_and_unbound_top_summary_are_never_admission(monk
             continue
         section["cells"]["2026-12-04"] = {"590": None, "600": None}
         section.update(status="partial", n_available=4, cell_gaps=2, metric_admitted=False)
-    result = rebind(env)
-    env["metrics"] = {"admitted": ["window"], "unavailable": ["delta_weighted"]}
+        # v3: the metrics summary is digest-bound content — the scenario override
+        # must be part of the STORED record, so it is applied BEFORE rebind()
+        # seals the digest (a post-rebind mutation is now a digest violation by
+        # design, which is exactly the v2 consumer gap this closes).
+        env["metrics"] = {"admitted": ["window"], "unavailable": ["delta_weighted"]}
+        result = rebind(env)
     async with harness(monkeypatch, env=env, result=result) as h:
         await login_and_save(h)
         saved = await ask_saved(h)

@@ -22,19 +22,20 @@ IDENTITIES = {
 }
 
 
-# Pin the read-side rga-content.v2 wire contract without importing the
+# Pin the read-side rga-content.v3 wire contract without importing the
 # analytical producer or recorder into research's no-order dependency graph.
-# The omitted metrics summary remains unqualified; conformance tests detect
+# v3 joins the per-metric admission summary (`metrics`) to the canonical
+# digest — matching the admitted producer exactly; conformance tests detect
 # producer changes instead of silently broadening this projection.
-_CONTENT_KEYS_V2 = (
+_CONTENT_KEYS_V3 = (
     "version", "status", "refusals", "symbol", "query", "axes", "grids",
-    "metric_registry", "clocks", "coverage", "provenance", "synthetic",
-    "grounding", "content_schema",
+    "metric_registry", "metrics", "clocks", "coverage", "provenance",
+    "synthetic", "grounding", "content_schema",
 )
 
 
 def compute_content_digest(envelope):
-    projection = {key: envelope.get(key) for key in _CONTENT_KEYS_V2}
+    projection = {key: envelope.get(key) for key in _CONTENT_KEYS_V3}
     content = json.dumps(projection, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
@@ -127,7 +128,7 @@ def _validate(raw, screen, ticker):
         raise ValueError(reason)
     require(isinstance(raw.get("envelope"), dict), "RANGE_RECORD_CORRUPT")
     env = raw["envelope"]
-    require(env.get("version") == VERSION and env.get("content_schema") == "rga-content.v2",
+    require(env.get("version") == VERSION and env.get("content_schema") == "rga-content.v3",
             "RANGE_SCHEMA_MISMATCH")
     digest = compute_content_digest(env)
     require(env.get("content_digest") == digest, "RANGE_DIGEST_MISMATCH")
