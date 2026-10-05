@@ -250,6 +250,17 @@ re-verified at this tree via `git hash-object` per manifest line:
 backend-tests PASS 16m28s + frontend PASS; only docs/api freshness red
 (OpenCode-owned handoff).
 
+PR106 ALL-GREEN receipt (2026-10-05, coordinator): at `c39752bc` ALL
+FOUR hosted gates PASS — backend-tests 12m01s (run 37308132541),
+docker-build 3m09s, frontend-build 2m07s, ruff 2m15s (run 37308132584).
+The final red gate (docs/api freshness) closed by regenerating
+openapi.json + README.md for the three r18 routes (380→383 paths) —
+verified additive-only (zero existing-path modifications, zero removals,
+zero info drift; README 391→394 endpoints) and committed under the
+user's explicit takeover authorization after confirming the OpenCode lane
+idle 2h+; `generate_api_docs.py --check` passes (383 paths). Full local
+suite at this tree: 7190 passed/0 failed; protected71 71/71.
+
 ## External (not engineering): NAV-CAPTURE
 
 Approved production capture/storage policy and admitted REAL records after a
