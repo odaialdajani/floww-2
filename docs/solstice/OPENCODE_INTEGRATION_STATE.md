@@ -78,3 +78,38 @@ Next action: verify actual OpenCode Muse/Spark1.3 provider/effort/tool access/li
   10 READY / 1 IN_PROGRESS. Activation OFF; six NAV HOLDs remain.
 
 Multi-day continuation: read /Users/nav/Documents/Codex/2026-10-04/resume-check-complete-no-newly-ready-2/outputs/FLOWW-Cline-OpenCode-Finish-Packet/MULTI-DAY-CONTINUATION.md. Cline remains on user-confirmed GLM5.3; no model switch. One hourly native coordination heartbeat is active; preserve active writer state and do not launch duplicates.
+
+## 2026-10-05 manual-takeover turn (I02 verification + S05 cross-process closure)
+
+- Takeover respected: manual prompt to this session; controller
+  BLOCKED/yielded (child_pid null, activation OFF) — verified via
+  control-continuation.py STATUS before any work; no duplicate writer.
+- I02 provenance verified: integration branch 3ad67e64 descends PR104
+  cb483298 (branch-start holds); PR104 reverified sole open successor at
+  cb483298 via gh (PR103 ba95e118, PR105 22df6fe6, PR106 a0c7fbc6
+  unchanged; origin/main 6eaa3343). Conflict analysis for the pending
+  Spark candidate 09318fc0: `git merge-tree --write-tree 3ad67e64
+  09318fc0` exit 0, ZERO conflicts; zero files changed on both sides
+  since merge-base 1d340199 (candidate touches 20 Spark-owned files).
+  Composition remains blocked on Cline admission of S01–S15.
+- S05 residual closed in Spark lane `1f3b4258` (over 09318fc0): the
+  durable intent row is the atomic single-use claim — first write plain
+  INSERT (primary-key conflict refuses a rival claim before any broker
+  effect), same-owner transitions update in place, foreign order_id
+  writes refused (pre-fix INSERT OR REPLACE clobbered the original
+  identity — RED reproduced). New suite
+  test_s18_cross_process_single_use.py: RED pre-fix on both claim
+  probes; post-fix 4 passed including a real spawned-child cross-PID
+  restart duplicate (zero new placements in the second process) and
+  injected-write-fault STORE_UNAVAILABLE with zero broker calls.
+  Affected neighbors 190 passed (17 suites incl. deployment spawn,
+  brokerage route admission/auth/gate); ruff clean; py_compile OK.
+  queue.json updated with hashed evidence; REVIEW_PENDING for Cline.
+- Full packet sweep re-read this turn: task-ledger (48 obligations),
+  REMAINING-WORK, OWNERSHIP, DEEP-SWEEP-AUDIT, ISSUE-READY-BACKLOG,
+  COMMISSIONING-HOLDS, ACCEPTANCE-AND-REVIEW, MULTI-DAY-CONTINUATION,
+  TOOL-TIMEOUT-RECOVERY, START-HERE, stop-diagnosis.
+- Next exact command: in spark-r17, audit S01 store-failure purge and
+  S04 cancellation-during-async coverage against the harness adversarial
+  list; close gaps failed-first if behavior is missing. Engineering HOLD
+  remains; activation OFF; six NAV HOLDs unchanged.
