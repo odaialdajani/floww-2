@@ -113,3 +113,36 @@ Multi-day continuation: read /Users/nav/Documents/Codex/2026-10-04/resume-check-
   S04 cancellation-during-async coverage against the harness adversarial
   list; close gaps failed-first if behavior is missing. Engineering HOLD
   remains; activation OFF; six NAV HOLDs unchanged.
+
+## 2026-10-05 same-turn continuation (S04/S12 cancellation truth + S01 audits)
+
+- S04/S12 residual closed in Spark lane `a7609446` (over 1f3b4258):
+  asyncio.CancelledError is BaseException (3.8+), so the effect await's
+  `except Exception` never caught task cancellation — a cancelled broker
+  call left the record claiming clean SUBMITTED (false certainty).
+  Fix: explicit CancelledError branch → state UNKNOWN + annotation,
+  persisted, re-raised. RED pre-fix reproduced (SUBMITTED, no error);
+  GREEN: retry reconciles ORIGINAL identity, zero new placements.
+- S01 audits pinned in same commit: injected approval-store fault
+  purges memory authority (permission never left live); failed revoke
+  reports STORE_UNAVAILABLE with no phantom revocation (durable truth
+  governs; memory mirrors).
+- Verification: new suite test_s18_cancel_and_store_faults.py 3 passed;
+  full lane sweep tests/solstice/ + brokerage admission/auth/gate routes
+  775 passed 0 failed; ruff clean; py_compile OK.
+- Harness adversarial-scenario list now fully mapped to lane coverage:
+  every listed scenario has a committed probe or pinned audit
+  (revoked-restore race, same-ID mutation, foreign operator/principal,
+  raw-row/OSI binder, Decimal/bool/side/type guards, policy change,
+  repeated/concurrent/ambiguous/restart submission incl. cross-process
+  claim, preflight refusal matrix, store faults, fees/fills/census,
+  multiplier/reserved capacity, lease-loss-before-effect +
+  cancellation-during-async, calendar/protection boundaries).
+- Lane heads: spark-r17 `a7609446` (12 commits over ba95e118, unpushed,
+  all REVIEW_PENDING); integration `11740a21`. queue.json holds hashed
+  evidence for S01/S04/S05/S12/I02 updates.
+- Next exact command: assess I04 test-local mounted full-stack scope
+  (mounted FastAPI TestClient app + fake broker + denied matrix at all
+  seven enumerated entries) against the reviewed-named-production-change
+  boundary; no production wiring, no live flags. Engineering HOLD
+  remains; activation OFF; six NAV HOLDs unchanged.
