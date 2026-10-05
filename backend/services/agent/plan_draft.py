@@ -7,6 +7,7 @@ from typing import Literal, TypedDict
 
 from services.agent.contracts import INTERPRETATIONS, canonical, instant
 from services.agent.grounding import grounding_hash
+from services.agent.stored_contract_resolver import bind_stored_range_contract
 
 
 class TradePlanDraft(TypedDict):
@@ -18,6 +19,7 @@ class TradePlanDraft(TypedDict):
     status: Literal["review_only"]
     executable: Literal[False]
     selection: dict
+    range_record: dict | None
     contract: dict | None
     evidence_ids: list[str]
     observation_ids: list[str]
@@ -79,6 +81,11 @@ def build_plan_draft(answer, turn_id, *, now=None) -> TradePlanDraft:
             "rangeVersion", "rangeRecordId", "rangeDigest", "rangeMetric", "rangeBasis", "rangeStatus",
             "provider", "formula", "mapQuery", "mapStrikes", "mapExpiries",
         )}),
+        # I05: a range-replay draft binds the EXACT stored record it claims —
+        # verified against the stored envelope via the owning resolver, never
+        # trusting the client's rangeRecordId/digest echo. This is grounded
+        # EVIDENCE only: contract stays None and review_only/executable=False.
+        range_record=bind_stored_range_contract(context),
         contract=contract, evidence_ids=evidence_ids,
         observation_ids=sorted({f["snapshot_id"] for f in facts if f.get("snapshot_id")}),
         rationale=rationale, blockers=blockers, quantity=None, limit_price=None,
