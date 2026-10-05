@@ -11,7 +11,7 @@ Producer fixtures only; no live chain queries (never replay history).
 """
 from __future__ import annotations
 
-from services.agent.range_replay import compute_content_digest, record_id_for_digest
+from services.agent.range_replay import compute_content_digest
 
 # I05 refusal reasons (draft binding only; the record itself was already
 # admitted by the owning replay resolver upstream of this seam).

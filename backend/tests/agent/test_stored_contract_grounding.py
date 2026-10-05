@@ -6,6 +6,7 @@ digest disagrees with the stored content fails closed; a resolver that
 refuses remains contractNone/review_only/executable=False by policy.
 """
 import sys
+
 sys.path.insert(0, "backend")
 
 import json
