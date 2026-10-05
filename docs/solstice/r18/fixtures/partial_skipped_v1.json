@@ -37,8 +37,8 @@
    "source": "public-mid"
   }
  },
- "content_digest": "095a355309252e0018e0cc78b1b96058b0578c4d9ef23ceb4e3c197632e56eb5",
- "content_schema": "rga-content.v2",
+ "content_digest": "fcdb9bcb22b9cdc6ca0995eb9c2ce0bbf317beda7d833804909ca500f863e879",
+ "content_schema": "rga-content.v3",
  "coverage": {
   "attempt_cap": 3,
   "budget": {
@@ -115,7 +115,11 @@
   "delta_weighted": {
    "basis": "OI_DELTA_WEIGHTED",
    "cell_gaps": 2,
-   "cell_invalid_delta": {},
+   "cell_invalid_delta": {
+    "2026-11-09": {
+     "600": 1
+    }
+   },
    "cell_missing_delta": {},
    "cells": {
     "2026-10-26": {
@@ -124,7 +128,7 @@
     },
     "2026-11-09": {
      "590": 1542240.0,
-     "600": 1542240.0
+     "600": 5896800.0
     },
     "2026-12-04": {
      "590": null,
@@ -132,7 +136,7 @@
     }
    },
    "formula_version": "gex.v2",
-   "invalid_delta": 0,
+   "invalid_delta": 1,
    "invalid_mult": 0,
    "invalid_type": 0,
    "metric_admitted": false,
@@ -142,30 +146,35 @@
    "n_available": 4,
    "n_cells": 6,
    "population": {
+    "expiry_missing": 0,
+    "gamma_missing": 0,
     "input_contracts": 8,
-    "invalid": 0,
-    "invalid_delta": 0,
+    "invalid_delta": 1,
+    "invalid_mult": 0,
+    "invalid_type": 0,
     "missing_delta": 0,
-    "missing_oi": 0,
-    "usable": 8
+    "oi_missing_or_nonpositive": 0,
+    "quarantined": 0,
+    "strike_invalid": 0,
+    "usable": 7
    },
    "quarantined": 0,
    "reason": null,
    "status": "partial",
    "unit": "USD per 1% spot move (S^2 dealer-positive convention)",
-   "usable": 8
+   "usable": 7
   },
   "raw_oi": {
    "basis": "OI",
    "cell_gaps": 2,
    "cells": {
     "2026-10-26": {
-     "590": 1262589.6657694587,
-     "600": 1356816.6565049868
+     "590": 1262589.665769,
+     "600": 1356816.656505
     },
     "2026-11-09": {
-     "590": 996034.1546551939,
-     "600": 1048867.2375825467
+     "590": 996034.154655,
+     "600": 1048867.237583
     },
     "2026-12-04": {
      "590": null,
@@ -179,13 +188,15 @@
    "n_available": 4,
    "n_cells": 6,
    "population": {
+    "expiry_missing": 0,
+    "gamma_nonpositive": 0,
     "input_contracts": 8,
-    "invalid": 0,
-    "invalid_delta": 0,
-    "missing_delta": 0,
-    "missing_oi": 0,
-    "usable": 8,
-    "zero_oi_or_excluded_by_kernel": "cell nulls record BS iv/T exclusions the aggregate does not class"
+    "iv_missing_or_nonpositive": 0,
+    "oi_missing_or_nonpositive": 0,
+    "strike_invalid": 0,
+    "t_missing_or_nonpositive": 0,
+    "type_unknown": 0,
+    "usable": 8
    },
    "reason": null,
    "status": "partial",
@@ -218,9 +229,14 @@
    "n_available": 4,
    "n_cells": 6,
    "population": {
+    "expiry_missing": 0,
+    "gamma_missing": 0,
     "input_contracts": 8,
-    "invalid": 0,
+    "invalid_mult": 0,
+    "invalid_type": 0,
     "missing_volume": 0,
+    "quarantined": 0,
+    "strike_invalid": 0,
     "usable": 8
    },
    "quarantined": 0,
@@ -343,7 +359,7 @@
   "max_dte": 60,
   "min_dte": 14
  },
- "record_id": "rga1-095a355309252e0018e0cc78",
+ "record_id": "rga1-fcdb9bcb22b9cdc6ca0995eb",
  "refusals": [
   "PARTIAL_COVERAGE"
  ],

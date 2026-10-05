@@ -37,8 +37,8 @@
    "source": "public-mid"
   }
  },
- "content_digest": "54f0a823b635f938492cbfb3e0531e638338fc29aa7117a38d9d18c360cb955c",
- "content_schema": "rga-content.v2",
+ "content_digest": "f2600391594368d7c17bd2c5380c947b35c4b93fe72837c11c27a0ac39c05fce",
+ "content_schema": "rga-content.v3",
  "coverage": {
   "attempt_cap": 3,
   "budget": {
@@ -137,11 +137,16 @@
    "n_available": 6,
    "n_cells": 6,
    "population": {
+    "expiry_missing": 0,
+    "gamma_missing": 0,
     "input_contracts": 12,
-    "invalid": 0,
     "invalid_delta": 0,
+    "invalid_mult": 0,
+    "invalid_type": 0,
     "missing_delta": 0,
-    "missing_oi": 0,
+    "oi_missing_or_nonpositive": 0,
+    "quarantined": 0,
+    "strike_invalid": 0,
     "usable": 12
    },
    "quarantined": 0,
@@ -155,16 +160,16 @@
    "cell_gaps": 0,
    "cells": {
     "2026-10-26": {
-     "590": 1262589.6657694587,
-     "600": 1356816.6565049868
+     "590": 1262589.665769,
+     "600": 1356816.656505
     },
     "2026-11-09": {
-     "590": 996034.1546551939,
-     "600": 1048867.2375825467
+     "590": 996034.154655,
+     "600": 1048867.237583
     },
     "2026-12-04": {
-     "590": 774081.1943076025,
-     "600": 805112.713173864
+     "590": 774081.194308,
+     "600": 805112.713174
     }
    },
    "formula_version": "gex.v2",
@@ -174,13 +179,15 @@
    "n_available": 6,
    "n_cells": 6,
    "population": {
+    "expiry_missing": 0,
+    "gamma_nonpositive": 0,
     "input_contracts": 12,
-    "invalid": 0,
-    "invalid_delta": 0,
-    "missing_delta": 0,
-    "missing_oi": 0,
-    "usable": 12,
-    "zero_oi_or_excluded_by_kernel": "cell nulls record BS iv/T exclusions the aggregate does not class"
+    "iv_missing_or_nonpositive": 0,
+    "oi_missing_or_nonpositive": 0,
+    "strike_invalid": 0,
+    "t_missing_or_nonpositive": 0,
+    "type_unknown": 0,
+    "usable": 12
    },
    "reason": null,
    "status": "ok",
@@ -213,9 +220,14 @@
    "n_available": 6,
    "n_cells": 6,
    "population": {
+    "expiry_missing": 0,
+    "gamma_missing": 0,
     "input_contracts": 12,
-    "invalid": 0,
+    "invalid_mult": 0,
+    "invalid_type": 0,
     "missing_volume": 0,
+    "quarantined": 0,
+    "strike_invalid": 0,
     "usable": 12
    },
    "quarantined": 0,
@@ -343,7 +355,7 @@
   "max_dte": 60,
   "min_dte": 14
  },
- "record_id": "rga1-54f0a823b635f938492cbfb3",
+ "record_id": "rga1-f2600391594368d7c17bd2c5",
  "refusals": [],
  "status": "ok",
  "symbol": "SPY",
