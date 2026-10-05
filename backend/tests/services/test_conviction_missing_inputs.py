@@ -304,11 +304,21 @@ def test_stale_observation_is_reported_as_stale():
     identically to a fresh one. The age is now surfaced. The SCORE is
     deliberately unchanged -- a decay curve would be an unvalidated model of
     how signal decays, and this module has no evidence for one.
+
+    The two asof stamps are computed RELATIVE to the wall clock (30 days old
+    vs 1 hour old): a hard-coded "fresh" date detonates the moment the
+    calendar passes it -- this exact test crossed its own 7-day boundary on
+    2026-10-05 and broke CI on an unrelated branch.
     """
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime.now(UTC)
+    old_ts = (now - timedelta(days=30)).isoformat()
+    fresh_ts = (now - timedelta(hours=1)).isoformat()
     old = rank_one("SPY", flow={"conviction": 90}, opportunity=None, confluence=None, ml=None,
-                   snapshot_id="s", asof="2026-03-01T00:00:00+00:00")
+                   snapshot_id="s", asof=old_ts)
     fresh = rank_one("SPY", flow={"conviction": 90}, opportunity=None, confluence=None, ml=None,
-                     snapshot_id="s", asof="2026-09-28T00:00:00+00:00")
+                     snapshot_id="s", asof=fresh_ts)
 
     assert old["evidence"]["asof_status"] == "stale", old["evidence"]
     assert fresh["evidence"]["asof_status"] == "fresh", fresh["evidence"]

@@ -199,13 +199,22 @@ def _dense_section(
     grid = kernel.get("grid") or {}
     cells: dict[str, dict[str, Any]] = {}
     n_available = 0
+    # R18-C12 (C01): cell floats are QUANTIZED to 1e-6 at assembly. The
+    # BS-mirror cells are the only float-bearing content in the canonical
+    # digest; raw double reprs carry ~17 significant digits whose last ulp
+    # differs between platform libms (macOS vs the Linux CI runner), which
+    # broke byte-for-byte fixture idempotency across platforms. 1e-6 is six
+    # orders of magnitude coarser than libm noise and far below any decision
+    # threshold, so envelope bytes and the content digest are stable by
+    # construction on every platform.
+    _Q = 6
     for exp in admitted_expiries:
         row = grid.get(exp) or {}
         dense_row: dict[str, Any] = {}
         for key in strike_keys:
             v = row.get(key)
             ok = isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
-            dense_row[key] = float(v) if ok else None
+            dense_row[key] = round(float(v), _Q) if ok else None  # type: ignore[arg-type]
             n_available += 1 if ok else 0
         cells[exp] = dense_row
     n_cells = len(admitted_expiries) * len(strike_keys)

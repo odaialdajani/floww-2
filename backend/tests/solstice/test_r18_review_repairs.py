@@ -549,6 +549,43 @@ def test_r5_generator_is_idempotent(tmp_path):
             f"{name}: committed fixture bytes diverged from the producer"
 
 
+def test_r5b_cell_bytes_are_platform_stable():
+    """R18-C12 (C01 hosted-CI divergence): grid cell floats are QUANTIZED.
+
+    The BS-mirror cells are the only float-bearing content in the digest.
+    Raw double reprs carry 17 significant digits — the last ulp differs
+    between platform libms (macOS vs the Linux CI runner), so byte-for-byte
+    fixture idempotency (test_r5) cannot hold cross-platform against raw
+    reprs. Cell values are rounded to 1e-6 — six orders of magnitude
+    coarser than libm noise (~1e-9 relative) and far below any decision
+    threshold — making envelope bytes and the canonical content digest
+    platform-stable by construction.
+    """
+    chain = json.loads((FIXTURES / "chain_complete.json").read_text())
+    listing = json.loads((FIXTURES / "listing.json").read_text())
+    from services.solstice_range_analytics import select_window_expiries
+    sel = select_window_expiries(listing["expiries"], 14, 60,
+                                 date(2026, 10, 5))
+    env = build_range_envelope(symbol="SPY", min_dte=14, max_dte=60,
+                               asof=date(2026, 10, 5), listing=listing,
+                               selection=sel, chain=chain)
+    assert env["status"] == "ok"
+    float_cells = 0
+    for section in env["grids"].values():
+        for row in section["cells"].values():
+            for key, v in row.items():
+                if v is None:
+                    continue
+                assert isinstance(v, float), (key, v)
+                # The quantization invariant: every cell is an exact multiple
+                # of 1e-6 — its repr carries no more than 6 decimals, so no
+                # platform libm tail can survive into the canonical bytes.
+                assert abs(v * 1e6 - round(v * 1e6)) < 1e-6, \
+                    f"cell {key}={v!r} is not quantized to the 1e-6 grid"
+                float_cells += 1
+    assert float_cells >= 6, "fixture chain must exercise float cells"
+
+
 # ── R6 (C06): delta/volume exclusions stay visible beside finite siblings ──
 
 def _chain_with_defects():

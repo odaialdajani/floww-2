@@ -12,10 +12,10 @@
  "rows": [
   {
    "asof_date": "2026-10-05",
-   "digest": "5abb7490bbf7feb0daebeb2c4eee84b7f82f4faf69bf52411143ccb3716e43c5",
+   "digest": "f2600391594368d7c17bd2c5380c947b35c4b93fe72837c11c27a0ac39c05fce",
    "integrity": "verified",
    "received_at": "2026-10-05T13:59:30+00:00",
-   "record_id": "rga1-5abb7490bbf7feb0daebeb2c",
+   "record_id": "rga1-f2600391594368d7c17bd2c5",
    "recorded_at": "2026-10-05T14:00:01+00:00",
    "status": "ok",
    "synthetic": true,
@@ -27,10 +27,10 @@
   },
   {
    "asof_date": "2026-10-05",
-   "digest": "8e09fc516ebb4ede54aaa3b522b07821f922061657a172e5b453b5d5a05376ae",
+   "digest": "fcdb9bcb22b9cdc6ca0995eb9c2ce0bbf317beda7d833804909ca500f863e879",
    "integrity": "verified",
    "received_at": "2026-10-05T13:59:30+00:00",
-   "record_id": "rga1-8e09fc516ebb4ede54aaa3b5",
+   "record_id": "rga1-fcdb9bcb22b9cdc6ca0995eb",
    "recorded_at": "2026-10-05T14:00:01+00:00",
    "status": "partial",
    "synthetic": true,
