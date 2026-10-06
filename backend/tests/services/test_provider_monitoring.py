@@ -46,7 +46,15 @@ def test_provider_stats_initial_state(stats):
     assert stats.success_rate == 1.0
     assert stats.window_calls == 0
     assert stats.consecutive_failures == 0
-    assert stats.seconds_since_last_success == float("inf")
+    # Was float("inf"). That value reached the `provider_down` alert dict and
+    # made /api/data/health return HTTP 500: inf is not JSON compliant, so
+    # response encoding raised ValueError, and the route's own `except` could
+    # not catch it because encoding happens after the handler returns. A
+    # provider that had never succeeded took the health endpoint down with it.
+    # None is serializable and more honest -- "no success yet" is an absent
+    # measurement, not an infinitely long one. See
+    # tests/routes/test_data_health_outage.py.
+    assert stats.seconds_since_last_success is None
 
 
 def test_provider_stats_record_success(stats):

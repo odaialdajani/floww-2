@@ -237,6 +237,45 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "ScanRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "dte": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dte"
+          },
+          "limit": {
+            "default": 12,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "max_expiries": {
+            "default": 2,
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Max Expiries",
+            "type": "integer"
+          },
+          "refresh": {
+            "default": false,
+            "title": "Refresh",
+            "type": "boolean"
+          }
+        },
+        "title": "ScanRequest",
+        "type": "object"
+      },
       "TradeAnalysisRequest": {
         "properties": {
           "confidence": {
@@ -1137,6 +1176,66 @@
           }
         },
         "summary": "Claims",
+        "tags": [
+          "agent",
+          "agent"
+        ]
+      }
+    },
+    "/api/agent/handoffs": {
+      "get": {
+        "operationId": "get_api_agent_handoffs",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Native Handoff History",
+        "tags": [
+          "agent",
+          "agent"
+        ]
+      },
+      "post": {
+        "operationId": "post_api_agent_handoffs",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Native Handoff",
         "tags": [
           "agent",
           "agent"
@@ -6161,7 +6260,7 @@
     },
     "/api/flow-digest": {
       "get": {
-        "description": "Daily digest. Wraps briefing if available.",
+        "description": "Daily digest built from the canonical briefing builder.\n\nDEAD-WIRE REPAIR. This used to call `routes.briefing.daily_briefing`,\nwhich does not exist \u2014 that module exposes `briefing_send(ticker, request)`\nand nothing else. The `except Exception` swallowed the AttributeError, so\nthe endpoint ALWAYS served the scaffold, and the scaffold asserted facts\nit never measured:\n\n    - Top flow tickers: SPY, QQQ, NVDA\n    - VIX regime: normal\n    - Gamma regime: positive\n\nNone of those were read from anywhere. The narrative now comes from\n`services.morning_briefing.build_briefing`, fed a real Public chain, and\nwhen no chain is available the endpoint says so instead of printing a\nmarket call it did not compute.",
         "operationId": "get_api_flow-digest",
         "parameters": [
           {
@@ -7884,6 +7983,24 @@
           },
           {
             "in": "query",
+            "name": "dte",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 365,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dte"
+            }
+          },
+          {
+            "in": "query",
             "name": "refresh",
             "required": false,
             "schema": {
@@ -8421,6 +8538,17 @@
               "minimum": 20,
               "title": "Max Strikes",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expiry_scope",
+            "required": false,
+            "schema": {
+              "default": "loaded",
+              "pattern": "^(loaded|next)$",
+              "title": "Expiry Scope",
+              "type": "string"
             }
           }
         ],
@@ -16722,9 +16850,106 @@
         ]
       }
     },
+    "/api/solstice/price-paths/points": {
+      "get": {
+        "description": "Read-only ordered (t, price) observations for a ticker (no writes).",
+        "operationId": "get_api_solstice_price-paths_points",
+        "parameters": [
+          {
+            "description": "Underlying symbol, e.g. SPY",
+            "in": "query",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "description": "Underlying symbol, e.g. SPY",
+              "title": "Ticker",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Epoch seconds lower bound (vendor time)",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "default": 0.0,
+              "description": "Epoch seconds lower bound (vendor time)",
+              "title": "Since",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 1000,
+              "maximum": 100000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Price Path Points Api Solstice Price Paths Points Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Price Path Points",
+        "tags": [
+          "solstice",
+          "solstice"
+        ]
+      }
+    },
+    "/api/solstice/price-paths/status": {
+      "get": {
+        "description": "Producer health + store durability, reported separately (R15-2).",
+        "operationId": "get_api_solstice_price-paths_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Price Paths Status Api Solstice Price Paths Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Price Paths Status",
+        "tags": [
+          "solstice",
+          "solstice"
+        ]
+      }
+    },
     "/api/solstice/recorder_health": {
       "get": {
-        "description": "Truthful recorder health (R5-F): durable mode, tables, latest write.\n\nMemory fallback keeps analytics running but never claims durable capture.\nCommissioning remains a separate final authorization.",
+        "description": "Truthful recorder health (R5-F): durable mode, tables, latest write.\n\nMemory fallback keeps analytics running but never claims durable capture.\nCommissioning remains a separate final authorization.\n\nS4: durability (the STORE) and capture state (the JOB) are reported as\nseparate facts. A durable store with no capture worker is exactly that,\nand is no longer described as \"needs time\" \u2014 worker_state names\nabsent / wired_off / active.",
         "operationId": "get_api_solstice_recorder_health",
         "responses": {
           "200": {
@@ -16847,6 +17072,118 @@
         "summary": "Replay",
         "tags": [
           "solstice",
+          "solstice"
+        ]
+      }
+    },
+    "/api/solstice/scan": {
+      "post": {
+        "operationId": "post_api_solstice_scan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scan",
+        "tags": [
+          "solstice"
+        ]
+      }
+    },
+    "/api/solstice/scan/leaderboard": {
+      "get": {
+        "operationId": "get_api_solstice_scan_leaderboard",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 12,
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_expiries",
+            "required": false,
+            "schema": {
+              "default": 2,
+              "maximum": 4,
+              "minimum": 1,
+              "title": "Max Expiries",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dte",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 365,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dte"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Leaderboard",
+        "tags": [
           "solstice"
         ]
       }
@@ -17165,6 +17502,132 @@
           }
         },
         "summary": "Walls",
+        "tags": [
+          "solstice",
+          "solstice"
+        ]
+      }
+    },
+    "/api/solstice/{ticker}/contract": {
+      "get": {
+        "description": "Resolve ONE exact contract identity from a recorded snapshot (S5).\n\nThe backend half of the R10-13 migration. It requires an explicit\nidentity: OSI, or strike+expiry+type. It never substitutes the wall\nmidpoint or the first expiry, and a miss is a miss. Quote age and\nspread are reported per leg with unknown preserved as unknown.\n\nRead-only. No broker call, no side inference, no aggressor identity.",
+        "operationId": "get_api_solstice_ticker_contract",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "title": "Ticker",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "osi",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Osi"
+            }
+          },
+          {
+            "in": "query",
+            "name": "strike",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Strike"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expiry",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expiry"
+            }
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "snapshot_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Snapshot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Contract Detail Api Solstice  Ticker  Contract Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Contract Detail",
         "tags": [
           "solstice",
           "solstice"

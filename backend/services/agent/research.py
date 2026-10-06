@@ -11,6 +11,7 @@ from services.agent.access.horizon import horizon_window
 from services.agent.answer_sections import build_answer_sections, merge_history_section
 from services.agent.contracts import INTERPRETATIONS, finite, validate_model_answer
 from services.agent.narrative import request_limit
+from services.agent.plan_draft import build_plan_draft
 from services.agent.read_budget import ReadActivityUnavailable, ReadBudget, ReadDenied, budget_scope, current_budget
 from services.agent.saved_history import history_facts
 
@@ -26,6 +27,10 @@ def deterministic_answer(snapshots, spec):
     summary = "Available readings are shown below. Exposure estimates do not establish trade direction."
     if not any(finite(f["value"]) and f["metric"] == "Underlying price" for f in facts):
         summary = "There is not enough cached market data to answer reliably. Open the market view and try again."
+    if any(s.get("anchor_kind") in {"display", "recorded"} and s["facts"] for s in snapshots):
+        summary = "Exact displayed snapshot readings are shown below; weighting does not establish dealer intent or trade direction."
+    if any(s.get("replay") for s in snapshots):
+        summary = "Recorded snapshot research only; no live readings or current trade context were substituted."
     limits = request_limit(spec.get("question", ""))
     if limits:
         summary = limits
@@ -135,11 +140,11 @@ class ResearchService:
                                 **({"price_only": True} if spec.get("price_only") else {}),
                             )
                         )
-                        if not spec.get("price_only"):
+                        if not spec.get("price_only") and snapshots[-1].get("anchor_kind") not in {"display", "recorded"}:
                             await self.repository.save_anchor(owner, snapshots[-1])
                             await self.repository.watch_observations(owner, ticker, spec["horizon"], selected_expiry)
                     answer = deterministic_answer(snapshots, spec)
-                    if re.search(
+                    if spec["screen"].get("displayMode") != "replay" and re.search(
                         r"\b(?:changed?|since|earlier|previously|previous|prior|yesterday|closing|last close)\b",
                         spec["question"],
                         re.IGNORECASE,
@@ -178,6 +183,8 @@ class ResearchService:
                             raise
                         except Exception:
                             answer["model_status"] = "Interpretation unavailable; showing saved market readings"
+                    if not spec.get("price_only"):
+                        answer["plan_draft"] = build_plan_draft(answer, turn_id)
                     await self.repository.finish(owner, turn_id, "completed", answer=answer,
                                                  read_activity=budget.close())
         except asyncio.CancelledError:
@@ -229,7 +236,8 @@ class ResearchService:
                 allow_inspect=not inspected,
                 history_note=history_note,
                 repair=repaired,
-                **({"owner": owner, "settings": spec["ai_settings"]} if "ai_settings" in spec else {}),
+                **({"owner": owner, "settings": spec["ai_settings"], "context": spec["screen"]}
+                                   if "ai_settings" in spec else {}),
             )
             answer["usage"].append(
                 {
@@ -242,7 +250,7 @@ class ResearchService:
                         "model",
                         "provider",
                         "policy_version",
-                        "effort", "speed", "tokens",
+                        "effort", "speed", "tokens", "trace",
                     )
                     if k in result
                 }

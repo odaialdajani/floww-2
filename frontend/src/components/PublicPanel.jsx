@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { API } from "../config/api";
 import { storedAppKeyHeaders } from "../utils/appKey";
 
@@ -37,8 +37,14 @@ export default function PublicPanel() {
   const [portfolio, setPortfolio] = useState(null);
   const [orders, setOrders] = useState(null);
   const [error, setError] = useState(null);
+  const [receivedAt, setReceivedAt] = useState(null);
+  const epoch = useRef(0), active = useRef(false), pending = useRef(false), request = useRef(null);
 
-  const load = useCallback(async (signal) => {
+  const load = useCallback(async () => {
+    if (!active.current || pending.current) return;
+    pending.current = true;
+    const current = ++epoch.current, ctrl = new AbortController(); request.current = ctrl;
+    const signal = ctrl.signal, timer = setTimeout(() => ctrl.abort(), 20000);
     try {
       // Brokerage reads require the backend master key. Never prompt here
       // (this polls every 30s) — show the key-missing hint instead.
@@ -53,21 +59,28 @@ export default function PublicPanel() {
           })
         )
       );
+      if (epoch.current !== current || signal.aborted) return;
+      if ([a,p,o].some(body => body?.ok === false)) throw new Error("ACCOUNT_CONNECTION_UNAVAILABLE");
+      if (a?.account_id && p?.account_id && a.account_id !== p.account_id) throw new Error("ACCOUNT_IDENTITY_MISMATCH");
       setAccount(a);
       setPortfolio(p);
       setOrders(o);
+      setReceivedAt(new Date().toISOString());
       setError(null);
     } catch (e) {
-      if (e?.name === "AbortError") return;
-      setError(e?.message || "Brokerage unavailable");
+      if (epoch.current !== current) return;
+      setError(e?.name === "AbortError" ? "ACCOUNT_READ_TIMEOUT" : e?.message || "Brokerage unavailable");
+    } finally {
+      clearTimeout(timer);
+      if (epoch.current === current) pending.current = false;
     }
   }, []);
 
   useEffect(() => {
-    const ctrl = new AbortController();
-    load(ctrl.signal);
-    const id = setInterval(() => load(ctrl.signal), 30000);
-    return () => { ctrl.abort(); clearInterval(id); };
+    active.current = true;
+    load();
+    const id = setInterval(load, 30000);
+    return () => { active.current = false; epoch.current++; request.current?.abort(); pending.current = false; clearInterval(id); };
   }, [load]);
 
   if (error && !account && !portfolio) {
@@ -79,7 +92,7 @@ export default function PublicPanel() {
             ? "Backend key missing or rejected. Enter API_SECRET_KEY once (any mutating action prompts), then retry."
             : `Brokerage unreachable (${error}). Set PUBLIC_API_KEY on the backend, then retry.`}
         </div>
-        <button className="btn mt-2" onClick={() => load(new AbortController().signal)}>Retry</button>
+        <button className="btn mt-2" onClick={load}>Retry</button>
       </div>
     );
   }
@@ -87,7 +100,7 @@ export default function PublicPanel() {
     return (
       <div className="panel p-4" data-testid="public-panel-loading">
         <div className="label">Public Broker</div>
-        <div className="text-sm text-slate-500">Loading brokerage…</div>
+        <div className="text-sm text-slate-400">Loading brokerage…</div>
       </div>
     );
   }
@@ -103,6 +116,8 @@ export default function PublicPanel() {
   return (
     <div className="panel p-4 space-y-3" data-testid="public-panel">
       <div className="label">Public Broker · {account?.account_id || "—"}</div>
+      <p className="text-sm">Public live account reads · no entry approval or activation from this page. Quick Trade elsewhere remains Alpaca PAPER.</p>
+      {receivedAt && <p className="text-xs">Received at {receivedAt} · not a broker event clock.</p>}
       {error && <p role="status">Refresh failed. Showing the last received account data.</p>}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[12px] mono">
         <div><div className="label">Cash</div><div>{fmtMoney(portfolio ? portfolio.cash : account?.cash)}</div></div>
@@ -113,7 +128,7 @@ export default function PublicPanel() {
       <div>
         <div className="label mb-1">Positions{positions.length ? ` (${positions.length})` : ""}</div>
         {positions.length === 0 ? (
-          <div className="text-[12px] text-slate-500">No positions.</div>
+          <div className="text-[12px] text-slate-400">No positions.</div>
         ) : (
           <div style={{overflowX: "auto"}}>
           <table className="w-full text-[12px] mono" style={{minWidth: 900}} aria-label="Broker positions">
@@ -147,21 +162,23 @@ export default function PublicPanel() {
       <div>
         <div className="label mb-1">Orders{orderList.length ? ` (${orderList.length})` : ""}</div>
         {orderList.length === 0 ? (
-          <div className="text-[12px] text-slate-500">No orders.</div>
+          <div className="text-[12px] text-slate-400">No orders.</div>
         ) : (
-          <table className="w-full text-[12px] mono">
-            <thead><tr><th align="left">Symbol</th><th align="left">Side</th><th align="right">Qty</th><th align="left">Status</th></tr></thead>
+          <div style={{overflowX: "auto"}}><table className="w-full text-[12px] mono" style={{minWidth: 620}} aria-label="Broker orders">
+            <thead><tr><th align="left">Symbol</th><th align="left">Side</th><th align="right">Qty</th><th align="right">Filled</th><th align="right">Remaining</th><th align="left">Status</th></tr></thead>
             <tbody>
               {orderList.slice(0, 25).map((o, i) => (
                 <tr key={o.order_id || i}>
                   <td>{o.symbol}</td>
                   <td>{o.side}</td>
-                  <td align="right">{o.quantity}</td>
+                  <td align="right">{numberOrNull(o.quantity) ?? "Unavailable"}</td>
+                  <td align="right" aria-label={`Filled quantity for ${o.order_id}`}>{numberOrNull(o.filled_quantity) ?? "Unavailable"}</td>
+                  <td align="right" aria-label={`Remaining quantity for ${o.order_id}`}>{numberOrNull(o.quantity) !== null && numberOrNull(o.filled_quantity) !== null && o.filled_quantity >= 0 && o.quantity >= o.filled_quantity ? o.quantity - o.filled_quantity : "Unavailable"}</td>
                   <td>{o.status}</td>
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
     </div>

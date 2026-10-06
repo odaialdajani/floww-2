@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import threading
 from datetime import UTC, datetime
 from typing import Any
@@ -65,7 +66,21 @@ def normalize_stored_contract(row: dict[str, Any]) -> dict[str, Any]:
         out["strike"] = float(row.get("strike")) if row.get("strike") is not None else None
     except (TypeError, ValueError):
         out["strike"] = None
+    try:
+        inputs = json.loads(row.get("window_inputs_json"))
+        out["window_inputs"] = inputs if isinstance(inputs, dict) else None
+    except (TypeError, ValueError):
+        out["window_inputs"] = None
     return out
+
+
+def _window_inputs(contract):
+    # DOUBLE storage cannot distinguish bool/NULL/nonfinite source readings.
+    # Keep the typed input envelope separately; invalid markers are not zeros.
+    fields = ("osi", "strike", "expiry", "type", "gamma", "delta", "volume", "oi", "open_interest",
+              "multiplier", "contractMultiplier", "m", "adjusted", "nonstandard", "greeks_source", "delta_source")
+    return {k: {"invalid_observation": "NONFINITE"} if isinstance(v, float) and not math.isfinite(v) else v
+            for k, v in contract.items() if k in fields}
 
 
 def observation_id_for(payload: dict[str, Any]) -> str:
@@ -195,6 +210,13 @@ def ensure_tables(conn) -> None:
             conn.execute(f"ALTER TABLE heatmap_snapshots_v2 ADD COLUMN IF NOT EXISTS {col} VARCHAR")
         except Exception as e:
             log.warning("heatmap_history migrate %s failed: %s", col, e)
+    # Keep source decimal identity and contract-spec provenance alongside the
+    # legacy DOUBLE arithmetic columns. Old observations remain explicitly old.
+    for col in ("strike_exact", "multiplier_source", "series", "window_inputs_json"):
+        try:
+            conn.execute(f"ALTER TABLE contract_observations_v2 ADD COLUMN IF NOT EXISTS {col} VARCHAR")
+        except Exception as e:
+            log.warning("heatmap_history contract migration %s failed: %s", col, e)
     # R8-05: policy_version keys outcome idempotency (decision/horizon/
     # policy/version); price_paths_v1 stores the worker's price observations.
     for col in ("policy_version",):
@@ -428,6 +450,9 @@ def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
                       # inspector, not just cells.
                       "metrics_full_json": json.dumps(payload.get("metrics", {}), default=str),
                       "context_json": json.dumps({
+                          "display": {key: payload.get(key) for key in (
+                              "map_query", "scope_selection", "event_time", "observed_at", "fetched_at",
+                              "spot_source", "spot_event_time", "spot_fetched_at", "stale", "stale_age_s")},
                           "session": payload.get("session"),
                           "playbook": payload.get("playbook"),
                           "scout": payload.get("scout"),
@@ -460,19 +485,30 @@ def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
             for c in contracts:
                 if not isinstance(c, dict):
                     continue
+                from domain.exposure_metrics import is_valid_measurement, resolve_multiplier
+
+                def measurement(key, row=c):
+                    return _esc(is_valid_measurement(row.get(key)))
+
+                multiplier, multiplier_reason = resolve_multiplier(c)
                 conn.execute(
-                    "INSERT INTO contract_observations_v2 VALUES ("
+                    "INSERT INTO contract_observations_v2 (snapshot_id, ticker, osi, expiry, strike, opt_type, "
+                    "multiplier, bid, ask, last, bid_ts, ask_ts, last_ts, received_at, volume, oi, oi_effective_date, "
+                    "iv, delta, gamma, theta, vega, greeks_source, provider, exposure_basis, calculated_at, "
+                    "strike_exact, multiplier_source, series, window_inputs_json) VALUES ("
                     + ",".join([_esc(sid), _esc(payload.get("ticker")), _esc(c.get("osi")),
-                                _esc(c.get("expiry")), _esc(c.get("strike")), _esc(c.get("type")),
-                                _esc(c.get("multiplier", 100.0)), _esc(c.get("bid")), _esc(c.get("ask")),
-                                _esc(c.get("last")), _esc(c.get("bid_timestamp")),
+                                _esc(c.get("expiry")), measurement("strike"), _esc(c.get("type")),
+                                _esc(multiplier), measurement("bid"), measurement("ask"),
+                                measurement("last"), _esc(c.get("bid_timestamp")),
                                 _esc(c.get("ask_timestamp")), _esc(c.get("last_timestamp")),
-                                _esc(c.get("received_at")), _esc(c.get("volume")), _esc(c.get("oi")),
-                                _esc(c.get("oi_effective_date")), _esc(c.get("iv")), _esc(c.get("delta")),
-                                _esc(c.get("gamma")), _esc(c.get("theta")), _esc(c.get("vega")),
-                                _esc(c.get("greeks_source")), _esc(c.get("oi_source", "public_api")),
+                                _esc(c.get("received_at")), measurement("volume"), measurement("oi"),
+                                _esc(c.get("oi_effective_date")), measurement("iv"), measurement("delta"),
+                                measurement("gamma"), measurement("theta"), measurement("vega"),
+                                _esc(c.get("greeks_source")), _esc(c.get("data_source") or payload.get("data_source")),
                                 _esc(c.get("exposure_basis", payload.get("exposure_basis"))),
-                                _esc(payload.get("asof"))]) + ")")
+                                _esc(payload.get("asof")), _esc(c.get("strike_exact", c.get("strike"))),
+                                _esc(c.get("multiplier_source") or multiplier_reason), _esc(c.get("series")),
+                                _esc(json.dumps(_window_inputs(c), default=str, allow_nan=False))]) + ")")
             # Hard COMMIT: a failed commit is never acknowledged — control
             # falls to ROLLBACK + None below, leaving zero half-records.
             conn.execute("COMMIT")
@@ -511,13 +547,18 @@ def _full_grids(payload: dict[str, Any]) -> dict[str, Any]:
     grids = ((payload.get("metrics") or {}).get("grids")) or {}
     if isinstance(grids, dict):
         for name, g in grids.items():
-            if isinstance(g, dict) and isinstance(g.get("grid"), dict):
-                section = {"grid": g["grid"],
+            if isinstance(g, dict) and (isinstance(g.get("grid"), dict) or g.get("status") == "unavailable"):
+                section = {"grid": g.get("grid"),
                            "exposure_basis": g.get("exposure_basis"),
                            "formula_version": g.get("formula_version", "gex.v2"),
                            "status": g.get("status"), "reason": g.get("reason"),
                            "missing_delta": g.get("missing_delta"),
                            "quarantined": g.get("quarantined")}
+                for key in ("metric_id", "usable", "invalid", "invalid_type", "invalid_delta", "invalid_mult", "mixed_pair",
+                            "missing_volume", "no_baseline", "coverage", "comparison", "interval", "greek_convention", "provenance_note",
+                            "cell_missing_delta", "cell_invalid_delta", "cell_usable", "cell_status"):
+                    if key in g:
+                        section[key] = g[key]
                 if isinstance(g.get("expiries"), list):
                     section["expiries"] = g["expiries"]
                 if isinstance(g.get("strikes"), list):

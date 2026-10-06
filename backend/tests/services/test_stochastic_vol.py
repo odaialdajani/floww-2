@@ -67,7 +67,17 @@ class TestSABRModel:
     def test_fit_insufficient_data(self):
         m = SABRModel()
         result = m.fit(np.array([100.0]), np.array([0.2]), F=100.0, T=1.0)
-        assert result["rmse"] == float("inf")
+        # Was float("inf"). That value is not JSON compliant, and
+        # POST /api/vol-surface/{ticker}/sabr returns this dict directly, so an
+        # unachievable fit produced a 500 instead of a reported failure. None
+        # says exactly what happened: no error was measured, because no fit
+        # was attempted.
+        assert result["rmse"] is None
+        assert result["fit_status"] == "insufficient_data"
+        # The default parameters are still reported, so a caller can tell
+        # which surface it is looking at.
+        for key in ("alpha", "beta", "rho", "nu"):
+            assert key in result
 
     def test_get_state(self):
         m = SABRModel(alpha=0.3, beta=0.7, rho=-0.5, nu=0.6)
@@ -120,7 +130,10 @@ class TestSVIProfile:
     def test_fit_insufficient_data(self):
         svi = SVIProfile()
         result = svi.fit(np.array([0.0, 0.1]), np.array([0.2, 0.22]), T=1.0)
-        assert result["rmse"] == float("inf")
+        # See the SABR case above: rmse=inf was unserializable and turned an
+        # unachievable fit into a 500 from POST /api/vol-surface/{t}/svi.
+        assert result["rmse"] is None
+        assert result["fit_status"] == "insufficient_data"
 
     def test_get_state(self):
         svi = SVIProfile(a=0.05, b=0.3, rho=-0.6, m=0.01, sigma=0.15)

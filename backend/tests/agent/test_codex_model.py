@@ -14,8 +14,9 @@ from services.agent.repository import AgentRepository
 
 
 def test_windows_executable_discovery_without_appdata(monkeypatch, tmp_path):
-    import services.agent.codex_bridge as module
     from pathlib import Path
+
+    import services.agent.codex_bridge as module
     if module.os.name != "nt":
         pytest.skip("Windows installation layout")
     binary = tmp_path / "AppData/Roaming/npm/node_modules/@openai/codex/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe"
@@ -116,6 +117,39 @@ async def test_saved_request_keeps_its_original_ai_choices_on_replay():
     assert replay["spec"]["ai_settings"]["effort"] == "low"
     assert service._work.await_count == 1 and model.settings_for.await_count == 1
     await service.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fail", [False, True])
+async def test_grounded_trace_distinguishes_request_from_verified_dispatch_and_is_saved(fail):
+    db = AsyncMongoMockClient().db
+    repo = AgentRepository(db)
+    await repo.initialize()
+    FakeBridge.calls, FakeBridge.error = 0, fail
+    model = CodexModel(repo, db.usage, bridge_factory=FakeBridge)
+    facts = [dict(id="evidence-1", snapshot_id="observation-1", metric="Underlying price",
+                  value=500, unit="USD", ticker="SPY", source="recorded", status="ok")]
+    screen = {"ticker": "SPY", "snapshotId": "observation-1", "selectedWall": "wall-1"}
+    result = await model.once("Explain", facts, "trace-turn", owner="alice",
+                              settings=DEFAULT_SETTINGS, context=screen)
+    trace = result["trace"]
+    assert trace["version"] == "lodestar-trace.v1"
+    assert trace["requested"] == DEFAULT_SETTINGS
+    assert trace["effective"] == (None if fail else DEFAULT_SETTINGS)
+    assert trace["correlation_id"] == "trace-turn"
+    assert trace["evidence_ids"] == ["evidence-1"]
+    assert trace["observation_ids"] == ["observation-1"]
+    assert len(trace["context_hash"]) == len(trace["input_hash"]) == 64
+    assert trace["latency_ms"] >= 0 and trace["actual_cost"] is None
+    assert trace["status"] == ("unavailable" if fail else "completed")
+    if fail:
+        assert "model" not in result
+        assert "TimeoutError" not in json.dumps(trace)
+    else:
+        assert trace["tokens"] == {"total": {"totalTokens": 99}}
+    row = await db.usage.find_one({"_id": "day:" + datetime.now(UTC).date().isoformat()})
+    assert row["entries"][result["reservation_id"]]["trace"] == trace
+    FakeBridge.error = False
 
 
 class FakeBridge:

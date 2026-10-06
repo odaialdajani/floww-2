@@ -4,7 +4,7 @@
 <!-- Regenerate: python3 qc/audit/generate_api_docs.py -->
 <!-- Verify:     python3 qc/audit/generate_api_docs.py --check -->
 
-Total endpoints: 380
+Total endpoints: 387
 Route groups: 104
 
 Generated from the live FastAPI app, so every path below is a real,
@@ -35,7 +35,7 @@ callable route rather than a hand-copied guess.
 |--------|------|---------|
 | GET | `/api/advanced/{ticker}` | Advanced Analytics |
 
-## agent (14 endpoints)
+## agent (16 endpoints)
 
 | Method | Path | Summary |
 |--------|------|---------|
@@ -43,6 +43,8 @@ callable route rather than a hand-copied guess.
 | GET | `/api/agent/budget` | Budget |
 | POST | `/api/agent/cancel/{turn_id}` | Cancel |
 | GET | `/api/agent/claims` | Claims |
+| GET | `/api/agent/handoffs` | Native Handoff History |
+| POST | `/api/agent/handoffs` | Save Native Handoff |
 | GET | `/api/agent/history` | History |
 | GET | `/api/agent/models` | Models |
 | GET | `/api/agent/prefs` | Prefs |
@@ -784,7 +786,7 @@ callable route rather than a hand-copied guess.
 | GET | `/api/social/sentiment/{ticker}` | Get Sentiment |
 | GET | `/api/social/status` | Get Pipeline Status |
 
-## solstice (15 endpoints)
+## solstice (20 endpoints)
 
 | Method | Path | Summary |
 |--------|------|---------|
@@ -794,13 +796,18 @@ callable route rather than a hand-copied guess.
 | GET | `/api/solstice/manifest/{ticker}` | Manifest |
 | POST | `/api/solstice/outcomes/close` | Outcomes Close |
 | GET | `/api/solstice/patterns/{ticker}` | Patterns |
+| GET | `/api/solstice/price-paths/points` | Price Path Points |
+| GET | `/api/solstice/price-paths/status` | Price Paths Status |
 | GET | `/api/solstice/recorder_health` | Recorder Health |
 | GET | `/api/solstice/regime/{ticker}` | Regime |
 | GET | `/api/solstice/replay/{snapshot_id}` | Replay |
+| POST | `/api/solstice/scan` | Scan |
+| GET | `/api/solstice/scan/leaderboard` | Leaderboard |
 | GET | `/api/solstice/scout/{ticker}` | Scout |
 | GET | `/api/solstice/snapshot/{ticker}` | Snapshot |
 | GET | `/api/solstice/vanna/{ticker}` | Vanna |
 | GET | `/api/solstice/walls/{ticker}` | Walls |
+| GET | `/api/solstice/{ticker}/contract` | Contract Detail |
 | GET | `/api/solstice/{ticker}/decisions` | Decisions List |
 | POST | `/api/solstice/{ticker}/decisions/{decision_id}/review` | Save Review |
 

@@ -148,11 +148,26 @@ async def _read_sse_events(aclient, url, max_events=3):
 
 
 async def _in_window_now(aclient):
+    """Whether the live trading window is currently open.
+
+    The previous version returned False on any error, which meant "we could not
+    tell" was treated as "we are outside the window". That made
+    `test_flow_spy_outside_window_emits_error` RUN during market hours, where
+    the endpoint correctly streams heartbeats instead of an error, and fail.
+
+    /api/databento/usage returns 503 when auth is not configured (mutating
+    review routes do this deliberately), so the key is simply absent. The guard
+    must SKIP on an unknown window rather than assert against it -- an
+    unobservable precondition is not a failed precondition.
+    """
     try:
         r = (await aclient.get("/api/databento/usage")).json()
-        return bool(r.get("in_window_now"))
     except Exception:
-        return False
+        return None
+    val = r.get("in_window_now")
+    if val is None:
+        return None
+    return bool(val)
 
 
 async def test_flow_qqq_refused_not_in_paid_tickers(aclient):
@@ -164,8 +179,42 @@ async def test_flow_qqq_refused_not_in_paid_tickers(aclient):
     assert "paid" in (data.get("error", "").lower()), f"unexpected error: {data}"
 
 
+def test_admin_window_check_is_dst_aware():
+    """`/api/databento/usage` must not under-report the window during EDT.
+
+    It previously computed the current time as
+    `datetime.now(UTC) - timedelta(hours=5)` -- EST, with no DST handling. For
+    roughly five months a year that put it an hour behind, so it reported the
+    window CLOSED a full hour before the trade route opened it: two endpoints
+    disagreeing about whether it was 09:00, and any caller gating on
+    `in_window_now` getting the wrong answer.
+
+    The check now delegates to `server._in_window_now_et`, which resolves the
+    zone properly. This pins that the two agree at a boundary hour, which is
+    where the bug actually bit.
+    """
+    from datetime import datetime as _dt
+    from zoneinfo import ZoneInfo
+
+    from server import LIVE_WINDOW, _in_window_now_et
+
+    et = _dt.now(ZoneInfo("America/New_York"))
+    hhmm = et.strftime("%H:%M")
+    start = LIVE_WINDOW.get("start_hhmm", "09:00")
+    stop = LIVE_WINDOW.get("stop_hhmm", "16:00")
+    expected = not (hhmm < start or hhmm >= stop)
+
+    assert _in_window_now_et() is expected, (
+        f"window check disagrees with zoneinfo at {hhmm} ET "
+        f"(window {start}-{stop})"
+    )
+
+
 async def test_flow_spy_outside_window_emits_error(aclient):
-    if await _in_window_now(aclient):
+    window = await _in_window_now(aclient)
+    if window is None:
+        pytest.skip("Cannot determine trading window — precondition unobservable")
+    if window:
         pytest.skip("Currently within live window — test would fail by design")
     events = await _read_sse_events(aclient, "/api/flow/SPY?max_seconds=10", max_events=1)
     assert events

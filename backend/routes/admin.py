@@ -67,7 +67,13 @@ async def errors_clear():
 async def databento_usage(_: bool = Depends(_require_admin_auth)):
     from datetime import datetime, timedelta
 
-    from server import LIVE_WINDOW, PAID_TICKERS, _live_tape_session, db
+    from server import (
+        LIVE_WINDOW,
+        PAID_TICKERS,
+        _in_window_now_et,
+        _live_tape_session,
+        db,
+    )
     cutoff = datetime.now(UTC) - timedelta(days=30)
     usage = db.databento_usage.find({"ts": {"$gte": cutoff}}, {"_id": 0}).sort("ts", -1).limit(100)
     usage_list = await usage.to_list(length=100)
@@ -78,12 +84,16 @@ async def databento_usage(_: bool = Depends(_require_admin_auth)):
     budget_remaining = BUDGET_USD - est_cost
     budget_pct = (est_cost / BUDGET_USD * 100) if BUDGET_USD > 0 else 0
 
-    # Window check
-    now_et = datetime.now(UTC) - timedelta(hours=5)  # rough ET
-    current_hhmm = now_et.strftime("%H:%M")
+    # Window check -- delegate to the single authoritative helper.
+    # This used to hardcode `datetime.now(UTC) - timedelta(hours=5)`, which is
+    # EST and ignores DST. During EDT it under-reported by a full hour, so this
+    # endpoint claimed the window was CLOSED one hour before the trade route at
+    # server.py:_flow_stream opened it -- two endpoints disagreeing about
+    # whether it was 09:00. Anything gating on in_window_now got the wrong
+    # answer for five months of daylight saving each year.
+    in_window = _in_window_now_et()
     ws = LIVE_WINDOW.get("start_hhmm", "09:00")
     we = LIVE_WINDOW.get("stop_hhmm", "16:00")
-    in_window = ws <= current_hhmm <= we
 
     # Aggregate per-day usage for the `recent` view
     day_counts: dict[tuple[str, str], int] = {}

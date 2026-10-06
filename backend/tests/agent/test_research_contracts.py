@@ -104,6 +104,15 @@ def test_observation_date_does_not_change_expiry_and_same_ticker_keeps_range():
     assert spec["horizon"] == "all" and spec["question_scope"] is None
 
 
+@pytest.mark.parametrize("screen", [
+    {"contextVersion": 3}, {"contextVersion": True},
+    {"contextVersion": 2, "page": "trinity", "ticker": "SPY"},
+])
+def test_invalid_or_incomplete_context_version_is_refused(screen):
+    with pytest.raises(ValueError, match="context|Context"):
+        request_spec({"question": "Explain this wall", "screen": screen})
+
+
 @pytest.mark.parametrize("text", ["The price is 999", "Price is above flip", "This is guaranteed bullish"])
 def test_model_cannot_hide_factual_claims_in_commentary(text):
     with pytest.raises(ValueError):

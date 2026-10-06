@@ -118,59 +118,99 @@ def window_contract_activity(prev: list[dict], cur: list[dict],
     flow. Mixed gamma/delta provenance pairs are blocked without policy.
     OI turnover is turnover, never inventory-erosion evidence.
     """
-    import math as _math
-
+    from domain.exposure_metrics import (
+        abs_delta,
+        dollar_gamma_unit,
+        is_valid_measurement,
+        option_type_sign,
+        resolve_multiplier,
+    )
     from services.solstice_provenance import check_volume_window
 
+    spot_f = is_valid_measurement(spot)
+    if spot_f is None or spot_f <= 0:
+        return {"status": "unavailable", "reason": "SPOT_UNKNOWN", "contracts": [],
+                "missing_delta": 0, "mixed_pair": 0, "invalid": 0}
     before = {_contract_key(c): c for c in (prev or []) if isinstance(c, dict)}
     rows = []
     missing_delta = 0
     mixed_pair = 0
+    invalid = 0
+    invalid_type = invalid_delta = no_baseline = missing_volume = 0
+    exclusions = []
+
+    def exclude(contract, reason):
+        exclusions.append({"expiry": contract.get("expiry"), "strike": contract.get("strike"), "reason": reason})
+
     for c in cur or []:
         if not isinstance(c, dict):
             continue
         p = before.get(_contract_key(c))
         if p is None:
-            continue  # NO_PRIOR baseline: not comparable, not ranked
-        if p.get("delta") is None or c.get("delta") is None:
-            missing_delta += 1
+            no_baseline += 1
+            exclude(c, "NO_BASELINE")
+            continue
+        # Validate both observations before admitting this counter step.
+        d, old_reason = abs_delta(p.get("delta"))
+        current_delta, new_reason = abs_delta(c.get("delta"))
+        if d is None or current_delta is None:
+            if old_reason == "DELTA_MISSING" or new_reason == "DELTA_MISSING":
+                missing_delta += 1
+                exclude(c, "DELTA_MISSING")
+            if (d is None and old_reason != "DELTA_MISSING") or (current_delta is None and new_reason != "DELTA_MISSING"):
+                invalid += 1
+                invalid_delta += 1
+                exclude(c, "DELTA_INVALID")
+            continue
+        if isinstance(p.get("volume"), bool) or isinstance(c.get("volume"), bool):
+            invalid += 1
+            exclude(c, "VOLUME_INVALID")
             continue
         chk = check_volume_window(p.get("volume"), c.get("volume"))
         if not chk["valid"]:
             if chk["reason"] == "VOLUME_REBASE":
                 return {"status": "unavailable", "reason": "VOLUME_REBASE",
                         "contracts": [], "missing_delta": missing_delta,
-                        "mixed_pair": mixed_pair,
+                        "mixed_pair": mixed_pair, "invalid_delta": invalid_delta, "invalid": invalid,
+                        "invalid_type": invalid_type, "no_baseline": no_baseline, "missing_volume": missing_volume,
+                        "exclusions": exclusions,
                         "note": "cumulative-volume correction invalidated the window; "
                                 "new baseline required before re-enabling"}
+            if p.get("volume") is None or c.get("volume") is None:
+                missing_volume += 1
+                exclude(c, "VOLUME_MISSING")
+            else:
+                invalid += 1
+                exclude(c, "VOLUME_INVALID")
             continue
+        # A verified unchanged cumulative counter is measured zero activity.
         dv = chk["delta"]
-        if not dv or dv <= 0:
-            continue
         gsrc = p.get("greeks_source") or "vendor"
         dsrc = p.get("delta_source", gsrc) or "vendor"
         if gsrc != dsrc:
             mixed_pair += 1
+            exclude(c, "MIXED_GREEK_PAIR")
             continue
-        try:
-            g = float(p.get("gamma"))
-            d = abs(float(p.get("delta")))
-            m = float(p.get("multiplier", 100.0) or 100.0)
-        except (TypeError, ValueError):
+        sign = option_type_sign(p.get("type"))
+        if sign is None:
+            invalid_type += 1
+            exclude(c, "TYPE_INVALID")
             continue
-        if not all(_math.isfinite(x) for x in (g, d, m, dv)) or g < 0 or m <= 0:
+        m, _ = resolve_multiplier(p)
+        u = dollar_gamma_unit(p.get("gamma"), m, spot_f)
+        if u is None or not math.isfinite(u * d * dv):
+            invalid += 1
+            exclude(c, "EXPOSURE_INPUT_INVALID_OR_UNKNOWN")
             continue
-        if d > 1.0 + 1e-9:
-            continue
-        sign = 1.0 if str(p.get("type", "")).lower().startswith("c") else -1.0
-        u = g * m * spot * spot * 0.01
         rows.append({"osi": c.get("osi"), "expiry": c.get("expiry"),
                      "strike": c.get("strike"), "delta_volume": dv,
-                     "window_daddex": sign * u * min(d, 1.0) * dv,
+                     "window_daddex": sign * u * d * dv,
                      "pair": f"{gsrc}/{dsrc}"})
     rows.sort(key=lambda r: abs(r["window_daddex"]), reverse=True)
     return {"status": "ok", "contracts": rows,
             "missing_delta": missing_delta, "mixed_pair": mixed_pair,
+            "invalid": invalid, "invalid_type": invalid_type, "invalid_delta": invalid_delta,
+            "no_baseline": no_baseline, "missing_volume": missing_volume, "exclusions": exclusions,
             "note": "turnover, not positioning"}
 
 

@@ -3,7 +3,7 @@ import {act,render,screen,fireEvent,waitFor,within} from "@testing-library/react
 import AgentProvider,{useAgent} from "./AgentProvider";
 import {publishScreenContext} from "./useScreenContext";
 beforeAll(()=>{Object.defineProperty(globalThis,"crypto",{value:require("crypto").webcrypto,configurable:true});});
-function Consumer(){const a=useAgent();return <><button onClick={()=>a.askQuestion("What changed?")}>Ask shared</button><button onClick={a.loadHistory}>Load history</button><button onClick={a.endSession}>End session</button><div data-testid="error">{a.error}</div><div data-testid="notice">{a.sessionNotice}</div><div data-testid="history-count">{a.turns.length}</div><div data-testid="answer">{a.activeTurn?.text}</div><div data-testid="ticker">{a.activeTurn?.ticker}</div></>}
+function Consumer(){const a=useAgent();return <><button onClick={()=>a.askQuestion("What changed?")}>Ask shared</button><button onClick={a.loadHistory}>Load history</button><button onClick={a.endSession}>End session</button><div data-testid="error">{a.error}</div><div data-testid="notice">{a.sessionNotice}</div><div data-testid="history-count">{a.turns.length}</div><div data-testid="answer">{a.activeTurn?.text}</div><div data-testid="ticker">{a.activeTurn?.ticker}</div><div data-testid="grounding">{a.answerContextStatus}</div></>}
 beforeEach(()=>{global.fetch=jest.fn(async url=>({ok:true,json:async()=>String(url).endsWith("/session")?{}:String(url).endsWith("/ask")?{turn_id:"turn-one"}:{turn_id:"turn-one",status:"completed",ticker:"NVDA",text:"Saved final answer",ledger:{price:{value:178.4}}}}));});
 test("shared request freezes screen and stores final service answer",async()=>{
  publishScreenContext({page:"flowseeker-pro",ticker:"NVDA",dte:"all",selectedContract:"NVDA-test",observedAt:"2026-09-11T15:00:00Z"});
@@ -15,6 +15,35 @@ test("shared request freezes screen and stores final service answer",async()=>{
  const call=global.fetch.mock.calls.find(([url])=>String(url).endsWith("/ask"));
  expect(JSON.parse(call[1].body).screen.selectedContract).toBe("NVDA-test");
  expect(call[1].credentials).toBe("include");
+});
+
+test.each([
+ {ticker:"QQQ"}, {page:"trinity"}, {snapshotId:"record-two"}, {selectedExpiry:"2026-10-09"},
+ {selectedWall:{id:"wall-two",lower:601,upper:602}}, {overlayMetric:"session_delta_volume"},
+ {selectedContract:{osi:"SPY261009C00600000"}}, {confirmationEvidence:["touch-two"]}, {displayMode:"replay"},
+])("a material selection change labels the old answer without invoking another model: %j",async change=>{
+ const selection={page:"heatseeker",ticker:"SPY",dte:"all",snapshotId:"record-one",selectedExpiry:"2026-10-02",
+  selectedWall:{id:"wall-one",lower:600,upper:601},overlayMetric:"raw",selectedContract:null,
+  confirmationEvidence:[],displayMode:"live"};
+ publishScreenContext(selection);
+ render(<AgentProvider><Consumer/></AgentProvider>);
+ fireEvent.click(screen.getByText("Ask shared"));
+ await waitFor(()=>expect(screen.getByTestId("answer").textContent).toBe("Saved final answer"));
+ expect(screen.getByTestId("grounding").textContent).toBe("current");
+ const calls=global.fetch.mock.calls.length;
+ act(()=>publishScreenContext({...selection,...change}));
+ expect(screen.getByTestId("grounding").textContent).toBe("previous_selection");
+ expect(screen.getByTestId("answer").textContent).toBe("Saved final answer");
+ expect(global.fetch).toHaveBeenCalledTimes(calls);
+});
+
+test("equivalent selection object order does not invalidate a grounded answer",async()=>{
+ publishScreenContext({ticker:"SPY",selectedWall:{lower:600,upper:601,id:"wall"}});
+ render(<AgentProvider><Consumer/></AgentProvider>);
+ fireEvent.click(screen.getByText("Ask shared"));
+ await waitFor(()=>expect(screen.getByTestId("answer").textContent).toBe("Saved final answer"));
+ act(()=>publishScreenContext({selectedWall:{id:"wall",upper:601,lower:600},ticker:"SPY"}));
+ expect(screen.getByTestId("grounding").textContent).toBe("current");
 });
 
 test("ending research clears private views and ignores an older history response",async()=>{

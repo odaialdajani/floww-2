@@ -2,6 +2,7 @@ import {createContext,useCallback,useContext,useEffect,useMemo,useRef,useState} 
 import useScreenContext from "./useScreenContext";
 import useAgentStream from "./useAgentStream";
 import {API} from "../config/api";
+import {contextIdentity} from "./contextIdentity";
 const AgentContext=createContext(null);
 const SESSION_ENDED="floww-research-session-ended";
 export function useAgent(){return useContext(AgentContext);}
@@ -10,15 +11,21 @@ export default function AgentProvider({children}){
  const [open,setOpen]=useState(false),[barOpen,setBarOpen]=useState(false),[error,setError]=useState(null),[progress,setProgress]=useState(null);
  const [context]=useScreenContext();const frozen=useRef(null),busy=useRef(false),historyEpoch=useRef(0),ending=useRef(false);
  const [endingSession,setEndingSession]=useState(false),[sessionNotice,setSessionNotice]=useState(null);
- const pushTurn=useCallback(turn=>{setTurns(rows=>[turn,...rows.filter(t=>t.turn_id!==turn.turn_id)].slice(0,20));setActiveTurn(turn);},[]);
+ const grounding=useRef(new Map());
+ const pushTurn=useCallback((turn,screen)=>{
+  if(screen){grounding.current.set(turn.turn_id,contextIdentity(screen));if(grounding.current.size>20)grounding.current.delete(grounding.current.keys().next().value);}
+  setTurns(rows=>[turn,...rows.filter(t=>t.turn_id!==turn.turn_id)].slice(0,20));setActiveTurn(turn);
+ },[]);
+ const answerContextStatus=!activeTurn?null:!grounding.current.has(activeTurn.turn_id)?"unverified_history":
+  grounding.current.get(activeTurn.turn_id)===contextIdentity(context)?"current":"previous_selection";
  const {state,ask,cancel,disconnect}=useAgentStream({onEvent:(kind,payload)=>{
-  if(kind==="done"){pushTurn(payload);setError(null);}
+  if(kind==="done"){pushTurn(payload,frozen.current);setError(null);}
   else if(kind==="error"){setError(payload.error || payload.message || `Research ${payload.status || "unavailable"}`);}
   else setProgress(payload.message || payload.tool || "Checking saved evidence");
  }});
  const clearSessionView=useCallback(()=>{
   historyEpoch.current++;busy.current=false;disconnect();
-  setTurns([]);setActiveTurn(null);frozen.current=null;setProgress(null);setError(null);
+  setTurns([]);setActiveTurn(null);grounding.current.clear();frozen.current=null;setProgress(null);setError(null);
   setSessionNotice("Research session ended. Saved answers remain stored; reopening them requires authorized recovery.");
  },[disconnect]);
  useEffect(()=>{
@@ -53,6 +60,6 @@ export default function AgentProvider({children}){
   }catch{setError("Ending this session could not be confirmed. Your answer remains visible; try again.");}
   finally{clearTimeout(timer);ending.current=false;setEndingSession(false);}
  },[]);
- const value=useMemo(()=>({turns,activeTurn,setActiveTurn,pushTurn,open,setOpen,barOpen,setBarOpen,askQuestion,cancel,state,error,progress,context,requestContext:frozen.current,loadHistory,endSession,endingSession,sessionNotice}),[turns,activeTurn,pushTurn,open,barOpen,askQuestion,cancel,state,error,progress,context,loadHistory,endSession,endingSession,sessionNotice]);
+ const value=useMemo(()=>({turns,activeTurn,answerContextStatus,setActiveTurn,pushTurn,open,setOpen,barOpen,setBarOpen,askQuestion,cancel,state,error,progress,context,requestContext:frozen.current,loadHistory,endSession,endingSession,sessionNotice}),[turns,activeTurn,answerContextStatus,pushTurn,open,barOpen,askQuestion,cancel,state,error,progress,context,loadHistory,endSession,endingSession,sessionNotice]);
  return <AgentContext.Provider value={value}>{children}</AgentContext.Provider>;
 }

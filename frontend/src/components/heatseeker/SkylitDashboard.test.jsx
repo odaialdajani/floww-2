@@ -8,7 +8,7 @@
  * with HeatseekerDashboard.test.jsx so coverage spans both layouts.
  */
 import React from "react";
-import { render, screen, act, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, act, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import axios from "axios";
 
@@ -33,7 +33,7 @@ jest.mock("./SkylitTickerBar",       () => (props) => (
   <div data-testid="mock-ticker-bar" data-tickers={JSON.stringify(props.tickers ?? null)} />
 ));
 jest.mock("./SkylitControlBar",      () => (props) => (
-  <div data-testid="mock-control-bar" data-tickers={JSON.stringify(props.tickers ?? null)} data-spot={JSON.stringify(props.spot ?? null)} data-live={String(props.isLive)}><button data-testid="mock-activity" onClick={()=>props.onMetricChange("activity")}>Activity</button></div>
+  <div data-testid="mock-control-bar" data-tickers={JSON.stringify(props.tickers ?? null)} data-spot={JSON.stringify(props.spot ?? null)} data-live={String(props.isLive)}><button data-testid="mock-activity" onClick={()=>props.onMetricChange("activity")}>Activity</button><button data-testid="mock-window" onClick={()=>props.onMetricChange("window")}>Window</button></div>
 ));
 jest.mock("./SkylitHeatmapGrid",     () => ({ onCellClick, onStrikeClick, windowRows, density, spot }) => (
   <div data-testid="mock-heatmap" data-window={windowRows} data-density={density} data-spot={JSON.stringify(spot ?? null)}>
@@ -75,12 +75,42 @@ jest.mock("./RndDensityPanel",              () => () => <div data-testid="hs-rnd
 import SkylitDashboard from "./SkylitDashboard";
 import useScreenContext from "../../agent/useScreenContext";
 
+test('R12: strike review callback requires explicitly armed Trade mode', () => {
+  const onStrikeClick = jest.fn();
+  render(<SkylitDashboard ticker="SPY" data={selectionMap()} onStrikeClick={onStrikeClick} />);
+  fireEvent.click(screen.getByTestId('mock-strike'));
+  expect(onStrikeClick).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByTestId('skylit-trade-btn'));
+  fireEvent.click(screen.getByTestId('mock-strike'));
+  expect(onStrikeClick).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByTestId('skylit-trade-btn'));
+  fireEvent.click(screen.getByTestId('mock-strike'));
+  expect(onStrikeClick).toHaveBeenCalledTimes(1);
+});
+
 function ResearchSelection(){const [context]=useScreenContext();return <output data-testid="research-selection">{JSON.stringify(context)}</output>;}
 
 function selectionMap(value = 123.4, asof = "2026-09-11T18:00:00Z") {
  return {ticker:"SPY",asof,map_query:{expiries:4,mode:"day",dte:null},strikes:[{strike:650}],
    grid:{strikes:[650],expiries:["2026-09-18"],grid:{"2026-09-18":{"650":value}}}};
 }
+
+test("window context carries server baseline/interval selectors and clears them with basis change", () => {
+ const section={strikes:[650],expiries:["2026-09-18"],grid:{"2026-09-18":{"650":0}},status:"ok",
+   comparison:{previous_snapshot_id:"prior"},interval:{start:"2026-09-11T17:59:00Z",end:"2026-09-11T18:00:00Z"}};
+ const data={...selectionMap(),snapshotId:"current",data_source:"fixture",formula_version:"gex.v2",metrics:{grids:{window:section}}};
+ const mounted=render(<><SkylitDashboard ticker="SPY" data={data} spot={650}/><ResearchSelection/></>);
+ fireEvent.click(screen.getByTestId("mock-window"));
+ fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+ const current=()=>JSON.parse(screen.getByTestId("research-selection").textContent);
+ expect(current()).toMatchObject({overlayMetric:"window",windowBaselineId:"prior",windowInterval:section.interval,selectedStrike:650});
+ expect(current()).not.toHaveProperty("windowNet");
+ mounted.rerender(<><SkylitDashboard ticker="SPY" data={{...data,metrics:{grids:{window:{status:"unavailable",reason:"NO_BASELINE"}}}}} spot={650}/><ResearchSelection/></>);
+ expect(current().windowBaselineId).toBeNull();
+ expect(current().selectedStrike).toBeNull();
+ fireEvent.click(screen.getByTestId("mock-activity"));
+ expect(current().windowInterval).toBeNull();
+});
 
 test("same-scope polling retains the selected cell with the latest displayed value and map version",()=>{
  const mounted=render(<><SkylitDashboard ticker="SPY" data={selectionMap()} spot={650}/><ResearchSelection/></>);
@@ -154,6 +184,7 @@ test("research follows the rendered wide map and never carries it into another t
 beforeEach(() => {
   axios.get.mockImplementation(async () => ({ data: { strikes: [] } }));
 });
+afterEach(async () => { await act(async () => {}); });
 
 describe("SkylitDashboard", () => {
   test("mounts the skylit chrome with NO bottom boxes (removed 2026-09-03)", async () => {
@@ -425,6 +456,26 @@ test("R7-03: false eligibility without reasons shows a generic blocker, not perm
   expect(setup.title).not.toContain("No blockers");
 });
 
+test.each(["vex", "charm"])("%s mounted replay publishes its stored envelope, value and independent owning identity", async metric => {
+ const main={...selectionMap().grid,[metric+"_grid"]:{"2026-09-18":{"650":-7}},[metric+"_meta"]:{record_version:"metric-record.v1",status:"ok"}};
+ axios.get.mockImplementation(async url=>({data:String(url).includes("/manifest/") ? {snapshots:[{id:"record"}]} : String(url).includes("/replay/") ? {
+   snapshot:{ticker:"SPY",snapshot_id:"record",asof_ts:"2026-09-11T18:00:00Z",spot:650,data_source:"fixture",formula_version:"gex.v2"},
+   grids:{grid:main},metrics_full:{},context:{display:{map_query:selectionMap().map_query}},strikes:[{strike:650}]
+ } : {}}));
+ const mounted=render(<><SkylitDashboard ticker="SPY" data={selectionMap(999)} spot={650} viewMode={metric}/><ResearchSelection/></>);
+ await act(async()=>fireEvent.click(screen.getByTestId("solstice-replay-load")));
+ await act(async()=>fireEvent.click(screen.getByTestId("solstice-replay-next")));
+ fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+ expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("-7.0");
+ const current=()=>JSON.parse(screen.getByTestId("research-selection").textContent);
+ expect(current()).toMatchObject({metric,displayMode:"replay",snapshotId:"record",recordedMetricVersion:"metric-record.v1",selectedStrike:650});
+ mounted.rerender(<><SkylitDashboard ticker="SPY" data={selectionMap(12345)} spot={700} viewMode={metric}/><ResearchSelection/></>);
+ expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("-7.0");
+ fireEvent.click(screen.getByTestId("solstice-replay-exit"));
+ expect(current().recordedMetricVersion).toBeNull();
+ expect(current().selectedStrike).toBeNull();
+});
+
 test("R7-03: replay clicks never reach the live Trade callback; Trade disabled in replay", async () => {
   const onCellClick = jest.fn();
   const onStrikeClick = jest.fn();
@@ -493,6 +544,52 @@ test("R7-04: compare toggle mounts two real panes over one snapshot; back to one
   await act(async () => { fireEvent.click(screen.getByTestId("skylit-compare-toggle")); });
   expect(screen.queryAllByTestId("mock-heatmap").length).toBe(1);
   expect(screen.queryByTestId("skylit-compare-desk")).not.toBeInTheDocument();
+});
+
+test("R11: Raw+Δ toggle mounts raw-left/adjustment-right over one snapshot", async () => {
+  const data = {
+    ticker: "SPY", asof: "2026-09-03T00:00:00Z", spot: 650, exposure_basis: "OI",
+    strikes: [{ strike: 650, gex: 1000 }],
+    grid: { expiries: ["2026-09-18"], strikes: [650], grid: { "2026-09-18": { 650: 1000 } } },
+    metrics: { walls: [], grids: { delta: { expiries: ["2026-09-18"], grid: { "2026-09-18": { 650: 500 } } } } },
+    quality: { state: "usable", reasonCodes: [], setupEligible: true },
+  };
+  await act(async () => {
+    render(<SkylitDashboard ticker="SPY" data={data} spot={650} />);
+  });
+  await act(async () => { fireEvent.click(screen.getByTestId("skylit-rawdelta-toggle")); });
+  expect(screen.getByTestId("skylit-compare-desk")).toBeInTheDocument();
+  expect(screen.queryAllByTestId("mock-heatmap").length).toBe(2);
+  // Raw left, adjustment right — same symbol panes, never multi-symbol.
+  expect(screen.getByTestId("skylit-pane-gex-header").textContent).toContain("Raw OI");
+  expect(screen.getByTestId("skylit-pane-delta-header").textContent).toContain("Δ-weighted OI");
+  expect(screen.getByTestId("skylit-pane-delta-header").textContent).toContain("USD/1% move");
+  expect(screen.queryByTestId("skylit-pane-vex")).not.toBeInTheDocument();
+  // Clicking the right pane makes it own the readout with its own basis:
+  // the readout resolves 500 (Δ surface), not 1000 (raw surface).
+  const cells = screen.getAllByTestId("mock-heatmap-cell");
+  await act(async () => { fireEvent.click(cells[1]); });
+  expect(screen.getByTestId("skylit-selected-cell").textContent).toContain("500.0");
+  await act(async () => { fireEvent.click(screen.getByTestId("skylit-rawdelta-toggle")); });
+  expect(screen.queryAllByTestId("mock-heatmap").length).toBe(1);
+  expect(screen.queryByTestId("skylit-compare-desk")).not.toBeInTheDocument();
+});
+
+test("R11: Raw+Δ right pane follows the active adjustment basis", async () => {
+  const data = {
+    ticker: "SPY", asof: "2026-09-03T00:00:00Z", spot: 650, exposure_basis: "OI",
+    strikes: [{ strike: 650, gex: 1000 }],
+    grid: { expiries: ["2026-09-18"], strikes: [650], grid: { "2026-09-18": { 650: 1000 } } },
+    metrics: { walls: [], grids: {} },
+    quality: { state: "usable", reasonCodes: [], setupEligible: true },
+  };
+  await act(async () => {
+    render(<SkylitDashboard ticker="SPY" data={data} spot={650} />);
+  });
+  await act(async () => { fireEvent.click(screen.getByTestId("mock-activity")); });
+  await act(async () => { fireEvent.click(screen.getByTestId("skylit-rawdelta-toggle")); });
+  expect(screen.getByTestId("skylit-pane-gex-header").textContent).toContain("Raw OI");
+  expect(screen.getByTestId("skylit-pane-delta-header").textContent).toContain("Session volume");
 });
 
 test("R7-04: clicking the VEX pane makes it own the readout; scroll syncs", async () => {
@@ -611,6 +708,9 @@ test("R8-04: review pill shows 'No review yet' for a snapshot with no decision",
     quality: { state: "usable", reasonCodes: [], setupEligible: true },
   };
   await act(async () => { render(<SkylitDashboard ticker="SPY" data={data} spot={650} />); });
+  // O2: review UI lives in the selection-opened drawer — select a cell first.
+  await act(async () => { fireEvent.click(screen.getByTestId("mock-heatmap-cell")); });
+  await waitFor(() => { expect(screen.getByTestId("skylit-inspector-drawer")).toBeInTheDocument(); });
   await waitFor(() => {
     expect(screen.getByTestId("skylit-review-pending")).toBeInTheDocument();
     expect(screen.getByTestId("skylit-review-pending").textContent).toBe("No review yet");
@@ -632,6 +732,8 @@ test("R8-04: review pill surfaces a saved review state", async () => {
     quality: { state: "usable", reasonCodes: [], setupEligible: true },
   };
   await act(async () => { render(<SkylitDashboard ticker="SPY" data={data} spot={650} />); });
+  await act(async () => { fireEvent.click(screen.getByTestId("mock-heatmap-cell")); });
+  await waitFor(() => { expect(screen.getByTestId("skylit-inspector-drawer")).toBeInTheDocument(); });
   await waitFor(() => {
     expect(screen.queryByTestId("skylit-review-loading")).not.toBeInTheDocument();
   });
@@ -654,6 +756,8 @@ test("R8-04: review pill clears on snapshot change and skips replay", async () =
     quality: { state: "usable", reasonCodes: [], setupEligible: true },
   };
   const { rerender } = await act(async () => render(<SkylitDashboard ticker="SPY" data={data2} spot={650} />));
+  await act(async () => { fireEvent.click(screen.getByTestId("mock-heatmap-cell")); });
+  await waitFor(() => { expect(screen.getByTestId("skylit-inspector-drawer")).toBeInTheDocument(); });
   await waitFor(() => { expect(screen.queryByTestId("skylit-review-loading")).not.toBeInTheDocument(); });
   await waitFor(() => {
     const pill = screen.getByTestId("skylit-review-pill");
@@ -741,6 +845,11 @@ test("R8-02: save review posts frozen context and refetches reviewed state", asy
   await act(async () => {
     render(<SkylitDashboard ticker="SPY" data={r8Data()} spot={650} />);
   });
+  // O2: save controls live in the selection-opened drawer.
+  await act(async () => {
+    fireEvent.click(screen.getAllByTestId("mock-heatmap-cell")[0]);
+  });
+  await waitFor(() => { expect(screen.getByTestId("skylit-inspector-drawer")).toBeInTheDocument(); });
   await waitFor(() => {
     expect(screen.getByTestId("skylit-review-save-reviewed")).toBeInTheDocument();
   });
@@ -764,6 +873,10 @@ test("R8-04: next-to-review lists unreviewed only and jumps to replay", async ()
   await act(async () => {
     render(<SkylitDashboard ticker="SPY" data={r8Data()} spot={650} />);
   });
+  await act(async () => {
+    fireEvent.click(screen.getAllByTestId("mock-heatmap-cell")[0]);
+  });
+  await waitFor(() => { expect(screen.getByTestId("skylit-inspector-drawer")).toBeInTheDocument(); });
   await waitFor(() => {
     expect(screen.getByTestId("skylit-review-queue")).toBeInTheDocument();
   });
@@ -825,4 +938,195 @@ test('selected wall receives the current VEX surface and separate contract gross
  mounted.rerender(<SkylitDashboard ticker="SPY" data={old} spot={650}/>);
  expect(screen.getByText('VEX gross / net').closest('tr').textContent).toContain('— / $0');
  await act(async()=>{});
+});
+
+describe("SkylitDashboard O1 layout ownership", () => {
+  let observed = [];
+  beforeEach(() => {
+    observed = [];
+    global.ResizeObserver = class ResizeObserver {
+      constructor(callback) { this.callback = callback; }
+      observe(target) { observed.push(target); }
+      disconnect() {}
+      unobserve() {}
+    };
+  });
+  afterEach(() => { delete global.ResizeObserver; });
+
+  test("compare desk does not re-apply zoom (single application at the area)", async () => {
+    await act(async () => {
+      render(<SkylitDashboard ticker="SPY" />);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("skylit-zoom-in"));
+    });
+    expect(screen.getByTestId("skylit-heatmap-area").style.zoom).toBe("1.25");
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("skylit-compare-toggle"));
+    });
+    const desk = screen.getByTestId("skylit-compare-desk");
+    // jsdom has no `zoom` CSS property: absent reads undefined, and any
+    // re-applied style={{zoom}} would come back as a value. Zoom must live
+    // only on the heatmap area (asserted 1.25 above).
+    expect(desk.style.zoom).toBeUndefined();
+  });
+
+  test("fitRows observer watches the allocated parent box, not the grid itself", async () => {
+    await act(async () => {
+      render(<SkylitDashboard ticker="SPY" />);
+    });
+    const area = screen.getByTestId("skylit-heatmap-area");
+    expect(observed.length).toBeGreaterThan(0);
+    // The measured box must be the flex parent (stable allocated height),
+    // never the heatmap area whose descendants change with fitRows.
+    expect(observed[0]).toBe(area.parentElement);
+    expect(observed[0]).not.toBe(area);
+  });
+});
+
+describe("SkylitDashboard O2 inspector drawer", () => {
+  const drawerData = {
+    ticker: "SPY", asof: "2026-09-03T00:00:00Z", spot: 650, exposure_basis: "OI",
+    strikes: [{ strike: 650, gex: 1000 }],
+    grid: { expiries: ["2026-09-18"], strikes: [650], grid: { "2026-09-18": { 650: 1000 } } },
+    snapshotId: "snap-o2-1",
+    metrics: { walls: [{ wall_id: "w1", low: 648, high: 652, members: [650], gross: 1000, net: 1000 }], grids: {} },
+    quality: { state: "usable", reasonCodes: [], setupEligible: true },
+  };
+  beforeEach(() => {
+    axios.get.mockImplementation(async () => ({ data: { strikes: [] } }));
+    window.sessionStorage.clear();
+  });
+
+  test("selection opens the drawer with inspector + Open in Triad; close and Esc shut it", async () => {
+    await act(async () => {
+      render(<SkylitDashboard ticker="SPY" data={drawerData} spot={650} />);
+    });
+    expect(screen.queryByTestId("skylit-inspector-drawer")).not.toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("skylit-inspector-drawer")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("skylit-open-triad")).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("skylit-drawer-close"));
+    });
+    expect(screen.queryByTestId("skylit-inspector-drawer")).not.toBeInTheDocument();
+    // Same selection must NOT yank it back open (explicit close wins).
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+    });
+    await act(async () => {});
+    expect(screen.queryByTestId("skylit-inspector-drawer")).not.toBeInTheDocument();
+    // Fresh selection context reopens; Esc closes.
+    cleanup();
+    await act(async () => {
+      render(<SkylitDashboard ticker="SPY" data={drawerData} spot={650} />);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("skylit-inspector-drawer")).toBeInTheDocument();
+    });
+    await act(async () => {
+      fireEvent.keyDown(window, { key: "Escape" });
+    });
+    expect(screen.queryByTestId("skylit-inspector-drawer")).not.toBeInTheDocument();
+  });
+
+  test("Open in Triad writes a sessionStorage handoff for Triad to consume", async () => {
+    await act(async () => {
+      render(<SkylitDashboard ticker="SPY" data={drawerData} spot={650} />);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("skylit-open-triad")).toBeInTheDocument();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("skylit-open-triad"));
+    });
+    const raw = window.sessionStorage.getItem("solstice.triadHandoff");
+    expect(raw).not.toBeNull();
+    const handoff = JSON.parse(raw);
+    expect(handoff).toMatchObject({ ticker: "SPY", strike: 650, snapshotId: "snap-o2-1" });
+    expect(typeof handoff.ts).toBe("number");
+  });
+});
+
+test("O2 drawer anchors to the main area so toolbar controls stay clickable", async () => {
+  axios.get.mockImplementation(async () => ({ data: { strikes: [] } }));
+  // Minimal fixture (drawerData is scoped to the O2 describe above).
+  const data = { ticker: "SPY", asof: "2026-09-03T00:00:00Z", spot: 650, exposure_basis: "OI",
+    strikes: [{ strike: 650, gex: 1000 }],
+    grid: { expiries: ["2026-09-18"], strikes: [650], grid: { "2026-09-18": { 650: 1000 } } },
+    snapshotId: "s-anchor", metrics: { walls: [], grids: {} },
+    quality: { state: "usable", reasonCodes: [], setupEligible: true } };
+  await act(async () => {
+    render(<SkylitDashboard ticker="SPY" data={data} spot={650} />);
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+  });
+  await waitFor(() => {
+    expect(screen.getByTestId("skylit-inspector-drawer")).toBeInTheDocument();
+  });
+  // The drawer must live inside the main area (absolute anchor), never as a
+  // viewport-fixed overlay covering the toolbar row above it.
+  const drawer = screen.getByTestId("skylit-inspector-drawer");
+  expect(drawer.closest(".skylit-main-area")).not.toBeNull();
+  // Toolbar controls live outside the drawer's anchor box, so an open
+  // drawer can never cover them (the real-browser failure this guards).
+  const toggle = screen.getByTestId("skylit-compare-toggle");
+  expect(drawer.contains(toggle)).toBe(false);
+});
+
+test("O5 drawer moves focus to its close control and restores prior focus on close", async () => {
+  axios.get.mockImplementation(async () => ({ data: { strikes: [] } }));
+  const data = { ticker: "SPY", asof: "2026-09-03T00:00:00Z", spot: 650, exposure_basis: "OI",
+    strikes: [{ strike: 650, gex: 1000 }],
+    grid: { expiries: ["2026-09-18"], strikes: [650], grid: { "2026-09-18": { 650: 1000 } } },
+    snapshotId: "s-focus", metrics: { walls: [], grids: {} },
+    quality: { state: "usable", reasonCodes: [], setupEligible: true } };
+  await act(async () => {
+    render(<SkylitDashboard ticker="SPY" data={data} spot={650} />);
+  });
+  const cell = screen.getByTestId("mock-heatmap-cell");
+  cell.focus();
+  await act(async () => { fireEvent.click(cell); });
+  await waitFor(() => {
+    expect(screen.getByTestId("skylit-inspector-drawer")).toBeInTheDocument();
+  });
+  expect(screen.getByTestId("skylit-drawer-close")).toHaveFocus();
+  await act(async () => { fireEvent.click(screen.getByTestId("skylit-drawer-close")); });
+  expect(cell).toHaveFocus();
+});
+
+test("O3 compare panes share one snapshot and identical geometry inputs", async () => {
+  axios.get.mockImplementation(async () => ({ data: { strikes: [] } }));
+  const data = { ticker: "SPY", asof: "2026-09-03T00:00:00Z", spot: 650, exposure_basis: "OI",
+    strikes: [{ strike: 650, gex: 1000 }],
+    grid: { expiries: ["2026-09-18"], strikes: [650], grid: { "2026-09-18": { 650: 1000 } } },
+    snapshotId: "s-geo", metrics: { walls: [], grids: {} },
+    quality: { state: "usable", reasonCodes: [], setupEligible: true } };
+  await act(async () => {
+    render(<SkylitDashboard ticker="SPY" data={data} spot={650} />);
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByTestId("skylit-compare-toggle"));
+  });
+  const panes = screen.getAllByTestId("mock-heatmap");
+  expect(panes).toHaveLength(2);
+  // Same snapshot, same spot, same row window in both panes: row geometry is
+  // identical by construction, so pixel-offset scroll sync is valid (S3).
+  // A missing VEX surface renders its own unavailable state instead.
+  const windows = panes.map((p) => p.getAttribute("data-window"));
+  expect(windows[0]).toBe(windows[1]);
+  const spots = panes.map((p) => p.getAttribute("data-spot"));
+  expect(spots[0]).toBe(spots[1]);
+  expect(spots[0]).toBe("650");
 });

@@ -413,17 +413,27 @@ LIVE_WINDOW = {"start_hhmm": "09:00", "stop_hhmm": "10:30"}
 PREFETCH_HHMM = "08:55"  # pre-fetch SPY OI 5 min before market open
 
 
+def _eastern_now() -> datetime:
+    """Current time in US Eastern. See services.eastern_clock for the rules.
+
+    Kept as a thin module-level alias because the gates below read it by name.
+    Uses the instant-preserving safe boundary (R10-11): identical wall hour
+    to eastern_now, with a correct aware UTC offset when tz data is absent.
+    """
+    from services.eastern_clock import eastern_now_safe
+
+    return eastern_now_safe()
+
+
 def _in_window_now_et() -> bool:
     """Check if current time is within configured live window (US/Eastern)."""
     try:
-        from zoneinfo import ZoneInfo
-        et = datetime.now(ZoneInfo("America/New_York"))
+        et = _eastern_now()
     except Exception:
-        # Fallback: use UTC-4 (EDT) during DST, UTC-5 (EST) otherwise
-        import time
-        is_dst = time.localtime().tm_isdst > 0
-        offset = 4 if is_dst else 5
-        et = datetime.now(UTC) - timedelta(hours=offset)
+        # _eastern_now already falls back internally; reaching here means both
+        # the tz database and the arithmetic fallback failed. Fail closed
+        # rather than guessing at Eastern time.
+        return False
     hhmm = et.strftime("%H:%M")
     return LIVE_WINDOW["start_hhmm"] <= hhmm <= LIVE_WINDOW["stop_hhmm"]
 
@@ -945,10 +955,11 @@ _BUILD_HEATMAP_INFLIGHT: set[str] = set()
 
 async def _revalidate_heatmap(cache_key: str, ticker: str, max_expiries: int,
                               with_taps: bool, mode: str, dte, scalp: bool,
-                              max_strikes: int):
+                              max_strikes: int, expiry_scope: str = "loaded", scope_session: str | None = None):
     """Background refresh — never raises to the caller."""
     try:
-        fresh = await _build_heatmap_impl(ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes)
+        scope_kwargs = {"expiry_scope": expiry_scope, "scope_session": scope_session} if expiry_scope == "next" else {}
+        fresh = await _build_heatmap_impl(ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes, **scope_kwargs)
         if isinstance(fresh, dict) and not fresh.get("error") and (fresh.get("strikes") or fresh.get("grid")):
             _BUILD_HEATMAP_CACHE[cache_key] = {"ts": time.time(), "data": fresh}
     except Exception as e:
@@ -956,7 +967,7 @@ async def _revalidate_heatmap(cache_key: str, ticker: str, max_expiries: int,
     finally:
         _BUILD_HEATMAP_INFLIGHT.discard(cache_key)
 
-async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = True, mode: str = "day", dte: int | None = None, scalp: bool = False, max_strikes: int = 200) -> dict[str, Any]:
+async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = True, mode: str = "day", dte: int | None = None, scalp: bool = False, max_strikes: int = 200, expiry_scope: str = "loaded") -> dict[str, Any]:
     """Build heatmap with OOM protection and index symbol fast path.
 
     Stale-while-revalidate: if the fresh-TTL cache misses but a stale entry
@@ -965,7 +976,15 @@ async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = Tr
     from services.market_provenance import cached_market_copy
     if _shutdown_event.is_set():
         raise HTTPException(status_code=503, detail="Market refresh is stopping")
-    cache_key = f"{ticker}:{max_expiries}:{mode}:{dte}:{scalp}:{with_taps}:{max_strikes}"
+    from services.solstice_scope import EXCHANGE_TZ, request_query
+    from services.solstice_scope import cache_key as scope_cache_key
+    scope_session = datetime.now(EXCHANGE_TZ).date().isoformat() if expiry_scope == "next" else None
+    try:
+        query = request_query(max_expiries, mode, dte, scalp, with_taps, max_strikes, expiry_scope, scope_session)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    cache_key = scope_cache_key(ticker, query)
+    scope_kwargs = {"expiry_scope": expiry_scope, "scope_session": scope_session} if expiry_scope == "next" else {}
     cached = _BUILD_HEATMAP_CACHE.get(cache_key)
     age = (time.time() - cached["ts"]) if cached else None
     if cached is not None and age is not None:
@@ -980,13 +999,13 @@ async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = Tr
         ):
             _BUILD_HEATMAP_INFLIGHT.add(cache_key)
             refresh = asyncio.create_task(_revalidate_heatmap(
-                cache_key, ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes,
+                cache_key, ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes, **scope_kwargs,
             ))
             _background_tasks.add(refresh)
             refresh.add_done_callback(_background_tasks.discard)
             return cached_market_copy(cached["data"], age, revalidating=True)
     try:
-        return await _build_heatmap_impl(ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes)
+        return await _build_heatmap_impl(ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes, **scope_kwargs)
     except HTTPException:
         raise
     except Exception as e:
@@ -1042,18 +1061,14 @@ def _display_surfaces(spot: float, contracts: list[dict[str, Any]], ticker: str,
         grid["charm_grid"] = _cg["grid"]
         grid["charm_meta"] = {key: value for key, value in _cg.items()
                               if key not in {"grid", "expiries", "strikes"}}
-        try:
-            grid["vex_grid"] = _vg.get("grid", {})
-            grid["vex_strike_gross"] = _vg.get("strike_gross", [])
-            grid["vex_meta"] = {"exposure_basis": _vg.get("exposure_basis"),
-                                "model": _vg.get("model"),
-                                "status": _vg.get("status"),
-                                "reason": _vg.get("reason"),
-                                "missing_vanna_inputs": _vg.get("missing_vanna_inputs", 0),
-                                "quarantined": _vg.get("quarantined", 0),
-                                "invalid_type": _vg.get("invalid_type", 0)}
-        except Exception:
-            pass  # silent by design: VEX attach is additive metadata — GEX surfaces already computed
+        from domain.exposure_metrics import METRIC_REGISTRY
+        grid["vex_grid"] = _vg.get("grid", {})
+        grid["vex_strike_gross"] = _vg.get("strike_gross", [])
+        grid["vex_meta"] = {key: value for key, value in _vg.items()
+                            if key not in {"grid", "expiries", "strikes", "strike_gross"}}
+        for _metric, _id in (("vex", "vex_net_1volpt"), ("charm", "charm_net_1pct_year_v1")):
+            grid[_metric + "_meta"].update(metric_id=_id, unit=METRIC_REGISTRY[_id]["units"])
+        grid["vex_meta"]["weight_basis"] = "OI"
         return grid
     if scalp:
         from services.gex_core import (
@@ -1138,11 +1153,15 @@ def _display_quality(exposure_basis: str, model_basis: str, strikes: list) -> di
     }
 
 
-async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: bool = True, mode: str = "day", dte: int | None = None, scalp: bool = False, max_strikes: int = 200) -> dict[str, Any]:
+async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: bool = True, mode: str = "day", dte: int | None = None, scalp: bool = False, max_strikes: int = 200, expiry_scope: str = "loaded", scope_session: str | None = None) -> dict[str, Any]:
     log.info(f"build_heatmap: {ticker} expiries={max_expiries} mode={mode} max_strikes={max_strikes}")
     # Check cache first
-    cache_key = f"{ticker}:{max_expiries}:{mode}:{dte}:{scalp}:{with_taps}:{max_strikes}"
-    requested_map_query = {"expiries": max_expiries, "mode": mode, "dte": dte, "scalp": scalp, "withTaps": with_taps, "maxStrikes": max_strikes}
+    from services.solstice_scope import EXCHANGE_TZ, next_listed_selection, request_query
+    from services.solstice_scope import cache_key as scope_cache_key
+    if expiry_scope == "next" and scope_session is None:
+        scope_session = datetime.now(EXCHANGE_TZ).date().isoformat()
+    requested_map_query = request_query(max_expiries, mode, dte, scalp, with_taps, max_strikes, expiry_scope, scope_session)
+    cache_key = scope_cache_key(ticker, requested_map_query)
     cached = _BUILD_HEATMAP_CACHE.get(cache_key)
     if cached and (time.time() - cached["ts"]) < _BUILD_HEATMAP_CACHE_TTL:
         # Poison-entry guard: a cached payload from a degraded upstream window
@@ -1271,6 +1290,40 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                         log.info(f"build_heatmap: cvserver full-chain enrichment for {ticker} — {len(raw['contracts'])} contracts, {cv_unique} unique strikes")
             except Exception as e:
                 log.debug(f"build_heatmap: cvserver enrichment failed for {ticker}: {e}")
+    # Work on our copy: scope selection must not mutate the provider cache.
+    import copy
+    raw = copy.deepcopy(raw)
+    scope_selection = None
+    if expiry_scope == "next":
+        scope_selection = next_listed_selection(raw.get("contracts", []), scope_session)
+        selected = set(scope_selection["selected_expiries"])
+        raw["contracts"] = [c for c in raw.get("contracts", []) if c.get("expiry") in selected]
+        raw["expiries"] = sorted(selected)
+        if not selected:
+            from services.heatmap_snapshot import snapshot_id_for
+            empty = {"ticker": ticker, "spot": raw.get("spot"), "expiries_used": [], "strikes": [],
+                     "grid": {"expiries": [], "strikes": [], "grid": {}},
+                     "metrics": {"gex_net_v1": None, "walls": [], "grids": {}},
+                     "status": "unavailable", "reason": scope_selection["reason"],
+                     "scope_selection": scope_selection, "map_query": requested_map_query,
+                     "data_source": raw.get("data_source", "unknown"), "formula_version": "gex.v2",
+                     "asof": datetime.now(UTC).isoformat(), "event_time": raw.get("event_time"),
+                     "quality": {"state": "unavailable", "reasonCodes": [scope_selection["reason"]],
+                                 "setupEligible": False, "executionEligible": False}}
+            empty["snapshotId"] = snapshot_id_for(empty)
+            return empty
+    # Listed-date scope bound: the requested count applies to listed expiry
+    # dates, never calendar-day substitutes. Sparse enrichment above may
+    # return a deeper chain for strike density; the loaded population stays
+    # bounded by the request — earliest listed dates first.
+    if max_expiries is not None and max_expiries > 0:
+        _listed = sorted({c.get("expiry") for c in raw.get("contracts", []) if c.get("expiry")})
+        if len(_listed) > max_expiries:
+            _keep = set(_listed[:max_expiries])
+            raw["contracts"] = [c for c in raw["contracts"] if c.get("expiry") in _keep]
+            raw["expiries"] = sorted(_keep)
+            log.info(f"build_heatmap: scoped {ticker} to {max_expiries} listed expiries "
+                     f"({len(_listed)} returned)")
     spot = raw["spot"]
     if not spot or spot != spot or not raw["contracts"]:  # spot != spot catches NaN
         raise HTTPException(404, f"No options data for {ticker}")
@@ -1420,28 +1473,56 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     metrics: dict[str, Any] = {"default_basis": exposure_basis}
     try:
         from domain.exposure_metrics import compute_delta_weighted_oi, compute_raw_oi, compute_volume_gamma
+        from domain.exposure_metrics import compute_session_delta_volume_gamma as _compute_sess_dvol
         from services.gex_core import (
             compute_gex_by_strike_vendor,
             compute_gex_grid_delta_weighted,
+            compute_gex_grid_session_delta_volume,
             compute_gex_grid_vendor,
             compute_gex_grid_volume_vendor,
         )
+        from services.solstice_metric_contract import window_grid_section as _window_grid_section
         from services.wall_structure import discover_walls, nearest_by_side, nearest_walls
         raw_m = compute_raw_oi(raw["contracts"], spot)
         dw_m = compute_delta_weighted_oi(raw["contracts"], spot)
         vol_m = compute_volume_gamma(raw["contracts"], spot)
+        # S2: DISTINCT fourth activity surface (R10-01 repair). session_dvol
+        # is Σ c·u·V·|δ|; the legacy volume_gamma keys stay Σ c·u·V,
+        # backward compatible. No silent field replacement.
+        sess_dvol_m = _compute_sess_dvol(raw["contracts"], spot)
         vendor_rows = compute_gex_by_strike_vendor(spot, raw["contracts"])
         vendor_grid = compute_gex_grid_vendor(spot, raw["contracts"])
         delta_grid = compute_gex_grid_delta_weighted(spot, raw["contracts"])
         activity_grid = compute_gex_grid_volume_vendor(spot, raw["contracts"])
+        sess_dvol_grid = compute_gex_grid_session_delta_volume(spot, raw["contracts"])
         metrics.update({
             "gex_gross_v1": raw_m.gross, "gex_net_v1": raw_m.net,
             "gex_call": raw_m.call, "gex_put": raw_m.put,
+            # Resweep: the raw and session-volume surfaces carried NO
+            # population, so a consumer could not tell a measured 0.0 from
+            # an unavailable one (e.g. spot missing/0/NaN makes every
+            # contract invalid and every gross 0.0). The delta and session
+            # delta-volume surfaces already reported theirs; these two
+            # were the inconsistent ones. Additive keys only.
+            "raw_usable": raw_m.usable, "raw_missing_oi": raw_m.missing_oi,
+            "raw_invalid": raw_m.invalid,
             "dadgex_gross_v1": dw_m.gross, "dadgex_net_v1": dw_m.net,
             "dadgex_usable": dw_m.usable, "dadgex_missing_delta": dw_m.missing_delta,
+            "dadgex_missing_oi": dw_m.missing_oi, "dadgex_invalid": dw_m.invalid,
             "volume_gamma_gross": vol_m.gross, "volume_gamma_net": vol_m.net,
+            "volume_gamma_usable": vol_m.usable, "volume_gamma_missing_vol": vol_m.missing_oi,
+            "volume_gamma_invalid": vol_m.invalid,
+            "session_delta_volume_gross_v1": sess_dvol_m.gross,
+            "session_delta_volume_net_v1": sess_dvol_m.net,
+            "session_delta_volume_usable": sess_dvol_m.usable,
+            "session_delta_volume_missing_delta": sess_dvol_m.missing_delta,
+            "session_delta_volume_missing_vol": sess_dvol_m.missing_oi,
+            "session_delta_volume_invalid": sess_dvol_m.invalid,
             "window_dadgex_v1": None, "window_dadgex_reason": "HISTORY_NOT_YET_RECORDED",
             # §28.3 registry name alias (same unavailable state, both keys).
+            # R11-H01: the alias must carry the reason too — the inspector
+            # read `window_daddex_reason`, which was never populated.
+            "window_daddex_v1": None, "window_daddex_reason": "HISTORY_NOT_YET_RECORDED",
             "window_delta_weighted_volume_v1": None,
             # R6-2: per-wall window aggregation lands here when a comparable
             # baseline exists; absent means unavailable, never scope-total.
@@ -1460,7 +1541,12 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             # the same class of bug as the VEX/charm surfaces reading keys the
             # vendor path never emitted.
             "grids": {"raw": None, "delta": delta_grid, "activity": activity_grid,
-                      "vendor": vendor_grid},
+                      "session_delta_volume": sess_dvol_grid,
+                      "vendor": vendor_grid,
+                      # R11-H03: governed window surface in grid shape;
+                      # unavailable (with reason) until a comparable
+                      # baseline exists — never zero, never raw.
+                      "window": _window_grid_section(None)},
             "formula_version": "gex.v2",
         })
         sol_scope = {"symbol": ticker, "formula": "gex.v2"}
@@ -1489,61 +1575,48 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         except Exception as le:
             log.debug("offscreen landmarks failed: %s", le)
             metrics["offscreen_landmarks"] = []
-        # R5-B: live window delta-weighted activity from the recorder's
-        # previous snapshot. Epoch/scope-bound: same query scope
-        # (ticker/mode/dte/scalp), same session day, same provider. Anything
-        # else is not a comparable epoch — the surface stays unavailable
-        # (never zero-filled, never raw fallback). Rebase quarantines.
+        # One bounded stored baseline. Source clocks, NY session and the FULL
+        # request identity govern comparison; build time is only availability.
+        from services.solstice_window import recorded_window_activity
+        _w = recorded_window_activity(None, {}, spot)
         try:
-            import contextlib as _ctxw
-            with _ctxw.suppress(Exception):
-                from services.duckdb_engine import db as _ddb_win
-                from services.heatmap_history import normalize_stored_contract, replay_snapshot
-                _wconn = getattr(_ddb_win, "conn", None)
-                if _wconn is not None:
-                    _scope_key = f"{ticker}:{mode}:{dte}:{scalp}"
-                    from services.connection_guard import query_rows
-                    _prev_rows = query_rows(_wconn,
-                        "SELECT snapshot_id, asof_ts, data_source FROM heatmap_snapshots_v2 "
-                        "WHERE ticker = '" + str(ticker).replace("'", "''") + "' AND query_key = '"
-                        + _scope_key.replace("'", "''") + "' ORDER BY asof_ts DESC LIMIT 1")
-                    if _prev_rows:
-                        _pid = _prev_rows[0][0]
-                        _prep = replay_snapshot(_wconn, _pid)
-                        _praw = (_prep or {}).get("contracts") or []
-                        _pcontracts = [normalize_stored_contract(r) for r in _praw]
-                        _psnap = (_prep or {}).get("snapshot") or {}
-                        import datetime as _dtw
-                        _today = _dtw.datetime.now(_dtw.UTC).date().isoformat()
-                        _same_day = str(_psnap.get("asof_ts", ""))[:10] == _today
-                        _same_src = ((_psnap.get("data_source") or "")
-                                     == (raw.get("data_source", "yfinance") or ""))
-                        if _pcontracts and _same_day and _same_src:
-                            from services.solstice_enrichment import (
-                                aggregate_window_by_wall,
-                                window_contract_activity,
-                            )
-                            _w = window_contract_activity(_pcontracts, raw["contracts"], spot)
-                            if _w.get("status") == "ok" and _w.get("contracts"):
-                                metrics["window_daddex_v1"] = sum(
-                                    c.get("window_daddex", 0) for c in _w["contracts"])
-                                metrics["window_delta_weighted_volume_v1"] = metrics["window_daddex_v1"]
-                                # Registry canonical name kept in sync (alias).
-                                metrics["window_dadgex_v1"] = metrics["window_daddex_v1"]
-                                metrics["window_daddex_reason"] = None
-                                metrics["window_contracts"] = _w["contracts"][:20]
-                                metrics["window_missing_delta"] = _w.get("missing_delta", 0)
-                                metrics["window_mixed_pair"] = _w.get("mixed_pair", 0)
-                                # R6-2: wall-local window aggregation over the
-                                # FULL row list (before the display cut above);
-                                # a truncated sample is not a population.
-                                metrics["wall_window"] = aggregate_window_by_wall(
-                                    sol_walls, _w["contracts"])
-                            elif _w.get("reason") == "VOLUME_REBASE":
-                                metrics["window_daddex_reason"] = "VOLUME_REBASE"
-                                metrics["window_dadgex_reason"] = "VOLUME_REBASE"
+            from services.connection_guard import query_rows
+            from services.duckdb_engine import db as _ddb_win
+            from services.heatmap_history import replay_snapshot
+            _wconn = getattr(_ddb_win, "conn", None)
+            if _wconn is not None:
+                _scope_key = cache_key if scope_selection else f"{ticker}:{mode}:{dte}:{scalp}"
+                _prev_rows = query_rows(_wconn,
+                    "SELECT snapshot_id FROM heatmap_snapshots_v2 "
+                    "WHERE ticker = '" + str(ticker).replace("'", "''") + "' AND query_key = '"
+                    + _scope_key.replace("'", "''") + "' ORDER BY asof_ts DESC LIMIT 1")
+                if _prev_rows:
+                    _w = recorded_window_activity(replay_snapshot(_wconn, _prev_rows[0][0]), {
+                        "ticker": ticker, "data_source": raw.get("data_source"),
+                        "formula_version": "gex.v2", "map_query": requested_map_query,
+                        "event_time": raw.get("event_time") or raw.get("observed_at"),
+                        "fetched_at": raw.get("fetched_at"), "asof": datetime.now(UTC).isoformat(),
+                        "contracts": raw["contracts"],
+                    }, spot)
         except Exception as we:
-            log.debug("window activity attach failed: %s", we)
+            log.warning("window baseline read failed: %s", we)
+            _w["reason"] = "BASELINE_READ_FAILED"
+        _wrows = _w.get("contracts") or []
+        _wr = None if _w.get("status") == "ok" and _wrows else _w.get("reason") or "NO_COMPARABLE_OBSERVATIONS"
+        for _alias in ("window_dadgex_v1", "window_daddex_v1", "window_delta_weighted_volume_v1"):
+            metrics[_alias] = _w.get("window_net") if _wr is None else None
+        metrics["window_daddex_reason"] = metrics["window_dadgex_reason"] = _wr
+        metrics["grids"]["window"] = _window_grid_section(_w)
+        metrics["window_contracts"] = _wrows[:20]
+        metrics["window_surface"] = _w["surface"]
+        metrics["window_coverage"] = _w["coverage"]
+        metrics["window_missing_delta"] = _w["coverage"]["n_missing_delta"]
+        metrics["window_mixed_pair"] = _w["coverage"]["n_mixed_pair"]
+        metrics["window_greek_convention"] = _w["greek_convention"]
+        metrics["window_interval"] = _w.get("interval")
+        metrics["window_provenance_note"] = _w["provenance_note"]
+        from services.solstice_enrichment import aggregate_window_by_wall
+        metrics["wall_window"] = aggregate_window_by_wall(sol_walls, _wrows) if _wr is None else {}
     except Exception as me:
         log.debug("solstice metrics surfaces failed (non-fatal): %s", me)
         metrics["error"] = "METRICS_UNAVAILABLE"
@@ -1605,6 +1678,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         "gex_regime": nodes.get("regime"),
         "mode": mode,
         "map_query": requested_map_query,
+        **({"scope_selection": scope_selection} if scope_selection else {}),
         "dte": dte,
         "scalp": scalp,
         "asof": datetime.now(UTC).isoformat(),
@@ -1631,6 +1705,29 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         # Solstice read-only desk (T04–T10/T15–T20, deterministic, no execution)
         "metrics": metrics,
     }
+    # New records declare each existing metric's complete observation envelope.
+    # Missing source clocks stay missing; older records are not backfilled.
+    for _metric in ("vex", "charm"):
+        _meta = grid.get(_metric + "_meta")
+        if isinstance(_meta, dict):
+            _meta.update(record_version="metric-record.v1", data_source=payload["data_source"],
+                         map_query=requested_map_query, event_time=payload["event_time"],
+                         fetched_at=payload["fetched_at"], available_at=payload["asof"],
+                         scope={"strikes": grid.get("strikes"), "expiries": grid.get("expiries")})
+    # Bind the newly materialized window to this owning payload's availability,
+    # before hashing/recording. Source interval clocks remain unchanged.
+    _comparison = ((metrics.get("grids") or {}).get("window") or {}).get("comparison")
+    if isinstance(_comparison, dict):
+        _comparison["current"]["available_at"] = payload["asof"]
+    # R11-H01: per-surface population + status summary (no arithmetic; reads
+    # the sections the kernels already produced). Additive key.
+    try:
+        from services.solstice_metric_contract import CONTRACT_VERSION as _mc_ver
+        from services.solstice_metric_contract import build_surface_coverage
+        metrics["surface_coverage"] = build_surface_coverage(metrics, grid)
+        metrics["metric_contract_version"] = _mc_ver
+    except Exception as _cov_e:
+        log.debug("surface coverage summary failed: %s", _cov_e)
     # R5-A: one issued observation ID for this build (content + asof + ticker).
     # Interactions, scenarios, evidence and recorder rows all join on this ID;
     # wall events must never be written with a blank snapshot link.
@@ -1674,7 +1771,9 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         # R5-C: scope binds expiry dimensions — same strikes at another DTE/
         # mode/expiry count are a different analytical scope (fresh lifecycle).
         scope_id = scope_id_for(ticker, {"mode": mode, "dte": dte,
-                                         "scalp": scalp, "expiries": max_expiries})
+                                         "scalp": scalp, "expiries": max_expiries,
+                                                                                  **({"expiryScope": "next", "sessionDate": scope_session,
+                                                                                      "selectedExpiries": raw["expiries"]} if scope_selection else {})})
         _data_source = raw.get("data_source", "yfinance")
         sides = metrics.get("nearest_by_side") or {}
         ordered = [sides.get("below"), sides.get("inside"), sides.get("above")]
@@ -1914,6 +2013,11 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                          "expiries_used": payload.get("expiries_used"),
                                          "spot": spot,
                                          "mode": mode, "dte": dte, "scalp": scalp,
+                                         "map_query": requested_map_query,
+                                         "scope_selection": scope_selection,
+                                         **{key: payload.get(key) for key in (
+                                             "event_time", "observed_at", "fetched_at", "spot_source",
+                                             "spot_event_time", "spot_fetched_at", "stale", "stale_age_s")},
                                          "data_source": payload.get("data_source"),
                                          "exposure_basis": exposure_basis,
                                          "formula_version": "gex.v2",
@@ -1926,8 +2030,20 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                          "coverage": _cov,
                                          "quality": payload.get("quality", {}),
                                          "scenarios": payload.get("scenarios", [])[:12],
-                                         "interactions": payload.get("interactions", [])[:12]},
-                f"{ticker}:{mode}:{dte}:{scalp}",
+                                         "interactions": payload.get("interactions", [])[:12],
+                                         # R7-03 context travels with the
+                                         # record so replay restores the
+                                         # inspector (session/scout/regime/
+                                         # patterns/vanna/moneyness), not
+                                         # just cells.
+                                         "session": payload.get("session"),
+                                         "playbook": payload.get("playbook"),
+                                         "scout": payload.get("scout"),
+                                         "gamma_regime_v1": payload.get("gamma_regime_v1"),
+                                         "patterns_v1": payload.get("patterns_v1"),
+                                         "vanna_v1": payload.get("vanna_v1"),
+                                         "moneyness": payload.get("moneyness")},
+                cache_key if scope_selection else f"{ticker}:{mode}:{dte}:{scalp}",
                 payload.get("snapshotId") or None))
             _background_tasks.add(_t2)
             _t2.add_done_callback(_background_tasks.discard)
@@ -2571,13 +2687,9 @@ async def _scheduler_loop():
                 pass
 
             try:
-                from zoneinfo import ZoneInfo
-                et = datetime.now(ZoneInfo("America/New_York"))
+                et = _eastern_now()
             except Exception:
-                import time
-                is_dst = time.localtime().tm_isdst > 0
-                offset = 4 if is_dst else 5
-                et = datetime.now(UTC) - timedelta(hours=offset)
+                et = datetime.now(UTC)
             hhmm = et.strftime("%H:%M")
             today_et = et.date().isoformat()
             if hhmm >= PREFETCH_HHMM and fired_for_date != today_et and et.weekday() < 5:
@@ -2963,13 +3075,9 @@ async def flow_sse(
     # Check trading window
     if enforce_window:
         try:
-            from zoneinfo import ZoneInfo
-            et = datetime.now(ZoneInfo("America/New_York"))
+            et = _eastern_now()
         except Exception:
-            import time as _time
-            is_dst = _time.localtime().tm_isdst > 0
-            offset = 4 if is_dst else 5
-            et = datetime.now(UTC) - timedelta(hours=offset)
+            et = datetime.now(UTC)
         hhmm = et.strftime("%H:%M")
         lw = LIVE_WINDOW
         start = lw.get("start_hhmm", "09:30")
@@ -3551,6 +3659,17 @@ register_review_routes(solstice_router)
 
 app.include_router(solstice_router, tags=["solstice"])
 
+from routes.solstice_scan import router as solstice_scan_router
+
+app.include_router(solstice_scan_router)
+
+# R15-2 (Spark): read-only price-path status/reads. No writes, no activation,
+# no broker access. Shared-file writer: Spark (default mount owner); Zed ack
+# pending — no behavior change while FLOWW_PRICE_PATH_PRODUCER is unset.
+from routes.solstice_price_paths import router as solstice_price_paths_router
+
+app.include_router(solstice_price_paths_router, tags=["solstice"])
+
 from routes.public_api import router as public_api_router
 
 app.include_router(public_api_router, tags=["public_api"])
@@ -3759,6 +3878,12 @@ try:
             entry = _BUILD_HEATMAP_CACHE.get(map_cache_key(ticker, query))
             return copy.deepcopy(entry["data"]) if entry else None
 
+        def read_recorded_map(ticker, snapshot_id):
+            from services.heatmap_history import replay_snapshot
+            from services.solstice_replay import recorded_display
+            conn = getattr(duckdb_engine, "_conn", None)
+            return recorded_display(replay_snapshot(conn, snapshot_id), ticker, snapshot_id) if conn is not None else None
+
         def read_alerts(ticker):
             from services.research_data_seam import stored_research_alerts
             return stored_research_alerts(duckdb_engine.query_strict, ticker)
@@ -3770,7 +3895,7 @@ try:
         try:
             repository = AgentRepository(db)
             await repository.initialize()
-            reads = ResearchReads(peek_chain, peek_map, read_alerts)
+            reads = ResearchReads(peek_chain, peek_map, read_alerts, read_recorded_map=read_recorded_map)
             from services.agent.codex_model import CodexModel
             from services.agent.spend import SpendLedger, money_units
             spending = SpendLedger(repository.budgets, cap_units=money_units(os.getenv("AGENT_DAILY_BUDGET_USD", "20")), audit_collection=db["agent_budget_audit"])
@@ -3967,6 +4092,45 @@ async def shutdown_solstice_capture() -> None:
                 await _solstice_capture_task
     except Exception as e:
         log.warning("Solstice capture shutdown error: %s", e)
+
+
+# ============ Solstice Price-Path Producer (R15-2, Spark, default OFF) ============
+# Wires the missing scheduled price-path producer WITHOUT activating it.
+# Startup registers the file/memory store + Public-quote capture seam, then
+# calls start_worker(), which refuses with {"started": False,
+# reason: "FLOWW_PRICE_PATH_PRODUCER!=1"} unless the operator explicitly arms
+# it. Shutdown stops the thread if running. Shared-file writer: Spark
+# (default lifecycle owner); Zed ack pending. No orders, no activation.
+@app.on_event("startup")
+async def startup_solstice_price_paths() -> None:
+    try:
+        from services import solstice_price_producer as _ppp
+        from services.solstice_price_fetch import fetch_one_public_quote, symbols_from_env
+
+        _ppp.register_store(duckdb_engine.conn if "duckdb_engine" in globals() else None)
+        from services import public_budget as _pb
+
+        _ppp.register_capture(
+            symbols=symbols_from_env(),
+            fetch_one=fetch_one_public_quote,
+            session_gate=None,  # default XNYS calendar gate
+            cadence_s=300,
+            budget=_pb.budget,
+        )
+        receipt = _ppp.start_worker()
+        log.info("Solstice price-path producer startup: %s", receipt)
+    except Exception as e:
+        log.warning("Solstice price-path producer startup failed (non-fatal): %s", e)
+
+
+@app.on_event("shutdown")
+async def shutdown_solstice_price_paths() -> None:
+    try:
+        from services import solstice_price_producer as _ppp
+
+        _ppp.stop_worker()
+    except Exception as e:
+        log.warning("Solstice price-path producer shutdown error: %s", e)
 
 
 # ============ Paper Trading Engine ============

@@ -102,11 +102,19 @@ class FridayPinStrategy:
             except (ValueError, AttributeError):
                 ts = datetime.now(UTC)
 
-        # Convert to ET (UTC-5 or UTC-4 for DST)
-        # Simple approximation: ET = UTC - 5h
-        from datetime import timedelta
-        et_offset = timedelta(hours=5)
-        ts_et = ts.astimezone(UTC) - et_offset
+        # Convert to ET. This hardcoded UTC-5, which is EST and ignores DST,
+        # even though the comment above it acknowledged the problem. For ~5
+        # months a year every bar was read an hour early: a 15:35 ET bar
+        # evaluated as 14:35 and was REJECTED by the 15:30-15:40 entry window
+        # this method exists to catch. The comment claimed to handle DST; the
+        # code did not. zoneinfo does.
+        from zoneinfo import ZoneInfo
+
+        try:
+            ts_et = ts.astimezone(ZoneInfo("America/New_York"))
+        except Exception:
+            from datetime import timedelta
+            ts_et = ts.astimezone(UTC) - timedelta(hours=5)
 
         # Check Friday (weekday 4 = Friday)
         if ts_et.weekday() != 4:

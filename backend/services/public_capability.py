@@ -34,7 +34,7 @@ _OPERATIONS_BASE: list[dict[str, Any]] = [
     {"id": 16, "op": "get_bars_agg", "docs": "market-data/get-bars-v2-with-aggregation", "wrapper": "PublicBroker.get_bars", "writes": False},
     {"id": 17, "op": "preflight_single", "docs": "order-placement/preflight-single-leg", "wrapper": "PublicBroker.preflight_single_leg", "writes": False},
     {"id": 18, "op": "preflight_multi", "docs": "order-placement/preflight-multi-leg", "wrapper": "PublicBroker.preflight_multi_leg", "writes": False},
-    {"id": 19, "op": "place_order", "docs": "order-placement/place-order", "wrapper": "PublicBroker.place_order (UNGATED LIVE — disarmed, no route)", "writes": True},
+    {"id": 19, "op": "place_order", "docs": "order-placement/place-order", "wrapper": "PublicBroker.place_order (gated LIVE — POST /api/public/order, FLOWW_ENABLE_LIVE_PUBLIC==1)", "writes": True},
     {"id": 20, "op": "replace_order", "docs": "order-placement/replace-order", "wrapper": "PublicBroker.replace_order (disarmed)", "writes": True},
     {"id": 21, "op": "search_orders", "docs": "order-placement/search-orders", "wrapper": "PublicBroker.search_orders", "writes": False},
     {"id": 22, "op": "get_order_v2", "docs": "order-placement/get-order-v2", "wrapper": "PublicBroker.get_order_v2", "writes": False},

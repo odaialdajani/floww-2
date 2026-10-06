@@ -345,6 +345,38 @@ beforeEach(() => {
 
 afterEach(() => { global.Date = RealDate; });
 
+describe("saved scan findings status", () => {
+  it("does not claim empty history when the first scan fails", async () => {
+    mockBackend();
+    const fetcher = global.fetch;
+    global.fetch = jest.fn((url, ...args) => String(url).includes("/scan?")
+      ? Promise.reject(new Error("scan unavailable")) : fetcher(url, ...args));
+    render(<FlowseekerProBlademap active />);
+    await waitFor(() => expect(global.fetch.mock.calls.some(([url]) => String(url).includes("/scan?"))).toBe(true));
+    await act(async () => {});
+    expect(screen.getByText("Saved findings are unavailable.")).toBeInTheDocument();
+    expect(screen.queryByText("No earlier findings saved yet.")).not.toBeInTheDocument();
+  });
+  it.each([undefined, "unknown"])("does not claim empty history for status %s", async findingsStatus => {
+    mockBackend({ scanOverrides: { findings_status: findingsStatus } });
+    render(<FlowseekerProBlademap active />);
+    await waitFor(() => expect(screen.getByTestId("trade-now-row")).toBeInTheDocument());
+    expect(screen.getByText("Saved findings are unavailable.")).toBeInTheDocument();
+    expect(screen.queryByText("No earlier findings saved yet.")).not.toBeInTheDocument();
+  });
+  it("shows an empty list only after an available read", async () => {
+    mockBackend({ scanOverrides: { findings_status: "available", recent_findings: [] } });
+    render(<FlowseekerProBlademap active />);
+    expect(await screen.findByText("No earlier findings saved yet.")).toBeInTheDocument();
+  });
+  it("keeps the incomplete-list notice for a partial read", async () => {
+    mockBackend({ scanOverrides: { findings_status: "partial", recent_findings: [] } });
+    render(<FlowseekerProBlademap active />);
+    expect(await screen.findByText(/Some recent findings could not be saved/)).toBeInTheDocument();
+    expect(screen.queryByText("No earlier findings saved yet.")).not.toBeInTheDocument();
+  });
+});
+
 describe("Tidehunter Pro v3 — one page, zero page tabs", () => {
   it("ignores browser visibility changes while the page is inactive", async () => {
     mockBackend();const view=render(<FlowseekerProBlademap active />);

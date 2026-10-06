@@ -1,7 +1,7 @@
 import {useEffect, useRef, useState} from "react";
 import {API} from "../config/api";
 
-export const THINKING_LABELS = {low:"Quick", medium:"Balanced", high:"Deep", xhigh:"Deeper", max:"Deepest"};
+export const THINKING_LABELS = {low:"Quick", medium:"Balanced", high:"Deep", xhigh:"Extra high", max:"Deepest"};
 export const SPEED_LABELS = {default:"Standard", priority:"Fast (uses more allowance)"};
 
 export default function AgentModelSettings({disabled=false, onSaving=()=>{}}) {
@@ -60,12 +60,24 @@ export default function AgentModelSettings({disabled=false, onSaving=()=>{}}) {
   finally{clearTimeout(timer);if(epoch.current===current){setLoading(false);onSaving(!confirmed);}}
  };
  const model=models.find(m=>m.id===selected?.model);
+ const sol=models.find(m=>m.label==="GPT-6.1-Sol");
+ const solBlocker=!sol?"GPT-6.1-Sol is not offered by this login":
+  !sol.efforts.includes("xhigh")?"GPT-6.1-Sol does not offer xhigh":
+  !sol.speeds.includes("default")?"GPT-6.1-Sol does not offer Standard speed":"";
  const changed=selected && JSON.stringify(selected)!==JSON.stringify(saved);
  return <div className="lodestar-model-settings">
   <button type="button" disabled={disabled || loading} onClick={()=>open?setOpen(false):load()} aria-expanded={open}>
    {loading?"Checking AI choices…":"AI choices · ChatGPT login"}
   </button>
   {open && <div>
+   {!loading && <div>
+    <button type="button" disabled={disabled || Boolean(solBlocker)}
+     aria-describedby={solBlocker?"lodestar-sol-blocker":undefined}
+     onClick={()=>{setSelected({model:sol.id,effort:"xhigh",speed:"default"});setMessage("");}}>
+     Use GPT-6.1-Sol · Extra high
+    </button>
+    {solBlocker && <p id="lodestar-sol-blocker" role="status">{solBlocker}. No replacement is saved automatically.</p>}
+   </div>}
    {model && <fieldset disabled={disabled || loading}>
     <legend>Choose how your next question is answered</legend>
     <label>Model<select value={selected.model} onChange={e=>changeModel(e.target.value)}>

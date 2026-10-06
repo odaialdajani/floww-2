@@ -1,5 +1,35 @@
 import { replayIndexOf, replayToDisplay, shouldIgnoreLive, stepReplay } from "./solsticeReplay";
 
+test("recorded request and provenance restore without deriving a live identity", () => {
+  const display = { map_query: { expiries: 4, expiryScope: "next", sessionDate: "2026-10-01" },
+    scope_selection: { kind: "next", selected_expiries: ["2026-10-02"] }, event_time: "2026-10-01T14:00:00Z" };
+  const rep = { snapshot: { snapshot_id: "snap1", ticker: "SPY", data_source: "fixture", formula_version: "gex.v2" },
+    context: { display }, grids: {}, metrics_full: {} };
+  const out = replayToDisplay(rep, "SPY");
+  expect(out.map_query).toEqual(display.map_query);
+  expect(out.scope_selection).toEqual(display.scope_selection);
+  expect(out.data_source).toBe("fixture");
+  expect(out.formula_version).toBe("gex.v2");
+  expect(out.event_time).toBe(display.event_time);
+  const old = replayToDisplay({ snapshot: rep.snapshot, context: {} }, "SPY");
+  expect(old.map_query).toBeNull();
+});
+
+test("VEX and Charm replay preserve stored signed cells and conventions without fallback", () => {
+ const main={strikes:[100],expiries:["2026-10-02"],grid:{"2026-10-02":{"100":999}},
+   vex_grid:{"2026-10-02":{"100":0}},charm_grid:{"2026-10-02":{"100":-7}},
+   vex_meta:{unit:"USD delta-notional/+1 vol pt",record_version:"metric-record.v1"},charm_meta:{unit:"dollar_charm_1pct_per_year"}};
+ const rep={snapshot:{ticker:"SPY",snapshot_id:"record"},grids:{grid:main},metrics_full:{},context:{}};
+ const out=replayToDisplay(rep,"SPY");
+ expect(out.grid.vex_grid).toEqual(main.vex_grid);
+ expect(out.grid.charm_grid).toEqual(main.charm_grid);
+ expect(out.grid.vex_meta).toEqual(main.vex_meta);
+ expect(out.grid.charm_meta).toEqual(main.charm_meta);
+ const old=replayToDisplay({snapshot:rep.snapshot,grids:{grid:{...main,vex_meta:undefined,charm_grid:undefined}},context:{}},"SPY");
+ expect(old.grid.vex_meta).toBeUndefined();
+ expect(old.grid.charm_grid).toBeUndefined();
+});
+
 describe("solsticeReplay (P09/R4-15)", () => {
   const snaps = [{ id: "a", asof: "t1" }, { id: "b", asof: "t2" }, { id: "c", asof: "t3" }];
   test("steps chronologically, stops at ends", () => {

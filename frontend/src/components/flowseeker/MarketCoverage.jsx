@@ -4,10 +4,20 @@ import { API } from "../../config/api";
 
 export default function MarketCoverage({ coverage }) {
   const [release, setRelease] = useState(null);
+  // "pending" | "ok" | "failed" are genuinely different facts. Collapsing
+  // them into one "not available yet" string made a permanent failure
+  // indistinguishable from a first load, so an operator could believe the
+  // release state was merely stale when nothing was being checked at all.
+  const [releaseState, setReleaseState] = useState("pending");
   useEffect(() => {
     const controller = new AbortController();
     const refresh = () => axios.get(`${API}/market/provider-updates`, { signal: controller.signal, timeout: 30000 })
-      .then(({ data }) => setRelease(data)).catch(() => {});
+      .then(({ data }) => { setRelease(data); setReleaseState("ok"); })
+      .catch((e) => {
+        if (controller.signal.aborted) return;
+        setRelease(null);
+        setReleaseState("failed");
+      });
     refresh();
     const id = setInterval(refresh, 300000);
     return () => { clearInterval(id); controller.abort(); };
@@ -37,9 +47,22 @@ export default function MarketCoverage({ coverage }) {
       </>}
     </> : "Automatic scan coverage is not available yet."}
     <br />
-    {release?.status === "current" && checkIsRecent ? "Provider release check: no changes since the last review."
-      : release?.status === "review_needed" ? "Provider changes found: review needed before new functions can be used."
-        : "Provider release check is not available yet."}
+    {releaseState === "failed" ? (
+      <span data-testid="release-check-failed">
+        Provider release check could not be completed — the provider status endpoint is unreachable. New provider functions stay unusable until this succeeds.
+      </span>
+    ) : releaseState === "pending" ? (
+      <span data-testid="release-check-pending">Provider release check pending…</span>
+    ) : release?.status === "current" && checkIsRecent
+      ? "Provider release check: no changes since the last review."
+      : release?.status === "review_needed"
+        ? "Provider changes found: review needed before new functions can be used."
+        : (
+          <span data-testid="release-check-unknown">
+            Provider release check returned an unrecognised status
+            {release?.status ? ` (${release.status})` : ""}; treat the release state as unverified.
+          </span>
+        )}
     {Number.isFinite(checkedAt) && ` Last checked ${new Date(checkedAt).toLocaleString()}.`}
   </div>;
 }

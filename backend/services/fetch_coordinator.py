@@ -116,7 +116,14 @@ class FetchCoordinator:
                     "budget_exhausted", str(exc), retry_after=exc.retry_after
                 )
             except Exception as exc:
+                # Fail CLOSED. This used to log and fall through into the
+                # fetch, so an unreachable governor (as opposed to an
+                # exhausted one) let external spend proceed uncapped --
+                # removing the budget exactly when it could not be read.
                 logger.warning("Budget acquire failed for %s: %s", key, exc)
+                return degraded_response(
+                    "budget_unavailable", str(exc),
+                )
         logger.info("Initiating external fetch for %s", key)
         task = asyncio.create_task(self._do_fetch(key, ticker, expiries, fetcher))
         if pub_budget is not None:

@@ -74,7 +74,21 @@ def research_default_features(zone: tuple[float, float], encounter_price: float,
     Returns {zone, target, stop, horizon_s, policy_version, experimental,
     barrier_source, status} or {status: policy_unavailable, reason}.
     """
+    # `lo, hi = zone` unpacked before any validation, so a None zone raised
+    # TypeError instead of reaching the documented policy_unavailable path.
+    # server.py explicitly guards this call with `zone=(None if zone is None
+    # else tuple(zone))`, so None is an anticipated input, not a caller bug.
+    if not isinstance(zone, (tuple, list)) or len(zone) != 2:
+        return {"status": "policy_unavailable",
+                "reason": "missing_or_malformed_zone",
+                "policy_version": POLICY_VERSION}
     lo, hi = zone
+    try:
+        lo, hi = float(lo), float(hi)
+    except (TypeError, ValueError):
+        return {"status": "policy_unavailable",
+                "reason": "non_numeric_zone",
+                "policy_version": POLICY_VERSION}
     if not (math.isfinite(lo) and math.isfinite(hi) and hi > lo):
         return {"status": "policy_unavailable",
                 "reason": "invalid_zone",

@@ -40,7 +40,20 @@ def _parse_strike_map(raw: Any, value_kind: str = "float") -> dict[float, Any]:
 
 
 def _parse_momentum_score(raw: Any) -> int:
-    """Coerce a momentum input to the 0-100 detector scale."""
+    """Coerce a momentum input to the 0-100 detector scale.
+
+    Returns 50 for anything that is not a usable reading. That is a no-alert
+    sentinel, not a measurement: it sits inside the dead band between
+    MOMENTUM_EXTREME_LOW (20) and MOMENTUM_EXTREME_HIGH (80), so unavailable
+    momentum cannot fire an alert.
+
+    bool is rejected explicitly. It subclasses int, so `float(True)` is 1.0
+    and the old coercion turned a boolean into a real score of 1 -- below
+    MOMENTUM_EXTREME_LOW, which BROADCASTS a "Strong BEARISH momentum" alert
+    to every /ws/signals client from a value that was never a measurement.
+    """
+    if isinstance(raw, bool):
+        return 50
     try:
         score = int(float(raw))
     except (TypeError, ValueError, OverflowError):

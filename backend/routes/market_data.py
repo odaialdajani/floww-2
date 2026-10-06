@@ -117,11 +117,16 @@ async def heatmap(
     dte: int | None = Query(None, ge=0, le=30),
     scalp: bool = Query(False),
     max_strikes: int = Query(80, ge=20, le=200),
+    expiry_scope: str = Query("loaded", pattern="^(loaded|next)$"),
 ):
     from server import build_heatmap
     t = ticker.strip().upper()
     if t == "SPX":
         t = "^SPX"
+    if expiry_scope == "next":
+        if dte is not None or scalp or mode != "day":
+            raise HTTPException(422, "Next listed cannot be combined with DTE, scalp or swing")
+        return await build_heatmap(t, expiries, taps, mode, dte, scalp, max_strikes, expiry_scope="next")
     return await build_heatmap(t, expiries, taps, mode, dte, scalp, max_strikes)
 
 
@@ -229,6 +234,11 @@ async def chain(
     spot = raw["spot"]
     from services.chain_readings import chain_readings
     rows = chain_readings(contracts, spot, t)
+    # Same canonical exposure as /api/public/chain (C3 wiring): identical
+    # values for standard contracts, quarantine+basis for the rest, so the
+    # two chain routes never disagree on a row.
+    from services.triad_projection import annotate_contract_exposure
+    rows = annotate_contract_exposure(rows, spot)
     # Apply DTE filter if specified
     if dte_max is not None:
         rows = [r for r in rows if r.get("dte") is not None and r["dte"] <= dte_max]

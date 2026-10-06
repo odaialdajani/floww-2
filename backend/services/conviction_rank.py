@@ -9,6 +9,8 @@ inputs degrade the tier, never fabricate confidence.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 SCHEMA_VERSION = "conviction_rank.v1"
 VERSION = "conviction_rank.v1"
 WEIGHTS = {"flow": 0.35, "opportunity": 0.30, "confluence": 0.20, "ml": 0.15}
@@ -28,8 +30,17 @@ def _clamp01(x):
 def _norm_flow(flow):
     if flow is None:
         return 0.0, "missing"
+    raw = flow.get("conviction", flow.get("score")) if isinstance(flow, dict) else flow
+    # Same availability boundary as _norm_conf: a producer that ran and found
+    # nothing reports None, and an empty dict carries no reading. Neither is
+    # malformed data, so neither is "invalid", and neither may report "ok" --
+    # that status is what tells a consumer the evidence was actually measured.
+    # `raw is None` already covers `{}`: a dict without conviction or score
+    # yields None, which is the same absence a producer reports.
+    if raw is None:
+        return 0.0, "missing"
     try:
-        v = float(flow.get("conviction", flow.get("score", 0)) if isinstance(flow, dict) else flow)
+        v = float(raw)
     except (TypeError, ValueError):
         return 0.0, "invalid"
     return _clamp01(v / 100.0), "ok"
@@ -46,15 +57,35 @@ def _norm_opp(opp):
 
 
 def _norm_conf(conf):
+    # A missing input is an ABSENT observation, not a neutral one. Returning
+    # 0.5 here made an entirely empty setup score 17.5 (0.2*0.5 + 0.15*0.5),
+    # which outranked real but weak evidence and read as a low-conviction
+    # signal rather than the absence of one. `*_status` already reports
+    # "missing", so the component must be 0.0 to agree with it.
     if conf is None:
-        return 0.5, "missing"
+        return 0.0, "missing"
     try:
-        v = float(conf.get("total", 0) if isinstance(conf, dict) else conf)
+        raw = conf.get("total", 0) if isinstance(conf, dict) else conf
+    except AttributeError:
+        return 0.0, "invalid"
+    # A producer that ran and found nothing reports total=None (see
+    # services.agent.confluence.score, which pairs it with
+    # direction="insufficient_evidence"). That is an absence, not malformed
+    # data -- relabelling it "invalid" told consumers the producer emitted
+    # garbage. An empty dict likewise carries no reading.
+    # NOTE: the default here is 0, NOT None, so `{}` yields 0.0 and would
+    # report "ok". The empty-dict clause is load-bearing for confluence.
+    if raw is None or (isinstance(conf, dict) and not conf):
+        return 0.0, "missing"
+    try:
+        v = float(raw)
     except (TypeError, ValueError):
-        return 0.5, "invalid"
-    if v > 100 or v < -100:
-        v = max(-100.0, min(100.0, v))
-    return _clamp01((v + 100.0) / 200.0), "ok"
+        return 0.0, "invalid"
+    # `total` is signed, so 0 is genuinely "no confluence signal". Rescale
+    # around 0 rather than 0->0.5, so a neutral reading contributes nothing
+    # instead of half a directional signal, and bearish/bullish totals of
+    # equal magnitude receive equal quality.
+    return _clamp01(abs(v) / 100.0), "ok"
 
 
 _ML_MAP = {
@@ -70,8 +101,18 @@ _ML_MAP = {
 
 
 def _norm_ml(ml):
+    # Same rule as _norm_conf: absent is absent. A missing model reading was
+    # returning 0.5, contributing 7.5 points of apparently-sourced conviction
+    # to every row the model had not scored.
     if ml is None:
-        return 0.5, "missing"
+        return 0.0, "missing"
+    # A dict with no prediction -- empty, or explicitly null -- carries no
+    # reading. Same availability boundary as _norm_flow / _norm_conf. This one
+    # clause covers both: `{}` yields _lab None, as does {"prediction": None}.
+    if isinstance(ml, dict):
+        _lab = ml.get("prediction", ml.get("label", ml.get("direction")))
+        if _lab is None:
+            return 0.0, "missing"
     try:
         if isinstance(ml, dict):
             lab = str(ml.get("prediction", ml.get("label", ml.get("direction", "")))).upper()
@@ -80,10 +121,55 @@ def _norm_ml(ml):
             lab = str(ml).upper()
             conf = 0.75
     except (TypeError, ValueError):
-        return 0.5, "invalid"
-    base = _ML_MAP.get(lab, 0.5)
+        return 0.0, "invalid"
+    base = _ML_MAP.get(lab)
+    if base is None:
+        # An unrecognised label is not a HOLD. Treat it as unavailable so an
+        # unknown string cannot be silently scored as a neutral middle.
+        return 0.0, "invalid"
+    # Quality is evidence STRENGTH, not direction. BULLISH and BEARISH of equal
+    # confidence must receive equal quality, so scale magnitude symmetrically
+    # around the neutral label rather than mapping DOWN->0 and UP->1, which
+    # handed a bearish model 0.0 and a bullish model 1.0 for identical evidence.
+    neutral = 0.5
     w = max(0.0, min(1.0, conf))
-    return _clamp01(0.5 + (base - 0.5) * (0.5 + 0.5 * w)), "ok"
+    return _clamp01(abs(base - neutral) * (0.5 + 0.5 * w)), "ok"
+
+
+# Age at which an observation is reported STALE. Reporting only -- this does NOT
+# rescale the score. A decay curve would be an unvalidated model of how signal
+# decays, and this module has no evidence for one. Consumers get the age and
+# decide; the module refuses to invent the decay.
+STALE_AFTER_SECONDS = 7 * 24 * 3600  # matches the 7-day alert feed window
+
+
+def _recency(asof):
+    """Age diagnostics for an observation. Never changes conviction.
+
+    `asof` was recorded but never evaluated, so a 6-month-old alert scored
+    identically to a fresh one -- a historical high-conviction alert read as a
+    current directional observation. This surfaces the age so that is visible.
+    """
+    if not asof:
+        return {"asof_age_seconds": None, "asof_status": "unknown"}
+    dt = asof
+    if isinstance(dt, str):
+        try:
+            dt = datetime.fromisoformat(str(dt).replace("Z", "+00:00"))
+        except ValueError:
+            return {"asof_age_seconds": None, "asof_status": "unparseable"}
+    if not isinstance(dt, datetime):
+        return {"asof_age_seconds": None, "asof_status": "unparseable"}
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    age = (datetime.now(UTC) - dt).total_seconds()
+    if age < 0:
+        status = "future"
+    elif age > STALE_AFTER_SECONDS:
+        status = "stale"
+    else:
+        status = "fresh"
+    return {"asof_age_seconds": int(age), "asof_status": status}
 
 
 def rank_one(
@@ -134,6 +220,7 @@ def rank_one(
     }
     if isinstance(flow, dict) and flow.get("key"):
         ev["flow_alert_key"] = flow["key"]
+    ev.update(_recency(asof))
     return {
         "ticker": str(ticker or "").upper(),
         "conviction": conviction,
@@ -156,11 +243,23 @@ def rank_many(rows, **kw):
             continue
         opp = r.get("opportunity") if isinstance(r.get("opportunity"), dict) else None
         conv = r.get("conviction")
-        flow = conv if isinstance(conv, dict) and "conviction" in conv else None
-        confl = conv if isinstance(conv, dict) and "total" in conv else None
-        ml_in = conv if isinstance(conv, dict) and ("prediction" in conv or "label" in conv) else None
-        if flow is None and confl is None and ml_in is None and isinstance(conv, dict):
-            flow = conv
+        flow = confl = ml_in = None
+        # A row's `conviction` is the ALREADY-FUSED output of an earlier
+        # rank_one. It is not a scorer payload. Re-reading it here re-fused a
+        # fused score: a blob carrying `label` matched the ML branch and
+        # `total` matched the confluence branch, so the row silently gained
+        # components it never had. Only unpack a blob that is unambiguously a
+        # raw scorer payload -- one that carries a scorer-shaped value and none
+        # of the fused-output markers (components / total / *_status / tier).
+        if isinstance(conv, dict):
+            fused_markers = {"components", "total", "tier", "flow_status", "ml_status", "confluence_status"}
+            if not (fused_markers & set(conv)):
+                if "conviction" in conv or "score" in conv:
+                    flow = conv
+                elif "prediction" in conv or "label" in conv:
+                    ml_in = conv
+                elif "opportunity_score" in conv:
+                    flow = conv
         out.append(
             rank_one(
                 r.get("ticker"),

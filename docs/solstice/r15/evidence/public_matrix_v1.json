@@ -1,0 +1,469 @@
+{
+  "base": "1530ccd7",
+  "contract": "public-capability.v1",
+  "docs_base": "https://public.com/api/docs",
+  "operations": [
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "authorization/create-personal-access-token",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [],
+      "id": 1,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "create_token",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.auth",
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "list-accounts/get-accounts",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Broker"
+      ],
+      "id": 2,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "get_accounts",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.get_accounts",
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "account-details/get-account-portfolio-v2",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Portfolio",
+        "Broker",
+        "Journal"
+      ],
+      "id": 3,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "get_portfolio_v2",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.get_portfolio",
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "account-details/get-history",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Journal",
+        "Broker"
+      ],
+      "id": 4,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "get_history",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.get_history",
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "tax-lot-selling/get-unrealized-tax-lots",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Journal"
+      ],
+      "id": 5,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "get_tax_lots",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.get_unrealized_tax_lots",
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "tax-lot-selling/get-unrealized-tax-lots-for-symbol",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [],
+      "id": 6,
+      "installed": false,
+      "observed": "not_observed",
+      "op": "get_tax_lots_symbol",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "none",
+      "wrapper": null,
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "tax-lot-selling/get-unrealized-tax-lots-csv",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [],
+      "id": 7,
+      "installed": false,
+      "observed": "not_observed",
+      "op": "get_tax_lots_csv",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "none",
+      "wrapper": null,
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "instrument-details/get-all-instruments",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Triad",
+        "Portfolio"
+      ],
+      "id": 8,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "get_all_instruments",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.get_all_instruments",
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "instrument-details/get-instrument",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Broker"
+      ],
+      "id": 9,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "get_instrument",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.get_instrument",
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "instrument-details/search-bonds",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [],
+      "id": 10,
+      "installed": false,
+      "observed": "not_observed",
+      "op": "search_bonds",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "none",
+      "wrapper": null,
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "market-data/get-quotes",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Solstice",
+        "Triad",
+        "Broker"
+      ],
+      "id": 11,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "get_quotes",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.get_quotes",
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "market-data/get-bond-details",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [],
+      "id": 12,
+      "installed": false,
+      "observed": "not_observed",
+      "op": "get_bond_details",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "none",
+      "wrapper": null,
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "market-data/get-option-expirations",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Solstice",
+        "Triad"
+      ],
+      "id": 13,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "get_option_expirations",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.get_option_expirations",
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "market-data/get-option-chain",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Solstice",
+        "Triad",
+        "Heatseeker"
+      ],
+      "id": 14,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "get_option_chain",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.get_option_chain",
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "market-data/get-bars-v2",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Solstice"
+      ],
+      "id": 15,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "get_bars_v2",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.get_bars",
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "market-data/get-bars-v2-with-aggregation",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Solstice"
+      ],
+      "id": 16,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "get_bars_agg",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.get_bars",
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "order-placement/preflight-single-leg",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Broker"
+      ],
+      "id": 17,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "preflight_single",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.preflight_single_leg",
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "order-placement/preflight-multi-leg",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Broker"
+      ],
+      "id": 18,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "preflight_multi",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.preflight_multi_leg",
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "order-placement/place-order",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Broker(gated)"
+      ],
+      "id": 19,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "place_order",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.place_order (gated LIVE \u2014 POST /api/public/order, FLOWW_ENABLE_LIVE_PUBLIC==1)",
+      "writes": true
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "order-placement/replace-order",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Broker(gated)"
+      ],
+      "id": 20,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "replace_order",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.replace_order (disarmed)",
+      "writes": true
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "order-placement/search-orders",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Broker",
+        "Journal"
+      ],
+      "id": 21,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "search_orders",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.search_orders",
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "order-placement/get-order-v2",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Broker",
+        "Journal"
+      ],
+      "id": 22,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "get_order_v2",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.get_order_v2",
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "order-placement/place-multileg-order",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Broker(gated)"
+      ],
+      "id": 23,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "place_multileg",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.place_multileg_order (disarmed, type-fixed)",
+      "writes": true
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "order-placement/get-order",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Broker",
+        "Journal"
+      ],
+      "id": 24,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "get_order_legacy",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.get_order",
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "order-placement/cancel-order",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Broker"
+      ],
+      "id": 25,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "cancel_order",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.cancel_order (disarmed, DELETE-fixed)",
+      "writes": true
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "option-details/get-option-greeks",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Solstice"
+      ],
+      "id": 26,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "get_greeks",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.get_option_greeks",
+      "writes": false
+    },
+    {
+      "checked_at": "2026-10-02T20:30:00Z",
+      "coverage": "offline-mocked-no-live-calls",
+      "docs": "option-details/get-strategy-quote",
+      "entitlement": "commissioning_required",
+      "frontend_consumer": [
+        "Broker"
+      ],
+      "id": 27,
+      "installed": true,
+      "observed": "not_observed",
+      "op": "get_strategy_quote",
+      "refusal_contract": "live_trading_disabled(403-disarmed)/no_public_api_key(502)/unsupported-capability(labeled-unknown)",
+      "tests": "mocked_only",
+      "wrapper": "PublicBroker.get_strategy_quote",
+      "writes": false
+    }
+  ],
+  "reviewed_at": "2026-09-23"
+}

@@ -5,14 +5,14 @@ import { useAuth } from "./context/AuthContext";
 
 import { formatStrike } from "./lib/marketDisplay";
 import { fmt, fmtAbs, tagFor, TRIAD, DEFAULT_TICKERS } from "./lib/helpers";
-import { buildHeatmapQuery } from "./lib/heatmapQuery";
+import { buildHeatmapQuery, heatmapReadPath } from "./lib/heatmapQuery";
 import GridHeatmap from "./components/GridHeatmap";
 import DomHeatmap from "./components/DomHeatmap";
 import MultiTickerHeatmap from "./components/MultiTickerHeatmap";
 import VolumeProfileGrid from "./components/VolumeProfileGrid";
 import HeatseekerDashboard from "./components/heatseeker/HeatseekerDashboard";
 import Movers from "./components/Movers";
-import UniverseLeaderboard from "./components/UniverseLeaderboard";
+import SolsticeLeaderboard from "./components/heatseeker/SolsticeLeaderboard";
 import GexStrikeTable from "./components/heatseeker/GexStrikeTable";
 import BarHeatmap from "./components/BarHeatmap";
 import PatternCard from "./components/PatternCard";
@@ -39,6 +39,7 @@ import UOAPanel from "./components/UOAPanel";
 import { useWebSocketGex } from "./hooks/useWebSocketGex";
 import { useDebounce } from "./hooks/useDebounce";
 import { useScopedReading } from "./hooks/useScopedReading";
+import useSolsticeReviewCallbacks from "./hooks/useSolsticeReviewCallbacks";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { ShortcutsModal } from "./components/ShortcutsModal";
 import { MorningBriefing } from "./components/MorningBriefing";
@@ -52,9 +53,12 @@ import SkylitDashboard from "./components/heatseeker/SkylitDashboard";
 import StealThreePreview from "./components/heatseeker/StealThreePreview";
 import FlowseekerProBlademap from "./components/flowseeker/FlowseekerProBlademap";
 import PublicPanel from "./components/PublicPanel";
+import TidehunterPublicBridge from "./components/public/TidehunterPublicBridge";
+import NativeHandoffHistory from "./components/public/NativeHandoffHistory";
 import AlertOverlay from "./components/AlertOverlay";
 import PWAInstallBanner from "./components/PWAInstallBanner";
 import AppShell from "./shell/AppShell";
+import useWorkspaceNavigation from "./shell/useWorkspaceNavigation";
 import { useTheme } from "./context/ThemeContext";
 import { autoDecimate } from "./utils/dataDecimator";
 import { mutatingHeaders } from "./utils/appKey";
@@ -470,13 +474,7 @@ const regimeColor = (regime) => regime === "positive" ? "text-emerald-400" : reg
 // ============ Main App ============
 export default function App() {
   const { token, user, isAuthenticated, logout } = useAuth();
-  const [page, setPage] = useState(() => {
-    try {
-      const q = new URLSearchParams(window.location.search).get("page");
-      if (q && ["heatseeker", "trinity", "skylit", "flowseeker-pro", "steal-three", "journal", "portfolio", "public"].includes(q)) return q;
-    } catch {}
-    return "heatseeker";
-  });
+  const [page, setPage] = useWorkspaceNavigation();
   const [ticker, setTicker] = useState(() => {
     try { return localStorage.getItem("floww_settings") ? JSON.parse(localStorage.getItem("floww_settings")).defaultTicker || "SPY" : "SPY"; } catch { return "SPY"; }
   });
@@ -486,12 +484,13 @@ export default function App() {
   const [showLeftSidebar, setShowLeftSidebar] = useState(false);
   const [showRightSidebar, setShowRightSidebar] = useState(false);
   const [viewMode, setViewMode] = useState("gex");
-  const [view, setView] = useState("skylit");
+  const [view, setView] = useState("profile");
   const [mode, setMode] = useState("day");
   const [filters, setFilters] = useState({ side: "all", lifecycle: "all", magMin: 0 });
   const [expiries, setExpiries] = useState(4);
   const [trinityTab, setTrinityTab] = useState("gex");
   const [dte, setDte] = useState(null);
+  const [expiryScope, setExpiryScope] = useState("loaded");
   const { tickers, status: stockSearchStatus, retry: retryStockSearch } = useTickerDirectory(API);
   const [advancedLoading, setAdvancedLoading] = useState(true);
   const [advancedError, setAdvancedError] = useState(false);
@@ -499,6 +498,7 @@ export default function App() {
   const { theme, toggleTheme } = useTheme();
   const [tradeSelection, setTradeSelection] = useState(null);
   const [heatmapReplay, setHeatmapReplay] = useState(false);
+  const [tideReviewActive, setTideReviewActive] = useState(false);
   // Use auth context for user info
   const userEmail = user?.email || null;
   const userTier = user?.tier || null;
@@ -507,7 +507,9 @@ export default function App() {
   const debouncedMode = useDebounce(mode, 300);
   const debouncedExpiries = useDebounce(expiries, 300);
   const debouncedDte = useDebounce(dte, 300);
-  const readingScope = JSON.stringify([ticker, debouncedExpiries, debouncedMode, debouncedDte]);
+  const debouncedExpiryScope = useDebounce(expiryScope, 300);
+  const effectiveExpiryScope = page === "heatseeker" && debouncedMode === "day" ? debouncedExpiryScope : "loaded";
+  const readingScope = JSON.stringify([ticker, debouncedExpiries, debouncedMode, debouncedDte, effectiveExpiryScope]);
   const [data, setData] = useScopedReading(readingScope);
   const [livespot, setLivespot] = useScopedReading(ticker);
   const [err, setErr] = useScopedReading(readingScope);
@@ -535,8 +537,8 @@ export default function App() {
     fetchCtrl.current = ctrl;
     setLoading(true);
     try {
-      const qs = buildHeatmapQuery({ expiries: debouncedExpiries, mode: debouncedMode, dte: debouncedDte });
-      const res = await axios.get(`${API}/heatmap/${ticker}?${qs}`, { timeout: 30000, signal: ctrl.signal });
+      const qs = buildHeatmapQuery({ expiries: debouncedExpiries, mode: debouncedMode, dte: debouncedDte, expiryScope: effectiveExpiryScope });
+      const res = await axios.get(`${API}/${heatmapReadPath(ticker)}?${qs}`, { timeout: 30000, signal: ctrl.signal });
       if (fetchGen.current !== myGen) return; // superseded — never render stale
       setData(res.data); setErr(null);
     } catch (e) {
@@ -558,7 +560,7 @@ export default function App() {
     } finally {
       if (fetchGen.current === myGen) setLoading(false);
     }
-  }, [ticker, debouncedExpiries, debouncedMode, debouncedDte]);
+  }, [ticker, debouncedExpiries, debouncedMode, debouncedDte, effectiveExpiryScope]);
 
   // Fetch advanced analytics
   const fetchAdvanced = useCallback(async () => {
@@ -581,8 +583,8 @@ export default function App() {
         // Same query as the manual /heatmap fetch — a naked poll here
         // overwrites the user's DTE/Expiries/mode selection with backend
         // defaults on every tick (Round-8 regression).
-        const qs = buildHeatmapQuery({ expiries: debouncedExpiries, mode: debouncedMode, dte: debouncedDte });
-        const r = await axios.get(`${API}/data/${ticker}?${qs}`, { signal: ctrl.signal });
+        const qs = buildHeatmapQuery({ expiries: debouncedExpiries, mode: debouncedMode, dte: debouncedDte, expiryScope: effectiveExpiryScope });
+        const r = await axios.get(`${API}/${heatmapReadPath(ticker,{poll:true,expiryScope:effectiveExpiryScope})}?${qs}`, { signal: ctrl.signal });
         if (!cancelled && fetchGen.current === myGen) { setData(r.data); setErr(null); setLoading(false); }
       } catch (e) {
         if (!cancelled && fetchGen.current === myGen && !axios.isCancel?.(e)) { setErr(e.message); setLoading(false); }
@@ -591,7 +593,7 @@ export default function App() {
     doFetch();
     const id = setInterval(doFetch, refreshMs);
     return () => { cancelled = true; ctrl.abort(); clearInterval(id); };
-  }, [ticker, refreshMs, debouncedExpiries, debouncedMode, debouncedDte]);
+  }, [ticker, refreshMs, debouncedExpiries, debouncedMode, debouncedDte, effectiveExpiryScope]);
 
   // Advanced analytics with in-flight guard
   useEffect(() => {
@@ -651,6 +653,10 @@ export default function App() {
     const handler = (e) => {
       if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
       if (e.metaKey || e.ctrlKey) return;
+      // The strike matrix and modal dialogs own their keys: arrow-key cell
+      // navigation (and review controls) must never cycle tickers or flip
+      // pages/views out from under focused widgets.
+      if (e.target.closest && e.target.closest('[role="grid"], [role="dialog"]')) return;
 
       switch (e.key) {
         case "1": setPage("trinity"); break;
@@ -728,6 +734,9 @@ export default function App() {
     };
   }, [data]);
 
+  const solsticeCallbacks = useSolsticeReviewCallbacks({ ticker, data: displayData,
+    spot: livespot?.spot ?? data?.spot, setMode, refresh: fetchData, clearError: setErr, onReview: setTradeSelection });
+
   // F05: liveness is chain/Greek freshness, never socket/object presence.
   // Independent spot / chain / history / flow status from the snapshot itself.
   const heatLive = useMemo(() => {
@@ -789,7 +798,7 @@ export default function App() {
               </button>
             </div>
             {trinityTab === "gex" ? (
-              <TrinityView onFocusTicker={handleFocusTicker} onTradeSelect={setTradeSelection} />
+              <TrinityView ticker={ticker} onFocusTicker={setTicker} onTradeSelect={setTradeSelection} />
             ) : (
               <TrinityVolatility ticker={ticker.startsWith("^") ? ticker.slice(1) : ticker} expiries={8} />
             )}
@@ -933,23 +942,29 @@ export default function App() {
                     <button onClick={() => setView("multi")} className={`btn flex-1 ${view === "multi" ? "active" : ""}`}>Multi</button>
                     <button onClick={() => setView("profile")} className={`btn flex-1 ${view === "profile" ? "active" : ""}`}>Profile</button>
                   </div>
+                  <details className="mb-2"><summary>Additional view</summary>
+                    <button type="button" onClick={() => setView("volume-profile")} className={`btn ${view === "volume-profile" ? "active" : ""}`}>Volume profile</button>
+                  </details>
                   <div className="text-slate-500 mb-1 text-[10px]">Mode</div>
                   <div className="flex gap-1 mb-2">
                     {["day", "swing", "scalp"].map(m => (
                       <button key={m} onClick={() => setMode(m)} className={`btn flex-1 ${mode === m ? "active" : ""}`}>{m.toUpperCase()}</button>
                     ))}
                   </div>
-                  <div className="flex gap-1 mb-2">
-                    {["gex", "vex", "charm"].map(m => (
-                      <button key={m} onClick={() => setViewMode(m)} className={`btn flex-1 ${viewMode === m ? "active" : ""}`}>{m.toUpperCase()}</button>
-                    ))}
-                  </div>
+                  {/* O2: family switching (GEX/VEX/Charm) lives once in the
+                      Solstice control bar; this duplicate row is removed.
+                      viewMode state + keyboard shortcuts (e/v/h) unchanged. */}
                   <div className="text-slate-500 mb-1 text-[10px]">DTE</div>
                   <div className="flex gap-1 mb-2">
-                    {[{l:"0DTE",v:0},{l:"1DTE",v:1},{l:"Week",v:7},{l:"All",v:null}].map(({l,v}) => (
-                      <button key={l} onClick={() => setDte(v)} className={`btn flex-1 ${dte === v ? "active" : ""}`}>{l}</button>
+                    {[{l:"0DTE",v:0},{l:"≤1DTE",v:1},{l:"Week",v:7},{l:"All",v:null}].map(({l,v}) => (
+                      <button key={l} onClick={() => { setExpiryScope("loaded"); setDte(v); }} className={`btn flex-1 ${expiryScope === "loaded" && dte === v ? "active" : ""}`}>{l}</button>
                     ))}
                   </div>
+                  <div className="flex gap-1 mb-2">
+                    <button type="button" className={`btn ${expiryScope === "next" && mode === "day" ? "active" : ""}`} onClick={() => { setMode("day"); setDte(null); setExpiryScope("next"); }}>Next listed · day</button>
+                    <button type="button" className="btn" disabled aria-describedby="solstice-range-blocker">14–60 DTE</button>
+                  </div>
+                  <small id="solstice-range-blocker">14–60 DTE unavailable: current endpoint caps DTE at 30 and has no admitted lower bound.</small>
                   <div className="text-slate-500 mb-1 text-[10px]">Expiries</div>
                   <div className="flex gap-1">
                     {[2,4,6,8,12].map(n => (
@@ -959,7 +974,7 @@ export default function App() {
                 </div>
 
                 {!heatmapReplay && <Movers onPick={(t) => setTicker(t)} />}
-                {!heatmapReplay && <UniverseLeaderboard onPick={(t) => setTicker(t)} />}
+                {!heatmapReplay && <SolsticeLeaderboard onPick={setTicker} dte={dte} />}
                 <HistoryPanel ticker={ticker} />
                 <SettingsPanel
                   refreshMs={refreshMs}
@@ -978,12 +993,14 @@ export default function App() {
                 <OptionsChainTable ticker={ticker} spot={livespot?.spot ?? displayData?.spot} />
               ) : view === "multi" ? (
                 <MultiTickerHeatmap tickers={tickers} />
-              ) : view === "profile" ? (
+              ) : view === "volume-profile" ? (
                 <div className="volume-profile-page">
                   <VolumeProfileGrid data={displayData} spot={livespot?.spot ?? displayData?.spot} />
                 </div>
-              ) : view === "skylit" || view === "grid" ? (
+              ) : view === "skylit" || view === "grid" || view === "profile" ? (
                 <SkylitDashboard
+                  expiryScope={effectiveExpiryScope}
+                  localView={view}
                   onReplayChange={setHeatmapReplay}
                   ticker={ticker}
                   spot={livespot?.spot ?? data?.spot}
@@ -994,59 +1011,22 @@ export default function App() {
                   viewMode={viewMode}
                   onViewModeChange={setViewMode}
                   timeframe={mode === "scalp" ? "1m" : mode === "swing" ? "1h" : "5m"}
-                  onTimeframeChange={(tf) => {
-                    if (tf === "1m") setMode("scalp");
-                    else if (tf === "1h") setMode("swing");
-                    else setMode("day");
-                  }}
+                  onTimeframeChange={solsticeCallbacks.timeframe}
                   expiries={expiries}
                   onExpiriesChange={setExpiries}
                   onTickerChange={setTicker}
                   tickers={tickers}
-                  onRefresh={() => { setErr(null); fetchData(); }}
-                  onCellClick={async (strike, colKey, value) => {
-                    const row = displayData?.strikes?.find(s => s.strike === strike);
-                    let contractData = null;
-                    try {
-                      const cd = await fetch(
-                        `${API}/contract/${ticker}/${strike}/${colKey}`
-                      );
-                      if (cd.ok) contractData = await cd.json();
-                    } catch (_) { /* contract detail optional */ }
-
-                    const callC = contractData?.contracts?.find(c => c.type === 'call')
-                      || contractData?.contracts?.[0];
-                    const putC = contractData?.contracts?.find(c => c.type === 'put')
-                      || contractData?.contracts?.[1];
-
-                    setTradeSelection({
-                      ticker, strike, expiry: colKey,
-                      spot: livespot?.spot ?? data?.spot,
-                      gex: value,
-                      iv: row?.iv ?? callC?.iv ?? data?.iv,
-                      delta: row?.delta ?? callC?.delta ?? data?.delta,
-                      oi: row?.total_oi ?? row?.oi ?? data?.oi
-                        ?? (callC?.open_interest ?? 0) + (putC?.open_interest ?? 0),
-                      call_gex: row?.call_gex,
-                      put_gex: row?.put_gex,
-                      vex: row?.vex,
-                      charm: row?.charm,
-                      oi_symbol: callC?.osi || putC?.osi || null,
-                      call_bid: callC?.bid,
-                      call_ask: callC?.ask,
-                      call_last: callC?.last,
-                      put_bid: putC?.bid,
-                      put_ask: putC?.ask,
-                      put_last: putC?.last,
-                    });
-                  }}
-                  onStrikeClick={(strike) => setTradeSelection({ ticker, strike, spot: livespot?.spot ?? data?.spot })}
+                  onRefresh={solsticeCallbacks.reload}
+                  onCellClick={solsticeCallbacks.cell}
+                  onStrikeClick={solsticeCallbacks.strike}
                   isLive={heatLive}
                   regime={data?.nodes?.regime}
                   loading={loading && !data}
                 />
               ) : (
                 <SkylitDashboard
+                  expiryScope={effectiveExpiryScope}
+                  localView={view}
                   onReplayChange={setHeatmapReplay}
                   ticker={ticker}
                   spot={livespot?.spot ?? data?.spot}
@@ -1057,53 +1037,14 @@ export default function App() {
                   viewMode={viewMode}
                   onViewModeChange={setViewMode}
                   timeframe={mode === "scalp" ? "1m" : mode === "swing" ? "1h" : "5m"}
-                  onTimeframeChange={(tf) => {
-                    if (tf === "1m") setMode("scalp");
-                    else if (tf === "1h") setMode("swing");
-                    else setMode("day");
-                  }}
+                  onTimeframeChange={solsticeCallbacks.timeframe}
                   expiries={expiries}
                   onExpiriesChange={setExpiries}
                   onTickerChange={setTicker}
                   tickers={tickers}
-                  onRefresh={() => { setErr(null); fetchData(); }}
-                  onCellClick={async (strike, colKey, value) => {
-                    const row = displayData?.strikes?.find(s => s.strike === strike);
-                    let contractData = null;
-                    try {
-                      const cd = await fetch(
-                        `${API}/contract/${ticker}/${strike}/${colKey}`
-                      );
-                      if (cd.ok) contractData = await cd.json();
-                    } catch (_) { /* contract detail optional */ }
-
-                    const callC = contractData?.contracts?.find(c => c.type === 'call')
-                      || contractData?.contracts?.[0];
-                    const putC = contractData?.contracts?.find(c => c.type === 'put')
-                      || contractData?.contracts?.[1];
-
-                    setTradeSelection({
-                      ticker, strike, expiry: colKey,
-                      spot: livespot?.spot ?? data?.spot,
-                      gex: value,
-                      iv: row?.iv ?? callC?.iv ?? data?.iv,
-                      delta: row?.delta ?? callC?.delta ?? data?.delta,
-                      oi: row?.total_oi ?? row?.oi ?? data?.oi
-                        ?? (callC?.open_interest ?? 0) + (putC?.open_interest ?? 0),
-                      call_gex: row?.call_gex,
-                      put_gex: row?.put_gex,
-                      vex: row?.vex,
-                      charm: row?.charm,
-                      oi_symbol: callC?.osi || putC?.osi || null,
-                      call_bid: callC?.bid,
-                      call_ask: callC?.ask,
-                      call_last: callC?.last,
-                      put_bid: putC?.bid,
-                      put_ask: putC?.ask,
-                      put_last: putC?.last,
-                    });
-                  }}
-                  onStrikeClick={(strike) => setTradeSelection({ ticker, strike, spot: livespot?.spot ?? data?.spot })}
+                  onRefresh={solsticeCallbacks.reload}
+                  onCellClick={solsticeCallbacks.cell}
+                  onStrikeClick={solsticeCallbacks.strike}
                   isLive={heatLive}
                   regime={data?.nodes?.regime}
                   loading={loading && !data}
@@ -1180,24 +1121,29 @@ export default function App() {
 
         {/* Portfolio View */}
         {page === "portfolio" && (
-          <PortfolioPanel ticker={ticker} spot={livespot?.spot ?? data?.spot} />
+          <div>
+            <p className="panel p-3">Portfolio research · manually entered positions and sizing estimates are separate from the Public account below.</p>
+            <PortfolioPanel ticker={ticker} spot={livespot?.spot ?? data?.spot} />
+            <ErrorBoundary><PublicPanel /></ErrorBoundary>
+          </div>
         )}
 
         {/* Trade Journal */}
         {page === "journal" && (
-          <TradeJournal ticker={ticker} />
+          <div><TradeJournal ticker={ticker} /><NativeHandoffHistory /></div>
         )}
 
         {/* Public Brokerage */}
         {page === "public" && (
-          <PublicPanel />
+          <div><PublicPanel /><NativeHandoffHistory /></div>
         )}
 
         {/* Tidehunter Pro Tab */}
         {page === "flowseeker-pro" && (
           <div className="flex-1 overflow-auto">
             <ErrorBoundary>
-              <FlowseekerProBlademap active={page === "flowseeker-pro"} onTrade={setTradeSelection} />
+              <FlowseekerProBlademap active={page === "flowseeker-pro" && !tideReviewActive} onTrade={setTradeSelection} />
+              <TidehunterPublicBridge onReviewActive={setTideReviewActive} />
             </ErrorBoundary>
           </div>
         )}

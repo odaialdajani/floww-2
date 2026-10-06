@@ -67,6 +67,55 @@ def test_nonfinite_momentum_uses_neutral_default(value):
     assert _parse_momentum_score(value) == 50
 
 
+def test_booleans_are_not_momentum_scores():
+    """bool is an int subclass, so `float(True)` produced a real score of 1.
+
+    The coercion was `int(float(raw))`. For True that is `int(1.0)` == 1,
+    which lands under AlertEngine.MOMENTUM_EXTREME_LOW (20) and therefore
+    BROADCASTS a bearish "Strong BEARISH momentum" alert to every /ws/signals
+    client -- from a boolean that was never a measurement.
+
+    Booleans are not readings. They must be rejected like any other malformed
+    input, not silently converted into a score that trips a threshold.
+    """
+    from routes.alerts import _parse_momentum_score
+
+    for bad in (True, False):
+        score = _parse_momentum_score(bad)
+        assert score == 50, f"bool {bad!r} must not become a score, got {score}"
+        assert not (score < 20), f"bool {bad!r} would fire a bearish alert"
+
+
+def test_missing_and_malformed_are_not_measured_neutral_readings():
+    """Unavailability must be distinguishable from a genuine mid-scale value.
+
+    Everything unparseable collapses to exactly 50 -- the same value a real
+    reading of 50 produces. A consumer cannot tell "no data" from "measured
+    50", which is precisely the phantom-evidence pattern fixed in the
+    conviction ranker.
+    """
+    from routes.alerts import _parse_momentum_score
+
+    unavailable = [
+        None, "", "abc", "nan", [], {}, float("nan"),
+    ]
+    for value in unavailable:
+        assert _parse_momentum_score(value) == 50, value
+
+    # 50 is inside the dead band (20..80), so today these do not fire. That is
+    # luck, not design: a threshold change would turn absent data into a
+    # broadcast alert. The contract to preserve is that the fallback is a
+    # no-alert sentinel, and it is asserted here explicitly.
+    from alert_engine import AlertEngine
+
+    lo, hi = AlertEngine.MOMENTUM_EXTREME_LOW, AlertEngine.MOMENTUM_EXTREME_HIGH
+    for value in unavailable:
+        score = _parse_momentum_score(value)
+        assert not (score > hi or score < lo), (
+            f"{value!r} -> {score} would fire a momentum alert"
+        )
+
+
 def test_overflowed_strike_entry_does_not_drop_valid_entries():
     from routes.alerts import _parse_strike_map
     assert _parse_strike_map({"500": 10 ** 400, "505": 100}) == {505.0: 100.0}

@@ -68,6 +68,8 @@ def content_digest(payload: dict[str, Any]) -> str:
         "formula": payload.get("formula_version", "gex.v2"),
         "strikes": _canon_strikes(payload),
         "grids": _canon_grids(payload),
+        **({"next_listed_scope": {"query": payload.get("map_query"), "selection": payload.get("scope_selection")}}
+           if (payload.get("map_query") or {}).get("expiryScope") == "next" else {}),
     }
     return hashlib.sha256(json.dumps(core, sort_keys=True, default=str).encode()).hexdigest()[:16]
 

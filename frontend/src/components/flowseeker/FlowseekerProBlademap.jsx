@@ -445,7 +445,7 @@ export default function FlowseekerProBlademap({ active = true }) {
         }
       } catch (e) {
         if (cancelled || e?.name === "AbortError") return;
-        setScanMeta((m) => ({ ...m, stale: hadDataRef.current, err: !hadDataRef.current }));
+        setScanMeta((m) => ({ ...m, stale: hadDataRef.current, err: !hadDataRef.current, findingsStatus: "unavailable" }));
       } finally {
         ctrl._polling = false;
       }
@@ -1378,8 +1378,9 @@ export default function FlowseekerProBlademap({ active = true }) {
             <p>The latest saved scan per stock, kept for up to seven days. These are not live trade signals.
               Up to 100 stocks are shown, with three contract examples each. Times below are when the data was received.</p>
             {scanMeta.findingsStatus === "partial" && <p>Some recent findings could not be saved. This list is incomplete.</p>}
-            {scanMeta.findingsStatus === "unavailable" ? <p>Saved findings are unavailable.</p>
-              : !scanMeta.recentFindings?.length ? <p>No earlier findings saved yet.</p>
+            {!["available", "partial"].includes(scanMeta.findingsStatus) ? <p>Saved findings are unavailable.</p>
+              : !scanMeta.recentFindings?.length ? <p>{scanMeta.findingsStatus === "available"
+                ? "No earlier findings saved yet." : "No saved findings were returned."}</p>
                 : <ul>{scanMeta.recentFindings.map(item => <li key={item.ticker}>
                   <strong>{item.ticker}</strong> · {item.contracts} matching contracts · received {new Date(item.received_at * 1000).toLocaleString()}
                   <span> · {(item.examples || []).map(row => `${row[3]} ${row[2]} ${row[4]} (${Number(row[5]).toLocaleString()} session volume)`).join("; ")}</span>

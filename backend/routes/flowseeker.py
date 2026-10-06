@@ -2604,13 +2604,19 @@ def _universe_scan_opportunity(ticker: str, heat: dict | None):
 def _universe_scan_conviction(ticker: str, heat: dict | None, opp: dict | None):
     try:
         from services.conviction_rank import rank_one as _rank
-        flow = {"conviction": 0}
+        # Start at None, not {"conviction": 0}. A hardcoded zero made an
+        # absent alert feed indistinguishable from a real conviction reading of
+        # 0: rank_one reported flow_status "ok" with a 0.0 component either way,
+        # so a row with no flow evidence at all looked measured.
+        flow = None
         try:
             from services import flow_alerts as _fa
             from services.duckdb_engine import db as _ddb
             _rows = _fa.read_alert_feed(_ddb, days=7, ticker=str(ticker).upper(), sort_by="conviction")
             if _rows:
-                flow = {"conviction": _rows[0].get("conviction", 0), "key": _rows[0].get("key")}
+                _c = _rows[0].get("conviction")
+                if _c is not None:
+                    flow = {"conviction": _c, "key": _rows[0].get("key")}
         except Exception:
             pass  # silent by design: DuckDB alert feed optional; conviction falls back to unranked rather than failing the rank
         return _rank(ticker, flow=flow, opportunity=opp, confluence=None, ml=None,
@@ -2623,6 +2629,7 @@ def _universe_scan_conviction(ticker: str, heat: dict | None, opp: dict | None):
 
 @router.get("/universe/scan")
 async def universe_scan(limit: int = Query(20, ge=1, le=40), max_expiries: int = Query(2, ge=1, le=4),
+                        dte: int | None = Query(None, ge=0, le=365),
                         refresh: bool = Query(False)):
     """Prefilter + batched heatmap builds + fused conviction leaderboard.
     Rotating cursor: each call scans the NEXT slice (no budget stampede).
@@ -2682,7 +2689,7 @@ async def universe_scan(limit: int = Query(20, ge=1, le=40), max_expiries: int =
         batch = []
     swept = await scan_batch(batch, opportunity_fn=_universe_scan_opportunity,
                              conviction_fn=_universe_scan_conviction,
-                             max_expiries=max_expiries, pace_sec=0.0)
+                             max_expiries=max_expiries, dte=dte, pace_sec=0.0)
     fused = _rank_many([{"ticker": r["ticker"], "opportunity": r.get("opportunity"),
                          "conviction": r.get("conviction"), "snapshot_id": r.get("snapshot_id"),
                          "asof": r.get("asof")} for r in swept["rows"]])

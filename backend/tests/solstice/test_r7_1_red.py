@@ -137,15 +137,25 @@ def test_total_provider_failure_is_unavailable_then_stale():
                                               "status": "ok", "pct": 1.0, "change": 1.0}]})
     movers_svc._CACHE[(last, prior, movers_svc.UNIVERSE_ID, "previous_completed_session")] = {
         "ts": __import__("time").time(), "payload": good}
-    try:
-        stale = asyncio.run(movers_svc.get_movers(limit=5))
-        # get_movers uses the real clock/provider; only assert the stale path
-        # when the live session pair matches the seeded test pair.
-        live = movers_svc.completed_session_pair(now=datetime.now(UTC))
-        if live == (last, prior):
+    # The live call is skipped unless the seeded pair matches the live pair.
+    # It was previously made UNCONDITIONALLY, with only the assertions guarded
+    # by the same check -- so on any day the pair differed, the test still fanned
+    # out over the whole 75-ticker universe against api.public.com and then
+    # threw the result away. The session-scoped guard in
+    # tests/offline_network.py correctly blocked those 75 connections, but it
+    # asserts at teardown, so the failure surfaced against whichever test ran
+    # last and pointed at the wrong file entirely.
+    live = movers_svc.completed_session_pair(now=datetime.now(UTC))
+    if live == (last, prior):
+        try:
+            stale = asyncio.run(movers_svc.get_movers(limit=5))
             assert stale["status"] in ("stale", "ok", "partial")
             assert stale["results"]
-    finally:
+        finally:
+            movers_svc._CACHE.pop(
+                (last, prior, movers_svc.UNIVERSE_ID, "previous_completed_session"), None)
+    else:
+        # Cache cleanup still required even when the live call is skipped.
         movers_svc._CACHE.pop(
             (last, prior, movers_svc.UNIVERSE_ID, "previous_completed_session"), None)
 
@@ -170,6 +180,12 @@ def test_upstream_seam_calls_real_adapter_signature_and_shape():
 
     async def go():
         market_bars._reset_state()
+        # Same isolation class as the v3_costsave flake: _reset_state clears
+        # the bars cache but not the process-global Public token bucket. Late
+        # in a full-suite run the bucket is drained and _get short-circuits
+        # before the broker is ever awaited. Reset it here (test-only).
+        from services.public_budget import budget as _pub_budget
+        _pub_budget.reset()
         with patch("services.public_api_adapter._get_broker", new=AsyncMock(return_value=broker)):
             return await market_bars.get_daily_bars("SPY", days=10)
     bars = asyncio.run(go())
