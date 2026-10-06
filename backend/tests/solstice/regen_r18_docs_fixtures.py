@@ -125,9 +125,8 @@ def main(argv: list[str] | None = None) -> int:
     _pf["received_at"] = "2026-10-05T13:59:35+00:00"
     partial["clocks"] = _pf
     # Re-seal after the clock override so the digest covers the true bytes.
-    from services.solstice_range_analytics import compute_content_digest, record_id_for_digest as _rid
     partial["content_digest"] = compute_content_digest(partial)
-    partial["record_id"] = _rid(partial["content_digest"])
+    partial["record_id"] = record_id_for_digest(partial["content_digest"])
     _assert_invariants(complete, "complete_v1")
     _assert_invariants(partial, "partial_skipped_v1")
     assert complete["status"] == "ok", complete["status"]
