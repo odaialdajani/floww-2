@@ -23,7 +23,7 @@ User authorized bringing all work up to date, merging current partner work, comm
 - Full frontend:130 suites,1375 tests passed; production build passed. Existing warnings about React test cleanup and bundle size remain.
 - Configured Bandit medium scan passed, Ruff passed, generated API reference matches383 paths. Truth audit227 passed/0 failed using the verified project Python rather than the Windows Store alias.
 - Earlier full backend attempt:7366 passed,27 failed,43 existing skips; coverage69.62%. This was not accepted as green. It ran before the missing torch installation and final test-scope/date corrections. All affected groups subsequently passed.
-- Final complete backend rerun is pending; exact result will be recorded before completion. Local execution is Python3.13.15; this does not claim a Python3.12 container run or hosted acceptance.
+- Final complete backend rerun: **7412 passed,42 skipped,0 failed**,1977 warnings; coverage **69.71%**, above the configured60% requirement. Exit0 at2026-10-06T11:38:15UTC; runtime662.15s. The final source was unchanged during this run. Local execution is Python3.13.15; this does not claim a Python3.12 container run or hosted acceptance.
 
 ## Actual application check and limits
 
@@ -38,3 +38,7 @@ Local detailed receipts are retained under the ignored output/update-20261006 di
 
 - Python Windows byte-range locking reference: https://docs.python.org/3/library/msvcrt.html#msvcrt.locking
 - Official CPU package installation reference: https://pytorch.org/get-started/locally/
+
+## Final preservation check
+
+Fresh independent review confirmed all nine inventoried review heads are ancestors, all31 older-source conflict resolutions retain their recorded bytes, and the final qc/test source identities match. Current style/API-reference receipts pass. Source/data test limits and commissioning holds above remain explicit. The shared main will be updated by a normal forward push; the exact published identity is checked after it completes.
