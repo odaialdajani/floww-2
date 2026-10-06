@@ -438,6 +438,7 @@ export default function FlowseekerProBlademap({ active = true }) {
             received: Date.now(), age: Number.isFinite(d.cache_age_seconds) ? d.cache_age_seconds : null, retry: d.retry_after_seconds ?? null,
             ttl: d.scan_ttl ?? 60, budget: d.budget ?? null,
             truncated: !!d.truncated,coverage:d.coverage || null,
+            recentFindings: d.recent_findings || [], findingsStatus: d.findings_status,
           };
           if (feedHoverRef.current || feedFocusRef.current || kbActiveRef.current) setPendingScan({ rows, meta });
           else { setScan(rows); setPendingScan(null); setScanMeta(meta); setScanAt(new Date().toLocaleTimeString()); }
@@ -1372,6 +1373,18 @@ export default function FlowseekerProBlademap({ active = true }) {
 
         <div className="th-content">
           <MarketCoverage coverage={scanMeta.coverage} />
+          <details style={{ padding: "8px 12px", color: "#b6bfd0", fontSize: 12 }}>
+            <summary>Earlier scan findings ({scanMeta.recentFindings?.length || 0} stocks)</summary>
+            <p>The latest saved scan per stock, kept for up to seven days. These are not live trade signals.
+              Up to 100 stocks are shown, with three contract examples each. Times below are when the data was received.</p>
+            {scanMeta.findingsStatus === "partial" && <p>Some recent findings could not be saved. This list is incomplete.</p>}
+            {scanMeta.findingsStatus === "unavailable" ? <p>Saved findings are unavailable.</p>
+              : !scanMeta.recentFindings?.length ? <p>No earlier findings saved yet.</p>
+                : <ul>{scanMeta.recentFindings.map(item => <li key={item.ticker}>
+                  <strong>{item.ticker}</strong> · {item.contracts} matching contracts · received {new Date(item.received_at * 1000).toLocaleString()}
+                  <span> · {(item.examples || []).map(row => `${row[3]} ${row[2]} ${row[4]} (${Number(row[5]).toLocaleString()} session volume)`).join("; ")}</span>
+                </li>)}</ul>}
+          </details>
           <div className="th-topbar">
             <span className="th-pill">Market {marketSession?.session_state || "state unavailable"}</span>
             <StockDirectory buttonClass="th-pill" onSelect={(symbol) => { setFocusTicker(symbol); setSelectedRow(null); setDrill(null); setDrillSel(null); setDrillRows([]); }} />

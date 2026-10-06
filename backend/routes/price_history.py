@@ -22,6 +22,24 @@ def read_snapshots(engine, ticker, first, last):
     )
 
 
+def recording_summary(engine, ticker):
+    """Actual backing and saved range, including records newer than the candles."""
+    from services.connection_guard import connection_lock
+    from services.heatmap_history import recorder_status
+
+    with connection_lock(engine.conn):
+        status = recorder_status(engine.conn)
+    rows = engine.query_strict(
+        "SELECT MIN(TRY_CAST(asof_ts AS TIMESTAMPTZ)) AS first_at, "
+        "MAX(TRY_CAST(asof_ts AS TIMESTAMPTZ)) AS last_at, COUNT(*) AS count "
+        "FROM heatmap_snapshots_v2 WHERE ticker = ?", [ticker],
+    )
+    saved = rows[0] if rows else {}
+    return {"durable": status["durable"], "status": "available",
+            "first_at": saved.get("first_at"), "last_at": saved.get("last_at"),
+            "count": saved.get("count", 0)}
+
+
 @router.get("/price-history/{ticker}")
 async def price_history(ticker: str, days: int = Query(5, ge=1, le=20),
                         query_key: str | None = Query(None, max_length=2000)):
@@ -30,6 +48,10 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=20),
     from services.public_budget import BudgetExhausted, budget
 
     ticker = ticker.strip().upper()
+    try:
+        recording = await asyncio.to_thread(recording_summary, db, ticker)
+    except Exception:
+        recording = {"status": "unavailable", "durable": False}
     period, aggregation, bar_seconds = ("DAY", "ONE_MINUTE", 60) if days == 1 else ("WEEK", "FIVE_MINUTES", 300) if days <= 5 else ("MONTH", "ONE_HOUR", 3600)
     # This path deliberately does not use market_bars' stale-on-error cache:
     # a failed historical fetch must be visible, not labelled as a new read.
@@ -47,7 +69,7 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=20),
     valid_times = [epoch(frame["time"]) for frame in price_only["frames"]]
     if not valid_times:
         return {**build_history(ticker, [], [], query_key), "price_status": "unavailable",
-                "node_status": "not_loaded", "days": days}
+                "node_status": "not_loaded", "days": days, "recording": recording}
     first = datetime.fromtimestamp(min(valid_times), UTC) - timedelta(minutes=15)
     last = datetime.fromtimestamp(max(valid_times), UTC)
     node_status = "available"
@@ -65,4 +87,4 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=20),
     return {**result, "price_status": "available", "node_status": node_status,
             "records_truncated": truncated, "days": days, "prices_received_at": received_at,
             "last_candle_at": datetime.fromtimestamp(max(valid_times), UTC).isoformat(),
-            "bar_seconds": bar_seconds}
+            "bar_seconds": bar_seconds, "recording": recording}

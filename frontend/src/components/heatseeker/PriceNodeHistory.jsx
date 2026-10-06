@@ -58,6 +58,20 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
         {status === "loading" && <p role="status">Loading recorded history...</p>}
         {status === "error" && <p role="alert">History could not be loaded. Try reloading.</p>}
         {status === "ready" && !frames.length && <p>No price candles are available for this period.</p>}
+        {status === "ready" && payload?.recording && <p role="status" style={{ fontSize: 12 }}>
+          {payload.recording.status === "unavailable"
+            ? "Saved recording details are unavailable."
+            : payload.recording.durable
+              ? "New node readings are saved across restarts."
+              : "Warning: node readings are temporary and may be lost on restart."}
+          {payload.recording.first_at
+            ? ` First saved reading for ${ticker}: ${new Date(payload.recording.first_at).toLocaleString()}.`
+            : payload.recording.status === "available" ? ` No node readings have been saved for ${ticker} yet.` : ""}
+          {" "}Readings are captured when this symbol's heatmap refreshes.
+          {!!frames.length && payload.node_status === "available" && !payload.candles_with_recorded_nodes
+            ? " No recorded nodes match these candles. Earlier missing readings cannot be recreated from today's data."
+            : ""}
+        </p>}
         {!!frames.length && <>
           <p style={{ fontSize: 12, color: "var(--muted, #b6bfd0)" }}>
             {payload.candles_with_recorded_nodes} of {frames.length} candles have saved nodes.

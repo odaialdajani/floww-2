@@ -28,6 +28,11 @@ from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 
+# Services below construct shared storage and capture provider settings at import.
+# Load the local settings first so DUCKDB_PATH cannot silently become :memory:.
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / ".env")
+
 from advanced_analytics import (
     calc_charm_integral,
     calc_gamma_flip_levels,
@@ -60,9 +65,6 @@ from vol_analytics import (
     calc_realized_volatility,
     calc_skew_metrics,
 )
-
-ROOT_DIR = Path(__file__).parent  # backend/
-load_dotenv(ROOT_DIR / ".env")
 
 _env = os.getenv("ENVIRONMENT") or os.getenv("ENV") or "development"
 _is_prod = bool(_env == "production")  # noqa: F841  (used by exception handlers)

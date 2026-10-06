@@ -13,6 +13,20 @@ from services.agent.codex_model import DEFAULT_SETTINGS, CodexModel, OAuthUsage,
 from services.agent.repository import AgentRepository
 
 
+def test_windows_executable_discovery_without_appdata(monkeypatch, tmp_path):
+    import services.agent.codex_bridge as module
+    from pathlib import Path
+    if module.os.name != "nt":
+        pytest.skip("Windows installation layout")
+    binary = tmp_path / "AppData/Roaming/npm/node_modules/@openai/codex/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe"
+    binary.parent.mkdir(parents=True)
+    binary.touch()
+    monkeypatch.delenv("FLOWW_CODEX_EXECUTABLE", raising=False)
+    monkeypatch.delenv("APPDATA", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    assert module.executable() == str(binary)
+
+
 def test_relationship_menu_does_not_compare_unknown_structure_time():
     facts = [
         dict(id="price", ticker="SPY", metric="Underlying price", value=500, unit="USD", horizon="all",

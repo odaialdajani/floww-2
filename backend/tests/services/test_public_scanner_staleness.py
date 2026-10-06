@@ -167,3 +167,14 @@ def test_rows_and_extras_strict_json_finite(clean_state):
         for v in e.values():
             if isinstance(v, float):
                 assert math.isfinite(v)
+
+
+@pytest.mark.asyncio
+async def test_failed_archive_save_is_visible(fresh_budget, clean_state):
+    with patch("services.public_api_adapter.fetch_chain_from_public_api", return_value=empty_chain()), \
+         patch.object(scanner._recent_findings_store(), "save", side_effect=OSError("disk full")):
+        view = await scanner.scan_next(slice_size=1, universe=["T00"])
+    assert view["findings_status"] == "partial"
+    with patch("services.public_api_adapter.fetch_chain_from_public_api", return_value=None):
+        failed_refresh = await scanner.scan_next(slice_size=1, universe=["T00"])
+    assert failed_refresh["findings_status"] == "partial"

@@ -89,7 +89,8 @@ def executable():
             raise ValueError("Configured Codex executable is unavailable")
         return str(path)
     if os.name == "nt":
-        root = Path(os.environ.get("APPDATA", "")) / "npm/node_modules/@openai/codex/node_modules"
+        roaming = Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming")
+        root = roaming / "npm/node_modules/@openai/codex/node_modules"
         matches = list(root.glob("@openai/codex-win32-*/vendor/*/bin/codex.exe"))
         if len(matches) == 1:
             return str(matches[0])

@@ -81,7 +81,13 @@ def get_universe() -> list[str]:
     if raw.strip():
         return out
     from services.market_catalog import cached_scan_symbols
-    return cached_scan_symbols()
+    symbols = list(dict.fromkeys(cached_scan_symbols()))
+    available = set(symbols)
+    priority = [name for name in UNIVERSE if name in available]
+    priority_names = set(priority)
+    # Start with useful liquid names while retaining every provider symbol
+    # exactly once in the same fair rotation. Explicit universes keep order.
+    return priority + [name for name in symbols if name not in priority_names]
 
 
 SCAN_COLUMNS: list[str] = [
@@ -477,6 +483,16 @@ _vol_marks: dict[str, tuple[float, float]] = {}  # osi -> (vol, ts)
 _mid_marks: dict[str, float] = {}  # osi -> last-seen mid (Lee-Ready tick anchor)
 _mid_rings: dict[str, list[float]] = {}  # legacy test helper only
 _observation_store = None
+_findings_store = None
+
+
+def _recent_findings_store():
+    global _findings_store
+    if _findings_store is None:
+        from services.scan_findings import ScanFindings
+        default = Path(__file__).resolve().parents[1] / "data" / "scan_findings.sqlite3"
+        _findings_store = ScanFindings(os.environ.get("FLOWW_PUBLIC_FINDINGS_PATH") or default)
+    return _findings_store
 
 
 def _observations_store():
@@ -489,7 +505,11 @@ def _observations_store():
 
 def _reset_state() -> None:
     """Tests only — clear slices + cursor + velocity/mid marks + rings."""
-    global _cursor, _observation_store
+    global _cursor, _observation_store, _findings_store
+    from services.scan_findings import ScanFindings
+    if _findings_store is not None:
+        _findings_store.close()
+    _findings_store = ScanFindings(":memory:")
     if _observation_store is not None:
         _observation_store.close()
     _observation_store = SnapshotObservations(":memory:")
@@ -674,6 +694,7 @@ async def scan_next(
             for t in tickers:
                 pack = fresh.get(t, {"status": "failed"})
                 _attempts[t] = {"status": pack.get("status"), "at": time.time(),
+                                "findings_saved": _attempts.get(t, {}).get("findings_saved"),
                                 "expiries_checked": pack.get("expiries_checked", 0),
                                 "history_status": pack.get("history_status", "unavailable"),
                                 "history_capped": pack.get("history_capped", False),
@@ -688,6 +709,12 @@ async def scan_next(
                                   "extras": pack["extras"], "dealer": pack["dealer"],
                                   "rows_capped": pack.get("rows_capped", False)}
                     dealer[t] = pack["dealer"]
+                    try:
+                        await asyncio.to_thread(_recent_findings_store().save, t, received_ts, pack["rows"])
+                        _attempts[t]["findings_saved"] = True
+                    except Exception as exc:
+                        _attempts[t]["findings_saved"] = False
+                        log.warning("Dated scan findings unavailable (%s)", type(exc).__name__)
         # Removed symbols must not remain in rows or count as scanned.
         for old in set(_slices) - set(uni):
             _slices.pop(old, None)
@@ -726,6 +753,11 @@ async def scan_next(
         # a dropped stale slice must not keep contributing regime reads.
         fresh_unders = {r[0] for r in rows if r}
         dealer = {t: d for t, d in dealer.items() if d and t in fresh_unders}
+        try:
+            recent_findings = await asyncio.to_thread(_recent_findings_store().recent, tickers=uni)
+            findings_status = "partial" if any(a.get("findings_saved") is False for a in _attempts.values()) else "available"
+        except Exception:
+            recent_findings, findings_status = [], "unavailable"
         return {
             "columns": SCAN_COLUMNS,
             "rows": rows,
@@ -734,6 +766,8 @@ async def scan_next(
             "dealer": dealer,
             "coverage": coverage,
             "tickers": sorted(uni),
+            "recent_findings": recent_findings,
+            "findings_status": findings_status,
         }
 
 

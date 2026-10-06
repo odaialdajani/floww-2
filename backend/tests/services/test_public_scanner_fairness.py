@@ -18,6 +18,18 @@ from services.public_budget import BudgetExhausted, PublicBudget
 UNI10 = [f"T{i:02d}" for i in range(10)]
 
 
+def test_provider_rotation_starts_liquid_but_keeps_all_names(monkeypatch):
+    monkeypatch.delenv("FLOWW_PUBLIC_UNIVERSE", raising=False)
+    names = ["AA", "AAPL", "QQQ", "SPY", "ZZZ", "AA"]
+    with patch("services.market_catalog.cached_scan_symbols", return_value=names):
+        assert scanner.get_universe() == ["SPY", "QQQ", "AAPL", "AA", "ZZZ"]
+
+
+def test_explicit_universe_preserves_requested_order(monkeypatch):
+    monkeypatch.setenv("FLOWW_PUBLIC_UNIVERSE", "AA,SPY,QQQ")
+    assert scanner.get_universe() == ["AA", "SPY", "QQQ"]
+
+
 @pytest.fixture
 def fresh_budget():
     b = PublicBudget(capacity=12, refill_per_sec=0.0, max_inflight=99)

@@ -1532,6 +1532,8 @@ async def public_market_scan(
         "budget": _budget_state(),
         "public_budget": _pub_budget.status(),
         "coverage": view["coverage"],
+        "recent_findings": view.get("recent_findings", []),
+        "findings_status": view.get("findings_status", "unavailable"),
         "tickers": view["tickers"],
         "quote_truth": extras,
         "dealer": dealer,

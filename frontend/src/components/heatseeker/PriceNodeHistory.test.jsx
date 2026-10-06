@@ -10,6 +10,15 @@ jest.mock("react-plotly.js", () => ({ __esModule: true,
 const frames = ["14:00", "14:01", "14:02"].map(t => ({ time: `2026-09-10T${t}:00+00:00`,
   open: 100, high: 102, low: 99, close: 101, nodes: [] }));
 
+test("failed node reads do not claim the recordings are absent", async () => {
+  axios.get.mockResolvedValue({ data: { ticker: "SPY", frames, candles_with_recorded_nodes: 0,
+    node_status: "unavailable", recording: { durable: true, status: "available", first_at: frames[0].time } } });
+  render(<PriceNodeHistory ticker="SPY" open />);
+  await screen.findByTestId("price-plot");
+  expect(screen.getByText(/Saved node history is currently unavailable/)).toBeInTheDocument();
+  expect(screen.queryByText(/No recorded nodes match/)).not.toBeInTheDocument();
+});
+
 test("chart opens on demand and replay position changes the visible candles", async () => {
   axios.get.mockResolvedValue({ data: { ticker: "SPY", frames, candles_with_recorded_nodes: 0 } });
   render(<PriceNodeHistory ticker="SPY" />);

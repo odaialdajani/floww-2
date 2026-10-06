@@ -4,14 +4,27 @@
     {
       "name": "frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "frontend", "start"],
+      "runtimeArgs": [
+        "--prefix",
+        "frontend",
+        "start"
+      ],
       "port": 3000
     },
     {
       "name": "backend",
       "runtimeExecutable": "uvicorn",
-      "runtimeArgs": ["--app-dir", "backend", "server:app", "--reload", "--host", "0.0.0.0", "--port", "8000"],
-      "port": 8000
+      "runtimeArgs": [
+        "--app-dir",
+        "backend",
+        "server:app",
+        "--reload",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8001"
+      ],
+      "port": 8001
     }
   ]
 }
