@@ -4,7 +4,7 @@
 <!-- Regenerate: python3 qc/audit/generate_api_docs.py -->
 <!-- Verify:     python3 qc/audit/generate_api_docs.py --check -->
 
-Total endpoints: 387
+Total endpoints: 394
 Route groups: 104
 
 Generated from the live FastAPI app, so every path below is a real,
@@ -412,11 +412,12 @@ callable route rather than a hand-copied guess.
 | GET | `/api/health` | Health Check |
 | GET | `/health` | Health Alias |
 
-## heatmap (1 endpoints)
+## heatmap (2 endpoints)
 
 | Method | Path | Summary |
 |--------|------|---------|
 | GET | `/api/heatmap/{ticker}` | Heatmap |
+| GET | `/api/heatmap/{ticker}/range-analytics` | Heatmap Range Analytics |
 
 ## heatseeker (18 endpoints)
 
@@ -698,13 +699,14 @@ callable route rather than a hand-copied guess.
 |--------|------|---------|
 | GET | `/api/provider-health` | Provider Health |
 
-## public (12 endpoints)
+## public (13 endpoints)
 
 | Method | Path | Summary |
 |--------|------|---------|
 | GET | `/api/public/account` | Get Account |
 | GET | `/api/public/bars/{ticker}` | Get Public Bars |
 | GET | `/api/public/chain/{ticker}` | Get Public Chain |
+| GET | `/api/public/execution-lifecycle/inventory` | Execution Lifecycle Inventory |
 | GET | `/api/public/expirations/{ticker}` | Get Public Expirations |
 | GET | `/api/public/history/{ticker}` | Get Public History |
 | POST | `/api/public/order` | Place Order |
@@ -786,7 +788,7 @@ callable route rather than a hand-copied guess.
 | GET | `/api/social/sentiment/{ticker}` | Get Sentiment |
 | GET | `/api/social/status` | Get Pipeline Status |
 
-## solstice (20 endpoints)
+## solstice (25 endpoints)
 
 | Method | Path | Summary |
 |--------|------|---------|
@@ -796,7 +798,12 @@ callable route rather than a hand-copied guess.
 | GET | `/api/solstice/manifest/{ticker}` | Manifest |
 | POST | `/api/solstice/outcomes/close` | Outcomes Close |
 | GET | `/api/solstice/patterns/{ticker}` | Patterns |
+| GET | `/api/solstice/price-paths/comparable` | Price Path Comparable |
+| GET | `/api/solstice/price-paths/expiries` | Price Path Expiries |
 | GET | `/api/solstice/price-paths/points` | Price Path Points |
+| GET | `/api/solstice/price-paths/range-records` | Range Record Index |
+| GET | `/api/solstice/price-paths/range-records/{record_id}` | Range Record Replay |
+| GET | `/api/solstice/price-paths/sessions` | Price Path Sessions |
 | GET | `/api/solstice/price-paths/status` | Price Paths Status |
 | GET | `/api/solstice/recorder_health` | Recorder Health |
 | GET | `/api/solstice/regime/{ticker}` | Regime |

@@ -1,5 +1,6 @@
 import React, { memo, useState } from "react";
 import { useAgent } from "../../agent/AgentProvider";
+import {rangeResearchBlock} from '../../lib/rangeAnalytics';
 
 /**
  * AskLodestar — compact entry point next to a selected wall / active pane.
@@ -12,7 +13,9 @@ import { useAgent } from "../../agent/AgentProvider";
  * admitted for live raw, verified adjusted v2 selections and recorded GEX
  * replay with complete identity, plus resolved listed-contract selectors.
  * Comparable stored windows require their baseline/interval selectors.
- * Price-history remains unavailable. Only the server resolves facts.
+ * Stored range-replay cells use the shared completeness guard; raw
+ * populations and full producer integrity remain pending. Price-history
+ * remains unavailable. Only the server resolves facts.
  * The published screen context (not these props)
  * is what the server validates; client values are never numeric evidence.
  */
@@ -23,6 +26,12 @@ export const STARTERS = [
 ];
 
 export function admissionBlock({ context, overlayMetric, displayMode }) {
+  const rangeBlock=rangeResearchBlock(context);
+  if(rangeBlock) return rangeBlock;
+  if((typeof displayMode === 'string' && displayMode.startsWith('range-')) || context?.displayMode === 'range-replay') {
+    if(context?.displayMode !== displayMode || context?.overlayMetric !== overlayMetric) return 'RANGE_RESEARCH_UNAVAILABLE: RANGE_SELECTION_MISMATCH — published pane/basis changed.';
+    return rangeResearchBlock(context);
+  }
   if (displayMode === "price-history") return "Close the price-history chart to ask about the live map.";
   if (context && !context.ticker) return "No published selection for this screen.";
   if (context?.selectedContract) {
@@ -49,7 +58,7 @@ export function admissionBlock({ context, overlayMetric, displayMode }) {
   return null;
 }
 
-function AskLodestar({ subject = "", overlayMetric = "raw", displayMode = "live", compact = false, testId = "ask-lodestar" }) {
+function AskLodestar({ subject = "", overlayMetric = "raw", displayMode = "live", compact = false, testId = "ask-lodestar", starters = STARTERS }) {
   const agent = useAgent();
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState(null);
@@ -76,14 +85,14 @@ function AskLodestar({ subject = "", overlayMetric = "raw", displayMode = "live"
         aria-haspopup="menu" aria-expanded={open} disabled={busy}
         title={block || "Ask Lodestar about this selection — uses the same published evidence, no new data"}
         data-testid={`${testId}-btn`}
-        onClick={() => setOpen((o) => !o)}>
+        onClick={() => { setNote(null); setOpen((o) => !o); }}>
         ✦ Ask Lodestar
       </button>
       {open && (
         <span className="lodestar-ask-menu" role="menu" data-testid={`${testId}-menu`}>
-          {STARTERS.map((q) => (
+          {starters.map((q,index) => (
             <button key={q} type="button" role="menuitem" className="lodestar-ask-item"
-              data-testid={`${testId}-q-${STARTERS.indexOf(q)}`} onClick={() => ask(q)}>
+              data-testid={`${testId}-q-${index}`} onClick={() => ask(q)}>
               {q}
             </button>
           ))}
@@ -91,6 +100,13 @@ function AskLodestar({ subject = "", overlayMetric = "raw", displayMode = "live"
       )}
       {note && (
         <span className="lodestar-ask-note" role="status" data-testid={`${testId}-note`}>{note}</span>
+      )}
+      {((typeof displayMode === 'string' && displayMode.startsWith('range-'))
+        || (typeof agent.context?.displayMode === 'string' && agent.context.displayMode.startsWith('range-'))
+        || block?.startsWith('RANGE_RESEARCH_UNAVAILABLE')) && (
+        <span className="lodestar-range-disclosure" data-testid={`${testId}-range-disclosure`}>
+          Research only · raw population and full producer integrity qualification pending. Backend resolves stored facts; no crypto/production admission or native draft permission.
+        </span>
       )}
     </span>
   );

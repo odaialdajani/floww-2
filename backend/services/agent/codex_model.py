@@ -159,7 +159,7 @@ class CodexModel:
     ):
         started = time.monotonic()
         trace = dict(
-            version="lodestar-trace.v1", correlation_id=turn_id,
+            version="lodestar-trace.v1", correlation_id=turn_id, policy_version=POLICY_VERSION,
             requested=dict(settings), effective=None,
             context_hash=grounding_hash(context or {}, facts),
             evidence_ids=sorted({f["id"] for f in facts}),
@@ -189,8 +189,13 @@ class CodexModel:
                 async with self.bridge_factory() as bridge:
                     # Verify the managed login before recording a possible dispatch.
                     available = await bridge.catalog()
-                    if not any(m["id"] == settings["model"] for m in available):
-                        raise ValueError("Model is no longer available")
+                    if not any(
+                        m["id"] == settings["model"]
+                        and settings["effort"] in m["efforts"]
+                        and settings["speed"] in m["speeds"]
+                        for m in available
+                    ):
+                        raise ValueError("Selected AI settings are no longer available")
                     trace["status"] = "reserved_dispatch_unknown"
                     reservation = await self.spend.reserve(owner, turn_id, settings, trace=trace)
                     if not reservation:
@@ -232,7 +237,7 @@ class CodexModel:
                 # The reservation already retains grounded/requested identity if
                 # shutdown or storage failure prevents this terminal trace write.
                 with contextlib.suppress(Exception):
-                    await self.spend.finish(reservation, trace=trace)
+                    await self.spend.finish(reservation, status=trace["status"], trace=trace)
 
     async def reconcile(self):
         # ChatGPT subscription usage has no dollar-cost lookup. Unknown work

@@ -423,56 +423,77 @@ async def fetch_chain_from_public_api(
     coalescing; on upstream failure a stale entry is served when present.
     Returns None if Public API key missing or call fails with no cache.
     """
-    pb = await _get_broker()
-    if pb is None:
-        return None
-
     key = (ticker.upper(), max_expiries)
-    now = time.monotonic()
-    hit = _CHAIN_CACHE.get(key)
-    if hit is not None and hit[1] is pb and now - hit[0] < _CHAIN_CACHE_TTL:
-        return _cached_copy(hit[2], stale=False)
-
-    async with _chain_lock(key):
-        # Re-check under the lock (coalesced waiters share one fetch).
+    # R18-C12: zero-I/O WARM probe — the module singleton IS the live
+    # broker; a same-identity cache hit serves with zero admission, zero
+    # provider calls and without touching the key lock.
+    pb_warm = BROKER
+    if pb_warm is not None:
         now = time.monotonic()
         hit = _CHAIN_CACHE.get(key)
-        if hit is not None and hit[1] is pb and now - hit[0] < _CHAIN_CACHE_TTL:
+        if hit is not None and hit[1] is pb_warm \
+                and now - hit[0] < _CHAIN_CACHE_TTL:
             return _cached_copy(hit[2], stale=False)
-        # C8: debit the fan-out (2+N upstream calls) before any Public
-        # call. All-or-nothing: refusal spends zero and returns None.
-        # The in-flight slot releases when this attempt settles.
-        # Module-attribute access keeps the budget singleton patchable.
-        try:
-            await _public_budget.budget.acquire_n(2 + max_expiries, "api.public.com")
-            _debit_held = True
-        except _public_budget.BudgetExhausted as exc:
-            log.warning("Public budget refused %s chain fetch: %s", ticker, exc)
-            return None
-        except Exception:
-            _debit_held = False
-        # D5: the success timestamp is the request start, so a stale
-        # in-flight success cannot erase a sibling's fresher 429 contract.
-        _fetch_t0 = time.monotonic()
-        try:
+
+    _debit_held = False
+    try:
+        async with _chain_lock(key):
+            # R18-C12: re-probe UNDER the lock. A sibling that completed
+            # the fetch while we waited has initialized the singleton and
+            # primed the identity-bound cache — serve with ZERO spend.
+            now = time.monotonic()
+            pb_now = BROKER
+            hit = _CHAIN_CACHE.get(key)
+            if pb_now is not None and hit is not None and hit[1] is pb_now \
+                    and now - hit[0] < _CHAIN_CACHE_TTL:
+                return _cached_copy(hit[2], stale=False)
+            # R18-C11/C12: admission UNDER the key lock — concurrent
+            # same-key waiters coalesce to ONE budget envelope — and the
+            # required debit still PRECEDES the cold _get_broker() vendor
+            # auth/accounts: refusal spends ZERO provider calls. Module-
+            # attribute access keeps the budget singleton patchable.
+            try:
+                await _public_budget.budget.acquire_n(2 + max_expiries, "api.public.com")
+                _debit_held = True
+            except _public_budget.BudgetExhausted as exc:
+                log.warning("Public budget refused %s chain fetch: %s", ticker, exc)
+                return None
+            except Exception as exc:
+                log.warning("Public budget debit failed for %s — refusing fetch "
+                            "with zero provider calls: %s", ticker, exc)
+                return None
+            pb = await _get_broker()  # admission held; auth/accounts allowed
+            if pb is None:
+                return None
+            # Rotation-safe re-check with the resolved broker identity.
+            now = time.monotonic()
+            hit = _CHAIN_CACHE.get(key)
+            if hit is not None and hit[1] is pb \
+                    and now - hit[0] < _CHAIN_CACHE_TTL:
+                return _cached_copy(hit[2], stale=False)
+            # D5: the success timestamp is the request start, so a stale
+            # in-flight success cannot erase a sibling's fresher 429 contract.
+            _fetch_t0 = time.monotonic()
             result = await _fetch_chain_live(pb, ticker, max_expiries)
-        finally:
-            if _debit_held:
+            if result is not None:
+                result["stale"] = False
+                result["max_expiries"] = max_expiries  # H2: cost envelope key
                 with contextlib.suppress(Exception):
-                    _public_budget.budget.release()
-        if result is not None:
-            result["stale"] = False
-            result["max_expiries"] = max_expiries  # H2: key metadata for cost envelope
+                    _public_budget.budget.record_ok("api.public.com", now=_fetch_t0)
+                if len(_CHAIN_CACHE) >= _CHAIN_CACHE_MAX:
+                    _CHAIN_CACHE.pop(next(iter(_CHAIN_CACHE)))
+                _CHAIN_CACHE[key] = (time.monotonic(), pb, result)
+                return _cached_copy(result, stale=False)
+            if hit is not None and hit[1] is pb:
+                log.warning("Public API chain failed for %s — serving stale cache", ticker)
+                return _cached_copy(hit[2], stale=True)
+            return None
+    finally:
+        # R18-C12: the inflight slot releases on EVERY exit — success,
+        # refusal, and CANCELLATION during broker init or a lock wait.
+        if _debit_held:
             with contextlib.suppress(Exception):
-                _public_budget.budget.record_ok("api.public.com", now=_fetch_t0)
-            if len(_CHAIN_CACHE) >= _CHAIN_CACHE_MAX:
-                _CHAIN_CACHE.pop(next(iter(_CHAIN_CACHE)))
-            _CHAIN_CACHE[key] = (time.monotonic(), pb, result)
-            return _cached_copy(result, stale=False)
-        if hit is not None and hit[1] is pb:
-            log.warning("Public API chain failed for %s — serving stale cache", ticker)
-            return _cached_copy(hit[2], stale=True)
-        return None
+                _public_budget.budget.release()
 
 
 def _note_public_429(exc: BaseException) -> None:
@@ -516,7 +537,6 @@ async def _fetch_chain_live(
     never volume-substituted; exposure_basis carried per contract.
     """
     from services.public_api import resolve_public_instrument_type
-    from services.solstice_time import resolve_series, time_to_expiry_years
 
     trading = pb.get_trading_account()
     if trading is None:
@@ -549,11 +569,41 @@ async def _fetch_chain_live(
     # back to the yfinance close instead of printing a fiction mid).
     try:
         spot_observation = await _resolve_spot_observation(pb, symbol, account_id)
-        spot, spot_source = spot_observation["price"], spot_observation["source"]
     except Exception as e:
         _note_public_429(e)
         log.warning("Public API quote fail for %s: %s", ticker, e)
         return None
+
+    # 3. Bounded per-expiry walk (shared with the range-analytics fetcher).
+    asm = await _assemble_chain(pb, ticker, symbol, account_id, chain_type,
+                                expiries, max_expiries, spot_observation)
+    if asm is None or not asm.get("contracts"):
+        # Existing refusal contract: zero contracts means an unavailable chain.
+        log.warning("Public API returned 0 contracts for %s", ticker)
+        return None
+    return asm
+
+
+async def _assemble_chain(
+    pb: PublicBroker,
+    ticker: str,
+    symbol: str,
+    account_id: str,
+    chain_type: Any,
+    expiry_walk: list,
+    max_expiries: int,
+    spot_observation: dict[str, Any],
+    skip_log: list[dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
+    """Bounded per-expiry chain assembly (one call ≈ N upstream Public calls).
+
+    Extracted from _fetch_chain_live so the range-analytics.v1 producer can
+    request EXACT admitted expiry dates with identical parsing/clocks
+    (F01/F03/F06/F13 preserved verbatim) and per-expiry skip accountability
+    via skip_log. Returns the floww-shaped chain dict (contracts may be
+    empty — the caller decides the refusal).
+    """
+    from services.solstice_time import resolve_series, time_to_expiry_years
 
     # 3. Fetch chain for each expiry (up to max_expiries ACCEPTED). Only
     # expiries that actually return data are reported (requested vs returned
@@ -579,10 +629,11 @@ async def _fetch_chain_live(
     received_at = now_utc.isoformat()
     n_expired_dropped = 0
 
-    max_attempts = min(len(expiries), max_expiries + MAX_EXPIRY_SKIPS)
-    for exp in expiries[:max_attempts]:
+    max_attempts = min(len(expiry_walk), max_expiries + MAX_EXPIRY_SKIPS)
+    for exp in expiry_walk[:max_attempts]:
         if len(exp_dates) >= max_expiries:
             break
+        n_dates_before = len(exp_dates)
         try:
             try:
                 parsed = await pb.get_option_chain_parsed(symbol, exp, account_id, instrument_type=chain_type)
@@ -596,6 +647,8 @@ async def _fetch_chain_live(
         except Exception as e:
             _note_public_429(e)
             log.warning("Public API chain fail for %s %s: %s", ticker, exp, e)
+            if skip_log is not None:
+                skip_log.append({"expiry": str(exp), "reason": "CHAIN_FETCH_FAILED"})
             continue
         for side in ("calls", "puts"):
             for oc in parsed.get(side, []):
@@ -670,17 +723,19 @@ async def _fetch_chain_live(
                 accepted_expiry = exp_d.isoformat()
                 if accepted_expiry not in exp_dates:
                     exp_dates.append(accepted_expiry)
+        if skip_log is not None and len(exp_dates) == n_dates_before:
+            # The expiry was attempted and admitted zero contracts (all
+            # dropped as expired/unparseable, or an empty book) — that is a
+            # SKIP with a visible reason, never a silent absence.
+            skip_log.append({"expiry": str(exp), "reason": "NO_ADMITTED_CONTRACTS"})
 
-    if not contracts:
-        log.warning("Public API returned 0 contracts for %s", ticker)
-        return None
-
+    spot, spot_source = spot_observation.get("price"), spot_observation.get("source")
     return {
         "ticker": ticker.upper(),
         "spot": float(spot or 0.0),
         "spot_source": spot_source,
-        "spot_event_time": spot_observation["event_time"],
-        "spot_fetched_at": spot_observation["fetched_at"],
+        "spot_event_time": spot_observation.get("event_time"),
+        "spot_fetched_at": spot_observation.get("fetched_at"),
         # Quote sides have their own times; Public supplies no observation
         # timestamp for the whole chain's OI/Greeks. Keep that distinct.
         "event_time": None,
@@ -691,7 +746,213 @@ async def _fetch_chain_live(
         "chain_instrument_type": chain_type,
         "received_at": received_at,
         "n_expired_dropped": n_expired_dropped,
+        # Admitted-expiry accountability (range-analytics.v1): expiries whose
+        # fetch failed or admitted zero contracts, with reason. Empty for the
+        # legacy first-N caller (skip_log unused there).
+        "skipped": skip_log or [],
+        "attempt_cap": max_attempts,
     }
+
+
+async def fetch_option_expiry_listing(ticker: str) -> dict[str, Any] | None:
+    """Additive (range-analytics.v1 / R18-C1): vendor expiry LISTING only.
+
+    One upstream call, budget-debited like any Public request. The full
+    vendor listing (vendor order preserved — it leads with the possibly dead
+    "today" expiry) is required so the owning range selector can observe BOTH
+    window edges instead of inheriting a first-N slice. Returns None on
+    missing key/account or vendor failure; never a partial fiction.
+    """
+    from services.public_api import resolve_public_instrument_type
+
+    symbol = _normalize_symbol(ticker)
+    chain_type = resolve_public_instrument_type(ticker, "chain")
+    # R18-C11/C12: admission BEFORE broker init — a cold _get_broker()
+    # performs vendor auth/accounts, so a failed REQUIRED debit must
+    # precede it. Refusal at this gate spends ZERO provider calls. The
+    # single outer finally releases the slot on EVERY exit, including
+    # CANCELLATION during broker init or the listing call.
+    _debit_held = False
+    try:
+        await _public_budget.budget.acquire_n(1, "api.public.com")
+        _debit_held = True
+    except _public_budget.BudgetExhausted as exc:
+        log.warning("Public budget refused %s expiry listing: %s", ticker, exc)
+        return None
+    except Exception as exc:
+        # R18-C5/C11: failed REQUIRED debit → refusal, zero vendor calls.
+        log.warning("Public budget debit failed for %s listing — refusing "
+                    "with zero vendor calls: %s", ticker, exc)
+        return None
+    try:
+        pb = await _get_broker()  # admission held; auth/accounts allowed
+        if pb is None:
+            return None
+        trading = pb.get_trading_account()
+        if trading is None:
+            log.warning("No trading account for Public API")
+            return None
+        account_id = trading.account_id
+        _fetch_t0 = time.monotonic()
+        try:
+            expiries = await pb.get_option_expirations(symbol, account_id,
+                                                       instrument_type=chain_type)
+        except TypeError as te:
+            if "instrument_type" in str(te):
+                expiries = await pb.get_option_expirations(symbol, account_id)
+            else:
+                raise
+    except Exception as e:
+        _note_public_429(e)
+        log.warning("Public API expirations fail for %s: %s", ticker, e)
+        return None
+    finally:
+        # R18-C12: release on EVERY exit — success, refusal, cancellation.
+        if _debit_held:
+            with contextlib.suppress(Exception):
+                _public_budget.budget.release()
+    if not expiries:
+        log.warning("Public API returned no expirations for %s", ticker)
+        return None
+    with contextlib.suppress(Exception):
+        _public_budget.budget.record_ok("api.public.com", now=_fetch_t0)
+    return {
+        "ticker": ticker.upper(),
+        "expiries": [str(e) for e in expiries],
+        "n_listed": len(expiries),
+        # This API hands back the whole listing; an upstream-side cap is not
+        # observable here, so incompleteness is never claimed either way.
+        "listing_capped": False,
+        "received_at": datetime.now(UTC).isoformat(),
+        "data_source": "public_api",
+    }
+
+
+async def fetch_chain_for_expiries(
+    ticker: str,
+    expiry_dates: list[str],
+) -> dict[str, Any] | None:
+    """Additive (range-analytics.v1 / R18-C1): bounded request for EXACT dates.
+
+    Unlike fetch_chain_from_public_api (a first-N ACCEPTED walk), every date
+    here was already admitted by the caller's own DTE window; each date is
+    attempted once inside the already-paid 2 + N budget envelope (C8), and
+    every failed/empty expiry is reported in `skipped` — never silently
+    absent. Cache identity binds (symbol, exact sorted window dates): another
+    window cannot reuse a mismatched chain. Returns None only on wholesale
+    failure (no broker/account/quote/budget); a dict with empty `contracts`
+    plus full `skipped` accounting is a truthful partial-empty answer.
+    """
+    from services.public_api import resolve_public_instrument_type
+
+    # Local date parsing first (no I/O) so admission precedes every
+    # provider-adjacent action.
+    dates: list[str] = []
+    for raw in expiry_dates or []:
+        s = str(raw)[:10]
+        try:
+            datetime.strptime(s, "%Y-%m-%d")
+        except (TypeError, ValueError):
+            continue
+        if s not in dates:
+            dates.append(s)
+    if not dates:
+        return None
+
+    key = ("RANGE", ticker.upper(), tuple(sorted(dates)))
+    # R18-C12: zero-I/O WARM probe — the module singleton IS the live
+    # broker; a same-identity cache hit serves with zero admission, zero
+    # provider calls and without touching the key lock.
+    pb_warm = BROKER
+    if pb_warm is not None:
+        now = time.monotonic()
+        hit = _CHAIN_CACHE.get(key)
+        if hit is not None and hit[1] is pb_warm \
+                and now - hit[0] < _CHAIN_CACHE_TTL:
+            return _cached_copy(hit[2], stale=False)
+
+    _debit_held = False
+    try:
+        async with _chain_lock(key):
+            # R18-C12: re-probe UNDER the lock — a sibling that completed
+            # the fetch while we waited has initialized the singleton and
+            # primed the identity-bound cache. Serve with ZERO spend.
+            now = time.monotonic()
+            pb_now = BROKER
+            hit = _CHAIN_CACHE.get(key)
+            if pb_now is not None and hit is not None and hit[1] is pb_now \
+                    and now - hit[0] < _CHAIN_CACHE_TTL:
+                return _cached_copy(hit[2], stale=False)
+            # R18-C11/C12: admission UNDER the key lock — concurrent
+            # same-key waiters coalesce to ONE budget envelope — and the
+            # required debit still PRECEDES the cold _get_broker() vendor
+            # auth/accounts: refusal spends ZERO provider calls.
+            try:
+                await _public_budget.budget.acquire_n(2 + len(dates), "api.public.com")
+                _debit_held = True
+            except _public_budget.BudgetExhausted as exc:
+                log.warning("Public budget refused %s range chain fetch: %s", ticker, exc)
+                return None
+            except Exception as exc:
+                log.warning("Public budget debit failed for %s range fetch — "
+                            "refusing with zero vendor calls: %s", ticker, exc)
+                return None
+            pb = await _get_broker()  # admission held; auth/accounts allowed
+            if pb is None:
+                return None
+            # Rotation-safe re-check with the resolved broker identity.
+            now = time.monotonic()
+            hit = _CHAIN_CACHE.get(key)
+            if hit is not None and hit[1] is pb \
+                    and now - hit[0] < _CHAIN_CACHE_TTL:
+                return _cached_copy(hit[2], stale=False)
+            _fetch_t0 = time.monotonic()
+            trading = pb.get_trading_account()
+            if trading is None:
+                log.warning("No trading account for Public API")
+                result = None
+            else:
+                account_id = trading.account_id
+                symbol = _normalize_symbol(ticker)
+                chain_type = resolve_public_instrument_type(ticker, "chain")
+                try:
+                    spot_observation = await _resolve_spot_observation(
+                        pb, symbol, account_id)
+                except Exception as e:
+                    _note_public_429(e)
+                    log.warning("Public API quote fail for %s: %s", ticker, e)
+                    spot_observation = None
+                if spot_observation is None:
+                    result = None
+                else:
+                    skipped: list[dict[str, Any]] = []
+                    result = await _assemble_chain(
+                        pb, ticker, symbol, account_id, chain_type,
+                        list(dates), len(dates), spot_observation,
+                        skip_log=skipped)
+                    if result is not None:
+                        result["requested_expiries"] = list(dates)
+                        result["budget_pre_debit"] = 2 + len(dates)
+            if result is not None:
+                result["stale"] = False
+                result["max_expiries"] = len(dates)
+                with contextlib.suppress(Exception):
+                    _public_budget.budget.record_ok("api.public.com", now=_fetch_t0)
+                if len(_CHAIN_CACHE) >= _CHAIN_CACHE_MAX:
+                    _CHAIN_CACHE.pop(next(iter(_CHAIN_CACHE)))
+                _CHAIN_CACHE[key] = (time.monotonic(), pb, result)
+                return _cached_copy(result, stale=False)
+            if hit is not None and hit[1] is pb:
+                log.warning("Public API range chain failed for %s — serving stale cache",
+                            ticker)
+                return _cached_copy(hit[2], stale=True)
+            return None
+    finally:
+        # R18-C12: the inflight slot releases on EVERY exit — success,
+        # refusal, and CANCELLATION during broker init or a lock wait.
+        if _debit_held:
+            with contextlib.suppress(Exception):
+                _public_budget.budget.release()
 
 
 async def fetch_spot_from_public_api(

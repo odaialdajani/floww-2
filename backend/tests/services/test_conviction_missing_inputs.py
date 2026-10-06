@@ -304,11 +304,18 @@ def test_stale_observation_is_reported_as_stale():
     identically to a fresh one. The age is now surfaced. The SCORE is
     deliberately unchanged -- a decay curve would be an unvalidated model of
     how signal decays, and this module has no evidence for one.
+
+    Timestamps are RELATIVE to the evaluation clock so the freshness
+    contract (older than the 7-day window reads stale; newer reads fresh)
+    is pinned for every future run, not just the week this was written.
     """
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime.now(UTC)
     old = rank_one("SPY", flow={"conviction": 90}, opportunity=None, confluence=None, ml=None,
-                   snapshot_id="s", asof="2026-03-01T00:00:00+00:00")
+                   snapshot_id="s", asof=(now - timedelta(days=180)).isoformat())
     fresh = rank_one("SPY", flow={"conviction": 90}, opportunity=None, confluence=None, ml=None,
-                     snapshot_id="s", asof="2026-09-28T00:00:00+00:00")
+                     snapshot_id="s", asof=(now - timedelta(hours=1)).isoformat())
 
     assert old["evidence"]["asof_status"] == "stale", old["evidence"]
     assert fresh["evidence"]["asof_status"] == "fresh", fresh["evidence"]

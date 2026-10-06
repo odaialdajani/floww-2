@@ -30,8 +30,12 @@ def answer(packet, body):
         records[(snap["ticker"], snap["snapshot_id"])] = recorded_display(rep,snap["ticker"],snap["snapshot_id"])
     reads = ResearchReads(forbidden,forbidden,forbidden,read_daily_bars=forbidden,
                           read_recorded_map=lambda ticker,sid:records.get((ticker,sid)))
-    with patch.object(socket.socket,"connect",forbidden), patch.object(socket.socket,"connect_ex",forbidden):
-        snapshot = asyncio.run(reads.snapshot(spec["ticker"],spec["horizon"],screen=spec["screen"],now=datetime.now(UTC)))
+    # Windows creates an internal socket pair when the event loop starts.
+    # Start the loop first, then keep every connection forbidden during reads.
+    with asyncio.Runner() as runner:
+        runner.get_loop()
+        with patch.object(socket.socket,"connect",forbidden), patch.object(socket.socket,"connect_ex",forbidden):
+            snapshot = runner.run(reads.snapshot(spec["ticker"],spec["horizon"],screen=spec["screen"],now=datetime.now(UTC)))
     assert not attempts, "A forbidden seam was called, even if swallowed"
     result = deterministic_answer([snapshot],spec)
     return dict(turn_id="r14-fixture-answer",status="completed",saved=False,ticker=spec["ticker"],horizon=spec["horizon"],

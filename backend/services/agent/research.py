@@ -144,7 +144,7 @@ class ResearchService:
                             await self.repository.save_anchor(owner, snapshots[-1])
                             await self.repository.watch_observations(owner, ticker, spec["horizon"], selected_expiry)
                     answer = deterministic_answer(snapshots, spec)
-                    if spec["screen"].get("displayMode") != "replay" and re.search(
+                    if spec["screen"].get("displayMode") not in {"replay", "range-replay"} and re.search(
                         r"\b(?:changed?|since|earlier|previously|previous|prior|yesterday|closing|last close)\b",
                         spec["question"],
                         re.IGNORECASE,
@@ -175,7 +175,10 @@ class ResearchService:
                     if (
                         not spec.get("price_only")
                         and self.model is not None
-                        and any(f["metric"] == "Underlying price" for f in answer["facts"])
+                        and (
+                            any(f["metric"] in {"Underlying price", "Exact contract OSI"} for f in answer["facts"])
+                            or any(s.get("range_observation") and s["facts"] for s in snapshots)
+                        )
                     ):
                         try:
                             await self._interpret(owner, turn_id, spec, answer, snapshots)
@@ -233,7 +236,7 @@ class ResearchService:
                 spec["question"],
                 answer["facts"],
                 turn_id,
-                allow_inspect=not inspected,
+                allow_inspect=not inspected and spec["screen"].get("displayMode") not in {"replay", "range-replay"},
                 history_note=history_note,
                 repair=repaired,
                 **({"owner": owner, "settings": spec["ai_settings"], "context": spec["screen"]}
@@ -260,6 +263,7 @@ class ResearchService:
                     requested = result["data"]
                     if (
                         inspected
+                        or spec["screen"].get("displayMode") in {"replay", "range-replay"}
                         or not isinstance(requested, dict)
                         or set(requested) != {"ticker"}
                         or requested["ticker"] not in spec["tickers"]

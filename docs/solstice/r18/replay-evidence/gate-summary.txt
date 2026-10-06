@@ -1,0 +1,86 @@
+Actual new combined gate output; source 4bc20b69c599535a1c4e80fa21a5c62357e4284c
+Engineering HOLD; synthetic/scripted evidence is not commissioning.
+
+=== backend ===
+From backend: isolated DB_NAME=test_r18_final_candidate; MONGO_URL=mongodb://127.0.0.1:27017; DUCKDB_PATH=:memory:; FLOWW_AGENT_DISABLED=0; capture/price/execution/live-public/range-capture flags=0; vendor keys empty/test-key-ci; root backend/.venv/bin/python -m pytest tests/ -q --tb=short --cov=.
+services/yoptions_fetcher.py                     84      5    94%   62-63, 99, 102, 157
+social_flow_pipeline.py                         107    107     0%   15-213
+vol_analytics.py                                139     11    92%   37, 85-86, 116, 127, 194-195, 204, 245, 262-263
+---------------------------------------------------------------------------
+TOTAL                                         55918  16931    70%
+Required test coverage of 60.0% reached. Total coverage: 69.72%
+7303 passed, 37 skipped, 3363 warnings in 408.70s (0:06:48)
+
+=== frontend ===
+From frontend: CI=true npm test -- --watchAll=false --runInBand
+Tests:       1369 passed, 1369 total
+Snapshots:   0 total
+Time:        35.43 s
+Ran all test suites.
+Jest did not exit one second after the test run has completed.
+
+This usually means that there are asynchronous operations that weren't stopped in your tests. Consider running Jest with `--detectOpenHandles` to troubleshoot this issue.
+
+=== stories ===
+From frontend: CI=true npm run test-storybook
+   [33m[2m✓[22m[39m Waiting [33m 1081[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m5 passed[39m[22m[90m (5)[39m
+[2m      Tests [22m [1m[32m36 passed[39m[22m[90m (36)[39m
+[2m   Start at [22m 07:59:14
+[2m   Duration [22m 8.11s[2m (transform 0ms, setup 9.35s, collect 1.21s, tests 9.82s, environment 0ms, prepare 14.36s)[22m
+
+
+=== storybook_build ===
+From frontend: CI=true npm run build-storybook
+[90m│[39m  [43mVite[49m [32m✓ built in 32.99s[39m
+[90m│[39m
+[32m◇[39m  Output directory:
+[90m│[39m  /Users/nav/Documents/GitHub/floww-2/.worktrees/zed-r17-integration-20261003/frontend/.storybook-build
+[90m│[39m
+[90m└[39m  Storybook build completed successfully
+
+
+=== browser_build ===
+node scripts/r15_browser_receipt.cjs /Users/nav/Documents/GitHub/floww-2/backend/.venv/bin/python '/Users/nav/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing' docs/solstice/r18/replay-evidence
+  serve -s build
+
+Find out more about deployment here:
+
+  https://cra.link/deployment
+
+{"status":"passed_fixture_full_app_browser","routes":8,"viewports":10,"pageErrors":0}
+
+=== truth ===
+bash qc/audit/truth_audit.sh
+  PASS: Model backend/models/IWM_rf_v2_20260530_005729_manifest.json: accuracy 0.4 (reasonable)
+  PASS: Model backend/models/TLT_logistic_gex_production_manifest.json: accuracy 0.3392857142857143 (reasonable)
+  PASS: Model backend/models/IWM_rf_gex_production_manifest.json: accuracy 0.44821428571428573 (reasonable)
+  PASS: Model backend/models/DIA_gbm_production_manifest.json: accuracy 0.42 (reasonable)
+
+=== Results: 227 passed, 0 failed ===
+TRUTH AUDIT PASSED — all claims verified.
+
+=== silent ===
+root backend/.venv/bin/python qc/audit/check_silent_excepts.py
+OK - no unjustified silent except-pass sites (362 files scanned under backend/services, backend/routes, backend/server.py).
+
+=== api ===
+root backend/.venv/bin/python qc/audit/generate_api_docs.py --check
+/Users/nav/Documents/GitHub/floww-2/.worktrees/zed-r17-integration-20261003/backend/services/dash_ui.py:1028: StarletteDeprecationWarning: starlette.middleware.wsgi is deprecated and will be removed in a future release. Please refer to https://github.com/abersheeran/a2wsgi as a replacement.
+  from starlette.middleware.wsgi import WSGIMiddleware
+{"timestamp": "2026-10-04T11:31:18.167211+00:00", "level": "INFO", "message": "Dash UI mounted at /dashboard/", "module": "dash_ui", "function": "create_dash_app", "line": 1633}
+{"timestamp": "2026-10-04T11:31:18.167297+00:00", "level": "INFO", "message": "Dash UI mounted at /dashboard/", "module": "server", "function": "<module>", "line": 4215}
+/Users/nav/Documents/GitHub/floww-2/backend/.venv/lib/python3.14/site-packages/fastapi/openapi/utils.py:252: UserWarning: Duplicate Operation ID root_head__head for function root_head at /Users/nav/Documents/GitHub/floww-2/.worktrees/zed-r17-integration-20261003/backend/server.py
+  warnings.warn(message, stacklevel=1)
+API docs up to date (383 paths).
+
+=== boundary_green ===
+See acceptance and full local log SHA256
+tests/agent/test_range_research.py: 532 warnings
+tests/agent/test_owner_provider_acceptance.py: 236 warnings
+  /Users/nav/Documents/GitHub/floww-2/backend/.venv/lib/python3.14/site-packages/mongomock/helpers.py:73: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    return datetime.utcnow()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+97 passed, 799 warnings in 3.38s

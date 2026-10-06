@@ -20,7 +20,7 @@ import threading
 from datetime import UTC, datetime
 from typing import Any
 
-from services.connection_guard import guarded_connection
+from services.connection_guard import connection_lock, guarded_connection
 
 log = logging.getLogger(__name__)
 
@@ -1163,3 +1163,361 @@ def save_decision_review(conn, decision_id: str, state: str,
     except Exception as e:
         log.warning("save_decision_review failed for %s: %s", decision_id, e)
         return None
+
+
+# ── R18-C2: owning analytical range-envelope persistence ─────────────
+#
+# Additive, namespace-specific table (Cline-owned analytical/recorder schema).
+# record_snapshot / replay_snapshot and every existing table/migration above
+# are untouched; range_analytics_envelopes_v1 stores the IMMUTABLE
+# range-analytics.v1 envelope itself, so replay restores the exact admitted
+# display (axes/cells/clocks/coverage) instead of reprojecting current data.
+
+_RANGE_DDL = """
+    CREATE TABLE IF NOT EXISTS range_analytics_envelopes_v1 (
+        record_id VARCHAR PRIMARY KEY, ticker VARCHAR, window_min INTEGER,
+        window_max INTEGER, asof_date VARCHAR, received_at VARCHAR,
+        status VARCHAR, digest VARCHAR, envelope_json VARCHAR, recorded_at VARCHAR
+    )
+"""
+
+_RANGE_REQUIRED = ("version", "status", "symbol", "record_id", "content_digest",
+                   "content_schema", "query", "axes", "grids", "metric_registry",
+                   "clocks", "coverage", "provenance")
+
+
+def _canonical_range(envelope: dict[str, Any]) -> str:
+    return json.dumps(envelope, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _validate_range_envelope(envelope: dict[str, Any]) -> str | None:
+    """R18-C6: canonical-content validation. Returns a typed refusal reason or
+    None. The digest is ALWAYS recomputed from the payload — a supplied digest
+    is never trusted on its own, and record identity must derive from the
+    recomputed digest. Pre-C6 (absent/legacy content_schema) is an explicit
+    schema refusal, not a silent upgrade.
+    """
+    from services.solstice_range_analytics import CONTENT_SCHEMA, compute_content_digest, record_id_for_digest
+
+    schema = envelope.get("content_schema")
+    if schema != CONTENT_SCHEMA:
+        return "INCOMPATIBLE_CONTENT_SCHEMA"
+    recomputed = compute_content_digest(envelope)
+    if envelope.get("content_digest") != recomputed:
+        return "DIGEST_MISMATCH"
+    if envelope.get("record_id") != record_id_for_digest(recomputed):
+        return "RECORD_ID_MISMATCH"
+    return None
+
+
+def bind_range_row(rid: Any, ticker: Any, window_min: Any, window_max: Any,
+                   asof: Any, received_at: Any, status: Any, digest: Any,
+                   envelope_json: Any) -> tuple[dict[str, Any] | None, str | None]:
+    """R18-C11: SHARED exception-safe canonical row/payload binding.
+
+    The ONE validator behind record-duplicate checks, replay retrieval and
+    the read-only index — so a row's verdict can never differ between the
+    paths that serve it. Binds the COMPLETE stored row to the canonical
+    payload:
+
+      * payload parses as a JSON object (else CORRUPT_PAYLOAD);
+      * rga-content schema, recomputed content digest and record identity
+        all validate (else that typed refusal);
+      * the ROW's record_id equals the payload's own record_id — a fully
+        self-consistent forgery under someone else's row can never serve
+        (else ROW_HEADER_MISMATCH);
+      * EVERY row header matches the validated payload: ticker/symbol,
+        window (a NULL window is a typed ROW_HEADER_MISMATCH, never a
+        TypeError), as-of date, status and received-at clock;
+      * the stored digest column equals the payload's content digest
+        (else STORED_DIGEST_MISMATCH).
+
+    Returns ``(payload, None)`` when the row is fully bound, else
+    ``(None, refusal_reason)``. Never raises.
+    """
+    try:
+        payload = json.loads(envelope_json) if envelope_json else None
+    except (TypeError, ValueError):
+        payload = None
+    if not isinstance(payload, dict):
+        return None, "CORRUPT_PAYLOAD"
+    try:
+        defect = _validate_range_envelope(payload)
+    except Exception:
+        return None, "CORRUPT_PAYLOAD"
+    if defect is not None:
+        return None, defect
+    q = payload.get("query") or {}
+    if not isinstance(q, dict) or not isinstance(payload.get("clocks"), dict):
+        # R18-C12: a list/str query or clocks block is a typed corruption —
+        # never an AttributeError raised out of the shared binder.
+        return None, "CORRUPT_PAYLOAD"
+    if str(rid or "") != str(payload.get("record_id") or ""):
+        return None, "ROW_HEADER_MISMATCH"
+
+    def _int(v: Any) -> int | None:
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return None
+
+    # NULL/invalid window headers are a typed refusal — int(None) must
+    # never raise out of a read path (R18-C11 consumer review).
+    wmin, wmax = _int(window_min), _int(window_max)
+    if (wmin is None or wmax is None
+            or wmin != q.get("min_dte") or wmax != q.get("max_dte")):
+        return None, "ROW_HEADER_MISMATCH"
+    clocks_received = str((payload.get("clocks") or {}).get("received_at") or "")
+    if (str(ticker or "") != str(payload.get("symbol") or "")
+            or str(asof or "") != str(q.get("as_of_ny") or "")
+            or str(status or "") != str(payload.get("status") or "")
+            or str(received_at or "") != clocks_received):
+        return None, "ROW_HEADER_MISMATCH"
+    if str(digest or "") != str(payload.get("content_digest") or ""):
+        return None, "STORED_DIGEST_MISMATCH"
+    return payload, None
+
+
+def ensure_range_tables(conn) -> None:
+    with connection_lock(conn):
+        try:
+            conn.execute(_RANGE_DDL)
+        except Exception as e:
+            log.warning("range_analytics_envelopes_v1 create failed: %s", e)
+
+
+def record_range_envelope(conn, envelope: dict[str, Any]) -> dict[str, Any]:
+    """Persist one OWNING range-analytics.v1 envelope (idempotent by identity).
+
+    Required fields are validated up front. A repeat of the same record_id
+    with the same digest is a no-op duplicate; the same record_id with a
+    DIFFERENT digest is an identity conflict and refuses. Store/write
+    failures return an explicit refusal — required persistence never falls
+    back to a false success.
+    """
+    if not isinstance(envelope, dict):
+        return {"status": "refused", "reason": "NOT_AN_ENVELOPE"}
+    # C6: recompute and validate content identity BEFORE trusting anything.
+    defect = _validate_range_envelope(envelope)
+    if defect is not None:
+        return {"status": "refused", "reason": defect,
+                "detail": "write-side canonical validation failed"}
+    missing = [k for k in _RANGE_REQUIRED if envelope.get(k) in (None, "")]
+    # R18-C12: clocks/query must be dicts — a list/str clock or query is a
+    # TYPED refusal, never an AttributeError out of the write path.
+    q = envelope.get("query")
+    clocks = envelope.get("clocks")
+    if not isinstance(q, dict) or not isinstance(clocks, dict):
+        return {"status": "refused", "reason": "IDENTITY_INCOMPLETE",
+                "detail": {"bad_query": not isinstance(q, dict),
+                           "bad_clocks": not isinstance(clocks, dict)}}
+    bad_window = not isinstance(q.get("min_dte"), int) \
+        or not isinstance(q.get("max_dte"), int)
+    if missing or bad_window or envelope.get("status") == "refused":
+        return {"status": "refused", "reason": "IDENTITY_INCOMPLETE",
+                "detail": {"missing": missing, "bad_window": bad_window,
+                           "envelope_status": envelope.get("status")}}
+
+    record_id = str(envelope["record_id"])
+    digest = str(envelope["content_digest"])  # already recomputed-validated
+    asof = str(q.get("as_of_ny") or "")
+    received_at = str(clocks.get("received_at") or "")
+    recorded_at = _now_iso()
+    from services.solstice_range_analytics import compute_content_digest
+    try:
+        with connection_lock(conn):
+            with _RECORDER_LOCK:
+                ensure_range_tables(conn)
+                rows = conn.execute(
+                    "SELECT ticker, window_min, window_max, asof_date, "
+                    "received_at, status, digest, envelope_json "
+                    "FROM range_analytics_envelopes_v1 "
+                    "WHERE record_id = " + _esc(record_id)).fetchall()
+                if rows:
+                    # C6/C11/C12: duplicate detection compares RECOMPUTED
+                    # digests of both sides — a supplied digest alone can
+                    # never earn a duplicate success — and the STORED row
+                    # must pass the FULL shared row binder (canonical
+                    # identity + every header), exactly like index and
+                    # replay: a header-tampered row can never "duplicate".
+                    (s_tk, s_wmin, s_wmax, s_asof, s_recv, s_status,
+                     stored_digest, s_json) = rows[0]
+                    try:
+                        stored_env, stored_refusal = bind_range_row(
+                            record_id, s_tk, s_wmin, s_wmax, s_asof, s_recv,
+                            s_status, stored_digest, s_json)
+                    except Exception:
+                        stored_env, stored_refusal = None, "CORRUPT_PAYLOAD"
+                    if stored_refusal is not None:
+                        return {"status": "refused",
+                                "reason": "STORED_RECORD_CORRUPT",
+                                "record_id": record_id,
+                                "stored_defect": stored_refusal}
+                    stored_recomputed = compute_content_digest(stored_env)
+                    if stored_recomputed == digest and stored_digest == digest:
+                        return {"status": "duplicate", "record_id": record_id,
+                                "digest": digest, "recorded_at": recorded_at,
+                                "replay_identity": record_id,
+                                "digest_recomputed": True}
+                    return {"status": "refused", "reason": "IDENTITY_CONFLICT",
+                            "record_id": record_id,
+                            "digest_recomputed": True}
+                conn.execute(
+                    "INSERT INTO range_analytics_envelopes_v1 VALUES ("
+                    + ",".join([_esc(record_id), _esc(envelope.get("symbol")),
+                                _esc(q.get("min_dte")), _esc(q.get("max_dte")),
+                                _esc(asof), _esc(received_at),
+                                _esc(envelope.get("status")), _esc(digest),
+                                _esc(_canonical_range(envelope)),
+                                _esc(recorded_at)]) + ")")
+        return {"status": "recorded", "record_id": record_id, "digest": digest,
+                "recorded_at": recorded_at, "replay_identity": record_id}
+    except Exception as e:
+        log.warning("record_range_envelope failed for %s: %s", record_id, e)
+        return {"status": "refused", "reason": "STORE_WRITE_FAILED",
+                "record_id": record_id, "detail": str(e)}
+
+
+def replay_range_envelope(conn, record_id: str) -> dict[str, Any] | None:
+    """Restore the EXACT stored range-analytics.v1 envelope by record identity.
+
+    C6: replay VALIDATES — the canonical content digest is recomputed from the
+    payload, record identity must derive from it, and EVERY stored row
+    header (ticker/window/asof/status/received_at) must match the payload
+    via the shared bind_range_row validator (the same one the index and
+    duplicate-write check use). Typed refusal dicts
+    (never a silent map): STORE_READ_FAILED / CORRUPT_PAYLOAD /
+    INCOMPATIBLE_CONTENT_SCHEMA / DIGEST_MISMATCH / RECORD_ID_MISMATCH /
+    ROW_HEADER_MISMATCH / STORED_DIGEST_MISMATCH. None = unknown identity.
+    """
+    try:
+        with connection_lock(conn):
+            rows = conn.execute(
+                "SELECT record_id, ticker, window_min, window_max, asof_date, "
+                "received_at, status, digest, envelope_json, recorded_at "
+                "FROM range_analytics_envelopes_v1 WHERE record_id = "
+                + _esc(record_id)).fetchall()
+    except Exception as e:
+        log.warning("replay_range_envelope query failed for %s: %s", record_id, e)
+        return {"record_id": record_id, "envelope": None,
+                "error": "STORE_READ_FAILED", "detail": str(e)}
+    if not rows:
+        return None
+    (rid, ticker, wmin, wmax, asof, received_at, status, digest,
+     envelope_json, recorded_at) = rows[0]
+
+    def _refusal(reason: str, **extra: Any) -> dict[str, Any]:
+        return {"record_id": rid, "envelope": None, "error": reason, **extra}
+
+    # R18-C11: the SHARED row binder (the same validator as the index and
+    # the duplicate-write check) binds EVERY header — record id, ticker,
+    # window (NULL is a typed refusal, never a TypeError), as-of date,
+    # status, the received-at clock AND the stored digest column — to the
+    # canonical payload before anything serves.
+    try:
+        envelope, refusal = bind_range_row(rid, ticker, wmin, wmax, asof,
+                                           received_at, status, digest,
+                                           envelope_json)
+    except Exception as e:  # defensive: read paths never raise
+        log.warning("replay bind failed for %s: %s", rid, e)
+        return _refusal("CORRUPT_PAYLOAD", digest=digest)
+    if refusal is not None:
+        return _refusal(refusal, digest=digest)
+    # Wrapper fields are served from the BOUND values only — after binding
+    # the row headers equal the payload, so echoing them is exact.
+    q = envelope.get("query") or {}
+    return {
+        "record_id": rid, "ticker": envelope.get("symbol"),
+        "window": {"min_dte": q.get("min_dte"), "max_dte": q.get("max_dte")},
+        "asof_date": q.get("as_of_ny"),
+        "received_at": (envelope.get("clocks") or {}).get("received_at"),
+        "status": envelope.get("status"),
+        "digest": digest, "recorded_at": recorded_at, "envelope": envelope,
+        "integrity": "verified",
+        "replay_note": "exact stored envelope restored; canonical content "
+                       "digest recomputed and verified; no recomputation",
+    }
+
+
+def list_range_envelopes(
+    conn,
+    *,
+    ticker: str | None = None,
+    min_dte: int | None = None,
+    max_dte: int | None = None,
+    as_of: str | None = None,
+    status: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict[str, Any]:
+    """R18-C9: read-only record INDEX over range_analytics_envelopes_v1.
+
+    Identity-bound filters (ticker/window/as_of/status), bounded pagination
+    (limit 1..200). Each row reports its `integrity` verdict — payload digests
+    are recomputed for the listed page, so tampered rows show up in the index
+    instead of masquerading as valid. Store failures are explicit refusals.
+    No writes; never fetches current chains for historical playback.
+    """
+    lim = max(1, min(int(limit or 50), 200))
+    off = max(0, int(offset or 0))
+    where: list[str] = []
+    params: list[Any] = []
+    if ticker:
+        where.append("ticker = ?")
+        params.append(str(ticker).upper())
+    if min_dte is not None:
+        where.append("window_min = ?")
+        params.append(int(min_dte))
+    if max_dte is not None:
+        where.append("window_max = ?")
+        params.append(int(max_dte))
+    if as_of:
+        where.append("asof_date = ?")
+        params.append(str(as_of)[:10])
+    if status:
+        where.append("status = ?")
+        params.append(str(status))
+    sql = ("SELECT record_id, ticker, window_min, window_max, asof_date, "
+           "received_at, status, digest, envelope_json, recorded_at "
+           "FROM range_analytics_envelopes_v1")
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY received_at DESC, record_id LIMIT ? OFFSET ?"
+    params += [lim, off]
+    try:
+        with connection_lock(conn):
+            rows = conn.execute(sql, params).fetchall()
+    except Exception as e:
+        log.warning("list_range_envelopes failed: %s", e)
+        return {"version": "range-records.v1", "status": "refused",
+                "reason": "STORE_READ_FAILED", "detail": str(e)}
+    out_rows: list[dict[str, Any]] = []
+    for (rid, tk, wmin, wmax, asof_d, recv, st, digest, envelope_json,
+         recorded_at) in rows:
+        # R18-C11: the SAME shared binder as replay — the index verdict for a
+        # row can never differ from the retrieve verdict for that row.
+        try:
+            payload, row_refusal = bind_range_row(rid, tk, wmin, wmax, asof_d,
+                                                  recv, st, digest,
+                                                  envelope_json)
+        except Exception:
+            payload, row_refusal = None, "CORRUPT_PAYLOAD"
+        if row_refusal is not None:
+            integrity = f"refused:{row_refusal}"
+        else:
+            integrity = "verified"
+        out_rows.append({
+            "record_id": rid, "ticker": tk,
+            "window": {"min_dte": wmin, "max_dte": wmax},
+            "asof_date": asof_d, "received_at": recv, "status": st,
+            "digest": digest, "recorded_at": recorded_at,
+            "integrity": integrity,
+            # Honest evidence classification for the inspector (C8).
+            "synthetic": (payload.get("synthetic")
+                          if isinstance(payload, dict) else None),
+        })
+    return {"version": "range-records.v1", "status": "ok",
+            "filters": {"ticker": ticker, "min_dte": min_dte, "max_dte": max_dte,
+                        "as_of": as_of, "status": status},
+            "limit": lim, "offset": off, "n_returned": len(out_rows),
+            "rows": out_rows}

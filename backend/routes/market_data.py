@@ -15,7 +15,7 @@ import asyncio
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 router = APIRouter()
 
@@ -283,3 +283,91 @@ async def uoa(
         raise HTTPException(404, f"No options data for {ticker}")
     result = calc_uoa(spot, raw["contracts"], t, min_premium, limit)
     return _sanitize(result)
+
+
+@router.get("/heatmap/{ticker}/range-analytics", response_model=None)
+async def heatmap_range_analytics(
+    ticker: str,
+    request: Request,
+    min_dte: int = Query(14, ge=0, le=365),
+    max_dte: int = Query(60, ge=0, le=365),
+    as_of: str | None = Query(
+        None, description="Owning NY date; must equal today — a current fetch "
+                          "can never recreate a historical observation"),
+    persist: bool = Query(
+        False, description="Recorder write of the admitted owning envelope. "
+                           "R18-C10: requires the explicit capture policy "
+                           "(FLOWW_RANGE_CAPTURE_ENABLED) AND operator API-key "
+                           "auth. Default False — display reads never write."),
+):
+    """Owning 14–60 DTE analytical range map (contract range-analytics.v1).
+
+    ADDITIVE and distinct from coverage-read.v1 (an expiry LISTING verdict)
+    and from the existing `dte le=30` display envelope on /heatmap. Returns
+    the owned axes/cells/basis/units/coverage/clocks envelope from
+    services.solstice_range_analytics. Refusals stay machine-readable:
+    REVERSED_WINDOW → 422; vendor/listing unavailable → 502; zero admitted
+    expiries → 200 with status "refused" (an honest empty window answer).
+    Execution policy is unchanged — this is research data, not entry
+    permission. A partial map is research only and never execution-eligible.
+    """
+    from fastapi.responses import JSONResponse
+
+    from services.solstice_range_analytics import CONTRACT_VERSION, fetch_range_analytics
+
+    t = ticker.strip().upper()
+    if min_dte > max_dte:
+        # Structured JSONResponse, same reason as coverage-read.v1: the global
+        # handler stringifies dict details, burying the refusal code.
+        return JSONResponse(status_code=422, content={
+            "error": "REVERSED_WINDOW",
+            "message": f"min_dte {min_dte} is above max_dte {max_dte} — "
+                       "no expiry can satisfy a reversed window.",
+            "version": CONTRACT_VERSION,
+        })
+    conn = None
+    if persist:
+        # R18-C10: capture mutation is default-off. It requires the explicit
+        # operator capture policy flag AND authenticated API-key admission on
+        # this GET; without both the write is refused, not performed. Real
+        # capture remains an operator commissioning step.
+        import os
+
+        from auth import require_api_key
+        if os.environ.get("FLOWW_RANGE_CAPTURE_ENABLED", "").lower() not in (
+                "1", "true", "yes"):
+            return JSONResponse(status_code=503, content={
+                "error": "CAPTURE_DISABLED",
+                "message": "Range-envelope capture is default-off. Set "
+                           "FLOWW_RANGE_CAPTURE_ENABLED through the accepted "
+                           "commissioning policy, and authenticate.",
+                "version": CONTRACT_VERSION,
+            })
+        await require_api_key(request)  # 401/503 when unauthenticated
+        try:
+            from services.duckdb_engine import db as eng
+            conn = eng.conn if hasattr(eng, "conn") else None
+        except Exception:
+            conn = None
+        if conn is None:
+            return JSONResponse(status_code=503, content={
+                "error": "recorder_unavailable",
+                "message": "persist=true requires the owning recorder store; "
+                           "it is not connected.",
+                "version": CONTRACT_VERSION,
+            })
+    envelope = await fetch_range_analytics(t, min_dte, max_dte, as_of=as_of,
+                                           persist_conn=conn,
+                                           capture=(
+                                               {"authorized": True,
+                                                "policy":
+                                                    "FLOWW_RANGE_CAPTURE_ENABLED",
+                                                "operator": "api-key",
+                                                "route":
+                                                    "heatmap_range_analytics"}
+                                               if conn is not None else None))
+    if envelope.get("status") == "refused" and \
+            "VENDOR_UNAVAILABLE" in (envelope.get("refusals") or []):
+        return JSONResponse(status_code=502, content=envelope)
+    return envelope
+

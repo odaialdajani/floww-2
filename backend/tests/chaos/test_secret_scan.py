@@ -88,3 +88,16 @@ def test_gate_scans_the_repo_it_ships_in():
     # The old bug: a path under a sibling repo, not this one.
     stale_clone = Path("/Users/nav/Documents/GitHub/floww")
     assert stale_clone != REPO_ROOT, "hardcoded sibling-clone path regressed"
+
+
+def test_tree_scan_excludes_installed_python_environments_but_scans_source(tmp_path):
+    from tests.chaos.secret_scan import scan_tree
+
+    environment = tmp_path / ".venv313"
+    environment.mkdir()
+    (environment / "pyvenv.cfg").write_text("home = installed-python\n")
+    (environment / "dependency.py").write_text("ghp_abcdefghijklmnopqrstuvwxyz012345")
+    source = tmp_path / "service.py"
+    source.write_text("ghp_abcdefghijklmnopqrstuvwxyz012345")
+    findings = scan_tree(str(tmp_path))
+    assert [(item["path"], item["pattern"]) for item in findings] == [(str(source), "github_token")]

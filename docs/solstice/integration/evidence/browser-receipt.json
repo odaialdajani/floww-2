@@ -1,11 +1,11 @@
 {
   "version": "floww-browser-receipt.v1",
   "fixtureOnly": true,
-  "sourceCommit": "047153ec74d903b8c2c08d5bbfdfd176e6207a30",
+  "sourceCommit": "aadea4ac833e35b14375f9f36243c7da1f526d7f",
   "sourceHashes": {
     "frontend/src/App.css": "e2909affc171c429033191d863572ddef0b35e2fe7f7698c22318cbbfafef19f",
     "frontend/src/App.egress-invariant.test.js": "6676cedac81158c8f415359cfd73119d3c6564278bc9d27636ac7e4bb6a76f35",
-    "frontend/src/App.js": "45f1dfed4755e3d7c2eb8f525f6511787ae45911b6d088dd78a2e3de29ecfb0a",
+    "frontend/src/App.js": "9ce3faf2461e0897f0a15f07904146d816397ac737b483847ca560177fc6265f",
     "frontend/src/App.keyboard-invariant.test.js": "d02603e645b5a7d677545d42b4e09a85b303c3bf08af6177bf2318922bce318b",
     "frontend/src/__tests__/visual.test.jsx": "872370e8bc6c3d8d14dd2e6448429dee07378e5a1368b0a9b4a29eaeeba6ded3",
     "frontend/src/agent/AgentCommandBar.jsx": "0431d89295280d48d8f29467cbe8d01585934a7a6eb948d8977555f7667ffe62",
@@ -66,8 +66,8 @@
     "frontend/src/components/PortfolioPanel.jsx": "0ca4d20472587e10096fb8c2396220f32ad54a61a13d1cd9f75b32ee430e2114",
     "frontend/src/components/PositionSizing.jsx": "cfea97a2cc9c468cd55e5f7f667a5c3f10fbf3300dd23eb8ec2855d14df6ff0f",
     "frontend/src/components/PositionSizing.test.jsx": "a401e5c74a28abe8bf1768174c1b494339227917f3c525cf3cf8425266da0b11",
-    "frontend/src/components/PublicPanel.jsx": "5ef7b56fb43eceb16d43ea9ffd0d67603126b275158cacaa66a569ebd1af9760",
-    "frontend/src/components/PublicPanel.test.jsx": "d3e4849b8abd514212ac24da86d70e608c22c55cee7134f9a75855c86c67db4a",
+    "frontend/src/components/PublicPanel.jsx": "302a74f6059ca36aa1e7a9f7046ea7d76f880eeb52c435e0a50d375666677030",
+    "frontend/src/components/PublicPanel.test.jsx": "e3e8ec9dfc0b36b72a5efae8f8c227971449d745ffb43cafef984c00dc32f35e",
     "frontend/src/components/QuickTradePanel.jsx": "edd1e41f6affbd84644fff682ac88f3330ee53a8e3e8baa272de2c12b3523f09",
     "frontend/src/components/RetryButton.js": "89b3757d353ff8e1255d30e0a94f5ef4538c7c4cf4d4f52b7f87b81ae64e7da9",
     "frontend/src/components/RetryButton.test.jsx": "d71c70f88ea131969787f26afcb109f05b240809f28eee6cf55559a62cbfa322",
@@ -168,6 +168,7 @@
     "frontend/src/components/heatseeker/DualGEXBadge.test.jsx": "ba546c1b4c5a72b6a7c533e58e61885313fc407d68cf7487edca1be113f2d123",
     "frontend/src/components/heatseeker/ExactContractReview.admission.test.jsx": "cc5e86d7f2512d83a02a5bc649c85756ddf8b3c429401127adfcbbfabe25a8e6",
     "frontend/src/components/heatseeker/ExactContractReview.jsx": "370687ce0e90da83d8167bc0d07f05cc7b192e9788833f29b500a5a1767b733a",
+    "frontend/src/components/heatseeker/ExpiryCoverage.jsx": "fd0594498e641c09e8d1aee104d6d4055c52db96d63b5035bba28d87cac6d377",
     "frontend/src/components/heatseeker/ExposureStrip.css": "a5c6d9c5cc04326e04597f14caf93393f40b4bd3a7e4ca609504f1fa68433ad9",
     "frontend/src/components/heatseeker/ExposureStrip.jsx": "d2684713483b4ac583bb81b1637ab537434a6aa2906c8f00d19776077f0f1a8f",
     "frontend/src/components/heatseeker/ExposureStrip.test.jsx": "9855aa187e4cd1d8b675ed8f650da28efe1370474b7ce3bed2127c8484af6c1f",
@@ -195,8 +196,8 @@
     "frontend/src/components/heatseeker/RainbowRoadIndicator.test.jsx": "75c6e365ec65b82136fb861fd19c2e7b443e6d806cc9d4e99f69405ecee2c494",
     "frontend/src/components/heatseeker/RecoveryR12.test.jsx": "b80ade3055b90c187fad5151b3f10aba50a812f9e2af7edae10e32b2eca3e3b3",
     "frontend/src/components/heatseeker/RegimeCoverage.test.jsx": "6f19d9f7d161c7c750d3925729fc5fba9c35eaba48d8ea7e1bfa0a97523ac666",
-    "frontend/src/components/heatseeker/ReplayStrip.jsx": "e27c859dc84e700377abcd66e8c8c154061033728643612124f7fb6e09d5898b",
-    "frontend/src/components/heatseeker/ReplayStrip.test.jsx": "15c45ade55a5ff5da487ba2cf295aa2648ea196c4bcae8cf0953bd8acefc73a7",
+    "frontend/src/components/heatseeker/ReplayStrip.jsx": "0be025904d36caad27cfc7fd337ad7d10dcfbfdae8c8158b6da201c82c40a463",
+    "frontend/src/components/heatseeker/ReplayStrip.test.jsx": "d8baba43982f58a7bab5f4b22cf55401eedf69fd05dd468f8f82e7214c826b64",
     "frontend/src/components/heatseeker/ReverseRugIndicator.jsx": "9b6f91d676f4dcd6ec17f6621cf84fe3366a155bbdaf71283dd01a1be8fee6f4",
     "frontend/src/components/heatseeker/ReverseRugIndicator.test.jsx": "2dd4285e8ebfd0bcd5250a0c7206f8b4b1efe448b2f61bf27f776204a4a604a6",
     "frontend/src/components/heatseeker/RndDensityPanel.jsx": "eb0f91f590353b45295d68e27bd696c578bd76422ef6b0caff1730bada08ca6f",
@@ -205,8 +206,8 @@
     "frontend/src/components/heatseeker/ScenarioStrip.jsx": "0224b4cab37d59dc7e61fb76b261fb12828930daff1ee44ed090c87177d5ae29",
     "frontend/src/components/heatseeker/SkylitControlBar.jsx": "6e9ee426312bcd7b1b359d833b387688ea8d0f26685c3bac4b33e8b59d36c07f",
     "frontend/src/components/heatseeker/SkylitControlBar.test.jsx": "37c34a2df0e2453f77b4491b895aab4468cd553d2a5d20bb484efcbe5c977cf6",
-    "frontend/src/components/heatseeker/SkylitDashboard.jsx": "ddcfc08bc3dbd4fd0a19568bcca6e1f944dcd4de5716659e84db185519171a48",
-    "frontend/src/components/heatseeker/SkylitDashboard.test.jsx": "cf44a0591c9bc3a846b203d94555afcd459cba46858d6c19678f1d036344bb8d",
+    "frontend/src/components/heatseeker/SkylitDashboard.jsx": "148874ac1777cfd822ed915c10ca74880b364a97953a78991529ccdabb65e09a",
+    "frontend/src/components/heatseeker/SkylitDashboard.test.jsx": "eb0938668a0cfab3738269690e14bc926b2d2eb7a94e4e7042c51c1afa754d62",
     "frontend/src/components/heatseeker/SkylitHeatmapGrid.jsx": "3edfa25fb91d122c5b2af81615c31b57f1fd43f53dad5004b492237ca5d5207f",
     "frontend/src/components/heatseeker/SkylitHeatmapGrid.palette.test.js": "7bbe1dfedb7fb60c41a96c798d218854247fb295771235c81526e2d7840d7664",
     "frontend/src/components/heatseeker/SkylitHeatmapGrid.r11.test.jsx": "fad784bbf335c75855db8e64b338138643547d482f890bba53fea2353115c81e",
@@ -218,15 +219,15 @@
     "frontend/src/components/heatseeker/SkylitTickerBar.paging.test.jsx": "bc471735e114b63be42a7b7d7041cf286a306e779119a21bb84a312ec83ed871",
     "frontend/src/components/heatseeker/SkylitTickerBar.test.jsx": "fc5ff3c369cc127a56179083d4ecb2469dce29e0d1d61cbd142e01a408e508df",
     "frontend/src/components/heatseeker/SolsticeCanvas.r11.test.jsx": "cc8e86950bbc931834ccc102e9bdfd07fd719af2966cd9cbdd6265683cc359a4",
-    "frontend/src/components/heatseeker/SolsticeDesk.stories.jsx": "399eb932e14250e6ab8ff0f8105b571bc6d55017c57260b087c71f6dae781dbb",
+    "frontend/src/components/heatseeker/SolsticeDesk.stories.jsx": "2d3ee67497cac7c2d877a58f3935f8a0c9e1848e0d8b14381b93efd09bb25cef",
     "frontend/src/components/heatseeker/SolsticeLeaderboard.jsx": "595a9213ffcc0a564757ec0301981e44d887c92e51af803ee9d9ac4deea9fe6d",
     "frontend/src/components/heatseeker/SolsticeLeaderboard.r11.test.jsx": "6ae3c49026dfa1057ba3f98937785571855a510fefd5c697b58bccba329e5a00",
-    "frontend/src/components/heatseeker/SolsticeSlice2.test.jsx": "78738dee32e41e95a160a844b815e748e60e10e1f7cbcb7cf32612f1f6cb8586",
+    "frontend/src/components/heatseeker/SolsticeSlice2.test.jsx": "3ac5bb4ad5b5fd6cd04dcc3a1289855be2a4f05456b388594493d4140cd6f105",
     "frontend/src/components/heatseeker/SolsticeStatusStrip.jsx": "db7296704514bd745b772f6cb91a0144d8f9df890f81be6e43bfe3fa2dff3342",
     "frontend/src/components/heatseeker/SolsticeStatusStrip.stories.jsx": "ab52289cd4b140434d9b37cbd54fd9a9a40fb17e2b45fe804815b405cfb938e0",
     "frontend/src/components/heatseeker/SolsticeSymbolMaps.jsx": "a90c49ebadde8c38a9f3d0eb1e4bbe3504063d40809a67891b9b41e4fe6013af",
     "frontend/src/components/heatseeker/SolsticeSymbolMaps.test.jsx": "58e45ef6fb1c68859cea00382d617d0def3101d3d6a6837effb44a0e175c577a",
-    "frontend/src/components/heatseeker/SolsticeWorkspace.css": "7c7126fe99295e6d6c321ee624727f819fbcdf376061de84c013509b0177d7b7",
+    "frontend/src/components/heatseeker/SolsticeWorkspace.css": "bb006ad8cfb91464eb6ec7cc21f022d79a4b74f5a8d57cabff2b96711abd2c3f",
     "frontend/src/components/heatseeker/StackedNodesPanel.jsx": "59425eadb3c3352259250c81ed87dd1e033638a44a373ac77cdfb2b3ee458c2a",
     "frontend/src/components/heatseeker/StackedNodesPanel.test.jsx": "9da58c96e42a8de784383d998d83a2c298e6e63ac9b4d2dcaea17657dc55525b",
     "frontend/src/components/heatseeker/StealThreePreview.jsx": "422d770fcf996333396c9b05a522286fdc97f7827836d817e14f1b856b145c2c",
@@ -257,7 +258,8 @@
     "frontend/src/components/public/PublicHandoffReview.jsx": "7b3d64e8ef24e740117f20c5b079016e6390961c874fa178e6715a9682c47fdd",
     "frontend/src/components/public/PublicHandoffReview.stories.jsx": "f426cddbbfd9ac737813a48ace25b146a48a57082cedc60f0893f01fb1f9d9d5",
     "frontend/src/components/public/PublicHandoffReview.test.jsx": "4a0902b95929c907df6a341ee940c7ff21a3534a98684df482e3999f5dfc1c73",
-    "frontend/src/components/public/PublicPanel.stories.jsx": "245a14af972309b93d86d8d34d2dd8812af0dd24dc1c3224ea7bab443ac4fa8a",
+    "frontend/src/components/public/PublicLifecycleInventory.jsx": "74a5a0ad333c29548dc383f7c12cfbc611485baeac13e23e7452b904209250c1",
+    "frontend/src/components/public/PublicPanel.stories.jsx": "84ad0e767b56261e0db1b483ee53680b4c62b7cf1327a8a82ebac9c4e421dde2",
     "frontend/src/components/public/PublicReview.css": "219238f051a7213c198777a621fb968024af8eb9d11f9cd4682bd365e399445a",
     "frontend/src/components/public/TidehunterPublicBridge.jsx": "7bb01cb0091c56ce6e25c275d161889d5c04b1fffacd2bc9adf49da9158675e1",
     "frontend/src/components/public/TidehunterPublicBridge.test.jsx": "5772bde45af4f32c4b8f63919e1a899afd1d7037c4b7057a097a4a0119b33b46",
@@ -268,6 +270,8 @@
     "frontend/src/config/api.js": "39b564ccf6e7b270d7e96669f37a4c6d93a4fc781f32ed71ec80d62b61d29f58",
     "frontend/src/context/AuthContext.js": "557091020b9865d62d5fce96f94c81769ec97231f03e8e5dd6e5a218d4ab743c",
     "frontend/src/context/ThemeContext.js": "3ed049e0050dfdcd91457bee1cace6bc8259c4e11e570c59268438afa1250922",
+    "frontend/src/fixtures/integration/coverage-read.v1.json": "a066bc6bfa4e0fd38f78bf983b5aace077a66b5eff606241b2b30cb0aa942eb0",
+    "frontend/src/fixtures/integration/lifecycle-inventory.v1.json": "0c05695f69de74d42bf221172dc0269db8d381c958543b58788f428116153a7c",
     "frontend/src/fixtures/integration/solstice-display.v1.json": "41a2a84bab0649beca599c880ff40468156f9e2570412c8b60bd37537ae92c78",
     "frontend/src/heatseeker-routing.test.js": "1e0db2e04e02b3a3e2ed9942cfea8bcb69f95a6608a1aa8a8f0b63b23b4767f2",
     "frontend/src/hooks/useDebounce.js": "3203faba1a0dbd657693a6936954fbf0f62f65a34d043dba178a868a00937ad6",
@@ -294,8 +298,8 @@
     "frontend/src/lib/solsticeExplain.test.js": "c3db0c024558c87a455a2e5f4a38c59b423fd784b86ffa32744375bcfe3b56a4",
     "frontend/src/lib/solsticeMetrics.js": "a46256ecc853cedc841a6d3404b2bededb7ca335d6fe87dda83e84f588a8efea",
     "frontend/src/lib/solsticeMetrics.test.js": "b0d3d6472251bc5d082d4c447f3e58ecf9336de754058ca489b9241145799836",
-    "frontend/src/lib/solsticeReplay.js": "7e76addc3ddaf1f8b98a40ddea622b5be8bcbd45c09a8338d08e5c06ce5c2f8f",
-    "frontend/src/lib/solsticeReplay.test.js": "e940a8c59c4cc88d55d9e7c5026ff29f4d9bd0db728a8a08dd8ddff8c387e2ff",
+    "frontend/src/lib/solsticeReplay.js": "f2542adfeb6cd5c2476e132c8dbd9adc9fda818e515ff8520e61ec768e4315d3",
+    "frontend/src/lib/solsticeReplay.test.js": "65cd92bed088b4d600767cb48db9b16ce9f3224efeaae04fae842ec0a768cf85",
     "frontend/src/lib/solsticeSelection.js": "f2d60533623dba5be5110c28df304f27e782a82a427758bf35b203f79f5121b9",
     "frontend/src/lib/solsticeSelection.test.js": "266d4d475810ba097c1af3a7a3fc07648a6b9344b2348d88483617b8482c8b18",
     "frontend/src/setupTests.js": "833d01eb305e1f4d63c0307ca1255789e3223853a24ac50d2de04613f3059ae9",
@@ -509,7 +513,7 @@
     "backend/services/public_api_adapter.py": "3ed54060a67adb7b6da6797db1e053c83b5a0fab948c9032fe35eb9410175e52",
     "backend/services/public_budget.py": "a9973850c78cec0ee462bf48a06549d73ff36c88d10856de8582cc66d716575f",
     "backend/services/public_capability.py": "fa8ede163c776fca2bd4ecffaae90674684d8dad3d447c0e2500f9de466bdd6e",
-    "backend/services/public_execution_lifecycle.py": "364fa94c970e9eeeb35895f957bdae5eb99f34f827e6283b719032c1ce996e99",
+    "backend/services/public_execution_lifecycle.py": "18ca1f7cf8864012c5ac9a5f93482a754f363c295b2b8c1ec5356576f2d404d1",
     "backend/services/public_release_watch.py": "fd9ca1484f7914e7c00addf69cc6049028551beb390e174b274444ebb77013c8",
     "backend/services/public_request_pacer.py": "eb981033378583483fe6c381e905ff29de1a50675eec6151f3aa02c31f281fbe",
     "backend/services/public_scanner.py": "11b81450d3cc87c719aa4a6f0d487a4d0a088483d7800a52006504fb444416ba",
@@ -558,8 +562,8 @@
     "backend/services/solstice_metric_contract.py": "61ecab17db03e90303e595abd5ec8d00b27f3e33ecff619f9ac4918c8b1a66b6",
     "backend/services/solstice_missed.py": "3f7e7b45117e4ba484670bc0d709cc2b0a898ee78cab3ee90baa3a18f1ba5c1a",
     "backend/services/solstice_patterns.py": "168fb38191a795a5bc58edace3633e884776af97bb8847f004c30a933dd03842",
-    "backend/services/solstice_price_fetch.py": "6b688d48cf8c51157f85f919e978a4510e3d1f7baa8f95d3955c12c7c9ae4c39",
-    "backend/services/solstice_price_producer.py": "19ae25bc9d9092767ab9db4d42116150e94cad2b110ec464f628cb07021b2874",
+    "backend/services/solstice_price_fetch.py": "c06ca4a83d98c5fe6b90e7fb3d67f257837438ac6d89f46fb9394e7b0297073a",
+    "backend/services/solstice_price_producer.py": "886bd2ce2575f21ee0e829cf912e6c619baa0688bdfe4a0470eaa02ae9a2dce8",
     "backend/services/solstice_provenance.py": "54dae9d7133bb2fdb7d95d17ba8bafa28353580d3498758d76c7c96d9018dc4e",
     "backend/services/solstice_rank.py": "80c40714bb8d5eb290bab1f0f4ff6effe59563b4052371b8a985992ab29ef2fb",
     "backend/services/solstice_regime.py": "383bccc6316f9646eae12560e0a6a867c47933e4c66a5f163c87f7e8f2023e2c",
@@ -647,14 +651,14 @@
     "backend/routes/preferences.py": "c0d9b2590aa135900ac6551d78d034abf8504d7983621a6eecff2ea878fcd3eb",
     "backend/routes/price_history.py": "d34bd9ba7a09656b845cf8f5d05032303e6ae2af7ea10c0764ce88103c2d7921",
     "backend/routes/public_api.py": "8bd5b862a823c2e7e39182f64e62766fefefaed07b6f462c97fded85c397a145",
-    "backend/routes/public_brokerage.py": "de3b639330c2a0c96e2911c406ea53a0be778fdc06ccb4c0ce252ea5508130a6",
+    "backend/routes/public_brokerage.py": "27b2336bdae9da0bf28c5e51ad1044f586f78e28d4958c4cf8352a99add69dfb",
     "backend/routes/quant.py": "b7b767f919b269dd840f7de7fee56fb990b0213a719b664dcbfe6a69c2f34355",
     "backend/routes/quant_full.py": "a1caf4fd7ea87cd19f1ecacad02e515cc47ec0955800735f05d1160b79bba082",
     "backend/routes/replay.py": "20fe430c6351bc9d35d0a37a9f9dd5b05d92bfc6e0a28349585d497de1676ed5",
     "backend/routes/retail_flow.py": "3f6cb1b0665acc54858cac1429df1f01532ebfd7a533926631875f3e9916406b",
     "backend/routes/social_flow.py": "5c02db74bef18b7054e4992815fc777158ca1a792105a7ec50835cc4ee1d5c06",
     "backend/routes/solstice.py": "c014dfa3e259a982d319b55abea950951197b5b7ebd94fe1055b361fa69d1233",
-    "backend/routes/solstice_price_paths.py": "261dea402af6d690d27774cf076169492ded853583127cc22cfd24df26b80fc6",
+    "backend/routes/solstice_price_paths.py": "cdb00eca10ecd5581277947eda0d99064c6f7e7d87d95d8cb2a26c6d7bac9536",
     "backend/routes/solstice_review.py": "f5fabb02224a4f192e1ebe2e21093b6e89b3c2649c9f24610dca878490cfa385",
     "backend/routes/solstice_scan.py": "2bb279eadc7262592aacd16d10ea25cc5051288c5c7244ea3c4e03d7f54f21f0",
     "backend/routes/steal_three.py": "bad494cac6e849303e568ecb79d8baaa4823750a3b876de68e7850a156469848",
@@ -667,8 +671,8 @@
     "scripts/r15_fixture_answer.py": "45a9792568bdd0153fad32d732ac5da7415931d09c3df7778f2968cca98de3ee"
   },
   "bundleHashes": {
-    "main.css": "8159faf11e11106920412606a5341b9163c1e1db536eadb4e774edff684b4dc6",
-    "main.js": "433297bd751f49b3b89efef02b2762f8113e1b33723d57868e1edd8120395522",
+    "main.css": "4e04ddd1ca5107cd2f9526af27eaabe14e0e4978761acc06b8c851d49dfa76b0",
+    "main.js": "1b6627445d0690d8654e636469945a197f41e1d88899f04fd09c475cb5c80f72",
     "static/js/415.34df0ce4.chunk.js": "48d91bcce41053d197315b3d2d270ae761f77121989bf4b83e0388f79fa5f157",
     "static/js/248.517a2a31.chunk.js": "a989bff8cf146299b2f3722ae275f99130eeef3f5031c185f3853eaa122e32a5",
     "static/js/537.613479e6.chunk.js": "7edae7a915322aaab4cbcfaab2236d462a31fb91aabdeaab712bc7d459bc85fd"
@@ -818,28 +822,32 @@
   ],
   "screenshots": [
     {
+      "file": "public-inventory-1440.png",
+      "sha256": "83df906f0c9958b0c557e2482d2fe67503d74f247a2301a861255fb71dd8abcc"
+    },
+    {
       "file": "solstice-1440.png",
-      "sha256": "ff1f08cc324f08f455d34c9f1ded0024c1d811a43b537d359f9b0db3439bc2db"
+      "sha256": "d2bd13afb2fed60772f2cb1e03692ed1c14e4e8f5f8fcdcbb3e5fb1f8be280cd"
     },
     {
       "file": "solstice-1280.png",
-      "sha256": "589ba22836700343758a5c25667fe356a78f18c95273652c85678aac5e05b955"
+      "sha256": "0a673c1659bc9593b9bff4c28bfc5ef2c33af9123e3d639c1d52dbb575e5db63"
     },
     {
       "file": "solstice-390.png",
-      "sha256": "8a8f0c0e4cb81799b5a974cfdb6671099ef5ef6c167371ba16dc8e81830aa9ee"
+      "sha256": "36cca9ee29bf2c1da90b3ce77afc8e90d74c774548a71b5d4bbc7b8b9078a4aa"
     },
     {
       "file": "triad-1440.png",
-      "sha256": "0de0f2bcacbb2ee3504dd5580e3ebbe8b29cf401c5ca99094e7886ef4b912bc6"
+      "sha256": "b89cc404ea0c2ddcb41167c016ff9f4609cb14c8dd9c5d6ce11bbd58fc577900"
     },
     {
       "file": "triad-1280.png",
-      "sha256": "fa133b5902ee62f724bd7e83f91519273e3602991a904f5bbfb6beb687cd76a7"
+      "sha256": "9a1d4268401b074a514bab35083eb3cfba116f67430742dbec99681efad6d83d"
     },
     {
       "file": "triad-390.png",
-      "sha256": "cf24811a2a0997c7f661e5d125dc729848a289d4038c81349fdd26ec901c30d8"
+      "sha256": "67305a622b333768d2a276188ea87aec68ce68fc6666daab5ba25c47b4bc8a00"
     }
   ],
   "externalRequestsBlocked": [
@@ -1005,8 +1013,7 @@
           98,
           97.5,
           97,
-          96.5,
-          96
+          96.5
         ],
         "mapExpiries": [
           "2026-10-03",
@@ -1019,31 +1026,76 @@
       },
       "turn_id": "r15-fixture-answer",
       "fact_ids": [
-        "ev51103333d8325d7984fc1ee22a8831700c9311e10647643febb79dc8615790ee",
-        "ev6682da07530af19522b771d87ca9012a320508e105ee7dd126538161bc79bc74",
-        "evc7cd64e8b77627d76596b3cc1197ead61c12fc894f0e18b5ca992d13b928cb7c",
-        "ev4840f12f40a5c5905ae85c5932d3332aef7469bcc20aa890cb5ece44cad307c8",
-        "ev067b5308bae305a3041d78f95050575a5a79eb09ff4f2d62af6f1b33ea11d41f",
-        "evca62e4a4dab7dabcf12b18e84cbd6766b1afa8bc12e6165ea9db54234ab9f9d0",
-        "ev89e89ff54fdd9610c0b69f49c93e009d1a5e3198a7053be0b6ccbcea135d699f",
-        "evbb89c545eec76da3454f8094d2e6e73802bb82a7679c28761fbdd9952c7d71dd",
-        "evc508a5b70918b8842d53a8e4bf834490fe203da3f97bca9022333ca2ceca745a",
-        "ev360cd9125853112c00338fdbea8bbb429eb918fd43bd32497fbcec43958a8d72",
-        "evd790d60ffb7c0f9c755e487a54d84f9061c53a569ee3ef61d71cb9fccf5c9593",
-        "eve2b5f4fc87fd04b6f959dbdb1ca5084372c1bd8eecf4c10e8ddaef21877df69e",
-        "ev16ea3ce39ed5419aaff9e0e96dd158930f49eb7d37655a545467424738dfce32",
-        "ev0b0b274dc62bd9860c76845fa2bdc8ba6844d5e5ae24d3682e109ba893d7150c",
-        "eva06f0b578a913188cb92da15d48938f94b2463db8e53c5876e2e77cc900a0bea"
+        "ev2bc39529cb8c03a29eca4c0d743e9e682607f724115885d3889b89c35042cb8a",
+        "eva6f38f0a67baa7ebab1f2b9c4410a2985570cec996f89bc30617add5f5ba9c33",
+        "evde5c06e5c5e55f6ccddf722f7fd1d1a4df7038f564602f3b68cc8893e5d51e9d",
+        "ev282923b9ae8a4d0f15b63d088b80d4339c201333ae2875df5a530278bdad88db",
+        "eve9a9cbaadcbe3daa5029ed64d937ebdfdbbb4dc05da09e042e6a5fd765cf4339",
+        "ev32e7ba35504baa41f583722d137e04c72f638c9629a1386d3224fdc150d460ba",
+        "evffe4014d6d48e102a4c8408b065e694a67670b533d55a55845729246e01d507a",
+        "evacc0deec585a403631e63ae1c73afcfcc46ef17ebc8ec5ac6ff92d8539cd01f8",
+        "ev8874951e1a20fbd90c99d7e0e5bf19730c94def90e3d27613ba40f9c29361320",
+        "evfbf34dcfb0724cc739fe1bd40489dd58756a118fe6e6723b44087afdf6abe228",
+        "eve1571a858b30bdf95fbf5304472bf375fdd49a4d0dca15bf5419b7d0b2c7f2ee",
+        "ev7fa555d615346a86fcce3b3193e2ed38c39bbaa85a66880cd6bcb47797008d01",
+        "evf24eb0f0dade1194059259f976d84dcda1a0d0d5c969aad785c5c80232f8c1c3",
+        "evf4a0183abf441e0c0ab472beb35f6fc31c8b957e30621d15b98e48693bba3066",
+        "evb82df435a0bd94d44d2306799363228e77f44a97b7d8080678a2a7c644ca8965"
       ],
-      "draft_id": "draft_21911de298841a01dd7c32abe3f3ce649da5941c4dfea82cf20079c202223092",
+      "draft_id": "draft_373fb6dfac056bb3d1a640a247dade3e9043c0a102673a4eee1127715c4b63a8",
       "executable": false
     }
   ],
   "checks": [
+    "on-demand local lifecycle inventory; durable surplus over local open/unknown records requires read-only recovery review; installed policy and stored/revoked counts are not permission; GET only",
+    "empty local registry with stored rows discloses recovery review; no recovery or entry mutation",
     "browser back/forward + query/hash preservation",
     "Expand restores selected strike and layout",
+    "count-limited exact admitted-expiry projection is listing-only; analytical range map unavailable; selection unchanged",
+    "overnight attribution disclosed; manifest uses stored prefix, not normalized NY date (index-only fixture)",
+    "stored day enumeration with declared NY attribution + dated load + admitted/refused exact record pair",
+    "recorded play/pause/scrub",
     "stored manifest, step both directions, deliberate Live exit",
     "owning-contract deterministic draft + manual native brief, no execution"
+  ],
+  "coverageFixtureHash": "a066bc6bfa4e0fd38f78bf983b5aace077a66b5eff606241b2b30cb0aa942eb0",
+  "coverageReads": [
+    {
+      "path": "/api/solstice/price-paths/expiries",
+      "query": "?ticker=SPY&min_dte=14&max_dte=60&expirations=12",
+      "method": "GET"
+    },
+    {
+      "path": "/api/solstice/price-paths/sessions",
+      "query": "?ticker=SPY",
+      "method": "GET"
+    },
+    {
+      "path": "/api/solstice/price-paths/sessions",
+      "query": "?ticker=SPY",
+      "method": "GET"
+    },
+    {
+      "path": "/api/solstice/price-paths/comparable",
+      "query": "?baseline_id=snap_b65e71e600355fb0&snapshot_id=snap_f1bbaa8d0e56cb65",
+      "method": "GET"
+    },
+    {
+      "path": "/api/solstice/price-paths/comparable",
+      "query": "?baseline_id=snap_b65e71e600355fb0&snapshot_id=snap_f1bbaa8d0e56cb65",
+      "method": "GET"
+    }
+  ],
+  "lifecycleFixtureHash": "0c05695f69de74d42bf221172dc0269db8d381c958543b58788f428116153a7c",
+  "lifecycleReads": [
+    {
+      "path": "/api/public/execution-lifecycle/inventory",
+      "method": "GET"
+    },
+    {
+      "path": "/api/public/execution-lifecycle/inventory",
+      "method": "GET"
+    }
   ],
   "browser": "148.0.7778.96",
   "nativeZoom": {

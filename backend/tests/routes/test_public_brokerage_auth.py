@@ -87,13 +87,53 @@ class TestOrderKillSwitch:
                             json=self._order(quantity=-1))
         assert r.status_code == 422, r.text
 
-    def test_place_order_armed_proceeds(self, monkeypatch):
+    def test_place_order_armed_with_admission_proceeds(self, monkeypatch):
         monkeypatch.setenv("FLOWW_ENABLE_LIVE_PUBLIC", "1")
-        broker = _broker()
-        with _patched_broker(broker):
-            r = client.post("/api/public/order", headers=KEY, json=self._order())
-        assert r.status_code == 200, r.text
-        broker.place_order.assert_called_once()
+        import duckdb
+
+        import routes.public_brokerage as mod
+        from services import execution_admission as adm
+        from services import operator_registry as operators
+
+        conn = duckdb.connect(":memory:")
+        monkeypatch.setattr(mod, "_admission_store_conn", lambda: conn)
+        try:
+            assert operators.register_operator(
+                conn, "op-1", ["TEST-ACCT"], "root")["ok"] is True
+            assert adm.set_account_policy_required(
+                conn, "TEST-ACCT", {"max_quantity": 5}, "op-1")["ok"] is True
+            created = adm.create_order_approval(
+                conn, "TEST-ACCT", "AAPL", "BUY", 1, None, "op-1",
+                order_type="MARKET", instrument_type="EQUITY")
+            assert created["ok"] is True, created
+            broker = _broker()
+            body = self._order(approval_id=created["approval_id"],
+                               operator="op-1")
+            with _patched_broker(broker):
+                r = client.post("/api/public/order", headers=KEY, json=body)
+            assert r.status_code == 200, r.text
+            broker.place_order.assert_called_once()
+        finally:
+            conn.close()
+
+    def test_place_order_armed_without_policy_refuses(self, monkeypatch):
+        monkeypatch.setenv("FLOWW_ENABLE_LIVE_PUBLIC", "1")
+        import duckdb
+
+        import routes.public_brokerage as mod
+
+        conn = duckdb.connect(":memory:")
+        monkeypatch.setattr(mod, "_admission_store_conn", lambda: conn)
+        try:
+            broker = _broker()
+            with _patched_broker(broker):
+                r = client.post("/api/public/order", headers=KEY,
+                                json=self._order())
+            assert r.status_code == 403, r.text
+            assert "POLICY_UNSET" in r.json()["error"]
+            broker.place_order.assert_not_called()
+        finally:
+            conn.close()
 
     def test_cancel_disarmed_remains_available(self, monkeypatch):
         monkeypatch.delenv("FLOWW_ENABLE_LIVE_PUBLIC", raising=False)

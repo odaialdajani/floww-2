@@ -53,7 +53,11 @@ def scan_tree(root: str) -> list[dict[str, str]]:
     """Walk a repo tree; return [{path, line, pattern}] findings."""
     findings: list[dict[str, str]] = []
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
+        dirnames[:] = [
+            d for d in dirnames
+            if d not in _SKIP_DIRS
+            and not os.path.isfile(os.path.join(dirpath, d, "pyvenv.cfg"))
+        ]
         for fn in filenames:
             if fn in _SKIP_FILES or fn.startswith(".env."):
                 continue

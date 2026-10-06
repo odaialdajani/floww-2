@@ -25,12 +25,15 @@ from services.market_provenance import spot_provenance
 
 
 class ResearchReads:
-    def __init__(self, peek_chain, peek_map, read_alerts, *, read_daily_bars=None, read_recorded_map=None):
+    def __init__(self, peek_chain, peek_map, read_alerts, *, read_daily_bars=None, read_recorded_map=None,
+                 read_recorded_range=None):
         self._peek_chain = peek_chain
         self._peek_map = peek_map
         self._read_alerts = read_alerts
         self._read_daily_bars = read_daily_bars
         self._read_recorded_map = read_recorded_map
+        # Synchronous server-owned seam: (ticker, record_id) -> stored replay wrapper | None.
+        self._read_recorded_range = read_recorded_range
 
     async def snapshot(self, ticker, horizon, **kwargs):
         if current_budget() is None:
@@ -40,6 +43,14 @@ class ResearchReads:
 
     async def _snapshot(self, ticker, horizon, *, selected_expiry=None, now=None, screen=None, price_only=False):
         now = now or datetime.now(UTC)
+        if screen and screen.get("displayMode") == "range-live":
+            from services.agent.range_replay import range_snapshot
+
+            snapshot = range_snapshot(None, screen, ticker, horizon, now)
+            snapshot["gaps"] = ["RANGE_LIVE_UNAVAILABLE; only stored range-replay is supported; no substitute was read"]
+            return snapshot
+        if screen and screen.get("displayMode") == "range-replay":
+            return await self._range_snapshot(ticker, horizon, screen, now)
         if screen and (screen.get("displayMode") == "replay" or
                        screen.get("contextVersion") == 2 and (screen.get("overlayMetric", "raw") != "raw" or screen.get("selectedContract") is not None)):
             return await self._selected_snapshot(ticker, horizon, screen, now)
@@ -258,6 +269,30 @@ class ResearchReads:
                 ).encode()
             ).hexdigest(),
         )
+
+    async def _range_snapshot(self, ticker, horizon, screen, now):
+        from services.agent.range_replay import range_snapshot, validate_selection
+
+        raw = None
+        try:
+            validate_selection(screen)
+        except ValueError as exc:
+            snapshot = range_snapshot(None, screen, ticker, horizon, now)
+            snapshot["gaps"] = [str(exc) + "; no substitute was read"]
+            return snapshot
+        if self._read_recorded_range is not None:
+            try:
+                raw = copy.deepcopy(await current_budget().sync(
+                    "map", ticker, self._read_recorded_range, ticker, screen["rangeRecordId"],
+                    scope={"range_record_id": screen["rangeRecordId"], "range_digest": screen["rangeDigest"],
+                           "range_metric": screen["rangeMetric"]}))
+            except ReadActivityUnavailable:
+                raise
+            except Exception:
+                snapshot = range_snapshot(None, screen, ticker, horizon, now)
+                snapshot["gaps"] = ["RANGE_READ_UNAVAILABLE; stored resolution failed or timed out; no substitute was read"]
+                return snapshot
+        return range_snapshot(raw, screen, ticker, horizon, now)
 
     async def _selected_snapshot(self, ticker, horizon, screen, now):
         # Exact displayed surface only: no unrelated chain/flow/volatility reads.

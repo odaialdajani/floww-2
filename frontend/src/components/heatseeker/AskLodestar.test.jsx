@@ -1,5 +1,24 @@
 /** @jest-environment jsdom */
-import { admissionBlock } from "./AskLodestar";
+import React from 'react';
+import {act,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import AskLodestar, {admissionBlock,STARTERS} from './AskLodestar';
+import AgentProvider from '../../agent/AgentProvider';
+import {publishScreenContext} from '../../agent/useScreenContext';
+import {rangeSelectionContext} from '../../lib/rangeAnalytics';
+import rangeComplete from '../../fixtures/integration/range-analytics.v1/complete.json';
+import rangePartial from '../../fixtures/integration/range-analytics.v1/partial.json';
+beforeAll(()=>{Object.defineProperty(globalThis,'crypto',{value:require('crypto').webcrypto,configurable:true});});
+beforeEach(()=>{global.fetch=jest.fn(async url=>({ok:true,json:async()=>String(url).endsWith('/session')?{}
+ :String(url).endsWith('/ask')?{turn_id:'range-menu-turn'}:{turn_id:'range-menu-turn',status:'completed',ticker:'SPY',text:'Stored research only',contract:null,executable:false}}));});
+
+test('persistent range qualification disclosure is not a transient popup that can cover its menu',()=>{
+ publishScreenContext(rangeSelectionContext(rangeComplete,'raw_oi',{strike:'590',expiry:'2026-10-26'},'replay'));
+ render(<AgentProvider><AskLodestar overlayMetric="raw_oi" displayMode="range-replay"/></AgentProvider>);
+ const disclosure=screen.getByTestId('ask-lodestar-range-disclosure');
+ expect(disclosure).not.toHaveClass('lodestar-ask-note');
+ fireEvent.click(screen.getByTestId('ask-lodestar-btn'));
+ expect(screen.getByRole('menu')).toBeInTheDocument();expect(disclosure).toHaveTextContent('qualification pending');
+});
 
 test("live raw context is admitted", () => {
   expect(admissionBlock({ context: { ticker: "SPY" }, overlayMetric: "raw", displayMode: "live" })).toBeNull();
@@ -59,4 +78,69 @@ test.each(["vex", "charm"])("%s replay requires a recorded metric-envelope selec
 test("missing published selection stays unavailable", () => {
   expect(admissionBlock({ context: {}, overlayMetric: "raw", displayMode: "live" }))
     .toMatch(/No published selection/);
+});
+
+const storedRangeContext = (fixture=rangeComplete,metric='raw_oi') => rangeSelectionContext(
+ fixture,metric,{strike:'590',expiry:'2026-10-26'},'replay');
+test.each(['raw_oi','delta_weighted','volume'])('range %s admission is checked before legacy overlay guards',metric=>{
+ const context=storedRangeContext(rangePartial,metric);
+ expect(admissionBlock({context,overlayMetric:metric,displayMode:'range-replay'})).toBeNull();
+ expect(admissionBlock({context,overlayMetric:'raw',displayMode:'range-replay'})).toMatch(/RANGE_RESEARCH_UNAVAILABLE/);
+ expect(admissionBlock({context,overlayMetric:metric,displayMode:'live'})).toMatch(/RANGE_RESEARCH_UNAVAILABLE/);
+});
+test('range recorded-cell starters remain explicit and use the same agent transport and canonical horizon',async()=>{
+ const context=storedRangeContext();publishScreenContext(context);
+ const starters=['What does this recorded cell show?','Which recorded inputs are unknown?'];
+ render(<AgentProvider><AskLodestar overlayMetric="raw_oi" displayMode="range-replay" starters={starters}
+  subject="recorded SPY cell" testId="range-ask"/></AgentProvider>);
+ expect(global.fetch).not.toHaveBeenCalled();
+ expect(screen.getByTestId('range-ask-range-disclosure')).toHaveTextContent(/research only.*pending/i);
+ expect(screen.getByTestId('range-ask-range-disclosure')).toHaveTextContent(/native draft/i);
+ fireEvent.click(screen.getByTestId('range-ask-btn'));expect(global.fetch).not.toHaveBeenCalled();
+ expect(screen.getAllByRole('menuitem').map(node=>node.textContent)).toEqual(starters);
+ fireEvent.click(screen.getByTestId('range-ask-q-0'));
+ await waitFor(()=>expect(global.fetch.mock.calls.some(([url])=>String(url).endsWith('/ask'))).toBe(true));
+ const payload=JSON.parse(global.fetch.mock.calls.find(([url])=>String(url).endsWith('/ask'))[1].body);
+ expect(payload.question).toBe('What does this recorded cell show? (recorded SPY cell)');
+ expect(payload.horizon).toBe('range:14:60');expect(payload.screen).toEqual(context);
+ expect(payload.screen.selectedContract).toBeNull();expect(payload.screen.selectedWall).toBeNull();
+ const calls=global.fetch.mock.calls.length;
+ act(()=>publishScreenContext({...context,selectedStrike:null,selectedExpiry:null}));
+ expect(global.fetch).toHaveBeenCalledTimes(calls);
+});
+test.each([
+ ['live',c=>{c.displayMode='range-live';}],
+ ['mismatched identity',c=>{c.snapshotId=rangePartial.record_id;}],
+ ['unavailable section',c=>{c.rangeStatus='unavailable';}],
+ ['window',c=>{c.rangeMetric='window';c.overlayMetric='window';c.rangeBasis='VOLUME_WINDOW';c.rangeStatus='unavailable';}],
+ ['invented wall',c=>{c.selectedWall={id:'wall'};}],
+ ['invented contract',c=>{c.selectedContract={osi:'fake'};}],
+ ['missing selection',c=>{c.selectedStrike=null;c.selectedExpiry=null;}],
+])('range menu blocks %s before any session, fallback or model request',async(_,change)=>{
+ const context=storedRangeContext();change(context);publishScreenContext(context);
+ render(<AgentProvider><AskLodestar overlayMetric={context.overlayMetric} displayMode={context.displayMode}/></AgentProvider>);
+ fireEvent.click(screen.getByTestId('ask-lodestar-btn'));fireEvent.click(screen.getByTestId('ask-lodestar-q-0'));
+ expect(screen.getByTestId('ask-lodestar-note')).toHaveTextContent('RANGE_RESEARCH_UNAVAILABLE');
+ expect(global.fetch).not.toHaveBeenCalled();
+});
+test('malformed range mode refuses before fetch without crashing under legacy props',()=>{
+ const context=storedRangeContext();context.displayMode={invalid:true};publishScreenContext(context);
+ render(<AgentProvider><AskLodestar/></AgentProvider>);
+ fireEvent.click(screen.getByTestId('ask-lodestar-btn'));fireEvent.click(screen.getByTestId('ask-lodestar-q-0'));
+ expect(screen.getByTestId('ask-lodestar-note')).toHaveTextContent('RANGE_RESEARCH_UNAVAILABLE');
+ expect(global.fetch).not.toHaveBeenCalled();
+});
+test('resolved exact-contract legacy selectors still require and preserve their authoritative drawer identity',()=>{
+ const context={...complete,selectedStrike:600,selectedExpiry:'2026-10-09',mapStrikes:[590,600],mapExpiries:['2026-10-09'],
+  contractResolution:'resolved',selectedContract:{osi:'SPY261009C00600000',strike:600,expiry:'2026-10-09',type:'call'}};
+ expect(admissionBlock({context,overlayMetric:'delta',displayMode:'live'})).toBeNull();
+ expect(admissionBlock({context:{...context,contractResolution:'unresolved'},overlayMetric:'delta',displayMode:'live'})).toMatch(/contract/i);
+});
+test('default wall starters and their test IDs are preserved for legacy screens',()=>{
+ publishScreenContext({ticker:'SPY',page:'heatseeker',overlayMetric:'raw',displayMode:'live'});
+ render(<AgentProvider><AskLodestar/></AgentProvider>);
+ fireEvent.click(screen.getByTestId('ask-lodestar-btn'));
+ STARTERS.forEach((question,index)=>expect(screen.getByTestId(`ask-lodestar-q-${index}`)).toHaveTextContent(question));
+ expect(screen.queryByTestId('ask-lodestar-range-disclosure')).not.toBeInTheDocument();
+ expect(global.fetch).not.toHaveBeenCalled();
 });

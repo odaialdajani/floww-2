@@ -69,15 +69,27 @@ def budget():
 def cold_adapter(budget):
     adapter._CHAIN_CACHE.clear()
     broker = make_broker()
+
+    async def _fake_get_broker():
+        # R18-C12 fidelity: the REAL _get_broker initializes the module
+        # singleton (global BROKER), which the adapter's zero-I/O warm
+        # probe and in-lock re-probe read. A mock that omits this models a
+        # state production cannot reach (a warm identity-bound cache with
+        # no live singleton).
+        adapter.BROKER = broker
+        return broker
+
     patches = [
-        patch.object(adapter, "_get_broker", new=AsyncMock(return_value=broker)),
+        patch.object(adapter, "_get_broker", new=_fake_get_broker),
         patch("services.public_budget.budget", budget),
     ]
+    adapter.BROKER = None
     for p in patches:
         p.start()
     yield broker
     for p in patches:
         p.stop()
+    adapter.BROKER = None
     adapter._CHAIN_CACHE.clear()
 
 
@@ -129,3 +141,30 @@ async def test_concurrent_same_key_single_fan_out(cold_adapter, budget):
     assert cold_adapter.get_option_expirations.await_count == 1
     after = await budget.peek_available()
     assert before - after == pytest.approx(2 + 2)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("call", [
+    lambda: adapter.fetch_chain_from_public_api("SPY", max_expiries=2),
+    lambda: adapter.fetch_option_expiry_listing("SPY"),
+    lambda: adapter.fetch_chain_for_expiries("SPY", ["2026-10-26"]),
+])
+async def test_cancelled_broker_init_releases_slot(cold_adapter, budget, call):
+    """R18-C12: cancelling during cold broker init must not leak the
+    inflight slot — all three chain-family seams share the cleanup shape."""
+    import asyncio as _aio
+
+    started = _aio.Event()
+
+    async def hang(*a, **k):
+        started.set()
+        await _aio.sleep(3600)
+
+    with patch.object(adapter, "_get_broker", new=AsyncMock(side_effect=hang)), \
+            patch.object(adapter, "BROKER", None):
+        task = _aio.create_task(call())
+        await started.wait()
+        task.cancel()
+        with pytest.raises(_aio.CancelledError):
+            await task
+    assert budget._inflight == 0
