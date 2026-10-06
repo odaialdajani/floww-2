@@ -75,3 +75,33 @@ class TestUnbackedClaims:
 
 def test_main_exits_zero_on_a_clean_tree():
     assert gate.main([]) == 0
+
+
+def test_dependency_environment_marker_is_excluded_while_project_docs_are_checked(tmp_path, monkeypatch):
+    installed = tmp_path / "backend" / ".venv313"
+    installed.mkdir(parents=True)
+    (installed / "pyvenv.cfg").write_text("home = installed-python\n")
+    (installed / "README.md").write_text("[not-shipped](missing-dependency.md)\n")
+    (tmp_path / "README.md").write_text("[project](missing-project.md)\n")
+    monkeypatch.setattr(gate, "REPO_ROOT", tmp_path)
+    docs = gate._markdown_files()
+    assert installed / "README.md" not in docs
+    assert tmp_path / "README.md" in docs
+    assert [item["target"] for item in gate.find_broken_links()] == ["missing-project.md"]
+
+
+def test_dependency_sources_cannot_back_project_contract_claims(tmp_path, monkeypatch):
+    installed = tmp_path / "backend" / ".venv313"
+    installed.mkdir(parents=True)
+    (installed / "pyvenv.cfg").write_text("home = installed-python\n")
+    (installed / "dependency.py").write_text("not_a_project_producer = 1\n")
+    (tmp_path / "backend" / "service.py").write_text("real_project_producer = 1\n")
+    contracts = tmp_path / "docs" / "solstice"
+    contracts.mkdir(parents=True)
+    (contracts / "CONTRACT_MATRIX.md").write_text("`not_a_project_producer`\n")
+    monkeypatch.setattr(gate, "REPO_ROOT", tmp_path)
+    assert "real_project_producer" in gate._source_corpus()
+    assert gate.find_unbacked_claims() == [{
+        "doc": "docs/solstice/CONTRACT_MATRIX.md", "token": "not_a_project_producer",
+        "reason": "NO_SOURCE_REFERENCE",
+    }]

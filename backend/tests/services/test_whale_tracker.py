@@ -5,6 +5,8 @@ collapsed >50%, or closer-shape: volume burst + OI decay) / EXPIRED
 (past expiry). P&L is the side-signed UNDERLYING-leg move (proxy, not
 premium P&L — labeled as such; premium needs chain mids at scan time).
 """
+from datetime import UTC, datetime
+
 import pytest
 
 from services.journal_store import (
@@ -29,7 +31,7 @@ def _alert(**kw):
     base = dict(key="whale|SPY|call|700|2026-09-18", ckey="SPY|call|700|2026-09-18",
                 under="SPY", type="call", side="BUY", bias="BULLISH",
                 strike=700.0, exp="2026-09-18", dte=10, tier="GOLD",
-                asof="2026-09-05T10:00:00")
+                asof=datetime.now(UTC).isoformat())
     base.update(kw)
     return base
 
@@ -81,7 +83,7 @@ def test_no_oi_basis_is_unknown():
 
 
 def test_unknown_readings_round_trip_without_zeroes_or_held_claim(fresh_engine):
-    alert = _alert(asof="2026-09-26T14:00:00")
+    alert = _alert()
     assert bookmark_whale(fresh_engine, alert, spot=None, oi=None, vol=3000) == 1
     row = read_whales(fresh_engine)[0]
     assert row["entry_oi"] is None and row["entry_spot"] is None

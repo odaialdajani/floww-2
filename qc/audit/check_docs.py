@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -57,11 +58,19 @@ def _is_template(path: Path) -> bool:
 DIR_EXCLUDES = (".git", ".venv", "node_modules", "__pycache__")
 
 
+def _dependency_file(path: Path) -> bool:
+    return any(
+        parent.name in DIR_EXCLUDES or (parent / "pyvenv.cfg").is_file()
+        for parent in path.parents
+        if parent != REPO_ROOT and REPO_ROOT in parent.parents
+    )
+
+
 def _markdown_files() -> list[Path]:
     out: list[Path] = []
     for pattern in DOC_GLOBS:
         out.extend(p for p in REPO_ROOT.glob(pattern) if p.is_file())
-    return sorted({p for p in out if not (set(p.parts) & set(DIR_EXCLUDES))})
+    return sorted({p for p in out if not _dependency_file(p)})
 
 
 def find_broken_links() -> list[dict[str, str]]:
@@ -87,12 +96,19 @@ def _source_corpus() -> str:
         root = REPO_ROOT / base
         if not root.is_dir():
             continue
-        for path in root.rglob("*"):
-            if path.is_file() and path.suffix in SOURCE_SUFFIXES:
-                try:
-                    chunks.append(path.read_text(encoding="utf-8", errors="ignore"))
-                except OSError:
-                    continue
+        for directory, subdirectories, files in os.walk(root):
+            subdirectories[:] = [
+                name for name in subdirectories
+                if name not in DIR_EXCLUDES
+                and not (Path(directory) / name / "pyvenv.cfg").is_file()
+            ]
+            for name in files:
+                path = Path(directory) / name
+                if path.suffix in SOURCE_SUFFIXES:
+                    try:
+                        chunks.append(path.read_text(encoding="utf-8", errors="ignore"))
+                    except OSError:
+                        continue
     return "\n".join(chunks)
 
 
