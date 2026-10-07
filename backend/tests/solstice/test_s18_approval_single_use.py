@@ -550,3 +550,42 @@ def test_concurrent_same_fingerprint_different_approvals_place_once(mounted):
                      json=_order(approval_id=approval_b, operator="op-1"))
     assert r2.status_code == 200, r2.text
     assert broker.place_order.await_count == 1
+
+
+def test_concurrent_same_fingerprint_claims_serialize_to_one(mounted):
+    import threading
+
+    client, broker, _monkeypatch, conn = mounted
+    _setup(client)
+
+    import services.execution_admission as adm
+
+    fp = _fingerprint()
+    aids = [_create_approval(client) for _ in range(5)]
+    barrier = threading.Barrier(5)
+    outcomes = [None] * 5
+
+    def attempt(i):
+        barrier.wait(timeout=10)
+        outcomes[i] = adm.consume_order_approval(
+            conn, aids[i], fingerprint=fp, operator="op-1",
+            account_id="TEST-ACCT")
+
+    threads = [threading.Thread(target=attempt, args=(i,)) for i in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+    assert all(not t.is_alive() for t in threads)
+    winners = [o for o in outcomes if o.get("ok") is True]
+    losers = [o for o in outcomes if o.get("ok") is not True]
+    assert len(winners) == 1, outcomes
+    assert all(o.get("reason") == "PLACEMENT_IN_FLIGHT" for o in losers), outcomes
+    used = conn.execute(
+        "SELECT COUNT(*) FROM approvals_v1 WHERE used_at IS NOT NULL").fetchone()
+    assert used[0] == 1, "exactly the winner burns; losers stay usable"
+    claim = conn.execute(
+        "SELECT approval_id, resolved_at, error FROM placement_attempts_v1 "
+        "WHERE fingerprint = ?", [fp]).fetchone()
+    assert claim is not None and claim[1] is None and claim[2] is None
+    assert broker.place_order.await_count == 0
