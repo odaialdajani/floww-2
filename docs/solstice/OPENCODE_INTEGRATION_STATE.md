@@ -535,3 +535,25 @@ read in full. Findings applied:
   further binds); fixture-content verified before asserting (C10 probe
   rewrite); scripts checked for stale assumptions (NameError caught
   pre-write); overstatements corrected append-only (PR103).
+
+## 2026-10-06 S17c + duplicates audit (user: no duplicates, keep improving)
+
+- Duplicates audit clean: ledger 57 unique IDs, queue 34 unique, no
+  duplicate evidence items, no incomplete queue entries; PR109 branch =
+  exactly 3 commits on main, PR108 = 1 commit, file sets disjoint
+  (verified by diff --name-only); pushed branches byte-identical to the
+  verified commits; lane worktree holds only pre-existing dirty files.
+- S17c (PR109 3rd commit 88374992): resolve_placement_attempt returns
+  resolved_at (operator record-keeping); re-cycle test pins fail ->
+  resolve -> fail reopens unresolved while unresolved rows never
+  clobber (third submission UNKNOWN, exactly 2 broker calls). Verified:
+  12/12 file, 120 s18, 842 slice, 103 brokerage, ruff clean, API 383
+  current (unmounted router excluded by design — no regen needed),
+  bandit parity identical. PR109 body covers S17/S17b (S17c is a small
+  same-story follow-up, no body change needed). I17 evidence extended
+  (s17c log hashed); review-request §B updated to the 3-commit tip.
+- Caught pre-write this session: would-be API regen unnecessary
+  (checked --check first: 383 current); journal resolve column bug class
+  not repeated (row[1] verified by the new tests from the start).
+- Closure checker: 0 errors, 23 accepted, 27 pending, HOLD stands.
+  PR109 CI re-run pending at push time (run 37564268511).
