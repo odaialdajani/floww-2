@@ -657,3 +657,26 @@ read in full. Findings applied:
   behavior as the standing setup; not introduced here).
 - Untouched: :3000 proxy (PID 95566) + :8000 uvicorn (PID 83764, not mine).
   Stop mine with: kill 83032 81695 (leaving running for the review).
+
+## 2026-10-07 whole-plan reconciliation (user: bring everything together, speed up)
+
+- Wrote references/whole-plan-reconciliation.md: 4 plan systems mapped
+  (root vision docs / GSD ROADMAP / finish ledger / ChatGPT-era design
+  contracts) with gaps (ROADMAP Phase 1 deploy unowned by ledger;
+  MASTER_PLAN phases + Triad desk never promoted; Triad 0DTE desk has
+  contract+preview but no ledger epic).
+- Frontend archaeology: 63 files (May, single-file App) -> 326 files
+  (183 components); eras May 101 / Jun 152 / Jul-Aug 112 / Sep 181 /
+  Oct 1 (freeze). First frontend shares almost no code with today.
+- Design verdict from screenshot comparison: live :3001 MATCHES the
+  Triad contract (rails, matrix+toolbar, inspector, palette);
+  floww-home.png is a backend-down FAILURE state, not a target (stale
+  :3000 serves it); real deltas are branding lineage + pagination by
+  design. Live behavior matches the honesty contract throughout.
+- Speed: acceptance overhead is the chosen standard (not fixable without
+  lowering it); 27 items peer/Nav-gated; my fix going forward = batch
+  pushes (PR109's 5 pushes = 5 CI cycles was the waste), dev-server for
+  review, no unchanged resweeps; lane doc pushes verified zero-CI.
+- Forward order recorded: merges -> merged-head re-verify -> Cline
+  signoff -> C10 -> NAV inputs in commissioning order; unpromoted scope
+  explicitly nobody's queue until promoted + owned.
