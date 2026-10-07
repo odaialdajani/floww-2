@@ -431,3 +431,25 @@ main, no merge by OpenCode, no activation; commissioning HOLDs unchanged.
 - PR103 body: original refresh noted the seam as decided; corrected
   append-only to record it as REVIEW-PENDING engineering (receipt-aligned),
   then this repair as its closure PR.
+
+## 2026-10-06 continued — polling residual analyzed benign; final signoff request issued
+
+- Background-polling residual investigated at main (not merely disclosed):
+  solsticeReplay.js has ZERO fetches; RangeAnalyticsWorkspace has no
+  polling (manual read only, disabled during replay, epoch/abort guarded);
+  SkylitDashboard renders replaySnap over live, hides live-only surfaces
+  in replay, labels replay mode, exits deliberately. The polling that
+  continues is ambient sibling-panel refresh, provably segregated from
+  replay state. Verdict BENIGN AS DISCLOSED — no repair warranted (a
+  shutdown would harm unrelated panels + cold-restart live exit for zero
+  contract gain). Evidence: references/evidence/replay-polling-analysis.log.
+  NAV-VISUAL unchanged.
+- Issued references/opencode-review-request-final-1fc5582c.md: exact Cline
+  signoff list at 1fc5582c (I06-I15/H02 with evidence pointers), raw-patch
+  adversarial review of PR108 + PR109, and the C10 per-contract-fixture
+  prescription. Ledger I06 evidence extended; queue entries point at the
+  request. No self-acceptance: all OpenCode-owned items stay
+  REVIEW_PENDING for the peer pass.
+- Remote state unchanged: main 1fc5582c, cline/r18-analytics 6342afdf,
+  PR108 + PR109 OPEN (both hosted all-green). No pushes to main, no merges,
+  no activation; commissioning HOLDs stand.
