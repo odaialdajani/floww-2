@@ -799,3 +799,27 @@ read in full. Findings applied:
 - PR115 mergeable clean into new main (merge-tree: 0 conflict markers;
   App.js auto-merges, 4 Triad files pure additions). PR115 CI was
   all-green at its head. Merge remains Cline/Nav.
+
+## 2026-10-07 continuous round (user: no stopping, verify smooth)
+
+- New main bdb6a8d8 (desktop charts/nav + saved chat/scanner + CI tz +
+  API refresh), fully CI-green (23m18s + lint). Zero touches to S17
+  seams, binder, fixtures, registry, ledger, lease, inspector, producer.
+- heatmap +9 (additive snapshot context, absent stays absent) and
+  adapter budget-mechanics rework assessed per §28: C02/C14 re-verified
+  (budget/adapter/chain 25 green + r18/C10 93 green at new main; binds
+  stand, ledger annotated). heatmap change is range-path-untouched.
+- S03 entry re-enumeration at new main: no new placement callers; one
+  new mount (diagnostics_router: POST /events + GET /summary, local
+  problem reports, no broker involvement — verified clean).
+- T01 slices green at new main: ordering suites 205/205 (wave added
+  tests around mine, all pass); lifecycle seams 69/69 direct run.
+  PR115 CI all four green (backend 20m12s); merge-tree into new main
+  shows 0 conflicts. Merges stay Cline/Nav.
+- Review stack refreshed to bdb6a8d8 (fresh build + backend, screenshot
+  verified live data with honest labels); old PIDs retired, чужой
+  services untouched.
+- Deliberately NOT started: Phase-6 builds (unpromoted scope —
+  promotion is a scoping decision, not an engineering gap to fill
+  unilaterally); ADR writes (deployment policy is Nav's; coupling ADR
+  would presume product decisions). No filler.
