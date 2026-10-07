@@ -782,3 +782,20 @@ read in full. Findings applied:
 - Deliberately NOT queued as loop work: Phase-6 backlog (unpromoted per
   GSD process), Triad desk follow-ups beyond PR115 (await merge),
   NAV inputs (external), C-line items (other lane).
+
+## 2026-10-07 main wave bdb6a8d8 assessed (user: keep going, verify smooth)
+
+- New main bdb6a8d8 (desktop charts/nav repair + saved chat/chart/scanner
+  + CI tz fix + API refresh), fully CI-green (23m18s + lint). 214 files,
+  all outside my S17 seams and the C-line binder/fixtures.
+- Material deltas assessed per ownership §28: heatmap_history +9
+  (additive RECORDED_STRUCTURE_FIELDS in record_snapshot, absent stays
+  absent — range-envelope replay path untouched); public_api_adapter
+  budget-mechanics rework (extra per-skip debit_additional + new
+  accounting fields + raise_budget_exhausted flag + daily-bar-evidence
+  warm path). Latter is C02/C14-domain: re-verified budget/adapter/
+  chain suites 25/25 green at new main + r18/C10 slice 93/93; binds
+  stand, ledger annotated. Former needs no re-verify (different table).
+- PR115 mergeable clean into new main (merge-tree: 0 conflict markers;
+  App.js auto-merges, 4 Triad files pure additions). PR115 CI was
+  all-green at its head. Merge remains Cline/Nav.
