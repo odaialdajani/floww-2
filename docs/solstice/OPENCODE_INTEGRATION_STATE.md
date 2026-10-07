@@ -823,3 +823,21 @@ read in full. Findings applied:
   promotion is a scoping decision, not an engineering gap to fill
   unilaterally); ADR writes (deployment policy is Nav's; coupling ADR
   would presume product decisions). No filler.
+
+## 2026-10-07 "second project" scare resolved (user saw FLOWW flowseeker-pro page)
+
+- Image 2 (?page=flowseeker-pro) is the SAME app/build, different page:
+  FlowseekerProBlademap + TidehunterPublicBridge in App.js. No second
+  project, no rogue agent. Recent work there = NAV HIMSELF this morning
+  (odaialdajani: desktop charts/nav repair + saved chat/scanner,
+  bdb6a8d8, CI green).
+- Money safety verified: the only order path on that page posts to
+  Alpaca paper + paper journal (disclosed NAV-PAPER-EXEMPT residual);
+  the "Direct Public order" comment does not match code behavior (code
+  governs). No live-money path in any UI. Activation OFF.
+- Protection: 61/71 at bdb6a8d8; all 10 drifted files are Nav's wave
+  (reviewed clean: scan-cache refactor, UI+tests, fail-closed budget
+  propagation; 40/40 budget/scanner suites green). Owner edits —
+  recorded in I13, not reverted.
+- Genuine UX debt (not a defect): two brandings (FLOWW vs MERIDIAN) +
+  two navs + ?page= routing. Unifying is a Nav product decision.
