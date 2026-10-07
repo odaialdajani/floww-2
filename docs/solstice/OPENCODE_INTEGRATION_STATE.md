@@ -637,3 +637,23 @@ read in full. Findings applied:
   docs/verification/2026-10-06-combined-update.md; tests under
   backend/tests/{solstice,agent,services,routes}. Runs with the shared
   backend/.venv + Mongo up; frontend node_modules symlinked in.
+
+## 2026-10-07 latest version opened in Chrome (user request)
+
+- Pre-existing :3000 proxy serves a STALE 2026-10-02 build (no v3
+  markers) from the dirty r11-opus checkout — left running untouched;
+  NOT pointed at for review.
+- Fresh production build compiled from main 1fc5582c
+  (/private/tmp/main-verify-20261006/frontend, "Compiled successfully",
+  v3 "Stored rga1 replay" marker present in bundle).
+- Running for review (127.0.0.1-only, all flags unset, no live calls):
+  backend uvicorn PID 81695 on :8001 (health 200; /api honestly
+  503-fail-closed without keys); hermes static_proxy PID 83032 on
+  :3001 -> :8001 + fresh build dir. Opened in Chrome at
+  http://127.0.0.1:3001/ — renders fully, no Comet block. Screenshot
+  verified: SPY $779.09 with "Quote degraded · yfinance / Observed time
+  unknown" honest labels, analytical range 14-60 DTE, matrix/Replay/
+  Display controls, "Reconnecting (3)" ambient ws indicator (same
+  behavior as the standing setup; not introduced here).
+- Untouched: :3000 proxy (PID 95566) + :8000 uvicorn (PID 83764, чужой).
+  Stop mine with: kill 83032 81695 (leaving running for the review).
