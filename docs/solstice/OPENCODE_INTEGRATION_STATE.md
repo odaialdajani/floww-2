@@ -582,3 +582,20 @@ read in full. Findings applied:
   PR109 body updated.
 - Closure checker: 0 errors, 23 accepted, 27 pending, HOLD stands.
   PR109 CI re-running on the 4-commit tip.
+
+## 2026-10-07 S17e true-concurrency proof (user: resweep, reverify, improve)
+
+- Prior art found before writing: test_s18_single_use_retry.py already
+  proves S05 lifecycle duplicates-place-once (5-thread barrier) and
+  ambiguous-ACK orderId reconcile — my mounted-entry tests complement
+  (not duplicate) it at the route seam.
+- New t14: 5 threads, barrier-released, 5 distinct approvals, 1
+  fingerprint, simultaneous consume on the shared store -> exactly one
+  winner, 4 IN_FLIGHT, 1 burn, claim row present, 0 placements. Stable
+  3/3. (5th commit b26b95b6 on PR109, test-only; full slice not rerun
+  locally since product code unchanged from the 843 run — hosted CI
+  covers it.)
+- Verified: 14/14 file, 122 s18, ruff clean. I17 evidence extended
+  (s17e log hashed); review-request §B at the 5-commit tip. Closure
+  checker: 0 errors, 23 accepted, 27 pending, HOLD. PR109 CI re-running
+  on the tip (run 37565581459).
