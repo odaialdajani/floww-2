@@ -655,5 +655,5 @@ read in full. Findings applied:
   unknown" honest labels, analytical range 14-60 DTE, matrix/Replay/
   Display controls, "Reconnecting (3)" ambient ws indicator (same
   behavior as the standing setup; not introduced here).
-- Untouched: :3000 proxy (PID 95566) + :8000 uvicorn (PID 83764, чужой).
+- Untouched: :3000 proxy (PID 95566) + :8000 uvicorn (PID 83764, not mine).
   Stop mine with: kill 83032 81695 (leaving running for the review).
