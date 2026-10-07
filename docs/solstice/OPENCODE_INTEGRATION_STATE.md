@@ -557,3 +557,28 @@ read in full. Findings applied:
   not repeated (row[1] verified by the new tests from the start).
 - Closure checker: 0 errors, 23 accepted, 27 pending, HOLD stands.
   PR109 CI re-run pending at push time (run 37564268511).
+
+## 2026-10-06 S17d resweep + duplicates audit (user: no duplicates, keep improving)
+
+- Duplicates audit clean: ledger 57 unique IDs, queue 34 unique, no
+  duplicate evidence items, no incomplete queue entries; PR109 branch =
+  exactly the authored commits on main, PR108 = 1 commit, file sets
+  disjoint (diff --name-only verified); pushed branches byte-identical
+  to verified commits; lane holds only pre-existing dirty files.
+- S17d resweep found a REAL in-process race the guarded UPDATE cannot
+  see: two different approvals, same fingerprint, both verify+consume
+  then both place. Closed with an in-flight fingerprint claim at consume
+  (refuse IN_FLIGHT/UNKNOWN without burning) + completion journaling
+  with broker order identity (4th commit cace2fa3 on PR109).
+- S17d TDD record: resolve column check caught pre-commit (row[0] vs
+  row[1]); always-fail-broker scaffolding fixed twice; ruff F401 from
+  an unneeded import removed; journal-failure test rewritten when S17d
+  changed its premise (claim row backstops as IN_FLIGHT — strictly
+  better than the disclosed degradation). Content-identical edit
+  mangling caught immediately (process lesson re-applied: never issue
+  identical edits). Verified: 13/13 file, 121 s18, 843 slice, 103
+  brokerage, ruff clean, bandit parity identical. I17 evidence extended
+  (s17d log hashed); review-request §B updated to the 4-commit tip;
+  PR109 body updated.
+- Closure checker: 0 errors, 23 accepted, 27 pending, HOLD stands.
+  PR109 CI re-running on the 4-commit tip.
