@@ -1440,11 +1440,12 @@ def resolve_placement_attempt(
                 return {"ok": False,
                         "reason": auth.get("reason", "OPERATOR_UNKNOWN"),
                         "detail": "resolver is not authorized for this account"}
+            moment = _now_iso()
             conn.execute(
                 "UPDATE placement_attempts_v1 SET resolved_at = ?, "
                 "resolved_by = ?, resolution_note = ? "
                 "WHERE fingerprint = ? AND resolved_at IS NULL",
-                [_now_iso(), str(operator or "").strip(), note[:500], fp])
+                [moment, str(operator or "").strip(), note[:500], fp])
     except Exception:
         return {"ok": False, "reason": "APPROVAL_STORE_UNAVAILABLE"}
-    return {"ok": True, "fingerprint": fp}
+    return {"ok": True, "fingerprint": fp, "resolved_at": moment}

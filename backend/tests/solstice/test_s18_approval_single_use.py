@@ -372,6 +372,7 @@ def test_resolve_endpoint_validations(mounted):
                         "fingerprint": fp, "operator": "op-1",
                         "resolution": "verified: no order"})
     assert r.status_code == 200, r.text
+    assert r.json()["resolved_at"], "resolve must return its timestamp"
     r = client.post("/api/admission/placement-attempts/resolve",
                     headers=KEY, json={
                         "fingerprint": fp, "operator": "op-1",
@@ -454,3 +455,40 @@ def test_journal_store_failure_disclosed_not_silent(mounted):
                      json=_order(approval_id=_create_approval(client),
                                  operator="op-1"))
     assert r2.status_code == 200, r2.text
+
+
+def test_resolved_cycle_journals_a_second_failure(mounted):
+    client, broker, monkeypatch, _conn = mounted
+    _setup(client)
+
+    import routes.public_brokerage as pb
+
+    async def _fail(**_kw):
+        raise RuntimeError("broker down")
+
+    broker.place_order = AsyncMock(side_effect=_fail)
+    monkeypatch.setattr(pb, "_get_broker", AsyncMock(return_value=broker))
+
+    r1 = client.post("/api/public/order", headers=KEY,
+                     json=_order(approval_id=_create_approval(client),
+                                 operator="op-1"))
+    assert r1.status_code == 502, r1.text
+    rr = client.post("/api/admission/placement-attempts/resolve",
+                     headers=KEY, json={
+                         "fingerprint": _fingerprint(), "operator": "op-1",
+                         "resolution": "no order 12:00-12:01"})
+    assert rr.status_code == 200, rr.text
+
+    # The SAME fingerprint fails AGAIN (broker still down): the resolved
+    # row must start a new unresolved cycle, not stay resolved.
+    r2 = client.post("/api/public/order", headers=KEY,
+                     json=_order(approval_id=_create_approval(client),
+                                 operator="op-1"))
+    assert r2.status_code == 502, r2.text
+    r3 = client.post("/api/public/order", headers=KEY,
+                     json=_order(approval_id=_create_approval(client),
+                                 operator="op-1"))
+    assert r3.status_code == 403, r3.text
+    assert _refusal(r3) == "PLACEMENT_OUTCOME_UNKNOWN"
+    assert broker.place_order.await_count == 2, (
+        "exactly the two attempted placements, no resubmission placed")
