@@ -507,3 +507,31 @@ read in full. Findings applied:
   Formal deviation from the lane-directory letter, compliant in intent.
 - Queue now carries hashed progress_evidence per touched item
   (finish-primary §17). Closure checker re-run below.
+
+## 2026-10-06 S17b + model-identity reconciliation (user: improve, no repeated mistakes)
+
+- Model-identity ledger written (references/model-identity-ledger.md,
+  wired into H01): Kimi K3 early-turn runtime (transcript markers),
+  muse-spark-1.3-contributor-free/xhigh diagnosed session
+  (stop-diagnosis + host-identity JSONs), nvidia/z-ai/glm-5.3 Cline lane
+  (CLI metadata), current OpenCode turns z-ai/glm-5.3 per runtime
+  (disclosed, label not claimed). Ends cross-era label confusion.
+- S17b ambiguous-ACK journal (PR109 2nd commit ed84ce46, same branch):
+  burn alone couldn't stop a fresh-approval retry when the first broker
+  call may have placed despite raising. Now: placement_attempts_v1
+  journal on any post-consume exception; verify refuses the same
+  fingerprint PLACEMENT_OUTCOME_UNKNOWN until operator-attested resolve
+  (POST /api/admission/placement-attempts/resolve, unmounted router;
+  registered+allowed, note mandatory, never auto-cleared); journal
+  failure disclosed in the 502 detail, never silent. TDD caught a
+  resolve column-index bug (row[0] account_id vs row[1] resolved_at)
+  plus always-fail-broker scaffolding errors — fixed, suite green.
+- Verification at ed84ce46: 11/11 new tests; s18 119; solstice slice 841
+  (830+11); brokerage 103; ruff clean; bandit parity identical on all 4
+  touched files. PR109 body updated with the S17b section; I17 evidence
+  extended (s17b log hashed); review-request §B updated to the 2-commit
+  tip. Closure checker: 0 errors, 23 accepted, 27 pending, HOLD.
+- Past-mistake guards applied: read-then-bind (full packet read before
+  further binds); fixture-content verified before asserting (C10 probe
+  rewrite); scripts checked for stale assumptions (NameError caught
+  pre-write); overstatements corrected append-only (PR103).
