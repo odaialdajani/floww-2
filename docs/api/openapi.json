@@ -392,6 +392,51 @@
         "title": "ValidationError",
         "type": "object"
       },
+      "WarmRequest": {
+        "properties": {
+          "batch_size": {
+            "default": 8,
+            "maximum": 8.0,
+            "minimum": 1.0,
+            "title": "Batch Size",
+            "type": "integer"
+          },
+          "limit": {
+            "default": 200,
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "scope": {
+            "default": "related",
+            "enum": [
+              "related",
+              "all"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "window": {
+            "default": 30,
+            "enum": [
+              30,
+              90,
+              252
+            ],
+            "title": "Window",
+            "type": "integer"
+          }
+        },
+        "title": "WarmRequest",
+        "type": "object"
+      },
       "_OutcomesCloseBody": {
         "properties": {
           "paths": {
@@ -7813,6 +7858,177 @@
           }
         },
         "summary": "Public Market Scan",
+        "tags": [
+          "flowseeker",
+          "flowseeker"
+        ]
+      }
+    },
+    "/api/flowseeker/scan-public/observations": {
+      "get": {
+        "description": "Browse dated bounded snapshots, without spending a provider call.\n\nReceipt age and source age stay separate. Recent receipt does not admit\nsaved rows to live alerts, execution, or claim whole-market freshness.\nLegacy three-example findings are not expanded into unknown quote data.",
+        "operationId": "get_api_flowseeker_scan-public_observations",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 2400000,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ticker",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 12,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ticker"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_volume",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 1000000000000.0,
+              "minimum": 0,
+              "title": "Min Volume",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expiry",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expiry"
+            }
+          },
+          {
+            "in": "query",
+            "name": "contract_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(call|put)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Contract Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "age",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "pattern": "^(all|recent|stale)$",
+              "title": "Age",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scope"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_age_seconds",
+            "required": false,
+            "schema": {
+              "default": 604800,
+              "maximum": 604800,
+              "minimum": 60,
+              "title": "Max Age Seconds",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "required": false,
+            "schema": {
+              "default": "stocks",
+              "pattern": "^(stocks|received)$",
+              "title": "Order",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Public Saved Observations",
         "tags": [
           "flowseeker",
           "flowseeker"
@@ -15939,6 +16155,145 @@
         "summary": "Regime Persistence Endpoint",
         "tags": [
           "steal-three"
+        ]
+      }
+    },
+    "/api/related/{ticker}": {
+      "get": {
+        "operationId": "get_api_related_ticker",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "title": "Ticker",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "title": "Window",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "related",
+              "enum": [
+                "related",
+                "all"
+              ],
+              "title": "Scope",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Related Ticker Snapshot",
+        "tags": [
+          "related-tickers",
+          "related-stock-comparisons"
+        ]
+      }
+    },
+    "/api/related/{ticker}/warm": {
+      "post": {
+        "operationId": "post_api_related_ticker_warm",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "title": "Ticker",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WarmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Related Ticker Warm",
+        "tags": [
+          "related-tickers",
+          "related-stock-comparisons"
         ]
       }
     },

@@ -131,7 +131,7 @@ async function launch() {
     }
     update('Checking the data connection...');
     if(!await currentBackend()){
-      spawnService(python,['-u','-m','uvicorn','server:app','--host','127.0.0.1','--port','8001'],backend,'backend');
+      spawnService(python,['-u','-m','uvicorn','server:app','--host','127.0.0.1','--port','8001','--timeout-graceful-shutdown','25'],backend,'backend');
       await waitUntil(async()=>(await json('http://127.0.0.1:8001/api/health')).status==='healthy','Data service');
     }
     let previous=[];try {const old=JSON.parse(await fsp.readFile(activeFile,'utf8'));previous=[old.directory,...old.previous||[]];}catch{}

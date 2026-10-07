@@ -5,6 +5,7 @@ import { API } from "../../config/api";
 import { buildTickerUniverse, normalizeTicker, searchUniverse, UNIVERSE_MAX_PAGES, UNIVERSE_PAGE_LIMIT } from "./tickerUniverse";
 import "./TickerPicker.css";
 import useMarketCoverage from "./useMarketCoverage";
+import StockDirectory from "./StockDirectory";
 
 export const FAVORITES_KEY = "floww-symbol-favorites-v1";
 const FAVORITES_CHANGED = "floww-symbol-favorites-changed";
@@ -27,13 +28,14 @@ export default function TickerPicker({ value = "SPY", onChange, tickers = null, 
   const [catalog, setCatalog] = useState(null), [catalogState, setCatalogState] = useState("idle"), [catalogAttempt, setCatalogAttempt] = useState(0);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [directoryOpen, setDirectoryOpen] = useState(false);
   const [index, setIndex] = useState(-1);
   const [page, setPage] = useState(0);
   const [favorites, setFavorites] = useState(readFavorites);
   const [message, setMessage] = useState("");
   const [checking, setChecking] = useState(false);
   const [position, setPosition] = useState({ left: 8, top: 40, width: 300, maxHeight: 420 });
-  const control = useRef(null), popup = useRef(null), input = useRef(null);
+  const control = useRef(null), popup = useRef(null), input = useRef(null), directoryReturnFocus = useRef(null);
   const request = useRef(null), epoch = useRef(0);
   const listId = useId();
   const noteId = useId();
@@ -191,7 +193,7 @@ export default function TickerPicker({ value = "SPY", onChange, tickers = null, 
         aria-expanded={open} aria-controls={open ? listId : undefined} aria-activedescendant={open && highlighted >= 0 ? `${listId}-${highlighted}` : undefined}
         aria-describedby={message || checking ? noteId : undefined} value={query} maxLength={40} placeholder="Search stocks"
         onFocus={() => setOpen(true)} onChange={event => { stopLookup(); setQuery(event.target.value); setOpen(true); setIndex(-1); setPage(0); setMessage(""); }} onKeyDown={keyDown} />
-      <button type="button" className="ticker-picker-browse" aria-label="Browse stock list" aria-expanded={open} onClick={() => { if (open) close(); else { setOpen(true); input.current?.focus(); } }}>▾</button>
+      <button ref={directoryReturnFocus} type="button" className="ticker-picker-browse" aria-label="Browse stock list" aria-expanded={open} onClick={() => { if (open) close(); else { setOpen(true); input.current?.focus(); } }}>▾</button>
       <button type="button" className="ticker-picker-star" disabled={checking || !validSymbol(active)} aria-label={`${favorites.includes(active) ? "Remove" : "Add"} ${active} ${favorites.includes(active) ? "from" : "to"} favorites`} aria-pressed={favorites.includes(active)} onClick={toggleFavorite}>{favorites.includes(active) ? "★" : "☆"}</button>
     </div>
     {globalPicker && <div className="ticker-picker-feed-counts" data-testid="stock-feed-counts" aria-label="Stock feed counts" title="Checked stocks have received option data in the shown window. Listed names show directory access; they do not prove every stock has recent data.">
@@ -202,6 +204,7 @@ export default function TickerPicker({ value = "SPY", onChange, tickers = null, 
     {(checking || message) && <p id={noteId} className="ticker-picker-notice" role={message ? "alert" : "status"}>{message || "Checking the provider stock list…"}</p>}
     {open && createPortal(<div ref={popup} className="ticker-picker-popup" style={position} onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); input.current?.focus(); close(); } }}>
       {statusText && <p className="ticker-picker-status" role="status">{statusText}{onRetry && status !== "loading" && <button type="button" onClick={onRetry}>Retry stock list</button>}</p>}
+      {globalPicker && <button type="button" className="ticker-picker-lookup" onClick={() => { close(); setDirectoryOpen(true); }}>Full stock directory</button>}
       {globalPicker && <div className="ticker-picker-filters">
         <label>Category <select aria-label="Stock category" value={category} onChange={event => {stopLookup();setCategory(event.target.value);setSector("");setPage(0);setIndex(-1);}}><option value="all">All listed</option><option value="options">Options enabled</option><option value="favorites">Favorites</option></select></label>
         <label>Sector <select aria-label="Stock sector" disabled={!sectors.length || category==="favorites"} value={sector} onChange={event => {stopLookup();setSector(event.target.value);setPage(0);setIndex(-1);}}><option value="">{sectors.length ? "All supplied sectors" : "Sector details unavailable"}</option>{sectors.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
@@ -220,5 +223,7 @@ export default function TickerPicker({ value = "SPY", onChange, tickers = null, 
       {query.trim() && <button type="button" className="ticker-picker-lookup" disabled={checking} onClick={() => choose(query)}>{checking ? "Checking…" : "Choose this stock"}</button>}
       {totalPages > 1 && <div className="ticker-picker-pages"><button type="button" disabled={safePage === 0 || filteredCatalog && catalogState === "loading"} onClick={() => { setPage(safePage - 1); setIndex((safePage - 1) * PAGE_SIZE); }}>Previous</button><button type="button" disabled={safePage >= totalPages - 1 || filteredCatalog && (!currentCatalog || catalogState !== "ready")} onClick={() => { setPage(safePage + 1); setIndex((safePage + 1) * PAGE_SIZE); }}>Next</button></div>}
     </div>, document.body)}
+    {globalPicker && <StockDirectory open={directoryOpen} onOpenChange={setDirectoryOpen} showTrigger={false} returnFocusRef={directoryReturnFocus}
+      onSelect={symbol => { stopLookup(); onChange?.(symbol); setQuery(""); setIndex(-1); setPage(0); setOpen(false); }} />}
   </div>;
 }

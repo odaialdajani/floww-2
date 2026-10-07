@@ -115,13 +115,13 @@ function VelocityGauge({ velocity }) {
 // ============ Nodes Table ============
 // ============ Ticker Search ============
 // One verified symbol picker across the header and chart; favorites do not restrict scanning.
-function TickerSearch({ tickers, value, onChange }) {
+function TickerSearch({ tickers, value, onChange, status, onRetry }) {
   return <TickerPicker value={value} onChange={onChange} tickers={tickers}
-    ariaLabel="Search stocks" className="floww-header-symbol-picker" />;
+    status={status} onRetry={onRetry} ariaLabel="Search stocks" className="floww-header-symbol-picker" />;
 }
 
 // ============ AlphaPod-style Header ============
-function ApHeader({ page, navigation, ticker, onTickerChange, tickers, data, onSignOut, userEmail, userTier }) {
+export function ApHeader({ page, navigation, ticker, onTickerChange, tickers, stockSearchStatus, retryStockSearch, relatedOpen=false, onToggleRelated, data, onSignOut, userEmail, userTier }) {
   const pageName = PAGE_NAMES[page] || page;
 
   return (
@@ -136,13 +136,8 @@ function ApHeader({ page, navigation, ticker, onTickerChange, tickers, data, onS
         {/* Right side actions */}
         <div className="ap-header-actions">
           {/* Ticker search for relevant pages */}
-          {tickers && (
-            <TickerSearch
-              tickers={buildTickerUniverse(tickers)}
-              value={ticker}
-              onChange={onTickerChange}
-            />
-          )}
+          <TickerSearch tickers={tickers?buildTickerUniverse(tickers):null} value={ticker} onChange={onTickerChange} status={stockSearchStatus} onRetry={retryStockSearch}/>
+          <button type="button" className="related-workspace-toggle" aria-label="Related stocks and funds" aria-expanded={relatedOpen} onClick={onToggleRelated}>Related</button>
 
           <DataAccountMenu ticker={ticker} data={data} userEmail={userEmail} onSignOut={onSignOut} />
         </div>
@@ -406,6 +401,7 @@ export default function App() {
     try { return localStorage.getItem("floww_settings") ? JSON.parse(localStorage.getItem("floww_settings")).refreshMs || 25000 : 25000; } catch { return 25000; }
   });
   const [showLeftSidebar, setShowLeftSidebar] = useState(false);
+  const [relatedOpen,setRelatedOpen]=useState(false);
   const [showRightSidebar, setShowRightSidebar] = useState(false);
   const [viewMode, setViewMode] = useState("gex");
   const [view, setView] = useState("profile");
@@ -678,7 +674,7 @@ export default function App() {
   }, [data]);
 
   return (
-    <AppShell page={page} onNavigate={setPage} userEmail={userEmail} userTier={userTier}>
+    <AppShell page={page} onNavigate={setPage} userEmail={userEmail} userTier={userTier} ticker={ticker} onTickerChange={setTicker} relatedOpen={relatedOpen} onRelatedClose={()=>setRelatedOpen(false)}>
       <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
         {/* Alert Overlay - Real-time signal toasts */}
         <AlertOverlay onSignalClick={handleSignalClick} maxVisible={3} />
@@ -693,6 +689,7 @@ export default function App() {
           ticker={ticker}
           onTickerChange={setTicker}
           tickers={tickers}
+          stockSearchStatus={stockSearchStatus} retryStockSearch={retryStockSearch} relatedOpen={relatedOpen} onToggleRelated={()=>setRelatedOpen(value=>!value)}
           data={data}
           onSignOut={handleSignOut}
           userEmail={userEmail}

@@ -4,6 +4,7 @@ import IVMidBadge from "./IVMidBadge";
 import WheelIncomeScreenerPanel from "./WheelIncomeScreenerPanel";
 import TickerPicker from "./TickerPicker";
 import "./StealThreePreview.css";
+import NavigationScreenContext from "../../agent/NavigationScreenContext";
 
 const STUDIES = [["income", "Options income"], ["exposure", "Exposure comparison"], ["volatility", "Volatility comparison"]];
 
@@ -25,6 +26,7 @@ function StealThreePreview({ defaultTicker = "SPY", ticker: sharedTicker, onTick
   const family = (id,children) => visited.has(id)
     ? <section className="extra-study-family" data-extra-study={id} hidden={study !== id}>{children}</section> : null;
   return <div className="extra-studies" data-testid="steal-three-preview">
+    <NavigationScreenContext page="steal-three" ticker={ticker} study={STUDIES.find(([id]) => id === study)?.[1]} />
     <div className="extra-study-toolbar">
       <label>Study <select aria-label="Study" value={study} onChange={chooseStudy}>
         {STUDIES.map(([id,label]) => <option key={id} value={id}>{label}</option>)}

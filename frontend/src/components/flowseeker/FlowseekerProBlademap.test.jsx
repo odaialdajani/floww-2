@@ -911,3 +911,19 @@ test("missing scan age is not replaced by a 60 second warning", async () => {
   await waitFor(() => expect(screen.getByTestId("market-tape")).toHaveTextContent("AGE UNKNOWN"));
   expect(screen.queryByTestId("scan-age-warning")).not.toBeInTheDocument();
 });
+
+it('shows other stocks before repeated fund alerts and lets every alert page be reached',async()=>{
+ const symbols=['NVDA','AMD','AAPL','TSLA','MSFT','AMZN','META','MU','CSCO','AVGO','CRM','ORCL'];
+ const make=(under,index,conviction)=>({...FEED_ALERTS[2],key:'daily-'+under+'-'+index,under,conviction,side:'STRATEGY',bias:null,key_levels_json:null,context_json:JSON.stringify({activity_basis:'cumulative_snapshot',premium_truth:false}),why:under+' recorded activity'});
+ const alerts=[...Array.from({length:14},(_,i)=>make('QQQ',i,98)),...Array.from({length:12},(_,i)=>make('SPY',i,97)),...symbols.map((under,i)=>make(under,i,65))];
+ mockBackend({alerts});render(<FlowseekerProBlademap active/>);
+ const table=screen.getByTestId('vector-feed');
+ await waitFor(()=>expect(table).toHaveTextContent('QQQ recorded activity'));
+ await waitFor(()=>expect(within(table).getByRole('button',{name:'NVDA',exact:true})).toBeInTheDocument());
+ expect(within(table).getByRole('button',{name:'AMD',exact:true})).toBeInTheDocument();
+ expect(within(table).getByRole('button',{name:'AAPL',exact:true})).toBeInTheDocument();
+ fireEvent.change(screen.getByRole('combobox',{name:'Alert view'}),{target:{value:'alerts'}});
+ const seen=[];do{for(const row of table.querySelectorAll('tbody tr'))seen.push(row.getAttribute('data-alert-key'));const next=within(table).getByRole('button',{name:'Next alerts'});if(next.disabled)break;fireEvent.click(next);}while(seen.length<=alerts.length);
+ expect(seen).toHaveLength(alerts.length);expect(new Set(seen)).toEqual(new Set(alerts.map(a=>a.key)));
+ expect(screen.getByTestId('vector-feed')).toHaveTextContent('38 alerts');
+});

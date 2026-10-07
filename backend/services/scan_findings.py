@@ -51,6 +51,34 @@ class ScanFindings:
                 break
         return results
 
+    def saved_records(self, now=None, tickers=None):
+        """Read the actually retained records, beyond the old 100-result display cap.
+
+        Original bare examples remain limited. This does not recover pruned
+        names, quote extras, source clocks, or full chains.
+        """
+        now = time.time() if now is None else now
+        allowed = set(tickers) if tickers is not None else None
+        with self._lock:
+            temporary = self._connection is None and self.path != ":memory:"
+            if temporary:
+                path = Path(self.path).resolve()
+                if not path.exists():
+                    return []
+                conn = sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=2)
+            else:
+                conn = self._db()
+            try:
+                rows = conn.execute("SELECT ticker,received,payload FROM findings "
+                                    "WHERE received>=? AND received<=? "
+                                    "ORDER BY received DESC,ticker LIMIT 500",
+                                    (now - 7 * 86400, now)).fetchall()
+            finally:
+                if temporary:
+                    conn.close()
+        return [{"ticker": ticker, "received_at": received, **json.loads(payload)}
+                for ticker, received, payload in rows if allowed is None or ticker in allowed]
+
     def close(self):
         with self._lock:
             if self._connection is not None:

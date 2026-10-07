@@ -474,6 +474,23 @@ function SkylitDashboard({
   const visibleData = expanded ? overlayData : displayData;
   const [studyChoice, setStudyChoice] = useState(initialView.studyChoice);
   const [priceHistoryOpen, setPriceHistoryOpen] = useState(() => stockStudyOpen(initialView, defaultStudy));
+  const showPriceHistory = defaultStudy !== "options" || priceHistoryOpen;
+  const priceStudyRef = useRef(null), optionsStudyRef = useRef(null);
+  const [scrollStudy, setScrollStudy] = useState(null);
+  const focusStudy = useCallback(study => {
+    setPriceHistoryOpen(study === "price"); setStudyChoice(study);
+  }, []);
+  useEffect(() => {
+    if (rangeOpen || !scrollStudy) return;
+    const section = scrollStudy === "price" ? priceStudyRef.current : optionsStudyRef.current;
+    if (!section) return;
+    section.scrollIntoView?.({behavior:"smooth",block:"start"});
+    section.focus?.({preventScroll:true});
+    setScrollStudy(null);
+  }, [rangeOpen,scrollStudy,showPriceHistory]);
+  const focusPriceInteraction = event => {
+    if (!event.target.closest?.(".recorded-chart-actions")) focusStudy("price");
+  };
   const previousRangeOpen=useRef(rangeOpen);
   const multi = layout === "multi";
   const panes = compareMode || multi;
@@ -521,7 +538,9 @@ function SkylitDashboard({
     setReplayPanelOpen(false); setReplayOpenRequest(null); setExpanded(false);
     setFollowWall(false); setFollowWallId(null); setDrawerOpen(false); if (rangeOpen) setPriceHistoryOpen(false);
   }, [rangeOpen]);
-  usePublishScreenContext(rangeOpen ? null : {contextVersion:2,page:"heatseeker",ticker,
+  usePublishScreenContext(rangeOpen ? null : priceHistoryOpen
+    ? {contextVersion:1,page:"heatseeker",ticker,study:"Price chart",navigationOnly:true}
+    : {contextVersion:2,page:"heatseeker",ticker,
         selectedContract:priceHistoryOpen ? null : currentContract?.identity || null, contractResolution:currentContract?.status || null,
         recordedMetricVersion:!priceHistoryOpen && isReplay && ["vex", "charm"].includes(activeView) ? visibleData?.grid?.[activeView + "_meta"]?.record_version || null : null,
         windowBaselineId:!priceHistoryOpen && activeMetric === "window" ? visibleData?.metrics?.grids?.window?.comparison?.previous_snapshot_id || null : null,
@@ -768,15 +787,15 @@ function SkylitDashboard({
           if (rangeOpen) {
             if (onAnalyticalRangeChange) onAnalyticalRangeChange(false);
             else setLocalRangeOpen(false);
-            setPriceHistoryOpen(false); setStudyChoice("options");
+            focusStudy("options"); setScrollStudy("options");
           } else {
-            const nextOpen = !priceHistoryOpen;
-            setPriceHistoryOpen(nextOpen); setStudyChoice(nextOpen ? "price" : "options");
+            const nextStudy = priceHistoryOpen ? "options" : "price";
+            focusStudy(nextStudy); setScrollStudy(nextStudy);
           }
           setExpanded(false); setDrawerOpen(false);
         }}>{rangeOpen ? "Return to options desk" : !priceHistoryOpen ? "Price chart" : "Options desk"}</button>
         <SavedChartReadings key={replayOpenRequest?.nonce || "saved"} ticker={ticker} disabled={rangeOpen} onOpen={id => {
-          setPriceHistoryOpen(false); setStudyChoice("options");
+          focusStudy("options"); setScrollStudy("options");
           setExpanded(false); setDrawerOpen(false);
           setReplayPanelOpen(true);
           setReplayOpenRequest({id, nonce: Date.now()});
@@ -786,12 +805,15 @@ function SkylitDashboard({
   </>;
   return (
     <div className="skylit-full-dashboard" data-study={rangeOpen ? "range" : priceHistoryOpen ? "price" : "options"}>
-      {(rangeOpen || !priceHistoryOpen) && <div className="skylit-study-toolbar" role="toolbar" aria-label="Stock study">{studyActions}</div>}
-      {rangeOpen ? <RangeAnalyticsWorkspace ticker={ticker} onReplayModeChange={setRangeIsReplay} /> : <>
-      <div className="skylit-price-study" hidden={!priceHistoryOpen}>
-        <PriceNodeHistory ticker={ticker} primary={priceHistoryOpen} open={priceHistoryOpen} toolbarActions={priceHistoryOpen ? studyActions : null} />
+      {(rangeOpen || !showPriceHistory) && <div className="skylit-study-toolbar" role="toolbar" aria-label="Stock study">{studyActions}</div>}
+      {rangeOpen && <RangeAnalyticsWorkspace ticker={ticker} onReplayModeChange={setRangeIsReplay} />}
+      <>
+      <div className="skylit-price-study" ref={priceStudyRef} tabIndex={-1} hidden={rangeOpen || !showPriceHistory}
+        onPointerDownCapture={focusPriceInteraction} onClickCapture={focusPriceInteraction} onChangeCapture={focusPriceInteraction} onFocusCapture={focusPriceInteraction} >
+        <PriceNodeHistory ticker={ticker} primary={showPriceHistory} open={!rangeOpen && showPriceHistory} toolbarActions={showPriceHistory ? studyActions : null} />
       </div>
-      <div className="skylit-options-study" hidden={priceHistoryOpen}>
+      <div className="skylit-options-study" ref={optionsStudyRef} role="region" aria-label={ticker + " options desk"} tabIndex={-1} hidden={rangeOpen}
+        onPointerDownCapture={() => focusStudy("options")} onClickCapture={() => focusStudy("options")} onChangeCapture={() => focusStudy("options")} onFocusCapture={() => focusStudy("options")} >
       <button type="button" className="range-mode-toggle" aria-pressed={rangeOpen} onClick={() => {
         if (onAnalyticalRangeChange) onAnalyticalRangeChange(true);
         else setLocalRangeOpen(true);

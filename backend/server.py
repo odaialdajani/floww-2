@@ -3598,6 +3598,10 @@ from routes.flowseeker import router as flowseeker_router
 
 app.include_router(flowseeker_router, tags=["flowseeker"])
 
+from routes.related_tickers import router as related_tickers_router
+
+app.include_router(related_tickers_router, tags=["related-tickers"])
+
 # ============ Route module wiring ============
 # Wired by Hermes/OWL on 2026-05-19 — all orphaned route modules.
 # All modules mounted with prefix="/api" for consistent URL structure.

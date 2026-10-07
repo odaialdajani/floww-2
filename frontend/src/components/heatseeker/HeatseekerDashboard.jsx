@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState, useEffect, useRef, memo } from "react";
 import "./HeatseekerDashboard.css";
+import NavigationScreenContext from "../../agent/NavigationScreenContext";
 import CharmDecayPanel from "./CharmDecayPanel";
 import BriefingStrip from "./BriefingStrip";
 
@@ -222,6 +223,7 @@ export default function HeatseekerDashboard({
     {extraStudies?.[id] != null && extraStudies[id] !== false && <div className="study-extras">{extraStudies[id]}</div>}
   </StudyFamily>;
   return <div className="study-workspace" data-testid="heatseeker-dashboard">
+    <NavigationScreenContext page="heatseeker" ticker={normalizedTicker} study={STUDIES.find(([id]) => id === study)?.[1]} />
     <div className="study-toolbar">
       <label>Study <select aria-label="Study" value={study} onChange={chooseStudy}>
         {STUDIES.map(([id,label]) => <option key={id} value={id}>{label}</option>)}

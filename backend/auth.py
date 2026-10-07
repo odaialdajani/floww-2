@@ -8,6 +8,7 @@ The API key is stored in the .env file as API_SECRET_KEY.
 import hmac
 import logging
 import os
+import re
 
 from fastapi import HTTPException, Request, WebSocket
 
@@ -101,6 +102,11 @@ async def verify_api_key(request: Request):
         from services.agent.local_access import require_local
         require_local(request)
         return True
+
+    if request.method == "POST" and re.fullmatch(r"/api/related/[A-Z][A-Z0-9.\-]{0,11}/warm", request.url.path):
+        from services.agent.local_access import require_local
+        require_local(request)
+        return True  # Bounded local market-price cache reads; no broker mutation.
 
     from services.agent.local_access import research_path
     if research_path(request.method, request.url.path):

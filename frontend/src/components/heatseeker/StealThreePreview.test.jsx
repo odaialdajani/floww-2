@@ -1,7 +1,10 @@
 import React from "react";
-import {render,screen,fireEvent} from "@testing-library/react";
+import {render,screen,fireEvent,act} from "@testing-library/react";
 import "@testing-library/jest-dom";
 import StealThreePreview from "./StealThreePreview";
+import useScreenContext, { publishScreenContext } from "../../agent/useScreenContext";
+function ReadContext() { const [context] = useScreenContext(); return <output data-testid="screen-context">{JSON.stringify(context)}</output>; }
+function readContext() { return JSON.parse(screen.getByTestId("screen-context").textContent); }
 
 jest.mock("./DualGEXBadge",()=>({ticker})=><div data-testid="extra-exposure">{ticker} exposure reading</div>);
 jest.mock("./IVMidBadge",()=>({ticker})=><div data-testid="extra-volatility">{ticker} volatility reading</div>);
@@ -53,4 +56,38 @@ test("standalone stock choice updates the preview and reports the choice",()=>{
  fireEvent.click(screen.getByRole("button",{name:"Choose stock SPY"}));
  expect(change).toHaveBeenCalledWith("QQQ");
  expect(screen.getByTestId("extra-income")).toHaveTextContent("QQQ income reading");
+});
+
+
+test("Extra replaces an old Options reading with the current stock and chosen study",()=>{
+ let releaseOld; act(()=>{releaseOld=publishScreenContext({page:"heatseeker",ticker:"SPY",dte:7,displayMode:"historical",observedAt:"2026-10-01T14:00:00Z",reading:{netGex:123}});});
+ const view=render(<><StealThreePreview ticker="NVDA"/><ReadContext/></>);
+ expect(readContext()).toMatchObject({contextVersion:1,page:"steal-three",ticker:"NVDA",study:"Options income",observedAt:null});
+ expect(readContext().reading).toBeUndefined();
+ fireEvent.change(screen.getByRole("combobox",{name:"Study"}),{target:{value:"exposure"}});
+ expect(readContext().study).toBe("Exposure comparison");
+ act(()=>releaseOld());
+ expect(readContext().ticker).toBe("NVDA");
+ view.rerender(<><StealThreePreview ticker="QQQ"/><ReadContext/></>);
+ expect(readContext().ticker).toBe("QQQ");
+ view.rerender(<ReadContext/>);
+ expect(readContext().ticker).toBeNull();
+});
+
+test("Extra unmount leaves a later screen owner intact",()=>{
+ const view=render(<><StealThreePreview ticker="NVDA"/><ReadContext/></>);
+ let release; act(()=>{release=publishScreenContext({page:"flowseeker-pro",ticker:"QQQ"});});
+ view.rerender(<ReadContext/>);
+ expect(readContext()).toMatchObject({page:"flowseeker-pro",ticker:"QQQ"});
+ act(()=>release());
+});
+
+
+test("Extra selection survives StrictMode and clears only its own choice",()=>{
+ const view=render(<React.StrictMode><StealThreePreview ticker="NVDA"/><ReadContext/></React.StrictMode>);
+ expect(readContext()).toMatchObject({page:"steal-three",ticker:"NVDA",observedAt:null});
+ view.rerender(<React.StrictMode><StealThreePreview ticker="QQQ"/><ReadContext/></React.StrictMode>);
+ expect(readContext()).toMatchObject({page:"steal-three",ticker:"QQQ",observedAt:null});
+ view.rerender(<React.StrictMode><ReadContext/></React.StrictMode>);
+ expect(readContext().ticker).toBeNull();
 });

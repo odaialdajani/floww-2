@@ -4,8 +4,8 @@
 <!-- Regenerate: python3 qc/audit/generate_api_docs.py -->
 <!-- Verify:     python3 qc/audit/generate_api_docs.py --check -->
 
-Total endpoints: 399
-Route groups: 105
+Total endpoints: 402
+Route groups: 106
 
 Generated from the live FastAPI app, so every path below is a real,
 callable route rather than a hand-copied guess.
@@ -342,7 +342,7 @@ callable route rather than a hand-copied guess.
 |--------|------|---------|
 | GET | `/api/flow-digest` | Flow Digest |
 
-## flowseeker (29 endpoints)
+## flowseeker (30 endpoints)
 
 | Method | Path | Summary |
 |--------|------|---------|
@@ -370,6 +370,7 @@ callable route rather than a hand-copied guess.
 | POST | `/api/flowseeker/risk/killswitch/trip` | Risk Killswitch Trip |
 | GET | `/api/flowseeker/scan` | Market Scan |
 | GET | `/api/flowseeker/scan-public` | Public Market Scan |
+| GET | `/api/flowseeker/scan-public/observations` | Public Saved Observations |
 | GET | `/api/flowseeker/scan/history` | Scan History |
 | POST | `/api/flowseeker/scan/refresh` | Force Refresh Scan |
 | GET | `/api/flowseeker/screen` | Screen Options |
@@ -750,6 +751,13 @@ callable route rather than a hand-copied guess.
 | Method | Path | Summary |
 |--------|------|---------|
 | GET | `/api/regime_persistence/{ticker}` | Regime Persistence Endpoint |
+
+## related (2 endpoints)
+
+| Method | Path | Summary |
+|--------|------|---------|
+| GET | `/api/related/{ticker}` | Related Ticker Snapshot |
+| POST | `/api/related/{ticker}/warm` | Related Ticker Warm |
 
 ## replay (3 endpoints)
 

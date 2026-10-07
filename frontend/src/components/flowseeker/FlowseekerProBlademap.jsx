@@ -4,6 +4,8 @@ import useTickerDirectory from "../heatseeker/useTickerDirectory";
 import MarketCoverage from "./MarketCoverage";
 import {getScreenerReading,saveScreenerReading} from "./screenerReadingCache";
 import boundedMarketRead from "./boundedMarketRead";
+import {spreadStockAlerts} from "./stockAlertOverview";
+import SavedStockActivity from "./SavedStockActivity";
 /**
  * FlowseekerProBlademap.jsx — Tidehunter Pro v3: Blademap-matched insight pipeline.
  *
@@ -718,7 +720,9 @@ export default function FlowseekerProBlademap({ active = true, ticker: sharedTic
   const [preferencesFailed,setPreferencesFailed]=useState(false);
   const [pulsePages,setPulsePages]=useState(1);
   const savedFindingsRef=useRef(null);
-  const showSavedActivity=()=>{if(savedFindingsRef.current){savedFindingsRef.current.open=true;savedFindingsRef.current.scrollIntoView({behavior:"smooth",block:"start"});}};
+  const [activityChoice,setActivityChoice]=useState("auto");
+  const activityView=activityChoice==="auto"?(scan.length?"current":"saved"):activityChoice;
+  const showSavedActivity=()=>{setActivityChoice("saved");document.getElementById("pulse")?.scrollIntoView?.({behavior:"smooth",block:"start"});};
   const pulseRowCap = (mode === "trade" ? 8 : mode === "monitor" ? 14 : 30) * pulsePages;
 
   // today's knobs (behind Filters disclosure; active ones surface as chips)
@@ -731,6 +735,8 @@ export default function FlowseekerProBlademap({ active = true, ticker: sharedTic
   const [universeOnly, setUniverseOnly] = useState(prefs.universeOnly ?? false);
   const [sortPreset, setSortPreset] = useState(prefs.sortPreset || { key: "score", dir: "desc" });
   const [feedOrder, setFeedOrder] = useState(prefs.feedOrder ?? "conviction");
+  const [feedView,setFeedView]=useState(prefs.feedView==="alerts"?"alerts":"stocks");
+  const [feedPage,setFeedPage]=useState(0);
   const [showHistory, setShowHistory] = useState(false);
   // Rule visibility chips (⋯ menu): hide whole rule families from the feed
   // and the Changed counts. Visibility only — the server engine still fires.
@@ -751,10 +757,10 @@ export default function FlowseekerProBlademap({ active = true, ticker: sharedTic
   };
   const knobQRef = useRef(null);
   useEffect(() => {
-    try { localStorage.setItem("fsb.pollMs", String(pollMs)); localStorage.setItem(PREFS_KEY, JSON.stringify({focusTicker, pollMs, universe, alertScore, notify, alertUnivOnly, screenId, knobType, knobMinVol, knobMinScore, knobQ, knobDteMin, knobDteMax, universeOnly, sortPreset, feedOrder, hiddenRules})); }
+    try { localStorage.setItem("fsb.pollMs", String(pollMs)); localStorage.setItem(PREFS_KEY, JSON.stringify({focusTicker, pollMs, universe, alertScore, notify, alertUnivOnly, screenId, knobType, knobMinVol, knobMinScore, knobQ, knobDteMin, knobDteMax, universeOnly, sortPreset, feedOrder, feedView, hiddenRules})); }
     catch { setPreferencesFailed(true); return; }
     setPreferencesFailed(false);
-  }, [focusTicker, pollMs, universe, alertScore, notify, alertUnivOnly, screenId, knobType, knobMinVol, knobMinScore, knobQ, knobDteMin, knobDteMax, universeOnly, sortPreset, feedOrder, hiddenRules]);
+  }, [focusTicker, pollMs, universe, alertScore, notify, alertUnivOnly, screenId, knobType, knobMinVol, knobMinScore, knobQ, knobDteMin, knobDteMax, universeOnly, sortPreset, feedOrder, feedView, hiddenRules]);
 
   const ack = useCallback((key) => {
     setAcked((m) => {
@@ -843,7 +849,7 @@ export default function FlowseekerProBlademap({ active = true, ticker: sharedTic
       return [...live].sort((a,b)=>direction*((Date.parse(a.asof_ts || "") || 0)-(Date.parse(b.asof_ts || "") || 0)));
     }
     return [...live].sort((a,b)=>(b.conviction ?? 0)-(a.conviction ?? 0));
-  }, [screenedFeed, alertUnivOnly, universe, feedOrder, hiddenRules,clearedFeed]);
+  }, [screenedFeed, alertUnivOnly, universe, feedOrder, feedView, hiddenRules,clearedFeed]);
   const unackedFeed=useMemo(()=>scopedFeed.filter(a=>!acked[a.key]),[scopedFeed,acked]);
   const visibleFeed=showHistory?scopedFeed:unackedFeed;
 
@@ -885,7 +891,10 @@ export default function FlowseekerProBlademap({ active = true, ticker: sharedTic
   const orderedFeedRef = useRef([]);
   const pinnedLayoutRef = useRef(false);
   if (!holdingPresentation) {
-    orderedFeedRef.current = tradeNow ? [tradeNow, ...feedBodyOf(visibleFeed, tradeNow)] : visibleFeed;
+    const body=tradeNow?feedBodyOf(visibleFeed,tradeNow):visibleFeed;
+    const compactLimit=mode==="research"?5:mode==="monitor"?6:8;
+    const display=feedView==="stocks"&&body.length>compactLimit?spreadStockAlerts(body,tradeNow?.under||tradeNow?.ticker):body;
+    orderedFeedRef.current=tradeNow?[tradeNow,...display]:display;
     pinnedLayoutRef.current = !!tradeNow;
   }
   const orderedFeed = holdingPresentation ? orderedFeedRef.current.filter(a=>visibleFeed.some(row=>row.key===a.key)) : orderedFeedRef.current;
@@ -1232,7 +1241,13 @@ export default function FlowseekerProBlademap({ active = true, ticker: sharedTic
   if (universeOnly) activeChips.push(["Universe", `${universe.length} names`,()=>setUniverseOnly(false)]);
 
   const sectionOrder = tide.sectionOrder || ["board", "vector", "pulse", "lattice", "trust"];
-  const feedCap = mode === "research" ? 5 : mode === "monitor" ? 6 : 8;
+  const feedCap=showHistory?50:(mode==="research"?5:mode==="monitor"?6:8)+(pinnedLayoutRef.current?1:0);
+  const feedPages=Math.max(1,Math.ceil(orderedFeed.length/feedCap));
+  const currentFeedPage=Math.min(feedPage,feedPages-1);
+  const feedStart=currentFeedPage*feedCap;
+  const feedOnPage=orderedFeed.slice(feedStart,feedStart+feedCap);
+  const feedStocks=new Set(visibleFeed.map(a=>a.under||a.ticker).filter(Boolean)).size;
+  useEffect(()=>setFeedPage(0),[screenId,mode,feedView,feedOrder,showHistory,knobType,knobQ,knobMinVol,knobMinScore,knobDteMin,knobDteMax,universeOnly,alertUnivOnly]);
 
   const renderVerdictRow = (a, pinned = false) => {
     const ctx = isContextual(a);
@@ -1242,7 +1257,8 @@ export default function FlowseekerProBlademap({ active = true, ticker: sharedTic
     const lv = a.levels || {};
     return (
       <tr
-        key={a.key}
+        key={`${a.asof_date||""}|${a.asof_ts||""}|${a.key}`}
+        data-alert-key={a.key}
         className={`${pinned ? "pinned" : ""} ${ctx ? "contextual" : dir.cls} ${selectedRow?.key === a.key ? "sel" : ""}`}
         data-testid={pinned ? "trade-now-row" : undefined}
         onClick={ctx ? undefined : () => doDrill(a)}
@@ -1711,7 +1727,8 @@ export default function FlowseekerProBlademap({ active = true, ticker: sharedTic
                   <div className="th-sec" id="vector" key="vector">
                     <div className="th-sh">
                       <h2>Alerts</h2>
-                      <span className="th-meta"><b>{feedErr ? "UNAVAILABLE" : !feedReceived ? "LOADING" : withheld ? "STALE" : "AVAILABLE"}</b> direction board · {feedOrder === "new" ? "newest first" : feedOrder === "old" ? "oldest first" : "ranked by conviction"} · {visibleFeed.length} in screen · {screen.label}</span>
+                      <select aria-label="Alert view" value={feedView} onChange={e=>setFeedView(e.target.value)}><option value="stocks">By stock</option><option value="alerts">All alerts</option></select>
+                      <span className="th-meta"><b>{feedErr ? "UNAVAILABLE" : !feedReceived ? "LOADING" : withheld ? "STALE" : "AVAILABLE"}</b> {feedView === "stocks" ? "stocks first" : "all readings"} · {feedOrder === "new" ? "newest first" : feedOrder === "old" ? "oldest first" : "ranked by conviction"} · {feedStocks} stocks · {visibleFeed.length} alerts · {screen.label}</span>
                       <span className="th-sp" />
                       <span className="th-rulecounts" title="Signals per rule in this screen">
                         {Object.entries(ruleCounts).map(([k, v]) => <span key={k} className="th-fchip">{k} <b>{v}</b></span>)}
@@ -1740,11 +1757,15 @@ export default function FlowseekerProBlademap({ active = true, ticker: sharedTic
                             <th>Price</th><th>Invalidation</th><th>Target</th><th>Moved</th>
                           </tr></thead>
                           <tbody>
-                            {orderedFeed.slice(0, showHistory ? 50 : feedCap + (pinnedLayoutRef.current ? 1 : 0)).map((a) => renderVerdictRow(a, a.key === tradeNow?.key))}
+                            {feedOnPage.map((a) => renderVerdictRow(a, a.key === tradeNow?.key))}
                           </tbody>
                         </table>
                       )}
                       <div className="th-tblfoot">
+                        <span>{orderedFeed.length?feedStart+1:0}–{Math.min(feedStart+feedCap,orderedFeed.length)} of {orderedFeed.length} alerts · {feedStocks} stocks</span>
+                        <button type="button" aria-label="Previous alerts" disabled={currentFeedPage===0} onClick={()=>setFeedPage(currentFeedPage-1)}>Previous</button>
+                        <span>Page {currentFeedPage+1} of {feedPages}</span>
+                        <button type="button" aria-label="Next alerts" disabled={currentFeedPage+1>=feedPages} onClick={()=>setFeedPage(currentFeedPage+1)}>Next</button>
                         <span>Stage: Early = daily activity · Building = repeated activity or a volume jump · Confirmed = open interest increased</span>
                         <span>{LEVELS_LABEL} — edit before you plan</span>
                         <span>Plan writes a journal note only · nothing is sent to a broker</span>
@@ -1758,6 +1779,7 @@ export default function FlowseekerProBlademap({ active = true, ticker: sharedTic
                   <div className="th-sec" id="pulse" key="pulse">
                     <div className="th-sh">
                       <h2>Activity results</h2>
+                      <select aria-label="Activity readings" value={activityView} onChange={e=>setActivityChoice(e.target.value)}><option value="saved">Saved stock activity</option><option value="current">Current readings</option></select>
                       <span className="th-meta"><b>{scanState.status}</b> screened contracts · {screenedScans.length} of {scan.length} · {screen.label}{limitedScan && ` · ${limitedScan}`}</span>
                       <span className="th-sp" />
                       {holdingPresentation && <span className="th-meta">Row positions held while you interact; age labels keep updating.</span>}
@@ -1786,7 +1808,8 @@ export default function FlowseekerProBlademap({ active = true, ticker: sharedTic
                         <button type="button" className="th-chipb" onClick={() => setVisibleCols([...PULSE_DEFAULT_COLS])}>Reset to 10 default</button>
                       </div>
                     )}
-                    <div className="th-tbl" data-testid="pulse-table" onMouseEnter={() => { feedHoverRef.current = true; }} onMouseLeave={() => { feedHoverRef.current = false; }} onFocusCapture={() => { feedFocusRef.current = true; }} onBlurCapture={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) feedFocusRef.current = false; }}>
+                    <SavedStockActivity active={active && activityView==="saved"} screen={screen} universe={universe} tickerFacts={tickerFacts} filters={{type:knobType,minVolume:knobMinVol,minScore:knobMinScore,q:knobQ,dteMin:knobDteMin,dteMax:knobDteMax,universeOnly}} onPickTicker={symbol=>{setFocusTicker(symbol);setSelectedRow(null);setDrill(null);setDrillSel(null);setDrillRows([]);}} />
+                    {activityView==="current" && <div className="th-tbl" data-testid="pulse-table" onMouseEnter={() => { feedHoverRef.current = true; }} onMouseLeave={() => { feedHoverRef.current = false; }} onFocusCapture={() => { feedFocusRef.current = true; }} onBlurCapture={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) feedFocusRef.current = false; }}>
                       {scan.length === 0 ? (
                         <div className="th-empty">
                           {scanMeta.err ? "Scan unavailable; retrying." : scanMeta.mode ? "No contracts were returned by the current scan." : "Scanning market flow…"}
@@ -1847,7 +1870,7 @@ export default function FlowseekerProBlademap({ active = true, ticker: sharedTic
                         <span><kbd>/</kbd> ticker</span><span><kbd>r</kbd> force refresh</span>
                         <span>ΔOI held = positioning stuck · faded = intraday churn</span>
                       </div>
-                    </div>
+                    </div>}
                   </div>
                 );
               }

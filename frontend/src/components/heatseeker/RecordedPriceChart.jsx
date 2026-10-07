@@ -10,6 +10,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
  const [size,setSize]=useState({width:800,height:480});
  const [view,setView]=useState(()=>({start:Math.max(0,data.length-80),count:80}));
  const [manualPrice,setManualPrice]=useState(null),[hover,setHover]=useState(null),[metrics,setMetrics]=useState(['gex','vex','charm']),[allNodes,setAllNodes]=useState(false);
+ const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState('');
  const id=useId().replace(/[^a-zA-Z0-9_-]/g,'');
  useEffect(()=>{
   const element=surface.current;if(!element)return undefined;
@@ -58,6 +59,28 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
   else {setView(clampWindow({start:base.view.start-dx/plotWidth*base.view.count,count:base.view.count},data.length));if(base.manual){const offset=dy/plotHeight*(base.range.high-base.range.low);setManualPrice({low:base.range.low+offset,high:base.range.high+offset});}}
  };
  const end=event=>{pointers.current.delete(event.pointerId);event.currentTarget.releasePointerCapture?.(event.pointerId);if(pointers.current.size===1){gesture.current={mode:'pan',point:[...pointers.current.values()][0],view:current.current.view,range:current.current.range,manual:Boolean(manualPrice)};}else gesture.current=null;};
+ const downloadChart=async()=>{
+  const svg=surface.current?.querySelector('svg');if(!svg||!data.length||exporting)return;
+  setExporting(true);setExportError('');let sourceUrl;
+  try{
+   // Copy the displayed drawing and its resolved styles, so saved colors and
+   // text do not depend on the app stylesheet when the image opens elsewhere.
+   const copy=svg.cloneNode(true),originals=[svg,...svg.querySelectorAll('*')],copies=[copy,...copy.querySelectorAll('*')];
+   const properties=['color','fill','fill-opacity','stroke','stroke-opacity','stroke-width','stroke-dasharray','stroke-linecap','stroke-linejoin','opacity','font-family','font-size','font-weight','text-anchor'];
+   originals.forEach((element,index)=>{const styles=window.getComputedStyle(element);properties.forEach(property=>{const value=styles.getPropertyValue(property);if(value)copies[index].style.setProperty(property,value);});});
+   copy.setAttribute('xmlns','http://www.w3.org/2000/svg');copy.setAttribute('width',String(size.width));copy.setAttribute('height',String(size.height));copy.style.position='static';copy.style.width=size.width+'px';copy.style.height=size.height+'px';
+   const canvas=document.createElement('canvas'),header=42,scale=2;canvas.width=Math.round(size.width*scale);canvas.height=Math.round((size.height+header)*scale);
+   const context=canvas.getContext('2d');if(!context)throw new Error('Image drawing is unavailable');
+   sourceUrl=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(copy)],{type:'image/svg+xml;charset=utf-8'}));
+   const drawing=new Image();await new Promise((resolve,reject)=>{drawing.onload=resolve;drawing.onerror=()=>reject(new Error('Chart image could not be read'));drawing.src=sourceUrl;});
+   context.scale(scale,scale);context.fillStyle='#0c1118';context.fillRect(0,0,size.width,size.height+header);context.fillStyle='#dce5ee';context.font='14px Consolas, monospace';
+   context.fillText(ticker+' | '+chartTime(visible[0]?.time,true)+' - '+chartTime(visible.at(-1)?.time,true)+' New York',12,25);context.drawImage(drawing,0,header,size.width,size.height);
+   const png=await new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Chart image could not be saved')),'image/png'));
+   const downloadUrl=URL.createObjectURL(png),link=document.createElement('a');link.href=downloadUrl;link.download=(String(ticker).replace(/[^a-zA-Z0-9._-]/g,'_')||'stock')+'-price-chart.png';
+   document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(downloadUrl),1000);
+  }catch{setExportError('Chart image could not be saved. Try again.');}
+  finally{if(sourceUrl)URL.revokeObjectURL(sourceUrl);setExporting(false);}
+ };
  const shift=amount=>{notify();setHover(null);setView(clampWindow({...windowView,start:windowView.start+amount},data.length));};
  const keyboard=event=>{const actions={ArrowLeft:()=>shift(-1),ArrowRight:()=>shift(1),PageUp:()=>shift(-Math.max(1,Math.floor(windowView.count/2))),PageDown:()=>shift(Math.max(1,Math.floor(windowView.count/2))),Home:()=>shift(-data.length),End:()=>shift(data.length),'+':()=>zoom('time',0.75),'-':()=>zoom('time',1.35)};if(actions[event.key]){event.preventDefault();event.stopPropagation();actions[event.key]();}};
  return <div className="recorded-price-chart" data-testid="recorded-price-chart" data-candles={data.length} data-visible-candles={visible.length} data-window-start={windowView.start} data-price-low={range.low} data-price-high={range.high}>
@@ -67,6 +90,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
    <details className="recorded-chart-popover"><summary role="button" aria-label="Chart tools">Tools</summary><div className="recorded-chart-popover-content">
     <div className="recorded-chart-history"><button type="button" aria-label="Earlier candles" disabled={!windowView.start} onClick={()=>shift(-Math.max(1,Math.floor(windowView.count/2)))}>Earlier</button><button type="button" aria-label="Later candles" disabled={windowView.start+windowView.count>=data.length} onClick={()=>shift(Math.max(1,Math.floor(windowView.count/2)))}>Later</button><button type="button" disabled={!data.length} onClick={()=>{notify();setView({start:0,count:data.length});setManualPrice(null);}}>Fit history</button></div>
     <fieldset className="recorded-chart-layers" aria-label="Saved node lines"><legend>Saved lines</legend>{Object.entries(NODE_LABELS).map(([metric,label])=><label key={metric} style={{'--node-color':NODE_COLORS[metric]}}><input type="checkbox" checked={metrics.includes(metric)} disabled={!availableMetrics.includes(metric)} onChange={e=>{setMetrics(old=>e.target.checked?[...old,metric]:old.filter(value=>value!==metric));setManualPrice(null);}}/>{label}{!availableMetrics.includes(metric)&&<span> unavailable</span>}</label>)}<label><input type="checkbox" checked={allNodes} onChange={e=>{setAllNodes(e.target.checked);setManualPrice(null);}}/>All saved levels</label></fieldset>
+    <button type="button" disabled={!data.length||exporting} onClick={downloadChart}>{exporting?'Saving image...':'Download chart image'}</button>{exportError&&<p role="alert">{exportError}</p>}
     {historyControls}<small id={'chart-help-'+id}>Drag to scroll history. Pinch time and price. Drag an axis to stretch it. Ctrl + scroll zooms time; Shift + scroll zooms price. Normal scrolling moves the page.</small>
    </div></details>
    <div className="recorded-chart-actions">{toolbarActions}</div>

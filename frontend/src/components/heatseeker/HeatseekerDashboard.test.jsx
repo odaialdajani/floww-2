@@ -5,6 +5,19 @@ import React from "react";
 import axios from "axios";
 import { render, screen, act, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
+import useScreenContext, { publishScreenContext } from "../../agent/useScreenContext";
+var mockPublishRich = false;
+function ReadContext() { const [context] = useScreenContext(); return <output data-testid="screen-context">{JSON.stringify(context)}</output>; }
+function readContext() { return JSON.parse(screen.getByTestId("screen-context").textContent); }
+jest.mock("./NodeConfluencePanel", () => {
+ const React = require("react");
+ const { usePublishScreenContext } = require("../../agent/useScreenContext");
+ return React.memo(function RichChild({ticker}) {
+  const context = React.useMemo(() => mockPublishRich ? {contextVersion:2,page:"heatseeker",ticker,study:"Recorded map",dte:7,displayMode:"replay",observedAt:"2026-10-01T14:00:00Z",snapshotId:"fixture-snapshot",provider:"fixture",formula:"fixture-formula",activePane:"gex",mapExpiries:["2026-10-16"],mapQuery:{},mapVersion:"2026-10-01T14:00:00Z",reading:{netGex:123}} : null, [ticker]);
+  usePublishScreenContext(context);
+  return <div data-testid="rich-child"/>;
+ });
+});
 
 // Study navigation checks must not read a real account or market service.
 jest.mock("axios", () => ({get: jest.fn().mockRejectedValue(new Error("Read unavailable"))}));
@@ -77,6 +90,7 @@ const IDLE = { data: null, loading: false, error: null, refresh: () => {} };
 
 describe("HeatseekerDashboard", () => {
   beforeEach(() => {
+    mockPublishRich = false;
     useHeatseeker.mockReturnValue(IDLE);
     axios.get.mockRejectedValue(new Error("Read unavailable"));
     global.fetch = jest.fn().mockRejectedValue(new Error("Read unavailable"));
@@ -99,7 +113,7 @@ describe("HeatseekerDashboard", () => {
     // The old all-at-once layout was intentionally replaced by one visible
     // family. Every old panel is still checked after choosing its family.
     const families = {
-      levels: ["hs-flip-zones", "hs-node-lifecycle", "hs-air-pockets"],
+      levels: ["hs-flip-zones", "hs-node-lifecycle", "hs-air-pockets", "rich-child"],
       patterns: ["hs-beach-ball", "hs-reverse-rug", "hs-rainbow-road"],
       income: ["hs-dual-gex", "hs-iv-mid", "hs-wheel-income"],
       history: ["hs-velocity-mode", "hs-trinity-confluence", "hs-max-pain", "hs-max-pain-per-expiry-drift"],
@@ -201,4 +215,122 @@ describe("HeatseekerDashboard", () => {
     fireEvent.change(screen.getByRole("combobox",{name:"Study"}),{target:{value:"levels"}});
     expect(screen.getByRole("button",{name:"levels Saved choice"})).toBeVisible();
   });
+});
+
+
+beforeEach(()=>{mockPublishRich=false;useHeatseeker.mockReturnValue(IDLE);axios.get.mockRejectedValue(new Error("Read unavailable"));global.fetch=jest.fn().mockRejectedValue(new Error("Read unavailable"));});
+
+test("Options map publishes only the chosen stock and study without inventing readings", async()=>{
+ await act(async()=>render(<><HeatseekerDashboard ticker="SPY" spot={500}/><ReadContext/></>));
+ expect(readContext()).toMatchObject({contextVersion:1,page:"heatseeker",ticker:"SPY",study:"Price levels",observedAt:null});
+ expect(readContext().spot).toBeUndefined();
+ expect(readContext().reading).toBeUndefined();
+ await act(async()=>fireEvent.change(screen.getByRole("combobox",{name:"Study"}),{target:{value:"patterns"}}));
+ expect(readContext().study).toBe("Patterns");
+});
+
+test("a memoized current child keeps its real reading when the Options study changes",async()=>{
+ mockPublishRich=true;
+ const view=render(<><HeatseekerDashboard ticker="SPY"/><ReadContext/></>);
+ expect(readContext()).toMatchObject({page:"heatseeker",ticker:"SPY",study:"Recorded map",dte:7,displayMode:"replay",reading:{netGex:123}});
+ const selectedReading=readContext();
+ fireEvent.change(screen.getByRole("combobox",{name:"Study"}),{target:{value:"patterns"}});
+ expect(readContext()).toEqual(selectedReading);
+ expect(readContext().study).toBe("Recorded map");
+ view.unmount();
+});
+
+test("Options unmount cannot clear a later screen owner",async()=>{
+ const view=render(<><HeatseekerDashboard ticker="SPY"/><ReadContext/></>);
+ let release; act(()=>{release=publishScreenContext({page:"flowseeker-pro",ticker:"QQQ"});});
+ view.rerender(<ReadContext/>);
+ expect(readContext()).toMatchObject({page:"flowseeker-pro",ticker:"QQQ"});
+ act(()=>release());
+});
+
+
+test("a changed Options stock receives the new child reading without keeping the old stock",()=>{
+ mockPublishRich=true;
+ const view=render(<React.StrictMode><HeatseekerDashboard ticker="SPY"/><ReadContext/></React.StrictMode>);
+ expect(readContext()).toMatchObject({page:"heatseeker",ticker:"SPY",dte:7,reading:{netGex:123}});
+ view.rerender(<React.StrictMode><HeatseekerDashboard ticker="NVDA"/><ReadContext/></React.StrictMode>);
+ expect(readContext()).toMatchObject({page:"heatseeker",ticker:"NVDA",dte:7,reading:{netGex:123}});
+});
+
+
+// Mount the actual App Options branch, with isolated study controls. If App
+// drops a real study or routes it to the wrong family, these DOM checks fail.
+function mockAppStudy(name) {
+ return function IsolatedAppStudy() {
+  const [choice,setChoice]=React.useState("First choice");
+  return <div data-testid={"app-study-"+name}><button onClick={()=>setChoice("Saved choice")}>{name} {choice}</button></div>;
+ };
+}
+var mockAppReading={ticker:"SPY",spot:500,asof:"2026-10-07T12:00:00Z",nodes:{king:{strike:500}},metrics:{gex_net_v1:100},velocity:{velocity_score:.2,snapshots_count:3}};
+jest.mock("../../context/AuthContext",()=>({useAuth:()=>({token:"fixture",user:null,isAuthenticated:true,logout:()=>{}})}));
+jest.mock("../../context/ThemeContext",()=>({useTheme:()=>({theme:"dark",toggleTheme:()=>{}})}));
+jest.mock("../../shell/useWorkspaceNavigation",()=>({__esModule:true,default:()=>["skylit",()=>{},{}]}));
+jest.mock("../../shell/AppShell",()=>{const React=require("react");return {__esModule:true,default:({children})=><div data-testid="actual-app-study-branch">{children}</div>};});
+jest.mock("../../hooks/useWebSocketGex",()=>({useWebSocketGex:()=>({connected:false,reconnectAttempt:0,data:null})}));
+jest.mock("../../hooks/useScopedReading",()=>({useScopedReading:(scope,options)=>[options?.retain?mockAppReading:scope==="SPY"?{spot:500}:null,()=>{},false]}));
+jest.mock("../../hooks/useSolsticeReviewCallbacks",()=>({__esModule:true,default:()=>({})}));
+jest.mock("./useTickerDirectory",()=>({__esModule:true,default:()=>({tickers:["SPY"],status:"available",retry:()=>{}})}));
+jest.mock("./TickerPicker",()=>()=>null);
+jest.mock("../AlertOverlay",()=>()=>null);
+jest.mock("../PWAInstallBanner",()=>()=>null);
+jest.mock("../SidebarPanels",()=>Object.fromEntries(["FlipZonesPanel","StackedNodesPanel","TugOfWarPanel","ScenarioPanel","RiskDashboardPanel","OpportunitiesPanel","ImpliedMovePanel","VolAnalyticsPanel","GreekReferencePanel","UsagePanel","LivePolicyPanel"].map(name=>[name,mockAppStudy(name)])));
+jest.mock("../AdvancedAnalyticsPanel",()=>Object.fromEntries(["MarketRegimePanel","ImpliedPDFPanel","HedgeImpulsePanel","PressureCloudPanel","CharmIntegralPanel"].map(name=>[name,mockAppStudy(name)])));
+jest.mock("../MlDashboard",()=>({MlDashboard:mockAppStudy("MlDashboard")}));
+jest.mock("../MultiTimeframeGEXPanel",()=>mockAppStudy("MultiTimeframeGEXPanel"));
+jest.mock("../FlowTicker",()=>mockAppStudy("FlowTicker"));
+jest.mock("../AlertsPanel",()=>mockAppStudy("AlertsPanel"));
+jest.mock("../UOAPanel",()=>mockAppStudy("UOAPanel"));
+jest.mock("../ToxicityGauge",()=>mockAppStudy("ToxicityGauge"));
+jest.mock("../MorningBriefing",()=>({MorningBriefing:mockAppStudy("MorningBriefing")}));
+jest.mock("../PositionSizing",()=>({PositionSizing:mockAppStudy("PositionSizing")}));
+jest.mock("../TradeEntry",()=>({TradeEntry:mockAppStudy("TradeEntry")}));
+jest.mock("../DashboardSummary",()=>({DashboardSummary:mockAppStudy("DashboardSummary")}));
+jest.mock("../TradeAnalytics",()=>({TradeAnalytics:mockAppStudy("TradeAnalytics")}));
+
+test("the original Gamma regime reading stays reachable in Market brief",async()=>{
+ await act(async()=>render(<HeatseekerDashboard ticker="SPY" spot={500} data={{regime:{gex_regime:"positive"}}}/>));
+ fireEvent.change(screen.getByRole("combobox",{name:"Study"}),{target:{value:"briefing"}});
+ const reading=screen.getByText(/Positive Gamma/);expect(reading).toBeVisible();
+ expect(screen.getByText(/Dealers dampen volatility/)).toBeVisible();
+ fireEvent.change(screen.getByRole("combobox",{name:"Study"}),{target:{value:"patterns"}});expect(reading).not.toBeVisible();
+ fireEvent.change(screen.getByRole("combobox",{name:"Study"}),{target:{value:"briefing"}});expect(screen.getByText(/Positive Gamma/)).toBe(reading);expect(reading).toBeVisible();
+});
+
+test("the actual Charm decay study keeps its supplied expiry reading when returning",async()=>{
+ global.fetch=jest.fn().mockResolvedValue({ok:true,json:async()=>({grid:{strikes:[500],expiries:["2026-10-16","2026-10-23"],charm_grid:{"2026-10-16":{"500":123000000},"2026-10-23":{"500":456000000}}}})});
+ await act(async()=>render(<HeatseekerDashboard ticker="SPY" spot={500}/>));
+ await act(async()=>fireEvent.change(screen.getByRole("combobox",{name:"Study"}),{target:{value:"exposure"}}));
+ const reading=await screen.findByText("Charm Decay by Expiry");expect(reading).toBeVisible();expect(screen.getByTitle("Net charm 10-16")).toHaveTextContent("10-16 · $123.0M");
+ expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/api/data/SPY?mode=day&expiries=6"),expect.anything());
+ fireEvent.change(screen.getByRole("combobox",{name:"Study"}),{target:{value:"patterns"}});expect(reading).not.toBeVisible();
+ fireEvent.change(screen.getByRole("combobox",{name:"Study"}),{target:{value:"exposure"}});expect(screen.getByText("Charm Decay by Expiry")).toBe(reading);expect(reading).toBeVisible();
+});
+
+test("the actual App retains all twenty-five original side studies in their chosen families",async()=>{
+ const App=require("../../App").default;localStorage.clear();
+ await act(async()=>render(<App/>));
+ const families={
+  levels:["DashboardSummary","ScenarioPanel","GreekReferencePanel"],
+  patterns:["OpportunitiesPanel","MarketRegimePanel","PressureCloudPanel"],
+  income:["PositionSizing","TradeEntry","LivePolicyPanel"],
+  history:["MlDashboard","MultiTimeframeGEXPanel","TradeAnalytics"],
+  moves:["ImpliedMovePanel","VolAnalyticsPanel","ImpliedPDFPanel"],
+  structure:["RiskDashboardPanel","HedgeImpulsePanel","CharmIntegralPanel"],
+  exposure:["UOAPanel","FlowTicker","VelocityGauge","ToxicityGauge"],
+  briefing:["MorningBriefing","AlertsPanel","UsagePanel"],
+ };
+ expect(Object.values(families).flat()).toHaveLength(25);
+ fireEvent.click(screen.getByRole("button",{name:"DashboardSummary First choice"}));
+ for(const [family,names] of Object.entries(families)){
+  await act(async()=>fireEvent.change(screen.getByRole("combobox",{name:"Study"}),{target:{value:family}}));
+  for(const name of names)expect(screen.getByTestId(name==="VelocityGauge"?"velocity-gauge":"app-study-"+name)).toBeVisible();
+  expect(document.querySelectorAll('.study-family:not([hidden])')).toHaveLength(1);
+ }
+ fireEvent.change(screen.getByRole("combobox",{name:"Study"}),{target:{value:"levels"}});
+ expect(screen.getByRole("button",{name:"DashboardSummary Saved choice"})).toBeVisible();
 });

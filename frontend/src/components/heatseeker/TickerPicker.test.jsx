@@ -160,3 +160,35 @@ test("global All refuses a mismatched provider page or rows outside the typed qu
  render(<TickerPicker value="SPY" tickers={["SPY"]} className="floww-header-symbol-picker"/>);fireEvent.change(screen.getByRole("combobox",{name:"Search stocks"}),{target:{value:"RIGHT"}});
  expect(await screen.findByRole("alert")).toHaveTextContent("Matches are unavailable");expect(screen.queryByRole("option",{name:"WRONG"})).toBeNull();
 });
+
+
+test("the global dropdown opens the full provider directory without losing its modal",async()=>{
+ axios.get.mockImplementation(async(url,options)=>({data:String(url).includes("/market/status")?feedCounts():options.params.limit===100?{instruments:[{symbol:"NVDA",options:true}],matches:1,total:13174,optionable_total:8838,complete_provider_catalog:false,has_more:false,stale:true,asof:"2026-10-07T12:00:00Z",page:1,limit:100}:{instruments:[{symbol:"SPY",options:true}],matches:1,complete_provider_catalog:true,page:1,limit:30}}));
+ function GlobalChoice(){const [ticker,setTicker]=React.useState("SPY");return <TickerPicker value={ticker} onChange={setTicker} tickers={["SPY"]} className="floww-header-symbol-picker"/>;}
+ render(<GlobalChoice/>);fireEvent.click(screen.getByRole("button",{name:"Browse stock list"}));
+ fireEvent.click(screen.getByRole("button",{name:"Full stock directory"}));
+ const dialog=await screen.findByRole("dialog",{name:"Stocks and funds"});
+ expect(screen.queryByRole("listbox")).toBeNull();expect(screen.queryByRole("button",{name:"Browse all stocks"})).toBeNull();
+ await screen.findByRole("button",{name:"NVDA",exact:true});
+ expect(dialog).toHaveTextContent("13,174 available");expect(dialog).toHaveTextContent("Saved list; refresh unavailable");
+ expect(dialog).toHaveTextContent("2026");expect(dialog).toHaveTextContent("New York");
+ expect(dialog).toHaveTextContent("full provider list is unavailable");
+ act(()=>screen.getByRole("textbox",{name:"Search full stock list"}).focus());
+ expect(screen.getByRole("dialog",{name:"Stocks and funds"})).toBe(dialog);
+ fireEvent.click(screen.getByRole("button",{name:"NVDA",exact:true}));
+ expect(screen.getByText("Selected NVDA")).toBeInTheDocument();
+ expect(screen.queryByRole("dialog")).toBeNull();expect(screen.queryByRole("listbox")).toBeNull();
+ expect(screen.getByRole("button",{name:"Browse stock list"})).toHaveFocus();
+ expect(axios.get.mock.calls.every(([url])=>!String(url).includes("scan"))).toBe(true);
+});
+
+test("the full directory remains reachable when quick search fails and retries its own read",async()=>{
+ let fullAttempts=0;axios.get.mockImplementation(async(url,options)=>{if(String(url).includes("/market/status"))return {data:feedCounts()};if(options.params.limit!==100)throw Error("quick unavailable");fullAttempts++;if(fullAttempts===1)throw Error("full unavailable");return {data:{instruments:[{symbol:"AMD",options:true}],matches:1,total:1,optionable_total:1,complete_provider_catalog:true,has_more:false,stale:false,asof:null,page:1,limit:100}};});
+ render(<TickerPicker value="SPY" tickers={null} className="floww-header-symbol-picker"/>);fireEvent.click(screen.getByRole("button",{name:"Browse stock list"}));
+ await screen.findByText(/stock group could not be loaded/);fireEvent.click(screen.getByRole("button",{name:"Full stock directory"}));
+ expect(await screen.findByRole("alert")).toHaveTextContent("stock list could not be loaded");
+ fireEvent.click(screen.getByRole("button",{name:"Retry",exact:true}));
+ await screen.findByRole("button",{name:"AMD",exact:true});expect(screen.getByRole("dialog")).toHaveTextContent("List time unknown");
+ fireEvent.click(screen.getByRole("button",{name:"Close stock directory"}));expect(screen.queryByRole("dialog")).toBeNull();expect(screen.queryByRole("listbox")).toBeNull();
+ expect(fullAttempts).toBe(2);
+});

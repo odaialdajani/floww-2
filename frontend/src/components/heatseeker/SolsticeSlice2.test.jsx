@@ -29,26 +29,33 @@ const data = {
   quality: { setupEligible: true, reasonCodes: [], state: "usable" },
 };
 
-test('analytical range is an exclusive Solstice canvas and returns to the legacy map',async()=>{
+test('analytical range hides the options desk and restores its layout on return',async()=>{
   require('axios').get.mockImplementation(async()=>({data}));
   await act(async()=>{render(<SkylitDashboard ticker="SPY" data={data} spot={500}/>);});
+  fireEvent.change(screen.getByLabelText('Canvas layout'), {target:{value:'profile'}});
   fireEvent.click(screen.getByRole('button',{name:'Analytical range · 14–60 DTE'}));
   expect(screen.getByRole('region',{name:'Solstice analytical range'})).toBeInTheDocument();
-  expect(screen.queryByLabelText('Canvas layout')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('Canvas layout')).not.toBeVisible();
   fireEvent.click(screen.getByRole('button',{name:'Return to options desk'}));
-  expect(screen.getByLabelText('Canvas layout')).toBeInTheDocument();
+  expect(screen.getByLabelText('Canvas layout')).toBeVisible();
+  expect(screen.getByLabelText('Canvas layout')).toHaveValue('profile');
   expect(screen.queryByRole('region',{name:'Solstice analytical range'})).not.toBeInTheDocument();
 });
 
-test('sidebar-controlled range mode unmounts legacy controls and publishes the toggle request',async()=>{
+test('sidebar-controlled range mode hides options controls until its owner closes it',async()=>{
  require('axios').get.mockImplementation(async()=>({data}));
  const change=jest.fn();let view;
  await act(async()=>{view=render(<SkylitDashboard ticker="SPY" data={data} analyticalRangeOpen={false} onAnalyticalRangeChange={change}/>);});
  view.rerender(<SkylitDashboard ticker="SPY" data={data} analyticalRangeOpen onAnalyticalRangeChange={change}/>);
  expect(screen.getByRole('region',{name:'Solstice analytical range'})).toBeInTheDocument();
- expect(screen.queryByLabelText('Canvas layout')).not.toBeInTheDocument();
+ expect(screen.getByLabelText('Canvas layout')).not.toBeVisible();
  fireEvent.click(screen.getByRole('button',{name:'Return to options desk'}));
  expect(change).toHaveBeenCalledWith(false);
+ expect(screen.getByRole('region',{name:'Solstice analytical range'})).toBeVisible();
+ expect(screen.getByLabelText('Canvas layout')).not.toBeVisible();
+ view.rerender(<SkylitDashboard ticker="SPY" data={data} analyticalRangeOpen={false} onAnalyticalRangeChange={change}/>);
+ expect(screen.getByLabelText('Canvas layout')).toBeVisible();
+ expect(screen.queryByRole('region',{name:'Solstice analytical range'})).not.toBeInTheDocument();
 });
 
 test("metric switch renders and changes overlay basis", async () => {

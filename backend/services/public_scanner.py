@@ -425,6 +425,13 @@ def unusual_rows_from_chain(
                 "rel_spread": rel_spread,
                 **changes,
                 "volume_data_received_at": now,
+                "volume_source_time": timestamp(c.get("volume_timestamp")),
+                "bid_source_time": timestamp(c.get("bid_timestamp") or c.get("bid_event_time")),
+                "ask_source_time": timestamp(c.get("ask_timestamp") or c.get("ask_event_time")),
+                "last_source_time": timestamp(c.get("last_timestamp") or c.get("last_event_time")),
+                "quote_source_time": current_quote_time,
+                "oi_source_time": timestamp(c.get("oi_timestamp") or c.get("oi_event_time")),
+                "bid": _nonnegative_reading(bid), "ask": _nonnegative_reading(ask),
             }
         except (TypeError, ValueError):
             continue
@@ -548,6 +555,8 @@ _mid_marks: dict[str, float] = {}  # osi -> last-seen mid (Lee-Ready tick anchor
 _mid_rings: dict[str, list[float]] = {}  # legacy test helper only
 _observation_store = None
 _findings_store = None
+_broad_observations_store = None
+_pass_timing_anchor = None
 _last_completed_view = None
 _progress_store = None
 _active_scope = None
@@ -570,6 +579,68 @@ def _recent_findings_store():
         default = Path(__file__).resolve().parents[1] / "data" / "scan_findings.sqlite3"
         _findings_store = ScanFindings(os.environ.get("FLOWW_PUBLIC_FINDINGS_PATH") or default)
     return _findings_store
+
+
+def _dated_observations_store():
+    global _broad_observations_store
+    if _broad_observations_store is None:
+        from services.public_scan_observations import PublicScanObservations
+        default = Path(__file__).resolve().parents[1] / "data" / "public_scan_observations.sqlite3"
+        _broad_observations_store = PublicScanObservations(os.environ.get("FLOWW_PUBLIC_SCAN_OBSERVATIONS_PATH") or default)
+    return _broad_observations_store
+
+
+def saved_observations_page(**filters):
+    """Read saved evidence only; no provider/catalog refresh or scan admission."""
+    from services.market_catalog import peek_catalog
+    catalog = peek_catalog()
+    explicit = bool(os.environ.get("FLOWW_PUBLIC_UNIVERSE", "").strip())
+    universe = get_universe() if explicit or catalog["available"] else None
+    try:
+        legacy = _recent_findings_store().saved_records(now=filters.get("now"), tickers=universe)
+        legacy_status = "available"
+    except Exception as exc:
+        legacy, legacy_status = [], "unavailable"
+        log.warning("Legacy saved scan examples unavailable (%s)", type(exc).__name__)
+    result = _dated_observations_store().page(universe=universe, legacy_records=legacy, **filters)
+    result["columns"] = list(SCAN_COLUMNS)
+    coverage = result["coverage"]
+    if legacy_status == "unavailable" and not coverage["observed_tickers"]:
+        raise OSError("Saved observation access unavailable")
+    coverage.update(legacy_status=legacy_status, catalog_available=catalog["available"], catalog_stale=catalog["stale"],
+                    catalog_asof=catalog["asof"], scope_kind="explicit_symbols" if explicit else "provider_option_enabled",
+                    scope_note="Latest recorded bounded option checks; not a full contract chain, live flow, or historical tape.")
+    result["status"] = "missing" if not coverage["observed_tickers"] else "partial" if (
+        coverage["partial_tickers"] or coverage["missing_tickers"] or coverage["latest_failed_tickers"]
+        or coverage["storage_capacity_tickers"] or coverage["receipt_clock_unknown_tickers"]
+        or coverage["source_clock_unknown_tickers"] or legacy_status == "unavailable"
+        or not explicit and not catalog["available"]) else "available"
+    return result
+
+
+def _measured_pass_timing(scope, progress, universe_size):
+    """Actual inter-batch throughput includes off-hours pauses and budget waits."""
+    global _pass_timing_anchor
+    result = dict(estimated_pass_seconds=None, estimated_remaining_seconds=None,
+                  pass_estimate_basis="unknown_until_two_batches", measured_checks_per_second=None)
+    if progress.get("pass_id") is None or progress.get("status") == "unavailable":
+        return result
+    now = time.monotonic()
+    completed = progress.get("attempted_in_pass", 0)
+    identity = (scope, progress["pass_id"])
+    if _pass_timing_anchor is None or _pass_timing_anchor["identity"] != identity:
+        if completed:
+            _pass_timing_anchor = dict(identity=identity, at=now, completed=completed)
+        return result
+    elapsed = now - _pass_timing_anchor["at"]
+    additional = completed - _pass_timing_anchor["completed"]
+    if elapsed <= 0 or additional <= 0:
+        return result
+    rate = additional / elapsed
+    return dict(estimated_pass_seconds=round(universe_size / rate),
+                estimated_remaining_seconds=round(progress.get("pending", 0) / rate),
+                pass_estimate_basis="measured_inter_batch_throughput", measured_checks_per_second=rate,
+                pass_estimate_note="Projection at observed pace; future session, budget or provider waits may change it.")
 
 
 def _observations_store():
@@ -628,10 +699,16 @@ async def _renew_scan_claims(context, stopped):
 def _reset_state() -> None:
     """Tests only — clear slices + cursor + velocity/mid marks + rings."""
     global _cursor, _observation_store, _findings_store, _last_completed_view, _progress_store, _active_scope
+    global _broad_observations_store, _pass_timing_anchor
     from services.scan_findings import ScanFindings
     if _findings_store is not None:
         _findings_store.close()
     _findings_store = ScanFindings(":memory:")
+    from services.public_scan_observations import PublicScanObservations
+    if _broad_observations_store is not None:
+        _broad_observations_store.close()
+    _broad_observations_store = PublicScanObservations(":memory:")
+    _pass_timing_anchor = None
     if _observation_store is not None:
         _observation_store.close()
     _observation_store = SnapshotObservations(":memory:")
@@ -784,6 +861,8 @@ async def scan_slice(
             await publish(t, {"rows": rows, "extras": extras, "dealer": dealer, "status": "ok", "received_ts": received_ts,
                       "event_time": instant(chain.get("event_time")),
                       "expiries_checked": len(chain.get("expiries") or []),
+                      "expiries": chain.get("expiries"), "max_expiries": max_expiries,
+                      "source": chain.get("data_source") or chain.get("source"),
                       "rows_capped": selection["rows_truncated"], "selection": selection,
                       "history_status": history_status, "history_capped": history_capped,
                        "history_contracts": len(observations), "contract_conflicts": contract_conflicts})
@@ -825,7 +904,6 @@ async def scan_next(
         from services.public_budget import budget as pub_budget
 
         await pub_budget.check_request_allowed("api.public.com")
-        started = time.monotonic()
         per_ticker = chain_cost(max_expiries)
         try:
             affordable = max(0, int(await pub_budget.peek_available() // per_ticker))
@@ -870,6 +948,11 @@ async def scan_next(
                 for t in tickers:
                     pack = fresh.get(t, {"status": "failed"})
                     await _checkpoint_result(t, pack)
+                    try:
+                        await asyncio.to_thread(_dated_observations_store().record_attempt, t, time.time(),
+                                                pack.get("status", "failed"), pack.get("reason"))
+                    except Exception as exc:
+                        log.warning("Dated broad scan check unavailable (%s)", type(exc).__name__)
                     if pack.get("status") == "deferred":
                         continue
                     _attempts[t] = {"status": pack.get("status"), "at": time.time(),
@@ -888,6 +971,14 @@ async def scan_next(
                                   "extras": pack["extras"], "dealer": pack["dealer"],
                                   "rows_capped": pack.get("rows_capped", False), "selection": pack.get("selection", {})}
                         dealer[t] = pack["dealer"]
+                        try:
+                            dated_saved = await asyncio.to_thread(_dated_observations_store().save, t, pack, scope=scope)
+                            _attempts[t]["dated_observation_saved"] = dated_saved in ("saved", "unchanged")
+                            if dated_saved not in ("saved", "unchanged"):
+                                await asyncio.to_thread(_dated_observations_store().record_attempt, t, time.time(), "capacity", dated_saved)
+                        except Exception as exc:
+                            _attempts[t]["dated_observation_saved"] = False
+                            log.warning("Dated broad scan evidence unavailable (%s)", type(exc).__name__)
                         try:
                             await asyncio.to_thread(_recent_findings_store().save, t, received_ts, pack["rows"])
                             _attempts[t]["findings_saved"] = True
@@ -925,11 +1016,7 @@ async def scan_next(
             _slices[expired] = {"ts": _slices[expired]["ts"], "rows": [],
                                 "extras": {}, "dealer": None,
                                 "event_time": _slices[expired].get("event_time")}
-        duration = max(0, time.monotonic() - started)
-        try:
-            pause = max(0.1, float(os.environ.get("FLOWW_PUBLIC_SWEEP_RTH_S", "1")))
-        except ValueError:
-            pause = 1.0
+        timing = _measured_pass_timing(scope, progress, len(uni))
         coverage.update(
             source="public-instruments" if catalog is not None else "custom-universe",
             catalog_stale=bool(catalog and catalog["stale"]) or directory_older,
@@ -942,7 +1029,8 @@ async def scan_next(
                                  for ticker in coverage["received_at_by_ticker"]},
             rows_capped=any(v.get("rows_capped") for v in _slices.values()),
             fresh_window_seconds=SLICE_TTL_S, checked_at=time.time(),
-            estimated_pass_seconds=round(math.ceil(len(uni) / len(tickers)) * (duration + pause)) if tickers else None,
+            **timing,
+            dated_observation_save_failures=sum(a.get("dated_observation_saved") is False for a in _attempts.values()),
             complete_realtime_market=False,
             history_contract_limit=60,
             history_unavailable=sum(a.get("history_status") != "available" for a in _attempts.values()),

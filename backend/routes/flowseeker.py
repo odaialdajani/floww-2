@@ -1483,6 +1483,36 @@ async def scan_history(days: int = Query(14, ge=2, le=60)):
     return payload
 
 
+@router.get("/scan-public/observations")
+async def public_saved_observations(
+    offset: int = Query(0, ge=0, le=2_400_000),
+    limit: int = Query(100, ge=1, le=500),
+    ticker: str | None = Query(None, max_length=12),
+    min_volume: float = Query(0, ge=0, le=1e12),
+    expiry: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    contract_type: str | None = Query(None, pattern="^(call|put)$"),
+    age: str = Query("all", pattern="^(all|recent|stale)$"),
+    scope: str | None = Query(None, max_length=100),
+    max_age_seconds: int = Query(7 * 86400, ge=60, le=7 * 86400),
+    order: str = Query("stocks", pattern="^(stocks|received)$"),
+):
+    """Browse dated bounded snapshots, without spending a provider call.
+
+    Receipt age and source age stay separate. Recent receipt does not admit
+    saved rows to live alerts, execution, or claim whole-market freshness.
+    Legacy three-example findings are not expanded into unknown quote data.
+    """
+    from services.public_scanner import saved_observations_page
+    try:
+        return await asyncio.to_thread(saved_observations_page, offset=offset, limit=limit,
+                                       ticker=ticker.strip().upper() if ticker else None,
+                                       min_volume=min_volume, expiry=expiry, contract_type=contract_type,
+                                       age=age, scope=scope, max_age_seconds=max_age_seconds, order=order)
+    except Exception as exc:
+        logger.warning("Saved broad scan observations unavailable (%s)", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Saved observations are unavailable. Fresh checks remain separate.") from exc
+
+
 @router.get("/scan-public")
 async def public_market_scan(
     slice_size: int = Query(default=8, ge=1, le=20),

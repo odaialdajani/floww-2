@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Sidebar from "./Sidebar";
+import RelatedTickerPanel from "./RelatedTickerPanel";
 import ProblemStatus from "../diagnostics/ProblemStatus";
 import AgentProvider, { useAgent } from "../agent/AgentProvider";
 import AgentPanel from "../agent/AgentPanel";
@@ -36,7 +37,7 @@ function useSidebarCollapsed() {
 
 function viewportWidth(){return document.documentElement.clientWidth || window.innerWidth || 0;}
 
-function Workspace({collapsed,children}){
+function Workspace({collapsed,children,ticker,onTickerChange,relatedOpen,onRelatedClose}){
  const agent=useAgent(),workspace=useRef(null);
  const railWidth=collapsed?64:240;
  const [preferred,setPreferred]=useState(readChatPaneWidth);
@@ -60,20 +61,25 @@ function Workspace({collapsed,children}){
   setPreferred(next);if(persist)saveChatPaneWidth(next);
  },[available]);
  const layout=agent.open?sizing.layout:"closed";
- return <div ref={workspace} className="floww-workspace" data-chat-layout={layout}
-  style={{marginLeft:railWidth,minWidth:0,minHeight:"100dvh",display:"grid",gridTemplateColumns:layout==="side"?"minmax(0, 1fr) "+sizing.width+"px":"minmax(0, 1fr)",columnGap:layout==="side"?CHAT_PANE_GAP:0,"--assistant-pane-width":sizing.width+"px"}}>
+ const relatedWidth=Math.min(400,Math.max(320,available*.3));
+ const relatedDock=!!relatedOpen&&available-relatedWidth-(layout==="side"?sizing.width+CHAT_PANE_GAP:0)>=560;
+ const relatedLayout=relatedDock?"dock":"overlay";
+ const columns="minmax(0, 1fr)"+(relatedDock?" "+relatedWidth+"px":"")+(layout==="side"?" "+sizing.width+"px":"");
+ return <div ref={workspace} className="floww-workspace" data-chat-layout={layout} data-related-layout={relatedOpen?relatedLayout:"closed"}
+  style={{marginLeft:railWidth,minWidth:0,minHeight:"100dvh",display:"grid",gridTemplateColumns:columns,columnGap:layout==="side"||relatedDock?CHAT_PANE_GAP:0,"--assistant-pane-width":sizing.width+"px"}}>
   <main className="floww-workspace-main" style={{minWidth:0,display:"flex",flexDirection:"column",minHeight:"100dvh"}}>{children}</main>
+  {relatedOpen&&<RelatedTickerPanel ticker={ticker} onTickerChange={onTickerChange} onClose={onRelatedClose} layout={relatedLayout} width={relatedWidth} right={layout==="side"?sizing.width+16:12}/>}
   <AgentPanel paneWidth={sizing.width} minWidth={sizing.minWidth} maxWidth={sizing.maxWidth} resizeEnabled={layout==="side"} onPaneWidthChange={changeWidth}/>
   <AgentCommandBar/><ProblemStatus/>
  </div>;
 }
 
-export default function AppShell({ page, onNavigate, children, userEmail, userTier }) {
+export default function AppShell({ page, onNavigate, children, userEmail, userTier, ticker, onTickerChange, relatedOpen=false, onRelatedClose }) {
  const collapsed=useSidebarCollapsed();
  return <AgentProvider onNavigate={onNavigate}>
   <div className="min-h-screen floww-application" style={{background:"var(--bg-page)"}}>
    <Sidebar page={page} onNavigate={onNavigate} userEmail={userEmail} userTier={userTier}/>
-   <Workspace collapsed={collapsed}>{children}</Workspace>
+   <Workspace collapsed={collapsed} ticker={ticker} onTickerChange={onTickerChange} relatedOpen={relatedOpen} onRelatedClose={onRelatedClose}>{children}</Workspace>
   </div>
  </AgentProvider>;
 }

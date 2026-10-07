@@ -1,0 +1,1276 @@
+{
+  "version": 1,
+  "coverage": {
+    "complete": false,
+    "scope": "Issuer-verified single-stock and shared-benchmark products; holdings-based and other issuer links are incomplete.",
+    "verified_at": "2026-10-07",
+    "notes": [
+      "Membership in the provider directory is checked separately.",
+      "Daily targets are contractual fund objectives, not measured correlation coefficients.",
+      "Issuer links do not establish price adjustment or historical coverage."
+    ]
+  },
+  "products": [
+    {
+      "symbol": "ADBU",
+      "underlying": "ADBE",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "PYPU",
+      "underlying": "PYPL",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "UNHU",
+      "underlying": "UNH",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "TXNU",
+      "underlying": "TXN",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "ASMU",
+      "underlying": "ASML",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "BABU",
+      "underlying": "BABA",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "MRVU",
+      "underlying": "MRVL",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "SOFA",
+      "underlying": "SOFI",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "CONX",
+      "underlying": "COIN",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "ORCU",
+      "underlying": "ORCL",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "ORCS",
+      "underlying": "ORCL",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": -1,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "HODU",
+      "underlying": "HOOD",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "LINT",
+      "underlying": "INTC",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "TSLL",
+      "underlying": "TSLA",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "TSLS",
+      "underlying": "TSLA",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": -1,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "AAPU",
+      "underlying": "AAPL",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "AAPD",
+      "underlying": "AAPL",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": -1,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "AMUU",
+      "underlying": "AMD",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "AMDD",
+      "underlying": "AMD",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": -1,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "AMZU",
+      "underlying": "AMZN",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "AMZD",
+      "underlying": "AMZN",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": -1,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "AVL",
+      "underlying": "AVGO",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "AVS",
+      "underlying": "AVGO",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": -1,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "BOEU",
+      "underlying": "BA",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "BRKU",
+      "underlying": "BRK.B",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "CSCL",
+      "underlying": "CSCO",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "CSCS",
+      "underlying": "CSCO",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": -1,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "ELIL",
+      "underlying": "LLY",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "GGLL",
+      "underlying": "GOOGL",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "GGLS",
+      "underlying": "GOOGL",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": -1,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "LMTL",
+      "underlying": "LMT",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "METU",
+      "underlying": "META",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "METD",
+      "underlying": "META",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": -1,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "MSFU",
+      "underlying": "MSFT",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "MSFD",
+      "underlying": "MSFT",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": -1,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "MUU",
+      "underlying": "MU",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "MUD",
+      "underlying": "MU",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": -1,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "NFXL",
+      "underlying": "NFLX",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "NFXS",
+      "underlying": "NFLX",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": -1,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "NVDU",
+      "underlying": "NVDA",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "NVDD",
+      "underlying": "NVDA",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": -1,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "PALU",
+      "underlying": "PANW",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "PALD",
+      "underlying": "PANW",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": -1,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "PLTU",
+      "underlying": "PLTR",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "PLTD",
+      "underlying": "PLTR",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": -1,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "QCMU",
+      "underlying": "QCOM",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "QCMD",
+      "underlying": "QCOM",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": -1,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "SHPU",
+      "underlying": "SHOP",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "TSMX",
+      "underlying": "TSM",
+      "benchmark": null,
+      "issuer": "Direxion",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.direxion.com/single-stock-etfs"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "NVDL",
+      "underlying": "NVDA",
+      "benchmark": null,
+      "issuer": "GraniteShares",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://graniteshares.com/etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "NVD",
+      "underlying": "NVDA",
+      "benchmark": null,
+      "issuer": "GraniteShares",
+      "product_type": "single_stock_daily",
+      "daily_target": -2,
+      "reset": "daily",
+      "source_urls": [
+        "https://graniteshares.com/etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "MVLL",
+      "underlying": "MRVL",
+      "benchmark": null,
+      "issuer": "GraniteShares",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://graniteshares.com/etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "NBIL",
+      "underlying": "NBIS",
+      "benchmark": null,
+      "issuer": "GraniteShares",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://graniteshares.com/etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "NOWL",
+      "underlying": "NOW",
+      "benchmark": null,
+      "issuer": "GraniteShares",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://graniteshares.com/etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "NTAL",
+      "underlying": "NTAP",
+      "benchmark": null,
+      "issuer": "GraniteShares",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://graniteshares.com/etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "PDDL",
+      "underlying": "PDD",
+      "benchmark": null,
+      "issuer": "GraniteShares",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://graniteshares.com/etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "PTIR",
+      "underlying": "PLTR",
+      "benchmark": null,
+      "issuer": "GraniteShares",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://graniteshares.com/etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "QCML",
+      "underlying": "QCOM",
+      "benchmark": null,
+      "issuer": "GraniteShares",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://graniteshares.com/etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "RDTL",
+      "underlying": "RDDT",
+      "benchmark": null,
+      "issuer": "GraniteShares",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://graniteshares.com/etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "RVNL",
+      "underlying": "RIVN",
+      "benchmark": null,
+      "issuer": "GraniteShares",
+      "product_type": "single_stock_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://graniteshares.com/etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "AMDY",
+      "underlying": "AMD",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "AMZY",
+      "underlying": "AMZN",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "APLY",
+      "underlying": "AAPL",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "BABO",
+      "underlying": "BABA",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "GMEY",
+      "underlying": "GME",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "GOOY",
+      "underlying": "GOOGL",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "HIYY",
+      "underlying": "HIMS",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "HOOY",
+      "underlying": "HOOD",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "INYY",
+      "underlying": "INTC",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "MARO",
+      "underlying": "MARA",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "MRNY",
+      "underlying": "MRNA",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "MSFO",
+      "underlying": "MSFT",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "MSTY",
+      "underlying": "MSTR",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "NFLY",
+      "underlying": "NFLX",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "NVDY",
+      "underlying": "NVDA",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "PLTY",
+      "underlying": "PLTR",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "PYPY",
+      "underlying": "PYPL",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "RBLY",
+      "underlying": "RBLX",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "RDYY",
+      "underlying": "RDDT",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "SMCY",
+      "underlying": "SMCI",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "SNOY",
+      "underlying": "SNOW",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "TSLY",
+      "underlying": "TSLA",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "TSMY",
+      "underlying": "TSM",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "XOMO",
+      "underlying": "XOM",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "XYZY",
+      "underlying": "XYZ",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "YSPC",
+      "underlying": "SPCX",
+      "benchmark": null,
+      "issuer": "YieldMax",
+      "product_type": "option_income",
+      "daily_target": null,
+      "reset": null,
+      "source_urls": [
+        "https://yieldmaxetfs.com/our-etfs/"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "UPRO",
+      "underlying": null,
+      "benchmark": "S&P500",
+      "issuer": "ProShares",
+      "product_type": "benchmark_daily",
+      "daily_target": 3,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.proshares.com/our-etfs/leveraged-and-inverse/upro"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "SPXU",
+      "underlying": null,
+      "benchmark": "S&P500",
+      "issuer": "ProShares",
+      "product_type": "benchmark_daily",
+      "daily_target": -3,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.proshares.com/our-etfs/leveraged-and-inverse/spxu"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "TQQQ",
+      "underlying": null,
+      "benchmark": "NASDAQ100",
+      "issuer": "ProShares",
+      "product_type": "benchmark_daily",
+      "daily_target": 3,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.proshares.com/our-etfs/leveraged-and-inverse/tqqq"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "SQQQ",
+      "underlying": null,
+      "benchmark": "NASDAQ100",
+      "issuer": "ProShares",
+      "product_type": "benchmark_daily",
+      "daily_target": -3,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.proshares.com/our-etfs/leveraged-and-inverse/sqqq"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "QLD",
+      "underlying": null,
+      "benchmark": "NASDAQ100",
+      "issuer": "ProShares",
+      "product_type": "benchmark_daily",
+      "daily_target": 2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.proshares.com/our-etfs/leveraged-and-inverse/qld"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "QID",
+      "underlying": null,
+      "benchmark": "NASDAQ100",
+      "issuer": "ProShares",
+      "product_type": "benchmark_daily",
+      "daily_target": -2,
+      "reset": "daily",
+      "source_urls": [
+        "https://www.proshares.com/our-etfs/leveraged-and-inverse/qid"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "SPY",
+      "underlying": null,
+      "benchmark": "S&P500",
+      "issuer": "State Street",
+      "product_type": "benchmark_fund",
+      "daily_target": 1,
+      "reset": "none",
+      "source_urls": [
+        "https://www.ssga.com/us/en/individual/etfs/state-street-spdr-sp-500-etf-trust-spy"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "VOO",
+      "underlying": null,
+      "benchmark": "S&P500",
+      "issuer": "Vanguard",
+      "product_type": "benchmark_fund",
+      "daily_target": 1,
+      "reset": "none",
+      "source_urls": [
+        "https://investor.vanguard.com/investment-products/etfs/profile/voo"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "IVV",
+      "underlying": null,
+      "benchmark": "S&P500",
+      "issuer": "iShares",
+      "product_type": "benchmark_fund",
+      "daily_target": 1,
+      "reset": "none",
+      "source_urls": [
+        "https://www.ishares.com/us/products/239726/ishares-core-sp-500-etf"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "QQQ",
+      "underlying": null,
+      "benchmark": "NASDAQ100",
+      "issuer": "Invesco",
+      "product_type": "benchmark_fund",
+      "daily_target": 1,
+      "reset": "none",
+      "source_urls": [
+        "https://www.invesco.com/qqq-etf/en/home.html"
+      ],
+      "verified_at": "2026-10-07"
+    },
+    {
+      "symbol": "QQQM",
+      "underlying": null,
+      "benchmark": "NASDAQ100",
+      "issuer": "Invesco",
+      "product_type": "benchmark_fund",
+      "daily_target": 1,
+      "reset": "none",
+      "source_urls": [
+        "https://www.invesco.com/us/financial-products/etfs/product-detail?audienceType=Investor&ticker=QQQM"
+      ],
+      "verified_at": "2026-10-07"
+    }
+  ]
+}
