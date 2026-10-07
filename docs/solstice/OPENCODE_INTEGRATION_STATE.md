@@ -616,3 +616,24 @@ read in full. Findings applied:
   brokerage). Closure checker: 0 errors, 23 accepted, 27 pending, HOLD.
 - Remote steady: main 1fc5582c, cline/r18-analytics 6342afdf, PR108 +
   PR109 OPEN. PR109 CI on the 5-commit tip pending at record time.
+
+## 2026-10-07 ledger refresh + latest version opened (user: miss nothing)
+
+- Refreshed 14 stale packet-creation ledger texts (S06-S11, S13-S14,
+  I01-I03, I05, I11) to verified current state: each now cites the r19
+  acceptance basis + OpenCode's exact main-branch verification (86
+  r18+grounding, 69 budget/agent, 108 s18 run fresh at main this
+  session, 182 frontend ordering, API 383, adversarial probes 10/10)
+  + the precise Cline-signoff ask. No statuses changed (no
+  self-acceptance); no mechanism invented beyond read sources and green
+  runs. Closure checker: 0 errors, 23 accepted, 27 pending, HOLD.
+- Latest floww-2 opened at /private/tmp/main-verify-20261006: clean
+  worktree at 1fc5582c == origin/main. Entry points: backend/server.py;
+  services/{execution_admission, public_execution_lifecycle,
+  heatmap_history, solstice_range_analytics}; routes/{public_brokerage,
+  solstice_price_paths, execution_admission (unmounted)};
+  frontend/src (App.js, heatseeker views, lib/rangeAnalytics,
+  lib/solsticeReplay); docs/solstice (+r18 fixtures, r19 receipt),
+  docs/verification/2026-10-06-combined-update.md; tests under
+  backend/tests/{solstice,agent,services,routes}. Runs with the shared
+  backend/.venv + Mongo up; frontend node_modules symlinked in.
