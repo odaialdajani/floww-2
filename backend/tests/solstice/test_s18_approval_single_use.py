@@ -127,6 +127,15 @@ def test_same_approval_replay_places_exactly_once(mounted):
     assert broker.place_order.await_count == 2, "fresh approval still places"
 
 
+def _fingerprint():
+    import services.execution_admission as adm
+
+    return adm.order_fingerprint(
+        "TEST-ACCT", "AAPL", "BUY", 1, None, stop_price=None,
+        time_in_force="DAY", order_type="MARKET", instrument_type="EQUITY",
+        equity_market_session=None)
+
+
 def test_broker_failure_burns_approval_fail_closed(mounted):
     client, broker, monkeypatch, _conn = mounted
     _setup(client)
@@ -147,13 +156,31 @@ def test_broker_failure_burns_approval_fail_closed(mounted):
                      json=_order(approval_id=approval_id, operator="op-1"))
     assert r1.status_code == 502, r1.text
     assert broker.place_order.await_count == 1, "first attempt did place-call"
+    assert "placement_outcome" in r1.json()["detail"], (
+        "unknown outcome must be explicit, not a bare 502")
 
+    # Replay hits the journal gate first (verify before consume): the
+    # outcome is UNKNOWN until reconciled — strictly more informative
+    # than already-used, and it blocks even a fresh approval (see below).
     r2 = client.post("/api/public/order", headers=KEY,
                      json=_order(approval_id=approval_id, operator="op-1"))
     assert r2.status_code == 403, r2.text
-    assert _refusal(r2) == "APPROVAL_ALREADY_USED"
+    assert _refusal(r2) == "PLACEMENT_OUTCOME_UNKNOWN"
     assert broker.place_order.await_count == 1, (
-        "burned approval must never place again")
+        "unknown-outcome resubmission must never place again")
+
+    # Resolve with operator attestation — yet the burned approval STILL
+    # refuses: consumption is independent of the journal.
+    rr = client.post("/api/admission/placement-attempts/resolve",
+                     headers=KEY, json={
+                         "fingerprint": _fingerprint(), "operator": "op-1",
+                         "resolution": "checked broker 12:00-12:05: no order present"})
+    assert rr.status_code == 200, rr.text
+    r3 = client.post("/api/public/order", headers=KEY,
+                     json=_order(approval_id=approval_id, operator="op-1"))
+    assert r3.status_code == 403, r3.text
+    assert _refusal(r3) == "APPROVAL_ALREADY_USED"
+    assert broker.place_order.await_count == 1
 
 
 def test_consume_store_failure_refuses_with_zero_broker_calls(mounted):
@@ -260,3 +287,170 @@ def test_consume_bad_inputs_refuse_without_store(mounted):
     assert adm.consume_order_approval(conn, 123)["reason"] == "APPROVAL_NOT_STORED"
     missing = adm.consume_order_approval(conn, "no-such-id")
     assert missing["ok"] is False and missing["reason"] == "APPROVAL_NOT_STORED"
+
+
+def test_unknown_outcome_blocks_fresh_approval_until_resolved(mounted):
+    client, broker, monkeypatch, _conn = mounted
+    _setup(client)
+
+    import routes.public_brokerage as pb
+
+    async def _fail(**_kw):
+        raise RuntimeError("broker down")
+
+    broker.place_order = AsyncMock(side_effect=_fail)
+    monkeypatch.setattr(pb, "_get_broker", AsyncMock(return_value=broker))
+
+    first = _create_approval(client)
+    r1 = client.post("/api/public/order", headers=KEY,
+                     json=_order(approval_id=first, operator="op-1"))
+    assert r1.status_code == 502, r1.text
+
+    # A FRESH approval for the same exact intent is still the same
+    # fingerprint — the ambiguous first attempt may have placed, so this
+    # resubmission must refuse without touching the broker.
+    second = _create_approval(client)
+    r2 = client.post("/api/public/order", headers=KEY,
+                     json=_order(approval_id=second, operator="op-1"))
+    assert r2.status_code == 403, r2.text
+    assert _refusal(r2) == "PLACEMENT_OUTCOME_UNKNOWN"
+    assert broker.place_order.await_count == 1, (
+        "ambiguous-ACK resubmission must never place a second order")
+
+    rr = client.post("/api/admission/placement-attempts/resolve",
+                     headers=KEY, json={
+                         "fingerprint": _fingerprint(), "operator": "op-1",
+                         "resolution": "broker shows no order 12:00-12:06; safe to retry"})
+    assert rr.status_code == 200, rr.text
+    broker.place_order = AsyncMock(return_value=MagicMock(
+        status="PENDING", raw={}, order_id="oid-su-2", symbol="AAPL",
+        side="BUY", order_type="MARKET", quantity=1, price=None,
+        created_at="2026-10-06T00:00:00Z"))
+    r3 = client.post("/api/public/order", headers=KEY,
+                     json=_order(approval_id=second, operator="op-1"))
+    assert r3.status_code == 200, r3.text
+    assert broker.place_order.await_count == 1
+
+
+def test_resolve_endpoint_validations(mounted):
+    client, _broker, _monkeypatch, conn = mounted
+    _setup(client)
+
+    import services.execution_admission as adm
+
+    fp = _fingerprint()
+    assert adm.record_placement_attempt(
+        conn, fp, "aid-1", "TEST-ACCT", "boom")["ok"] is True
+
+    r = client.post("/api/admission/placement-attempts/resolve",
+                    headers=KEY, json={
+                        "fingerprint": "rga1-no-such-fingerprint",
+                        "operator": "op-1", "resolution": "x"})
+    assert r.status_code == 404, r.text
+    assert r.json()["detail"]["reason"] == "NO_SUCH_ATTEMPT"
+
+    r = client.post("/api/admission/placement-attempts/resolve",
+                    headers=KEY, json={
+                        "fingerprint": fp, "operator": "op-1",
+                        "resolution": "   "})
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"]["reason"] == "BAD_CONTRACT"
+
+    r = client.post("/api/admission/operators", headers=KEY, json={
+        "operator_id": "op-2", "allowed_accounts": ["OTHER-ACCT"],
+        "created_by": "root"})
+    assert r.status_code == 200, r.text
+    r = client.post("/api/admission/placement-attempts/resolve",
+                    headers=KEY, json={
+                        "fingerprint": fp, "operator": "op-2",
+                        "resolution": "mallory attests"})
+    assert r.status_code == 403, r.text
+    assert r.json()["detail"]["reason"] == "OPERATOR_UNAUTHORIZED"
+
+    r = client.post("/api/admission/placement-attempts/resolve",
+                    headers=KEY, json={
+                        "fingerprint": fp, "operator": "op-1",
+                        "resolution": "verified: no order"})
+    assert r.status_code == 200, r.text
+    r = client.post("/api/admission/placement-attempts/resolve",
+                    headers=KEY, json={
+                        "fingerprint": fp, "operator": "op-1",
+                        "resolution": "verified again"})
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"]["reason"] == "ALREADY_RESOLVED"
+
+
+def test_journal_is_fingerprint_scoped_not_account_scoped(mounted):
+    client, broker, monkeypatch, _conn = mounted
+    _setup(client)
+
+    import routes.public_brokerage as pb
+
+    async def _fail(**_kw):
+        raise RuntimeError("broker down")
+
+    broker.place_order = AsyncMock(side_effect=_fail)
+    monkeypatch.setattr(pb, "_get_broker", AsyncMock(return_value=broker))
+
+    r1 = client.post("/api/public/order", headers=KEY,
+                     json=_order(approval_id=_create_approval(client),
+                                 operator="op-1"))
+    assert r1.status_code == 502, r1.text
+
+    # A different exact order (quantity 2 -> different fingerprint) is a
+    # different placement decision: the journal must not become an
+    # account-wide block.
+    other = _create_approval(client, quantity=2)
+    broker.place_order = AsyncMock(return_value=MagicMock(
+        status="PENDING", raw={}, order_id="oid-su-3", symbol="AAPL",
+        side="BUY", order_type="MARKET", quantity=2, price=None,
+        created_at="2026-10-06T00:00:00Z"))
+    r2 = client.post("/api/public/order", headers=KEY,
+                     json=_order(approval_id=other, operator="op-1",
+                                 quantity=2))
+    assert r2.status_code == 200, r2.text
+    assert broker.place_order.await_count == 1
+
+
+def test_journal_store_failure_disclosed_not_silent(mounted):
+    client, broker, monkeypatch, conn = mounted
+    _setup(client)
+    approval_id = _create_approval(client)
+
+    import routes.public_brokerage as pb
+
+    async def _fail(**_kw):
+        raise RuntimeError("broker down")
+
+    broker.place_order = AsyncMock(side_effect=_fail)
+    monkeypatch.setattr(pb, "_get_broker", AsyncMock(return_value=broker))
+
+    class _FailingJournalConn:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def execute(self, sql, *args, **kwargs):
+            if "INSERT INTO placement_attempts" in sql:
+                raise RuntimeError("journal store broke")
+            return self._inner.execute(sql, *args, **kwargs)
+
+    monkeypatch.setattr(pb, "_admission_store_conn",
+                        lambda: _FailingJournalConn(conn))
+
+    r = client.post("/api/public/order", headers=KEY,
+                    json=_order(approval_id=approval_id, operator="op-1"))
+    assert r.status_code == 502, r.text
+    assert r.json()["detail"]["attempt_journal"] == "APPROVAL_STORE_UNAVAILABLE"
+    # Disclosed degradation (not endorsed): with no journal row there is
+    # nothing to gate on, so a later resubmission is unguarded — the 502
+    # detail above is the operator's only guard and demands manual
+    # reconciliation before any retry.
+    monkeypatch.setattr(pb, "_admission_store_conn", lambda: conn)
+    broker.place_order = AsyncMock(return_value=MagicMock(
+        status="PENDING", raw={}, order_id="oid-su-4", symbol="AAPL",
+        side="BUY", order_type="MARKET", quantity=1, price=None,
+        created_at="2026-10-06T00:00:00Z"))
+    r2 = client.post("/api/public/order", headers=KEY,
+                     json=_order(approval_id=_create_approval(client),
+                                 operator="op-1"))
+    assert r2.status_code == 200, r2.text

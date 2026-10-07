@@ -421,6 +421,7 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
         instrument_type:    EQUITY, OPTION, CRYPTO, BOND
         equity_market_session: optional for EQUITY
     """
+    consumed_fp = None
     try:
         symbol = request.get("symbol", "")
         side = request.get("side", "BUY")
@@ -504,14 +505,14 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
         # operator re-approves with a fresh row; never refunded).
         from services import execution_admission as _adm
 
+        fp = _adm.order_fingerprint(
+            getattr(account, "account_id", ""), symbol, side, quantity,
+            limit_price, stop_price=stop_price, time_in_force=time_in_force,
+            order_type=order_type, instrument_type=instrument_type,
+            equity_market_session=equity_market_session)
         consumed = _adm.consume_order_approval(
             _admission_store_conn(), request.get("approval_id"),
-            fingerprint=_adm.order_fingerprint(
-                getattr(account, "account_id", ""), symbol, side, quantity,
-                limit_price, stop_price=stop_price, time_in_force=time_in_force,
-                order_type=order_type, instrument_type=instrument_type,
-                equity_market_session=equity_market_session),
-            operator=operator)
+            fingerprint=fp, operator=operator)
         if not consumed.get("ok"):
             raise HTTPException(status_code=403, detail={
                 "error": consumed.get("reason", "APPROVAL_CONSUME_FAILED"),
@@ -520,6 +521,7 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
                            "is unavailable); refusing placement.",
                 "detail": consumed.get("detail"),
             })
+        consumed_fp = fp
 
         order = await broker.place_order(
             account_id=account.account_id,
@@ -561,10 +563,35 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
         raise
     except Exception as exc:
         logging.getLogger(__name__).warning("Public.com place_order failed: %s", exc)
-        raise HTTPException(status_code=502, detail={
+        detail = {
             "error": "api_error",
             "message": f"Public.com API error: {exc}",
-        }) from exc
+        }
+        if consumed_fp is not None:
+            # S17b: the approval was consumed but placement failed with
+            # unknown outcome (ambiguous ACK — the broker may have placed
+            # despite raising). Journal the attempt so any resubmission of
+            # this exact fingerprint refuses PLACEMENT_OUTCOME_UNKNOWN
+            # until an operator reconciles broker state and resolves it.
+            # A journal failure is disclosed, never silent: resubmission
+            # is then unguarded and must be reconciled manually.
+            journaled = _adm.record_placement_attempt(
+                _admission_store_conn(), consumed_fp,
+                request.get("approval_id"),
+                getattr(account, "account_id", ""),
+                f"{type(exc).__name__}: {exc}")
+            if journaled.get("ok"):
+                detail["placement_outcome"] = (
+                    "UNKNOWN — resubmission of this exact order refuses "
+                    "until reconciled and resolved")
+            else:
+                detail["attempt_journal"] = journaled.get(
+                    "reason", "STORE_UNAVAILABLE")
+                detail["attempt_journal_note"] = (
+                    "the failed attempt could not be journaled; resubmission "
+                    "is unguarded — reconcile broker state manually before "
+                    "any retry")
+        raise HTTPException(status_code=502, detail=detail) from exc
 
 
 # ---------------------------------------------------------------------------

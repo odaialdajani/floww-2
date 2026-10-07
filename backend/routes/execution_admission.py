@@ -93,6 +93,40 @@ async def revoke_approval(
     return out
 
 
+@router.post("/placement-attempts/resolve")
+async def resolve_placement_attempt(
+    body: dict[str, Any], _: bool = Depends(require_api_key),
+) -> dict[str, Any]:
+    """Record operator-attested reconciliation of an unknown-outcome attempt.
+
+    Body: fingerprint, operator, resolution (required note stating what
+    broker-state verification showed — e.g. "no order present 13:00-13:05"
+    or "existing order oid-9 adopted; reconcile it, do not resubmit").
+    Attestation, not automatic: without broker read-back the claim is the
+    operator's verified statement, persisted with identity and time. The
+    resolver must be registered AND allowed for the attempt's account.
+    """
+    from services import execution_admission as adm
+
+    out = adm.resolve_placement_attempt(
+        _store_conn(), body.get("fingerprint"), body.get("operator"),
+        body.get("resolution"))
+    if not out.get("ok"):
+        reason = out.get("reason", "")
+        if reason == "NO_SUCH_ATTEMPT":
+            status = 404
+        elif reason == "ALREADY_RESOLVED":
+            status = 409
+        elif reason in ("OPERATOR_UNKNOWN", "OPERATOR_UNAUTHORIZED"):
+            status = 403
+        elif reason == "BAD_CONTRACT":
+            status = 422
+        else:
+            status = 503
+        raise HTTPException(status_code=status, detail=out)
+    return out
+
+
 @router.post("/operators")
 async def register_operator(
     body: dict[str, Any], _: bool = Depends(require_api_key),

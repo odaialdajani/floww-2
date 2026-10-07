@@ -76,6 +76,8 @@ __all__ = [
     "create_order_approval",
     "verify_order_approval",
     "consume_order_approval",
+    "record_placement_attempt",
+    "resolve_placement_attempt",
 ]
 
 
@@ -1275,6 +1277,21 @@ def verify_order_approval(
                                 rec.get("symbol") or symbol)
     if gate is not None:
         return gate
+    try:
+        attempt = conn.execute(
+            "SELECT attempted_at, approval_id FROM placement_attempts_v1 "
+            "WHERE fingerprint = ? AND resolved_at IS NULL",
+            [want]).fetchone()
+    except Exception:
+        return {"ok": False, "reason": "APPROVAL_STORE_UNAVAILABLE"}
+    if attempt is not None:
+        return {"ok": False, "reason": "PLACEMENT_OUTCOME_UNKNOWN",
+                "detail": {"attempted_at": str(attempt[0]),
+                           "approval_id": str(attempt[1]),
+                           "guidance": "a prior placement with this exact "
+                           "fingerprint failed with unknown outcome; "
+                           "reconcile broker state, then resolve via POST "
+                           "/api/admission/placement-attempts/resolve"}}
     return {"ok": True, "approval_id": approval_id}
 
 
@@ -1325,3 +1342,109 @@ def consume_order_approval(
     except Exception:
         return {"ok": False, "reason": "APPROVAL_STORE_UNAVAILABLE"}
     return {"ok": True, "approval_id": approval_id, "used_at": moment}
+
+
+def record_placement_attempt(
+    conn: Any, fingerprint: Any, approval_id: Any, account_id: Any,
+    error: Any,
+) -> dict[str, Any]:
+    """Journal a broker placement that FAILED after approval consumption (S17b).
+
+    The burned approval alone cannot stop a retry: the operator creates a
+    FRESH approval for the same intent and the route would place again —
+    but the first call may have placed despite raising (ambiguous ACK),
+    which would make two economic orders. The journal makes the unknown
+    outcome explicit: `verify_order_approval` refuses the same fingerprint
+    with PLACEMENT_OUTCOME_UNKNOWN until an operator reconciles broker
+    state and resolves the attempt. Existing unresolved rows are never
+    clobbered (fail-closed audit); a resolved row starts a new cycle.
+    Never raises.
+    """
+    if conn is None:
+        return {"ok": False, "reason": "STORE_UNAVAILABLE"}
+    fp = str(fingerprint or "").strip()
+    if not fp:
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": "fingerprint required"}
+    moment = _now_iso()
+    try:
+        from services import public_execution_lifecycle as lc
+
+        with _APPROVAL_STORE_LOCK:
+            lc.ensure_lifecycle_tables(conn)
+            row = conn.execute(
+                "SELECT resolved_at FROM placement_attempts_v1 "
+                "WHERE fingerprint = ?", [fp]).fetchone()
+            if row is None:
+                conn.execute(
+                    "INSERT INTO placement_attempts_v1 (fingerprint, "
+                    "account_id, approval_id, attempted_at, error) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    [fp, str(account_id or ""), str(approval_id or ""),
+                     moment, str(error or "")[:500]])
+            elif row[0]:
+                conn.execute(
+                    "UPDATE placement_attempts_v1 SET approval_id = ?, "
+                    "attempted_at = ?, error = ?, resolved_at = NULL, "
+                    "resolved_by = NULL, resolution_note = NULL "
+                    "WHERE fingerprint = ?",
+                    [str(approval_id or ""), moment,
+                     str(error or "")[:500], fp])
+            # else: an unresolved attempt is already journaled — keep the
+            # original row (first failure wins the audit trail).
+    except Exception:
+        return {"ok": False, "reason": "APPROVAL_STORE_UNAVAILABLE"}
+    return {"ok": True, "fingerprint": fp, "attempted_at": moment}
+
+
+def resolve_placement_attempt(
+    conn: Any, fingerprint: Any, operator: Any, resolution: Any,
+) -> dict[str, Any]:
+    """Record operator-attested reconciliation of an unknown-outcome attempt.
+
+    The operator states what broker-state verification showed (e.g. "no
+    order present for the window" or "existing order oid-... adopted —
+    reconcile it, do not resubmit"). Attestation because this service has
+    no broker read-back: the claim is the operator's verified statement,
+    persisted with identity and time, never an automatic clear (an
+    automatic clear would reopen the ambiguous-ACK hole). The presenter
+    must be registered AND allowed for the attempt's account. Never raises.
+    """
+    if conn is None:
+        return {"ok": False, "reason": "STORE_UNAVAILABLE"}
+    fp = str(fingerprint or "").strip()
+    if not fp:
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": "fingerprint required"}
+    note = str(resolution or "").strip()
+    if not note:
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": "resolution_note required: state what broker-state "
+                          "verification showed"}
+    try:
+        from services import operator_registry as operators
+        from services import public_execution_lifecycle as lc
+
+        with _APPROVAL_STORE_LOCK:
+            lc.ensure_lifecycle_tables(conn)
+            row = conn.execute(
+                "SELECT account_id, resolved_at FROM placement_attempts_v1 "
+                "WHERE fingerprint = ?", [fp]).fetchone()
+            if row is None:
+                return {"ok": False, "reason": "NO_SUCH_ATTEMPT"}
+            if row[1]:
+                return {"ok": False, "reason": "ALREADY_RESOLVED"}
+            auth = operators.authorize_operator(
+                conn, str(operator or "").strip(), str(row[0] or "").strip())
+            if not auth.get("ok"):
+                return {"ok": False,
+                        "reason": auth.get("reason", "OPERATOR_UNKNOWN"),
+                        "detail": "resolver is not authorized for this account"}
+            conn.execute(
+                "UPDATE placement_attempts_v1 SET resolved_at = ?, "
+                "resolved_by = ?, resolution_note = ? "
+                "WHERE fingerprint = ? AND resolved_at IS NULL",
+                [_now_iso(), str(operator or "").strip(), note[:500], fp])
+    except Exception:
+        return {"ok": False, "reason": "APPROVAL_STORE_UNAVAILABLE"}
+    return {"ok": True, "fingerprint": fp}
