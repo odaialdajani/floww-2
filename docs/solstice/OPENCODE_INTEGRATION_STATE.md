@@ -764,3 +764,21 @@ read in full. Findings applied:
   takeover/session-change per its own guards. Sleeps when blocked;
   bounded stops (no-progress/completion/failure). Logs /tmp/floww-
   controller-logs (outside deliverables).
+
+## 2026-10-07 away-loop hardened (user walking away: loop until plans done)
+
+- Controller audit before arming: WAITING sleep does NOT consume the
+  3-stop budget (continue skips the counter); peer-head advance flips
+  dependency=='Cline' items to READY. Found + fixed: T03 lacked the
+  dependency field, so the wake-up could never fire for it — set
+  dependency=Cline with explicit blocker. Queue re-validated with the
+  controller's own loader (37 tasks OK, 0 actionable).
+- Loop behavior while away: sleeps 60s cycles, no model/test calls while
+  blocked; on new Cline head flips T03 READY and works it (PR115
+  merged-head re-verify per §28 rule); bounded 72h/100 turns; stops on
+  no-progress/completion/failure/takeover/cancellation. Cannot
+  self-accept, merge, activate, trade, spend. Waiter PID 77169 fires
+  ~7 min after session idle; aborts safely on interjection.
+- Deliberately NOT queued as loop work: Phase-6 backlog (unpromoted per
+  GSD process), Triad desk follow-ups beyond PR115 (await merge),
+  NAV inputs (external), C-line items (other lane).
