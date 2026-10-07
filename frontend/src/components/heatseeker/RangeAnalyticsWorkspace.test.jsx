@@ -209,3 +209,41 @@ test('review trade opens a read-only summary and never touches order surfaces',a
  fireEvent.click(screen.getByRole('button',{name:'Close trade review'}));
  expect(screen.queryByRole('region',{name:'Trade review'})).not.toBeInTheDocument();
 });
+test('compare toggle renders both bases side by side and exits cleanly without fetching',async()=>{
+ global.fetch.mockImplementation(async url=>response(String(url).includes('/range-records/')?replay(complete):index()));
+ render(<><RangeAnalyticsWorkspace ticker="SPY"/><Context/></>);
+ await loadStored();fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:complete.record_id}});
+ await screen.findByRole('grid',{name:'Raw OI GEX · strike by expiry'});
+ const calls=global.fetch.mock.calls.length;
+ fireEvent.click(screen.getByRole('button',{name:'Compare Raw vs Adjusted'}));
+ expect(screen.getByRole('grid',{name:/compare raw/})).toBeInTheDocument();
+ expect(screen.getByRole('grid',{name:/compare adjusted/})).toBeInTheDocument();
+ expect(global.fetch.mock.calls.length).toBe(calls);
+ fireEvent.click(screen.getByRole('button',{name:'Exit compare'}));
+ expect(screen.queryByRole('grid',{name:/compare/})).not.toBeInTheDocument();
+ expect(screen.getByRole('grid',{name:'Raw OI GEX · strike by expiry'})).toBeInTheDocument();
+});
+test('right-pane selection syncs both panes and shows the derived delta honestly',async()=>{
+ const {fmtK}=require('./SkylitHeatmapGrid');
+ global.fetch.mockImplementation(async url=>response(String(url).includes('/range-records/')?replay(complete):index()));
+ render(<><RangeAnalyticsWorkspace ticker="SPY"/><Context/></>);
+ await loadStored();fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:complete.record_id}});
+ await screen.findByRole('grid',{name:'Raw OI GEX · strike by expiry'});
+ fireEvent.click(screen.getByRole('button',{name:'Compare Raw vs Adjusted'}));
+ const right=screen.getAllByRole('button',{name:/^590 · 2026-10-26/})[1];
+ fireEvent.click(right);
+ expect(JSON.parse(screen.getByTestId('range-context').textContent).selectedStrike).toBe(590);
+ const raw=complete.grids.raw_oi.cells['2026-10-26']['590'],adj=complete.grids.delta_weighted.cells['2026-10-26']['590'],d=adj-raw;
+ expect(screen.getByText(`Raw ${fmtK(raw)} · Adjusted ${fmtK(adj)} · display-derived delta ${d<0?'-':''}${fmtK(Math.abs(d))} (not a metric).`)).toBeInTheDocument();
+});
+test('metric select hides during compare and returns with its value preserved',async()=>{
+ global.fetch.mockImplementation(async url=>response(String(url).includes('/range-records/')?replay(complete):index()));
+ render(<><RangeAnalyticsWorkspace ticker="SPY"/><Context/></>);
+ await loadStored();fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:complete.record_id}});
+ await screen.findByRole('grid');
+ fireEvent.click(screen.getByRole('button',{name:'Compare Raw vs Adjusted'}));
+ expect(screen.queryByLabelText('Range metric')).not.toBeInTheDocument();
+ expect(screen.getByText(/Comparing Raw OI GEX \(left\) vs Delta-weighted/)).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Exit compare'}));
+ expect(screen.getByLabelText('Range metric')).toHaveValue('raw_oi');
+});

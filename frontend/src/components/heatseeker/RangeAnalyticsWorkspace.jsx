@@ -15,8 +15,9 @@ export default function RangeAnalyticsWorkspace({ticker,onReplayModeChange}) {
  const [selection,setSelection]=useState(null),[expanded,setExpanded]=useState(false),[follow,setFollow]=useState(false);
  const [replayOpen,setReplayOpen]=useState(false),[replayMode,setReplayMode]=useState(false);
  const [copyStatus,setCopyStatus]=useState(null),[approach,setApproach]=useState('awaiting'),[reviewOpen,setReviewOpen]=useState(false);
+ const [compare,setCompare]=useState(false);
  const epoch=useRef(0),controller=useRef(null),cellRefs=useRef(new Map());
- const clear=()=>{epoch.current++;controller.current?.abort();setResult(null);setSelection(null);setLoading(false);setReplayMode(false);};
+ const clear=()=>{epoch.current++;controller.current?.abort();setResult(null);setSelection(null);setLoading(false);setReplayMode(false);setCompare(false);};
  const acceptStored=record=>{epoch.current++;controller.current?.abort();setResult(record?{envelope:record}:null);setSelection(null);setLoading(false);if(record)setReplayMode(true);};
  const validWindow=minDte.trim() && maxDte.trim() && Number.isInteger(Number(minDte)) && Number.isInteger(Number(maxDte)) && Number(minDte)>=0 && Number(maxDte)<=365 && Number(minDte)<=Number(maxDte);
  useEffect(()=>{
@@ -61,20 +62,43 @@ export default function RangeAnalyticsWorkspace({ticker,onReplayModeChange}) {
   return selectedRaw>0?'Positive raw: approach from below → review rejection. Owning price confirmation is required.':'Negative raw: approach from below → review squeeze. Owning price confirmation is required.';
  };
  const rows=envelope?.axes.strike_keys || [],expiries=envelope?.axes.expiries || [];
- const values=section && section.status!=='unavailable'?Object.values(section.cells).flatMap(row=>Object.values(row)).filter(v=>typeof v==='number'):[];
- const extent=Math.max(1,...values.map(Math.abs));
- const focusCell=(event,row,column)=>{
+ const sectionExtent=sec=>{const vs=sec && sec.status!=='unavailable'?Object.values(sec.cells).flatMap(row=>Object.values(row)).filter(v=>typeof v==='number'):[];return Math.max(1,...vs.map(Math.abs));};
+ const focusCell=(event,row,column,prefix='')=>{
   const movement={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]}[event.key];
   if(!movement)return;
-  const target=cellRefs.current.get(`${row+movement[0]}:${column+movement[1]}`);
+  const target=cellRefs.current.get(`${prefix}${row+movement[0]}:${column+movement[1]}`);
   if(target){event.preventDefault();target.focus();}
  };
- const followSpot=()=>{
+ const renderGrid=(sec,label,prefix)=>{
+  if(!sec||sec.status==='unavailable')return <p role="status">{label} unavailable · {sec?.reason || 'NO_COVERAGE'}</p>;
+  const ext=sectionExtent(sec);
+  return <table role="grid" aria-label={`${label} · strike by expiry`} className="range-matrix">
+   <thead><tr><th scope="col">Strike USD</th>{expiries.map(row=><th scope="col" key={row.expiry}>{row.expiry}<small>{row.dte} DTE</small></th>)}</tr></thead>
+   <tbody>{rows.map((strike,r)=><tr key={strike}><th scope="row">{strike}</th>{expiries.map(({expiry},c)=>{
+    const value=sec.cells[expiry][strike],color=value===null?null:cellPalette((value/ext+1)/2);
+    const selected=selection?.strike===strike && selection.expiry===expiry;
+    return <td key={expiry} role="gridcell" aria-selected={selected} className={selected?'range-selected':''}>
+     <button type="button" ref={node=>{if(node)cellRefs.current.set(`${prefix}${r}:${c}`,node);else cellRefs.current.delete(`${prefix}${r}:${c}`);}}
+      aria-label={`${strike} · ${expiry} · ${value===null?'Unavailable':value+' USD per 1% spot move'}`}
+      style={color?{background:color.background,color:color.foreground}:undefined}
+      onKeyDown={event=>focusCell(event,r,c,prefix)} onClick={()=>setSelection(value===null?null:{strike,expiry})}>
+      {value===null?'Unavailable':fmtK(value)}
+     </button></td>;
+   })}</tr>)}</tbody>
+  </table>;
+ };
+ const followSpot=(prefix='')=>{
   setFollow(value=>!value);
   const spot=envelope?.clocks.spot.price;
   if(typeof spot!=='number' || !rows.length)return;
   const nearest=rows.reduce((a,b)=>Math.abs(Number(a)-spot)<=Math.abs(Number(b)-spot)?a:b);
-  cellRefs.current.get(`${rows.indexOf(nearest)}:0`)?.scrollIntoView?.({block:'center',inline:'nearest'});
+  cellRefs.current.get(`${prefix}${rows.indexOf(nearest)}:0`)?.scrollIntoView?.({block:'center',inline:'nearest'});
+ };
+ const compareDelta=()=>{
+  if(!compare||!selection||!envelope)return null;
+  const l=envelope.grids.raw_oi?.cells?.[selection.expiry]?.[selection.strike],r=envelope.grids.delta_weighted?.cells?.[selection.expiry]?.[selection.strike];
+  if(typeof l!=='number'||typeof r!=='number')return 'Comparison unavailable for this cell (missing side).';
+  const d=r-l;return `Raw ${fmtK(l)} · Adjusted ${fmtK(r)} · display-derived delta ${d<0?'-':''}${fmtK(Math.abs(d))} (not a metric).`;
  };
  const selectedRaw=selection?envelope?.grids.raw_oi.cells[selection.expiry]?.[selection.strike]:null;
  return <section className={`range-workspace${expanded?' range-workspace-expanded':''}`} aria-label="Solstice analytical range">
@@ -83,8 +107,10 @@ export default function RangeAnalyticsWorkspace({ticker,onReplayModeChange}) {
    <label>Minimum DTE<input aria-label="Minimum DTE" type="number" min="0" max="365" value={minDte} onChange={e=>queryChange(setMinDte,e.target.value)}/></label>
    <label>Maximum DTE<input aria-label="Maximum DTE" type="number" min="0" max="365" value={maxDte} onChange={e=>queryChange(setMaxDte,e.target.value)}/></label>
    <button type="button" onClick={read} disabled={loading || replayOpen} title={replayOpen?'Exit stored replay with Live before requesting a current analytical range':undefined}>{loading?'Loading range…':'Load analytical range'}</button>
-   <label>Metric<select aria-label="Range metric" value={metric} onChange={e=>{setSelection(null);setMetric(e.target.value);}}>{Object.entries(RANGE_METRICS).map(([key,value])=><option key={key} value={key}>{value.label}</option>)}</select></label>
-   <button type="button" disabled={!envelope} aria-pressed={follow} onClick={followSpot}>Follow</button>
+    {!compare && <label>Metric<select aria-label="Range metric" value={metric} onChange={e=>{setSelection(null);setMetric(e.target.value);}}>{Object.entries(RANGE_METRICS).map(([key,value])=><option key={key} value={key}>{value.label}</option>)}</select></label>}
+    {compare && <p className="range-note">Comparing Raw OI GEX (left) vs Delta-weighted OI GEX (right).</p>}
+    <button type="button" disabled={!envelope} aria-pressed={compare} title="Side-by-side raw vs adjusted matrices for the same selection" onClick={()=>setCompare(value=>!value)}>{compare?'Exit compare':'Compare Raw vs Adjusted'}</button>
+    <button type="button" disabled={!envelope} aria-pressed={follow} onClick={()=>followSpot(compare?'L:':'')}>Follow</button>
    <button type="button" disabled={!envelope} aria-pressed={expanded} onClick={()=>setExpanded(value=>!value)}>{expanded?'Return layout':'Expand range'}</button>
    <button type="button" disabled={!validWindow} aria-pressed={replayOpen} title={!validWindow?'WINDOW_OUT_OF_RANGE: choose an integer owning window first':'Stored rga1 research frames; full integrity/production qualification remain pending'} onClick={()=>{clear();setReplayOpen(value=>!value);}}>{replayOpen?'Close range replay':'Range replay'}</button>
   </header>
@@ -107,25 +133,17 @@ export default function RangeAnalyticsWorkspace({ticker,onReplayModeChange}) {
    </details>
    <div className="range-desk">
     <div className="range-matrix-scroll">
-     {section.status==='unavailable'?<p role="status">{RANGE_METRICS[metric].label} unavailable · {section.reason || 'NO_COVERAGE'}</p>:
-      <table role="grid" aria-label={`${RANGE_METRICS[metric].label} · strike by expiry`} className="range-matrix">
-       <thead><tr><th scope="col">Strike USD</th>{expiries.map(row=><th scope="col" key={row.expiry}>{row.expiry}<small>{row.dte} DTE</small></th>)}</tr></thead>
-       <tbody>{rows.map((strike,r)=><tr key={strike}><th scope="row">{strike}</th>{expiries.map(({expiry},c)=>{
-        const value=section.cells[expiry][strike],color=value===null?null:cellPalette((value/extent+1)/2);
-        const selected=selection?.strike===strike && selection.expiry===expiry;
-        return <td key={expiry} role="gridcell" aria-selected={selected} className={selected?'range-selected':''}>
-         <button type="button" ref={node=>{if(node)cellRefs.current.set(`${r}:${c}`,node);else cellRefs.current.delete(`${r}:${c}`);}}
-          aria-label={`${strike} · ${expiry} · ${value===null?'Unavailable':value+' USD per 1% spot move'}`}
-          style={color?{background:color.background,color:color.foreground}:undefined}
-          onKeyDown={event=>focusCell(event,r,c)} onClick={()=>setSelection(value===null?null:{strike,expiry})}>
-          {value===null?'Unavailable':fmtK(value)}
-         </button></td>;
-       })}</tr>)}</tbody>
-      </table>}
+      {compare && envelope
+       ? <div className="range-compare">
+          <div className="range-matrix-scroll">{renderGrid(envelope.grids.raw_oi,'Raw OI GEX · strike by expiry · compare raw','L:')}</div>
+          <div className="range-matrix-scroll">{renderGrid(envelope.grids.delta_weighted,'Delta-weighted OI GEX · strike by expiry · compare adjusted','R:')}</div>
+         </div>
+       : renderGrid(section,RANGE_METRICS[metric].label,'')}
     </div>
     <aside className="range-inspector" aria-label="Range selection review">
      <h3>Selected strike</h3>
-     <p>{selection?`${selection.strike} USD · ${selection.expiry}`:'Select an available cell'}</p>
+      <p>{selection?`${selection.strike} USD · ${selection.expiry}`:'Select an available cell'}</p>
+      {compareDelta() && <p>{compareDelta()}</p>}
      <p>Wall bounds/ID unavailable in this range envelope; a cell is not a classified structural wall.</p>
       <h3>Evidence / scenario</h3>
       <label>Price approach<select aria-label="Price approach" value={approach} onChange={e=>setApproach(e.target.value)}>
