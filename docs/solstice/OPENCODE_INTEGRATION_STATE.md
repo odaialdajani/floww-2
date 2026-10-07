@@ -599,3 +599,20 @@ read in full. Findings applied:
   (s17e log hashed); review-request §B at the 5-commit tip. Closure
   checker: 0 errors, 23 accepted, 27 pending, HOLD. PR109 CI re-running
   on the tip (run 37565581459).
+
+## 2026-10-07 commit-history verification (user: check all previous commits)
+
+- PR109 branch: exactly 5 authored commits on main (28d8b9c6, ed84ce46,
+  88374992, cace2fa3, b26b95b6); cumulative diff 5 files, +1009/-4, no
+  stray files; pushed tip byte-identical to the verified commit.
+- PR108 branch: byte-identical to verified b103b08c; 2-file delta intact.
+- Integration lane: my 8 checkpoint commits touch ONLY
+  docs/solstice/OPENCODE_INTEGRATION_STATE.md; pre-existing dirty files
+  untouched.
+- Ledger evidence audit (beyond the checker's AT_SHA scope): 39/39
+  referenced log files present with matching sha256, 0 problems.
+- PR109 body refreshed to cover S17c/S17e with exact current numbers
+  (14/14, 122 s18, 843 slice at cace2fa3 + test-only commits, 103
+  brokerage). Closure checker: 0 errors, 23 accepted, 27 pending, HOLD.
+- Remote steady: main 1fc5582c, cline/r18-analytics 6342afdf, PR108 +
+  PR109 OPEN. PR109 CI on the 5-commit tip pending at record time.
