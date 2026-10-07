@@ -680,3 +680,27 @@ read in full. Findings applied:
 - Forward order recorded: merges -> merged-head re-verify -> Cline
   signoff -> C10 -> NAV inputs in commissioning order; unpromoted scope
   explicitly nobody's queue until promoted + owned.
+
+## 2026-10-07 fast-lane merges + duplicate-PR resolution (user: no duplicates, keep going)
+
+- Cline merged PR108/109/110/111 in sequence (afb0c07a, ecff52ba, a74cab7a,
+  edaa1cc8 = current main) under Nav's fast-lane delegation, then bound
+  25 ledger items (I16/I17/T01 + the I/H/S lanes) at edaa1cc8 with a
+  substantive merged-head battery (s18 122, r18+C10 93, agent 69,
+  full+budget 858, API 383, ruff, 4 own adversarial probes re-run,
+  frontend 187/241). Closure: 0 errors, 51 accepted, 1 pending (I18),
+  7 holds. Queue synced (17 items to ACCEPTED).
+- Cline's PR109 review read in full (references/cline-review-pr109-
+  b26b95b6.md): genuinely adversarial beyond my suite (async
+  interleavings, cross-approval sequential doctrine, S02xS17 authority,
+  completion-journal failure cycle) + 2 disclosed non-blocking notes.
+  Bound I17 stands reviewed.
+- DUPLICATE found and resolved: Cline PR112 (transport + complete/
+  partial copies + checkpoint) vs my PR113 (transport only) — transport
+  content verified identical modulo regen stamps; fixture copies match
+  docs seal. Closed PR113 superseded (branch kept as record, no force
+  operations). I18 vehicle is now PR112 (Cline merges); I16 noted
+  doubly-overtaken. No competing publications remain.
+- PR114 (compare slice) open on current main; main CI on edaa1cc8:
+  lint+frontend green, backend green post-merge (run 37570229246
+  completed success after the merge sequence).
