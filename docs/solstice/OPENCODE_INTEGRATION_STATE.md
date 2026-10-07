@@ -739,3 +739,28 @@ read in full. Findings applied:
 - Old PIDs (81695 backend, 83032 proxy) retired after replacement;
   pre-existing :3000 proxy + :8000 backend still untouched.
 - Review at http://127.0.0.1:3001/ (refresh the tab).
+
+## 2026-10-07 away-loop setup (user: loop until all 4 plans done, walking away)
+
+- T02 ID collision resolved: Cline concurrently overwrote my Triad-desk
+  T02 with their compare-slice acceptance (both invented T02; substantive
+  content, kept). Triad desk re-tracked as T03 PENDING (PR115 open).
+  Rule recorded in review-request §F: re-read ledger immediately before
+  every write; lowest free T-number at write time.
+- I18 bound ACCEPTED_AT_SHA=3e532c51 (ownership follows authorship ->
+  Cline; OpenCode reviewer): transport records byte-identical to sealed
+  fixtures, digests match, clocks distinct, ordering 190/190, r18+ 93.
+  PR113 closed superseded by PR112 (verified identical modulo stamps).
+- Controller-validity repairs (queue now passes the controller's own
+  load_queue): Phase-6 items moved to runtime/phase6-backlog.json
+  (backlog, not active queue — keeps acceptance closure scoped);
+  Cline-owned C17/I18 removed from OpenCode queue; statuses synced to
+  the controller set (36 ACCEPTED_AT_SHA, 1 REVIEW_PENDING=T03).
+  Closure: 0 errors, 53 accepted, pending C17+T03, 7 holds.
+- PR115 CI: frontend+ruff green, backend running. T03 awaits Cline
+  review+merge; NOT self-accepted.
+- Away-loop: background waiter launches continue-opencode.py
+  (ses_ef877c04, 72h/100 turns) after idleness; it self-aborts on
+  takeover/session-change per its own guards. Sleeps when blocked;
+  bounded stops (no-progress/completion/failure). Logs /tmp/floww-
+  controller-logs (outside deliverables).
