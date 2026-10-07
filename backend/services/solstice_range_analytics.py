@@ -686,12 +686,43 @@ def build_range_envelope(
             row["n_call"] += 1
         elif c.get("type") == "put":
             row["n_put"] += 1
+    # C10 (per-contract identity restitution): the owning record persists the
+    # deterministic PER-CONTRACT identity population — OSI root, series,
+    # expiry, strike key (the axes' canonical encoding), right and the
+    # canonically resolved multiplier — so replay restitutes the exact
+    # captured contract identities byte-identically instead of only an
+    # aggregate digest of them. REFERENCE IDENTITY ONLY: quotes stay inside
+    # contracts_digest (never replayable tradable quotes), and drafting stays
+    # RANGE_RECORD_REFERENCE_ONLY. resolve_multiplier is the SAME canonical
+    # resolver the kernels use (R10-02): explicit invalid rests null with its
+    # typed provenance, never a fabricated 100; the absent-key case carries
+    # the documented DEFAULT_STANDARD provenance honestly.
+    from domain.exposure_metrics import resolve_multiplier
+    contract_rows: list[dict[str, Any]] = []
+    for c in contracts:
+        mult, mult_reason = resolve_multiplier(c)
+        contract_rows.append({
+            "osi": c.get("osi"),
+            "series": c.get("series"),
+            "expiry": c.get("expiry"),
+            "strike_key": _strike_key(c.get("strike")),
+            "right": c.get("type"),
+            "multiplier": mult,
+            "multiplier_provenance": (mult_reason if mult_reason
+                                      else "EXPLICIT" if mult is not None
+                                      else "MULTIPLIER_UNRESOLVED"),
+        })
+    contract_rows.sort(key=lambda r: (
+        str(r.get("expiry") or ""), str(r.get("strike_key") or ""),
+        str(r.get("right") or ""), str(r.get("osi") or "")))
     grounding = {
         "resolver": "range-resolver.v1",
         "record_query_identity": {"symbol": symbol, "min_dte": min_dte,
                                   "max_dte": max_dte, "as_of_ny": asof.isoformat()},
         "contract_population": per_expiry,
+        "contract_rows": contract_rows,
         "contracts_digest": contracts_digest,
+
         # Honest capability: drafting an executable contract needs OSI + live
         # quotes; this record carries reference identity only.
         "contract_drafting": {"admitted": False,

@@ -1,6 +1,6 @@
 {
  "asof_date": "2026-10-05",
- "digest": "f2600391594368d7c17bd2c5380c947b35c4b93fe72837c11c27a0ac39c05fce",
+ "digest": "8e6217fe33a4978bede91bf07a5f7a531d7af96281fdbefc6d9d2e3cb4dd8177",
  "envelope": {
   "axes": {
    "expiries": [
@@ -40,7 +40,7 @@
     "source": "public-mid"
    }
   },
-  "content_digest": "f2600391594368d7c17bd2c5380c947b35c4b93fe72837c11c27a0ac39c05fce",
+  "content_digest": "8e6217fe33a4978bede91bf07a5f7a531d7af96281fdbefc6d9d2e3cb4dd8177",
   "content_schema": "rga-content.v3",
   "coverage": {
    "attempt_cap": 3,
@@ -294,6 +294,116 @@
      "n_put": 2
     }
    },
+   "contract_rows": [
+    {
+     "expiry": "2026-10-26",
+     "multiplier": 100.0,
+     "multiplier_provenance": "EXPLICIT",
+     "osi": "FAKE-2026-10-26-590-CALL",
+     "right": "call",
+     "series": "EQUITY",
+     "strike_key": "590"
+    },
+    {
+     "expiry": "2026-10-26",
+     "multiplier": 100.0,
+     "multiplier_provenance": "EXPLICIT",
+     "osi": "FAKE-2026-10-26-590-PUT",
+     "right": "put",
+     "series": "EQUITY",
+     "strike_key": "590"
+    },
+    {
+     "expiry": "2026-10-26",
+     "multiplier": 100.0,
+     "multiplier_provenance": "EXPLICIT",
+     "osi": "FAKE-2026-10-26-600-CALL",
+     "right": "call",
+     "series": "EQUITY",
+     "strike_key": "600"
+    },
+    {
+     "expiry": "2026-10-26",
+     "multiplier": 100.0,
+     "multiplier_provenance": "EXPLICIT",
+     "osi": "FAKE-2026-10-26-600-PUT",
+     "right": "put",
+     "series": "EQUITY",
+     "strike_key": "600"
+    },
+    {
+     "expiry": "2026-11-09",
+     "multiplier": 100.0,
+     "multiplier_provenance": "EXPLICIT",
+     "osi": "FAKE-2026-11-09-590-CALL",
+     "right": "call",
+     "series": "EQUITY",
+     "strike_key": "590"
+    },
+    {
+     "expiry": "2026-11-09",
+     "multiplier": 100.0,
+     "multiplier_provenance": "EXPLICIT",
+     "osi": "FAKE-2026-11-09-590-PUT",
+     "right": "put",
+     "series": "EQUITY",
+     "strike_key": "590"
+    },
+    {
+     "expiry": "2026-11-09",
+     "multiplier": 100.0,
+     "multiplier_provenance": "EXPLICIT",
+     "osi": "FAKE-2026-11-09-600-CALL",
+     "right": "call",
+     "series": "EQUITY",
+     "strike_key": "600"
+    },
+    {
+     "expiry": "2026-11-09",
+     "multiplier": 100.0,
+     "multiplier_provenance": "EXPLICIT",
+     "osi": "FAKE-2026-11-09-600-PUT",
+     "right": "put",
+     "series": "EQUITY",
+     "strike_key": "600"
+    },
+    {
+     "expiry": "2026-12-04",
+     "multiplier": 100.0,
+     "multiplier_provenance": "EXPLICIT",
+     "osi": "FAKE-2026-12-04-590-CALL",
+     "right": "call",
+     "series": "EQUITY",
+     "strike_key": "590"
+    },
+    {
+     "expiry": "2026-12-04",
+     "multiplier": 100.0,
+     "multiplier_provenance": "EXPLICIT",
+     "osi": "FAKE-2026-12-04-590-PUT",
+     "right": "put",
+     "series": "EQUITY",
+     "strike_key": "590"
+    },
+    {
+     "expiry": "2026-12-04",
+     "multiplier": 100.0,
+     "multiplier_provenance": "EXPLICIT",
+     "osi": "FAKE-2026-12-04-600-CALL",
+     "right": "call",
+     "series": "EQUITY",
+     "strike_key": "600"
+    },
+    {
+     "expiry": "2026-12-04",
+     "multiplier": 100.0,
+     "multiplier_provenance": "EXPLICIT",
+     "osi": "FAKE-2026-12-04-600-PUT",
+     "right": "put",
+     "series": "EQUITY",
+     "strike_key": "600"
+    }
+   ],
    "contracts_digest": "be7a00e7ebe98b8b5997e9a8868e79c3389c4874d6175c76b6b822e0f61320d3",
    "record_query_identity": {
     "as_of_ny": "2026-10-05",
@@ -358,7 +468,7 @@
    "max_dte": 60,
    "min_dte": 14
   },
-  "record_id": "rga1-f2600391594368d7c17bd2c5",
+  "record_id": "rga1-8e6217fe33a4978bede91bf0",
   "refusals": [],
   "status": "ok",
   "symbol": "SPY",
@@ -367,7 +477,7 @@
  },
  "integrity": "verified",
  "received_at": "2026-10-05T13:59:30+00:00",
- "record_id": "rga1-f2600391594368d7c17bd2c5",
+ "record_id": "rga1-8e6217fe33a4978bede91bf0",
  "recorded_at": "2026-10-05T14:00:01+00:00",
  "replay_note": "exact stored envelope restored; canonical content digest recomputed and verified; no recomputation",
  "status": "ok",
