@@ -101,7 +101,8 @@
    matrix box and scroll the desk, rather than clipping the grid to a few pixels. */
 @media (max-height: 640px) {
   div.skylit-full-dashboard { overflow-y: auto; }
-  .skylit-full-dashboard > .skylit-main-area { flex: 0 0 280px; min-height: 280px; }
+  .skylit-full-dashboard > .skylit-main-area, .skylit-options-study > .skylit-main-area { flex: 0 0 280px; min-height: 280px; }
+  .skylit-options-study { overflow-y:auto; }
 }
 @media (min-width: 1700px) {
   .skylit-multi-workspace { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); }
@@ -148,4 +149,29 @@
  .skylit-full-dashboard .skylit-control-left{flex:1 1 340px;min-width:0;flex-wrap:wrap;}
  .skylit-full-dashboard .skylit-control-center{order:3;flex:1 1 100%;min-width:0;justify-content:flex-start;flex-wrap:wrap;gap:7px;}
  .skylit-full-dashboard .skylit-control-right{margin-left:auto;}
+}
+
+/* The stock study gives the chart one owning view; the options desk keeps its
+   mounted state and measured rows while hidden. */
+.skylit-full-dashboard > .skylit-study-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:7px 12px; flex-shrink:0; border-bottom:1px solid #29454d; background:#0d1822; }
+.skylit-study-toolbar .skylit-study-switch { border-color:#8fa6b5; color:#e9f1f5; }
+.skylit-study-toolbar > .lodestar-ask { margin-left:auto; }
+.skylit-study-toolbar > [data-testid="saved-chart-readings"] { position:relative; flex:0 0 auto; margin:0!important; padding:0!important; border:0; background:transparent; }
+.skylit-study-toolbar > [data-testid="saved-chart-readings"] > div { position:absolute; top:100%; left:0; z-index:110; margin-top:8px!important; width:min(580px,75vw); max-height:65dvh; overflow:auto; padding:16px; border:1px solid #435260; border-radius:6px; background:#101722; box-shadow:0 10px 28px #0009; }
+.skylit-price-study, .skylit-options-study { display:flex; flex-direction:column; flex:1; min-width:0; min-height:0; }
+.skylit-price-study { overflow:auto; padding:0 12px 12px; }
+.skylit-options-study { overflow:hidden; }
+.skylit-price-study[hidden], .skylit-options-study[hidden] { display:none; }
+.skylit-price-study > .price-node-history { display:flex; flex-direction:column; flex:1 0 auto; margin:0!important; border:0; background:transparent; padding:8px 0!important; }
+.skylit-price-study .price-history-toolbar { margin-top:0; flex-shrink:0; }
+.skylit-price-study .recorded-price-chart { display:flex; flex-direction:column; flex:1; min-height:420px; }
+.skylit-price-study .recorded-chart-surface { flex:1; height:auto; min-height:300px; }
+.skylit-price-study .recorded-chart-tools, .skylit-price-study .recorded-chart-readout, .skylit-price-study .recorded-chart-footer, .skylit-price-study .recorded-chart-nodes, .skylit-price-study .price-history-replay { flex-shrink:0; }
+.heatseeker-layout:has(.skylit-full-dashboard[data-study="price"]) { grid-template-columns:minmax(0,1fr); }
+.heatseeker-layout:has(.skylit-full-dashboard[data-study="price"]) .heatseeker-main { grid-column:1; min-width:0; }
+.heatseeker-layout:has(.skylit-full-dashboard[data-study="price"]) .heatseeker-sidebar-left { display:none!important; }
+@media(max-width:700px) {
+ .skylit-full-dashboard > .skylit-study-toolbar { gap:6px; padding:6px 8px; }
+ .skylit-price-study { padding:0 8px 8px; }
+ .skylit-study-toolbar > [data-testid="saved-chart-readings"] > div { position:fixed; top:150px; left:3vw; width:94vw; max-height:60dvh; }
 }

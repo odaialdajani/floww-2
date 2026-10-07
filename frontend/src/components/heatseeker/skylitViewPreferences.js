@@ -8,7 +8,8 @@ const LAYOUTS=new Set(["focus","profile","multi","calendar","symbols"]);
 const VIEWS=new Set(["gex","skylit","vex","charm"]);
 const PANES=new Set(["gex","delta","vex","charm"]);
 const ZOOMS=new Set([0.75,1,1.25,1.5]);
-const DEFAULTS={metric:"raw",layout:"profile",gridZoom:1,priceHistoryOpen:false,compareMode:false,comparePair:"gexvex",activePane:"gex",selection:null};
+const STUDY_CHOICES=new Set(["price","options"]);
+const DEFAULTS={metric:"raw",layout:"profile",gridZoom:1,priceHistoryOpen:false,studyChoice:null,compareMode:false,comparePair:"gexvex",activePane:"gex",selection:null};
 
 export function skylitViewScope({ticker,timeframe,expiries,dte,expiryScope,viewMode,localView}){
  if(typeof ticker!=="string" || !ticker.trim() || ticker.length>32 || typeof timeframe!=="string" || timeframe.length>32 || typeof expiryScope!=="string" || expiryScope.length>32 || (localView!=null && (typeof localView!=="string" || localView.length>32)) || !Number.isFinite(expiries) || (dte!=null && !Number.isFinite(dte)) || !VIEWS.has(viewMode))return null;
@@ -48,8 +49,10 @@ function selectionIdentity(selection){
 
 function preferences(value){
  const input=value && typeof value==="object"?value:{};
+ const studyChoice=STUDY_CHOICES.has(input.studyChoice)?input.studyChoice:null;
  return {metric:METRICS.has(input.metric)?input.metric:DEFAULTS.metric,layout:LAYOUTS.has(input.layout)?input.layout:DEFAULTS.layout,
-  gridZoom:ZOOMS.has(input.gridZoom)?input.gridZoom:1,priceHistoryOpen:input.priceHistoryOpen===true,
+  gridZoom:ZOOMS.has(input.gridZoom)?input.gridZoom:1,studyChoice,
+  priceHistoryOpen:studyChoice?studyChoice==="price":input.priceHistoryOpen===true,
   compareMode:input.compareMode===true && input.layout==="focus",comparePair:input.comparePair==="rawdelta"?"rawdelta":"gexvex",
   activePane:PANES.has(input.activePane)?input.activePane:"gex",selection:selectionIdentity(input.selection)};
 }

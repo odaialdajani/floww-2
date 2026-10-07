@@ -88,9 +88,37 @@ APPROVAL_STORE_DDL = """
         approval_id VARCHAR PRIMARY KEY, intent_hash VARCHAR,
         account_id VARCHAR, scope VARCHAR, valid_until VARCHAR,
         approved_by VARCHAR, approved_at VARCHAR, revoked BOOLEAN,
-        approval_json VARCHAR, updated_at VARCHAR
+        approval_json VARCHAR, updated_at VARCHAR,
+        used_at VARCHAR, used_by VARCHAR, used_fingerprint VARCHAR
     )
 """
+
+# Placement-attempt journal (S17b): every broker call that FAILS after an
+# approval was consumed leaves an unresolved row keyed by the exact order
+# fingerprint. A later resubmission of the SAME fingerprint (even under a
+# fresh approval) refuses PLACEMENT_OUTCOME_UNKNOWN until an operator
+# reconciles broker state and resolves the attempt — closing the
+# ambiguous-ACK double-placement hole (first call may have placed despite
+# raising). Resolved rows permit a new attempt cycle; unresolved rows are
+# never auto-cleared.
+PLACEMENT_ATTEMPT_DDL = """
+    CREATE TABLE IF NOT EXISTS placement_attempts_v1 (
+        fingerprint VARCHAR PRIMARY KEY, account_id VARCHAR,
+        approval_id VARCHAR, attempted_at VARCHAR, error VARCHAR,
+        resolved_at VARCHAR, resolved_by VARCHAR, resolution_note VARCHAR
+    )
+"""
+
+_PLACEMENT_ATTEMPT_ALTER = (
+    "ALTER TABLE placement_attempts_v1 ADD COLUMN IF NOT EXISTS resolved_at VARCHAR",
+    "ALTER TABLE placement_attempts_v1 ADD COLUMN IF NOT EXISTS resolved_by VARCHAR",
+    "ALTER TABLE placement_attempts_v1 ADD COLUMN IF NOT EXISTS resolution_note VARCHAR",
+)
+_APPROVAL_USED_ALTERS = (
+    "ALTER TABLE approvals_v1 ADD COLUMN IF NOT EXISTS used_at VARCHAR",
+    "ALTER TABLE approvals_v1 ADD COLUMN IF NOT EXISTS used_by VARCHAR",
+    "ALTER TABLE approvals_v1 ADD COLUMN IF NOT EXISTS used_fingerprint VARCHAR",
+)
 
 # Broker-native protection support as DOCUMENTED + account-eligibility gated.
 # Conservative by design: nothing is offered until both the vendor documents
@@ -135,6 +163,7 @@ __all__ = [
     "LIFECYCLE_DDL",
     "ACCOUNT_POLICY_DDL",
     "APPROVAL_STORE_DDL",
+    "PLACEMENT_ATTEMPT_DDL",
     "DRAFT_DDL",
     "NATIVE_PROTECTION_MATRIX",
     "intent_hash",
@@ -191,6 +220,14 @@ def ensure_lifecycle_tables(conn: Any) -> None:
         conn.execute(ACCOUNT_POLICY_DDL)
     with _ctxlib.suppress(Exception):
         conn.execute(APPROVAL_STORE_DDL)
+    for _alter in _APPROVAL_USED_ALTERS:
+        with _ctxlib.suppress(Exception):
+            conn.execute(_alter)
+    with _ctxlib.suppress(Exception):
+        conn.execute(PLACEMENT_ATTEMPT_DDL)
+    for _alter in _PLACEMENT_ATTEMPT_ALTER:
+        with _ctxlib.suppress(Exception):
+            conn.execute(_alter)
 
 
 def register_store(conn: Any) -> bool:

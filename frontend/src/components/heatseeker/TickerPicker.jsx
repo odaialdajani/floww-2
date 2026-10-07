@@ -4,6 +4,7 @@ import axios from "axios";
 import { API } from "../../config/api";
 import { buildTickerUniverse, normalizeTicker, searchUniverse, UNIVERSE_MAX_PAGES, UNIVERSE_PAGE_LIMIT } from "./tickerUniverse";
 import "./TickerPicker.css";
+import useMarketCoverage from "./useMarketCoverage";
 
 export const FAVORITES_KEY = "floww-symbol-favorites-v1";
 const FAVORITES_CHANGED = "floww-symbol-favorites-changed";
@@ -20,6 +21,10 @@ function readFavorites(onError) {
 export default function TickerPicker({ value = "SPY", onChange, tickers = null, status = "unknown", onRetry, ariaLabel = "Search stocks", className = "" }) {
   const universe = useMemo(() => buildTickerUniverse(tickers).filter(validSymbol), [tickers]);
   const active = normalizeTicker(value);
+  const globalPicker = className.split(/\s+/).includes("floww-header-symbol-picker");
+  const coverage = useMarketCoverage(globalPicker);
+  const [category, setCategory] = useState("all"), [sector, setSector] = useState("");
+  const [catalog, setCatalog] = useState(null), [catalogState, setCatalogState] = useState("idle"), [catalogAttempt, setCatalogAttempt] = useState(0);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(-1);
@@ -32,11 +37,41 @@ export default function TickerPicker({ value = "SPY", onChange, tickers = null, 
   const request = useRef(null), epoch = useRef(0);
   const listId = useId();
   const noteId = useId();
-  const matches = useMemo(() => query.trim() ? searchUniverse(universe, normalizeTicker(query), universe.length).matches : universe, [universe, query]);
-  const totalPages = Math.max(1, Math.ceil(matches.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages - 1);
-  const shown = matches.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
-  const highlighted = index >= safePage * PAGE_SIZE && index < (safePage + 1) * PAGE_SIZE && index < matches.length ? index : -1;
+  const filteredCatalog = globalPicker && category !== "favorites";
+  const catalogKey = JSON.stringify([category,sector,normalizeTicker(query),page]);
+  const currentCatalog = catalog?.key === catalogKey ? catalog.data : null;
+  const localMatches = useMemo(() => {
+    const available = category === "favorites" ? favorites : universe;
+    return query.trim() ? searchUniverse(available, normalizeTicker(query), available.length).matches : available;
+  }, [universe, query, category, favorites]);
+  const matches = filteredCatalog ? (currentCatalog?.instruments || []).map(row => row.symbol) : localMatches;
+  const matchCount = filteredCatalog ? currentCatalog?.matches || 0 : matches.length;
+  const totalPages = Math.max(1, Math.ceil(matchCount / PAGE_SIZE));
+  const safePage = filteredCatalog ? page : Math.min(page, totalPages - 1);
+  const shown = filteredCatalog ? matches : matches.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+  const highlighted = index >= safePage * PAGE_SIZE && index < (safePage + 1) * PAGE_SIZE && index < matchCount ? index : -1;
+  const sectors = useMemo(() => Array.isArray(coverage.data?.directory.sectors) ? coverage.data.directory.sectors.filter(value => typeof value === "string" && value.trim()) : [], [coverage.data]);
+  useEffect(() => {
+    if (coverage.status === "ready" && sector && !sectors.includes(sector)) {setSector("");setPage(0);setIndex(-1);}
+  }, [coverage.status,sectors,sector]);
+  useEffect(() => {
+    if (filteredCatalog && currentCatalog && page >= totalPages) {setPage(totalPages-1);setIndex(-1);}
+  }, [filteredCatalog,currentCatalog,page,totalPages]);
+  useEffect(() => {
+    if (!open || !filteredCatalog) return undefined;
+    const controller = new AbortController();let active = true;setCatalog(null);setCatalogState("loading");
+    const timer = setTimeout(async () => {
+      try {
+        const {data} = await axios.get(API+"/market/catalog", {params:{page:page+1,limit:PAGE_SIZE,q:normalizeTicker(query),options_only:category==="options",...(sector?{sector}:{})},signal:controller.signal,timeout:15000});
+        if (!active) return;
+        if (!Array.isArray(data?.instruments) || data.instruments.length > PAGE_SIZE || !Number.isSafeInteger(data.matches) || data.matches < data.instruments.length || data.instruments.some(row => !validSymbol(row?.symbol) || normalizeTicker(query) && !row.symbol.includes(normalizeTicker(query)) || category === "options" && row.options !== true || sector && row.sector !== sector)) throw Error("Invalid filtered list");
+        if (data.complete_provider_catalog === false && !data.instruments.length) throw Error("Provider list unavailable");
+        if (data.page != null && data.page !== page+1 || data.limit != null && data.limit !== PAGE_SIZE) throw Error("Wrong catalogue page");
+        setCatalog({key:catalogKey,data});setCatalogState("ready");
+      } catch { if (active && !controller.signal.aborted) setCatalogState("error"); }
+    }, 150);
+    return () => {active=false;clearTimeout(timer);controller.abort();};
+  }, [open,filteredCatalog,category,sector,query,page,catalogKey,catalogAttempt]);
   const stopLookup = useCallback(() => { epoch.current++; request.current?.abort(); request.current = null; setChecking(false); }, []);
   const close = useCallback(() => { stopLookup(); setOpen(false); setIndex(-1); }, [stopLookup]);
 
@@ -110,7 +145,7 @@ export default function TickerPicker({ value = "SPY", onChange, tickers = null, 
   const choose = async raw => {
     setMessage("");
     const local = normalizeTicker(raw);
-    if (validSymbol(local) && universe.includes(local)) {
+    if (validSymbol(local) && (universe.includes(local) || currentCatalog?.instruments.some(row => row.symbol === local))) {
       stopLookup(); onChange?.(local); input.current?.focus(); setQuery(""); setOpen(false); setIndex(-1); setPage(0); return;
     }
     const pending = resolve(raw);
@@ -135,13 +170,13 @@ export default function TickerPicker({ value = "SPY", onChange, tickers = null, 
   };
   const move = direction => {
     setOpen(true);
-    if (!matches.length) return;
-    const next = index < 0 || index >= matches.length ? direction > 0 ? 0 : matches.length - 1 : Math.max(0, Math.min(matches.length - 1, index + direction));
+    if (!matchCount) return;
+    const next = index < 0 || index >= matchCount ? direction > 0 ? 0 : matchCount - 1 : Math.max(0, Math.min(matchCount - 1, index + direction));
     setIndex(next); setPage(Math.floor(next / PAGE_SIZE));
   };
   const keyDown = event => {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); move(event.key === "ArrowDown" ? 1 : -1); }
-    else if (event.key === "Enter") { event.preventDefault(); choose(open && highlighted >= 0 ? matches[highlighted] : query); }
+    else if (event.key === "Enter") { event.preventDefault(); if(filteredCatalog && (catalogState !== "ready" || !currentCatalog)) return; choose(open && highlighted >= 0 ? shown[highlighted - safePage * PAGE_SIZE] : query); }
     else if (event.key === "Escape" && open) { event.preventDefault(); event.stopPropagation(); close(); }
     else if (event.key === "Tab") close();
   };
@@ -159,17 +194,31 @@ export default function TickerPicker({ value = "SPY", onChange, tickers = null, 
       <button type="button" className="ticker-picker-browse" aria-label="Browse stock list" aria-expanded={open} onClick={() => { if (open) close(); else { setOpen(true); input.current?.focus(); } }}>▾</button>
       <button type="button" className="ticker-picker-star" disabled={checking || !validSymbol(active)} aria-label={`${favorites.includes(active) ? "Remove" : "Add"} ${active} ${favorites.includes(active) ? "from" : "to"} favorites`} aria-pressed={favorites.includes(active)} onClick={toggleFavorite}>{favorites.includes(active) ? "★" : "☆"}</button>
     </div>
+    {globalPicker && <div className="ticker-picker-feed-counts" data-testid="stock-feed-counts" aria-label="Stock feed counts" title="Checked stocks have received option data in the shown window. Listed names show directory access; they do not prove every stock has recent data.">
+      <span>{coverage.data?.directory.available ? coverage.data.directory.total.toLocaleString()+" listed" : "Listed count unknown"}{coverage.data?.directory.stale || coverage.status==="unavailable" && coverage.data ? " (saved list)" : ""}</span>
+      <span>{coverage.fresh===null ? "Stock checks unknown" : coverage.fresh.toLocaleString()+" stocks checked"}{coverage.data?.directory.available ? " / "+coverage.data.directory.optionable_total.toLocaleString()+" with options" : ""}{coverage.data?.options.window_seconds ? " in "+Math.round(coverage.data.options.window_seconds/60)+" min" : ""}</span>
+      <span>{coverage.status==="unavailable" ? "Feed counts unavailable" : coverage.lastSuccessAge===null ? "Feed last success unknown" : "Feed read "+(coverage.lastSuccessAge<60 ? Math.round(coverage.lastSuccessAge)+"s" : Math.round(coverage.lastSuccessAge/60)+"m")+" ago"}</span>
+    </div>}
     {(checking || message) && <p id={noteId} className="ticker-picker-notice" role={message ? "alert" : "status"}>{message || "Checking the provider stock list…"}</p>}
     {open && createPortal(<div ref={popup} className="ticker-picker-popup" style={position} onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); input.current?.focus(); close(); } }}>
       {statusText && <p className="ticker-picker-status" role="status">{statusText}{onRetry && status !== "loading" && <button type="button" onClick={onRetry}>Retry stock list</button>}</p>}
+      {globalPicker && <div className="ticker-picker-filters">
+        <label>Category <select aria-label="Stock category" value={category} onChange={event => {stopLookup();setCategory(event.target.value);setSector("");setPage(0);setIndex(-1);}}><option value="all">All listed</option><option value="options">Options enabled</option><option value="favorites">Favorites</option></select></label>
+        <label>Sector <select aria-label="Stock sector" disabled={!sectors.length || category==="favorites"} value={sector} onChange={event => {stopLookup();setSector(event.target.value);setPage(0);setIndex(-1);}}><option value="">{sectors.length ? "All supplied sectors" : "Sector details unavailable"}</option>{sectors.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
+        {sectors.length > 0 && <small>{coverage.data?.directory.sector_classified?.toLocaleString()} names have supplied sector details; others remain unclassified.</small>}
+      </div>}
       {!query.trim() && favorites.length > 0 && <div className="ticker-picker-favorites" aria-label="Favorite stocks"><span>Favorites</span>{favorites.map(symbol => <button type="button" key={symbol} onClick={() => choose(symbol)}>{symbol}</button>)}</div>}
-      <div className="ticker-picker-result-count">{matches.length.toLocaleString()} {query.trim() ? "matches" : "loaded stocks"} · Page {safePage + 1} of {totalPages}</div>
+      <div className="ticker-picker-result-count">{(filteredCatalog && !currentCatalog ? "Unknown" : matchCount.toLocaleString())} {query.trim() ? "matches" : filteredCatalog ? "listed stocks" : "loaded stocks"} · Page {safePage + 1} of {filteredCatalog && !currentCatalog ? "unknown" : totalPages}</div>
       <div id={listId} role="listbox" aria-label="Stock suggestions" className="ticker-picker-list">
         {shown.map((symbol, offset) => { const optionIndex = safePage * PAGE_SIZE + offset; return <div id={`${listId}-${optionIndex}`} key={symbol} role="option" aria-label={symbol} aria-selected={highlighted === optionIndex} className={`ticker-picker-option${highlighted === optionIndex ? " highlighted" : ""}`} onMouseDown={event => event.preventDefault()} onClick={() => choose(symbol)}><span>{symbol}</span>{symbol === active && <small>Selected</small>}{favorites.includes(symbol) && <span aria-label="Favorite">★</span>}</div>; })}
       </div>
-      {!matches.length && <p className="ticker-picker-status">No loaded matches. Press Enter or check the provider to find this stock.</p>}
+      {filteredCatalog && catalogState === "loading" && <p className="ticker-picker-status" role="status">Loading this stock group...</p>}
+      {filteredCatalog && catalogState === "error" && <p className="ticker-picker-status" role="alert">This stock group could not be loaded. Matches are unavailable. <button type="button" onClick={()=>setCatalogAttempt(value=>value+1)}>Retry stock group</button></p>}
+      {filteredCatalog && currentCatalog?.complete_provider_catalog === false && <p className="ticker-picker-status" role="status">The provider stock list is incomplete; other names may be missing.</p>}
+      {filteredCatalog && currentCatalog?.stale && <p className="ticker-picker-status">This group uses a saved provider list.</p>}
+      {!shown.length && (!filteredCatalog || catalogState === "ready") && <p className="ticker-picker-status">{category==="favorites" ? "No matching favorites." : "No loaded matches. Press Enter or check the provider to find this stock."}</p>}
       {query.trim() && <button type="button" className="ticker-picker-lookup" disabled={checking} onClick={() => choose(query)}>{checking ? "Checking…" : "Choose this stock"}</button>}
-      {totalPages > 1 && <div className="ticker-picker-pages"><button type="button" disabled={safePage === 0} onClick={() => { setPage(safePage - 1); setIndex((safePage - 1) * PAGE_SIZE); }}>Previous</button><button type="button" disabled={safePage === totalPages - 1} onClick={() => { setPage(safePage + 1); setIndex((safePage + 1) * PAGE_SIZE); }}>Next</button></div>}
+      {totalPages > 1 && <div className="ticker-picker-pages"><button type="button" disabled={safePage === 0 || filteredCatalog && catalogState === "loading"} onClick={() => { setPage(safePage - 1); setIndex((safePage - 1) * PAGE_SIZE); }}>Previous</button><button type="button" disabled={safePage >= totalPages - 1 || filteredCatalog && (!currentCatalog || catalogState !== "ready")} onClick={() => { setPage(safePage + 1); setIndex((safePage + 1) * PAGE_SIZE); }}>Next</button></div>}
     </div>, document.body)}
   </div>;
 }

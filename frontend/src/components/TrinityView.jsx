@@ -74,6 +74,7 @@ function scenariosForWall(scenarios, wall, spot) {
 }
 
 function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
+  const sharedStockChoice = Boolean(sharedTicker) && typeof onFocusTicker === "function";
   const [handoff] = useState(readHandoff);
   const [ticker, setTicker] = useState(handoff?.ticker || sharedTicker || "SPY");
   const [symbolInput, setSymbolInput] = useState(handoff?.ticker || sharedTicker || "SPY");
@@ -288,7 +289,9 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
         <span>⚠</span> {isSPX
           ? "SPX unavailable in this session (entitlement/coverage unknown). No substitution made — pick another symbol."
           : `Error: ${error || "no data"}`}
-        <button onClick={() => { setReplayDisplay(null); setReplayId(null); setTicker("SPY"); }}>SPY</button>
+        {sharedStockChoice
+          ? <button type="button" onClick={() => { setReplayDisplay(null); setReplayId(null); setLiveReload(value => value + 1); }}>Retry this stock</button>
+          : <button onClick={() => { setReplayDisplay(null); setReplayId(null); setTicker("SPY"); }}>SPY</button>}
       </div></div>
     );
   }
@@ -298,7 +301,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
       {replayControls}
       {replayId && !replayDisplay && <button type="button" onClick={() => onReplayDisplay(null)}>Leave recorded observation · Live</button>}
       <ContextStrip board={board} ticker={ticker} symbolInput={symbolInput}
-        onSymbolInput={setSymbolInput} onSubmit={submitSymbol} />
+        onSymbolInput={setSymbolInput} onSubmit={submitSymbol} showStockControl={!sharedStockChoice} />
       <div className="triad-board-status" role="status">Solstice research ranks · {boardStatus} · unvalidated, not probability</div>
             {payload?.scope_selection?.status === "unavailable" && <div role="status" data-testid="triad-empty-scope">No listed expiry in the server's 30-day bound — no substitution made.</div>}
       {!isReplay && scope === "0dte" && !sameDayAdmitted && <p role="status" data-testid="triad-scope-admission">
@@ -383,7 +386,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
   );
 }
 
-function ContextStrip({ board, ticker, symbolInput, onSymbolInput, onSubmit }) {
+function ContextStrip({ board, ticker, symbolInput, onSymbolInput, onSubmit, showStockControl = true }) {
   const byTicker = useMemo(() => {
     const m = {};
     for (const r of board || []) m[String(r.ticker || "").toUpperCase()] = r;
@@ -410,12 +413,12 @@ function ContextStrip({ board, ticker, symbolInput, onSymbolInput, onSubmit }) {
           </div>
         );
       })}
-      <div className="triad-context-focus">
+      {showStockControl && <div className="triad-context-focus">
         <input value={symbolInput} onChange={(e) => onSymbolInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") onSubmit(); }}
           data-testid="triad-symbol-input" aria-label="Focused symbol" placeholder="SYM" />
         <button onClick={onSubmit} data-testid="triad-symbol-go" title="Load this symbol's snapshot (its own data only)">Go</button>
-      </div>
+      </div>}
       <div className="triad-context-note" data-testid="triad-coverage-note"
         title="Coverage description only — never a position size">
         {observed.length}/3 observed{dirs.length ? ` · ${dirs.join(" / ")}` : ""}

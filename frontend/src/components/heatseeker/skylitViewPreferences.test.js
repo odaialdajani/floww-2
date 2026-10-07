@@ -9,7 +9,7 @@ test('preferences store only bounded display choices and selected identity, neve
  const store=storage(),scope=skylitViewScope(parameters),identity=captureSkylitSelection(cell,context(123));
  writeSkylitView(scope,{metric:'raw',layout:'calendar',gridZoom:1.25,selection:identity,grid:data(123).grid,value:123,spot:650,tradeMode:true,scaleLock:{max:99},contractSelection:{osi:'private'},replaySnap:data(-7),account:'private'},store);
  const saved=JSON.parse(store.getItem(SKYLIT_VIEW_KEY)).entries[0].preferences;
- expect(Object.keys(saved).sort()).toEqual(['activePane','compareMode','comparePair','gridZoom','layout','metric','priceHistoryOpen','selection'].sort());
+ expect(Object.keys(saved).sort()).toEqual(['activePane','compareMode','comparePair','gridZoom','layout','metric','priceHistoryOpen','studyChoice','selection'].sort());
  expect(saved.selection).not.toHaveProperty('value');expect(saved.selection).not.toHaveProperty('asof');expect(saved.selection).not.toHaveProperty('grid');
  expect(restoreSkylitSelection(saved.selection,context(999))).toMatchObject({value:999,asof:data(999).asof});
 });
@@ -76,4 +76,17 @@ test('valid numeric text is restored only from a matching current cell and wall'
  const current=context(999);current.data.metrics={walls:[{wall_id:'current-wall',low:'649.5',high:'650.5'}]};
  const identity={...captureSkylitSelection(cell,context(123)),strike:'650',wall_id:'current-wall'};
  expect(restoreSkylitSelection(identity,current)).toMatchObject({strike:650,value:999});
+});
+
+
+test("explicit stock study choices are additive, validated and cannot contradict their saved open state",()=>{
+ const store=storage(),scope=skylitViewScope(parameters),identity=captureSkylitSelection(cell,context(123));
+ writeSkylitView(scope,{studyChoice:"options",priceHistoryOpen:true,layout:"calendar",gridZoom:1.25,selection:identity},store);
+ expect(readSkylitView(scope,store)).toMatchObject({studyChoice:"options",priceHistoryOpen:false,layout:"calendar",gridZoom:1.25,selection:identity});
+ writeSkylitView(scope,{studyChoice:"price",priceHistoryOpen:false,layout:"calendar",gridZoom:1.25,selection:identity},store);
+ expect(readSkylitView(scope,store)).toMatchObject({studyChoice:"price",priceHistoryOpen:true,selection:identity});
+});
+test.each([false,true,"grid",{},[],"",null])("legacy or invalid explicit stock study choice remains unknown (%p)",studyChoice=>{
+ const store=storage(),scope=skylitViewScope(parameters);writeSkylitView(scope,{studyChoice,priceHistoryOpen:false,layout:"calendar"},store);
+ expect(readSkylitView(scope,store)).toMatchObject({studyChoice:null,priceHistoryOpen:false,layout:"calendar"});
 });

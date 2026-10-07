@@ -314,6 +314,24 @@ async def recorder_health() -> dict[str, Any]:
         "last_error_at": combined["last_error_at"],
         "stop_recovery": combined["stop_recovery"],
     }
+    # The bounded async market recorder is separate from the older opt-in
+    # recorder-health thread. Report the real scheduled task and its window.
+    try:
+        from server import _solstice_capture_cfg, _solstice_capture_task, _solstice_in_hours
+        cfg = _solstice_capture_cfg()
+        active = _solstice_capture_task is not None and not _solstice_capture_task.done()
+        in_hours = _solstice_in_hours()
+        status["background_capture"] = {
+            "enabled": cfg is not None, "task_active": active,
+            "tickers": cfg["tickers"] if cfg else [],
+            "interval_s": cfg["interval"] if cfg else None,
+            "market_hours_only": cfg["hours_only"] if cfg else None,
+            "in_market_hours": in_hours,
+            "state": "disabled" if cfg is None else "stopped" if not active else
+                     "waiting_for_market" if cfg["hours_only"] and not in_hours else "scheduled",
+        }
+    except Exception:
+        status["background_capture"] = {"state": "unavailable"}
     return status
 
 

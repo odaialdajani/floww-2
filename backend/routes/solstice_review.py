@@ -64,6 +64,29 @@ def register_review_routes(router: APIRouter) -> None:
             return {"ticker": ticker.upper(), "decisions": [],
                     "error": str(e)}
 
+    @router.get("/{ticker}/decisions/page")
+    async def decisions_page(ticker: str,
+                             limit: int = Query(50, ge=1, le=100),
+                             state: str | None = Query(None, max_length=16),
+                             cursor: str | None = Query(None, max_length=1024),
+                             order: str = Query("newest", max_length=6, pattern="^(newest|oldest)$")) -> dict[str, Any]:
+        """Read older saved decisions without repeating or changing any work."""
+        import asyncio
+
+        from fastapi import HTTPException
+
+        from services.duckdb_engine import db as eng
+        from services.solstice_decision_history import DecisionHistoryUnavailable, decision_page
+
+        conn = eng.conn if hasattr(eng, "conn") else None
+        try:
+            return await asyncio.to_thread(decision_page, conn, ticker,
+                                           limit=limit, state=state, cursor=cursor, order=order)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
+        except DecisionHistoryUnavailable as exc:
+            raise HTTPException(503, str(exc)) from None
+
     @router.post("/{ticker}/decisions/{decision_id}/review")
     async def save_review(ticker: str, decision_id: str,
                           body: _ReviewBody) -> dict[str, Any]:

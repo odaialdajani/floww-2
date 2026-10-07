@@ -1,10 +1,12 @@
 import React from "react";
 import { render, screen, fireEvent, act } from "@testing-library/react";
-import SkylitDashboard from "./SkylitDashboard";
+import OptionsDashboard from "./SkylitDashboard";
 import SolsticeStatusStrip from "./SolsticeStatusStrip";
 import WallInspector from "./WallInspector";
 import ScenarioStrip from "./ScenarioStrip";
 import ReplayStrip from "./ReplayStrip";
+// These contracts exercise the options desk; the stock route now opens price first.
+const SkylitDashboard = props => <OptionsDashboard defaultStudy="options" {...props}/>;
 
 jest.mock("axios");
 
@@ -33,7 +35,7 @@ test('analytical range is an exclusive Solstice canvas and returns to the legacy
   fireEvent.click(screen.getByRole('button',{name:'Analytical range · 14–60 DTE'}));
   expect(screen.getByRole('region',{name:'Solstice analytical range'})).toBeInTheDocument();
   expect(screen.queryByLabelText('Canvas layout')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button',{name:'Return to current map'}));
+  fireEvent.click(screen.getByRole('button',{name:'Return to options desk'}));
   expect(screen.getByLabelText('Canvas layout')).toBeInTheDocument();
   expect(screen.queryByRole('region',{name:'Solstice analytical range'})).not.toBeInTheDocument();
 });
@@ -45,7 +47,7 @@ test('sidebar-controlled range mode unmounts legacy controls and publishes the t
  view.rerender(<SkylitDashboard ticker="SPY" data={data} analyticalRangeOpen onAnalyticalRangeChange={change}/>);
  expect(screen.getByRole('region',{name:'Solstice analytical range'})).toBeInTheDocument();
  expect(screen.queryByLabelText('Canvas layout')).not.toBeInTheDocument();
- fireEvent.click(screen.getByRole('button',{name:'Return to current map'}));
+ fireEvent.click(screen.getByRole('button',{name:'Return to options desk'}));
  expect(change).toHaveBeenCalledWith(false);
 });
 

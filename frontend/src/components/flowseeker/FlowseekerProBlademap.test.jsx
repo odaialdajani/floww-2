@@ -236,6 +236,10 @@ import React from "react";
 import { render, screen, waitFor, within, fireEvent, act } from "@testing-library/react";
 import FlowseekerProBlademap from "./FlowseekerProBlademap";
 
+// Render/action checks use the existing fixture universe and never contact a
+// real stock directory. Its paging and provider checks have their own suites.
+jest.mock("../heatseeker/useTickerDirectory",()=>()=>({tickers:null,status:"incomplete",retry:jest.fn()}));
+
 const NOW_ISO = "2026-09-07T15:00:00.000Z";
 const RealDate = Date;
 class FixtureDate extends RealDate {
@@ -379,6 +383,32 @@ describe("saved scan findings status", () => {
 });
 
 describe("Tidehunter Pro v3 — one page, zero page tabs", () => {
+  it("uses the shared stock control without another search or automatic scan", async () => {
+    const urls=mockBackend();
+    const change=jest.fn();
+    let view;
+    await act(async()=>{view=render(<FlowseekerProBlademap active ticker="QQQ" onTickerChange={change}/>);});
+    await waitFor(()=>expect(screen.getByTestId("cell-dealers")).toHaveTextContent("Dealers · QQQ"));
+    expect(screen.queryByLabelText("Focused ticker")).toBeNull();
+    expect(screen.queryByRole("button",{name:"Browse all stocks"})).toBeNull();
+    await act(async()=>view.rerender(<FlowseekerProBlademap active ticker="NVDA" onTickerChange={change}/>));
+    await waitFor(()=>expect(screen.getByTestId("cell-dealers")).toHaveTextContent("Dealers · NVDA"));
+    expect(urls.some(url=>url.includes("/scan/refresh"))).toBe(false);
+  });
+
+  it("keeps the primary action together and optional help closed", async () => {
+    mockBackend();
+    await act(async()=>render(<FlowseekerProBlademap active/>));
+    const actions=screen.getByTestId("screener-action-row");
+    expect(within(actions).getByRole("button",{name:"Find unusual activity"})).toBeVisible();
+    expect(within(actions).getByTitle("Refresh now")).toBeVisible();
+    expect(screen.getByText("How to read").closest("details")).not.toHaveAttribute("open");
+    expect(screen.getByTestId("screener-saved-findings")).not.toHaveAttribute("open");
+    expect(screen.getByTestId("settings-table").closest("details")).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByRole("button",{name:"Settings"}));
+    expect(screen.getByTestId("settings-table")).toBeVisible();
+  });
+
   it("ignores browser visibility changes while the page is inactive", async () => {
     mockBackend();const view=render(<FlowseekerProBlademap active />);
     await waitFor(()=>expect(screen.getByTestId("trade-now-row")).toBeInTheDocument());

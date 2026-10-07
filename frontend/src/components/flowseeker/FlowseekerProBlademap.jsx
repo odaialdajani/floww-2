@@ -23,7 +23,7 @@ import boundedMarketRead from "./boundedMarketRead";
  * Nothing here calls /auto-trade/*, any order route, or any broker path.
  * Plan trade writes client-side floww_trades_v2 only.
  */
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import { BACKEND_URL } from "../../config/api";
 import { getSettings } from "../SettingsPanel";
 import {
@@ -213,14 +213,17 @@ const STRIPE_SORT_LABEL = {
 };
 const scrollTo = (id) => {
   try {
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const target = document.getElementById(id);
+    if (target?.tagName === "DETAILS") target.open = true;
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch {
     /* noop */
   }
 };
 
 // ---------- component ----------
-export default function FlowseekerProBlademap({ active = true }) {
+export default function FlowseekerProBlademap({ active = true, ticker: sharedTicker = null, onTickerChange }) {
+  const sharedStockChoice = validFocusTicker(sharedTicker) && typeof onTickerChange === "function";
   const prefs = useMemo(loadPrefs, []);
   const retainedReading=useMemo(getScreenerReading,[]);
   const {tickers:providerTickers,status:directoryStatus,retry:retryDirectory}=useTickerDirectory(`${BACKEND_URL}/api`);
@@ -256,12 +259,20 @@ export default function FlowseekerProBlademap({ active = true }) {
   const [cbMode, setCbMode] = useState(tide.colorBlindMode ?? !!appSettings.colorBlindMode);
 
   // focus ticker defaults to floww_settings.defaultTicker, printed on Dealers cell
-  const [focusTicker, setFocusTicker] = useState(() => [prefs.focusTicker, appSettings.defaultTicker, "SPY"].find(validFocusTicker));
+  const [focusTicker, setLocalFocusTicker] = useState(() => [sharedTicker, prefs.focusTicker, appSettings.defaultTicker, "SPY"].find(validFocusTicker));
+  const setFocusTicker = useCallback(symbol => { setLocalFocusTicker(symbol); onTickerChange?.(symbol); }, [onTickerChange]);
   const [selectedRow, setSelectedRow] = useState(null);
+  useLayoutEffect(() => {
+    if (!sharedStockChoice || sharedTicker === focusTicker) return;
+    setLocalFocusTicker(sharedTicker);
+    setSelectedRow(row => (row?.under || row?.ticker) === sharedTicker ? row : null);
+    setDrill(value => value?.ticker === sharedTicker ? value : null);
+    setDrillSel(null); setDrillRows([]);
+  }, [sharedStockChoice, sharedTicker, focusTicker]);
   useEffect(()=>{
     const focus=event=>{const symbol=event.detail?.ticker;if(!active || !validFocusTicker(symbol))return;setFocusTicker(symbol);setSelectedRow(null);setDrill(null);setDrillSel(null);setDrillRows([]);};
     window.addEventListener("floww:focus-ticker",focus);return()=>window.removeEventListener("floww:focus-ticker",focus);
-  },[active]);
+  },[active,setFocusTicker]);
   const [clock, setClock] = useState("");
   useEffect(() => {
     const id = setInterval(() => setClock(new Date().toLocaleTimeString()), 1000);
@@ -960,7 +971,7 @@ export default function FlowseekerProBlademap({ active = true }) {
       panel?.scrollIntoView?.({ block: "nearest" });
       panel?.focus();
     }, 0);
-  }, [mode, focusTicker]);
+  }, [mode, focusTicker, setFocusTicker]);
   const doWatch = useCallback((ticker) => {
     if (!ticker) return;
     setUniverse((u) => (u.includes(ticker) ? u : [...u, ticker]));
@@ -1374,17 +1385,15 @@ export default function FlowseekerProBlademap({ active = true }) {
 
           <button type="button" className="th-nav" onClick={() => scrollTo("settings")}>Settings</button>
           <span className="th-sp" />
-          <div className="th-st">
+          <details className="th-feed-details"><summary>Feed details</summary><div className="th-st">
             <span><b>{scanState.status}</b> <span className={`dot ${heartbeat.dot}`} />{scanMeta.source || "Source not supplied"} · {scanMeta.symbols || "—"} symbols</span>
             <span>{scanMeta.budget ? `${scanMeta.budget.used}/${scanMeta.budget.hourly_cap} calls this hour` : "budget n/a"}{scanMeta.ttl ? ` · next scan ~${elapsedClock(Math.max(0, scanMeta.ttl - elapsedScanAge))}` : ""}</span>
             <span>Order-flow imbalance, price impact: no feed</span>
-          </div>
+          </div></details>
         </aside>
 
         <div className="th-content">
-          <section className="th-start" aria-label="Getting started">
-            <h1>Find unusual options activity</h1>
-            <p>Start with volume versus open interest. Check the scan time, then open a contract row to study the stock.</p>
+          <div className="th-topbar" data-testid="screener-action-row">
             <button type="button" className="th-chipb" onClick={() => {
               setScreenId("fresh");setSortPreset({key:"volOI",dir:"desc"});
               setKnobQ("");setKnobType("all");setKnobMinVol(0);setKnobMinScore(0);
@@ -1392,13 +1401,14 @@ export default function FlowseekerProBlademap({ active = true }) {
               setPulsePages(1);
               scrollTo("pulse");
             }}>Find unusual activity</button>
-            <button type="button" className="th-chipb" onClick={showSavedActivity}>See saved activity</button>
-            <p>Volume is today's contract count. Open interest is the earlier count of open contracts. High volume does not tell us who bought or sold.</p>
-          </section>
-          <MarketCoverage coverage={scanMeta.coverage} />
-          {scanMeta.restored && <p className="th-coverage-progress" role="status" aria-label="Retained scanner results" style={{margin:"0 16px 8px"}}>Earlier results kept while checking the latest scan. Their original times still apply.</p>}
-          <details ref={savedFindingsRef} style={{ padding: "8px 12px", color: "#b6bfd0", fontSize: 12 }}>
+            <details className="th-popover th-reading-help"><summary>How to read</summary><div className="th-popover-body">
+              <strong>Find unusual options activity</strong>
+              <p>Start with volume versus open interest. Check the scan time, then open a contract row to study the stock.</p>
+              <p>Volume is today's contract count. Open interest is the earlier count of open contracts. High volume does not tell us who bought or sold.</p>
+            </div></details>
+          <details ref={savedFindingsRef} className="th-popover" data-testid="screener-saved-findings">
             <summary>Earlier scan findings ({scanMeta.recentFindings?.length || 0} stocks)</summary>
+            <div className="th-popover-body">
             <p>The latest saved scan per stock, kept for up to seven days. These are not live trade signals.
               Up to 100 stocks are shown, with three contract examples each. Times below are when the data was received.</p>
             {scanMeta.findingsStatus === "partial" && <p>Some recent findings could not be saved. This list is incomplete.</p>}
@@ -1409,26 +1419,26 @@ export default function FlowseekerProBlademap({ active = true }) {
                   <strong>{item.ticker}</strong> · {item.contracts} matching contracts · received {new Date(item.received_at * 1000).toLocaleString()}
                   <span> · {(item.examples || []).map(row => `${row[3]} ${row[2]} ${row[4]} (${Number(row[5]).toLocaleString()} session volume)`).join("; ")}</span>
                 </li>)}</ul>}
+            </div>
           </details>
-          <div className="th-topbar">
             <span className="th-pill">Market {marketSession?.session_state || "state unavailable"}</span>
-            <StockDirectory buttonClass="th-pill" onSelect={(symbol) => { setFocusTicker(symbol); setSelectedRow(null); setDrill(null); setDrillSel(null); setDrillRows([]); }} />
-            <TickerPicker value={focusTicker} tickers={providerTickers || universe} status={directoryStatus} onRetry={retryDirectory} ariaLabel="Focused ticker"
-              onChange={(symbol) => { setFocusTicker(symbol); setSelectedRow(null); setDrill(null); setDrillSel(null); setDrillRows([]); }} />
-            <button type="button" className="th-pill" title="Jump to the screener" onClick={() => scrollTo("screens")}>
-              <span className="k">Screen</span><span className="v">{screen.label}</span><span className="c">▾</span>
-            </button>
+            {sharedStockChoice ? <span className="th-focused-stock">Focused {focusTicker}</span> : <>
+              <StockDirectory buttonClass="th-pill" onSelect={(symbol) => { setFocusTicker(symbol); setSelectedRow(null); setDrill(null); setDrillSel(null); setDrillRows([]); }} />
+              <TickerPicker value={focusTicker} tickers={providerTickers || universe} status={directoryStatus} onRetry={retryDirectory} ariaLabel="Focused ticker"
+                onChange={(symbol) => { setFocusTicker(symbol); setSelectedRow(null); setDrill(null); setDrillSel(null); setDrillRows([]); }} />
+            </>}
             <span className="th-sp" />
             <span className="th-pill th-regime" title={heartbeat.hint}>
               <span className={`dot ${heartbeat.dot}`} />
               <span className="v">{dealersFacts.reg.current_state || "—"}{dealersFacts.reg.is_warming ? " · warming" : ""}</span>
             </span>
-            <button type="button" className="th-icb" title="Refresh now" onClick={forceRefresh} disabled={forcing}>
-              {forcing ? "…" : "↻"}
+            <button type="button" className="th-chipb th-refresh" title="Refresh now" onClick={forceRefresh} disabled={forcing}>
+              {forcing ? "Refreshing…" : "Refresh"}
             </button>
             {scanAgeWarning && <span className="th-meta" data-testid="scan-age-warning" title="The scan is over 60 seconds old. Requesting a refresh does not make its data newer.">Scan older than 60s</span>}
-            <button type="button" className="th-icb" title="Settings" onClick={() => scrollTo("settings")}>⚙</button>
           </div>
+          <MarketCoverage coverage={scanMeta.coverage} />
+          {scanMeta.restored && <p className="th-coverage-progress" role="status" aria-label="Retained scanner results" style={{margin:"0 16px 8px"}}>Earlier results kept while checking the latest scan. Their original times still apply.</p>}
 
           <div className="th-page">
             {/* ===== ORDERED SECTIONS ===== */}
@@ -1648,7 +1658,6 @@ export default function FlowseekerProBlademap({ active = true }) {
                     <option value={5000}>5s</option><option value={15000}>15s</option>
                     <option value={30000}>30s</option><option value={60000}>60s</option><option value={0}>Off</option>
                   </select>
-                  <button type="button" className="th-chipb" onClick={forceRefresh}>⟳ Force</button>
                   <button type="button" className="th-chipb" disabled={!screenedScans.length} onClick={() => exportCSV(screenedScans)}>⤓ CSV</button>
                   <button
                     type="button" className="th-chipb"
@@ -2019,7 +2028,7 @@ export default function FlowseekerProBlademap({ active = true }) {
             })}
 
             {/* ===== SETTINGS ===== */}
-            <div className="th-sec" id="settings">
+            <details className="th-sec th-settings-disclosure" id="settings"><summary>Settings</summary>
               <div className="th-sh"><h2>Settings</h2>
                 <span className="th-meta">saved in floww Settings · this browser · follows the app&apos;s existing store</span>
               </div>
@@ -2060,7 +2069,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                   <TidehunterSettings />
                 </div>
               </div>
-            </div>
+            </details>
           </div>
 
           <div className="th-foot">

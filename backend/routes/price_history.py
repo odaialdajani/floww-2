@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from services.price_node_history import build_history, epoch
 
@@ -42,7 +43,11 @@ def recording_summary(engine, ticker):
 
 @router.get("/price-history/{ticker}")
 async def price_history(ticker: str, days: int = Query(5, ge=1, le=20),
-                        query_key: str | None = Query(None, max_length=2000)):
+                        query_key: str | None = Query(None, max_length=2000),
+                        interval_minutes: int | None = Query(None, ge=1, le=60),
+                        include_metric_lines: bool = Query(False)):
+    if interval_minutes is not None and interval_minutes not in {1, 5, 15, 30, 60}:
+        raise HTTPException(status_code=422, detail="Choose 1, 5, 15, 30 or 60 minute candles")
     from services.duckdb_engine import db
     from services.public_api_adapter import fetch_bars_by_interval
     from services.public_budget import BudgetExhausted, budget
@@ -53,6 +58,10 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=20),
     except Exception:
         recording = {"status": "unavailable", "durable": False}
     period, aggregation, bar_seconds = ("DAY", "ONE_MINUTE", 60) if days == 1 else ("WEEK", "FIVE_MINUTES", 300) if days <= 5 else ("MONTH", "ONE_HOUR", 3600)
+    if interval_minutes is not None:
+        aggregation = {1: "ONE_MINUTE", 5: "FIVE_MINUTES", 15: "FIFTEEN_MINUTES",
+                       30: "THIRTY_MINUTES", 60: "ONE_HOUR"}[interval_minutes]
+        bar_seconds = interval_minutes * 60
     # This path deliberately does not use market_bars' stale-on-error cache:
     # a failed historical fetch must be visible, not labelled as a new read.
     try:
@@ -66,6 +75,15 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=20),
             budget.release()
     received_at = datetime.now(UTC).isoformat()
     price_only = build_history(ticker, bars, [], query_key)
+    session_dates = sorted({datetime.fromtimestamp(epoch(frame["time"]), UTC).astimezone(ZoneInfo("America/New_York")).date()
+                            for frame in price_only["frames"]})
+    if interval_minutes is not None and len(session_dates) > days:
+        keep = set(session_dates[-days:])
+        valid_instants = {epoch(frame["time"]) for frame in price_only["frames"]
+                          if datetime.fromtimestamp(epoch(frame["time"]), UTC).astimezone(ZoneInfo("America/New_York")).date() in keep}
+        bars = [bar for bar in bars if epoch(bar.get("t")) in valid_instants]
+        price_only = build_history(ticker, bars, [], query_key)
+        session_dates = session_dates[-days:]
     valid_times = [epoch(frame["time"]) for frame in price_only["frames"]]
     if not valid_times:
         return {**build_history(ticker, [], [], query_key), "price_status": "unavailable",
@@ -82,9 +100,12 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=20),
     if truncated:
         rows = rows[:50000]
     result = build_history(ticker, bars, rows, query_key)
+    if include_metric_lines:
+        from services.recorded_price_levels import enrich_recorded_levels
+        result = await asyncio.to_thread(enrich_recorded_levels, result, db)
     for frame in result["frames"]:
         frame["duration_seconds"] = bar_seconds
     return {**result, "price_status": "available", "node_status": node_status,
             "records_truncated": truncated, "days": days, "prices_received_at": received_at,
             "last_candle_at": datetime.fromtimestamp(max(valid_times), UTC).isoformat(),
-            "bar_seconds": bar_seconds, "recording": recording}
+            "bar_seconds": bar_seconds, "price_sessions_returned": len(session_dates), "recording": recording}

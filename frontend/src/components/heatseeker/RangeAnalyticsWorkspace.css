@@ -7,3 +7,6 @@
 .range-replay-controls{border:1px solid #55727c;border-radius:4px;padding:10px;margin:12px 0;overflow-wrap:anywhere}.range-replay-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:end}.range-replay-toolbar label{display:grid;gap:3px;min-width:0}.range-replay-toolbar select{width:100%;min-width:0;max-width:100%;box-sizing:border-box}.range-replay-toolbar input[type=range]{width:160px}.range-replay-controls p{margin:6px 0}.range-replay-toolbar label:has(select[aria-label="Stored range record"]){flex:1 1 240px;max-width:100%}
 .range-workspace .lodestar-ask{display:block;max-width:100%}.range-workspace .lodestar-ask-menu,.range-workspace .lodestar-ask-note{position:static;width:100%;min-width:0;box-sizing:border-box}.lodestar-range-disclosure{display:block;max-width:300px;margin:8px 0;white-space:normal;font-size:12px;line-height:1.5}
 @media(max-width:900px){.range-desk{grid-template-columns:minmax(0,1fr)}.range-inspector{border-left:0;border-top:1px solid #38545d;padding:8px 0}.range-toolbar select{max-width:100%}.range-workspace{padding:10px}.range-toolbar{align-items:start}}
+
+.range-compare{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;min-width:0}.range-compare>.range-matrix-scroll{min-width:0;max-width:100%}
+.range-inspector{min-width:0;overflow-wrap:anywhere}

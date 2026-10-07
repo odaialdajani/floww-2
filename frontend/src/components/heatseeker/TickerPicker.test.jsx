@@ -97,3 +97,66 @@ test("moving focus outside closes the dropdown and aborts a pending lookup",asyn
  act(()=>screen.getByRole("button",{name:"Other task"}).focus());expect(input).toHaveAttribute("aria-expanded","false");expect(axios.get.mock.calls[0][1].signal.aborted).toBe(true);
  await act(async()=>resolve({data:{instruments:[{symbol:"COIN"}]}}));expect(change).not.toHaveBeenCalled();
 });
+
+
+const feedCounts=()=>{const now=Date.now()/1000;return {status:"available",checked_at:new Date().toISOString(),directory:{available:true,stale:false,total:3000,optionable_total:800,sectors:["Technology"],sector_classified:2},options:{received_recently:2,receipt_times:[now-2,now-3],window_seconds:300,last_scan_at:now-2},provider:{last_success_at:now-5}};};
+test("global stock counts stay visible with the dropdown closed and distinguish reads from listed names",async()=>{axios.get.mockResolvedValue({data:feedCounts()});render(<TickerPicker value="SPY" tickers={["SPY","AMD"]} className="floww-header-symbol-picker"/>);await waitFor(()=>expect(screen.getByTestId("stock-feed-counts")).toHaveTextContent("3,000 listed"));expect(screen.getByTestId("stock-feed-counts")).toHaveTextContent("2 stocks checked / 800 with options in 5 min");expect(screen.queryByRole("listbox")).toBeNull();expect(screen.getByTestId("stock-feed-counts")).toBeVisible();});
+test("global categories use provider options and supplied sectors without changing scanning scope",async()=>{const change=jest.fn();axios.get.mockImplementation(async(url,options)=>({data:String(url).includes("/market/status")?feedCounts():{instruments:[{symbol:"AMD",options:true,sector:"Technology"}],matches:1,stale:false}}));render(<TickerPicker value="SPY" tickers={["SPY","AMD","NOPT"]} onChange={change} className="floww-header-symbol-picker"/>);await waitFor(()=>expect(screen.getByTestId("stock-feed-counts")).toHaveTextContent("3,000 listed"));fireEvent.focus(screen.getByRole("combobox",{name:"Search stocks"}));fireEvent.change(screen.getByRole("combobox",{name:"Stock category"}),{target:{value:"options"}});await waitFor(()=>expect(screen.getByRole("option",{name:"AMD"})).toBeInTheDocument());expect(screen.queryByRole("option",{name:"NOPT"})).toBeNull();fireEvent.change(screen.getByRole("combobox",{name:"Stock sector"}),{target:{value:"Technology"}});await waitFor(()=>expect(axios.get).toHaveBeenCalledWith(expect.stringContaining("/market/catalog"),expect.objectContaining({params:expect.objectContaining({options_only:true,sector:"Technology"})})));await waitFor(()=>expect(screen.getByRole("option",{name:"AMD"})).toBeInTheDocument());fireEvent.click(screen.getByRole("option",{name:"AMD"}));expect(change).toHaveBeenCalledWith("AMD");expect(axios.get.mock.calls.every(([url])=>!String(url).includes("scan"))).toBe(true);});
+test("missing sector details stay unavailable rather than guessed from a ticker",async()=>{const b=feedCounts();axios.get.mockResolvedValue({data:{...b,directory:{...b.directory,sectors:[],sector_classified:0}}});render(<TickerPicker value="SPY" tickers={["SPY","AMD"]} className="floww-header-symbol-picker"/>);await waitFor(()=>expect(screen.getByTestId("stock-feed-counts")).toHaveTextContent("3,000 listed"));fireEvent.focus(screen.getByRole("combobox",{name:"Search stocks"}));expect(screen.getByRole("combobox",{name:"Stock sector"})).toBeDisabled();expect(screen.getByRole("option",{name:"Sector details unavailable"})).toBeInTheDocument();});
+test("favorite category narrows browsing without rewriting the full list",async()=>{localStorage.setItem(FAVORITES_KEY,JSON.stringify(["SPY"]));axios.get.mockImplementation(async url=>({data:String(url).includes("/market/status")?feedCounts():{instruments:[{symbol:"SPY",options:true},{symbol:"AMD",options:true}],matches:2,stale:false}}));render(<TickerPicker value="SPY" tickers={["SPY","AMD"]} className="floww-header-symbol-picker"/>);fireEvent.focus(screen.getByRole("combobox",{name:"Search stocks"}));fireEvent.change(screen.getByRole("combobox",{name:"Stock category"}),{target:{value:"favorites"}});expect(screen.getByRole("option",{name:"SPY"})).toBeInTheDocument();expect(screen.queryByRole("option",{name:"AMD"})).toBeNull();fireEvent.change(screen.getByRole("combobox",{name:"Stock category"}),{target:{value:"all"}});await waitFor(()=>expect(screen.getByRole("option",{name:"AMD"})).toBeInTheDocument());expect(JSON.parse(localStorage.getItem(FAVORITES_KEY))).toEqual(["SPY"]);});
+test("changing category aborts a delayed group instead of showing old filtered results",async()=>{const pending=[];axios.get.mockImplementation((url,options)=>String(url).includes("/market/status")?Promise.resolve({data:feedCounts()}):new Promise(resolve=>pending.push({resolve,signal:options.signal,params:options.params})));render(<TickerPicker value="SPY" tickers={["SPY","AMD"]} className="floww-header-symbol-picker"/>);fireEvent.focus(screen.getByRole("combobox",{name:"Search stocks"}));fireEvent.change(screen.getByRole("combobox",{name:"Stock category"}),{target:{value:"options"}});await waitFor(()=>expect(pending).toHaveLength(1));fireEvent.change(screen.getByRole("combobox",{name:"Stock category"}),{target:{value:"all"}});expect(pending[0].signal.aborted).toBe(true);await act(async()=>pending[0].resolve({data:{instruments:[{symbol:"NOPT",options:false}],matches:1}}));expect(screen.queryByRole("option",{name:"NOPT"})).toBeNull();await waitFor(()=>expect(pending).toHaveLength(2));expect(pending[1].params.options_only).toBe(false);await act(async()=>pending[1].resolve({data:{instruments:[{symbol:"SPY",options:true}],matches:1}}));expect(screen.getByRole("option",{name:"SPY"})).toBeInTheDocument();});
+
+
+test("global All listed searches provider names beyond the incomplete local fallback",async()=>{
+ const change=jest.fn();axios.get.mockImplementation(async(url,options)=>({data:String(url).includes("/market/status")?feedCounts():{instruments:[{symbol:options.params.q==="BEYOND"?"BEYOND":"OUTSIDE",options:true}],matches:1,stale:false}}));
+ render(<TickerPicker value="SPY" tickers={["SPY","QQQ"]} status="incomplete" className="floww-header-symbol-picker" onChange={change}/>);
+ const input=screen.getByRole("combobox",{name:"Search stocks"});fireEvent.focus(input);
+ await waitFor(()=>expect(screen.getByRole("option",{name:"OUTSIDE"})).toBeInTheDocument());
+ fireEvent.change(input,{target:{value:"BEYOND"}});
+ await waitFor(()=>expect(screen.getByRole("option",{name:"BEYOND"})).toBeInTheDocument());
+ expect(axios.get).toHaveBeenCalledWith(expect.stringContaining("/market/catalog"),expect.objectContaining({params:expect.objectContaining({q:"BEYOND",page:1,limit:30,options_only:false})}));
+ fireEvent.click(screen.getByRole("option",{name:"BEYOND"}));expect(change).toHaveBeenCalledWith("BEYOND");
+});
+test("global All listed pages use provider counts and keyboard selects the loaded page identity",async()=>{
+ const batch=Array.from({length:30},(_,i)=>({symbol:"NAME"+i,options:true}));const change=jest.fn();
+ axios.get.mockImplementation(async(url,options)=>({data:String(url).includes("/market/status")?feedCounts():{instruments:options.params.page===1?batch:[{symbol:"LAST",options:true}],matches:31,stale:false}}));
+ render(<TickerPicker value="SPY" tickers={["SPY"]} className="floww-header-symbol-picker" onChange={change}/>);const input=screen.getByRole("combobox",{name:"Search stocks"});fireEvent.focus(input);
+ await waitFor(()=>expect(screen.getByRole("option",{name:"NAME0"})).toBeInTheDocument());fireEvent.click(screen.getByRole("button",{name:"Next"}));
+ await waitFor(()=>expect(screen.getByRole("option",{name:"LAST"})).toBeInTheDocument());
+ fireEvent.keyDown(input,{key:"Enter"});expect(change).toHaveBeenCalledWith("LAST");expect(axios.get.mock.calls.filter(([url])=>String(url).includes("/market/catalog")).map(([,options])=>options.params.page)).toEqual([1,2]);
+});
+test("failed global All query keeps results unknown instead of falling back to a partial list or zero matches",async()=>{
+ axios.get.mockImplementation(async url=>{if(String(url).includes("/market/status"))return {data:feedCounts()};throw Error("unavailable");});
+ render(<TickerPicker value="SPY" tickers={["SPY"]} className="floww-header-symbol-picker"/>);fireEvent.focus(screen.getByRole("combobox",{name:"Search stocks"}));
+ expect(await screen.findByRole("alert")).toHaveTextContent("stock group could not be loaded");expect(screen.queryByRole("option",{name:"SPY"})).toBeNull();
+ expect(document.querySelector(".ticker-picker-result-count")).toHaveTextContent("Unknown listed stocks");expect(document.querySelector(".ticker-picker-result-count")).not.toHaveTextContent("0 listed stocks");
+});
+test("favorite category reaches saved IDs absent from the local fallback while selection still checks the provider",async()=>{
+ localStorage.setItem(FAVORITES_KEY,JSON.stringify(["BEYOND"]));const change=jest.fn();
+ axios.get.mockImplementation(async url=>({data:String(url).includes("/market/status")?feedCounts():{instruments:[{symbol:"BEYOND",options:true}],matches:1,has_more:false,stale:false}}));
+ render(<TickerPicker value="SPY" tickers={["SPY"]} className="floww-header-symbol-picker" onChange={change}/>);fireEvent.focus(screen.getByRole("combobox",{name:"Search stocks"}));fireEvent.change(screen.getByRole("combobox",{name:"Stock category"}),{target:{value:"favorites"}});
+ expect(screen.getByRole("option",{name:"BEYOND"})).toBeInTheDocument();fireEvent.click(screen.getByRole("option",{name:"BEYOND"}));await waitFor(()=>expect(change).toHaveBeenCalledWith("BEYOND"));
+});
+
+
+test("a delayed global All query cannot replace the newer provider query",async()=>{
+ const requests=[];axios.get.mockImplementation((url,options)=>String(url).includes("/market/status")?Promise.resolve({data:feedCounts()}):new Promise(resolve=>requests.push({resolve,params:options.params,signal:options.signal})));
+ const change=jest.fn();render(<TickerPicker value="SPY" tickers={["SPY"]} className="floww-header-symbol-picker" onChange={change}/>);const input=screen.getByRole("combobox",{name:"Search stocks"});
+ fireEvent.change(input,{target:{value:"OLDER"}});await waitFor(()=>expect(requests).toHaveLength(1));
+ fireEvent.change(input,{target:{value:"NEWER"}});expect(requests[0].signal.aborted).toBe(true);await waitFor(()=>expect(requests).toHaveLength(2));
+ await act(async()=>requests[1].resolve({data:{instruments:[{symbol:"NEWER",options:true}],matches:1,page:1,limit:30}}));
+ await act(async()=>requests[0].resolve({data:{instruments:[{symbol:"OLDER",options:true}],matches:1,page:1,limit:30}}));
+ expect(screen.queryByRole("option",{name:"OLDER"})).toBeNull();fireEvent.click(screen.getByRole("option",{name:"NEWER"}));expect(change.mock.calls).toEqual([["NEWER"]]);
+});
+test("an empty incomplete provider directory stays unknown and retries only its bounded page",async()=>{
+ let attempts=0;axios.get.mockImplementation(async(url,options)=>{if(String(url).includes("/market/status"))return {data:feedCounts()};attempts++;return {data:attempts===1?{instruments:[],matches:0,complete_provider_catalog:false,page:1,limit:30}:{instruments:[{symbol:"BEYOND",options:true}],matches:1,complete_provider_catalog:true,page:1,limit:30}};});
+ render(<TickerPicker value="SPY" tickers={["SPY"]} className="floww-header-symbol-picker"/>);fireEvent.focus(screen.getByRole("combobox",{name:"Search stocks"}));
+ expect(await screen.findByRole("alert")).toHaveTextContent("Matches are unavailable");expect(document.querySelector(".ticker-picker-result-count")).toHaveTextContent("Unknown listed stocks");
+ fireEvent.click(screen.getByRole("button",{name:"Retry stock group"}));await waitFor(()=>expect(screen.getByRole("option",{name:"BEYOND"})).toBeInTheDocument());
+ expect(axios.get.mock.calls.filter(([url])=>String(url).includes("/market/catalog")).map(([,options])=>options.params)).toEqual([{page:1,limit:30,q:"",options_only:false},{page:1,limit:30,q:"",options_only:false}]);
+});
+test("global All refuses a mismatched provider page or rows outside the typed query",async()=>{
+ axios.get.mockImplementation(async url=>({data:String(url).includes("/market/status")?feedCounts():{instruments:[{symbol:"WRONG",options:true}],matches:1,page:2,limit:30}}));
+ render(<TickerPicker value="SPY" tickers={["SPY"]} className="floww-header-symbol-picker"/>);fireEvent.change(screen.getByRole("combobox",{name:"Search stocks"}),{target:{value:"RIGHT"}});
+ expect(await screen.findByRole("alert")).toHaveTextContent("Matches are unavailable");expect(screen.queryByRole("option",{name:"WRONG"})).toBeNull();
+});

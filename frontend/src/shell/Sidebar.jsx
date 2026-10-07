@@ -110,14 +110,14 @@ export default function Sidebar({ page, onNavigate, userEmail, userTier }) {
           className="flex h-7 w-7 items-center justify-center rounded-md"
           style={{ background: "var(--gold-dim)", border: "1px solid var(--gold-border)" }}
         >
-          <span className="display font-bold text-sm" style={{ color: "var(--gold)" }}>Δ</span>
+          <span role="img" aria-label="FLOWW" title="FLOWW" className="display font-bold text-sm" style={{ color: "var(--gold)" }}>F</span>
         </div>
         {!collapsed && (
           <span
             className="display font-bold tracking-[0.12em]"
             style={{ fontSize: 13, color: "var(--text-primary)" }}
           >
-            MERIDIAN
+            FLOWW
           </span>
         )}
         <button

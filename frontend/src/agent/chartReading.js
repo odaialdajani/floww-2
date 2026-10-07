@@ -17,7 +17,7 @@ export function readableScopeText(text = "") {
 }
 
 export function savedChartReading(answer, ticker) {
-  const facts = (answer?.facts || []).filter(f => f?.ticker === ticker);
+  const facts = (Array.isArray(answer?.facts) ? answer.facts : []).filter(f => f?.ticker === ticker);
   const strikes = unique(facts.filter(f => f.metric === "Displayed strikes"));
   if (!strikes?.snapshot_id || !Array.isArray(strikes.value) || !strikes.value.length ||
       !strikes.value.every(s => finite(s) && s > 0) || new Set(strikes.value).size !== strikes.value.length) return null;
@@ -39,6 +39,39 @@ export function savedChartReading(answer, ticker) {
     add("This is the chart's estimate for that strike and expiry, not an observed dealer position.", [cell]);
   }
   const bars = display("Displayed net gamma");
+  const profile = display("Displayed signed profile");
+  const basis = display("Display basis");
+  if (!bars && basis?.value === "Raw OI" && profile?.unit === "display gamma units" &&
+      Array.isArray(profile.value) && profile.value.length === strikes.value.length) {
+    const counts = display("Displayed profile contributing expiries");
+    const scopeVerified = typeof strikes.snapshot_id === "string" && Boolean(strikes.snapshot_id.trim()) &&
+      typeof strikes.horizon === "string" && Boolean(strikes.horizon.trim());
+    const countsVerified = scopeVerified && counts?.unit === "expiry counts" && Array.isArray(counts.value) &&
+      counts.value.length === strikes.value.length && counts.value.every(value => Number.isSafeInteger(value) && value >= 0 && value <= expiry.value.length);
+    const known = profile.value.map((value, index) => ({value, strike: strikes.value[index]})).filter(row => finite(row.value));
+    const complete = countsVerified && known.length === profile.value.length && counts.value.every(value => value === expiry.value.length);
+    const support = [strikes, profile, expiry, ...(countsVerified ? [counts] : [])];
+    if (known.length) {
+      const maximum = Math.max(...known.map(row => Math.abs(row.value)));
+      if (maximum === 0) add(complete ? "All visible bars are zero; no largest level stands out." :
+        "The saved profile contributions are zero; missing expiry contributions remain unknown.", support);
+      else {
+        const largest = known.filter(row => Math.abs(row.value) === maximum);
+        const label = complete ? "Largest visible bar" : "Largest saved profile contribution";
+        add(`${label}${largest.length > 1 ? "s (tied)" : ""}: ${largest.map(row => `${price(row.strike)} at ${amount(row.value)} displayed gamma`).join("; ")}.`, support);
+        add("This describes the saved raw profile by size; it is not a price target or a direction forecast.", support);
+      }
+    }
+    if (!complete) add("Missing expiry contributions could change the largest level or the total. A complete visible total is unavailable.", support);
+    else {
+      const sum = known.reduce((value, row) => value + row.value, 0);
+      const total = display("Displayed total gamma");
+      if (finite(sum) && (!total || finite(total.value) && total.unit === profile.unit &&
+          Math.abs(sum - total.value) <= Math.max(1, Math.abs(sum)) * 1e-10)) {
+        add(`Visible total: ${amount(sum)} displayed gamma across the saved strikes and expiries.`, [...support, ...(total ? [total] : [])]);
+      }
+    }
+  }
   if (Array.isArray(bars?.value) && bars.value.length === strikes.value.length && bars.unit === "display gamma units") {
     const known = bars.value.map((value, index) => ({value, strike: strikes.value[index]})).filter(row => finite(row.value));
     const complete = known.length === bars.value.length;
@@ -80,4 +113,59 @@ export function savedChartReading(answer, ticker) {
     add(`Saved market observation: ${strikes.event_time}. These readings may have changed since.`, [strikes]);
   }
   return lines;
+}
+
+// Present only a coherent daily window already stored with this answer.
+// Recalculation checks the stored scalar; it never replaces that value.
+const nonemptyText = value => typeof value === "string" && Boolean(value.trim());
+function validDailyDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const millis = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(millis) && new Date(millis).toISOString().slice(0, 10) === value;
+}
+function savedInstant(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,9})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(value) ||
+      !validDailyDate(value.slice(0, 10))) return null;
+  const millis = Date.parse(value);
+  return Number.isFinite(millis) ? millis : null;
+}
+
+export function savedDailyPriceReading(answer, ticker) {
+  if (!nonemptyText(ticker)) return null;
+  const facts = (Array.isArray(answer?.facts) ? answer.facts : []).filter(fact => fact?.ticker === ticker);
+  const dates = unique(facts.filter(fact => fact.metric === "Realized volatility observation dates"));
+  const prices = unique(facts.filter(fact => fact.metric === "Realized volatility close prices"));
+  const scalar = unique(facts.filter(fact => fact.metric === "Realized daily close volatility"));
+  if (!dates || !prices || !scalar || dates.unit !== "dates" || prices.unit !== "USD" ||
+      scalar.unit !== "annualized fraction") return null;
+  const supporting = [dates, prices, scalar];
+  if (supporting.some(fact => !nonemptyText(fact.id) || !nonemptyText(fact.snapshot_id) ||
+      !nonemptyText(fact.horizon) || !nonemptyText(fact.source) || fact.contract != null ||
+      !["ok", "degraded", "stale"].includes(fact.status)) ||
+      new Set(supporting.map(fact => fact.id)).size !== supporting.length ||
+      supporting.some(fact => !sameScope(fact, dates) || fact.source !== dates.source)) return null;
+  const observed = savedInstant(dates.event_time);
+  if (observed === null || supporting.some(fact => savedInstant(fact.event_time) !== observed)) return null;
+  if (!Array.isArray(scalar.parents) || scalar.parents.length !== 2 ||
+      new Set(scalar.parents).size !== 2 || !scalar.parents.includes(dates.id) || !scalar.parents.includes(prices.id)) return null;
+  const days = dates.value, closes = prices.value;
+  if (!Array.isArray(days) || days.length < 3 || days.length > 512 ||
+      !Array.isArray(closes) || closes.length !== days.length ||
+      !days.every((day, index) => validDailyDate(day) && (!index || day > days[index - 1])) ||
+      !closes.every(close => finite(close) && close > 0) ||
+      days[days.length - 1] > new Date(observed).toISOString().slice(0, 10) ||
+      !finite(scalar.value) || scalar.value < 0) return null;
+  const returns = closes.slice(1).map((close, index) => Math.log(close / closes[index]));
+  if (!returns.every(finite)) return null;
+  const mean = returns.reduce((sum, value) => sum + value, 0) / returns.length;
+  const variance = returns.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (returns.length - 1);
+  const checked = Math.sqrt(variance) * Math.sqrt(252);
+  const annualizedPercent = scalar.value * 100;
+  if (!finite(checked) || !finite(annualizedPercent) ||
+      Math.abs(checked - scalar.value) > Math.max(1e-12, Math.abs(checked) * 1e-10)) return null;
+  const status = supporting.some(fact => fact.status === "stale") ? "stale" :
+    supporting.some(fact => fact.status === "degraded") ? "degraded" : "ok";
+  const reason = [...new Set(supporting.map(fact => fact.reason).filter(nonemptyText))].join("; ");
+  return {value: scalar.value, annualizedPercent, dates: [...days], closes: [...closes],
+    returnCount: returns.length, source: dates.source, status, reason, factIds: supporting.map(fact => fact.id)};
 }

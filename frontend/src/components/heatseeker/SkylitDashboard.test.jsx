@@ -72,7 +72,9 @@ jest.mock("./NewsBadge",                    () => () => <div data-testid="hs-new
 jest.mock("./RndDensityPanel",              () => () => <div data-testid="hs-rnd-density" />);
 
 // Import AFTER mocks are set up.
-import SkylitDashboard from "./SkylitDashboard";
+import SkylitDashboardView from "./SkylitDashboard";
+// Existing matrix contracts explicitly start at the secondary options desk.
+function SkylitDashboard(props) { return <SkylitDashboardView defaultStudy="options" {...props} />; }
 import useScreenContext from "../../agent/useScreenContext";
 import coverageFixture from "../../fixtures/integration/coverage-read.v1.json";
 import {skylitViewScope,readSkylitView,writeSkylitView} from "./skylitViewPreferences";
@@ -334,7 +336,7 @@ describe("SkylitDashboard", () => {
     });
 
     // Zenith chrome (top → bottom)
-    expect(screen.getByTestId("mock-ticker-bar")).toBeInTheDocument();
+    expect(screen.queryByTestId("mock-ticker-bar")).not.toBeInTheDocument();
     expect(screen.getByTestId("mock-control-bar")).toBeInTheDocument();
     expect(screen.getByTestId("mock-heatmap")).toBeInTheDocument();
     expect(screen.getByTestId("mock-metrics")).toBeInTheDocument();
@@ -522,7 +524,7 @@ describe("SkylitDashboard", () => {
     expect(screen.getAllByTestId("wall-inspector").length).toBe(2);
   });
 
-  test("passes the full ticker universe to the bar and control bar (no fallback)", async () => {
+  test("passes the full ticker universe to desk arrows without a duplicate search bar", async () => {
     // 2026-09-12 regression: neither child received `tickers`, so the bar
     // fell back to 23 featured tickers and the arrows cycled 10 ("1/10")
     // while App.js held the 31k universe. An exotic symbol must flow through.
@@ -531,9 +533,7 @@ describe("SkylitDashboard", () => {
       render(<SkylitDashboard ticker="SPY" tickers={universe} />);
     });
 
-    expect(screen.getByTestId("mock-ticker-bar")).toHaveAttribute(
-      "data-tickers", JSON.stringify(universe)
-    );
+    expect(screen.queryByTestId("mock-ticker-bar")).not.toBeInTheDocument();
     expect(screen.getByTestId("mock-control-bar")).toHaveAttribute(
       "data-tickers", JSON.stringify(universe)
     );
@@ -1050,16 +1050,16 @@ jest.mock("react-plotly.js", () => () => <div data-testid="history-plot" />);
 test("open history blocks research through loading and live refresh; close uses latest map", async()=>{
  axios.get.mockImplementation(()=>new Promise(()=>{}));
  const mounted=render(<><SkylitDashboard ticker="SPY" data={selectionMap()} spot={650}/><ResearchSelection/></>);
- fireEvent.click(screen.getByText("Price chart + historical nodes"));
+ fireEvent.click(screen.getByTestId("skylit-study-switch"));
  let context=JSON.parse(screen.getByTestId("research-selection").textContent);
  expect(context).toMatchObject({displayMode:"price-history",mapVersion:null,mapQuery:null,selectedStrike:null});
  mounted.rerender(<><SkylitDashboard ticker="SPY" data={selectionMap(999,"LATEST")} spot={650}/><ResearchSelection/></>);
  expect(JSON.parse(screen.getByTestId("research-selection").textContent).displayMode).toBe("price-history");
- fireEvent.click(screen.getByText("Price chart + historical nodes"));
+ fireEvent.click(screen.getByTestId("skylit-study-switch"));
  expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({displayMode:"live",mapVersion:"LATEST"});
- fireEvent.click(screen.getByText("Price chart + historical nodes"));
+ fireEvent.click(screen.getByTestId("skylit-study-switch"));
  mounted.rerender(<><SkylitDashboard ticker="QQQ" data={{...selectionMap(),ticker:"QQQ"}} spot={650}/><ResearchSelection/></>);
- expect(screen.getByText("Price chart + historical nodes")).toHaveAttribute("aria-expanded","true");
+ expect(screen.getByTestId("skylit-study-switch")).toHaveTextContent("Options desk");
  expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({ticker:"QQQ",displayMode:"price-history",mapVersion:null});
 });
 
@@ -1310,11 +1310,13 @@ describe('dashboard display preferences across main-tab remounts',()=>{
   const first=mountPreferences(data,{localView:'focus'});
   fireEvent.change(screen.getByRole('combobox',{name:'Canvas layout'}),{target:{value:'calendar'}});
   fireEvent.click(screen.getByTestId('mock-activity'));fireEvent.click(screen.getByTestId('skylit-zoom-in'));
-  await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Price chart + historical nodes'})));
+  await act(async()=>fireEvent.click(screen.getByTestId('skylit-study-switch')));
   first.unmount();await act(async()=>mountPreferences(data,{localView:'focus'}));
+  expect(screen.getByTestId('skylit-study-switch')).toHaveTextContent("Options desk");
+  fireEvent.click(screen.getByTestId('skylit-study-switch'));
   expect(screen.getByRole('combobox',{name:'Canvas layout'})).toHaveValue('calendar');
   expect(screen.getByTestId('skylit-heatmap-area').style.zoom).toBe('1.25');
-  expect(screen.getByRole('button',{name:'Price chart + historical nodes'})).toHaveAttribute('aria-expanded','true');
+  fireEvent.click(screen.getByTestId('skylit-study-switch'));
   expect(JSON.parse(screen.getByTestId('research-selection').textContent)).toMatchObject({overlayMetric:'activity',displayMode:'price-history'});
  });
  test('a remounted selection uses the new current reading and never re-arms trade or locks',()=>{
@@ -1425,12 +1427,14 @@ describe('pending chart preferences and in-place query isolation',()=>{
   const qqq={...selectionMap(999),ticker:'QQQ'};const next=render(desk('SPY',spy));
   fireEvent.change(screen.getByRole('combobox',{name:'Canvas layout'}),{target:{value:'calendar'}});fireEvent.click(screen.getByTestId('mock-activity'));fireEvent.click(screen.getByTestId('skylit-zoom-in'));
   await act(async()=>next.rerender(desk('QQQ',qqq)));
+  expect(screen.getByTestId('skylit-study-switch')).toHaveTextContent("Options desk");
+  fireEvent.click(screen.getByTestId('skylit-study-switch'));
   expect(screen.getByRole('combobox',{name:'Canvas layout'})).toHaveValue('multi');expect(screen.getByTestId('skylit-heatmap-area').style.zoom).toBe('0.75');
-  expect(screen.getByRole('button',{name:'Price chart + historical nodes'})).toHaveAttribute('aria-expanded','true');
+  fireEvent.click(screen.getByTestId('skylit-study-switch'));
   expect(readSkylitView(scope('QQQ'))).toMatchObject({layout:'multi',metric:'raw',gridZoom:.75,priceHistoryOpen:true});
   await act(async()=>next.rerender(desk('SPY',spy)));
   expect(screen.getByRole('combobox',{name:'Canvas layout'})).toHaveValue('calendar');expect(screen.getByTestId('skylit-heatmap-area').style.zoom).toBe('1.25');
-  expect(screen.getByRole('button',{name:'Price chart + historical nodes'})).toHaveAttribute('aria-expanded','false');
+  expect(screen.getByTestId('skylit-study-switch')).toHaveTextContent("Price chart");
   expect(readSkylitView(scope('SPY'))).toMatchObject({layout:'calendar',metric:'activity',gridZoom:1.25,priceHistoryOpen:false});
  });
  test('an explicit basis change cancels a pending saved selection even before data arrives',()=>{
@@ -1466,4 +1470,95 @@ describe('pending chart preferences and in-place query isolation',()=>{
   expect(JSON.parse(screen.getByTestId('research-selection').textContent)).toMatchObject({overlayMetric:'activity',selectedStrike:650});
  });
 
+});
+
+
+describe("primary stock price study", () => {
+ const chart = props => <><SkylitDashboardView ticker="SPY" spot={650} data={selectionMap()} {...props} /><ResearchSelection /></>;
+ test("opens the price chart first with one switch and no duplicate stock search", () => {
+  render(chart());
+  expect(screen.getByTestId("price-node-history")).toBeVisible();
+  expect(screen.getByTestId("mock-control-bar")).not.toBeVisible();
+  expect(screen.getByTestId("mock-heatmap")).not.toBeVisible();
+  expect(screen.getAllByRole("button", {name:"Options desk"})).toHaveLength(1);
+  expect(screen.queryByTestId("mock-ticker-bar")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", {name:"Browse all stocks"})).toBeNull();
+  expect(screen.getByRole("combobox", {name:"Candle interval"})).toHaveValue("30");
+  expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({displayMode:"price-history",mapQuery:null,mapVersion:null,selectedStrike:null});
+ });
+ test("one switch keeps desk choices and candle interval while research follows the owning view", () => {
+  render(chart());
+  fireEvent.change(screen.getByRole("combobox", {name:"Candle interval"}), {target:{value:"15"}});
+  fireEvent.click(screen.getByRole("button", {name:"Options desk"}));
+  fireEvent.change(screen.getByRole("combobox", {name:"Canvas layout"}), {target:{value:"calendar"}});
+  fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+  expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({displayMode:"live",selectedStrike:650});
+  fireEvent.click(screen.getByRole("button", {name:"Price chart"}));
+  expect(screen.getByRole("combobox", {name:"Candle interval"})).toHaveValue("15");
+  expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({displayMode:"price-history",selectedStrike:null,mapQuery:null});
+  fireEvent.click(screen.getByRole("button", {name:"Options desk"}));
+  expect(screen.getByRole("combobox", {name:"Canvas layout"})).toHaveValue("calendar");
+  expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("123.4");
+ });
+ test("an explicit options desk choice survives a tab remount", () => {
+  const first=render(chart());fireEvent.click(screen.getByRole("button", {name:"Options desk"}));first.unmount();
+  render(chart());expect(screen.getByTestId("mock-control-bar")).toBeVisible();expect(screen.getByTestId("price-node-history")).not.toBeVisible();
+ });
+ test("opening a saved reading reveals its exact recorded options desk", async () => {
+  axios.get.mockImplementation(async url => ({data:String(url).includes("/decisions/page") ? {ticker:"SPY",status:"available",order:"newest",count:1,has_more:false,next_cursor:null,decisions:[{ticker:"SPY",decision_id:"saved-one",snapshot_id:"owning-chart",snapshot_available:true,at_ts:"2026-10-06T18:00:00Z",n_quotes:2,features_status:"available"}]} : String(url).includes("/replay/") ? {snapshot:{ticker:"SPY",snapshot_id:"owning-chart",asof_ts:"2026-10-06T18:00:00Z",spot:649},strikes:[{strike:650}],grids:{grid:selectionMap(-7).grid},metrics_full:{},context:{}} : {ticker:"SPY",frames:[]}}));
+  render(chart());fireEvent.click(screen.getByRole("button", {name:"Saved chart readings"}));
+  await waitFor(()=>expect(screen.getByRole("button", {name:"Open saved chart"})).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", {name:"Open saved chart"}));
+  await waitFor(()=>expect(screen.getByTestId("solstice-replay-banner")).toHaveTextContent("2026-10-06T18:00:00Z"));
+  expect(screen.getByTestId("mock-control-bar")).toBeVisible();expect(screen.getByTestId("price-node-history")).not.toBeVisible();
+  expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({displayMode:"replay",snapshotId:"owning-chart"});
+  expect(screen.getByRole("button",{name:"Saved chart readings"})).toHaveAttribute("aria-expanded","false");
+ });
+});
+
+
+describe("legacy stock study migration", () => {
+ const scope=ticker=>skylitViewScope({ticker,timeframe:"5m",expiries:4,dte:null,expiryScope:"loaded",viewMode:"gex",localView:null});
+ const stock=(ticker,data=selectionMap())=><><SkylitDashboardView ticker={ticker} data={{...data,ticker}} spot={650}/><ResearchSelection/></>;
+ test("legacy automatic closed history opens the primary chart without losing desk choices or selection", () => {
+  const old=render(<SkylitDashboard ticker="SPY" data={selectionMap()} spot={650}/>);
+  fireEvent.change(screen.getByRole("combobox",{name:"Canvas layout"}),{target:{value:"calendar"}});
+  fireEvent.click(screen.getByTestId("skylit-zoom-in"));fireEvent.click(screen.getByTestId("mock-heatmap-cell"));old.unmount();
+  const before=readSkylitView(scope("SPY"));expect(before.priceHistoryOpen).toBe(false);
+  render(stock("SPY",selectionMap(777,"2026-09-11T18:10:00Z")));
+  expect(screen.getByTestId("price-node-history")).toBeVisible();
+  expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({displayMode:"price-history",selectedStrike:null,mapQuery:null});
+  expect(readSkylitView(scope("SPY"))).toMatchObject({layout:before.layout,metric:before.metric,gridZoom:before.gridZoom,selection:before.selection});
+  fireEvent.click(screen.getByRole("button",{name:"Options desk"}));
+  expect(screen.getByRole("combobox",{name:"Canvas layout"})).toHaveValue("calendar");
+  expect(screen.getByTestId("skylit-heatmap-area").style.zoom).toBe("1.25");
+  expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("777.0");
+  expect(screen.getByTestId("skylit-trade-btn")).not.toHaveClass("active");
+ });
+ test("new explicit stock study choices persist separately from legacy automatic booleans", () => {
+  const first=render(stock("SPY"));fireEvent.click(screen.getByRole("button",{name:"Options desk"}));first.unmount();
+  expect(readSkylitView(scope("SPY"))).toMatchObject({studyChoice:"options",priceHistoryOpen:false});
+  const resumed=render(stock("SPY"));expect(screen.getByTestId("mock-control-bar")).toBeVisible();
+  fireEvent.click(screen.getByRole("button",{name:"Price chart"}));resumed.unmount();
+  expect(readSkylitView(scope("SPY"))).toMatchObject({studyChoice:"price",priceHistoryOpen:true});
+  render(stock("SPY"));expect(screen.getByTestId("price-node-history")).toBeVisible();
+ });
+ test("a newly explicit options choice survives return while another legacy stock starts at its price chart", async () => {
+  writeSkylitView(scope("QQQ"),{layout:"multi",gridZoom:.75,priceHistoryOpen:false});
+  const current=render(stock("SPY"));fireEvent.click(screen.getByRole("button",{name:"Options desk"}));
+  fireEvent.change(screen.getByRole("combobox",{name:"Canvas layout"}),{target:{value:"calendar"}});
+  await act(async()=>current.rerender(stock("QQQ")));
+  expect(screen.getByTestId("price-node-history")).toBeVisible();
+  expect(readSkylitView(scope("QQQ"))).toMatchObject({layout:"multi",gridZoom:.75});
+  await act(async()=>current.rerender(stock("SPY")));
+  expect(screen.getByTestId("mock-control-bar")).toBeVisible();
+  expect(screen.getByRole("combobox",{name:"Canvas layout"})).toHaveValue("calendar");
+  expect(readSkylitView(scope("SPY")).studyChoice).toBe("options");
+ });
+ test("display-only geometry changes retain the explicit options choice",async()=>{
+  const current=render(<SkylitDashboardView ticker="SPY" data={selectionMap()} spot={650} localView="profile"/>);
+  fireEvent.click(screen.getByRole("button",{name:"Options desk"}));
+  await act(async()=>current.rerender(<SkylitDashboardView ticker="SPY" data={selectionMap()} spot={650} localView="grid"/>));
+  expect(screen.getByTestId("mock-control-bar")).toBeVisible();expect(screen.getByRole("combobox",{name:"Canvas layout"})).toHaveValue("focus");
+ });
 });

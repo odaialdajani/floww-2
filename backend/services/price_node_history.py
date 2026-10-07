@@ -29,6 +29,8 @@ def epoch(value) -> float | None:
 
 
 def _positive(value):
+    if value is None or isinstance(value, bool):
+        return None
     try:
         number = float(value)
         return number if math.isfinite(number) and number > 0 else None

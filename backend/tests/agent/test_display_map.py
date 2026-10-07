@@ -212,3 +212,28 @@ def test_v2_replay_mode_stays_unavailable_with_reason():
     facts, gaps = display_facts(_v2_raw(), _v2_screen(displayMode="replay"), "SPY", NOW)
     assert facts == []
     assert gaps == ["Adjusted/replay evidence resolution remains unavailable"]
+
+
+def test_profile_counts_preserve_actual_shown_expiry_contributions():
+    raw = _v2_raw()
+    raw["grid"]["expiries"].append("2026-09-25")
+    raw["grid"]["grid"]["2026-09-25"] = {"95": 0, "100": None, "105": 2}
+    screen = _v2_screen(mapExpiries=["2026-09-18", "2026-09-25"])
+    facts, gaps = display_facts(raw, screen, "SPY", NOW)
+    by_name = {f["metric"]: f for f in facts}
+    profile = by_name["Displayed signed profile"]
+    counts = by_name["Displayed profile contributing expiries"]
+    assert profile["value"] == [-4, 3, 10]
+    assert counts["value"] == [2, 1, 2]
+    assert counts["unit"] == "expiry counts"
+    assert counts["snapshot_id"] == profile["snapshot_id"] and counts["horizon"] == profile["horizon"]
+    assert any("missing" in g.lower() and "profile" in g.lower() for g in gaps)
+
+
+def test_complete_profile_counts_do_not_change_the_existing_profile_evidence():
+    raw = _v2_raw()
+    facts, gaps = display_facts(raw, _v2_screen(), "SPY", NOW)
+    by_name = {f["metric"]: f for f in facts}
+    assert by_name["Displayed profile contributing expiries"]["value"] == [1, 1, 1]
+    assert by_name["Displayed signed profile"]["value"] == [-4, 3, 8]
+    assert not gaps

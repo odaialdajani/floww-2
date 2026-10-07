@@ -11,7 +11,7 @@ describe("skylit page routing", () => {
   test("page state is initialized from the URL-authoritative navigation hook", () => {
     window.history.replaceState({}, "", "/?page=skylit&review=retained");
     expect(readWorkspace()).toBe("skylit");
-    expect(readApp()).toMatch(/const\s*\[page,\s*setPage\]\s*=\s*useWorkspaceNavigation\(\)/);
+    expect(readApp()).toMatch(/const\s*\[page,\s*setPage,\s*navigation\]\s*=\s*useWorkspaceNavigation\(\)/);
   });
 
   test('"skylit" and the other workspaces are admitted by the registry', () => {

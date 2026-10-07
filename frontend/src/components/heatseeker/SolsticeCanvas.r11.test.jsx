@@ -3,7 +3,9 @@ import React from "react";
 import { render, screen, fireEvent, act, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import axios from "axios";
-import SkylitDashboard from "./SkylitDashboard";
+import OptionsDashboard from "./SkylitDashboard";
+// These contracts exercise the options desk; the stock route now opens price first.
+const SkylitDashboard = props => <OptionsDashboard defaultStudy="options" {...props}/>;
 
 jest.mock("axios", () => ({ get: jest.fn(), post: jest.fn() }));
 jest.mock("./SkylitTickerBar", () => ({ __esModule: true, default: () => null, TICKER_SETS: { popular: ["SPY", "QQQ"] } }));

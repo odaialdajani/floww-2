@@ -5,8 +5,10 @@ import "@testing-library/jest-dom";
 import axios from "axios";
 import ExactContractReview from "./ExactContractReview";
 import { admissionBlock } from "./AskLodestar";
-import SkylitDashboard from "./SkylitDashboard";
+import OptionsDashboard from "./SkylitDashboard";
 import useScreenContext from "../../agent/useScreenContext";
+// These contracts exercise the options desk; the stock route now opens price first.
+const SkylitDashboard = props => <OptionsDashboard defaultStudy="options" {...props}/>;
 
 jest.mock("./SkylitTickerBar", () => ({ __esModule: true, default: () => null, TICKER_SETS: { popular: ["SPY", "QQQ"] } }));
 jest.mock("./StockDirectory", () => () => null);

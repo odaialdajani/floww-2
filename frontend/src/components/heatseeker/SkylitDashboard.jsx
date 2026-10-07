@@ -1,9 +1,8 @@
-import StockDirectory from "./StockDirectory";
 import PriceNodeHistory from "./PriceNodeHistory";
+import SavedChartReadings from "./SavedChartReadings";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { API as BACKEND_API } from "../../config/api";
-import SkylitTickerBar from "./SkylitTickerBar";
 import SkylitControlBar from "./SkylitControlBar";
 import SkylitHeatmapGrid from "./SkylitHeatmapGrid";
 import SkylitMetricsSidebar from "./SkylitMetricsSidebar";
@@ -27,6 +26,14 @@ import SolsticeSymbolMaps from "./SolsticeSymbolMaps";
 import RangeAnalyticsWorkspace from "./RangeAnalyticsWorkspace";
 import { resolveSelectedWall, wallPositionOf } from "../../lib/solsticeSelection";
 import {skylitViewScope,readSkylitView,writeSkylitView,captureSkylitSelection,restoreSkylitSelection} from "./skylitViewPreferences";
+
+function stockStudyOpen(preferences, defaultStudy) {
+  if (preferences.studyChoice === "price") return true;
+  if (preferences.studyChoice === "options") return false;
+  // Older code wrote closed history automatically. It cannot establish an
+  // explicit choice of the new secondary desk. Keep all other preferences.
+  return defaultStudy === "options" ? preferences.priceHistoryOpen === true : true;
+}
 
 /**
  * SelectedCellReadout — R6-1 + R7-03: the banner resolves its value from the
@@ -234,9 +241,10 @@ function SkylitDashboard({
   regime = null,
   loading = false,
   // Full ticker universe from App.js ({trinity, default, popular} with the
-  // /api/tickers/all list merged into popular). Wired through to the bar +
-  // control bar so arrows/buttons/search traverse everything, not fallbacks.
+  // /api/tickers/all list merged into popular). The global header owns search;
+  // desk arrows retain this full list instead of featured-name fallbacks.
   tickers = null,
+  defaultStudy = "price",
 }) {
   const preferenceScope=useMemo(()=>skylitViewScope({ticker,timeframe,expiries,dte,expiryScope,viewMode,localView}),[ticker,timeframe,expiries,dte,expiryScope,viewMode,localView]);
   const analyticalScope=useMemo(()=>skylitViewScope({ticker,timeframe,expiries,dte,expiryScope,viewMode,localView:null}),[ticker,timeframe,expiries,dte,expiryScope,viewMode]);
@@ -464,7 +472,8 @@ function SkylitDashboard({
   }, [expanded, ticker, timeframe, expiries, dte, expiryScope, expWidened, expQueryKey, isReplay]);
   const overlayData = isReplay ? displayData : (expData?.ticker === ticker ? expData : baseData);
   const visibleData = expanded ? overlayData : displayData;
-  const [priceHistoryOpen, setPriceHistoryOpen] = useState(initialView.priceHistoryOpen);
+  const [studyChoice, setStudyChoice] = useState(initialView.studyChoice);
+  const [priceHistoryOpen, setPriceHistoryOpen] = useState(() => stockStudyOpen(initialView, defaultStudy));
   const previousRangeOpen=useRef(rangeOpen);
   const multi = layout === "multi";
   const panes = compareMode || multi;
@@ -510,7 +519,7 @@ function SkylitDashboard({
     if(previousRangeOpen.current===rangeOpen)return;previousRangeOpen.current=rangeOpen;
     setSelectedCell(null); setContractSelection(null); setReplaySnap(null);
     setReplayPanelOpen(false); setReplayOpenRequest(null); setExpanded(false);
-    setFollowWall(false); setFollowWallId(null); setDrawerOpen(false); setPriceHistoryOpen(false);
+    setFollowWall(false); setFollowWallId(null); setDrawerOpen(false); if (rangeOpen) setPriceHistoryOpen(false);
   }, [rangeOpen]);
   usePublishScreenContext(rangeOpen ? null : {contextVersion:2,page:"heatseeker",ticker,
         selectedContract:priceHistoryOpen ? null : currentContract?.identity || null, contractResolution:currentContract?.status || null,
@@ -625,9 +634,13 @@ function SkylitDashboard({
     setLayout(localViewChanged && localView ? localView==="profile"?"profile":"focus"
       : incoming.found?incoming.layout:localView?localView==="profile"?"profile":"focus":"profile");
     setGridZoom(choices.gridZoom);
-    // An unseen query keeps an explicitly opened history study open. Loading
-    // another stock must not silently admit research against its live map.
-    setPriceHistoryOpen(incoming.found?incoming.priceHistoryOpen:outgoing?.value.priceHistoryOpen===true);
+    // New explicit choices belong to their query. Display-only geometry may
+    // carry the current explicit choice into an older preference entry.
+    const nextStudyChoice = incoming.studyChoice || (!changingQueryScope ? outgoing?.value.studyChoice : null) || null;
+    setStudyChoice(nextStudyChoice);
+    const historyPreferences = {...incoming, studyChoice:nextStudyChoice};
+    if (defaultStudy === "options" && !incoming.found && outgoing) historyPreferences.priceHistoryOpen = outgoing.value.priceHistoryOpen;
+    setPriceHistoryOpen(stockStudyOpen(historyPreferences, defaultStudy));
     setCompareMode(localViewChanged?false:choices.compareMode);setComparePair(choices.comparePair);
     setActivePane(localViewChanged?"gex":choices.activePane);
     // A display-only geometry change keeps the current owning selection and
@@ -642,7 +655,7 @@ function SkylitDashboard({
     }
     appliedQueryScope.current=analyticalScope;
     setAppliedPreferenceScope(preferenceScope);
-  },[preferenceScope,analyticalScope,changingPreferenceScope,changingQueryScope,localView,localViewChanged]);
+  },[preferenceScope,analyticalScope,changingPreferenceScope,changingQueryScope,localView,localViewChanged,defaultStudy]);
   useEffect(()=>{
     const saved=restoreIdentity.current;
     if(changingQueryScope || analyticalScope!==mountQueryScope.current || isReplay || rangeOpen
@@ -658,11 +671,11 @@ function SkylitDashboard({
   const savedSelection=captureSkylitSelection(selectedCell,{data:visibleData,ticker,view:activeView,metric:activeMetric,spot:displaySpot,windowRows:expanded?null:fitRows,replay:isReplay || rangeOpen});
   const pendingIdentity=analyticalScope===mountQueryScope.current && !isReplay && !rangeOpen
     && restoreIdentity.current?.view===activeView && restoreIdentity.current?.metric===activeMetric?restoreIdentity.current:null;
-  if(!changingPreferenceScope)latestPreferences.current={scope:preferenceScope,value:{metric,layout,gridZoom,priceHistoryOpen,compareMode,comparePair,activePane,selection:savedSelection || pendingIdentity}};
+  if(!changingPreferenceScope)latestPreferences.current={scope:preferenceScope,value:{metric,layout,gridZoom,priceHistoryOpen,studyChoice,compareMode,comparePair,activePane,selection:savedSelection || pendingIdentity}};
   useEffect(()=>{
     if(changingPreferenceScope)return;
     const current=latestPreferences.current;if(current)writeSkylitView(current.scope,current.value);
-  },[preferenceScope,changingPreferenceScope,metric,layout,gridZoom,priceHistoryOpen,compareMode,comparePair,activePane,selectedCell,visibleData,baseData,fitRows,expanded,isReplay,rangeOpen]);
+  },[preferenceScope,changingPreferenceScope,metric,layout,gridZoom,priceHistoryOpen,studyChoice,compareMode,comparePair,activePane,selectedCell,visibleData,baseData,fitRows,expanded,isReplay,rangeOpen]);
   useEffect(()=>()=>{const current=latestPreferences.current;if(current)writeSkylitView(current.scope,current.value);},[]);
 
   // R8-02 (deeper edge): when followWall is on and a new live snapshot
@@ -750,22 +763,39 @@ function SkylitDashboard({
     } catch { /* noop */ }
   }, [ticker, selectedCell, displayData, compareMode, activePane, viewMode, metric, isReplay]);
 
-  return (
-    <div className="skylit-full-dashboard">
-      {/* 1. Top Ticker Bar */}
-      <SkylitTickerBar
-        activeTicker={ticker}
-        onTickerChange={onTickerChange}
-        tickers={tickers}
-      />
+  const studyActions = <>
+        <button type="button" className="skylit-trade-mode-btn skylit-study-switch" data-testid="skylit-study-switch" onClick={() => {
+          if (rangeOpen) {
+            if (onAnalyticalRangeChange) onAnalyticalRangeChange(false);
+            else setLocalRangeOpen(false);
+            setPriceHistoryOpen(false); setStudyChoice("options");
+          } else {
+            const nextOpen = !priceHistoryOpen;
+            setPriceHistoryOpen(nextOpen); setStudyChoice(nextOpen ? "price" : "options");
+          }
+          setExpanded(false); setDrawerOpen(false);
+        }}>{rangeOpen ? "Return to options desk" : !priceHistoryOpen ? "Price chart" : "Options desk"}</button>
+        <SavedChartReadings key={replayOpenRequest?.nonce || "saved"} ticker={ticker} disabled={rangeOpen} onOpen={id => {
+          setPriceHistoryOpen(false); setStudyChoice("options");
+          setExpanded(false); setDrawerOpen(false);
+          setReplayPanelOpen(true);
+          setReplayOpenRequest({id, nonce: Date.now()});
+        }} />
+        {priceHistoryOpen && !rangeOpen && <AskLodestar subject={ticker} overlayMetric={activeMetric} displayMode="price-history" compact />}
 
-      <StockDirectory onSelect={onTickerChange} />
-      <button type="button" className="range-mode-toggle" aria-pressed={rangeOpen} onClick={() => {
-        if (onAnalyticalRangeChange) onAnalyticalRangeChange(!rangeOpen);
-        else setLocalRangeOpen(!rangeOpen);
-      }}>{rangeOpen ? "Return to current map" : "Analytical range · 14–60 DTE"}</button>
+  </>;
+  return (
+    <div className="skylit-full-dashboard" data-study={rangeOpen ? "range" : priceHistoryOpen ? "price" : "options"}>
+      {(rangeOpen || !priceHistoryOpen) && <div className="skylit-study-toolbar" role="toolbar" aria-label="Stock study">{studyActions}</div>}
       {rangeOpen ? <RangeAnalyticsWorkspace ticker={ticker} onReplayModeChange={setRangeIsReplay} /> : <>
-      <PriceNodeHistory ticker={ticker} open={priceHistoryOpen} onOpenChange={setPriceHistoryOpen} />
+      <div className="skylit-price-study" hidden={!priceHistoryOpen}>
+        <PriceNodeHistory ticker={ticker} primary={priceHistoryOpen} open={priceHistoryOpen} toolbarActions={priceHistoryOpen ? studyActions : null} />
+      </div>
+      <div className="skylit-options-study" hidden={priceHistoryOpen}>
+      <button type="button" className="range-mode-toggle" aria-pressed={rangeOpen} onClick={() => {
+        if (onAnalyticalRangeChange) onAnalyticalRangeChange(true);
+        else setLocalRangeOpen(true);
+      }}>Analytical range · 14–60 DTE</button>
 
       {/* 2. Control Bar */}
       <SkylitControlBar
@@ -1234,6 +1264,7 @@ function SkylitDashboard({
             </span>
           )}
         </div>
+      </div>
       </div>
       </>}
     </div>

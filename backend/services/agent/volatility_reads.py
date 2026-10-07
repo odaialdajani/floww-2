@@ -98,9 +98,15 @@ def _realized(envelope, context, now):
         return [], [missing]
     bars = envelope.get("bars")
     source = envelope.get("source")
+    provider_reported = (envelope.get("price_basis") == "provider_reported"
+                         and source == "public_api"
+                         and envelope.get("status") in {"degraded", "stale"}
+                         and envelope.get("adjustment_policy") == "unknown"
+                         and envelope.get("price_basis_verified") is False)
     if (envelope.get("ticker") != context["ticker"] or envelope.get("interval") != "1d"
             or envelope.get("complete") is not True
-            or envelope.get("price_basis") not in {"unadjusted", "split_adjusted", "adjusted"}
+            or (envelope.get("price_basis") not in {"unadjusted", "split_adjusted", "adjusted"}
+                and not provider_reported)
             or not isinstance(source, str) or not source.strip()
             or not isinstance(bars, list) or not 3 <= len(bars) <= 512):
         return [], [missing]
@@ -129,6 +135,8 @@ def _realized(envelope, context, now):
     except (ValueError, KeyError):
         return [], [missing]
     observed = instant(envelope.get("event_time"))
+    if provider_reported and observed != instant(cal.session_close(dates[-1]).to_pydatetime()):
+        return [], ["Realized volatility is unavailable: Public daily history needs its exact completed exchange-close time"]
     status = envelope.get("status", "ok")
     if status not in {"ok", "degraded", "stale"}:
         return [], [missing]
@@ -148,7 +156,8 @@ def _realized(envelope, context, now):
         return [], ["Realized volatility calculator did not return a complete usable estimate"]
     inputs = [fact(metric, values, unit, **context, source=source, event_time=observed,
                    received_at=envelope.get("received_at"), status=status,
-                   reason=f"Completed daily bars; {envelope['price_basis']} prices")
+                   reason=(f"Completed daily bars; {envelope['price_basis']} prices"
+                           + ("; provider adjustment policy is unknown" if provider_reported else "")))
               for metric, values, unit in (("Realized volatility observation dates", dates, "dates"),
                                            ("Realized volatility close prices", closes, "USD"))]
     output = derived_fact("Realized daily close volatility", value, "annualized fraction", inputs, context,

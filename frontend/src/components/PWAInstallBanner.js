@@ -59,7 +59,7 @@ export default function PWAInstallBanner() {
     <div className="pwa-install-banner">
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>
-          Install Meridian
+          Install FLOWW
         </div>
         <div style={{ fontSize: 10, color: '#64748b', lineHeight: 1.4 }}>
           Add to home screen for instant access during market hours.

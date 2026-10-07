@@ -58,6 +58,8 @@ import NativeHandoffHistory from "./components/public/NativeHandoffHistory";
 import AlertOverlay from "./components/AlertOverlay";
 import PWAInstallBanner from "./components/PWAInstallBanner";
 import AppShell from "./shell/AppShell";
+import DataAccountMenu from "./shell/DataAccountMenu";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import useWorkspaceNavigation from "./shell/useWorkspaceNavigation";
 import { useTheme } from "./context/ThemeContext";
 import { autoDecimate } from "./utils/dataDecimator";
@@ -119,26 +121,22 @@ function TickerSearch({ tickers, value, onChange }) {
 }
 
 // ============ AlphaPod-style Header ============
-function ApHeader({ page, ticker, onTickerChange, tickers, data, onSignOut, userEmail, userTier }) {
+function ApHeader({ page, navigation, ticker, onTickerChange, tickers, data, onSignOut, userEmail, userTier }) {
   const pageName = PAGE_NAMES[page] || page;
-  const isLive = page === "flow-alerts";
 
   return (
     <header className="ap-header">
       <div className="ap-header-inner">
         {/* Breadcrumb */}
         <div className="ap-breadcrumb">
-          <span className="hidden lg:inline" style={{ color: "var(--text-tertiary)" }}>Research</span>
-          <svg className="hidden lg:block" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--text-quaternary)" }}>
-            <path d="M9 18l6-6-6-6"/>
-          </svg>
+          <div className="workspace-history-controls" aria-label="Page history"><button type="button" aria-label="Back" title="Back" disabled={!navigation?.canBack} onClick={navigation?.back}><ArrowLeft size={16}/></button><button type="button" aria-label="Forward" title="Forward" disabled={!navigation?.canForward} onClick={navigation?.forward}><ArrowRight size={16}/></button></div>
           <span className="truncate font-semibold" title={pageName} style={{ color: "var(--text-primary)" }}>{pageName}</span>
         </div>
 
         {/* Right side actions */}
         <div className="ap-header-actions">
           {/* Ticker search for relevant pages */}
-          {tickers && (page === "heatseeker" || page === "trinity" || page === "skylit") && (
+          {tickers && (
             <TickerSearch
               tickers={buildTickerUniverse(tickers)}
               value={ticker}
@@ -146,40 +144,7 @@ function ApHeader({ page, ticker, onTickerChange, tickers, data, onSignOut, user
             />
           )}
 
-          {/* Live badge */}
-          <div className="ap-live-badge" title="Market research">
-            <span className="dot" />
-            <span>Research</span>
-          </div>
-
-          {/* Data source indicator */}
-          {data?.data_source && (
-            <span className="mono text-[10px] uppercase tracking-wider hidden lg:inline" style={{ color: "var(--text-tertiary)" }}>
-              {String(data.data_source).replace(/[_-]/g, " ")}
-            </span>
-          )}
-
-          {/* User chip */}
-          {userEmail && (
-            <div className="ap-user-chip">
-              <span className="hidden lg:inline" style={{ color: "var(--text-secondary)" }}>{userEmail}</span>
-              {userTier && <span className="tier">{userTier}</span>}
-            </div>
-          )}
-
-          {/* Sign out */}
-          <button
-            onClick={onSignOut}
-            className="ap-icon-btn"
-            title="Sign out"
-            style={{ color: "var(--text-tertiary)" }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-              <polyline points="16 17 21 12 16 7"/>
-              <line x1="21" y1="12" x2="9" y2="12"/>
-            </svg>
-          </button>
+          <DataAccountMenu ticker={ticker} data={data} userEmail={userEmail} onSignOut={onSignOut} />
         </div>
       </div>
     </header>
@@ -433,7 +398,7 @@ const regimeColor = (regime) => regime === "positive" ? "text-emerald-400" : reg
 // ============ Main App ============
 export default function App() {
   const { token, user, isAuthenticated, logout } = useAuth();
-  const [page, setPage] = useWorkspaceNavigation();
+  const [page, setPage, navigation] = useWorkspaceNavigation();
   const [ticker, setTicker] = useState(() => {
     try { return localStorage.getItem("floww_settings") ? JSON.parse(localStorage.getItem("floww_settings")).defaultTicker || "SPY" : "SPY"; } catch { return "SPY"; }
   });
@@ -714,7 +679,7 @@ export default function App() {
 
   return (
     <AppShell page={page} onNavigate={setPage} userEmail={userEmail} userTier={userTier}>
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: "100vh" }}>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
         {/* Alert Overlay - Real-time signal toasts */}
         <AlertOverlay onSignalClick={handleSignalClick} maxVisible={3} />
 
@@ -724,6 +689,7 @@ export default function App() {
         {/* AlphaPod-style Header */}
         <ApHeader
           page={page}
+          navigation={navigation}
           ticker={ticker}
           onTickerChange={setTicker}
           tickers={tickers}
@@ -1045,42 +1011,19 @@ export default function App() {
                 isOffline={data?.data_fallback === true}
                 dataAge={data?.stale_age_s != null ? data.stale_age_s * 1000 : null}
                 dataFallback={data?.data_fallback === true}
+                extraStudies={{
+                  levels: <><DashboardSummary ticker={ticker} spot={livespot?.spot ?? data?.spot} /><ScenarioPanel data={data} loading={loading} error={err} /><GreekReferencePanel /></>,
+                  patterns: <><OpportunitiesPanel data={data} loading={loading} error={err} /><MarketRegimePanel data={data} loading={loading} error={!!err} /><PressureCloudPanel data={advanced} loading={advancedLoading} error={advancedError} /></>,
+                  income: <><PositionSizing ticker={ticker} spot={livespot?.spot ?? data?.spot} /><TradeEntry ticker={ticker} spot={livespot?.spot ?? data?.spot} /><LivePolicyPanel /></>,
+                  history: <><MlDashboard ticker={ticker} spot={livespot?.spot ?? data?.spot} /><MultiTimeframeGEXPanel ticker={ticker} /><TradeAnalytics ticker={ticker} /></>,
+                  moves: <><ImpliedMovePanel data={data} loading={loading} error={err} /><VolAnalyticsPanel data={data} loading={loading} error={err} /><ImpliedPDFPanel data={data} loading={loading} error={!!err} /></>,
+                  structure: <><RiskDashboardPanel data={data} loading={loading} error={err} /><HedgeImpulsePanel data={advanced} loading={advancedLoading} error={advancedError} /><CharmIntegralPanel data={advanced} loading={advancedLoading} error={advancedError} /></>,
+                  exposure: <><UOAPanel ticker={ticker} /><FlowTicker ticker={ticker} /><VelocityGauge velocity={data?.velocity} /><ToxicityGauge ensemble={ensembleData} onRefresh={() => { axios.get(API + '/ensemble/state?ticker=' + ticker).then(r => setEnsembleData(r.data)).catch(() => {}); }} /></>,
+                  briefing: <><MorningBriefing ticker={ticker} spot={livespot?.spot ?? data?.spot} /><AlertsPanel ticker={ticker} /><UsagePanel /></>,
+                }}
               />
             </ErrorBoundary>
-            <aside className="skylit-panels">
-              <div className="skylit-panel-grid">
-                {page === "skylit" && <MorningBriefing ticker={ticker} spot={livespot?.spot ?? data?.spot} />}
-                <DashboardSummary ticker={ticker} spot={livespot?.spot ?? data?.spot} />
-                <ScenarioPanel data={data} loading={loading} error={err} />
-                <RiskDashboardPanel data={data} loading={loading} error={err} />
-                <OpportunitiesPanel data={data} loading={loading} error={err} />
-                <ImpliedMovePanel data={data} loading={loading} error={err} />
-                <VolAnalyticsPanel data={data} loading={loading} error={err} />
-                <MarketRegimePanel data={data} loading={loading} error={!!err} />
-                <ImpliedPDFPanel data={data} loading={loading} error={!!err} />
-                <HedgeImpulsePanel data={advanced} loading={advancedLoading} error={advancedError} />
-                <PressureCloudPanel data={advanced} loading={advancedLoading} error={advancedError} />
-                <CharmIntegralPanel data={advanced} loading={advancedLoading} error={advancedError} />
-                <MlDashboard ticker={ticker} spot={livespot?.spot ?? data?.spot} />
-                <MultiTimeframeGEXPanel ticker={ticker} />
-                <AlertsPanel ticker={ticker} />
-                <TradeAnalytics ticker={ticker} />
-                <UOAPanel ticker={ticker} />
-                {page === "skylit" && <FlowTicker ticker={ticker} />}
-                <UsagePanel />
-                <LivePolicyPanel />
-                {page === "skylit" && <PositionSizing ticker={ticker} spot={livespot?.spot ?? data?.spot} />}
-                {page === "skylit" && <TradeEntry ticker={ticker} spot={livespot?.spot ?? data?.spot} />}
-                <VelocityGauge velocity={data?.velocity} />
-                <ToxicityGauge
-                  ensemble={ensembleData}
-                  onRefresh={() => {
-                    axios.get(`${API}/ensemble/state?ticker=${ticker}`).then(r => setEnsembleData(r.data)).catch(() => {});
-                  }}
-                />
-                <GreekReferencePanel />
-              </div>
-            </aside>
+
           </div>
         )}
 
@@ -1089,7 +1032,7 @@ export default function App() {
           <div>
             <p className="panel p-3">Portfolio research · manually entered positions and sizing estimates are separate from the Public account below.</p>
             <PortfolioPanel ticker={ticker} spot={livespot?.spot ?? data?.spot} />
-            <ErrorBoundary><PublicPanel /></ErrorBoundary>
+            <button type="button" className="btn" onClick={() => setPage("public")}>Open broker records</button>
           </div>
         )}
 
@@ -1107,7 +1050,7 @@ export default function App() {
         {page === "flowseeker-pro" && (
           <div className="flex-1 overflow-auto">
             <ErrorBoundary>
-              <FlowseekerProBlademap active={page === "flowseeker-pro" && !tideReviewActive} onTrade={setTradeSelection} />
+              <FlowseekerProBlademap ticker={ticker} onTickerChange={setTicker} active={page === "flowseeker-pro" && !tideReviewActive} onTrade={setTradeSelection} />
               <TidehunterPublicBridge onReviewActive={setTideReviewActive} />
             </ErrorBoundary>
           </div>
@@ -1115,7 +1058,7 @@ export default function App() {
 
         {/* Steal Three Top-3 Preview Page */}
         {page === "steal-three" && (
-          <StealThreePreview defaultTicker="SPY" />
+          <StealThreePreview ticker={ticker} onTickerChange={setTicker} />
         )}
 
         {/* Quick Trade Panel */}
@@ -1178,12 +1121,12 @@ export default function App() {
         )}
 
         {/* Footer */}
-        <footer className="border-t border-slate-800 px-4 py-2 text-[10px] text-slate-600 flex justify-between flex-shrink-0">
+        <footer className="floww-page-footer border-t border-slate-800 px-4 py-2 flex justify-between flex-shrink-0">
           <span>Data sources and observation limits are shown with each reading.</span>
           <span className="hidden md:inline text-slate-700">
             Press ? for keyboard shortcuts.
           </span>
-          <span>Meridian · Market research · {new Date().getFullYear()}</span>
+          <span>FLOWW · Market research · {new Date().getFullYear()}</span>
         </footer>
 
         {/* Shortcuts Modal */}

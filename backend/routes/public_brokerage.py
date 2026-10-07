@@ -421,6 +421,7 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
         instrument_type:    EQUITY, OPTION, CRYPTO, BOND
         equity_market_session: optional for EQUITY
     """
+    consumed_fp = None
     try:
         symbol = request.get("symbol", "")
         side = request.get("side", "BUY")
@@ -494,6 +495,35 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
         if admission_refusal is not None:
             raise HTTPException(status_code=403, detail=admission_refusal)
 
+        # Single-use consumption (S17): verify passed, so burn the approval
+        # BEFORE any broker placement — the guarded store UPDATE admits
+        # exactly one placement per approval, closing the r19-recorded gap
+        # where a same-ID replay within the <=24h validity window placed a
+        # second order. Consume failures (already-used, revoked, store
+        # unavailable) refuse 403 with ZERO broker calls; a subsequently
+        # failed placement burns the approval anyway (fail-closed — the
+        # operator re-approves with a fresh row; never refunded).
+        from services import execution_admission as _adm
+
+        fp = _adm.order_fingerprint(
+            getattr(account, "account_id", ""), symbol, side, quantity,
+            limit_price, stop_price=stop_price, time_in_force=time_in_force,
+            order_type=order_type, instrument_type=instrument_type,
+            equity_market_session=equity_market_session)
+        consumed = _adm.consume_order_approval(
+            _admission_store_conn(), request.get("approval_id"),
+            fingerprint=fp, operator=operator,
+            account_id=getattr(account, "account_id", ""))
+        if not consumed.get("ok"):
+            raise HTTPException(status_code=403, detail={
+                "error": consumed.get("reason", "APPROVAL_CONSUME_FAILED"),
+                "message": "The presented approval is single-use and was not "
+                           "consumable (already used, revoked, or the store "
+                           "is unavailable); refusing placement.",
+                "detail": consumed.get("detail"),
+            })
+        consumed_fp = fp
+
         order = await broker.place_order(
             account_id=account.account_id,
             symbol=symbol,
@@ -514,7 +544,10 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
             raw_order = order.raw.get("order", order.raw)
             status = raw_order.get("status", "UNKNOWN")
 
-        return {
+        completed = _adm.complete_placement_attempt(
+            _admission_store_conn(), fp, request.get("approval_id"),
+            order.order_id)
+        response = {
             "ok": True,
             "order_id": order.order_id,
             "symbol": order.symbol,
@@ -527,15 +560,53 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
             "status": status,
             "created_at": order.created_at,
             "data_source": "public_api",
+            "approval_id": request.get("approval_id"),
+            "approval_consumed": consumed.get("ok") is True,
         }
+        if not completed.get("ok"):
+            # The economic effect happened — the 200 stands. A stuck
+            # in-flight claim would wrongly fence later placements, so
+            # disclose it for operator resolution instead of failing.
+            response["placement_journal"] = completed.get(
+                "reason", "STORE_UNAVAILABLE")
+            response["placement_journal_note"] = (
+                "placement succeeded but its completion was not journaled; "
+                "resolve the in-flight claim via POST "
+                "/api/admission/placement-attempts/resolve before resubmitting")
+        return response
     except HTTPException:
         raise
     except Exception as exc:
         logging.getLogger(__name__).warning("Public.com place_order failed: %s", exc)
-        raise HTTPException(status_code=502, detail={
+        detail = {
             "error": "api_error",
             "message": f"Public.com API error: {exc}",
-        }) from exc
+        }
+        if consumed_fp is not None:
+            # S17b: the approval was consumed but placement failed with
+            # unknown outcome (ambiguous ACK — the broker may have placed
+            # despite raising). Journal the attempt so any resubmission of
+            # this exact fingerprint refuses PLACEMENT_OUTCOME_UNKNOWN
+            # until an operator reconciles broker state and resolves it.
+            # A journal failure is disclosed, never silent: resubmission
+            # is then unguarded and must be reconciled manually.
+            journaled = _adm.record_placement_attempt(
+                _admission_store_conn(), consumed_fp,
+                request.get("approval_id"),
+                getattr(account, "account_id", ""),
+                f"{type(exc).__name__}: {exc}")
+            if journaled.get("ok"):
+                detail["placement_outcome"] = (
+                    "UNKNOWN — resubmission of this exact order refuses "
+                    "until reconciled and resolved")
+            else:
+                detail["attempt_journal"] = journaled.get(
+                    "reason", "STORE_UNAVAILABLE")
+                detail["attempt_journal_note"] = (
+                    "the failed attempt could not be journaled; resubmission "
+                    "is unguarded — reconcile broker state manually before "
+                    "any retry")
+        raise HTTPException(status_code=502, detail=detail) from exc
 
 
 # ---------------------------------------------------------------------------

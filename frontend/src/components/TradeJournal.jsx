@@ -204,7 +204,7 @@ function LevelStatus({ trade }) {
   );
 }
 
-function TradeCard({ trade, onEdit, onDelete, onClose }) {
+function TradeCard({ trade, onEdit, onDelete, onClose, readOnly = false }) {
   const [exitPrice, setExitPrice] = useState("");
   const [expanded, setExpanded] = useState(false);
 
@@ -267,12 +267,12 @@ function TradeCard({ trade, onEdit, onDelete, onClose }) {
                 <>
                   <input type="number" step="0.01" value={exitPrice} onChange={e => setExitPrice(e.target.value)}
                     placeholder="Exit $" className="flex-1 bg-slate-800/50 border border-slate-700/50 rounded px-2 py-1 text-[10px] text-slate-200" />
-                  <button onClick={() => onClose(trade.id, parseFloat(exitPrice) || 0)}
+                  <button disabled={readOnly} onClick={() => onClose(trade.id, parseFloat(exitPrice) || 0)}
                     className="px-2 py-1 bg-emerald-600/20 text-emerald-400 rounded text-[10px] hover:bg-emerald-600/30">Close</button>
                 </>
               )}
-              <button onClick={() => onEdit(trade)} className="px-2 py-1 bg-slate-700/50 text-slate-400 rounded text-[10px] hover:bg-slate-700">Edit</button>
-              <button onClick={() => onDelete(trade.id)} className="px-2 py-1 bg-rose-500/10 text-rose-400 rounded text-[10px] hover:bg-rose-500/20">Delete</button>
+              <button disabled={readOnly} onClick={() => onEdit(trade)} className="px-2 py-1 bg-slate-700/50 text-slate-400 rounded text-[10px] hover:bg-slate-700">Edit</button>
+              <button disabled={readOnly} onClick={() => onDelete(trade.id)} className="px-2 py-1 bg-rose-500/10 text-rose-400 rounded text-[10px] hover:bg-rose-500/20">Delete</button>
             </div>
           </div>
         )}
@@ -284,6 +284,8 @@ function TradeCard({ trade, onEdit, onDelete, onClose }) {
 // ─── Main Journal Component ───────────────────────────────────────────────────
 export default function TradeJournal({ ticker }) {
   const [trades, setTrades] = useState([]);
+  const [serverState, setServerState] = useState("loading");
+  const [localAvailable, setLocalAvailable] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingTrade, setEditingTrade] = useState(null);
   const [filterTicker, setFilterTicker] = useState("");
@@ -299,18 +301,26 @@ export default function TradeJournal({ ticker }) {
   useEffect(() => {
     let cancelled = false;
     const loadServer = async () => {
+      if (!cancelled) setServerState("loading");
       try {
         const saved = localStorage.getItem("floww_trades_v2");
-        if (saved) setTrades(JSON.parse(saved));
-      } catch (e) { console.error("TradeJournal load failed:", e); }
+        if (saved) {
+          const rows = JSON.parse(saved);
+          if (!Array.isArray(rows) || rows.some(row => !row || typeof row !== "object" || typeof row.ticker !== "string" || typeof row.type !== "string" || typeof row.action !== "string")) throw new Error("Invalid local history");
+          setTrades(rows);
+        }
+        if (!cancelled) setLocalAvailable(true);
+      } catch (e) { if (!cancelled) setLocalAvailable(false); }
       try {
         const res = await fetch(`${API}/flowseeker/journal/trades?days=365`);
-        if (!res.ok) return;
+        if (!res.ok) throw new Error("History unavailable");
         const data = await res.json();
-        const server = data.trades || [];
-        if (cancelled || server.length === 0) return;
-        setTrades(prev => mergeJournalRows(prev, server));
-      } catch (e) { /* server store unreachable — localStorage is the fallback */ }
+        const server = data.trades;
+        if (!Array.isArray(server) || server.some(row => !row || typeof row !== "object" || typeof row.ticker !== "string" || typeof row.type !== "string" || typeof row.action !== "string")) throw new Error("Invalid server history");
+        if (cancelled) return;
+        setServerState("available");
+        if (server.length) setTrades(prev => mergeJournalRows(prev, server));
+      } catch (e) { if (!cancelled) setServerState("unavailable"); }
     };
     loadServer();
     // Tickets confirmed in another tab/panel land without refresh.
@@ -329,12 +339,13 @@ export default function TradeJournal({ ticker }) {
 
   // Save to localStorage
   useEffect(() => {
+    if (!localAvailable) return;
     if (loadedRef.current) {
       localStorage.setItem("floww_trades_v2", JSON.stringify(trades));
     } else if (trades.length > 0) {
       loadedRef.current = true;
     }
-  }, [trades]);
+  }, [trades, localAvailable]);
 
   const handleSave = useCallback((form) => {
     if (editingTrade?.id) {
@@ -412,23 +423,25 @@ export default function TradeJournal({ ticker }) {
   const maxDailyPnl = dailyPnl.length > 0 ? Math.max(...dailyPnl.map(([, v]) => Math.abs(v)), 1) : 1;
 
   return (
-    <div className="flex h-full">
+    <div className="journal-layout flex h-full">
       {/* Left Panel — Stats & Filters */}
       <div className="w-64 flex-shrink-0 border-r border-slate-800/50 bg-[#0b0d12] p-3 space-y-3 overflow-y-auto">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-200">Journal</h2>
-          <button onClick={() => { setEditingTrade(null); setShowForm(true); }}
+          <button disabled={!localAvailable} onClick={() => { setEditingTrade(null); setShowForm(true); }}
             className="text-[10px] px-2 py-1 bg-sky-600 hover:bg-sky-500 rounded text-white font-medium">+ Add</button>
         </div>
 
         {/* Stats */}
         <div className="grid grid-cols-2 gap-2">
+        {(trades.length > 0 || (serverState === "available" && localAvailable)) ? <>
           <StatCard label="Total P&L" value={`$${stats.totalPnl >= 0 ? "+" : ""}${stats.totalPnl.toFixed(0)}`} color={stats.totalPnl >= 0 ? "emerald" : "rose"} />
           <StatCard label="Win Rate" value={`${stats.winRate.toFixed(0)}%`} color={stats.winRate >= 50 ? "emerald" : "amber"} />
           <StatCard label="Avg Win" value={`+$${stats.avgWin.toFixed(0)}`} color="emerald" />
           <StatCard label="Avg Loss" value={`$${stats.avgLoss.toFixed(0)}`} color="rose" />
           <StatCard label="Open" value={stats.openCount.toString()} color="amber" />
           <StatCard label="Closed" value={`${stats.wins}W / ${stats.losses}L`} color="slate" />
+        </> : <p className="journal-read-limit">Totals unavailable until saved records can be read.</p>}
         </div>
 
         {/* Daily P&L */}
@@ -498,16 +511,19 @@ export default function TradeJournal({ ticker }) {
       </div>
 
       {/* Right Panel — Trade List */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      <div className="journal-records flex-1 overflow-y-auto p-3 space-y-2">
+        {serverState === "loading" && <p role="status" className="journal-read-limit">Loading saved records...</p>}
+        {serverState === "unavailable" && <p role="status" className="journal-read-limit">Server history is unavailable. Figures cover loaded records only.</p>}
+        {!localAvailable && <p role="alert" className="journal-read-limit">Local saved entries could not be read. Their contents have been kept; editing is paused.</p>}
         {filteredTrades.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-slate-500 text-sm gap-2">
             <div className="text-2xl">📝</div>
-            <div>{trades.length === 0 ? "No trades yet" : "No trades match filters"}</div>
-            <div className="text-[10px] text-slate-600">{trades.length === 0 ? "Click + Add to record your first trade" : "Try adjusting your filters"}</div>
+            <div>{trades.length === 0 ? serverState === "loading" ? "Loading saved records" : serverState !== "available" || !localAvailable ? "Saved records unavailable" : "No trades yet" : "No trades match filters"}</div>
+            <div className="text-[10px] text-slate-600">{trades.length === 0 ? serverState === "available" && localAvailable ? "Click + Add to record your first trade" : "Missing history is not an empty journal." : "Try adjusting your filters"}</div>
           </div>
         ) : (
           filteredTrades.map(trade => (
-            <TradeCard key={trade.id} trade={trade} onEdit={handleEdit} onDelete={handleDelete} onClose={handleClose} />
+            <TradeCard key={trade.id} trade={trade} readOnly={!localAvailable} onEdit={handleEdit} onDelete={handleDelete} onClose={handleClose} />
           ))
         )}
       </div>

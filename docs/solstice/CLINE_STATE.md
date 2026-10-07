@@ -285,3 +285,90 @@ engineering. Policy UNSET, activation OFF, outcomes INSUFFICIENT EVIDENCE.
   {symbol, min_dte, max_dte, as_of_ny} + `record_id`; contract drafting from
   range records stays REFUSED (`RANGE_RECORD_REFERENCE_ONLY`) until real
   owning quote capture is commissioned (NAV-CAPTURE).
+
+## C19 session (2026-10-06/07, C10 per-contract population closure)
+
+OpenCode's independent C10 review at main 1fc5582c (packet
+`references/evidence/c10-1fc5582c-probe.log`) returned PARTIAL: resolver
+verified for the admitted aggregate population (16/16 incl. byte-identical
+restitution, typed-refusal battery, no live-chain call graph) but per-contract
+OSI/series/expiry/strike/right/multiplier restitution was UNPROVEN — no sealed
+fixture carried a per-contract population. Prescription: seed synthetic
+per-contract rows through the owning write path + replay proof, or Nav narrows
+C10. Engineering path taken (real operator values not needed for synthetic
+population truth).
+
+Repair 62f29808 (branch `cline/r19-c10-per-contract`, base main 1fc5582c):
+
+- `build_range_envelope` grounding gains `contract_rows` — the deterministic
+  per-contract identity population (osi/series/expiry/strike_key/right/
+  multiplier + multiplier_provenance via the SAME canonical
+  `resolve_multiplier` as the kernels; explicit invalid rests null, absent
+  carries DEFAULT_STANDARD). Reference identity ONLY: quotes stay inside
+  `contracts_digest`, drafting stays RANGE_RECORD_REFERENCE_ONLY, and rows
+  join the canonical content digest (tamper = typed refusal at
+  replay/duplicate/index via the shared binder).
+- chain fixture gains the adapter-faithful `series` field (SPY → EQUITY).
+- Docs fixtures regenerated through the real producer + record/replay seams:
+  complete `rga1-8e6217fe33a4978bede91bf0`, partial
+  `rga1-b6370d7f35bd93e563da95d2`; both refusal fixtures byte-identical;
+  C16 distinct received_at clocks preserved (13:59:30 < 13:59:35).
+- Consumer impact disclosure for composition (OpenCode-owned frontend copy):
+  `frontend/src/fixtures/integration/range-analytics.v1/replay-transport.json`
+  still carries the 33843c65/f2600391 seal — self-consistent and green, but
+  after this merges, the transport regen
+  (`scripts/r18_range_transport_fixture.py`) must be re-run at the new seal
+  and its source_commit re-stamped (same handoff pattern as the C16 regen).
+
+Verification at 62f29808 (repo backend cwd, venv 3.14 disclosed, ruff 0.15.22
+CI pin): new suite `test_r18_c10_per_contract_population.py` 7/7 with a
+failed-first RED run (7/7 pre-repair); r18+agent focused slice 195/0 (9
+files); FULL `tests/solstice/` + budget slice **844 passed / 0 failed**
+(837 pre-existing + 7 new); `ruff check .` clean. Mongo up. No live calls,
+no broker, throwaway :memory: DuckDB only; capture/activation OFF.
+
+Status: REPAIRED, REVIEW_PENDING — awaiting OpenCode's independent review of
+the raw patch (not a test rerun) before any ACCEPTED_AT_SHA bind of C10.
+PR (review-only; merge is Nav's) publishes this branch.
+
+## C19 continued (2026-10-07, fast-lane model: OpenCode builds, Cline reviews/fixes/merges)
+
+User changed the operating model with explicit merge delegation. This
+session (Cline) completed the review/fix/merge pipeline:
+
+- C10 CLOSED: OpenCode independent review ACCEPT at PR110 head 58d93ad2
+  (packet evidence/c10-PR110-58d93ad2.log, 10/10 probes; prescription
+  satisfied). PR110 merged to main via a74cab7a.
+- PR108 merged via afb0c07a (Cline review ACCEPT — cherry-pick byte-identical
+  to 336a69a9; transport provenance resync verified).
+- PR109 merged via ecff52ba (Cline review ACCEPT at b26b95b6 covering the
+  FULL S17/S17b/S17d delta + 4 independent adversarial probes: same-approval
+  async race, cross-approval fenced-approval survival, cross-operator
+  refusal, post-success journal-failure disclosure; all PASS).
+- PR111 (T01 range review actions) reviewed from the raw diff + independent
+  187/187 run at 9e750067: honest controls (owner unselected, copy is not an
+  execution permission, review-trade read-only, zero order-surface fetches).
+  Merged via edaa1cc8.
+- PR112 (I18): frontend fixture reseal at the merged head — complete/partial
+  byte-copies of the new docs fixtures + transport regenerated offline
+  (source_commit truthfully stamps edaa1cc8); affected suites 241/241;
+  transport records == new seal identities. REVIEW_PENDING for OpenCode's
+  mechanical review before its AT_SHA bind.
+
+Merged-head battery at edaa1cc8 (packet evidence/cline-merged-head-
+edaa1cc8.log): s18 sweep 122/0; r18+C10+grounding 93/0; agent admission
+69/0; FULL solstice+budget slice 858/0; API docs 383 current; ruff clean
+(CI pin); the 4 PR109 probes re-run at the merged head — all PASS;
+frontend 187/187 pre-reseal, 241/241 post-reseal.
+
+Ledger after this session: 51 ACCEPTED_AT_SHA, 1 pending (I18 review), 7 NAV
+holds, closure checker 0 errors. Engineering HOLD stands until I18 binds;
+commissioning HOLDs unchanged (ACCOUNT/CAPTURE/MODEL/NATIVE/VISUAL/RELEASE/
+PAPER-EXEMPT remain Nav's). Whole-plan context per packet
+references/whole-plan-reconciliation.md: the ledger is the engineering
+acceptance authority; ROADMAP Phase 1 is the deploy authority; the Triad
+0DTE desk / MASTER_PLAN phases / Phase 6 partials need explicit promotion
+before any lane touches them.
+
+No live calls, no broker actions, no captures; activation OFF; policy UNSET;
+profitability INSUFFICIENT EVIDENCE.

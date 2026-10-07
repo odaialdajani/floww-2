@@ -1635,14 +1635,20 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     # --- Institutional vol analytics ---
     iv_surface = calc_iv_surface_data(spot, raw["contracts"])
     skew = calc_skew_metrics(spot, raw["contracts"])
+    # Warm verified Public daily closes for copy-only research while normal
+    # desktop analytics are built. It reuses a completed-session cache and
+    # never starts a provider request from an Ask FLOWW read.
+    from services.agent.daily_bar_evidence import ensure_public_daily_bars
+    daily_price_task = asyncio.create_task(ensure_public_daily_bars(ticker))
     # Run yfinance calls in parallel threads to avoid blocking
     rv_task = asyncio.create_task(asyncio.to_thread(calc_realized_volatility, ticker.replace("^", ""), 20))
     iv_rank_task = asyncio.create_task(asyncio.to_thread(calc_iv_rank_percentile, ticker.replace("^", ""), skew.get("atm_iv", 0.2)))
-    for task in (rv_task, iv_rank_task):
+    for task in (rv_task, iv_rank_task, daily_price_task):
         _background_tasks.add(task)
         task.add_done_callback(_background_tasks.discard)
     rv = await rv_task
     iv_rank = await iv_rank_task
+    await daily_price_task
     if rv:
         iv_rank["rv_iv_spread"] = round(skew.get("atm_iv", 0) - rv.get("rv_close", 0), 4)
         iv_rank["rv_close"] = rv.get("rv_close")
@@ -3881,6 +3887,7 @@ try:
         import copy
 
         from routes.analytics import _cache as chain_cache
+        from services.agent.daily_bar_evidence import peek_daily_bars
         from services.agent.reads import ResearchReads
         from services.agent.repository import AgentRepository
         from services.agent.research import ResearchService
@@ -3917,7 +3924,7 @@ try:
             repository = AgentRepository(db)
             await repository.initialize()
             reads = ResearchReads(peek_chain, peek_map, read_alerts, read_recorded_map=read_recorded_map,
-                                  read_recorded_range=read_recorded_range, peek_scan=peek_scan)
+                                  read_recorded_range=read_recorded_range, peek_scan=peek_scan, read_daily_bars=peek_daily_bars)
             from services.agent.codex_model import CodexModel
             from services.agent.spend import SpendLedger, money_units
             spending = SpendLedger(repository.budgets, cap_units=money_units(os.getenv("AGENT_DAILY_BUDGET_USD", "20")), audit_collection=db["agent_budget_audit"])
@@ -4049,14 +4056,8 @@ def _solstice_capture_cfg() -> dict[str, Any] | None:
 
 
 def _solstice_in_hours(now: datetime | None = None) -> bool:
-    try:
-        from zoneinfo import ZoneInfo
-        et = (now.astimezone(ZoneInfo("America/New_York")) if now is not None
-              else datetime.now(ZoneInfo("America/New_York")))
-        return et.weekday() < 5 and (9, 0) <= (et.hour, et.minute) < (16, 30)
-    except Exception as e:
-        log.debug("capture hours check failed (capturing): %s", e)
-        return True
+    from services.solstice_capture_policy import capture_market_hours
+    return capture_market_hours(now if now is not None else datetime.now(UTC))
 
 
 async def _solstice_capture_loop(tickers: list[str], interval: int, hours_only: bool) -> None:

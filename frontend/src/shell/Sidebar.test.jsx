@@ -56,7 +56,7 @@ test("every nav icon exists in the Sidebar ICONS map", () => {
 test("App mounts the registry-backed browser navigation hook", () => {
   const app = fs.readFileSync(path.join(__dirname, "..", "App.js"), "utf8");
   expect(app).toContain('import useWorkspaceNavigation from "./shell/useWorkspaceNavigation"');
-  expect(app).toContain('const [page, setPage] = useWorkspaceNavigation();');
+  expect(app).toContain('const [page, setPage, navigation] = useWorkspaceNavigation();');
 });
 
 test("records start folded and their toggle opens and closes them", () => {

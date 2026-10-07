@@ -1,0 +1,12 @@
+.extra-studies { padding:12px; min-width:0; color:var(--text-primary); font-variant-numeric:tabular-nums; }
+.extra-study-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:12px; font-size:12px; }
+.extra-study-toolbar label { display:flex; align-items:center; gap:8px; font-weight:600; }
+.extra-study-toolbar select { min-height:30px; padding:4px 28px 4px 8px; background:var(--panel); color:var(--text-primary); border:1px solid var(--border-2); border-radius:4px; }
+.extra-study-toolbar > span { color:var(--text-secondary); }
+.extra-study-family { min-width:0; }
+.extra-study-family[hidden] { display:none; }
+.extra-studies .rounded-xl, .extra-studies .rounded-lg { border-radius:4px; box-shadow:none; }
+.extra-studies .text-slate-500, .extra-studies .text-slate-600 { color:var(--text-secondary); }
+.extra-studies table { min-width:580px; }
+.extra-studies th { color:var(--text-secondary); }
+@media(max-width:700px) { .extra-studies { padding:8px; } .extra-study-toolbar > span { flex-basis:100%; } }

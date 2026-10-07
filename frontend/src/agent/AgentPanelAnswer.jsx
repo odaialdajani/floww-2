@@ -3,7 +3,7 @@ import {checkedChartAction} from "./chatNavigation";
 import {savedAnswerView} from "./savedAnswerView";
 import {readableGap,sectionLabel} from "./chatQuestions";
 import {THINKING_LABELS,SPEED_LABELS} from "./AgentModelSettings";
-import {readableScopeText,savedChartReading} from "./chartReading";
+import {readableScopeText,savedChartReading,savedDailyPriceReading} from "./chartReading";
 export default function AgentPanelAnswer({turn,onChartAction}){
  if(!turn)return null;
  if(turn.localOnly)return <article className="lodestar-answer" aria-label="App navigation"><p>{typeof turn.text==="string"?turn.text:"Navigation details are unavailable."}</p><small>Page opened in this chat. This is not a saved market reading.</small></article>;
@@ -16,6 +16,7 @@ export default function AgentPanelAnswer({turn,onChartAction}){
  const window=answer?.snapshots?.find(s=>s.ticker===ticker)?.window;
  const scope=window?.start && window?.end ? window.start===window.end ? window.start : `${window.start} to ${window.end}` : typeof turn.horizon==="string"?turn.horizon:"Scope unavailable";
  const chart=savedChartReading(answer,ticker);
+ const daily=savedDailyPriceReading(answer,ticker);
  const primary=answer?.summary || (typeof turn.text==="string"?turn.text:"") || "No answer available";
  const explanations=(answer?.model_explanations || []).map(item=>({...item,text:readableScopeText(item.text).replace((item.ticker===ticker?ticker:"__none__")+" (scope all): ","")}));
  const assessment=[...new Set((answer?.model_sections || []).map(s=>s.text))];
@@ -24,6 +25,15 @@ export default function AgentPanelAnswer({turn,onChartAction}){
   <h3>{answer?.scope==="market"?"Market scan":ticker+" · "+scope}</h3>
   <small>{turn.saved === false ? "Not saved" : completed?"Saved answer":"Saved answer status unknown"}</small>
   {date && <section className="assistant-date-result assistant-gaps" aria-label="Saved date comparison"><h4>Saved date comparison · {date}</h4><small>Requested date in New York market time.</small><p>{dateSection?readableScopeText(dateSection.text):"The dated comparison details are unavailable. The other saved readings remain below."}</p></section>}
+  {daily && <section className="assistant-gaps assistant-daily-reading" aria-label="Saved daily price reading">
+   <h4>Recent price variation</h4><p><strong>{daily.annualizedPercent.toLocaleString("en-US",{maximumFractionDigits:2,minimumFractionDigits:2})}% annualized</strong></p>
+   <p>{daily.returnCount} completed daily changes · {daily.dates[0]} to {daily.dates.at(-1)}.</p>
+   <p>{daily.source==="public_api"?"Public's saved daily closes.":"Saved daily closing prices."} This describes past price variation.</p>
+   {/adjustment.*unknown|adjustment.*unverified/i.test(daily.reason) && <p>Price adjustments were not confirmed.</p>}
+   {daily.status==="stale" && <p>These prices were already out of date when saved.</p>}
+   {(!completed || incomplete) && <p>Saved calculation · source support unverified.</p>}
+   <details><summary>Daily prices used</summary><ul>{daily.dates.map((date,i)=><li key={date}>{date}: {"$"}{daily.closes[i].toLocaleString("en-US",{maximumFractionDigits:6})}</li>)}</ul></details>
+  </section>}
   {chart && !generic && <p>{primary}</p>}
   {chart ? <section aria-label="Saved chart reading">{chart.map((line,i)=><p key={i}>{line.text}</p>)}</section> : <p>{generic && (answer?.facts || []).length?"The saved reading has important limits. Here is what can be checked.":primary}</p>}
   {incomplete && <p className="assistant-selection-note" role="status">Some saved answer details are incomplete. The readable parts are shown below.</p>}

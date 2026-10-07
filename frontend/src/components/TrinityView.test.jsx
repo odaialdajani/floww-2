@@ -61,6 +61,20 @@ beforeEach(() => {
   axios.post.mockImplementation(async () => ({ data: { durability: "durable" } }));
 });
 
+test("shared stock choice removes only the duplicate input, retaining comparison and source limits", async () => {
+  await act(async()=>render(<TrinityView ticker="SPY" onFocusTicker={jest.fn()}/>));
+  expect(screen.queryByLabelText("Focused symbol")).toBeNull();
+  for (const ticker of ["SPX","SPY","QQQ"]) expect(screen.getByTestId(`triad-context-${ticker}`)).toBeVisible();
+  expect(screen.getByTestId("triad-coverage-note")).toHaveTextContent("2/3 observed");
+  expect(screen.getByTestId("triad-source")).toHaveTextContent("snap-triad-1");
+  expect(screen.getByLabelText("Triad expiry scope")).toBeVisible();
+});
+
+test("standalone market view retains its stock control", async () => {
+  await act(async()=>render(<TrinityView/>));
+  expect(screen.getByLabelText("Focused symbol")).toBeVisible();
+});
+
 test("renders backend packet values verbatim with units; no invented fields", async () => {
   await act(async () => { render(<TrinityView />); });
   await waitFor(() => expect(screen.getByTestId("triad-raw-adjusted")).toBeInTheDocument());

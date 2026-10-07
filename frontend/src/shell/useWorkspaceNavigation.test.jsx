@@ -3,8 +3,8 @@ import { NAV_ITEMS } from "./navConfig";
 import useWorkspaceNavigation from "./useWorkspaceNavigation";
 
 function Workspace() {
-  const [page, navigate] = useWorkspaceNavigation();
-  return <><output aria-label="Current workspace">{page}</output>{NAV_ITEMS.map(item =>
+  const [page, navigate, history] = useWorkspaceNavigation();
+  return <><button aria-label="Back" disabled={!history.canBack} onClick={history.back}>Back</button><button aria-label="Forward" disabled={!history.canForward} onClick={history.forward}>Forward</button><output aria-label="Current workspace">{page}</output>{NAV_ITEMS.map(item =>
     <button key={item.id} aria-current={page === item.id ? "page" : undefined} onClick={() => navigate(item.id)}>{item.label}</button>
   )}<button onClick={() => navigate("unsupported-page")}>Unknown workspace</button></>;
 }
@@ -58,4 +58,9 @@ test("unknown links fall back to Screener and unmount releases the history liste
   view.unmount();
   expect(remove).toHaveBeenCalledWith("popstate", expect.any(Function));
   remove.mockRestore();
+});
+
+
+test("visible history controls follow only this app trail and restore forward after back",()=>{
+ render(<Workspace/>);expect(screen.getByRole("button",{name:"Back",exact:true})).toBeDisabled();expect(screen.getByRole("button",{name:"Forward",exact:true})).toBeDisabled();fireEvent.click(screen.getByRole("button",{name:"Stock chart",exact:true}));const previous=JSON.parse(JSON.stringify(window.history.state));fireEvent.click(screen.getByRole("button",{name:"Market view",exact:true}));expect(screen.getByRole("button",{name:"Back",exact:true})).not.toBeDisabled();act(()=>{window.history.replaceState(previous,"","/?page=heatseeker");window.dispatchEvent(new PopStateEvent("popstate",{state:previous}));});expect(screen.getByLabelText("Current workspace")).toHaveTextContent("heatseeker");expect(screen.getByRole("button",{name:"Forward",exact:true})).not.toBeDisabled();fireEvent.click(screen.getByRole("button",{name:"Extra studies",exact:true}));expect(screen.getByRole("button",{name:"Forward",exact:true})).toBeDisabled();
 });

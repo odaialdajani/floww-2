@@ -224,17 +224,19 @@ def display_facts(raw, screen, ticker, now):
         if v2:
             add("Display basis", METRIC_REGISTRY[metric_id]["basis"] if overlay != "raw" else
                 "Raw OI" if metric in {"gex", "skylit"} else metric.upper(), "basis")
-            profile, missing_delta, invalid_delta = [], [], []
+            profile, missing_delta, invalid_delta, contributing_expiries = [], [], [], []
             for strike in strikes:
                 known = [v for e in expiries if (v := cell(e, strike)) is not None]
                 profile.append(sum(known) if known else None)
+                contributing_expiries.append(len(known))
                 sk = str(int(strike)) if float(strike).is_integer() else str(strike)
                 missing_delta.append(sum(((grid.get("cell_missing_delta") or {}).get(e) or {}).get(sk, 0) for e in expiries))
                 invalid_delta.append(sum(((grid.get("cell_invalid_delta") or {}).get(e) or {}).get(sk, 0) for e in expiries))
             add("Displayed signed profile", profile, unit)
+            add("Displayed profile contributing expiries", contributing_expiries, "expiry counts")
             add("Displayed profile missing delta", missing_delta, "excluded contracts")
             add("Displayed profile invalid delta", invalid_delta, "excluded contracts")
-            if any(v is None for v in profile):
+            if any(count < len(expiries) for count in contributing_expiries):
                 gaps.append("Missing cells remain gaps in the signed profile")
             if any(missing_delta) or any(invalid_delta):
                 gaps.append("Partial profile preserves valid contributions; missing and invalid delta remain distinct")

@@ -16,6 +16,7 @@
   {
    "osi": "FAKE-2026-10-26-590-CALL",
    "expiry": "2026-10-26",
+   "series": "EQUITY",
    "T": 0.05753,
    "type": "call",
    "strike": 590.0,
@@ -39,6 +40,7 @@
   {
    "osi": "FAKE-2026-10-26-590-PUT",
    "expiry": "2026-10-26",
+   "series": "EQUITY",
    "T": 0.05753,
    "type": "put",
    "strike": 590.0,
@@ -62,6 +64,7 @@
   {
    "osi": "FAKE-2026-10-26-600-CALL",
    "expiry": "2026-10-26",
+   "series": "EQUITY",
    "T": 0.05753,
    "type": "call",
    "strike": 600.0,
@@ -85,6 +88,7 @@
   {
    "osi": "FAKE-2026-10-26-600-PUT",
    "expiry": "2026-10-26",
+   "series": "EQUITY",
    "T": 0.05753,
    "type": "put",
    "strike": 600.0,
@@ -108,6 +112,7 @@
   {
    "osi": "FAKE-2026-11-09-590-CALL",
    "expiry": "2026-11-09",
+   "series": "EQUITY",
    "T": 0.09589,
    "type": "call",
    "strike": 590.0,
@@ -131,6 +136,7 @@
   {
    "osi": "FAKE-2026-11-09-590-PUT",
    "expiry": "2026-11-09",
+   "series": "EQUITY",
    "T": 0.09589,
    "type": "put",
    "strike": 590.0,
@@ -154,6 +160,7 @@
   {
    "osi": "FAKE-2026-11-09-600-CALL",
    "expiry": "2026-11-09",
+   "series": "EQUITY",
    "T": 0.09589,
    "type": "call",
    "strike": 600.0,
@@ -177,6 +184,7 @@
   {
    "osi": "FAKE-2026-11-09-600-PUT",
    "expiry": "2026-11-09",
+   "series": "EQUITY",
    "T": 0.09589,
    "type": "put",
    "strike": 600.0,
@@ -200,6 +208,7 @@
   {
    "osi": "FAKE-2026-12-04-590-CALL",
    "expiry": "2026-12-04",
+   "series": "EQUITY",
    "T": 0.16164,
    "type": "call",
    "strike": 590.0,
@@ -223,6 +232,7 @@
   {
    "osi": "FAKE-2026-12-04-590-PUT",
    "expiry": "2026-12-04",
+   "series": "EQUITY",
    "T": 0.16164,
    "type": "put",
    "strike": 590.0,
@@ -246,6 +256,7 @@
   {
    "osi": "FAKE-2026-12-04-600-CALL",
    "expiry": "2026-12-04",
+   "series": "EQUITY",
    "T": 0.16164,
    "type": "call",
    "strike": 600.0,
@@ -269,6 +280,7 @@
   {
    "osi": "FAKE-2026-12-04-600-PUT",
    "expiry": "2026-12-04",
+   "series": "EQUITY",
    "T": 0.16164,
    "type": "put",
    "strike": 600.0,

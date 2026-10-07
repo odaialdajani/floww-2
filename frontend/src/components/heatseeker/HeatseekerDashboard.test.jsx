@@ -2,8 +2,12 @@
  * @jest-environment jsdom
  */
 import React from "react";
-import { render, screen, act } from "@testing-library/react";
+import axios from "axios";
+import { render, screen, act, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
+
+// Study navigation checks must not read a real account or market service.
+jest.mock("axios", () => ({get: jest.fn().mockRejectedValue(new Error("Read unavailable"))}));
 
 // Mock IntersectionObserver — trigger immediately so LazyRow renders children
 global.IntersectionObserver = class IntersectionObserver {
@@ -37,7 +41,13 @@ jest.mock("../ErrorBoundary", () => ({
 // would hit the backend on mount; we just need to confirm presence).
 jest.mock("./DualGEXBadge", () => () => <div data-testid="hs-dual-gex" />);
 jest.mock("./IVMidBadge", () => () => <div data-testid="hs-iv-mid" />);
-jest.mock("./WheelIncomeScreenerPanel", () => () => <div data-testid="hs-wheel-income" />);
+jest.mock("./WheelIncomeScreenerPanel", () => {
+  const React = require("react");
+  return function MockWheel() {
+    const [choice, setChoice] = React.useState("Put income");
+    return <div data-testid="hs-wheel-income"><button onClick={() => setChoice("Call income")}>{choice}</button></div>;
+  };
+});
 jest.mock("./MaxPainBadge", () => () => <div data-testid="hs-max-pain" />);
 // Per-expiry max-pain-drift multi-line chart tile (steal-list #9 rich
 // visualization; fetches /api/max_pain_drift/{ticker}/per_expiry_history).
@@ -60,7 +70,7 @@ jest.mock("../VannaChart", () => () => <div data-testid="mock-vanna" />);
 jest.mock("../CharmChart", () => () => <div data-testid="mock-charm" />);
 
 // Import AFTER mocks are set up
-import HeatseekerDashboard from "./HeatseekerDashboard";
+import HeatseekerDashboard, { HeroSection } from "./HeatseekerDashboard";
 import { useHeatseeker } from "../../hooks/useHeatseeker";
 
 const IDLE = { data: null, loading: false, error: null, refresh: () => {} };
@@ -68,22 +78,41 @@ const IDLE = { data: null, loading: false, error: null, refresh: () => {} };
 describe("HeatseekerDashboard", () => {
   beforeEach(() => {
     useHeatseeker.mockReturnValue(IDLE);
+    axios.get.mockRejectedValue(new Error("Read unavailable"));
+    global.fetch = jest.fn().mockRejectedValue(new Error("Read unavailable"));
   });
 
-  test("renders header with ticker and Wave 1+2+3 caption", async () => {
+  test("shows one study choice without development captions", async () => {
     await act(async () => {
       render(<HeatseekerDashboard ticker="SPY" spot={500} />);
     });
-    expect(screen.getByText("Zenith Solstice")).toBeInTheDocument();
-    expect(screen.getByText(/Wave 1 \+ 2 \+ 3/i)).toBeInTheDocument();
+    expect(screen.getAllByRole("combobox", { name: "Study" })).toHaveLength(1);
+    expect(screen.getByRole("combobox", { name: "Study" })).toHaveValue("levels");
+    expect(screen.queryByText(/Wave 1 \+ 2 \+ 3/i)).not.toBeInTheDocument();
   });
 
-  test("mounts all 25 child panels + Row 3 container + steal-list wrappers via their test-ids", async () => {
+  test("every original panel remains reachable without stacking every study", async () => {
     await act(async () => {
       render(<HeatseekerDashboard ticker="SPY" spot={500} />);
     });
     expect(screen.getByTestId("heatseeker-dashboard")).toBeInTheDocument();
-    expect(screen.getByTestId("hs-briefing-strip")).toBeInTheDocument();
+    // The old all-at-once layout was intentionally replaced by one visible
+    // family. Every old panel is still checked after choosing its family.
+    const families = {
+      levels: ["hs-flip-zones", "hs-node-lifecycle", "hs-air-pockets"],
+      patterns: ["hs-beach-ball", "hs-reverse-rug", "hs-rainbow-road"],
+      income: ["hs-dual-gex", "hs-iv-mid", "hs-wheel-income"],
+      history: ["hs-velocity-mode", "hs-trinity-confluence", "hs-max-pain", "hs-max-pain-per-expiry-drift"],
+      moves: ["hs-strike-cone", "hs-opportunity", "hs-news", "hs-rnd-density"],
+      structure: ["hs-rolling-floors-ceilings", "hs-tug-of-war", "hs-node-classification", "hs-stacked-nodes"],
+      exposure: ["mock-vanna", "mock-charm"],
+      briefing: ["hs-briefing-strip"],
+    };
+    for (const [family, ids] of Object.entries(families)) {
+      await act(async () => fireEvent.change(screen.getByRole("combobox", {name:"Study"}), {target:{value:family}}));
+      ids.forEach(id => expect(screen.getByTestId(id)).toBeVisible());
+      expect(document.querySelectorAll('.study-family:not([hidden])')).toHaveLength(1);
+    }
     [
       // Row 3 container — visual-regression sweep target (2026-07-15)
       "hs-row3-confluence-velocity",
@@ -129,6 +158,47 @@ describe("HeatseekerDashboard", () => {
     await act(async () => {
       render(<HeatseekerDashboard ticker="^SPX" />);
     });
-    expect(screen.getByText(/Wave 1 \+ 2 \+ 3/i)).toBeInTheDocument();
+    expect(screen.getByTestId("study-summary")).toHaveTextContent("SPX");
+  });
+
+  test("a missing reading never claims to be live", () => {
+    render(<HeroSection ticker="SPY" />);
+    expect(screen.getByTestId("study-summary")).toHaveTextContent("No reading");
+    expect(screen.queryByText("Live")).not.toBeInTheDocument();
+    expect(document.querySelector('.animate-pulse')).toBeNull();
+  });
+
+  test("already opened panels keep their reading and control state", async () => {
+    await act(async () => render(<HeatseekerDashboard ticker="SPY" />));
+    await act(async () => fireEvent.change(screen.getByRole("combobox", {name:"Study"}), {target:{value:"income"}}));
+    const original = screen.getByTestId("hs-wheel-income");
+    fireEvent.click(screen.getByRole("button", {name:"Put income"}));
+    await act(async () => fireEvent.change(screen.getByRole("combobox", {name:"Study"}), {target:{value:"patterns"}}));
+    expect(original).not.toBeVisible();
+    await act(async () => fireEvent.change(screen.getByRole("combobox", {name:"Study"}), {target:{value:"income"}}));
+    expect(screen.getByTestId("hs-wheel-income")).toBe(original);
+    expect(screen.getByRole("button", {name:"Call income"})).toBeVisible();
+  });
+
+  test("supplied studies stay in their matching family and preserve control state", async () => {
+    function Extra({family}) {
+      const [choice,setChoice] = React.useState("First choice");
+      return <div data-testid={`extra-${family}`}><button onClick={()=>setChoice("Saved choice")}>{family} {choice}</button></div>;
+    }
+    const families = ["levels","patterns","income","history","moves","structure","exposure","briefing"];
+    const extras = Object.fromEntries(families.map(family=>[family,<Extra key={family} family={family}/>]));
+    await act(async()=>render(<HeatseekerDashboard ticker="SPY" extraStudies={extras}/>));
+    fireEvent.click(screen.getByRole("button",{name:"levels First choice"}));
+    for (const family of families) {
+      await act(async()=>fireEvent.change(screen.getByRole("combobox",{name:"Study"}),{target:{value:family}}));
+      expect(screen.getByTestId(`extra-${family}`)).toBeVisible();
+      families.filter(other=>other!==family).forEach(other=>{
+        const extra=screen.queryByTestId(`extra-${other}`);
+        if(extra) expect(extra).not.toBeVisible();
+      });
+      expect(screen.getAllByRole("combobox",{name:"Study"})).toHaveLength(1);
+    }
+    fireEvent.change(screen.getByRole("combobox",{name:"Study"}),{target:{value:"levels"}});
+    expect(screen.getByRole("button",{name:"levels Saved choice"})).toBeVisible();
   });
 });

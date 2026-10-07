@@ -23,6 +23,11 @@ TTL_SECONDS = 86400
 RETRY_SECONDS = 60
 
 
+def _sector(value):
+    # Retain only labels supplied by the provider; no guessed classifications.
+    return value.strip() if isinstance(value, str) and 0 < len(value.strip()) <= 100 else None
+
+
 def parse_instruments(instruments: list[dict]) -> list[dict]:
     """Preserve provider spelling (notably share classes) and option eligibility."""
     records = {}
@@ -45,6 +50,7 @@ def parse_instruments(instruments: list[dict]) -> list[dict]:
             "options": status in {"BUY_AND_SELL", "LIQUIDATION_ONLY"},
             "options_status": status or "UNKNOWN",
             "exchange": item.get("exchangeName") or item.get("exchange") or None,
+            "sector": _sector(item.get("sector")) or _sector(item.get("sectorName")) or _sector(identity.get("sector")),
         }
     return [records[s] for s in sorted(records)]
 
@@ -95,3 +101,15 @@ async def get_catalog(refresh: bool = False) -> dict:
 def cached_scan_symbols() -> list[str]:
     """Only symbols the provider explicitly reports as option-enabled."""
     return [r["symbol"] for r in (_cache or {}).get("instruments", []) if r["options"]]
+
+
+def peek_catalog() -> dict:
+    """Read the existing directory only; never trigger provider work."""
+    now = time.monotonic()
+    records = copy.deepcopy((_cache or {}).get("instruments", []))
+    return {"asof": (_cache or {}).get("asof"), "total": len(records) if _cache is not None else None,
+            "optionable_total": sum(row["options"] for row in records) if _cache is not None else None,
+            "available": _cache is not None,
+            "stale": _cache is None or now - _loaded_at >= TTL_SECONDS or _retry_at > now,
+            "sectors": sorted({row["sector"] for row in records if row.get("sector")}),
+            "sector_classified": sum(bool(row.get("sector")) for row in records)}

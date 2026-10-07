@@ -1334,6 +1334,10 @@ async def fetch_bars_from_public_api(
         log.warning("Public API bars fail for %s %s: %s", ticker, timeframe, e)
         return None
 
+    from services.agent.daily_bar_evidence import cache_public_daily_payload
+    if aggregation == "ONE_DAY":
+        cache_public_daily_payload(ticker, payload)
+
     bars = _normalize_bars(payload, limit, sessions=sessions)
     if not bars:
         log.warning("Public API returned 0 bars for %s %s", ticker, timeframe)
@@ -1341,6 +1345,52 @@ async def fetch_bars_from_public_api(
 
     _record_call(True)
     return bars
+
+
+async def fetch_daily_bar_evidence_from_public_api(ticker: str, *, now: datetime | None = None):
+    """Budgeted normal-desktop warm; preserve original daily payload quality.
+
+    A cold request reserves auth, account discovery and one bar request. A
+    warm request reserves the bars plus any imminent token refresh. No legacy
+    fallback, quote lookup, model call or trading operation is allowed here.
+    """
+    from services.agent.daily_bar_evidence import cache_public_daily_payload
+    held = False
+    started = time.monotonic()
+    try:
+        broker = BROKER
+        cost = 3 if broker is None else 1
+        expiry = getattr(broker, "_token_expires_at", None)
+        if broker is not None and isinstance(expiry, (int, float)) and expiry - time.time() < 300:
+            cost += 1
+        try:
+            await _public_budget.budget.acquire_n(cost, "api.public.com")
+            held = True
+        except Exception as exc:
+            log.info("Public daily-bar budget refused %s: %s", ticker, type(exc).__name__)
+            return None
+        broker = await _get_broker()
+        if broker is None:
+            return None
+        raw = await broker.get_bars(ticker, "YEAR", aggregation="ONE_DAY",
+                                    trading_session_toggle="REGULAR_HOURS")
+        received = now or datetime.now(UTC)
+        result = cache_public_daily_payload(ticker, raw, now=received, received_at=received)
+        if result is not None:
+            with contextlib.suppress(Exception):
+                _public_budget.budget.record_ok("api.public.com", now=started)
+            _record_call(True)
+        return result
+    except Exception as exc:
+        _note_public_429(exc)
+        if isinstance(exc, _TRANSPORT_ERRORS):
+            _record_call(False)
+        log.warning("Public daily-bar evidence unavailable for %s: %s", ticker, type(exc).__name__)
+        return None
+    finally:
+        if held:
+            with contextlib.suppress(Exception):
+                _public_budget.budget.release()
 
 
 async def fetch_quotes_from_public_api(
@@ -1468,6 +1518,9 @@ async def fetch_bars_by_interval(
         _note_public_429(e)
         log.warning("Public API bars fail for %s %s: %s", ticker, interval, e)
         return None
+    from services.agent.daily_bar_evidence import cache_public_daily_payload
+    if eff_agg == "ONE_DAY":
+        cache_public_daily_payload(ticker, raw)
     bars = _extract_bars(raw, sessions=sessions)
     return bars or None
 

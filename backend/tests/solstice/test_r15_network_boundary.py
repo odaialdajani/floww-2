@@ -3,6 +3,7 @@ network capability. All broker/HTTP access is injected (tests) or arrives via
 the existing gated route / adapter seam — never constructed here."""
 
 import ast
+import os
 import pathlib
 import sys
 
@@ -89,6 +90,17 @@ def test_lifecycle_never_reads_venue_flag():
     assert "getenv" not in src
 
 
+
+def _production_python(root: pathlib.Path):
+    """Walk project callers without entering installed Python environments."""
+    for folder, directories, files in os.walk(root):
+        current = pathlib.Path(folder)
+        directories[:] = sorted(name for name in directories
+                               if name != "tests" and not (current / name / "pyvenv.cfg").is_file())
+        for name in sorted(files):
+            if name.endswith(".py") and "test_" not in name:
+                yield current / name
+
 def test_no_production_callers_of_lifecycle_transitions():
     """Fail-closed approval stance, pinned: no route/service/caller in the tree
     reaches a lifecycle transition, so no unapproved path exists. The day a
@@ -97,14 +109,14 @@ def test_no_production_callers_of_lifecycle_transitions():
     import re
 
     hits: dict[str, list[str]] = {}
-    for path in sorted((REPO_ROOT / "backend").rglob("*.py")):
-        rel = str(path.relative_to(REPO_ROOT))
+    for path in _production_python(REPO_ROOT / "backend"):
+        rel = path.relative_to(REPO_ROOT).as_posix()
         if "/tests/" in rel or "test_" in path.name:
             continue
         if rel in ("backend/services/public_execution_lifecycle.py",):
             continue
         try:
-            src = path.read_text()
+            src = path.read_text(encoding="utf-8")
         except OSError:
             continue
         found = re.findall(
@@ -115,3 +127,36 @@ def test_no_production_callers_of_lifecycle_transitions():
         if found:
             hits[rel] = sorted(set(found))
     assert not hits, f"production lifecycle callers (need approval-desk cover): {hits}"
+
+
+def test_scanner_excludes_installed_python_envs(tmp_path, monkeypatch):
+    module = sys.modules[__name__]
+    env = tmp_path / "backend" / ".venv313"
+    env.mkdir(parents=True)
+    (env / "pyvenv.cfg").write_text("home = fixture-python\n", encoding="utf-8")
+    (env / "third_party.py").write_text("lc.submit()\n", encoding="utf-8")
+    monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
+    test_no_production_callers_of_lifecycle_transitions()
+
+
+def test_scanner_excludes_nested_test_helpers(tmp_path, monkeypatch):
+    module = sys.modules[__name__]
+    folder = tmp_path / "backend" / "tests"
+    folder.mkdir(parents=True)
+    (folder / "helper.py").write_text("lc.cancel()\n", encoding="utf-8")
+    monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
+    test_no_production_callers_of_lifecycle_transitions()
+
+
+def test_scanner_still_names_adjacent_source_callers(tmp_path, monkeypatch):
+    import pytest
+    module = sys.modules[__name__]
+    env = tmp_path / "backend" / "installed-env"
+    env.mkdir(parents=True)
+    (env / "pyvenv.cfg").write_text("home = fixture-python\n", encoding="utf-8")
+    project = tmp_path / "backend" / "ordinary-source"
+    project.mkdir()
+    (project / "caller.py").write_text("lc.submit()\n", encoding="utf-8")
+    monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
+    with pytest.raises(AssertionError, match="ordinary-source.*caller"):
+        test_no_production_callers_of_lifecycle_transitions()

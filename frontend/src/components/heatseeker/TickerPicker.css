@@ -26,3 +26,10 @@
 .ticker-picker-bar .ticker-picker { flex: 0 1 340px; }
 .ticker-picker-bar-count { font-size: 12px; color: var(--text-secondary, #adb7c7); }
 @media (max-width: 480px) { .ticker-picker-bar { gap: 6px; padding: 6px 8px; } .ticker-picker-bar .ticker-picker { flex-basis: 100%; } .ticker-picker-current { flex-basis: 100%; } }
+
+.floww-header-symbol-picker .ticker-picker-feed-counts { display:flex; flex-wrap:wrap; gap:4px 12px; margin-top:5px; font-size:11px; line-height:1.4; color:var(--text-secondary,#b5c2cc); font-variant-numeric:tabular-nums; }
+.floww-header-symbol-picker .ticker-picker-feed-counts span { white-space:nowrap; }
+.ticker-picker-filters { display:flex; flex-wrap:wrap; gap:8px; padding:5px 2px 8px; border-bottom:1px solid var(--border-2,#46505f); }
+.ticker-picker-filters label { display:flex; align-items:center; gap:5px; font-size:12px; }
+.ticker-picker-filters select { max-width:240px; background:var(--panel-2,#111820); color:var(--text-primary,#f1f5f9); border:1px solid var(--border-2,#46505f); border-radius:4px; padding:5px; font-size:12px; }
+.ticker-picker-filters small { flex-basis:100%; color:var(--text-secondary,#adb7c7); line-height:1.4; }
