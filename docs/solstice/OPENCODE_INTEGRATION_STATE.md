@@ -724,3 +724,18 @@ read in full. Findings applied:
   nobody's queue.
 - Review servers (:3001/:8001) healthy for the user session; pre-existing
   :3000 proxy + :8000 backend untouched. All worktrees clean.
+
+## 2026-10-07 review stack refreshed to current main 1200372d (user: keep going)
+
+- Merges landed PR108->109->110->111 (afb0c07a, ecff52ba, a74cab7a,
+  edaa1cc8=current main); PR112 + PR114 open (Cline to merge); PR113
+  closed superseded.
+- Fresh production build compiled from 1200372d (slice-2 markers
+  present); review stack restarted on it: backend uvicorn (new PID) on
+  :8001 (slow warmup ~90s observed: heatmap warm + DuckDB warnings are
+  honest degradation, then health 200), proxy on :3001. Screenshot
+  verified in Chrome: live data flowing, degradation labels honest
+  (MARKET_CLOSED, VOLUME_FALLBACK_OI_UNKNOWN, quote-degraded).
+- Old PIDs (81695 backend, 83032 proxy) retired after replacement;
+  pre-existing :3000 proxy + :8000 backend still untouched.
+- Review at http://127.0.0.1:3001/ (refresh the tab).
