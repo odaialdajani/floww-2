@@ -14,6 +14,7 @@ export default function RangeAnalyticsWorkspace({ticker,onReplayModeChange}) {
  const [metric,setMetric]=useState('raw_oi'),[result,setResult]=useState(null),[loading,setLoading]=useState(false);
  const [selection,setSelection]=useState(null),[expanded,setExpanded]=useState(false),[follow,setFollow]=useState(false);
  const [replayOpen,setReplayOpen]=useState(false),[replayMode,setReplayMode]=useState(false);
+ const [copyStatus,setCopyStatus]=useState(null),[approach,setApproach]=useState('awaiting'),[reviewOpen,setReviewOpen]=useState(false);
  const epoch=useRef(0),controller=useRef(null),cellRefs=useRef(new Map());
  const clear=()=>{epoch.current++;controller.current?.abort();setResult(null);setSelection(null);setLoading(false);setReplayMode(false);};
  const acceptStored=record=>{epoch.current++;controller.current?.abort();setResult(record?{envelope:record}:null);setSelection(null);setLoading(false);if(record)setReplayMode(true);};
@@ -46,6 +47,19 @@ export default function RangeAnalyticsWorkspace({ticker,onReplayModeChange}) {
   finally{clearTimeout(timer);if(id===epoch.current)setLoading(false);}
  };
  const queryChange=(setter,value)=>{clear();setter(value);};
+ const copyContext=async()=>{
+  if(!envelope){setCopyStatus('Nothing to copy: load a range or stored record first.');return;}
+  const payload={kind:'range-lodestar-context',version:1,ticker,symbol:envelope.symbol,record_id:envelope.record_id||null,content_digest:envelope.content_digest||null,query:envelope.query,metric,selection,replay:replayMode,received_at:envelope.clocks?.received_at,synthetic:!!envelope.synthetic,note:'research-only frozen context; not an execution permission'};
+  try{await navigator.clipboard.writeText(JSON.stringify(payload));setCopyStatus('Context copied.');}
+  catch(error){setCopyStatus('Copy failed: clipboard unavailable.');}
+ };
+ const scenarioText=()=>{
+  if(!selection)return 'Select a cell first; reaction review needs a selected strike and expiry.';
+  if(approach==='awaiting')return 'No reaction measured yet — choose an approach only after observing price action. Sign alone is not an entry or proven dealer position.';
+  if(typeof selectedRaw!=='number'||selectedRaw===0)return 'Raw wall direction unknown for this cell; approach noted without a directional read.';
+  if(approach==='above')return selectedRaw>0?'Positive raw: approach from above → review bounce. Owning price confirmation is required.':'Negative raw: approach from above → review flush. Owning price confirmation is required.';
+  return selectedRaw>0?'Positive raw: approach from below → review rejection. Owning price confirmation is required.':'Negative raw: approach from below → review squeeze. Owning price confirmation is required.';
+ };
  const rows=envelope?.axes.strike_keys || [],expiries=envelope?.axes.expiries || [];
  const values=section && section.status!=='unavailable'?Object.values(section.cells).flatMap(row=>Object.values(row)).filter(v=>typeof v==='number'):[];
  const extent=Math.max(1,...values.map(Math.abs));
@@ -113,8 +127,27 @@ export default function RangeAnalyticsWorkspace({ticker,onReplayModeChange}) {
      <h3>Selected strike</h3>
      <p>{selection?`${selection.strike} USD · ${selection.expiry}`:'Select an available cell'}</p>
      <p>Wall bounds/ID unavailable in this range envelope; a cell is not a classified structural wall.</p>
-     <h3>Evidence / scenario</h3>
-     <p>{typeof selectedRaw!=='number' || selectedRaw===0?'Raw wall direction unknown.':selectedRaw>0?'Positive raw: approach from below → review rejection; from above → review bounce.':'Negative raw: approach from below → review squeeze; from above → review flush.'} Owning price confirmation is required; sign alone is not an entry or proven dealer position.</p>
+      <h3>Evidence / scenario</h3>
+      <label>Price approach<select aria-label="Price approach" value={approach} onChange={e=>setApproach(e.target.value)}>
+       <option value="awaiting">Awaiting measured reaction</option>
+       <option value="above">From above · falling into wall</option>
+       <option value="below">From below · rising into wall</option>
+      </select></label>
+      <p>{scenarioText()}</p>
+      <h3>Handoff trace</h3>
+      <p>{selection?`Wall context attached · ${ticker} · ${selection.strike} USD · ${selection.expiry}`:'No cell selected — nothing attached.'}</p>
+      <p>{envelope?`Record ${envelope.record_id||'unidentified'} · digest ${envelope.content_digest||'unknown'} · received ${envelope.clocks?.received_at||'unknown'} · ${replayMode?'stored replay':'live read'} · ${envelope.synthetic?'synthetic fixture':'observed source'}`:'No envelope loaded.'}</p>
+      <p>Execution owner: unselected — choosing an owner labels a future draft only and never authorizes entry.</p>
+      <h3>Review trade</h3>
+      <button type="button" disabled={!envelope} onClick={()=>setReviewOpen(value=>!value)}>{reviewOpen?'Close trade review':'Review trade'}</button>
+      {reviewOpen && envelope && <div role="region" aria-label="Trade review">
+       <p>{selection?`Reviewing ${selection.strike} USD · ${selection.expiry} · ${ticker}`:'No cell selected.'} Record {envelope.record_id||'unidentified'} · {replayMode?'stored replay':'live read'}.</p>
+       <p>Contract: RANGE_CONTRACT_UNAVAILABLE · no exact OSI, population or quote clocks. Risks explicit and unset: limit, budget, conditions, window, expiry, notifications.</p>
+       <p>No execution path: this review cannot place, approve, or route any order. Backend entry unavailable; copied references do not activate Public.</p>
+      </div>}
+      <h3>Lodestar context</h3>
+      <button type="button" disabled={!envelope} onClick={copyContext}>Copy Lodestar context</button>
+      {copyStatus && <p role="status">{copyStatus}</p>}
      <h3>Supported contract</h3><p>RANGE_CONTRACT_UNAVAILABLE · owning OSI, contract population and quote clocks are not supplied. No current-chain substitution.</p>
      <h3>Lodestar</h3><p>{replayMode?'Select a stored cell for research-only interpretation. Full production integrity and raw population qualification remain pending; no contract or execution permission.':'Live range reads are not persisted research evidence. Select a stored replay record first; no current-chain or old answer substitute.'}</p>
      <AskLodestar subject={`${ticker} recorded range`} overlayMetric={metric} displayMode={replayMode?'range-replay':'range-live'} compact testId="range-ask-lodestar" starters={['Explain the recorded cells','What limits this observation?','What confirms or invalidates?']}/>
