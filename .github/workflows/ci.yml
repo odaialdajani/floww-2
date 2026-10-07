@@ -172,6 +172,8 @@ jobs:
         # so failures block the gate from here on regardless of exact total.
         env:
           CI: true
+          # The saved UTC history regression exercises the New York DST gap.
+          TZ: America/New_York
         # CRA's `react-scripts test` runs jest in watch mode by default; --watchAll=false
         # forces single-run mode for CI.
         run: npm test -- --watchAll=false

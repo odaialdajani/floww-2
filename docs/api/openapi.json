@@ -1262,6 +1262,66 @@
         ]
       }
     },
+    "/api/agent/history/page": {
+      "get": {
+        "operationId": "get_api_agent_history_page",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 30,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "History Page",
+        "tags": [
+          "agent",
+          "agent"
+        ]
+      }
+    },
     "/api/agent/models": {
       "get": {
         "operationId": "get_api_agent_models",
@@ -5311,6 +5371,44 @@
         ]
       }
     },
+    "/api/diagnostics/events": {
+      "post": {
+        "operationId": "post_api_diagnostics_events",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Events",
+        "tags": [
+          "diagnostics"
+        ]
+      }
+    },
+    "/api/diagnostics/summary": {
+      "get": {
+        "operationId": "get_api_diagnostics_summary",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Summary",
+        "tags": [
+          "diagnostics"
+        ]
+      }
+    },
     "/api/discord/status": {
       "get": {
         "description": "Show Discord wiring state. Booleans only \u2014 tokens never leave env.",
@@ -9246,6 +9344,34 @@
               ],
               "title": "Query Key"
             }
+          },
+          {
+            "in": "query",
+            "name": "interval_minutes",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 60,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Interval Minutes"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_metric_lines",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Metric Lines",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -10868,6 +10994,17 @@
               "title": "Options Only",
               "type": "boolean"
             }
+          },
+          {
+            "in": "query",
+            "name": "sector",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 100,
+              "title": "Sector",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -10910,6 +11047,26 @@
           }
         },
         "summary": "Provider Updates",
+        "tags": [
+          "market-directory"
+        ]
+      }
+    },
+    "/api/market/status": {
+      "get": {
+        "description": "Existing list, completed option reads and observed health; no new scan.",
+        "operationId": "get_api_market_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Market Status",
         "tags": [
           "market-directory"
         ]
@@ -18212,6 +18369,110 @@
           }
         },
         "summary": "Decisions List",
+        "tags": [
+          "solstice",
+          "solstice"
+        ]
+      }
+    },
+    "/api/solstice/{ticker}/decisions/page": {
+      "get": {
+        "description": "Read older saved decisions without repeating or changing any work.",
+        "operationId": "get_api_solstice_ticker_decisions_page",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "title": "Ticker",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 16,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 1024,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "required": false,
+            "schema": {
+              "default": "newest",
+              "maxLength": 6,
+              "pattern": "^(newest|oldest)$",
+              "title": "Order",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Decisions Page Api Solstice  Ticker  Decisions Page Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decisions Page",
         "tags": [
           "solstice",
           "solstice"

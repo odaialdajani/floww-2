@@ -4,8 +4,8 @@
 <!-- Regenerate: python3 qc/audit/generate_api_docs.py -->
 <!-- Verify:     python3 qc/audit/generate_api_docs.py --check -->
 
-Total endpoints: 394
-Route groups: 104
+Total endpoints: 399
+Route groups: 105
 
 Generated from the live FastAPI app, so every path below is a real,
 callable route rather than a hand-copied guess.
@@ -35,7 +35,7 @@ callable route rather than a hand-copied guess.
 |--------|------|---------|
 | GET | `/api/advanced/{ticker}` | Advanced Analytics |
 
-## agent (16 endpoints)
+## agent (17 endpoints)
 
 | Method | Path | Summary |
 |--------|------|---------|
@@ -46,6 +46,7 @@ callable route rather than a hand-copied guess.
 | GET | `/api/agent/handoffs` | Native Handoff History |
 | POST | `/api/agent/handoffs` | Save Native Handoff |
 | GET | `/api/agent/history` | History |
+| GET | `/api/agent/history/page` | History Page |
 | GET | `/api/agent/models` | Models |
 | GET | `/api/agent/prefs` | Prefs |
 | PUT | `/api/agent/prefs` | Save Prefs |
@@ -257,6 +258,13 @@ callable route rather than a hand-copied guess.
 | Method | Path | Summary |
 |--------|------|---------|
 | GET | `/api/deep-dive/{ticker}` | Deep Dive |
+
+## diagnostics (2 endpoints)
+
+| Method | Path | Summary |
+|--------|------|---------|
+| POST | `/api/diagnostics/events` | Events |
+| GET | `/api/diagnostics/summary` | Summary |
 
 ## discord (2 endpoints)
 
@@ -502,12 +510,13 @@ callable route rather than a hand-copied guess.
 | POST | `/api/llm/generate` | Llm Generate |
 | GET | `/api/llm/providers` | Llm Providers |
 
-## market (2 endpoints)
+## market (3 endpoints)
 
 | Method | Path | Summary |
 |--------|------|---------|
 | GET | `/api/market/catalog` | Catalog Page |
 | GET | `/api/market/provider-updates` | Provider Updates |
+| GET | `/api/market/status` | Market Status |
 
 ## max_pain (1 endpoints)
 
@@ -788,7 +797,7 @@ callable route rather than a hand-copied guess.
 | GET | `/api/social/sentiment/{ticker}` | Get Sentiment |
 | GET | `/api/social/status` | Get Pipeline Status |
 
-## solstice (25 endpoints)
+## solstice (26 endpoints)
 
 | Method | Path | Summary |
 |--------|------|---------|
@@ -816,6 +825,7 @@ callable route rather than a hand-copied guess.
 | GET | `/api/solstice/walls/{ticker}` | Walls |
 | GET | `/api/solstice/{ticker}/contract` | Contract Detail |
 | GET | `/api/solstice/{ticker}/decisions` | Decisions List |
+| GET | `/api/solstice/{ticker}/decisions/page` | Decisions Page |
 | POST | `/api/solstice/{ticker}/decisions/{decision_id}/review` | Save Review |
 
 ## spot (1 endpoints)
