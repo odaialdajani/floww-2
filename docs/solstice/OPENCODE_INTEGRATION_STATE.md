@@ -704,3 +704,23 @@ read in full. Findings applied:
 - PR114 (compare slice) open on current main; main CI on edaa1cc8:
   lint+frontend green, backend green post-merge (run 37570229246
   completed success after the merge sequence).
+
+## 2026-10-07 skills audit + Triad feasibility (user: use all skills, miss nothing)
+
+- Skills audited: frontend/front2 (design-link collections, no workflows —
+  repo patterns already comply); jfej/readmegrill (TDD/debug/review
+  discipline already packet-mandated and practiced); gsd-loop-*
+  (inapplicable: repo is not a gsd-loop source, issues disabled);
+  dvt-* (personal trading routines, not engineering). No skill changes
+  the engineering method; assessment recorded instead of theater.
+- PR112 CI: frontend+ruff green, backend pending. PR114 CI: backend
+  11m20s green, frontend+ruff green, docker pending. Both open for
+  Cline review+merge per fast-lane.
+- Triad 0DTE feasibility answered read-only (appended to
+  whole-plan-reconciliation §6): min_dte=0 servable, chain keeps 0DTE
+  with exact T; display envelope + min_entry_dte + same-day policy +
+  SPX entitlement are the explicit constraints; exposure overlay has no
+  admitted metric (not built, not invented). Unpromoted scope stays
+  nobody's queue.
+- Review servers (:3001/:8001) healthy for the user session; pre-existing
+  :3000 proxy + :8000 backend untouched. All worktrees clean.
