@@ -257,6 +257,12 @@ def test_consume_exactly_once_with_audit_trail(mounted):
     assert row[0] == first["used_at"]
     assert row[1] == "op-1"
     assert row[2] == fingerprint
+    claim = conn.execute(
+        "SELECT approval_id, resolved_at, error FROM placement_attempts_v1 "
+        "WHERE fingerprint = ?", [fingerprint]).fetchone()
+    assert claim is not None and claim[0] == approval_id, (
+        "consume must leave an in-flight fingerprint claim")
+    assert claim[1] is None and claim[2] is None
 
 
 def test_unconsumed_approval_still_verifies_pure(mounted):
@@ -431,7 +437,13 @@ def test_journal_store_failure_disclosed_not_silent(mounted):
             self._inner = inner
 
         def execute(self, sql, *args, **kwargs):
-            if "INSERT INTO placement_attempts" in sql:
+            # Fail ONLY the failure-journal writes (the record INSERT with
+            # its error column, and the in-flight row's error UPDATE).
+            # The consume claim INSERT (no error column), DDL and SELECTs
+            # pass through, so placement is reached and the journal-write
+            # failure itself is what gets disclosed.
+            if "attempted_at, error)" in sql or \
+                    "UPDATE placement_attempts_v1 SET error" in sql:
                 raise RuntimeError("journal store broke")
             return self._inner.execute(sql, *args, **kwargs)
 
@@ -442,19 +454,31 @@ def test_journal_store_failure_disclosed_not_silent(mounted):
                     json=_order(approval_id=approval_id, operator="op-1"))
     assert r.status_code == 502, r.text
     assert r.json()["detail"]["attempt_journal"] == "APPROVAL_STORE_UNAVAILABLE"
-    # Disclosed degradation (not endorsed): with no journal row there is
-    # nothing to gate on, so a later resubmission is unguarded — the 502
-    # detail above is the operator's only guard and demands manual
-    # reconciliation before any retry.
+    # Strictly better than the disclosed degradation: the consume-created
+    # in-flight claim row SURVIVED (only the error write failed), so the
+    # fingerprint stays fenced as IN_FLIGHT — resubmission is still
+    # refused until the operator resolves, just with the less precise
+    # reason. Nothing is unguarded.
     monkeypatch.setattr(pb, "_admission_store_conn", lambda: conn)
-    broker.place_order = AsyncMock(return_value=MagicMock(
-        status="PENDING", raw={}, order_id="oid-su-4", symbol="AAPL",
-        side="BUY", order_type="MARKET", quantity=1, price=None,
-        created_at="2026-10-06T00:00:00Z"))
     r2 = client.post("/api/public/order", headers=KEY,
                      json=_order(approval_id=_create_approval(client),
                                  operator="op-1"))
-    assert r2.status_code == 200, r2.text
+    assert r2.status_code == 403, r2.text
+    assert _refusal(r2) == "PLACEMENT_IN_FLIGHT"
+    assert broker.place_order.await_count == 1
+    rr = client.post("/api/admission/placement-attempts/resolve",
+                     headers=KEY, json={
+                         "fingerprint": _fingerprint(), "operator": "op-1",
+                         "resolution": "broker down, journal failed too; verified no order"})
+    assert rr.status_code == 200, rr.text
+    broker.place_order = AsyncMock(return_value=MagicMock(
+        status="PENDING", raw={}, order_id="oid-su-5", symbol="AAPL",
+        side="BUY", order_type="MARKET", quantity=1, price=None,
+        created_at="2026-10-06T00:00:00Z"))
+    r3 = client.post("/api/public/order", headers=KEY,
+                     json=_order(approval_id=_create_approval(client),
+                                 operator="op-1"))
+    assert r3.status_code == 200, r3.text
 
 
 def test_resolved_cycle_journals_a_second_failure(mounted):
@@ -492,3 +516,37 @@ def test_resolved_cycle_journals_a_second_failure(mounted):
     assert _refusal(r3) == "PLACEMENT_OUTCOME_UNKNOWN"
     assert broker.place_order.await_count == 2, (
         "exactly the two attempted placements, no resubmission placed")
+
+
+def test_concurrent_same_fingerprint_different_approvals_place_once(mounted):
+    client, broker, _monkeypatch, conn = mounted
+    _setup(client)
+
+    import services.execution_admission as adm
+
+    # Approval A is consumed out-of-band first (its in-flight fingerprint
+    # claim is now held): a concurrent placement of the SAME exact order
+    # under a DIFFERENT approval must refuse, not double-place.
+    approval_a = _create_approval(client)
+    consumed_a = adm.consume_order_approval(
+        conn, approval_a, fingerprint=_fingerprint(), operator="op-1",
+        account_id="TEST-ACCT")
+    assert consumed_a["ok"] is True
+
+    approval_b = _create_approval(client)
+    r = client.post("/api/public/order", headers=KEY,
+                    json=_order(approval_id=approval_b, operator="op-1"))
+    assert r.status_code == 403, r.text
+    assert _refusal(r) == "PLACEMENT_IN_FLIGHT"
+    assert broker.place_order.await_count == 0, (
+        "concurrent duplicate fingerprint must place nothing")
+
+    # A's placement completes: the claim resolves, and B's approval —
+    # never burned by the refused attempt — places exactly once.
+    done = adm.complete_placement_attempt(
+        conn, _fingerprint(), approval_a, "oid-race-1")
+    assert done["ok"] is True and done["resolved_at"]
+    r2 = client.post("/api/public/order", headers=KEY,
+                     json=_order(approval_id=approval_b, operator="op-1"))
+    assert r2.status_code == 200, r2.text
+    assert broker.place_order.await_count == 1

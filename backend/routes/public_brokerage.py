@@ -512,7 +512,8 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
             equity_market_session=equity_market_session)
         consumed = _adm.consume_order_approval(
             _admission_store_conn(), request.get("approval_id"),
-            fingerprint=fp, operator=operator)
+            fingerprint=fp, operator=operator,
+            account_id=getattr(account, "account_id", ""))
         if not consumed.get("ok"):
             raise HTTPException(status_code=403, detail={
                 "error": consumed.get("reason", "APPROVAL_CONSUME_FAILED"),
@@ -543,7 +544,10 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
             raw_order = order.raw.get("order", order.raw)
             status = raw_order.get("status", "UNKNOWN")
 
-        return {
+        completed = _adm.complete_placement_attempt(
+            _admission_store_conn(), fp, request.get("approval_id"),
+            order.order_id)
+        response = {
             "ok": True,
             "order_id": order.order_id,
             "symbol": order.symbol,
@@ -559,6 +563,17 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
             "approval_id": request.get("approval_id"),
             "approval_consumed": consumed.get("ok") is True,
         }
+        if not completed.get("ok"):
+            # The economic effect happened — the 200 stands. A stuck
+            # in-flight claim would wrongly fence later placements, so
+            # disclose it for operator resolution instead of failing.
+            response["placement_journal"] = completed.get(
+                "reason", "STORE_UNAVAILABLE")
+            response["placement_journal_note"] = (
+                "placement succeeded but its completion was not journaled; "
+                "resolve the in-flight claim via POST "
+                "/api/admission/placement-attempts/resolve before resubmitting")
+        return response
     except HTTPException:
         raise
     except Exception as exc:

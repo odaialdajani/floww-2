@@ -77,6 +77,7 @@ __all__ = [
     "verify_order_approval",
     "consume_order_approval",
     "record_placement_attempt",
+    "complete_placement_attempt",
     "resolve_placement_attempt",
 ]
 
@@ -1279,12 +1280,19 @@ def verify_order_approval(
         return gate
     try:
         attempt = conn.execute(
-            "SELECT attempted_at, approval_id FROM placement_attempts_v1 "
-            "WHERE fingerprint = ? AND resolved_at IS NULL",
-            [want]).fetchone()
+            "SELECT attempted_at, approval_id, error FROM "
+            "placement_attempts_v1 WHERE fingerprint = ? AND "
+            "resolved_at IS NULL", [want]).fetchone()
     except Exception:
         return {"ok": False, "reason": "APPROVAL_STORE_UNAVAILABLE"}
     if attempt is not None:
+        if not attempt[2]:
+            return {"ok": False, "reason": "PLACEMENT_IN_FLIGHT",
+                    "detail": {"attempted_at": str(attempt[0]),
+                               "approval_id": str(attempt[1]),
+                               "guidance": "another placement of this exact "
+                               "order is in flight; concurrent duplicates "
+                               "of one fingerprint never place twice"}}
         return {"ok": False, "reason": "PLACEMENT_OUTCOME_UNKNOWN",
                 "detail": {"attempted_at": str(attempt[0]),
                            "approval_id": str(attempt[1]),
@@ -1297,7 +1305,7 @@ def verify_order_approval(
 
 def consume_order_approval(
     conn: Any, approval_id: Any, fingerprint: Any = None,
-    operator: Any = None,
+    operator: Any = None, account_id: Any = None,
 ) -> dict[str, Any]:
     """Consume an order-entry approval exactly once (S17 single-use).
 
@@ -1313,11 +1321,21 @@ def consume_order_approval(
     never reset or refunded: a failed/refused placement burns the
     approval (fail-closed doctrine — re-approve with a fresh row). Never
     raises.
+
+    S17d: consumption ALSO claims the exact order fingerprint in
+    placement_attempts_v1 (in-flight row, error NULL). A concurrent
+    placement of the same fingerprint under a DIFFERENT approval refuses
+    here (PLACEMENT_IN_FLIGHT / PLACEMENT_OUTCOME_UNKNOWN) instead of
+    double-placing: the guarded approval UPDATE alone cannot see across
+    approval IDs. Resolved rows start a new cycle, so reconcile-then-retry
+    and cancel-then-resubmit keep working; only concurrent duplicates of
+    one fingerprint are fenced.
     """
     if conn is None:
         return {"ok": False, "reason": "STORE_UNAVAILABLE"}
     if not isinstance(approval_id, str) or not approval_id:
         return {"ok": False, "reason": "APPROVAL_NOT_STORED"}
+    fp = str(fingerprint or "").strip()
     moment = _now_iso()
     try:
         with _APPROVAL_STORE_LOCK:
@@ -1333,11 +1351,35 @@ def consume_order_approval(
             if row[1]:
                 return {"ok": False, "reason": "APPROVAL_ALREADY_USED",
                         "detail": {"used_at": str(row[1])}}
+            if fp:
+                claim = conn.execute(
+                    "SELECT approval_id, error, resolved_at FROM "
+                    "placement_attempts_v1 WHERE fingerprint = ?",
+                    [fp]).fetchone()
+                if claim is not None and claim[2] is None:
+                    return {"ok": False,
+                            "reason": ("PLACEMENT_IN_FLIGHT"
+                                       if not claim[1]
+                                       else "PLACEMENT_OUTCOME_UNKNOWN"),
+                            "detail": {"approval_id": str(claim[0])}}
+                if claim is None:
+                    conn.execute(
+                        "INSERT INTO placement_attempts_v1 (fingerprint, "
+                        "account_id, approval_id, attempted_at) "
+                        "VALUES (?, ?, ?, ?)",
+                        [fp, str(account_id or ""), approval_id, moment])
+                else:
+                    conn.execute(
+                        "UPDATE placement_attempts_v1 SET approval_id = ?, "
+                        "account_id = ?, attempted_at = ?, error = NULL, "
+                        "resolved_at = NULL, resolved_by = NULL, "
+                        "resolution_note = NULL WHERE fingerprint = ?",
+                        [approval_id, str(account_id or ""), moment, fp])
             conn.execute(
                 "UPDATE approvals_v1 SET used_at = ?, used_by = ?, "
                 "used_fingerprint = ?, updated_at = ? "
                 "WHERE approval_id = ? AND used_at IS NULL",
-                [moment, str(operator or ""), str(fingerprint or ""),
+                [moment, str(operator or ""), fp,
                  moment, approval_id])
     except Exception:
         return {"ok": False, "reason": "APPROVAL_STORE_UNAVAILABLE"}
@@ -1373,8 +1415,9 @@ def record_placement_attempt(
         with _APPROVAL_STORE_LOCK:
             lc.ensure_lifecycle_tables(conn)
             row = conn.execute(
-                "SELECT resolved_at FROM placement_attempts_v1 "
-                "WHERE fingerprint = ?", [fp]).fetchone()
+                "SELECT approval_id, resolved_at, error FROM "
+                "placement_attempts_v1 WHERE fingerprint = ?",
+                [fp]).fetchone()
             if row is None:
                 conn.execute(
                     "INSERT INTO placement_attempts_v1 (fingerprint, "
@@ -1382,7 +1425,7 @@ def record_placement_attempt(
                     "VALUES (?, ?, ?, ?, ?)",
                     [fp, str(account_id or ""), str(approval_id or ""),
                      moment, str(error or "")[:500]])
-            elif row[0]:
+            elif row[1]:
                 conn.execute(
                     "UPDATE placement_attempts_v1 SET approval_id = ?, "
                     "attempted_at = ?, error = ?, resolved_at = NULL, "
@@ -1390,11 +1433,66 @@ def record_placement_attempt(
                     "WHERE fingerprint = ?",
                     [str(approval_id or ""), moment,
                      str(error or "")[:500], fp])
-            # else: an unresolved attempt is already journaled — keep the
-            # original row (first failure wins the audit trail).
+            elif not row[2] and str(row[0] or "") == str(approval_id or ""):
+                conn.execute(
+                    "UPDATE placement_attempts_v1 SET error = ? "
+                    "WHERE fingerprint = ? AND resolved_at IS NULL",
+                    [str(error or "")[:500], fp])
+            # else: an unresolved attempt is already journaled (by this or
+            # another approval) — keep the original row (first failure wins
+            # the audit trail).
     except Exception:
         return {"ok": False, "reason": "APPROVAL_STORE_UNAVAILABLE"}
     return {"ok": True, "fingerprint": fp, "attempted_at": moment}
+
+
+def complete_placement_attempt(
+    conn: Any, fingerprint: Any, approval_id: Any, order_id: Any,
+) -> dict[str, Any]:
+    """Mark an in-flight fingerprint claim placed (S17d).
+
+    Called by the mounted entry AFTER a successful broker placement with
+    the broker's order identity. Resolves the consume-created in-flight
+    row so the fingerprint is recorded completed — a later resubmission
+    of the same fingerprint starts a fresh cycle instead of tripping the
+    in-flight fence. Refuses when no unresolved row exists (nothing to
+    complete) or when the row belongs to another approval (never resolve
+    a foreign in-flight claim). A completion failure is disclosed by the
+    caller but never fails the placement itself (the economic effect
+    happened; the operator resolves the stuck row via the resolve
+    endpoint). Never raises.
+    """
+    if conn is None:
+        return {"ok": False, "reason": "STORE_UNAVAILABLE"}
+    fp = str(fingerprint or "").strip()
+    if not fp:
+        return {"ok": False, "reason": "BAD_CONTRACT",
+                "detail": "fingerprint required"}
+    moment = _now_iso()
+    try:
+        from services import public_execution_lifecycle as lc
+
+        with _APPROVAL_STORE_LOCK:
+            lc.ensure_lifecycle_tables(conn)
+            row = conn.execute(
+                "SELECT approval_id, resolved_at FROM placement_attempts_v1 "
+                "WHERE fingerprint = ?", [fp]).fetchone()
+            if row is None:
+                return {"ok": False, "reason": "NO_SUCH_ATTEMPT"}
+            if row[1]:
+                return {"ok": False, "reason": "ALREADY_RESOLVED"}
+            if str(row[0] or "") != str(approval_id or ""):
+                return {"ok": False, "reason": "APPROVAL_MISMATCH",
+                        "detail": "in-flight claim belongs to another approval"}
+            conn.execute(
+                "UPDATE placement_attempts_v1 SET resolved_at = ?, "
+                "resolved_by = ?, resolution_note = ? "
+                "WHERE fingerprint = ? AND resolved_at IS NULL",
+                [moment, "auto:broker-placement",
+                 "placed order " + str(order_id or "")[:100], fp])
+    except Exception:
+        return {"ok": False, "reason": "APPROVAL_STORE_UNAVAILABLE"}
+    return {"ok": True, "fingerprint": fp, "resolved_at": moment}
 
 
 def resolve_placement_attempt(
