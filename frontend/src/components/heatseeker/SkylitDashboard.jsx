@@ -26,6 +26,7 @@ import { GroundedPublicReview } from "../public/PublicHandoffReview";
 import SolsticeSymbolMaps from "./SolsticeSymbolMaps";
 import RangeAnalyticsWorkspace from "./RangeAnalyticsWorkspace";
 import { resolveSelectedWall, wallPositionOf } from "../../lib/solsticeSelection";
+import {skylitViewScope,readSkylitView,writeSkylitView,captureSkylitSelection,restoreSkylitSelection} from "./skylitViewPreferences";
 
 /**
  * SelectedCellReadout — R6-1 + R7-03: the banner resolves its value from the
@@ -237,6 +238,16 @@ function SkylitDashboard({
   // control bar so arrows/buttons/search traverse everything, not fallbacks.
   tickers = null,
 }) {
+  const preferenceScope=useMemo(()=>skylitViewScope({ticker,timeframe,expiries,dte,expiryScope,viewMode,localView}),[ticker,timeframe,expiries,dte,expiryScope,viewMode,localView]);
+  const analyticalScope=useMemo(()=>skylitViewScope({ticker,timeframe,expiries,dte,expiryScope,viewMode,localView:null}),[ticker,timeframe,expiries,dte,expiryScope,viewMode]);
+  const [initialView]=useState(()=>readSkylitView(preferenceScope));
+  const [appliedPreferenceScope,setAppliedPreferenceScope]=useState(preferenceScope);
+  const changingPreferenceScope=appliedPreferenceScope!==preferenceScope;
+  const appliedQueryScope=useRef(analyticalScope),mountQueryScope=useRef(analyticalScope);
+  const changingQueryScope=appliedQueryScope.current!==analyticalScope;
+  const restoreIdentity=useRef(initialView.selection),latestPreferences=useRef(null);
+  const previousLocalView=useRef(localView),previousTicker=useRef(ticker);
+  const localViewChanged=previousLocalView.current!==localView;
   const [localRangeOpen, setLocalRangeOpen] = useState(false);
   const [rangeIsReplay, setRangeIsReplay] = useState(false);
   const rangeOpen = analyticalRangeOpen ?? localRangeOpen;
@@ -251,10 +262,11 @@ function SkylitDashboard({
   }, []);
   // T04: metric overlay state — same snapshot, raw wall identity locked while
   // viewing activity (walls come from the payload, never recomputed per tab).
-  const [metric, setMetric] = useState("raw");
-  const [layout, setLayout] = useState("profile");
+  const [metric, setMetric] = useState(initialView.metric);
+  const [layout, setLayout] = useState(()=>initialView.found?initialView.layout:localView?localView==="profile"?"profile":"focus":"profile");
   useEffect(() => {
-    if (localView) setLayout(localView === "profile" ? "profile" : "focus");
+    if(previousLocalView.current===localView)return;previousLocalView.current=localView;
+    if (localView) {setLayout(localView === "profile" ? "profile" : "focus");setCompareMode(false);setActivePane("gex");}
   }, [localView]);
   const [replayPanelOpen, setReplayPanelOpen] = useState(false);
   const [followSpot, setFollowSpot] = useState(true);
@@ -266,11 +278,11 @@ function SkylitDashboard({
   const [scaleLock, setScaleLock] = useState(null);
   // R7-04 compare desk: Single (default, unchanged) vs GEX+VEX vs Raw+Δ.
   // One snapshot/request; the clicked pane owns the readout.
-  const [compareMode, setCompareMode] = useState(false);
-  const [comparePair, setComparePair] = useState("gexvex");
+  const [compareMode, setCompareMode] = useState(initialView.compareMode);
+  const [comparePair, setComparePair] = useState(initialView.comparePair);
   // snapshot/request drives both panes; the active pane owns the readout
   // while wall identity stays raw-anchored. Per-pane scales lock together.
-  const [activePane, setActivePane] = useState("gex");
+  const [activePane, setActivePane] = useState(initialView.activePane);
   const [compareScales, setCompareScales] = useState({ gex: null, delta: null, vex: null, charm: null });
   const [compareLock, setCompareLock] = useState(null);
   // R8-02: "Follow this wall" — keep the same wall_id selected across
@@ -281,6 +293,8 @@ function SkylitDashboard({
   // closes it. Only auto-opens on a NEW selection (follow refreshes must
   // not yank it open after the user closed it).
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerOpenNow=useRef(drawerOpen),openingRows=useRef(null);
+  drawerOpenNow.current=drawerOpen;
   // O5: drawer focus ownership — focus the close control on open, restore
   // the previously focused element on close/unmount.
   const drawerCloseRef = useRef(null);
@@ -336,7 +350,7 @@ function SkylitDashboard({
   const displaySpot = isReplay ? (displayData?.spot ?? null) : spot;
   // Grid zoom, in-frame only (2026-09-04): the expanded overlay keeps its
   // designed full density instead of compounding scale on scale.
-  const [gridZoom, setGridZoom] = useState(1);
+  const [gridZoom, setGridZoom] = useState(initialView.gridZoom);
   const zoomIn = useCallback(() => setGridZoom((z) => Math.min(1.5, +(z + 0.25).toFixed(2))), []);
   const zoomOut = useCallback(() => setGridZoom((z) => Math.max(0.75, +(z - 0.25).toFixed(2))), []);
   const zoomReset = useCallback(() => setGridZoom(1), []);
@@ -348,6 +362,8 @@ function SkylitDashboard({
   // Falls back to 21 pre-measure / without ResizeObserver.
   const heatAreaRef = useRef(null);
   const [fitRows, setFitRows] = useState(21);
+  const measuredRows=useRef(fitRows),displayZoom=useRef(gridZoom);
+  measuredRows.current=fitRows;displayZoom.current=gridZoom;
   useEffect(() => {
     const el = heatAreaRef.current;
     if (!el || typeof ResizeObserver === "undefined") return undefined;
@@ -357,6 +373,19 @@ function SkylitDashboard({
       if (h > 0) {
         const rows = Math.floor((h / gridZoom - 64) / 23);
         const next = Math.max(10, Math.min(120, rows));
+        const opening=openingRows.current;
+        if(opening){
+          const owned=drawerOpenNow.current && opening.width===window.innerWidth
+            && opening.viewportHeight===window.innerHeight && opening.zoom===gridZoom;
+          if(!owned || opening.height===null && next>=opening.rows)openingRows.current=null;
+          else if(opening.height===null)opening.height=h;
+          else if(opening.height!==h)openingRows.current=null;
+          // The inspector may reduce its allocated height. Keep its existing
+          // rows scrollable for that one geometry; a later resize still prunes.
+          if(openingRows.current){
+            setFitRows(prev=>prev===opening.rows?prev:opening.rows);return;
+          }
+        }
         setFitRows((prev) => (prev === next ? prev : next));
       }
     };
@@ -396,7 +425,7 @@ function SkylitDashboard({
   useEffect(() => {
     setExpData(null);
     setExpWidened(false);
-  }, [ticker, timeframe, expiries, dte, expiryScope]);
+  }, [ticker, timeframe, expiries, dte, expiryScope, replaySnap]);
   // R5-B resweep: closing the overlay drops expanded data so stale
   // expanded scope can never drive inline clicks after close. Reopening
   // refetches under the current scope (loading state, never old pixels).
@@ -435,7 +464,8 @@ function SkylitDashboard({
   }, [expanded, ticker, timeframe, expiries, dte, expiryScope, expWidened, expQueryKey, isReplay]);
   const overlayData = isReplay ? displayData : (expData?.ticker === ticker ? expData : baseData);
   const visibleData = expanded ? overlayData : displayData;
-  const [priceHistoryOpen, setPriceHistoryOpen] = useState(false);
+  const [priceHistoryOpen, setPriceHistoryOpen] = useState(initialView.priceHistoryOpen);
+  const previousRangeOpen=useRef(rangeOpen);
   const multi = layout === "multi";
   const panes = compareMode || multi;
   // Raw+Δ pair: left is always raw structure; right is the active GEX
@@ -477,6 +507,7 @@ function SkylitDashboard({
     && contractSelection.wallId === (selectedCell?.wall_id || null) && contractSelection.replay === isReplay
     && contractSelection.selectionScope === contractScope ? contractSelection : null;
   useEffect(() => {
+    if(previousRangeOpen.current===rangeOpen)return;previousRangeOpen.current=rangeOpen;
     setSelectedCell(null); setContractSelection(null); setReplaySnap(null);
     setReplayPanelOpen(false); setReplayOpenRequest(null); setExpanded(false);
     setFollowWall(false); setFollowWallId(null); setDrawerOpen(false); setPriceHistoryOpen(false);
@@ -505,15 +536,19 @@ function SkylitDashboard({
     }
   }, [selectedCell]);
   const selectForReview = useCallback((selection) => {
+    restoreIdentity.current=null;
     const key = `${selection.ticker}|${selection.wall_id || ""}|${selection.strike ?? ""}|${selection.colKey ?? ""}`;
     setSelectedCell(selection);
     if (key !== lastUserSelectionKey.current) {
       lastUserSelectionKey.current = key;
+      if(!drawerOpenNow.current)openingRows.current={rows:measuredRows.current,height:null,
+        width:window.innerWidth,viewportHeight:window.innerHeight,zoom:displayZoom.current};
       setDrawerOpen(true);
     }
   }, []);
   const overlayNote = (() => {
     const n = overlayData?.strikes?.length || 0;
+    if (isReplay) return `Saved scope · ${overlayData?.grid?.expiries?.length || 0} expiries · ${n} strikes`;
     const scope = `${timeframe} · ${expWidened ? 8 : expiries} expiries`;
     // Loading is explicit even with no rows yet: reopening after close must
     // show a loading state, never stale pixels and never a blank header.
@@ -555,7 +590,7 @@ function SkylitDashboard({
     [tradeMode,onCellClick,visibleData,ticker,isReplay,followWall,followWallId,activeView,metric,multi,compareMode,comparePair,selectForReview]
   );
   // Clear ticker-dependent selection on symbol change (F18).
-  useEffect(() => { setSelectedCell(null); setActivePane("gex"); }, [ticker]);
+  useEffect(() => { if(previousTicker.current===ticker)return;previousTicker.current=ticker;setSelectedCell(null);setActivePane("gex"); }, [ticker]);
   // R7-F12: entering replay disarms live Trade mode; returning to live does
   // not re-arm it (deliberate user action required).
   useEffect(() => { if (isReplay) setTradeMode(false); }, [isReplay]);
@@ -572,6 +607,63 @@ function SkylitDashboard({
     setActivePane(pane);
     handleCellClick(strike, colKey, value, pane);
   }, [handleCellClick]);
+
+
+  useEffect(()=>{
+    if(!changingPreferenceScope)return;
+    // Keep the outgoing query intact until the new query's display choices
+    // have been applied. A transitional render must never write them to it.
+    const incoming=readSkylitView(preferenceScope);
+    const outgoing=latestPreferences.current;
+    const choices=!incoming.found && !changingQueryScope && outgoing?outgoing.value:incoming;
+    if(outgoing){
+      latestPreferences.current={...outgoing,value:{...outgoing.value,selection:changingQueryScope?null:outgoing.value.selection}};
+      writeSkylitView(outgoing.scope,latestPreferences.current.value);
+    }
+    if(changingQueryScope)restoreIdentity.current=null;
+    setMetric(choices.metric);
+    setLayout(localViewChanged && localView ? localView==="profile"?"profile":"focus"
+      : incoming.found?incoming.layout:localView?localView==="profile"?"profile":"focus":"profile");
+    setGridZoom(choices.gridZoom);
+    // An unseen query keeps an explicitly opened history study open. Loading
+    // another stock must not silently admit research against its live map.
+    setPriceHistoryOpen(incoming.found?incoming.priceHistoryOpen:outgoing?.value.priceHistoryOpen===true);
+    setCompareMode(localViewChanged?false:choices.compareMode);setComparePair(choices.comparePair);
+    setActivePane(localViewChanged?"gex":choices.activePane);
+    // A display-only geometry change keeps the current owning selection and
+    // paused rows. Changing the analytical query cancels them permanently.
+    if(changingQueryScope){
+      openingRows.current=null;
+      setSelectedCell(null);setContractSelection(null);setTradeMode(false);
+      setScaleLock(null);setCompareLock(null);setReplaySnap(null);setReplayOpenRequest(null);
+      setReplayPanelOpen(false);setExpanded(false);setExpData(null);setExpWidened(false);
+      setFollowWall(false);setFollowWallId(null);setDrawerOpen(false);
+      setFollowSpot(true);setAnchorStrike(null);
+    }
+    appliedQueryScope.current=analyticalScope;
+    setAppliedPreferenceScope(preferenceScope);
+  },[preferenceScope,analyticalScope,changingPreferenceScope,changingQueryScope,localView,localViewChanged]);
+  useEffect(()=>{
+    const saved=restoreIdentity.current;
+    if(changingQueryScope || analyticalScope!==mountQueryScope.current || isReplay || rangeOpen
+      || saved && (saved.view!==activeView || saved.metric!==activeMetric)){
+      restoreIdentity.current=null;return;
+    }
+    if(changingPreferenceScope || !saved || !baseData)return;
+    const restored=restoreSkylitSelection(saved,{data:baseData,ticker,view:activeView,metric:activeMetric,spot:displaySpot,windowRows:expanded?null:fitRows});
+    // A placeholder, stale reading, absent cell or unfinished row measurement
+    // is not a successful restore. Keep identity only, never its old number.
+    if(restored){restoreIdentity.current=null;setSelectedCell(restored);}
+  },[preferenceScope,analyticalScope,changingPreferenceScope,changingQueryScope,baseData,ticker,activeView,activeMetric,displaySpot,expanded,fitRows,isReplay,rangeOpen]);
+  const savedSelection=captureSkylitSelection(selectedCell,{data:visibleData,ticker,view:activeView,metric:activeMetric,spot:displaySpot,windowRows:expanded?null:fitRows,replay:isReplay || rangeOpen});
+  const pendingIdentity=analyticalScope===mountQueryScope.current && !isReplay && !rangeOpen
+    && restoreIdentity.current?.view===activeView && restoreIdentity.current?.metric===activeMetric?restoreIdentity.current:null;
+  if(!changingPreferenceScope)latestPreferences.current={scope:preferenceScope,value:{metric,layout,gridZoom,priceHistoryOpen,compareMode,comparePair,activePane,selection:savedSelection || pendingIdentity}};
+  useEffect(()=>{
+    if(changingPreferenceScope)return;
+    const current=latestPreferences.current;if(current)writeSkylitView(current.scope,current.value);
+  },[preferenceScope,changingPreferenceScope,metric,layout,gridZoom,priceHistoryOpen,compareMode,comparePair,activePane,selectedCell,visibleData,baseData,fitRows,expanded,isReplay,rangeOpen]);
+  useEffect(()=>()=>{const current=latestPreferences.current;if(current)writeSkylitView(current.scope,current.value);},[]);
 
   // R8-02 (deeper edge): when followWall is on and a new live snapshot
   // arrives, re-resolve the followed wall_id against the new snapshot's
@@ -1059,14 +1151,14 @@ function SkylitDashboard({
               <span className="skylit-expanded-ticker">{ticker}</span>
               <span className="skylit-expanded-label">Full grid</span>
               {overlayNote && <span className="skylit-expanded-coverage">{overlayNote}</span>}
-              <button
+              {!isReplay && <button
                 className="skylit-trade-mode-btn"
                 onClick={() => setExpWidened((w) => !w)}
                 title="Widen analysis to 8 expiries (explicit scope change)"
                 data-testid="skylit-expand-widen"
               >
                 {expWidened ? "Scope: wide (8)" : "Widen to 8"}
-              </button>
+              </button>}
               <span className="skylit-expanded-hint">Esc to close</span>
             </div>
             <button

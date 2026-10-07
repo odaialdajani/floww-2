@@ -1,7 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import axios from "axios";
-import useTickerDirectory from "./useTickerDirectory";
+import useTickerDirectory,{clearTickerDirectoryCache} from "./useTickerDirectory";
 import StockSearchNotice from "./StockSearchNotice";
 import { buildTickerUniverse } from "./tickerUniverse";
 
@@ -13,6 +13,7 @@ function StockSearch() {
     <span data-testid="names">{buildTickerUniverse(tickers).join(",")}</span></>;
 }
 
+beforeEach(()=>clearTickerDirectoryCache());
 afterEach(() => jest.resetAllMocks());
 
 test("failed later pages show partial search and retry recovers the full list", async () => {

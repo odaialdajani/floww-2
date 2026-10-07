@@ -22,7 +22,7 @@ const fixture = () => ({ ticker: "SPY", spot: 100.25, asof: "2031-01-16T15:00:00
       session_delta_volume: { expiries: [E1], strikes: [101, 100, 99], grid: { [E1]: { 100: 5000 } } } },
     surface_coverage: { raw: { status: "ok" }, delta: { status: "ok" }, session_delta_volume: { status: "partial" }, window: { status: "unavailable", reason: "NO_BASELINE" } } },
   quality: { state: "usable", setupEligible: false, reasonCodes: ["PRICE_HISTORY_MISSING"] } });
-beforeEach(() => { axios.get.mockResolvedValue({ data: { snapshots: [], decisions: [] } }); });
+beforeEach(() => { sessionStorage.clear(); axios.get.mockResolvedValue({ data: { snapshots: [], decisions: [] } }); });
 const mount = async () => { await act(async () => render(<SkylitDashboard ticker="SPY" spot={100.25} data={fixture()} />)); };
 
 test("Matrix + Profile is the default and local view changes preserve the owning selection",async()=>{
@@ -107,4 +107,33 @@ test("manual scrolling pauses follow spot; resume is explicit", async () => {
   expect(screen.getByTestId("skylit-follow-spot-toggle")).toHaveTextContent("Resume spot");
   fireEvent.click(screen.getByTestId("skylit-follow-spot-toggle"));
   expect(screen.getByTestId("skylit-follow-spot-toggle")).toHaveTextContent("Follow spot");
+});
+
+
+test('opening the inspector keeps an available edge cell selected, while a later external resize still prunes it',async()=>{
+ const priorObserver=global.ResizeObserver;
+ const priorHeight=Object.getOwnPropertyDescriptor(HTMLElement.prototype,'clientHeight');
+ const observers=[];let externalHeight=null,view;const onCellClick=jest.fn();
+ global.ResizeObserver=class{constructor(callback){this.callback=callback;observers.push(this);}observe(box){this.box=box;}disconnect(){}};
+ Object.defineProperty(HTMLElement.prototype,'clientHeight',{configurable:true,get(){
+  if(!this.classList.contains('skylit-main-area'))return 0;
+  return externalHeight ?? ((document.querySelector('[data-testid="skylit-inspector-drawer"]')?13:18)*23+64);
+ }});
+ try{
+  const data=fixture();data.grid.strikes=Array.from({length:100},(_,i)=>i+50);data.strikes=data.grid.strikes.map(strike=>({strike}));
+  data.grid.grid[E1]=Object.fromEntries(data.grid.strikes.map(strike=>[strike,1000]));
+  await act(async()=>{view=render(<SkylitDashboard ticker="SPY" spot={100.25} data={data} onCellClick={onCellClick}/>);});
+  const cell=screen.getAllByRole('gridcell')[0];const strike=cell.getAttribute('aria-label').split(' by ')[0];
+  fireEvent.click(cell);expect(screen.getByTestId('skylit-selected-cell')).toHaveTextContent(strike+' · '+E1+' · 1000.0');
+  expect(screen.getByTestId('skylit-inspector-drawer')).toBeInTheDocument();
+  const observer=observers.find(item=>item.box===document.querySelector('.skylit-main-area'));
+  act(()=>observer.callback());
+  expect(screen.getByTestId('skylit-selected-cell')).toHaveTextContent(strike+' · '+E1+' · 1000.0');
+  expect(screen.getByTestId('skylit-inspector-drawer')).toBeInTheDocument();expect(onCellClick).not.toHaveBeenCalled();
+  externalHeight=10*23+64;act(()=>observer.callback());
+  expect(screen.queryByTestId('skylit-selected-cell')).toBeNull();expect(screen.queryByTestId('skylit-inspector-drawer')).toBeNull();expect(onCellClick).not.toHaveBeenCalled();
+ }finally{
+  view?.unmount();if(priorObserver===undefined)delete global.ResizeObserver;else global.ResizeObserver=priorObserver;
+  if(priorHeight)Object.defineProperty(HTMLElement.prototype,'clientHeight',priorHeight);else delete HTMLElement.prototype.clientHeight;
+ }
 });

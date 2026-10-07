@@ -70,13 +70,26 @@ def explanation_menu(facts):
         else:
             add("alert_limits", "The alert reading summarizes selected, derived signals. It is not a complete trade tape "
                 "or proof of who bought, sold, or held the options.",flow)
-        implied = [f for f in items if "implied" in f["metric"].lower() and f.get("value") is not None]
-        realized = [f for f in items if "realized" in f["metric"].lower() and f.get("value") is not None]
+        implied_units = {
+            "Implied volatility": {"annualized fraction", "percent"},
+            "At-the-money implied volatility": {"annualized fraction", "percent"},
+            "Implied move": {"USD", "percent"}, "Implied move estimate": {"USD"}, "Implied move percent": {"percent"},
+        }
+        implied = [f for f in items if f["metric"] in implied_units and finite(f.get("value"))
+                   and f["value"] >= 0 and f.get("unit") in implied_units[f["metric"]]]
+        realized = [f for f in items if f["metric"] in {"Realized volatility", "Realized daily close volatility"}
+                    and finite(f.get("value")) and f.get("value") >= 0
+                    and f.get("unit") in {"annualized fraction", "percent"}]
         if not implied or not realized:
             absent = "implied and realized volatility estimates" if not implied and not realized else "implied volatility estimates" if not implied else "realized volatility estimates"
             add("missing_volatility", f"The supplied evidence lacks usable {absent}. "
                 "Some raw inputs may be present; the listed source gaps explain what remains unverified. "
                 "An implied-versus-realized comparison cannot be calculated from price, gamma or alerts alone.")
+        if implied and realized:
+            add("volatility_meaning", "Implied estimates describe option pricing expectations; realized volatility describes "
+                "past price variation. Neither is a direction or profit probability. A price-move estimate and an "
+                "annualized volatility estimate have different units; compare only matched units, scope and verified source quality.",
+                (implied + realized)[:12])
         if not any(f["metric"] == "Price change since saved observation" for f in items):
             add("missing_change", "No validated price change from an earlier compatible observation is supplied. "
                 "A single snapshot cannot establish how much the market changed; matching scope, source and observation times are required.")

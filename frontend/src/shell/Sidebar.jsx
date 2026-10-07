@@ -64,6 +64,7 @@ function getIcon(id) {
 export default function Sidebar({ page, onNavigate, userEmail, userTier }) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(SIDEBAR_KEY) === "true");
   const [legacyExpanded, setLegacyExpanded] = useState(false);
+  const [recordsExpanded, setRecordsExpanded] = useState(false);
   useEffect(() => {
     localStorage.setItem(SIDEBAR_KEY, String(collapsed));
     document.documentElement.setAttribute("data-sidebar-collapsed", String(collapsed));
@@ -143,23 +144,29 @@ export default function Sidebar({ page, onNavigate, userEmail, userTier }) {
       <nav className="ap-mobile-scroll flex-1 overflow-y-auto p-2 pt-3">
         {groups.map((group, gi) => {
           const isLegacy = group.name === "Legacy";
-          const showItems = !isLegacy || legacyExpanded;
+          const isRecords = group.name === "Your records";
+          const foldable = isLegacy || isRecords;
+          const expanded = isRecords ? recordsExpanded : legacyExpanded;
+          const showItems = !foldable || expanded;
           return (
             <div key={gi} className="mb-1">
-              {!collapsed && (
+              {(!collapsed || isRecords) && (
                 <button
                   type="button"
-                  onClick={isLegacy ? () => setLegacyExpanded(v => !v) : undefined}
+                  aria-label={group.name}
+                  aria-expanded={foldable ? expanded : undefined}
+                  title={group.name}
+                  onClick={isRecords ? () => setRecordsExpanded(v => !v) : isLegacy ? () => setLegacyExpanded(v => !v) : undefined}
                   className="display flex w-full items-center gap-1.5 px-3 pt-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em]"
                   style={{
                     color: "var(--text-quaternary)",
                     background: "transparent",
                     border: "none",
-                    cursor: isLegacy ? "pointer" : "default",
+                    cursor: foldable ? "pointer" : "default",
                     textAlign: "left",
                   }}
                 >
-                  {isLegacy && (
+                  {foldable && (
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       width="10"
@@ -171,7 +178,7 @@ export default function Sidebar({ page, onNavigate, userEmail, userTier }) {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       style={{
-                        transform: legacyExpanded ? "rotate(0deg)" : "rotate(-90deg)",
+                        transform: expanded ? "rotate(0deg)" : "rotate(-90deg)",
                         transition: "transform 150ms",
                         flexShrink: 0,
                       }}
@@ -179,7 +186,7 @@ export default function Sidebar({ page, onNavigate, userEmail, userTier }) {
                       <path d="m6 9 6 6 6-6"/>
                     </svg>
                   )}
-                  {group.name}
+                  {!collapsed && group.name}
                 </button>
               )}
               {showItems && group.items.map(item => {
@@ -204,7 +211,10 @@ export default function Sidebar({ page, onNavigate, userEmail, userTier }) {
                     <span className="nav-icon" style={{ flexShrink: 0, color: active ? "var(--gold)" : "inherit" }}>
                       {getIcon(item.icon)}
                     </span>
-                    {!collapsed && <span className="truncate" title={item.label}>{item.label}</span>}
+                    {!collapsed && <span style={{ minWidth: 0 }}>
+                      <span className="block truncate" title={item.label}>{item.label}</span>
+                      {item.description && <small className="block" style={{ fontSize: 10, lineHeight: "14px", color: "var(--text-tertiary)" }}>{item.description}</small>}
+                    </span>}
                     {!collapsed && item.badge === "NEW" && (
                       <span
                         className="mono ml-auto rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"

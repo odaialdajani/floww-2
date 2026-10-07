@@ -27,6 +27,40 @@ function fmtGex(v) {
   return v.toFixed(0);
 }
 
+const cellMap = value => value && typeof value === "object" && !Array.isArray(value);
+function overlayTotals(section, rawGrid) {
+  const cells = section?.grid;
+  if (!cellMap(cells) || !Object.keys(cells).length || section?.status === "unavailable") return { status: "unavailable" };
+  if (section?.usable != null && (typeof section.usable !== "number" || !Number.isFinite(section.usable) || section.usable <= 0)) return { status: "unavailable" };
+  let complete = true, usable = 0, net = 0, absolute = 0;
+  const observedStrikes = new Set();
+  for (const column of Object.values(cells)) {
+    if (!cellMap(column) || !Object.keys(column).length) { complete = false; continue; }
+    for (const [strike, value] of Object.entries(column)) {
+      observedStrikes.add(Number(strike));
+      if (typeof value !== "number" || !Number.isFinite(value)) { complete = false; continue; }
+      usable++; net += value; absolute += Math.abs(value);
+    }
+  }
+  const expiries = section?.expiries ?? rawGrid?.expiries;
+  if (expiries != null && (!Array.isArray(expiries) || !expiries.length || expiries.some(expiry => !cellMap(cells[expiry]) || !Object.keys(cells[expiry]).length))) complete = false;
+  // Overlay producers intentionally use sparse cells. Declared strikes must
+  // be present somewhere; an absent strike/expiry combination is not filled
+  // with zero or inferred to contain a contract.
+  const strikes = section?.strikes ?? rawGrid?.strikes;
+  if (strikes != null && (!Array.isArray(strikes) || !strikes.length || strikes.some(strike => !observedStrikes.has(Number(strike))))) complete = false;
+  for (const key of ["cell_missing_delta", "cell_invalid_delta"]) {
+    const excluded = section?.[key];
+    if (excluded != null && (!cellMap(excluded) || Object.values(excluded).some(column => !cellMap(column)
+      || Object.values(column).some(count => typeof count !== "number" || !Number.isFinite(count) || count !== 0)))) complete = false;
+  }
+  if (["partial", "incomplete", "error", "invalid"].includes(section?.status)
+    || ["missing_delta", "missing_volume", "missing_oi", "invalid", "invalid_delta", "invalid_mult", "invalid_type", "quarantined", "mixed_pair", "no_baseline"].some(key => typeof section?.[key] === "number" && section[key] > 0)
+    || section?.coverage?.complete === false || section?.coverage?.status === "partial") complete = false;
+  if (!usable || !Number.isFinite(net) || !Number.isFinite(absolute)) return { status: "unavailable" };
+  return complete ? { status: "complete", net, absolute } : { status: "partial" };
+}
+
 function MetricRow({ label, value, color = "#c9d1d9", sub }) {
   return (
     <div className="skylit-metric-row">
@@ -47,10 +81,12 @@ function SkylitMetricsSidebar({
   // cells. Structural strongest-wall anchor never moves with the metric.
   metric = "raw",
 }) {
-  const nodes = data?.nodes || {};
+  const nodes = data?.nodes && typeof data.nodes === "object" && !Array.isArray(data.nodes) ? data.nodes : {};
   const kingNode = nodes.king;
-  const floors = nodes.floors || [];
-  const ceilings = nodes.ceilings || [];
+  const floors = Array.isArray(nodes.floors) ? nodes.floors : null;
+  const ceilings = Array.isArray(nodes.ceilings) ? nodes.ceilings : null;
+  // The fallback is the same recorded payload, never today's live selection.
+  const observedRegime = regime ?? data?.regime ?? data?.gex_regime ?? nodes.regime;
   // F17: three distinct concepts — largest CELL (grid king), strongest
   // aggregate WALL (sidebar king), nearest relevant WALL. Sidebar respects the
   // active metric for its summary; grid king stays cell-scoped.
@@ -63,46 +99,44 @@ function SkylitMetricsSidebar({
   const summaryLabel = useOverlay
     ? metricLabel
     : (viewMode === "vex" || viewMode === "charm" ? "GEX structural" : "GEX");
-  const overlayCells = useOverlay ? ((data?.metrics?.grids || {})[metric] || {}).grid : null;
-  const overlayHasCells = !!overlayCells && Object.keys(overlayCells).length > 0;
-  const metricActive = !useOverlay || overlayHasCells;
-  const exposureBasis = useOverlay && overlayHasCells
-    ? (((data?.metrics?.grids || {})[metric] || {}).exposure_basis
+  const overlaySection = useOverlay ? (data?.metrics?.grids || {})[metric] : null;
+  const overlay = useOverlay ? overlayTotals(overlaySection, data?.grid) : null;
+  const metricActive = !useOverlay || overlay.status === "complete";
+  const exposureBasis = useOverlay
+    ? (overlaySection?.exposure_basis
       || (metric === "delta" ? "OI_DELTA_WEIGHTED" : "VOLUME"))
     : (data?.exposure_basis || "OI");
   // net GEX lives on nodes.total_gex; |GEX| is summed client-side because the
   // heatmap payload never exports total_abs_gex; flip point from gamma_flip.
   // R6-1: a missing metric surface renders unavailable (—), never raw totals
   // under an active delta/activity control.
-  const sumCells = (cells, abs) => Object.values(cells).reduce(
-    (acc, col) => acc + Object.values(col || {}).reduce(
-      (a, v) => a + (abs ? Math.abs(v || 0) : (v || 0)), 0), 0);
-  const sumRows = () => (data?.strikes?.length
-    ? data.strikes.reduce((acc, s) => acc + Math.abs(s.gex || 0), 0)
+  const sumRows = () => (Array.isArray(data?.strikes) && data.strikes.length
+    && data.strikes.every(row => typeof row?.gex === "number" && Number.isFinite(row.gex))
+    ? data.strikes.reduce((acc, s) => acc + Math.abs(s.gex), 0)
     : null);
   const netGex = !metricActive
     ? null
-    : (useOverlay && overlayHasCells
-      ? sumCells(overlayCells, false)
+    : (useOverlay
+      ? overlay.net
       : (data?.net_gex_total ?? nodes?.total_gex));
   const totalAbsGex = !metricActive
     ? null
-    : (useOverlay && overlayHasCells
-      ? sumCells(overlayCells, true)
+    : (useOverlay
+      ? overlay.absolute
       : (data?.total_abs_gex ?? sumRows()));
   const flipPoint = data?.flip_zones?.[0]?.price ?? data?.gamma_flip?.gamma_flip;
   const polarityLevel = nodes?.polarity_level;
-  const gatekeeperCount = nodes?.gatekeepers?.length || 0;
+  const gatekeeperCount = Array.isArray(nodes.gatekeepers) ? nodes.gatekeepers.length : null;
 
   const regimeColor =
-    regime === "positive" ? "#34d399" :
-    regime === "negative" ? "#f87171" :
+    observedRegime === "positive" ? "#34d399" :
+    observedRegime === "negative" ? "#f87171" :
     "#fbbf24";
 
   const regimeLabel =
-    regime === "positive" ? "Positive γ" :
-    regime === "negative" ? "Negative γ" :
-    regime === "neutral" ? "Neutral γ" : "Gamma reading unavailable";
+    observedRegime === "positive" ? "Positive γ" :
+    observedRegime === "negative" ? "Negative γ" :
+    observedRegime === "neutral" ? "Neutral γ" : "Gamma reading unavailable";
 
   return (
     <div className="skylit-metrics-sidebar">
@@ -118,8 +152,8 @@ function SkylitMetricsSidebar({
           Key Levels · {summaryLabel}{useOverlay ? ` · ${metric}` : ""} · {exposureBasis}
         </div>
         {!metricActive && (
-          <div className="skylit-metric-row" data-testid="skylit-sidebar-unavailable">
-            <span className="skylit-metric-label">Metric unavailable</span>
+          <div className="skylit-metric-row" data-testid={overlay?.status === "partial" ? "skylit-sidebar-partial" : "skylit-sidebar-unavailable"} role="status">
+            <span className="skylit-metric-label">{overlay?.status === "partial" ? "Metric incomplete" : "Metric unavailable"}</span>
             <span className="skylit-metric-value">—</span>
           </div>
         )}
@@ -145,13 +179,13 @@ function SkylitMetricsSidebar({
 
         <MetricRow
           label="TOP FLOOR"
-          value={floors.length > 0 ? `$${fmtStrike(floors[0].strike)}` : "—"}
+          value={floors?.length > 0 ? `$${fmtStrike(floors[0].strike)}` : "—"}
           color="#34d399"
         />
 
         <MetricRow
           label="TOP CEILING"
-          value={ceilings.length > 0 ? `$${fmtStrike(ceilings[0].strike)}` : "—"}
+          value={ceilings?.length > 0 ? `$${fmtStrike(ceilings[0].strike)}` : "—"}
           color="#f87171"
         />
 
@@ -165,6 +199,7 @@ function SkylitMetricsSidebar({
       {/* Structure */}
       <div className="skylit-metrics-section">
         <div className="skylit-section-title">Structure</div>
+        {data?.replay && data?.structure_status !== "complete" && <p role="status">Some price levels are unavailable for this saved view.</p>}
 
         <MetricRow
           label="Polarity"
@@ -174,19 +209,19 @@ function SkylitMetricsSidebar({
 
         <MetricRow
           label="Gatekeepers"
-          value={String(gatekeeperCount)}
+          value={gatekeeperCount == null ? "Unknown" : String(gatekeeperCount)}
           color="#c084fc"
         />
 
         <MetricRow
           label="Floors"
-          value={String(floors.length)}
+          value={floors == null ? "Unknown" : String(floors.length)}
           color="#34d399"
         />
 
         <MetricRow
           label="Ceilings"
-          value={String(ceilings.length)}
+          value={ceilings == null ? "Unknown" : String(ceilings.length)}
           color="#f87171"
         />
       </div>

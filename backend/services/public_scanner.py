@@ -9,10 +9,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import copy
+import hashlib
+import json
 import logging
 import math
 import os
 import time
+from contextvars import ContextVar
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -102,7 +106,9 @@ SCAN_COLUMNS: list[str] = [
 MIN_VOL = 200
 MIN_VOL_OI = 1.0
 BIG_VOL = 2500
-MAX_ROWS_PER_TICKER = 60
+MAX_ROWS_PER_TICKER = 60  # ratio leaders retained for existing low-volume reads
+MAX_VOLUME_ROWS_PER_TICKER = 60
+MAX_RETAINED_ROWS_PER_TICKER = MAX_ROWS_PER_TICKER + MAX_VOLUME_ROWS_PER_TICKER
 
 # Slice cache TTL: a slice older than this is dropped from the merged view
 # rather than served as if fresh (honesty over coverage).
@@ -115,7 +121,7 @@ CHAIN_OVERHEAD_CALLS = 2
 
 
 def chain_cost(max_expiries: int) -> int:
-    """Upstream HTTP calls one ticker chain fetch fans out to."""
+    """Base prepaid calls. Extra skip attempts require separate adapter admission."""
     return CHAIN_OVERHEAD_CALLS + max(0, int(max_expiries))
 
 
@@ -267,13 +273,15 @@ def unusual_rows_from_chain(
     mid_marks: dict[str, float] | None = None,
     now: float | None = None,
     observations: dict | None = None,
+    selection: dict | None = None,
 ) -> tuple[list[list], dict[str, dict[str, Any]]]:
     """Public chain dict → (cvserver-shaped unusual list-rows, quote-truth extras).
 
     extras[ckey] = {premium_true, side, nbbo_side, signed_side, sign_method,
     bias, mid, last, vol_delta, velocity_per_min}. Malformed contracts are
     dropped, never raised. Rows sorted vol_oi desc so the strongest
-    positioning leads even before scoring.
+    positioning leads even before scoring. A bounded union also retains the
+    largest-volume contracts before callers apply their visible volume filter.
 
     Saved per-name observations retain receipt-window changes separately
     from source-timed volume rates. Legacy receipt marks cannot establish
@@ -421,7 +429,21 @@ def unusual_rows_from_chain(
         except (TypeError, ValueError):
             continue
     out.sort(key=lambda t: t[0], reverse=True)
-    rows = [r for _, r in out[:MAX_ROWS_PER_TICKER]]
+    ratio_leaders = out[:MAX_ROWS_PER_TICKER]
+    volume_leaders = sorted(out, key=lambda item: item[1][5], reverse=True)[:MAX_VOLUME_ROWS_PER_TICKER]
+    rows = []
+    identities = set()
+    for _, row in ratio_leaders + volume_leaders:
+        identity = ckey_of(row[0], row[2], row[3], row[4])
+        if identity not in identities:
+            identities.add(identity)
+            rows.append(row)
+    if selection is not None:
+        selection.update(eligible_rows=len(out), retained_rows=len(rows),
+                         rows_truncated=len(out) > len(rows),
+                         ratio_leaders_limit=MAX_ROWS_PER_TICKER,
+                         volume_leaders_limit=MAX_VOLUME_ROWS_PER_TICKER,
+                         rows_per_ticker_cap=MAX_RETAINED_ROWS_PER_TICKER)
     keep = {ckey_of(r[0], r[2], r[3], r[4]) for r in rows}
     extras = {k: v for k, v in extras.items() if k in keep}
     return rows, extras
@@ -469,8 +491,50 @@ def merge_slices(
         "fresh": len(fresh),
         "stale_dropped": stale_dropped,
         "max_age_s": round(max_age, 1),
+        "received_at_by_ticker": {ticker: float(slices[ticker]["ts"]) for ticker in fresh},
     }
     return rows, extras, coverage
+
+
+def fresh_cached_view(view: dict, *, now=None, elapsed=0.0) -> dict:
+    """Recheck an observed response using original receipt times; no reads or scans."""
+    result = copy.deepcopy(view)
+    now = time.time() if now is None else now
+    coverage = result.setdefault("coverage", {})
+    window = float(coverage.get("fresh_window_seconds", SLICE_TTL_S))
+    receipt_times = coverage.get("received_at_by_ticker")
+    elapsed = max(0.0, float(elapsed))
+    oldest_age = max(0.0, float(coverage.get("max_age_s") or 0) + elapsed)
+    rows = result.get("rows", [])
+    if isinstance(receipt_times, dict) and receipt_times:
+        ages = {ticker: now - received for ticker, received in receipt_times.items()
+                if isinstance(received, (int, float)) and math.isfinite(received)}
+        fresh = {ticker for ticker, age in ages.items() if -30 <= age <= window}
+        expired = set(receipt_times) - fresh
+        coverage["fresh"] = len(fresh)
+        coverage["max_age_s"] = round(max((max(0.0, ages[t]) for t in fresh), default=0.0), 1)
+    else:
+        # Legacy cached payloads have only the original maximum age. It bounds
+        # every included row, but cannot justify keeping any row after expiry.
+        fresh = {row[0] for row in rows if row} if oldest_age <= window else set()
+        expired = {row[0] for row in rows if row} - fresh
+        if oldest_age > window:
+            coverage["fresh"] = 0
+        coverage["max_age_s"] = round(oldest_age, 1) if fresh else 0.0
+    rows = [row for row in rows if row and row[0] in fresh]
+    row_keys = {ckey_of(row[0], row[2], row[3], row[4]) for row in rows if len(row) > 4}
+    result["rows"], result["count"] = rows, len(rows)
+    result["quote_truth"] = {key: value for key, value in result.get("quote_truth", {}).items() if key in row_keys}
+    row_tickers = {row[0] for row in rows}
+    result["dealer"] = {ticker: value for ticker, value in result.get("dealer", {}).items() if ticker in row_tickers}
+    coverage["stale_dropped"] = sorted(set(coverage.get("stale_dropped", [])) | expired)
+    if "selection_by_ticker" in coverage:
+        selection = {ticker: value for ticker, value in coverage["selection_by_ticker"].items() if ticker in fresh}
+        coverage["selection_by_ticker"] = selection
+        coverage["rows_capped"] = any(value.get("rows_truncated", False) for value in selection.values())
+    result["cache_age_seconds"] = coverage["max_age_s"] if coverage.get("fresh") else oldest_age
+    result["stale"] = bool(result.get("stale")) or bool(expired) or oldest_age > window
+    return result
 
 
 # ── I/O ───────────────────────────────────────────────────────────────
@@ -484,6 +548,19 @@ _mid_marks: dict[str, float] = {}  # osi -> last-seen mid (Lee-Ready tick anchor
 _mid_rings: dict[str, list[float]] = {}  # legacy test helper only
 _observation_store = None
 _findings_store = None
+_last_completed_view = None
+_progress_store = None
+_active_scope = None
+_progress_context = ContextVar("public_scan_progress", default=None)
+
+
+def peek_scan_view(*, now=None):
+    """Read a copy of completed public observations without I/O or scan waits."""
+    if _last_completed_view is None:
+        return None
+    view = fresh_cached_view(_last_completed_view, now=now)
+    view["columns"] = list(SCAN_COLUMNS)
+    return view
 
 
 def _recent_findings_store():
@@ -503,9 +580,54 @@ def _observations_store():
     return _observation_store
 
 
+def _rotation_store():
+    global _progress_store
+    if _progress_store is None:
+        from services.scan_progress import ScanProgress
+        default = Path(__file__).resolve().parents[1] / "data" / "scan_progress.sqlite3"
+        _progress_store = ScanProgress(os.environ.get("FLOWW_PUBLIC_PROGRESS_PATH") or default)
+    return _progress_store
+
+
+def _rotation_scope(universe, max_expiries, provider):
+    if provider:
+        return f"provider-options:{max_expiries}"
+    identity = hashlib.sha256(json.dumps(sorted(universe), separators=(",", ":")).encode()).hexdigest()[:24]
+    return f"custom-options:{max_expiries}:{identity}"
+
+
+async def _checkpoint_result(ticker, outcome):
+    context = _progress_context.get()
+    if (context is None or context["error"] is not None
+            or ticker not in context["claims"] or ticker in context["completed"]):
+        return
+    try:
+        saved = await asyncio.to_thread(context["store"].finish, context["scope"], ticker,
+                                        context["claims"][ticker], outcome, time.time())
+        if not saved:
+            raise ValueError("Scan checkpoint was not confirmed")
+        context["completed"].add(ticker)
+    except Exception as exc:
+        context["error"] = "SCAN_PROGRESS_UNAVAILABLE"
+        log.warning("Scan progress save unavailable (%s)", type(exc).__name__)
+
+
+async def _renew_scan_claims(context, stopped):
+    token = next(iter(context["claims"].values()))
+    interval = min(30, context["store"].lease_seconds / 3)
+    while not stopped.is_set():
+        try:
+            await asyncio.wait_for(stopped.wait(), timeout=interval)
+        except TimeoutError:
+            try:
+                await asyncio.to_thread(context["store"].renew, context["scope"], token, time.time())
+            except Exception:
+                context["error"] = "SCAN_PROGRESS_UNAVAILABLE"
+
+
 def _reset_state() -> None:
     """Tests only — clear slices + cursor + velocity/mid marks + rings."""
-    global _cursor, _observation_store, _findings_store
+    global _cursor, _observation_store, _findings_store, _last_completed_view, _progress_store, _active_scope
     from services.scan_findings import ScanFindings
     if _findings_store is not None:
         _findings_store.close()
@@ -513,6 +635,13 @@ def _reset_state() -> None:
     if _observation_store is not None:
         _observation_store.close()
     _observation_store = SnapshotObservations(":memory:")
+    from services.scan_progress import ScanProgress
+    if _progress_store is not None:
+        _progress_store.close()
+    _progress_store = ScanProgress(":memory:")
+    _progress_context.set(None)
+    _last_completed_view = None
+    _active_scope = None
     _slices.clear()
     _attempts.clear()
     _cursor = 0
@@ -577,25 +706,46 @@ async def scan_slice(
     """
     from services.agent.contracts import instant
     from services.public_api_adapter import fetch_chain_from_public_api
+    from services.public_budget import BudgetExhausted
 
     out: dict[str, dict[str, Any]] = {}
     sem = asyncio.Semaphore(max(1, concurrency))
 
+    async def publish(ticker, outcome):
+        out[ticker] = outcome
+        await _checkpoint_result(ticker, outcome)
+
     async def _one(t: str) -> None:
         async with sem:
+            # A job may have queued before a sibling lost its checkpoint or
+            # lease. Recheck after semaphore admission, before provider work.
+            # Already-dispatched reads keep their actual outcomes and clocks;
+            # unconfirmed claims remain pending for safe later recovery.
+            context = _progress_context.get()
+            if context is not None and context["error"] is not None:
+                out[t] = {"rows": [], "extras": {}, "dealer": None, "status": "deferred",
+                          "reason": "SCAN_PROGRESS_UNAVAILABLE"}
+                return
             try:
-                chain = await fetch_chain_from_public_api(t, max_expiries=max_expiries)
+                if _progress_context.get() is None:
+                    chain = await fetch_chain_from_public_api(t, max_expiries=max_expiries)
+                else:
+                    chain = await fetch_chain_from_public_api(t, max_expiries=max_expiries, raise_budget_exhausted=True)
+            except BudgetExhausted as exc:
+                await publish(t, {"rows": [], "extras": {}, "dealer": None, "status": "deferred",
+                                  "reason": exc.reason, "retry_after": exc.retry_after})
+                return
             except Exception as e:
                 log.warning("public scanner slice fail %s: %s", t, e)
-                out[t] = {"rows": [], "extras": {}, "dealer": None, "status": "failed"}
+                await publish(t, {"rows": [], "extras": {}, "dealer": None, "status": "failed"})
                 return
             if not chain:
-                out[t] = {"rows": [], "extras": {}, "dealer": None, "status": "failed"}
+                await publish(t, {"rows": [], "extras": {}, "dealer": None, "status": "failed"})
                 return
             received = instant(chain.get("fetched_at"))
             received_ts = datetime.fromisoformat(received).timestamp() if received else None
             if chain.get("stale") or received_ts is None or not -30 <= time.time() - received_ts <= 300:
-                out[t] = {"rows": [], "extras": {}, "dealer": None, "status": "failed"}
+                await publish(t, {"rows": [], "extras": {}, "dealer": None, "status": "failed"})
                 return
             now = received_ts
             contracts, contract_conflicts = unique_contracts(chain.get("contracts", []))
@@ -607,7 +757,8 @@ async def scan_slice(
                 log.warning("Snapshot history read unavailable for %s (%s)", t, type(exc).__name__)
                 prior = {}
                 history_status = "unavailable"
-            rows, extras = unusual_rows_from_chain(chain, now=now, observations=prior)
+            selection = {}
+            rows, extras = unusual_rows_from_chain(chain, now=now, observations=prior, selection=selection)
             try:
                 spot = float(chain.get("spot") or 0)
             except (TypeError, ValueError):
@@ -630,12 +781,12 @@ async def scan_slice(
                 log.warning("Snapshot history save unavailable for %s (%s)", t, type(exc).__name__)
                 history_status = "unavailable"
             dealer["roll_spread"] = _roll_pooled_for({osi: value["mid_ring"] for osi, value in observations.items()})
-            out[t] = {"rows": rows, "extras": extras, "dealer": dealer, "status": "ok", "received_ts": received_ts,
+            await publish(t, {"rows": rows, "extras": extras, "dealer": dealer, "status": "ok", "received_ts": received_ts,
                       "event_time": instant(chain.get("event_time")),
                       "expiries_checked": len(chain.get("expiries") or []),
-                      "rows_capped": len(rows) >= MAX_ROWS_PER_TICKER,
+                      "rows_capped": selection["rows_truncated"], "selection": selection,
                       "history_status": history_status, "history_capped": history_capped,
-                      "history_contracts": len(observations), "contract_conflicts": contract_conflicts}
+                       "history_contracts": len(observations), "contract_conflicts": contract_conflicts})
 
     await asyncio.gather(*(_one(t) for t in tickers))
     return out
@@ -656,13 +807,20 @@ async def scan_next(
     tickers keep their prior slices and wait for the next rotation —
     coverage degrades gracefully instead of stampeding upstream.
     """
-    global _cursor
+    global _cursor, _last_completed_view, _active_scope
     catalog = None
     if universe is None and not os.environ.get("FLOWW_PUBLIC_UNIVERSE", "").strip():
         from services.market_catalog import get_catalog
         catalog = await get_catalog()
     uni = list(dict.fromkeys(get_universe() if universe is None else universe))
+    scope = _rotation_scope(uni, max_expiries, catalog is not None)
     async with _scan_lock:
+        if _active_scope != scope:
+            if _active_scope is not None:
+                _slices.clear()
+                _attempts.clear()
+                _cursor = 0
+            _active_scope = scope
         from services.public_budget import BudgetExhausted
         from services.public_budget import budget as pub_budget
 
@@ -683,17 +841,38 @@ async def scan_next(
         if take < slice_size:
             log.info("public sweep trimmed %d→%d tickers on budget",
                      slice_size, take)
-        idx, _cursor = advance_cursor(_cursor, take, len(uni))
-        tickers = [uni[i] for i in idx]
+        waiting_directory = bool(catalog is not None and not catalog["complete_provider_catalog"])
+        directory_at = timestamp(catalog.get("asof")) if catalog is not None else None
+        context = {"store": None, "scope": scope, "claims": {}, "completed": set(), "error": None}
+        try:
+            store = _rotation_store()
+            context["store"] = store
+            context["claims"] = await asyncio.to_thread(store.claim, scope, uni, 0 if waiting_directory else take,
+                                                        time.time(), authoritative=not waiting_directory and not bool(catalog and catalog["stale"]),
+                                                        directory_at=directory_at)
+            uni = await asyncio.to_thread(store.members, scope)
+            _attempts.update(await asyncio.to_thread(store.attempts, scope))
+        except Exception as exc:
+            context["error"] = "SCAN_PROGRESS_UNAVAILABLE"
+            log.warning("Scan progress unavailable; chain reads paused (%s)", type(exc).__name__)
+        tickers = list(context["claims"]) if context["error"] is None else []
+        _, _cursor = advance_cursor(_cursor, len(tickers), len(uni))
         dealer: dict[str, dict[str, Any]] = {
             t: (_slices[t]["dealer"] if isinstance(_slices.get(t), dict) and _slices[t].get("dealer") else None)
             for t in _slices
         }
         if tickers:
-            fresh = await scan_slice(tickers, max_expiries=max_expiries)
-            for t in tickers:
-                pack = fresh.get(t, {"status": "failed"})
-                _attempts[t] = {"status": pack.get("status"), "at": time.time(),
+            token = _progress_context.set(context)
+            stopped = asyncio.Event()
+            heartbeat = asyncio.create_task(_renew_scan_claims(context, stopped))
+            try:
+                fresh = await scan_slice(tickers, max_expiries=max_expiries)
+                for t in tickers:
+                    pack = fresh.get(t, {"status": "failed"})
+                    await _checkpoint_result(t, pack)
+                    if pack.get("status") == "deferred":
+                        continue
+                    _attempts[t] = {"status": pack.get("status"), "at": time.time(),
                                 "findings_saved": _attempts.get(t, {}).get("findings_saved"),
                                 "expiries_checked": pack.get("expiries_checked", 0),
                                 "history_status": pack.get("history_status", "unavailable"),
@@ -703,18 +882,37 @@ async def scan_next(
                 # slice — obsolete rows must not pose as current. Only a
                 # failed read keeps the prior slice with its age (merge
                 # drops it past TTL and names it in coverage).
-                received_ts = pack.get("received_ts")
-                if pack.get("status") == "ok" and isinstance(received_ts, (float, int)) and math.isfinite(received_ts):
-                    _slices[t] = {"ts": received_ts, "rows": pack["rows"], "event_time": pack.get("event_time"),
+                    received_ts = pack.get("received_ts")
+                    if pack.get("status") == "ok" and isinstance(received_ts, (float, int)) and math.isfinite(received_ts):
+                        _slices[t] = {"ts": received_ts, "rows": pack["rows"], "event_time": pack.get("event_time"),
                                   "extras": pack["extras"], "dealer": pack["dealer"],
-                                  "rows_capped": pack.get("rows_capped", False)}
-                    dealer[t] = pack["dealer"]
-                    try:
-                        await asyncio.to_thread(_recent_findings_store().save, t, received_ts, pack["rows"])
-                        _attempts[t]["findings_saved"] = True
-                    except Exception as exc:
-                        _attempts[t]["findings_saved"] = False
-                        log.warning("Dated scan findings unavailable (%s)", type(exc).__name__)
+                                  "rows_capped": pack.get("rows_capped", False), "selection": pack.get("selection", {})}
+                        dealer[t] = pack["dealer"]
+                        try:
+                            await asyncio.to_thread(_recent_findings_store().save, t, received_ts, pack["rows"])
+                            _attempts[t]["findings_saved"] = True
+                        except Exception as exc:
+                            _attempts[t]["findings_saved"] = False
+                            log.warning("Dated scan findings unavailable (%s)", type(exc).__name__)
+                        try:
+                            await asyncio.to_thread(store.findings_saved, scope, t, received_ts, _attempts[t]["findings_saved"])
+                        except Exception:
+                            context["error"] = "SCAN_PROGRESS_UNAVAILABLE"
+            finally:
+                stopped.set()
+                await heartbeat
+                _progress_context.reset(token)
+        try:
+            progress = await asyncio.to_thread(context["store"].snapshot, scope) if context["store"] is not None else {}
+        except Exception:
+            progress = {}
+            context["error"] = "SCAN_PROGRESS_UNAVAILABLE"
+        if context["error"] is not None:
+            progress.update(status="unavailable", reason=context["error"])
+        elif waiting_directory:
+            progress.update(status="awaiting_directory")
+        directory_older = bool(directory_at is not None and progress.get("directory_at") is not None
+                               and directory_at < progress["directory_at"])
         # Removed symbols must not remain in rows or count as scanned.
         for old in set(_slices) - set(uni):
             _slices.pop(old, None)
@@ -734,11 +932,14 @@ async def scan_next(
             pause = 1.0
         coverage.update(
             source="public-instruments" if catalog is not None else "custom-universe",
-            catalog_stale=bool(catalog and catalog["stale"]),
+            catalog_stale=bool(catalog and catalog["stale"]) or directory_older,
             catalog_available=bool(catalog["complete_provider_catalog"]) if catalog is not None else True,
             attempted=len(_attempts), never_scanned=max(0, len(uni) - len(_attempts)),
-            latest_failed=sum(a["status"] != "ok" for a in _attempts.values()),
-            expiries_per_ticker=max_expiries, rows_per_ticker_cap=MAX_ROWS_PER_TICKER,
+            latest_failed=sum(a["status"] == "failed" for a in _attempts.values()),
+            expiries_per_ticker=max_expiries, rows_per_ticker_cap=MAX_RETAINED_ROWS_PER_TICKER,
+            ratio_leaders_limit=MAX_ROWS_PER_TICKER, volume_leaders_limit=MAX_VOLUME_ROWS_PER_TICKER,
+            selection_by_ticker={ticker: _slices[ticker].get("selection", {})
+                                 for ticker in coverage["received_at_by_ticker"]},
             rows_capped=any(v.get("rows_capped") for v in _slices.values()),
             fresh_window_seconds=SLICE_TTL_S, checked_at=time.time(),
             estimated_pass_seconds=round(math.ceil(len(uni) / len(tickers)) * (duration + pause)) if tickers else None,
@@ -748,6 +949,11 @@ async def scan_next(
             history_capped=sum(bool(a.get("history_capped")) for a in _attempts.values()),
             arrival_rates_require_source_time=True,
             conflicting_contracts_excluded=sum(a.get("contract_conflicts", 0) for a in _attempts.values()),
+            progress=progress,
+            scope_kind="provider_option_enabled" if catalog is not None else "explicit_symbols",
+            scope_note="Options checks cover provider-enabled stocks and funds; other listed names may not offer option chains.",
+            eligible_option_tickers=len(uni) if catalog is not None and not waiting_directory else None,
+            provider_listed_tickers=catalog.get("total") if catalog is not None and not directory_older else None,
         )
         # Dealer context only for tickers actually in the merged view —
         # a dropped stale slice must not keep contributing regime reads.
@@ -758,7 +964,7 @@ async def scan_next(
             findings_status = "partial" if any(a.get("findings_saved") is False for a in _attempts.values()) else "available"
         except Exception:
             recent_findings, findings_status = [], "unavailable"
-        return {
+        view = {
             "columns": SCAN_COLUMNS,
             "rows": rows,
             "count": len(rows),
@@ -769,6 +975,8 @@ async def scan_next(
             "recent_findings": recent_findings,
             "findings_status": findings_status,
         }
+        _last_completed_view = copy.deepcopy(view)
+        return view
 
 
 async def sweep_once(

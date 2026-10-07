@@ -84,7 +84,7 @@ OLD_ROWS = [["T00", "O:T00", "call", 100.0, "2026-09-18", 500, 100, 0.4, 0.4, 99
 async def test_success_empty_clears_prior_rows(fresh_budget, clean_state):
     seed_prior([list(r) for r in OLD_ROWS])
 
-    async def fake_fetch(ticker, max_expiries=2):
+    async def fake_fetch(ticker, max_expiries=2, **_kwargs):
         return dict(empty_chain()) | {"ticker": ticker}
 
     with patch(
@@ -102,7 +102,7 @@ async def test_success_empty_clears_prior_rows(fresh_budget, clean_state):
 async def test_failed_refresh_keeps_prior_with_age(fresh_budget, clean_state):
     seed_prior([list(r) for r in OLD_ROWS], age_s=10.0)
 
-    async def fake_fetch(ticker, max_expiries=2):
+    async def fake_fetch(ticker, max_expiries=2, **_kwargs):
         return None
 
     with patch(
@@ -121,7 +121,7 @@ async def test_failed_refresh_keeps_prior_with_age(fresh_budget, clean_state):
 async def test_stale_failure_dropped_and_named(fresh_budget, clean_state):
     seed_prior([list(r) for r in OLD_ROWS], age_s=3600.0)
 
-    async def fake_fetch(ticker, max_expiries=2):
+    async def fake_fetch(ticker, max_expiries=2, **_kwargs):
         return None
 
     with patch(

@@ -97,6 +97,11 @@ async def verify_api_key(request: Request):
     if request.method not in PROTECTED_METHODS:
         return True
 
+    if request.method == "POST" and request.url.path == "/api/diagnostics/events":
+        from services.agent.local_access import require_local
+        require_local(request)
+        return True
+
     from services.agent.local_access import research_path
     if research_path(request.method, request.url.path):
         return True  # Routes independently enforce local session ownership.

@@ -1,4 +1,4 @@
-import React, { memo, useState } from "react";
+import React, { memo, useState, useRef, useEffect } from "react";
 import { useAgent } from "../../agent/AgentProvider";
 import {rangeResearchBlock} from '../../lib/rangeAnalytics';
 
@@ -42,7 +42,7 @@ export function admissionBlock({ context, overlayMetric, displayMode }) {
       && context.mapStrikes?.includes(Number(c.strike)) && context.mapExpiries?.includes(c.expiry);
     if (!exact) return "Exact contract selection is incomplete, changed or unresolved — use the authoritative read-only contract drawer.";
   }
-  if (!["raw", "delta", "session_delta_volume", "activity", "window"].includes(overlayMetric || "raw")) return "This adjusted basis remains explicitly unavailable to Lodestar.";
+  if (!["raw", "delta", "session_delta_volume", "activity", "window"].includes(overlayMetric || "raw")) return "This adjusted basis remains explicitly unavailable to Ask FLOWW.";
   if ((context?.overlayMetric && context.overlayMetric !== overlayMetric) || (context?.displayMode && context.displayMode !== displayMode)) return "Published selection changed — wait for the current pane and basis.";
   const advanced = displayMode === "replay" || (overlayMetric && overlayMetric !== "raw");
   const bound = context?.contextVersion === 2 && context.snapshotId && context.mapQuery && context.mapVersion && context.provider && context.formula;
@@ -54,7 +54,7 @@ export function admissionBlock({ context, overlayMetric, displayMode }) {
     || !(Date.parse(context.windowInterval.start) < Date.parse(context.windowInterval.end)))) return "Window activity unavailable: a comparable recorded baseline and declared interval are required.";
   if (displayMode === "replay" && context?.metric && !["gex", "skylit"].includes(context.metric)
     && (!["vex", "charm"].includes(context.metric) || context.recordedMetricVersion !== "metric-record.v1")) return "Recorded replay answers for this metric remain unavailable: the complete stored metric envelope is required.";
-  if (displayMode && !["live", "replay"].includes(displayMode)) return "This display is unavailable to Lodestar.";
+  if (displayMode && !["live", "replay"].includes(displayMode)) return "This display is unavailable to Ask FLOWW.";
   return null;
 }
 
@@ -62,17 +62,22 @@ function AskLodestar({ subject = "", overlayMetric = "raw", displayMode = "live"
   const agent = useAgent();
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState(null);
+  const host=useRef(null),trigger=useRef(null),menu=useRef(null);
+  const [focused,setFocused]=useState(0);
+  useEffect(()=>{if(!open)return;const items=[...menu.current?.querySelectorAll("button") || []];items[0]?.focus();const outside=e=>{if(!host.current?.contains(e.target))setOpen(false);};document.addEventListener("pointerdown",outside);return()=>document.removeEventListener("pointerdown",outside);},[open]);
+  const menuKey=e=>{const items=[...menu.current?.querySelectorAll("button") || []];let next=focused;if(e.key==="Escape"){e.preventDefault();e.stopPropagation();setOpen(false);trigger.current?.focus();return;}if(e.key==="ArrowDown")next=(focused+1)%items.length;else if(e.key==="ArrowUp")next=(focused+items.length-1)%items.length;else if(e.key==="Home")next=0;else if(e.key==="End")next=items.length-1;else return;e.preventDefault();e.stopPropagation();setFocused(next);items[next]?.focus();};
   if (!agent) {
     return (
       <span className="lodestar-ask lodestar-ask-off" data-testid={`${testId}-unavailable`}
-        title="Lodestar is not mounted on this screen">
-        Lodestar unavailable
+        title="Ask FLOWW is unavailable on this screen">
+        Ask FLOWW unavailable
       </span>
     );
   }
   const block = admissionBlock({ context: agent.context, overlayMetric, displayMode });
   const busy = ["asking", "running", "reconnecting", "cancelling"].includes(agent.state);
   const ask = (q) => {
+    trigger.current?.focus();
     setOpen(false);
     if (block) { setNote(block); return; }
     setNote(null);
@@ -80,18 +85,19 @@ function AskLodestar({ subject = "", overlayMetric = "raw", displayMode = "live"
     agent.askQuestion(subject ? `${q} (${subject})` : q);
   };
   return (
-    <span className={`lodestar-ask${compact ? " compact" : ""}`} data-testid={testId}>
-      <button type="button" className="skylit-trade-mode-btn lodestar-ask-btn"
+    <span ref={host} className={`lodestar-ask${compact ? " compact" : ""}`} data-testid={testId}>
+      <button ref={trigger} type="button" className="skylit-trade-mode-btn lodestar-ask-btn"
         aria-haspopup="menu" aria-expanded={open} disabled={busy}
-        title={block || "Ask Lodestar about this selection — uses the same published evidence, no new data"}
+        title={block || "Ask FLOWW about the selected reading"}
         data-testid={`${testId}-btn`}
-        onClick={() => { setNote(null); setOpen((o) => !o); }}>
-        ✦ Ask Lodestar
+        onKeyDown={e=>{if(e.key==="ArrowDown" && !busy){e.preventDefault();e.stopPropagation();setFocused(0);setOpen(true);}}}
+        onClick={() => { setNote(null);setFocused(0); setOpen((o) => !o); }}>
+        Ask FLOWW
       </button>
       {open && (
-        <span className="lodestar-ask-menu" role="menu" data-testid={`${testId}-menu`}>
+        <span ref={menu} className="lodestar-ask-menu" role="menu" aria-label="Ask FLOWW questions" onKeyDown={menuKey} onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))setOpen(false);}} data-testid={`${testId}-menu`}>
           {starters.map((q,index) => (
-            <button key={q} type="button" role="menuitem" className="lodestar-ask-item"
+            <button key={q} type="button" role="menuitem" tabIndex={focused===index?0:-1} onFocus={()=>setFocused(index)} className="lodestar-ask-item"
               data-testid={`${testId}-q-${index}`} onClick={() => ask(q)}>
               {q}
             </button>
@@ -105,7 +111,7 @@ function AskLodestar({ subject = "", overlayMetric = "raw", displayMode = "live"
         || (typeof agent.context?.displayMode === 'string' && agent.context.displayMode.startsWith('range-'))
         || block?.startsWith('RANGE_RESEARCH_UNAVAILABLE')) && (
         <span className="lodestar-range-disclosure" data-testid={`${testId}-range-disclosure`}>
-          Research only · raw population and full producer integrity qualification pending. Backend resolves stored facts; no crypto/production admission or native draft permission.
+          Limited research view · some saved-data checks are still unfinished. This view cannot prepare an order.
         </span>
       )}
     </span>

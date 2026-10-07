@@ -196,7 +196,7 @@ function SkylitControlBar({
             <div>A sign alone never permits a trade: price interaction at the wall decides readiness. Unknown/no-data are valid states.</div>
             <div>Click a cell to inspect it · Trade is a review hand-off, never an automatic order.</div>
 
-            <div>Data: Public.com live chain → cvserver → yfinance.</div>
+            <div>The source and market time belong to each reading. Missing source times remain unknown.</div>
           </div>
         )}
       </div>

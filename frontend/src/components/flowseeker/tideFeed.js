@@ -39,19 +39,19 @@ export const TICKER_FACT_LABELS = {
 // Pulse columns: all 17 facts; 10 default. Saved per layout mode.
 export const PULSE_COLUMNS = [
   { key: "firstSeen", label: "Seen" },
-  { key: "under", label: "Sym" },
+  { key: "under", label: "Stock" },
   { key: "strike", label: "Strike" },
-  { key: "type", label: "C/P" },
-  { key: "exp", label: "Exp" },
-  { key: "dte", label: "DTE" },
+  { key: "type", label: "Call / put" },
+  { key: "exp", label: "Expiry" },
+  { key: "dte", label: "Days left" },
   { key: "ftype", label: "Type" },
   { key: "arch", label: "Signal" },
   { key: "score", label: "Score" },
-  { key: "vol", label: "Size" },
-  { key: "oiChgPct", label: "ΔOI" },
-  { key: "premium", label: "Prem" },
-  { key: "oi", label: "OI" },
-  { key: "volOI", label: "Vol/OI" },
+  { key: "vol", label: "Volume" },
+  { key: "oiChgPct", label: "Open interest change" },
+  { key: "premium", label: "Est. value" },
+  { key: "oi", label: "Open interest" },
+  { key: "volOI", label: "Volume / open interest" },
   { key: "notional", label: "Notional" },
   { key: "iv", label: "IV" },
   { key: "delta", label: "Delta" },
@@ -59,8 +59,8 @@ export const PULSE_COLUMNS = [
   { key: "trend", label: "Trend", derived: true },
 ];
 export const PULSE_DEFAULT_COLS = [
-  "firstSeen", "under", "type", "strike", "dte", "vol",
-  "oiChgPct", "premium", "ftype", "score",
+  "firstSeen", "under", "type", "strike", "exp", "dte",
+  "vol", "oi", "volOI", "premium",
 ];
 
 function safeJSON(text) {
@@ -265,47 +265,47 @@ function byScoreDesc(a, b) {
 }
 export const BUILTIN_SCREENS = [
   {
-    id: "all", label: "All flow",
+    id: "all", label: "All activity",
     matchScan: () => true, matchAlert: () => true,
     rankScan: byScoreDesc, rankAlert: (a, b) => (b.conviction ?? 0) - (a.conviction ?? 0),
   },
   {
-    id: "whale", label: "Whale blocks",
+    id: "whale", label: "Large activity",
     matchScan: (r) => (r.premium ?? 0) >= 1e6 || r.ftype === "block" || r.arch === "WHALE",
     matchAlert: (a) => (a.premium ?? 0) >= 1e6 || String(a.rule || "").toUpperCase() === "WHALE",
     rankScan: (a, b) => (b.premium ?? 0) - (a.premium ?? 0),
     rankAlert: (a, b) => (b.premium ?? 0) - (a.premium ?? 0),
   },
   {
-    id: "oiconf", label: "OI-confirmed",
+    id: "oiconf", label: "Open interest rising",
     matchScan: (r) => (r.oiChgPct ?? 0) >= 0.2,
     matchAlert: (a) => String(a.rule || "").toUpperCase() === "OICONF" || (a.oi_chg_pct ?? 0) >= 0.2,
     rankScan: (a, b) => (b.oiChgPct ?? 0) - (a.oiChgPct ?? 0),
     rankAlert: (a, b) => (b.conviction ?? 0) - (a.conviction ?? 0),
   },
   {
-    id: "zerodte", label: "0DTE lottos",
+    id: "zerodte", label: "Expires today",
     matchScan: (r) => r.dte === 0,
     matchAlert: (a) => a.dte === 0,
     rankScan: byScoreDesc,
     rankAlert: (a, b) => (b.conviction ?? 0) - (a.conviction ?? 0),
   },
   {
-    id: "hedge", label: "Hedges",
+    id: "hedge", label: "Possible hedges",
     matchScan: (r) => r.arch === "HEDGE" || (r.type === "put" && r.dte != null && r.dte >= 30),
     matchAlert: (a) => String(a.type || "").toLowerCase().startsWith("p") && a.dte != null && a.dte >= 30,
     rankScan: byScoreDesc,
     rankAlert: (a, b) => (b.conviction ?? 0) - (a.conviction ?? 0),
   },
   {
-    id: "fresh", label: "Fresh positioning",
+    id: "fresh", label: "Volume vs open interest",
     matchScan: (r) => r.arch === "FRESH" || (r.volOI ?? 0) >= 3,
     matchAlert: (a) => (a.vol_oi ?? 0) >= 3,
     rankScan: (a, b) => (b.volOI ?? b.vol_oi ?? 0) - (a.volOI ?? a.vol_oi ?? 0),
     rankAlert: (a, b) => (b.conviction ?? 0) - (a.conviction ?? 0),
   },
   {
-    id: "mine", label: "My universe",
+    id: "mine", label: "My watchlist",
     matchScan: (r, ctx) => (ctx?.universe || []).includes(r.under),
     matchAlert: (a, ctx) => (ctx?.universe || []).includes(a.under || a.ticker),
     rankScan: byScoreDesc,

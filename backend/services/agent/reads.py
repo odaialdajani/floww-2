@@ -26,7 +26,7 @@ from services.market_provenance import spot_provenance
 
 class ResearchReads:
     def __init__(self, peek_chain, peek_map, read_alerts, *, read_daily_bars=None, read_recorded_map=None,
-                 read_recorded_range=None):
+                 read_recorded_range=None, peek_scan=None):
         self._peek_chain = peek_chain
         self._peek_map = peek_map
         self._read_alerts = read_alerts
@@ -34,6 +34,28 @@ class ResearchReads:
         self._read_recorded_map = read_recorded_map
         # Synchronous server-owned seam: (ticker, record_id) -> stored replay wrapper | None.
         self._read_recorded_range = read_recorded_range
+        self._peek_scan = peek_scan
+
+    async def market_snapshot(self, *, limit=50, now=None):
+        """Inspect only a previously completed public scan, without provider work."""
+        from services.agent.market_reads import MAX_CANDIDATES, market_answer
+
+        if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= MAX_CANDIDATES:
+            raise ValueError("Choose between one and fifty cached scan examples")
+        if current_budget() is None:
+            with budget_scope(ReadBudget()):
+                return await self.market_snapshot(limit=limit, now=now)
+        budget = current_budget()
+        try:
+            view = (await budget.sync("market_scan", None, self._peek_scan, scope={"limit": limit})
+                    if self._peek_scan is not None else None)
+        except ReadActivityUnavailable:
+            raise
+        except ReadDenied:
+            view = None
+        except Exception:
+            view = None
+        return market_answer(view, limit=limit, now=now)
 
     async def snapshot(self, ticker, horizon, **kwargs):
         if current_budget() is None:

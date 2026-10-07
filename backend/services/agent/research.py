@@ -8,12 +8,56 @@ import re
 from datetime import UTC, datetime, timedelta
 
 from services.agent.access.horizon import horizon_window
-from services.agent.answer_sections import build_answer_sections, merge_history_section
-from services.agent.contracts import INTERPRETATIONS, finite, validate_model_answer
+from services.agent.answer_sections import (
+    build_answer_sections,
+    history_excluded,
+    merge_history_section,
+    requested_sections,
+    requests_history,
+)
+from services.agent.contracts import (
+    INTERPRETATIONS,
+    finite,
+    validate_history_baseline,
+    validate_model_answer,
+    validate_parent_turn_id,
+)
 from services.agent.narrative import request_limit
 from services.agent.plan_draft import build_plan_draft
 from services.agent.read_budget import ReadActivityUnavailable, ReadBudget, ReadDenied, budget_scope, current_budget
 from services.agent.saved_history import history_facts
+
+REJECTION_CHOICES = {
+    "Unexpected answer fields": ("unexpected_fields", "answer"),
+    "Invalid answer sections": ("invalid_sections", "sections"),
+    "Invalid section": ("invalid_section", "sections"),
+    "Unrestricted factual commentary is not accepted": ("unrestricted_commentary", "sections"),
+    "Unknown section": ("unknown_section", "sections"),
+    "Unknown evidence": ("unknown_evidence", "evidence"),
+    "Unsupported interpretation": ("unsupported_interpretation", "interpretation"),
+    "Limited evidence needs a limited interpretation": ("limited_evidence_required", "interpretation"),
+    "Invalid relationships": ("invalid_relationships", "relationships"),
+    "Invalid relationship": ("invalid_relationship", "relationships"),
+    "Unknown relationship evidence": ("unknown_relationship_evidence", "relationships"),
+    "Unexpected comparison evidence": ("unexpected_comparison_evidence", "relationships"),
+    "Unsupported evidence state": ("unsupported_evidence_state", "relationships"),
+    "Unsupported comparison": ("unsupported_comparison", "relationships"),
+    "Incompatible comparison scope": ("incompatible_scope", "relationships"),
+    "Comparison needs healthy scalar evidence": ("healthy_scalar_required", "relationships"),
+    "Comparison source time is unknown": ("source_time_unknown", "relationships"),
+    "Trend needs comparable time-ordered observations": ("ordered_observations_required", "relationships"),
+    "Comparison observations are too far apart": ("observation_times_mismatch", "relationships"),
+    "Comparison contradicts saved values": ("saved_values_contradicted", "relationships"),
+    "Invalid explanation selection": ("invalid_explanation_selection", "explanations"),
+    "Explanation is not supported by the supplied evidence": ("unsupported_explanation", "explanations"),
+}
+
+
+def rejection_diagnostic(error, turn_id):
+    """Persist only fixed rejection categories; never exception or model text."""
+    code, field = REJECTION_CHOICES.get(str(error), ("validation_rejected", "answer"))
+    identity = turn_id if isinstance(turn_id, str) and re.fullmatch(r"[a-zA-Z0-9-]{1,64}", turn_id) else "unknown"
+    return {"code": code, "field": field, "turn_id": identity}
 
 
 def deterministic_answer(snapshots, spec):
@@ -78,9 +122,17 @@ class ResearchService:
         async with self._admission:
             # Existing requests must remain replayable even when new-work slots are full.
             existing = await self.repository.turns.find_one({"owner": owner, "request_id": request_id})
+            spec = {key: value for key, value in spec.items() if key != "parent_context"}
+            parent_id = validate_parent_turn_id(spec.get("parent_turn_id"))
+            if parent_id is not None:
+                parent = await self.repository.read(owner, parent_id)
+                if parent is None or parent.get("owner") != owner or parent.get("status") != "completed":
+                    raise ValueError("Choose a completed saved answer you can access for the previous context")
+                from services.agent.parent_context import completed_parent_context
+                spec = {**spec, "parent_context": completed_parent_context(parent)}
             if existing is None and len(self.tasks) >= self.capacity:
                 raise OverflowError("Research queue is full")
-            if (existing is None and not spec.get("price_only") and self.model is not None
+            if (existing is None and not spec.get("price_only") and spec.get("scope") != "market" and self.model is not None
                     and hasattr(self.model, "settings_for")):
                 spec = {**spec, "ai_settings": await self.model.settings_for(owner)}
             elif existing is not None and "ai_settings" in existing.get("spec", {}):
@@ -117,6 +169,13 @@ class ResearchService:
                 async with self._slots:
                     if not await self.repository.progress(owner, turn_id, "Reading available market observations"):
                         return
+                    if spec.get("scope") == "market":
+                        answer = await self.reads.market_snapshot(limit=spec["market_limit"])
+                        if "parent_context" in spec:
+                            answer = {**answer, "parent_context": spec["parent_context"]}
+                        await self.repository.finish(owner, turn_id, "completed", answer=answer,
+                                                     read_activity=budget.close())
+                        return
                     snapshots = []
                     for ticker in spec["tickers"]:
                         if not await self.repository.progress(owner, turn_id, f"Checking {ticker} coverage"):
@@ -144,11 +203,13 @@ class ResearchService:
                             await self.repository.save_anchor(owner, snapshots[-1])
                             await self.repository.watch_observations(owner, ticker, spec["horizon"], selected_expiry)
                     answer = deterministic_answer(snapshots, spec)
-                    if spec["screen"].get("displayMode") not in {"replay", "range-replay"} and re.search(
-                        r"\b(?:changed?|since|earlier|previously|previous|prior|yesterday|closing|last close)\b",
-                        spec["question"],
-                        re.IGNORECASE,
-                    ):
+                    if "parent_context" in spec:
+                        answer["parent_context"] = spec["parent_context"]
+                    if (spec["screen"].get("displayMode") not in {"replay", "range-replay"}
+                            and not history_excluded(spec["question"])
+                            and (spec.get("history_baseline") is not None or requests_history(spec["question"]))):
+                        if spec.get("history_baseline") is not None:
+                            answer["history_baseline"] = spec["history_baseline"]
                         answer["history_closing_only"] = bool(
                             re.search(r"\b(?:closing|close|yesterday)\b", spec["question"], re.IGNORECASE)
                         )
@@ -162,6 +223,7 @@ class ResearchService:
                                 snapshot,
                                 closing_only=answer["history_closing_only"],
                                 previous_session=answer["history_previous_session"],
+                                history_baseline=spec.get("history_baseline"),
                             )
                             existing = {item["id"] for item in answer["facts"]}
                             answer["facts"].extend(item for item in more if item["id"] not in existing)
@@ -202,14 +264,17 @@ class ResearchService:
                 await self.repository.finish(owner, turn_id, "failed", error="Research could not finish or be saved",
                                              read_activity=budget.close())
 
-    async def _history(self, repository, owner, snapshot, *, closing_only=False, previous_session=False):
+    async def _history(self, repository, owner, snapshot, *, closing_only=False, previous_session=False, history_baseline=None):
         budget = current_budget()
-        key = (snapshot["ticker"], snapshot["snapshot_id"], closing_only, previous_session)
+        baseline = validate_history_baseline(history_baseline)
+        key = (snapshot["ticker"], snapshot["snapshot_id"], closing_only, previous_session,
+               baseline["date"] if baseline is not None else None)
         try:
             return await budget.async_call("history", snapshot["ticker"], history_facts,
                 repository, owner, snapshot, closing_only=closing_only, previous_session=previous_session,
-                memo_key=key, scope={"snapshot_id": snapshot["snapshot_id"],
-                                     "closing_only": closing_only, "previous_session": previous_session})
+                history_baseline=baseline, memo_key=key, scope={"snapshot_id": snapshot["snapshot_id"],
+                                     "closing_only": closing_only, "previous_session": previous_session,
+                                     "history_baseline": baseline})
         except ReadActivityUnavailable:
             raise
         except ReadDenied as exc:
@@ -222,7 +287,10 @@ class ResearchService:
     async def _interpret(self, owner, turn_id, spec, answer, snapshots):
         inspected = False
         repaired = False
-        history_note = None
+        parent = spec.get("parent_context")
+        history_note = {"parent_context": parent} if isinstance(parent, dict) and parent.get("facts") else None
+        if spec.get("history_baseline") is not None:
+            history_note = {**(history_note or {}), "history_baseline": spec["history_baseline"]}
         answer["usage"] = []
         for _ in range(1 if getattr(self.model, "single_attempt", False) else 3):
             if not await self.repository.progress(
@@ -236,11 +304,16 @@ class ResearchService:
                 spec["question"],
                 answer["facts"],
                 turn_id,
-                allow_inspect=not inspected and spec["screen"].get("displayMode") not in {"replay", "range-replay"},
+                allow_inspect=not inspected and not history_excluded(spec["question"])
+                and spec["screen"].get("displayMode") not in {"replay", "range-replay"},
                 history_note=history_note,
                 repair=repaired,
                 **({"owner": owner, "settings": spec["ai_settings"], "context": spec["screen"]}
                                    if "ai_settings" in spec else {}),
+                **({"source_gaps": answer.get("gaps", []),
+                    "selection": {"requested_sections": list(requested_sections(spec)),
+                                  "recorded_selection": spec["screen"].get("displayMode") in {"replay", "range-replay"}}}
+                   if getattr(self.model, "supports_selection_context", False) else {}),
             )
             answer["usage"].append(
                 {
@@ -263,6 +336,7 @@ class ResearchService:
                     requested = result["data"]
                     if (
                         inspected
+                        or history_excluded(spec["question"])
                         or spec["screen"].get("displayMode") in {"replay", "range-replay"}
                         or not isinstance(requested, dict)
                         or set(requested) != {"ticker"}
@@ -278,6 +352,7 @@ class ResearchService:
                             snapshot,
                             closing_only=answer.get("history_closing_only", False),
                             previous_session=answer.get("history_previous_session", False),
+                            history_baseline=spec.get("history_baseline"),
                         )
                         existing = {f["id"] for f in answer["facts"]}
                         answer["facts"].extend(f for f in more if f["id"] not in existing)
@@ -288,6 +363,11 @@ class ResearchService:
                         if not more:
                             answer["gaps"].append(history_note)
                         merge_history_section(answer, snapshot["ticker"], text, more, snapshot.get("horizon", "all"))
+                        if isinstance(parent, dict) and parent.get("facts"):
+                            history_note = {"parent_context": parent, "saved_history_note": history_note}
+                        if spec.get("history_baseline") is not None:
+                            history_note = {**(history_note if isinstance(history_note, dict) else {"saved_history_note": history_note}),
+                                            "history_baseline": spec["history_baseline"]}
                         continue
                 else:
                     try:
@@ -308,7 +388,13 @@ class ResearchService:
                             "Checked interpretation; quantitative readings remain the saved evidence"
                         )
                         return
-                    except (ValueError, TypeError, KeyError):
+                    except (ValueError, TypeError, KeyError) as exc:
+                        from services.problem_journal import record_problem
+                        rejection = rejection_diagnostic(exc, turn_id)
+                        answer["model_rejection"] = rejection
+                        record_problem({"kind": "server_log", "source": "research.evidence_check." + rejection["code"] + "." + rejection["field"],
+                                        "route": "/api/agent/turn/" + rejection["turn_id"],
+                                        "name": "ValueError", "message": "AI interpretation failed its evidence check"})
                         result = {"status": "invalid", "reason": "Model interpretation was not supported by the facts"}
             answer["model_status"] = result.get("reason", "Model interpretation unavailable")
             if result["status"] != "invalid" or repaired:

@@ -1,3 +1,5 @@
+jest.mock("./MarketCoverage",()=>()=>null);
+jest.mock('../heatseeker/useTickerDirectory',()=>()=>({tickers:null,status:'incomplete',retry:jest.fn()}));
 /**
  * TDZ guard — mounts Tidehunter Pro in the ACTIVE state.
  *

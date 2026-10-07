@@ -172,3 +172,6 @@ backend/data/*.db-shm
 /.playwright-mcp/page-2026-09-06T08-38-47-009Z.yml
 /2026-09-08-redesing-messages-below.txt
 /backend/2026-09-07-091737-command-messageprompt2command-message.txt
+
+# Local browser daemon output from Windows path handling; retained on this machine.
+/UsersDARK HEROAppDataLocal/

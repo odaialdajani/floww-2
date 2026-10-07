@@ -16,6 +16,9 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import UTC, datetime
 
+from services.agent.answer_sections import history_excluded, requests_history
+from services.agent.contracts import validate_history_baseline
+
 POLICY = "research-capabilities-1"
 LIMIT = 8
 PER_READ_SECONDS = 5
@@ -23,7 +26,6 @@ _POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="research-read")
 _WORKERS = threading.BoundedSemaphore(4)
 _CURRENT = ContextVar("research_read_budget", default=None)
 _PLAN = ContextVar("research_read_plan", default=None)
-_HISTORY = re.compile(r"\b(?:changed?|since|earlier|previously|previous|prior|yesterday|closing|last close)\b", re.I)
 
 
 class ReadDenied(Exception):
@@ -38,6 +40,8 @@ def capability_plan(spec):
     if spec.get("price_only"):
         return set()
     question = spec.get("question", "")
+    baseline = validate_history_baseline(spec.get("history_baseline"))
+    dated_history = baseline is not None and not history_excluded(question)
     requested = set()
     if re.search(
         r"\b(?:structure|gamma|gex|flip|walls?|levels?|support|resistance|exposure|dealer|vanna|charm|air pockets?|pinning|max pain|put.?call)\b",
@@ -52,7 +56,9 @@ def capability_plan(spec):
     if re.search(r"\b(?:chart|map|cell|selected|screen)\b", question, re.I):
         requested.add("map")
     broad = bool(re.search(r"\b(?:full|complete|overall|everything|checklist|all readings)\b", question, re.I))
-    if not broad and not requested and _HISTORY.search(question):
+    if not broad and dated_history:
+        return requested
+    if not broad and not requested and requests_history(question):
         return set()
     if broad or len(spec.get("tickers", [])) <= 1:
         return {"structure", "volatility", "flow", "map"}

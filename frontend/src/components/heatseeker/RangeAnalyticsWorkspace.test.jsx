@@ -132,3 +132,5 @@ test('basis and query changes invalidate the canonical selection without invokin
  expect(JSON.parse(screen.getByTestId('range-context').textContent).snapshotId).toBeNull();
  expect(global.fetch).toHaveBeenCalledTimes(1);
 });
+
+test('analytical read keeps the app key and omits private session cookies',async()=>{window.localStorage.setItem('floww_app_key','offline-key');global.fetch.mockImplementation(async(url,options)=>{if(options.credentials!=='omit')throw new Error('Cross-origin market read must omit session cookies');return response(complete);});render(<RangeAnalyticsWorkspace ticker="SPY"/>);fireEvent.click(screen.getByRole('button',{name:'Load analytical range'}));await screen.findByRole('grid');expect(global.fetch.mock.calls[0][1]).toMatchObject({credentials:'omit',headers:{'X-API-Key':'offline-key'}});window.localStorage.removeItem('floww_app_key');});

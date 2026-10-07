@@ -21,6 +21,7 @@
  */
 
 import React, { Component } from "react";
+import {reportProblem} from "../diagnostics/problemTracking";
 
 export default class ErrorBoundary extends Component {
   constructor(props) {
@@ -39,6 +40,7 @@ export default class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, errorInfo) {
+    reportProblem({kind:"browser_error",name:error?.name});
     // Log for debugging — not shown to user
     console.error("[ErrorBoundary] Caught render error:", error);
     console.error("[ErrorBoundary] Component stack:", errorInfo?.componentStack);

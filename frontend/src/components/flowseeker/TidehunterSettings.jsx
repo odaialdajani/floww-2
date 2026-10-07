@@ -8,13 +8,13 @@ import { PULSE_COLUMNS, PULSE_DEFAULT_COLS, migrateScreenUnits } from "./tideFee
 
 export const SETTINGS_KEY = "floww_settings";
 export const DEFAULT_MODE = "trade";
-export const DEFAULT_SECTION_ORDER = ["board", "vector", "pulse", "lattice", "trust"];
+export const DEFAULT_SECTION_ORDER = ["pulse", "board", "vector", "lattice", "trust"];
 export const SECTION_LABELS = {
-  board: "Board",
-  vector: "Vector · direction",
-  pulse: "Pulse · live flow",
-  lattice: "Lattice · positioning",
-  trust: "Trust",
+  board: "Overview",
+  vector: "Alerts",
+  pulse: "Activity results",
+  lattice: "Stock details",
+  trust: "Data quality",
 };
 export const MODES = ["trade", "monitor", "research"];
 

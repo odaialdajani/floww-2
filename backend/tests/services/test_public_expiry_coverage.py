@@ -9,6 +9,20 @@ from services import public_api_adapter as adapter
 from tests.services.test_public_adapter_truth import make_broker, make_contract
 
 
+async def fetch_admitted(broker, max_expiries):
+    """Exercise skip recovery under the owning wrapper's real admission contract."""
+    from services.public_budget import PublicBudget
+
+    budget = PublicBudget(capacity=60, refill_per_sec=0, max_inflight=4)
+    with patch.object(adapter, "BROKER", broker), \
+         patch.object(adapter, "_get_broker", AsyncMock(return_value=broker)), \
+         patch.object(adapter, "_CHAIN_CACHE", {}), \
+         patch.object(adapter._public_budget, "budget", budget):
+        result = await adapter.fetch_chain_from_public_api("SPY", max_expiries)
+        assert budget._inflight == 0
+        return result
+
+
 async def fetch_mocked(chains):
     broker = make_broker(chains)
     with patch.object(adapter, "_resolve_spot_observation", AsyncMock(return_value={
@@ -91,7 +105,7 @@ async def test_max_expiries_window_skips_expiries_with_no_accepted_contracts(mon
         "price": 530.0, "source": "public-mid", "event_time": None,
         "fetched_at": AfterCloseDateTime.now().isoformat(),
     })):
-        result = await adapter._fetch_chain_live(broker, "SPY", 1)
+        result = await fetch_admitted(broker, 1)
 
     assert result is not None, "an empty 1-expiry window must not 503 when a live expiry follows"
     assert result["expiries"] == [tomorrow]
@@ -142,10 +156,11 @@ async def test_attempts_stay_within_the_pre_debited_envelope(monkeypatch):
         "fetched_at": AfterCloseDateTime.now().isoformat(),
     })):
         # The call is what performs the walk; the assertion is on the count.
-        await adapter._fetch_chain_live(broker, "SPY", 1)
+        await fetch_admitted(broker, 1)
 
     # One chain call per attempt. This is the assertion that fails when the
     # walk is unbounded: an unbounded loop would try every dead expiry.
+    assert len(seen) == 1 + adapter.MAX_EXPIRY_SKIPS
     assert len(seen) <= 1 + adapter.MAX_EXPIRY_SKIPS, (
         f"walked {len(seen)} expiries, over the pre-debited envelope "
         f"(1 + {adapter.MAX_EXPIRY_SKIPS}): {seen}"
@@ -174,7 +189,7 @@ async def test_one_dead_expiry_is_skipped_and_the_live_one_is_returned(monkeypat
         "price": 530.0, "source": "public-mid", "event_time": None,
         "fetched_at": AfterCloseDateTime.now().isoformat(),
     })):
-        result = await adapter._fetch_chain_live(broker, "SPY", 1)
+        result = await fetch_admitted(broker, 1)
     assert result is not None, "a 1-expiry request must not 503 when a live expiry follows"
     assert result["expiries"] == [live]
 

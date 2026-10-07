@@ -24,11 +24,11 @@ test.each(NAV_ITEMS.map(item => [item.id, item.label]))("loads and refreshes the
 test("workspace changes preserve unrelated URL state and do not add duplicate history entries", () => {
   render(<Workspace/>);
   const length = window.history.length;
-  fireEvent.click(screen.getByRole("button", { name: "Triad", exact: true }));
+  fireEvent.click(screen.getByRole("button", { name: "Market view", exact: true }));
   expect(window.location.search).toBe("?keep=owned&page=trinity");
   expect(window.location.hash).toBe("#selection");
   expect(window.history.length).toBe(length + 1);
-  fireEvent.click(screen.getByRole("button", { name: "Triad", exact: true }));
+  fireEvent.click(screen.getByRole("button", { name: "Market view", exact: true }));
   expect(window.history.length).toBe(length + 1);
   fireEvent.click(screen.getByRole("button", { name: "Unknown workspace" }));
   expect(screen.getByLabelText("Current workspace")).toHaveTextContent("trinity");
@@ -50,11 +50,11 @@ test("back/forward popstate uses the URL rather than untrusted history metadata"
   expect(screen.getByLabelText("Current workspace")).toHaveTextContent("journal");
 });
 
-test("unknown links fall back to Solstice and unmount releases the history listener", () => {
+test("unknown links fall back to Screener and unmount releases the history listener", () => {
   window.history.replaceState(null, "", "/?page=not-a-workspace");
   const remove = jest.spyOn(window, "removeEventListener");
   const view = render(<Workspace/>);
-  expect(screen.getByLabelText("Current workspace")).toHaveTextContent("heatseeker");
+  expect(screen.getByLabelText("Current workspace")).toHaveTextContent("flowseeker-pro");
   view.unmount();
   expect(remove).toHaveBeenCalledWith("popstate", expect.any(Function));
   remove.mockRestore();

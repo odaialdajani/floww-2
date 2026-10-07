@@ -51,26 +51,26 @@ export default function TidehunterPublicBridge({onReviewActive=()=>{}}) {
     provider:data.data_source,formula:data.formula_version,mapQuery:data.map_query,mapStrikes:strikes,mapExpiries:expiries,
     observedAt:data.event_time || data.observed_at || null,sourceWorkspace:"flowseeker-pro",sourceObservedAt:frozen.observedAt || null};
    setReview({context,body,source:frozen});callback.current(true);
-  }catch(e){if(epoch.current===current && !ctrl.signal.aborted)setError(["OBSERVATION_IDENTITY_MISMATCH","EXACT_CONTRACT_UNAVAILABLE"].includes(e.message)?e.message:"READ_UNAVAILABLE — no Pro estimate or nearby contract substituted");}
+  }catch(e){if(epoch.current===current && !ctrl.signal.aborted)setError(e.message==="OBSERVATION_IDENTITY_MISMATCH"?"The returned reading does not match your selected stock.":e.message==="EXACT_CONTRACT_UNAVAILABLE"?"The exact selected contract is unavailable. No nearby contract was used.":"The contract check is unavailable. No estimated or nearby contract was used.");}
   finally{if(epoch.current===current)setPending(false);}
  };
  const close=()=>{epoch.current++;controller.current?.abort();setReview(null);setPending(false);setError("");callback.current(false);};
  const closeRef=useRef(null);
  useEffect(()=>{if(!review)return;const previous=document.activeElement;closeRef.current?.focus();const escape=e=>{if(e.key==="Escape")close();};window.addEventListener("keydown",escape);return()=>{window.removeEventListener("keydown",escape);previous?.focus?.();};},[review]);
- return <section className="tidehunter-public-bridge" aria-label="Tidehunter Public boundary">
-  <strong>Separate Public review</strong>
-  <p>Pro ckey, estimated premium and conviction are display inputs, not executable identity, current quotes or probability. Public chain OI/volume is not a trade-print or aggressor feed.</p>
-  {!review && <><button type="button" disabled={!hasSelector || pending} onClick={resolve}>{pending?"Resolving exact current record…":"Resolve a separate Public review"}</button>
-   {!hasSelector && <p role="status">SELECTED_CONTRACT_INCOMPLETE — choose a published exact strike, expiry and type; ckey alone is not sufficient.</p>}
-   <p>This explicit read loads a new owning observation; it does not replace or recalculate the friend-owned Pro feed.</p></>}
+ return <section className="tidehunter-public-bridge" aria-label="Selected contract check">
+  <strong>Check a selected contract</strong>
+  <p>The screener shows estimates. This check loads a separate option-chain reading from Public; it does not reveal who bought or sold.</p>
+  {!review && <><button type="button" disabled={!hasSelector || pending} onClick={resolve}>{pending?"Checking the contract…":"Check selected contract"}</button>
+   {!hasSelector && <p role="status">Choose a contract row with a strike, expiry, and call or put first.</p>}
+   <p>This keeps the screener reading and the new reading separate.</p></>}
   {error && <p role="alert">{error}</p>}
   {review && <div role="dialog" aria-label="Separate Public contract review">
    <button ref={closeRef} type="button" onClick={close}>Close separate Public review</button>
-   <p>Pro source time: {review.source.observedAt || "unknown"}</p>
-   <p>New owning observation: {review.context.snapshotId} · {review.context.mapVersion} · {review.context.provider}</p>
+   <p>Screener reading time: {review.source.observedAt || "unknown"}</p>
+   <p>Separate reading time: {review.context.mapVersion} · source {review.context.provider}</p>
    <strong>{review.body.matched_identity.osi}</strong>
    <p>Recorded bid / ask: {review.body.quote?.bid ?? "unknown"} / {review.body.quote?.ask ?? "unknown"} USD · ages: {review.body.quote?.ages_s?.bid ?? "unknown"} / {review.body.quote?.ages_s?.ask ?? "unknown"} s</p>
-   <p>Multiplier: {review.body.multiplier?.value ?? "unknown"} · {review.body.multiplier?.source || "provenance unavailable"}. Read-only, not preflight.</p>
+   <p>Contract size: {review.body.multiplier?.value ?? "unknown"} shares each · {review.body.multiplier?.source || "provenance unavailable"}. This checks data only. No order is sent.</p>
    <AskLodestar subject={`${review.context.ticker} · separate exact contract review`} compact/>
    <GroundedPublicReview/>
   </div>}

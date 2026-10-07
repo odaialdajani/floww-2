@@ -29,14 +29,14 @@ const select = id => fireEvent.change(screen.getByLabelText('Stored range record
 const settle = async () => {await act(async()=>{});};
 const lastEnvelope = () => onRecord.mock.calls[onRecord.mock.calls.length-1]?.[0];
 
-test('index is explicit and reads only stored routes with credentials and stored key',async()=>{
+test('index is explicit and reads only stored routes with the app key and no session cookies',async()=>{
  window.localStorage.setItem('floww_app_key','offline-key');mount();expect(global.fetch).not.toHaveBeenCalled();
  await load();
  const [url,options]=global.fetch.mock.calls[0];
  const parsed=new URL(url);
  expect(parsed.pathname).toBe('/api/solstice/price-paths/range-records');
  expect(Object.fromEntries(parsed.searchParams)).toEqual({ticker:'SPY',min_dte:'14',max_dte:'60',limit:'50',offset:'0'});
- expect(options).toMatchObject({method:'GET',credentials:'include',headers:{'X-API-Key':'offline-key'}});
+ expect(options).toMatchObject({method:'GET',credentials:'omit',headers:{'X-API-Key':'offline-key'}});
  expect(screen.getByText(/Research only.*qualification pending/i)).toBeInTheDocument();
  expect(screen.getByText(/Full integrity.*HOLD/i)).toBeInTheDocument();
  expect(screen.getByText(/gaps.*unknown/i)).toBeInTheDocument();
@@ -262,3 +262,5 @@ test('a duplicate across pages refuses the combined timeline rather than replayi
  await screen.findByText(/RANGE_DUPLICATE_IDENTITY/);expect(lastEnvelope()).toBeNull();
  expect(screen.getByRole('button',{name:'Play frames'})).toBeDisabled();
 });
+
+test('stored index and frames keep the app key without private session cookies',async()=>{window.localStorage.setItem('floww_app_key','offline-key');global.fetch.mockImplementation(async(url,options)=>{if(options.credentials!=='omit')throw new Error('Cross-origin history read must omit session cookies');return response(String(url).includes('/range-records/')?wrapper(complete):page());});mount();await load();select(complete.record_id);await waitFor(()=>expect(lastEnvelope()?.record_id).toBe(complete.record_id));expect(global.fetch.mock.calls).toHaveLength(2);for(const [,options] of global.fetch.mock.calls)expect(options).toMatchObject({method:'GET',credentials:'omit',headers:{'X-API-Key':'offline-key'}});});

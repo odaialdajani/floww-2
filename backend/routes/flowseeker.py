@@ -1562,11 +1562,10 @@ async def _public_dashboard_scan(min_volume, limit):
             payload = await public_market_scan(slice_size=2, max_expiries=2)
             _public_dashboard_cache = (time.monotonic(), copy.deepcopy(payload))
         saved_at, payload = _public_dashboard_cache
-        result = copy.deepcopy(payload)
-        age = (result.get("coverage", {}).get("max_age_s") or 0) + max(0, time.monotonic() - saved_at)
+        from services.public_scanner import fresh_cached_view
+        result = fresh_cached_view(payload, now=time.time(), elapsed=max(0, time.monotonic() - saved_at))
         eligible = [row for row in result.get("rows", []) if len(row) > 5 and float(row[5] or 0) >= min_volume]
         result.update(rows=eligible[:limit], count=min(len(eligible), limit), truncated=len(eligible) > limit,
-                      cache_age_seconds=age, stale=bool(result.get("stale")) or age > 300,
                       budget=None)
         return result
 

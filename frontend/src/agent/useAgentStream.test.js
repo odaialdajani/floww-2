@@ -172,3 +172,207 @@ test('a hung research request times out with a recoverable error',async()=>{
   if(typeof realTimeoutFn!=='function')delete AbortSignal.timeout;
  }
 });
+
+
+test.each(['network','response','timeout'])('a failed first saved-turn read reconnects without another model request: %s',async failure=>{
+ jest.useFakeTimers();const events=[];let reads=0,pending;
+ global.fetch=jest.fn(async url=>{
+  if(url.endsWith('/session'))return reply({});
+  if(url.endsWith('/ask'))return reply({turn_id:'accepted'});
+  if(++reads===1){
+   if(failure==='response')return {ok:false,status:503};
+   if(failure==='timeout')throw new DOMException('The operation was aborted.','AbortError');
+   throw new TypeError('Temporary network loss');
+  }
+  return reply({turn_id:'accepted',status:'completed',text:'Recovered answer'});
+ });
+ const {result}=renderHook(()=>useAgentStream({onEvent:(kind,data)=>events.push([kind,data])}));
+ try {
+  await act(async()=>{pending=result.current.ask({question:'Research once'});});
+  expect(result.current.state).toBe('reconnecting');
+  await act(async()=>{jest.advanceTimersByTime(1000);});
+  await act(async()=>{await pending;});
+  expect(result.current.state).toBe('completed');
+  expect(events.filter(([kind])=>kind==='done')).toHaveLength(1);
+  expect(events.filter(([kind])=>kind==='error')).toHaveLength(0);
+  expect(reads).toBe(2);
+  expect(global.fetch.mock.calls.filter(([url])=>url.endsWith('/ask'))).toHaveLength(1);
+ } finally {act(()=>result.current.disconnect());jest.useRealTimers();}
+});
+
+
+test('first-read reconnect remains bounded and never resubmits research',async()=>{
+ jest.useFakeTimers();const events=[];let pending;
+ global.fetch=jest.fn(async url=>{
+  if(url.endsWith('/session'))return reply({});
+  if(url.endsWith('/ask'))return reply({turn_id:'accepted'});
+  return {ok:false,status:503};
+ });
+ const {result}=renderHook(()=>useAgentStream({onEvent:(kind,data)=>events.push([kind,data])}));
+ try {
+  await act(async()=>{pending=result.current.ask({question:'Research once'});});
+  expect(result.current.state).toBe('reconnecting');
+  for(let i=0;i<130;i++)await act(async()=>{jest.advanceTimersByTime(1000);});
+  await act(async()=>{await pending;});
+  expect(result.current.state).toBe('interrupted');
+  expect(events.filter(([kind])=>kind==='error')).toEqual([['error',{status:'interrupted',error:'Connection lost. Reopen history to recover the saved request.'}]]);
+  expect(global.fetch.mock.calls.filter(([url])=>url.endsWith('/ask'))).toHaveLength(1);
+  expect(global.fetch.mock.calls.filter(([url])=>url.includes('/turn/'))).toHaveLength(131);
+ } finally {act(()=>result.current.disconnect());jest.useRealTimers();}
+});
+
+test('cancelling during first-read reconnect targets the accepted request once',async()=>{
+ jest.useFakeTimers();const events=[];let pending;
+ global.fetch=jest.fn(async url=>{
+  if(url.endsWith('/session'))return reply({});
+  if(url.endsWith('/ask'))return reply({turn_id:'accepted'});
+  if(url.includes('/cancel/'))return reply({turn_id:'accepted',status:'cancelled'});
+  throw new TypeError('Temporary network loss');
+ });
+ const {result}=renderHook(()=>useAgentStream({onEvent:(kind,data)=>events.push([kind,data])}));
+ try {
+  await act(async()=>{pending=result.current.ask({question:'Research once'});});
+  expect(result.current.state).toBe('reconnecting');
+  await act(async()=>{await result.current.cancel();jest.advanceTimersByTime(1000);});
+  await act(async()=>{await pending;});
+  expect(result.current.state).toBe('cancelled');
+  expect(events.filter(([kind])=>kind==='done')).toHaveLength(0);
+  expect(global.fetch.mock.calls.filter(([url])=>url.includes('/cancel/'))).toHaveLength(1);
+  expect(global.fetch.mock.calls.filter(([url])=>url.endsWith('/ask'))).toHaveLength(1);
+ } finally {act(()=>result.current.disconnect());jest.useRealTimers();}
+});
+
+test.each(['request','body'])('early cancellation with a stalled %s is bounded and observes the accepted answer once',async failure=>{
+ jest.useFakeTimers();let admit,pending;const events=[];
+ global.fetch=jest.fn(async url=>{
+  if(url.endsWith('/session'))return reply({});
+  if(url.endsWith('/ask'))return new Promise(resolve=>{admit=resolve;});
+  if(url.includes('/cancel/'))return failure==='request'?new Promise(()=>{}):{ok:true,json:()=>new Promise(()=>{})};
+  return reply({turn_id:'accepted-cancel',status:'completed',text:'Saved after cancellation timeout'});
+ });
+ const {result}=renderHook(()=>useAgentStream({onEvent:(kind,data)=>events.push([kind,data])}));
+ try{
+  await act(async()=>{pending=result.current.ask({question:'Admit only once'});});
+  expect(admit).toBeDefined();
+  await act(async()=>{await result.current.cancel();});
+  await act(async()=>admit(reply({turn_id:'accepted-cancel'})));
+  expect(result.current.state).toBe('cancelling');
+  await act(async()=>{jest.advanceTimersByTime(15001);});
+  expect(result.current.state).toBe('completed');
+  await act(async()=>{await pending;});
+  expect(events.filter(([kind])=>kind==='done')).toEqual([['done',{turn_id:'accepted-cancel',status:'completed',text:'Saved after cancellation timeout'}]]);
+  expect(global.fetch.mock.calls.filter(([url])=>url.endsWith('/ask'))).toHaveLength(1);
+  expect(global.fetch.mock.calls.filter(([url])=>url.includes('/cancel/'))).toHaveLength(1);
+  expect(global.fetch.mock.calls.filter(([url])=>url.includes('/turn/')).map(([url])=>url.split('/').pop())).toEqual(['accepted-cancel']);
+ }finally{act(()=>result.current.disconnect());jest.useRealTimers();}
+});
+
+test('early cancel discovering a completed accepted request emits one admission before one final answer',async()=>{
+ let admit,pending;const events=[];
+ global.fetch=jest.fn(async url=>url.endsWith('/session')?reply({})
+  :url.endsWith('/ask')?new Promise(resolve=>{admit=resolve;})
+  :reply({turn_id:'early-completed',status:'completed',text:'Completed before cancel'}));
+ const {result}=renderHook(()=>useAgentStream({onEvent:(kind,payload)=>events.push([kind,payload])}));
+ act(()=>{pending=result.current.ask({question:'Submit once',screen:{ticker:'SPY'}});});
+ await waitFor(()=>expect(admit).toBeDefined());
+ await act(async()=>result.current.cancel());
+ await act(async()=>{admit(reply({turn_id:'early-completed'}));await pending;});
+ expect(result.current.state).toBe('completed');
+ expect(events.map(([kind])=>kind)).toEqual(['started','done']);
+ expect(events[0][1]).toEqual({turn_id:'early-completed',screen:{ticker:'SPY'}});
+ expect(global.fetch.mock.calls.filter(([url])=>url.endsWith('/ask'))).toHaveLength(1);
+ expect(global.fetch.mock.calls.filter(([url])=>url.includes('/cancel/'))).toHaveLength(1);
+});
+
+test('a stopped admission cannot publish a late accepted event or answer',async()=>{
+ let admit,pending;const events=[];
+ global.fetch=jest.fn(async url=>url.endsWith('/session')?reply({})
+  :new Promise(resolve=>{admit=resolve;}));
+ const {result}=renderHook(()=>useAgentStream({onEvent:(kind,payload)=>events.push([kind,payload])}));
+ act(()=>{pending=result.current.ask({question:'Stop observing'});});
+ await waitFor(()=>expect(admit).toBeDefined());
+ act(()=>result.current.disconnect());
+ await act(async()=>{admit(reply({turn_id:'late-accepted'}));await pending;});
+ expect(result.current.state).toBe('idle');
+ expect(events).toEqual([]);
+});
+
+test.each(['TimeoutError','AbortError'])('a first session %s gives a useful timeout without claiming a saved question exists',async name=>{
+ const events=[];global.fetch=jest.fn(async()=>{throw new DOMException('The operation timed out.',name);});
+ const {result}=renderHook(()=>useAgentStream({onEvent:(kind,data)=>events.push([kind,data])}));
+ await act(async()=>{await result.current.ask({question:'Explain this activity'});});
+ expect(result.current.state).toBe('error');expect(events[0][1].error).toMatch(/connection timed out/i);
+ expect(events[0][1].error).toMatch(/no question was sent/i);expect(global.fetch).toHaveBeenCalledTimes(1);
+});
+
+
+test.each([
+ ['session',15000],['admission request',45000],['admission body',45000],['saved read',15000],
+])('missing native timeout still bounds a stalled %s',async(stage,deadline)=>{
+ const originalTimeout=AbortSignal.timeout;AbortSignal.timeout=undefined;jest.useFakeTimers();
+ const events=[];let pending;
+ global.fetch=jest.fn(async url=>{
+  if(url.endsWith('/session'))return stage==='session'?new Promise(()=>{}):reply({});
+  if(url.endsWith('/ask'))return stage==='admission request'?new Promise(()=>{}):stage==='admission body'?{ok:true,json:()=>new Promise(()=>{})}:reply({turn_id:'bounded'});
+  return new Promise(()=>{});
+ });
+ const {result,unmount}=renderHook(()=>useAgentStream({onEvent:(kind,data)=>events.push([kind,data])}));
+ try{
+  act(()=>{pending=result.current.ask({question:'Bound the request'});});await act(async()=>{});
+  await act(async()=>{jest.advanceTimersByTime(deadline+1);});
+  if(stage==='saved read')expect(result.current.state).toBe('reconnecting');
+  else{expect(result.current.state).toBe('error');expect(events[0][1].error).toMatch(/timed out/i);}
+  const call=global.fetch.mock.calls.find(([url])=>stage==='session'?url.endsWith('/session'):stage==='saved read'?url.includes('/turn/'):url.endsWith('/ask'));
+  expect(call[1].signal.aborted).toBe(true);
+  expect(global.fetch.mock.calls.filter(([url])=>url.endsWith('/ask'))).toHaveLength(stage==='session'?0:1);
+ }finally{act(()=>result.current.disconnect());unmount();jest.useRealTimers();if(originalTimeout===undefined)delete AbortSignal.timeout;else AbortSignal.timeout=originalTimeout;}
+});
+
+test('unconfirmed early cancellation followed by admission timeout warns that the saved question may finish',async()=>{
+ jest.useFakeTimers();const originalTimeout=AbortSignal.timeout;
+ AbortSignal.timeout=ms=>{const controller=new AbortController();setTimeout(()=>controller.abort(new DOMException('The operation timed out.','TimeoutError')),ms);return controller.signal;};
+ const events=[];let pending;
+ global.fetch=jest.fn(async(url,options)=>url.endsWith('/session')?reply({}):new Promise((_,reject)=>options.signal.addEventListener('abort',()=>reject(new DOMException('The operation timed out.','TimeoutError')))));
+ const {result,unmount}=renderHook(()=>useAgentStream({onEvent:(kind,data)=>events.push([kind,data])}));
+ try{
+  act(()=>{pending=result.current.ask({question:'Already accepted, response lost'});});await act(async()=>{});
+  await act(async()=>result.current.cancel());
+  await act(async()=>{jest.advanceTimersByTime(45001);});
+  expect(result.current.state).toBe('error');expect(events[0][1].error).toMatch(/saved|history/i);expect(events[0][1].error).not.toMatch(/no question was sent|cancelled before/i);
+  expect(global.fetch.mock.calls.filter(([url])=>url.endsWith('/ask'))).toHaveLength(1);expect(global.fetch.mock.calls.some(([url])=>url.includes('/cancel/'))).toBe(false);
+ }finally{act(()=>result.current.disconnect());unmount();jest.useRealTimers();if(originalTimeout===undefined)delete AbortSignal.timeout;else AbortSignal.timeout=originalTimeout;}
+});
+
+
+test.each(['request','successful response body'])('an unknown admission %s failure warns to recover the saved question before retrying',async failure=>{
+ const events=[];
+ global.fetch=jest.fn(async url=>{
+  if(url.endsWith('/session'))return reply({});
+  if(failure==='request')throw new TypeError('Failed to fetch');
+  return {ok:true,json:async()=>{throw new SyntaxError('Unexpected end of JSON input');}};
+ });
+ const {result}=renderHook(()=>useAgentStream({onEvent:(kind,data)=>events.push([kind,data])}));
+ await act(async()=>{await result.current.ask({question:'Server may have accepted this question'});});
+ expect(result.current.state).toBe('error');expect(events[0][1].error).toMatch(/history|saved answers/i);
+ expect(events[0][1].error).not.toMatch(/no question was sent|cancelled before/i);
+ expect(global.fetch.mock.calls.filter(([url])=>url.endsWith('/ask'))).toHaveLength(1);
+ expect(global.fetch.mock.calls).toHaveLength(2);
+});
+
+test.each([422,503])('a known %s admission rejection never claims the saved question is running',async status=>{
+ const events=[];
+ global.fetch=jest.fn(async url=>url.endsWith('/session')?reply({}):{ok:false,status,json:async()=>{throw new SyntaxError('Unreadable rejection body');}});
+ const {result}=renderHook(()=>useAgentStream({onEvent:(kind,data)=>events.push([kind,data])}));
+ await act(async()=>{await result.current.ask({question:'Rejected question'});});
+ expect(events).toEqual([['error',{status:'error',error:'Research request could not start'}]]);
+ expect(global.fetch.mock.calls).toHaveLength(2);
+});
+
+
+test.each([null,{}, {turn_id:''}, {turn_id:42}])('an accepted response without a usable saved identity retains the recovery warning: %j',async admission=>{
+ const events=[];global.fetch=jest.fn(async url=>url.endsWith('/session')?reply({}):reply(admission));
+ const {result}=renderHook(()=>useAgentStream({onEvent:(kind,data)=>events.push([kind,data])}));
+ await act(async()=>{await result.current.ask({question:'Recover its unknown saved identity'});});
+ expect(result.current.state).toBe('error');expect(events[0][1].error).toMatch(/saved answers/i);
+ expect(global.fetch.mock.calls).toHaveLength(2);
+});

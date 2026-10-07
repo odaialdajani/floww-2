@@ -52,7 +52,7 @@ def null_chain():
 async def test_trimmed_sweep_advances_only_scanned(fresh_budget, clean_state):
     seen = []
 
-    async def fake_fetch(ticker, max_expiries=2):
+    async def fake_fetch(ticker, max_expiries=2, **_kwargs):
         seen.append(ticker)
         return dict(null_chain())
 
@@ -88,7 +88,7 @@ async def test_scan_slice_does_not_acquire(fresh_budget, clean_state):
         calls.append(n)
         return await real_acquire(n, host, now)
 
-    async def fake_fetch(ticker, max_expiries=2):
+    async def fake_fetch(ticker, max_expiries=2, **_kwargs):
         return dict(null_chain())
 
     with (
@@ -107,7 +107,7 @@ async def test_scan_slice_does_not_acquire(fresh_budget, clean_state):
 async def test_full_coverage_no_starvation(fresh_budget, clean_state):
     scanned: list = []
 
-    async def fake_fetch(ticker, max_expiries=2):
+    async def fake_fetch(ticker, max_expiries=2, **_kwargs):
         scanned.append(ticker)
         return dict(null_chain())
 

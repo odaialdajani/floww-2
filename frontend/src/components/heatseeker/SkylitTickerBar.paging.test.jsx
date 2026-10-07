@@ -1,68 +1,27 @@
-/**
- * @jest-environment jsdom
- *
- * A-Z paging (user request): the bar shows 500-button windows of the full
- * universe with prev/next page controls, so every symbol A-Z is reachable
- * by scrolling, not just the first 500. RENDER_CAP, full-universe search,
- * active-beyond-cap rendering, and free-text Go contracts are unchanged.
- */
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
-import "@testing-library/jest-dom";
+import {render,screen,fireEvent} from "@testing-library/react";
 import SkylitTickerBar from "./SkylitTickerBar";
-
-const bigUniverse = () => ({
-  trinity: ["^SPX", "SPY", "QQQ"],
-  default: ["IWM"],
-  popular: Array.from({ length: 600 }, (_, i) => `T${String(i).padStart(4, "0")}`),
+beforeEach(()=>localStorage.clear());
+const names=Array.from({length:65},(_,i)=>"T"+String(i).padStart(4,"0"));
+test("vertical dropdown pages through every loaded name",()=>{
+ render(<SkylitTickerBar activeTicker="T0000" tickers={names}/>);fireEvent.focus(screen.getByRole("combobox"));
+ expect(screen.getByRole("button",{name:"Previous",exact:true})).toBeDisabled();expect(screen.getByRole("option",{name:"T0000"})).toBeInTheDocument();
+ fireEvent.click(screen.getByRole("button",{name:"Next",exact:true}));expect(screen.getByRole("option",{name:"T0030"})).toBeInTheDocument();
+ fireEvent.click(screen.getByRole("button",{name:"Next",exact:true}));expect(screen.getByRole("option",{name:"T0064"})).toBeInTheDocument();
+ expect(screen.getByRole("button",{name:"Next",exact:true})).toBeDisabled();fireEvent.click(screen.getByRole("button",{name:"Previous",exact:true}));
+ expect(screen.getByRole("option",{name:"T0030"})).toBeInTheDocument();
 });
-
-test("next page shows the following window of the universe", () => {
-  render(<SkylitTickerBar activeTicker="SPY" onTickerChange={() => {}} tickers={bigUniverse()} />);
-  expect(screen.queryByTestId("skylit-ticker-btn-T0500")).not.toBeInTheDocument();
-  fireEvent.click(screen.getByTestId("skylit-ticker-page-next"));
-  expect(screen.getByTestId("skylit-ticker-btn-T0500")).toBeInTheDocument();
-  expect(screen.getByTestId("skylit-ticker-count").textContent).toMatch(/page 2\//);
+test("keyboard moves across vertical pages and Enter selects the owning option",()=>{
+ const change=jest.fn();render(<SkylitTickerBar activeTicker="T0000" onTickerChange={change} tickers={names}/>);const input=screen.getByRole("combobox");fireEvent.focus(input);
+ for(let i=0;i<31;i++)fireEvent.keyDown(input,{key:"ArrowDown"});
+ expect(screen.getByRole("option",{name:"T0030"})).toHaveAttribute("aria-selected","true");fireEvent.keyDown(input,{key:"Enter"});expect(change).toHaveBeenCalledWith("T0030");
 });
-
-test("prev is disabled on first page, next disabled on last", () => {
-  render(<SkylitTickerBar activeTicker="SPY" onTickerChange={() => {}} tickers={bigUniverse()} />);
-  expect(screen.getByTestId("skylit-ticker-page-prev")).toBeDisabled();
-  fireEvent.click(screen.getByTestId("skylit-ticker-page-next"));
-  expect(screen.getByTestId("skylit-ticker-page-next")).toBeDisabled();
-  fireEvent.click(screen.getByTestId("skylit-ticker-page-prev"));
-  expect(screen.getByTestId("skylit-ticker-btn-T0000")).toBeInTheDocument();
+test("small lists need no paging controls",()=>{
+ render(<SkylitTickerBar activeTicker="SPY" tickers={["SPY","QQQ"]}/>);fireEvent.focus(screen.getByRole("combobox"));expect(screen.queryByRole("button",{name:"Next",exact:true})).toBeNull();
 });
-
-test("selecting a ticker beyond the window jumps the page to reveal it", () => {
-  const { rerender } = render(
-    <SkylitTickerBar activeTicker="SPY" onTickerChange={() => {}} tickers={bigUniverse()} />
-  );
-  expect(screen.queryByTestId("skylit-ticker-btn-T0559")).not.toBeInTheDocument();
-  rerender(
-    <SkylitTickerBar activeTicker="T0559" onTickerChange={() => {}} tickers={bigUniverse()} />
-  );
-  const btn = screen.getByTestId("skylit-ticker-btn-T0559");
-  expect(btn).toBeInTheDocument();
-  expect(btn.className).toMatch(/active/);
-});
-
-test("no paging controls when the universe fits in one window", () => {
-  render(
-    <SkylitTickerBar activeTicker="SPY" onTickerChange={() => {}} tickers={{ default: ["SPY", "QQQ"] }} />
-  );
-  expect(screen.queryByTestId("skylit-ticker-page-next")).not.toBeInTheDocument();
-  expect(screen.queryByTestId("skylit-ticker-page-prev")).not.toBeInTheDocument();
-});
-
-
-test("shrinking universe with an unlisted ticker makes Previous move immediately", () => {
-  const symbols = Array.from({length:1500}, (_,i)=>`S${String(i).padStart(4,"0")}`);
-  const view = render(<SkylitTickerBar activeTicker="NOTLISTED" tickers={{popular:symbols}} />);
-  fireEvent.click(screen.getByTestId("skylit-ticker-page-next"));
-  fireEvent.click(screen.getByTestId("skylit-ticker-page-next"));
-  view.rerender(<SkylitTickerBar activeTicker="NOTLISTED" tickers={{popular:symbols.slice(0,600)}} />);
-  expect(screen.getByTestId("skylit-ticker-count")).toHaveTextContent("page 2/2");
-  fireEvent.click(screen.getByTestId("skylit-ticker-page-prev"));
-  expect(screen.getByTestId("skylit-ticker-count")).toHaveTextContent("page 1/2");
+test("a shrinking universe clamps browsing without losing current selection",()=>{
+ const view=render(<SkylitTickerBar activeTicker="NOTLISTED" tickers={names}/>);fireEvent.focus(screen.getByRole("combobox"));
+ fireEvent.click(screen.getByRole("button",{name:"Next",exact:true}));fireEvent.click(screen.getByRole("button",{name:"Next",exact:true}));
+ view.rerender(<SkylitTickerBar activeTicker="NOTLISTED" tickers={["SPY","QQQ"]}/>);
+ expect(screen.getByRole("option",{name:"SPY"})).toBeInTheDocument();expect(screen.getByText("Selected NOTLISTED")).toBeInTheDocument();expect(screen.queryByRole("button",{name:"Next",exact:true})).toBeNull();
 });

@@ -1,3 +1,4 @@
+jest.mock('../heatseeker/useTickerDirectory',()=>()=>({tickers:null,status:'incomplete',retry:jest.fn()}));
 jest.mock("./MarketCoverage", () => () => null);
 /**
  * @jest-environment jsdom
@@ -488,7 +489,7 @@ describe("Tidehunter Pro v3 — one page, zero page tabs", () => {
     mockBackend();render(<FlowseekerProBlademap active />);
     await waitFor(()=>expect(screen.getByTestId("pulse-table").querySelector("tbody")).not.toBeNull());
     fireEvent.click(screen.getByRole("tab",{name:/My whales/}));
-    expect(within(screen.getByTestId("pulse-table")).getByRole("button",{name:/Prem/}).closest("th")).toHaveAttribute("aria-sort","descending");
+    expect(within(screen.getByTestId("pulse-table")).getByRole("button",{name:/Est. value/}).closest("th")).toHaveAttribute("aria-sort","descending");
   });
 
   it.each([null, {source_quality:"unknown"}, {
@@ -740,8 +741,9 @@ describe("Tidehunter Pro v3 — one page, zero page tabs", () => {
     await waitFor(() => expect(screen.getByText(/Dealers · SPY/)).toBeInTheDocument());
     const sel = screen.getByLabelText("Focused ticker");
     fireEvent.change(sel, { target: { value: "NVDA" } });
+    fireEvent.keyDown(sel, {key:"Enter"});
     await waitFor(() => expect(screen.getByText(/Dealers · NVDA/)).toBeInTheDocument());
-    expect(screen.getByText("Lattice · NVDA")).toBeInTheDocument();
+    expect(screen.getByText("Stock details · NVDA")).toBeInTheDocument();
   });
 
   it("Plan saves a client-side journal draft only — no order route is ever called", async () => {
@@ -759,12 +761,29 @@ describe("Tidehunter Pro v3 — one page, zero page tabs", () => {
     expect(money).toEqual([]);
   });
 
+  it("start action clears a saved narrow search and exposes activity evidence", async () => {
+    localStorage.setItem("th-prefs-v1", JSON.stringify({knobQ:"ZZZZ",knobType:"put",knobMinScore:99,universeOnly:true}));
+    mockBackend({scanOverrides:{rows:SCAN_ROWS.map((row,i)=>i===0?row.map((v,j)=>j===6?50000:v):row)}});
+    render(<FlowseekerProBlademap active />);
+    await waitFor(()=>expect(global.fetch.mock.calls.some(([url])=>String(url).includes("/scan?"))).toBe(true));
+    await act(async()=>{});
+    fireEvent.click(screen.getByRole("button", {name:"Find unusual activity"}));
+    expect(screen.getByRole("tab", {name:"Volume vs open interest"})).toHaveAttribute("aria-selected", "true");
+    const headers=within(screen.getByTestId("pulse-table")).getAllByRole("columnheader").map(x=>x.textContent);
+    expect(headers).toContain("Open interest");
+    expect(headers.some(x=>x.startsWith("Volume / open interest"))).toBe(true);
+    expect(JSON.parse(localStorage.getItem("th-prefs-v1")).knobQ).toBe("");
+    expect(JSON.parse(localStorage.getItem("th-prefs-v1")).universeOnly).toBe(false);
+  });
+
   it("pulse score carries the component breakdown tooltip", async () => {
     mockBackend();
     render(<FlowseekerProBlademap active />);
     await waitFor(() => expect(
       within(screen.getByTestId("pulse-table")).getAllByRole("columnheader"),
     ).toHaveLength(10));
+    fireEvent.click(screen.getByRole("button", {name:/Columns ·/}));
+    fireEvent.click(within(screen.getByTestId("column-chooser")).getByLabelText("Score"));
     const withTip = screen.getByTestId("pulse-table").querySelector("b[title*='vol/OI']");
     expect(withTip).not.toBeNull();
   });

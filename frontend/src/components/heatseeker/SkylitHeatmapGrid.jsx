@@ -28,6 +28,35 @@ import "./SolsticeWorkspace.css";
  * integer string when whole, else the float string (backend _k()).
  */
 
+const EXCHANGE_TIME_ZONE = "America/New_York";
+const EXCHANGE_CALENDAR = new Intl.DateTimeFormat("en-US", {
+  timeZone: EXCHANGE_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit",
+});
+
+// Calendar-day indexes avoid browser timezone and daylight-saving hour changes.
+function calendarDayIndex(day) {
+  if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const value = new Date(day + "T00:00:00Z");
+  if (!Number.isFinite(value.getTime()) || value.toISOString().slice(0, 10) !== day) return null;
+  return value.getTime() / 86400000;
+}
+
+function expiryReference(isReplay, asof) {
+  let time;
+  if (isReplay) {
+    // The owning snapshot asof comes from replayToDisplay. Observation times
+    // and manifest trading days do not own these immutable recorded cells.
+    if (typeof asof !== "string"
+      || !/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(asof)
+      || calendarDayIndex(asof.slice(0, 10)) == null) return { day: null, index: null };
+    time = new Date(asof);
+    if (!Number.isFinite(time.getTime())) return { day: null, index: null };
+  } else time = new Date();
+  const parts = Object.fromEntries(EXCHANGE_CALENDAR.formatToParts(time).map(p => [p.type, p.value]));
+  const day = parts.year + "-" + parts.month + "-" + parts.day;
+  return { day, index: calendarDayIndex(day) };
+}
+
 const GRID_BY_VIEW = { gex: "grid", vex: "vex_grid", charm: "charm_grid", skylit: "grid" };
 
 // Viridis stops, most-negative → max
@@ -388,8 +417,7 @@ function SkylitHeatmapGrid({
 
   // Per-expiry header meta: calendar days left + |net cell| share (not gross).
   const expMeta = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const reference = expiryReference(data?.replay, data?.asof);
     let matrixAbsNet = 0;
     const cols = {};
     for (const e of expiries) {
@@ -407,17 +435,13 @@ function SkylitHeatmapGrid({
     }
     const meta = {};
     for (const e of expiries) {
-      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(e);
-      let daysLeft = null;
-      if (m) {
-        const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-        daysLeft = Math.round((d - today) / 86400000);
-      }
+      const expiryDay = calendarDayIndex(e);
+      const daysLeft = reference.index != null && expiryDay != null ? expiryDay - reference.index : null;
       const share = matrixAbsNet > 0 ? cols[e].absNet / matrixAbsNet : null;
       meta[e] = { ...cols[e], daysLeft, share };
     }
-    return { meta, matrixGross: matrixAbsNet, matrixAbsNet };
-  }, [expiries, matrix]);
+    return { meta, matrixGross: matrixAbsNet, matrixAbsNet, referenceDay: reference.day };
+  }, [expiries, matrix, data?.replay, data?.asof]);
   const zeroDte = useMemo(
     () => expiries.filter((e) => expMeta.meta[e]?.daysLeft === 0),
     [expiries, expMeta]
@@ -590,12 +614,12 @@ function SkylitHeatmapGrid({
               {expiries.map((e) => {
                 const meta = expMeta.meta[e] || {};
                 const dl = meta.daysLeft;
-                const dlTxt = dl == null ? "date unknown" : dl === 0 ? "0DTE (expires today)" : dl > 0 ? `${dl}d left` : "expired";
+                const dlTxt = dl == null ? "date unknown" : dl === 0 ? (data?.replay ? "0DTE (expires on saved day)" : "0DTE (expires today)") : dl > 0 ? `${dl}d left` : "expired";
                 const shareTxt = meta.share != null ? ` · ${(meta.share * 100).toFixed(1)}% of sum |signed cells| (not raw gross)` : "";
                 const isSelCol = selExp === e;
                 return (
                   <th key={e} className={`trin-th-exp${isSelCol ? " trin-th-selected" : ""}`}
-                    title={`${e} · ${dlTxt} · ${meta.n ?? 0} strikes covered${shareTxt}`}>
+                    title={`${e} · ${dlTxt} · ${data?.replay ? "saved" : "current"} exchange day ${expMeta.referenceDay || "unknown"} (${EXCHANGE_TIME_ZONE}) · ${meta.n ?? 0} strikes covered${shareTxt}`}>
                     {fmtExpiry(e)}
                     {density === "calendar" && dl != null && <span className="trin-th-dte">{dl === 0 ? "0D" : `${dl}d`}</span>}
                   </th>
@@ -632,7 +656,7 @@ function SkylitHeatmapGrid({
           <span
             className="trin-legend-0dte"
             data-testid="skylit-grid-0dte"
-            title="Share of sum |signed cells| in today-expiring columns (not raw gross; structural context, not a signal)"
+            title={`Share of sum |signed cells| in ${data?.replay ? "saved-day" : "today"}-expiring columns (${EXCHANGE_TIME_ZONE}, ${expMeta.referenceDay || "unknown"}; not raw gross; structural context, not a signal)`}
           >
             0DTE {zeroDte.map((e) => fmtExpiry(e)).join(", ")}:{" "}
             {zeroDte.map((e) => {

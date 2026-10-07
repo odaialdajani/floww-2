@@ -120,6 +120,30 @@ class PublicBudget:
             self._tokens -= float(n)
             self._inflight += 1
 
+    async def debit_additional(self, n: int = 1, host: str = "public", now: float | None = None) -> None:
+        """Charge serial calls while the caller retains its original job slot.
+
+        Refusal grants no call and changes no job count. A failed or cancelled
+        attempt keeps its debit; this method never refunds provider work.
+        """
+        n = max(1, int(n))
+        now = time.monotonic() if now is None else now
+        async with self._guard:
+            self._refill_locked(now)
+            if self._inflight <= 0:
+                self.total_limited += 1
+                raise BudgetExhausted(retry_after=5, reason="missing_job_admission")
+            left = self._cooldown_left_locked(host, now)
+            if left > 0:
+                self.total_limited += 1
+                raise BudgetExhausted(retry_after=int(left) + 1, reason="host_cooldown")
+            if self._tokens < float(n):
+                self.total_limited += 1
+                deficit = float(n) - self._tokens
+                wait = int(deficit / self._refill) + 1 if self._refill > 0 else 60
+                raise BudgetExhausted(retry_after=wait, reason="token_bucket")
+            self._tokens -= float(n)
+
     async def check_request_allowed(self, host: str = "api.public.com") -> None:
         """Recheck cooldown immediately before each fan-out HTTP request."""
         async with self._guard:

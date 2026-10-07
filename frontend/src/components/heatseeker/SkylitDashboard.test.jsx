@@ -75,6 +75,7 @@ jest.mock("./RndDensityPanel",              () => () => <div data-testid="hs-rnd
 import SkylitDashboard from "./SkylitDashboard";
 import useScreenContext from "../../agent/useScreenContext";
 import coverageFixture from "../../fixtures/integration/coverage-read.v1.json";
+import {skylitViewScope,readSkylitView,writeSkylitView} from "./skylitViewPreferences";
 
 test('listed expiry admission is an explicit read, not a new map or selection', async () => {
   axios.get.mockResolvedValue({ data: coverageFixture.expiries });
@@ -321,6 +322,7 @@ test("research follows the rendered wide map and never carries it into another t
 });
 
 beforeEach(() => {
+  sessionStorage.clear();
   axios.get.mockImplementation(async () => ({ data: { strikes: [] } }));
 });
 afterEach(async () => { await act(async () => {}); });
@@ -1268,4 +1270,200 @@ test("O3 compare panes share one snapshot and identical geometry inputs", async 
   const spots = panes.map((p) => p.getAttribute("data-spot"));
   expect(spots[0]).toBe(spots[1]);
   expect(spots[0]).toBe("650");
+});
+
+test('expanded replay shows only its stored expiry scope and cannot widen', async () => {
+  axios.get.mockImplementation(async url => ({ data: String(url).includes('/manifest/')
+    ? { snapshots: [{ id: 'stored-scope' }] }
+    : String(url).includes('/replay/') ? {
+      snapshot: { ticker: 'SPY', snapshot_id: 'stored-scope', asof_ts: '2026-09-28T18:00:00Z', spot: 650 },
+      strikes: [{ strike: 650 }],
+      grids: { grid: { expiries: ['2026-09-28', '2026-10-05'], strikes: [650], grid: {
+        '2026-09-28': { 650: 25 }, '2026-10-05': { 650: 75 },
+      } } }, metrics_full: {}, context: {},
+    } : {} }));
+  render(<SkylitDashboard ticker="SPY" data={selectionMap()} spot={650} expiries={8} timeframe="swing" />);
+  await act(async () => fireEvent.click(screen.getByTestId('solstice-replay-load')));
+  await act(async () => fireEvent.click(screen.getByTestId('solstice-replay-next')));
+  const callsBefore = axios.get.mock.calls.filter(c => String(c[0]).includes('/heatmap/')).length;
+  await act(async () => fireEvent.click(screen.getByTestId('skylit-expand-btn')));
+  expect(screen.queryByTestId('skylit-expand-widen')).toBeNull();
+  const scope = document.querySelector('.skylit-expanded-coverage');
+  expect(scope).toHaveTextContent('Saved scope');
+  expect(scope).toHaveTextContent('2 expiries');
+  expect(scope).not.toHaveTextContent('8 expiries');
+  expect(scope).not.toHaveTextContent('swing');
+  expect(screen.getByTestId('skylit-loaded-scope')).toHaveTextContent('2026-09-28, 2026-10-05');
+  expect(axios.get.mock.calls.filter(c => String(c[0]).includes('/heatmap/'))).toHaveLength(callsBefore);
+  await act(async () => fireEvent.click(screen.getByTestId('skylit-expand-close')));
+  await act(async () => fireEvent.click(screen.getByTestId('solstice-replay-exit')));
+  await act(async () => fireEvent.click(screen.getByTestId('skylit-expand-btn')));
+  expect(screen.getByTestId('skylit-expand-widen')).toHaveTextContent('Widen to 8');
+});
+
+describe('dashboard display preferences across main-tab remounts',()=>{
+ beforeEach(()=>sessionStorage.clear());
+ function mountPreferences(data=selectionMap(),props={}){return render(<><SkylitDashboard ticker="SPY" spot={650} data={data} {...props}/><ResearchSelection/></>);}
+ test('layout, basis, grid size and price-history opening resume for the same query',async()=>{
+  const activity={...selectionMap().grid,status:'ok'};const data={...selectionMap(),metrics:{grids:{activity}}};
+  axios.get.mockImplementation(async url=>({data:String(url).includes('/price-history/')?{ticker:'SPY',frames:[]}:{strikes:[]}}));
+  const first=mountPreferences(data,{localView:'focus'});
+  fireEvent.change(screen.getByRole('combobox',{name:'Canvas layout'}),{target:{value:'calendar'}});
+  fireEvent.click(screen.getByTestId('mock-activity'));fireEvent.click(screen.getByTestId('skylit-zoom-in'));
+  await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Price chart + historical nodes'})));
+  first.unmount();await act(async()=>mountPreferences(data,{localView:'focus'}));
+  expect(screen.getByRole('combobox',{name:'Canvas layout'})).toHaveValue('calendar');
+  expect(screen.getByTestId('skylit-heatmap-area').style.zoom).toBe('1.25');
+  expect(screen.getByRole('button',{name:'Price chart + historical nodes'})).toHaveAttribute('aria-expanded','true');
+  expect(JSON.parse(screen.getByTestId('research-selection').textContent)).toMatchObject({overlayMetric:'activity',displayMode:'price-history'});
+ });
+ test('a remounted selection uses the new current reading and never re-arms trade or locks',()=>{
+  const onCellClick=jest.fn();const first=mountPreferences(selectionMap(),{onCellClick});
+  fireEvent.click(screen.getByTestId('mock-heatmap-cell'));fireEvent.click(screen.getByTestId('skylit-trade-btn'));
+  first.unmount();mountPreferences(selectionMap(567.8,'2026-09-11T18:01:00Z'),{onCellClick});
+  expect(screen.getByTestId('skylit-selected-cell')).toHaveTextContent('567.8');
+  expect(JSON.parse(screen.getByTestId('research-selection').textContent)).toMatchObject({selectedStrike:650,selectedExpiry:'2026-09-18',mapVersion:'2026-09-11T18:01:00Z',selectedContract:null,contractResolution:null});
+  expect(screen.getByTestId('skylit-trade-btn')).not.toHaveClass('active');expect(screen.getByTestId('skylit-scale-lock')).not.toHaveClass('active');expect(onCellClick).not.toHaveBeenCalled();
+ });
+ test('selection restoration waits for a current record rather than showing a stored number',()=>{
+  const first=mountPreferences();fireEvent.click(screen.getByTestId('mock-heatmap-cell'));first.unmount();
+  const next=mountPreferences(null);expect(screen.queryByTestId('skylit-selected-cell')).toBeNull();
+  next.rerender(<><SkylitDashboard ticker="SPY" spot={650} data={selectionMap(777,'2026-09-11T18:02:00Z')}/><ResearchSelection/></>);
+  expect(screen.getByTestId('skylit-selected-cell')).toHaveTextContent('777.0');
+ });
+ test('a different query cannot inherit the prior local view or selection',()=>{
+  const first=mountPreferences();fireEvent.change(screen.getByRole('combobox',{name:'Canvas layout'}),{target:{value:'calendar'}});fireEvent.click(screen.getByTestId('mock-heatmap-cell'));first.unmount();
+  mountPreferences({...selectionMap(),map_query:{mode:'day',expiries:8,dte:7}},{expiries:8,dte:7});
+  expect(screen.getByRole('combobox',{name:'Canvas layout'})).toHaveValue('profile');expect(screen.queryByTestId('skylit-selected-cell')).toBeNull();
+ });
+});
+
+describe('remount preferences refuse unsafe or unrelated selections',()=>{
+ beforeEach(()=>sessionStorage.clear());
+ test.each([
+  ['stale',d=>({...d,stale:true})],['unavailable',d=>({...d,status:'unavailable'})],
+  ['different map query',d=>({...d,map_query:{...d.map_query,expiries:8}})],
+  ['missing cell',d=>({...d,grid:{...d.grid,grid:{}}})],
+  ['invalid cell',d=>({...d,grid:{...d.grid,grid:{'2026-09-18':{650:null}}}})],
+  ['replay payload',d=>({...d,replay:true})],['different ticker',d=>({...d,ticker:'QQQ'})],
+ ])('saved selection is refused for %s',(_name,change)=>{
+  const first=render(<SkylitDashboard ticker="SPY" spot={650} data={selectionMap()}/>);fireEvent.click(screen.getByTestId('mock-heatmap-cell'));first.unmount();
+  render(<><SkylitDashboard ticker="SPY" spot={650} data={change(selectionMap(999))}/><ResearchSelection/></>);
+  expect(screen.queryByTestId('skylit-selected-cell')).toBeNull();expect(JSON.parse(screen.getByTestId('research-selection').textContent).selectedStrike).toBeNull();
+ });
+ test('stored replay state and values are never brought into a live remount',async()=>{
+  axios.get.mockImplementation(async url=>({data:String(url).includes('/manifest/')?{snapshots:[{id:'saved-replay'}]}:String(url).includes('/replay/')?{snapshot:{ticker:'SPY',snapshot_id:'saved-replay',asof_ts:'2026-09-03T18:00:00Z'},strikes:[{strike:650}],grids:{grid:selectionMap(-7).grid},metrics_full:{},context:{}}:{}}));
+  const first=render(<SkylitDashboard ticker="SPY" spot={650} data={selectionMap()}/>);
+  await act(async()=>fireEvent.click(screen.getByTestId('solstice-replay-load')));await act(async()=>fireEvent.click(screen.getByTestId('solstice-replay-next')));fireEvent.click(screen.getByTestId('mock-heatmap-cell'));
+  expect(screen.getByTestId('skylit-selected-cell')).toHaveTextContent('-7.0');first.unmount();
+  render(<><SkylitDashboard ticker="SPY" spot={650} data={selectionMap(999)}/><ResearchSelection/></>);
+  expect(screen.queryByTestId('solstice-replay-banner')).toBeNull();expect(screen.queryByTestId('skylit-selected-cell')).toBeNull();expect(JSON.parse(screen.getByTestId('research-selection').textContent).displayMode).toBe('live');
+ });
+ test('compare display choices resume without restoring comparison locks',()=>{
+  const data={...selectionMap(),grid:{...selectionMap().grid,vex_grid:{'2026-09-18':{650:-7}}}};
+  const first=render(<SkylitDashboard ticker="SPY" spot={650} data={data}/>);fireEvent.click(screen.getByTestId('skylit-compare-toggle'));fireEvent.click(screen.getByTestId('skylit-scale-lock'));first.unmount();
+  render(<SkylitDashboard ticker="SPY" spot={650} data={data}/>);expect(screen.getByTestId('skylit-compare-desk')).toBeInTheDocument();expect(screen.getByTestId('skylit-scale-lock')).toHaveTextContent('Lock scales');
+ });
+});
+
+test('display changes made while current data is still loading survive another remount',()=>{
+ sessionStorage.clear();const first=render(<SkylitDashboard ticker="SPY" data={selectionMap()} spot={650}/>);fireEvent.click(screen.getByTestId('mock-heatmap-cell'));first.unmount();
+ const waiting=render(<SkylitDashboard ticker="SPY" data={null} spot={650}/>);fireEvent.change(screen.getByRole('combobox',{name:'Canvas layout'}),{target:{value:'calendar'}});fireEvent.click(screen.getByTestId('skylit-zoom-in'));waiting.unmount();
+ render(<SkylitDashboard ticker="SPY" data={selectionMap(999)} spot={650}/>);expect(screen.getByRole('combobox',{name:'Canvas layout'})).toHaveValue('calendar');expect(screen.getByTestId('skylit-heatmap-area').style.zoom).toBe('1.25');expect(screen.getByTestId('skylit-selected-cell')).toHaveTextContent('999.0');
+});
+
+test('strict mount checks retain preferences while revalidating a current selection',()=>{
+ sessionStorage.clear();const first=render(<SkylitDashboard ticker="SPY" data={selectionMap()} spot={650}/>);fireEvent.click(screen.getByTestId('mock-heatmap-cell'));fireEvent.click(screen.getByTestId('skylit-zoom-in'));first.unmount();
+ render(<React.StrictMode><SkylitDashboard ticker="SPY" data={selectionMap(888)} spot={650}/></React.StrictMode>);expect(screen.getByTestId('skylit-selected-cell')).toHaveTextContent('888.0');expect(screen.getByTestId('skylit-heatmap-area').style.zoom).toBe('1.25');
+});
+
+test('App profile view keeps a saved calendar across remounts and honors later external view changes',()=>{
+ sessionStorage.clear();const data=selectionMap();
+ const first=render(<SkylitDashboard ticker="SPY" data={data} spot={650} localView="profile"/>);
+ expect(screen.getByRole('combobox',{name:'Canvas layout'})).toHaveValue('profile');
+ fireEvent.change(screen.getByRole('combobox',{name:'Canvas layout'}),{target:{value:'calendar'}});first.unmount();
+ const next=render(<SkylitDashboard ticker="SPY" data={data} spot={650} localView="profile"/>);
+ expect(screen.getByRole('combobox',{name:'Canvas layout'})).toHaveValue('calendar');
+ next.rerender(<SkylitDashboard ticker="SPY" data={data} spot={650} localView="focus"/>);
+ expect(screen.getByRole('combobox',{name:'Canvas layout'})).toHaveValue('focus');
+ next.rerender(<SkylitDashboard ticker="SPY" data={data} spot={650} localView="profile"/>);
+ expect(screen.getByRole('combobox',{name:'Canvas layout'})).toHaveValue('profile');
+});
+
+
+describe('pending chart preferences and in-place query isolation',()=>{
+ beforeEach(()=>sessionStorage.clear());
+ const scope=ticker=>skylitViewScope({ticker,timeframe:'5m',expiries:4,dte:null,expiryScope:'loaded',viewMode:'gex',localView:null});
+ const desk=(ticker,data,extra={})=><><SkylitDashboard ticker={ticker} spot={650} data={data} {...extra}/><ResearchSelection/></>;
+ function saveCell(){const first=render(desk('SPY',selectionMap()));fireEvent.click(screen.getByTestId('mock-heatmap-cell'));first.unmount();}
+ test.each([
+  ['stale',d=>({...d,stale:true})],
+  ['placeholder',d=>({...d,map_query:null})],
+  ['missing current cell',d=>({...d,grid:{...d.grid,grid:{}}})],
+ ])('pending saved selection waits through %s then resolves the next valid current value',(_name,unready)=>{
+  saveCell();const onCellClick=jest.fn();const next=render(desk('SPY',unready(selectionMap()),{onCellClick}));
+  expect(screen.queryByTestId('skylit-selected-cell')).toBeNull();
+  next.rerender(desk('SPY',selectionMap(777,'2026-09-11T18:03:00Z'),{onCellClick}));
+  expect(screen.getByTestId('skylit-selected-cell')).toHaveTextContent('777.0');
+  expect(JSON.parse(screen.getByTestId('research-selection').textContent)).toMatchObject({selectedStrike:650,mapVersion:'2026-09-11T18:03:00Z',selectedContract:null});
+  expect(screen.getByTestId('skylit-trade-btn')).not.toHaveClass('active');expect(screen.getByTestId('skylit-scale-lock')).not.toHaveClass('active');expect(onCellClick).not.toHaveBeenCalled();
+ });
+ test('pending selected identity waits until the measured current rows include it',()=>{
+  saveCell();const previous=global.ResizeObserver;const observers=[];
+  global.ResizeObserver=class{constructor(callback){this.callback=callback;observers.push(this);}observe(box){this.box=box;}disconnect(){}};
+  try{
+   const data={...selectionMap(888),grid:{...selectionMap(888).grid,strikes:Array.from({length:51},(_,i)=>600+i)}};
+   const next=render(desk('SPY',data,{spot:600}));expect(screen.queryByTestId('skylit-selected-cell')).toBeNull();
+   const observer=observers.find(row=>row.box===screen.getByTestId('skylit-heatmap-area').parentElement);
+   Object.defineProperty(observer.box,'clientHeight',{value:2000,configurable:true});act(()=>observer.callback());
+   expect(screen.getByTestId('skylit-selected-cell')).toHaveTextContent('888.0');next.unmount();
+  }finally{if(previous===undefined)delete global.ResizeObserver;else global.ResizeObserver=previous;}
+ });
+ test('in-place query switches load each own display choices without overwriting another stock',async()=>{
+  writeSkylitView(scope('QQQ'),{layout:'multi',metric:'raw',gridZoom:.75,priceHistoryOpen:true});
+  const spy={...selectionMap(),metrics:{grids:{activity:{...selectionMap().grid,status:'ok'}}}};
+  const qqq={...selectionMap(999),ticker:'QQQ'};const next=render(desk('SPY',spy));
+  fireEvent.change(screen.getByRole('combobox',{name:'Canvas layout'}),{target:{value:'calendar'}});fireEvent.click(screen.getByTestId('mock-activity'));fireEvent.click(screen.getByTestId('skylit-zoom-in'));
+  await act(async()=>next.rerender(desk('QQQ',qqq)));
+  expect(screen.getByRole('combobox',{name:'Canvas layout'})).toHaveValue('multi');expect(screen.getByTestId('skylit-heatmap-area').style.zoom).toBe('0.75');
+  expect(screen.getByRole('button',{name:'Price chart + historical nodes'})).toHaveAttribute('aria-expanded','true');
+  expect(readSkylitView(scope('QQQ'))).toMatchObject({layout:'multi',metric:'raw',gridZoom:.75,priceHistoryOpen:true});
+  await act(async()=>next.rerender(desk('SPY',spy)));
+  expect(screen.getByRole('combobox',{name:'Canvas layout'})).toHaveValue('calendar');expect(screen.getByTestId('skylit-heatmap-area').style.zoom).toBe('1.25');
+  expect(screen.getByRole('button',{name:'Price chart + historical nodes'})).toHaveAttribute('aria-expanded','false');
+  expect(readSkylitView(scope('SPY'))).toMatchObject({layout:'calendar',metric:'activity',gridZoom:1.25,priceHistoryOpen:false});
+ });
+ test('an explicit basis change cancels a pending saved selection even before data arrives',()=>{
+  saveCell();const waiting=render(desk('SPY',null));fireEvent.click(screen.getByTestId('mock-activity'));
+  expect(readSkylitView(scope('SPY')).selection).toBeNull();waiting.unmount();
+  const saved=readSkylitView(scope('SPY'));writeSkylitView(scope('SPY'),{...saved,metric:'raw'});
+  render(desk('SPY',selectionMap(999)));expect(screen.queryByTestId('skylit-selected-cell')).toBeNull();
+ });
+ test('a query change cancels waiting selection and returning does not re-arm the old choice',()=>{
+  saveCell();const next=render(desk('SPY',null));next.rerender(desk('QQQ',{...selectionMap(888),ticker:'QQQ'}));next.rerender(desk('SPY',selectionMap(999)));
+  expect(screen.queryByTestId('skylit-selected-cell')).toBeNull();expect(screen.getByTestId('skylit-trade-btn')).not.toHaveClass('active');
+ });
+ test('query cancellation also prevents pending identity from returning on a later cold remount',()=>{
+  saveCell();const next=render(desk('SPY',null));next.rerender(desk('QQQ',{...selectionMap(888),ticker:'QQQ'}));next.unmount();
+  render(desk('SPY',selectionMap(999)));expect(screen.queryByTestId('skylit-selected-cell')).toBeNull();
+  expect(readSkylitView(scope('SPY')).selection).toBeNull();
+ });
+
+ test('a local display-view switch preserves a pending identity and resolves only the next current value',()=>{
+  const onCellClick=jest.fn();const first=render(desk('SPY',selectionMap(),{localView:'profile',onCellClick}));
+  fireEvent.click(screen.getByTestId('mock-heatmap-cell'));first.unmount();
+  const next=render(desk('SPY',null,{localView:'profile',onCellClick}));next.rerender(desk('SPY',null,{localView:'grid',onCellClick}));
+  expect(screen.queryByTestId('skylit-selected-cell')).toBeNull();
+  next.rerender(desk('SPY',selectionMap(777,'2026-09-11T18:04:00Z'),{localView:'grid',onCellClick}));
+  expect(screen.getByTestId('skylit-selected-cell')).toHaveTextContent('777.0');expect(screen.getByTestId('skylit-trade-btn')).not.toHaveClass('active');expect(onCellClick).not.toHaveBeenCalled();
+ });
+ test('a new local display-view preserves the active basis and its valid current selection',()=>{
+  const data={...selectionMap(),metrics:{grids:{activity:{...selectionMap(555).grid,status:'ok'}}}};
+  const next=render(desk('SPY',data,{localView:'profile'}));fireEvent.click(screen.getByTestId('mock-activity'));fireEvent.click(screen.getByTestId('mock-heatmap-cell'));
+  expect(screen.getByTestId('skylit-selected-cell')).toHaveTextContent('555.0');
+  next.rerender(desk('SPY',data,{localView:'grid'}));
+  expect(screen.getByRole('combobox',{name:'Canvas layout'})).toHaveValue('focus');expect(screen.getByTestId('skylit-selected-cell')).toHaveTextContent('555.0');
+  expect(JSON.parse(screen.getByTestId('research-selection').textContent)).toMatchObject({overlayMetric:'activity',selectedStrike:650});
+ });
+
 });

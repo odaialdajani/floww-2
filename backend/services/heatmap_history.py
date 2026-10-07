@@ -26,6 +26,12 @@ log = logging.getLogger(__name__)
 
 SCHEMA_VERSION = "2"
 
+# Only producer-supplied, same-observation structure belongs in a record.
+# Keeping absent keys absent distinguishes older history from measured zeros.
+RECORDED_STRUCTURE_FIELDS = (
+    "nodes", "gamma_flip", "flip_zones", "net_gex_total", "total_abs_gex", "regime", "gex_regime",
+)
+
 # Recorder ordering is nested inside the shared connection guard.
 # Reads, writes, commit and rollback hold the same connection lock.
 _RECORDER_LOCK = threading.Lock()
@@ -450,9 +456,10 @@ def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
                       # inspector, not just cells.
                       "metrics_full_json": json.dumps(payload.get("metrics", {}), default=str),
                       "context_json": json.dumps({
-                          "display": {key: payload.get(key) for key in (
+                          "display": {**{key: payload.get(key) for key in (
                               "map_query", "scope_selection", "event_time", "observed_at", "fetched_at",
                               "spot_source", "spot_event_time", "spot_fetched_at", "stale", "stale_age_s")},
+                              **{key: payload[key] for key in RECORDED_STRUCTURE_FIELDS if key in payload}},
                           "session": payload.get("session"),
                           "playbook": payload.get("playbook"),
                           "scout": payload.get("scout"),

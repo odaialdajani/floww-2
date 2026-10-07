@@ -1,4 +1,4 @@
-/** Zenith must remain reachable by deep link and the shared navigation registry. */
+/** Options map must remain reachable by deep link and the shared navigation registry. */
 import {NAV_ITEMS} from "./shell/navConfig";
 import {readWorkspace} from "./shell/useWorkspaceNavigation";
 
@@ -29,9 +29,9 @@ describe("skylit page routing", () => {
     expect(src.slice(Math.max(0, dashIdx - 3000), dashIdx).lastIndexOf('page === "skylit"')).toBeGreaterThan(-1);
   });
 
-  test("Zenith has a real navigation entry, not only an undocumented deep link", () => {
-    expect(NAV_ITEMS.find(item => item.id === "skylit")).toMatchObject({label: "Zenith"});
+  test("Options map has a real navigation entry, not only an undocumented deep link", () => {
+    expect(NAV_ITEMS.find(item => item.id === "skylit")).toMatchObject({label: "Options map"});
     window.history.replaceState({}, "", "/?page=not-a-workspace");
-    expect(readWorkspace()).toBe("heatseeker");
+    expect(readWorkspace()).toBe("flowseeker-pro");
   });
 });

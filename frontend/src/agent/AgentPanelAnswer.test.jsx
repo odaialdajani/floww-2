@@ -1,5 +1,5 @@
 import React from "react";
-import {render, screen, within} from "@testing-library/react";
+import {render, screen, within, fireEvent} from "@testing-library/react";
 import AgentPanelAnswer from "./AgentPanelAnswer";
 
 test.each([false,true])("trace identifies requested versus verified effective settings (%s)",effective=>{
@@ -9,6 +9,8 @@ test.each([false,true])("trace identifies requested versus verified effective se
   correlation_id:"correlation-1",observation_ids:["observation-1"],evidence_ids:["evidence-1"],latency_ms:120,
   status:effective?"completed":"unavailable",actual_cost:null,
  }}]}}}/>);
+ fireEvent.click(screen.getByText("Source and answer details"));
+ fireEvent.click(screen.getByText("Dispatch trace"));
  expect(screen.getByText(/Requested: catalog-sol-id · Extra high/)).toBeVisible();
  expect(screen.getByText(effective?/Effective: catalog-sol-id · Extra high/:/Effective dispatch unverified/)).toBeVisible();
  expect(screen.getByText(/correlation-1/)).toBeInTheDocument();
@@ -146,4 +148,11 @@ test("selected cell with incompatible units is withheld", () => {
   render(<AgentPanelAnswer turn={saved([reading("Selected display cell", 125,
     {contract: "2026-09-18:105:charm", unit: "USD"})])}/>);
   expect(screen.queryByText(/Selected cell:/)).not.toBeInTheDocument();
+});
+
+test('an incomplete legacy trace cannot hide or crash the saved answer',()=>{
+ render(<AgentPanelAnswer turn={{ticker:'SPY',status:'completed',text:'Saved reading remains available',answer:{usage:[{provider:'ChatGPT login',trace:{}}]}}}/>);
+ expect(screen.getByText('Saved reading remains available')).toBeVisible();
+ fireEvent.click(screen.getByText('Source and answer details'));
+ expect(screen.getByText(/Requested: Unverified/)).toBeVisible();
 });

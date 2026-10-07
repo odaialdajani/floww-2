@@ -25,6 +25,30 @@ export function shouldIgnoreLive(isReplayActive) {
   return Boolean(isReplayActive);
 }
 
+const STRUCTURE_KEYS = ["nodes", "gamma_flip", "flip_zones", "net_gex_total", "total_abs_gex", "regime", "gex_regime"];
+const finiteReading = value => typeof value === "number" && Number.isFinite(value);
+const copyRecorded = value => Array.isArray(value) ? value.map(copyRecorded)
+  : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, copyRecorded(item)])) : value;
+
+function recordedStructure(display, strikes) {
+  const values = Object.fromEntries(STRUCTURE_KEYS.map(key => [key, copyRecorded(display?.[key] ?? null)]));
+  const missing = [];
+  const nodes = values.nodes && typeof values.nodes === "object" && !Array.isArray(values.nodes) ? values.nodes : null;
+  if (!nodes) missing.push("structure.nodes");
+  else {
+    for (const key of ["floors", "ceilings", "gatekeepers"]) if (!Array.isArray(nodes[key])) missing.push(`structure.nodes.${key}`);
+    if (!Object.prototype.hasOwnProperty.call(nodes, "king")) missing.push("structure.nodes.king");
+    if (!finiteReading(nodes.polarity_level)) missing.push("structure.nodes.polarity_level");
+  }
+  if (!finiteReading(values.net_gex_total ?? nodes?.total_gex)) missing.push("structure.net_gex_total");
+  // Existing raw summaries may use explicitly measured stored strike rows.
+  // This checks availability only; it never calculates new historical nodes.
+  if (!finiteReading(values.total_abs_gex) && !(Array.isArray(strikes) && strikes.length && strikes.every(row => finiteReading(row?.gex)))) missing.push("structure.total_abs_gex");
+  if (!Array.isArray(values.flip_zones) && !finiteReading(values.gamma_flip?.gamma_flip)) missing.push("structure.gamma_flip");
+  if (!["positive", "negative", "neutral"].includes(values.regime ?? values.gex_regime ?? nodes?.regime)) missing.push("structure.regime");
+  return { ...values, structure_status: !STRUCTURE_KEYS.some(key => display?.[key] != null) ? "unknown" : missing.length ? "partial" : "complete", structure_missing: missing };
+}
+
 /**
  * Adapt a /replay snapshot payload into grid-display shape so the SAME
  * grid/inspector/evidence components render stored content (not counts).
@@ -63,11 +87,13 @@ export function replayToDisplay(rep, ticker) {
   // them and are marked explicitly incomplete — never reconstructed.
   const metricsFull = rep.metrics_full && typeof rep.metrics_full === "object" ? rep.metrics_full : null;
   const ctx = rep.context && typeof rep.context === "object" ? rep.context : null;
+  const structure = recordedStructure(ctx?.display, strikes);
   const missing = [];
   if (!metricsFull) missing.push("metrics");
   if (!ctx) missing.push("context");
   else for (const k of ["session", "scout"]) if (ctx[k] == null) missing.push(`context.${k}`);
   if (!Object.keys(metricGrids).length && !(main.grid && Object.keys(main.grid).length)) missing.push("grids");
+  missing.push(...structure.structure_missing);
   const sid = snap.snapshot_id || null;
   return {
     ticker: snap.ticker,
@@ -75,6 +101,8 @@ export function replayToDisplay(rep, ticker) {
     spot: snap.spot ?? null,
     data_source: snap.data_source || null,
     formula_version: snap.formula_version || null,
+    exposure_basis: snap.exposure_basis || main.exposure_basis || null,
+    ...structure,
     map_query: ctx?.display?.map_query || null,
     scope_selection: ctx?.display?.scope_selection || null,
     event_time: ctx?.display?.event_time || ctx?.display?.observed_at || null,

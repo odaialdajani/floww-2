@@ -37,7 +37,7 @@ export default function RangeAnalyticsWorkspace({ticker,onReplayModeChange}) {
   const timer=setTimeout(()=>ctrl.abort(),20000);setLoading(true);
   try{
    const response=await fetch(`${API}/heatmap/${encodeURIComponent(ticker)}/range-analytics?min_dte=${min}&max_dte=${max}&persist=false`,
-    {headers:storedAppKeyHeaders() || {},credentials:'include',signal:ctrl.signal});
+    {headers:storedAppKeyHeaders() || {},credentials:'omit',signal:ctrl.signal});
    const data=await response.json();
    if(id!==epoch.current || ctrl.signal.aborted)return;
    const admitted=admitRangeEnvelope(data,{symbol:ticker,minDte:min,maxDte:max});

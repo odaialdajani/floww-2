@@ -141,15 +141,176 @@ def validate_screen_context(screen):
             raise ValueError("Invalid exact contract context")
 
 
+def _specific_history_matches(question):
+    """A named date/time cannot silently become the latest saved comparison."""
+    dates = r"(?:\d{4}-\d{2}-\d{2}|\d{1,4}/\d{1,2}(?:/\d{1,4})?)"
+    months = (r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|"
+              r"aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+\d{1,2}\b")
+    weekdays = r"(?:(?:last|this)\s+)?(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b"
+    clocks = (r"(?:(?:today|yesterday)(?:['’]s)?(?:\s+at)?\s+)?"
+              r"(?:\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]\.?m\.?)?|\d{1,2}\s*[ap]\.?m\.?)\b")
+    sessions = r"(?:(?:the|today's|today’s|this)\s+)?(?:market open|open|morning|afternoon|noon)\b"
+    explicit_comparison = bool(re.search(
+        r"\b(?:chang(?:e|ed|es)|compar(?:e|ed|ing|ison)|history|historical|saved|previous|prior|earlier)\b", question, re.I))
+    introducers = (r"\b(?:since|from|after|for|with|to|versus|before|on|at)\s+(?:(?:the|an?|my|saved|earlier)\s+){0,3}"
+                   if explicit_comparison else r"\b(?:since|from)\s+")
+    pattern = introducers + "(?P<baseline>" + "|".join((dates, months, weekdays, clocks, sessions)) + ")"
+    result = []
+    for match in re.finditer(pattern, question, re.I):
+        # Calendar expiry selection is separate from the comparison baseline.
+        if re.search(r"\b(?:expiry|expiration|expiring|expires)\s+$", question[:match.start()], re.I):
+            continue
+        result.append(match)
+    return result
+
+
+
+def specific_history_baseline(question):
+    """Retain the existing detector for callers that only need a yes/no result."""
+    return bool(_specific_history_matches(question))
+
+
+def validate_history_baseline(value):
+    if value is None:
+        return None
+    message = "Choose one saved-history date with the date picker or YYYY-MM-DD"
+    if (not isinstance(value, dict) or set(value) != {"date"} or not isinstance(value["date"], str)
+            or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value["date"])):
+        raise ValueError(message)
+    try:
+        if date.fromisoformat(value["date"]).isoformat() != value["date"]:
+            raise ValueError(message)
+    except ValueError:
+        raise ValueError(message) from None
+    return {"date": value["date"]}
+
+
+def parse_history_baseline(question, value=None):
+    """Keep a fully specified calendar day, never guess a year or clock cutoff."""
+    from services.agent.answer_sections import history_excluded, requests_history
+
+    supplied = validate_history_baseline(value)
+    if history_excluded(question):
+        positive_dated_price = any(
+            not history_excluded(clause)
+            and re.search(r"\bprices?\b", clause, re.I)
+            and re.search(r"\b(?:on|as of|for|from|since|at)\s+\d{1,4}[-/]\d{1,2}", clause, re.I)
+            for clause in re.split(r"[;!?]|\.(?:\s+|$)", question)
+        )
+        if supplied is not None or positive_dated_price:
+            raise ValueError("The requested history date conflicts with the request not to use saved history")
+        return None
+    matches = _specific_history_matches(question)
+    dated_price = bool(re.search(r"\b(?:spot|underlying|stock|share)?\s*prices?\b", question, re.I)
+                       and re.search(r"\b(?:on|as of|for|from|since|at)\s+\d{1,4}[-/]\d{1,2}", question, re.I))
+    context = supplied is not None or bool(matches) or requests_history(question) or dated_price
+    if not context:
+        return None
+    message = "Specific history comparisons need the date picker or YYYY-MM-DD; incomplete dates and exact clocks are unsupported"
+    if any(not re.fullmatch(r"\d{4}-\d{2}-\d{2}", match.group("baseline")) for match in matches):
+        raise ValueError(message)
+    dates = []
+    for match in re.finditer(r"\b\d{4}-\d{1,2}-\d{1,3}\b", question):
+        if re.search(r"\b(?:expiry|expiration|expiring|expires)(?:\s+on)?\s+$", question[:match.start()], re.I):
+            continue
+        dates.append(match.group())
+    dates = list(dict.fromkeys(dates))
+    clock = r"\b(?:\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]\.?m\.?)?|\d{1,2}\s*[ap]\.?m\.?)\b"
+    if re.search(clock, question, re.I) or re.search(r"\d{4}-\d{2}-\d{2}T\d{1,2}:\d{2}", question):
+        raise ValueError(message)
+    if len(dates) > 1:
+        raise ValueError("Choose one saved-history date with the date picker or YYYY-MM-DD")
+    if dates:
+        parsed = validate_history_baseline({"date": dates[0]})
+        if supplied is not None and parsed != supplied:
+            raise ValueError("The selected history date differs from the date in the question")
+        return parsed
+    if supplied is not None:
+        return supplied
+    # A bare month/day or weekday in a history question is still not a known day.
+    ambiguous = (r"\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|"
+                 r"aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+\d{1,2}\b|"
+                 r"\b(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b|"
+                 r"\b\d{1,4}[-/]\d{1,2}(?:[-/]\d{1,4})?\b")
+    if requests_history(question) and re.search(ambiguous, question, re.I):
+        raise ValueError(message)
+    return None
+
+
+_MARKET_SCOPE = re.compile(
+    r"\b(?:(?:whole|entire|full)\s+(?:stock\s+)?market|market[- ]wide|"
+    r"(?:all|every|each)\s+(?:the\s+)?(?:(?:eligible|available|possible|accessible|supported)\s+)*"
+    r"(?:stocks?|tickers?|symbols?|names|funds?|etfs?))\b", re.I
+)
+
+
+_MARKET_DATA = re.compile(r"\bacross\s+all\s+(?:available\s+)?data\b", re.I)
+_MARKET_NEGATION = re.compile(
+    r"\b(?:not|never|no|do\s+not|don't|dont)(?:\s+(?:scan|check|inspect|research|analy[sz]e|search|include|look\s+at))?"
+    r"(?:\s+across)?(?:\s+(?:the|an?|a))?\s*$", re.I
+)
+
+
+def negates_market(question):
+    return any(_MARKET_NEGATION.search(question[:match.start()].rstrip())
+               for pattern in (_MARKET_SCOPE, _MARKET_DATA) for match in pattern.finditer(question))
+
+
+def requests_market(question):
+    if negates_market(question):
+        return False
+    if _MARKET_SCOPE.search(question):
+        return True
+    # Broad data requests without a named stock may inspect the market cache;
+    # a question explicitly about SPY's readings remains selected-stock research.
+    symbols = re.findall(r"\$[A-Za-z][A-Za-z0-9.-]{0,11}\b|\b[A-Z][A-Z0-9.]{1,11}\b", question)
+    symbols = [name for name in symbols if name not in {"AI", "USD", "ETF", "GEX", "VEX", "AND", "OR", "THE", "IV", "OI"}]
+    return not symbols and bool(_MARKET_DATA.search(question))
+
+
+def validate_parent_turn_id(value):
+    if value is None:
+        return None
+    if not isinstance(value, str) or not re.fullmatch(r"[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}", value):
+        raise ValueError("Choose a valid completed saved answer for the previous context")
+    return value.lower()
+
+
 def request_spec(body):
     question = body.get("question")
     if not isinstance(question, str) or not question.strip() or len(question) > 2000:
         raise ValueError("Question must contain between one and two thousand characters")
+    baseline = parse_history_baseline(question, body.get("history_baseline"))
+    baseline_fields = {"history_baseline": baseline} if baseline is not None else {}
+    parent_id = validate_parent_turn_id(body.get("parent_turn_id"))
+    parent_fields = {"parent_turn_id": parent_id} if parent_id is not None else {}
     screen = copy.deepcopy(body.get("screen") or {})
     if not isinstance(screen, dict) or len(canonical(screen)) > 12000:
         raise ValueError("Invalid screen selection")
     validate_screen_context(screen)
     mode, overlay = screen.get("displayMode", "live"), screen.get("overlayMetric", "raw")
+    scope = body.get("scope")
+    if scope is not None and scope not in ("selected", "market"):
+        raise ValueError("Choose selected-stock or market research")
+    if scope == "market" and negates_market(question):
+        raise ValueError("Market scope conflicts with the question; choose selected-stock research")
+    if scope == "selected" and requests_market(question):
+        raise ValueError("Selected-stock scope conflicts with a whole-market question")
+    market = scope == "market" or scope is None and requests_market(question)
+    if market:
+        if baseline is not None:
+            raise ValueError("Dated saved history needs selected-stock research; market scans have no saved dated baseline")
+        if mode in {"replay", "range-replay"}:
+            raise ValueError("Market research cannot mix a recorded chart with current cached scan findings")
+        if mode not in (None, "live", "range-live"):
+            raise ValueError("Market research needs a supported live view or no chart selection")
+        limit = body.get("market_limit", 50)
+        if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 50:
+            raise ValueError("Choose between one and fifty cached scan examples")
+        return dict(question=question.strip(), scope="market", tickers=[], ticker=None, horizon="all", screen=screen,
+                    context_conflict=False, question_scope=None, price_only=False, market_limit=limit, **parent_fields)
+    if baseline is not None and mode in {"replay", "range-replay"}:
+        raise ValueError("Dated saved history cannot substitute a different observation for the recorded chart")
     range_replay = mode == "range-replay"
     if range_replay:
         from services.agent.range_replay import validate_selection
@@ -252,7 +413,9 @@ def request_spec(body):
         screen=screen,
         context_conflict=bool(screen.get("ticker") and screen["ticker"] not in tickers),
         question_scope=question_scope,
-        price_only=mode not in {"replay", "range-replay"} and is_price_lookup(question, tickers),
+        price_only=baseline is None and mode not in {"replay", "range-replay"} and is_price_lookup(question, tickers),
+        **parent_fields,
+        **baseline_fields,
     )
 
 
@@ -310,7 +473,7 @@ def relationship_text(relation, ledger):
     if kind in {"fresh", "stale", "available", "event_date"}:
         if "other_fact_id" in relation:
             raise ValueError("Unexpected comparison evidence")
-        if kind == "fresh" and left.get("status") == "ok" and left.get("event_time"):
+        if kind == "fresh" and left.get("status") == "ok" and instant(left.get("event_time")):
             return f"{label} was fresh at the saved observation."
         if kind == "stale" and left.get("status") == "stale":
             return f"{label} was stale at the saved observation."
@@ -332,17 +495,19 @@ def relationship_text(relation, ledger):
         or not finite(right.get("value"))
     ):
         raise ValueError("Comparison needs healthy scalar evidence")
-    if not left.get("event_time") or not right.get("event_time"):
+    left_time, right_time = instant(left.get("event_time")), instant(right.get("event_time"))
+    if left_time is None or right_time is None:
         raise ValueError("Comparison source time is unknown")
+    left_observed, right_observed = datetime.fromisoformat(left_time), datetime.fromisoformat(right_time)
     if kind in {"rising", "falling"}:
         if (
             left["metric"] != right["metric"]
             or left["source"] != right["source"]
-            or left["event_time"] <= right["event_time"]
+            or left_observed <= right_observed
         ):
             raise ValueError("Trend needs comparable time-ordered observations")
     elif (
-        abs((datetime.fromisoformat(left["event_time"]) - datetime.fromisoformat(right["event_time"])).total_seconds())
+        abs((left_observed - right_observed).total_seconds())
         > 120
     ):
         raise ValueError("Comparison observations are too far apart")

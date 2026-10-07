@@ -134,13 +134,15 @@
    the grid measuring box is content-sized, so row capacity chases its own
    content across layout switches (resize oscillation). Inner panes own
    their scroll at every width; the document stays exactly stable. */
-.min-h-screen > main:has(.heatseeker-layout) {
+.min-h-screen > main:has(.heatseeker-layout),
+.floww-workspace-main:has(.heatseeker-layout) {
   height: 100vh;
   height: 100dvh;
   min-height: 0;
 }
 /* The page wrapper between main and the layout joins the flex chain. */
-.min-h-screen > main:has(.heatseeker-layout) > div {
+.min-h-screen > main:has(.heatseeker-layout) > div,
+.floww-workspace-main:has(.heatseeker-layout) > div {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
@@ -149,12 +151,15 @@
 /* Shell chrome above/below the layout keeps natural height (the search
    notice unmounts when complete; flex reclaims the space automatically). */
 .min-h-screen > main:has(.heatseeker-layout) .ap-header,
-.min-h-screen > main:has(.heatseeker-layout) [role="status"] {
+.floww-workspace-main:has(.heatseeker-layout) .ap-header,
+.min-h-screen > main:has(.heatseeker-layout) [role="status"],
+.floww-workspace-main:has(.heatseeker-layout) [role="status"] {
   flex-shrink: 0;
 }
 /* The heatseeker grid itself is a flex filler at every width, so the
    measuring box stays viewport-derived on mobile too. */
-.min-h-screen > main:has(.heatseeker-layout) .heatseeker-layout {
+.min-h-screen > main:has(.heatseeker-layout) .heatseeker-layout,
+.floww-workspace-main:has(.heatseeker-layout) .heatseeker-layout {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;

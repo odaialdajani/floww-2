@@ -43,6 +43,7 @@ from advanced_analytics import (
 )
 from databento_provider import fetch_oi_for_ticker, init_cache
 from portfolio import Portfolio, Position, calc_position_size
+from routes.diagnostics import router as diagnostics_router
 from services.duckdb_engine import db as duckdb_engine
 
 # Rust-backed implementations (decoder_core delegation with pure-Python fallback,
@@ -58,6 +59,7 @@ from services.gex_core import (
     detect_patterns,
 )
 from services.logging_config import CorrelationIdMiddleware, setup_logging
+from services.problem_journal import install_problem_logging, record_problem
 from services.websocket_streamer import manager as ws_manager
 from vol_analytics import (
     calc_iv_rank_percentile,
@@ -140,6 +142,9 @@ async def _logged_task(coro, name: str):
 
 app = FastAPI(title="Meridian — GEX Terminal")
 app.add_middleware(CorrelationIdMiddleware)
+app.include_router(diagnostics_router)
+if os.getenv("TESTING", "").lower() not in {"1", "true", "yes"}:
+    install_problem_logging()
 
 # ----------------------------- Safe Float Helper -----------------------------
 
@@ -2001,7 +2006,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     # The 2,000-contract cap is declared (truncated=True) — never silent.
     try:
         from services.duckdb_engine import db as _ddb
-        from services.heatmap_history import record_capability, record_snapshot
+        from services.heatmap_history import RECORDED_STRUCTURE_FIELDS, record_capability, record_snapshot
         _conn = getattr(_ddb, "conn", None)
         if _conn is not None:
             _all = raw.get("contracts", []) or []
@@ -2025,6 +2030,8 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                          "source_received_at": payload.get("source_received_at"),
                                          "contracts": _kept,
                                          "strikes": strikes,
+                                         **{key: payload[key] for key in RECORDED_STRUCTURE_FIELDS
+                                            if key in payload},
                                          "grid": payload.get("grid"),
                                          "metrics": metrics,
                                          "coverage": _cov,
@@ -3336,6 +3343,11 @@ async def metrics_middleware(request: Request, call_next):
         status=str(response.status_code),
     ).inc()
 
+    if not route.startswith("/api/diagnostics") and "/stream" not in route:
+        if response.status_code >= 400 or duration >= 2:
+            record_problem({"kind": "failed_request" if response.status_code >= 400 else "slow_request",
+                            "route": route, "method": request.method, "status": response.status_code,
+                            "duration_ms": duration * 1000})
     return response
 
 
@@ -3897,11 +3909,15 @@ try:
             from services.public_api_adapter import peek_chain_from_public_api
             return peek_chain_from_public_api(ticker, preferred) or chain_cache.peek_available_chain(ticker, preferred)
 
+        def peek_scan():
+            from services.public_scanner import peek_scan_view
+            return peek_scan_view()
+
         try:
             repository = AgentRepository(db)
             await repository.initialize()
             reads = ResearchReads(peek_chain, peek_map, read_alerts, read_recorded_map=read_recorded_map,
-                                  read_recorded_range=read_recorded_range)
+                                  read_recorded_range=read_recorded_range, peek_scan=peek_scan)
             from services.agent.codex_model import CodexModel
             from services.agent.spend import SpendLedger, money_units
             spending = SpendLedger(repository.budgets, cap_units=money_units(os.getenv("AGENT_DAILY_BUDGET_USD", "20")), audit_collection=db["agent_budget_audit"])
@@ -3913,6 +3929,9 @@ try:
         except Exception as exc:
             app.state.research_service = None
             log.warning("Saved research unavailable: %s", type(exc).__name__)
+
+    # Local session requests can recover if storage started after this service.
+    app.state.initialize_research = startup_research
 
     @app.on_event("shutdown")
     async def shutdown_research():

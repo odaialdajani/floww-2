@@ -66,6 +66,7 @@ import { PAGE_NAMES } from "./shell/navConfig";
 import { buildTickerUniverse, normalizeTicker } from "./components/heatseeker/tickerUniverse";
 import useTickerDirectory from "./components/heatseeker/useTickerDirectory";
 import StockSearchNotice from "./components/heatseeker/StockSearchNotice";
+import TickerPicker from "./components/heatseeker/TickerPicker";
 
 import ToxicityGauge from "./components/ToxicityGauge";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -111,52 +112,10 @@ function VelocityGauge({ velocity }) {
 
 // ============ Nodes Table ============
 // ============ Ticker Search ============
-// Open universe (2026-09-03, Nav-approved): Enter submits free text — any
-// symbol, not just the suggestion list. For the suggestion popover we render
-// from the same deduped universe the ticker bar and arrows use, so the header
-// suggestions, bar buttons, count, and arrow order are one contract.
+// One verified symbol picker across the header and chart; favorites do not restrict scanning.
 function TickerSearch({ tickers, value, onChange }) {
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
-  const ref = useRef();
-  const universe = useMemo(() => buildTickerUniverse(tickers), [tickers]);
-  const filtered = useMemo(() => {
-    if (!q) return universe.slice(0, 12);
-    const ql = q.toLowerCase();
-    return universe.filter(t => t.toLowerCase().includes(ql)).slice(0, 12);
-  }, [universe, q]);
-  const submitFreeText = () => {
-    const t = q.trim().toUpperCase().replace(/^\$/, "");
-    if (t) { onChange(t); setOpen(false); setQ(""); }
-  };
-  useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-  return (
-    <div ref={ref} className="relative">
-      <input
-        className="mono text-[12px] px-2 py-1 rounded"
-        style={{ background: "var(--panel)", border: "1px solid var(--border)", color: "var(--text-primary)", width: 100 }}
-        value={q}
-        onChange={e => { setQ(e.target.value); setOpen(true); }}
-        onKeyDown={e => { if (e.key === "Enter") submitFreeText(); }}
-        onFocus={() => setOpen(true)}
-        placeholder={value || "SPY"}
-      />
-      {open && filtered.length > 0 && (
-        <div className="absolute top-full mt-1 z-50 rounded-lg overflow-hidden" style={{ background: "var(--panel)", border: "1px solid var(--border)", minWidth: 120 }}>
-          {filtered.map(t => (
-            <div key={t} className="px-3 py-1.5 cursor-pointer text-[12px] mono bar-row" onClick={() => { onChange(t); setOpen(false); setQ(""); }}
-              style={{ color: t === value ? "var(--gold)" : "var(--text-secondary)" }}>
-              {t}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  return <TickerPicker value={value} onChange={onChange} tickers={tickers}
+    ariaLabel="Search stocks" className="floww-header-symbol-picker" />;
 }
 
 // ============ AlphaPod-style Header ============
@@ -169,7 +128,7 @@ function ApHeader({ page, ticker, onTickerChange, tickers, data, onSignOut, user
       <div className="ap-header-inner">
         {/* Breadcrumb */}
         <div className="ap-breadcrumb">
-          <span className="hidden lg:inline" style={{ color: "var(--text-tertiary)" }}>Decoder</span>
+          <span className="hidden lg:inline" style={{ color: "var(--text-tertiary)" }}>Research</span>
           <svg className="hidden lg:block" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--text-quaternary)" }}>
             <path d="M9 18l6-6-6-6"/>
           </svg>
@@ -196,7 +155,7 @@ function ApHeader({ page, ticker, onTickerChange, tickers, data, onSignOut, user
           {/* Data source indicator */}
           {data?.data_source && (
             <span className="mono text-[10px] uppercase tracking-wider hidden lg:inline" style={{ color: "var(--text-tertiary)" }}>
-              {data.data_source}
+              {String(data.data_source).replace(/[_-]/g, " ")}
             </span>
           )}
 
@@ -511,7 +470,7 @@ export default function App() {
   const debouncedExpiryScope = useDebounce(expiryScope, 300);
   const effectiveExpiryScope = page === "heatseeker" && debouncedMode === "day" ? debouncedExpiryScope : "loaded";
   const readingScope = JSON.stringify([ticker, debouncedExpiries, debouncedMode, debouncedDte, effectiveExpiryScope]);
-  const [data, setData] = useScopedReading(readingScope);
+  const [data, setData, readingFromCache] = useScopedReading(readingScope, {retain: true});
   const [livespot, setLivespot] = useScopedReading(ticker);
   const [err, setErr] = useScopedReading(readingScope);
   const [advanced, setAdvanced] = useScopedReading(JSON.stringify([ticker, debouncedExpiries]));
@@ -585,7 +544,7 @@ export default function App() {
         // overwrites the user's DTE/Expiries/mode selection with backend
         // defaults on every tick (Round-8 regression).
         const qs = buildHeatmapQuery({ expiries: debouncedExpiries, mode: debouncedMode, dte: debouncedDte, expiryScope: effectiveExpiryScope });
-        const r = await axios.get(`${API}/${heatmapReadPath(ticker,{poll:true,expiryScope:effectiveExpiryScope})}?${qs}`, { signal: ctrl.signal });
+        const r = await axios.get(`${API}/${heatmapReadPath(ticker,{poll:true,expiryScope:effectiveExpiryScope})}?${qs}`, { signal: ctrl.signal, timeout: 30000 });
         if (!cancelled && fetchGen.current === myGen) { setData(r.data); setErr(null); setLoading(false); }
       } catch (e) {
         if (!cancelled && fetchGen.current === myGen && !axios.isCancel?.(e)) { setErr(e.message); setLoading(false); }
@@ -881,6 +840,7 @@ export default function App() {
                   <div className="text-[10px] text-slate-500 mt-1">
                     {data?.expiries_used?.length ? `${data.expiries_used.length} exp · ${data.expiries_used[0]} → ${data.expiries_used.slice(-1)[0]}` : ""}
                   </div>
+                  {readingFromCache && <p role="status" className="text-[11px] text-amber-200 mt-2">Earlier reading retained for this selection. Its original market time still applies; checking the latest data.</p>}
                   {err && (
                     <ErrorState
                       error={err}
@@ -901,7 +861,7 @@ export default function App() {
                     <div><div className="label">Top Floor</div><div className="mono text-emerald-400">{formatStrike(data?.nodes?.floors?.[0]?.strike) || "—"}</div></div>
                     <div><div className="label">Top Ceiling</div><div className="mono text-rose-400">{formatStrike(data?.nodes?.ceilings?.[0]?.strike) || "—"}</div></div>
                     <div><div className="label">Polarity</div><div className="mono text-sky-300">{data?.nodes?.polarity_level ? fmt(data.nodes.polarity_level, 1) : "—"}</div></div>
-                    <div><div className="label">Gatekeepers</div><div className="mono">{data?.nodes?.gatekeepers?.length || 0}</div></div>
+                    <div><div className="label">Gatekeepers</div><div className="mono">{Array.isArray(data?.nodes?.gatekeepers) ? data.nodes.gatekeepers.length : "Unknown"}</div></div>
                   </div>
 
                   {/* Live GEX WebSocket indicator */}
@@ -1221,9 +1181,9 @@ export default function App() {
         <footer className="border-t border-slate-800 px-4 py-2 text-[10px] text-slate-600 flex justify-between flex-shrink-0">
           <span>Data sources and observation limits are shown with each reading.</span>
           <span className="hidden md:inline text-slate-700">
-            Keys: 1/2/3 pages · G/B/C views · D/S/X modes · E/V/H overlays · ↑↓ tickers · ? shortcuts
+            Press ? for keyboard shortcuts.
           </span>
-          <span>Meridian · Institutional Grade · {new Date().getFullYear()}</span>
+          <span>Meridian · Market research · {new Date().getFullYear()}</span>
         </footer>
 
         {/* Shortcuts Modal */}

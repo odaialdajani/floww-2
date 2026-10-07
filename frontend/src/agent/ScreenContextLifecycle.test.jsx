@@ -38,10 +38,10 @@ test('grid to chain switch must not submit the previous ticker and expiry contex
  await screen.findByText(/Options Chain/);
  fireEvent.change(screen.getByRole('option',{name:'All Expiries'}).parentElement,{target:{value:'2026-10-02'}});
  await act(async()=>{});
- fireEvent.click(screen.getByRole('button',{name:'Open Lodestar research'}));
+ fireEvent.click(screen.getByRole('button',{name:'Open Ask FLOWW'}));
  fireEvent.change(screen.getByRole('textbox'),{target:{value:'What changed?'}});
  fireEvent.click(screen.getByRole('button',{name:'Ask',exact:true}));
- await screen.findByText(/Open the Solstice grid or Tidehunter/);
+ await screen.findByText("Choose a ticker in Screener, Options map or Unusual flow before asking.");
  expect(global.fetch.mock.calls.some(([url])=>String(url).endsWith('/ask'))).toBe(false);
  // A supported view must restore asking with its own identity.
  view.rerender(<AppShell page='heatseeker'><SkylitDashboard ticker='QQQ' dte={7} data={{...map,ticker:'QQQ'}} spot={500}/></AppShell>);

@@ -37,7 +37,8 @@ def test_model_cannot_relabel_or_repeat_explanation_ids():
     with pytest.raises(ValueError):select_explanations([{"text":"Guaranteed rise"}],[sample()])
 
 def test_missing_history_and_volatility_are_not_asserted_when_the_facts_exist():
-    facts=[sample("Price change since saved observation"),sample("Implied move"),sample("Realized volatility")]
+    facts=[sample("Price change since saved observation"),sample("Implied move"),
+           {**sample("Realized volatility",value=.2), "unit":"annualized fraction"}]
     kinds={x["kind"] for x in explanation_menu(facts)}
     assert "missing_change" not in kinds and "missing_volatility" not in kinds
 

@@ -4,7 +4,7 @@ import { NAV_ITEMS } from "./navConfig";
 const workspaceIds = new Set(NAV_ITEMS.map(item => item.id));
 export function readWorkspace() {
   const id = new URLSearchParams(window.location.search).get("page");
-  return workspaceIds.has(id) ? id : "heatseeker";
+  return workspaceIds.has(id) ? id : "flowseeker-pro";
 }
 
 export default function useWorkspaceNavigation() {

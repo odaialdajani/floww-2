@@ -17,7 +17,7 @@ test('persistent range qualification disclosure is not a transient popup that ca
  const disclosure=screen.getByTestId('ask-lodestar-range-disclosure');
  expect(disclosure).not.toHaveClass('lodestar-ask-note');
  fireEvent.click(screen.getByTestId('ask-lodestar-btn'));
- expect(screen.getByRole('menu')).toBeInTheDocument();expect(disclosure).toHaveTextContent('qualification pending');
+ expect(screen.getByRole('menu')).toBeInTheDocument();expect(disclosure).toHaveTextContent('checks are still unfinished');
 });
 
 test("live raw context is admitted", () => {
@@ -94,8 +94,8 @@ test('range recorded-cell starters remain explicit and use the same agent transp
  render(<AgentProvider><AskLodestar overlayMetric="raw_oi" displayMode="range-replay" starters={starters}
   subject="recorded SPY cell" testId="range-ask"/></AgentProvider>);
  expect(global.fetch).not.toHaveBeenCalled();
- expect(screen.getByTestId('range-ask-range-disclosure')).toHaveTextContent(/research only.*pending/i);
- expect(screen.getByTestId('range-ask-range-disclosure')).toHaveTextContent(/native draft/i);
+ expect(screen.getByTestId('range-ask-range-disclosure')).toHaveTextContent(/limited research view.*unfinished/i);
+ expect(screen.getByTestId('range-ask-range-disclosure')).toHaveTextContent(/cannot prepare an order/i);
  fireEvent.click(screen.getByTestId('range-ask-btn'));expect(global.fetch).not.toHaveBeenCalled();
  expect(screen.getAllByRole('menuitem').map(node=>node.textContent)).toEqual(starters);
  fireEvent.click(screen.getByTestId('range-ask-q-0'));
@@ -143,4 +143,15 @@ test('default wall starters and their test IDs are preserved for legacy screens'
  STARTERS.forEach((question,index)=>expect(screen.getByTestId(`ask-lodestar-q-${index}`)).toHaveTextContent(question));
  expect(screen.queryByTestId('ask-lodestar-range-disclosure')).not.toBeInTheDocument();
  expect(global.fetch).not.toHaveBeenCalled();
+});
+
+test('question menu supports arrows and Escape without sending anything',()=>{
+ const setOpen=jest.fn();
+ const view=render(<AgentProvider><AskLodestar/></AgentProvider>);
+ const trigger=screen.getByTestId('ask-lodestar-btn');
+ fireEvent.click(trigger);
+ const items=screen.getAllByRole('menuitem');expect(items[0]).toHaveFocus();
+ fireEvent.keyDown(items[0],{key:'ArrowDown'});expect(items[1]).toHaveFocus();
+ fireEvent.keyDown(items[1],{key:'Escape'});expect(screen.queryByRole('menu')).toBeNull();expect(trigger).toHaveFocus();
+ view.unmount();
 });

@@ -37,7 +37,7 @@ function datedBrief(draft, owner) {
   `Research correlation: ${draft.correlation_id}. Context: ${draft.context_hash}`,
   `Evidence: ${draft.evidence_ids.join(", ") || "none"}`,
   "These copied references are not remote trace ingestion. No continuous external-GEX feed is established.",
-  "Public's internal agent model is separate from Lodestar. Review the full workflow in Public's builder; delivery and activation remain unverified.",
+  "Public's internal agent model is separate from Ask FLOWW. Review the full workflow in Public's builder; delivery and activation remain unverified.",
  ].join("\n");
 }
 
@@ -87,7 +87,7 @@ function HandoffForm({selection,turn,grounded}) {
    <option value="">Choose one owner</option><option value="PUBLIC_NATIVE_AGENT">Public native agent · manual builder</option><option value="FLOWW_BACKEND">FLOWW backend · separately gated</option>
   </select></label>
   {owner==="FLOWW_BACKEND" && <p role="status">Backend entry unavailable: immutable preflight, account policy, authenticated intent approval and unresolved native ownership overlap must be validated on the server. This panel does not submit orders.</p>}
-  {!matches && <p role="status">Resolve an exact listed contract and ask Lodestar for this owning observation. Saved research from a different selection cannot prepare a current brief.</p>}
+  {!matches && <p role="status">Resolve an exact listed contract and use Ask FLOWW for this owning observation. Saved research from a different selection cannot prepare a current brief.</p>}
   <button type="button" disabled={!canPrepare || saving} onClick={()=>{setBrief(datedBrief(draft,owner));setNotice("");}}>Prepare dated brief</button>
   <details><summary>Commissioning policy · UNSET</summary><dl>{POLICY_FIELDS.map(field=><React.Fragment key={field}><dt>{field}</dt><dd>UNSET</dd></React.Fragment>)}</dl>
    <p>Policy text is not server permission. Local trading state is not proof of remote native-workflow ownership.</p></details>

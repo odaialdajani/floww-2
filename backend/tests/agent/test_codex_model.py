@@ -184,15 +184,18 @@ async def test_settings_owner_scoped_and_uncertain_work_never_repeated():
     with pytest.raises(ValueError):
         await model.validate_settings({**DEFAULT_SETTINGS, "speed": "priority"})
     FakeBridge.calls, FakeBridge.error = 0, True
-    result = await model.once("hello", [], "sample-turn", owner="alice", settings=DEFAULT_SETTINGS)
+    evidence = [dict(id="evidence", ticker="SPY", horizon="all", metric="Underlying price",
+                     value=500, unit="USD", status="degraded", event_time=None)]
+    result = await model.once("hello", evidence, "sample-turn", owner="alice", settings=DEFAULT_SETTINGS)
     assert result["status"] == "unavailable" and result["actual_cost"] is None
-    await model.once("hello", [], "sample-turn", owner="alice", settings=DEFAULT_SETTINGS)
+    await model.once("hello", evidence, "sample-turn", owner="alice", settings=DEFAULT_SETTINGS)
     assert FakeBridge.calls == 1
     assert (await model.spend.state())["calls"] == 1
 
 
 @pytest.mark.asyncio
-async def test_three_ticker_evidence_fits_without_dropping_facts():
+@pytest.mark.parametrize("vector_size", [120, 240])
+async def test_three_ticker_full_input_bound_keeps_all_facts_or_refuses_before_spending(vector_size):
     from services.agent.codex_model import allowed_relationships
     from services.agent.contracts import canonical, fact
     from services.agent.explanations import explanation_menu
@@ -204,8 +207,8 @@ async def test_three_ticker_evidence_fits_without_dropping_facts():
             ('Underlying price', 500, 'USD'),
             ('Available contracts', 700, 'contracts'),
             ('Available expiry dates', ['2026-10-02', '2026-10-09'], 'dates'),
-            ('Gamma exposure strikes', [400 + i for i in range(240)], 'USD'),
-            ('Estimated gamma exposure', [12345678.123456 + i for i in range(240)], 'USD per 1% move'),
+            ('Gamma exposure strikes', [400 + i for i in range(vector_size)], 'USD'),
+            ('Estimated gamma exposure', [12345678.123456 + i for i in range(vector_size)], 'USD per 1% move'),
             ('Total estimated gamma exposure', 10000000, 'USD per 1% move'),
             ('Estimated flip levels', [501, 510], 'USD'),
             ('Maximum pain estimate', 500, 'USD'),
@@ -219,25 +222,42 @@ async def test_three_ticker_evidence_fits_without_dropping_facts():
     old_content = canonical(dict(question='Compare the saved readings across these three tickers.', facts=facts,
                                  history=None, allowed_relationships=allowed_relationships(facts),
                                  explanation_menu=explanation_menu(facts)))
-    assert len(old_content.encode()) > MAX_BODY_BYTES
+    if vector_size == 240:
+        assert len(old_content.encode()) > MAX_BODY_BYTES
     before = canonical(facts)
     class CapturingBridge(FakeBridge):
         captured = None
+        schema = None
+        dispatches = 0
         async def answer(self, content, settings, schema):
             type(self).captured = json.loads(content)
+            type(self).schema = schema
+            type(self).dispatches += 1
             return {'sections': [{'name': 'Structure', 'fact_ids': [facts[0]['id']],
                                    'interpretation': 'limited'}]}, {}, 'thread', 'turn'
     db = AsyncMongoMockClient().db
     repo = AgentRepository(db)
     await repo.initialize()
     model = CodexModel(repo, db.usage, bridge_factory=CapturingBridge)
+    if vector_size == 240:
+        model.validate_settings = AsyncMock(side_effect=AssertionError('Oversized complete input must refuse before transport'))
+        model.spend.reserve = AsyncMock(side_effect=AssertionError('Oversized complete input must refuse before spending'))
     result = await model.once('Compare the saved readings across these three tickers.', facts,
                               'three-ticker-size', owner='alice', settings=DEFAULT_SETTINGS)
-    assert result['status'] == 'ok'
-    assert CapturingBridge.captured['facts'] == facts
     assert canonical(facts) == before
-    assert len(canonical(CapturingBridge.captured).encode()) <= MAX_BODY_BYTES
-    assert (await model.spend.state())['calls'] == 1
+    if vector_size == 240:
+        assert result['status'] == 'unavailable' and result['trace']['status'] == 'input_refused'
+        model.validate_settings.assert_not_awaited()
+        model.spend.reserve.assert_not_awaited()
+        assert CapturingBridge.dispatches == 0 and CapturingBridge.captured is None
+        assert await db.usage.count_documents({}) == 0
+    else:
+        assert result['status'] == 'ok'
+        assert CapturingBridge.dispatches == 1
+        assert CapturingBridge.captured['facts'] == facts
+        size = len(canonical(CapturingBridge.captured).encode()) + len(canonical(CapturingBridge.schema).encode())
+        assert size <= MAX_BODY_BYTES
+        assert (await model.spend.state())['calls'] == 1
 
 
 @pytest.mark.asyncio

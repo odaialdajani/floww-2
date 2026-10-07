@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import copy
 import hashlib
 import json
@@ -15,7 +17,7 @@ from pymongo.errors import DuplicateKeyError
 
 from services.agent.claims import claim_seed as rebuild_claim
 from services.agent.claims import resolve_claim
-from services.agent.contracts import canonical
+from services.agent.contracts import canonical, instant
 
 TERMINAL = {"completed", "failed", "cancelled", "interrupted"}
 
@@ -33,6 +35,131 @@ def request_time(request_id, now=None):
     if age < -300 or age > 7 * 86400:
         raise ValueError("Request identity expired or has an invalid clock")
     return created
+
+
+HISTORY_PAGE_FIELDS = ("turn_id", "ticker", "question", "horizon", "status", "created_at", "updated_at", "saved")
+HISTORY_SEARCH_LIMIT = 64
+HISTORY_DB_TIME_MS = 2000
+MARKET_TIME_PATTERN = (r"^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T"
+                       r"(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,6})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$")
+
+
+def storage_utc(value):
+    """Mongo's trusted BSON clocks are UTC, including its naive read form.
+
+    This helper never interprets market observation timestamps.
+    """
+    if not isinstance(value, datetime):
+        raise ValueError("Invalid saved-answer clock")
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+def history_cursor(created_at, turn_id):
+    payload = {"v": 1, "created_at": storage_utc(created_at).isoformat(), "turn_id": turn_id}
+    return base64.urlsafe_b64encode(canonical(payload).encode()).decode().rstrip("=")
+
+
+def parse_history_cursor(value):
+    error = "Invalid saved-answer cursor"
+    if not isinstance(value, str) or not 1 <= len(value) <= 256 or not re.fullmatch(r"[A-Za-z0-9_-]+", value):
+        raise ValueError(error)
+    try:
+        decoded = base64.b64decode(value + "=" * (-len(value) % 4), altchars=b"-_", validate=True)
+        payload = json.loads(decoded)
+        if (not isinstance(payload, dict) or set(payload) != {"v", "created_at", "turn_id"}
+                or type(payload["v"]) is not int or payload["v"] != 1
+                or not isinstance(payload["turn_id"], str)
+                or not re.fullmatch(r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", payload["turn_id"])
+                or not isinstance(payload["created_at"], str)
+                or instant(payload["created_at"]) != payload["created_at"]):
+            raise ValueError(error)
+        observed = datetime.fromisoformat(payload["created_at"])
+        if history_cursor(observed, payload["turn_id"]) != value:
+            raise ValueError(error)
+    except (ValueError, TypeError, KeyError, UnicodeError, binascii.Error):
+        raise ValueError(error) from None
+    return observed, payload["turn_id"]
+
+
+
+def market_time_key(value):
+    """Exact UTC seconds and microseconds; never BSON millisecond precision."""
+    observed = instant(value)
+    if observed is None:
+        raise ValueError("Market source time is unknown")
+    parsed = datetime.fromisoformat(observed)
+    seconds = (parsed.toordinal() - 1) * 86400 + parsed.hour * 3600 + parsed.minute * 60 + parsed.second
+    return seconds, parsed.microsecond
+
+
+def market_time_stages(field, prefix):
+    """Calendar-validated, timezone-aware comparison keys before sort and cap.
+
+    All integer keys remain below 2**53, including year 9999. Keeping the
+    fractional part separate retains every supported source microsecond.
+    These temporary fields never alter the source fact or its identity.
+    """
+    def ref(name):
+        return "$" + prefix + name
+
+    def substring(start, length):
+        return {"$substr": [field, start, length]}
+
+    def number(start, length):
+        return {"$toInt": substring(start, length)}
+
+    leap = {"$and": [{"$eq": [{"$mod": [ref("year"), 4]}, 0]},
+                     {"$or": [{"$ne": [{"$mod": [ref("year"), 100]}, 0]},
+                              {"$eq": [{"$mod": [ref("year"), 400]}, 0]}]}]}
+    maximum_day = {"$switch": {"branches": [
+        {"case": {"$in": [ref("month"), [1, 3, 5, 7, 8, 10, 12]]}, "then": 31},
+        {"case": {"$in": [ref("month"), [4, 6, 9, 11]]}, "then": 30}],
+        "default": {"$cond": [leap, 29, 28]}}}
+    year_days = {"$add": [{"$multiply": [ref("past_year"), 365]},
+                           {"$floor": {"$divide": [ref("past_year"), 4]}},
+                           {"$multiply": [-1, {"$floor": {"$divide": [ref("past_year"), 100]}}]},
+                           {"$floor": {"$divide": [ref("past_year"), 400]}}]}
+    day_count = {"$add": [year_days,
+                          {"$arrayElemAt": [[0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334],
+                                             {"$subtract": [ref("month"), 1]}]},
+                          {"$subtract": [ref("day"), 1]},
+                          {"$cond": [{"$and": [{"$gt": [ref("month"), 2]}, ref("leap")]}, 1, 0]}]}
+    offset = {"$cond": [{"$eq": [ref("zone"), "Z"]}, 0,
+                         {"$multiply": [{"$cond": [{"$eq": [{"$substr": [ref("zone"), 0, 1]}, "-"]}, -1, 1]},
+                                        {"$add": [{"$multiply": [{"$toInt": {"$substr": [ref("zone"), 1, 2]}}, 60]},
+                                                  {"$toInt": {"$substr": [ref("zone"), 4, 2]}}]}]}]}
+    return [
+        {"$addFields": {prefix + "year": number(0, 4), prefix + "month": number(5, 2), prefix + "day": number(8, 2),
+                        prefix + "hour": number(11, 2), prefix + "minute": number(14, 2), prefix + "second": number(17, 2),
+                        prefix + "clock": {"$arrayElemAt": [{"$split": [field, "T"]}, 1]}}},
+        {"$addFields": {prefix + "plus": {"$split": [ref("clock"), "+"]},
+                        prefix + "minus": {"$split": [ref("clock"), "-"]}, prefix + "leap": leap,
+                        prefix + "past_year": {"$subtract": [ref("year"), 1]},
+                        prefix + "calendar_ok": {"$and": [{"$gte": [ref("year"), 1]}, {"$lte": [ref("year"), 9999]},
+                            {"$gte": [ref("month"), 1]}, {"$lte": [ref("month"), 12]},
+                            {"$gte": [ref("day"), 1]}, {"$lte": [ref("day"), maximum_day]}]}}},
+        {"$match": {prefix + "calendar_ok": True}},
+        {"$addFields": {prefix + "zone": {"$cond": [{"$gt": [{"$size": ref("plus")}, 1]},
+            {"$concat": ["+", {"$arrayElemAt": [ref("plus"), 1]}]},
+            {"$cond": [{"$gt": [{"$size": ref("minus")}, 1]},
+                {"$concat": ["-", {"$arrayElemAt": [ref("minus"), 1]}]}, "Z"]}]},
+            prefix + "clean_clock": {"$arrayElemAt": [{"$split": [
+                {"$arrayElemAt": [{"$split": [{"$arrayElemAt": [ref("plus"), 0]}, "-"]}, 0]}, "Z"]}, 0]}}},
+        {"$addFields": {prefix + "offset": offset,
+                        prefix + "microsecond": {"$toInt": {"$substr": [{"$concat": [
+                            {"$ifNull": [{"$arrayElemAt": [{"$split": [ref("clean_clock"), "."]}, 1]}, ""]},
+                            "000000"]}, 0, 6]}}}},
+        {"$addFields": {prefix + "seconds": {"$subtract": [
+            {"$add": [{"$multiply": [day_count, 86400]}, {"$multiply": [ref("hour"), 3600]},
+                      {"$multiply": [ref("minute"), 60]}, ref("second")]}, {"$multiply": [ref("offset"), 60]}]}}},
+        {"$match": {prefix + "seconds": {"$gte": 0, "$lte": 315537897599}}},
+    ]
+
+
+def market_bound(prefix, value, *, lower=False):
+    seconds, microseconds = market_time_key(value)
+    return {"$or": [{prefix + "seconds": {"$gt" if lower else "$lt": seconds}},
+                    {prefix + "seconds": seconds, prefix + "microsecond": {"$gte" if lower else "$lt": microseconds}}]}
 
 
 class AgentRepository:
@@ -53,6 +180,7 @@ class AgentRepository:
         )
         await self.turns.create_index("turn_id", unique=True)
         await self.turns.create_index([("owner", 1), ("created_at", -1)])
+        await self.turns.create_index([("owner", 1), ("created_at", -1), ("turn_id", -1)])
         await self.sessions.create_index("capability_hash", unique=True)
         await self.sessions.create_index("expires_at", expireAfterSeconds=0)
         await self.preferences.create_index("owner", unique=True)
@@ -288,6 +416,94 @@ class AgentRepository:
 
     async def history(self, owner):
         return await self.turns.find({"owner": owner}, {"_id": 0}).sort("created_at", -1).limit(30).to_list(length=30)
+
+    async def history_page(self, owner, *, limit=30, cursor=None):
+        if type(limit) is not int or not 1 <= limit <= 30:
+            raise ValueError("Choose between one and thirty saved answers")
+        query = {"owner": owner}
+        if cursor is not None:
+            observed, turn_id = parse_history_cursor(cursor)
+            anchor = await self.turns.find_one({"owner": owner, "turn_id": turn_id}, {"created_at": 1, "_id": 0})
+            if anchor is None or storage_utc(anchor.get("created_at")) != observed:
+                raise ValueError("Invalid saved-answer cursor")
+            query["$or"] = [{"created_at": {"$lt": observed}},
+                            {"created_at": observed, "turn_id": {"$lt": turn_id}}]
+        projection = {key: 1 for key in HISTORY_PAGE_FIELDS}
+        projection["_id"] = 0
+        page_query = self.turns.find(query, projection).sort([("created_at", -1), ("turn_id", -1)]).limit(limit + 1)
+        if hasattr(page_query, "max_time_ms"):
+            page_query = page_query.max_time_ms(HISTORY_DB_TIME_MS)
+        rows = await page_query.to_list(length=limit + 1)
+        more = len(rows) > limit
+        turns = rows[:limit]
+        for row in turns:
+            for field in ("created_at", "updated_at"):
+                if isinstance(row.get(field), datetime):
+                    row[field] = storage_utc(row[field])
+        next_cursor = history_cursor(turns[-1]["created_at"], turns[-1]["turn_id"]) if more else None
+        return {"turns": turns, "next_cursor": next_cursor, "has_more": more}
+
+    async def history_candidates(self, owner, *, ticker, horizon, before, start=None, end=None,
+                                 coverage_id=None, source=None, unit=None, close_time=None, compatible=True):
+        """Filter stored source observations before loading a bounded price-only set.
+
+        A compatible observation buried beneath recent questions remains visible.
+        No created-at clock selects market evidence and no provider is called.
+        """
+        upper = min((before, end), key=market_time_key) if end is not None else before
+        price = {"metric": "Underlying price", "ticker": ticker, "horizon": horizon,
+                 "event_time": {"$regex": MARKET_TIME_PATTERN},
+                 "value": {"$type": "number", "$gte": -1.7976931348623157e308, "$lte": 1.7976931348623157e308}}
+        scope = {"ticker": ticker, "horizon": horizon}
+        if compatible:
+            scope["coverage_id"] = coverage_id
+            price.update(source=source, unit=unit, status={"$in": ["ok", "degraded", "stale"]})
+        if close_time is not None:
+            scope["anchor_kind"] = "close"
+            scope["window.session_close"] = {"$regex": MARKET_TIME_PATTERN}
+        scope["facts"] = {"$elemMatch": price}
+        minimal = ("ticker", "horizon", "snapshot_id", "coverage_id", "coverage", "anchor_kind", "window.session_close", "facts")
+        snapshots, truncated = [], False
+        stores = (
+            (self.turns, "answer.snapshots", {"owner": owner, "status": "completed",
+                                             "answer.snapshots": {"$elemMatch": scope}}),
+            (self.snapshots, "snapshot", {"owner": owner, "ticker": ticker, "expires_at": {"$gt": utcnow()},
+                                         **{"snapshot." + key: value for key, value in scope.items()}}),
+        )
+        for collection, path, query in stores:
+            stages = [{"$match": query}]
+            if path == "answer.snapshots":
+                stages.append({"$unwind": "$" + path})
+            stages.extend([
+                {"$project": {"_id": 0, "snapshot": "$" + path}},
+                {"$match": {"snapshot." + key: value for key, value in scope.items()}},
+                {"$unwind": "$snapshot.facts"},
+                {"$match": {"snapshot.facts." + key: value for key, value in price.items()}},
+            ])
+            stages.extend(market_time_stages("$snapshot.facts.event_time", "_price_"))
+            bounds = [market_bound("_price_", upper)]
+            if start is not None:
+                bounds.append(market_bound("_price_", start, lower=True))
+            if close_time is not None:
+                seconds, micros = market_time_key(close_time)
+                bounds.append({"_price_seconds": seconds, "_price_microsecond": micros})
+                stages.extend(market_time_stages("$snapshot.window.session_close", "_close_"))
+                bounds.append({"_close_seconds": seconds, "_close_microsecond": micros})
+            stages.extend([
+                {"$match": {"$and": bounds}},
+                {"$sort": {"_price_seconds": -1, "_price_microsecond": -1, "snapshot.snapshot_id": -1}},
+                {"$limit": HISTORY_SEARCH_LIMIT + 1},
+                {"$project": {"_id": 0, **{"snapshot." + key: 1 for key in minimal}}},
+            ])
+            rows = await collection.aggregate(stages, maxTimeMS=HISTORY_DB_TIME_MS,
+                                              allowDiskUse=False).to_list(length=HISTORY_SEARCH_LIMIT + 1)
+            truncated = truncated or len(rows) > HISTORY_SEARCH_LIMIT
+            for row in rows[:HISTORY_SEARCH_LIMIT]:
+                item = copy.deepcopy(row["snapshot"])
+                item["facts"] = [item["facts"]]
+                snapshots.append(item)
+        snapshots.sort(key=lambda item: (instant(item["facts"][0].get("event_time")) or "", item.get("snapshot_id", "")), reverse=True)
+        return {"snapshots": snapshots, "truncated": truncated, "limit_per_store": HISTORY_SEARCH_LIMIT}
 
     async def project_claims(self):
         """Replay only canonical committed answers, bounded per maintenance tick."""

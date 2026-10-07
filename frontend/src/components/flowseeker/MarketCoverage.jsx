@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { API } from "../../config/api";
 
+const count=value=>typeof value==="number" && Number.isFinite(value) && value>=0 && Number.isInteger(value)?value.toLocaleString():"Unknown";
 export default function MarketCoverage({ coverage }) {
   const [release, setRelease] = useState(null);
   // "pending" | "ok" | "failed" are genuinely different facts. Collapsing
@@ -24,16 +25,20 @@ export default function MarketCoverage({ coverage }) {
   }, []);
   const checkedAt = Date.parse(release?.checked_at);
   const checkIsRecent = Number.isFinite(checkedAt) && Date.now() - checkedAt >= -60000 && Date.now() - checkedAt < 26 * 3600000;
-  return <div aria-label="Automatic scan coverage" style={{ padding: "8px 12px", fontSize: 12, color: "#b6bfd0", lineHeight: 1.5 }}>
+  return <div className="th-coverage" aria-label="Automatic scan coverage" style={{ padding: "8px 12px", fontSize: 12, color: "#b6bfd0", lineHeight: 1.5 }}>
     {coverage ? <>
-      <strong>{Number(coverage.universe || 0).toLocaleString()} stocks and funds in the automatic scan</strong>
-      {" · "}{Number(coverage.fresh || 0).toLocaleString()} checked within {Math.max(1, Math.round((coverage.fresh_window_seconds || 60) / 60))} minute(s) at the last scan
-      {" · "}{Number(coverage.never_scanned || 0).toLocaleString()} still waiting
-      {" · "}{Number(coverage.latest_failed || 0).toLocaleString()} without usable fresh data.
+      <strong>{count(coverage.universe)} stocks and funds in the automatic scan{coverage.scope_kind === "provider_option_enabled" ? " · listed options only" : ""}</strong>
+      {" · "}{count(coverage.fresh)} checked within {Math.max(1, Math.round((coverage.fresh_window_seconds || 60) / 60))} minute(s) at the last scan
+      {" · "}{count(coverage.never_scanned)} still waiting
+      {" · "}{count(coverage.latest_failed)} without usable fresh data.
       {coverage.source === "custom-universe" && " A custom stock list limits this scan."}
       {coverage.catalog_available === false && " The provider's full list is unavailable."}
       {coverage.catalog_stale && " Using the last saved stock list."}
-      <br />
+      {coverage.progress?.status === "durable" && <p className="th-coverage-progress">Scan position is saved · {count(coverage.progress.pending)} names remain in this pass{coverage.progress.deferred > 0 ? ` · of which ${count(coverage.progress.deferred)} are waiting for the call allowance` : ""}.</p>}
+      {coverage.progress?.status === "unavailable" && <p className="th-coverage-progress" role="status">Scan progress could not be saved. New checks are paused.</p>}
+      {coverage.progress?.status === "awaiting_directory" && <p className="th-coverage-progress" role="status">The saved scan position is kept. Waiting for the provider stock list.</p>}
+      <details className="th-coverage-details"><summary>Scan coverage and limits</summary>
+      {typeof coverage.provider_listed_tickers === "number" && <p>{count(coverage.provider_listed_tickers)} names in the provider list · {count(coverage.eligible_option_tickers)} have options enabled for this scan. Other names may not offer option chains.</p>}
       Checks up to {coverage.expiries_per_ticker || 2} upcoming expiries per stock.
       {" "}Results show unusual activity from available snapshots; this is not a live feed of every trade.
       {coverage.estimated_pass_seconds > 0 && ` A full pass at the last scan's pace takes about ${Math.ceil(coverage.estimated_pass_seconds / 60)} minutes of scanning.`}
@@ -45,6 +50,7 @@ export default function MarketCoverage({ coverage }) {
         {coverage.history_unavailable > 0 && ` Saved comparisons are unavailable for ${Number(coverage.history_unavailable).toLocaleString()} stocks.`}
         {coverage.history_capped > 0 && ` ${Number(coverage.history_capped).toLocaleString()} stocks reached the saved-comparison limit.`}
       </>}
+      </details>
     </> : "Automatic scan coverage is not available yet."}
     <br />
     {releaseState === "failed" ? (

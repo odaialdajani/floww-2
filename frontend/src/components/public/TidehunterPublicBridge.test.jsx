@@ -16,13 +16,13 @@ beforeEach(()=>axios.get.mockImplementation(async url=>String(url).includes("/co
 test("Pro ckey is display-only; exact identity resolves before a separate, dated Public review",async()=>{
  render(<Scene/>);
  expect(axios.get).not.toHaveBeenCalled();
- await act(async()=>fireEvent.click(screen.getByRole("button",{name:"Resolve a separate Public review"})));
+ await act(async()=>fireEvent.click(screen.getByRole("button",{name:"Check selected contract"})));
  expect(screen.getByRole("dialog",{name:"Separate Public contract review"})).toBeInTheDocument();
  const params=axios.get.mock.calls.find(([url])=>String(url).includes("/contract"))[1].params;
  expect(params).toEqual({strike:"500",expiry:"2026-10-02",type:"call",snapshot_id:"separate-record"});
  expect(params.osi).toBeUndefined();
- expect(screen.getByText(/New owning observation: separate-record/)).toBeVisible();
- expect(screen.getByText(/Pro source time: 2026-10-02T14:30:00Z/)).toBeVisible();
+ expect(screen.getByText(/Separate reading time: 2026-10-02T14:45:00Z/)).toBeVisible();
+ expect(screen.getByText(/Screener reading time: 2026-10-02T14:30:00Z/)).toBeVisible();
  expect(JSON.parse(screen.getByTestId("published-bridge").textContent)).toMatchObject({page:"flowseeker-pro",bridgeVersion:"tidehunter-public-review.v1",snapshotId:"separate-record",selectedContract:identity,contractResolution:"resolved"});
  fireEvent.click(screen.getByRole("button",{name:"Close separate Public review"}));
  expect(JSON.parse(screen.getByTestId("published-bridge").textContent).selectedContract).toBe("pro-display-ckey");
@@ -32,8 +32,8 @@ test("Pro ckey is display-only; exact identity resolves before a separate, dated
 test("conflicting symbol or incomplete contract refuses; no nearest substitute",async()=>{
  axios.get.mockResolvedValue({data:{...packet,ticker:"QQQ"}});
  render(<Scene/>);
- await act(async()=>fireEvent.click(screen.getByRole("button",{name:"Resolve a separate Public review"})));
- expect(screen.getByText(/OBSERVATION_IDENTITY_MISMATCH/)).toBeVisible();
+ await act(async()=>fireEvent.click(screen.getByRole("button",{name:"Check selected contract"})));
+ expect(screen.getByText(/returned reading does not match your selected stock/)).toBeVisible();
  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
  expect(axios.get).toHaveBeenCalledTimes(1);
 });
@@ -42,7 +42,7 @@ test("symbol changes abort the owned request and cannot publish its late exact r
  let release,signal;
  axios.get.mockImplementation((url,opts)=>{signal=opts.signal;return new Promise(resolve=>{release=resolve;});});
  const view=render(<Scene/>);
- fireEvent.click(screen.getByRole("button",{name:"Resolve a separate Public review"}));
+ fireEvent.click(screen.getByRole("button",{name:"Check selected contract"}));
  await waitFor(()=>expect(release).toBeTruthy());
  view.rerender(<Scene selection={{...source,ticker:"QQQ"}}/>);
  expect(signal.aborted).toBe(true);

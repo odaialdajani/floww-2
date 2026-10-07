@@ -352,9 +352,9 @@ _CHAIN_CACHE_MAX = 128
 # to reach that many accepted ones. The vendor list leads with TODAY, which
 # is fully expired after the close, so at least one skip is required for the
 # 1-expiry case to return anything. The bound is what keeps actual provider
-# calls within the `2 + max_expiries` envelope pre-debited by the caller
-# (C8): skipping is free, but an unbounded walk would silently exceed the
-# shared-quota pre-debit.
+# attempts bounded. The first max_expiries chain calls are prepaid; every
+# additional attempted expiry must acquire another token before dispatch.
+# Skipping is never free, and failure consumes its attempted call.
 MAX_EXPIRY_SKIPS = 3
 
 
@@ -412,6 +412,8 @@ def peek_chain_from_public_api(ticker: str, preferred: int = 6):
 async def fetch_chain_from_public_api(
     ticker: str,
     max_expiries: int = 4,
+    *,
+    raise_budget_exhausted: bool = False,
 ) -> dict[str, Any] | None:
     """
     Fetch options chain from Public API, return floww-shaped dict.
@@ -457,6 +459,8 @@ async def fetch_chain_from_public_api(
                 _debit_held = True
             except _public_budget.BudgetExhausted as exc:
                 log.warning("Public budget refused %s chain fetch: %s", ticker, exc)
+                if raise_budget_exhausted:
+                    raise
                 return None
             except Exception as exc:
                 log.warning("Public budget debit failed for %s — refusing fetch "
@@ -617,12 +621,10 @@ async def _assemble_chain(
     # None — a 503 from /api/spot/{ticker} while the very next expiry held a
     # full chain. Walk the list and stop once the budget is met.
     #
-    # The walk MUST also be bounded in ATTEMPTS: the caller pre-debited a
-    # fixed `2 + max_expiries` envelope above (C8), so attempting more
-    # expiries than that would make actual provider calls exceed the debit
-    # and turn the shared-quota pre-debit into an under-count. Skipping past
-    # dead expiries is allowed, but only within the already-paid envelope;
-    # MAX_EXPIRY_SKIPS bounds how far past max_expiries we may walk.
+    # Keep accepted depth and attempted calls separate. The caller prepays
+    # listing + quote + max_expiries chain calls. Each additional skip attempt
+    # needs its own token before dispatch, while the original chain slot stays
+    # held. MAX_EXPIRY_SKIPS bounds the extra work even when budget remains.
     contracts: list[dict[str, Any]] = []
     exp_dates = []
     now_utc = datetime.now(UTC)
@@ -630,9 +632,23 @@ async def _assemble_chain(
     n_expired_dropped = 0
 
     max_attempts = min(len(expiry_walk), max_expiries + MAX_EXPIRY_SKIPS)
-    for exp in expiry_walk[:max_attempts]:
+    extra_debit = 0
+    attempted_expiries = []
+    for attempt_index, exp in enumerate(expiry_walk[:max_attempts]):
         if len(exp_dates) >= max_expiries:
             break
+        if attempt_index >= max_expiries:
+            try:
+                await _public_budget.budget.debit_additional(1, "api.public.com")
+            except Exception as exc:
+                if skip_log is not None:
+                    skip_log.append({"expiry": str(exp), "reason": "EXTRA_EXPIRY_BUDGET_UNAVAILABLE"})
+                log.info("Public extra expiry refused for %s (%s)", ticker, type(exc).__name__)
+                break
+            # The original fetch keeps its one job slot; this debit only
+            # accounts for another serial request, even at full job capacity.
+            extra_debit += 1
+        attempted_expiries.append(str(exp))
         n_dates_before = len(exp_dates)
         try:
             try:
@@ -751,6 +767,11 @@ async def _assemble_chain(
         # legacy first-N caller (skip_log unused there).
         "skipped": skip_log or [],
         "attempt_cap": max_attempts,
+        "expiries_attempted": attempted_expiries,
+        "budget_pre_debit": 2 + max_expiries,
+        "budget_extra_debit": extra_debit,
+        "budget_total_debit": 2 + max_expiries + extra_debit,
+        "budget_accounting_scope": "original_chain_fetch",
     }
 
 

@@ -1,5 +1,9 @@
 import StockDirectory from "../heatseeker/StockDirectory";
+import TickerPicker from "../heatseeker/TickerPicker";
+import useTickerDirectory from "../heatseeker/useTickerDirectory";
 import MarketCoverage from "./MarketCoverage";
+import {getScreenerReading,saveScreenerReading} from "./screenerReadingCache";
+import boundedMarketRead from "./boundedMarketRead";
 /**
  * FlowseekerProBlademap.jsx — Tidehunter Pro v3: Blademap-matched insight pipeline.
  *
@@ -54,6 +58,27 @@ export function isStale(lastRefreshAt, now = Date.now()) {
 const ACK_KEY = "th-acked-v1";
 const CLEARED_FEED_KEY = "th-cleared-feed-v1";
 const PREFS_KEY = "th-prefs-v1";
+const validFocusTicker = value => typeof value === "string" && /^\^?[A-Z][A-Z0-9.-]{0,11}$/.test(value);
+// Current route values are nested engine readings; its unobserved zero is
+// not an available reading. Flat numeric payloads remain legacy-compatible.
+function observedVpinReading(reading) {
+  if (!reading || typeof reading !== "object" || Array.isArray(reading)
+    || reading.available === false || reading.status === "unavailable") return null;
+  const nested = Object.prototype.hasOwnProperty.call(reading, "current");
+  const current = nested ? reading.current : reading;
+  if (!current || typeof current !== "object" || Array.isArray(current)
+    || current.available === false || current.status === "unavailable") return null;
+  if (nested) {
+    const observed = reading.history?.vpin_history_length;
+    if (!Number.isFinite(observed) || !Number.isInteger(observed) || observed <= 0) return null;
+  }
+  const value = current.vpin;
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  // The engine contract does not publish an observation clock. Receiving it
+  // now does not establish when the market inputs were observed.
+  return {value, sourceTimeUnknown: nested};
+}
+
 const FIRSTSEEN_KEY = "th-firstseen-v1";
 const ALERTSEEN_KEY = "th-alertseen-v1";
 const OPS = ["≥", "≤", "between", "is"];
@@ -96,11 +121,8 @@ const dteOf = (exp) => {
     return 0;
   }
 };
-async function getJSON(url, signal) {
-  const r = await fetch(url, { signal });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
-}
+const getJSON=boundedMarketRead;
+
 function estPrice(strike, iv, expiry) {
   const dte = Math.max(1, dteOf(expiry));
   const ivv = iv > 1 ? iv / 100 : iv || 0.2;
@@ -123,35 +145,34 @@ function rowConviction(p) {
 }
 
 // Map Public API flat contract list to flow-feed row shape. Exported for Jest.
+function nonNegative(value){
+ if(value==null || !["number","string"].includes(typeof value) || typeof value==="string" && !value.trim())return null;
+ const number=Number(value);return Number.isFinite(number) && number>=0?number:null;
+}
+function contractCount(value){const n=nonNegative(value);return Number.isSafeInteger(n)?n:null;}
 export function mapPublicChainToRows(contracts, spot, ticker) {
-  const rows = [];
-  for (const c of contracts) {
-    const vol = Number(c.volume) || 0;
-    if (vol < NOISE_FLOOR * 20) continue;
-    const oi = Number(c.oi) || 0;
-    const voi = oi > 0 ? vol / oi : vol / 100;
-    if (voi < 0.4) continue;
-    const iv = Number(c.iv) || 0;
-    const bid = Number(c.bid) || 0;
-    const ask = Number(c.ask) || 0;
-    const last = Number(c.last) || 0;
-    const mid = last || (bid + ask) / 2 || estPrice(Number(c.strike), iv, c.expiry);
-    const premium = Math.round(vol * mid * 100);
-    const dte = dteOf(c.expiry);
-    const cls = premium >= 5e7 ? "block" : dte <= 2 ? "sweep" : "unusual";
-    const p = {
-      ticker, type: String(c.type || "").toLowerCase(), classification: cls,
-      osi: c.osi || c.symbol || c.contract_symbol || null,
-      strike: Number(c.strike), expiration: c.expiry, timestamp: Date.now(),
-      volume: vol, oi, vol_oi_ratio: voi, iv: iv < 1 ? iv * 100 : iv, premium,
-    };
-    const cd = rowConviction(p);
-    p._conv = cd.conv;
-    p._cd = cd;
-    rows.push(p);
-  }
-  rows.sort((a, b) => b.vol_oi_ratio - a.vol_oi_ratio);
-  return rows.slice(0, 100);
+ const rows=[];
+ for(const c of contracts || []){
+  if(!c || typeof c!=="object")continue;
+  const vol=contractCount(c.volume);if(vol===null || vol<NOISE_FLOOR*20)continue;
+  const oi=contractCount(c.oi),voi=oi!==null && oi>0?vol/oi:null;
+  if(voi!==null && voi<.4)continue;
+  const iv=nonNegative(c.iv),strike=nonNegative(c.strike),bid=nonNegative(c.bid),ask=nonNegative(c.ask),last=nonNegative(c.last);
+  const dte=dteDays(c.expiry);
+  const quotePrice=last!==null && last>0?last:bid!==null && ask!==null && ask>0 && bid<=ask?(bid+ask)/2:null;
+  const estimate=quotePrice===null && strike!==null && strike>0 && iv!==null && iv>0 && dte!==null && dte>0?estPrice(strike,iv,c.expiry):null;
+  const mid=quotePrice ?? estimate;
+  const computed=mid!==null?Math.round(vol*mid*100):null;
+  const premium=computed!==null && Number.isFinite(computed)?computed:null;
+  const cls=quotePrice!==null && premium!==null && premium>=5e7?"block":dte!==null && dte<=2?"sweep":voi!==null?"unusual":"activity";
+  const p={ticker,type:String(c.type || "").toLowerCase(),classification:cls,
+   osi:c.osi || c.symbol || c.contract_symbol || null,strike,expiration:c.expiry,timestamp:Date.now(),
+   volume:vol,oi,vol_oi_ratio:voi,iv:iv===null?null:iv<1?iv*100:iv,premium,quotePrice,
+   priceBasis:quotePrice!==null?(last>0?"last_reported_price":"bid_ask_mid"):estimate!==null?"model_estimate":"unavailable"};
+  const cd=rowConviction(p);p._conv=cd.conv;p._cd=cd;rows.push(p);
+ }
+ rows.sort((a,b)=>(b.vol_oi_ratio ?? -1)-(a.vol_oi_ratio ?? -1) || b.volume-a.volume);
+ return rows.slice(0,100);
 }
 
 const contractIdentity = row => row?.osi || row?.ckey || (row ? [row.under || row.ticker,row.type,row.strike,row.exp || row.expiration].join("|") : null);
@@ -187,8 +208,8 @@ function dteDays(exp) {
   return Math.max(0, Math.round((t - Date.now()) / 86400000));
 }
 const STRIPE_SORT_LABEL = {
-  all: "Top score", whale: "Big money", oiconf: "ΔOI build", zerodte: "Top score",
-  hedge: "Top score", fresh: "Vol/OI", mine: "Top score",
+  all: "Top score", whale: "Big money", oiconf: "Open interest rising", zerodte: "Top score",
+  hedge: "Top score", fresh: "Volume vs open interest", mine: "Top score",
 };
 const scrollTo = (id) => {
   try {
@@ -201,6 +222,8 @@ const scrollTo = (id) => {
 // ---------- component ----------
 export default function FlowseekerProBlademap({ active = true }) {
   const prefs = useMemo(loadPrefs, []);
+  const retainedReading=useMemo(getScreenerReading,[]);
+  const {tickers:providerTickers,status:directoryStatus,retry:retryDirectory}=useTickerDirectory(`${BACKEND_URL}/api`);
   const appSettings = useMemo(() => {
     try {
       return getSettings();
@@ -233,8 +256,12 @@ export default function FlowseekerProBlademap({ active = true }) {
   const [cbMode, setCbMode] = useState(tide.colorBlindMode ?? !!appSettings.colorBlindMode);
 
   // focus ticker defaults to floww_settings.defaultTicker, printed on Dealers cell
-  const [focusTicker, setFocusTicker] = useState(appSettings.defaultTicker || "SPY");
+  const [focusTicker, setFocusTicker] = useState(() => [prefs.focusTicker, appSettings.defaultTicker, "SPY"].find(validFocusTicker));
   const [selectedRow, setSelectedRow] = useState(null);
+  useEffect(()=>{
+    const focus=event=>{const symbol=event.detail?.ticker;if(!active || !validFocusTicker(symbol))return;setFocusTicker(symbol);setSelectedRow(null);setDrill(null);setDrillSel(null);setDrillRows([]);};
+    window.addEventListener("floww:focus-ticker",focus);return()=>window.removeEventListener("floww:focus-ticker",focus);
+  },[active]);
   const [clock, setClock] = useState("");
   useEffect(() => {
     const id = setInterval(() => setClock(new Date().toLocaleTimeString()), 1000);
@@ -242,10 +269,10 @@ export default function FlowseekerProBlademap({ active = true }) {
   }, []);
 
   // ---- verdict feed (poll + SSE share FEED_DAYS / FEED_MIN_CONVICTION) ----
-  const [feed, setFeed] = useState([]);
-  const [feedAt, setFeedAt] = useState("");
+  const [feed, setFeed] = useState(retainedReading?.feed || []);
+  const [feedAt, setFeedAt] = useState(retainedReading?.feedAt || "");
   const [feedErr, setFeedErr] = useState(null);
-  const [feedReceived, setFeedReceived] = useState(0);
+  const [feedReceived, setFeedReceived] = useState(retainedReading?.feedReceived || 0);
   const [pendingFeed, setPendingFeed] = useState(null);
   const feedHoverRef = useRef(false);
   const feedFocusRef = useRef(false);
@@ -322,10 +349,11 @@ export default function FlowseekerProBlademap({ active = true }) {
   }, [active, applyFeed]);
 
   // ---- pulse scan ----
-  const [scan, setScan] = useState([]);
-  const [scanAt, setScanAt] = useState("");
+  const [scan, setScan] = useState(retainedReading?.scan || []);
+  const [scanAt, setScanAt] = useState(retainedReading?.scanAt || "");
   const [pendingScan, setPendingScan] = useState(null);
-  const [scanMeta, setScanMeta] = useState({ mode: null, stale: false, symbols: 0 });
+  const [scanMeta, setScanMeta] = useState(retainedReading?.scanMeta || { mode: null, stale: false, symbols: 0 });
+  useEffect(()=>{saveScreenerReading({feed,feedAt,feedReceived,scan,scanAt,scanMeta});},[feed,feedAt,feedReceived,scan,scanAt,scanMeta]);
   const [baselines, setBaselines] = useState({});
   const [history, setHistory] = useState({});
   const [refreshTick, setRefreshTick] = useState(0);
@@ -333,10 +361,10 @@ export default function FlowseekerProBlademap({ active = true }) {
   const [universe, setUniverse] = useState(prefs.universe || ["SPY", "QQQ", "IWM", "NVDA", "TSLA", "AAPL", "MSFT", "AMZN", "META", "GOOGL"]);
   const [alertScore, setAlertScore] = useState(prefs.alertScore ?? 85);
   const [notify, setNotify] = useState(!!prefs.notify);
-  const [alertUnivOnly, setAlertUnivOnly] = useState(prefs.alertUnivOnly ?? true);
+  const [alertUnivOnly, setAlertUnivOnly] = useState(prefs.alertUnivOnly ?? false);
   const prevKeysRef = useRef(null);
   const firstSeenRef = useRef(loadFirstSeen());
-  const hadDataRef = useRef(false);
+  const hadDataRef = useRef(Boolean(retainedReading?.scan?.length));
   useEffect(() => {
     notifyRef.current = notify;
   }, [notify]);
@@ -523,15 +551,18 @@ export default function FlowseekerProBlademap({ active = true }) {
     };
   }, [active, focusTicker, refreshTick]);
 
-  // ---- vpin stub (real route) ----
+  // ---- focused VPIN read (observed values or unavailable) ----
   const [vpin, setVpin] = useState(null);
+  const focusedVpin = vpin?.ticker === focusTicker ? vpin.reading : null;
+  const focusedVpinReading = observedVpinReading(focusedVpin);
   useEffect(() => {
     if (!active) return;
     let cancelled = false;
     const ctrl = new AbortController();
-    getJSON(`${BACKEND_URL}/api/vpin/${focusTicker}`, ctrl.signal)
+    setVpin(null);
+    getJSON(`${BACKEND_URL}/api/vpin/${encodeURIComponent(focusTicker)}`, ctrl.signal)
       .then((d) => {
-        if (!cancelled) setVpin(d);
+        if (!cancelled) setVpin({ticker: focusTicker, reading: d});
       })
       .catch(() => {
         if (!cancelled) setVpin(null);
@@ -622,36 +653,13 @@ export default function FlowseekerProBlademap({ active = true }) {
           };
           const iVol = vi("volume"), iOI = vi("openInterest"), iIV = vi("impliedVolatility");
           const iBid = vi("bid"), iAsk = vi("ask"), iLast = vi("lastPrice");
-          const cvRows = [];
-          for (const exp of d.chain || []) {
-            for (const s of exp.strikes || []) {
-              const strike = s[0];
-              for (const [sideU, vals] of [["CALL", s[1] || []], ["PUT", s[2] || []]]) {
-                const vol = Number(vals[iVol]) || 0;
-                if (vol < NOISE_FLOOR * 20) continue;
-                const oi = Number(vals[iOI]) || 0;
-                const voi = oi > 0 ? vol / oi : vol / 100;
-                if (voi < 0.4) continue;
-                const iv = Number(vals[iIV]) || 0;
-                const last = Number(vals[iLast]) || 0;
-                const mid = last || ((Number(vals[iBid]) || 0) + Number(vals[iAsk]) || 0) / 2 || estPrice(strike, iv, exp.expiration);
-                const premium = Math.round(vol * mid * 100);
-                const dte = dteOf(exp.expiration);
-                const cls = premium >= 5e7 ? "block" : dte <= 2 ? "sweep" : "unusual";
-                const p = {
-                  ticker: t, type: sideU.toLowerCase(), classification: cls,
-                  strike, expiration: exp.expiration, timestamp: Date.now(),
-                  volume: vol, oi, vol_oi_ratio: voi, iv: iv < 1 ? iv * 100 : iv, premium,
-                };
-                const cd = rowConviction(p);
-                p._conv = cd.conv;
-                p._cd = cd;
-                cvRows.push(p);
-              }
-            }
+          const cvContracts=[];
+          for(const exp of d.chain || [])for(const s of exp.strikes || []){
+            for(const [sideU,vals] of [["CALL",s[1] || []],["PUT",s[2] || []]])cvContracts.push({
+              type:sideU.toLowerCase(),strike:s[0],expiry:exp.expiration,
+              volume:vals[iVol],oi:vals[iOI],iv:vals[iIV],bid:vals[iBid],ask:vals[iAsk],last:vals[iLast]});
           }
-          cvRows.sort((a, b) => b.vol_oi_ratio - a.vol_oi_ratio);
-          rows = cvRows.slice(0, 100);
+          rows=mapPublicChainToRows(cvContracts,d.spot,t);
         } catch {
           /* keep last data */
         }
@@ -698,6 +706,8 @@ export default function FlowseekerProBlademap({ active = true }) {
   const [actionNotice, setActionNotice] = useState("");
   const [preferencesFailed,setPreferencesFailed]=useState(false);
   const [pulsePages,setPulsePages]=useState(1);
+  const savedFindingsRef=useRef(null);
+  const showSavedActivity=()=>{if(savedFindingsRef.current){savedFindingsRef.current.open=true;savedFindingsRef.current.scrollIntoView({behavior:"smooth",block:"start"});}};
   const pulseRowCap = (mode === "trade" ? 8 : mode === "monitor" ? 14 : 30) * pulsePages;
 
   // today's knobs (behind Filters disclosure; active ones surface as chips)
@@ -730,10 +740,10 @@ export default function FlowseekerProBlademap({ active = true }) {
   };
   const knobQRef = useRef(null);
   useEffect(() => {
-    try { localStorage.setItem("fsb.pollMs", String(pollMs)); localStorage.setItem(PREFS_KEY, JSON.stringify({pollMs, universe, alertScore, notify, alertUnivOnly, screenId, knobType, knobMinVol, knobMinScore, knobQ, knobDteMin, knobDteMax, universeOnly, sortPreset, feedOrder, hiddenRules})); }
+    try { localStorage.setItem("fsb.pollMs", String(pollMs)); localStorage.setItem(PREFS_KEY, JSON.stringify({focusTicker, pollMs, universe, alertScore, notify, alertUnivOnly, screenId, knobType, knobMinVol, knobMinScore, knobQ, knobDteMin, knobDteMax, universeOnly, sortPreset, feedOrder, hiddenRules})); }
     catch { setPreferencesFailed(true); return; }
     setPreferencesFailed(false);
-  }, [pollMs, universe, alertScore, notify, alertUnivOnly, screenId, knobType, knobMinVol, knobMinScore, knobQ, knobDteMin, knobDteMax, universeOnly, sortPreset, feedOrder, hiddenRules]);
+  }, [focusTicker, pollMs, universe, alertScore, notify, alertUnivOnly, screenId, knobType, knobMinVol, knobMinScore, knobQ, knobDteMin, knobDteMax, universeOnly, sortPreset, feedOrder, hiddenRules]);
 
   const ack = useCallback((key) => {
     setAcked((m) => {
@@ -1355,12 +1365,12 @@ export default function FlowseekerProBlademap({ active = true }) {
     <div className="th-root" data-mode={mode} data-cb={cbMode ? "on" : "off"} data-testid="tide-root">
       <div className="th-shell">
         <aside className="th-side" aria-label="Sections">
-          <div className="th-brand"><i>◢</i><b>Tidehunter Pro</b></div>
-          <button type="button" className="th-nav" onClick={() => scrollTo("board")}>Board</button>
-          <button type="button" className="th-nav" onClick={() => scrollTo("vector")}>Vector · direction</button>
-          <button type="button" className="th-nav" onClick={() => scrollTo("pulse")}>Pulse · live flow</button>
-          <button type="button" className="th-nav" onClick={() => doDrill(focusTicker)}>Lattice · positioning</button>
-          <button type="button" className="th-nav" onClick={() => scrollTo("trust")}>Trust</button>
+          <div className="th-brand"><i>◢</i><b>Activity screener</b></div>
+          <button type="button" className="th-nav" onClick={() => scrollTo("board")}>Overview</button>
+          <button type="button" className="th-nav" onClick={() => scrollTo("vector")}>Alerts</button>
+          <button type="button" className="th-nav" onClick={() => scrollTo("pulse")}>Activity results</button>
+          <button type="button" className="th-nav" onClick={() => doDrill(focusTicker)}>Stock details</button>
+          <button type="button" className="th-nav" onClick={() => scrollTo("trust")}>Data quality</button>
 
           <button type="button" className="th-nav" onClick={() => scrollTo("settings")}>Settings</button>
           <span className="th-sp" />
@@ -1372,8 +1382,22 @@ export default function FlowseekerProBlademap({ active = true }) {
         </aside>
 
         <div className="th-content">
+          <section className="th-start" aria-label="Getting started">
+            <h1>Find unusual options activity</h1>
+            <p>Start with volume versus open interest. Check the scan time, then open a contract row to study the stock.</p>
+            <button type="button" className="th-chipb" onClick={() => {
+              setScreenId("fresh");setSortPreset({key:"volOI",dir:"desc"});
+              setKnobQ("");setKnobType("all");setKnobMinVol(0);setKnobMinScore(0);
+              setKnobDteMin(null);setKnobDteMax(null);setUniverseOnly(false);setAlertUnivOnly(false);
+              setPulsePages(1);
+              scrollTo("pulse");
+            }}>Find unusual activity</button>
+            <button type="button" className="th-chipb" onClick={showSavedActivity}>See saved activity</button>
+            <p>Volume is today's contract count. Open interest is the earlier count of open contracts. High volume does not tell us who bought or sold.</p>
+          </section>
           <MarketCoverage coverage={scanMeta.coverage} />
-          <details style={{ padding: "8px 12px", color: "#b6bfd0", fontSize: 12 }}>
+          {scanMeta.restored && <p className="th-coverage-progress" role="status" aria-label="Retained scanner results" style={{margin:"0 16px 8px"}}>Earlier results kept while checking the latest scan. Their original times still apply.</p>}
+          <details ref={savedFindingsRef} style={{ padding: "8px 12px", color: "#b6bfd0", fontSize: 12 }}>
             <summary>Earlier scan findings ({scanMeta.recentFindings?.length || 0} stocks)</summary>
             <p>The latest saved scan per stock, kept for up to seven days. These are not live trade signals.
               Up to 100 stocks are shown, with three contract examples each. Times below are when the data was received.</p>
@@ -1389,18 +1413,8 @@ export default function FlowseekerProBlademap({ active = true }) {
           <div className="th-topbar">
             <span className="th-pill">Market {marketSession?.session_state || "state unavailable"}</span>
             <StockDirectory buttonClass="th-pill" onSelect={(symbol) => { setFocusTicker(symbol); setSelectedRow(null); setDrill(null); setDrillSel(null); setDrillRows([]); }} />
-            <label className="th-pill" title="Focused ticker — drives the Dealers cell and Lattice">
-              <span className="k">Ticker</span>
-              <select
-                className="th-tickersel" value={focusTicker}
-                onChange={(e) => { setFocusTicker(e.target.value); setSelectedRow(null); setDrill(null); setDrillSel(null); setDrillRows([]); }}
-                aria-label="Focused ticker"
-              >
-                {Array.from(new Set([focusTicker, ...universe])).map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </label>
+            <TickerPicker value={focusTicker} tickers={providerTickers || universe} status={directoryStatus} onRetry={retryDirectory} ariaLabel="Focused ticker"
+              onChange={(symbol) => { setFocusTicker(symbol); setSelectedRow(null); setDrill(null); setDrillSel(null); setDrillRows([]); }} />
             <button type="button" className="th-pill" title="Jump to the screener" onClick={() => scrollTo("screens")}>
               <span className="k">Screen</span><span className="v">{screen.label}</span><span className="c">▾</span>
             </button>
@@ -1424,7 +1438,7 @@ export default function FlowseekerProBlademap({ active = true }) {
             <div className="th-sec" id="board">
               <div className="th-ph">
                 <div>
-                  <h1>Board</h1>
+                  <h1>Overview</h1>
                   <div className="th-meta">
                     <b>{scanState.status}</b>
                     <span className="k">Last updated</span><span>{scanAt || feedAt || "—"}</span>
@@ -1625,7 +1639,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                   <span className="th-brk" />
                   <span className="lbl">Sort</span>
                   {[["Top score", { key: "score", dir: "desc" }], ["Big money", { key: "premium", dir: "desc" }],
-                    ["Unusual", { key: "volOI", dir: "desc" }], ["Short fuse", { key: "dte", dir: "asc" }],
+                    ["Unusual", { key: "volOI", dir: "desc" }], ["Soonest expiry", { key: "dte", dir: "asc" }],
                     ["New arrivals", { key: "firstSeen", dir: "desc" }]].map(([l, s]) => (
                     <button key={l} type="button" className={`th-chipb${sortPreset.key === s.key && sortPreset.dir === s.dir ? " on" : ""}`} onClick={() => setSortPreset(s)}>{l}</button>
                   ))}
@@ -1687,7 +1701,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                 return (
                   <div className="th-sec" id="vector" key="vector">
                     <div className="th-sh">
-                      <h2>Vector</h2>
+                      <h2>Alerts</h2>
                       <span className="th-meta"><b>{feedErr ? "UNAVAILABLE" : !feedReceived ? "LOADING" : withheld ? "STALE" : "AVAILABLE"}</b> direction board · {feedOrder === "new" ? "newest first" : feedOrder === "old" ? "oldest first" : "ranked by conviction"} · {visibleFeed.length} in screen · {screen.label}</span>
                       <span className="th-sp" />
                       <span className="th-rulecounts" title="Signals per rule in this screen">
@@ -1722,7 +1736,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                         </table>
                       )}
                       <div className="th-tblfoot">
-                        <span>Stage: Early = daily activity · Building = FOLLOW/SIGMA · Confirmed = OICONF</span>
+                        <span>Stage: Early = daily activity · Building = repeated activity or a volume jump · Confirmed = open interest increased</span>
                         <span>{LEVELS_LABEL} — edit before you plan</span>
                         <span>Plan writes a journal note only · nothing is sent to a broker</span>
                       </div>
@@ -1734,7 +1748,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                 return (
                   <div className="th-sec" id="pulse" key="pulse">
                     <div className="th-sh">
-                      <h2>Pulse</h2>
+                      <h2>Activity results</h2>
                       <span className="th-meta"><b>{scanState.status}</b> screened contracts · {screenedScans.length} of {scan.length} · {screen.label}{limitedScan && ` · ${limitedScan}`}</span>
                       <span className="th-sp" />
                       {holdingPresentation && <span className="th-meta">Row positions held while you interact; age labels keep updating.</span>}
@@ -1773,7 +1787,9 @@ export default function FlowseekerProBlademap({ active = true }) {
                         <div className="th-empty">No contracts pass this screen.
                           <div>
                             <button type="button" className="th-chipb" onClick={() => { setKnobType("all"); setKnobMinVol(0); setKnobMinScore(0); setKnobQ(""); setKnobDteMin(null); setKnobDteMax(null); setUniverseOnly(false); }}>Clear filters</button>
-                            <button type="button" className="th-chipb" onClick={() => setScreenId("all")}>Choose broader screen</button>
+                            <button type="button" className="th-chipb" onClick={() => setScreenId("all")}>Show all activity</button>
+                            <button type="button" className="th-chipb" onClick={showSavedActivity}>See saved activity</button>
+                            <p>The current checked stocks have no matching rows. Saved activity shows older readings, with their dates.</p>
                           </div>
                         </div>
                       ) : (
@@ -1830,7 +1846,7 @@ export default function FlowseekerProBlademap({ active = true }) {
                 return (
                   <div className="th-sec" id="lattice" key="lattice">
                     <div className="th-sh">
-                      <h2>Lattice · {focusTicker}</h2>
+                      <h2>Stock details · {focusTicker}</h2>
                       <span className="th-meta"><b>{dealers.loading ? "LOADING" : dealersFacts.err ? "UNAVAILABLE" : dealerStale ? "STALE / TIME UNKNOWN" : "AVAILABLE"}</b> dealer positioning · display-scale gamma · refreshed {dealersFacts.at || "—"}</span>
                     </div>
                     <div className="th-lat" data-testid="lattice">
@@ -1925,8 +1941,8 @@ export default function FlowseekerProBlademap({ active = true }) {
                                     <td className={`l ${String(p.type).toLowerCase().startsWith("c") ? "up" : "dn"}`}>{String(p.type).toUpperCase()}</td>
                                     <td>{String(p.strike)}</td>
                                     <td>{dteOf(p.expiration)}d</td>
-                                    <td>{fmtMoney(p.premium)}</td>
-                                    <td>{Number(p.vol_oi_ratio || 0).toFixed(1)}</td>
+                                    <td title={p.priceBasis === "model_estimate" ? "Modelled price estimate: no usable quote. This is not executed money." : "Cumulative volume times a reported price; not actual traded money."}>{p.premium==null?"Unknown":(p.priceBasis==="model_estimate"?"Model ~":"~")+fmtMoney(p.premium)}</td>
+                                    <td>{p.vol_oi_ratio==null?"Unknown":p.vol_oi_ratio.toFixed(1)}</td>
                                     <td>{p._conv}</td>
                                   </tr>
                                 ))}
@@ -1941,12 +1957,12 @@ export default function FlowseekerProBlademap({ active = true }) {
                             <b>{drillSel.ticker} ${String(drillSel.strike)} {String(drillSel.type).toUpperCase()}</b>
                             {drillSel._missing && <span>Selected contract is absent from the latest activity refresh; showing its saved reading.</span>}
                             <span> conviction {drillSel._conv}/99 = pattern {drillSel._cd.pat} + size {drillSel._cd.size} + unusualness {drillSel._cd.stat} + urgency {drillSel._cd.urg}</span>
-                            <span> classification {drillSel.classification} · vol/OI {Number(drillSel.vol_oi_ratio || 0).toFixed(1)}x · est. notional {fmtMoney(drillSel.premium)}</span>
+                            <span> classification {drillSel.classification} · vol/OI {drillSel.vol_oi_ratio==null?"Unknown":drillSel.vol_oi_ratio.toFixed(1)+"x"} · {drillSel.priceBasis==="model_estimate"?"modelled value":"estimated daily value"} {drillSel.premium==null?"Unknown":fmtMoney(drillSel.premium)}</span>
                           </div>
                         )}
                         <ContractReview contractKey={contractIdentity(drillSel)} />
                         <div className="th-micro">
-                          <span>VPIN {vpin?.vpin != null ? Number(vpin.vpin).toFixed(3) : "— no feed"}</span>
+                          <span title={focusedVpinReading?.sourceTimeUnknown ? "Source observation time unknown" : undefined}>VPIN {focusedVpinReading ? focusedVpinReading.value.toFixed(3) : "— no feed"}</span>
                           <span>Order imbalance — unavailable</span>
                           <span data-testid="spread-cost-state">Spread-cost history unavailable · mid-quote estimates are not executable costs.</span>
                           <span>Price impact — unavailable</span>
@@ -2049,7 +2065,7 @@ export default function FlowseekerProBlademap({ active = true }) {
 
           <div className="th-foot">
             <span>Market source: {scanMeta.source || "not supplied"} · Dealer estimates use the available chain.</span>
-            <span>Tidehunter Pro · market research</span>
+            <span>Activity screener · market research</span>
           </div>
         </div>
       </div>

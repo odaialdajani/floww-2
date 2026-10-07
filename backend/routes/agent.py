@@ -5,7 +5,7 @@ import json
 import os
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 
@@ -24,8 +24,27 @@ def service(request):
     return result
 
 
+async def ready_service(request):
+    """Retry failed startup once storage is ready; never replace active work."""
+    if getattr(request.app.state, "research_service", None) is not None:
+        return service(request)
+    initialize = getattr(request.app.state, "initialize_research", None)
+    if initialize is not None:
+        lock = getattr(request.app.state, "research_start_lock", None)
+        if lock is None:
+            lock = request.app.state.research_start_lock = asyncio.Lock()
+        async with lock:
+            if getattr(request.app.state, "research_service", None) is None:
+                try:
+                    await initialize()
+                except Exception:
+                    raise HTTPException(503, "Saved research storage is unavailable") from None
+    return service(request)
+
+
 async def owner(request):
     require_local(request)
+    await ready_service(request)
     try:
         result = await service(request).repository.owner(request.cookies.get(COOKIE))
     except HTTPException:
@@ -53,7 +72,7 @@ async def storage_result(operation):
 @router.get("/budget", dependencies=[Depends(require_api_key)])
 async def budget(request: Request):
     # This path is deliberately not exempt from the existing secret-key guard.
-    model = service(request).model
+    model = (await ready_service(request)).model
     if model is None:
         raise HTTPException(503, "Model budget is unavailable")
     return await storage_result(model.spend.state())
@@ -82,6 +101,7 @@ async def rotate_session(request: Request, response: Response):
 @router.post("/session/logout")
 async def logout_session(request: Request, response: Response):
     require_local(request)
+    await ready_service(request)
     await storage_result(service(request).repository.revoke_session(request.cookies.get(COOKIE)))
     response.delete_cookie(COOKIE, path="/api/agent")
     return {"status": "signed-out"}
@@ -90,6 +110,7 @@ async def logout_session(request: Request, response: Response):
 @router.post("/session/recover", dependencies=[Depends(require_api_key)])
 async def recover_session(body: dict, request: Request, response: Response):
     require_local(request)
+    await ready_service(request)
     try:
         token = await service(request).repository.recover_session(body.get("owner"))
     except ValueError:
@@ -103,6 +124,7 @@ async def recover_session(body: dict, request: Request, response: Response):
 @router.post("/session")
 async def session(request: Request, response: Response):
     require_local(request)
+    await ready_service(request)
     try:
         _, token = await service(request).repository.session(request.cookies.get(COOKIE))
     except HTTPException:
@@ -152,6 +174,18 @@ async def get_turn(turn_id: str, request: Request):
 async def history(request: Request):
     identity = await owner(request)
     return {"turns": [public_turn(doc) for doc in await storage_result(service(request).repository.history(identity))]}
+
+
+@router.get("/history/page")
+async def history_page(request: Request, limit: int = Query(30, ge=1, le=30), cursor: str | None = None):
+    identity = await owner(request)
+    try:
+        page = await service(request).repository.history_page(identity, limit=limit, cursor=cursor)
+    except ValueError:
+        raise HTTPException(422, "Invalid saved-answer page or cursor") from None
+    except Exception:
+        raise HTTPException(503, "Saved research storage is unavailable") from None
+    return {**page, "turns": [public_turn(doc) for doc in page["turns"]]}
 
 
 @router.post("/cancel/{turn_id}")
@@ -208,7 +242,8 @@ async def stream(turn_id: str, request: Request):
 
 @router.get("/prefs")
 async def prefs(request: Request):
-    return await storage_result(service(request).repository.get_preferences(await owner(request)))
+    identity = await owner(request)
+    return await storage_result(service(request).repository.get_preferences(identity))
 
 
 @router.get("/models")

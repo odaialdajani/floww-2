@@ -99,7 +99,8 @@ test("R7-03: context restore, dual ID spelling, projection status", () => {
     scenarios: [], interactions: [],
     grids: { grid: { expiries: ["2030-01-15"], strikes: [500], grid: { "2030-01-15": { 500: 1e6 } } } },
     metrics_full: { wall_window: { w1: { window_daddex: 42 } }, nearest_walls: [{ wall_id: "w1" }] },
-    context: { session: { entry_allowed: false, reasons: ["MARKET_CLOSED"] }, scout: { calls: 0 } },
+    context: { session: { entry_allowed: false, reasons: ["MARKET_CLOSED"] }, scout: { calls: 0 },
+      display: { nodes: {king:null,floors:[],ceilings:[],gatekeepers:[],polarity_level:0,total_gex:0,regime:"neutral"}, gamma_flip:{gamma_flip:0}, total_abs_gex:0 } },
   };
   const d = replayToDisplay(full, "SPY");
   expect(d.snapshot_id).toBe("a");
@@ -117,4 +118,25 @@ test("R7-03: context restore, dual ID spelling, projection status", () => {
   expect(legacy.projection_status).toBe("partial");
   expect(legacy.projection_missing).toContain("metrics");
   expect(legacy.projection_missing).toContain("context");
+});
+
+test("recorded nodes and flip restore exactly, including explicit zeros and empty lists",()=>{
+ const structure={nodes:{king:{strike:100,gex:0},floors:[],ceilings:[],gatekeepers:[],polarity_level:0,total_gex:0,regime:"neutral"},gamma_flip:{gamma_flip:0},flip_zones:[],net_gex_total:0,total_abs_gex:0,gex_regime:"neutral"};
+ const rep={snapshot:{ticker:"SPY",snapshot_id:"structure-record"},context:{session:{},scout:{},display:structure},metrics_full:{},grids:{grid:{grid:{"2030-01-04":{"100":0}},vex_grid:{"2030-01-04":{"100":-7}},vex_meta:{record_version:"metric-record.v1",unit:"USD delta-notional/+1 vol pt"}}}};
+ const unchanged=JSON.parse(JSON.stringify(rep));const out=replayToDisplay(rep,"SPY");
+ for(const key of Object.keys(structure))expect(out[key]).toEqual(structure[key]);
+ expect(out.structure_status).toBe("complete");expect(out.structure_missing).toEqual([]);expect(out.projection_status).toBe("complete");
+ expect(out.grid.vex_grid).toEqual(rep.grids.grid.vex_grid);expect(out.grid.vex_meta).toEqual(rep.grids.grid.vex_meta);expect(rep).toEqual(unchanged);
+ expect(replayToDisplay(rep,"QQQ")).toBeNull();
+});
+test("legacy recorded rows never invent missing node lists, flip or regime",()=>{
+ const out=replayToDisplay({snapshot:{ticker:"SPY",snapshot_id:"legacy-structure"},context:{session:{},scout:{},display:{}},metrics_full:{},grids:{grid:{grid:{"2030-01-04":{"100":0}}}}},"SPY");
+ expect(out.nodes).toBeNull();expect(out.gamma_flip).toBeNull();expect(out.flip_zones).toBeNull();expect(out.net_gex_total).toBeNull();expect(out.total_abs_gex).toBeNull();expect(out.gex_regime).toBeNull();
+ expect(out.structure_status).toBe("unknown");expect(out.projection_status).toBe("partial");expect(out.projection_missing).toContain("structure.nodes");
+});
+
+test("hydrated structure is detached from the immutable recorded packet",()=>{
+ const rep={snapshot:{ticker:"SPY",snapshot_id:"immutable"},context:{display:{nodes:{king:{strike:100},floors:[{strike:99}],ceilings:[],gatekeepers:[]}}}};
+ const out=replayToDisplay(rep,"SPY");out.nodes.king.strike=123;out.nodes.floors[0].strike=124;
+ expect(rep.context.display.nodes.king.strike).toBe(100);expect(rep.context.display.nodes.floors[0].strike).toBe(99);expect(out.structure_status).toBe("partial");
 });

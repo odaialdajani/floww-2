@@ -102,3 +102,21 @@ test("a removed thinking depth needs a supported replacement",async()=>{
  expect(screen.getByLabelText("Thinking depth").value).not.toBe("removed");
  expect(screen.getByRole("button",{name:"Save AI choice"})).not.toBeDisabled();
 });
+
+test("storage failure is not reported as missing login or missing model",async()=>{
+ global.fetch.mockResolvedValue({ok:false,json:async()=>({error:"Saved research storage is unavailable"})});
+ render(<AgentModelSettings/>);fireEvent.click(screen.getByRole("button",{name:/AI choices/}));
+ await screen.findByText("Saved answers are unavailable. Reload choices to reconnect.");
+ expect(screen.queryByText(/not offered by this login/)).toBeNull();
+ expect(screen.queryByText(/Check that Codex is signed in/)).toBeNull();
+ global.fetch.mockResolvedValue({ok:true,json:async()=>({models,selected})});
+ fireEvent.click(screen.getByRole("button",{name:"Reload choices"}));
+ await screen.findByLabelText("Model");
+});
+
+test('ending access before a first-open settings timer fires cannot create a hidden session',()=>{
+ jest.useFakeTimers();const view=render(<AgentModelSettings initialOpen/>);
+ act(()=>window.dispatchEvent(new Event('floww-research-session-ended')));
+ act(()=>jest.advanceTimersByTime(1));expect(global.fetch).not.toHaveBeenCalled();
+ view.unmount();jest.useRealTimers();
+});

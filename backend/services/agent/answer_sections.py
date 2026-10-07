@@ -42,13 +42,15 @@ UNAVAILABLE = {
     "Invalidation": "No testable prediction or verified trade setup was formed, so a price invalidation is unavailable.",
     "Trade": "No executable trade proposal is available. No order, fill or position was created.",
 }
+HISTORY_INTENT = r"\b(?:changed?|since|earlier|previously|previous|prior|history|historical|yesterday|closing|last close|saved observations?|saved readings?)\b"
+
 QUICK = {
     "Structure": r"\b(?:structure|positioning|gamma|gex|dealer|map)\b",
     "Flow": r"\b(?:flow|alerts?|buying|selling)\b",
     "Levels": r"\b(?:levels?|flip|support|resistance)\b",
     "Vol": r"\b(?:vol|volatility|iv|implied move|realized)\b",
     "Company": r"\b(?:company|earnings|dividend|news|events?)\b",
-    "What changed": r"\b(?:changed?|since|yesterday|previous|prior|history|closing)\b",
+    "What changed": HISTORY_INTENT,
     "Confluence": r"\b(?:confluence|agreement)\b",
     "Verdict": r"\b(?:verdict|direction|bullish|bearish)\b",
     "Invalidation": r"\b(?:invalidation|invalidate|stop)\b",
@@ -56,13 +58,31 @@ QUICK = {
 }
 
 
+def history_excluded(question):
+    """Honor direct exclusions only; unrelated negation never cancels a comparison."""
+    return bool(re.search(
+        r"\b(?:do\s+not|don't|don’t|never|without|skip|exclude|ignore)\s+"
+        r"(?:(?:using|use|reading|read|inspecting|inspect|checking|check|searching|search|comparing|compare)\s+)?"
+        r"(?:(?:with|against|to|using)\s+)?"
+        r"(?:(?:my|the|any|saved|past|historical|previous|prior|earlier|older)\s+){0,4}"
+        r"(?:history|readings?|observations?|(?:historical|past|earlier|previous)\s+data)\b", question, re.I))
+
+
+def requests_history(question):
+    return not history_excluded(question) and bool(re.search(HISTORY_INTENT, question, re.I))
+
+
 def requested_sections(spec):
     if spec.get("price_only"):
         return ("Structure",)
     question = spec.get("question", "")
     selected = [name for name in SECTION_NAMES if re.search(QUICK[name], question, re.I)]
+    if isinstance(spec.get("screen", {}).get("selectedContract"), dict) and re.search(
+            r"\b(?:bids?|asks?|mid|midpoint|spread|quotes?|price|premium)\b", question, re.I):
+        selected = list(dict.fromkeys(["Structure", *selected]))
     full = re.search(r"\b(?:full|research|overview|analysis|analyze|analyse|outlook|breakdown|read)\b", question, re.I)
-    return SECTION_NAMES if full or not selected else tuple(selected)
+    result = SECTION_NAMES if full or not selected else tuple(selected)
+    return tuple(name for name in result if name != "What changed" or not history_excluded(question))
 
 
 def _value_text(value):
@@ -79,22 +99,41 @@ def _reference(item):
             "ticker": item["ticker"], "horizon": item.get("horizon", "all")}
 
 
+def _contract_quote_note(facts):
+    quotes = {item["metric"]: item for item in facts}
+    missing = [leg for leg in ("bid", "ask")
+               if not finite(quotes.get("Exact contract " + leg, {}).get("value"))]
+    note = "Saved exact-contract readings retain their own units and observation times; they do not prove an executable fill."
+    if missing:
+        verb = " are" if len(missing) > 1 else " is"
+        note += " The exact contract's " + " and ".join(missing) + verb + " unavailable; no missing quote or midpoint was inferred."
+    if any(item["status"] == "stale" for item in facts if item["metric"] in {"Exact contract bid", "Exact contract ask"}):
+        note += " The saved option quotes are out of date; they do not establish a current entry price."
+    return note, bool(missing)
+
+
 def _entry(name, snapshot, price_only=False):
     facts = [item for item in snapshot.get("facts", [])
              if item.get("ticker") == snapshot["ticker"]
              and (item.get("metric") in ({"Underlying price"} if price_only else METRICS[name])
+                  or not price_only and name == "Structure" and item.get("metric", "").startswith("Exact contract ")
                   or not price_only and name == "Structure" and snapshot.get("range_observation")
                   and item.get("metric", "").startswith("Recorded range cell "))]
     text = "; ".join(
-        f"{item['metric']}: {_value_text(item['value'])} {item['unit']} "
+        f"{item['metric']}: {str(item['value']) if item['metric'].startswith('Exact contract ') and finite(item['value']) else _value_text(item['value'])} {item['unit']} "
         f"({item['status']}; observed {item.get('event_time') or 'time unknown'}; scope {item.get('horizon', 'all')})"
         for item in facts
     )
     segments = [_reference(item) for item in facts]
     note = ""
+    exact_contract = [item for item in facts if item["metric"].startswith("Exact contract ")]
+    partial_quote = False
+    if exact_contract:
+        note, partial_quote = _contract_quote_note(exact_contract)
     if name == "Structure" and not price_only:
         # Preserve existing checked descriptive explanations and their references.
-        note = explain_snapshot(snapshot)
+        descriptive = explain_snapshot(snapshot)
+        note = " ".join(part for part in (note, descriptive) if part)
         used = {item["id"] for item in facts}
         facts += [item for item in snapshot.get("facts", []) if item["id"] not in used
                   and item.get("ticker") == snapshot["ticker"] and item.get("metric") in METRICS["Levels"] | METRICS["Flow"]]
@@ -120,6 +159,8 @@ def _entry(name, snapshot, price_only=False):
     if window.get("start") and window.get("end"):
         scope += f" · expiries {window['start']} through {window['end']}"
     status = "available" if facts and all(item["status"] == "ok" for item in facts) else "degraded" if facts else "unavailable"
+    if exact_contract and partial_quote:
+        status = "degraded"
     if name == "Levels" and not any(item["metric"] not in {"Underlying price", "Cached map price"} for item in facts):
         status = "unavailable"
     return {"ticker": snapshot["ticker"], "horizon": snapshot.get("horizon", "all"),

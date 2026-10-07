@@ -4,42 +4,58 @@ import {API} from "../config/api";
 export const THINKING_LABELS = {low:"Quick", medium:"Balanced", high:"Deep", xhigh:"Extra high", max:"Deepest"};
 export const SPEED_LABELS = {default:"Standard", priority:"Fast (uses more allowance)"};
 
-export default function AgentModelSettings({disabled=false, onSaving=()=>{}}) {
+const CHOICE_ERROR = "AI choices could not be checked. Reload choices to try again.";
+const STORAGE_ERROR = "Saved answers are unavailable. Reload choices to reconnect.";
+async function choiceProblem(response) {
+ const body=await response.json().catch(()=>({}));
+ const reason=body.error || body.detail;
+ return new Error(["Saved research storage is unavailable","Session storage is unavailable","Session could not be saved"].includes(reason)?STORAGE_ERROR:CHOICE_ERROR);
+}
+
+export default function AgentModelSettings({disabled=false, onSaving=()=>{}, initialOpen=false}) {
  const [open,setOpen]=useState(false),[loading,setLoading]=useState(false),[models,setModels]=useState([]);
  const [selected,setSelected]=useState(null),[saved,setSaved]=useState(null),[message,setMessage]=useState("");
- const [usage,setUsage]=useState(null);
+ const [usage,setUsage]=useState(null),[checked,setChecked]=useState(false);
  const epoch=useRef(0),controller=useRef(null);
- const uncertain=useRef(false);
+ const uncertain=useRef(false),initialRequested=useRef(false),initialTimer=useRef(null),initialLoad=useRef(null);
  const savingCallback=useRef(onSaving);savingCallback.current=onSaving;
  useEffect(()=>{
-  const clear=()=>{epoch.current++;controller.current?.abort();uncertain.current=false;setOpen(false);setLoading(false);setModels([]);setSelected(null);setSaved(null);setUsage(null);setMessage("");savingCallback.current(false);};
+  const clear=()=>{clearTimeout(initialTimer.current);initialRequested.current=true;epoch.current++;controller.current?.abort();uncertain.current=false;setOpen(false);setLoading(false);setModels([]);setChecked(false);setSelected(null);setSaved(null);setUsage(null);setMessage("");savingCallback.current(false);};
   const storage=e=>{if(e.key==="floww-research-session-ended" && e.newValue)clear();};
   window.addEventListener("floww-research-session-ended",clear);window.addEventListener("storage",storage);
-  return ()=>{epoch.current++;controller.current?.abort();savingCallback.current(false);window.removeEventListener("floww-research-session-ended",clear);window.removeEventListener("storage",storage);};
+  return ()=>{clearTimeout(initialTimer.current);epoch.current++;controller.current?.abort();savingCallback.current(false);window.removeEventListener("floww-research-session-ended",clear);window.removeEventListener("storage",storage);};
  },[]);
  const load=async()=>{
   if(loading || disabled)return;
-  setOpen(true);setLoading(true);onSaving(true);setMessage("");const current=++epoch.current;
+  setOpen(true);setChecked(false);setLoading(true);onSaving(true);setMessage("");const current=++epoch.current;
   const abort=new AbortController();controller.current=abort;
   const timer=setTimeout(()=>abort.abort(),30000);
   try{
    const session=await fetch(`${API}/agent/session`,{method:"POST",credentials:"include",signal:abort.signal});
-   if(!session.ok)throw new Error();
+   if(!session.ok)throw await choiceProblem(session);
    const response=await fetch(`${API}/agent/models`,{credentials:"include",signal:abort.signal});
-   if(!response.ok)throw new Error();
+   if(!response.ok)throw await choiceProblem(response);
    const data=await response.json();
    if(epoch.current===current){
     uncertain.current=false;
-    setModels(data.models);setSaved(data.selected);setUsage(data.usage);
+    setChecked(true);setModels(data.models);setSaved(data.selected);setUsage(data.usage);
     const supported=data.models.find(m=>m.id===data.selected?.model);
     if(supported && supported.efforts.includes(data.selected.effort) && supported.speeds.includes(data.selected.speed))setSelected(data.selected);
     else if(supported){setSelected({model:supported.id,effort:supported.default_effort,speed:"default"});setMessage("Your saved depth or speed is unavailable. Choose and save a replacement.");}
     else if(data.models.length){const first=data.models[0];setSelected({model:first.id,effort:first.default_effort,speed:"default"});setMessage("Your saved model is unavailable. Choose and save a replacement.");}
     else setSelected(null);
    }
-  }catch{if(epoch.current===current)setMessage("AI choices are unavailable. Check that Codex is signed in with ChatGPT on this computer.");}
+  }catch(error){if(epoch.current===current){setModels([]);setSelected(null);setUsage(null);setMessage([STORAGE_ERROR,CHOICE_ERROR].includes(error.message)?error.message:CHOICE_ERROR);}}
   finally{clearTimeout(timer);if(epoch.current===current){setLoading(false);onSaving(uncertain.current);}}
  };
+ initialLoad.current=load;
+ useEffect(()=>{
+  if(!initialOpen || disabled || initialRequested.current)return;
+  // Defer first-open loading until mount checks finish; cleanup/session end
+  // cancels it so a hidden or ended view cannot recreate access automatically.
+  initialTimer.current=setTimeout(()=>{if(!initialRequested.current){initialRequested.current=true;initialLoad.current();}},0);
+  return()=>clearTimeout(initialTimer.current);
+ },[initialOpen,disabled]);
  const changeModel=id=>{
   const model=models.find(m=>m.id===id);
   if(!model)return;
@@ -55,7 +71,7 @@ export default function AgentModelSettings({disabled=false, onSaving=()=>{}}) {
    const response=await fetch(`${API}/agent/prefs`,{method:"PUT",credentials:"include",signal:abort.signal,
     headers:{"Content-Type":"application/json"},body:JSON.stringify({ai_settings:selected})});
    if(!response.ok)throw new Error();
-   if(epoch.current===current){confirmed=true;setSaved(selected);setMessage("Saved for your next question.");}
+   if(epoch.current===current){confirmed=true;uncertain.current=false;setSaved(selected);setMessage("Saved for your next question.");}
   }catch{if(epoch.current===current){uncertain.current=true;setMessage("Your new AI choice was not confirmed. Reload choices before asking.");}}
   finally{clearTimeout(timer);if(epoch.current===current){setLoading(false);onSaving(!confirmed);}}
  };
@@ -70,7 +86,7 @@ export default function AgentModelSettings({disabled=false, onSaving=()=>{}}) {
    {loading?"Checking AI choices…":"AI choices · ChatGPT login"}
   </button>
   {open && <div>
-   {!loading && <div>
+   {!loading && checked && <div>
     <button type="button" disabled={disabled || Boolean(solBlocker)}
      aria-describedby={solBlocker?"lodestar-sol-blocker":undefined}
      onClick={()=>{setSelected({model:sol.id,effort:"xhigh",speed:"default"});setMessage("");}}>
@@ -92,7 +108,7 @@ export default function AgentModelSettings({disabled=false, onSaving=()=>{}}) {
     <button type="button" onClick={save} disabled={!changed}>Save AI choice</button>
     {changed && <small>Unsaved choice. Questions use your last saved choice.</small>}
    </fieldset>}
-   <small>Uses your ChatGPT allowance. Dollar cost is not reported. These are the settings supported by your login.</small>
+   <small>Uses your ChatGPT allowance. Dollar cost is not reported. These choices are reported by Codex. Access is checked when you ask.</small>
    {usage && <small>{usage.calls} of {usage.daily_limit} app calls used today. Cancelled or uncertain calls still count.</small>}
    {message && <p role="status">{message}</p>}
    {!loading && <button type="button" disabled={disabled} onClick={load}>Reload choices</button>}

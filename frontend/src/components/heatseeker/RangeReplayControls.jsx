@@ -83,7 +83,7 @@ export default function RangeReplayControls({ticker,minDte,maxDte,onRecord,onLiv
   active.current={controller,timer};
   try {
    const response=await fetch(`${API}/solstice/price-paths/range-records${path}`,{
-    method:'GET',headers:storedAppKeyHeaders() || {},credentials:'include',signal:controller.signal,
+    method:'GET',headers:storedAppKeyHeaders() || {},credentials:'omit',signal:controller.signal,
    });
    if(!current()) return;
    const body=await response.json();
