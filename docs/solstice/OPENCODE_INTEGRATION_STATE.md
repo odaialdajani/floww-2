@@ -817,7 +817,7 @@ read in full. Findings applied:
   PR115 CI all four green (backend 20m12s); merge-tree into new main
   shows 0 conflicts. Merges stay Cline/Nav.
 - Review stack refreshed to bdb6a8d8 (fresh build + backend, screenshot
-  verified live data with honest labels); old PIDs retired, чужой
+  verified live data with honest labels); old PIDs retired, third-party
   services untouched.
 - Deliberately NOT started: Phase-6 builds (unpromoted scope —
   promotion is a scoping decision, not an engineering gap to fill
