@@ -88,9 +88,21 @@ APPROVAL_STORE_DDL = """
         approval_id VARCHAR PRIMARY KEY, intent_hash VARCHAR,
         account_id VARCHAR, scope VARCHAR, valid_until VARCHAR,
         approved_by VARCHAR, approved_at VARCHAR, revoked BOOLEAN,
-        approval_json VARCHAR, updated_at VARCHAR
+        approval_json VARCHAR, updated_at VARCHAR,
+        used_at VARCHAR, used_by VARCHAR, used_fingerprint VARCHAR
     )
 """
+
+# Single-use consumption columns (S17): additive on pre-existing stores so a
+# legacy approvals_v1 table gains used_at/used_by/used_fingerprint without a
+# destructive rebuild. NULL used_at means never consumed (legacy rows verify
+# unchanged); consumption is written exactly once by the guarded UPDATE in
+# execution_admission.consume_order_approval and never reset.
+_APPROVAL_USED_ALTERS = (
+    "ALTER TABLE approvals_v1 ADD COLUMN IF NOT EXISTS used_at VARCHAR",
+    "ALTER TABLE approvals_v1 ADD COLUMN IF NOT EXISTS used_by VARCHAR",
+    "ALTER TABLE approvals_v1 ADD COLUMN IF NOT EXISTS used_fingerprint VARCHAR",
+)
 
 # Broker-native protection support as DOCUMENTED + account-eligibility gated.
 # Conservative by design: nothing is offered until both the vendor documents
@@ -191,6 +203,9 @@ def ensure_lifecycle_tables(conn: Any) -> None:
         conn.execute(ACCOUNT_POLICY_DDL)
     with _ctxlib.suppress(Exception):
         conn.execute(APPROVAL_STORE_DDL)
+    for _alter in _APPROVAL_USED_ALTERS:
+        with _ctxlib.suppress(Exception):
+            conn.execute(_alter)
 
 
 def register_store(conn: Any) -> bool:

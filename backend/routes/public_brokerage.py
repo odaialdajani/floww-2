@@ -494,6 +494,33 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
         if admission_refusal is not None:
             raise HTTPException(status_code=403, detail=admission_refusal)
 
+        # Single-use consumption (S17): verify passed, so burn the approval
+        # BEFORE any broker placement — the guarded store UPDATE admits
+        # exactly one placement per approval, closing the r19-recorded gap
+        # where a same-ID replay within the <=24h validity window placed a
+        # second order. Consume failures (already-used, revoked, store
+        # unavailable) refuse 403 with ZERO broker calls; a subsequently
+        # failed placement burns the approval anyway (fail-closed — the
+        # operator re-approves with a fresh row; never refunded).
+        from services import execution_admission as _adm
+
+        consumed = _adm.consume_order_approval(
+            _admission_store_conn(), request.get("approval_id"),
+            fingerprint=_adm.order_fingerprint(
+                getattr(account, "account_id", ""), symbol, side, quantity,
+                limit_price, stop_price=stop_price, time_in_force=time_in_force,
+                order_type=order_type, instrument_type=instrument_type,
+                equity_market_session=equity_market_session),
+            operator=operator)
+        if not consumed.get("ok"):
+            raise HTTPException(status_code=403, detail={
+                "error": consumed.get("reason", "APPROVAL_CONSUME_FAILED"),
+                "message": "The presented approval is single-use and was not "
+                           "consumable (already used, revoked, or the store "
+                           "is unavailable); refusing placement.",
+                "detail": consumed.get("detail"),
+            })
+
         order = await broker.place_order(
             account_id=account.account_id,
             symbol=symbol,
@@ -527,6 +554,8 @@ async def place_order(request: dict[str, Any]) -> dict[str, Any]:
             "status": status,
             "created_at": order.created_at,
             "data_source": "public_api",
+            "approval_id": request.get("approval_id"),
+            "approval_consumed": consumed.get("ok") is True,
         }
     except HTTPException:
         raise

@@ -75,6 +75,7 @@ __all__ = [
     "order_fingerprint",
     "create_order_approval",
     "verify_order_approval",
+    "consume_order_approval",
 ]
 
 
@@ -1275,3 +1276,52 @@ def verify_order_approval(
     if gate is not None:
         return gate
     return {"ok": True, "approval_id": approval_id}
+
+
+def consume_order_approval(
+    conn: Any, approval_id: Any, fingerprint: Any = None,
+    operator: Any = None,
+) -> dict[str, Any]:
+    """Consume an order-entry approval exactly once (S17 single-use).
+
+    The mounted entry calls this AFTER verify_order_approval succeeds and
+    BEFORE any broker placement: the r19 verified probe showed a same-ID
+    replay within the <=24h validity window otherwise places a second
+    order. Consumption is a guarded UPDATE under the S01 store lock —
+    exactly one caller wins, every later presenter refuses
+    APPROVAL_ALREADY_USED, and a revoked/missing row never consumes.
+    Store failures refuse fail-closed (APPROVAL_STORE_UNAVAILABLE) so a
+    broken store can never degrade single-use into verify-only. Legacy
+    rows with NULL used_at are unconsumed by definition. Consumption is
+    never reset or refunded: a failed/refused placement burns the
+    approval (fail-closed doctrine — re-approve with a fresh row). Never
+    raises.
+    """
+    if conn is None:
+        return {"ok": False, "reason": "STORE_UNAVAILABLE"}
+    if not isinstance(approval_id, str) or not approval_id:
+        return {"ok": False, "reason": "APPROVAL_NOT_STORED"}
+    moment = _now_iso()
+    try:
+        with _APPROVAL_STORE_LOCK:
+            ensure_admission_tables(conn)
+            row = conn.execute(
+                "SELECT revoked, used_at FROM approvals_v1 "
+                "WHERE approval_id = ?", [approval_id]).fetchone()
+            if row is None:
+                return {"ok": False, "reason": "APPROVAL_NOT_STORED"}
+            if bool(row[0]):
+                return {"ok": False, "reason": "APPROVAL_INVALID",
+                        "detail": "revoked"}
+            if row[1]:
+                return {"ok": False, "reason": "APPROVAL_ALREADY_USED",
+                        "detail": {"used_at": str(row[1])}}
+            conn.execute(
+                "UPDATE approvals_v1 SET used_at = ?, used_by = ?, "
+                "used_fingerprint = ?, updated_at = ? "
+                "WHERE approval_id = ? AND used_at IS NULL",
+                [moment, str(operator or ""), str(fingerprint or ""),
+                 moment, approval_id])
+    except Exception:
+        return {"ok": False, "reason": "APPROVAL_STORE_UNAVAILABLE"}
+    return {"ok": True, "approval_id": approval_id, "used_at": moment}
