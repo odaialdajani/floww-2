@@ -340,3 +340,57 @@ combined frontend red ONLY on this fixture defect. After Cline regen:
 refresh parent stack, rerun combined backend+frontend+stories, record,
 then freeze for the four hosted gates. Still no push, no PR104 mutation,
 no live production action.
+
+## 2026-10-06 Session resume — regen landed via r19 combined lane; ledger reconciled to main 1fc5582c
+
+Model disclosure: this OpenCode session runs z-ai/glm-5.3 (requested "Muse
+Spark 1.3" label not claimed — actual session model governs per packet rule).
+Controller STOPPED/yielded; single active host writer; Cline hub idle.
+
+World moved past the 2026-10-05 checkpoint: the C16 regen landed PRODUCER-SIDE
+via the r19 combined lane (3f3f5abb "distinct producer clock keys", in main
+via PR107 merge c033a5e5): partial received_at 13:59:35 vs complete 13:59:30,
+digest resealed 33843c65..., record_index matches. PR93/103/104/106/107 ALL
+MERGED; main = 1fc5582c with CI/CD+lint green 2026-10-06T11:39Z (run
+37457900225). Nav's verification doc records backend 7412/42 skips/0 fail at
+69.71%, frontend 1375/130 suites + build, API 383, Comet-blocked browser
+check disclosed.
+
+My re-verification at main 1fc5582c (detached worktree /private/tmp/
+main-verify-20261006, Mongo up, shared 3.14 venv disclosed):
+- r18 + stored-contract grounding: 86 passed.
+- budget + native_handoff + plan_draft + exact_contract_admission +
+  metric_replay_admission: 69 passed.
+- Consumer replay/ordering suites previously broken by the fixture collapse:
+  182/182 across 4 suites (rangeReplay, rangeAnalytics, RangeReplayControls,
+  RangeAnalyticsWorkspace).
+- generate_api_docs --check: 383 current. Protected manifest: 68/71; the 3
+  deltas inspected blob-vs-blob = Nav's DISCLOSED saved-findings truth
+  corrections (+4 pinning tests) — additive, gate-neutral, recorded, not
+  reverted.
+
+New defect found + dispositioned (finite-sweep counterexample): PR107's head
+branch carried a post-merge stranded repair 336a69a9 (08:35 EDT, 55 min after
+the merge push) — transport copy source_commit provenance misattribution
+(stale 945dd3d9 vs true 3f3f5abb) + regen-script import hygiene. Cherry-picked
+onto main as b103b08c (branch solstice/opencode-r19-transport-resync-
+20261006), verified: ruff check . clean (v0.15.22 CI pin), 86 backend,
+182 frontend, bandit parity 13/0==13/0, transport consistency 5/5, both files
+byte-identical to 336a69a9. Published PR108 (review-only; Nav merges).
+
+Ledger reconciliation (hashed evidence log references/evidence/
+main-1fc5582c-reverify.log sha256 de23f058…): C16 ACCEPTED_AT_SHA=1fc5582c
+(reviewer OpenCode — I set the 6342afdf rejection condition; the repair
+satisfies it); S15 ACCEPTED_AT_SHA=d24fedceda2b68dd61e69e474e579c351755b10d
+(reviewer Cline, references/cline-review-spark-a7609446-d24fedce.md); I06-I10/
+I12/I13 evidence re-verified binds appended; I15 sweep closed with both
+counterexamples dispositioned; new I16 (PR108 follow-up) added; PR103 body
+refreshed append-only with final acceptance state. check-closure: 0 errors,
+23 ACCEPTED_AT_SHA, 26 pending (Cline signoff at final head + PR108 merge),
+7 NAV holds, engineering HOLD stands.
+
+Remaining to structural completion: (1) Cline-lane signoff pass over the
+I-lane/H-lane re-verify evidence at 1fc5582c (their review, not mine to
+self-accept); (2) Nav merges PR108 then re-verify at the merged head (I16);
+(3) browser/visual acceptance remains Comet-blocked/NAV-VISUAL. No pushes to
+main, no merge by OpenCode, no activation; commissioning HOLDs unchanged.
