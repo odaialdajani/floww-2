@@ -132,3 +132,80 @@ test('basis and query changes invalidate the canonical selection without invokin
  expect(JSON.parse(screen.getByTestId('range-context').textContent).snapshotId).toBeNull();
  expect(global.fetch).toHaveBeenCalledTimes(1);
 });
+test('price approach selector drives scenario text without any network call',async()=>{
+ global.fetch.mockImplementation(async url=>response(String(url).includes('/range-records/')?replay(partial):index()));
+ render(<><RangeAnalyticsWorkspace ticker="SPY"/><Context/></>);
+ await loadStored();fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:partial.record_id}});
+ await screen.findByRole('grid');
+ fireEvent.click(screen.getByRole('button',{name:/^590 · 2026-10-26/}));
+ expect(screen.getByText(/No reaction measured yet/)).toBeInTheDocument();
+ const calls=global.fetch.mock.calls.length;
+ const raw=partial.grids.raw_oi.cells['2026-10-26']['590'];
+ fireEvent.change(screen.getByLabelText('Price approach'),{target:{value:'above'}});
+ if(typeof raw==='number'&&raw!==0){
+  expect(screen.getByText(raw>0?/review bounce/:/review flush/)).toBeInTheDocument();
+ }else{
+  expect(screen.getByText(/direction unknown/)).toBeInTheDocument();
+ }
+ fireEvent.change(screen.getByLabelText('Price approach'),{target:{value:'below'}});
+ if(typeof raw==='number'&&raw!==0){
+  expect(screen.getByText(raw>0?/review rejection/:/review squeeze/)).toBeInTheDocument();
+ }
+ expect(global.fetch.mock.calls.length).toBe(calls);
+});
+test('handoff trace attaches wall context and declares the owner unselected',async()=>{
+ global.fetch.mockImplementation(async url=>response(String(url).includes('/range-records/')?replay(complete):index()));
+ render(<><RangeAnalyticsWorkspace ticker="SPY"/><Context/></>);
+ await loadStored();fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:complete.record_id}});
+ await screen.findByRole('grid');
+ expect(screen.getByText(/No cell selected — nothing attached/)).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:/^590 · 2026-10-26/}));
+ expect(screen.getByText(/Wall context attached · SPY · 590 USD · 2026-10-26/)).toBeInTheDocument();
+ expect(screen.getByText(new RegExp(`Record ${complete.record_id}.*received`))).toBeInTheDocument();
+ expect(screen.getByText(/Execution owner: unselected/)).toBeInTheDocument();
+});
+test('copy lodestar context writes the frozen record scope and nothing else',async()=>{
+ const written=[];
+ Object.defineProperty(navigator,'clipboard',{value:{writeText:jest.fn(async text=>{written.push(text);})},configurable:true});
+ global.fetch.mockImplementation(async url=>response(String(url).includes('/range-records/')?replay(complete):index()));
+ render(<><RangeAnalyticsWorkspace ticker="SPY"/><Context/></>);
+ expect(screen.queryByRole('button',{name:'Copy Lodestar context'})).not.toBeInTheDocument();
+ await loadStored();fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:complete.record_id}});
+ await screen.findByRole('grid');
+ expect(screen.getByRole('button',{name:'Copy Lodestar context'})).toBeEnabled();
+ fireEvent.click(screen.getByRole('button',{name:/^590 · 2026-10-26/}));
+ fireEvent.click(screen.getByRole('button',{name:'Copy Lodestar context'}));
+ await screen.findByText('Context copied.');
+ expect(written).toHaveLength(1);
+ const payload=JSON.parse(written[0]);
+ expect(payload).toMatchObject({kind:'range-lodestar-context',symbol:'SPY',record_id:complete.record_id,content_digest:complete.content_digest,metric:'raw_oi',replay:true});
+ expect(payload.selection).toEqual({strike:'590',expiry:'2026-10-26'});
+ expect(payload.note).toMatch(/not an execution permission/);
+});
+test('copy failure surfaces a status instead of throwing',async()=>{
+ Object.defineProperty(navigator,'clipboard',{value:{writeText:jest.fn(async()=>{throw new Error('denied');})},configurable:true});
+ global.fetch.mockImplementation(async url=>response(String(url).includes('/range-records/')?replay(complete):index()));
+ render(<><RangeAnalyticsWorkspace ticker="SPY"/><Context/></>);
+ await loadStored();fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:complete.record_id}});
+ await screen.findByRole('grid');
+ fireEvent.click(screen.getByRole('button',{name:'Copy Lodestar context'}));
+ await screen.findByText('Copy failed: clipboard unavailable.');
+});
+test('review trade opens a read-only summary and never touches order surfaces',async()=>{
+ global.fetch.mockImplementation(async url=>response(String(url).includes('/range-records/')?replay(complete):index()));
+ render(<><RangeAnalyticsWorkspace ticker="SPY"/><Context/></>);
+ expect(screen.queryByRole('button',{name:'Review trade'})).not.toBeInTheDocument();
+ await loadStored();fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:complete.record_id}});
+ await screen.findByRole('grid');
+ const calls=global.fetch.mock.calls.length;
+ fireEvent.click(screen.getByRole('button',{name:'Review trade'}));
+ expect(screen.getByText(/No cell selected\. Record/)).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:/^590 · 2026-10-26/}));
+ expect(screen.getByText(/Reviewing 590 USD · 2026-10-26/)).toBeInTheDocument();
+ expect(screen.getByText(/Contract: RANGE_CONTRACT_UNAVAILABLE/)).toBeInTheDocument();
+ expect(screen.getByText(/cannot place, approve, or route any order/)).toBeInTheDocument();
+ expect(global.fetch.mock.calls.length).toBe(calls);
+ expect(global.fetch.mock.calls.every(([url])=>String(url).includes('/solstice/price-paths/range-records'))).toBe(true);
+ fireEvent.click(screen.getByRole('button',{name:'Close trade review'}));
+ expect(screen.queryByRole('region',{name:'Trade review'})).not.toBeInTheDocument();
+});
