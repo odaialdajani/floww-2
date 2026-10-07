@@ -394,3 +394,40 @@ I-lane/H-lane re-verify evidence at 1fc5582c (their review, not mine to
 self-accept); (2) Nav merges PR108 then re-verify at the merged head (I16);
 (3) browser/visual acceptance remains Comet-blocked/NAV-VISUAL. No pushes to
 main, no merge by OpenCode, no activation; commissioning HOLDs unchanged.
+
+## 2026-10-06 continued — S17 single-use repair (PR109) + C10 partial review
+
+- Closed r19 COMBINED_R19_RECEIPT honest residual #1 ("same-approval replay
+  within <=24h places a second order"): root cause = verify_order_approval
+  is pure verification, approvals_v1 had no consumed marker. Repair 28d8b9c6
+  (branch solstice/opencode-r19-approval-single-use-20261006): additive
+  used_at/used_by/used_fingerprint columns + migrations;
+  consume_order_approval() exactly-once guarded UPDATE under the S01 lock
+  (revoked/missing never consume; fail-closed store errors; never refunded);
+  route verify -> consume -> place with 403 + zero broker calls on consume
+  failure; success discloses approval_id + approval_consumed. Burn-on-
+  broker-failure is the documented fail-closed doctrine. Alpaca paper entry
+  (NAV-PAPER-EXEMPT), lifecycle S05 seam, kill-switch ordering, and
+  cancellation/reconciliation paths untouched.
+- Verification at 28d8b9c6: new adversarial suite 7/7 (TDD: 1 fail first on
+  missing-table typed refusal, fixed via ensure inside consume); s18 suite
+  115; full solstice slice 837; non-solstice brokerage suites 103; ruff
+  check . clean at CI pin. Published PR109 (review-only; Nav merges).
+- Hosted gates since last checkpoint: PR108 all four PASS (backend 16m49s),
+  PR109 all four PASS (backend 19m38s, run 37558112536). Both PRs open.
+- Ledger: I17 added (PENDING, awaiting Cline raw-patch review + Nav merge +
+  merged-head re-verify). Closure checker: 0 errors, 23 ACCEPTED_AT_SHA,
+  27 pending, 7 NAV holds, HOLD stands. Evidence logs hashed (s17 +
+  main-1fc5582c-reverify).
+- C10 independent review at main 1fc5582c (replay_range_envelope vs C-line
+  write path, sealed record_replay_v1.json carrier, throwaway DuckDB):
+  PARTIAL, no ACCEPT bind. Verified: byte-identical restitution (strike/
+  expiry axes, quote-side clocks, digest, received_at), full typed-refusal
+  battery, no live-chain call graph (16/16). Withheld: per-contract
+  OSI/right/multiplier recovery is UNPROVEN — no sealed fixture carries a
+  per-contract population. C-line closure: synthetic per-contract fixtures
+  through record_range_envelope + replay proof, or Nav narrows C10 to
+  aggregate restitution. Evidence: references/evidence/c10-1fc5582c-probe.log.
+- PR103 body: original refresh noted the seam as decided; corrected
+  append-only to record it as REVIEW-PENDING engineering (receipt-aligned),
+  then this repair as its closure PR.
