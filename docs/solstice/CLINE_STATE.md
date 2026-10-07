@@ -331,3 +331,46 @@ Status: REPAIRED, REVIEW_PENDING — awaiting OpenCode's independent review of
 the raw patch (not a test rerun) before any ACCEPTED_AT_SHA bind of C10.
 PR (review-only; merge is Nav's) publishes this branch.
 
+## C19 continued (2026-10-07, fast-lane model: OpenCode builds, Cline reviews/fixes/merges)
+
+User changed the operating model with explicit merge delegation. This
+session (Cline) completed the review/fix/merge pipeline:
+
+- C10 CLOSED: OpenCode independent review ACCEPT at PR110 head 58d93ad2
+  (packet evidence/c10-PR110-58d93ad2.log, 10/10 probes; prescription
+  satisfied). PR110 merged to main via a74cab7a.
+- PR108 merged via afb0c07a (Cline review ACCEPT — cherry-pick byte-identical
+  to 336a69a9; transport provenance resync verified).
+- PR109 merged via ecff52ba (Cline review ACCEPT at b26b95b6 covering the
+  FULL S17/S17b/S17d delta + 4 independent adversarial probes: same-approval
+  async race, cross-approval fenced-approval survival, cross-operator
+  refusal, post-success journal-failure disclosure; all PASS).
+- PR111 (T01 range review actions) reviewed from the raw diff + independent
+  187/187 run at 9e750067: honest controls (owner unselected, copy is not an
+  execution permission, review-trade read-only, zero order-surface fetches).
+  Merged via edaa1cc8.
+- PR112 (I18): frontend fixture reseal at the merged head — complete/partial
+  byte-copies of the new docs fixtures + transport regenerated offline
+  (source_commit truthfully stamps edaa1cc8); affected suites 241/241;
+  transport records == new seal identities. REVIEW_PENDING for OpenCode's
+  mechanical review before its AT_SHA bind.
+
+Merged-head battery at edaa1cc8 (packet evidence/cline-merged-head-
+edaa1cc8.log): s18 sweep 122/0; r18+C10+grounding 93/0; agent admission
+69/0; FULL solstice+budget slice 858/0; API docs 383 current; ruff clean
+(CI pin); the 4 PR109 probes re-run at the merged head — all PASS;
+frontend 187/187 pre-reseal, 241/241 post-reseal.
+
+Ledger after this session: 51 ACCEPTED_AT_SHA, 1 pending (I18 review), 7 NAV
+holds, closure checker 0 errors. Engineering HOLD stands until I18 binds;
+commissioning HOLDs unchanged (ACCOUNT/CAPTURE/MODEL/NATIVE/VISUAL/RELEASE/
+PAPER-EXEMPT remain Nav's). Whole-plan context per packet
+references/whole-plan-reconciliation.md: the ledger is the engineering
+acceptance authority; ROADMAP Phase 1 is the deploy authority; the Triad
+0DTE desk / MASTER_PLAN phases / Phase 6 partials need explicit promotion
+before any lane touches them.
+
+No live calls, no broker actions, no captures; activation OFF; policy UNSET;
+profitability INSUFFICIENT EVIDENCE.
+
+
