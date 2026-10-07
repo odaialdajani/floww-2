@@ -453,3 +453,57 @@ main, no merge by OpenCode, no activation; commissioning HOLDs unchanged.
 - Remote state unchanged: main 1fc5582c, cline/r18-analytics 6342afdf,
   PR108 + PR109 OPEN (both hosted all-green). No pushes to main, no merges,
   no activation; commissioning HOLDs stand.
+
+## 2026-10-06 full-packet read reconciliation (user: "read all files, double verify")
+
+All 14 packet root docs + finish-primary + MUSE_STATE (1457 lines) +
+CLINE_STATE + all 3 Cline review files + COMBINED_R19_RECEIPT +
+verification doc + ZED continuation/acceptance + COMMISSIONING head +
+original-packet START-HERE + tools + small JSONs + prior review docs now
+read in full. Findings applied:
+
+- Review files CONFIRM the binds: S15 at d24fedce (VERIFIED/ACCEPT both
+  heads), S01/S04/S05 at 1f3b4258, S02/S03 enumeration at d24fedce
+  (incl. alpaca-paper disclosed residual -> NAV-PAPER-EXEMPT, and the
+  replay gap recorded 3x across Cline docs). No bind corrected.
+- MUSE_STATE §49 line 1213 anticipated PR109 exactly ("single-use would
+  break retry-after-broker-failure without a defined exactly-once
+  story"): the burn-on-failure + re-approve-fresh doctrine IS that
+  story. Repair direction validated by the lane's own record.
+- PR103-comment residual seams re-probed adversarially at main, all
+  closed: MARKET OPTION / LIMIT-without-limit / qty-over-ceiling /
+  expired-OSI / malformed-symbol refuse at creation; SPY-vs-OSI and
+  tampered-qty refuse at verify; valid approves verify (8/8 + 2/2 with
+  configured guards: expired -> EXPIRY_INVALID, future admitted).
+  v3 migration coherent (CONTENT_SCHEMA=v3 canonical; v2 recognized
+  only to refuse). ba95e118 stale positive superseded by the authorized
+  operator-workflow positive.
+- Polling deep trace: useHeatseeker `skip` exists but unwired AND
+  unnecessary — the 5 polling tiles mount only on page==="skylit"
+  (conditional mount = no polling elsewhere); replay views poll
+  nothing; Movers/Leaderboard replay-gated; dashboard replay-wins +
+  live-hiding + abort guards hold. Zed/COMMISSIONING "pause ownership"
+  prose describes this effect accurately. Addendum logged separately
+  (hashed evidence file left intact).
+- C10 prescription sharpened with CLINE_STATE's recorded posture
+  (RANGE_RECORD_REFERENCE_ONLY until NAV-CAPTURE): fixtures OR explicit
+  narrowing; partial verdict unchanged.
+- I04 split recorded (PR109 closes replay half; lifecycle-submit wiring
+  stays REVIEW-PENDING for Nav); I02 successor chain updated
+  (PR104->PR107->main; PR108/PR109 open, disjoint file sets verified,
+  sequential not competing); H01 actuals updated (current session
+  z-ai/glm-5.3 disclosed vs historical muse-spark session record).
+- PR109 adjacency audit: admission module never places (own docstring
+  contract); lifecycle S05 seam untouched (no consume refs); cancel paths
+  untouched; updated_at overwrite safe (conflict check ignores it; suites
+  green). No adjacent counterexamples.
+- Lane rationale (finish-primary §22 / ownership §18 "existing lane"):
+  S17 + resync branches are main-based in /private/tmp, not in
+  .worktrees/spark-r17, because that lane's content is fully merged
+  (d24fedce ancestor of main) and its worktree is 14+ behind with
+  pre-existing dirty files — basing new work there would fork from a
+  stale tree. Single writer held; no simultaneous two-lane writes; file
+  ownership respected (OpenCode-owned seams only); reviewable PRs.
+  Formal deviation from the lane-directory letter, compliant in intent.
+- Queue now carries hashed progress_evidence per touched item
+  (finish-primary §17). Closure checker re-run below.
