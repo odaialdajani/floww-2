@@ -37,7 +37,7 @@
    "source": "public-mid"
   }
  },
- "content_digest": "33843c65d6c088edd57e71125481892e8c1aaadc464627297e94d9e5e550cdd4",
+ "content_digest": "b6370d7f35bd93e563da95d26b5865b9f4029489af444112d14e010dc2b75c71",
  "content_schema": "rga-content.v3",
  "coverage": {
   "attempt_cap": 3,
@@ -295,6 +295,80 @@
     "n_put": 2
    }
   },
+  "contract_rows": [
+   {
+    "expiry": "2026-10-26",
+    "multiplier": 100.0,
+    "multiplier_provenance": "EXPLICIT",
+    "osi": "FAKE-2026-10-26-590-CALL",
+    "right": "call",
+    "series": "EQUITY",
+    "strike_key": "590"
+   },
+   {
+    "expiry": "2026-10-26",
+    "multiplier": 100.0,
+    "multiplier_provenance": "EXPLICIT",
+    "osi": "FAKE-2026-10-26-590-PUT",
+    "right": "put",
+    "series": "EQUITY",
+    "strike_key": "590"
+   },
+   {
+    "expiry": "2026-10-26",
+    "multiplier": 100.0,
+    "multiplier_provenance": "EXPLICIT",
+    "osi": "FAKE-2026-10-26-600-CALL",
+    "right": "call",
+    "series": "EQUITY",
+    "strike_key": "600"
+   },
+   {
+    "expiry": "2026-10-26",
+    "multiplier": 100.0,
+    "multiplier_provenance": "EXPLICIT",
+    "osi": "FAKE-2026-10-26-600-PUT",
+    "right": "put",
+    "series": "EQUITY",
+    "strike_key": "600"
+   },
+   {
+    "expiry": "2026-11-09",
+    "multiplier": 100.0,
+    "multiplier_provenance": "EXPLICIT",
+    "osi": "FAKE-2026-11-09-590-CALL",
+    "right": "call",
+    "series": "EQUITY",
+    "strike_key": "590"
+   },
+   {
+    "expiry": "2026-11-09",
+    "multiplier": 100.0,
+    "multiplier_provenance": "EXPLICIT",
+    "osi": "FAKE-2026-11-09-590-PUT",
+    "right": "put",
+    "series": "EQUITY",
+    "strike_key": "590"
+   },
+   {
+    "expiry": "2026-11-09",
+    "multiplier": 100.0,
+    "multiplier_provenance": "EXPLICIT",
+    "osi": "FAKE-2026-11-09-600-CALL",
+    "right": "call",
+    "series": "EQUITY",
+    "strike_key": "600"
+   },
+   {
+    "expiry": "2026-11-09",
+    "multiplier": 100.0,
+    "multiplier_provenance": "EXPLICIT",
+    "osi": "FAKE-2026-11-09-600-PUT",
+    "right": "put",
+    "series": "EQUITY",
+    "strike_key": "600"
+   }
+  ],
   "contracts_digest": "02f176dcdc9842a7ccc89dc6dfa82d6df51e6d62eafe93dfe920e9f725c7bb20",
   "record_query_identity": {
    "as_of_ny": "2026-10-05",
@@ -359,7 +433,7 @@
   "max_dte": 60,
   "min_dte": 14
  },
- "record_id": "rga1-33843c65d6c088edd57e7112",
+ "record_id": "rga1-b6370d7f35bd93e563da95d2",
  "refusals": [
   "PARTIAL_COVERAGE"
  ],
