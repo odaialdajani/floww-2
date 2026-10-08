@@ -3,7 +3,8 @@ import {API} from '../../config/api';
 import {storedAppKeyHeaders} from '../../utils/appKey';
 import {usePublishScreenContext} from '../../agent/useScreenContext';
 import {admitRangeEnvelope,rangeSelectionContext,RANGE_METRICS} from '../../lib/rangeAnalytics';
-import {cellPalette,fmtK} from './SkylitHeatmapGrid';
+import {fmtK} from './SkylitHeatmapGrid';
+import {signedCellPalette} from '../../lib/signedGridPalette';
 import RangeReplayControls from './RangeReplayControls';
 import AskLodestar from './AskLodestar';
 import './RangeAnalyticsWorkspace.css';
@@ -91,12 +92,12 @@ export default function RangeAnalyticsWorkspace({ticker,onReplayModeChange}) {
   return <table role="grid" aria-label={`${label} · strike by expiry`} className="range-matrix">
    <thead><tr><th scope="col">Strike USD</th>{expiries.map(row=><th scope="col" key={row.expiry}>{row.expiry}<small>{row.dte} DTE</small></th>)}</tr></thead>
    <tbody>{rows.map((strike,r)=><tr key={strike}><th scope="row">{strike}</th>{expiries.map(({expiry},c)=>{
-    const value=sec.cells[expiry][strike],color=value===null?null:cellPalette((value/ext+1)/2);
+    const value=sec.cells[expiry][strike],color=value===null?null:signedCellPalette(value,ext);
     const selected=selection?.strike===strike && selection.expiry===expiry;
     return <td key={expiry} role="gridcell" aria-selected={selected} className={selected?'range-selected':''}>
      <button type="button" ref={node=>{if(node)cellRefs.current.set(`${prefix}${r}:${c}`,node);else cellRefs.current.delete(`${prefix}${r}:${c}`);}}
       aria-label={`${strike} · ${expiry} · ${value===null?'Unavailable':value+' USD per 1% spot move'}`}
-      style={color?{background:color.background,color:color.foreground}:undefined}
+      style={color?{backgroundColor:color.background,backgroundImage:color.backgroundImage,color:color.foreground}:undefined}
       onKeyDown={event=>focusCell(event,r,c,prefix)} onClick={()=>selectCell(value,strike,expiry,owningMetric)}>
       {value===null?'Unavailable':fmtK(value)}
      </button></td>;

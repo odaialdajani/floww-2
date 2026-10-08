@@ -170,7 +170,7 @@ export default function TriadDesk({ ticker }) {
     {expiry && !chainError && <>
       <div className="panel exposure"><div className="panelhead">
         <strong>Exposure by strike</strong>
-        <div className="chart-legend"><span>Measured over</span><span>Partial hatched</span><span>Unknown gray</span></div>
+        <div className="chart-legend"><span>Gold positive · purple negative</span><span>Negative hatched · partial outlined</span><span>Unknown gray</span></div>
       </div>
         {series ? <TriadExposure series={series} spot={spot}
           selectedStrike={selection ? Number(selection.strike) : null}
