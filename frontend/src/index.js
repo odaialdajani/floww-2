@@ -7,6 +7,7 @@ import App from "@/App";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { AuthProvider } from "@/context/AuthContext";
 import {startProblemTracking, reportProblem} from "./diagnostics/problemTracking";
+import "./NeutralTheme.css";
 startProblemTracking();
 
 class ErrorBoundary extends React.Component {

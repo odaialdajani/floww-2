@@ -142,7 +142,7 @@ export default function RangeAnalyticsWorkspace({ticker,onReplayModeChange}) {
    <p>{section.basis} · {section.unit} · {section.formula_version} · {section.model} · metric {section.status}</p>
    <details><summary>Clocks and coverage</summary>
     <p>Received {envelope.clocks.received_at} · fetched {envelope.clocks.fetched_at || 'unknown'} · {envelope.clocks.chain_event_time?`chain event ${envelope.clocks.chain_event_time}`:'Chain event time unknown'}.</p>
-    <p>OI effective dates: {envelope.clocks.oi_effective_dates.join(', ') || 'unknown'}. Missing per-contract dates remain unknown.</p>
+    <p>OI effective dates: {(envelope.clocks.oi_effective_dates || []).join(', ') || 'unknown'}. Missing per-contract dates remain unknown.</p>
     <p>Spot {envelope.clocks.spot.price ?? 'unknown'} · {envelope.clocks.spot.source || 'source unknown'} · event {envelope.clocks.spot.event_time || 'unknown'}.</p>
     <p>Producer-reported usable {section.usable ?? 'unknown'}; missing delta {section.missing_delta ?? 'unknown'}, invalid delta {section.invalid_delta ?? 'unknown'}, quarantined {section.quarantined ?? 'unknown'}. Population acceptance is separate from cell counts.</p>
     <p>Record {envelope.record_id} · digest {envelope.content_digest}. Shape admission is not cryptographic replay integrity; stored evidence validation awaits the producer repair.</p>

@@ -1,0 +1,107 @@
+/* Surface-only dark theme. Data palettes and workspace geometry stay owned
+   by their existing components; body portals share these same surface tokens. */
+@media screen {
+  html:not([data-theme="light"]) {
+    --bg: #090909;
+    --bg-page: #090909;
+    --bg-sidebar: #080808;
+    --bg-2: #111111;
+    --bg-3: #191919;
+    --panel: #111111;
+    --panel-2: #191919;
+    --surface-1: #111111;
+    --surface-3: #222222;
+    --border: #282828;
+    --border-c: #282828;
+    --border-2: #454545;
+    --floww-surface: #111111;
+    --floww-raised: #191919;
+    --floww-control: #222222;
+    --floww-line: #454545;
+  }
+  html:not([data-theme="light"]) .legacy-theme {
+    --bg: #090909; --bg-2: #111111; --panel: #111111;
+    --panel-2: #191919; --border: #282828; --border-2: #454545;
+  }
+  html:not([data-theme="light"]) .th-root {
+    --th-bg: #111111; --th-side: #151515; --th-panel: #191919;
+    --th-row: #1c1c1c; --th-hover: #242424;
+    --th-line: #282828; --th-line2: #454545;
+  }
+  html:not([data-theme="light"]) :is(.skylit-full-dashboard, .trinity-layout) {
+    --desk-bg: #111111; --desk-panel: #191919; --desk-border: #454545;
+    background: var(--floww-surface);
+  }
+  html:not([data-theme="light"]) :is(
+    .skylit-control-bar, .skylit-col-bar, .skylit-selection-strip,
+    .skylit-full-dashboard > .skylit-study-toolbar,
+    .skylit-full-dashboard .skylit-drawer, .trinity-layout .triad-drawer,
+    .trinity-layout .triad-pane-header, .trinity-layout .triad-profile,
+    .triad-desk-toolbar, .trin-profile-cell, .trin-th-profile,
+    .solstice-expiry-coverage > div, .lodestar-ask-menu, .lodestar-ask-note,
+    .recorded-chart-popover-content, .recorded-chart-actions > [data-testid="saved-chart-readings"] > div,
+    .skylit-study-toolbar > [data-testid="saved-chart-readings"] > div,
+    .assistant-panel.lodestar-panel, .assistant-panel .assistant-header,
+    .floww-workspace[data-chat-layout="stacked"] > .assistant-docked > .assistant-header,
+    .assistant-panel .assistant-composer, .assistant-settings-dialog,
+    .assistant-settings-dialog header, .related-ticker-panel, .related-product-list li,
+    .range-workspace, .range-matrix th, .skylit-info-popover, .saved-stock-activity,
+    .saved-stock-activity tbody tr:nth-child(even), .tv-root, .tv-header,
+    .tv-cell, .tv-legend, .tidehunter-public-bridge
+  ) {
+    background: var(--floww-raised);
+    border-color: var(--floww-line);
+  }
+  html:not([data-theme="light"]) :is(
+    .recorded-price-chart button, .recorded-chart-tools > select,
+    .recorded-chart-popover > summary, .recorded-chart-popover-content select,
+    .price-history-toolbar button, .price-history-toolbar select,
+    .skylit-control-overflow[open], .skylit-replay-strip select,
+    .skylit-replay-strip input[type="date"], .triad-desk-toolbar select,
+    .assistant-open.lodestar-open, .assistant-panel .assistant-starters button,
+    .assistant-panel .assistant-followups button, .assistant-panel .assistant-new-answer,
+    .assistant-panel .assistant-composer-actions button:not(.assistant-send),
+    .assistant-settings-dialog button, .related-workspace-toggle,
+    .related-ticker-panel button:not(.positive):not(.negative), .related-ticker-panel select,
+    .range-mode-toggle, .range-toolbar button, .range-toolbar input, .range-toolbar select,
+    .range-replay-controls button, .range-replay-controls input, .range-replay-controls select,
+    .range-inspector button, .range-inspector input, .range-inspector select,
+    .saved-stock-activity button, .saved-stock-activity th,
+    .tv-controls select, .tv-subtab:not(.on), .public-handoff-review button,
+    .tidehunter-public-bridge > button
+  ) {
+    background: var(--floww-control);
+    border-color: var(--floww-line);
+  }
+  html:not([data-theme="light"]) :is(
+    .recorded-chart-surface, .assistant-panel .assistant-composer textarea,
+    .assistant-history-date input, .assistant-settings-dialog .lodestar-model-settings select,
+    .public-handoff-review input, .public-handoff-review select, .public-handoff-review textarea,
+    .saved-stock-details pre
+  ) {
+    background: var(--floww-surface);
+    border-color: var(--floww-line);
+  }
+  html:not([data-theme="light"]) :is(.lodestar-ask-item:hover, .assistant-panel .assistant-starters button:hover,
+    .saved-stock-activity button:hover:enabled, .saved-stock-activity tbody tr:hover) {
+    background: #303030;
+  }
+  html:not([data-theme="light"]) :is(
+    .skylit-options-study, .solstice-symbol-heading, .solstice-symbol-pane,
+    .solstice-symbol-pane header, .solstice-symbol-inspector,
+    .recorded-chart-nodes, .price-history-replay, .related-header, .related-controls,
+    .related-body section, .assistant-context-row, .assistant-history-controls
+  ) { border-color: var(--floww-line); }
+  html:not([data-theme="light"]) .trin-spot-rail-label { background: var(--floww-surface); }
+  html:not([data-theme="light"]) .related-body { scrollbar-color: #777777 #191919; }
+  /* This shared directory uses inline surfaces and is rendered into body. */
+  html:not([data-theme="light"]) dialog.floww-stock-directory {
+    background: var(--floww-raised) !important;
+    border-color: var(--floww-line) !important;
+  }
+  html:not([data-theme="light"]) dialog.floww-stock-directory :is(button, input:not([type="checkbox"])) {
+    background: var(--floww-control) !important;
+    border-color: var(--floww-line) !important;
+  }
+  html:not([data-theme="light"]) ::-webkit-scrollbar-thumb:hover { background: #666666; }
+}

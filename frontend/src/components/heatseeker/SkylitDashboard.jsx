@@ -1288,7 +1288,7 @@ function SkylitDashboard({
         </div>
       </div>
       </div>
-      </>}
+      </>
     </div>
   );
 }

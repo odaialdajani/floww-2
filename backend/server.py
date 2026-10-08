@@ -156,6 +156,26 @@ _rate_limits: dict = defaultdict(deque)  # ip -> deque[timestamp]
 RATE_LIMIT = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "60"))  # requests per minute
 _TEST_MODE = os.environ.get("TESTING", "").lower() in ("1", "true", "yes")
 
+# Read-only dashboard GET families admitted without consuming the per-IP burst
+# budget. Plain GETs only; POST/PUT/PATCH/DELETE on these paths stay limited,
+# and broker/admission routers (/api/public, /api/alpaca, /admission) are never
+# listed here.
+_READ_ONLY_GET_FAMILIES = (
+    "/api/heatseeker", "/api/analytics", "/api/flowseeker", "/api/heatmap",
+    "/api/spot", "/api/data", "/api/tickers", "/api/portfolio", "/api/alerts",
+    "/api/agent",
+    "/api/dual_gex", "/api/iv_mid", "/api/screener", "/api/wheel_income",
+    "/api/max_pain", "/api/contract", "/api/chain",
+    "/api/related", "/api/market", "/api/solstice", "/api/ensemble",
+    "/api/version",
+)
+
+
+def _is_read_only_dashboard_path(path: str) -> bool:
+    """Segment-boundary family match: exact prefix or prefix + '/'."""
+    return any(path == family or path.startswith(family + "/")
+               for family in _READ_ONLY_GET_FAMILIES)
+
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
     """Rate limiter: RATE_LIMIT requests per minute per IP with sliding window.
@@ -167,13 +187,9 @@ async def rate_limit_middleware(request: Request, call_next):
     # dashboard fires ~20+ panel reads on load + polling, which blows past a
     # 60/min budget and surfaced as HTTP 429 on nearly every panel. Mutating
     # routes (POST/DELETE: snapshots, portfolio writes, alerts) stay limited.
-    if request.method == "GET" and request.url.path.startswith((
-        "/api/heatseeker", "/api/analytics", "/api/flowseeker", "/api/heatmap",
-        "/api/spot", "/api/data", "/api/tickers", "/api/portfolio", "/api/alerts",
-        "/api/agent/",
-        "/api/dual_gex", "/api/iv_mid", "/api/screener", "/api/wheel_income",
-        "/api/max_pain", "/api/contract", "/api/chain",
-    )):
+    # Families match on path-segment boundaries only: a near-prefix lookalike
+    # such as /api/spotlight or /api/relatedness stays subject to the limit.
+    if request.method == "GET" and _is_read_only_dashboard_path(request.url.path):
         return await call_next(request)
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
