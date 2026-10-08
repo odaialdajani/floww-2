@@ -106,6 +106,13 @@ test('on-demand owning axes and metrics preserve nulls, clocks and research-only
  expect(screen.getByRole('status')).toHaveTextContent('HISTORY_NOT_YET_RECORDED');
  expect(screen.queryByRole('grid')).not.toBeInTheDocument();
 });
+test('unknown vendor OI dates preserve the map and show the original unknown date',async()=>{
+ const data=JSON.parse(JSON.stringify(complete));data.clocks.oi_effective_dates=null;
+ global.fetch.mockResolvedValue(response(data));render(<RangeAnalyticsWorkspace ticker="SPY"/>);
+ fireEvent.click(screen.getByRole('button',{name:'Load analytical range'}));
+ await screen.findByRole('grid',{name:'Raw OI GEX · strike by expiry'});
+ expect(screen.getByText(/OI effective dates: unknown/)).toBeInTheDocument();
+});
 test('partial skipped expiry and stale provenance stay explicit, without replacement arithmetic',async()=>{
  global.fetch.mockResolvedValue(response(partial));render(<RangeAnalyticsWorkspace ticker="SPY"/>);
  fireEvent.click(screen.getByRole('button',{name:'Load analytical range'}));

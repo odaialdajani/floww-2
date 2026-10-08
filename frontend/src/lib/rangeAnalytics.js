@@ -43,7 +43,7 @@ export function admitRangeEnvelope(data,{symbol,minDte,maxDte,asOf,recordId}={})
  const clocks=data.clocks;
  if(!object(clocks) || !timestamp(clocks.received_at) || (clocks.fetched_at !== null && !timestamp(clocks.fetched_at))
   || (clocks.chain_event_time !== null && !timestamp(clocks.chain_event_time))
-  || !Array.isArray(clocks.oi_effective_dates) || clocks.oi_effective_dates.some(value=>!date(value))
+  || (clocks.oi_effective_dates !== null && (!Array.isArray(clocks.oi_effective_dates) || clocks.oi_effective_dates.some(value=>!date(value))))
   || !object(clocks.spot) || (clocks.spot.price !== null && (typeof clocks.spot.price !== 'number' || !Number.isFinite(clocks.spot.price) || clocks.spot.price <= 0))
   || !object(data.provenance) || typeof data.provenance.stale !== 'boolean'
   || !text(data.provenance.data_source)) return refuse('RANGE_CLOCKS_UNAVAILABLE');

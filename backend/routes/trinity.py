@@ -92,6 +92,23 @@ async def get_trinity_alignment(
     return result
 
 
+def _qualified_adv_shares(ticker: str, raw: dict) -> tuple[float | None, dict]:
+    """Return (adv_shares, provenance) only from independently qualified evidence.
+
+    A qualified ADV is a rolling per-session share-volume average computed from
+    stored, validated daily bars that carry explicit share volume with clocks.
+    No admitted store persists per-session volume today (the Related daily
+    store keeps close-only bars), so this refuses rather than emitting a
+    constant substitute. When such a store is admitted, qualify it here with
+    its source, session count and as-of date.
+    """
+    return None, {
+        "status": "unavailable",
+        "reason": "no_qualified_adv",
+        "detail": "no admitted per-session share-volume store for ticker ADV",
+    }
+
+
 @router.get("/{ticker}")
 async def get_trinity_for_ticker(ticker: str, expiries: int = Query(4, ge=1, le=12)):
     """Get zero-gamma levels and GEX data for a single ticker."""
@@ -119,24 +136,64 @@ async def get_trinity_for_ticker(ticker: str, expiries: int = Query(4, ge=1, le=
 
     # ── Paper-accurate Gamma Imbalance (Barbon-Buraschi) ──
     if spot > 0 and flip_levels:
+        from services.gex_paper_accurate import (
+            compute_flip_metrics,
+            compute_gamma_imbalance,
+        )
         try:
-            from services.gex_paper_accurate import (
-                compute_flip_metrics,
-                compute_gamma_imbalance,
-                cross_asset_gamma_spillover,
-            )
-            gi = compute_gamma_imbalance(net_gex, spot, adv_shares=75_000_000)
-            fm = compute_flip_metrics(spot, flip_levels[0] if flip_levels else None, net_gex)
-            response["gamma_imbalance"] = gi
-            response["flip_metrics"] = fm
-            # Cross-asset spillover: how much SPX gamma drives this ticker
-            gib_pct = gi.get("gamma_imbalance_pct", 0)
-            response["cross_asset_spillover"] = cross_asset_gamma_spillover(
-                spx_gamma_imbalance_pct=gib_pct,
-                single_stock_gamma_imbalance_pct=gib_pct,
-                sector="broad",
+            response["flip_metrics"] = compute_flip_metrics(
+                spot, flip_levels[0] if flip_levels else None, net_gex
             )
         except Exception:
-            pass  # silent by design: sector fallback to broad; response otherwise complete
+            logger.warning("Trinity flip-metrics compute failed for %s", t, exc_info=True)
+            response["flip_metrics"] = {"status": "partial", "reason": "compute_failed"}
+        # ADV must be independently qualified per ticker (rolling share volume
+        # with provenance). No admitted store carries per-session share volume
+        # today; a constant substitute is refused instead of displayed.
+        adv_shares, adv_prov = _qualified_adv_shares(t, raw)
+        if adv_shares is None:
+            response["gamma_imbalance"] = {
+                "status": "unavailable",
+                "reason": adv_prov.get("reason", "no_qualified_adv"),
+                "gamma_imbalance_pct": None,
+                "gamma_imbalance_dollars_per_share": None,
+                "regime": None,
+                "interpretation": (
+                    "Gamma imbalance withheld: no independently qualified "
+                    "per-ticker average daily share volume in stored evidence; "
+                    "a constant substitute is not emitted."
+                ),
+            }
+        else:
+            try:
+                gi = compute_gamma_imbalance(net_gex, spot, adv_shares=adv_shares)
+                gi["status"] = "ok"
+                gi["adv_shares"] = adv_shares
+                gi["adv_provenance"] = adv_prov
+                response["gamma_imbalance"] = gi
+            except Exception:
+                logger.warning("Trinity gamma-imbalance compute failed for %s", t, exc_info=True)
+                response["gamma_imbalance"] = {
+                    "status": "partial",
+                    "reason": "compute_failed",
+                    "gamma_imbalance_pct": None,
+                    "gamma_imbalance_dollars_per_share": None,
+                    "regime": None,
+                }
+        # Cross-asset spillover needs a separately timestamped SPX gamma
+        # measurement. Reusing this ticker's own imbalance as the SPX input is
+        # self-substitution and is refused; report a typed unavailability.
+        response["cross_asset_spillover"] = {
+            "status": "unavailable",
+            "reason": "no_separate_spx_measurement",
+            "spillover_risk": None,
+            "effective_gamma": None,
+            "index_driver_pct": None,
+            "interpretation": (
+                "Spillover withheld: no separately measured SPX gamma "
+                "imbalance is available as evidence; the selected ticker's "
+                "own value is never substituted for SPX."
+            ),
+        }
 
     return response

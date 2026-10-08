@@ -61,6 +61,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
  const end=event=>{pointers.current.delete(event.pointerId);event.currentTarget.releasePointerCapture?.(event.pointerId);if(pointers.current.size===1){gesture.current={mode:'pan',point:[...pointers.current.values()][0],view:current.current.view,range:current.current.range,manual:Boolean(manualPrice)};}else gesture.current=null;};
  const downloadChart=async()=>{
   const svg=surface.current?.querySelector('svg');if(!svg||!data.length||exporting)return;
+  const background=window.getComputedStyle(surface.current).backgroundColor;
   setExporting(true);setExportError('');let sourceUrl;
   try{
    // Copy the displayed drawing and its resolved styles, so saved colors and
@@ -73,7 +74,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
    const context=canvas.getContext('2d');if(!context)throw new Error('Image drawing is unavailable');
    sourceUrl=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(copy)],{type:'image/svg+xml;charset=utf-8'}));
    const drawing=new Image();await new Promise((resolve,reject)=>{drawing.onload=resolve;drawing.onerror=()=>reject(new Error('Chart image could not be read'));drawing.src=sourceUrl;});
-   context.scale(scale,scale);context.fillStyle='#0c1118';context.fillRect(0,0,size.width,size.height+header);context.fillStyle='#dce5ee';context.font='14px Consolas, monospace';
+   context.scale(scale,scale);context.fillStyle=background&&background!=='transparent'&&background!=='rgba(0, 0, 0, 0)'?background:'#111111';context.fillRect(0,0,size.width,size.height+header);context.fillStyle='#dce5ee';context.font='14px Consolas, monospace';
    context.fillText(ticker+' | '+chartTime(visible[0]?.time,true)+' - '+chartTime(visible.at(-1)?.time,true)+' New York',12,25);context.drawImage(drawing,0,header,size.width,size.height);
    const png=await new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Chart image could not be saved')),'image/png'));
    const downloadUrl=URL.createObjectURL(png),link=document.createElement('a');link.href=downloadUrl;link.download=(String(ticker).replace(/[^a-zA-Z0-9._-]/g,'_')||'stock')+'-price-chart.png';

@@ -69,6 +69,7 @@ test('image download keeps the visible candles, saved levels, colors, dates and 
  const create=jest.fn().mockReturnValueOnce('blob:chart-svg').mockReturnValueOnce('blob:chart-png'),revoke=jest.fn();
  URL.createObjectURL=create;URL.revokeObjectURL=revoke;
  const drawing={scale:jest.fn(),fillRect:jest.fn(),fillText:jest.fn(),drawImage:jest.fn()};
+ const fills=[];Object.defineProperty(drawing,'fillStyle',{set(value){fills.push(value);}});
  jest.spyOn(HTMLCanvasElement.prototype,'getContext').mockReturnValue(drawing);
  jest.spyOn(HTMLCanvasElement.prototype,'toBlob').mockImplementation(callback=>callback(new Blob(['png'],{type:'image/png'})));
  jest.spyOn(window,'Image').mockImplementation(()=>{const image={};Object.defineProperty(image,'src',{set(){queueMicrotask(()=>image.onload());}});return image;});
@@ -79,12 +80,14 @@ test('image download keeps the visible candles, saved levels, colors, dates and 
   const chart=screen.getByTestId('recorded-price-chart'),before={start:chart.getAttribute('data-window-start'),count:chart.getAttribute('data-visible-candles'),low:chart.getAttribute('data-price-low'),high:chart.getAttribute('data-price-high')};
   // These are the styles resolved by the browser from the chart stylesheet.
   chart.querySelector('.recorded-candle-up').style.color='#57c5b0';chart.querySelector('.recorded-price-label').style.fill='#aebcc9';
+  chart.querySelector('.recorded-chart-surface').style.backgroundColor='#111111';
   fireEvent.click(screen.getByRole('button',{name:'Chart tools'}));
   await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Download chart image'})));
   await waitFor(()=>expect(click).toHaveBeenCalledTimes(1));
   const svgBlob=create.mock.calls[0][0],xml=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsText(svgBlob);});
   expect(svgBlob.type).toContain('image/svg+xml');expect(xml.match(/data-testid="price-candle"/g)).toHaveLength(60);expect(xml).toContain('data-testid="saved-node-line"');expect(xml).toContain('color: rgb(87, 197, 176)');expect(xml).toContain('fill: #aebcc9');expect(xml).toContain('New York');
   expect(drawing.fillText.mock.calls[0][0]).toContain('SPY |');expect(drawing.fillText.mock.calls[0][0]).toContain('New York');expect(drawing.drawImage).toHaveBeenCalledWith(expect.anything(),0,42,800,480);
+  expect(fills[0]).toBe('rgb(17, 17, 17)');
   expect(create.mock.calls[1][0].type).toBe('image/png');expect(click.mock.instances[0].download).toBe('SPY-price-chart.png');expect(click.mock.instances[0].href).toBe('blob:chart-png');expect(revoke).toHaveBeenCalledWith('blob:chart-svg');
   expect(chart).toHaveAttribute('data-window-start',before.start);expect(chart).toHaveAttribute('data-visible-candles',before.count);expect(chart).toHaveAttribute('data-price-low',before.low);expect(chart).toHaveAttribute('data-price-high',before.high);expect(screen.getByRole('button',{name:'Auto scale'})).toHaveAttribute('aria-pressed','false');
   await new Promise(resolve=>setTimeout(resolve,1100));expect(revoke).toHaveBeenCalledWith('blob:chart-png');

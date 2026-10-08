@@ -250,7 +250,7 @@ class RelatedSeriesStore:
                 return []
             try:
                 return connection.execute(query, args).fetchall()
-            except sqlite3.OperationalError:
+            except sqlite3.Error:  # corrupt/torn files raise DatabaseError, not only OperationalError
                 self.read_error = "cache_storage_unavailable"
                 return []
             finally:

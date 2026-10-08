@@ -1570,6 +1570,7 @@ describe("stock chart scroll-down study continuity",()=>{
  const stock=props=><><SkylitDashboardView ticker="SPY" data={selectionMap()} spot={650} {...props}/><ResearchSelection/></>;
  test("the default chart retains the accessible heatmap and study controls below it",()=>{
   render(stock());
+  expect(screen.queryByText("}",{exact:true})).not.toBeInTheDocument();
   const chart=screen.getByTestId("price-node-history"),map=screen.getByTestId("mock-heatmap");
   expect(chart).toBeVisible();expect(map).toBeVisible();expect(screen.getByTestId("mock-control-bar")).toBeVisible();
   expect(screen.getByRole("combobox",{name:"Canvas layout"})).toBeVisible();
