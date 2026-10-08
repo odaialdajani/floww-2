@@ -1,11 +1,14 @@
 # Ledger status at merged head `f1e76e82` (updated 2026-10-08)
 
 Machine re-check (`check-closure.py --check-engineering`): pending is now
-exactly **C17** (18 "belongs to another SHA" notes are the known
-SHA-strictness on I-tasks accepted at older heads — unchanged).
+exactly **C17** — CLOSED 2026-10-08: admitted per-strike exposure series
+shipped (projection counts + read-only endpoint + 6/6 tests + freshness
+gate). See `C17/DEFERRAL.md`. The 18 "belongs to another SHA" notes are
+the known SHA-strictness on I-tasks accepted at older heads — unchanged.
 **T03 → ACCEPTED_AT_SHA** with Cline adversarial review + three hashed
 packet-relative receipts (`references/t03-*`). 54 engineering accepted;
-7 Nav holds intact. Prior note below (pending T03+C17) is superseded.
+7 Nav holds intact. Prior notes below (pending T03; pending T03+C17) are
+superseded.
 
 
 Tool: old-packet `tools/check-closure.py --check-engineering

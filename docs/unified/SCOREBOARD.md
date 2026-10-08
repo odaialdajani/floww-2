@@ -3,8 +3,9 @@
 ## Sealed (evidence + verdict where roles permit)
 
 - Old packet: 54/54 engineering accepted (T03 closed with review + hashed
-  receipts; C17 deferred with reason). Machine check: pending C17 only.
-  7 NAV holds intact.
+  receipts; C17 closed 2026-10-08 via admitted per-strike exposure series
+  — projection counts + read-only `/api/public/chain/{ticker}/exposure-by-strike`
+  + 6/6 unified tests + docs-freshness gate). 7 NAV holds intact.
 - Unified engineering: U01–U09 accepted; U10 repaired (6/6) and accepted;
   U11/U12/U13/U06/U07/U08 accepted; U13 sweep verified; U15 dossier with
   5-test contract; U16 map; C17 deferred with reason.
