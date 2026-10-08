@@ -57,3 +57,14 @@ Reason (2) is answered by the per-strike counts construction; reason (1)
 is narrowed (share-volume persistence remains unadmitted — the series
 carries counts, not share volumes); reason (3) is answered by shipping
 the minimal projection + endpoint + tests with receipts.
+
+
+## Current independently reviewed repair (2026-10-08)
+
+The initial C17 closure claim did not supply an admitted consumer and lost
+coverage/provenance. That claim is superseded. The corrected producer and
+same-response consumer now have paired canonical synthetic fixtures, failed-
+first counterexamples and scoped independent ACCEPT review. Current source
+hashes and remaining final gates are in FROZEN-SNAPSHOT.md. The original
+machine ledger stays pending until its exact-source named-peer requirements
+are satisfied; this record does not rewrite original historical acceptance.

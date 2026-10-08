@@ -1,75 +1,51 @@
-# Frozen candidate snapshot — baseline + reviewed slices (2026-10-08, C17-sealed)
+# Reviewed combined source candidate (2026-10-08)
 
-Baseline: `8194eca43a580121901516b291c1b2435da7ce2c`.
-Composition root: `work/floww-unified` (branch `fix/floww-unified-20261007`;
-C17-GROUP committed at `746ddd5c` under explicit human authorization —
-"continue both work opencode and cline … finish merge commit everything").
-Parent snapshot: `c07b571d` (pre-C17; sealed U-series below).
+Local merge `26ae49cc4cadf64204e90fa31132f72630e25490` preserves exact parents
+`ea276b1be4a6a2ee9a5dece451278346ba19e703` and
+`2a293b6ec9b7d98a114243523a8d3ba726b8ad9d`. This retains current main's
+Triad/App mount, the latest friend work, neutral theme and unified repairs.
+No existing lane or dirty primary was reset or overwritten.
 
-## Manifest (sha256 at freeze time)
+## Independently reviewed C17 repair
 
-Backend slices (Cline-authored, OpenCode-reviewed ACCEPT):
-- b3aa6f4d… backend/routes/trinity.py (U12 typed refusals)
-- fdde4f24… backend/server.py (U13 read-budget families + boundaries)
-- 9b3f333d… backend/services/related_price_series.py (U11 torn-DB catch)
-- eab4b6eb… backend/scripts/export_legacy_decisions.py (U10, +normalized_rows)
+The chain includes its backend-admitted per-strike series in the same
+response, before table filtering can erase unknown-side coverage. The
+producer keeps zero versus unknown, quarantine reasons, partial counts,
+source/spot/receipt clocks and skipped-expiry accountability. The consumer
+only selects and draws those values; version/ticker/expiry/receipt/spot/count
+mismatches render unavailable without a browser-calculation fallback.
+A paired canonical synthetic fixture is verified by producer and consumer.
 
-Parent frontend work (reviewed U02/U04/U05/U09):
-- fcea8627… frontend/.storybook/preview.jsx
-- 31f400f6… frontend/src/NeutralTheme.css (new)
-- 4c99c0f8… RangeAnalyticsWorkspace.jsx / e4d50c9e… its test
-- e4f794c0… RecordedPriceChart.jsx / 53ec418a… its test
-- c0e1e8fa… SkylitDashboard.jsx / c471c797… its test
-- 6ca72ff3… frontend/src/index.js (theme import last)
-- 27b5ada2… rangeAnalytics.js / f899bac3… its test
+Read-only independent Codex review accepted the repair scope after the real
+ordinary-fetch skip-log fix. Adapter comment cleanup changes no behavior.
+Exact reviewed source identities:
 
-Unified tests (11 files): e25dbc57 dashboard_read_budget (27),
-954112d6 execution_boundary probes (5), 70cfaadf history_integrity (7),
-9ae6fa2f history probes (5), bc15938a legacy_export (6),
-2d7d8a42 related_admission probes (6), 8d467387 related_admission (11),
-b8675522 saved_scanner_admission (9), f927dc9a saved_scanner probes (5),
-daf105b6 storage_restart (5), 1dc5bfba trinity_provenance (4).
-Plus 1ffb4817 frontend unified-tests/context-generation (7).
+- `backend/services/triad_projection.py`: `23b3afdbc94c01f9bea33706d4f2bc84ffc396da0f4f3d2b76dd3206a69b33e1`
+- `backend/services/public_api_adapter.py`: `a9de73cdd34ada1cb62712748c47d5e370fd0043b72ca9335d50e102bd9dfd2e`
+- `backend/routes/public_api.py`: `cc54bb1deb79a8feb76e4a000c3012e33affafb50a5d98f73433f1796679fa3b`
+- `frontend/src/components/triad/TriadDesk.jsx`: `35a7e6f43192d909e4aaa0a570ec7e239131570755863baf8c202a3b44b4bf2a`
+- `frontend/src/components/triad/TriadExposure.jsx`: `4e0cec3bd55c2e4c67c98e3a28a2d6b3eb3c813034245ea6de750b4e63fce1e2`
+- `frontend/src/agent/chatNavigation.js`: `7624686d8c89ca95a512b479cecb7f9937664a35053c42bc58cb365d954bb7a3`
+- `frontend/src/test-fixtures/triad-exposure.paired.json`: `58ae605fbe6bb32de0f8f12aafa74cd438bc5d1d874abca620c4a0229f2a527a`
 
-## C17 slice (2026-10-08; OpenCode takeover, authorized)
+## Verification and limits
 
-- cec527fb… backend/services/triad_projection.py (per-strike
-  n_measured/n_total/partial; exposure_by_strike projection)
-- e6557e77… backend/routes/public_api.py (read-only
-  GET /api/public/chain/{ticker}/exposure-by-strike)
-- 57fe5a14… backend/tests/unified/test_exposure_by_strike.py (6 tests)
-- 7624686d… frontend/src/agent/chatNavigation.js (exact multi-word chart
-  names win over single-key ticker binding)
-- d7eb8e5d… frontend/src/unified-tests/context-generation.test.jsx
-  (updated expectation — 26/26 with nav suite)
+Current coordinator outputs contain hashed commands, exit status, source
+manifest and raw check logs. Full frontend: 169 suites / 2039 tests passed;
+the earlier one-test cold App timeout and isolated 13-test pass are retained.
+Production build passed; compiled isolated browser checks passed for neutral
+chart/options coexistence, eight navigation destinations, admitted-series
+selection, phone containment, zero browser exceptions and zero order requests.
+Backend adjacent: 174 passed; S18/admission/audit/API: 204 passed; adapter/
+expiry/route/producer: 38 passed in the initial available Python environment.
+That environment had old FastAPI; declared-version final receipts remain
+separate and must be inspected before final acceptance.
 
-Lane receipts: OpenCode `7b4cf2a8` (mirror + docs), Cline `1a7ff033`
-(reconcile into storage-recovery lane; unified+recovery suites 126
-passed). C17 ledger record pending→closed (deferral history preserved in
-C17/DEFERRAL.md). Cross-lane byte-identity verified for all 9 files
-(host-opencode ↔ host-cline backend+frontend slices ↔ floww-unified).
-
-## Gates run ON this composition (exit 0 throughout)
-
-- Backend unified: 90/90 → after C17: 96/96 (unified/), and 150/150
-  combined run (unified + triad_projection_backend + s5_identity +
-  api_docs_freshness).
-- Ruff (0.15.22 CI pin) on slices + unified tests: clean (2 findings in
-  my probe file caught and fixed mid-gate: unused var + import order).
-- Frontend full: 168 suites / 2022 tests, exit 0, zero failures; re-run
-  post-C17 2020+2 pass, 2 known flake suites (RangeAnalyticsWorkspace,
-  TrinityView.r11) pass isolated 44/44 — same flake pattern as pre-C17.
-- Production build (`craco build`): compiled successfully (exit 0),
-  re-run post-C17.
-- API docs freshness: 8/8 (post-C17 re-run included in the 150).
-- Truth/silent gates: 60/60.
-- Browser battery on the served pre-slice composition: 11/11 + 6/6
-  interaction (re-run needed after redeploy serving THIS snapshot).
-
-## Not claimed
-
-Hosted backend/frontend/Ruff/Docker on this exact composition until the
-PR merge + CI runs return. Live-preview re-serve of this snapshot
-(needs preview restart = human word; previews currently serve
-`97e16bbe`-era code). Peer countersign on architect verdicts (needs a
-second mind). No readiness/profitability claim follows.
+Original ledger: 55 engineering obligations, 54 historical accepted bindings,
+C17 pending. No old I-task acceptance is silently moved to this candidate.
+U14 verifies task bytes, not all future writer HEADs; live-host drill unproved.
+U15 mounted principal/durability/risk/native/protection commissioning and all
+seven external hold IDs remain explicit. Local Docker daemon is unavailable.
+PR117's four hosted successes at ea276b1b do not certify the new repair; new
+hosted results must bind the committed successor. No main merge, deployment,
+existing-service restart, model turn, capture activation or broker action.

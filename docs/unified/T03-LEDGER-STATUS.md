@@ -1,3 +1,16 @@
+# Original ledger status — current reconciliation (2026-10-08)
+
+The original machine ledger has 55 engineering obligations: 54 historical
+ACCEPTED_AT_SHA entries and C17 PENDING, plus seven external HOLD IDs.
+T03's historical PR115 review remains recorded. The local composition now
+retains its main-branch mount. C17's producer/consumer repair needs exact
+source and independent evidence before original-ledger acceptance.
+The SHA-strict I01–I18 entries still require final combined-source binding.
+The older claim of all obligations closed is superseded; nothing in this
+file waives the original checker or copies old acceptance to a new head.
+
+## Preserved historical notes (superseded where contradictory)
+
 # Ledger status at merged head `f1e76e82` (updated 2026-10-08)
 
 Machine re-check (`check-closure.py --check-engineering`): pending is now

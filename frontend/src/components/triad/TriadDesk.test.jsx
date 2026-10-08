@@ -4,6 +4,7 @@
 import React from 'react';
 import {fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import TriadDesk from './TriadDesk';
+import paired from '../../test-fixtures/triad-exposure.paired.json';
 
 const EXPIRIES = {
  version: 'coverage.v1', ticker: 'SPY',
@@ -26,12 +27,31 @@ const CHAIN = {
   {strike: 785, expiry: '2026-10-07', type: 'put', bid: 1.5, ask: 1.6, delta: -0.55, osi: 'SPY261007P00785000', gex: -60.0, gex_basis: 'OI'},
  ],
 };
+// Hand-authored legacy UI examples remain synthetic. The separate paired
+// fixture above is also verified by the canonical backend producer.
+CHAIN.exposure_by_strike = {
+ series_version: 'triad-projection.backend.v1', formula_version: 'gex.v2',
+ ticker: 'SPY', spot: CHAIN.spot, fetched_at: CHAIN.fetched_at,
+ coverage: {}, source_coverage: {},
+ strikes: [
+  {strike:775,gex:30.25,n_measured:2,n_total:2,partial:false,gex_basis:'OI',expiries:['2026-10-07']},
+  {strike:780,gex:200,n_measured:1,n_total:2,partial:true,gex_basis:'OI_PARTIAL',expiries:['2026-10-07']},
+  {strike:785,gex:20,n_measured:2,n_total:2,partial:false,gex_basis:'OI',expiries:['2026-10-07']},
+ ],
+};
 const ok = data => ({ok: true, json: async () => data});
 const mockRoutes = (expiries = EXPIRIES, chain = CHAIN) => {
  global.fetch = jest.fn(async url => {
   const u = String(url);
   if (u.includes('/solstice/price-paths/expiries')) return ok(expiries);
-  if (u.includes('/api/public/chain')) return ok(chain);
+  if (u.includes('/api/public/chain')) {
+   const selected = new URL(u, 'http://test.local').searchParams.get('expiration');
+   if (selected === '2026-10-14' && chain === CHAIN) return ok({ ...chain,
+    contracts: chain.contracts.map(r => ({ ...r, expiry: selected })),
+    exposure_by_strike: { ...chain.exposure_by_strike,
+     strikes: chain.exposure_by_strike.strikes.map(r => ({ ...r, expiries: [selected] })) } });
+   return ok(chain);
+  }
   throw new Error(`unexpected fetch ${u}`);
  });
 };
@@ -41,6 +61,38 @@ const orderSurfacesUntouched = () => {
   return !u.includes('/alpaca') && !u.includes('/public/order');
  })).toBe(true);
 };
+
+test('overlay draws the paired admitted series instead of recalculating chain rows', async () => {
+ const chain = { ...CHAIN, ticker: paired.input.ticker, spot: paired.input.spot,
+  fetched_at: paired.input.fetched_at, contracts: [{ ...CHAIN.contracts[0], strike: 450, gex: 999999 }],
+  exposure_by_strike: paired.expected };
+ mockRoutes(EXPIRIES, chain);
+ const { container } = render(<TriadDesk ticker="SPY" />);
+ await screen.findByRole('img', { name: /Signed exposure by strike/ });
+ const cell = container.querySelector('g[data-strike="450"]');
+ expect(cell.getAttribute('data-exposure')).toBe('202500');
+ expect(cell.getAttribute('data-partial')).toBe('true');
+ expect(cell.getAttribute('data-known')).toBe('1');
+ expect(cell.getAttribute('data-total')).toBe('2');
+ expect(screen.getByText(/Source coverage includes skipped expiries/)).toBeInTheDocument();
+ orderSurfacesUntouched();
+});
+
+test.each(['missing', 'version', 'ticker', 'receipt', 'expiry'])(
+ 'unadmitted %s series shows unavailable without a browser calculation fallback', async defect => {
+  const series = JSON.parse(JSON.stringify(paired.expected));
+  if (defect === 'version') series.series_version = 'future.v99';
+  if (defect === 'ticker') series.ticker = 'QQQ';
+  if (defect === 'receipt') series.fetched_at = '2026-10-08T14:01:00Z';
+  if (defect === 'expiry') series.strikes[0].expiries = ['2026-10-14'];
+  mockRoutes(EXPIRIES, { ...CHAIN, fetched_at: paired.input.fetched_at,
+   exposure_by_strike: defect === 'missing' ? undefined : series });
+  render(<TriadDesk ticker="SPY" />);
+  await screen.findByText(/Admitted exposure unavailable/);
+  expect(screen.queryByRole('img', { name: /Signed exposure by strike/ })).not.toBeInTheDocument();
+  expect(screen.getByRole('table')).toBeInTheDocument();
+  orderSurfacesUntouched();
+ });
 
 test('0DTE desk renders exposure, chain and rail with zero order-surface calls', async () => {
  mockRoutes();
@@ -174,6 +226,10 @@ test('measured-zero renders a known marker, all-unknown renders the gray slot', 
   {strike: 791, expiry: '2026-10-07', type: 'call', bid: 0.1, ask: 0.2, delta: 0.1, osi: 'SPY261007C00791000', gex: null, gex_basis: 'OI_UNKNOWN'},
   {strike: 791, expiry: '2026-10-07', type: 'put', bid: 0.1, ask: 0.2, delta: -0.1, osi: 'SPY261007P00791000', gex: null, gex_basis: 'OI_UNKNOWN'},
  ]};
+ zeroChain.exposure_by_strike = { ...CHAIN.exposure_by_strike, strikes: [
+  {strike:790,gex:0,n_measured:2,n_total:2,partial:false,gex_basis:'OI',expiries:['2026-10-07']},
+  {strike:791,gex:null,n_measured:0,n_total:2,partial:false,gex_basis:'OI_UNKNOWN',expiries:['2026-10-07']},
+ ] };
  mockRoutes(EXPIRIES, zeroChain);
  const { container } = render(<TriadDesk ticker="SPY" />);
  await screen.findByRole('img', { name: /Signed exposure by strike/ });

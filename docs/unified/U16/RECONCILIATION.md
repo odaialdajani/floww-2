@@ -53,3 +53,18 @@ H-ORIGINAL-STOP (8000/8001 + user jobs intact), H-CAPTURE, H-EXECUTION,
 H-CLINE-BINDING (Cline halted mid-U15; its lane preserved, unmerged),
 H-TRIAD-PROMOTION (now a merged fact for this branch — recorded, not
 waived), plus the 7 historical NAV holds.
+
+
+## Current reconciliation supersedes historical table (2026-10-08)
+
+Local composition now includes both the unified C17 lineage and main's
+Triad desk: merge `26ae49cc` has exact parents `ea276b1b` and `2a293b6e`.
+The neutral theme, friend-authored current stock tools, data repairs and
+Triad mount are retained. C17 now has a backend series and a same-snapshot
+consumer repair under review; the original packet still has 55 engineering
+obligations (54 historically accepted, C17 pending) and seven external IDs.
+No status is silently transferred to this candidate. Six commissioning
+categories remain plus the separate NAV-PAPER-EXEMPT policy decision.
+U17/U18 need frozen-source checks and independent acceptance; legacy recovery
+still needs a real-store completeness receipt. Current host processes are
+idle/aborted; no controller or coding model was launched by this audit.

@@ -20,6 +20,26 @@ const expiriesUrl = ticker =>
 const chainUrl = (ticker, expiry) =>
   `${API}/public/chain/${encodeURIComponent(ticker)}?expiration=${encodeURIComponent(expiry)}&expirations=4`;
 
+function admittedExposure(chain, ticker, expiry) {
+  const series = chain?.exposure_by_strike;
+  if (!series || series.series_version !== 'triad-projection.backend.v1'
+    || series.formula_version !== 'gex.v2' || series.ticker !== ticker
+    || series.fetched_at !== chain.fetched_at || series.spot !== chain.spot
+    || !Array.isArray(series.strikes)) return null;
+  const seen = new Set();
+  for (const row of series.strikes) {
+    if (!row || !Number.isFinite(row.strike) || row.strike <= 0 || seen.has(row.strike)
+      || !Array.isArray(row.expiries) || row.expiries.length !== 1 || row.expiries[0] !== expiry
+      || !Number.isInteger(row.n_measured) || !Number.isInteger(row.n_total)
+      || row.n_total <= 0 || row.n_measured < 0 || row.n_measured > row.n_total
+      || row.partial !== (row.n_measured > 0 && row.n_measured < row.n_total)
+      || (row.n_measured > 0 ? !Number.isFinite(row.gex) : row.gex !== null)
+      || row.gex_basis !== (row.partial ? 'OI_PARTIAL' : row.n_measured ? 'OI' : 'OI_UNKNOWN')) return null;
+    seen.add(row.strike);
+  }
+  return series;
+}
+
 export default function TriadDesk({ ticker }) {
   const [scope, setScope] = useState("0dte");
   const [expiry, setExpiry] = useState(null);
@@ -107,6 +127,7 @@ export default function TriadDesk({ ticker }) {
   const switchScope = next => { resetRequests(); setScope(next); };
   const contracts = Array.isArray(chain?.contracts) ? chain.contracts : [];
   const spot = typeof chain?.spot === "number" ? chain.spot : null;
+  const series = admittedExposure(chain, ticker, expiry);
   const selectedRows = selection
     ? contracts.filter(c => Number(c.strike) === Number(selection.strike)) : [];
   const selectedRow = selectedRows.find(c => c.gex != null && Number.isFinite(Number(c.gex)))
@@ -118,6 +139,9 @@ export default function TriadDesk({ ticker }) {
       selection, spot,
       chain_source: chain?.data_source || null,
       chain_fetched_at: chain?.fetched_at || null,
+      exposure_series_version: series?.series_version || null,
+      exposure_coverage: series?.coverage || null,
+      exposure_source_coverage: series?.source_coverage || null,
       note: "research-only frozen scope; not an execution permission",
     };
     try {
@@ -148,10 +172,14 @@ export default function TriadDesk({ ticker }) {
         <strong>Exposure by strike</strong>
         <div className="chart-legend"><span>Measured over</span><span>Partial hatched</span><span>Unknown gray</span></div>
       </div>
-        <TriadExposure rows={contracts} spot={spot}
+        {series ? <TriadExposure series={series} spot={spot}
           selectedStrike={selection ? Number(selection.strike) : null}
           onSelect={strike => setSelection({ strike: String(strike), expiry })} />
-        <div className="chart-caption">Same strike rail · {expiry} · signed canonical per-row exposure; unknown rows are not neutral.</div>
+          : <p role="status">Admitted exposure unavailable for this chain snapshot. Contract rows remain available for review.</p>}
+        <div className="chart-caption">Same strike rail · {expiry} · server-admitted exposure; unknown rows are not neutral.
+          {series && <> Receipt {series.fetched_at || 'unknown'} · observation {series.event_time || 'unknown'}.</>}
+          {series?.source_coverage?.skipped?.length > 0 && <span> Source coverage includes skipped expiries; displayed rows do not prove complete listing coverage.</span>}
+        </div>
       </div>
       <TriadChainTable rows={contracts} expiry={expiry}
         selectedStrike={selection ? Number(selection.strike) : null}

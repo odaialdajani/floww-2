@@ -1,19 +1,10 @@
 import React, { useMemo } from "react";
 
-/**
- * TriadExposure — signed per-strike exposure SVG from annotated chain rows.
- *
- * Each chain row carries ONE canonical signed gex (services/triad_projection
- * annotate_contract_exposure) plus gex_basis ("OI" measured vs "OI_UNKNOWN").
- * Bars: measured rows cyan (positive) / violet (negative); unknown rows
- * render as gray outlined slots, never zero-filled (unknown is not neutral).
- * Partially observed strikes (some rows measured, some unknown) render the
- * observed subtotal as a hatched partial bar with an explicit
- * "Partial n/m measured" title — a missing put/call never becomes silent
- * zero contribution. Axis ticks are raw dollars below one million and
- * millions (M) at or above, matching bar units.
- * Gold dashed line marks spot; the selected strike highlights. Pure
- * presentational transform of admitted rows — no new metric is invented.
+/** Render the backend-admitted per-strike series from the same chain snapshot.
+ * Values, measured/unknown counts and partial flags come from the producer.
+ * This component only selects a visible window and draws pixels. Unknown
+ * remains an outlined slot, partial exposure remains explicitly hatched,
+ * and spot/selection retain the existing gold rail. No client aggregation.
  */
 export function formatExposureTick(v) {
   const n = Number(v);
@@ -28,19 +19,17 @@ export function formatExposureTick(v) {
   return `${sign}${Math.round(abs)}`;
 }
 
-export default function TriadExposure({ rows, spot, selectedStrike, onSelect }) {
+export default function TriadExposure({ series, spot, selectedStrike, onSelect }) {
   const model = useMemo(() => {
     const byStrike = new Map();
-    for (const row of rows || []) {
+    for (const row of series?.strikes || []) {
       if (!row || typeof row !== "object") continue;
       const strike = Number(row.strike);
       if (!Number.isFinite(strike)) continue;
-      const entry = byStrike.get(strike) || { strike, gex: 0, nKnown: 0, nTotal: 0 };
-      entry.nTotal += 1;
-      if (typeof row.gex === "number" && Number.isFinite(row.gex)) {
-        entry.gex += row.gex;
-        entry.nKnown += 1;
-      }
+      // Backend values and coverage are authoritative; this renderer only
+      // chooses visible strikes and maps values to pixels.
+      const entry = { strike, gex: row.gex, nKnown: row.n_measured,
+        nTotal: row.n_total, partial: row.partial };
       byStrike.set(strike, entry);
     }
     let strikes = [...byStrike.keys()].sort((a, b) => a - b);
@@ -56,7 +45,7 @@ export default function TriadExposure({ rows, spot, selectedStrike, onSelect }) 
     }
     const max = Math.max(1, ...strikes.map(s => Math.abs(byStrike.get(s).gex)));
     return { byStrike, strikes, max };
-  }, [rows, spot]);
+  }, [series, spot]);
 
   const w = 750, h = 190, y = 99, step = 31, x0 = 65;
   const scale = 66 / model.max;
@@ -70,11 +59,12 @@ export default function TriadExposure({ rows, spot, selectedStrike, onSelect }) 
     {model.strikes.map((strike, i) => {
       const entry = model.byStrike.get(strike);
       const known = entry.nKnown > 0;
-      const partial = entry.nKnown > 0 && entry.nKnown < entry.nTotal;
+      const partial = entry.partial === true;
       const x = x0 + i * step, rh = Math.abs(entry.gex) * scale;
       const selected = strike === selectedStrike;
       return <g key={strike} data-action="cell" data-strike={strike}
         data-known={entry.nKnown} data-total={entry.nTotal}
+        data-exposure={entry.gex == null ? 'unknown' : entry.gex}
         data-partial={partial ? "true" : "false"}
         style={{ cursor: "pointer" }}
         onClick={() => onSelect && onSelect(strike)}>

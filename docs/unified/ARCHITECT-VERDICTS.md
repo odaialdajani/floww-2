@@ -25,3 +25,14 @@ service tests prove posture, not commissioning.
 Map covers all 18 tasks + C17 + holds with no silent omissions; references
 used as references, statuses never transferred. The U17/U18 dependency
 statements in it are now actionable by this same authority.
+
+
+## Independent review supersedes completion claims (2026-10-08)
+
+A separate read-only Codex reviewer reproduced the C17 coverage/provenance
+and missing-consumer gaps, and verified the U14 artifact hashes and 51-test
+fake suite. U14 verifies sealed task bytes, not all future writer HEADs;
+its corrected dossier limits that claim. U15's five passing probes cover
+refusal posture only, not its full scope. U16 contained stale C17/holder
+statements. These findings reopen final closure; the earlier single-mind
+verdicts are preserved as history and are not independent final acceptance.
