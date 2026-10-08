@@ -70,9 +70,19 @@ export default function TriadDesk({ ticker }) {
         }
         const picked = scope === "0dte"
           ? sameDay.slice().sort((a, b) => (a.expiry < b.expiry ? -1 : 1))[0].expiry
-          : (listed?.range_map?.admitted_expiries || [])[0]
-            || rows.filter(r => r && r.admitted).slice()
-              .sort((a, b) => a.dte - b.dte)[0]?.expiry || null;
+          : (() => {
+              const dteByExpiry = new Map(
+                rows.filter(r => r && r.expiry != null).map(r => [r.expiry, r.dte]),
+              );
+              const admittedFuture = (listed?.range_map?.admitted_expiries || [])
+                .filter(e => {
+                  const d = dteByExpiry.get(e);
+                  return typeof d === "number" ? d > 0 : false;
+                });
+              if (admittedFuture.length) return admittedFuture[0];
+              return rows.filter(r => r && r.admitted && typeof r.dte === "number" && r.dte > 0).slice()
+                .sort((a, b) => a.dte - b.dte)[0]?.expiry || null;
+            })();
         if (!picked) {
           setExpiry(null);
           setExpiriesNote("No admitted expiries in this scope and window.");
@@ -136,7 +146,7 @@ export default function TriadDesk({ ticker }) {
     {expiry && !chainError && <>
       <div className="panel exposure"><div className="panelhead">
         <strong>Exposure by strike</strong>
-        <div className="chart-legend"><span>Measured over</span><span>Unknown gray</span></div>
+        <div className="chart-legend"><span>Measured over</span><span>Partial hatched</span><span>Unknown gray</span></div>
       </div>
         <TriadExposure rows={contracts} spot={spot}
           selectedStrike={selection ? Number(selection.strike) : null}

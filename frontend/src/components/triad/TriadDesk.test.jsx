@@ -121,3 +121,66 @@ test('ticker change aborts and clears the desk', async () => {
  expect(signal.aborted).toBe(true);
  expect(screen.queryByRole('img', { name: /Signed exposure/ })).not.toBeInTheDocument();
 });
+
+test('partial strike renders hatched partial subtotal, never silent zero', async () => {
+ mockRoutes();
+ const { container } = render(<TriadDesk ticker="SPY" />);
+ await screen.findByRole('img', { name: /Signed exposure by strike/ });
+ const cell780 = container.querySelector('g[data-strike="780"]');
+ expect(cell780).not.toBeNull();
+ expect(cell780.getAttribute('data-partial')).toBe('true');
+ expect(cell780.getAttribute('data-known')).toBe('1');
+ expect(cell780.getAttribute('data-total')).toBe('2');
+ const title780 = cell780.querySelector('title');
+ expect(title780).not.toBeNull();
+ expect(title780.textContent.replace(/\s+/g, ' ')).toMatch(/Partial exposure 1\/2 measured/);
+ const cell775 = container.querySelector('g[data-strike="775"]');
+ expect(cell775.getAttribute('data-partial')).toBe('false');
+ expect(cell775.getAttribute('data-known')).toBe('2');
+ orderSurfacesUntouched();
+});
+
+test('axis ticks label raw dollars without M and millions with M', async () => {
+ const { formatExposureTick } = require('./TriadExposure');
+ expect(formatExposureTick(200)).toBe('+200');
+ expect(formatExposureTick(-200)).toBe('−200');
+ expect(formatExposureTick(1000000)).toMatch(/M$/);
+ expect(formatExposureTick(200)).not.toMatch(/M/);
+ mockRoutes();
+ render(<TriadDesk ticker="SPY" />);
+ await screen.findByRole('img', { name: /Signed exposure by strike/ });
+ expect(screen.queryByText('+200M')).not.toBeInTheDocument();
+ expect(screen.getByText('+200')).toBeInTheDocument();
+ orderSurfacesUntouched();
+});
+
+test('Next listed skips same-day expiry when a later series coexists', async () => {
+ mockRoutes();
+ render(<TriadDesk ticker="SPY" />);
+ await screen.findByRole('img', { name: /Signed exposure by strike/ });
+ fireEvent.click(screen.getByRole('button', { name: 'Next listed' }));
+ await waitFor(() => {
+  const calls = global.fetch.mock.calls.map(([u]) => String(u));
+  expect(calls.some(u => u.includes('expiration=2026-10-14'))).toBe(true);
+ });
+ expect(global.fetch.mock.calls.map(([u]) => String(u)).filter(u => u.includes('/api/public/chain') && u.includes('expiration=2026-10-07')).length).toBe(1);
+ orderSurfacesUntouched();
+});
+
+test('measured-zero renders a known marker, all-unknown renders the gray slot', async () => {
+ const zeroChain = { ...CHAIN, contracts: [
+  {strike: 790, expiry: '2026-10-07', type: 'call', bid: 0.1, ask: 0.2, delta: 0.1, osi: 'SPY261007C00790000', gex: 0, gex_basis: 'OI'},
+  {strike: 790, expiry: '2026-10-07', type: 'put', bid: 0.1, ask: 0.2, delta: -0.1, osi: 'SPY261007P00790000', gex: 0, gex_basis: 'OI'},
+  {strike: 791, expiry: '2026-10-07', type: 'call', bid: 0.1, ask: 0.2, delta: 0.1, osi: 'SPY261007C00791000', gex: null, gex_basis: 'OI_UNKNOWN'},
+  {strike: 791, expiry: '2026-10-07', type: 'put', bid: 0.1, ask: 0.2, delta: -0.1, osi: 'SPY261007P00791000', gex: null, gex_basis: 'OI_UNKNOWN'},
+ ]};
+ mockRoutes(EXPIRIES, zeroChain);
+ const { container } = render(<TriadDesk ticker="SPY" />);
+ await screen.findByRole('img', { name: /Signed exposure by strike/ });
+ const zero = container.querySelector('g[data-strike="790"]');
+ expect(zero.getAttribute('data-partial')).toBe('false');
+ expect(zero.getAttribute('data-known')).toBe('2');
+ const unknown = container.querySelector('g[data-strike="791"]');
+ expect(unknown.querySelector('title').textContent).toMatch(/Unknown exposure/);
+ orderSurfacesUntouched();
+});

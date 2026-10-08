@@ -7,9 +7,27 @@ import React, { useMemo } from "react";
  * annotate_contract_exposure) plus gex_basis ("OI" measured vs "OI_UNKNOWN").
  * Bars: measured rows cyan (positive) / violet (negative); unknown rows
  * render as gray outlined slots, never zero-filled (unknown is not neutral).
+ * Partially observed strikes (some rows measured, some unknown) render the
+ * observed subtotal as a hatched partial bar with an explicit
+ * "Partial n/m measured" title — a missing put/call never becomes silent
+ * zero contribution. Axis ticks are raw dollars below one million and
+ * millions (M) at or above, matching bar units.
  * Gold dashed line marks spot; the selected strike highlights. Pure
  * presentational transform of admitted rows — no new metric is invented.
  */
+export function formatExposureTick(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "0";
+  const sign = n < 0 ? "−" : "+";
+  const abs = Math.abs(n);
+  if (abs >= 1000000) {
+    const m = abs / 1000000;
+    const text = m >= 100 ? String(Math.round(m)) : String(Math.round(m * 10) / 10);
+    return `${sign}${text}M`;
+  }
+  return `${sign}${Math.round(abs)}`;
+}
+
 export default function TriadExposure({ rows, spot, selectedStrike, onSelect }) {
   const model = useMemo(() => {
     const byStrike = new Map();
@@ -17,10 +35,11 @@ export default function TriadExposure({ rows, spot, selectedStrike, onSelect }) 
       if (!row || typeof row !== "object") continue;
       const strike = Number(row.strike);
       if (!Number.isFinite(strike)) continue;
-      const entry = byStrike.get(strike) || { strike, gex: 0, known: false };
+      const entry = byStrike.get(strike) || { strike, gex: 0, nKnown: 0, nTotal: 0 };
+      entry.nTotal += 1;
       if (typeof row.gex === "number" && Number.isFinite(row.gex)) {
         entry.gex += row.gex;
-        entry.known = true;
+        entry.nKnown += 1;
       }
       byStrike.set(strike, entry);
     }
@@ -41,22 +60,32 @@ export default function TriadExposure({ rows, spot, selectedStrike, onSelect }) 
 
   const w = 750, h = 190, y = 99, step = 31, x0 = 65;
   const scale = 66 / model.max;
-  return <svg viewBox={`0 0 ${w} ${h}`} role="img" aria-label="Signed exposure by strike. Measured cyan or violet, unknown gray.">
+  return <svg viewBox={`0 0 ${w} ${h}`} role="img" aria-label="Signed exposure by strike. Measured cyan or violet, partial hatched, unknown gray.">
     <line x1="37" y1={y} x2="727" y2={y} stroke="#476374" />
     <line x1="37" y1="28" x2="727" y2="28" stroke="#1d3342" />
     <line x1="37" y1="164" x2="727" y2="164" stroke="#1d3342" />
-    <text x="5" y="31" fill="#8ea6b5" fontSize="9">+{Math.round(model.max)}M</text>
+    <text x="5" y="31" fill="#8ea6b5" fontSize="9">{formatExposureTick(model.max)}</text>
     <text x="19" y="103" fill="#8ea6b5" fontSize="9">0</text>
-    <text x="5" y="167" fill="#8ea6b5" fontSize="9">−{Math.round(model.max)}M</text>
+    <text x="5" y="167" fill="#8ea6b5" fontSize="9">{formatExposureTick(-model.max)}</text>
     {model.strikes.map((strike, i) => {
       const entry = model.byStrike.get(strike);
+      const known = entry.nKnown > 0;
+      const partial = entry.nKnown > 0 && entry.nKnown < entry.nTotal;
       const x = x0 + i * step, rh = Math.abs(entry.gex) * scale;
       const selected = strike === selectedStrike;
-      return <g key={strike} data-action="cell" data-strike={strike} style={{ cursor: "pointer" }}
+      return <g key={strike} data-action="cell" data-strike={strike}
+        data-known={entry.nKnown} data-total={entry.nTotal}
+        data-partial={partial ? "true" : "false"}
+        style={{ cursor: "pointer" }}
         onClick={() => onSelect && onSelect(strike)}>
-        {entry.known
-          ? <rect x={x - 11} y={entry.gex > 0 ? y - rh : y} width="23" height={rh}
-              fill={entry.gex > 0 ? "#33d4df" : "#9368ed"} opacity=".85" />
+        {known
+          ? <g>
+              <rect x={x - 11} y={entry.gex > 0 ? y - rh : y} width="23" height={Math.max(rh, entry.gex === 0 ? 2 : 0)}
+              fill={entry.gex > 0 ? "#33d4df" : "#9368ed"} opacity={partial ? ".55" : ".85"}
+              stroke={partial ? "#f2d44b" : "none"} strokeDasharray={partial ? "3 2" : undefined} strokeWidth={partial ? 1 : 0}>
+                {partial && <title>Partial exposure {entry.nKnown}/{entry.nTotal} measured</title>}
+              </rect>
+            </g>
           : <rect x={x - 11} y={y - 8} width="23" height="16" fill="none"
               stroke="#86919b" strokeDasharray="3 2" opacity=".7"><title>Unknown exposure</title></rect>}
         {selected && <rect x={x - 13} y="24" width="27" height="143" fill="#f2d44b08" stroke="#c2aa41" strokeWidth="1" />}
