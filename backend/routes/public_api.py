@@ -73,6 +73,36 @@ def _jsonable(value: Any) -> Any:
     return value
 
 
+@router.get("/chain/{ticker}/exposure-by-strike")
+async def get_chain_exposure_by_strike(
+    ticker: str,
+    expiration: str | None = Query(default=None, description="Specific expiration YYYY-MM-DD. If omitted, uses the first N expirations."),
+    expirations: int = Query(default=4, ge=1, le=12, description="Number of expirations to include."),
+):
+    """Admitted per-strike exposure series (C17 documented endpoint).
+
+    Same fetch and canonical per-row annotation as `/chain/{ticker}`, then
+    the `exposure_by_strike` projection: observed per-strike subtotals with
+    explicit measured/total counts and partial flags. Unknown stays null,
+    partial stays labeled — a consumer must not treat a partial subtotal
+    as complete. No order, approval, or execution surface anywhere here.
+    """
+    result = await fetch_chain_from_public_api(ticker.upper(), max_expiries=expirations)
+    if result is None:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Public API unavailable for {ticker} — key may be missing or API call failed",
+        )
+    from services.chain_readings import chain_readings
+    result = {**result, "contracts": chain_readings(result.get("contracts", []), result.get("spot"), ticker.upper())}
+    from services.triad_projection import annotate_contract_exposure, exposure_by_strike
+    annotated = annotate_contract_exposure(result.get("contracts", []), result.get("spot", 0))
+    if expiration:
+        annotated = [c for c in annotated if c.get("expiry") == expiration]
+    document = exposure_by_strike({**result, "contracts": annotated})
+    return {"ok": True, **document}
+
+
 @router.get("/chain/{ticker}")
 async def get_public_chain(
     ticker: str,

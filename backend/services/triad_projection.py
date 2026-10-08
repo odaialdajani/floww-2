@@ -252,6 +252,10 @@ def project_triad_from_chain(
 
     # Per-strike rows across the expiries actually shown. Keyed by exact
     # decimal strike identity (R10-08): 100.25 and 100.75 stay distinct.
+    # Each record carries measured/total row counts so a consumer can tell a
+    # complete subtotal from a partial one and unknown from measured zero
+    # (C17 admitted series basis). Counts are bookkeeping over admitted
+    # rows, never a new metric.
     by_strike: dict[str, dict[str, Any]] = {}
     for row in annotated:
         if row["expiry"].strip() not in used:
@@ -270,12 +274,16 @@ def project_triad_from_chain(
                 "oi": None,
                 "volume": None,
                 "expiries": [],
+                "n_measured": 0,
+                "n_total": 0,
             },
         )
         if row["expiry"].strip() not in rec["expiries"]:
             rec["expiries"].append(row["expiry"].strip())
+        rec["n_total"] += 1
         gex = row.get("gex")
         if gex is not None:
+            rec["n_measured"] += 1
             rec["gex"] = (rec["gex"] or 0.0) + gex
             side_key = "call_gex" if option_type_sign(row.get("type")) > 0 else "put_gex"
             rec[side_key] = (rec[side_key] or 0.0) + gex
@@ -288,6 +296,8 @@ def project_triad_from_chain(
 
     strikes = sorted(by_strike.values(), key=lambda r: (r["strike"] is None, r["strike"] or 0.0),
                      reverse=True)
+    for rec in strikes:
+        rec["partial"] = 0 < rec["n_measured"] < rec["n_total"]
 
     # King is a STRIKE chosen from aggregated rows, not a single contract.
     king = None
@@ -349,6 +359,56 @@ def project_triad_from_chain(
     }
 
 
+def exposure_by_strike(
+    payload: dict[str, Any] | None,
+    *,
+    expiry_count: int | None = None,
+) -> dict[str, Any]:
+    """Admitted per-strike exposure series (C17 documented endpoint shape).
+
+    Thin projection over `project_triad_from_chain`: same aggregation, same
+    canonical values, reduced to the per-strike series plus explicit
+    measured/total counts and coverage. A strike with no measured rows
+    carries `gex: None` (unknown, never zero-filled); a partially observed
+    strike carries the observed subtotal with `partial: true`; measured
+    zero stays `0.0` with `partial: false`. No consumer may treat a partial
+    subtotal as complete — the counts travel with the data.
+    """
+    projected = project_triad_from_chain(payload, expiry_count=expiry_count)
+    strikes = projected["strikes"]
+    return {
+        "series_version": TRIAD_PROJECTION_VERSION,
+        "formula_version": projected["formula_version"],
+        "ticker": projected["ticker"],
+        "spot": projected["spot"],
+        "strikes": [
+            {
+                "strike": rec["strike"],
+                "gex": rec["gex"],
+                "call_gex": rec["call_gex"],
+                "put_gex": rec["put_gex"],
+                "partial": rec["partial"],
+                "n_measured": rec["n_measured"],
+                "n_total": rec["n_total"],
+                "expiries": rec["expiries"],
+            }
+            for rec in strikes
+        ],
+        "coverage": {
+            "strikes": len(strikes),
+            "measured_strikes": sum(1 for rec in strikes if rec["n_measured"] > 0 and not rec["partial"]),
+            "partial_strikes": sum(1 for rec in strikes if rec["partial"]),
+            "unknown_strikes": sum(1 for rec in strikes if rec["n_measured"] == 0),
+            "rows_measured": sum(rec["n_measured"] for rec in strikes),
+            "rows_total": sum(rec["n_total"] for rec in strikes),
+            "contracts_without_gex": projected["coverage"]["contracts_without_gex"],
+            "expiries_used": projected["expiries_used"],
+        },
+        "data_source": projected["data_source"],
+        "stale": projected["stale"],
+    }
+
+
 def exposure_parity(contracts: list[dict[str, Any]], spot: float) -> dict[str, Any]:
     """Assert-level helper: the projection's net must equal the canonical net.
 
@@ -372,6 +432,7 @@ __all__ = [
     "REASON_GAMMA_MISSING",
     "REASON_TYPE_UNKNOWN",
     "annotate_contract_exposure",
+    "exposure_by_strike",
     "exposure_parity",
     "project_triad_from_chain",
 ]

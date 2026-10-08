@@ -12,6 +12,10 @@ export function parseChatNavigation(question){
  if(/^(?:saved answers|chat history)$/i.test(target))return {history:true,label:'Saved answers'};
  for(const [name,[page,label]] of Object.entries(TARGETS)){
   if(target.toLowerCase()===name)return {page,label};
+ }
+ // Exact multi-word target names win over single-key ticker bindings: a bare
+ // "stock chart" must open the chart, never bind a pseudo-ticker "STOCK".
+ for(const [name,[page,label]] of Object.entries(TARGETS)){
   const after=new RegExp('^'+name+' (?:for |of )?('+SYMBOL+')$','i').exec(target);
   const before=new RegExp('^('+SYMBOL+') '+name+'$','i').exec(target);
   const stock=after?.[1] || before?.[1];
