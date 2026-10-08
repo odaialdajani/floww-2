@@ -18,6 +18,7 @@ import BarHeatmap from "./components/BarHeatmap";
 import PatternCard from "./components/PatternCard";
 import TrinityView from "./components/TrinityView";
 import TrinityVolatility from "./components/TrinityVolatility";
+import TriadDesk from "./components/triad/TriadDesk";
 import QuickTradePanel from "./components/QuickTradePanel";
 import {
   FlipZonesPanel, StackedNodesPanel, TugOfWarPanel, ScenarioPanel,
@@ -719,9 +720,17 @@ export default function App() {
               >
                 ◈ Volatility (Skew / Term / RR)
               </button>
+              <button
+                onClick={() => setTrinityTab("desk")}
+                className={`tv-subtab ${trinityTab === "desk" ? "on" : ""}`}
+              >
+                ◉ Wall Desk
+              </button>
             </div>
             {trinityTab === "gex" ? (
               <TrinityView ticker={ticker} onFocusTicker={setTicker} onTradeSelect={setTradeSelection} />
+            ) : trinityTab === "desk" ? (
+              <TriadDesk ticker={ticker} />
             ) : (
               <TrinityVolatility ticker={ticker.startsWith("^") ? ticker.slice(1) : ticker} expiries={8} />
             )}
