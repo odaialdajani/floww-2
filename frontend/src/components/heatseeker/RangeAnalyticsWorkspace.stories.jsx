@@ -54,13 +54,16 @@ async function loadReplay(canvasElement){
 }
 export const StoredResearchReplay={async play({canvasElement}){
  const c=await loadReplay(canvasElement);
- await userEvent.selectOptions(c.getByLabelText('Stored range record'),partial.record_id);
+ const [first,second]=[complete,partial].sort((a,b)=>Date.parse(a.clocks.received_at)-Date.parse(b.clocks.received_at) || a.record_id.localeCompare(b.record_id));
+ await userEvent.selectOptions(c.getByLabelText('Stored range record'),first.record_id);
  await expect(c.findByRole('grid')).resolves.toBeInTheDocument();
+ await expect(c.findByText(new RegExp(`Stored frame 1/2.*${first.record_id}`))).resolves.toBeInTheDocument();
  await expect(c.getByText(/Stored rga1 replay/)).toBeInTheDocument();
- await userEvent.selectOptions(c.getByLabelText('Replay speed'),'4');
+ await userEvent.selectOptions(c.getByLabelText('Replay speed'),'0.5');
  await userEvent.click(c.getByRole('button',{name:'Play frames'}));await userEvent.click(c.getByRole('button',{name:'Pause frames'}));
+ await expect(c.getByText(new RegExp(`Stored frame 1/2.*${first.record_id}`))).toBeInTheDocument();
  await userEvent.click(c.getByRole('button',{name:'Next frame'}));
- await expect(c.findByText(new RegExp(`Stored frame 2/2.*${complete.record_id}`))).resolves.toBeInTheDocument();
+ await expect(c.findByText(new RegExp(`Stored frame 2/2.*${second.record_id}`))).resolves.toBeInTheDocument();
  await userEvent.click(c.getByRole('button',{name:'Live',exact:true}));
  await expect(c.queryByRole('grid')).not.toBeInTheDocument();await expect(c.getByRole('button',{name:'Load analytical range'})).toBeEnabled();
 }};
