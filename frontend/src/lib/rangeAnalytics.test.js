@@ -13,6 +13,12 @@ test('actual complete and partial producer axes, cells, clocks and nulls survive
  }
  expect(partial.coverage.complete).toBe(false);
 });
+test('explicitly unknown vendor OI dates remain unknown without rejecting a valid range',()=>{
+ const data=clone(complete);data.clocks.oi_effective_dates=null;
+ const result=admitRangeEnvelope(data,query);
+ expect(result.reason).toBeNull();expect(result.envelope).toBe(data);
+ expect(result.envelope.clocks.oi_effective_dates).toBeNull();
+});
 test('producer refusals and unavailable metrics never become zero grids',()=>{
  expect(admitRangeEnvelope(refused,{...query,minDte:60,maxDte:14}).reason).toBe('REVERSED_WINDOW');
  const selection=rangeSelectionContext(complete,'window',{strike:'590',expiry:'2026-10-26'},'live');
@@ -31,6 +37,8 @@ test.each([
  ['foreign formula',d=>{d.grids.delta_weighted.formula_version='preview';},'RANGE_METRIC_UNSUPPORTED'],
  ['false completeness',d=>{d.coverage.upper_edge_observed=false;},'RANGE_COVERAGE_UNAVAILABLE'],
  ['missing clock',d=>{delete d.clocks.received_at;},'RANGE_CLOCKS_UNAVAILABLE'],
+ ['missing OI dates declaration',d=>{delete d.clocks.oi_effective_dates;},'RANGE_CLOCKS_UNAVAILABLE'],
+ ['malformed OI date',d=>{d.clocks.oi_effective_dates=['unknown'];},'RANGE_CLOCKS_UNAVAILABLE'],
  ['false cell population',d=>{d.grids.raw_oi.n_available=0;},'RANGE_GRID_UNAVAILABLE'],
  ['unavailable numeric grid',d=>{d.grids.raw_oi.status='unavailable';},'RANGE_GRID_UNAVAILABLE'],
  ['string spot',d=>{d.clocks.spot.price='600';},'RANGE_CLOCKS_UNAVAILABLE'],
