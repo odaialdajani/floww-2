@@ -15471,6 +15471,80 @@
         ]
       }
     },
+    "/api/public/chain/{ticker}/exposure-by-strike": {
+      "get": {
+        "description": "Admitted per-strike exposure series (C17 documented endpoint).\n\nSame fetch and canonical per-row annotation as `/chain/{ticker}`, then\nthe `exposure_by_strike` projection: observed per-strike subtotals with\nexplicit measured/total counts and partial flags. Unknown stays null,\npartial stays labeled \u2014 a consumer must not treat a partial subtotal\nas complete. No order, approval, or execution surface anywhere here.",
+        "operationId": "get_api_public_chain_ticker_exposure-by-strike",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "title": "Ticker",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Specific expiration YYYY-MM-DD. If omitted, uses the first N expirations.",
+            "in": "query",
+            "name": "expiration",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Specific expiration YYYY-MM-DD. If omitted, uses the first N expirations.",
+              "title": "Expiration"
+            }
+          },
+          {
+            "description": "Number of expirations to include.",
+            "in": "query",
+            "name": "expirations",
+            "required": false,
+            "schema": {
+              "default": 4,
+              "description": "Number of expirations to include.",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Expirations",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Chain Exposure By Strike",
+        "tags": [
+          "public_api",
+          "public_api"
+        ]
+      }
+    },
     "/api/public/execution-lifecycle/inventory": {
       "get": {
         "description": "Read-only lifecycle inventory (authenticated, default-deny; R17-4).\n\nReports the stored execution boundary \u2014 known/open/unknown intent records\nwith conservative protection truth, draft stages (stored approvals and\npreflight states are draft rows, never client booleans), native workflow\nregistrations, the NEW-ENTRY protection window and the recovery boundary \u2014\nwithout executing recovery, any broker call or any new live path. The\nlive-submission arm state is disclosed; account-wide limits stay UNSET.",
