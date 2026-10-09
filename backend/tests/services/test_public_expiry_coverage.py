@@ -40,6 +40,34 @@ async def test_successful_empty_expiry_is_not_available_coverage():
     result = await fetch_mocked({empty: [], usable: [make_contract(expiration=usable)]})
     assert result["expiries"] == [usable]
     assert {c["expiry"] for c in result["contracts"]} == {usable}
+    assert result["skipped"] == [{"expiry": empty, "reason": "NO_ADMITTED_CONTRACTS"}]
+
+
+@pytest.mark.asyncio
+async def test_ordinary_chain_reports_failed_expiry_to_exposure_consumer():
+    today = datetime.now(UTC).date()
+    failed = (today + timedelta(days=7)).isoformat()
+    usable = (today + timedelta(days=14)).isoformat()
+    broker = make_broker({failed: [], usable: [make_contract(expiration=usable)]})
+    original = broker.get_option_chain_parsed.side_effect
+
+    async def fetch(symbol, expiry, account_id, **kwargs):
+        if str(expiry) == failed:
+            raise RuntimeError("synthetic failed expiry")
+        return original(symbol, expiry, account_id)
+
+    broker.get_option_chain_parsed.side_effect = fetch
+    with patch.object(adapter, "_resolve_spot_observation", AsyncMock(return_value={
+        "price": 520.5, "source": "synthetic-mid", "event_time": None,
+        "fetched_at": "2026-10-07T14:01:00Z",
+    })):
+        result = await adapter._fetch_chain_live(broker, "SPY", 2)
+    assert result["skipped"] == [{"expiry": failed, "reason": "CHAIN_FETCH_FAILED"}]
+    from services.triad_projection import exposure_by_strike
+
+    series = exposure_by_strike(result)
+    assert series["source_coverage"]["skipped"] == result["skipped"]
+    assert series["fetched_at"] == result["fetched_at"]
 
 
 @pytest.mark.asyncio

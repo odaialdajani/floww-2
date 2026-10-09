@@ -7,6 +7,8 @@ import uuid
 from unittest.mock import AsyncMock
 
 import pytest
+
+pytest.importorskip("mongomock_motor", reason="mongo mock unavailable in this env")
 from mongomock_motor import AsyncMongoMockClient
 
 from services.agent.answer_sections import requested_sections

@@ -10,10 +10,11 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from services.anomaly_detector import FlowAnomalyDetector, RegimeAwareThreshold
+from services.anomaly_detector import HAS_TORCH, FlowAnomalyDetector, RegimeAwareThreshold
 
 
 class TestRegimeAwareThreshold:
@@ -112,6 +113,7 @@ class TestRegimeAwareThreshold:
 
 
 class TestFlowAnomalyDetectorWithRegime:
+    @pytest.mark.skipif(not HAS_TORCH, reason="CNN autoencoder result shape needs torch")
     def test_regime_in_update_result(self):
         """FlowAnomalyDetector.update should include regime info."""
         det = FlowAnomalyDetector(seq_len=10, latent_dim=8)

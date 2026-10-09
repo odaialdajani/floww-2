@@ -414,6 +414,10 @@ def _load_chain_window(
     screener's min_dte filter then rejects wholesale) this fetches every
     listed expiry inside the [min_dte, max_dte] window, capped. Returns
     (spot, calls, puts) with ``expiry`` stamped on each row.
+
+    INCOME-04: missing cells stay missing (None), never ``fillna(0)``.
+    Zero-filling turned unobserved IV/volume into confident zeros downstream;
+    ``_normalize_contract`` flags absent inputs as unknown instead.
     """
     yt = yf.Ticker(symbol.upper())
     hist = yt.history(period="5d")
@@ -423,6 +427,14 @@ def _load_chain_window(
     expiry_attr = getattr(yt, "options", None) or []
     if not expiry_attr:
         raise HTTPException(status_code=404, detail=f"No options chain available for {symbol}")
+
+    def _records(frame) -> list[dict]:
+        rows = frame.to_dict(orient="records") if frame is not None else []
+        for row in rows:
+            for key, value in list(row.items()):
+                if isinstance(value, float) and math.isnan(value):
+                    row[key] = None
+        return rows
 
     calls: list[dict] = []
     puts: list[dict] = []
@@ -435,8 +447,8 @@ def _load_chain_window(
                 exp_str, symbol.upper(), exc.__class__.__name__,
             )
             continue
-        cs = chain.calls.fillna(0).to_dict(orient="records") if chain.calls is not None else []
-        ps = chain.puts.fillna(0).to_dict(orient="records") if chain.puts is not None else []
+        cs = _records(chain.calls)
+        ps = _records(chain.puts)
         for c in cs:
             c.setdefault("expiry", exp_str)
         for p in ps:

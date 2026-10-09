@@ -296,7 +296,8 @@ test("the original Gamma regime reading stays reachable in Market brief",async()
  await act(async()=>render(<HeatseekerDashboard ticker="SPY" spot={500} data={{regime:{gex_regime:"positive"}}}/>));
  fireEvent.change(screen.getByRole("combobox",{name:"Study"}),{target:{value:"briefing"}});
  const reading=screen.getByText(/Positive Gamma/);expect(reading).toBeVisible();
- expect(screen.getByText(/Dealers dampen volatility/)).toBeVisible();
+ expect(screen.getByText(/Positive-gamma backdrop\. Mean-reversion plays favored only with observed holding\./)).toBeVisible();
+ expect(screen.queryByText(/Dealers/i)).toBeNull();
  fireEvent.change(screen.getByRole("combobox",{name:"Study"}),{target:{value:"patterns"}});expect(reading).not.toBeVisible();
  fireEvent.change(screen.getByRole("combobox",{name:"Study"}),{target:{value:"briefing"}});expect(screen.getByText(/Positive Gamma/)).toBe(reading);expect(reading).toBeVisible();
 });

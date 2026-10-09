@@ -1,14 +1,16 @@
 import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import { shownMapStrikes } from "./shownMapStrikes";
 import "./SolsticeWorkspace.css";
+import { signedCellPalette } from "../../lib/signedGridPalette";
+export { cellPalette } from "../../lib/signedGridPalette";
 
 /**
  * SkylitHeatmapGrid — Solstice strike × expiry matrix.
  *
  * STRIKE rows (descending, sticky rail) × EXPIRY columns. Each cell is ONE
- * signed compact value of the active surface, colored on the viridis field
- * (purple negatives → indigo → cyan/green → yellow positives) over a
- * zero-anchored range. Colors describe exposure, never a forecast.
+ * signed compact value of the active surface: muted gold for positives and
+ * hatched purple for negatives, using the Screener magnitude levels over
+ * the existing zero-anchored range. Colors describe exposure, never a forecast.
  *
  * R11 additions (no new calculation — every number is a backend cell):
  *  - precise spot line placed BETWEEN the bracketing strike rows (gold);
@@ -58,32 +60,6 @@ function expiryReference(isReplay, asof) {
 }
 
 const GRID_BY_VIEW = { gex: "grid", vex: "vex_grid", charm: "charm_grid", skylit: "grid" };
-
-// Viridis stops, most-negative → max
-const VIRIDIS = [
-  [0x44, 0x01, 0x54], [0x46, 0x32, 0x7e], [0x36, 0x5c, 0x8d], [0x27, 0x7f, 0x8e],
-  [0x1f, 0xa1, 0x87], [0x4a, 0xc1, 0x6d], [0xa0, 0xda, 0x39], [0xfd, 0xe7, 0x25],
-];
-
-function viridis(t) {
-  const x = Math.max(0, Math.min(1, t)) * (VIRIDIS.length - 1);
-  const i = Math.min(Math.floor(x), VIRIDIS.length - 2);
-  const f = x - i;
-  const [r1, g1, b1] = VIRIDIS[i];
-  const [r2, g2, b2] = VIRIDIS[i + 1];
-  return `rgb(${Math.round(r1 + (r2 - r1) * f)}, ${Math.round(g1 + (g2 - g1) * f)}, ${Math.round(b1 + (b2 - b1) * f)})`;
-}
-
-export function cellPalette(t) {
-  const background = viridis(t);
-  const rgb = background.match(/\d+/g).map(Number).map(value => {
-    const s = value / 255;
-    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  });
-  const luminance = rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
-  const white = 1.05 / (luminance + 0.05), black = (luminance + 0.05) / 0.05;
-  return {background, foreground: black > white ? "#000" : "#fff", contrast: Math.max(black, white)};
-}
 
 // en-US grouping without Intl per cell (same output as toLocaleString with
 // one fraction digit; ~20× cheaper across a few thousand cells).
@@ -165,7 +141,7 @@ export function ProfileBars({ raw, adj, rawMax, adjMax, adjLabel, partial, inval
 }
 
 const GridRow = memo(function GridRow({
-  strike, r, cells, minV, range, kingExp, rowBadges, isSpot, spot, conc, concPct,
+  strike, r, cells, colorExtent, kingExp, rowBadges, isSpot, spot, conc, concPct,
   selExp, selStrike, inWall, rowMiss, rowInv, prof, onCell, onStrike,
 }) {
   const sk = strikeKey(strike);
@@ -192,8 +168,7 @@ const GridRow = memo(function GridRow({
       {cells.map(({ e, v }, c) => {
         const has = v != null && !Number.isNaN(v);
         const isZero = has && v === 0;
-        const t = has && range > 0 ? (v - minV) / range : 0.5;
-        const palette = has && !isZero ? cellPalette(t) : null;
+        const palette = signedCellPalette(has ? v : null, colorExtent);
         const isKing = kingExp === e;
         const pct = rowBadges[e];
         const miss = rowMiss ? (rowMiss[e] || 0) : 0;
@@ -211,10 +186,11 @@ const GridRow = memo(function GridRow({
             key={e}
             data-r={r}
             data-c={c}
-            className={`trin-cell${isKing ? " trin-king" : ""}${!has ? " trin-missing" : ""}${isZero ? " trin-zero" : ""}${partial ? " trin-partial" : ""}${inv ? " trin-invalid" : ""}${sel ? " trin-selected" : ""}`}
+            className={`trin-cell${palette.backgroundImage !== 'none' ? " trin-negative" : ""}${isKing ? " trin-king" : ""}${!has ? " trin-missing" : ""}${isZero ? " trin-zero" : ""}${partial ? " trin-partial" : ""}${inv ? " trin-invalid" : ""}${sel ? " trin-selected" : ""}`}
             style={{
-              background: has ? (palette?.background || "rgba(13,17,23,0.95)") : "rgba(13,17,23,0.85)",
-              color: has ? (palette?.foreground || "#fff") : "#9baab9",
+              backgroundColor: palette.background,
+              backgroundImage: palette.backgroundImage,
+              color: has ? palette.foreground : "#9baab9",
             }}
             onClick={has && onCell ? () => onCell(strike, e, v) : undefined}
             onKeyDown={(ev) => {
@@ -552,7 +528,7 @@ function SkylitHeatmapGrid({
     );
   }
 
-  const range = maxV - minV;
+  const colorExtent = Math.max(Math.abs(minV), Math.abs(maxV));
   const selStrikeNum = selected && selected.strike != null ? Number(selected.strike) : null;
   const selExp = selected?.expiry || null;
   const wLo = wallBand && Number.isFinite(Number(wallBand.low)) ? Number(wallBand.low) : null;
@@ -581,8 +557,7 @@ function SkylitHeatmapGrid({
         strike={strike}
         r={r}
         cells={rowCells.get(strike) || []}
-        minV={minV}
-        range={range}
+        colorExtent={colorExtent}
         kingExp={king && king.strikeKey === sk ? king.expiry : null}
         rowBadges={badges[sk] || EMPTY}
         isSpot={strike === spotStrike}
@@ -638,9 +613,9 @@ function SkylitHeatmapGrid({
         </table>
       </div>
       <div className="trin-legend">
-        <span className="trin-legend-label">{fmtK(minV) || "$0"}</span>
+        <span className="trin-legend-label">{fmtK(-colorExtent) || "$0"}</span>
         <div className="trin-legend-bar" />
-        <span className="trin-legend-label">{fmtK(maxV) || "$0"}</span>
+        <span className="trin-legend-label">{fmtK(colorExtent) || "$0"}</span>
         <span className="trin-legend-scale" title="Zero-anchored signed scale">
           {scaleMode === "locked" ? "locked scale · 0 anchored" : scaleMode === "fixed" ? "fixed scale · 0 anchored" : "relative scale · 0 anchored"}
         </span>

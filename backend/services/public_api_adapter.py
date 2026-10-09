@@ -580,7 +580,7 @@ async def _fetch_chain_live(
 
     # 3. Bounded per-expiry walk (shared with the range-analytics fetcher).
     asm = await _assemble_chain(pb, ticker, symbol, account_id, chain_type,
-                                expiries, max_expiries, spot_observation)
+                                expiries, max_expiries, spot_observation, skip_log=[])
     if asm is None or not asm.get("contracts"):
         # Existing refusal contract: zero contracts means an unavailable chain.
         log.warning("Public API returned 0 contracts for %s", ticker)
@@ -763,8 +763,8 @@ async def _assemble_chain(
         "received_at": received_at,
         "n_expired_dropped": n_expired_dropped,
         # Admitted-expiry accountability (range-analytics.v1): expiries whose
-        # fetch failed or admitted zero contracts, with reason. Empty for the
-        # legacy first-N caller (skip_log unused there).
+        # fetch failed or admitted zero contracts, with reason.
+        # Both first-N and range callers preserve this source coverage.
         "skipped": skip_log or [],
         "attempt_cap": max_attempts,
         "expiries_attempted": attempted_expiries,

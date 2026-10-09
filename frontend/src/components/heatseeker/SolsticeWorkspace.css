@@ -174,3 +174,30 @@
  .skylit-price-study { padding:0 8px 8px; }
  .skylit-study-toolbar > [data-testid="saved-chart-readings"] > div { position:fixed; top:150px; left:3vw; width:94vw; max-height:60dvh; }
 }
+
+/* Screener lattice presentation: retain each original grid's scope,
+   virtualization, focus, selection and producer values. */
+.trin-grid-table { background:#191919; font-family:var(--font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif); font-size:12px; }
+.trin-grid-table thead th { background:#111; color:#a2a2a2; border-bottom:1px solid #282828; font-weight:500; text-align:left; }
+.trin-row { height:27px; }
+.trin-cell { height:27px; line-height:27px; text-align:left; border-left:0; border-bottom:1px solid rgba(0,0,0,.25); font-weight:400; }
+.trin-negative { background-image:repeating-linear-gradient(-45deg,rgba(0,0,0,.28) 0 2px,transparent 2px 6px); }
+.trin-strike-cell { background:#191919; color:#a2a2a2; border-bottom:1px solid #282828; }
+.trin-grid-table .trin-th-strike { color:#a2a2a2!important; }
+.trin-profile-cell,.trin-th-profile { background:#191919; border-color:#282828; }
+.trin-prof-bar.pos { background:#96713f; }
+.trin-prof-bar.neg { background:#544a9e; background-image:repeating-linear-gradient(-45deg,rgba(0,0,0,.28) 0 2px,transparent 2px 6px); }
+.trin-king { outline-color:#c9a84c; }
+.trin-val-bold { font-weight:600; }
+.trin-pct.up { background:#3a3226; color:#eee; }
+.trin-pct.down { background:#232032; color:#eee; }
+.trin-legend { background:#111; border-color:#282828; }
+.trin-legend-bar { background:linear-gradient(90deg,#544a9e 0 14%,#37306b 14% 28%,#232032 28% 42%,#191919 42% 58%,#3a3226 58% 72%,#6b5433 72% 86%,#96713f 86%); }
+.triad-exposure [role="button"]:focus-visible { outline:none; }
+.triad-exposure [role="button"]:focus-visible>g>rect:first-child,
+.triad-exposure [role="button"]:focus-visible>rect:first-child { stroke:#eee; stroke-width:2; }
+.range-matrix { border-spacing:0; }
+.range-matrix th { background:#111; border-bottom:1px solid #282828; }
+.range-matrix td { padding:0; border-width:1px; border-bottom-color:#282828; }
+.range-matrix td button { min-height:27px; padding:0 10px; text-align:left; font-weight:400; }
+.range-matrix td.range-selected { outline:1px solid #c9a84c; outline-offset:-1px; }

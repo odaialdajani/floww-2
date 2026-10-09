@@ -6,6 +6,7 @@ import { useAuth } from "./context/AuthContext";
 import { formatStrike } from "./lib/marketDisplay";
 import { fmt, fmtAbs, tagFor, TRIAD, DEFAULT_TICKERS } from "./lib/helpers";
 import { buildHeatmapQuery, heatmapReadPath } from "./lib/heatmapQuery";
+import { snapshotStreamNote, streamScopeLabel } from "./lib/streamReading";
 import GridHeatmap from "./components/GridHeatmap";
 import DomHeatmap from "./components/DomHeatmap";
 import MultiTickerHeatmap from "./components/MultiTickerHeatmap";
@@ -437,6 +438,8 @@ export default function App() {
   const [err, setErr] = useScopedReading(readingScope);
   const [advanced, setAdvanced] = useScopedReading(JSON.stringify([ticker, debouncedExpiries]));
   const [ensembleData, setEnsembleData] = useScopedReading(ticker);
+  // EXPOSURE-02: snapshot and stream are separate readings; name it when they disagree.
+  const streamNote = wsGex.data ? snapshotStreamNote(data?.nodes, wsGex.data) : null;
 
   // Flowseeker signal cards dispatch this to focus the desk ticker.
   useEffect(() => {
@@ -858,6 +861,10 @@ export default function App() {
                         <div className="flex justify-between"><span className="text-slate-500">King</span><span className="mono text-amber-300">{wsGex.data.king ? formatStrike(wsGex.data.king.strike) : "—"}</span></div>
                         <div className="flex justify-between"><span className="text-slate-500">Regime</span><span className={`mono ${regimeColor(wsGex.data.regime)}`}>{wsGex.data.regime || "—"}</span></div>
                       </div>
+                      <div className="text-[9px] text-slate-500 mt-1">{streamScopeLabel(wsGex.data)}</div>
+                      {streamNote && (
+                        <div className="text-[9px] text-amber-300 mt-1" role="note">{streamNote}</div>
+                      )}
                     </>
                   )}
                 </div>

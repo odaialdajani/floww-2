@@ -4,6 +4,8 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
+
+pytest.importorskip("mongomock_motor", reason="mongo mock unavailable in this env")
 from mongomock_motor import AsyncMongoMockClient
 
 from services.agent.read_budget import ReadBudget, ReadDenied, budget_scope

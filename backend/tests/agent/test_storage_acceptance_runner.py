@@ -1,6 +1,8 @@
 """Fixture verification of the real-store runner, not real Mongo acceptance."""
 
 import pytest
+
+pytest.importorskip("mongomock_motor", reason="mongo mock unavailable in this env")
 from mongomock_motor import AsyncMongoMockClient
 
 from scripts.verify_agent_storage import (

@@ -634,6 +634,7 @@ class TestAnomalyDetector:
         recall = detected / total_anomalies
         assert recall >= 0.95, f"anomaly recall {recall:.2%} < 95% (detected {detected}/{total_anomalies})"
 
+    @pytest.mark.skipif(not HAS_TORCH, reason="CNN autoencoder result shape needs torch")
     def test_flow_detector_warmup_then_active(self):
         """FlowAnomalyDetector transitions from warming_up to active."""
         det = FlowAnomalyDetector(seq_len=20)

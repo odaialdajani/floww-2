@@ -139,7 +139,8 @@ async def test_replay_changed_question_is_saved_without_live_history_watch_or_mo
     import uuid
     from unittest.mock import AsyncMock
 
-    from mongomock_motor import AsyncMongoMockClient
+    mongomock_motor = pytest.importorskip("mongomock_motor", reason="mongo mock needed for repository replay test")
+    AsyncMongoMockClient = mongomock_motor.AsyncMongoMockClient
 
     from services.agent.repository import AgentRepository
     from services.agent.research import ResearchService

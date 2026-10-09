@@ -25,3 +25,23 @@ broker/API connection, paper/live orders, native workflow registration,
 per-operator credentials. Service-only tests prove refusal posture, never
 commissioning. H-EXECUTION and NAV-ACCOUNT/CAPTURE/MODEL/NATIVE/RELEASE
 stand exactly as scoped.
+
+
+## Independent review correction (2026-10-08)
+
+The five tests above prove only the listed refusal/cancel/mount posture;
+they do not close the full U15 execution contract. The policy/store and
+immutable-approval paths require `test_public_brokerage_admission.py`,
+`test_s18_approval_single_use.py` and `test_s18_mounted_full_stack.py` plus
+the remaining S18 authority/effect/retry/risk/protection suites, bound to
+the frozen candidate. Fresh receipts are kept in the current coordinator
+outputs; historical counts are not promoted here.
+
+The mounted route authenticates a shared API key and accepts the operator
+name from the request body; matching it to stored approval does not prove
+an authenticated per-operator principal. Actual per-operator credentials,
+file-durable authority commissioning, server account/risk/native integration,
+verified protection support and production unknown-outcome/restart evidence
+remain explicit holds. Fake journal/store failures and mounted fake broker
+workflows prove engineering behavior only. No live service, order or cancel
+has been commissioned by this work.

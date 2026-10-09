@@ -14,10 +14,11 @@ test('navigation-only phrases resolve to pages; research questions stay null',()
 });
 
 test('ticker-qualified navigation never invents grounding',async()=>{
- // Bare "stock chart" binds the literal pseudo-ticker STOCK via the `chart`
- // key; it cannot reach a view until verifyNavigationTicker confirms it
- // against the provider catalog (fail-closed downstream).
- expect(parseChatNavigation('show me the stock chart')).toEqual({page:'heatseeker',ticker:'STOCK',label:'Stock chart'});
+ // Bare multi-word names resolve exactly and never bind pseudo-tickers:
+ // "show me the stock chart" opens the chart with no ticker (the `chart`
+ // key can no longer claim the word "stock").
+ expect(parseChatNavigation('show me the stock chart')).toEqual({page:'heatseeker',label:'Stock chart'});
+ // A failed catalog lookup still fails closed downstream.
  await expect(verifyNavigationTicker('STOCK',async()=>({ok:true,json:async()=>({asof:'g1',instruments:[{symbol:'SPY'}],has_more:false,complete_provider_catalog:true,stale:false})}))).rejects.toThrow("not in the provider's available stock list");
  // Overlong symbols refuse at parse time (12-char bound).
  expect(parseChatNavigation('open stock chart for FAKETICKER123')).toBeNull();

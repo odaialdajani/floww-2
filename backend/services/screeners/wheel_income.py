@@ -30,6 +30,7 @@ Audit: docs/reports/2026-07-11-steal-list-integration-roadmap.md #3
 """
 
 from datetime import date, datetime
+from math import isfinite
 from typing import Any
 
 
@@ -53,6 +54,11 @@ def _normalize_contract(c: dict) -> dict | None:
     iv, volume, openInterest, contractSymbol, ...}, or shapes from cvforge
     / databento: {strike, mid, iv/volume, T/dte/expiry, ...}. We only need
     the fields below; missing fields default to 0.
+
+    INCOME-04: absent IV/volume are flagged (``iv_unknown`` /
+    ``volume_unknown``) rather than silently zeroed. A measured 0.0 stays a
+    known zero; only absent/None/NaN inputs are unknown. Ranking and
+    filtering are unchanged — the flags ride along for honest rendering.
     """
     try:
         K = float(c.get("strike") or c.get("K") or 0)
@@ -65,8 +71,28 @@ def _normalize_contract(c: dict) -> dict | None:
         mid = 0.5 * (bid + ask)
     else:
         mid = float(c.get("mid") or last or 0.0)
-    iv = float(c.get("iv") or c.get("impliedVolatility") or 0.0)
-    vol = int(float(c.get("volume") or c.get("vol") or 0))
+
+    def _unknown(src: Any) -> bool:
+        # Booleans are never measurements (True would otherwise read as 1.0).
+        # Non-finite floats are not observations either (inf would survive
+        # rounding into invalid JSON and NaN poisons every comparison).
+        if src is None or isinstance(src, bool):
+            return True
+        try:
+            return not isfinite(float(src))
+        except (TypeError, ValueError):
+            return True
+
+    _iv_src = c.get("iv")
+    if _iv_src is None:
+        _iv_src = c.get("impliedVolatility")
+    iv_unknown = _unknown(_iv_src)
+    iv = 0.0 if iv_unknown else float(_iv_src)
+    _vol_src = c.get("volume")
+    if _vol_src is None:
+        _vol_src = c.get("vol")
+    volume_unknown = _unknown(_vol_src)
+    vol = 0 if volume_unknown else int(float(_vol_src))
     oi = int(float(c.get("openInterest") or c.get("oi") or 0))
     # No tradable market (2026-09-03): zero prints AND zero holders means
     # the mid is a phantom wide quote — annualizing it yields nonsense ARR
@@ -106,7 +132,9 @@ def _normalize_contract(c: dict) -> dict | None:
         "strike": K,
         "mid": mid,
         "iv": iv,
+        "iv_unknown": iv_unknown,
         "volume": vol,
+        "volume_unknown": volume_unknown,
         "openInterest": oi,
         "dte": dte,
         "expiry": str(c.get("expiry") or c.get("expiration") or ""),
@@ -156,7 +184,9 @@ def rank_puts_to_sell(
             "dte": c["dte"],
             "mid": round(c["mid"], 4),
             "iv": round(c["iv"], 4),
+            "iv_unknown": c["iv_unknown"],
             "volume": c["volume"],
+            "volume_unknown": c["volume_unknown"],
             "openInterest": c["openInterest"],
             "breakeven": round(breakeven, 2),
             "breakeven_drop_pct": round(drop_pct * 100.0, 2),
@@ -209,7 +239,9 @@ def rank_calls_to_sell(
             "dte": c["dte"],
             "mid": round(c["mid"], 4),
             "iv": round(c["iv"], 4),
+            "iv_unknown": c["iv_unknown"],
             "volume": c["volume"],
+            "volume_unknown": c["volume_unknown"],
             "openInterest": c["openInterest"],
             "breakeven": round(c["strike"] + c["mid"], 2),
             "otm_pct": round(otm_pct * 100.0, 2),

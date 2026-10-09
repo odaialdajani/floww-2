@@ -1,0 +1,216 @@
+{
+  "kind": "SYNTHETIC_CANONICAL_PRODUCER_CONSUMER_FIXTURE_NOT_PRODUCTION_CAPTURE",
+  "input": {
+    "ticker": "SPY",
+    "spot": 450.0,
+    "event_time": null,
+    "fetched_at": "2026-10-07T14:01:00Z",
+    "received_at": "2026-10-07T14:01:01Z",
+    "spot_event_time": "2026-10-07T14:00:00Z",
+    "spot_fetched_at": "2026-10-07T14:00:02Z",
+    "spot_source": "synthetic-mid",
+    "cache_age_s": 0,
+    "data_source": "synthetic-paired-fixture",
+    "stale": false,
+    "skipped": [
+      {
+        "expiry": "2026-10-08",
+        "reason": "UPSTREAM_FAILED"
+      }
+    ],
+    "expiries_attempted": [
+      "2026-10-07",
+      "2026-10-08"
+    ],
+    "attempt_cap": 4,
+    "n_expired_dropped": 0,
+    "contracts": [
+      {
+        "strike": 450,
+        "type": "call",
+        "oi": 100,
+        "gamma": 0.01,
+        "expiry": "2026-10-07",
+        "delta": 0.5,
+        "volume": 10
+      },
+      {
+        "strike": 450,
+        "type": "put",
+        "oi": null,
+        "gamma": 0.01,
+        "expiry": "2026-10-07",
+        "delta": 0.5,
+        "volume": 10
+      },
+      {
+        "strike": 451,
+        "type": "call",
+        "oi": 0,
+        "gamma": 0.01,
+        "expiry": "2026-10-07",
+        "delta": 0.5,
+        "volume": 10
+      },
+      {
+        "strike": 452,
+        "type": "put",
+        "oi": 100,
+        "gamma": null,
+        "expiry": "2026-10-07",
+        "delta": 0.5,
+        "volume": 10
+      },
+      {
+        "strike": 453,
+        "type": "call",
+        "oi": 0,
+        "gamma": null,
+        "expiry": "2026-10-07",
+        "delta": 0.5,
+        "volume": 10,
+        "adjusted": true
+      },
+      {
+        "strike": 454,
+        "type": "unknown",
+        "oi": 100,
+        "gamma": 0.01,
+        "expiry": "2026-10-07",
+        "delta": 0.5,
+        "volume": 10
+      }
+    ]
+  },
+  "expected": {
+    "series_version": "triad-projection.backend.v1",
+    "formula_version": "gex.v2",
+    "ticker": "SPY",
+    "spot": 450.0,
+    "strikes": [
+      {
+        "strike": 454.0,
+        "gex": null,
+        "call_gex": null,
+        "put_gex": null,
+        "partial": false,
+        "n_measured": 0,
+        "n_total": 1,
+        "expiries": [
+          "2026-10-07"
+        ],
+        "gex_basis": "OI_UNKNOWN",
+        "unknown_reasons": {
+          "TYPE_UNKNOWN": 1
+        }
+      },
+      {
+        "strike": 453.0,
+        "gex": null,
+        "call_gex": null,
+        "put_gex": null,
+        "partial": false,
+        "n_measured": 0,
+        "n_total": 1,
+        "expiries": [
+          "2026-10-07"
+        ],
+        "gex_basis": "OI_UNKNOWN",
+        "unknown_reasons": {
+          "CONTRACT_QUARANTINED": 1
+        }
+      },
+      {
+        "strike": 452.0,
+        "gex": null,
+        "call_gex": null,
+        "put_gex": null,
+        "partial": false,
+        "n_measured": 0,
+        "n_total": 1,
+        "expiries": [
+          "2026-10-07"
+        ],
+        "gex_basis": "OI_UNKNOWN",
+        "unknown_reasons": {
+          "GAMMA_MISSING": 1
+        }
+      },
+      {
+        "strike": 451.0,
+        "gex": 0.0,
+        "call_gex": 0.0,
+        "put_gex": null,
+        "partial": false,
+        "n_measured": 1,
+        "n_total": 1,
+        "expiries": [
+          "2026-10-07"
+        ],
+        "gex_basis": "OI",
+        "unknown_reasons": {}
+      },
+      {
+        "strike": 450.0,
+        "gex": 202500.0,
+        "call_gex": 202500.0,
+        "put_gex": null,
+        "partial": true,
+        "n_measured": 1,
+        "n_total": 2,
+        "expiries": [
+          "2026-10-07"
+        ],
+        "gex_basis": "OI_PARTIAL",
+        "unknown_reasons": {
+          "OI_MISSING": 1
+        }
+      }
+    ],
+    "coverage": {
+      "returned": 6,
+      "usable": 2,
+      "dropped_no_expiry": 0,
+      "dropped_bad_strike": 0,
+      "dropped_unknown_side": 1,
+      "contracts_without_gex": 4,
+      "expiries_available": 1,
+      "expiries_requested": null,
+      "expiries_used": [
+        "2026-10-07"
+      ],
+      "expiry_cap_applied": false,
+      "expiries_dropped_by_cap": 0,
+      "truncated": false,
+      "strikes": 5,
+      "measured_strikes": 1,
+      "partial_strikes": 1,
+      "unknown_strikes": 3,
+      "rows_measured": 2,
+      "rows_total": 6
+    },
+    "data_source": "synthetic-paired-fixture",
+    "stale": false,
+    "event_time": null,
+    "fetched_at": "2026-10-07T14:01:00Z",
+    "received_at": "2026-10-07T14:01:01Z",
+    "spot_source": "synthetic-mid",
+    "spot_event_time": "2026-10-07T14:00:00Z",
+    "spot_fetched_at": "2026-10-07T14:00:02Z",
+    "cache_age_s": 0,
+    "source_coverage": {
+      "skipped": [
+        {
+          "expiry": "2026-10-08",
+          "reason": "UPSTREAM_FAILED"
+        }
+      ],
+      "expiries_attempted": [
+        "2026-10-07",
+        "2026-10-08"
+      ],
+      "attempt_cap": 4,
+      "n_expired_dropped": 0
+    }
+  }
+}

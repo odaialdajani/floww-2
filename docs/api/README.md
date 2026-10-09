@@ -4,7 +4,7 @@
 <!-- Regenerate: python3 qc/audit/generate_api_docs.py -->
 <!-- Verify:     python3 qc/audit/generate_api_docs.py --check -->
 
-Total endpoints: 402
+Total endpoints: 403
 Route groups: 106
 
 Generated from the live FastAPI app, so every path below is a real,
@@ -709,13 +709,14 @@ callable route rather than a hand-copied guess.
 |--------|------|---------|
 | GET | `/api/provider-health` | Provider Health |
 
-## public (13 endpoints)
+## public (14 endpoints)
 
 | Method | Path | Summary |
 |--------|------|---------|
 | GET | `/api/public/account` | Get Account |
 | GET | `/api/public/bars/{ticker}` | Get Public Bars |
 | GET | `/api/public/chain/{ticker}` | Get Public Chain |
+| GET | `/api/public/chain/{ticker}/exposure-by-strike` | Get Chain Exposure By Strike |
 | GET | `/api/public/execution-lifecycle/inventory` | Execution Lifecycle Inventory |
 | GET | `/api/public/expirations/{ticker}` | Get Public Expirations |
 | GET | `/api/public/history/{ticker}` | Get Public History |

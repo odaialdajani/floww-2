@@ -119,8 +119,15 @@ def broadcast_signal(payload: dict[str, Any]) -> None:
                 _send_and_evict(client, frame)
             )
         except RuntimeError:
-            # No running loop (sync context) — fall back to direct send.
-            _send_and_evict(client, frame)
+            # No running loop (sync context) — run the send to completion on a
+            # fresh loop. A bare call here would create a coroutine that is
+            # never awaited and silently drop the frame while reading as
+            # handled (audit #57 class). Only a truly unusable loop state
+            # may skip the send, and then it is logged, not silent.
+            try:
+                asyncio.run(_send_and_evict(client, frame))
+            except RuntimeError:
+                logger.debug("signal send skipped: no usable event loop")
 
 
 def _signal_frame(payload: dict[str, Any]) -> dict[str, Any]:

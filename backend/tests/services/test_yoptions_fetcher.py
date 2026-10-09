@@ -26,6 +26,8 @@ from unittest.mock import Mock, call, patch
 import pandas as pd
 import pytest
 
+pytest.importorskip("tenacity", reason="tenacity unavailable in this env")
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 os.environ.setdefault("TESTING", "1")

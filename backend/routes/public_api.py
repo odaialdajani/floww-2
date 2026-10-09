@@ -73,6 +73,36 @@ def _jsonable(value: Any) -> Any:
     return value
 
 
+@router.get("/chain/{ticker}/exposure-by-strike")
+async def get_chain_exposure_by_strike(
+    ticker: str,
+    expiration: str | None = Query(default=None, description="Specific expiration YYYY-MM-DD. If omitted, uses the first N expirations."),
+    expirations: int = Query(default=4, ge=1, le=12, description="Number of expirations to include."),
+):
+    """Admitted per-strike exposure series (C17 documented endpoint).
+
+    Same fetch and canonical per-row annotation as `/chain/{ticker}`, then
+    the `exposure_by_strike` projection: observed per-strike subtotals with
+    explicit measured/total counts and partial flags. Unknown stays null,
+    partial stays labeled — a consumer must not treat a partial subtotal
+    as complete. No order, approval, or execution surface anywhere here.
+    """
+    result = await fetch_chain_from_public_api(ticker.upper(), max_expiries=expirations)
+    if result is None:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Public API unavailable for {ticker} — key may be missing or API call failed",
+        )
+    # Project the raw admitted snapshot before table-only filtering can drop
+    # unknown sides and make an observed subtotal look fully measured.
+    from services.triad_projection import exposure_by_strike
+    contracts = result.get("contracts", [])
+    if expiration:
+        contracts = [c for c in contracts if isinstance(c, dict) and c.get("expiry") == expiration]
+    document = exposure_by_strike({**result, "contracts": contracts})
+    return {"ok": True, **document}
+
+
 @router.get("/chain/{ticker}")
 async def get_public_chain(
     ticker: str,
@@ -92,6 +122,7 @@ async def get_public_chain(
             detail=f"Public API unavailable for {ticker} — key may be missing or API call failed",
         )
 
+    exposure_payload = result
     from services.chain_readings import chain_readings
     result = {**result, "contracts": chain_readings(result.get("contracts", []), result.get("spot"), ticker.upper())}
 
@@ -111,6 +142,12 @@ async def get_public_chain(
         result["contracts"] = [c for c in result["contracts"] if c["expiry"] == expiration]
         result["expiries"] = [expiration] if result["contracts"] else []
 
+    from services.triad_projection import exposure_by_strike
+    raw_contracts = exposure_payload.get("contracts", [])
+    if expiration:
+        raw_contracts = [c for c in raw_contracts if isinstance(c, dict) and c.get("expiry") == expiration]
+    series = exposure_by_strike({**exposure_payload, "contracts": raw_contracts})
+
     return {
         "ok": True,
         "ticker": ticker.upper(),
@@ -120,6 +157,7 @@ async def get_public_chain(
         "data_source": result.get("data_source", "public_api"),
         "stale": result.get("stale", False),
         "contracts": result.get("contracts", []),
+        "exposure_by_strike": series,
         **{key: result.get(key) for key in ("event_time", "fetched_at", "spot_source", "spot_event_time", "spot_fetched_at", "cache_age_s")},
     }
 

@@ -13,6 +13,8 @@ import duckdb
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+
+pytest.importorskip("mongomock_motor", reason="mongo mock unavailable in this env")
 from mongomock_motor import AsyncMongoMockClient
 
 from routes.agent import router

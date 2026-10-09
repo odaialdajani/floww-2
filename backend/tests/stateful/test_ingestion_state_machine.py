@@ -8,6 +8,9 @@ import asyncio
 from collections import deque
 from unittest.mock import Mock
 
+import pytest
+
+pytest.importorskip("hypothesis", reason="hypothesis unavailable in this env")
 from hypothesis import settings
 from hypothesis import strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, initialize, invariant, rule

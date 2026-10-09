@@ -4,6 +4,8 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
+
+pytest.importorskip("mongomock_motor", reason="mongo mock unavailable in this env")
 from mongomock_motor import AsyncMongoMockClient
 
 from services.agent.model import GroundedModel

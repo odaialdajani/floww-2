@@ -12,6 +12,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
+pytest.importorskip("torch", reason="torch unavailable in this env")
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
 # Mock PIL and clip before importing chart_embeddings (heavy deps not in venv)

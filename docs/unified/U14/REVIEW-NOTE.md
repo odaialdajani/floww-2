@@ -34,7 +34,10 @@ no product mutation, no host launch, no network).
      worktree and must continue there (explicit handoff otherwise).
    - `review` re-verifies the sealed snapshot against the RECORDED WRITER
      worktree (not the reviewer's), binds exact snapshot SHA, and fails
-     closed if the writer lane advanced after sealing.
+     closed if sealed task bytes or their file population changed after sealing.
+     An unrelated successor commit can pass this task-scoped byte check;
+     it is not a full-writer-HEAD fence. Final acceptance separately binds
+     one frozen combined HEAD.
    - `seal_snapshot` fingerprints before/after and refuses on mid-seal
      change; checkpoint baseline must equal current full HEAD.
    - Note: all three unified lanes share one git common dir

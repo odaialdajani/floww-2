@@ -54,6 +54,21 @@ def get_engine():
                 logger.info("Journal store opened at %s", _DB_PATH)
     return _engine
 
+
+def close_engine() -> None:
+    """Shutdown-path teardown: close the file-backed journal engine if open.
+
+    Peeks only — never creates the engine, so calling this during shutdown
+    cannot open a store that was never used. Releasing the connection
+    releases the DuckDB file lock deterministically instead of relying on
+    process death. Safe to call twice.
+    """
+    global _engine
+    with _lock:
+        engine, _engine = _engine, None
+    if engine is not None:
+        engine.close()
+
 _JOURNAL_DDL = """
     CREATE TABLE IF NOT EXISTS flow_journal_trades (
         ckey TEXT,

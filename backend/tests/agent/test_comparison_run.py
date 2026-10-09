@@ -3,6 +3,8 @@ import copy
 from datetime import UTC, datetime
 
 import pytest
+
+pytest.importorskip("mongomock_motor", reason="mongo mock unavailable in this env")
 from mongomock_motor import AsyncMongoMockClient
 
 from scripts import research_comparison_run as run

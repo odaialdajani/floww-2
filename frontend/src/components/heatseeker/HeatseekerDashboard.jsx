@@ -64,9 +64,9 @@ function GammaRegimeBanner({ data }) {
   const color = isPositive ? "emerald" : isNegative ? "rose" : "amber";
   const label = isPositive ? "🟢 Positive Gamma" : isNegative ? "🔴 Negative Gamma" : "🟡 Neutral Gamma";
   const desc = isPositive
-    ? "Dealers dampen volatility. Mean-reversion plays favored."
+    ? "Positive-gamma backdrop. Mean-reversion plays favored only with observed holding."
     : isNegative
-    ? "Dealers amplify moves. Momentum trades favored."
+    ? "Negative-gamma backdrop. Momentum trades favored only with observed continuation."
     : "Mixed signals. Exercise caution.";
 
   return (
