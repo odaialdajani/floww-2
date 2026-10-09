@@ -77,3 +77,17 @@ def test_one_dead_client_cannot_silence_the_channel(clean_clients):
 
 def test_broadcast_with_no_clients_is_a_noop(clean_clients):
     assert asyncio.run(A.broadcast_signal_and_wait({"type": "signal"})) == 0
+
+
+def test_broadcast_sync_fallback_sends_without_running_loop(clean_clients):
+    """broadcast_signal() from sync context must still deliver the frame.
+
+    Regression (alerts.py:121-123): the no-running-loop fallback called the
+    async sender bare, creating a coroutine that was never awaited — frames
+    were silently dropped while the call read as handled.
+    """
+    ws = _FakeWS()
+    A._signal_clients.append(ws)
+    A.broadcast_signal({"type": "GAMMA_FLIP", "text": "sync path"})
+    assert len(ws.frames) == 1, "sync-context broadcast dropped the frame"
+    assert ws.frames[0]["type"] == "signal"
