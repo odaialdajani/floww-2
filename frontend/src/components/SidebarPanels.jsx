@@ -126,13 +126,13 @@ export function ScenarioPanel({ data, loading, error }) {
       <div className="space-y-1">
         {nodes.regime === "positive" && <>
           <div className="text-[9px] text-sky-400 font-bold">◎ RANGE DAY</div>
-          <div className="text-[8px] text-slate-400">Dealers dampen vol. Mean-reversion.</div>
+          <div className="text-[8px] text-slate-400">Positive-gamma backdrop for mean-reversion; needs observed holding at the wall.</div>
           {kingStrike != null && kingStrike > spot && <div className="text-[8px] text-rose-400">▽ Ceiling at {fmt(kingStrike, 0)}</div>}
           {kingStrike != null && kingStrike < spot && <div className="text-[8px] text-emerald-400">△ Floor at {fmt(kingStrike, 0)}</div>}
         </>}
         {nodes.regime === "negative" && <>
           <div className="text-[9px] text-amber-400 font-bold">⚡ TREND DAY</div>
-          <div className="text-[8px] text-slate-400">Dealers amplify moves. Momentum.</div>
+          <div className="text-[8px] text-slate-400">Negative-gamma backdrop for momentum; needs observed continuation through the wall.</div>
         </>}
         {nodes.regime === "neutral" && <>
           <div className="text-[9px] text-orange-400 font-bold">⚠ WHIPSAW</div>

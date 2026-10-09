@@ -32,3 +32,20 @@ describe("SidebarPanels — null prop smoke tests", () => {
     expect(container).toBeTruthy();
   });
 });
+
+describe("ScenarioPanel — conditional regime wording (LEGACY-03)", () => {
+  test.each([
+    ["positive", "Positive-gamma backdrop for mean-reversion; needs observed holding at the wall."],
+    ["negative", "Negative-gamma backdrop for momentum; needs observed continuation through the wall."],
+  ])("regime %s explains conditionally without dealer intent", (regime, sentence) => {
+    const { queryByText } = render(
+      <ScenarioPanel
+        data={{ nodes: { regime, king: { strike: 790 } }, spot: 775 }}
+        loading={false}
+        error={null}
+      />
+    );
+    expect(queryByText(sentence)).toBeTruthy();
+    expect(queryByText(/Dealers/i)).toBeNull();
+  });
+});

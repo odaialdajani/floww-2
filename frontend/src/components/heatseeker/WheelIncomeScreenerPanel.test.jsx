@@ -36,4 +36,30 @@ describe("WheelIncomeScreenerPanel", () => {
     expect(await screen.findByText("$480")).toBeInTheDocument();
     expect(screen.getByText(/BE ↓%/)).toBeInTheDocument();
   });
+
+  test("null IV renders unknown, never 0.0% (INCOME-04)", async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({
+        spot: 500,
+        puts: [{ strike: 480, expiry: "2026-08-21", dte: 37, mid: 4.2, iv: null, volume: 120, breakeven_drop_pct: 4.8, annualized_return_pct: 8.6 }],
+        calls: [],
+      }) })
+    );
+    const { container } = render(<WheelIncomeScreenerPanel ticker="SPY" />);
+    expect(await screen.findByText("$480")).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/0\.0%/);
+  });
+
+  test("genuine zero IV still renders 0.0%", async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({
+        spot: 500,
+        puts: [{ strike: 480, expiry: "2026-08-21", dte: 37, mid: 4.2, iv: 0, volume: 120, breakeven_drop_pct: 4.8, annualized_return_pct: 8.6 }],
+        calls: [],
+      }) })
+    );
+    render(<WheelIncomeScreenerPanel ticker="SPY" />);
+    expect(await screen.findByText("$480")).toBeInTheDocument();
+    expect(screen.getByText("0.0%")).toBeInTheDocument();
+  });
 });

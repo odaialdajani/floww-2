@@ -134,7 +134,7 @@ function WheelIncomeScreenerPanel({ ticker = "SPY" }) {
                 <td className="py-1 px-1 text-slate-100">${fmt(r.strike, 0)}</td>
                 <td className="py-1 px-1 text-slate-300">{r.dte ?? "—"}d</td>
                 <td className="py-1 px-1 text-right text-slate-300">{fmt(r.mid, 2)}</td>
-                <td className="py-1 px-1 text-right text-slate-400">{((r.iv ?? 0) * 100).toFixed(1)}%</td>
+                <td className="py-1 px-1 text-right text-slate-400">{Number.isFinite(r.iv) ? `${(r.iv * 100).toFixed(1)}%` : "—"}</td>
                 <td className="py-1 px-1 text-right text-slate-400">{r.volume ?? 0}</td>
                 <td className="py-1 px-1 text-right text-emerald-300">
                   {tab === "put" ? `${fmt(r.breakeven_drop_pct, 2)}%` : `${fmt(r.otm_pct, 2)}%`}
