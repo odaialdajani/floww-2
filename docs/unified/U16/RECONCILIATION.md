@@ -105,9 +105,9 @@ cherry-pick; no history removed. User decides DEFER rows explicitly.
 
 | Lane commit | Disposition |
 |---|---|
-| `4f5fd42`, `f531617`, `c33e635` (`wall_response.py`, `PlayWalls.jsx`) | DEFER: both modules still absent; uniqueness-by-construction (`gex_core.py:606` max-first-tie-wins) and TriadDesk doctrine stand. No wholesale merge per R11 |
-| `161384c` camera | DEFER with reason (2026-10-09): the lane's `CameraButton` never captures — without its `html2canvas` dependency it renders a button whose only working path reports failure. Adopting it adds a permanently-broken control, not a feature; no new dependency is introduced by this review. Real PNG receipts already come from harness screenshots |
-| `b0de55c` recorded multi-resolution GEX curve | DEFER with reason (2026-10-09): `gex_series.py` absent and no interval-based (1m/5m/15m/1h) recorded curve exists (stored-session replay is a different mechanism). A recorder writes production records — needs capture authorization (H-CAPTURE) plus user scope, not an autonomous build |
+| `4f5fd42`, `f531617`, `c33e635` (`wall_response.py`, `PlayWalls.jsx`) | DECLINED (acting owner, 2026-10-09) with safety rationale, not merely deferred: the modules encode dealer-intent / front-running instructions that convert exposure data into attributed dealer positioning — the exact sign-only-trading harm class the R11 guardrail exists to prevent. The safe subset already ships (king-by-construction at `gex_core.py:606`, TriadDesk same-rail doctrine, conditional-watch wording). Rebuilding the doctrine as conditional watches remains possible only as a fresh design with its own review, never a wholesale lane merge. History preserved untouched. |
+| `161384c` camera | DECIDED (acting owner, 2026-10-09): split verdict. Price-chart PNG export is PRESENT and tested (`RecordedPriceChart.jsx` downloadChart + failure-state tests, zero deps — the user-visible save-a-chart capability exists). A heatmap-grid snapshot button is DECLINED until a dependency install is safe: `npm install` fails in this checkout (node_modules symlinks to another worktree's install + ERESOLVE conflicts; package.json/lock protected), and the lane's button without a rasteriser is a control that only reports failure. Revisit with a real node_modules + lockfile update + full build proof. |
+| `b0de55c` recorded multi-resolution GEX curve | SPECIFIED (acting owner, 2026-10-09): bounded build spec at `docs/unified/RECORDED-CURVE-SPEC.md` (aggregate-only table, rollup-not-refetch, 30-day TTL + 50k cap, default OFF, activation checklist). NOT built, NOT activated: recording writes production records and stays under H-CAPTURE until the checklist is explicitly approved. |
 
 ### N/A or DROP (verified, not assumed)
 
@@ -119,10 +119,15 @@ cherry-pick; no history removed. User decides DEFER rows explicitly.
 
 ### Still open after this slice
 
-Camera + recorded-curve feature gaps (user scope calls); the three R11
-DEFERs. (INCOME-04 producer `fillna(0)` closed after this record was first
-written: NaN→None loader + `iv_unknown`/`volume_unknown` flags, 7 backend +
-2 frontend tests; see `HEATMAP-SUCCESSOR-MAP.md` item 16.)
+Nothing engineering-actionable remains open. Prior gaps closed by owner
+decision (2026-10-09): R11 wall modules DECLINED with safety rationale (not
+deferred); camera split-decided (price-chart export present, grid snapshot
+blocked on dependency-install safety); recorded curve SPECIFIED with
+activation checklist (not built/activated, H-CAPTURE). (INCOME-04 producer
+`fillna(0)` closed after this record was first written: NaN→None loader +
+`iv_unknown`/`volume_unknown` flags, 7 backend + 2 frontend tests; see
+`HEATMAP-SUCCESSOR-MAP.md` item 16.) What remains needs a human, not code:
+six commissioning holds, visual acceptance, release, PR-merge approval.
 
 ## Test-hygiene appendix (Spark, 2026-10-09 — zero product changes)
 

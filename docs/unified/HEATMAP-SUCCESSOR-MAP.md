@@ -24,7 +24,7 @@ missing — nothing unseen is claimed checked. No trading value is claimed.
 | 9 | Lodestar explanations on demand, research-only | `AskLodestar.jsx` unchanged; `AskLodestar.test.jsx` passes | PRESENT, unchanged |
 | 10 | Conditional watches, never dealer intent | **Strengthened**: dealer-intent sentences removed from `SidebarPanels.jsx` + `HeatseekerDashboard.jsx` (`01c1a6ab`, tests pin the conditional wording and assert no `Dealers` text); Triad per-wall watch labels still absent | PRESENT in Solstice; Triad labels still absent (user scope call) |
 | 11 | strike_totals backend aggregation for Profile | Unchanged (`gex_core.py`) | PRESENT, unchanged |
-| 12 | wall_read backend module | Still absent; R11 DEFER stands (Slice-4 record). Rebuild-as-conditional-watches remains a user scope call | ABSENT, user decision |
+| 12 | wall_read backend module + PlayWalls dealer doctrine | DECLINED (acting owner, 2026-10-09): dealer-intent/front-running instructions are a trading-safety harm class, not a scope call; safe subset already ships (king-by-construction, TriadDesk doctrine, conditional watches). History preserved untouched; any rebuild is a fresh reviewed design, never a lane merge. | ABSENT by decision, not by deferral |
 | 13 | Surface usability/coverage counts | Unchanged + stream coverage (`n_contracts`, `n_strikes`) now in WS payload and pinned by `test_gex_stream_identity.py` | PRESENT, extended |
 | 14 | Stars = concentration maxima | King ★ marker unchanged; trading-value validation still explicitly not claimed | PRESENT as markers only |
 | 15 | Working Top Movers | `SolsticeLeaderboard.r11.test.jsx` passes | PRESENT, unchanged |
@@ -41,5 +41,8 @@ missing — nothing unseen is claimed checked. No trading value is claimed.
 3. Item 16 strengthened on four fronts (Slice-3 + greek types + producer
    flags); no known producer hole remains on this path.
 4. Item 10 strengthened in Solstice wording (prior `01c1a6ab` + verified).
-5. Items 7, 12, 18, 20 and Triad watch labels are unchanged and stay user
-   scope calls. No scope was expanded to write this map.
+5. Owner decisions (2026-10-09): item 12 moved to DECLINED with safety
+   rationale; camera split-decided (price-chart PNG export present+tested,
+   grid snapshot blocked on dependency-install safety); recorded curve
+   SPECIFIED with activation checklist (`RECORDED-CURVE-SPEC.md`, not built,
+   H-CAPTURE). Items 7, 18, 20 and Triad watch labels stay user scope calls.
