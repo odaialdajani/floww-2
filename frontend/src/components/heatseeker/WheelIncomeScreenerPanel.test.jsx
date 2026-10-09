@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import WheelIncomeScreenerPanel from "./WheelIncomeScreenerPanel";
 
@@ -61,5 +61,32 @@ describe("WheelIncomeScreenerPanel", () => {
     render(<WheelIncomeScreenerPanel ticker="SPY" />);
     expect(await screen.findByText("$480")).toBeInTheDocument();
     expect(screen.getByText("0.0%")).toBeInTheDocument();
+  });
+
+  test("null volume renders unknown in its own cell, never 0 (INCOME-04)", async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({
+        spot: 500,
+        puts: [{ strike: 480, expiry: "2026-08-21", dte: 37, mid: 4.2, iv: 0.2, volume: null, breakeven_drop_pct: 4.8, annualized_return_pct: 8.6 }],
+        calls: [],
+      }) })
+    );
+    render(<WheelIncomeScreenerPanel ticker="SPY" />);
+    const row = (await screen.findByText("$480")).closest("tr");
+    expect(within(row).getByText("—")).toBeInTheDocument();
+    expect(within(row).queryByText("0")).not.toBeInTheDocument();
+  });
+
+  test("producer unknown flags render unknown even at zero (INCOME-04)", async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({
+        spot: 500,
+        puts: [{ strike: 480, expiry: "2026-08-21", dte: 37, mid: 4.2, iv: 0, iv_unknown: true, volume: 0, volume_unknown: true, breakeven_drop_pct: 4.8, annualized_return_pct: 8.6 }],
+        calls: [],
+      }) })
+    );
+    const { container } = render(<WheelIncomeScreenerPanel ticker="SPY" />);
+    expect(await screen.findByText("$480")).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/0\.0%/);
   });
 });
