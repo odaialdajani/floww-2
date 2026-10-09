@@ -9,6 +9,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+pytest.importorskip("plotly", reason="plotly unavailable in this env")
+
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
 @pytest.fixture

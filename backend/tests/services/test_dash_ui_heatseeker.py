@@ -16,6 +16,9 @@ Covers:
 import json
 import time
 
+import pytest
+
+pytest.importorskip("plotly", reason="plotly unavailable in this env")
 import plotly.graph_objects as go
 
 # ---------------------------------------------------------------------------

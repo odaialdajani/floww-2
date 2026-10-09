@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 
 import pytest
+
+pytest.importorskip("mongomock_motor", reason="mongo mock unavailable in this env")
 from mongomock_motor import AsyncMongoMockClient
 
 from scripts.research_comparison_history import current_snapshot, seed_history

@@ -16,6 +16,8 @@ from pathlib import Path
 
 import httpx
 import pytest
+
+pytest.importorskip("mongomock_motor", reason="mongo mock unavailable in this env")
 from mongomock_motor import AsyncMongoMockClient
 
 from scripts.research_comparison_inputs import synthetic_chain

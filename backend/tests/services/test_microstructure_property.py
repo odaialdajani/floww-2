@@ -10,6 +10,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 import numpy as np
 import pytest
+
+pytest.importorskip("hypothesis", reason="hypothesis unavailable in this env")
 from hypothesis import given, settings
 from hypothesis import strategies as st
 

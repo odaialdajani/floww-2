@@ -68,3 +68,88 @@ categories remain plus the separate NAV-PAPER-EXEMPT policy decision.
 U17/U18 need frozen-source checks and independent acceptance; legacy recovery
 still needs a real-store completeness receipt. Current host processes are
 idle/aborted; no controller or coding model was launched by this audit.
+
+## Slice-4 lane disposition (Spark, 2026-10-09, successor `fix/floww-finish-20261008`)
+
+Source: Hermes `LANE-INTEGRATION.json` (53 non-ancestor commits; 27
+patch-equivalent + 1 identical already included) + OpenCode worksheet
+`FLOWW-Lane-Disposition-Worksheet.md`. Every held item below was re-checked
+against the live successor tree (not just subjects/ancestry). No blanket
+cherry-pick; no history removed. User decides DEFER rows explicitly.
+
+### INCLUDED (adopted onto successor with failing-first regressions)
+
+| Lane commit | What | Evidence |
+|---|---|---|
+| `155edea` ADJ == RAW x \|delta\| | Adopted by `01c1a6ab` as new `test_oi_duo_dvo_surfaces.py` (6 tests incl. hostile missing/invalid/unknown-type/mult/netting classes) | 6/6 pass |
+| `c3bdf4c` greeks plain float | Worksheet guessed DROP (no numpy import) — **wrong**: scipy returns np.float64, proven live. Adopted: `float()` on all 11 success returns in `bs_greeks.py` + new `test_greek_plain_float.py`. Values unchanged | 237 pass across 7 greek suites (canonical, oracle, masking, scalers, convention) |
+| `9c5734c` #57 record + `3ed61b5` round-2 Triad record | Adopted as labeled historical appendix in `docs/audit/CLAIMS-VERIFIED.md` (history, not live claims) | File review; no protected paths touched |
+
+### SUPERSEDED (present by construction, with evidence pointer — not a claim)
+
+| Lane commit | Evidence |
+|---|---|
+| `85c32d7` DUO-106x | Candidate never had the bug: `domain/second_order_exposure.py` carries the correct product-rule `C*(S^2*g''+4*S*g'+2*g)`, pinned by `test_second_order_exposure_oracle.py` |
+| `85c32d7` VWAP dead wire | Same bug class guarded: `session_levels_source.py` + `test_session_levels_source.py` assert the bad symbol does not exist; 23 pass with OSI suite |
+| `85c32d7` GexChart sign | Component absent; sign discipline lives in shared palette, 35 `SkylitHeatmapGrid*` tests pass (incl. r11) |
+| `a40b295` ADJ history | Live path computes `delta_grid` with population counters (`server.py:1516`); history persists all grids generically (`heatmap_history.py:435-451`); math pinned by adopted `155edea` tests |
+| `f39f839` Charm/VEX dead rows | VEX row present (`WallInspector.jsx:143-155`); `test_charm_grid_surface.py` passes |
+| `d70a7ee` signal channel + `9e65b05` parser/channel | `alerts.py:92-131` already carries sync broadcaster + normalized frames + logged-only fallback (successor `95a17b47`); 15 channel/OSI tests pass. Lane-tip `databento_provider.py`/`test_osi_parse_regression.py`/`MultiTimeframeGEXPanel.jsx` byte-match candidate = already included |
+| `29a53e0` + `5e04201` OI/DUO/DVO surfaces | Ship via `heatmap_snapshot.py`; 51 pass across snapshot/charm/OI-DUO-DVO/oracle/registry suites |
+| `de3a320` tab-set doctrine | Implemented as TriadDesk + Raw+Δ compare (`SkylitDashboard.jsx`) + admitted exposure endpoint (live 200, 11/11 C17 tests) |
+| `1a7ff03` C17 slice | Candidate carries the newer reviewed C17; lane version must not regress it |
+| `de9b136`/`f95aeb7` Workspace.jsx | 7-line diff: lane uses local `cellPalette` normalization; candidate uses reviewed shared `signedCellPalette` + hatching. Adopting the lane file would REGRESS PR117 grids — do not. 103 `RangeAnalytics*` tests pass |
+| `958bfc6` DUO/VEX distinction | Already in candidate docs (`second_order_exposure.py` VEX-non-equivalence section, `METRIC_CONTRACT.md` convention column) |
+
+### CONFLICT / DEFER — preserved as history, not adopted
+
+| Lane commit | Disposition |
+|---|---|
+| `4f5fd42`, `f531617`, `c33e635` (`wall_response.py`, `PlayWalls.jsx`) | DEFER: both modules still absent; uniqueness-by-construction (`gex_core.py:606` max-first-tie-wins) and TriadDesk doctrine stand. No wholesale merge per R11 |
+| `161384c` camera | DEFER with reason (2026-10-09): the lane's `CameraButton` never captures — without its `html2canvas` dependency it renders a button whose only working path reports failure. Adopting it adds a permanently-broken control, not a feature; no new dependency is introduced by this review. Real PNG receipts already come from harness screenshots |
+| `b0de55c` recorded multi-resolution GEX curve | DEFER with reason (2026-10-09): `gex_series.py` absent and no interval-based (1m/5m/15m/1h) recorded curve exists (stored-session replay is a different mechanism). A recorder writes production records — needs capture authorization (H-CAPTURE) plus user scope, not an autonomous build |
+
+### N/A or DROP (verified, not assumed)
+
+| Lane commit | Reason |
+|---|---|
+| `3b2f3d4` ladder legs, `50119c1` vwap rename, `bacc9fa` mobile tabs | Target components/files absent (`PriceLadder`, `session_vwap.py`, `SurfaceTabs`/`.surface-tab` all missing) — the defects cannot exist; ruff-clean covers style |
+| `88b98fc` import sort | Trivial; ruff clean on touched files |
+| Composition docs (`de9b136`/`f95aeb7` CLINE-VERDICT/WIP + unified docs) | Preserved in lane checkouts as history; not adopted as live docs |
+
+### Still open after this slice
+
+Camera + recorded-curve feature gaps (user scope calls); the three R11
+DEFERs. (INCOME-04 producer `fillna(0)` closed after this record was first
+written: NaN→None loader + `iv_unknown`/`volume_unknown` flags, 7 backend +
+2 frontend tests; see `HEATMAP-SUCCESSOR-MAP.md` item 16.)
+
+## Test-hygiene appendix (Spark, 2026-10-09 — zero product changes)
+
+- **Session-poison kill:** `test_toxicity_ensemble_contract.py` installed a
+  spec-less torch stub into `sys.modules` at collection time. scipy's
+  array-api dispatch probes `sys.modules["torch"].Tensor`, so the stub
+  turned every later `scipy.stats` call session-wide into AttributeError —
+  deterministically killing the ml_realtime kurtosis cross-check in full
+  runs while green in isolation (bisected file-by-file to prove it). The
+  stub served nothing (ml_ensemble is natively torch-optional; the file uses
+  no torch names), so it was removed with the mechanism documented
+  in-file — not worked around.
+- **Optional-dep guards:** 25 agent/snapshot files (`mongomock_motor`), 2
+  dash files (`plotly`), 2 hypothesis files, 1 tenacity file, 3 torch
+  files, plus `skipif(torch)` on 2 detector-shape tests and local
+  `importorskip` in 1 admission test — all following the repo's existing
+  `importorskip("duckdb")` idiom. Missing deps now skip visibly with
+  reasons instead of erroring; hosted CI (which has them) still runs all.
+- **Result:** full backend suite `7530 passed, 62 skipped, 0 failed,
+  0 errors` (e2e/perf excluded as before). Ruff clean on every touched
+  file. The kurtosis oracle, all greek suites, and the ML-scale guards are
+  in the green set.
+- **Beyond the default collection:** `tests/perf/test_p99_latency.py` 9/9
+  and `test_bars_audit.py` + `test_feed_economics.py` 8/8 pass when run
+  explicitly (perf dir is excluded from the default suite). Remaining
+  exclusions are tool-blocked, not code-blocked: `tests/e2e`
+  (needs playwright+chromium+pixelmatch) and the Storybook vitest browser
+  suite (needs the Playwright bundled headless shell; the config's
+  `FLOWW_BROWSER_CHANNEL=chrome` escape is ignored by this toolchain
+  version). Neither touches code changed on this branch.

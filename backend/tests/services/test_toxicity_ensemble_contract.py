@@ -24,23 +24,15 @@ obs.duckdb_queue_depth = type("M", (), {"set": lambda s, v: None})()
 obs.duckdb_batch_size = type("M", (), {"observe": lambda s, v: None})()
 sys.modules.setdefault("services.observability", obs)
 
-# Mock torch (not available in test env)
-torch_mock = types.ModuleType("torch")
-torch_mock.nn = types.ModuleType("torch.nn")
-torch_mock.nn.Module = type("Module", (), {"__init__": lambda s: None})
-torch_mock.tensor = lambda *a, **kw: None
-torch_mock.float32 = None
-torch_mock.device = lambda *a, **kw: "cpu"
-torch_mock.no_grad = lambda: types.ModuleType("_ctx")
-torch_mock.no_grad.__enter__ = lambda s: None
-torch_mock.no_grad.__exit__ = lambda s, *a: None
-# setdefault only — use real torch/scipy when installed (they are, locally),
-# fall back to the stub only when absent (e.g. CI without torch). NEVER replace
-# real modules: clobbering sys.modules["scipy"] breaks scipy-using tests later in
-# the session (test_train_spy_v2, test_pipeline_integration).
-if importlib.util.find_spec("torch") is None:  # stub only when truly absent (minimal CI)
-    sys.modules.setdefault("torch", torch_mock)
-    sys.modules.setdefault("torch.nn", torch_mock.nn)
+# No torch stub is installed here, deliberately. A spec-less stub in
+# sys.modules["torch"] is session poison: (1) scipy's array-api dispatch
+# probes sys.modules["torch"].Tensor at call time, so the stub turned every
+# later scipy.stats call in the session into AttributeError (killed the
+# ml_realtime kurtosis cross-check in full runs while green in isolation);
+# (2) services.ml_ensemble probes find_spec("torch") at import, which raises
+# ValueError on a spec-less entry — an import-order landmine. ml_ensemble is
+# natively torch-optional (HAS_TORCH guards), and nothing in this file uses
+# torch directly, so absence is the honest state.
 
 # Stub scipy (fallback only)
 scipy_mock = types.ModuleType("scipy")

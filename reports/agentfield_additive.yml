@@ -15,10 +15,14 @@
 #      pre-commit hook fires automatically).
 
 shas:
-  - 72dee2c   # iter-1: additive bs_greeks AgentField reasoner PoC
-  - f6a6bc4   # iter-2: register bs_agent with real Go control plane (:8080)
-  - 8581c1d   # chore(reports): iter-1 AgentField PoC evidence report (evidence-only)
-  - a4a991e   # iter-3: add bs_vomma reasoner (∂²Price/∂σ² higher-order Greek)
+  - "2235795"   # iter-1: additive bs_greeks AgentField reasoner PoC (quoted: all-digit SHAs parse as int)
+  - e7e1b86   # iter-2: register bs_agent with real Go control plane (:8080)
+  - 30963b1   # chore(reports): iter-1 AgentField PoC evidence report (evidence-only)
+  - 21b8fd5   # iter-3: add bs_vomma reasoner (∂²Price/∂σ² higher-order Greek)
+# Provenance (2026-10-09): the manifest previously listed pre-rewrite SHAs
+# 72dee2c/f6a6bc4/8581c1d/a4a991e, unresolvable in every checked repository.
+# Same subjects/authors/dates/stats verified against these legacy SHAs;
+# history was rewritten (hashes changed, content preserved).
 
 # Optional override: explicit path to the consolidated-diff report.
 # Defaults to `reports/agentfield_consolidated_diff_2026-06-17.md` when

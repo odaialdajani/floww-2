@@ -186,3 +186,63 @@ added for earlier fixes: an incomplete Grafana port rename, a partial Schwab
 removal, and a provider test that matched method names instead of the client
 variable and so passed with a real violation injected. A guard that has never
 failed is not evidence of anything.
+
+---
+
+## Recovered records — Cline audit lane (preserved as history, 2026-10-09)
+
+The two sections below are recovered verbatim-in-substance from the preserved
+Cline audit lane (`~/.cline/audit-fixes`, commits `3ed61b5d` and `9c5734c0`,
+2026-09-27). They are **historical records, not live claims**: they describe
+a different branch at a different time. Each item carries its disposition on
+the current successor tree so it is not re-investigated a third time.
+
+### Round 2 — Triad surface tabs (lane `3ed61b5d`)
+
+Four verified defects of one class — the UI asserted a contract the payload
+does not have:
+
+1. Triad's grid read `cell.gex` on cells the backend emits as plain floats,
+   so every cell rendered `$0` on real `/api/data` payloads (masked by
+   client-fabricated object cells). **Successor: SUPERSEDED** — the TriadDesk
+   consumer reads `row.gex` with explicit null/partial/measured-zero states
+   (`TriadDesk.jsx:23-41`, `TriadExposure.jsx`), pinned by 18
+   `TriadDesk.test.jsx` tests.
+2. Three of eight tabs (OI, DUO, DVO) had no producer on the serving path.
+   **Successor: SUPERSEDED** — OI/DUO/DVO surfaces ship via
+   `services/heatmap_snapshot.py` with the correct product-rule DUO form
+   (`domain/second_order_exposure.py`), pinned by
+   `test_second_order_exposure_oracle.py` + `test_metric_registry_distinction.py`.
+3. The `/api/data` fallback was unreachable (`AbortSignal.timeout` undefined
+   under jsdom threw before fetch). **Successor: SUPERSEDED** — TriadDesk uses
+   `fetch` + `AbortController` with an honest unavailable panel, no axios
+   fallback chain.
+4. Triad fabricated a `'0'` expiry column, a hardcoded `2026-09-18` date,
+   `vex: 0`, `vix: 20`, `change_pct: 0`. **Successor: SUPERSEDED** — no such
+   literals exist in `frontend/src/components/triad/`; unknown renders as
+   unknown, never zero.
+
+Standing lessons kept: pin new Greeks against a finite-difference oracle, not
+presence; DUO scales with the **squared** 1% move (single-factor is a ~100x
+plausible-looking error); OI is unsigned (`signed: false`, count without `$`);
+a test that never exercises a branch is not coverage of it.
+
+### Round 3 — the rebase and the predicted signal-channel regression (lane `9c5734c0`)
+
+`docs/solstice/STATUS.md` predicted that merging the lane as-is would regress
+the signal channel — and was right. The merge left two `broadcast_signal`
+definitions; the shadowing copy normalized frames with `setdefault("type",
+"signal")` (cannot replace the `GAMMA_FLIP` value, so `AlertOverlay` discarded
+every frame) and was `async` while the sole production caller invokes it as a
+bare statement (coroutine created and discarded: zero frames, no error, route
+still 200). The lane's own test had pinned the broken signature and was
+rewritten, not kept. The same pass found the latent bug in main's code: the
+no-running-loop fallback called the async sender bare — a fallback that
+cannot fall back while reading as handled.
+
+**Successor: SUPERSEDED** — `backend/routes/alerts.py:92-131` carries the
+synchronous broadcaster, consumer-shaped frames, and the `asyncio.run`
+fallback with a logged-only skip; pinned by `test_alerts_signal_channel.py`
+(+ frame-consistency suite) and re-verified by the 2026-10-08 successor commit
+`95a17b47` (route suites 387/387). Standing lesson kept: a guard that encodes
+the wrong contract is worse than no guard.
