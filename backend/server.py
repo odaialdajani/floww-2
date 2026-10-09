@@ -130,6 +130,36 @@ async def _stop_tracked_background_tasks():
             return {task for task in _background_tasks if not task.done()}
 
 
+async def _shutdown_join(awaitable, label: str):
+    """Await one shutdown step with a hard bound. Never stalls shutdown.
+
+    Uses wait-not-await: awaiting a task that swallows cancellation can
+    stall wait_for past its own timeout, but asyncio.wait always returns
+    after the bound. A step stuck in uninterruptible work warns and yields
+    instead of hanging on_stop with storage open and silent — the
+    retired-preview failure mode. Inner cancellation (the expected outcome
+    of cancelling a step) is absorbed; cancellation of on_stop itself still
+    propagates so a forced shutdown is never trapped.
+    """
+    task = awaitable if isinstance(awaitable, asyncio.Task) else asyncio.ensure_future(awaitable)
+    done, _ = await asyncio.wait({task}, timeout=_BACKGROUND_SHUTDOWN_TIMEOUT_S)
+    if task not in done:
+        task.cancel()
+        log.warning(
+            "on_stop: %s did not finish within %.1fs; continuing shutdown",
+            label, _BACKGROUND_SHUTDOWN_TIMEOUT_S,
+        )
+        return
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        if asyncio.current_task() is not None and asyncio.current_task().cancelling():
+            raise
+        log.debug("on_stop: %s ended cancelled during shutdown", label)
+    except Exception as e:
+        log.warning("on_stop: %s raised on shutdown: %s", label, e)
+
+
 async def _logged_task(coro, name: str):
     """Run a coroutine and log any exception. Used to wrap fire-and-forget tasks."""
     try:
@@ -3148,6 +3178,54 @@ async def flow_sse(
 
 # ============ Unusual Options Activity (UOA) ============
 
+# EXPOSURE-02: the /ws/gex stream is a separate reading from the REST
+# snapshot (fixed 4-expiry scope, own clocks). Its payload carries the same
+# formula identity, units, scope and coverage the admitted REST series
+# carries, so the Stock chart can label the two readings instead of
+# presenting them as one contradictory signal. Math below is unchanged.
+GEX_STREAM_SERIES_VERSION = "gex-stream.ws.v1"
+GEX_STREAM_FORMULA_VERSION = "gex.v2"
+GEX_STREAM_UNITS = "USD"
+GEX_STREAM_EXPIRIES_REQUESTED = 4
+
+
+def build_gex_stream_payload(t, spot, strikes, nodes, raw, now_iso):
+    """Build one /ws/gex reading. Pure: no I/O, no math changes."""
+    from services.market_provenance import spot_provenance
+
+    total_gex = sum(s["gex"] for s in strikes)
+    positive = sorted([s for s in strikes if s["gex"] > 0], key=lambda x: x["gex"], reverse=True)
+    negative = sorted([s for s in strikes if s["gex"] < 0], key=lambda x: x["gex"])
+    observation = spot_provenance(raw, datetime.now(UTC))
+    contracts = raw.get("contracts", []) if isinstance(raw, dict) else []
+    expiries = raw.get("expiries", []) if isinstance(raw, dict) else []
+    chain_event_time = raw.get("event_time") if isinstance(raw, dict) else None
+    node_map = nodes if isinstance(nodes, dict) else {}
+    return {
+        "ticker": t,
+        "reading": "stream",
+        "series_version": GEX_STREAM_SERIES_VERSION,
+        "formula_version": GEX_STREAM_FORMULA_VERSION,
+        "units": GEX_STREAM_UNITS,
+        "expiries_requested": GEX_STREAM_EXPIRIES_REQUESTED,
+        "expiries": list(expiries) if isinstance(expiries, list) else [],
+        "n_contracts": len(contracts) if isinstance(contracts, list) else 0,
+        "n_strikes": len(strikes),
+        "spot": spot,
+        "total_gex": round(total_gex, 0),
+        "king": node_map.get("king"),
+        "floors": [{"strike": s["strike"], "gex": round(s["gex"], 0)} for s in positive[:5]],
+        "ceilings": [{"strike": s["strike"], "gex": round(s["gex"], 0)} for s in negative[:5]],
+        "regime": node_map.get("regime"),
+        "asof": now_iso,
+        "source_event_time": observation["event_time"],
+        "spot_source": observation["source"],
+        "spot_status": observation["status"],
+        "spot_fetched_at": observation["received_at"],
+        "chain_event_time": chain_event_time,
+    }
+
+
 @app.websocket("/ws/gex/{ticker}")
 async def websocket_gex(websocket: WebSocket, ticker: str):
     """WebSocket stream pushing live spot + key GEX levels every 5 seconds.
@@ -3175,28 +3253,10 @@ async def websocket_gex(websocket: WebSocket, ticker: str):
                 else:
                     consecutive_errors = 0  # Reset on success
                     strikes = compute_gex_by_strike(spot, raw["contracts"], t)
-                    total_gex = sum(s["gex"] for s in strikes)
-                    positive = sorted([s for s in strikes if s["gex"] > 0], key=lambda x: x["gex"], reverse=True)
-                    negative = sorted([s for s in strikes if s["gex"] < 0], key=lambda x: x["gex"])
                     nodes = classify_nodes(strikes, spot)
-
-                    from services.market_provenance import spot_provenance
-                    observation = spot_provenance(raw, datetime.now(UTC))
-                    payload = {
-                        "ticker": t,
-                        "spot": spot,
-                        "total_gex": round(total_gex, 0),
-                        "king": nodes.get("king"),
-                        "floors": [{"strike": s["strike"], "gex": round(s["gex"], 0)} for s in positive[:5]],
-                        "ceilings": [{"strike": s["strike"], "gex": round(s["gex"], 0)} for s in negative[:5]],
-                        "regime": nodes.get("regime"),
-                        "asof": datetime.now(UTC).isoformat(),
-                        "source_event_time": observation["event_time"],
-                        "spot_source": observation["source"],
-                        "spot_status": observation["status"],
-                        "spot_fetched_at": observation["received_at"],
-                        "chain_event_time": raw.get("event_time"),
-                    }
+                    payload = build_gex_stream_payload(
+                        t, spot, strikes, nodes, raw, datetime.now(UTC).isoformat()
+                    )
                     await websocket.send_json(_sanitize(payload))
 
                 # Back off on repeated errors
@@ -3568,35 +3628,42 @@ async def on_stop():
     log.info("on_stop: shutdown signal received")
     _shutdown_event.set()
 
-    # Cancel the scheduler task first so it stops queueing new work
+    # Cancel the scheduler task first so it stops queueing new work.
+    # Bounded join: a scheduler stuck in uninterruptible work must delay
+    # shutdown, never stall it with storage open and silent.
     global _scheduler_task
     if _scheduler_task and not _scheduler_task.done():
         _scheduler_task.cancel()
-        try:
-            await _scheduler_task
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            log.warning(f"on_stop: scheduler task raised on cancel: {e}")
+        await _shutdown_join(_scheduler_task, "scheduler")
 
     await _stop_tracked_background_tasks()
 
     # Research cancellation persists terminal state. It must finish while
     # Mongo is still open; its later registered callback is idempotent.
+    # Bounded for the same reason as the scheduler join above.
     research = getattr(app.state, "research_service", None)
     if research is not None:
-        await research.close()
+        await _shutdown_join(research.close(), "research")
 
     unfinished = {task for task in _background_tasks if not task.done()}
     if unfinished:
         log.error("on_stop: %d background task(s) did not stop; storage remains open", len(unfinished))
         raise RuntimeError("Background work did not stop; storage remains open")
 
+    # Release the file-backed journal lock deterministically instead of
+    # relying on process death: close_engine peeks and never opens, so this
+    # is a no-op when no journal route ran in this process.
+    try:
+        from services.journal_store import close_engine as _close_journal_engine
+        _close_journal_engine()
+    except Exception as e:
+        log.warning(f"on_stop: journal engine close failed: {e}")
+
     # Finally close MongoDB
     client.close()
     try:
         from services.public_api_adapter import close_broker
-        await close_broker()
+        await _shutdown_join(close_broker(), "broker")
     except Exception as e:
         log.warning(f"on_stop: Public API client close failed: {e}")
 
