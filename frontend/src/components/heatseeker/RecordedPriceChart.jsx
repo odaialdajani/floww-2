@@ -1,6 +1,7 @@
 import React,{useEffect,useId,useMemo,useRef,useState} from 'react';
 import {chartTime,checkedCandles,clampWindow,NODE_COLORS,NODE_LABELS,pinchFactors,priceRange,savedLevels,zoomPrice,zoomTime} from './recordedPriceChartData';
 import {sessionVwapValues} from './chart/indicators/priceStudies';
+import {volumeProfile} from './chart/indicators/profile';
 import './RecordedPriceChart.css';
 const price=value=>Number.isFinite(value)?value.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'Unavailable';
 const bound=(value,low,high)=>Math.max(low,Math.min(high,value));
@@ -11,7 +12,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
  const [size,setSize]=useState({width:800,height:480});
  const [view,setView]=useState(()=>({start:Math.max(0,data.length-80),count:80}));
  const [manualPrice,setManualPrice]=useState(null),[hover,setHover]=useState(null),[metrics,setMetrics]=useState(['gex','vex','charm']),[allNodes,setAllNodes]=useState(false);
- const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState(''),[vwapOn,setVwapOn]=useState(true);
+ const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState(''),[vwapOn,setVwapOn]=useState(true),[profileOn,setProfileOn]=useState(true);
  const id=useId().replace(/[^a-zA-Z0-9_-]/g,'');
  useEffect(()=>{
   const element=surface.current;if(!element)return undefined;
@@ -96,6 +97,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
     <div className="recorded-chart-history"><button type="button" aria-label="Earlier candles" disabled={!windowView.start} onClick={()=>shift(-Math.max(1,Math.floor(windowView.count/2)))}>Earlier</button><button type="button" aria-label="Later candles" disabled={windowView.start+windowView.count>=data.length} onClick={()=>shift(Math.max(1,Math.floor(windowView.count/2)))}>Later</button><button type="button" disabled={!data.length} onClick={()=>{notify();setView({start:0,count:data.length});setManualPrice(null);}}>Fit history</button></div>
     <fieldset className="recorded-chart-layers" aria-label="Saved node lines"><legend>Saved lines</legend>{Object.entries(NODE_LABELS).map(([metric,label])=><label key={metric} style={{'--node-color':NODE_COLORS[metric]}}><input type="checkbox" checked={metrics.includes(metric)} disabled={!availableMetrics.includes(metric)} onChange={e=>{setMetrics(old=>e.target.checked?[...old,metric]:old.filter(value=>value!==metric));setManualPrice(null);}}/>{label}{!availableMetrics.includes(metric)&&<span> unavailable</span>}</label>)}<label><input type="checkbox" checked={allNodes} onChange={e=>{setAllNodes(e.target.checked);setManualPrice(null);}}/>All saved levels</label></fieldset>
      <label><input type="checkbox" aria-label="Toggle VWAP" checked={vwapOn} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>setVwapOn(e.target.checked)}/>VWAP{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
+     <label><input type="checkbox" aria-label="Toggle profile" checked={profileOn} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>setProfileOn(e.target.checked)}/>Profile{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
      <button type="button" disabled={!data.length||exporting} onClick={downloadChart}>{exporting?'Saving image...':'Download chart image'}</button>{exportError&&<p role="alert">{exportError}</p>}
     {historyControls}<small id={'chart-help-'+id}>Drag to scroll history. Pinch time and price. Drag an axis to stretch it. Ctrl + scroll zooms time; Shift + scroll zooms price. Normal scrolling moves the page.</small>
    </div></details>
@@ -143,6 +145,12 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
        const pts=win.map((v,i)=>{if(typeof v!=='number'||!Number.isFinite(v))return null;const py=y(v);if(py<top||py>bottom)return null;return {x:left+(i+0.5)*spacing,y:py};});
        const drawn=pts.filter(Boolean);if(drawn.length<2)return null;
        return <polyline data-testid="vwap-line" points={drawn.map(p=>p.x+','+p.y).join(' ')} fill="none" stroke="#e08e45" strokeWidth="2"><title>Session VWAP</title></polyline>;})()}
+      {showAtlas&&profileOn&&data.some(frame=>Number.isFinite(frame.volume))&&(()=>{
+       const prof=volumeProfile(visible,{rows:Math.min(48,Math.max(8,visible.length))});
+       if(prof.status!=='ok')return null;
+       const peak=Math.max(...prof.rows.map(r=>r.volume),1),bw=64,bx=Math.max(left,right-bw-4);
+       return <g data-testid="volume-profile"><title>Volume profile (bar-range approximation)</title>{prof.rows.map((r,ri)=>{const isPoc=r.price===prof.poc.price&&r.volume===prof.poc.volume;
+        return <rect key={'vp:'+ri} data-testid={isPoc?'profile-poc':'profile-row'} x={bx+(bw-Math.max(1,(r.volume/peak)*bw))} y={y(r.price)-2} width={Math.max(1,(r.volume/peak)*bw)} height={4} fill={isPoc?'#e8bd65':'#5a6b7d'} opacity={isPoc?0.95:0.6}><title>{'Volume '+price(r.price)+': '+Math.round(r.volume).toLocaleString('en-US')+' shares'}</title></rect>;})}</g>;})()}
       {hover!==null&&selected&&<><line x1={left+(hover+0.5)*spacing} x2={left+(hover+0.5)*spacing} y1={top} y2={bottom} stroke="#a8b3be" strokeDasharray="3 4"/><line x1={left} x2={right} y1={y(selected.close)} y2={y(selected.close)} stroke="#a8b3be" strokeDasharray="3 4"/></>}
     </g>
     <line x1={right} x2={right} y1={top} y2={bottom} stroke="#3d4853"/>
