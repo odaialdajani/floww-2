@@ -15,7 +15,7 @@ function savedViewLabel(scope,index){
  return mode+" | "+sorted.length+" "+(sorted.length===1?"expiry":"expiries")+" | "+sorted[0]+(sorted.length>1?" to "+sorted.at(-1):"");
 }
 
-export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null }) {
+export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, showAtlas = true }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? (primary || localOpen);
   const setOpen = value => { setLocalOpen(value); onOpenChange?.(value); };
@@ -71,6 +71,6 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   const readingStatus = !frames.length?"Data details":payload?.node_status==="unavailable"?"Saved lines unavailable":(payload.candles_with_recorded_nodes??"Unknown")+"/"+frames.length+" saved";
   return <section className="panel price-node-history" data-open={open} style={{margin:"12px 0",padding:12}} data-testid="price-node-history">
     {!primary&&<button type="button" className="skylit-trade-mode-btn" aria-expanded={open} onClick={()=>{setOpen(!open);setPlaying(false);}}>Price chart + historical nodes</button>}
-    {open&&<RecordedPriceChart ticker={ticker} frames={frames.slice(0,position+1)} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={toolbarActions} historyControls={historyControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty}/>}
+    {open&&<RecordedPriceChart ticker={ticker} frames={frames.slice(0,position+1)} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={toolbarActions} historyControls={historyControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine} darkLevels={darkLevels} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars}/>}
   </section>;
 }

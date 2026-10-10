@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import PriceNodeHistory from '../PriceNodeHistory';
 import AtlasChart from './AtlasChart';
+import './ChartWorkspace.css';
 // B06 reversible single-pane workspace: controlled open + incumbent fallback.
 // No existing controls removed; valid candles carry source age/coverage/partial
 // bars, capability reasons and retries. Flag off keeps exact incumbent path.
