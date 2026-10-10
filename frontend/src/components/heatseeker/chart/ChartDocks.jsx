@@ -2,6 +2,9 @@ import React from 'react';
 // B14 focused-pane sidecars: reuse maps without duplicating dashboards.
 // Stale scopes badged, tombstones keep deletions removed, subscriptions capped.
 export const MAX_SUBSCRIPTIONS = 10;
+export function capSubscriptions(symbols) {
+  return (Array.isArray(symbols) ? symbols : []).slice(0, MAX_SUBSCRIPTIONS);
+}
 export function sidecarFor(focusedSymbol, maps) {
   if (!focusedSymbol || !maps) return { status: 'unavailable' };
   const entry = maps[focusedSymbol];

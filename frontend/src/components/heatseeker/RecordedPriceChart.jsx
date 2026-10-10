@@ -106,7 +106,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
      {visible.flatMap((frame,index)=>savedLevels(frame,metrics,allNodes).map((node,n)=>{const seconds=typeof frame.duration_seconds==='number'&&frame.duration_seconds>0?frame.duration_seconds:60,fraction=Math.min(seconds,Math.max(0,900-(node.age_seconds??frame.node_age_seconds)))/seconds;
       const xx=left+index*spacing,yy=y(node.level);return <line data-testid="saved-node-line" key={frame.time+':'+node.metric+':'+node.id+':'+n} x1={xx} x2={xx+spacing*fraction} y1={yy} y2={yy} stroke={NODE_COLORS[node.metric]} strokeWidth="2" opacity="0.88"><title>{NODE_LABELS[node.metric]+' saved level '+price(node.level)+'. Known '+chartTime(Object.hasOwn(node,'known_at')?node.known_at:frame.nodes_known_at,true)+' New York. '+(node.label||'Recorded level')}</title></line>;}))}
       {showAtlas&&visible.flatMap((frame,index)=>{
-       const nodes=(Array.isArray(frame.nodes)?frame.nodes:[]).filter(n=>n&&Number.isFinite(n.level));
+       const nodes=(Array.isArray(frame.nodes)?frame.nodes:[]).filter(n=>n&&Number.isFinite(n.level)&&Object.hasOwn(NODE_COLORS,n.metric||'gex'));
        if(!nodes.length)return [];
        const weights=nodes.map(n=>{const w=n.signed_value??n.strength;return typeof w==='number'&&Number.isFinite(w)?Math.abs(w):1;});
        const king=Math.max(...weights),center=left+(index+0.5)*spacing;
