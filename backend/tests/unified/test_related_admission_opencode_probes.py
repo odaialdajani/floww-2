@@ -18,10 +18,17 @@ from services.related_correlations import compare_series
 def sessions(n):
     # Only sessions whose close is complete: today's session (if any) is
     # excluded because its close lies in the future before 16:00 ET and no
-    # observed series can validate against it.
+    # observed series can validate against it. Anchor on the last actual
+    # session so weekends/holidays never pass a non-session end.
+    from datetime import date, timedelta
     cal = _calendar()
     today = datetime.now(UTC).date().isoformat()
-    past = [s.date().isoformat() for s in cal.sessions_window(today, -(n + 5)) if s.date().isoformat() < today]
+    anchor = datetime.now(UTC).date()
+    for _ in range(10):
+        if cal.is_session(anchor.isoformat()):
+            break
+        anchor -= timedelta(days=1)
+    past = [s.date().isoformat() for s in cal.sessions_window(anchor.isoformat(), -(n + 5)) if s.date().isoformat() < today]
     return past[-n:]
 
 

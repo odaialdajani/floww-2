@@ -4029,9 +4029,12 @@ try:
 
     @app.on_event("shutdown")
     async def shutdown_research():
+        # E1: second registered callback must be bounded like on_stop.
+        # Direct await hung shutdown when research.close() stalled; use the
+        # same wait-not-await join so the full ASGI chain always exits.
         research = getattr(app.state, "research_service", None)
         if research is not None:
-            await research.close()
+            await _shutdown_join(research.close(), "research-shutdown-callback")
 except Exception as _agent_import_err:  # noqa: BLE001 - non-fatal; feature degrades
     log.warning(f"Lodestar agent routes disabled (non-fatal): {_agent_import_err}")
 
@@ -4080,7 +4083,7 @@ async def startup_duckdb():
 async def shutdown_duckdb():
     """Flush and stop DuckDB on shutdown."""
     try:
-        await duckdb_engine.stop()
+        await _shutdown_join(duckdb_engine.stop(), "duckdb")
         log.info("DuckDB engine stopped")
     except Exception as e:
         log.warning(f"server.py: duckdb_engine.stop() raise swallowed (shutdown continued): {e}", exc_info=True)
@@ -4114,7 +4117,7 @@ async def shutdown_ingestion() -> None:
     global _ingestion_pipeline
     try:
         if _ingestion_pipeline:
-            await _ingestion_pipeline.stop()
+            await _shutdown_join(_ingestion_pipeline.stop(), "ingestion")
         log.info("Ingestion pipeline stopped")
     except Exception as e:
         log.warning(f"Ingestion shutdown error: {e}")
@@ -4201,8 +4204,7 @@ async def shutdown_solstice_capture() -> None:
     try:
         if _solstice_capture_task and not _solstice_capture_task.done():
             _solstice_capture_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await _solstice_capture_task
+            await _shutdown_join(_solstice_capture_task, "solstice-capture")
     except Exception as e:
         log.warning("Solstice capture shutdown error: %s", e)
 

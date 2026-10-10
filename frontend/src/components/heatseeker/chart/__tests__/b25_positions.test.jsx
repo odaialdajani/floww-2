@@ -1,0 +1,22 @@
+import { filterPositions } from '../PaperPositionOverlay';
+import { registerPlugin } from '../plugins/pluginRegistry';
+import { shouldHandleShortcut, FIT_MODES, watermark } from '../ChartShortcuts';
+import { exportPlan } from '../ChartExport';
+import { isNewChartEnabled, setChartV1, killSwitch } from '../workspaceFlags';
+test('positions/plugins/usability/rollout', () => {
+  expect(filterPositions([], { entitlement: false }).status).toBe('denied');
+  expect(filterPositions([{ source: 1 }], { entitlement: true }).items).toHaveLength(0);
+  expect(filterPositions([{ source: 's', account: 'a', state: 'open' }], { entitlement: true, replay: true }).status).toBe('practice-hidden');
+  expect(registerPlugin('overlay', { name: 'mine' }).status).toBe('registered');
+  expect(registerPlugin('evil', {}).status).toBe('deferred');
+  expect(registerPlugin('study', { remoteCode: 'x' }).status).toBe('refused');
+  expect(shouldHandleShortcut({ target: { tagName: 'INPUT' } })).toBe(false);
+  expect(FIT_MODES).toHaveLength(2);
+  expect(watermark({ source: 'tape', replay: true })).toMatch('replay');
+  expect(exportPlan({}).clipboard).toBe('prompt');
+  expect(isNewChartEnabled()).toBe(false);
+  setChartV1(true);
+  expect(isNewChartEnabled()).toBe(true);
+  expect(killSwitch()).toEqual({ reverted: true, dataLoss: false });
+  expect(isNewChartEnabled()).toBe(false);
+});
