@@ -4,7 +4,7 @@ import './RecordedPriceChart.css';
 const price=value=>Number.isFinite(value)?value.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'Unavailable';
 const bound=(value,low,high)=>Math.max(low,Math.min(high,value));
 
-export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null}) {
+export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null}) {
  const data=useMemo(()=>checkedCandles(frames),[frames]);
  const surface=useRef(null),pointers=useRef(new Map()),gesture=useRef(null),previousLength=useRef(0);
  const [size,setSize]=useState({width:800,height:480});
@@ -105,13 +105,30 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
      {visible.map((frame,index)=>{const center=left+(index+0.5)*spacing,up=frame.close>=frame.open,width=Math.max(1,Math.min(14,spacing*0.65)),bodyTop=y(Math.max(frame.open,frame.close)),bodyHeight=Math.max(1,Math.abs(y(frame.open)-y(frame.close)));return <g key={frame.time} className={up?'recorded-candle-up':'recorded-candle-down'} data-testid="price-candle"><title>{chartTime(frame.time,true)+' New York. Open '+price(frame.open)+', high '+price(frame.high)+', low '+price(frame.low)+', close '+price(frame.close)}</title><line x1={center} x2={center} y1={y(frame.high)} y2={y(frame.low)} stroke="currentColor" strokeWidth="1.5"/><rect x={center-width/2} y={bodyTop} width={width} height={bodyHeight} fill="currentColor"/></g>;})}
      {visible.flatMap((frame,index)=>savedLevels(frame,metrics,allNodes).map((node,n)=>{const seconds=typeof frame.duration_seconds==='number'&&frame.duration_seconds>0?frame.duration_seconds:60,fraction=Math.min(seconds,Math.max(0,900-(node.age_seconds??frame.node_age_seconds)))/seconds;
       const xx=left+index*spacing,yy=y(node.level);return <line data-testid="saved-node-line" key={frame.time+':'+node.metric+':'+node.id+':'+n} x1={xx} x2={xx+spacing*fraction} y1={yy} y2={yy} stroke={NODE_COLORS[node.metric]} strokeWidth="2" opacity="0.88"><title>{NODE_LABELS[node.metric]+' saved level '+price(node.level)+'. Known '+chartTime(Object.hasOwn(node,'known_at')?node.known_at:frame.nodes_known_at,true)+' New York. '+(node.label||'Recorded level')}</title></line>;}))}
-     {hover!==null&&selected&&<><line x1={left+(hover+0.5)*spacing} x2={left+(hover+0.5)*spacing} y1={top} y2={bottom} stroke="#a8b3be" strokeDasharray="3 4"/><line x1={left} x2={right} y1={y(selected.close)} y2={y(selected.close)} stroke="#a8b3be" strokeDasharray="3 4"/></>}
+      {showAtlas&&visible.flatMap((frame,index)=>{
+       const nodes=(Array.isArray(frame.nodes)?frame.nodes:[]).filter(n=>n&&Number.isFinite(n.level));
+       if(!nodes.length)return [];
+       const weights=nodes.map(n=>{const w=n.signed_value??n.strength;return typeof w==='number'&&Number.isFinite(w)?Math.abs(w):1;});
+       const king=Math.max(...weights),center=left+(index+0.5)*spacing;
+       return nodes.map((node,ni)=>{const ratio=king>0?weights[ni]/king:0,r=Math.min(12,Math.max(3,4*Math.sqrt(Math.max(0,ratio)))),yy=Math.max(top,Math.min(bottom,y(node.level))),isKing=weights[ni]===king;
+        return <circle data-testid="chart-orb" key={frame.time+':orb:'+ni} cx={center} cy={yy} r={r} fill={isKing?'#e8bd65':'none'} stroke={NODE_COLORS[node.metric||'gex']||'#e8bd65'} strokeWidth={isKing?2:1} opacity="0.75"><title>{'Orb '+price(node.level)+(isKing?' (King Node)':'')}</title></circle>;});})}
+      {showAtlas&&Array.isArray(exposureLine)&&exposureLine.length>0&&(()=>{
+       const byTime=new Map(exposureLine.filter(p=>p&&typeof p.time==='string').map(p=>[p.time,p]));
+       const pts=visible.map((frame,index)=>{const p=byTime.get(frame.time);if(!p||typeof p.centre!=='number'||!Number.isFinite(p.centre))return null;return {x:left+(index+0.5)*spacing,y:Math.max(top,Math.min(bottom,y(p.centre)))};});
+       const segs=[];let cur=[];pts.forEach(pt=>{if(pt)cur.push(pt);else{if(cur.length>1)segs.push(cur);cur=[];}});if(cur.length>1)segs.push(cur);
+       return segs.map((seg,si)=><polyline data-testid="exposure-vwap-line" key={'gexvwap:'+si} points={seg.map(p=>p.x+','+p.y).join(' ')} fill="none" stroke="#72d7df" strokeWidth="2"><title>GEX VWAP centre</title></polyline>);})()}
+      {showAtlas&&Array.isArray(darkLevels)&&darkLevels.filter(l=>l&&typeof l.price==='number'&&Number.isFinite(l.price)&&l.price>=range.low&&l.price<=range.high).map((l,li)=><line data-testid="dark-pool-level" key={'dark:'+li} x1={left} x2={right} y1={y(l.price)} y2={y(l.price)} stroke="#c9a86a" strokeWidth="1.5" strokeDasharray="6 3"><title>{'Dark pool level '+price(l.price)+(l.venue?' '+l.venue:'')}</title></line>)}
+      {hover!==null&&selected&&<><line x1={left+(hover+0.5)*spacing} x2={left+(hover+0.5)*spacing} y1={top} y2={bottom} stroke="#a8b3be" strokeDasharray="3 4"/><line x1={left} x2={right} y1={y(selected.close)} y2={y(selected.close)} stroke="#a8b3be" strokeDasharray="3 4"/></>}
     </g>
     <line x1={right} x2={right} y1={top} y2={bottom} stroke="#3d4853"/>
     {Array.from({length:Math.min(5,visible.length)},(_,i)=>{const index=Math.round(i*Math.max(0,visible.length-1)/Math.max(1,Math.min(5,visible.length)-1)),frame=visible[index];return frame&&<text key={i} x={left+(index+0.5)*spacing} y={bottom+24} textAnchor={i===0?'start':i===4?'end':'middle'} className="recorded-time-label">{chartTime(frame.time)}</text>;})}
    </svg>
-  </div>:<div className="recorded-chart-empty">{emptyContent||<p>No valid price candles are available.</p>}</div>}
-  {!!data.length&&<div className="recorded-chart-footer"><small>{windowView.start+1}-{windowView.start+visible.length} of {data.length} loaded candles</small></div>}
+   </div>:<div className="recorded-chart-empty">{emptyContent||<p>No valid price candles are available.</p>}</div>}
+   {!!data.length&&showAtlas&&Array.isArray(flowBars)&&flowBars.length===data.length&&(()=>{
+    const win=flowBars.slice(windowView.start,windowView.start+windowView.count);
+    const peak=Math.max(1,...win.flatMap(b=>[Math.abs(b?.call||0),Math.abs(b?.put||0)]));
+    return <div className="recorded-flow-pane" data-testid="flow-pane" aria-label="Options flow per candle">{win.map((b,bi)=><div key={bi} className="recorded-flow-bar"><div className="recorded-flow-call" style={{height:(Math.abs(b?.call||0)/peak*20)+'px'}}/><div className="recorded-flow-put" style={{height:(Math.abs(b?.put||0)/peak*20)+'px'}}/></div>)}</div>;})()}
+   {!!data.length&&<div className="recorded-chart-footer"><small>{windowView.start+1}-{windowView.start+visible.length} of {data.length} loaded candles</small></div>}
   {selected&&<div className="recorded-chart-nodes" aria-label="Selected candle saved nodes">{selectedLevels.length?selectedLevels.map((node,index)=><span key={node.metric+':'+node.id+':'+index} style={{color:NODE_COLORS[node.metric]}}>{NODE_LABELS[node.metric]} <b>{price(node.level)}</b></span>):<span>No supported saved node lines at this candle.{Object.entries(selected?.metric_status||{}).filter(([,status])=>status==="zero").map(([metric])=>" "+NODE_LABELS[metric]+" was zero; no largest level stood out.").join("")}</span>}</div>}
  </div>;
 }
