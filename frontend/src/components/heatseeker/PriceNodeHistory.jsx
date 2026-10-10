@@ -15,7 +15,7 @@ function savedViewLabel(scope,index){
  return mode+" | "+sorted.length+" "+(sorted.length===1?"expiry":"expiries")+" | "+sorted[0]+(sorted.length>1?" to "+sorted.at(-1):"");
 }
 
-export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, showAtlas = true }) {
+export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, showAtlas = true, forcedScope = null }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? (primary || localOpen);
   const setOpen = value => { setLocalOpen(value); onOpenChange?.(value); };
@@ -33,8 +33,9 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     const controller = new AbortController();
     let active = true;
     setPayload(null); setStatus("loading"); setPlaying(false);
+    const activeScope = forcedScope ?? scope;
     axios.get(`${API}/heatseeker/price-history/${encodeURIComponent(ticker)}`, {
-      params: { days, interval_minutes: minutes, include_metric_lines: true, ...(scope ? { query_key: scope } : {}) },
+      params: { days, interval_minutes: minutes, include_metric_lines: true, ...(activeScope ? { query_key: activeScope } : {}) },
       timeout: 30000, signal: controller.signal,
     }).then(({ data }) => {
       if (!active) return;
@@ -42,7 +43,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
       setPayload(data); setPosition(Math.max(0, (data.frames?.length || 0) - 1)); setStatus("ready");
     }).catch(() => { if (active) setStatus("error"); });
     return () => { active = false; controller.abort(); };
-  }, [ticker, days, minutes, scope, open, reload]);
+  }, [ticker, days, minutes, scope, forcedScope, open, reload]);
   const frames = payload?.ticker === ticker.toUpperCase() ? payload.frames || [] : [];
   useEffect(() => {
     if (!playing || !open || frames.length < 2) return undefined;
@@ -57,7 +58,8 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     <select aria-label="Candle interval" title="Candle interval" value={minutes} onChange={e=>setMinutes(Number(e.target.value))}><option value={1}>1 min</option><option value={5}>5 min</option><option value={15}>15 min</option><option value={30}>30 min</option><option value={60}>1 hour</option></select>
     <select aria-label="History sessions" title="History period" value={days} onChange={e=>setDays(Number(e.target.value))}><option value={1}>1 session</option><option value={5}>1 week</option><option value={20}>1 month</option></select></>;
   const historyControls = <>
-    {payload?.scopes?.length>1&&<label className="price-history-view">Saved view<select aria-label="Saved node view" value={scope||payload.query_key||""} onChange={e=>setScope(e.target.value)}>{payload.scopes.map((saved,i)=><option key={saved} value={saved}>{savedViewLabel(saved,i)}</option>)}</select></label>}
+    {forcedScope==null&&payload?.scopes?.length>1&&<label className="price-history-view">Saved view<select aria-label="Saved node view" value={scope||payload.query_key||""} onChange={e=>setScope(e.target.value)}>{payload.scopes.map((saved,i)=><option key={saved} value={saved}>{savedViewLabel(saved,i)}</option>)}</select></label>}
+    {forcedScope!=null&&<span className="price-history-view price-history-external-scope">Screener scope active</span>}
     <button type="button" onClick={()=>setReload(n=>n+1)}>Reload history</button>
     {!!frames.length&&<div className="price-history-replay"><button type="button" onClick={()=>{if(!playing&&position>=frames.length-1)setPosition(0);setPlaying(value=>!value);}}>{playing?"Pause replay":"Play replay"}</button><input aria-label="Replay position" type="range" min={0} max={frames.length-1} value={position} onChange={e=>{setPosition(Number(e.target.value));setPlaying(false);}}/><span>{chartTime(frames[position]?.time,true)} New York</span><button type="button" onClick={()=>{setPosition(frames.length-1);setPlaying(false);}}>Show all</button></div>}
   </>;

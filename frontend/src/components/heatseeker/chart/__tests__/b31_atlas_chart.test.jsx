@@ -37,6 +37,13 @@ test('full exposure line draws one segment', () => {
     exposureLine={[{ time: frames[0].time, centre: 100.5 }, { time: frames[1].time, centre: 101.5 }]} />);
   expect(screen.getAllByTestId('exposure-vwap-line')).toHaveLength(1);
 });
+test('forcedScope reaches the query_key param (screener scope parity mechanism)', async () => {
+  axios.get.mockResolvedValue({ data: { ticker: 'SPY', frames, candles_with_recorded_nodes: 0 } });
+  render(<PriceNodeHistory ticker="SPY" open forcedScope="SPY:4:day:None:False" />);
+  await waitFor(() => expect(axios.get).toHaveBeenCalled());
+  const params = axios.get.mock.calls[axios.get.mock.calls.length - 1][1].params;
+  expect(params.query_key).toBe('SPY:4:day:None:False');
+});
 test('PriceNodeHistory forwards Atlas feeds and replay slices flow with candles', async () => {
   axios.get.mockResolvedValue({ data: { ticker: 'SPY', frames, candles_with_recorded_nodes: 1 } });
   render(<PriceNodeHistory ticker="SPY" open darkLevels={[{ price: 101 }]} flowBars={[{ call: 5, put: 1 }, { call: 2, put: 8 }]} />);

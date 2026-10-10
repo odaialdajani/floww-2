@@ -1455,3 +1455,17 @@ service-level bypass:
   re-composition + lease→submit wiring + single-use/retry story +
   Nav merge decision; ACCEPTED = prior receipts; COMMISSIONED =
   external HOLD. Activation OFF. INSUFFICIENT EVIDENCE.
+
+## Spark Muse chart lane — G1 scope parity (2026-10-10)
+- DONE (mechanism): backend honors explicit query_key over newer scopes
+  (tests/services/test_price_history_scope.py 2/2); PriceNodeHistory
+  `forcedScope` prop forwards to query_key param with replay-safe slicing
+  (b31 forcedScope test RED→GREEN); SkylitDashboard mount untouched.
+- BLOCKED (dashboard thread-through): no exact scope string exists on the
+  client — recorded cache_key needs scalp/withTaps/maxStrikes/sessionDate,
+  none of which reach SkylitDashboard (mode recoverable from timeframe,
+  the rest not). Prefix-matching would be heuristic, refused per
+  interpretation contract. Needs either a backend scope-echo on the heatmap
+  response or an owner decision. Live store also holds zero snapshots, so
+  even exact wiring shows candles-only until the recorder runs.
+- Evidence: BUILD_RECEIPT.md (Opencode-Spark-Build-20261010) G1 section.
