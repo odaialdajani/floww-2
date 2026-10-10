@@ -126,6 +126,32 @@ async def _stop_tracked_background_tasks():
             return {task for task in _background_tasks if not task.done()}
 
 
+async def _shutdown_join(awaitable, label: str):
+    """Await one shutdown step with a hard bound. Never stalls shutdown.
+
+    Uses wait-not-await: awaiting a task that swallows cancellation can
+    stall wait_for past its own timeout, but asyncio.wait always returns
+    after the bound.
+    """
+    task = awaitable if isinstance(awaitable, asyncio.Task) else asyncio.ensure_future(awaitable)
+    done, _ = await asyncio.wait({task}, timeout=_BACKGROUND_SHUTDOWN_TIMEOUT_S)
+    if task not in done:
+        task.cancel()
+        log.warning(
+            "on_stop: %s did not finish within %.1fs; continuing shutdown",
+            label, _BACKGROUND_SHUTDOWN_TIMEOUT_S,
+        )
+        return
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        if asyncio.current_task() is not None and asyncio.current_task().cancelling():
+            raise
+        log.debug("on_stop: %s ended cancelled during shutdown", label)
+    except Exception as e:
+        log.warning("on_stop: %s raised on shutdown: %s", label, e)
+
+
 async def _logged_task(coro, name: str):
     """Run a coroutine and log any exception. Used to wrap fire-and-forget tasks."""
     try:
@@ -3531,24 +3557,22 @@ async def on_stop():
     log.info("on_stop: shutdown signal received")
     _shutdown_event.set()
 
-    # Cancel the scheduler task first so it stops queueing new work
+    # Cancel the scheduler task first so it stops queueing new work.
+    # Bounded join: a scheduler stuck in uninterruptible work must delay
+    # shutdown, never stall it with storage open and silent.
     global _scheduler_task
     if _scheduler_task and not _scheduler_task.done():
         _scheduler_task.cancel()
-        try:
-            await _scheduler_task
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            log.warning(f"on_stop: scheduler task raised on cancel: {e}")
+        await _shutdown_join(_scheduler_task, "scheduler")
 
     await _stop_tracked_background_tasks()
 
     # Research cancellation persists terminal state. It must finish while
     # Mongo is still open; its later registered callback is idempotent.
+    # Bounded for the same reason as the scheduler join above.
     research = getattr(app.state, "research_service", None)
     if research is not None:
-        await research.close()
+        await _shutdown_join(research.close(), "research")
 
     unfinished = {task for task in _background_tasks if not task.done()}
     if unfinished:
@@ -3559,7 +3583,7 @@ async def on_stop():
     client.close()
     try:
         from services.public_api_adapter import close_broker
-        await close_broker()
+        await _shutdown_join(close_broker(), "broker")
     except Exception as e:
         log.warning(f"on_stop: Public API client close failed: {e}")
 
@@ -3896,7 +3920,7 @@ try:
     async def shutdown_research():
         research = getattr(app.state, "research_service", None)
         if research is not None:
-            await research.close()
+            await _shutdown_join(research.close(), "research-shutdown-callback")
 except Exception as _agent_import_err:  # noqa: BLE001 - non-fatal; feature degrades
     log.warning(f"Lodestar agent routes disabled (non-fatal): {_agent_import_err}")
 
@@ -3945,7 +3969,7 @@ async def startup_duckdb():
 async def shutdown_duckdb():
     """Flush and stop DuckDB on shutdown."""
     try:
-        await duckdb_engine.stop()
+        await _shutdown_join(duckdb_engine.stop(), "duckdb")
         log.info("DuckDB engine stopped")
     except Exception as e:
         log.warning(f"server.py: duckdb_engine.stop() raise swallowed (shutdown continued): {e}", exc_info=True)
@@ -3979,7 +4003,7 @@ async def shutdown_ingestion() -> None:
     global _ingestion_pipeline
     try:
         if _ingestion_pipeline:
-            await _ingestion_pipeline.stop()
+            await _shutdown_join(_ingestion_pipeline.stop(), "ingestion")
         log.info("Ingestion pipeline stopped")
     except Exception as e:
         log.warning(f"Ingestion shutdown error: {e}")
@@ -4072,8 +4096,7 @@ async def shutdown_solstice_capture() -> None:
     try:
         if _solstice_capture_task and not _solstice_capture_task.done():
             _solstice_capture_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await _solstice_capture_task
+            await _shutdown_join(_solstice_capture_task, "solstice-capture")
     except Exception as e:
         log.warning("Solstice capture shutdown error: %s", e)
 
