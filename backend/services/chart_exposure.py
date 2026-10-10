@@ -14,18 +14,24 @@ def parse_grid(channel: dict) -> dict:
     values = channel.get("values")
     if metric not in ("gex", "vex") or not isinstance(values, list) or not values:
         return {"status": "unknown", "reason": "missing inputs"}
+    requested = channel.get("requested_expiries")
+    observed = channel.get("observed_expiries", channel.get("actual_expiries"))
+    coverage = {"inputs": len(values)}
+    if isinstance(requested, list) and isinstance(observed, list):
+        coverage = {"requested": len(requested), "observed": len(observed),
+                    "ratio": (len(observed) / len(requested)) if requested else 0.0}
     if metric == "gex":
         if channel.get("basis") != "gex.v2":
             return {"status": "unavailable", "reason": "basis mismatch"}
         return {"status": "available", "metric": "gex", "values": values,
-                "coverage": len(values)}
+                "coverage": coverage}
     # VANNA VEX requires canonical triple together; parent formula alone insufficient.
     if not (channel.get("model") == "VEX_1VOLPT"
             and channel.get("basis") == "local-bs-vanna.v1"
             and channel.get("unit") == "USD-per-volpt"):
         return {"status": "unavailable", "reason": "non-VANNA identity"}
     return {"status": "available", "metric": "vex", "values": values,
-            "coverage": len(values)}
+            "coverage": coverage}
 
 
 def select_display(readings: list[dict]) -> dict:

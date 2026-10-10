@@ -28,6 +28,14 @@ def test_monday_week_and_session_bounds():
     assert is_rth(datetime(2026, 10, 6, 12, 0, tzinfo=UTC).isoformat()) is False
 
 
+def test_monday_week_anchor():
+    from services.chart_resample import week_start
+
+    # Wednesday 2026-10-07 belongs to the Monday 2026-10-05 week.
+    assert week_start("2026-10-07T15:30:00+00:00").isoformat() == "2026-10-05T04:00:00+00:00"
+    assert week_start("not-a-time") is None
+
+
 def test_custom_bins_need_complete_base():
     from services.chart_resample import resample_bars
 

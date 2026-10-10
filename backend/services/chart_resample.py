@@ -56,6 +56,16 @@ def bucket_start(t: str, interval_minutes: int) -> datetime | None:
     return (open_ny + timedelta(minutes=bucket)).astimezone(UTC)
 
 
+def week_start(t: str):
+    """Equity 1W membership anchored Monday 00:00 New York; holidays not padded."""
+    dt = _parse(t)
+    if dt is None:
+        return None
+    ny = dt.astimezone(_NY)
+    monday = (ny - timedelta(days=ny.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    return monday.astimezone(UTC)
+
+
 def resample_bars(bars: list[dict], interval_minutes: int, session: str = "rth"):
     """Bucket base bars; emit only buckets with complete eligible inputs.
 

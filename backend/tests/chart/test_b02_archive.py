@@ -18,6 +18,8 @@ def test_parse_archived_gex_vanna():
     # Missing schemas/expiries stay unknown, never zero.
     assert parse_grid({})["status"] == "unknown"
     assert parse_grid({"metric": "gex"})["status"] == "unknown"
+    out = parse_grid({**gex, "requested_expiries": ["a", "b"], "observed_expiries": ["a"]})
+    assert out["coverage"] == {"requested": 2, "observed": 1, "ratio": 0.5}
 
 
 def test_newer_malformed_supersedes_without_carry():
