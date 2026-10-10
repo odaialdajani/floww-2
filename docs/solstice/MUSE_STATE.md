@@ -1479,3 +1479,18 @@ service-level bypass:
   honest nulls), journal 200/200, :3000 proxy 200 again. Committed 1aa4286f.
 - REMAINING: G2 (dark producer), G3 (flow buckets), G7 (VWAP mount),
   G4/G6 (sided-volume decision), G8 threading at :813 as producers land.
+## Spark Muse chart lane — G2/G3/G4 verdicts + G6 backend (2026-10-10)
+- G2 BLOCKED: no equity trade-print source exists. PublicBroker is
+  quotes/chains/bars only; Databento locked (vendor-side); FlashAlpha is
+  options prints (recent/live/outliers/summary/history unwired, cost
+  unknown) — not equity dark prints. Labelling options flow "dark pool"
+  refused. Needs a real print source + owner spend approval.
+- G3 BLOCKED: no recorded prints store (desk tables keep vol marks + IV
+  daily only); live SSE is intraday-gated, not history. Needs a
+  timestamped print store or an authorized history pull.
+- G4 DECISION NEEDED: Public bars carry total volume only; VPIN engine is
+  trade-tape-driven. CVD stays unwired until a sided-volume source is
+  authorized — never derived from up/down candles.
+- G6 backend DONE: bar-distributed volume profile (explicit approximation,
+  overlap pro-rata, POC down / VA up, sparse stop) 3/3 golden-oracle.
+  Pane wiring still open.
