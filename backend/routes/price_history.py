@@ -13,14 +13,17 @@ router = APIRouter(prefix="/api/heatseeker", tags=["price-node-history"])
 
 
 def read_snapshots(engine, ticker, first, last):
-    return engine.query_strict(
-        "SELECT snapshot_id, ticker, query_key, expiries, formula_version, exposure_basis, asof_ts, received_at, walls_json "
-        "FROM heatmap_snapshots_v2 WHERE ticker = ? "
-        "AND TRY_CAST(asof_ts AS TIMESTAMPTZ) >= ? "
-        "AND TRY_CAST(asof_ts AS TIMESTAMPTZ) <= ? "
-        "ORDER BY TRY_CAST(asof_ts AS TIMESTAMPTZ), snapshot_id LIMIT 50001",
-        [ticker, first, last],
-    )
+    base = ("SELECT snapshot_id, ticker, query_key, expiries, formula_version, exposure_basis, asof_ts, received_at, walls_json%s "
+            "FROM heatmap_snapshots_v2 WHERE ticker = ? "
+            "AND TRY_CAST(asof_ts AS TIMESTAMPTZ) >= ? "
+            "AND TRY_CAST(asof_ts AS TIMESTAMPTZ) <= ? "
+            "ORDER BY TRY_CAST(asof_ts AS TIMESTAMPTZ), snapshot_id LIMIT 50001")
+    try:
+        return engine.query_strict(base % ", strikes_json", [ticker, first, last])
+    except Exception:
+        # Older stores predate the strikes_json column: legacy read keeps
+        # nodes working, exposure centres simply stay null.
+        return engine.query_strict(base % "", [ticker, first, last])
 
 
 def recording_summary(engine, ticker):

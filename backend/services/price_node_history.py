@@ -60,6 +60,16 @@ def recorded_nodes(row: dict) -> list[dict]:
     return result
 
 
+def recorded_strikes(row: dict) -> list[dict]:
+    strikes = (row or {}).get("strikes_json") or []
+    if isinstance(strikes, str):
+        try:
+            strikes = json.loads(strikes)
+        except (TypeError, ValueError):
+            return []
+    return strikes if isinstance(strikes, list) else []
+
+
 def scope_id(row):
     """Old recorder keys omitted expiry depth; use the recorded expiries too."""
     expiries = row.get("expiries") or []
@@ -130,12 +140,20 @@ def build_history(ticker: str, bars: list[dict], snapshots: list[dict],
         # old snapshot must not become fresh merely because it arrived now.
         age = at - epoch(row["asof_ts"]) if row else None
         usable = row is not None and 0 <= age <= MAX_NODE_AGE_SECONDS
+        # Exposure centre shares the nodes' known-at discipline: only the
+        # time-eligible snapshot's recorded strikes feed it, else null.
+        centre = None
+        if usable:
+            from services.chart_exposure_centre import exposure_centre
+            centre = exposure_centre(recorded_strikes(row))["centre"]
         frames.append({**bar, "nodes": recorded_nodes(row) if usable else [],
                        "snapshot_id": row.get("snapshot_id") if usable else None,
                        "nodes_known_at": datetime.fromtimestamp(chosen[0], UTC).isoformat() if usable else None,
-                       "node_age_seconds": age if usable else None})
+                       "node_age_seconds": age if usable else None,
+                       "exposure_centre": centre})
     return {"ticker": ticker, "frames": frames, "query_key": scope,
             "scopes": scopes, "node_max_age_seconds": MAX_NODE_AGE_SECONDS,
             "candles": len(frames),
             "candles_with_recorded_nodes": sum(bool(f["nodes"]) for f in frames),
+            "exposure_line": [{"time": f["time"], "centre": f["exposure_centre"]} for f in frames],
             "note": "Nodes are shown only when recorded and known at the provider candle timestamp. Gaps mean no recent saved reading."}

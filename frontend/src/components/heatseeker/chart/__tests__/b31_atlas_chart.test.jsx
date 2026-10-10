@@ -44,6 +44,12 @@ test('forcedScope reaches the query_key param (screener scope parity mechanism)'
   const params = axios.get.mock.calls[axios.get.mock.calls.length - 1][1].params;
   expect(params.query_key).toBe('SPY:4:day:None:False');
 });
+test('server exposure_line flows to the chart without an explicit prop', async () => {
+  axios.get.mockResolvedValue({ data: { ticker: 'SPY', frames, candles_with_recorded_nodes: 0,
+    exposure_line: [{ time: frames[0].time, centre: 100.5 }, { time: frames[1].time, centre: 101.5 }] } });
+  render(<PriceNodeHistory ticker="SPY" open />);
+  await waitFor(() => expect(screen.getAllByTestId('exposure-vwap-line')).toHaveLength(1));
+});
 test('PriceNodeHistory forwards Atlas feeds and replay slices flow with candles', async () => {
   axios.get.mockResolvedValue({ data: { ticker: 'SPY', frames, candles_with_recorded_nodes: 1 } });
   render(<PriceNodeHistory ticker="SPY" open darkLevels={[{ price: 101 }]} flowBars={[{ call: 5, put: 1 }, { call: 2, put: 8 }]} />);
