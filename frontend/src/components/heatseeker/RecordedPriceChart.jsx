@@ -1,6 +1,6 @@
 import React,{useEffect,useId,useMemo,useRef,useState} from 'react';
 import {chartTime,checkedCandles,clampWindow,NODE_COLORS,NODE_LABELS,pinchFactors,priceRange,savedLevels,zoomPrice,zoomTime} from './recordedPriceChartData';
-import {sessionVwapValues} from './chart/indicators/priceStudies';
+import {sessionVwapBands,sessionVwapValues} from './chart/indicators/priceStudies';
 import {volumeProfile} from './chart/indicators/profile';
 import './RecordedPriceChart.css';
 const price=value=>Number.isFinite(value)?value.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'Unavailable';
@@ -12,7 +12,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
  const [size,setSize]=useState({width:800,height:480});
  const [view,setView]=useState(()=>({start:Math.max(0,data.length-80),count:80}));
  const [manualPrice,setManualPrice]=useState(null),[hover,setHover]=useState(null),[metrics,setMetrics]=useState(['gex','vex','charm']),[allNodes,setAllNodes]=useState(false);
- const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState(''),[vwapOn,setVwapOn]=useState(true),[profileOn,setProfileOn]=useState(true);
+ const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState(''),[vwapOn,setVwapOn]=useState(true),[bandsOn,setBandsOn]=useState(false),[profileOn,setProfileOn]=useState(true);
  const id=useId().replace(/[^a-zA-Z0-9_-]/g,'');
  useEffect(()=>{
   const element=surface.current;if(!element)return undefined;
@@ -98,6 +98,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
     <fieldset className="recorded-chart-layers" aria-label="Saved node lines"><legend>Saved lines</legend>{Object.entries(NODE_LABELS).map(([metric,label])=><label key={metric} style={{'--node-color':NODE_COLORS[metric]}}><input type="checkbox" checked={metrics.includes(metric)} disabled={!availableMetrics.includes(metric)} onChange={e=>{setMetrics(old=>e.target.checked?[...old,metric]:old.filter(value=>value!==metric));setManualPrice(null);}}/>{label}{!availableMetrics.includes(metric)&&<span> unavailable</span>}</label>)}<label><input type="checkbox" checked={allNodes} onChange={e=>{setAllNodes(e.target.checked);setManualPrice(null);}}/>All saved levels</label></fieldset>
      <label><input type="checkbox" aria-label="Toggle VWAP" checked={vwapOn} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>setVwapOn(e.target.checked)}/>VWAP{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
      <label><input type="checkbox" aria-label="Toggle profile" checked={profileOn} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>setProfileOn(e.target.checked)}/>Profile{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
+     <label><input type="checkbox" aria-label="Toggle VWAP bands" checked={bandsOn} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>setBandsOn(e.target.checked)}/>Bands{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
      <button type="button" disabled={!data.length||exporting} onClick={downloadChart}>{exporting?'Saving image...':'Download chart image'}</button>{exportError&&<p role="alert">{exportError}</p>}
     {historyControls}<small id={'chart-help-'+id}>Drag to scroll history. Pinch time and price. Drag an axis to stretch it. Ctrl + scroll zooms time; Shift + scroll zooms price. Normal scrolling moves the page.</small>
    </div></details>
@@ -145,6 +146,15 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
        const pts=win.map((v,i)=>{if(typeof v!=='number'||!Number.isFinite(v))return null;const py=y(v);if(py<top||py>bottom)return null;return {x:left+(i+0.5)*spacing,y:py};});
        const drawn=pts.filter(Boolean);if(drawn.length<2)return null;
        return <polyline data-testid="vwap-line" points={drawn.map(p=>p.x+','+p.y).join(' ')} fill="none" stroke="#e08e45" strokeWidth="2"><title>Session VWAP</title></polyline>;})()}
+      {showAtlas&&bandsOn&&vwapOn&&data.some(frame=>Number.isFinite(frame.volume))&&(()=>{
+       const all=sessionVwapBands(data),maxM=3;
+       return Array.from({length:maxM},(_,m)=>{const pts=[];
+        for(let k=0;k<windowView.count;k+=1){const set=all[windowView.start+k];const band=set?.[m];
+         if(!band||typeof band.upper!=='number'||!Number.isFinite(band.upper)||typeof band.lower!=='number'||!Number.isFinite(band.lower))continue;
+         const uy=y(band.upper),ly=y(band.lower);if(uy<top||uy>bottom||ly<top||ly>bottom)continue;
+         pts.push({x:left+(k+0.5)*spacing,uy,ly});}
+        if(pts.length<2)return null;
+        return <g key={'vwapband:'+m}><polyline data-testid="vwap-band" points={pts.map(p=>p.x+','+p.uy).join(' ')} fill="none" stroke="#e08e45" strokeWidth="1" strokeDasharray="4 3" opacity="0.8"/><polyline data-testid="vwap-band" points={pts.map(p=>p.x+','+p.ly).join(' ')} fill="none" stroke="#e08e45" strokeWidth="1" strokeDasharray="4 3" opacity="0.8"/></g>;});})()}
       {showAtlas&&profileOn&&data.some(frame=>Number.isFinite(frame.volume))&&(()=>{
        const prof=volumeProfile(visible,{rows:Math.min(48,Math.max(8,visible.length))});
        if(prof.status!=='ok')return null;

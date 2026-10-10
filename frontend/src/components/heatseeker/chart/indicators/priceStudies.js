@@ -57,6 +57,25 @@ export function sessionVwapValues(frames, opts = {}) {
   return out;
 }
 
+// Aligned per-frame band sets for the chart (null where unavailable).
+export function sessionVwapBands(frames, opts = {}) {
+  const out = new Array((frames || []).length).fill(null);
+  let day = null, group = [], at = [];
+  const flush = () => {
+    if (!group.length) return;
+    sessionVwap(group, opts).forEach((r, i) => { out[at[i]] = r.bands; });
+    group = []; at = [];
+  };
+  (frames || []).forEach((bar, i) => {
+    const key = sessionDay(bar?.time);
+    if (key === null) { out[i] = null; return; }
+    if (day !== null && key !== day) flush();
+    day = key; group.push(bar); at.push(i);
+  });
+  flush();
+  return out;
+}
+
 function barPrice(bar, source) {
   if (!bar) return null;
   if (source === 'close') {
@@ -68,18 +87,34 @@ function barPrice(bar, source) {
 }
 
 // Session-anchored price VWAP with bands. Zero weight => unavailable, not zero.
+// Bands carry real values: volume-weighted sigma (std) or fixed percent.
 export function sessionVwap(bars, { source = 'hlc3', bandBasis = 'std', multipliers = [1, 2, 3] } = {}) {
-  let cumPV = 0, cumV = 0;
+  let cumPV = 0, cumPV2 = 0, cumV = 0;
+  const bandsFor = (vwap) => {
+    if (vwap === null || !multipliers?.length) return null;
+    return multipliers.map((m) => {
+      if (bandBasis === 'percent') {
+        return { m, basis: bandBasis, upper: vwap * (1 + m / 100), lower: vwap * (1 - m / 100) };
+      }
+      const variance = Math.max(0, cumPV2 / cumV - vwap * vwap);
+      const sigma = Math.sqrt(variance);
+      return { m, basis: bandBasis, upper: vwap + m * sigma, lower: vwap - m * sigma };
+    });
+  };
   return (bars || []).map((bar) => {
     const price = barPrice(bar, source);
     const vol = typeof bar?.volume === 'number' && Number.isFinite(bar.volume) ? bar.volume : null;
-    if (price === null || vol === null) return { vwap: null, reason: 'unavailable' };
-    if (vol === 0) return { vwap: cumV ? cumPV / cumV : null, reason: cumV ? 'ok' : 'unavailable' };
+    if (price === null || vol === null) return { vwap: null, bands: null, reason: 'unavailable' };
+    if (vol === 0) {
+      const held = cumV ? cumPV / cumV : null;
+      return { vwap: held, bands: held === null ? null : bandsFor(held), reason: cumV ? 'ok' : 'unavailable' };
+    }
     cumPV += price * vol;
+    cumPV2 += price * price * vol;
     cumV += vol;
-    if (!cumV) return { vwap: null, reason: 'unavailable' };
+    if (!cumV) return { vwap: null, bands: null, reason: 'unavailable' };
     const vwap = cumPV / cumV;
-    return { vwap, bands: multipliers.map((m) => ({ m, basis: bandBasis })), reason: 'ok' };
+    return { vwap, bands: bandsFor(vwap), reason: 'ok' };
   });
 }
 

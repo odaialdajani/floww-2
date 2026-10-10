@@ -1479,6 +1479,10 @@ service-level bypass:
   honest nulls), journal 200/200, :3000 proxy 200 again. Committed 1aa4286f.
 - REMAINING: G2 (dark producer), G3 (flow buckets), G7 (VWAP mount),
   G4/G6 (sided-volume decision), G8 threading at :813 as producers land.
+## Spark Muse chart lane — VWAP bands (2026-10-10)
+- DONE: sessionVwap carries real band values (volume-weighted sigma +
+  percent, golden oracle RED→GREEN); up to 3 dashed pairs render behind
+  an off-by-default toggle (b31 RED→GREEN).
 ## Spark Muse chart lane — G6 TPO + live proof (2026-10-10)
 - G6 backend complete: TPO letters/composite/fifth-period 3/3 golden.
   Live headless-Chrome proof (?page=heatseeker): 70 candles, volume 70/70,
