@@ -41,3 +41,24 @@ def value_area(rows: list[dict], pct=0.70):
             break
     return {"status": "ok", "low": ordered[lo]["price"], "high": ordered[hi]["price"],
             "attained": acc / total}
+
+
+def naked_levels(prior_levels: list[dict], bars: list[dict]):
+    """Historically correct naked levels: a prior level stays visible from the
+    next session until the first bar whose range revisits it; unknown gaps are
+    never proof of untouched. Each level needs an observed session start."""
+    out = []
+    for level in (prior_levels or []):
+        price = (level or {}).get("price")
+        start = (level or {}).get("session_start")
+        if not isinstance(price, (int, float)) or not start:
+            continue
+        end = None
+        for bar in (bars or []):
+            low, high = (bar or {}).get("low"), (bar or {}).get("high")
+            if isinstance(low, (int, float)) and isinstance(high, (int, float)) and low <= price <= high:
+                end = bar.get("time")
+                break
+        out.append({"price": price, "visible_from": start, "visible_until": end,
+                    "naked": end is None})
+    return out
