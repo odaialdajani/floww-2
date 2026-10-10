@@ -1469,3 +1469,13 @@ service-level bypass:
   response or an owner decision. Live store also holds zero snapshots, so
   even exact wiring shows candles-only until the recorder runs.
 - Evidence: BUILD_RECEIPT.md (Opencode-Spark-Build-20261010) G1 section.
+## Spark Muse chart lane — G5 exposure line (2026-10-10)
+- DONE (producer + wiring): chart_exposure_centre from recorded strikes
+  (5/5 incl. build_history integration); route SELECTs strikes_json with
+  legacy fallback; PriceNodeHistory forwards payload.exposure_line
+  (b31 server-line test RED→GREEN).
+- LIVE: bounded restart 70297->6826, 391 frames keep volume,
+  node_status available, exposure_line 391 all-null (zero snapshots —
+  honest nulls), journal 200/200, :3000 proxy 200 again. Committed 1aa4286f.
+- REMAINING: G2 (dark producer), G3 (flow buckets), G7 (VWAP mount),
+  G4/G6 (sided-volume decision), G8 threading at :813 as producers land.
