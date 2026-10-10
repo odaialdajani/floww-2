@@ -117,6 +117,7 @@ class ResearchService:
         self.timeout = timeout
         self._maintenance_lock = asyncio.Lock()
         self._maintenance_task = None
+        self._closed = False
 
     async def ask(self, owner, request_id, spec):
         async with self._admission:
@@ -424,12 +425,36 @@ class ResearchService:
         return await self.repository.read(owner, turn_id)
 
     async def close(self):
+        # Idempotent bounded cleanup: second registered shutdown callback
+        # must never hang. asyncio.wait always returns after the bound even
+        # when a task swallows cancellation; gather alone would stall.
+        if getattr(self, "_closed", False):
+            return
+        self._closed = True
         tasks = list(self.tasks.values())
         if self._maintenance_task is not None:
             tasks.append(self._maintenance_task)
         for task in tasks:
-            task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+            if not task.done():
+                task.cancel()
+        if not tasks:
+            self.tasks.clear()
+            self._maintenance_task = None
+            return
+        try:
+            _, pending = await asyncio.wait(tasks, timeout=5.0)
+            if pending:
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "ResearchService.close: %d task(s) did not stop within 5.0s; continuing shutdown",
+                    len(pending),
+                )
+                for task in pending:
+                    task.cancel()
+        finally:
+            self.tasks.clear()
+            self._maintenance_task = None
 
     def schedule_maintenance(self):
         """One tracked task keeps slow reconciliation off the market scheduler."""
