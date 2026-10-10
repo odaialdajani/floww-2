@@ -95,8 +95,20 @@ def build_history(ticker: str, bars: list[dict], snapshots: list[dict],
         o, h, low, c = prices
         if not h >= max(o, low, c) or not low <= min(o, h, c):
             continue
-        clean[at] = {"time": datetime.fromtimestamp(at, UTC).isoformat(),
-                     "open": o, "high": h, "low": low, "close": c}
+        frame = {"time": datetime.fromtimestamp(at, UTC).isoformat(),
+                 "open": o, "high": h, "low": low, "close": c}
+        # Volume passes through when the provider measured it: positive, or a
+        # genuine measured zero. Absent / negative / non-finite stays absent —
+        # a fabricated 0 would read as "no shares traded" on the chart.
+        raw_v = bar.get("v", bar.get("volume"))
+        if raw_v is not None and not isinstance(raw_v, bool):
+            try:
+                v = float(raw_v)
+            except (TypeError, ValueError):
+                v = None
+            if v is not None and math.isfinite(v) and v >= 0:
+                frame["volume"] = v
+        clean[at] = frame
     # A later-arriving different view cannot choose this chart's default.
     end = max(clean) if clean else float("-inf")
     known = [(at, row) for at, row in known if at <= end]
