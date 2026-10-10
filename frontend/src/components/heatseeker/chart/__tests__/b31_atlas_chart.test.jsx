@@ -32,10 +32,63 @@ test('exposure line gaps on missing minutes, dark levels and flow render', () =>
   expect(screen.getAllByTestId('dark-pool-level')).toHaveLength(1);
   expect(screen.getByTestId('flow-pane')).toBeInTheDocument();
 });
+test('VWAP line draws from real volume, toggle hides it, absent volume disables', () => {
+  const vol = [
+    { time: '2026-10-06T13:30:00+00:00', open: 100, high: 102, low: 99, close: 101, volume: 100, duration_seconds: 60, nodes: [] },
+    { time: '2026-10-06T13:31:00+00:00', open: 101, high: 103, low: 100, close: 102, volume: 100, duration_seconds: 60, nodes: [] },
+  ];
+  const view = render(<RecordedPriceChart ticker="SPY" frames={vol} />);
+  expect(screen.getAllByTestId('vwap-line').length).toBeGreaterThanOrEqual(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Chart tools' }));
+  fireEvent.click(screen.getByLabelText('Toggle VWAP'));
+  expect(screen.queryByTestId('vwap-line')).not.toBeInTheDocument();
+  view.unmount();
+  render(<RecordedPriceChart ticker="SPY" frames={frames} />);
+  expect(screen.getByLabelText('Toggle VWAP')).toBeDisabled();
+});
 test('full exposure line draws one segment', () => {
   render(<RecordedPriceChart ticker="SPY" frames={frames}
     exposureLine={[{ time: frames[0].time, centre: 100.5 }, { time: frames[1].time, centre: 101.5 }]} />);
   expect(screen.getAllByTestId('exposure-vwap-line')).toHaveLength(1);
+});
+test('forcedScope reaches the query_key param (screener scope parity mechanism)', async () => {
+  axios.get.mockResolvedValue({ data: { ticker: 'SPY', frames, candles_with_recorded_nodes: 0 } });
+  render(<PriceNodeHistory ticker="SPY" open forcedScope="SPY:4:day:None:False" />);
+  await waitFor(() => expect(axios.get).toHaveBeenCalled());
+  const params = axios.get.mock.calls[axios.get.mock.calls.length - 1][1].params;
+  expect(params.query_key).toBe('SPY:4:day:None:False');
+});
+test('server exposure_line flows to the chart without an explicit prop', async () => {
+  axios.get.mockResolvedValue({ data: { ticker: 'SPY', frames, candles_with_recorded_nodes: 0,
+    exposure_line: [{ time: frames[0].time, centre: 100.5 }, { time: frames[1].time, centre: 101.5 }] } });
+  render(<PriceNodeHistory ticker="SPY" open />);
+  await waitFor(() => expect(screen.getAllByTestId('exposure-vwap-line')).toHaveLength(1));
+});
+test('profile pane draws POC/VA from real volume, toggle hides, absent volume disables', () => {
+  const { volumeProfile } = require('../indicators/profile');
+  const bars = [
+    { open: 100, high: 102, low: 100, close: 101, volume: 100 },
+    { open: 101, high: 103, low: 101, close: 102, volume: 300 },
+  ];
+  // Cross-implementation golden: same oracle as backend chart_volume_profile.
+  const out = volumeProfile(bars, { rows: 3, valueAreaPct: 0.70 });
+  expect(out.status).toBe('ok');
+  expect(out.total_volume).toBe(400);
+  expect(out.poc).toEqual({ price: 101.5, volume: 200 });
+  expect(out.value_area).toEqual({ low: 101, high: 103, attained: 0.875 });
+  const vol = [
+    { time: '2026-10-06T13:30:00+00:00', open: 100, high: 102, low: 99, close: 101, volume: 100, duration_seconds: 60, nodes: [] },
+    { time: '2026-10-06T13:31:00+00:00', open: 101, high: 103, low: 100, close: 102, volume: 300, duration_seconds: 60, nodes: [] },
+  ];
+  const view = render(<RecordedPriceChart ticker="SPY" frames={vol} />);
+  expect(screen.getByTestId('volume-profile')).toBeInTheDocument();
+  expect(screen.getByTestId('profile-poc')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Chart tools' }));
+  fireEvent.click(screen.getByLabelText('Toggle profile'));
+  expect(screen.queryByTestId('volume-profile')).not.toBeInTheDocument();
+  view.unmount();
+  render(<RecordedPriceChart ticker="SPY" frames={frames} />);
+  expect(screen.getByLabelText('Toggle profile')).toBeDisabled();
 });
 test('PriceNodeHistory forwards Atlas feeds and replay slices flow with candles', async () => {
   axios.get.mockResolvedValue({ data: { ticker: 'SPY', frames, candles_with_recorded_nodes: 1 } });

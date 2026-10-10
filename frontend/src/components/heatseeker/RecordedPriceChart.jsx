@@ -1,5 +1,7 @@
 import React,{useEffect,useId,useMemo,useRef,useState} from 'react';
 import {chartTime,checkedCandles,clampWindow,NODE_COLORS,NODE_LABELS,pinchFactors,priceRange,savedLevels,zoomPrice,zoomTime} from './recordedPriceChartData';
+import {sessionVwapValues} from './chart/indicators/priceStudies';
+import {volumeProfile} from './chart/indicators/profile';
 import './RecordedPriceChart.css';
 const price=value=>Number.isFinite(value)?value.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'Unavailable';
 const bound=(value,low,high)=>Math.max(low,Math.min(high,value));
@@ -10,7 +12,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
  const [size,setSize]=useState({width:800,height:480});
  const [view,setView]=useState(()=>({start:Math.max(0,data.length-80),count:80}));
  const [manualPrice,setManualPrice]=useState(null),[hover,setHover]=useState(null),[metrics,setMetrics]=useState(['gex','vex','charm']),[allNodes,setAllNodes]=useState(false);
- const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState('');
+ const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState(''),[vwapOn,setVwapOn]=useState(true),[profileOn,setProfileOn]=useState(true);
  const id=useId().replace(/[^a-zA-Z0-9_-]/g,'');
  useEffect(()=>{
   const element=surface.current;if(!element)return undefined;
@@ -42,7 +44,10 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
  const begin=event=>{
   if(!data.length)return;notify();setHover(null);const p=point(event);pointers.current.set(event.pointerId,p);event.currentTarget.setPointerCapture?.(event.pointerId);
   if(pointers.current.size===2){const touch=[...pointers.current.values()];gesture.current={mode:'pinch',touch,view:windowView,range};}
-  else if(pointers.current.size===1)gesture.current={mode:p.x>=right?'price':p.y>=bottom?'time':'pan',point:p,view:windowView,range,manual:Boolean(manualPrice)};
+  else if(pointers.current.size===1)gesture.current={mode:p.x>=right?'price':p.y>=bottom?'time':'pan',point:p,view:windowView,range,manual:Boolean(manualPrice),
+   // Anchor = where the user grabbed, as a fraction of the plot, so the
+   // point under the cursor stays under the cursor while the axis stretches.
+   anchor:p.x>=right?bound(1-(p.y-top)/plotHeight,0,1):p.y>=bottom?bound((p.x-left)/plotWidth,0,1):0};
  };
  const move=event=>{
   const p=point(event);if(!pointers.current.has(event.pointerId)){
@@ -54,8 +59,8 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
    if(factors.x!==1)setView(zoomTime(base.view,factors.x,bound((cx-left)/plotWidth,0,1),data.length));if(factors.y!==1)setManualPrice(zoomPrice(base.range,factors.y,bound(1-(cy-top)/plotHeight,0,1)));return;
   }
   const dx=p.x-base.point.x,dy=p.y-base.point.y;
-  if(base.mode==='price')setManualPrice(zoomPrice(base.range,Math.exp(bound(dy,-500,500)/180),0.5));
-  else if(base.mode==='time')setView(zoomTime(base.view,Math.exp(bound(dx,-500,500)/240),0.5,data.length));
+  if(base.mode==='price')setManualPrice(zoomPrice(base.range,Math.exp(bound(dy,-500,500)/180),base.anchor??.5));
+  else if(base.mode==='time')setView(zoomTime(base.view,Math.exp(bound(dx,-500,500)/240),base.anchor??.5,data.length));
   else {setView(clampWindow({start:base.view.start-dx/plotWidth*base.view.count,count:base.view.count},data.length));if(base.manual){const offset=dy/plotHeight*(base.range.high-base.range.low);setManualPrice({low:base.range.low+offset,high:base.range.high+offset});}}
  };
  const end=event=>{pointers.current.delete(event.pointerId);event.currentTarget.releasePointerCapture?.(event.pointerId);if(pointers.current.size===1){gesture.current={mode:'pan',point:[...pointers.current.values()][0],view:current.current.view,range:current.current.range,manual:Boolean(manualPrice)};}else gesture.current=null;};
@@ -91,7 +96,9 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
    <details className="recorded-chart-popover"><summary role="button" aria-label="Chart tools">Tools</summary><div className="recorded-chart-popover-content">
     <div className="recorded-chart-history"><button type="button" aria-label="Earlier candles" disabled={!windowView.start} onClick={()=>shift(-Math.max(1,Math.floor(windowView.count/2)))}>Earlier</button><button type="button" aria-label="Later candles" disabled={windowView.start+windowView.count>=data.length} onClick={()=>shift(Math.max(1,Math.floor(windowView.count/2)))}>Later</button><button type="button" disabled={!data.length} onClick={()=>{notify();setView({start:0,count:data.length});setManualPrice(null);}}>Fit history</button></div>
     <fieldset className="recorded-chart-layers" aria-label="Saved node lines"><legend>Saved lines</legend>{Object.entries(NODE_LABELS).map(([metric,label])=><label key={metric} style={{'--node-color':NODE_COLORS[metric]}}><input type="checkbox" checked={metrics.includes(metric)} disabled={!availableMetrics.includes(metric)} onChange={e=>{setMetrics(old=>e.target.checked?[...old,metric]:old.filter(value=>value!==metric));setManualPrice(null);}}/>{label}{!availableMetrics.includes(metric)&&<span> unavailable</span>}</label>)}<label><input type="checkbox" checked={allNodes} onChange={e=>{setAllNodes(e.target.checked);setManualPrice(null);}}/>All saved levels</label></fieldset>
-    <button type="button" disabled={!data.length||exporting} onClick={downloadChart}>{exporting?'Saving image...':'Download chart image'}</button>{exportError&&<p role="alert">{exportError}</p>}
+     <label><input type="checkbox" aria-label="Toggle VWAP" checked={vwapOn} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>setVwapOn(e.target.checked)}/>VWAP{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
+     <label><input type="checkbox" aria-label="Toggle profile" checked={profileOn} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>setProfileOn(e.target.checked)}/>Profile{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
+     <button type="button" disabled={!data.length||exporting} onClick={downloadChart}>{exporting?'Saving image...':'Download chart image'}</button>{exportError&&<p role="alert">{exportError}</p>}
     {historyControls}<small id={'chart-help-'+id}>Drag to scroll history. Pinch time and price. Drag an axis to stretch it. Ctrl + scroll zooms time; Shift + scroll zooms price. Normal scrolling moves the page.</small>
    </div></details>
    <div className="recorded-chart-actions">{toolbarActions}</div>
@@ -110,14 +117,40 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
        if(!nodes.length)return [];
        const weights=nodes.map(n=>{const w=n.signed_value??n.strength;return typeof w==='number'&&Number.isFinite(w)?Math.abs(w):1;});
        const king=Math.max(...weights),center=left+(index+0.5)*spacing;
-       return nodes.map((node,ni)=>{const ratio=king>0?weights[ni]/king:0,r=Math.min(12,Math.max(3,4*Math.sqrt(Math.max(0,ratio)))),yy=Math.max(top,Math.min(bottom,y(node.level))),isKing=weights[ni]===king;
+       return nodes.flatMap((node,ni)=>{const yy=y(node.level);
+        // A strike outside the visible price range is never drawn clamped
+        // to the plot edge — that would fabricate a price. Drop it and mark
+        // the candle as having out-of-range nodes instead.
+        if(yy<top||yy>bottom)return <title key={frame.time+':orb:'+ni+':oor'} data-testid="orb-out-of-range">Orb {price(node.level)} out of visible price range</title>;
+        const ratio=king>0?weights[ni]/king:0,r=Math.min(12,Math.max(3,4*Math.sqrt(Math.max(0,ratio)))),isKing=weights[ni]===king;
         return <circle data-testid="chart-orb" key={frame.time+':orb:'+ni} cx={center} cy={yy} r={r} fill={isKing?'#e8bd65':'none'} stroke={NODE_COLORS[node.metric||'gex']||'#e8bd65'} strokeWidth={isKing?2:1} opacity="0.75"><title>{'Orb '+price(node.level)+(isKing?' (King Node)':'')}</title></circle>;});})}
       {showAtlas&&Array.isArray(exposureLine)&&exposureLine.length>0&&(()=>{
        const byTime=new Map(exposureLine.filter(p=>p&&typeof p.time==='string').map(p=>[p.time,p]));
-       const pts=visible.map((frame,index)=>{const p=byTime.get(frame.time);if(!p||typeof p.centre!=='number'||!Number.isFinite(p.centre))return null;return {x:left+(index+0.5)*spacing,y:Math.max(top,Math.min(bottom,y(p.centre)))};});
-       const segs=[];let cur=[];pts.forEach(pt=>{if(pt)cur.push(pt);else{if(cur.length>1)segs.push(cur);cur=[];}});if(cur.length>1)segs.push(cur);
+       const pts=visible.map((frame,index)=>{const p=byTime.get(frame.time);if(!p||typeof p.centre!=='number'||!Number.isFinite(p.centre))return null;
+        const py=y(p.centre);
+        // Out-of-range centres are dropped, never clamped to an edge —
+        // a clamped point would read as a real price on the polyline.
+        if(py<top||py>bottom)return null;
+        return {x:left+(index+0.5)*spacing,y:py};});
+       const segs=[];let cur=[];
+       // Bridge across dropped points: an out-of-range centre is omitted from
+       // the line but must NOT split the visible segment into two false gaps.
+       const drawn=pts.filter(Boolean);cur=drawn.slice(0,1);
+       for(let i=1;i<drawn.length;i++){if(drawn[i-1].x>drawn[i].x)break;cur.push(drawn[i]);}
+       if(cur.length>1)segs.push(cur);
        return segs.map((seg,si)=><polyline data-testid="exposure-vwap-line" key={'gexvwap:'+si} points={seg.map(p=>p.x+','+p.y).join(' ')} fill="none" stroke="#72d7df" strokeWidth="2"><title>GEX VWAP centre</title></polyline>);})()}
       {showAtlas&&Array.isArray(darkLevels)&&darkLevels.filter(l=>l&&typeof l.price==='number'&&Number.isFinite(l.price)&&l.price>=range.low&&l.price<=range.high).map((l,li)=><line data-testid="dark-pool-level" key={'dark:'+li} x1={left} x2={right} y1={y(l.price)} y2={y(l.price)} stroke="#c9a86a" strokeWidth="1.5" strokeDasharray="6 3"><title>{'Dark pool level '+price(l.price)+(l.venue?' '+l.venue:'')}</title></line>)}
+      {showAtlas&&vwapOn&&data.some(frame=>Number.isFinite(frame.volume))&&(()=>{
+       const all=sessionVwapValues(data),win=all.slice(windowView.start,windowView.start+windowView.count);
+       const pts=win.map((v,i)=>{if(typeof v!=='number'||!Number.isFinite(v))return null;const py=y(v);if(py<top||py>bottom)return null;return {x:left+(i+0.5)*spacing,y:py};});
+       const drawn=pts.filter(Boolean);if(drawn.length<2)return null;
+       return <polyline data-testid="vwap-line" points={drawn.map(p=>p.x+','+p.y).join(' ')} fill="none" stroke="#e08e45" strokeWidth="2"><title>Session VWAP</title></polyline>;})()}
+      {showAtlas&&profileOn&&data.some(frame=>Number.isFinite(frame.volume))&&(()=>{
+       const prof=volumeProfile(visible,{rows:Math.min(48,Math.max(8,visible.length))});
+       if(prof.status!=='ok')return null;
+       const peak=Math.max(...prof.rows.map(r=>r.volume),1),bw=64,bx=Math.max(left,right-bw-4);
+       return <g data-testid="volume-profile"><title>Volume profile (bar-range approximation)</title>{prof.rows.map((r,ri)=>{const isPoc=r.price===prof.poc.price&&r.volume===prof.poc.volume;
+        return <rect key={'vp:'+ri} data-testid={isPoc?'profile-poc':'profile-row'} x={bx+(bw-Math.max(1,(r.volume/peak)*bw))} y={y(r.price)-2} width={Math.max(1,(r.volume/peak)*bw)} height={4} fill={isPoc?'#e8bd65':'#5a6b7d'} opacity={isPoc?0.95:0.6}><title>{'Volume '+price(r.price)+': '+Math.round(r.volume).toLocaleString('en-US')+' shares'}</title></rect>;})}</g>;})()}
       {hover!==null&&selected&&<><line x1={left+(hover+0.5)*spacing} x2={left+(hover+0.5)*spacing} y1={top} y2={bottom} stroke="#a8b3be" strokeDasharray="3 4"/><line x1={left} x2={right} y1={y(selected.close)} y2={y(selected.close)} stroke="#a8b3be" strokeDasharray="3 4"/></>}
     </g>
     <line x1={right} x2={right} y1={top} y2={bottom} stroke="#3d4853"/>
@@ -128,6 +161,15 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
     const win=flowBars.slice(windowView.start,windowView.start+windowView.count);
     const peak=Math.max(1,...win.flatMap(b=>[Math.abs(b?.call||0),Math.abs(b?.put||0)]));
     return <div className="recorded-flow-pane" data-testid="flow-pane" aria-label="Options flow per candle">{win.map((b,bi)=><div key={bi} className="recorded-flow-bar"><div className="recorded-flow-call" style={{height:(Math.abs(b?.call||0)/peak*20)+'px'}}/><div className="recorded-flow-put" style={{height:(Math.abs(b?.put||0)/peak*20)+'px'}}/></div>)}</div>;})()}
+   {!!data.length&&(()=>{ // Volume pane: real provider volume only — never fabricated.
+    const win=visible,hasVol=win.some(frame=>Number.isFinite(frame.volume));
+    if(!hasVol)return <div className="recorded-chart-empty recorded-volume-empty"><small>Volume unavailable for these candles.</small></div>;
+    const peak=Math.max(1,...win.map(frame=>Number(frame.volume)||0));
+    const h=Math.max(24,Math.min(72,Math.round(plotHeight*0.15)));
+    return <svg className="recorded-volume-pane" data-testid="volume-pane" role="img" aria-label="Traded volume per candle" viewBox={'0 0 '+size.width+' '+h} preserveAspectRatio="none" style={{width:'100%',height:h}}>
+      {win.map((frame,index)=>{const v=Number(frame.volume)||0,bh=Math.max(1,v/peak*(h-4));
+       return <rect data-testid="volume-bar" key={frame.time} x={left+index*spacing+Math.max(1,spacing*0.15)} y={h-bh} width={Math.max(1,Math.min(spacing*0.7,14))} height={bh} fill={frame.close>=frame.open?'#3f8f7d':'#8f4a52'} opacity="0.85"><title>{chartTime(frame.time,true)+' — '+(Number.isFinite(v)?v.toLocaleString('en-US'):'0')+' shares'}</title></rect>;})}
+    </svg>;})()}
    {!!data.length&&<div className="recorded-chart-footer"><small>{windowView.start+1}-{windowView.start+visible.length} of {data.length} loaded candles</small></div>}
   {selected&&<div className="recorded-chart-nodes" aria-label="Selected candle saved nodes">{selectedLevels.length?selectedLevels.map((node,index)=><span key={node.metric+':'+node.id+':'+index} style={{color:NODE_COLORS[node.metric]}}>{NODE_LABELS[node.metric]} <b>{price(node.level)}</b></span>):<span>No supported saved node lines at this candle.{Object.entries(selected?.metric_status||{}).filter(([,status])=>status==="zero").map(([metric])=>" "+NODE_LABELS[metric]+" was zero; no largest level stood out.").join("")}</span>}</div>}
  </div>;

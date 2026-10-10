@@ -30,6 +30,33 @@ export function ema(values, period) {
   return out;
 }
 
+function sessionDay(time) {
+  const d = new Date(time);
+  if (!Number.isFinite(d.valueOf())) return null;
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+}
+
+// Multi-session VWAP values aligned to input frames: cumulative Σ(hlc3·v)/Σv
+// resetting at each New York session open. Missing volume yields null (gap);
+// zero volume with history holds the last value. Never fabricates.
+export function sessionVwapValues(frames, opts = {}) {
+  const out = new Array((frames || []).length).fill(null);
+  let day = null, group = [], at = [];
+  const flush = () => {
+    if (!group.length) return;
+    sessionVwap(group, opts).forEach((r, i) => { out[at[i]] = r.vwap; });
+    group = []; at = [];
+  };
+  (frames || []).forEach((bar, i) => {
+    const key = sessionDay(bar?.time);
+    if (key === null) { out[i] = null; return; }
+    if (day !== null && key !== day) flush();
+    day = key; group.push(bar); at.push(i);
+  });
+  flush();
+  return out;
+}
+
 function barPrice(bar, source) {
   if (!bar) return null;
   if (source === 'close') {

@@ -1455,3 +1455,52 @@ service-level bypass:
   re-composition + lease→submit wiring + single-use/retry story +
   Nav merge decision; ACCEPTED = prior receipts; COMMISSIONED =
   external HOLD. Activation OFF. INSUFFICIENT EVIDENCE.
+
+## Spark Muse chart lane — G1 scope parity (2026-10-10)
+- DONE (mechanism): backend honors explicit query_key over newer scopes
+  (tests/services/test_price_history_scope.py 2/2); PriceNodeHistory
+  `forcedScope` prop forwards to query_key param with replay-safe slicing
+  (b31 forcedScope test RED→GREEN); SkylitDashboard mount untouched.
+- BLOCKED (dashboard thread-through): no exact scope string exists on the
+  client — recorded cache_key needs scalp/withTaps/maxStrikes/sessionDate,
+  none of which reach SkylitDashboard (mode recoverable from timeframe,
+  the rest not). Prefix-matching would be heuristic, refused per
+  interpretation contract. Needs either a backend scope-echo on the heatmap
+  response or an owner decision. Live store also holds zero snapshots, so
+  even exact wiring shows candles-only until the recorder runs.
+- Evidence: BUILD_RECEIPT.md (Opencode-Spark-Build-20261010) G1 section.
+## Spark Muse chart lane — G5 exposure line (2026-10-10)
+- DONE (producer + wiring): chart_exposure_centre from recorded strikes
+  (5/5 incl. build_history integration); route SELECTs strikes_json with
+  legacy fallback; PriceNodeHistory forwards payload.exposure_line
+  (b31 server-line test RED→GREEN).
+- LIVE: bounded restart 70297->6826, 391 frames keep volume,
+  node_status available, exposure_line 391 all-null (zero snapshots —
+  honest nulls), journal 200/200, :3000 proxy 200 again. Committed 1aa4286f.
+- REMAINING: G2 (dark producer), G3 (flow buckets), G7 (VWAP mount),
+  G4/G6 (sided-volume decision), G8 threading at :813 as producers land.
+## Spark Muse chart lane — G6 TPO + live proof (2026-10-10)
+- G6 backend complete: TPO letters/composite/fifth-period 3/3 golden.
+  Live headless-Chrome proof (?page=heatseeker): 70 candles, volume 70/70,
+  VWAP 1 line, profile present, orbs/exposure 0 (zero snapshots recorded —
+  expected), zero page errors. Committed c2599f9d, pushed.
+## Spark Muse chart lane — G6 pane + G7 mount (2026-10-10)
+- G6 pane DONE: volumeProfile helper cross-checked to backend oracle,
+  side pane over visible candles with POC mark + toggle (b31 RED→GREEN).
+- G7 DONE: multi-session VWAP polyline with NY-day reset + toggle
+  (golden oracle RED→GREEN). Committed abf4754f-era lane work, pushed.
+## Spark Muse chart lane — G2/G3/G4 verdicts + G6 backend (2026-10-10)
+- G2 BLOCKED: no equity trade-print source exists. PublicBroker is
+  quotes/chains/bars only; Databento locked (vendor-side); FlashAlpha is
+  options prints (recent/live/outliers/summary/history unwired, cost
+  unknown) — not equity dark prints. Labelling options flow "dark pool"
+  refused. Needs a real print source + owner spend approval.
+- G3 BLOCKED: no recorded prints store (desk tables keep vol marks + IV
+  daily only); live SSE is intraday-gated, not history. Needs a
+  timestamped print store or an authorized history pull.
+- G4 DECISION NEEDED: Public bars carry total volume only; VPIN engine is
+  trade-tape-driven. CVD stays unwired until a sided-volume source is
+  authorized — never derived from up/down candles.
+- G6 backend DONE: bar-distributed volume profile (explicit approximation,
+  overlap pro-rata, POC down / VA up, sparse stop) 3/3 golden-oracle.
+  Pane wiring still open.
