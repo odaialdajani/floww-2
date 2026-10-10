@@ -34,6 +34,21 @@ test('exposure-VWAP gaps never carry, opening needs 8 and freezes', () => {
   expect(after[15].envelope.high).toBe(114);
 });
 
+test('multi-session VWAP resets each New York day (golden oracle)', () => {
+  const { sessionVwapValues } = require('../indicators/priceStudies');
+  const d1a = { time: '2026-10-06T13:30:00+00:00', high: 10, low: 8, close: 9, volume: 100 };
+  const d1b = { time: '2026-10-06T13:31:00+00:00', high: 10, low: 9, close: 9.5, volume: 100 };
+  const d2a = { time: '2026-10-07T13:30:00+00:00', high: 20, low: 18, close: 19, volume: 50 };
+  const out = sessionVwapValues([d1a, d1b, d2a]);
+  // Day 1: 9.0 then (900+950)/200 = 9.25. Day 2 resets: 19.0.
+  expect(out[0]).toBeCloseTo(9.0, 8);
+  expect(out[1]).toBeCloseTo(9.25, 8);
+  expect(out[2]).toBeCloseTo(19.0, 8);
+  // Missing volume breaks (null), zero volume with history holds value.
+  const out2 = sessionVwapValues([d1a, { ...d1b, volume: null }, { ...d1b, volume: 0 }]);
+  expect(out2[1]).toBe(null);
+  expect(out2[2]).toBeCloseTo(9.0, 8);
+});
 test('registry declares approximation + replay', () => {
   expect(getStudy('vwap').approximation).toBe('bar-vwap');
   expect(getStudy('exposureVwap').source).toBe('board');
