@@ -1479,6 +1479,11 @@ service-level bypass:
   honest nulls), journal 200/200, :3000 proxy 200 again. Committed 1aa4286f.
 - REMAINING: G2 (dark producer), G3 (flow buckets), G7 (VWAP mount),
   G4/G6 (sided-volume decision), G8 threading at :813 as producers land.
+## Spark Muse chart lane — G6 pane + G7 mount (2026-10-10)
+- G6 pane DONE: volumeProfile helper cross-checked to backend oracle,
+  side pane over visible candles with POC mark + toggle (b31 RED→GREEN).
+- G7 DONE: multi-session VWAP polyline with NY-day reset + toggle
+  (golden oracle RED→GREEN). Committed abf4754f-era lane work, pushed.
 ## Spark Muse chart lane — G2/G3/G4 verdicts + G6 backend (2026-10-10)
 - G2 BLOCKED: no equity trade-print source exists. PublicBroker is
   quotes/chains/bars only; Databento locked (vendor-side); FlashAlpha is
