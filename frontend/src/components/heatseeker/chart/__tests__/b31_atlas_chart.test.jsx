@@ -46,6 +46,18 @@ test('VWAP line draws from real volume, toggle hides it, absent volume disables'
   render(<RecordedPriceChart ticker="SPY" frames={frames} />);
   expect(screen.getByLabelText('Toggle VWAP')).toBeDisabled();
 });
+test('VWAP bands render per pair, default off, toggle shows', () => {
+  const vol = [
+    { time: '2026-10-06T13:30:00+00:00', open: 100, high: 102, low: 99, close: 101, volume: 100, duration_seconds: 60, nodes: [] },
+    { time: '2026-10-06T13:31:00+00:00', open: 101, high: 103, low: 100, close: 102, volume: 100, duration_seconds: 60, nodes: [] },
+  ];
+  const view = render(<RecordedPriceChart ticker="SPY" frames={vol} />);
+  expect(screen.queryByTestId('vwap-band')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Chart tools' }));
+  fireEvent.click(screen.getByLabelText('Toggle VWAP bands'));
+  expect(screen.getAllByTestId('vwap-band').length).toBeGreaterThanOrEqual(2);
+  view.unmount();
+});
 test('full exposure line draws one segment', () => {
   render(<RecordedPriceChart ticker="SPY" frames={frames}
     exposureLine={[{ time: frames[0].time, centre: 100.5 }, { time: frames[1].time, centre: 101.5 }]} />);

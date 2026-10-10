@@ -49,6 +49,23 @@ test('multi-session VWAP resets each New York day (golden oracle)', () => {
   expect(out2[1]).toBe(null);
   expect(out2[2]).toBeCloseTo(9.0, 8);
 });
+test('VWAP bands: volume-weighted sigma + percent, hand-computed', () => {
+  const { sessionVwap } = require('../indicators/priceStudies');
+  const bars = [
+    { high: 10, low: 8, close: 9, volume: 100 },
+    { high: 10, low: 9, close: 9.5, volume: 100 },
+  ];
+  // VWAP 9.25, var = (100*0.0625 + 100*0.0625)/200 = 0.0625, sigma 0.25.
+  const std = sessionVwap(bars, { bandBasis: 'std', multipliers: [1, 2] });
+  expect(std[1].bands[0].upper).toBeCloseTo(9.5, 8);
+  expect(std[1].bands[0].lower).toBeCloseTo(9.0, 8);
+  expect(std[1].bands[1].upper).toBeCloseTo(9.75, 8);
+  const pct = sessionVwap(bars, { bandBasis: 'percent', multipliers: [1] });
+  expect(pct[1].bands[0].upper).toBeCloseTo(9.25 * 1.01, 8);
+  expect(pct[1].bands[0].lower).toBeCloseTo(9.25 * 0.99, 8);
+  // No volume yet: bands null, never fabricated.
+  expect(sessionVwap([{ high: 1, low: 1, close: 1, volume: null }])[0].bands).toBe(null);
+});
 test('registry declares approximation + replay', () => {
   expect(getStudy('vwap').approximation).toBe('bar-vwap');
   expect(getStudy('exposureVwap').source).toBe('board');
