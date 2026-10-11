@@ -1946,6 +1946,11 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     except Exception as ve:
         log.debug("solstice vanna attach failed: %s", ve)
     try:
+        from services.chart_skew import skew_by_expiry
+        payload["skew_by_expiry"] = skew_by_expiry(raw["contracts"], spot)
+    except Exception as se:
+        log.debug("solstice skew attach failed: %s", se)
+    try:
         from datetime import UTC as _scout_UTC
         from datetime import datetime as _scout_dt
 
