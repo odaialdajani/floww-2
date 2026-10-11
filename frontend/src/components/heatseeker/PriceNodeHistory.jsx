@@ -24,6 +24,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   const setOpen = value => { setLocalOpen(value); onOpenChange?.(value); };
   const [days, setDays] = useState(5);
   const [minutes, setMinutes] = useState(30);
+  const [sessions, setSessions] = useState("regular");
   const [scope, setScope] = useState("");
   const [payload, setPayload] = useState(null);
   const [status, setStatus] = useState("idle");
@@ -72,7 +73,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     setPayload(null); setStatus("loading"); setPlaying(false);
     const activeScope = forcedScope ?? scope;
     axios.get(`${API}/heatseeker/price-history/${encodeURIComponent(ticker)}`, {
-      params: { days, interval_minutes: minutes, include_metric_lines: true, ...(activeScope ? { query_key: activeScope } : {}), ...(contract ? { contract_symbol: contract } : {}) },
+      params: { days, interval_minutes: minutes, include_metric_lines: true, sessions, ...(activeScope ? { query_key: activeScope } : {}), ...(contract ? { contract_symbol: contract } : {}) },
       timeout: 30000, signal: controller.signal,
     }).then(({ data }) => {
       if (!active) return;
@@ -80,7 +81,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
       setPayload(data); setPosition(Math.max(0, (data.frames?.length || 0) - 1)); setStatus("ready");
     }).catch(() => { if (active) setStatus("error"); });
     return () => { active = false; controller.abort(); };
-  }, [ticker, days, minutes, scope, forcedScope, open, reload, contract]);
+  }, [ticker, days, minutes, sessions, scope, forcedScope, open, reload, contract]);
   useEffect(() => {
     if (!open) return undefined;
     const controller = new AbortController();
@@ -107,7 +108,8 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   const pauseInteraction = useCallback(() => setPlaying(false), []);
   const controls = <><strong className="price-chart-symbol">{ticker}</strong>
     <select aria-label="Candle interval" title="Candle interval" value={minutes} onChange={e=>setMinutes(Number(e.target.value))}><option value={1}>1 min</option><option value={5}>5 min</option><option value={15}>15 min</option><option value={30}>30 min</option><option value={60}>1 hour</option></select>
-    <select aria-label="History sessions" title="History period" value={days} onChange={e=>setDays(Number(e.target.value))}><option value={1}>1 session</option><option value={5}>1 week</option><option value={20}>1 month</option><option value={60}>3 months</option><option value={260}>1 year</option><option value={2600}>10 years</option></select></>;
+    <select aria-label="History sessions" title="History period" value={days} onChange={e=>setDays(Number(e.target.value))}><option value={1}>1 session</option><option value={5}>1 week</option><option value={20}>1 month</option><option value={60}>3 months</option><option value={260}>1 year</option><option value={2600}>10 years</option></select>
+    <select aria-label="Session coverage" title="Which trading sessions to load" value={sessions} onChange={e=>setSessions(e.target.value)}><option value="regular">Regular hours</option><option value="all">All sessions</option></select></>;
   const historyControls = <>
     {forcedScope==null&&payload?.scopes?.length>1&&<label className="price-history-view">Saved view<select aria-label="Saved node view" value={scope||payload.query_key||""} onChange={e=>setScope(e.target.value)}>{payload.scopes.map((saved,i)=><option key={saved} value={saved}>{savedViewLabel(saved,i)}</option>)}</select></label>}
     {forcedScope!=null&&<span className="price-history-view price-history-external-scope">Screener scope active</span>}

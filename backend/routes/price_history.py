@@ -96,7 +96,8 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
                         query_key: str | None = Query(None, max_length=2000),
                         interval_minutes: int | None = Query(None, ge=1, le=60),
                         include_metric_lines: bool = Query(False),
-                        contract_symbol: str | None = Query(None, max_length=32)):
+                        contract_symbol: str | None = Query(None, max_length=32),
+                        sessions: str = Query("regular", pattern="^(regular|all)$")):
     if interval_minutes is not None and interval_minutes not in {1, 5, 15, 30, 60}:
         raise HTTPException(status_code=422, detail="Choose 1, 5, 15, 30 or 60 minute candles")
     contract = None
@@ -126,7 +127,7 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
         bars = []
     else:
         try:
-            bars = await fetch_bars_by_interval(ticker, period=period, aggregation=aggregation, sessions="regular") or []
+            bars = await fetch_bars_by_interval(ticker, period=period, aggregation=aggregation, sessions=sessions) or []
         finally:
             budget.release()
     received_at = datetime.now(UTC).isoformat()
@@ -177,7 +178,7 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
             contract_bars = []
         else:
             try:
-                fetched = await fetch_bars_by_interval(contract, period=period, aggregation=aggregation, sessions="regular", instrument_type="OPTION") or []
+                fetched = await fetch_bars_by_interval(contract, period=period, aggregation=aggregation, sessions=sessions, instrument_type="OPTION") or []
             finally:
                 budget.release()
             contract_bars = fetched if isinstance(fetched, list) else []

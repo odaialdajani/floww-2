@@ -1657,3 +1657,16 @@ service-level bypass:
   that far back). Frontend period picker gains 3 months / 1 year /
   10 years. Backend 7/7 + frontend b39 2/2 RED first; docs regen is the
   maximum-only diff. Chart slice 27/105 green.
+
+## Spark Muse sessions lane — 24/5 coverage (2026-10-11)
+- price-history gains `sessions` (regular|all, 422 otherwise), forwarded to
+  underlying + contract fetches; frames carry the provider `session` label
+  (additive; null when the vendor shape has none). Default regular —
+  zero behavior change.
+- Frontend coverage picker (Regular hours / All sessions) drives the param.
+  Backend 3/3 + b40 3/3 RED first; docs regen for the new param; chart
+  slice 28/108 green.
+- Architect coordination: their in-flight SkylitDashboard edit broke the
+  dashboard render (dangling props); restored the two deleted structural
+  lines, kept all their additions. SkylitDashboard.test 117 green again.
+  Their file left uncommitted for them.
