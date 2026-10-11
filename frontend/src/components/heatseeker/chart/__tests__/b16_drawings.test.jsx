@@ -54,3 +54,27 @@ test('alert lines render armed levels and refuse stale ones on the chart', () =>
   expect(screen.getByRole('note')).toHaveTextContent(/stale alert refused/i);
   unmount();
 });
+test('tool registry covers evidence-backed tools, rejects the rest', () => {
+  const { DRAWING_TOOLS, isSupportedTool, anchorsFor } = require('../drawings/toolRegistry');
+  expect(DRAWING_TOOLS.length).toBeGreaterThanOrEqual(9);
+  for (const tool of DRAWING_TOOLS) {
+    expect(typeof tool.id).toBe('string');
+    expect(anchorsFor(tool.id)).toBeGreaterThanOrEqual(1);
+    expect(isSupportedTool(tool.id)).toBe(true);
+  }
+  expect(isSupportedTool('nope')).toBe(false);
+  expect(anchorsFor('fib')).toBe(2);
+  expect(anchorsFor('horizontal')).toBe(1);
+});
+test('drawing persistence isolates symbols, recovers corrupt rows, caps quota', () => {
+  const { saveDrawings, loadDrawings, clearDrawings } = require('../drawings/drawingPersistence');
+  clearDrawings('SPY'); clearDrawings('QQQ');
+  expect(loadDrawings('SPY')).toEqual([]);
+  saveDrawings('SPY', [{ id: 'd1', tool: 'trend' }]);
+  expect(loadDrawings('SPY')).toHaveLength(1);
+  expect(loadDrawings('QQQ')).toEqual([]);
+  window.localStorage.setItem('floww.drawings.SPY', '{{{');
+  expect(loadDrawings('SPY')).toEqual([]);
+  const many = Array.from({ length: 200 }, (_, i) => ({ id: 'd' + i, tool: 'trend' }));
+  expect(() => saveDrawings('SPY', many)).toThrow(/quota/);
+});

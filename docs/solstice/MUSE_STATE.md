@@ -1487,6 +1487,11 @@ service-level bypass:
 - DONE: sessionVwap carries real band values (volume-weighted sigma +
   percent, golden oracle RED→GREEN); up to 3 dashed pairs render behind
   an off-by-default toggle (b31 RED→GREEN).
+## Spark Muse chart lane — G10b registry + persistence (2026-10-10)
+- DONE: 9 evidence-backed tools with anchors/magnet/family (RED→GREEN);
+  per-symbol localStorage persistence with quota + corrupt recovery +
+  secrets refusal (RED→GREEN). Remaining Atlas tools explicitly
+  UNVERIFIED (not invented). Slice 22/86 green.
 ## Spark Muse chart lane — G1 CLOSED via scope_echo (2026-10-10)
 - DONE: heatmap responses carry server scope_echo (helper RED→GREEN, cached
   copies keep it); SkylitDashboard passes chartScopeFor (live non-replay echo
