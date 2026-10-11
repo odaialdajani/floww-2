@@ -87,6 +87,18 @@ test('missing minutes split the exposure line (honest gaps, no interpolation)', 
   expect(segs).toHaveLength(1);
   expect(segs[0].getAttribute('points').split(' ')).toHaveLength(2);
 });
+test('exposure envelope toggle draws session levels, default off', () => {
+  const exp = [
+    { time: frames[0].time, centre: 100.5 },
+    { time: frames[1].time, centre: 101.5 },
+  ];
+  const view = render(<RecordedPriceChart ticker="SPY" frames={frames} exposureLine={exp} />);
+  expect(screen.queryByTestId('exposure-envelope')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Chart tools' }));
+  fireEvent.click(screen.getByLabelText('Toggle exposure envelope'));
+  expect(screen.getAllByTestId('exposure-envelope')).toHaveLength(2);
+  view.unmount();
+});
 test('full exposure line draws one segment', () => {
   render(<RecordedPriceChart ticker="SPY" frames={frames}
     exposureLine={[{ time: frames[0].time, centre: 100.5 }, { time: frames[1].time, centre: 101.5 }]} />);

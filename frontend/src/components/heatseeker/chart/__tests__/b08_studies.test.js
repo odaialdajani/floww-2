@@ -66,6 +66,39 @@ test('VWAP bands: volume-weighted sigma + percent, hand-computed', () => {
   // No volume yet: bands null, never fabricated.
   expect(sessionVwap([{ high: 1, low: 1, close: 1, volume: null }])[0].bands).toBe(null);
 });
+test('exposure envelopes: opening needs 8 minutes and freezes, session only widens', () => {
+  const { openingEnvelope, sessionEnvelope } = require('../indicators/priceStudies');
+  const day = '2026-10-06';
+  const pts = [];
+  for (let m = 0; m < 20; m += 1) {
+    const hh = 13, mm = 30 + m;
+    pts.push({ time: `${day}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00+00:00`, centre: 100 + (m % 5) });
+  }
+  // 09:30 ET = 13:30Z (October, EDT). 15-min window, plenty of minutes.
+  const frozen = openingEnvelope(pts, { anchorDate: day, windowMinutes: 15 });
+  expect(frozen.status).toBe('frozen');
+  expect(frozen.high).toBe(104);
+  expect(frozen.low).toBe(100);
+  // Too few measured minutes: pending, never a misleading envelope.
+  const thin = openingEnvelope(pts.slice(0, 5), { anchorDate: day, windowMinutes: 15 });
+  expect(thin.status).toBe('pending');
+  expect(thin.high).toBe(null);
+  // Eight minutes but window still open: still pending, not frozen early.
+  const forming = openingEnvelope(pts.slice(0, 8), { anchorDate: day, windowMinutes: 15 });
+  expect(forming.status).toBe('pending');
+  // January uses EST (09:30 -> 14:30Z), not a hardcoded -04:00.
+  const jan = [];
+  for (let m = 0; m < 16; m += 1) {
+    jan.push({ time: `2026-01-05T14:${String(30 + m).padStart(2, '0')}:00+00:00`, centre: 200 + m });
+  }
+  const janEnv = openingEnvelope(jan, { anchorDate: '2026-01-05', windowMinutes: 15 });
+  expect(janEnv.status).toBe('frozen');
+  expect(janEnv.low).toBe(200);
+  // Session envelope only widens through eligible points.
+  const sess = sessionEnvelope([{ centre: 100 }, { centre: null }, { centre: 105 }, { centre: 102 }]);
+  expect(sess).toEqual({ high: 105, low: 100 });
+  expect(sessionEnvelope([{ centre: null }])).toEqual({ high: null, low: null });
+});
 test('registry declares approximation + replay', () => {
   expect(getStudy('vwap').approximation).toBe('bar-vwap');
   expect(getStudy('exposureVwap').source).toBe('board');
