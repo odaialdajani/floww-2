@@ -36,6 +36,15 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   // own OHLCV beside the underlying candles (own $ scale, never mixed).
   const [contractInput, setContractInput] = useState("");
   const [contract, setContract] = useState("");
+  // Node velocity: fastest-moving recorded nodes over the last snapshot
+  // pair (read-only compare output). Unavailable stays explicit.
+  const [velocity, setVelocity] = useState(null);
+  const velocityDtText = seconds => {
+    if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) return 'unknown window';
+    if (seconds >= 3600) return `${+(seconds / 3600).toFixed(2)} h`;
+    if (seconds >= 60) return `${+(seconds / 60).toFixed(1)} min`;
+    return `${+seconds.toFixed(1)} s`;
+  };
   // G10c drawings mount: rail over per-symbol persisted drawings (registry +
   // persistence landed in PR122; this mount shows them on the chart page).
   // Rail manages list/select/delete/lock/hide only — no canvas editing.
@@ -55,7 +64,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     } catch { setRecordNote("Recording did not land — try again."); }
     finally { setRecording(false); }
   }, [onRecordNodes, recording]);
-  useEffect(() => { setScope(""); setPayload(null); setPlaying(false); setDrawings(loadDrawings(ticker)); setSelectedDrawing(null); setContractInput(""); setContract(""); }, [ticker]);
+  useEffect(() => { setScope(""); setPayload(null); setPlaying(false); setDrawings(loadDrawings(ticker)); setSelectedDrawing(null); setContractInput(""); setContract(""); setVelocity(null); }, [ticker]);
   useEffect(() => {
     if (!open) return undefined;
     const controller = new AbortController();
@@ -72,6 +81,20 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     }).catch(() => { if (active) setStatus("error"); });
     return () => { active = false; controller.abort(); };
   }, [ticker, days, minutes, scope, forcedScope, open, reload, contract]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const controller = new AbortController();
+    let active = true;
+    setVelocity(null);
+    // Promise.resolve: the strip must never crash the chart on transport
+    // oddities (a bare undefined answer still lands as unavailable).
+    Promise.resolve(axios.get(`${API}/solstice/attribute/${encodeURIComponent(ticker)}`, {
+      timeout: 15000, signal: controller.signal,
+    })).then(({ data }) => {
+      if (active) setVelocity(data && typeof data === "object" ? data : null);
+    }).catch(() => { if (active) setVelocity({ status: "unavailable" }); });
+    return () => { active = false; controller.abort(); };
+  }, [ticker, open]);
   const frames = payload?.ticker === ticker.toUpperCase() ? payload.frames || [] : [];
   useEffect(() => {
     if (!playing || !open || frames.length < 2) return undefined;
@@ -112,5 +135,17 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
       onDelete={id => { if (selectedDrawing === id) setSelectedDrawing(null); persistDrawings(reduceDrawings(drawings, { type: "delete", id })); }}
       onToggleLock={id => persistDrawings(drawings.map(d => d.id === id ? { ...d, locked: !d.locked } : d))}
       onToggleHide={id => persistDrawings(drawings.map(d => d.id === id ? { ...d, visible: d.visible === false } : d))} />}
+    {open&&velocity?.status==="ok"&&Array.isArray(velocity.velocities)&&velocity.velocities.length>0&&(
+      <div className="price-history-velocity" data-testid="velocity-strip" aria-label="Fastest-moving nodes">
+        <strong>Node velocity</strong><span> over {velocityDtText(velocity.velocity_dt_seconds)}</span>
+        <ul>{velocity.velocities.slice(0,5).map(row=>{
+          const rate = typeof row.velocity==="number"&&Number.isFinite(row.velocity)
+            ? (row.velocity>=0?"+":"")+row.velocity.toLocaleString("en-US",{maximumFractionDigits:1})+"/s" : "n/a";
+          const growth = typeof row.growth==="number"&&Number.isFinite(row.growth)
+            ? `${(row.growth*100).toFixed(1)}%` : "n/a";
+          return <li key={row.strike} data-testid="velocity-row">strike {row.strike}: {rate} ({growth})</li>;})}</ul>
+      </div>)}
+    {open&&velocity&&velocity.status!=="ok"&&(
+      <div className="price-history-velocity-empty" data-testid="velocity-unavailable"><small>Node velocity unavailable — need 2+ recorded snapshots.</small></div>)}
   </section>;
 }
