@@ -1599,3 +1599,19 @@ service-level bypass:
   lane work, not smuggled in here.
 - Live gates re-verified this pass (see M5 entry): bundle rebuilt +
   disk==served, 70/70 volume, cvd 65/5 honest gaps, contract path live.
+
+## Spark Muse next lane — node velocity + skew per expiry (2026-10-11)
+- N1 node velocity (P2): new `services/chart_velocity.py`
+  (`node_velocity`, pure over recorded rows; retained-only rates, added/
+  removed stay unknown, growth null after zero, bad clocks give null
+  velocity with timeless growth kept). Wired additively into
+  `compare_snapshots` as `velocities` (top 20 retained by |rate|) +
+  `velocity_dt_seconds`. Complements the display-level velocity_score
+  (different store, per-strike granularity). 7/7 RED->GREEN.
+- N2 skew per expiry (P1): new `services/chart_skew.py`
+  (`skew_by_expiry`, GammaGrid larger|side|/smaller|side|; ATM tracked
+  apart; one-sided/empty give null/empty). Wired into the heatmap payload
+  as `skew_by_expiry` beside `vanna_v1` (same refresh, no new spend
+  class). 6/6 RED->GREEN.
+- Basis-toggle triage (from resweep): UI-only toggle refused — build_heatmap
+  has no basis request param; proper seam queued separately.

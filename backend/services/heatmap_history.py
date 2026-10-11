@@ -1008,9 +1008,26 @@ def compare_snapshots(conn, ticker: str, day: str) -> dict[str, Any]:
         volume_deltas.sort(key=lambda d: d["delta_volume"], reverse=True)
         w0 = {w.get("wall_id") for w in (_parse(wj0) or []) if isinstance(w, dict)}
         w1 = {w.get("wall_id") for w in (_parse(wj1) or []) if isinstance(w, dict)}
+        # Node velocity (P2): per-strike d(GEX)/dt over this exact pair.
+        # Added/removed strikes keep unknown rates; unparseable clocks give
+        # dt None instead of a fabricated rate. Additive — existing keys kept.
+        from services.chart_velocity import node_velocity
+        try:
+            t0 = datetime.fromisoformat(str(_asof0).replace("Z", "+00:00"))
+            t1 = datetime.fromisoformat(str(_asof1).replace("Z", "+00:00"))
+            dt = (t1 - t0).total_seconds() if t0.tzinfo and t1.tzinfo else None
+        except (ValueError, TypeError):
+            dt = None
+        velocities = sorted(
+            (r for r in node_velocity(_parse(sj0) or [], _parse(sj1) or [],
+                                      dt if dt else float("nan"))
+             if r["status"] == "retained" and r["velocity"] is not None),
+            key=lambda r: abs(r["velocity"]), reverse=True)[:20]
         return {"ticker": ticker.upper(), "day": day, "status": "ok",
                 "from": {"id": _id0, "asof": _asof0, "spot": _spot0},
                 "to": {"id": _id1, "asof": _asof1, "spot": _spot1},
+                "velocity_dt_seconds": dt,
+                "velocities": velocities,
                 "strike_deltas": sorted(deltas, key=lambda d: abs(d["delta"]), reverse=True)[:20],
                 "volume_deltas": volume_deltas[:20],
                 "volume_rebased": volume_rebased,
