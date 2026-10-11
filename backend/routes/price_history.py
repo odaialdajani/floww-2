@@ -96,7 +96,8 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
                         query_key: str | None = Query(None, max_length=2000),
                         interval_minutes: int | None = Query(None, ge=1, le=60),
                         include_metric_lines: bool = Query(False),
-                        contract_symbol: str | None = Query(None, max_length=32)):
+                        contract_symbol: str | None = Query(None, max_length=32),
+                        sessions: str = Query("regular", pattern="^(regular|all)$")):
     if interval_minutes is not None and interval_minutes not in {1, 5, 15, 30, 60}:
         raise HTTPException(status_code=422, detail="Choose 1, 5, 15, 30 or 60 minute candles")
     contract = None
@@ -113,7 +114,11 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
         recording = await asyncio.to_thread(recording_summary, db, ticker)
     except Exception:
         recording = {"status": "unavailable", "durable": False}
-    period, aggregation, bar_seconds = ("DAY", "ONE_MINUTE", 60) if days == 1 else ("WEEK", "FIVE_MINUTES", 300) if days <= 5 else ("MONTH", "ONE_HOUR", 3600) if days <= 20 else ("QUARTER", "ONE_DAY", 86400) if days <= 60 else ("YEAR", "ONE_DAY", 86400) if days <= 260 else ("TEN_YEARS", "ONE_DAY", 86400)
+    # Period brackets: Public.com's historicdata gateway rejects TEN_YEARS
+    # (400) and serves at most FIVE_YEARS (~1255 daily bars) — verified live
+    # 2026-10-11. The 10-year UI option therefore requests FIVE_YEARS, the
+    # provider's real maximum; never a label Public 400s on.
+    period, aggregation, bar_seconds = ("DAY", "ONE_MINUTE", 60) if days == 1 else ("WEEK", "FIVE_MINUTES", 300) if days <= 5 else ("MONTH", "ONE_HOUR", 3600) if days <= 20 else ("QUARTER", "ONE_DAY", 86400) if days <= 60 else ("YEAR", "ONE_DAY", 86400) if days <= 260 else ("FIVE_YEARS", "ONE_DAY", 86400)
     if interval_minutes is not None:
         aggregation = {1: "ONE_MINUTE", 5: "FIVE_MINUTES", 15: "FIFTEEN_MINUTES",
                        30: "THIRTY_MINUTES", 60: "ONE_HOUR"}[interval_minutes]
@@ -126,7 +131,7 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
         bars = []
     else:
         try:
-            bars = await fetch_bars_by_interval(ticker, period=period, aggregation=aggregation, sessions="regular") or []
+            bars = await fetch_bars_by_interval(ticker, period=period, aggregation=aggregation, sessions=sessions) or []
         finally:
             budget.release()
     received_at = datetime.now(UTC).isoformat()
@@ -177,7 +182,7 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
             contract_bars = []
         else:
             try:
-                fetched = await fetch_bars_by_interval(contract, period=period, aggregation=aggregation, sessions="regular", instrument_type="OPTION") or []
+                fetched = await fetch_bars_by_interval(contract, period=period, aggregation=aggregation, sessions=sessions, instrument_type="OPTION") or []
             finally:
                 budget.release()
             contract_bars = fetched if isinstance(fetched, list) else []

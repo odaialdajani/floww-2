@@ -14,13 +14,16 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 
-test("history period offers quarter, year and ten-year horizons", async () => {
+test("history period offers quarter, year and five-year provider-max horizons", async () => {
   render(<PriceNodeHistory ticker="SPY" open />);
   await waitFor(() => expect(screen.getByTestId("recorded-price-chart")).toBeInTheDocument());
   const picker = screen.getByLabelText("History sessions");
   expect(picker).toHaveTextContent(/3 months/);
   expect(picker).toHaveTextContent(/1 year/);
-  expect(picker).toHaveTextContent(/10 years/);
+  // Provider-verified maximum: api.public.com historicdata rejects TEN_YEARS
+  // (400) and serves at most FIVE_YEARS. The label must say what it serves.
+  expect(picker).toHaveTextContent(/5 years/);
+  expect(picker).not.toHaveTextContent(/10 years/);
 });
 
 test("selecting a long horizon drives the days param", async () => {

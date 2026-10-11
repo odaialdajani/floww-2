@@ -106,7 +106,8 @@ def build_history(ticker: str, bars: list[dict], snapshots: list[dict],
         if not h >= max(o, low, c) or not low <= min(o, h, c):
             continue
         frame = {"time": datetime.fromtimestamp(at, UTC).isoformat(),
-                 "open": o, "high": h, "low": low, "close": c}
+                 "open": o, "high": h, "low": low, "close": c,
+                 "session": bar.get("session")}
         # Volume passes through when the provider measured it: positive, or a
         # genuine measured zero. Absent / negative / non-finite stays absent —
         # a fabricated 0 would read as "no shares traded" on the chart.
