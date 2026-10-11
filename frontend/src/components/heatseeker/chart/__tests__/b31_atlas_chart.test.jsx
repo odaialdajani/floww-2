@@ -108,7 +108,10 @@ test('forcedScope reaches the query_key param (screener scope parity mechanism)'
   axios.get.mockResolvedValue({ data: { ticker: 'SPY', frames, candles_with_recorded_nodes: 0 } });
   render(<PriceNodeHistory ticker="SPY" open forcedScope="SPY:4:day:None:False" />);
   await waitFor(() => expect(axios.get).toHaveBeenCalled());
-  const params = axios.get.mock.calls[axios.get.mock.calls.length - 1][1].params;
+  // The chart page also reads the velocity compare output; find the
+  // price-history call explicitly instead of assuming call order.
+  const priceCall = axios.get.mock.calls.find(call => String(call[0]).includes('price-history'));
+  const params = priceCall[1].params;
   expect(params.query_key).toBe('SPY:4:day:None:False');
 });
 test('server exposure_line flows to the chart without an explicit prop', async () => {

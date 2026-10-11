@@ -1615,3 +1615,26 @@ service-level bypass:
   class). 6/6 RED->GREEN.
 - Basis-toggle triage (from resweep): UI-only toggle refused — build_heatmap
   has no basis request param; proper seam queued separately.
+
+## Spark Muse next lane — MERGED + live (2026-10-11)
+- PR124 MERGED at a33120cf (all 4 hosted gates green on exact head 2c419551:
+  backend-tests, ruff, frontend-build, docker-build). PR123 merged earlier
+  at 3b3d07bb (same 4-gate green).
+- :8002 bounded restart onto merged main (same argv/cwd/env, :8000
+  untouched). Live: attribute/SPY -> status ok, dt 12.2s, 20 velocities;
+  heatmap carries skew_by_expiry v1 (4 expiries, ratios 1.05-1.56, n~100);
+  scope_echo intact; price-history 70/70 volume + cvd_line intact.
+- Queued follow-ups (owner-ordered): velocity strip on chart (needs design),
+  basis-param seam (scope+recorder+G1 re-verify), get-bars-v2 migration,
+  TEN_YEARS/ALL horizons, node-velocity alert lines. No account-gated work
+  without a NAV decision.
+
+## Spark Muse velocity-display lane (2026-10-11)
+- Chart page reads GET /api/solstice/attribute/{ticker} on open and shows
+  the top-5 fastest-moving nodes with their measured window (b38 4/4
+  RED->GREEN); single-snapshot history and failed reads render an explicit
+  unavailable note, never a blank claim. Transport hardened with
+  Promise.resolve so a bare answer cannot crash the chart (caught by an
+  old ticker-change test). One old b31 test updated to find the
+  price-history call explicitly (call-order assumption, same assertion).
+- Chart slice 26 suites / 103 tests green.
