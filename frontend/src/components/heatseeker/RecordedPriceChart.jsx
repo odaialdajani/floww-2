@@ -1,18 +1,18 @@
 import React,{useEffect,useId,useMemo,useRef,useState} from 'react';
 import {chartTime,checkedCandles,clampWindow,NODE_COLORS,NODE_LABELS,pinchFactors,priceRange,savedLevels,zoomPrice,zoomTime} from './recordedPriceChartData';
-import {sessionVwapBands,sessionVwapValues} from './chart/indicators/priceStudies';
+import {openingEnvelope,sessionEnvelope,sessionVwapBands,sessionVwapValues} from './chart/indicators/priceStudies';
 import {volumeProfile} from './chart/indicators/profile';
 import './RecordedPriceChart.css';
 const price=value=>Number.isFinite(value)?value.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'Unavailable';
 const bound=(value,low,high)=>Math.max(low,Math.min(high,value));
 
-export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null}) {
+export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null}) {
  const data=useMemo(()=>checkedCandles(frames),[frames]);
  const surface=useRef(null),pointers=useRef(new Map()),gesture=useRef(null),previousLength=useRef(0);
  const [size,setSize]=useState({width:800,height:480});
  const [view,setView]=useState(()=>({start:Math.max(0,data.length-80),count:80}));
  const [manualPrice,setManualPrice]=useState(null),[hover,setHover]=useState(null),[metrics,setMetrics]=useState(['gex','vex','charm']),[allNodes,setAllNodes]=useState(false);
- const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState(''),[vwapOn,setVwapOn]=useState(true),[bandsOn,setBandsOn]=useState(false),[profileOn,setProfileOn]=useState(true);
+ const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState(''),[vwapOn,setVwapOn]=useState(true),[bandsOn,setBandsOn]=useState(false),[profileOn,setProfileOn]=useState(true),[envelopeOn,setEnvelopeOn]=useState(false);
  const id=useId().replace(/[^a-zA-Z0-9_-]/g,'');
  useEffect(()=>{
   const element=surface.current;if(!element)return undefined;
@@ -87,7 +87,41 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
   }catch{setExportError('Chart image could not be saved. Try again.');}
   finally{if(sourceUrl)URL.revokeObjectURL(sourceUrl);setExporting(false);}
  };
- const shift=amount=>{notify();setHover(null);setView(clampWindow({...windowView,start:windowView.start+amount},data.length));};
+  const exposurePolys=()=>{
+   if(!showAtlas||!Array.isArray(exposureLine)||!exposureLine.length)return null;
+   const byTime=new Map(exposureLine.filter(p=>p&&typeof p.time==='string').map(p=>[p.time,p]));
+   const segments=(key)=>{
+    const segs=[];let cur=[];
+    visible.forEach((frame,index)=>{
+     const entry=byTime.get(frame.time),value=entry?entry[key]:undefined;
+     if(typeof value!=='number'||!Number.isFinite(value)){if(cur.length>1)segs.push(cur);cur=[];return;}
+     const py=y(value);if(py<top||py>bottom)return;
+     cur.push({x:left+(index+0.5)*spacing,y:py});
+    });
+    if(cur.length>1)segs.push(cur);return segs;
+   };
+   const centre=segments('centre'),upper=segments('upper'),lower=segments('lower');
+   return (<g>
+    {centre.map((seg,si)=><polyline data-testid="exposure-vwap-line" key={'gexvwap:'+si} points={seg.map(p=>p.x+','+p.y).join(' ')} fill="none" stroke="#72d7df" strokeWidth="2"><title>GEX VWAP centre</title></polyline>)}
+    {upper.map((seg,si)=><polyline data-testid="exposure-band" key={'gexup:'+si} points={seg.map(p=>p.x+','+p.y).join(' ')} fill="none" stroke="#72d7df" strokeWidth="1" strokeDasharray="4 3" opacity="0.8"><title>GEX VWAP upper</title></polyline>)}
+    {lower.map((seg,si)=><polyline data-testid="exposure-band" key={'gexlow:'+si} points={seg.map(p=>p.x+','+p.y).join(' ')} fill="none" stroke="#72d7df" strokeWidth="1" strokeDasharray="4 3" opacity="0.8"><title>GEX VWAP lower</title></polyline>)}
+   </g>);
+  };
+  const envelopeLevels=()=>{
+   if(!showAtlas||!envelopeOn||!Array.isArray(exposureLine)||!exposureLine.length)return [];
+   const byTime=new Map();
+   exposureLine.forEach(p=>{if(p&&typeof p.time==='string')byTime.set(p.time,p.centre);});
+   const centres=visible.map(frame=>byTime.get(frame.time));
+   if(!centres.some(v=>typeof v==='number'&&Number.isFinite(v)))return [];
+   const sess=sessionEnvelope(centres.map(centre=>({centre})));
+   const first=visible.length?new Date(visible[0].time):null;
+   const anchor=first&&Number.isFinite(first.valueOf())?first.toLocaleDateString('en-CA',{timeZone:'America/New_York'}):null;
+   const opening=anchor?openingEnvelope(visible.map(frame=>({time:frame.time,centre:byTime.get(frame.time)})),{anchorDate:anchor,windowMinutes:15}):{status:'unavailable'};
+   const levels=[sess.high,sess.low];
+   if(opening.status==='frozen'){levels.push(opening.high,opening.low);}
+   return levels.filter(v=>typeof v==='number'&&Number.isFinite(v)&&v>=range.low&&v<=range.high);
+  };
+  const shift=amount=>{notify();setHover(null);setView(clampWindow({...windowView,start:windowView.start+amount},data.length));};
  const keyboard=event=>{const actions={ArrowLeft:()=>shift(-1),ArrowRight:()=>shift(1),PageUp:()=>shift(-Math.max(1,Math.floor(windowView.count/2))),PageDown:()=>shift(Math.max(1,Math.floor(windowView.count/2))),Home:()=>shift(-data.length),End:()=>shift(data.length),'+':()=>zoom('time',0.75),'-':()=>zoom('time',1.35)};if(actions[event.key]){event.preventDefault();event.stopPropagation();actions[event.key]();}};
  return <div className="recorded-price-chart" data-testid="recorded-price-chart" data-candles={data.length} data-visible-candles={visible.length} data-window-start={windowView.start} data-price-low={range.low} data-price-high={range.high}>
   <div className="recorded-chart-tools" data-testid="chart-control-row">
@@ -99,6 +133,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
      <label><input type="checkbox" aria-label="Toggle VWAP" checked={vwapOn} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>setVwapOn(e.target.checked)}/>VWAP{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
      <label><input type="checkbox" aria-label="Toggle profile" checked={profileOn} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>setProfileOn(e.target.checked)}/>Profile{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
      <label><input type="checkbox" aria-label="Toggle VWAP bands" checked={bandsOn} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>setBandsOn(e.target.checked)}/>Bands{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
+     <label><input type="checkbox" aria-label="Toggle exposure envelope" checked={envelopeOn} disabled={!Array.isArray(exposureLine)||!exposureLine.some(p=>typeof p?.centre==='number'&&Number.isFinite(p.centre))} onChange={e=>setEnvelopeOn(e.target.checked)}/>Envelope{(!Array.isArray(exposureLine)||!exposureLine.some(p=>typeof p?.centre==='number'&&Number.isFinite(p.centre)))&&<span> unavailable</span>}</label>
      <button type="button" disabled={!data.length||exporting} onClick={downloadChart}>{exporting?'Saving image...':'Download chart image'}</button>{exportError&&<p role="alert">{exportError}</p>}
     {historyControls}<small id={'chart-help-'+id}>Drag to scroll history. Pinch time and price. Drag an axis to stretch it. Ctrl + scroll zooms time; Shift + scroll zooms price. Normal scrolling moves the page.</small>
    </div></details>
@@ -125,22 +160,10 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
         if(yy<top||yy>bottom)return <title key={frame.time+':orb:'+ni+':oor'} data-testid="orb-out-of-range">Orb {price(node.level)} out of visible price range</title>;
         const ratio=king>0?weights[ni]/king:0,r=Math.min(12,Math.max(3,4*Math.sqrt(Math.max(0,ratio)))),isKing=weights[ni]===king;
         return <circle data-testid="chart-orb" key={frame.time+':orb:'+ni} cx={center} cy={yy} r={r} fill={isKing?'#e8bd65':'none'} stroke={NODE_COLORS[node.metric||'gex']||'#e8bd65'} strokeWidth={isKing?2:1} opacity="0.75"><title>{'Orb '+price(node.level)+(isKing?' (King Node)':'')}</title></circle>;});})}
-      {showAtlas&&Array.isArray(exposureLine)&&exposureLine.length>0&&(()=>{
-       const byTime=new Map(exposureLine.filter(p=>p&&typeof p.time==='string').map(p=>[p.time,p]));
-       const pts=visible.map((frame,index)=>{const p=byTime.get(frame.time);if(!p||typeof p.centre!=='number'||!Number.isFinite(p.centre))return null;
-        const py=y(p.centre);
-        // Out-of-range centres are dropped, never clamped to an edge —
-        // a clamped point would read as a real price on the polyline.
-        if(py<top||py>bottom)return null;
-        return {x:left+(index+0.5)*spacing,y:py};});
-       const segs=[];let cur=[];
-       // Bridge across dropped points: an out-of-range centre is omitted from
-       // the line but must NOT split the visible segment into two false gaps.
-       const drawn=pts.filter(Boolean);cur=drawn.slice(0,1);
-       for(let i=1;i<drawn.length;i++){if(drawn[i-1].x>drawn[i].x)break;cur.push(drawn[i]);}
-       if(cur.length>1)segs.push(cur);
-       return segs.map((seg,si)=><polyline data-testid="exposure-vwap-line" key={'gexvwap:'+si} points={seg.map(p=>p.x+','+p.y).join(' ')} fill="none" stroke="#72d7df" strokeWidth="2"><title>GEX VWAP centre</title></polyline>);})()}
+      {exposurePolys()}
+      {envelopeLevels().map((lv,li)=><line data-testid="exposure-envelope" key={'envelope:'+li} x1={left} x2={right} y1={y(lv)} y2={y(lv)} stroke="#72d7df" strokeWidth="1" strokeDasharray="2 3" opacity="0.7"><title>Exposure envelope level</title></line>)}
       {showAtlas&&Array.isArray(darkLevels)&&darkLevels.filter(l=>l&&typeof l.price==='number'&&Number.isFinite(l.price)&&l.price>=range.low&&l.price<=range.high).map((l,li)=><line data-testid="dark-pool-level" key={'dark:'+li} x1={left} x2={right} y1={y(l.price)} y2={y(l.price)} stroke="#c9a86a" strokeWidth="1.5" strokeDasharray="6 3"><title>{'Dark pool level '+price(l.price)+(l.venue?' '+l.venue:'')}</title></line>)}
+      {Array.isArray(alertLines)&&alertLines.filter(a=>a&&typeof a.price==='number'&&Number.isFinite(a.price)&&a.price>=range.low&&a.price<=range.high).map((a,ai)=><line data-testid="alert-line" data-state={a.state==='stale'?'stale':'armed'} key={'alert:'+(a.id||ai)} x1={left} x2={right} y1={y(a.price)} y2={y(a.price)} stroke={a.state==='stale'?'#6b7684':'#e06c75'} strokeWidth="1.5" strokeDasharray={a.state==='stale'?'2 3':'none'}><title>{'Alert '+(a.id||ai)+' at '+price(a.price)+(a.state==='stale'?' — stale alert refused':'')}</title></line>)}
       {showAtlas&&vwapOn&&data.some(frame=>Number.isFinite(frame.volume))&&(()=>{
        const all=sessionVwapValues(data),win=all.slice(windowView.start,windowView.start+windowView.count);
        const pts=win.map((v,i)=>{if(typeof v!=='number'||!Number.isFinite(v))return null;const py=y(v);if(py<top||py>bottom)return null;return {x:left+(i+0.5)*spacing,y:py};});
@@ -180,6 +203,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
       {win.map((frame,index)=>{const v=Number(frame.volume)||0,bh=Math.max(1,v/peak*(h-4));
        return <rect data-testid="volume-bar" key={frame.time} x={left+index*spacing+Math.max(1,spacing*0.15)} y={h-bh} width={Math.max(1,Math.min(spacing*0.7,14))} height={bh} fill={frame.close>=frame.open?'#3f8f7d':'#8f4a52'} opacity="0.85"><title>{chartTime(frame.time,true)+' — '+(Number.isFinite(v)?v.toLocaleString('en-US'):'0')+' shares'}</title></rect>;})}
     </svg>;})()}
+   {Array.isArray(alertLines)&&alertLines.some(a=>a?.state==='stale')&&<small role="note">Stale alert refused — no evaluation on stale prices.</small>}
    {!!data.length&&<div className="recorded-chart-footer"><small>{windowView.start+1}-{windowView.start+visible.length} of {data.length} loaded candles</small></div>}
   {selected&&<div className="recorded-chart-nodes" aria-label="Selected candle saved nodes">{selectedLevels.length?selectedLevels.map((node,index)=><span key={node.metric+':'+node.id+':'+index} style={{color:NODE_COLORS[node.metric]}}>{NODE_LABELS[node.metric]} <b>{price(node.level)}</b></span>):<span>No supported saved node lines at this candle.{Object.entries(selected?.metric_status||{}).filter(([,status])=>status==="zero").map(([metric])=>" "+NODE_LABELS[metric]+" was zero; no largest level stood out.").join("")}</span>}</div>}
  </div>;

@@ -25,6 +25,21 @@ def cache_key(ticker, query):
     return key
 
 
+def attach_scope_echo(payload, cache_key):
+    """Echo the server's exact scope key onto a heatmap payload.
+
+    Lets downstream readers (e.g. the price chart) request this exact
+    recorded scope instead of reconstructing it. Non-string or empty keys
+    leave the payload untouched — never a fabricated echo.
+    """
+    if not isinstance(payload, dict):
+        return payload
+    if not isinstance(cache_key, str) or not cache_key:
+        return payload
+    payload["scope_echo"] = cache_key
+    return payload
+
+
 def next_listed_selection(contracts, session_date):
     start = date.fromisoformat(session_date)
     end = start + timedelta(days=NEXT_LISTED_DAYS)

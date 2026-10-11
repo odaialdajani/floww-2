@@ -44,6 +44,53 @@ def recording_summary(engine, ticker):
             "count": saved.get("count", 0)}
 
 
+@router.post("/record/{ticker}")
+async def record_snapshot_now(ticker: str, expiries: int = Query(4, ge=1, le=12),
+                              mode: str = Query("day", pattern="^(day|swing|scalp)$"),
+                              dte: int | None = Query(None, ge=0, le=30),
+                              scalp: bool = Query(False)):
+    """Record-now: fresh heatmap build for one symbol, awaited into the store.
+
+    User-initiated explicit spend (same cost as a manual desk refresh). Returns
+    the recorded snapshot identity; 429 when the provider budget is exhausted,
+    503 when the row never lands within the bound (never a fabricated row).
+    """
+    from server import _build_heatmap_impl
+    from services.duckdb_engine import db
+    from services.heatmap_history import observation_id_for, replay_snapshot
+    from services.public_budget import BudgetExhausted
+    from services.solstice_scope import cache_key as scope_cache_key
+    from services.solstice_scope import request_query
+
+    t = ticker.strip().upper()
+    if not t or len(t) > 12:
+        raise HTTPException(status_code=422, detail="Choose a valid ticker symbol")
+    try:
+        payload = await _build_heatmap_impl(t, expiries, True, mode, dte, scalp)
+    except BudgetExhausted as err:
+        raise HTTPException(status_code=429, detail="Provider budget exhausted; retry after cooldown") from err
+    if not isinstance(payload, dict) or payload.get("error"):
+        raise HTTPException(status_code=503, detail="Fresh build failed; nothing recorded")
+    try:
+        scope = scope_cache_key(t, request_query(expiries, mode, dte, scalp, True, 200))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        sid = observation_id_for(payload)
+    except Exception as err:
+        raise HTTPException(status_code=503, detail="Observation identity failed; nothing recorded") from err
+    conn = getattr(db, "conn", None)
+    for _ in range(20):
+        try:
+            found = replay_snapshot(conn, sid) if conn is not None else None
+        except Exception:
+            found = None
+        if found:
+            return {"snapshot_id": sid, "ticker": t, "asof": payload.get("asof"), "scope": scope}
+        await asyncio.sleep(1)
+    raise HTTPException(status_code=503, detail="Recording did not land within 20s; retry or check recorder status")
+
+
 @router.get("/price-history/{ticker}")
 async def price_history(ticker: str, days: int = Query(5, ge=1, le=20),
                         query_key: str | None = Query(None, max_length=2000),

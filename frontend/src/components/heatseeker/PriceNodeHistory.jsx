@@ -15,7 +15,7 @@ function savedViewLabel(scope,index){
  return mode+" | "+sorted.length+" "+(sorted.length===1?"expiry":"expiries")+" | "+sorted[0]+(sorted.length>1?" to "+sorted.at(-1):"");
 }
 
-export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, showAtlas = true, forcedScope = null }) {
+export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, showAtlas = true, forcedScope = null, onRecordNodes = null }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? (primary || localOpen);
   const setOpen = value => { setLocalOpen(value); onOpenChange?.(value); };
@@ -27,6 +27,18 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   const [reload, setReload] = useState(0);
   const [position, setPosition] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordNote, setRecordNote] = useState("");
+  const recordNodes = useCallback(async () => {
+    if (!onRecordNodes || recording) return;
+    setRecording(true); setRecordNote("Recording nodes… (uses market reads)");
+    try {
+      const result = await onRecordNodes();
+      if (result?.recorded) { setRecordNote(""); setReload(n => n + 1); }
+      else setRecordNote("Recording did not land — try again.");
+    } catch { setRecordNote("Recording did not land — try again."); }
+    finally { setRecording(false); }
+  }, [onRecordNodes, recording]);
   useEffect(() => { setScope(""); setPayload(null); setPlaying(false); }, [ticker]);
   useEffect(() => {
     if (!open) return undefined;
@@ -61,6 +73,8 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     {forcedScope==null&&payload?.scopes?.length>1&&<label className="price-history-view">Saved view<select aria-label="Saved node view" value={scope||payload.query_key||""} onChange={e=>setScope(e.target.value)}>{payload.scopes.map((saved,i)=><option key={saved} value={saved}>{savedViewLabel(saved,i)}</option>)}</select></label>}
     {forcedScope!=null&&<span className="price-history-view price-history-external-scope">Screener scope active</span>}
     <button type="button" onClick={()=>setReload(n=>n+1)}>Reload history</button>
+    {onRecordNodes&&<button type="button" disabled={recording||status==="loading"} onClick={recordNodes}>{recording?"Recording…":"Record nodes"}</button>}
+    {recordNote&&<span role="status">{recordNote}</span>}
     {!!frames.length&&<div className="price-history-replay"><button type="button" onClick={()=>{if(!playing&&position>=frames.length-1)setPosition(0);setPlaying(value=>!value);}}>{playing?"Pause replay":"Play replay"}</button><input aria-label="Replay position" type="range" min={0} max={frames.length-1} value={position} onChange={e=>{setPosition(Number(e.target.value));setPlaying(false);}}/><span>{chartTime(frames[position]?.time,true)} New York</span><button type="button" onClick={()=>{setPosition(frames.length-1);setPlaying(false);}}>Show all</button></div>}
   </>;
   const details = <div className="price-history-details">

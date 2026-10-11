@@ -9683,6 +9683,98 @@
         ]
       }
     },
+    "/api/heatseeker/record/{ticker}": {
+      "post": {
+        "description": "Record-now: fresh heatmap build for one symbol, awaited into the store.\n\nUser-initiated explicit spend (same cost as a manual desk refresh). Returns\nthe recorded snapshot identity; 429 when the provider budget is exhausted,\n503 when the row never lands within the bound (never a fabricated row).",
+        "operationId": "post_api_heatseeker_record_ticker",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "title": "Ticker",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expiries",
+            "required": false,
+            "schema": {
+              "default": 4,
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Expiries",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "default": "day",
+              "pattern": "^(day|swing|scalp)$",
+              "title": "Mode",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dte",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 30,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dte"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scalp",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Scalp",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record Snapshot Now",
+        "tags": [
+          "price-node-history"
+        ]
+      }
+    },
     "/api/heatseeker/reverse-rug": {
       "get": {
         "description": "Reverse Rug: positive floor below + negative ceiling above.",

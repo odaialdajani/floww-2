@@ -58,6 +58,47 @@ test('VWAP bands render per pair, default off, toggle shows', () => {
   expect(screen.getAllByTestId('vwap-band').length).toBeGreaterThanOrEqual(2);
   view.unmount();
 });
+test('exposure upper/lower draw dashed band lines', () => {
+  render(<RecordedPriceChart ticker="SPY" frames={frames}
+    exposureLine={[
+      { time: frames[0].time, centre: 100.5, upper: 101.5, lower: 99.5 },
+      { time: frames[1].time, centre: 101.5, upper: 102.5, lower: 100.5 },
+    ]} />);
+  expect(screen.getAllByTestId('exposure-vwap-line')).toHaveLength(1);
+  expect(screen.getAllByTestId('exposure-band')).toHaveLength(2);
+});
+test('missing minutes split the exposure line (honest gaps, no interpolation)', () => {
+  const three = [
+    { time: '2026-10-06T13:30:00+00:00', open: 100, high: 102, low: 99, close: 101, duration_seconds: 60, nodes: [] },
+    { time: '2026-10-06T13:31:00+00:00', open: 101, high: 103, low: 100, close: 102, duration_seconds: 60, nodes: [] },
+    { time: '2026-10-06T13:32:00+00:00', open: 102, high: 104, low: 101, close: 103, duration_seconds: 60, nodes: [] },
+    { time: '2026-10-06T13:33:00+00:00', open: 103, high: 105, low: 102, close: 104, duration_seconds: 60, nodes: [] },
+  ];
+  render(<RecordedPriceChart ticker="SPY" frames={three}
+    exposureLine={[
+      { time: three[0].time, centre: 100.5 },
+      { time: three[1].time, centre: null },
+      { time: three[2].time, centre: 102.5 },
+      { time: three[3].time, centre: 103.5 },
+    ]} />);
+  // Point 0 is isolated (no line from a lone point); 2-3 join: exactly 1
+  // segment of exactly 2 points (no interpolation across the gap).
+  const segs = screen.getAllByTestId('exposure-vwap-line');
+  expect(segs).toHaveLength(1);
+  expect(segs[0].getAttribute('points').split(' ')).toHaveLength(2);
+});
+test('exposure envelope toggle draws session levels, default off', () => {
+  const exp = [
+    { time: frames[0].time, centre: 100.5 },
+    { time: frames[1].time, centre: 101.5 },
+  ];
+  const view = render(<RecordedPriceChart ticker="SPY" frames={frames} exposureLine={exp} />);
+  expect(screen.queryByTestId('exposure-envelope')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Chart tools' }));
+  fireEvent.click(screen.getByLabelText('Toggle exposure envelope'));
+  expect(screen.getAllByTestId('exposure-envelope')).toHaveLength(2);
+  view.unmount();
+});
 test('full exposure line draws one segment', () => {
   render(<RecordedPriceChart ticker="SPY" frames={frames}
     exposureLine={[{ time: frames[0].time, centre: 100.5 }, { time: frames[1].time, centre: 101.5 }]} />);
@@ -101,6 +142,27 @@ test('profile pane draws POC/VA from real volume, toggle hides, absent volume di
   view.unmount();
   render(<RecordedPriceChart ticker="SPY" frames={frames} />);
   expect(screen.getByLabelText('Toggle profile')).toBeDisabled();
+});
+test('record button calls parent recorder then reloads only on landed success', async () => {
+  const { default: PriceNodeHistory } = require('../../PriceNodeHistory');
+  const data = { ticker: 'SPY', frames, candles_with_recorded_nodes: 0 };
+  axios.get.mockResolvedValue({ data });
+  const onRecordNodes = jest.fn().mockResolvedValue({ recorded: true });
+  const view = render(<PriceNodeHistory ticker="SPY" open onRecordNodes={onRecordNodes} />);
+  await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toHaveAttribute('data-candles', '2'));
+  const callsBefore = axios.get.mock.calls.length;
+  fireEvent.click(screen.getByRole('button', { name: 'Record nodes' }));
+  await waitFor(() => expect(onRecordNodes).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(axios.get.mock.calls.length).toBeGreaterThan(callsBefore));
+  view.unmount();
+});
+test('record failure shows explicit note and never claims nodes', async () => {
+  const { default: PriceNodeHistory } = require('../../PriceNodeHistory');
+  axios.get.mockResolvedValue({ data: { ticker: 'SPY', frames, candles_with_recorded_nodes: 0 } });
+  render(<PriceNodeHistory ticker="SPY" open onRecordNodes={jest.fn().mockResolvedValue({ recorded: false })} />);
+  await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button', { name: 'Record nodes' }));
+  await waitFor(() => expect(screen.getByText(/recording did not land/i)).toBeInTheDocument());
 });
 test('PriceNodeHistory forwards Atlas feeds and replay slices flow with candles', async () => {
   axios.get.mockResolvedValue({ data: { ticker: 'SPY', frames, candles_with_recorded_nodes: 1 } });

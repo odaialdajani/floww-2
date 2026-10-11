@@ -26,6 +26,8 @@ import SolsticeSymbolMaps from "./SolsticeSymbolMaps";
 import RangeAnalyticsWorkspace from "./RangeAnalyticsWorkspace";
 import { resolveSelectedWall, wallPositionOf } from "../../lib/solsticeSelection";
 import {skylitViewScope,readSkylitView,writeSkylitView,captureSkylitSelection,restoreSkylitSelection} from "./skylitViewPreferences";
+import {chartScopeFor} from "./chart/scopeEcho";
+import { awaitRecording } from "./chart/pollRecording";
 
 function stockStudyOpen(preferences, defaultStudy) {
   if (preferences.studyChoice === "price") return true;
@@ -810,7 +812,18 @@ function SkylitDashboard({
       <>
       <div className="skylit-price-study" ref={priceStudyRef} tabIndex={-1} hidden={rangeOpen || !showPriceHistory}
         onPointerDownCapture={focusPriceInteraction} onClickCapture={focusPriceInteraction} onChangeCapture={focusPriceInteraction} onFocusCapture={focusPriceInteraction} >
-        <PriceNodeHistory ticker={ticker} primary={showPriceHistory} open={!rangeOpen && showPriceHistory} toolbarActions={showPriceHistory ? studyActions : null} />
+        <PriceNodeHistory ticker={ticker} primary={showPriceHistory} open={!rangeOpen && showPriceHistory} toolbarActions={showPriceHistory ? studyActions : null} forcedScope={chartScopeFor(visibleData, isReplay)} onRecordNodes={async () => {
+          // G11: refresh the heatmap desk (server records the fresh build as
+          // a side effect), then poll price-history scopes until the new
+          // snapshot is readable. Bounded, explicit, user-initiated spend.
+          try { await onRefresh?.(); } catch { return { recorded: false, tries: 0 }; }
+          try {
+            return await awaitRecording(async () => (await axios.get(
+              `${BACKEND_API}/heatseeker/price-history/${encodeURIComponent(ticker)}`,
+              { params: { days: 1, interval_minutes: 1 }, timeout: 30000 })).data,
+              { tries: 4, gapMs: 5000 });
+          } catch { return { recorded: false, tries: 4 }; }
+        }} />
       </div>
       <div className="skylit-options-study" ref={optionsStudyRef} role="region" aria-label={ticker + " options desk"} tabIndex={-1} hidden={rangeOpen}
         onPointerDownCapture={() => focusStudy("options")} onClickCapture={() => focusStudy("options")} onChangeCapture={() => focusStudy("options")} onFocusCapture={() => focusStudy("options")} >

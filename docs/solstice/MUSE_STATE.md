@@ -1479,10 +1479,40 @@ service-level bypass:
   honest nulls), journal 200/200, :3000 proxy 200 again. Committed 1aa4286f.
 - REMAINING: G2 (dark producer), G3 (flow buckets), G7 (VWAP mount),
   G4/G6 (sided-volume decision), G8 threading at :813 as producers land.
+## Spark Muse chart lane — G10 rail + alert render (2026-10-10)
+- DONE: DrawingRail (select/delete/lock/hide over reducer, RED→GREEN) +
+  chart alert lines (armed solid, stale dashed + refused note, RED→GREEN).
+  Evaluation stays server-owned; rail never edits canvas or broker state.
 ## Spark Muse chart lane — VWAP bands (2026-10-10)
 - DONE: sessionVwap carries real band values (volume-weighted sigma +
   percent, golden oracle RED→GREEN); up to 3 dashed pairs render behind
   an off-by-default toggle (b31 RED→GREEN).
+## Spark Muse chart lane — G10b registry + persistence (2026-10-10)
+- DONE: 9 evidence-backed tools with anchors/magnet/family (RED→GREEN);
+  per-symbol localStorage persistence with quota + corrupt recovery +
+  secrets refusal (RED→GREEN). Remaining Atlas tools explicitly
+  UNVERIFIED (not invented). Slice 22/86 green.
+## Spark Muse chart lane — G1 CLOSED via scope_echo (2026-10-10)
+- DONE: heatmap responses carry server scope_echo (helper RED→GREEN, cached
+  copies keep it); SkylitDashboard passes chartScopeFor (live non-replay echo
+  only) as forcedScope at :813 (b14 RED→GREEN, Skylit suite green).
+- LIVE: bounded restart 44930->47985; heatmap returns scope_echo
+  SPY:4:day:None:False:True:80; price-history 395/395 volume + 395-line
+  exposure shape kept; journal 200/200. Weekend note: my own probe traffic
+  briefly exhausted the Public budget (429s in log, self-healed in seconds —
+  counted spend, not a code fault).
+## Spark Muse chart lane — G11 record-now (2026-10-10)
+- DONE: POST /api/heatseeker/record/{ticker} (auth'd, fresh build, bounded
+  20s read-back, 429/503 honest) 3/3 RED→GREEN incl. 401-no-key proof;
+  PriceNodeHistory Record button + pollRecording helper (b31/b34 RED→GREEN);
+  SkylitDashboard wires refresh-then-poll (bounded 4x5s, disclosed spend).
+- LIVE: bounded restart 6826->44930; route registered; 401 live without key;
+  days=5 395/395 volume kept; days=1 empty on weekend window (provider-side,
+  fetch path untouched, no errors); journal 200/200; :3000 200.
+## Spark Muse chart lane — exposure envelopes (2026-10-10)
+- DONE: opening envelope (8-minute minimum, freeze at close, ET-correct
+  open incl. EST, RED→GREEN) + session envelope (widens only) + off-default
+  toggle rendering session levels (mount RED proven via stash, then GREEN).
 ## Spark Muse chart lane — G6 TPO + live proof (2026-10-10)
 - G6 backend complete: TPO letters/composite/fifth-period 3/3 golden.
   Live headless-Chrome proof (?page=heatseeker): 70 candles, volume 70/70,

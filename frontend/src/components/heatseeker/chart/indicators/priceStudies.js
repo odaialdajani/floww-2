@@ -76,6 +76,67 @@ export function sessionVwapBands(frames, opts = {}) {
   return out;
 }
 
+function nyOffsetMinutes(dateStr) {
+  // Offset of America/New_York at local noon (stable across the DST cutover
+  // inside a single day for market-hour purposes), in minutes behind UTC.
+  try {
+    const probe = new Date(dateStr + 'T12:00:00Z');
+    const part = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', timeZoneName: 'shortOffset' })
+      .formatToParts(probe).find((p) => p.type === 'timeZoneName')?.value || '';
+    const m = part.match(/GMT([+-])(\d+)(?::(\d+))?/);
+    if (m) return (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3] || 0));
+  } catch { /* fall through to calendar fallback */ }
+  const [y, mo, d] = dateStr.split('-').map(Number);
+  const dst = mo > 3 && mo < 11;
+  return dst ? -240 : -300;
+}
+
+function nyOpenUtc(dateStr) {
+  const [y, mo, d] = dateStr.split('-').map(Number);
+  if (![y, mo, d].every(Number.isFinite)) return null;
+  return Date.UTC(y, mo - 1, d, 9, 30) - nyOffsetMinutes(dateStr) * 60000;
+}
+
+function eligibleCentres(points, fromMs, toMs) {
+  return (points || [])
+    .map((p) => {
+      const t = Date.parse(p?.time);
+      const c = p?.centre;
+      if (!Number.isFinite(t) || typeof c !== 'number' || !Number.isFinite(c)) return null;
+      if (t < fromMs || t >= toMs) return null;
+      return { t, centre: c };
+    })
+    .filter(Boolean);
+}
+
+// Opening-window envelope: first N minutes after the 09:30 ET open need at
+// least 8 measured minutes, then freeze at window end. Anything less draws
+// nothing rather than a misleading envelope.
+export function openingEnvelope(points, { anchorDate, windowMinutes = 15 } = {}) {
+  const open = anchorDate ? nyOpenUtc(anchorDate) : null;
+  if (open === null || !(windowMinutes >= 8 && windowMinutes <= 60)) {
+    return { status: 'unavailable', high: null, low: null };
+  }
+  const end = open + windowMinutes * 60000;
+  const measured = eligibleCentres(points, open, end);
+  if (measured.length < 8) return { status: 'pending', high: null, low: null };
+  const observed = (points || []).map((p) => Date.parse(p?.time)).filter(Number.isFinite);
+  if (!observed.length || Math.max(...observed) < end) {
+    return { status: 'pending', high: null, low: null };
+  }
+  return { status: 'frozen', high: Math.max(...measured.map((p) => p.centre)),
+    low: Math.min(...measured.map((p) => p.centre)) };
+}
+
+// Session envelope: running extrema over eligible points; widens only.
+export function sessionEnvelope(points) {
+  const vals = (points || [])
+    .map((p) => p?.centre)
+    .filter((c) => typeof c === 'number' && Number.isFinite(c));
+  if (!vals.length) return { high: null, low: null };
+  return { high: Math.max(...vals), low: Math.min(...vals) };
+}
+
 function barPrice(bar, source) {
   if (!bar) return null;
   if (source === 'close') {
