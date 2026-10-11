@@ -95,9 +95,15 @@ async def record_snapshot_now(ticker: str, expiries: int = Query(4, ge=1, le=12)
 async def price_history(ticker: str, days: int = Query(5, ge=1, le=20),
                         query_key: str | None = Query(None, max_length=2000),
                         interval_minutes: int | None = Query(None, ge=1, le=60),
-                        include_metric_lines: bool = Query(False)):
+                        include_metric_lines: bool = Query(False),
+                        contract_symbol: str | None = Query(None, max_length=32)):
     if interval_minutes is not None and interval_minutes not in {1, 5, 15, 30, 60}:
         raise HTTPException(status_code=422, detail="Choose 1, 5, 15, 30 or 60 minute candles")
+    contract = None
+    if contract_symbol is not None:
+        contract = contract_symbol.strip().upper()
+        if not contract or len(contract) > 32 or any(ch not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789." for ch in contract):
+            raise HTTPException(status_code=422, detail="Choose a valid option contract symbol (OSI)")
     from services.duckdb_engine import db
     from services.public_api_adapter import fetch_bars_by_interval
     from services.public_budget import BudgetExhausted, budget
@@ -137,7 +143,10 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=20),
     valid_times = [epoch(frame["time"]) for frame in price_only["frames"]]
     if not valid_times:
         return {**build_history(ticker, [], [], query_key), "price_status": "unavailable",
-                "node_status": "not_loaded", "days": days, "recording": recording}
+                "node_status": "not_loaded", "days": days, "recording": recording,
+                "contract_symbol": contract,
+                "contract_status": "unavailable" if contract is not None else "not_requested",
+                "contract_bars": []}
     first = datetime.fromtimestamp(min(valid_times), UTC) - timedelta(minutes=15)
     last = datetime.fromtimestamp(max(valid_times), UTC)
     node_status = "available"
@@ -155,7 +164,28 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=20),
         result = await asyncio.to_thread(enrich_recorded_levels, result, db)
     for frame in result["frames"]:
         frame["duration_seconds"] = bar_seconds
+    # M3 contract premium path: the selected option contract's own OHLCV
+    # (Public OSI bars, market-data key only). Own dollars, own axis — never
+    # mixed into the underlying candles. Missing stays explicitly unavailable.
+    contract_bars: list = []
+    contract_status = "not_requested"
+    if contract is not None:
+        contract_status = "unavailable"
+        try:
+            await budget.acquire("api.public.com")
+        except BudgetExhausted:
+            contract_bars = []
+        else:
+            try:
+                fetched = await fetch_bars_by_interval(contract, period=period, aggregation=aggregation, sessions="regular", instrument_type="OPTION") or []
+            finally:
+                budget.release()
+            contract_bars = fetched if isinstance(fetched, list) else []
+            if contract_bars:
+                contract_status = "available"
     return {**result, "price_status": "available", "node_status": node_status,
             "records_truncated": truncated, "days": days, "prices_received_at": received_at,
             "last_candle_at": datetime.fromtimestamp(max(valid_times), UTC).isoformat(),
-            "bar_seconds": bar_seconds, "price_sessions_returned": len(session_dates), "recording": recording}
+            "bar_seconds": bar_seconds, "price_sessions_returned": len(session_dates), "recording": recording,
+            "contract_symbol": contract, "contract_status": contract_status,
+            "contract_bars": contract_bars}

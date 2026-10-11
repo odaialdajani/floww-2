@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { API } from "../../config/api";
 import RecordedPriceChart from "./RecordedPriceChart";
+import DrawingRail from "./chart/drawings/DrawingRail";
+import { loadDrawings, saveDrawings } from "./chart/drawings/drawingPersistence";
+import { reduceDrawings } from "./chart/drawings/drawingReducer";
 import { chartTime } from "./recordedPriceChartData";
 
 
@@ -15,7 +18,7 @@ function savedViewLabel(scope,index){
  return mode+" | "+sorted.length+" "+(sorted.length===1?"expiry":"expiries")+" | "+sorted[0]+(sorted.length>1?" to "+sorted.at(-1):"");
 }
 
-export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, showAtlas = true, forcedScope = null, onRecordNodes = null }) {
+export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, showAtlas = true, forcedScope = null, onRecordNodes = null, cvdLine = null }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? (primary || localOpen);
   const setOpen = value => { setLocalOpen(value); onOpenChange?.(value); };
@@ -29,6 +32,19 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   const [playing, setPlaying] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordNote, setRecordNote] = useState("");
+  // M3 contract premium path: user-picked OSI symbol loads the contract's
+  // own OHLCV beside the underlying candles (own $ scale, never mixed).
+  const [contractInput, setContractInput] = useState("");
+  const [contract, setContract] = useState("");
+  // G10c drawings mount: rail over per-symbol persisted drawings (registry +
+  // persistence landed in PR122; this mount shows them on the chart page).
+  // Rail manages list/select/delete/lock/hide only — no canvas editing.
+  const [drawings, setDrawings] = useState(() => loadDrawings(ticker));
+  const [selectedDrawing, setSelectedDrawing] = useState(null);
+  const persistDrawings = next => {
+    setDrawings(next);
+    try { saveDrawings(ticker, next); } catch { /* quota: in-memory only */ }
+  };
   const recordNodes = useCallback(async () => {
     if (!onRecordNodes || recording) return;
     setRecording(true); setRecordNote("Recording nodes… (uses market reads)");
@@ -39,7 +55,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     } catch { setRecordNote("Recording did not land — try again."); }
     finally { setRecording(false); }
   }, [onRecordNodes, recording]);
-  useEffect(() => { setScope(""); setPayload(null); setPlaying(false); }, [ticker]);
+  useEffect(() => { setScope(""); setPayload(null); setPlaying(false); setDrawings(loadDrawings(ticker)); setSelectedDrawing(null); setContractInput(""); setContract(""); }, [ticker]);
   useEffect(() => {
     if (!open) return undefined;
     const controller = new AbortController();
@@ -47,7 +63,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     setPayload(null); setStatus("loading"); setPlaying(false);
     const activeScope = forcedScope ?? scope;
     axios.get(`${API}/heatseeker/price-history/${encodeURIComponent(ticker)}`, {
-      params: { days, interval_minutes: minutes, include_metric_lines: true, ...(activeScope ? { query_key: activeScope } : {}) },
+      params: { days, interval_minutes: minutes, include_metric_lines: true, ...(activeScope ? { query_key: activeScope } : {}), ...(contract ? { contract_symbol: contract } : {}) },
       timeout: 30000, signal: controller.signal,
     }).then(({ data }) => {
       if (!active) return;
@@ -55,7 +71,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
       setPayload(data); setPosition(Math.max(0, (data.frames?.length || 0) - 1)); setStatus("ready");
     }).catch(() => { if (active) setStatus("error"); });
     return () => { active = false; controller.abort(); };
-  }, [ticker, days, minutes, scope, forcedScope, open, reload]);
+  }, [ticker, days, minutes, scope, forcedScope, open, reload, contract]);
   const frames = payload?.ticker === ticker.toUpperCase() ? payload.frames || [] : [];
   useEffect(() => {
     if (!playing || !open || frames.length < 2) return undefined;
@@ -75,6 +91,9 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     <button type="button" onClick={()=>setReload(n=>n+1)}>Reload history</button>
     {onRecordNodes&&<button type="button" disabled={recording||status==="loading"} onClick={recordNodes}>{recording?"Recording…":"Record nodes"}</button>}
     {recordNote&&<span role="status">{recordNote}</span>}
+    <label className="price-history-contract">Option contract<input aria-label="Option contract symbol" placeholder="OSI, e.g. SPY261017C00650000" value={contractInput} onChange={e=>setContractInput(e.target.value)} /></label>
+    <button type="button" disabled={!contractInput.trim()} onClick={()=>setContract(contractInput.trim().toUpperCase())}>Load contract</button>
+    {contract&&<button type="button" onClick={()=>{setContract("");setContractInput("");}}>Clear contract</button>}
     {!!frames.length&&<div className="price-history-replay"><button type="button" onClick={()=>{if(!playing&&position>=frames.length-1)setPosition(0);setPlaying(value=>!value);}}>{playing?"Pause replay":"Play replay"}</button><input aria-label="Replay position" type="range" min={0} max={frames.length-1} value={position} onChange={e=>{setPosition(Number(e.target.value));setPlaying(false);}}/><span>{chartTime(frames[position]?.time,true)} New York</span><button type="button" onClick={()=>{setPosition(frames.length-1);setPlaying(false);}}>Show all</button></div>}
   </>;
   const details = <div className="price-history-details">
@@ -87,6 +106,11 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   const readingStatus = !frames.length?"Data details":payload?.node_status==="unavailable"?"Saved lines unavailable":(payload.candles_with_recorded_nodes??"Unknown")+"/"+frames.length+" saved";
   return <section className="panel price-node-history" data-open={open} style={{margin:"12px 0",padding:12}} data-testid="price-node-history">
     {!primary&&<button type="button" className="skylit-trade-mode-btn" aria-expanded={open} onClick={()=>{setOpen(!open);setPlaying(false);}}>Price chart + historical nodes</button>}
-    {open&&<RecordedPriceChart ticker={ticker} frames={frames.slice(0,position+1)} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={toolbarActions} historyControls={historyControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars}/>}
+    {open&&<RecordedPriceChart ticker={ticker} frames={frames.slice(0,position+1)} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={toolbarActions} historyControls={historyControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars}/>}
+    {open&&<DrawingRail drawings={drawings} selectedId={selectedDrawing}
+      onSelect={setSelectedDrawing}
+      onDelete={id => { if (selectedDrawing === id) setSelectedDrawing(null); persistDrawings(reduceDrawings(drawings, { type: "delete", id })); }}
+      onToggleLock={id => persistDrawings(drawings.map(d => d.id === id ? { ...d, locked: !d.locked } : d))}
+      onToggleHide={id => persistDrawings(drawings.map(d => d.id === id ? { ...d, visible: d.visible === false } : d))} />}
   </section>;
 }

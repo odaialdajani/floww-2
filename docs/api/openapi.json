@@ -9588,6 +9588,23 @@
               "title": "Include Metric Lines",
               "type": "boolean"
             }
+          },
+          {
+            "in": "query",
+            "name": "contract_symbol",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Contract Symbol"
+            }
           }
         ],
         "responses": {
