@@ -1649,3 +1649,11 @@ service-level bypass:
   exposure_basis (Volume basis (scalp) / OI basis / raw string; absent ->
   no badge). 2/2 RED->GREEN in SkylitDashboard.test.jsx (117 green).
 - Chart slice 26/103 green.
+
+## Spark Muse horizons lane (2026-10-11)
+- Long horizons (P1): price-history days 1..2600 with daily brackets
+  (<=60 QUARTER, <=260 YEAR, else TEN_YEARS, all ONE_DAY/86400s); short
+  brackets byte-identical. Old frames keep honest nulls (no snapshots
+  that far back). Frontend period picker gains 3 months / 1 year /
+  10 years. Backend 7/7 + frontend b39 2/2 RED first; docs regen is the
+  maximum-only diff. Chart slice 27/105 green.

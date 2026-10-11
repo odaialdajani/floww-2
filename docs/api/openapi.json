@@ -9538,7 +9538,7 @@
             "required": false,
             "schema": {
               "default": 5,
-              "maximum": 20,
+              "maximum": 2600,
               "minimum": 1,
               "title": "Days",
               "type": "integer"
