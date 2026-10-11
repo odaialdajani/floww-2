@@ -6,13 +6,13 @@ import './RecordedPriceChart.css';
 const price=value=>Number.isFinite(value)?value.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'Unavailable';
 const bound=(value,low,high)=>Math.max(low,Math.min(high,value));
 
-export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null}) {
+export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null,cvdLine=null,contractBars=null,contractSymbol=null,contractStatus=null}) {
  const data=useMemo(()=>checkedCandles(frames),[frames]);
  const surface=useRef(null),pointers=useRef(new Map()),gesture=useRef(null),previousLength=useRef(0);
  const [size,setSize]=useState({width:800,height:480});
  const [view,setView]=useState(()=>({start:Math.max(0,data.length-80),count:80}));
  const [manualPrice,setManualPrice]=useState(null),[hover,setHover]=useState(null),[metrics,setMetrics]=useState(['gex','vex','charm']),[allNodes,setAllNodes]=useState(false);
- const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState(''),[vwapOn,setVwapOn]=useState(true),[bandsOn,setBandsOn]=useState(false),[profileOn,setProfileOn]=useState(true),[envelopeOn,setEnvelopeOn]=useState(false);
+  const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState(''),[vwapOn,setVwapOn]=useState(true),[bandsOn,setBandsOn]=useState(false),[profileOn,setProfileOn]=useState(true),[envelopeOn,setEnvelopeOn]=useState(false),[cvdOn,setCvdOn]=useState(true);
  const id=useId().replace(/[^a-zA-Z0-9_-]/g,'');
  useEffect(()=>{
   const element=surface.current;if(!element)return undefined;
@@ -133,7 +133,8 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
      <label><input type="checkbox" aria-label="Toggle VWAP" checked={vwapOn} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>setVwapOn(e.target.checked)}/>VWAP{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
      <label><input type="checkbox" aria-label="Toggle profile" checked={profileOn} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>setProfileOn(e.target.checked)}/>Profile{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
      <label><input type="checkbox" aria-label="Toggle VWAP bands" checked={bandsOn} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>setBandsOn(e.target.checked)}/>Bands{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
-     <label><input type="checkbox" aria-label="Toggle exposure envelope" checked={envelopeOn} disabled={!Array.isArray(exposureLine)||!exposureLine.some(p=>typeof p?.centre==='number'&&Number.isFinite(p.centre))} onChange={e=>setEnvelopeOn(e.target.checked)}/>Envelope{(!Array.isArray(exposureLine)||!exposureLine.some(p=>typeof p?.centre==='number'&&Number.isFinite(p.centre)))&&<span> unavailable</span>}</label>
+      <label><input type="checkbox" aria-label="Toggle exposure envelope" checked={envelopeOn} disabled={!Array.isArray(exposureLine)||!exposureLine.some(p=>typeof p?.centre==='number'&&Number.isFinite(p.centre))} onChange={e=>setEnvelopeOn(e.target.checked)}/>Envelope{(!Array.isArray(exposureLine)||!exposureLine.some(p=>typeof p?.centre==='number'&&Number.isFinite(p.centre)))&&<span> unavailable</span>}</label>
+      <label><input type="checkbox" aria-label="Toggle CVD" checked={cvdOn} disabled={!Array.isArray(cvdLine)||!cvdLine.some(p=>typeof p?.cvd==='number'&&Number.isFinite(p.cvd))} onChange={e=>setCvdOn(e.target.checked)}/>CVD{(!Array.isArray(cvdLine)||!cvdLine.some(p=>typeof p?.cvd==='number'&&Number.isFinite(p.cvd)))&&<span> unavailable</span>}</label>
      <button type="button" disabled={!data.length||exporting} onClick={downloadChart}>{exporting?'Saving image...':'Download chart image'}</button>{exportError&&<p role="alert">{exportError}</p>}
     {historyControls}<small id={'chart-help-'+id}>Drag to scroll history. Pinch time and price. Drag an axis to stretch it. Ctrl + scroll zooms time; Shift + scroll zooms price. Normal scrolling moves the page.</small>
    </div></details>
@@ -203,7 +204,43 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
       {win.map((frame,index)=>{const v=Number(frame.volume)||0,bh=Math.max(1,v/peak*(h-4));
        return <rect data-testid="volume-bar" key={frame.time} x={left+index*spacing+Math.max(1,spacing*0.15)} y={h-bh} width={Math.max(1,Math.min(spacing*0.7,14))} height={bh} fill={frame.close>=frame.open?'#3f8f7d':'#8f4a52'} opacity="0.85"><title>{chartTime(frame.time,true)+' — '+(Number.isFinite(v)?v.toLocaleString('en-US'):'0')+' shares'}</title></rect>;})}
     </svg>;})()}
-   {Array.isArray(alertLines)&&alertLines.some(a=>a?.state==='stale')&&<small role="note">Stale alert refused — no evaluation on stale prices.</small>}
+    {!!data.length&&cvdOn&&(()=>{ // CVD pane: BVC-estimated cumulative flow — honest gaps, never zero-filled.
+     if(!showAtlas||!Array.isArray(cvdLine))return null;
+     const byTime=new Map(cvdLine.filter(p=>p&&typeof p.time==='string').map(p=>[p.time,p]));
+     const known=visible.map(frame=>{const entry=byTime.get(frame.time);const v=entry?entry.cvd:undefined;return typeof v==='number'&&Number.isFinite(v)?v:null;});
+     if(!known.some(v=>v!==null))return null;
+     const vals=known.filter(v=>v!==null),lo=Math.min(...vals),hi=Math.max(...vals),span=(hi-lo)||1;
+     const h=56,pad=6,cy=v=>h-pad-((v-lo)/span)*(h-pad*2);
+     const segments=[];let cur=[];
+     known.forEach((v,i)=>{if(v===null){if(cur.length)segments.push(cur);cur=[];return;}cur.push({x:left+(i+0.5)*spacing,y:cy(v)});});
+     if(cur.length)segments.push(cur);
+     const lines=segments.filter(s=>s.length>1),dots=[];
+     segments.filter(s=>s.length===1).forEach(s=>dots.push(s[0]));
+     return <div className="recorded-cvd-pane" data-testid="cvd-pane" aria-label="Estimated cumulative volume delta">
+       <svg viewBox={'0 0 '+size.width+' '+h} preserveAspectRatio="none" style={{width:'100%',height:h}} role="img" aria-label="CVD estimate per candle">
+        {lines.map((seg,si)=><polyline data-testid="cvd-line" key={'cvd:'+si} points={seg.map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ')} fill="none" stroke="#9d7bea" strokeWidth="1.5"><title>CVD estimate</title></polyline>)}
+        {dots.map((p,di)=><circle data-testid="cvd-point" key={'cvddot:'+di} cx={p.x} cy={p.y} r="2" fill="#9d7bea" opacity="0.9"><title>CVD estimate (single known candle)</title></circle>)}
+       </svg>
+       <small>CVD estimated via bulk volume classification (Easley, López de Prado &amp; O&apos;Hara 2012); ≈80% bar accuracy on equities — directional, not exact. Unknown ≠ zero; gaps are honest. Range {lo.toLocaleString('en-US')}–{hi.toLocaleString('en-US')} shares (own scale).</small>
+     </div>;})()}
+    {Array.isArray(alertLines)&&alertLines.some(a=>a?.state==='stale')&&<small role="note">Stale alert refused — no evaluation on stale prices.</small>}
+    {!!data.length&&(()=>{ // Contract premium path: selected option's own closes on their own $ scale.
+     if(contractStatus==='unavailable'||(contractSymbol&&(!Array.isArray(contractBars)||!contractBars.length)))
+       return <div className="recorded-contract-empty" data-testid="contract-premium-unavailable"><small>Contract premium unavailable{contractSymbol?' for '+contractSymbol:''}.</small></div>;
+     if(!contractSymbol||!Array.isArray(contractBars)||!contractBars.length)return null;
+     const closes=contractBars.map(b=>{const v=b?.c??b?.close;return typeof v==='number'&&Number.isFinite(v)?v:null;});
+     if(!closes.some(v=>v!==null))return <div className="recorded-contract-empty" data-testid="contract-premium-unavailable"><small>Contract premium unavailable{contractSymbol?' for '+contractSymbol:''}.</small></div>;
+     const vals=closes.filter(v=>v!==null),lo=Math.min(...vals),hi=Math.max(...vals),span=(hi-lo)||1;
+     const h=56,pad=8,py=v=>h-pad-((v-lo)/span)*(h-pad*2);
+     const pts=[];closes.forEach((v,i)=>{if(v!==null)pts.push({x:left+(closes.length===1?0.5*plotWidth:i/(closes.length-1)*plotWidth),y:py(v)});});
+     if(pts.length<1)return null;
+     return <div className="recorded-contract-pane" data-testid="contract-premium-pane" aria-label="Selected contract premium">
+       <svg viewBox={'0 0 '+size.width+' '+h} preserveAspectRatio="none" style={{width:'100%',height:h}} role="img" aria-label={contractSymbol+' premium closes'}>
+        {pts.length>1&&<polyline data-testid="contract-premium" points={pts.map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ')} fill="none" stroke="#e8bd65" strokeWidth="1.5"><title>{contractSymbol+' premium closes'}</title></polyline>}
+        {pts.length===1&&<circle data-testid="contract-premium" cx={pts[0].x} cy={pts[0].y} r="2.5" fill="#e8bd65"><title>{contractSymbol+' premium close'}</title></circle>}
+       </svg>
+       <small>{contractSymbol} premium ($) — own scale, not underlying $. Range ${lo.toFixed(2)}–${hi.toFixed(2)}.</small>
+     </div>;})()}
    {!!data.length&&<div className="recorded-chart-footer"><small>{windowView.start+1}-{windowView.start+visible.length} of {data.length} loaded candles</small></div>}
   {selected&&<div className="recorded-chart-nodes" aria-label="Selected candle saved nodes">{selectedLevels.length?selectedLevels.map((node,index)=><span key={node.metric+':'+node.id+':'+index} style={{color:NODE_COLORS[node.metric]}}>{NODE_LABELS[node.metric]} <b>{price(node.level)}</b></span>):<span>No supported saved node lines at this candle.{Object.entries(selected?.metric_status||{}).filter(([,status])=>status==="zero").map(([metric])=>" "+NODE_LABELS[metric]+" was zero; no largest level stood out.").join("")}</span>}</div>}
  </div>;

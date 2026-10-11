@@ -153,6 +153,18 @@ def build_history(ticker: str, bars: list[dict], snapshots: list[dict],
                        "node_age_seconds": age if usable else None,
                        "exposure_centre": centre, "exposure_upper": upper,
                        "exposure_lower": lower})
+    # BVC-estimated CVD from the same OHLCV+volume (no tape needed). Unknown
+    # bars stay gaps; the pane labels the series as an honest estimate.
+    # Rows are index-zipped: estimate preserves chronological order and every
+    # clean bar carries a valid epoch, so no float-key time matching (ISO
+    # round-trips are not bit-exact) can silently misalign a row.
+    from services.chart_cvd import estimate_cvd_from_bars
+    cvd_rows = estimate_cvd_from_bars(
+        [{"t": at, "c": bar["close"], "v": bar.get("volume")}
+         for at, bar in sorted(clean.items())])
+    for frame, row in zip(frames, cvd_rows, strict=False):
+        frame["cvd_delta"] = row["delta"]
+        frame["cvd"] = row["cvd"]
     return {"ticker": ticker, "frames": frames, "query_key": scope,
             "scopes": scopes, "node_max_age_seconds": MAX_NODE_AGE_SECONDS,
             "candles": len(frames),
@@ -160,4 +172,6 @@ def build_history(ticker: str, bars: list[dict], snapshots: list[dict],
             "exposure_line": [{"time": f["time"], "centre": f["exposure_centre"],
                                  "upper": f["exposure_upper"], "lower": f["exposure_lower"]}
                                 for f in frames],
+            "cvd_line": [{"time": f["time"], "delta": f.get("cvd_delta"), "cvd": f.get("cvd")}
+                         for f in frames],
             "note": "Nodes are shown only when recorded and known at the provider candle timestamp. Gaps mean no recent saved reading."}

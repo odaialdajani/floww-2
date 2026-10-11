@@ -1538,3 +1538,64 @@ service-level bypass:
 - G6 backend DONE: bar-distributed volume profile (explicit approximation,
   overlap pro-rata, POC down / VA up, sparse stop) 3/3 golden-oracle.
   Pane wiring still open.
+
+## Spark Muse 2.1 lane — M1 CVD + M2 mount + M3 premium + M4 verdicts (2026-10-11)
+- M1 CVD pane (closes G4): BVC estimate from OHLCV+volume, new
+  `services/chart_cvd.py` (`estimate_cvd_from_bars`, window 20, session
+  anchor, unknown stays gaps; volume_clock.py untouched); `build_history`
+  returns `cvd_line` parallel to `exposure_line` (+ per-frame cvd/cvd_delta);
+  frontend CVD pane with the mandated honesty label (b35 4/4 RED->GREEN).
+  Spec deviation (documented in test_chart_cvd.py): the spec's section 6
+  constant-price tests contradict each other (window 20 expects values,
+  window 10 expects gaps on identical inputs); sigma uses trailing
+  available session history, flat bars split balanced, zero-variance moves
+  take the full side. Backend 12/12 incl. session-reset + running-sum pins.
+- M2 drawings MOUNT (closes G10c): DrawingRail mounted in PriceNodeHistory
+  over per-symbol persisted drawings (registry-filtered, quota-persisted;
+  select/delete/lock/hide; no canvas editing). b36 3/3 RED->GREEN.
+- M3 contract premium path (P0): `GET price-history` accepts
+  `contract_symbol` (OSI, validated pre-read, 422 on bad); OPTION bars via
+  the existing market-data path; `contract_bars` + `contract_status`
+  (available/unavailable/not_requested) ride the response; frontend picker
+  + premium strip with own-$ axis honesty + explicit unavailable. Backend
+  6/6, frontend b37 4/4, all RED->GREEN.
+- M4 G2 CLOSED-WITH-VERDICT: dark-pool LEVELS permanently impossible under
+  the Public-only doctrine (Public.com provides no trade-print data; FINRA
+  ATS is weekly-aggregate, no prices). The `darkLevels` render path stays
+  dormant by design — honest empty, never fabricated or mislabelled.
+- M4 G13 engine decision: KEEP incumbent SVG (per CHART_ENGINE_RESEARCH.md).
+  Tested zero-dep SVG export, DOM a11y/testability and the enforced honesty
+  rules outweigh LWC v5 panes + drawing ecosystem at FLOWW's scale; LWC
+  stays flag-gated opt-in with attribution carried.
+- Chart slice 25 suites / 97 tests green (was 22/86 at lane start); backend
+  price-history/CVD/contract suites 40 passed; ruff clean on all touched files.
+- M5 verify+seal (this session, all real runs): frontend rebuilt
+  (`npm run build`), bundle `main.cb470d8f.js` disk==served on :3000 with
+  cvd-pane/contract-premium/drawing-rail markers; :8002 bounded restart
+  (exact PID 47985 -> fresh, same argv/cwd/env, :8000 untouched); live
+  price-history SPY 70 frames, 70 volume, cvd_line 70 (65 known / 5 honest
+  session gaps), exposure 70; scope_echo SPY:4:day:None:False:True:80;
+  record POST 401 (gated, correct); contract SPY261016C00780000 returns
+  real premium bars (70, $2.55-2.60 own dollars) with status available, bad
+  symbol 422 pre-read; headless-Chrome DOM: 70 candles, 70 volume, VWAP 1,
+  profile 71, CVD pane 1 with 5 segments + mandated label text, drawing
+  rail 1, contract picker present, zero page errors. Orbs/exposure 0 =
+  honest (zero snapshots recorded). Changes left uncommitted in the lane
+  working tree for review (no merge/push/deploy).
+
+## Spark Muse 2.1 resweep — clean + better + next (2026-10-11)
+- Resweep GREEN: chart slice 25+/97+ (grew with toggle/range tests), FULL
+  frontend suite 192/2148 green, backend tests/services+tests/routes
+  4808 passed / 36 skipped / 0 failed, ruff clean on touched files.
+- Robustness: build_history CVD attach is now index-zipped (ISO float-key
+  matching removed — round-trips are not bit-exact), pinned by
+  test_build_history_cvd_line_aligns_to_frames; cvd_line uses .get.
+- Better: CVD toggle in Tools (default on, honest unavailable-disable) +
+  CVD pane own-scale range readout ("Range lo–hi shares (own scale)").
+- Next triaged: volume-weighted GEX basis toggle REFUSED as UI-only —
+  build_heatmap has no basis request param (basis is stored per snapshot,
+  not selectable), so a toggle would be fake. Proper seam (basis param ->
+  scope key -> recorder -> scope_echo + G1 re-verify) queued as backend
+  lane work, not smuggled in here.
+- Live gates re-verified this pass (see M5 entry): bundle rebuilt +
+  disk==served, 70/70 volume, cvd 65/5 honest gaps, contract path live.
