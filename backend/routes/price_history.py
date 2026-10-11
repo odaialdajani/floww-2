@@ -114,7 +114,11 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
         recording = await asyncio.to_thread(recording_summary, db, ticker)
     except Exception:
         recording = {"status": "unavailable", "durable": False}
-    period, aggregation, bar_seconds = ("DAY", "ONE_MINUTE", 60) if days == 1 else ("WEEK", "FIVE_MINUTES", 300) if days <= 5 else ("MONTH", "ONE_HOUR", 3600) if days <= 20 else ("QUARTER", "ONE_DAY", 86400) if days <= 60 else ("YEAR", "ONE_DAY", 86400) if days <= 260 else ("TEN_YEARS", "ONE_DAY", 86400)
+    # Period brackets: Public.com's historicdata gateway rejects TEN_YEARS
+    # (400) and serves at most FIVE_YEARS (~1255 daily bars) — verified live
+    # 2026-10-11. The 10-year UI option therefore requests FIVE_YEARS, the
+    # provider's real maximum; never a label Public 400s on.
+    period, aggregation, bar_seconds = ("DAY", "ONE_MINUTE", 60) if days == 1 else ("WEEK", "FIVE_MINUTES", 300) if days <= 5 else ("MONTH", "ONE_HOUR", 3600) if days <= 20 else ("QUARTER", "ONE_DAY", 86400) if days <= 60 else ("YEAR", "ONE_DAY", 86400) if days <= 260 else ("FIVE_YEARS", "ONE_DAY", 86400)
     if interval_minutes is not None:
         aggregation = {1: "ONE_MINUTE", 5: "FIVE_MINUTES", 15: "FIFTEEN_MINUTES",
                        30: "THIRTY_MINUTES", 60: "ONE_HOUR"}[interval_minutes]
