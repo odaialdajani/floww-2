@@ -26,6 +26,7 @@ import SolsticeSymbolMaps from "./SolsticeSymbolMaps";
 import RangeAnalyticsWorkspace from "./RangeAnalyticsWorkspace";
 import { resolveSelectedWall, wallPositionOf } from "../../lib/solsticeSelection";
 import {skylitViewScope,readSkylitView,writeSkylitView,captureSkylitSelection,restoreSkylitSelection} from "./skylitViewPreferences";
+import {chartScopeFor} from "./chart/scopeEcho";
 import { awaitRecording } from "./chart/pollRecording";
 
 function stockStudyOpen(preferences, defaultStudy) {
@@ -811,7 +812,7 @@ function SkylitDashboard({
       <>
       <div className="skylit-price-study" ref={priceStudyRef} tabIndex={-1} hidden={rangeOpen || !showPriceHistory}
         onPointerDownCapture={focusPriceInteraction} onClickCapture={focusPriceInteraction} onChangeCapture={focusPriceInteraction} onFocusCapture={focusPriceInteraction} >
-        <PriceNodeHistory ticker={ticker} primary={showPriceHistory} open={!rangeOpen && showPriceHistory} toolbarActions={showPriceHistory ? studyActions : null} onRecordNodes={async () => {
+        <PriceNodeHistory ticker={ticker} primary={showPriceHistory} open={!rangeOpen && showPriceHistory} toolbarActions={showPriceHistory ? studyActions : null} forcedScope={chartScopeFor(visibleData, isReplay)} onRecordNodes={async () => {
           // G11: refresh the heatmap desk (server records the fresh build as
           // a side effect), then poll price-history scopes until the new
           // snapshot is readable. Bounded, explicit, user-initiated spend.

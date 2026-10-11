@@ -2116,6 +2116,8 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     except Exception as rh:
         log.debug("heatmap_history record skipped: %s", rh)
     sanitized = _sanitize(payload)
+    from services.solstice_scope import attach_scope_echo
+    attach_scope_echo(sanitized, cache_key)
     _BUILD_HEATMAP_CACHE[cache_key] = {"ts": time.time(), "data": sanitized}
     if len(_BUILD_HEATMAP_CACHE) > 200:
         oldest = sorted(_BUILD_HEATMAP_CACHE.keys(), key=lambda k: _BUILD_HEATMAP_CACHE[k]["ts"])[:50]

@@ -1487,6 +1487,15 @@ service-level bypass:
 - DONE: sessionVwap carries real band values (volume-weighted sigma +
   percent, golden oracle RED→GREEN); up to 3 dashed pairs render behind
   an off-by-default toggle (b31 RED→GREEN).
+## Spark Muse chart lane — G1 CLOSED via scope_echo (2026-10-10)
+- DONE: heatmap responses carry server scope_echo (helper RED→GREEN, cached
+  copies keep it); SkylitDashboard passes chartScopeFor (live non-replay echo
+  only) as forcedScope at :813 (b14 RED→GREEN, Skylit suite green).
+- LIVE: bounded restart 44930->47985; heatmap returns scope_echo
+  SPY:4:day:None:False:True:80; price-history 395/395 volume + 395-line
+  exposure shape kept; journal 200/200. Weekend note: my own probe traffic
+  briefly exhausted the Public budget (429s in log, self-healed in seconds —
+  counted spend, not a code fault).
 ## Spark Muse chart lane — G11 record-now (2026-10-10)
 - DONE: POST /api/heatseeker/record/{ticker} (auth'd, fresh build, bounded
   20s read-back, 429/503 honest) 3/3 RED→GREEN incl. 401-no-key proof;
