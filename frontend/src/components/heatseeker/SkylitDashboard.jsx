@@ -785,6 +785,13 @@ function SkylitDashboard({
   }, [ticker, selectedCell, displayData, compareMode, activePane, viewMode, metric, isReplay]);
 
   const studyActions = <>
+        {visibleData?.exposure_basis ? (
+          <span className="skylit-basis-badge" data-testid="basis-badge" title={`Exposure basis: ${visibleData.exposure_basis}`}>
+            {visibleData.exposure_basis === 'VOLUME_SCALP' ? 'Volume basis (scalp)'
+              : visibleData.exposure_basis === 'OI' ? 'OI basis'
+              : `${visibleData.exposure_basis} basis`}
+          </span>
+        ) : null}
         <button type="button" className="skylit-trade-mode-btn skylit-study-switch" data-testid="skylit-study-switch" onClick={() => {
           if (rangeOpen) {
             if (onAnalyticalRangeChange) onAnalyticalRangeChange(false);

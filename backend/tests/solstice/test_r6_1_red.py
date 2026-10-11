@@ -136,3 +136,13 @@ def test_display_surfaces_volume_fallback_without_vendor_gamma():
     assert basis == "VOLUME_FALLBACK_OI_UNKNOWN" and strikes
     assert grid["grid"]
     assert model == "local-bs-fallback"
+
+
+def test_display_surfaces_scalp_selects_volume_basis():
+    # Characterization pin: scalp mode is the volume-weighted GEX basis
+    # (0DTE literature practice), day mode is OI. The frontend badge reads
+    # this exact string off the heatmap payload.
+    from server import _display_surfaces
+    basis, model, strikes, grid = _display_surfaces(SPOT, _contracts(), "SPY", True)
+    assert basis == "VOLUME_SCALP" and strikes
+    assert grid["grid"]

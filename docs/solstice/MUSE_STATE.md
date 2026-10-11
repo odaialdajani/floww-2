@@ -1638,3 +1638,14 @@ service-level bypass:
   old ticker-change test). One old b31 test updated to find the
   price-history call explicitly (call-order assumption, same assertion).
 - Chart slice 26 suites / 103 tests green.
+
+## Spark Muse basis-badge lane (2026-10-11)
+- Finding: the volume-weighted GEX basis already exists end-to-end as
+  Scalp mode (timeframe scalp/1m -> heatmap scalp=true -> VOLUME_SCALP;
+  day mode stays OI). No new plumbing was needed — only honesty labeling.
+- Backend pin: scalp selects VOLUME_SCALP (characterization test in
+  test_r6_1_red.py, green on existing behavior).
+- Frontend: basis badge in the study toolbar reads the heatmap payload's
+  exposure_basis (Volume basis (scalp) / OI basis / raw string; absent ->
+  no badge). 2/2 RED->GREEN in SkylitDashboard.test.jsx (117 green).
+- Chart slice 26/103 green.
