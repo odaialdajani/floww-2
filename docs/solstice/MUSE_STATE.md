@@ -1479,6 +1479,10 @@ service-level bypass:
   honest nulls), journal 200/200, :3000 proxy 200 again. Committed 1aa4286f.
 - REMAINING: G2 (dark producer), G3 (flow buckets), G7 (VWAP mount),
   G4/G6 (sided-volume decision), G8 threading at :813 as producers land.
+## Spark Muse chart lane — G10 rail + alert render (2026-10-10)
+- DONE: DrawingRail (select/delete/lock/hide over reducer, RED→GREEN) +
+  chart alert lines (armed solid, stale dashed + refused note, RED→GREEN).
+  Evaluation stays server-owned; rail never edits canvas or broker state.
 ## Spark Muse chart lane — VWAP bands (2026-10-10)
 - DONE: sessionVwap carries real band values (volume-weighted sigma +
   percent, golden oracle RED→GREEN); up to 3 dashed pairs render behind
