@@ -55,8 +55,10 @@ def test_build_history_emits_per_candle_exposure_line():
     out = build_history("SPY", bars, rows)
     assert len(out["exposure_line"]) == 2
     assert out["exposure_line"][0] == {"time": out["frames"][0]["time"],
-                                       "centre": -30.0}
+                                       "centre": -30.0, "upper": -30.0,
+                                       "lower": None}
     assert out["frames"][1]["exposure_centre"] == -30.0
+    assert out["frames"][1]["exposure_upper"] == -30.0
 
 
 def test_no_usable_snapshot_yields_null_centres():
@@ -65,4 +67,5 @@ def test_no_usable_snapshot_yields_null_centres():
              "l": 99.0, "c": 101.0}]
     out = build_history("SPY", bars, [])
     assert out["exposure_line"] == [{"time": out["frames"][0]["time"],
-                                     "centre": None}]
+                                     "centre": None, "upper": None,
+                                     "lower": None}]

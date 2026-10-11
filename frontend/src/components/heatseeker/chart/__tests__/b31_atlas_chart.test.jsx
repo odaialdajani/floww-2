@@ -58,6 +58,35 @@ test('VWAP bands render per pair, default off, toggle shows', () => {
   expect(screen.getAllByTestId('vwap-band').length).toBeGreaterThanOrEqual(2);
   view.unmount();
 });
+test('exposure upper/lower draw dashed band lines', () => {
+  render(<RecordedPriceChart ticker="SPY" frames={frames}
+    exposureLine={[
+      { time: frames[0].time, centre: 100.5, upper: 101.5, lower: 99.5 },
+      { time: frames[1].time, centre: 101.5, upper: 102.5, lower: 100.5 },
+    ]} />);
+  expect(screen.getAllByTestId('exposure-vwap-line')).toHaveLength(1);
+  expect(screen.getAllByTestId('exposure-band')).toHaveLength(2);
+});
+test('missing minutes split the exposure line (honest gaps, no interpolation)', () => {
+  const three = [
+    { time: '2026-10-06T13:30:00+00:00', open: 100, high: 102, low: 99, close: 101, duration_seconds: 60, nodes: [] },
+    { time: '2026-10-06T13:31:00+00:00', open: 101, high: 103, low: 100, close: 102, duration_seconds: 60, nodes: [] },
+    { time: '2026-10-06T13:32:00+00:00', open: 102, high: 104, low: 101, close: 103, duration_seconds: 60, nodes: [] },
+    { time: '2026-10-06T13:33:00+00:00', open: 103, high: 105, low: 102, close: 104, duration_seconds: 60, nodes: [] },
+  ];
+  render(<RecordedPriceChart ticker="SPY" frames={three}
+    exposureLine={[
+      { time: three[0].time, centre: 100.5 },
+      { time: three[1].time, centre: null },
+      { time: three[2].time, centre: 102.5 },
+      { time: three[3].time, centre: 103.5 },
+    ]} />);
+  // Point 0 is isolated (no line from a lone point); 2-3 join: exactly 1
+  // segment of exactly 2 points (no interpolation across the gap).
+  const segs = screen.getAllByTestId('exposure-vwap-line');
+  expect(segs).toHaveLength(1);
+  expect(segs[0].getAttribute('points').split(' ')).toHaveLength(2);
+});
 test('full exposure line draws one segment', () => {
   render(<RecordedPriceChart ticker="SPY" frames={frames}
     exposureLine={[{ time: frames[0].time, centre: 100.5 }, { time: frames[1].time, centre: 101.5 }]} />);
