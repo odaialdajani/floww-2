@@ -1657,3 +1657,17 @@ service-level bypass:
   that far back). Frontend period picker gains 3 months / 1 year /
   10 years. Backend 7/7 + frontend b39 2/2 RED first; docs regen is the
   maximum-only diff. Chart slice 27/105 green.
+
+## Spark Muse bars-v2 lane (2026-10-11)
+- Finding: "bars v2" is the same historicdata path with documented params
+  (tradingSessionToggle, ipoDate) and new fields (overnight buckets,
+  leadingFill). No migration of transports — only honest handling.
+- _extract_bars: pre/postMarketOvernight labeled "overnight" (chronological
+  position), served only under sessions="all"; leadingFill flat pre-IPO
+  fill dropped with a debug trace (never candles); known buckets excluded
+  from the unknown-bucket scan (no double-count). Overnight never poses as
+  regular data by default.
+- fetch_bars_by_interval gains trading_session (default None = vendor
+  default, zero behavior change), forwarded as trading_session_toggle.
+- 3 new tests (1 characterization pin for leadingFill) in the adapter
+  regression file; 14/14 green; adjacent price-history suites 33 green.
