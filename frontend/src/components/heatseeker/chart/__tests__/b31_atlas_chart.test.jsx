@@ -143,6 +143,27 @@ test('profile pane draws POC/VA from real volume, toggle hides, absent volume di
   render(<RecordedPriceChart ticker="SPY" frames={frames} />);
   expect(screen.getByLabelText('Toggle profile')).toBeDisabled();
 });
+test('record button calls parent recorder then reloads only on landed success', async () => {
+  const { default: PriceNodeHistory } = require('../../PriceNodeHistory');
+  const data = { ticker: 'SPY', frames, candles_with_recorded_nodes: 0 };
+  axios.get.mockResolvedValue({ data });
+  const onRecordNodes = jest.fn().mockResolvedValue({ recorded: true });
+  const view = render(<PriceNodeHistory ticker="SPY" open onRecordNodes={onRecordNodes} />);
+  await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toHaveAttribute('data-candles', '2'));
+  const callsBefore = axios.get.mock.calls.length;
+  fireEvent.click(screen.getByRole('button', { name: 'Record nodes' }));
+  await waitFor(() => expect(onRecordNodes).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(axios.get.mock.calls.length).toBeGreaterThan(callsBefore));
+  view.unmount();
+});
+test('record failure shows explicit note and never claims nodes', async () => {
+  const { default: PriceNodeHistory } = require('../../PriceNodeHistory');
+  axios.get.mockResolvedValue({ data: { ticker: 'SPY', frames, candles_with_recorded_nodes: 0 } });
+  render(<PriceNodeHistory ticker="SPY" open onRecordNodes={jest.fn().mockResolvedValue({ recorded: false })} />);
+  await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button', { name: 'Record nodes' }));
+  await waitFor(() => expect(screen.getByText(/recording did not land/i)).toBeInTheDocument());
+});
 test('PriceNodeHistory forwards Atlas feeds and replay slices flow with candles', async () => {
   axios.get.mockResolvedValue({ data: { ticker: 'SPY', frames, candles_with_recorded_nodes: 1 } });
   render(<PriceNodeHistory ticker="SPY" open darkLevels={[{ price: 101 }]} flowBars={[{ call: 5, put: 1 }, { call: 2, put: 8 }]} />);

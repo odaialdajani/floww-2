@@ -1487,6 +1487,14 @@ service-level bypass:
 - DONE: sessionVwap carries real band values (volume-weighted sigma +
   percent, golden oracle RED→GREEN); up to 3 dashed pairs render behind
   an off-by-default toggle (b31 RED→GREEN).
+## Spark Muse chart lane — G11 record-now (2026-10-10)
+- DONE: POST /api/heatseeker/record/{ticker} (auth'd, fresh build, bounded
+  20s read-back, 429/503 honest) 3/3 RED→GREEN incl. 401-no-key proof;
+  PriceNodeHistory Record button + pollRecording helper (b31/b34 RED→GREEN);
+  SkylitDashboard wires refresh-then-poll (bounded 4x5s, disclosed spend).
+- LIVE: bounded restart 6826->44930; route registered; 401 live without key;
+  days=5 395/395 volume kept; days=1 empty on weekend window (provider-side,
+  fetch path untouched, no errors); journal 200/200; :3000 200.
 ## Spark Muse chart lane — exposure envelopes (2026-10-10)
 - DONE: opening envelope (8-minute minimum, freeze at close, ET-correct
   open incl. EST, RED→GREEN) + session envelope (widens only) + off-default
