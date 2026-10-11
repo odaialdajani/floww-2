@@ -1633,3 +1633,19 @@ test("returning from the price chart preserves the complete valid selected map c
  expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toEqual(full);
  require("fs").writeFileSync(require("path").join(require("os").tmpdir(),"floww-stock-chat-contract-20261007.json"),JSON.stringify({navigation,full}));
 });
+
+test('active exposure basis is badged: volume scalp vs OI vs absent', async () => {
+  axios.get.mockResolvedValue({ data: coverageFixture.expiries });
+  const { unmount } = render(<SkylitDashboard ticker="SPY" data={{ ...selectionMap(), exposure_basis: 'VOLUME_SCALP' }} />);
+  expect(await screen.findByTestId('basis-badge')).toHaveTextContent('Volume basis');
+  unmount(); cleanup();
+  render(<SkylitDashboard ticker="SPY" data={{ ...selectionMap(), exposure_basis: 'OI' }} />);
+  expect(await screen.findByTestId('basis-badge')).toHaveTextContent('OI basis');
+});
+
+test('no basis badge without a reported basis', async () => {
+  axios.get.mockResolvedValue({ data: coverageFixture.expiries });
+  render(<SkylitDashboard ticker="SPY" data={selectionMap()} />);
+  await waitFor(() => expect(screen.getByTestId('mock-heatmap')).toBeInTheDocument());
+  expect(screen.queryByTestId('basis-badge')).not.toBeInTheDocument();
+});
