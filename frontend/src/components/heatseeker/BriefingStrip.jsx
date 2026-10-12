@@ -42,6 +42,27 @@ export default function BriefingStrip({ ticker = "SPY", spot = null }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Agent-brief export (P0): a research DRAFT for Public's native Agents
+  // UI — the user pastes it there and signs off there. FLOWW never places
+  // orders and never connects anything; the brief says so explicitly.
+  const [exportState, setExportState] = useState(null); // null | 'copied' | 'manual'
+  const [exportText, setExportText] = useState("");
+  const exportBrief = () => {
+    const brief = { brief: "floww-agent-brief.v1", ticker,
+      asof: data?.asof || null, spot,
+      executes_nothing: true,
+      note: "Research draft for Public Agents (user paste + sign-off). Not an order.",
+      metrics: data?.metrics || null, regime: data?.regime || null };
+    const text = JSON.stringify(brief, null, 2);
+    const clip = navigator?.clipboard?.writeText;
+    if (typeof clip === "function") {
+      clip.call(navigator.clipboard, text).then(
+        () => { setExportState("copied"); setExportText(""); },
+        () => { setExportState("manual"); setExportText(text); });
+    } else {
+      setExportState("manual"); setExportText(text);
+    }
+  };
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -110,6 +131,26 @@ export default function BriefingStrip({ ticker = "SPY", spot = null }) {
         <Metric label="IV Skew" value={m.iv_skew != null && m.iv_skew !== 0 ? fmtPct(m.iv_skew) : "balanced"}
           tone="neutral" title="25-delta put vs call IV" />
       </div>
+      <div className="flex items-center gap-2 mt-2">
+        <button type="button" data-testid="export-brief" onClick={exportBrief}
+          className="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider"
+          style={{ background: "rgba(30,41,59,0.6)", color: "#94a3b8" }}
+          title="Copy a research draft for Public's native Agents UI (paste + sign off there)">
+          Export agent brief
+        </button>
+        {exportState === "copied" && (
+          <span data-testid="export-brief-status" role="status" className="text-[10px] text-slate-400">
+            Brief copied — paste into Public Agents and sign off there. FLOWW executes nothing.
+          </span>)}
+        {exportState === "manual" && (
+          <span data-testid="export-brief-status" role="status" className="text-[10px] text-slate-400">
+            Copy unavailable — select the draft text manually:
+          </span>)}
+      </div>
+      {exportState === "manual" && (
+        <textarea data-testid="export-brief-text" readOnly rows={6}
+          value={exportText} aria-label="Agent brief draft"
+          className="w-full mt-1 font-mono text-[10px]" />)}
     </div>
   );
 }

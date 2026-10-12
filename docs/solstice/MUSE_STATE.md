@@ -1670,3 +1670,11 @@ service-level bypass:
   dashboard render (dangling props); restored the two deleted structural
   lines, kept all their additions. SkylitDashboard.test 117 green again.
   Their file left uncommitted for them.
+
+## Spark Muse brief-export lane — Public Agents handoff (2026-10-11)
+- P0 Agents export: BriefingStrip gains "Export agent brief" — copies a
+  versioned research DRAFT (floww-agent-brief.v1, executes_nothing: true)
+  for paste + sign-off in Public's native Agents UI. Clipboard failure
+  falls back to selectable text; no data renders no button. FLOWW never
+  places orders and never connects anything. b41 3/3 RED first; full
+  frontend 196/2162 green.
