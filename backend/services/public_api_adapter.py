@@ -1228,15 +1228,32 @@ def _extract_bars(raw: Any, sessions: str = "regular") -> list[dict[str, Any]]:
     """
     buckets: list[tuple[str, list]] = []
     if isinstance(raw, dict):
+        # Bars-v2 overnight sessions: known buckets with their own label,
+        # assembled in chronological position (pre-overnight first,
+        # post-overnight last). Served ONLY under sessions="all" — overnight
+        # ATS prints must never pose as regular-session bars by default.
+        pre_night = raw.get("preMarketOvernight")
+        if isinstance(pre_night, dict) and isinstance(pre_night.get("bars"), list):
+            buckets.append(("overnight", pre_night["bars"]))
+        # Bars-v2 pre-IPO lead-in: a flat fill, never candles. Dropped with
+        # a debug trace — drawing it would fabricate price history.
+        leading = raw.get("leadingFill")
+        if isinstance(leading, dict):
+            log.debug("Public bars v2 leadingFill dropped (flat pre-IPO fill, count=%r)",
+                      leading.get("count"))
         for bucket_key, label in (("preMarket", "pre"), ("regularMarket", "regular"),
                                   ("afterMarket", "after")):
             section = raw.get(bucket_key)
             if isinstance(section, dict) and isinstance(section.get("bars"), list):
                 buckets.append((label, section["bars"]))
+        post_night = raw.get("postMarketOvernight")
+        if isinstance(post_night, dict) and isinstance(post_night.get("bars"), list):
+            buckets.append(("overnight", post_night["bars"]))
         for key, val in raw.items():
             if not (isinstance(val, dict) and isinstance(val.get("bars"), list)):
                 continue
-            if key in ("preMarket", "regularMarket", "afterMarket"):
+            if key in ("preMarket", "regularMarket", "afterMarket",
+                         "preMarketOvernight", "postMarketOvernight"):
                 continue
             # Any other bars-carrying section is a session bucket this code
             # has never seen: log it, serve it ONLY under sessions="all" as
@@ -1257,7 +1274,7 @@ def _extract_bars(raw: Any, sessions: str = "regular") -> list[dict[str, Any]]:
     for label, rows in buckets:
         if label == "unknown" and not want_all:
             continue
-        if label in ("pre", "after") and not want_all:
+        if label in ("pre", "after", "overnight") and not want_all:
             continue
         for row in rows:
             if not isinstance(row, dict):
@@ -1494,6 +1511,7 @@ async def fetch_bars_by_interval(
     period: str | None = None,
     aggregation: str | None = None,
     sessions: str = "regular",
+    trading_session: str | None = None,
 ) -> list[dict[str, Any]] | None:
     """Fetch OHLCV bars from Public API. None when unavailable.
 
@@ -1501,6 +1519,9 @@ async def fetch_bars_by_interval(
     daily/weekly/monthly. Explicit `period`/`aggregation` (e.g. from the
     C13 bars provider) override the label mapping when both are given.
     `sessions`: "regular" (default, regular-session only) or "all".
+    `trading_session`: optional vendor toggle (REGULAR_HOURS,
+    REGULAR_AND_EXTENDED_HOURS, ALL_SESSIONS) forwarded as
+    trading_session_toggle; None keeps vendor default (no behavior change).
     """
     pb = await _get_broker()
     if pb is None:
@@ -1513,7 +1534,11 @@ async def fetch_bars_by_interval(
     eff_period = period or default_period
     eff_agg = aggregation if aggregation is not None else default_agg
     try:
-        raw = await pb.get_bars(symbol, eff_period, instrument_type, eff_agg)
+        if trading_session is None:
+            raw = await pb.get_bars(symbol, eff_period, instrument_type, eff_agg)
+        else:
+            raw = await pb.get_bars(symbol, eff_period, instrument_type, eff_agg,
+                                    trading_session_toggle=trading_session)
     except Exception as e:
         _note_public_429(e)
         log.warning("Public API bars fail for %s %s: %s", ticker, interval, e)

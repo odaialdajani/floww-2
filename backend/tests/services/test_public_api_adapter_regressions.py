@@ -244,3 +244,65 @@ def test_extract_bars_legacy_list_shape() -> None:
     rows = _extract_bars([{"t": "x", "o": 1, "h": 2, "l": 0.5, "c": 1.5, "v": 9}],
                          sessions="all")
     assert len(rows) == 1 and rows[0]["session"] == "unknown"
+
+
+def _v2_payload():
+    def bar(ts, o=10.0):
+        return {"timestamp": ts, "open": o, "close": o + 0.1, "high": o + 0.2,
+                "low": o - 0.1, "volume": 1000}
+    return {
+        "symbol": "SPY", "period": "DAY",
+        "preMarketOvernight": {"expectedBars": 1, "bars": [bar("2026-09-04T01:00:00-04:00", o=9.0)]},
+        "regularMarket": {"expectedBars": 1, "bars": [bar("2026-09-04T09:30:00-04:00")]},
+        "postMarketOvernight": {"expectedBars": 1, "bars": [bar("2026-09-04T21:00:00-04:00", o=12.0)]},
+        "leadingFill": {"startTimestamp": "2020-01-01T00:00:00Z",
+                        "endTimestamp": "2020-01-02T00:00:00Z", "value": "5.0", "count": 3,
+                        "includedInTotalExpectedBars": True},
+    }
+
+
+def test_extract_bars_v2_overnight_labeled_not_unknown() -> None:
+    from services.public_api_adapter import _extract_bars
+
+    assert _extract_bars(_v2_payload()) != []  # regular still served
+    assert all(r["session"] == "regular" for r in _extract_bars(_v2_payload()))
+    rows = _extract_bars(_v2_payload(), sessions="all")
+    assert [r["session"] for r in rows] == ["overnight", "regular", "overnight"]
+
+
+def test_extract_bars_v2_leading_fill_never_becomes_candles() -> None:
+    from services.public_api_adapter import _extract_bars
+
+    for sessions in ("regular", "all"):
+        rows = _extract_bars(_v2_payload(), sessions=sessions)
+        assert all(r["o"] != 5.0 for r in rows)  # the flat pre-IPO lead-in
+        assert len([r for r in rows if r["session"] == "regular"]) == 1
+
+
+def test_fetch_bars_forwards_trading_session_toggle() -> None:
+    import asyncio
+
+    from services import public_api_adapter as adapter
+
+    seen = {}
+
+    class FakeBroker:
+        def get_trading_account(self):
+            return {"id": "x"}
+
+        async def get_bars(self, symbol, period, instrument_type, aggregation, **kwargs):
+            seen.update(kwargs)
+            return {"regularMarket": {"bars": []}}
+
+    async def fake_get_broker():
+        return FakeBroker()
+
+    async def run():
+        with patch.object(adapter, "_get_broker", new=fake_get_broker):
+            with patch.object(adapter, "log"):
+                await adapter.fetch_bars_by_interval(
+                    "SPY", period="DAY", aggregation="ONE_MINUTE",
+                    trading_session="ALL_SESSIONS")
+
+    asyncio.run(run())
+    assert seen.get("trading_session_toggle") == "ALL_SESSIONS"
