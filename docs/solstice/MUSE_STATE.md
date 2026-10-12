@@ -1652,12 +1652,30 @@ service-level bypass:
 
 ## Spark Muse horizons lane (2026-10-11)
 - Long horizons (P1): price-history days 1..2600 with daily brackets
-  (<=60 QUARTER, <=260 YEAR, else TEN_YEARS, all ONE_DAY/86400s); short
-  brackets byte-identical. Old frames keep honest nulls (no snapshots
-  that far back). Frontend period picker gains 3 months / 1 year /
-  10 years. Backend 7/7 + frontend b39 2/2 RED first; docs regen is the
-  maximum-only diff. Chart slice 27/105 green.
+   (<=60 QUARTER, <=260 YEAR, else FIVE_YEARS after the provider-validity
+   correction below, all ONE_DAY/86400s); short brackets byte-identical.
+   Old frames keep honest nulls (no snapshots that far back). Frontend
+   period picker gains 3 months / 1 year / 5 years ("says what it serves").
+   Backend 7/7 + frontend b39 2/2 RED first; docs regen is the
+   maximum-only diff. Chart slice 27/105 green.
+- Correction d485b1ee (live probe): TEN_YEARS/ALL/DAY+ONE_DAY are rejected
+  400 by the gateway; max is FIVE_YEARS (~1255 daily bars). Lesson
+  recorded: mocked tests passed an invalid provider label — every
+  provider-facing change now gets a live parameterized probe before PR.
 
+## Spark Muse bars-v2 lane (2026-10-11)
+- Finding: "bars v2" is the same historicdata path with documented params
+  (tradingSessionToggle, ipoDate) and new fields (overnight buckets,
+  leadingFill). No migration of transports — only honest handling.
+- _extract_bars: pre/postMarketOvernight labeled "overnight" (chronological
+  position), served only under sessions="all"; leadingFill flat pre-IPO
+  fill dropped with a debug trace (never candles); known buckets excluded
+  from the unknown-bucket scan (no double-count). Overnight never poses as
+  regular data by default.
+- fetch_bars_by_interval gains trading_session (default None = vendor
+  default, zero behavior change), forwarded as trading_session_toggle.
+- 3 new tests (1 characterization pin for leadingFill) in the adapter
+  regression file; 14/14 green; adjacent price-history suites 33 green.
 ## Spark Muse sessions lane — 24/5 coverage (2026-10-11)
 - price-history gains `sessions` (regular|all, 422 otherwise), forwarded to
   underlying + contract fetches; frames carry the provider `session` label
@@ -1668,8 +1686,9 @@ service-level bypass:
   slice 28/108 green.
 - Architect coordination: their in-flight SkylitDashboard edit broke the
   dashboard render (dangling props); restored the two deleted structural
-  lines, kept all their additions. SkylitDashboard.test 117 green again.
-  Their file left uncommitted for them.
+  lines, kept all their additions (SkylitDashboard.test 117 green again).
+  They later reverted the dead wiring themselves (heatmap payload never
+  carried those keys) — file byte-identical to HEAD. Resolved, no action.
 
 ## Spark Muse brief-export lane — Public Agents handoff (2026-10-11)
 - P0 Agents export: BriefingStrip gains "Export agent brief" — copies a
