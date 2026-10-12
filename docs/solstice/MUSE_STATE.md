@@ -1652,11 +1652,16 @@ service-level bypass:
 
 ## Spark Muse horizons lane (2026-10-11)
 - Long horizons (P1): price-history days 1..2600 with daily brackets
-  (<=60 QUARTER, <=260 YEAR, else TEN_YEARS, all ONE_DAY/86400s); short
-  brackets byte-identical. Old frames keep honest nulls (no snapshots
-  that far back). Frontend period picker gains 3 months / 1 year /
-  10 years. Backend 7/7 + frontend b39 2/2 RED first; docs regen is the
-  maximum-only diff. Chart slice 27/105 green.
+   (<=60 QUARTER, <=260 YEAR, else FIVE_YEARS after the provider-validity
+   correction below, all ONE_DAY/86400s); short brackets byte-identical.
+   Old frames keep honest nulls (no snapshots that far back). Frontend
+   period picker gains 3 months / 1 year / 5 years ("says what it serves").
+   Backend 7/7 + frontend b39 2/2 RED first; docs regen is the
+   maximum-only diff. Chart slice 27/105 green.
+- Correction d485b1ee (live probe): TEN_YEARS/ALL/DAY+ONE_DAY are rejected
+  400 by the gateway; max is FIVE_YEARS (~1255 daily bars). Lesson
+  recorded: mocked tests passed an invalid provider label — every
+  provider-facing change now gets a live parameterized probe before PR.
 
 ## Spark Muse bars-v2 lane (2026-10-11)
 - Finding: "bars v2" is the same historicdata path with documented params
@@ -1671,3 +1676,16 @@ service-level bypass:
   default, zero behavior change), forwarded as trading_session_toggle.
 - 3 new tests (1 characterization pin for leadingFill) in the adapter
   regression file; 14/14 green; adjacent price-history suites 33 green.
+## Spark Muse sessions lane — 24/5 coverage (2026-10-11)
+- price-history gains `sessions` (regular|all, 422 otherwise), forwarded to
+  underlying + contract fetches; frames carry the provider `session` label
+  (additive; null when the vendor shape has none). Default regular —
+  zero behavior change.
+- Frontend coverage picker (Regular hours / All sessions) drives the param.
+  Backend 3/3 + b40 3/3 RED first; docs regen for the new param; chart
+  slice 28/108 green.
+- Architect coordination: their in-flight SkylitDashboard edit broke the
+  dashboard render (dangling props); restored the two deleted structural
+  lines, kept all their additions (SkylitDashboard.test 117 green again).
+  They later reverted the dead wiring themselves (heatmap payload never
+  carried those keys) — file byte-identical to HEAD. Resolved, no action.

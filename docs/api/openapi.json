@@ -9605,6 +9605,17 @@
               ],
               "title": "Contract Symbol"
             }
+          },
+          {
+            "in": "query",
+            "name": "sessions",
+            "required": false,
+            "schema": {
+              "default": "regular",
+              "pattern": "^(regular|all)$",
+              "title": "Sessions",
+              "type": "string"
+            }
           }
         ],
         "responses": {

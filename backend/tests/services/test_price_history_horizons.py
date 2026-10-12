@@ -3,6 +3,13 @@
 RED first: days is capped at 20 (422 beyond). Provider monkeypatched.
 Snapshots only cover recent days — old frames keep honest nulls; this
 suite pins the period/aggregation brackets and the compat floor.
+
+Round 6 (2026-10-11, Hermes re-audit): the TEN_YEARS period label is
+REJECTED by Public.com's live gateway (400 on /historicdata/EQUITY/SPY/
+TEN_YEARS/ONE_DAY); FIVE_YEARS is the longest period the provider
+serves (1255 daily bars). The 10-year UI option must therefore request
+FIVE_YEARS — the provider-verified maximum — never a label Public 400s
+on. Yamato's original test mocked the provider so the bad label passed.
 """
 import sys
 from types import SimpleNamespace
@@ -50,7 +57,7 @@ def history_client(monkeypatch):
     conn.close()
 
 
-@pytest.mark.parametrize(("days", "period"), [(60, "QUARTER"), (260, "YEAR"), (2600, "TEN_YEARS")])
+@pytest.mark.parametrize(("days", "period"), [(60, "QUARTER"), (260, "YEAR"), (2600, "FIVE_YEARS")])
 def test_long_horizons_fetch_daily_brackets(history_client, days, period):
     client, calls = history_client
     resp = client.get("/api/heatseeker/price-history/SPY", params={"days": days})
@@ -58,6 +65,19 @@ def test_long_horizons_fetch_daily_brackets(history_client, days, period):
     assert calls == [("SPY", {"period": period, "aggregation": "ONE_DAY", "sessions": "regular"})]
     assert resp.json()["bar_seconds"] == 86400
     assert resp.json()["frames"][0]["duration_seconds"] == 86400
+
+
+def test_ten_year_option_never_requests_rejected_period(history_client):
+    """The 10-year picker option must map to a period Public's gateway
+    actually serves. TEN_YEARS 400s live; FIVE_YEARS is the max."""
+    client, calls = history_client
+    resp = client.get("/api/heatseeker/price-history/SPY", params={"days": 2600})
+    assert resp.status_code == 200, resp.text
+    requested = calls[0][1]["period"]
+    assert requested in {"FIVE_YEARS", "YEAR"}, (
+        f"period {requested!r} is not served by api.public.com historicdata; "
+        "TEN_YEARS returns HTTP 400 from the live gateway"
+    )
 
 
 def test_short_horizons_unchanged(history_client):
