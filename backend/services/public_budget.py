@@ -251,5 +251,25 @@ class PublicBudget:
         }
 
 
+async def wait_for_read_admission(acquire, *, wait_seconds: float = 3.0) -> None:
+    """Briefly wait for read capacity, without dispatching/retrying provider I/O.
+
+    Only the idempotent market-data read paths opt in. Each admission attempt
+    still goes through the original atomic governor; no extra tokens/slots or
+    cooldown bypass. Refusal retains its real reason and retry hint. Caller
+    job deadlines and cancellation also cover this wait.
+    """
+    deadline = time.monotonic() + max(0.0, min(5.0, wait_seconds))
+    while True:
+        try:
+            await acquire()
+            return
+        except BudgetExhausted as exc:
+            remaining = deadline - time.monotonic()
+            if exc.reason not in {"inflight_cap", "token_bucket"} or remaining <= 0:
+                raise
+            await asyncio.sleep(min(0.05, remaining))
+
+
 # Process singleton — the whole point is one shared budget per worker.
 budget = PublicBudget()

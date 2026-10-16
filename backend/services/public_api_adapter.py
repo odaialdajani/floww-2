@@ -463,7 +463,9 @@ async def fetch_chain_from_public_api(
             # auth/accounts: refusal spends ZERO provider calls. Module-
             # attribute access keeps the budget singleton patchable.
             try:
-                await _public_budget.budget.acquire_n(2 + max_expiries, "api.public.com")
+                await _public_budget.wait_for_read_admission(
+                    lambda: _public_budget.budget.acquire_n(2 + max_expiries, "api.public.com")
+                )
                 _debit_held = True
             except _public_budget.BudgetExhausted as exc:
                 log.warning("Public budget refused %s chain fetch: %s", ticker, exc)

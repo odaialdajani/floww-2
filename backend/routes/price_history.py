@@ -21,7 +21,7 @@ _HISTORY_JOB_TIMEOUT_SECONDS = 20.0
 
 async def _history_bars(ticker, period, aggregation, sessions, instrument_type="EQUITY"):
     from services.public_api_adapter import fetch_bars_by_interval
-    from services.public_budget import BudgetExhausted, budget
+    from services.public_budget import BudgetExhausted, budget, wait_for_read_admission
 
     key = (asyncio.get_running_loop(), ticker, period, aggregation, sessions, instrument_type)
     task = _bar_reads.get(key)
@@ -30,7 +30,7 @@ async def _history_bars(ticker, period, aggregation, sessions, instrument_type="
             try:
                 async with asyncio.timeout(_HISTORY_JOB_TIMEOUT_SECONDS):
                     try:
-                        await budget.acquire("api.public.com")
+                        await wait_for_read_admission(lambda: budget.acquire("api.public.com"))
                     except BudgetExhausted as exc:
                         return [], {"reason": exc.reason, "retry_after_seconds": exc.retry_after}, None
                     except Exception:

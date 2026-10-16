@@ -33,6 +33,16 @@ const rect=e=>{const r=e.getBoundingClientRect();return {left:r.left,right:r.rig
    await page.goto('http://127.0.0.1:3000/?page='+desk,{waitUntil:'domcontentloaded'});
    const bundle=new URL(await page.locator('script[src*="main."]').getAttribute('src'),page.url()).pathname.split('/').pop();
    if(report.bundle)assert.equal(report.bundle,bundle);else report.bundle=bundle;
+   if(desk==='trinity'){
+    const scope=page.getByRole('combobox',{name:'Triad expiry scope',exact:true});
+    await scope.waitFor();
+    report.triadInitialScope=await scope.inputValue();
+    report.triadInitialAdmission=await page.getByTestId('triad-scope-admission').textContent().catch(()=>null);
+    // After close the same-day series can genuinely be empty. Explicitly
+    // choose next-listed for this workflow; never fake a 0DTE substitution.
+    await scope.selectOption('next');
+    report.triadReviewedScope='next';
+   }
    const selector=desk==='heatseeker'?'.skylit-options-study .skylit-heatmap-container':'.triad-pair .skylit-heatmap-container';
    await page.locator(selector+' .trin-cell[tabindex="0"]').first().waitFor({timeout:45000});
    const mapMs=Date.now()-start;
