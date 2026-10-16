@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { shownMapStrikes } from "./shownMapStrikes";
 import HeatmapLandmarks, {readLandmarks, landmarkLabel} from "./HeatmapLandmarks";
 import "./SolsticeWorkspace.css";
@@ -342,7 +342,7 @@ function SkylitHeatmapGrid({
   }, [expiries, matrix]);
 
   const spotStrike = useMemo(() => {
-    if (spot == null || !strikes.length) return null;
+    if (typeof spot !== "number" || !Number.isFinite(spot) || spot <= 0 || !strikes.length) return null;
     let best = strikes[0], bestDist = Math.abs(strikes[0] - spot);
     for (let i = 1; i < strikes.length; i++) {
       const d = Math.abs(strikes[i] - spot);
@@ -485,10 +485,33 @@ function SkylitHeatmapGrid({
     return out;
   }, [profile, strikes]);
 
-  const shownRaw = shownMapStrikes(data, spot, windowRows, viewMode, metric, anchorStrike);
+  const shownRaw = shownMapStrikes(data, spot, windowRows, viewMode, metric, anchorStrike, axes?.strikes);
   const shownKey = shownRaw.join(",");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const shownStrikes = useMemo(() => shownRaw, [shownKey]);
+
+  const viewportRef = useRef(null);
+  const centerOn = strike => {
+    const viewport = viewportRef.current;
+    if (!viewport || typeof strike !== "number" || !Number.isFinite(strike)) return;
+    const rows = [...viewport.querySelectorAll(".trin-row")];
+    const row = rows.find(el => Number(el.dataset.strike) === strike);
+    if (!row) return;
+    const bounds = viewport.getBoundingClientRect();
+    const target = row.getBoundingClientRect();
+    if (viewport.clientHeight <= 0 || target.height <= 0) return;
+    const header = viewport.querySelector("thead")?.getBoundingClientRect().height || 0;
+    viewport.scrollTop += target.top - bounds.top - header - (viewport.clientHeight - header - target.height) / 2;
+    viewport.dataset.centeredScroll = String(viewport.scrollTop);
+  };
+  // Center only when the actual displayed population/selection changes, not
+  // on pointer movement or each refresh. Manual scrolling retains its place.
+  useLayoutEffect(() => {
+    const target = shownStrikes.includes(selected?.strike) ? selected.strike
+      : spotStrike != null && shownStrikes.includes(spotStrike) ? spotStrike : null;
+    centerOn(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticker, shownKey, scopeSig, selected?.strike]);
 
   // Spot line position: between the two shown strikes that bracket spot.
   const spotLine = useMemo(() => {
@@ -587,7 +610,22 @@ function SkylitHeatmapGrid({
   return (
     <div className="skylit-heatmap-wrapper">
       {showLandmarks && <HeatmapLandmarks data={data} reading={landmarks} />}
-      <div className="skylit-heatmap-container" onScroll={onScroll} ref={scrollRef}>
+      <div className="heatmap-view-controls" role="group" aria-label="Map position">
+        <button type="button" disabled={spotStrike == null || !shownStrikes.includes(spotStrike)}
+          title={spotStrike == null ? "Price unavailable" : !shownStrikes.includes(spotStrike) ? "Price outside this row window — resume Follow" : "Center the actual nearest listed strike"}
+          onClick={() => centerOn(spotStrike)}>Center on price</button>
+        <button type="button" disabled={selected?.strike == null || !shownStrikes.includes(selected.strike)}
+          title={selected?.strike == null ? "Select a cell first" : !shownStrikes.includes(selected.strike) ? "Selection outside this row window — use row navigation" : "Show the selected listed strike"}
+          onClick={() => centerOn(selected.strike)}>Show selected level</button>
+      </div>
+      <div className="skylit-heatmap-container" onScroll={event => {
+        event.mapProgrammaticScroll = event.currentTarget.dataset.centeredScroll === String(event.currentTarget.scrollTop);
+        onScroll?.(event);
+      }} ref={el => {
+        viewportRef.current = el;
+        if (typeof scrollRef === "function") scrollRef(el);
+        else if (scrollRef) scrollRef.current = el;
+      }}>
         <table className={`trin-grid-table${densityClass}`} role="grid" aria-label={`${ticker} ${viewMode.toUpperCase()} ${metric} strike by expiry`}>
           <thead>
             <tr>

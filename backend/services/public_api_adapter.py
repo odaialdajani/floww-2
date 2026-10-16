@@ -137,6 +137,14 @@ async def _get_broker() -> PublicBroker | None:
         try:
             await broker.auth()
             await broker.get_accounts()
+        except asyncio.CancelledError:
+            # This client has not been published: no later caller can close it.
+            # A failed close must not replace the caller's cancellation.
+            try:
+                await broker.close()
+            except Exception as e:
+                log.warning("Discarded PublicBroker close failed after cancellation: %s", e)
+            raise
         except Exception as e:
             await broker.close()
             log.warning("PublicBroker auth failed: %s", e)

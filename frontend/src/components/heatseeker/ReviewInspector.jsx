@@ -5,7 +5,7 @@ const SECTIONS = [["wall", "Wall"], ["contract", "Contract"], ["flow", "Flow"], 
 
 // Presentation only: keep the existing fact, exact-contract and single-agent
 // consumers mounted. Changing steps neither refetches nor invokes research.
-function InspectorSections({wall, contract, flow, publicAgent, initialTab = "wall"}) {
+function InspectorSections({wall, contract, flow, publicAgent, context = null, initialTab = "wall"}) {
   const id = useId();
   const tabs = useRef([]);
   const [active, setActive] = useState(SECTIONS.some(([key]) => key === initialTab) ? initialTab : "wall");
@@ -23,6 +23,7 @@ function InspectorSections({wall, contract, flow, publicAgent, initialTab = "wal
     tabs.current[next]?.focus();
   };
   return <div className="review-inspector">
+    {context && <div className="review-selection-summary" role="group" aria-label="Selected reading">{context}</div>}
     <div className="review-inspector-tabs" role="tablist" aria-label="Inspector sections">
       {SECTIONS.map(([key, label], index) => <button key={key} ref={el => { tabs.current[index] = el; }}
         type="button" role="tab" id={`${id}-${key}-tab`} aria-controls={`${id}-${key}-panel`}
@@ -34,6 +35,18 @@ function InspectorSections({wall, contract, flow, publicAgent, initialTab = "wal
       {panels[key]}
     </section>)}
   </div>;
+}
+
+export function ReviewSelectionContext({ticker, data, wall, cell, metric, replay}) {
+  return <>
+    <strong>{ticker}{cell?.strike != null ? ` · ${cell.strike}` : wall ? ` · ${wall.low}–${wall.high}` : " · Selected level"}</strong>
+    <span>{wall ? `Structural zone ${wall.low}–${wall.high}` : "No classified wall"} · {cell?.colKey || "No expiry selected"}</span>
+    <span>{replay ? "Recorded observation" : "Displayed map"} · {data?.data_source || "Source unknown"} · {metric || "raw"}</span>
+    <span>Market time {data?.event_time || data?.observed_at || "unknown"}</span>
+    <details><summary>Snapshot and scope</summary><p>{data?.snapshotId || "Snapshot identity unknown"} · generated {data?.asof || "time unknown"}</p>
+      <p>{data?.grid?.expiries?.join(", ") || "Expiry scope unknown"} · {data?.exposure_basis || "Basis unknown"} · {data?.formula_version || "Formula unknown"}</p>
+    </details>
+  </>;
 }
 
 export default function ReviewInspector({selectionKey, ...props}) {

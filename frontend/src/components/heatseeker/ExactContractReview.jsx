@@ -55,12 +55,12 @@ export default function ExactContractReview({ ticker, data, wall, cell = null, r
   return <section className="exact-contract-review" data-testid={testPrefix} aria-label="Exact listed contract review">
     <p>Choose a listed identity. A wall is a zone, not a contract. Read-only · {replay ? "recorded replay" : "displayed snapshot"}.</p>
     {!snapshot && <p role="status">No recorded snapshot identity — contract review unavailable.</p>}
-    {candidates.length ? <table className="triad-contract-table"><thead><tr><th>Contract</th><th>Expiry</th><th>Δ</th><th>Bid / Ask</th><th>Spread</th><th>Review</th></tr></thead>
+    {candidates.length ? <div className="contract-candidates-scroll" role="region" aria-label="Listed contract candidates" tabIndex={0}><table className="triad-contract-table"><thead><tr><th>Contract</th><th>Expiry</th><th>Δ</th><th>Bid / Ask</th><th>Spread</th><th>Review</th></tr></thead>
       <tbody>{candidates.map((c, i) => <tr key={c.osi || i} data-testid="triad-contract-row">
         <td>{c.osi || `${c.type} ${c.strike}`}</td><td>{c.expiry}</td><td>{c.delta ?? "—"}</td><td>{c.bid ?? "—"} / {c.ask ?? "—"}</td>
         <td>{typeof c.bid === "number" && typeof c.ask === "number" ? (c.ask - c.bid).toFixed(2) : "—"}</td>
         <td><button disabled={!snapshot} onClick={() => choose(c)} aria-label={`Review ${c.osi || `${c.type} ${c.strike} ${c.expiry}`}`}>Review</button></td>
-      </tr>)}</tbody></table> : <p>No listed shortlist contract at this wall in this snapshot. Enter an explicit identity to resolve; no substitute is chosen.</p>}
+      </tr>)}</tbody></table></div> : <p>No listed shortlist contract at this wall in this snapshot. Enter an explicit identity to resolve; no substitute is chosen.</p>}
     <form onSubmit={e => { e.preventDefault(); selectIdentity({ strike, expiry, type: side }); }}>
       <label>Exact strike <input aria-label="Exact strike" value={strike} onChange={e => { setIdentity(null); setStrike(e.target.value); }} inputMode="decimal" /></label>
       <label>Listed expiry <select aria-label="Listed expiry" value={expiry} onChange={e => { setIdentity(null); setExpiry(e.target.value); }}>

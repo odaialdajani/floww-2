@@ -8,6 +8,25 @@
 .review-inspector-panel .skylit-metric-label { font-size: 11px; text-transform: none; }
 .review-inspector-panel .skylit-metric-value { font-size: 12px; line-height: 1.5; }
 .review-inspector-panel p { margin: 0 0 12px; }
+.review-selection-summary { display: grid; gap: 5px; padding: 0 0 12px; margin-bottom: 10px; border-bottom: 1px solid #29454d; font-size: 12px; overflow-wrap: anywhere; }
+.review-selection-summary strong { color: #f2d795; font-size: 16px; font-variant-numeric: tabular-nums; }
+.review-selection-summary span { color: #b9cbd3; }
+.review-selection-summary details p { margin: 6px 0; }
+.review-inspector summary { cursor: pointer; color: #c6d7df; padding: 5px 0; }
+.review-inspector-panel .skylit-metric-row { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 10px; align-items: start; padding: 5px 0; }
+.review-inspector-panel .skylit-metric-value { min-width: 0; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.review-inspector-panel .skylit-compare-table { width: 100%; table-layout: fixed; }
+.wall-exposure-details { margin: 12px 0; padding-top: 6px; border-top: 1px solid #29454d; }
+.contract-candidates-scroll { max-width: 100%; overflow-x: auto; margin-bottom: 12px; }
+.review-inspector .exact-contract-review { min-width: 0; }
+.review-inspector .exact-contract-review form { display: grid; gap: 10px; }
+.review-inspector .exact-contract-review form label { display: grid; gap: 4px; }
+.review-inspector .exact-contract-review input,
+.review-inspector .exact-contract-review select { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; min-height: 34px; padding: 5px 8px; color: #e2e8f0; background: #10232b; border: 1px solid #456272; border-radius: 4px; }
+.review-inspector .exact-contract-review button { min-height: 34px; padding: 5px 8px; }
+.review-inspector-tabs { position: sticky; top: 0; z-index: 2; background: #0d222a; }
+@media (max-width: 700px) { .review-inspector-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
 .review-inspector-panel h3 { font-size: 14px; margin: 0 0 8px; }
 .review-inspector-context { display: grid; gap: 6px; margin: 0 0 14px; padding-bottom: 12px; border-bottom: 1px solid #29454d; font-variant-numeric: tabular-nums; }
 .review-inspector-context dt { color: #a4bac7; }
@@ -15,6 +34,8 @@
 .review-inspector-panel .lodestar-ask { font-size: 13px; }
 .review-inspector-panel .lodestar-ask-btn { min-height: 34px; }
 .review-inspector-panel .lodestar-ask-menu { right: auto; left: 0; }
+.skylit-full-dashboard[data-expanded="true"] .skylit-main-area > .skylit-drawer { position: fixed; top: 70px; right: 12px; bottom: 12px; left: auto; width: min(380px, calc(100vw - 24px)); z-index: 10100; box-shadow: -8px 0 24px #0009; }
+.skylit-full-dashboard[data-expanded="true"]:has(.skylit-drawer) .skylit-expanded-sidebar { display: none; }
 /* Selected review replaces, rather than covers, the metrics rail on desktop.
    The original drawer/close/selection ownership remains intact below it. */
 @media (min-width: 1280px) {

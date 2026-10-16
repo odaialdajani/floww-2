@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 from datetime import UTC, datetime
 from typing import Any
 
@@ -73,6 +74,15 @@ router = APIRouter()
 # Helpers (kept identical to the prior sidecar implementation).
 # ----------------------------------------------------------------------
 
+def _require_legacy_market_data() -> None:
+    """Unsupported studies abstain before caches, producers or zero shapes."""
+    if os.getenv("FLOWW_MARKET_DATA_PROVIDER") == "public":
+        raise HTTPException(503, detail={
+            "status": "unavailable", "reason": "PUBLIC_ONLY_STUDY_UNAVAILABLE",
+            "message": "This study has no Public-only producer; alternate sources are disabled",
+        })
+
+
 def _load_chain(
     ticker: str,
     expiry_index: int = 0,
@@ -84,6 +94,7 @@ def _load_chain(
     call to ``yt.history`` (5d) and ``yt.option_chain(expiry_attr[0])``.
     Raises ``HTTPException(404)`` for symbols that have no chain (forex / futures).
     """
+    _require_legacy_market_data()
     yt = yf.Ticker(ticker.upper())
     hist = yt.history(period="5d")
     if hist is None or len(hist) == 0:
@@ -130,6 +141,7 @@ def _t_years_from_dte(dte_days: int) -> float:
 # ----------------------------------------------------------------------
 @router.get("/api/dual_gex/{ticker}")
 def dual_gex(ticker: str) -> dict[str, Any]:
+    _require_legacy_market_data()
     # Empty shape mirrors DualGexCalculator.compute()'s documented
     # "empty contracts / spot <= 0" return so the frontend sees the
     # same keys regardless of whether the failure is upstream (yfinance)
@@ -419,6 +431,7 @@ def _load_chain_window(
     Zero-filling turned unobserved IV/volume into confident zeros downstream;
     ``_normalize_contract`` flags absent inputs as unknown instead.
     """
+    _require_legacy_market_data()
     yt = yf.Ticker(symbol.upper())
     hist = yt.history(period="5d")
     if hist is None or len(hist) == 0:
@@ -489,6 +502,7 @@ def _run_income_screener(
         raise HTTPException(
             status_code=400, detail="max_dte must be >= min_dte",
         )
+    _require_legacy_market_data()
     import time as _time
 
     _key = (symbol.upper(), side, min_iv, min_volume, min_dte, max_dte, top)
@@ -618,6 +632,7 @@ def _load_multi_expiry_chain(
     actionable subset. Returns (spot, contracts_list, expiries_scanned).
     Raises ``HTTPException(404)`` when no chain exists.
     """
+    _require_legacy_market_data()
     yt = yf.Ticker(ticker.upper())
     expiry_attr = getattr(yt, "options", None) or []
     if not expiry_attr:
@@ -836,6 +851,7 @@ def strike_cone_endpoint(
     (e.g. "0.16,0.30,0.70,0.84" / "0.16,0.30"). Out-of-range tokens
     are silently dropped by the service.
     """
+    _require_legacy_market_data()
     try:
         from services.strike_cone import compute_cone
         # Parse comma-separated targets with defensive float coercion.
@@ -936,6 +952,7 @@ def risk_neutral_density_endpoint(
     is now removed, and the documented Query contract (0 = 0DTE, 1 =
     first non-0DTE, 2+ longer-dated) is honored as-is.
     """
+    _require_legacy_market_data()
     try:
         from services.risk_neutral_density import compute_rnd_pdf
         # Pass expiry_index verbatim. Query ge=0 already validates the
@@ -1013,6 +1030,7 @@ def risk_neutral_density_path_endpoint(ticker: str, expiry: str):
     so the dashboard never 500s on cold cache — mirrors the parent
     route's defensive pattern.
     """
+    _require_legacy_market_data()
     import yfinance as yf
     try:
         opts = list(
@@ -1092,6 +1110,8 @@ def max_pain_drift_endpoint(
       2. Frontend polls /api/max_pain_drift/SPY?accumulate=false&days=30
          every minute for the live drift readout.
     """
+    if accumulate:
+        _require_legacy_market_data()
     try:
         from server import (
             compute_max_pain_per_expiry,
@@ -1279,6 +1299,8 @@ def consensus_drift_endpoint(
       2. Frontend polls /api/consensus_drift/SPY?accumulate=false&days=14
          every minute for the live drift readout.
     """
+    if accumulate:
+        _require_legacy_market_data()
     try:
         from server import fetch_spot_and_chains
         from services.consensus_pricing_daily import (
@@ -2141,6 +2163,7 @@ def realized_volatility_endpoint(
     never propagates as a 500 — the route returns 200 with the empty
     shape + warnings so the frontend can render without crashing.
     """
+    _require_legacy_market_data()
     _ESTIMATOR_NAMES = (
         "yang_zhang", "garman_klass", "parkinson",
         "rogers_satchell", "close_to_close",

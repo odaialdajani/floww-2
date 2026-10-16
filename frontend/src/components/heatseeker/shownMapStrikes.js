@@ -15,8 +15,8 @@ export function mapSurface(data, viewMode = "gex", metric = "raw") {
 // Window of `windowRows` descending strikes centered on `anchor` when given
 // (follow-spot paused), else on spot. The anchor never changes the
 // calculation universe — only which rows are on screen.
-export function shownMapStrikes(data, spot, windowRows = null, viewMode = "gex", metric = "raw", anchor = null) {
- const src = mapSurface(data,viewMode,metric).strikes;
+export function shownMapStrikes(data, spot, windowRows = null, viewMode = "gex", metric = "raw", anchor = null, axisStrikes = null) {
+ const src = axisStrikes || mapSurface(data,viewMode,metric).strikes;
  const strikes = [...new Set(src)].filter(s=>s!=null).sort((a,b)=>b-a);
  if(windowRows == null || strikes.length <= windowRows) return strikes;
  const target = anchor != null && Number.isFinite(Number(anchor)) ? Number(anchor) : spot;

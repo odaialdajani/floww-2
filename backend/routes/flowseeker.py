@@ -275,38 +275,31 @@ async def options_chain(symbol: str):
     if not sym:
         raise HTTPException(400, "symbol required")
 
-    # Cache check
+    public_only = os.getenv("FLOWW_MARKET_DATA_PROVIDER") == "public"
+    # Unknown/legacy provenance is never reusable under Public-only policy.
     if sym in _chain_cache:
         ts, data = _chain_cache[sym]
-        if time.time() - ts < CACHE_TTL:
+        if time.time() - ts < CACHE_TTL and (not public_only or data.get("data_source") == "public_api"):
             return data
 
     # Try Public Advanced API first (paid primary — real NBBO + greeks).
-    # Budget exhaustion degrades to cvserver, never to an error: chains have
-    # free fallbacks, and the paid budget is reserved for flow-critical paths.
+    # The adapter owns fan-out admission, coalescing, and cache-hit economics.
     try:
         from services.public_api_adapter import (
             fetch_chain_from_public_api,
             public_to_nested,
         )
-        from services.public_budget import BudgetExhausted
-        from services.public_budget import budget as _pub_budget
-
-        try:
-            await _pub_budget.acquire("api.public.com")
-        except BudgetExhausted:
-            pub_nested = None
-        else:
-            try:
-                pub = await fetch_chain_from_public_api(sym, max_expiries=6)
-                pub_nested = public_to_nested(pub)
-            finally:
-                _pub_budget.release()
+        pub = await fetch_chain_from_public_api(sym, max_expiries=6)
+        pub_nested = public_to_nested(pub)
         if pub_nested and pub_nested.get("chain"):
+            pub_nested["data_source"] = "public_api"
             _remember_chain(sym, pub_nested)
             return pub_nested
     except Exception as e:
         logger.debug(f"flowseeker chain: public path failed for {sym}: {e}")
+
+    if public_only:
+        raise HTTPException(503, "Public market data is unavailable; alternate sources are disabled")
 
     # Try CVForge (fast, rich data)
     data = await _cvforge_chain(sym)
@@ -360,23 +353,20 @@ async def public_chain_flat(
     """
     from services.public_api_adapter import fetch_chain_from_public_api
     from services.public_budget import BudgetExhausted
-    from services.public_budget import budget as _pub_budget
 
     sym = (ticker or "").strip().upper()
     if not sym:
         raise HTTPException(400, "ticker required")
 
     try:
-        await _pub_budget.acquire("api.public.com")
+        result = await fetch_chain_from_public_api(
+            sym, max_expiries=expirations, raise_budget_exhausted=True,
+        )
     except BudgetExhausted as e:
         raise HTTPException(
             status_code=503,
             detail={"error": "public budget exhausted", "retry_after": e.retry_after},
         ) from e
-    try:
-        result = await fetch_chain_from_public_api(sym, max_expiries=expirations)
-    finally:
-        _pub_budget.release()
 
     if result is None:
         raise HTTPException(

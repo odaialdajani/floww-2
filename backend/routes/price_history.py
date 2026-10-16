@@ -14,6 +14,9 @@ router = APIRouter(prefix="/api/heatseeker", tags=["price-node-history"])
 # Only overlapping, identical market-data reads share work. Completed results
 # are never cached or stale-served; each caller still joins its own node scope.
 _bar_reads: dict[tuple, asyncio.Task] = {}
+# One clock for admission, broker lock/init, pacing and bars, including orphaned
+# jobs. Leave headroom below the browser's 30s request timeout.
+_HISTORY_JOB_TIMEOUT_SECONDS = 20.0
 
 
 async def _history_bars(ticker, period, aggregation, sessions, instrument_type="EQUITY"):
@@ -25,23 +28,27 @@ async def _history_bars(ticker, period, aggregation, sessions, instrument_type="
     if task is None or task.done():
         async def fetch():
             try:
-                await budget.acquire("api.public.com")
-            except BudgetExhausted as exc:
-                return [], {"reason": exc.reason, "retry_after_seconds": exc.retry_after}, None
-            except Exception:
-                return [], {"reason": "budget_unavailable", "retry_after_seconds": None}, None
-            try:
-                kwargs = {"period": period, "aggregation": aggregation, "sessions": sessions}
-                if instrument_type != "EQUITY":
-                    kwargs["instrument_type"] = instrument_type
-                bars = await fetch_bars_by_interval(ticker, **kwargs)
-                if not bars:
-                    return [], {"reason": "provider_unavailable", "retry_after_seconds": None}, None
-                return bars, None, datetime.now(UTC).isoformat()
-            except Exception:
-                return [], {"reason": "provider_unavailable", "retry_after_seconds": None}, None
-            finally:
-                budget.release()
+                async with asyncio.timeout(_HISTORY_JOB_TIMEOUT_SECONDS):
+                    try:
+                        await budget.acquire("api.public.com")
+                    except BudgetExhausted as exc:
+                        return [], {"reason": exc.reason, "retry_after_seconds": exc.retry_after}, None
+                    except Exception:
+                        return [], {"reason": "budget_unavailable", "retry_after_seconds": None}, None
+                    try:
+                        kwargs = {"period": period, "aggregation": aggregation, "sessions": sessions}
+                        if instrument_type != "EQUITY":
+                            kwargs["instrument_type"] = instrument_type
+                        bars = await fetch_bars_by_interval(ticker, **kwargs)
+                        if not bars:
+                            return [], {"reason": "provider_unavailable", "retry_after_seconds": None}, None
+                        return bars, None, datetime.now(UTC).isoformat()
+                    except Exception:
+                        return [], {"reason": "provider_unavailable", "retry_after_seconds": None}, None
+                    finally:
+                        budget.release()
+            except TimeoutError:
+                return [], {"reason": "history_job_timeout", "retry_after_seconds": None}, None
 
         task = asyncio.create_task(fetch())
         _bar_reads[key] = task

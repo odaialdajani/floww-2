@@ -33,7 +33,7 @@ export function resolveSelectedWall(data, selectedCell) {
     const strike = Number(selectedCell.strike);
     wall = walls.find((w) => strike >= Number(w.low) && strike <= Number(w.high)) || null;
     if (!wall) {
-      return { status: "gone", reason: "WALL_GONE", wall: null, interaction: null, scenarios: [] };
+      return { status: "unclassified", reason: "NO_CLASSIFIED_WALL", wall: null, interaction: null, scenarios: [] };
     }
   } else {
     return { status: "empty", wall: null, interaction: null, scenarios: [] };

@@ -613,6 +613,8 @@ async def velocity_and_rolling(ticker: str, current_nodes: dict[str, Any]) -> di
 
 def fetch_spot_and_chains(ticker: str, max_expiries: int = 4) -> dict[str, Any]:
     """Returns spot + flattened option contracts (limited expiries near term)."""
+    if os.getenv("FLOWW_MARKET_DATA_PROVIDER") == "public":
+        raise HTTPException(503, "Public-only market data: legacy Yahoo chain study unavailable")
     key = f"chain:{ticker}:{max_expiries}"
     hit = cache_get(key)
     if hit:
@@ -1004,15 +1006,25 @@ _BUILD_HEATMAP_STALE_TTL = 900  # 15 min — max age of stale-serveable data
 _BUILD_HEATMAP_INFLIGHT: set[str] = set()
 
 
+def _public_heatmap_cache_allowed(cached: dict) -> bool:
+    """Legacy Public chains may carry Yahoo analytics; require policy provenance."""
+    return os.getenv("FLOWW_MARKET_DATA_PROVIDER") != "public" or (
+        cached.get("provider_policy") == "public"
+        and cached.get("data", {}).get("data_source") == "public_api"
+    )
+
+
 async def _revalidate_heatmap(cache_key: str, ticker: str, max_expiries: int,
                               with_taps: bool, mode: str, dte, scalp: bool,
                               max_strikes: int, expiry_scope: str = "loaded", scope_session: str | None = None):
     """Background refresh — never raises to the caller."""
+    provider_policy = "public" if os.getenv("FLOWW_MARKET_DATA_PROVIDER") == "public" else "legacy"
     try:
         scope_kwargs = {"expiry_scope": expiry_scope, "scope_session": scope_session} if expiry_scope == "next" else {}
         fresh = await _build_heatmap_impl(ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes, **scope_kwargs)
         if isinstance(fresh, dict) and not fresh.get("error") and (fresh.get("strikes") or fresh.get("grid")):
-            _BUILD_HEATMAP_CACHE[cache_key] = {"ts": time.time(), "data": fresh}
+            _BUILD_HEATMAP_CACHE[cache_key] = {"ts": time.time(), "data": fresh,
+                                            "provider_policy": provider_policy}
     except Exception as e:
         log.warning(f"swr revalidate failed {cache_key}: {e}")
     finally:
@@ -1037,6 +1049,8 @@ async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = Tr
     cache_key = scope_cache_key(ticker, query)
     scope_kwargs = {"expiry_scope": expiry_scope, "scope_session": scope_session} if expiry_scope == "next" else {}
     cached = _BUILD_HEATMAP_CACHE.get(cache_key)
+    if cached and not _public_heatmap_cache_allowed(cached):
+        cached = None
     age = (time.time() - cached["ts"]) if cached else None
     if cached is not None and age is not None:
         if age < _BUILD_HEATMAP_CACHE_TTL:
@@ -1206,6 +1220,7 @@ def _display_quality(exposure_basis: str, model_basis: str, strikes: list) -> di
 
 async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: bool = True, mode: str = "day", dte: int | None = None, scalp: bool = False, max_strikes: int = 200, expiry_scope: str = "loaded", scope_session: str | None = None) -> dict[str, Any]:
     log.info(f"build_heatmap: {ticker} expiries={max_expiries} mode={mode} max_strikes={max_strikes}")
+    public_only = os.getenv("FLOWW_MARKET_DATA_PROVIDER") == "public"
     # Check cache first
     from services.solstice_scope import EXCHANGE_TZ, next_listed_selection, request_query
     from services.solstice_scope import cache_key as scope_cache_key
@@ -1214,6 +1229,8 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     requested_map_query = request_query(max_expiries, mode, dte, scalp, with_taps, max_strikes, expiry_scope, scope_session)
     cache_key = scope_cache_key(ticker, requested_map_query)
     cached = _BUILD_HEATMAP_CACHE.get(cache_key)
+    if cached and not _public_heatmap_cache_allowed(cached):
+        cached = None
     if cached and (time.time() - cached["ts"]) < _BUILD_HEATMAP_CACHE_TTL:
         # Poison-entry guard: a cached payload from a degraded upstream window
         # (e.g. cvserver 429 partial fill) must not pin zeros for the whole TTL.
@@ -1229,7 +1246,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     # Screen API filters server-side by strike range and OI
     is_index = ticker.startswith("^") or ticker.startswith("I:")
     raw = None  # initialize before cvserver fast-path; falls through to merged fetch
-    if is_index and not scalp:
+    if is_index and not scalp and not public_only:
         # PUBLIC-FIRST (2026-09-06, Nav directive: Solstice data is 100%
         # Public; cvserver is strict failover). Try the merged (Public-first)
         # fetch on a short leash first — index option chains may not exist
@@ -1249,7 +1266,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         except Exception as e:
             log.info(f"build_heatmap: Public-first miss for index {ticker} ({e}); trying cvserver screen")
             raw = None
-    if is_index and not scalp and raw is None:
+    if is_index and not scalp and raw is None and not public_only:
         # First get spot price from a quick chain fetch (just 1 expiry, minimal fields)
         from services.cvserver_client import CVSERVER_API_KEY, fetch_chain_for_heatmap, fetch_chain_from_cvserver
         if CVSERVER_API_KEY:
@@ -1320,7 +1337,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                 log.debug(f"build_heatmap: deeper fetch failed for {ticker}: {e}")
     unique_strikes = len({c.get("strike") for c in raw.get("contracts", [])})
     SPARSE_STRIKE_THRESHOLD = 30
-    if unique_strikes < SPARSE_STRIKE_THRESHOLD and ticker.upper() not in ("^SPX", "^NDX", "^RUT", "^VIX"):
+    if not public_only and unique_strikes < SPARSE_STRIKE_THRESHOLD and ticker.upper() not in ("^SPX", "^NDX", "^RUT", "^VIX"):
         from services.cvserver_client import CVSERVER_API_KEY, fetch_chain_from_cvserver
         if CVSERVER_API_KEY and raw.get("spot", 0) > 0:
             log.info(f"build_heatmap: Public chain sparse ({unique_strikes} strikes for {ticker}) — enriching from cvserver full chain")
@@ -1636,11 +1653,20 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             from services.heatmap_history import replay_snapshot
             _wconn = getattr(_ddb_win, "conn", None)
             if _wconn is not None:
-                _scope_key = cache_key if scope_selection else f"{ticker}:{mode}:{dte}:{scalp}"
-                _prev_rows = query_rows(_wconn,
-                    "SELECT snapshot_id FROM heatmap_snapshots_v2 "
-                    "WHERE ticker = '" + str(ticker).replace("'", "''") + "' AND query_key = '"
-                    + _scope_key.replace("'", "''") + "' ORDER BY asof_ts DESC LIMIT 1")
+                # New records store the full request/cache identity; stores from
+                # the legacy scheme keep the collapsed key. Select the exact new
+                # identity first and fall back to the legacy key only when no
+                # new-identity row exists — the window comparability check
+                # (map_query scope/formula/session) remains the actual guard.
+                _legacy_scope_key = f"{ticker}:{mode}:{dte}:{scalp}"
+                _prev_rows = []
+                for _scope_key in ([cache_key] if cache_key == _legacy_scope_key else [cache_key, _legacy_scope_key]):
+                    _prev_rows = query_rows(_wconn,
+                        "SELECT snapshot_id FROM heatmap_snapshots_v2 "
+                        "WHERE ticker = '" + str(ticker).replace("'", "''") + "' AND query_key = '"
+                        + _scope_key.replace("'", "''") + "' ORDER BY asof_ts DESC LIMIT 1")
+                    if _prev_rows:
+                        break
                 if _prev_rows:
                     _w = recorded_window_activity(replay_snapshot(_wconn, _prev_rows[0][0]), {
                         "ticker": ticker, "data_source": raw.get("data_source"),
@@ -1686,16 +1712,23 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     # never starts a provider request from an Ask FLOWW read.
     from services.agent.daily_bar_evidence import ensure_public_daily_bars
     daily_price_task = asyncio.create_task(ensure_public_daily_bars(ticker))
-    # Run yfinance calls in parallel threads to avoid blocking
-    rv_task = asyncio.create_task(asyncio.to_thread(calc_realized_volatility, ticker.replace("^", ""), 20))
-    iv_rank_task = asyncio.create_task(asyncio.to_thread(calc_iv_rank_percentile, ticker.replace("^", ""), skew.get("atm_iv", 0.2)))
-    for task in (rv_task, iv_rank_task, daily_price_task):
-        _background_tasks.add(task)
-        task.add_done_callback(_background_tasks.discard)
-    rv = await rv_task
-    iv_rank = await iv_rank_task
+    _background_tasks.add(daily_price_task)
+    daily_price_task.add_done_callback(_background_tasks.discard)
+    if public_only:
+        # These producers read Yahoo history, not the supplied Public chain.
+        rv: dict[str, Any] | None = {"status": "unavailable", "reason": "PUBLIC_ONLY_STUDY_UNAVAILABLE"}
+        iv_rank: dict[str, Any] = {"status": "unavailable", "reason": "PUBLIC_ONLY_STUDY_UNAVAILABLE"}
+    else:
+        # Run yfinance calls in parallel threads to avoid blocking.
+        rv_task = asyncio.create_task(asyncio.to_thread(calc_realized_volatility, ticker.replace("^", ""), 20))
+        iv_rank_task = asyncio.create_task(asyncio.to_thread(calc_iv_rank_percentile, ticker.replace("^", ""), skew.get("atm_iv", 0.2)))
+        for task in (rv_task, iv_rank_task):
+            _background_tasks.add(task)
+            task.add_done_callback(_background_tasks.discard)
+        rv = await rv_task
+        iv_rank = await iv_rank_task
     await daily_price_task
-    if rv:
+    if rv and not public_only:
         iv_rank["rv_iv_spread"] = round(skew.get("atm_iv", 0) - rv.get("rv_close", 0), 4)
         iv_rank["rv_close"] = rv.get("rv_close")
 
@@ -2061,7 +2094,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     # T09/R4-13/18: record fresh builds to immutable research history
     # (never stale-serves) with explicit coverage + capability observation.
     # The 2,000-contract cap is declared (truncated=True) — never silent.
-    history_query_key = cache_key if scope_selection else f"{ticker}:{mode}:{dte}:{scalp}"
+    history_query_key = cache_key
     try:
         from services.duckdb_engine import db as _ddb
         from services.heatmap_history import RECORDED_STRUCTURE_FIELDS, record_capability, record_snapshot
@@ -2124,7 +2157,8 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     sanitized = _sanitize(payload)
     from services.solstice_scope import attach_scope_echo
     attach_scope_echo(sanitized, cache_key, history_query_key=history_query_key, formula_version="gex.v2")
-    _BUILD_HEATMAP_CACHE[cache_key] = {"ts": time.time(), "data": sanitized}
+    _BUILD_HEATMAP_CACHE[cache_key] = {"ts": time.time(), "data": sanitized,
+                                    "provider_policy": "public" if public_only else "legacy"}
     if len(_BUILD_HEATMAP_CACHE) > 200:
         oldest = sorted(_BUILD_HEATMAP_CACHE.keys(), key=lambda k: _BUILD_HEATMAP_CACHE[k]["ts"])[:50]
         for k in oldest:

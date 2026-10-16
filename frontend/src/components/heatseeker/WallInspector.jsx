@@ -112,6 +112,15 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
       <Row k="Now" v={`${wall.low}–${wall.high} · gross ${fmtUsd(wall.gross)} · net ${fmtUsd(wall.net)} (USD/1% move, ${wall.exposure_basis || "OI"})`} />
       <Row k="Call / Put" v={`${fmtUsd(wall.call)} / ${fmtUsd(wall.put)}`} tip="Call-plus vs put-minus components; high gross + near-zero net is two-sided concentration" />
       <Row k="Distance" v={wall.distance != null ? `${Number(wall.distance).toFixed(2)} (${(Number(wall.distance_pct) * 100).toFixed(2)}%)` : "—"} />
+      <Row k="Changed" v={interaction ? `${interaction.state}${interaction.event ? ` · ${interaction.event}` : ""}${interaction.first_seen === false ? " · persistent" : " (first sighting — see replay compare)"}${interaction.durable === true ? " · durable" : interaction.durable === false ? " · memory-only" : ""}` : "see replay compare"} tip="Wall-level change needs 2+ recorded snapshots; persistent states carry continuity, first sightings do not; durable = restored from DuckDB after restart, memory-only = in-process" />
+      <InteractionTimeline interaction={interaction} />
+      <Readiness interaction={interaction} quality={quality} scenario={scenario} />
+      <Row k="Interaction" v={interaction ? interaction.state : "unobserved"} tip="Time-debounced state machine; session/feed gaps break continuity" />
+      <Row k="Touches" v={interaction && interaction.taps != null ? String(interaction.taps) : "unknown — no history"} tip="Observed touches only; never a calibrated probability" />
+      <Row k="Confirm" v={scenario?.confirmation || "Confirmation not supplied — observe, not an entry signal"} />
+      <Row k="Invalidates" v={scenario?.invalidation || "Invalidation not supplied — no trade plan inferred"} />
+      <Row k="Data" v={quality ? `${quality.state || "unknown"} · ${(quality.reasonCodes || []).join(", ") || "ok"}` : "unknown"} />
+      <details className="wall-exposure-details"><summary>Exposure details and coverage</summary>
       {perExpiry.length > 0 && (
         <Row k="Per-expiry" v={perExpiryGroups} tip="Same-snapshot per-expiry contributions for member strikes" />
       )}
@@ -119,14 +128,7 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
       <CompareTable wall={wall} metrics={metrics} displayGrid={displayGrid} />
       <Row k="Δ provenance" v={pairNote} tip="Vendor/vendor, local/local eligible; mixed pairs blocked without policy" />
       <Row k="OI eff. date" v={(wall.oi_effective_dates && wall.oi_effective_dates.length ? wall.oi_effective_dates.join(", ") : null) ?? "unavailable in snapshot"} tip="Per-wall OI effective dates from member-strike provenance; unavailable when no member carries OI metadata" />
-      <Row k="Changed" v={interaction ? `${interaction.state}${interaction.event ? ` · ${interaction.event}` : ""}${interaction.first_seen === false ? " · persistent" : " (first sighting — see replay compare)"}${interaction.durable === true ? " · durable" : interaction.durable === false ? " · memory-only" : ""}` : "see replay compare"} tip="Wall-level change needs 2+ recorded snapshots; persistent states carry continuity, first sightings do not; durable = restored from DuckDB after restart, memory-only = in-process" />
-      <InteractionTimeline interaction={interaction} />
-      <Readiness interaction={interaction} quality={quality} scenario={scenario} />
-      <Row k="Interaction" v={interaction ? interaction.state : "unobserved"} tip="Time-debounced state machine; session/feed gaps break continuity" />
-      <Row k="Touches" v={interaction && interaction.taps != null ? String(interaction.taps) : "unknown — no history"} tip="Observed touches only; never a calibrated probability" />
-      <Row k="Confirm" v={scenario?.confirmation || "reclaim and hold above zone"} />
-      <Row k="Invalidates" v={scenario?.invalidation || "acceptance beyond zone"} />
-      <Row k="Data" v={quality ? `${quality.state || "unknown"} · ${(quality.reasonCodes || []).join(", ") || "ok"}` : "unknown"} />
+      </details>
       <ExplainThisWall
         snapshotId={snapshotId} wall={wall} metric={metric} replay={replay}
         interaction={interaction} scenarios={scenario ? [scenario] : []} quality={quality}
