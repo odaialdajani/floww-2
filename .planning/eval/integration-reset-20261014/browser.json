@@ -3,12 +3,12 @@
   "checks": [
     {
       "desk": "Solstice",
-      "renderMs": 603,
-      "chartReadyMs": 926,
+      "renderMs": 632,
+      "chartReadyMs": 933,
       "tabTimes": [
         {
           "name": "Contract",
-          "ms": 33
+          "ms": 42
         },
         {
           "name": "Flow",
@@ -16,11 +16,11 @@
         },
         {
           "name": "Public agent",
-          "ms": 31
+          "ms": 33
         },
         {
           "name": "Wall",
-          "ms": 35
+          "ms": 34
         }
       ],
       "geometry": {
@@ -28,7 +28,7 @@
         "inspectorLeft": 1088.75,
         "inspectorWidth": 340
       },
-      "landmarks": "Raw OI landmarks\nMap reference · $771.78\n4 loaded expiries · usable\nSupport watch · below\n762.00–763.00 → 760.00\nCurrent zone\n765.00–780.00\nResistance watch · above\n785.00\nCall wall · concentration\n775.00\nPut wall · concentration\n772.00\n\nZones to watch, not a forecast or entry signal. Hold/reclaim or break/retest needs measured price confirmation. Raw levels stay separate from adjusted cells.\n\nLevel source and time",
+      "landmarks": "Raw OI landmarks\nMap reference · $771.72\n4 loaded expiries · usable\nSupport watch · below\n762.00–763.00 → 760.00\nCurrent zone\n765.00–780.00\nResistance watch · above\n785.00\nCall wall · concentration\n775.00\nPut wall · concentration\n772.00\n\nZones to watch, not a forecast or entry signal. Hold/reclaim or break/retest needs measured price confirmation. Raw levels stay separate from adjusted cells.\n\nLevel source and time",
       "candleCount": "70"
     },
     {
@@ -57,17 +57,17 @@
   "historyRequests": [
     {
       "scope": "SPY:day:None:False|expiries=2026-10-16,2026-10-19,2026-10-20,2026-10-21|gex.v2|OI",
-      "ms": 315,
+      "ms": 364,
       "status": 200
     }
   ],
-  "bundle": "main.38b367c3.js",
+  "bundle": "main.bce21f36.js",
   "requestCounts": {
     "GET /": 2,
     "GET /fonts/local-fonts.css": 2,
     "GET /css2": 2,
     "GET /static/css/main.dd7974c8.css": 2,
-    "GET /static/js/main.38b367c3.js": 2,
+    "GET /static/js/main.bce21f36.js": 2,
     "GET /fonts/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7W0Q5nw.woff2": 2,
     "GET /fonts/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPbF4C_k3HqU.woff2": 2,
     "GET /fonts/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwgknk-4.woff2": 1,
@@ -90,7 +90,7 @@
     "GET /icons/icon.svg": 2,
     "GET /api/tickers/all": 6,
     "GET /api/solstice/SPY/decisions": 3,
-    "POST /api/preferences/theme": 1,
+    "POST /api/preferences/theme": 2,
     "GET /api/heatmap/SPY": 2,
     "GET /api/version": 1
   },

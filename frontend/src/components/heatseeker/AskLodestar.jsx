@@ -42,7 +42,7 @@ export function admissionBlock({ context, overlayMetric, displayMode }) {
       && context.mapStrikes?.includes(Number(c.strike)) && context.mapExpiries?.includes(c.expiry);
     if (!exact) return "Exact contract selection is incomplete, changed or unresolved — use the authoritative read-only contract drawer.";
   }
-  if (!["raw", "delta", "session_delta_volume", "activity", "window"].includes(overlayMetric || "raw")) return "This adjusted basis remains explicitly unavailable to Ask FLOWW.";
+  if (!["raw", "delta", "session_delta_volume", "activity", "window"].includes(overlayMetric || "raw")) return "This adjusted basis remains explicitly unavailable to Ask Flow.";
   if ((context?.overlayMetric && context.overlayMetric !== overlayMetric) || (context?.displayMode && context.displayMode !== displayMode)) return "Published selection changed — wait for the current pane and basis.";
   const advanced = displayMode === "replay" || (overlayMetric && overlayMetric !== "raw");
   const bound = context?.contextVersion === 2 && context.snapshotId && context.mapQuery && context.mapVersion && context.provider && context.formula;
@@ -54,7 +54,7 @@ export function admissionBlock({ context, overlayMetric, displayMode }) {
     || !(Date.parse(context.windowInterval.start) < Date.parse(context.windowInterval.end)))) return "Window activity unavailable: a comparable recorded baseline and declared interval are required.";
   if (displayMode === "replay" && context?.metric && !["gex", "skylit"].includes(context.metric)
     && (!["vex", "charm"].includes(context.metric) || context.recordedMetricVersion !== "metric-record.v1")) return "Recorded replay answers for this metric remain unavailable: the complete stored metric envelope is required.";
-  if (displayMode && !["live", "replay"].includes(displayMode)) return "This display is unavailable to Ask FLOWW.";
+  if (displayMode && !["live", "replay"].includes(displayMode)) return "This display is unavailable to Ask Flow.";
   return null;
 }
 
@@ -69,8 +69,8 @@ function AskLodestar({ subject = "", overlayMetric = "raw", displayMode = "live"
   if (!agent) {
     return (
       <span className="lodestar-ask lodestar-ask-off" data-testid={`${testId}-unavailable`}
-        title="Ask FLOWW is unavailable on this screen">
-        Ask FLOWW unavailable
+        title="Ask Flow is unavailable on this screen">
+        Ask Flow unavailable
       </span>
     );
   }
@@ -88,14 +88,14 @@ function AskLodestar({ subject = "", overlayMetric = "raw", displayMode = "live"
     <span ref={host} className={`lodestar-ask${compact ? " compact" : ""}`} data-testid={testId}>
       <button ref={trigger} type="button" className="skylit-trade-mode-btn lodestar-ask-btn"
         aria-haspopup="menu" aria-expanded={open} disabled={busy}
-        title={block || "Ask FLOWW about the selected reading"}
+        title={block || "Ask Flow about the selected reading"}
         data-testid={`${testId}-btn`}
         onKeyDown={e=>{if(e.key==="ArrowDown" && !busy){e.preventDefault();e.stopPropagation();setFocused(0);setOpen(true);}}}
         onClick={() => { setNote(null);setFocused(0); setOpen((o) => !o); }}>
-        Ask FLOWW
+        Ask Flow
       </button>
       {open && (
-        <span ref={menu} className="lodestar-ask-menu" role="menu" aria-label="Ask FLOWW questions" onKeyDown={menuKey} onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))setOpen(false);}} data-testid={`${testId}-menu`}>
+        <span ref={menu} className="lodestar-ask-menu" role="menu" aria-label="Ask Flow questions" onKeyDown={menuKey} onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))setOpen(false);}} data-testid={`${testId}-menu`}>
           {starters.map((q,index) => (
             <button key={q} type="button" role="menuitem" tabIndex={focused===index?0:-1} onFocus={()=>setFocused(index)} className="lodestar-ask-item"
               data-testid={`${testId}-q-${index}`} onClick={() => ask(q)}>

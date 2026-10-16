@@ -10,7 +10,7 @@ function Contract({onMount}) {
 }
 function inspector(props = {}) {
   return <ReviewInspector selectionKey="SPY|wall-1" wall={<p>Recorded wall facts</p>}
-    contract={<p>Exact contract review</p>} flow={<button>Ask FLOWW</button>}
+    contract={<p>Exact contract review</p>} flow={<button>Ask Flow</button>}
     publicAgent={<p>Draft only · activation unverified</p>} {...props}/>;
 }
 
@@ -61,11 +61,11 @@ test('new selection resets the visible step instead of inheriting a previous wal
 
 test('opening contract review starts at Contract; tab activation alone never asks the assistant', () => {
   const ask = jest.fn();
-  render(inspector({initialTab: 'contract', flow: <button onClick={ask}>Ask FLOWW</button>}));
+  render(inspector({initialTab: 'contract', flow: <button onClick={ask}>Ask Flow</button>}));
   expect(screen.getByRole('tab', {name: 'Contract'})).toHaveAttribute('aria-selected', 'true');
   fireEvent.click(screen.getByRole('tab', {name: 'Flow'}));
   expect(ask).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', {name: 'Ask FLOWW'}));
+  fireEvent.click(screen.getByRole('button', {name: 'Ask Flow'}));
   expect(ask).toHaveBeenCalledTimes(1);
 });
 

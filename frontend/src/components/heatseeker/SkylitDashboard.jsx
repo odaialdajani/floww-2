@@ -1151,7 +1151,7 @@ function SkylitDashboard({
                 <dt>Snapshot time</dt><dd>{visibleData?.asof || "Unknown"} · {isReplay ? "Recorded" : "Live request"}</dd>
                 <dt>Source</dt><dd>{visibleData?.data_source || "Unknown"}</dd>
               </dl>
-              <p>Use the existing Ask FLOWW workspace to explain this reading. Opening this step does not run the assistant or prepare an order.</p>
+              <p>Use the existing Ask Flow workspace to explain this reading. Opening this step does not run the assistant or prepare an order.</p>
               <AskLodestar subject={`${ticker} · exact contract review`} overlayMetric={activeMetric} displayMode={isReplay ? "replay" : "live"} compact />
             </>}
             publicAgent={<><h3>Public agent · reviewed draft</h3><p>A copied brief is not delivery or activation. Review the workflow in Public before any separately approved activation.</p><GroundedPublicReview /></>}

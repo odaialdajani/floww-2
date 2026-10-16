@@ -33,7 +33,7 @@ export default function AssistantSettingsDialog({open,onClose,disabled,onSaving,
  if(!visited && !open)return null;
  return createPortal(<div className="assistant-settings-layer" hidden={!open}>
   <div className="assistant-settings-backdrop" aria-hidden="true" onClick={()=>close.current()}/>
-  <section ref={dialog} className="assistant-settings-dialog" role="dialog" aria-modal={open?"true":undefined} aria-label="Ask FLOWW settings">
+  <section ref={dialog} className="assistant-settings-dialog" role="dialog" aria-modal={open?"true":undefined} aria-label="Ask Flow settings">
    <header><h2>Settings</h2><button type="button" className="assistant-icon-button" aria-label="Close settings" onClick={()=>close.current()}><X size={16} aria-hidden="true"/></button></header>
    <AgentModelSettings disabled={disabled} onSaving={onSaving} initialOpen={open}/>
    <div className="assistant-session-settings"><p>End this browser's access to saved research. Saved answers stay stored.</p><button type="button" disabled={disabled || settingsPending || endingSession} onClick={endSession}>{endingSession?"Ending session…":"End research session"}</button></div>

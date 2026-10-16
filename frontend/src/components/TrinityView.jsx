@@ -629,7 +629,7 @@ function ContractDrawer({ data, cell, replay, wall, metric, onClose, ticker, clo
           <dt>Market observation</dt><dd>{data?.event_time || data?.observed_at || "Unknown"}</dd>
           <dt>Snapshot time</dt><dd>{data?.asof || "Unknown"} · {replay ? "Recorded" : "Live request"}</dd>
         </dl>
-        <p>The same Ask FLOWW assistant explains this selection. Opening a step does not request research or prepare an order.</p>
+        <p>The same Ask Flow assistant explains this selection. Opening a step does not request research or prepare an order.</p>
         <AskLodestar subject={`${ticker} · exact contract review`} overlayMetric={metric} displayMode={replay ? "replay" : "live"} compact />
       </>}
       publicAgent={<><h3>Public agent · reviewed draft</h3><p>A copied brief is not delivery or activation. Review the workflow in Public before any separately approved activation.</p><GroundedPublicReview /></>}

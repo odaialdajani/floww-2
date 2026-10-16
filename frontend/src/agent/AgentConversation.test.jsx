@@ -112,7 +112,7 @@ test('ending the session clears the unsent private question on reopening',async(
  global.fetch=jest.fn(async()=>({ok:true,json:async()=>({status:'signed-out'})}));
  render(<AgentProvider><ConversationToggle/></AgentProvider>);
  fireEvent.change(screen.getByRole('textbox'),{target:{value:'Private unsent question'}});
- fireEvent.click(screen.getByRole('button',{name:'Ask FLOWW settings'}));
+ fireEvent.click(screen.getByRole('button',{name:'Ask Flow settings'}));
  fireEvent.click(screen.getByRole('button',{name:'End research session'}));
  await waitFor(()=>expect(screen.getByText(/Research session ended/)).toBeInTheDocument());
  fireEvent.click(screen.getByText('Toggle chat'));fireEvent.click(screen.getByText('Toggle chat'));

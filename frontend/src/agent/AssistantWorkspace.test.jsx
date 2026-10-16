@@ -22,8 +22,8 @@ beforeEach(()=>{
   :{ok:true,json:async()=>({turn_id:'asked',ticker:'SPY',question:'Uncertain draft',status:'completed',text:'Actual saved answer'})});
 });
 function renderWorkspace(){return render(<AgentProvider><Workspace/></AgentProvider>);}
-function openChat(){fireEvent.click(screen.getByRole('button',{name:'Open Ask FLOWW'}));return screen.getByRole('region',{name:'Ask FLOWW chat'});}
-async function openSettings(){fireEvent.click(screen.getByRole('button',{name:'Ask FLOWW settings'}));return screen.findByRole('dialog',{name:'Ask FLOWW settings'});}
+function openChat(){fireEvent.click(screen.getByRole('button',{name:'Open Ask Flow'}));return screen.getByRole('region',{name:'Ask Flow chat'});}
+async function openSettings(){fireEvent.click(screen.getByRole('button',{name:'Ask Flow settings'}));return screen.findByRole('dialog',{name:'Ask Flow settings'});}
 
 test('opening chat keeps chart access and makes no model request until the gear is used',async()=>{
  renderWorkspace();expect(global.fetch).not.toHaveBeenCalled();
@@ -40,9 +40,9 @@ test('opening chat keeps chart access and makes no model request until the gear 
  fireEvent.keyDown(end,{key:'Tab'});expect(close).toHaveFocus();
  screen.getByText('Chart control').focus();expect(close).toHaveFocus();
  fireEvent.keyDown(screen.getByLabelText('Model'),{key:'Escape'});
- expect(screen.queryByRole('dialog',{name:'Ask FLOWW settings'})).toBeNull();
- expect(screen.getByRole('region',{name:'Ask FLOWW chat'})).toBeInTheDocument();
- expect(screen.getByRole('button',{name:'Ask FLOWW settings'})).toHaveFocus();
+ expect(screen.queryByRole('dialog',{name:'Ask Flow settings'})).toBeNull();
+ expect(screen.getByRole('region',{name:'Ask Flow chat'})).toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'Ask Flow settings'})).toHaveFocus();
  expect(screen.getByText('Chart control').closest('[inert]')).toBeNull();
 });
 
@@ -51,7 +51,7 @@ test('pending choices and unsent questions survive settings and chat close witho
  renderWorkspace();openChat();fireEvent.change(screen.getByRole('textbox'),{target:{value:'Keep this draft'}});
  await openSettings();await waitFor(()=>expect(releaseModels).toBeDefined());
  const originalChecking=screen.getByRole('button',{name:'Checking AI choices…'});
- fireEvent.click(screen.getByRole('button',{name:'Close settings'}));fireEvent.click(screen.getByRole('button',{name:'Close Ask FLOWW'}));
+ fireEvent.click(screen.getByRole('button',{name:'Close settings'}));fireEvent.click(screen.getByRole('button',{name:'Close Ask Flow'}));
  expect(global.fetch).toHaveBeenCalledTimes(2);
  openChat();expect(screen.getByRole('textbox')).toHaveValue('Keep this draft');expect(screen.getByRole('button',{name:'Ask',exact:true})).toBeDisabled();
  fireEvent.click(screen.getByText('Ask from chart'));
@@ -67,7 +67,7 @@ test('an uncertain save remains blocked after close and reopening until explicit
  await openSettings();await screen.findByLabelText('Thinking depth');
  fireEvent.change(screen.getByLabelText('Thinking depth'),{target:{value:'low'}});
  fireEvent.click(screen.getByRole('button',{name:'Save AI choice'}));await screen.findByText(/choice was not confirmed/);
- fireEvent.click(screen.getByRole('button',{name:'Close settings'}));fireEvent.click(screen.getByRole('button',{name:'Close Ask FLOWW'}));
+ fireEvent.click(screen.getByRole('button',{name:'Close settings'}));fireEvent.click(screen.getByRole('button',{name:'Close Ask Flow'}));
  openChat();expect(screen.getByRole('textbox')).toHaveValue('Uncertain draft');expect(screen.getByRole('button',{name:'Ask',exact:true})).toBeDisabled();
  const before=global.fetch.mock.calls.length;
  fireEvent.click(screen.getByText('Ask from chart'));
@@ -95,7 +95,7 @@ test('session end clears private drafts and shared choice guard while discarding
  renderWorkspace();openChat();fireEvent.change(screen.getByRole('textbox'),{target:{value:'Private pending question'}});
  await openSettings();await waitFor(()=>expect(releaseModels).toBeDefined());
  act(()=>window.dispatchEvent(new Event('floww-research-session-ended')));
- expect(screen.queryByRole('dialog',{name:'Ask FLOWW settings'})).toBeNull();expect(screen.getByRole('textbox')).toHaveValue('');
+ expect(screen.queryByRole('dialog',{name:'Ask Flow settings'})).toBeNull();expect(screen.getByRole('textbox')).toHaveValue('');
  await act(async()=>releaseModels(catalog()));
  expect(screen.queryByLabelText('Model')).toBeNull();expect(screen.queryByText('Confirm your AI choice in settings before asking.')).toBeNull();
  expect(screen.getByText(/Research session ended/)).toBeInTheDocument();
@@ -110,20 +110,20 @@ test('first gear use loads choices once after strict lifecycle checks and remain
 });
 
 test('shortcut close leaves focus on the chart control the user already chose',()=>{
- renderWorkspace();const opener=screen.getByRole('button',{name:'Open Ask FLOWW'});opener.focus();openChat();
+ renderWorkspace();const opener=screen.getByRole('button',{name:'Open Ask Flow'});opener.focus();openChat();
  const chart=screen.getByText('Chart control');chart.focus();
  fireEvent.keyDown(window,{key:'k',ctrlKey:true});
- expect(screen.queryByRole('region',{name:'Ask FLOWW chat'})).toBeNull();expect(chart).toHaveFocus();
+ expect(screen.queryByRole('region',{name:'Ask Flow chat'})).toBeNull();expect(chart).toHaveFocus();
 });
 
 test('closing the gear before first-use loading starts cancels its hidden timer',async()=>{
  jest.useFakeTimers();const view=renderWorkspace();
  try{
-  openChat();fireEvent.click(screen.getByRole('button',{name:'Ask FLOWW settings'}));
+  openChat();fireEvent.click(screen.getByRole('button',{name:'Ask Flow settings'}));
   fireEvent.click(screen.getByRole('button',{name:'Close settings'}));
   await act(async()=>jest.advanceTimersByTime(1));
   expect(global.fetch).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button',{name:'Ask FLOWW settings'}));
+  fireEvent.click(screen.getByRole('button',{name:'Ask Flow settings'}));
   await act(async()=>jest.advanceTimersByTime(1));
   expect(screen.getByLabelText('Model')).toHaveValue('first');
   expect(global.fetch.mock.calls.map(([url])=>String(url).split('/').pop())).toEqual(['session','models']);
@@ -139,7 +139,7 @@ test('closing a gear opened during research cannot load hidden choices when rese
  try{
   openChat();fireEvent.change(screen.getByRole('textbox'),{target:{value:'Work first'}});
   fireEvent.click(screen.getByRole('button',{name:'Ask',exact:true}));await waitFor(()=>expect(admit).toBeDefined());
-  fireEvent.click(screen.getByRole('button',{name:'Ask FLOWW settings'}));fireEvent.click(screen.getByRole('button',{name:'Close settings'}));
+  fireEvent.click(screen.getByRole('button',{name:'Ask Flow settings'}));fireEvent.click(screen.getByRole('button',{name:'Close settings'}));
   await act(async()=>admit({ok:true,json:async()=>({turn_id:'busy-answer'})}));
   await act(async()=>jest.advanceTimersByTime(1));
   expect(screen.getByText('Finished active research')).toBeInTheDocument();

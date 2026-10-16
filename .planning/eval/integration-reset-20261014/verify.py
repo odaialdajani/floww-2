@@ -13,6 +13,19 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 PLAN = ROOT / '.planning/unknowns/integration-reset-20261014.md'
 SOURCE = [
+    'frontend/src/agent/AgentCommandBar.jsx',
+    'frontend/src/agent/AgentCommandBar.test.jsx',
+    'frontend/src/agent/AgentConversation.jsx',
+    'frontend/src/agent/AgentConversation.test.jsx',
+    'frontend/src/agent/AgentPanel.jsx',
+    'frontend/src/agent/AgentPanel.test.jsx',
+    'frontend/src/agent/AssistantSettingsDialog.jsx',
+    'frontend/src/agent/AssistantWorkspace.css',
+    'frontend/src/agent/AssistantWorkspace.test.jsx',
+    'frontend/src/agent/ScreenContextLifecycle.test.jsx',
+    'frontend/src/components/heatseeker/AskLodestar.jsx',
+    'frontend/src/components/public/PublicHandoffReview.jsx',
+    'frontend/src/shell/AppShell.test.jsx',
     'backend/routes/price_history.py',
     'backend/server.py',
     'backend/services/price_node_history.py',
@@ -35,6 +48,7 @@ SOURCE = [
     'frontend/src/components/heatseeker/RangeAnalyticsWorkspace.jsx',
     'frontend/src/components/heatseeker/RangeAnalyticsWorkspace.test.jsx',
     'frontend/src/components/flowseeker/CostCaption.test.jsx',
+    'frontend/src/components/flowseeker/BlademapFlowView.test.jsx',
     *[f'frontend/src/components/heatseeker/{name}.{ext}' for name in ['ReviewInspector','HeatmapLandmarks'] for ext in ['jsx','css','test.jsx']],
 ]
 EXPECTED_OUTPUTS = {'inventory.json','api.json','browser.cjs','browser.json','solstice.png','triad.png','verify.py','gate.json','continuation-browser.cjs','continuation-browser.json','synthetic-chart.png','history-diagnosis.py','history-evidence.json','history-diagnosis.json','history-review.cjs','history-review.json','history-saved-view.png'}
@@ -80,8 +94,9 @@ try:
     assert len(inventory['worktrees']) == inventory['worktree_count'] == 41
     report['checks'].append('All 62 original obligations/fields and original preview retained; all 82 branches and 41 worktrees inventoried')
 
-    authorized_test = 'frontend/src/components/flowseeker/CostCaption.test.jsx'
-    protected = {path:digest for path,digest in inventory['protected_hashes'].items() if path != authorized_test}
+    authorized_tests = {'frontend/src/components/flowseeker/CostCaption.test.jsx',
+                        'frontend/src/components/flowseeker/BlademapFlowView.test.jsx'}
+    protected = {path:digest for path,digest in inventory['protected_hashes'].items() if path not in authorized_tests}
     for path,digest in protected.items():
         assert sha(ROOT/path) == digest, f'Protected file changed: {path}'
     subprocess.run(['git','-C',str(ROOT),'diff','--quiet','HEAD','--',*protected],check=True)
@@ -93,7 +108,7 @@ try:
     subprocess.run(['git','-C',str(ROOT),'diff','--check'],check=True)
     report['changed_paths'] = changed
     report['source_sha256'] = {p:sha(ROOT/p) for p in SOURCE}
-    report['checks'].append(f"{len(protected)} protected files match baseline and HEAD; the one authorized Screener test is scoped; only reviewed source/docs/evidence plus pre-existing kanban note are dirty")
+    report['checks'].append(f"{len(protected)} protected files match baseline and HEAD; two Screener tests have isolated network mocks; only reviewed source/docs/evidence plus pre-existing kanban note are dirty")
 
     db = sqlite3.connect('file:/Users/nav/.hermes/state.db?mode=ro',uri=True)
     try:

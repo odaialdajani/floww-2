@@ -15,7 +15,7 @@ test("renders rail + children, and routes nav clicks via onNavigate", () => {
 
 const CHAT_WIDTH_KEY='floww-assistant-pane-width';
 beforeEach(()=>{localStorage.clear();document.documentElement.removeAttribute('data-sidebar-collapsed');Object.defineProperty(window,'innerWidth',{value:1440,writable:true,configurable:true});global.fetch=jest.fn();});
-function openPane(){fireEvent.click(screen.getByRole('button',{name:'Open Ask FLOWW'}));return screen.getByRole('region',{name:'Ask FLOWW chat'});}
+function openPane(){fireEvent.click(screen.getByRole('button',{name:'Open Ask Flow'}));return screen.getByRole('region',{name:'Ask Flow chat'});}
 
 test('open chat reserves a workspace column beside the unchanged main content',()=>{
  render(<AppShell page="trinity"><button>Chart interaction</button></AppShell>);
@@ -32,7 +32,7 @@ test('keyboard resizing persists width, restores the whole main area on close, a
  render(<AppShell page="trinity"><button>Chart interaction</button></AppShell>);
  const pane=openPane(),handle=screen.getByRole('separator',{name:'Resize chat pane'});
  fireEvent.keyDown(handle,{key:'ArrowLeft'});expect(handle).toHaveAttribute('aria-valuenow','436');expect(localStorage.getItem(CHAT_WIDTH_KEY)).toBe('436');
- fireEvent.click(screen.getByRole('button',{name:'Close Ask FLOWW'}));
+ fireEvent.click(screen.getByRole('button',{name:'Close Ask Flow'}));
  expect(screen.getByRole('main').parentElement.style.gridTemplateColumns).toBe('minmax(0, 1fr)');
  expect(pane).toHaveAttribute('hidden');
  expect(openPane()).toBe(pane);expect(screen.getByRole('separator',{name:'Resize chat pane'})).toHaveAttribute('aria-valuenow','436');
@@ -57,7 +57,7 @@ test('viewport clamps the pane without replacing its saved width or stealing cha
  await waitFor(()=>expect(screen.getByRole('main').parentElement).toHaveAttribute('data-chat-layout','stacked'));
  expect(screen.getByRole('main').parentElement.style.gridTemplateColumns).toBe('minmax(0, 1fr)');
  expect(screen.queryByRole('separator',{name:'Resize chat pane'})).toBeNull();
- expect(screen.getByRole('region',{name:'Ask FLOWW chat'})).toBeInTheDocument();expect(localStorage.getItem(CHAT_WIDTH_KEY)).toBe('600');expect(chart).toHaveFocus();
+ expect(screen.getByRole('region',{name:'Ask Flow chat'})).toBeInTheDocument();expect(localStorage.getItem(CHAT_WIDTH_KEY)).toBe('600');expect(chart).toHaveFocus();
 });
 
 test('sidebar collapse updates the available resize bounds without remounting the page',async()=>{
@@ -109,7 +109,7 @@ test('closing during a resize releases capture and does not persist the unfinish
  const handle=screen.getByRole('separator',{name:'Resize chat pane'});handle.releasePointerCapture=jest.fn();
  const down=new MouseEvent('pointerdown',{bubbles:true,button:0,clientX:1000});Object.defineProperty(down,'pointerId',{value:9});fireEvent(handle,down);
  const move=new MouseEvent('pointermove',{bubbles:true,clientX:900});Object.defineProperty(move,'pointerId',{value:9});fireEvent(handle,move);
- fireEvent.click(screen.getByRole('button',{name:'Close Ask FLOWW'}));
+ fireEvent.click(screen.getByRole('button',{name:'Close Ask Flow'}));
  expect(handle.releasePointerCapture).toHaveBeenCalledWith(9);expect(localStorage.getItem(CHAT_WIDTH_KEY)).toBeNull();
 });
 

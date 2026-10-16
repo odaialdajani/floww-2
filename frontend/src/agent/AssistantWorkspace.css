@@ -46,7 +46,7 @@
 .assistant-session-settings{padding:0 14px 14px;border-top:1px solid #455970;}
 @media(max-width:768px){.assistant-open.lodestar-open{right:10px;bottom:calc(72px + env(safe-area-inset-bottom));}.assistant-panel.lodestar-panel{top:auto;right:8px;bottom:calc(116px + env(safe-area-inset-bottom));width:calc(100vw - 16px);height:min(560px,calc(100dvh - 144px - env(safe-area-inset-bottom)));}.assistant-thread{padding:10px 12px;}}
 
-/* Ask FLOWW: readable conversation, grounded highlights, quiet controls. */
+/* Ask Flow: readable conversation, grounded highlights, quiet controls. */
 .assistant-panel.lodestar-panel{width:min(520px,calc(100vw - 24px));border-color:#58606a;background:#121820;box-shadow:0 16px 48px #0007;}
 .assistant-panel.assistant-wide{width:min(780px,calc(100vw - 32px));}
 .assistant-panel .assistant-header{padding:16px 18px;background:#171e27;}
