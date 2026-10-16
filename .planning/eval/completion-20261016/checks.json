@@ -65,5 +65,19 @@
     "owner_holds": 7,
     "current_new_signatures": 0,
     "commissioning": "HOLD"
+  },
+  "hosted_exact_head": {
+    "exit_code": 0,
+    "head": "e8e53e2d39872af329608563d03c5492c803f3fe",
+    "ci_run": 38973627526,
+    "jobs": {
+      "backend-tests": "success",
+      "frontend-build": "success",
+      "docker-build": "success"
+    },
+    "pr": "https://github.com/odaialdajani/floww-2/pull/131",
+    "mergeable": "MERGEABLE",
+    "merge_state": "CLEAN",
+    "command": "verify.py --live at exact published head; offline gate re-passed"
   }
 }
