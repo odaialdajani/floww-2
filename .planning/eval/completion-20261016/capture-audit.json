@@ -1,0 +1,767 @@
+{
+  "schema": "floww.capture-audit.v1",
+  "read_only": true,
+  "source_sha": "0bbdd711859e9a2fea043c8b79bf25e9728319bc",
+  "repository": "/Users/nav/Documents/Codex/2026-10-07/so-we-have-a-really-big-3/work/floww-unified",
+  "markdown_report": "/Users/nav/.hermes/cache/scratch/floww-finish-20261016/capture-audit.md",
+  "markdown_sha256": "3d7509da0a568545a03ae5771f76b9d30b6aa06d9e5c318453f3b2056f49bbd9",
+  "scope": {
+    "owned_outputs": [
+      "/Users/nav/.hermes/cache/scratch/floww-finish-20261016/capture-audit.md",
+      "/Users/nav/.hermes/cache/scratch/floww-finish-20261016/capture-audit.json"
+    ],
+    "source_edits": false,
+    "git_mutations": false,
+    "provider_calls": false,
+    "secrets_read": false,
+    "workers_activated": false,
+    "services_restarted": false,
+    "active_database_opened": false,
+    "new_database_files_created": false
+  },
+  "current_store": {
+    "observed_at": "2026-10-16T21:21:55.250198+00:00",
+    "evidence": [
+      "GET http://127.0.0.1:8002/api/solstice/recorder_health",
+      "lsof -nP -p 39759"
+    ],
+    "pid": 39759,
+    "durable": true,
+    "mode": "file",
+    "backing": "file",
+    "path": "/Users/nav/Documents/Codex/2026-10-07/so-we-have-a-really-big-3/work/review-data.duckdb",
+    "same_shared_engine_for_producer_consumer": true,
+    "separate_journal_path": "/Users/nav/Documents/Codex/2026-10-07/so-we-have-a-really-big-3/work/floww-unified/data/journal.duckdb",
+    "latest_snapshot": {
+      "snapshot_id": "snap_60bd0299ffcc2b0b",
+      "ticker": "TSLA",
+      "asof": "2026-10-16T21:21:43.082515+00:00"
+    },
+    "background_capture": {
+      "enabled": false,
+      "task_active": false,
+      "state": "disabled",
+      "tickers": []
+    },
+    "recorder_health_worker": {
+      "worker_state": "absent",
+      "worker_enabled": false,
+      "capture_registered": false
+    },
+    "file_bytes_lsof": 1762930688,
+    "wal_bytes_lsof": 11135057,
+    "rss_kib_separate_later_ps_observation": 751616,
+    "cpu_percent_separate_later_ps_observation": 24.4,
+    "resource_observation_limit": "Point-in-time sizes and usage are not proof of OOM, a leak or retention acceptance."
+  },
+  "historical_store": {
+    "receipt": "/Users/nav/.hermes/cache/scratch/floww-review-20261016/live-safe-reads.json",
+    "observed_at": "2026-10-16T14:27:39.854040+00:00",
+    "durable": false,
+    "backing": "memory",
+    "configured_path_same_as_current": true,
+    "exact_startup_cause": "NOT_ESTABLISHED",
+    "possible_mechanisms_not_findings": [
+      "DUCKDB_PATH absent at singleton import",
+      "file open/schema initialization exception followed by tested memory fallback",
+      "older loaded modules/import state"
+    ],
+    "warning_search": {
+      "targeted_roots": [
+        "/Users/nav/.hermes/cache/scratch/floww-review-20261016",
+        "/Users/nav/.hermes/cache/scratch/floww-history-diagnosis"
+      ],
+      "matching_lock_memory_fallback_oom_resource_lines": 0,
+      "limit": "Only targeted log files checked; no universal absence or causal OOM claim."
+    }
+  },
+  "paths": {
+    "settings_and_singleton": [
+      "backend/server.py:31-47",
+      "backend/services/duckdb_engine.py:126-144,549-565"
+    ],
+    "producer": [
+      "backend/server.py:2094-2156"
+    ],
+    "store": [
+      "backend/services/heatmap_history.py:363-530"
+    ],
+    "consumer": [
+      "backend/routes/price_history.py:67-96,160-165",
+      "backend/services/price_node_history.py:73-164"
+    ],
+    "scheduled_capture": [
+      "backend/server.py:4177-4239",
+      "backend/services/solstice_capture_policy.py:9-43"
+    ],
+    "record_now_ack": [
+      "backend/routes/price_history.py:99-143"
+    ],
+    "older_summary_export_import": [
+      "backend/scripts/export_legacy_decisions.py:38-98",
+      "backend/services/legacy_decision_recovery.py:90-205"
+    ]
+  },
+  "root_causes_and_limits": [
+    {
+      "id": "CAPTURE-CONTINUITY",
+      "status": "PROVEN_MECHANISM_AND_BOUNDED_EVIDENCE",
+      "detail": "No scheduled background capture is active; fresh-build hooks still record opportunistically. Strict known-at, age<=900s and immutable scope ownership leave real gaps. Disabled worker does not mean all writes disabled."
+    },
+    {
+      "id": "DURABILITY-FALLBACK",
+      "status": "PROVEN_CODE_PATH_AND_HISTORICAL_OBSERVATION",
+      "detail": "DUCKDB_PATH defaults to memory; failed file-engine initialization warns and falls back. Singleton is frozen at import. Earlier actual memory backing measured; current backing is file. Exact earlier trigger unresolved."
+    },
+    {
+      "id": "WRITE-ACK",
+      "status": "SOURCE_FINDING",
+      "detail": "Ordinary builds schedule to_thread(record_snapshot) and return before COMMIT acknowledgement. Loop awaiting build does not observe None/failed write. Explicit record-now separately polls replay visibility."
+    },
+    {
+      "id": "RESOURCE-BOUNDS",
+      "status": "SOURCE_RISK_NOT_CAUSAL_OOM_PROOF",
+      "detail": "No explicit DuckDB memory/thread settings in constructor; task payload count/bytes not bounded by the connection correctness lock; repeated ensure_tables migrations and per-contract inserts add work. No active workload benchmark performed."
+    },
+    {
+      "id": "SUMMARY-NOT-FULL-RECOVERY",
+      "status": "PROVEN_FORMAT_LIMIT",
+      "detail": "Exporter yields summaries and quote counts, not physical quotes/full snapshot/review-detail rows. Importer explicitly quote_details_recovered=0, source completeness unknown, maximum source 8MB and 5000 summaries."
+    }
+  ],
+  "bounded_history_diagnosis": {
+    "passed": true,
+    "synthetic": false,
+    "evidence_sha256": "7573da9ae14e64070df419d7a7b7f3cc51439bc5cd63fd041224cfff0cc42682",
+    "copied_spy_rows": 2867,
+    "scopes_checked": 21,
+    "candles_checked": 70,
+    "default_scope": "SPY:day:None:False|expiries=2026-10-14,2026-10-15,2026-10-16,2026-10-19|gex.v2|OI",
+    "default_matching_nodes": 0,
+    "default_coverage": {
+      "scope_status": "available",
+      "gap_counts": {
+        "no_prior_observation": 42,
+        "observation_too_old": 28,
+        "recorded_without_nodes": 0
+      }
+    },
+    "any_scope_candles_with_nodes": 31,
+    "candles_without_eligible_nodes_in_any_scope": 39,
+    "independent_sql_matches": 31,
+    "invalid_clock_rows": 0,
+    "scopes": [
+      {
+        "scope": "SPY:4:day:None:False:True:80:next:2026-10-14|expiries=2026-10-15|gex.v2|OI",
+        "stored_rows": 5,
+        "matching_candles": 0,
+        "gap_counts": {
+          "no_prior_observation": 70,
+          "observation_too_old": 0,
+          "recorded_without_nodes": 0
+        }
+      },
+      {
+        "scope": "SPY:day:0:False|expiries=2026-10-07|gex.v2|OI",
+        "stored_rows": 13,
+        "matching_candles": 0,
+        "gap_counts": {
+          "no_prior_observation": 0,
+          "observation_too_old": 70,
+          "recorded_without_nodes": 0
+        }
+      },
+      {
+        "scope": "SPY:day:0:False|expiries=2026-10-08|gex.v2|OI",
+        "stored_rows": 2,
+        "matching_candles": 1,
+        "gap_counts": {
+          "no_prior_observation": 0,
+          "observation_too_old": 69,
+          "recorded_without_nodes": 0
+        }
+      },
+      {
+        "scope": "SPY:day:0:False|expiries=2026-10-09|gex.v2|OI",
+        "stored_rows": 6,
+        "matching_candles": 1,
+        "gap_counts": {
+          "no_prior_observation": 14,
+          "observation_too_old": 55,
+          "recorded_without_nodes": 0
+        }
+      },
+      {
+        "scope": "SPY:day:0:False|gex.v2|OI",
+        "stored_rows": 13,
+        "matching_candles": 0,
+        "gap_counts": {
+          "no_prior_observation": 0,
+          "observation_too_old": 70,
+          "recorded_without_nodes": 0
+        }
+      },
+      {
+        "scope": "SPY:day:None:False|expiries=2026-10-07,2026-10-08,2026-10-09,2026-10-12,2026-10-13,2026-10-14|gex.v2|OI",
+        "stored_rows": 210,
+        "matching_candles": 0,
+        "gap_counts": {
+          "no_prior_observation": 0,
+          "observation_too_old": 70,
+          "recorded_without_nodes": 0
+        }
+      },
+      {
+        "scope": "SPY:day:None:False|expiries=2026-10-07,2026-10-08,2026-10-09,2026-10-12|gex.v2|OI",
+        "stored_rows": 428,
+        "matching_candles": 0,
+        "gap_counts": {
+          "no_prior_observation": 0,
+          "observation_too_old": 70,
+          "recorded_without_nodes": 0
+        }
+      },
+      {
+        "scope": "SPY:day:None:False|expiries=2026-10-08,2026-10-09,2026-10-12,2026-10-13,2026-10-14,2026-10-15|gex.v2|OI",
+        "stored_rows": 176,
+        "matching_candles": 7,
+        "gap_counts": {
+          "no_prior_observation": 0,
+          "observation_too_old": 63,
+          "recorded_without_nodes": 0
+        }
+      },
+      {
+        "scope": "SPY:day:None:False|expiries=2026-10-08,2026-10-09,2026-10-12,2026-10-13|gex.v2|OI",
+        "stored_rows": 604,
+        "matching_candles": 13,
+        "gap_counts": {
+          "no_prior_observation": 0,
+          "observation_too_old": 57,
+          "recorded_without_nodes": 0
+        }
+      },
+      {
+        "scope": "SPY:day:None:False|expiries=2026-10-09,2026-10-12,2026-10-13,2026-10-14,2026-10-15,2026-10-16|gex.v2|OI",
+        "stored_rows": 229,
+        "matching_candles": 8,
+        "gap_counts": {
+          "no_prior_observation": 14,
+          "observation_too_old": 48,
+          "recorded_without_nodes": 0
+        }
+      },
+      {
+        "scope": "SPY:day:None:False|expiries=2026-10-09,2026-10-12,2026-10-13,2026-10-14|gex.v2|OI",
+        "stored_rows": 401,
+        "matching_candles": 12,
+        "gap_counts": {
+          "no_prior_observation": 14,
+          "observation_too_old": 44,
+          "recorded_without_nodes": 0
+        }
+      },
+      {
+        "scope": "SPY:day:None:False|expiries=2026-10-12,2026-10-13,2026-10-14,2026-10-15,2026-10-16,2026-10-19|gex.v2|OI",
+        "stored_rows": 12,
+        "matching_candles": 0,
+        "gap_counts": {
+          "no_prior_observation": 28,
+          "observation_too_old": 42,
+          "recorded_without_nodes": 0
+        }
+      },
+      {
+        "scope": "SPY:day:None:False|expiries=2026-10-12,2026-10-13,2026-10-14,2026-10-15|gex.v2|OI",
+        "stored_rows": 140,
+        "matching_candles": 0,
+        "gap_counts": {
+          "no_prior_observation": 28,
+          "observation_too_old": 42,
+          "recorded_without_nodes": 0
+        }
+      },
+      {
+        "scope": "SPY:day:None:False|expiries=2026-10-12|gex.v2|OI",
+        "stored_rows": 1,
+        "matching_candles": 0,
+        "gap_counts": {
+          "no_prior_observation": 28,
+          "observation_too_old": 42,
+          "recorded_without_nodes": 0
+        }
+      },
+      {
+        "scope": "SPY:day:None:False|expiries=2026-10-13,2026-10-14,2026-10-15,2026-10-16,2026-10-19,2026-10-20|gex.v2|OI",
+        "stored_rows": 9,
+        "matching_candles": 3,
+        "gap_counts": {
+          "no_prior_observation": 42,
+          "observation_too_old": 25,
+          "recorded_without_nodes": 0
+        }
+      },
+      {
+        "scope": "SPY:day:None:False|expiries=2026-10-13,2026-10-14,2026-10-15,2026-10-16|gex.v2|OI",
+        "stored_rows": 124,
+        "matching_candles": 6,
+        "gap_counts": {
+          "no_prior_observation": 42,
+          "observation_too_old": 22,
+          "recorded_without_nodes": 0
+        }
+      },
+      {
+        "scope": "SPY:day:None:False|expiries=2026-10-13,2026-10-15,2026-10-16,2026-10-19,2026-10-20,2026-10-21|gex.v2|OI",
+        "stored_rows": 4,
+        "matching_candles": 1,
+        "gap_counts": {
+          "no_prior_observation": 50,
+          "observation_too_old": 19,
+          "recorded_without_nodes": 0
+        }
+      },
+      {
+        "scope": "SPY:day:None:False|expiries=2026-10-14,2026-10-15,2026-10-16,2026-10-19,2026-10-20,2026-10-21|gex.v2|OI",
+        "stored_rows": 4,
+        "matching_candles": 0,
+        "gap_counts": {
+          "no_prior_observation": 56,
+          "observation_too_old": 14,
+          "recorded_without_nodes": 0
+        }
+      },
+      {
+        "scope": "SPY:day:None:False|expiries=2026-10-14,2026-10-15,2026-10-16,2026-10-19|gex.v2|OI",
+        "stored_rows": 249,
+        "matching_candles": 0,
+        "gap_counts": {
+          "no_prior_observation": 42,
+          "observation_too_old": 28,
+          "recorded_without_nodes": 0
+        }
+      },
+      {
+        "scope": "SPY:day:None:False|expiries=2026-10-15,2026-10-16,2026-10-19,2026-10-20,2026-10-21,2026-10-22|gex.v2|OI",
+        "stored_rows": 166,
+        "matching_candles": 0,
+        "gap_counts": {
+          "no_prior_observation": 56,
+          "observation_too_old": 14,
+          "recorded_without_nodes": 0
+        }
+      },
+      {
+        "scope": "SPY:day:None:False|expiries=2026-10-15,2026-10-16,2026-10-19,2026-10-20|gex.v2|OI",
+        "stored_rows": 71,
+        "matching_candles": 0,
+        "gap_counts": {
+          "no_prior_observation": 70,
+          "observation_too_old": 0,
+          "recorded_without_nodes": 0
+        }
+      }
+    ],
+    "limitations": "Bounded store-copy diagnosis, not whole-source recovery, default-scope substitution, capture activation or deployed backend certification."
+  },
+  "executed_checks": [
+    {
+      "name": "existing_preserved_history_diagnosis",
+      "result": "PASS",
+      "source": ".planning/eval/integration-reset-20261014/history-diagnosis.py",
+      "method": "Pinned Git code loaded in memory; removed only report-write AST expression. File-backed DuckDB opens refused; threads=1, memory_limit=128MB. Existing preserved JSON evidence; all Python oracle and SQL assertions retained.",
+      "rows": 2867,
+      "scopes": 21,
+      "candles": 70,
+      "default_matches": 0,
+      "any_scope_eligible_candles": 31,
+      "no_eligible_scope_candles": 39,
+      "evidence_sha256": "7573da9ae14e64070df419d7a7b7f3cc51439bc5cd63fd041224cfff0cc42682"
+    },
+    {
+      "name": "direct_existing_pure_test_cases",
+      "result": "PASS",
+      "cases": 13,
+      "files": [
+        "backend/tests/services/test_price_history_scope.py",
+        "backend/tests/services/test_price_history_volume.py",
+        "backend/tests/services/test_price_node_value_guards.py"
+      ],
+      "method": "Direct invocation, including six parameter cases, not pytest collection. Pinned production helper blobs, socket.connect denied, no conftest/app startup/singleton import, no file writes."
+    }
+  ],
+  "runtime": {
+    "successful_python": "/opt/homebrew/bin/python3.14",
+    "python_version": "3.14.6",
+    "duckdb_version": "1.5.3",
+    "initial_attempts": [
+      {
+        "command": "backend/.venv/bin/python",
+        "result": "No such file or directory"
+      },
+      {
+        "command": "/usr/bin/python3",
+        "result": "Python 3.9 ImportError: datetime.UTC unavailable"
+      }
+    ],
+    "installs": false
+  },
+  "test_inventory_not_rerun": [
+    {
+      "path": "backend/tests/services/test_duckdb_engine_durability.py",
+      "proof": "Actual engine selector write/close/reopen and fallback; same-process handles."
+    },
+    {
+      "path": "backend/tests/services/test_server_storage_bootstrap.py",
+      "proof": "Two subprocess server imports with synthetic settings; bootstrap probe, not full nodes."
+    },
+    {
+      "path": "backend/tests/solstice/test_r8_04_restart_durability.py",
+      "proof": "Decision/review same-process close/reopen with reasons and state."
+    },
+    {
+      "path": "backend/tests/solstice/test_r15_price_producer.py",
+      "proof": "Generation restart and price/snapshot replay; second_process-named test is sequential connections in ONE PID."
+    },
+    {
+      "path": "backend/tests/solstice/test_r18_range_replay_subprocess.py",
+      "proof": "Genuine distinct-PID range envelope + price paths; no production restart."
+    },
+    {
+      "path": "backend/tests/services/test_price_history_recording.py",
+      "proof": "Actual file vs memory backing/ticker range."
+    },
+    {
+      "path": "backend/tests/services/test_price_history_diagnostics.py",
+      "proof": "Scope echo, gap reasons, mocked actual producer-to-record scope."
+    },
+    {
+      "path": "backend/tests/unified/test_history_integrity.py",
+      "proof": "Keyset paging/clocks and known-at/age synthetic checks."
+    },
+    {
+      "path": "backend/tests/services/test_recorder_connection_lock.py",
+      "proof": "Failed recorder transaction cannot roll back an acknowledged concurrent engine write."
+    },
+    {
+      "path": "backend/tests/server/test_shutdown_join_bounds.py",
+      "proof": "Isolated journal release; does not certify original service full records."
+    },
+    {
+      "path": "backend/tests/server/test_shutdown_chain_bounds.py",
+      "proof": "Both research shutdown callbacks bounded; mocked resources."
+    },
+    {
+      "path": "backend/tests/unified/test_storage_restart_integrity.py",
+      "proof": "Related/scanner SQLite reopen/corruption; not whole DuckDB/Mongo coverage."
+    },
+    {
+      "path": "backend/tests/unified/test_legacy_export_completeness.py",
+      "proof": "Stopped synthetic export/summary import/digest/reopen; no physical quotes recovered."
+    }
+  ],
+  "original_obligations": {
+    "original_ledger_path": "/Users/nav/Documents/Codex/2026-10-08/hurry-bring-everything-together-now-last-8/outputs/FLOWW-OpenCode-Hermes-Handoff 2/original-contract/task-ledger.json",
+    "ledger_sha256": "2af8893fe277d2d7918a33c0648ec6bb45af658816bf7fec8ba857fac25a3d20",
+    "selected_exact_rows": [
+      {
+        "id": "C10",
+        "owner": "Cline",
+        "priority": "P1",
+        "title": "Owning stored exact-contract resolver",
+        "acceptance": "Recover exact OSI/series/expiry/strike/right/multiplier/quote-side clocks from owning persisted population; typed unsupported/stale/incomplete refusal; never current-chain reconstruction.",
+        "observed": "PR110 closes the PARTIAL gap: synthetic per-contract grounding rows (12, FAKE- OSIs, EXPLICIT/ MULTIPLIER_INVALID provenance) seeded through record_range_envelope; replay restitutes byte-identically (10/10 independent probe); strike/multiplier tamper -> DIGEST_MISMATCH never served; tampered rows cannot duplicate back; C16 clocks preserved (13:59:30/35, new digests in manifest); new suite 7/7 failed-first; 93-slice, 837 full slice (=830+7), budget 7/7, ruff clean. Body '844' mixes scopes (noted, non-blocking).",
+        "status": "ACCEPTED_AT_SHA",
+        "evidence": [
+          {
+            "source_sha": "58d93ad2570962087870102cf8dff0742465fd01",
+            "command": "OpenCode independent raw-patch review at PR110 head 58d93ad2: 10/10 probes (rows restituted byte-identical, exact identity fields, strike/multiplier tamper -> DIGEST_MISMATCH never served, tampered rows cannot duplicate back, C16 clocks preserved, unknown record -> None); prescription satisfied; receipt note on PR body arithmetic is non-blocking.",
+            "exit_code": 0,
+            "at": "2026-10-07T00:05:00-04:00",
+            "log_path": "references/evidence/c10-PR110-58d93ad2.log",
+            "log_sha256": "5c8cb2deb383a1cbf85a5c451f3a79d3e8aa7dca6f3aac72f95dede21f06e724"
+          },
+          {
+            "source_sha": "58d93ad2570962087870102cf8dff0742465fd01",
+            "command": "PR110 hosted 4/4 gates green at 58d93ad2; Cline failed-first 7/7 suite, r18+agent slice 195/0, full solstice+budget slice green; merged to main via a74cab7a and re-verified in the edaa1cc8 battery (93 r18+grounding incl. the 7 C10 pins; 858 full slice).",
+            "exit_code": 0,
+            "at": "2026-10-07T00:35:00-04:00",
+            "log_path": "references/evidence/c10-per-contract-62f29808.log",
+            "log_sha256": "bf9c0876a58f67fee02ff7bd4a31490d2a0c91355e4cdc3e60fc98a731fd8ca4"
+          }
+        ],
+        "reviewer": {
+          "owner": "OpenCode",
+          "source_sha": "58d93ad2570962087870102cf8dff0742465fd01",
+          "verdict": "ACCEPT"
+        },
+        "next_action": "ACCEPTED_AT_SHA 58d93ad2 (reviewed source; merged to main via a74cab7a). Per-contract identity population now persisted and restituted; consumer drafting stays RANGE_RECORD_REFERENCE_ONLY; real captures remain NAV-CAPTURE.",
+        "accepted_sha": "58d93ad2570962087870102cf8dff0742465fd01"
+      },
+      {
+        "id": "C11",
+        "owner": "Cline",
+        "priority": "P1",
+        "title": "Authenticated explicit capture boundary",
+        "acceptance": "Display/index/replay GET reads never write; persist/capture requires server authorization and default-off feature; denied captures have zero writes; no worker activation.",
+        "observed": "Capture boundary at market_data.py (325-372): FLOWW_RANGE_CAPTURE_ENABLED check \u2192 API-key admission \u2192 conn \u2192 attestation object; default-off at HTTP; persisted only in attestation (verified earlier and unchanged per diff range).",
+        "status": "ACCEPTED_AT_SHA",
+        "evidence": [
+          {
+            "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+            "command": "see c-lane-6342afdf.log (focused suites + independent probes)",
+            "exit_code": 0,
+            "at": "2026-10-05T13:10:00-04:00",
+            "log_path": "references/evidence/c-lane-6342afdf.log",
+            "log_sha256": "28e54ab2c707545751f9b077071bf62cc5ffd996984803c8f3f8619692a21b45"
+          }
+        ],
+        "reviewer": {
+          "owner": "OpenCode",
+          "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+          "verdict": "ACCEPT"
+        },
+        "accepted_sha": "6342afdf7241fae935002461fc2d002adf2e41ac"
+      },
+      {
+        "id": "C12",
+        "owner": "Cline",
+        "priority": "P1",
+        "title": "Independent writer exit reader durability",
+        "acceptance": "Temporary file DB, distinct PIDs/clean exits, exact axes/cells/clocks/metrics/digests/resolver data restored; corrupt/schema/missing/gap refusals; no production restart.",
+        "observed": "test_r18_range_replay_subprocess (6 tests) rerun at this head \u2014 storage writer active-changed post-proof; all pass.",
+        "status": "ACCEPTED_AT_SHA",
+        "evidence": [
+          {
+            "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+            "command": "see c-lane-6342afdf.log (focused suites + independent probes)",
+            "exit_code": 0,
+            "at": "2026-10-05T13:10:00-04:00",
+            "log_path": "references/evidence/c-lane-6342afdf.log",
+            "log_sha256": "28e54ab2c707545751f9b077071bf62cc5ffd996984803c8f3f8619692a21b45"
+          }
+        ],
+        "reviewer": {
+          "owner": "OpenCode",
+          "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+          "verdict": "ACCEPT"
+        },
+        "accepted_sha": "6342afdf7241fae935002461fc2d002adf2e41ac"
+      },
+      {
+        "id": "C15",
+        "owner": "Cline",
+        "priority": "P1",
+        "title": "Bounded data cadence and recovery design",
+        "acceptance": "Reuse shared pacer/worker/calendar/Retry-After/401 invalidation/cache; capture defaults off; five-minute price path is swing data, finer cadence only bounded tested disarmed design.",
+        "observed": "Diff a0c7fbc6..6342afdf does not touch producer/recorder_health/price_paths at all \u2014 no duplicate worker, no subscription drift; capture stays default-off.",
+        "status": "ACCEPTED_AT_SHA",
+        "evidence": [
+          {
+            "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+            "command": "see c-lane-6342afdf.log (focused suites + independent probes)",
+            "exit_code": 0,
+            "at": "2026-10-05T13:10:00-04:00",
+            "log_path": "references/evidence/c-lane-6342afdf.log",
+            "log_sha256": "28e54ab2c707545751f9b077071bf62cc5ffd996984803c8f3f8619692a21b45"
+          }
+        ],
+        "reviewer": {
+          "owner": "OpenCode",
+          "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+          "verdict": "ACCEPT"
+        },
+        "accepted_sha": "6342afdf7241fae935002461fc2d002adf2e41ac"
+      },
+      {
+        "id": "NAV-CAPTURE",
+        "owner": "Nav",
+        "priority": "EXTERNAL",
+        "title": "Production records and restart approval",
+        "acceptance": "Approve actual capture/store/ticker/range/rights and production writer exit/restart/read receipts with admitted full owning records.",
+        "observed": "HOLD: synthetic process proof cannot substitute.",
+        "status": "EXTERNAL_HOLD",
+        "evidence": [],
+        "reviewer": null
+      }
+    ],
+    "unified_scope_path": "/Users/nav/Documents/Codex/2026-10-07/so-we-have-a-really-big-3/outputs/FLOWW-Unified-Harness/scope.json",
+    "unified_selected_exact_rows": [
+      {
+        "id": "U08",
+        "title": "Recorded history clocks, stable paging and gaps",
+        "owner": "Cline",
+        "reviewer": "OpenCode",
+        "priority": "P1",
+        "initial_status": "READY",
+        "write_paths": [
+          "backend/services/solstice_decision_history.py",
+          "backend/services/price_node_history.py",
+          "backend/services/recorded_price_levels.py",
+          "backend/routes/price_history.py",
+          "backend/tests/unified/test_history_integrity.py",
+          "docs/unified/U08/"
+        ],
+        "read_paths": [
+          "backend/routes/solstice_review.py",
+          "backend/services/heatmap_history.py",
+          "frontend/src/components/heatseeker/PriceNodeHistory.jsx",
+          "frontend/src/components/heatseeker/recordedPriceChartData.js"
+        ],
+        "dependencies": [],
+        "acceptance": "Check date ordering across UTC/New York/DST, stable keyset pages under new inserts, ticker/state cursor binding, bounded lock/query timeout, malformed clocks/IDs, historical node known_at/age intervals and missing/truncated history. Preserve observation time versus receipt time and owning snapshot IDs. Unknown, zero, unavailable and gaps remain distinct; do not reconstruct old Greeks/nodes from current chains. Report pages as live paged observations unless a frozen export is independently demonstrated. Use isolated records and genuine counterexamples; no active-store rewrite."
+      },
+      {
+        "id": "U10",
+        "title": "Older decision export completeness and reversible migration proof",
+        "owner": "Cline",
+        "reviewer": "OpenCode",
+        "priority": "P0",
+        "initial_status": "READY",
+        "write_paths": [
+          "backend/scripts/export_legacy_decisions.py",
+          "backend/tests/unified/test_legacy_export_completeness.py",
+          "docs/unified/U10/"
+        ],
+        "read_paths": [
+          "backend/services/legacy_decision_recovery.py",
+          "backend/scripts/import_legacy_decision_summaries.py",
+          "backend/routes/solstice_review.py",
+          "backend/services/solstice_decision_history.py"
+        ],
+        "dependencies": [],
+        "acceptance": "Build a recovery receipt stating source service/store identity, expected records by ticker/table, exported pages/IDs, terminal cursors, duplicates, unknown clocks, missing/inaccessible rows, exact export digests and independently reopened destination copy. Capped legacy lists and successful summary import cannot prove completeness or restore quotes; source importer truth quote_details_recovered=0 is retained. Original8000/8001 services, original files/WAL and user jobs remain intact. Automated importer/export tests use isolated stopped copies; no live-store import or migration. If full source access cannot be established, keep this task BLOCKED with concrete missing coverage while independent work continues."
+      },
+      {
+        "id": "U11",
+        "title": "All-store isolation and restart integrity",
+        "owner": "Cline",
+        "reviewer": "OpenCode",
+        "priority": "P1",
+        "initial_status": "READY",
+        "write_paths": [
+          "backend/tests/unified/test_storage_restart_integrity.py",
+          "docs/unified/U11/"
+        ],
+        "read_paths": [
+          "backend/services/duckdb_engine.py",
+          "backend/services/heatmap_history.py",
+          "backend/services/agent/repository.py",
+          "backend/services/public_scanner.py",
+          "backend/services/related_price_series.py"
+        ],
+        "dependencies": [],
+        "acceptance": "Inventory actual DuckDB, Mongo, agent-history and all scanner/Related SQLite backing paths and owners without exposing settings. Verify default/fallback memory is disclosed and never called crash-safe. Test durable record/digest/clock/coverage survival, torn/corrupt/missing storage and reopen on isolated synthetic copies, preserving WAL companions where applicable. DuckDB isolation alone does not isolate other stores. Do not restart original services, borrow user Mongo for tests or alter ignored settings; inability to establish isolated paths blocks only affected checks."
+      }
+    ],
+    "rows_selected": 8,
+    "scope_limit": "Selected capture/recovery-related obligations, not a whole-ledger reacceptance."
+  },
+  "source_retrieval": {
+    "missing_plan": ".planning/unknowns/data-improvement-plan-20261006.md",
+    "result": "NOT_RECOVERED_IN_TARGETED_SEARCH",
+    "git_all_refs_filename_history": "no matching commits returned in integration repository",
+    "filename_roots_checked": [
+      "/Users/nav/Documents/GitHub/floww-2/.planning/unknowns",
+      "/Users/nav/Documents/Codex/2026-10-07/so-we-have-a-really-big-3/work",
+      "/Users/nav/Documents/Codex/2026-10-08/hurry-bring-everything-together-now-last-8/outputs",
+      "/Users/nav/.codex/attachments",
+      "/Users/nav/.hermes/attachments"
+    ],
+    "excluded_dependency_and_bulk_data_trees": true,
+    "october_6_codex_directory_exists": false,
+    "sessions_found": [
+      "20261008_144823_5a533d",
+      "20261008_floww_hermes_continuation",
+      "20261011_004910_fa3472",
+      "20261008_133046_bfcf57"
+    ],
+    "session_result": "Exact-name hits reference missing plan/checkpoints, not plan contents. Broader older-decision search yielded noisy results and is not evidence of absence.",
+    "local_continuation_attachment": {
+      "path": "/Users/nav/.hermes/attachments/pasted_content_2026-10-08_17-25-40-376_7795be.txt",
+      "exists": true,
+      "contains_missing_plan_body": false
+    },
+    "local_private_pasted_attachment": {
+      "path": "/Users/nav/.codex/attachments/6b2ad1e4-dea9-4577-9f46-d9d74396a022/Pasted text.txt",
+      "exists": true,
+      "read_scope": "Initial receipt/remaining-requirements section; no claim entire attachment reviewed",
+      "content_role": "PR104 handoff, not full older-record export or missing plan"
+    },
+    "private_heatmap_thread": {
+      "id": "6ab33e1a-8cf0-83ea-96a0-efed5ecd04be",
+      "title": "Heatmap Upgrade Plan",
+      "local_source": "/Users/nav/Documents/Codex/2026-10-08/hurry-bring-everything-together-now-last-8/outputs/FLOWW-OpenCode-Hermes-Handoff 2/check-receipts/planning-recovery-search.json",
+      "evidence_level": "Prior local metadata-only search receipt; private cloud not accessed now"
+    },
+    "sandbox_names_from_selected_planning": [
+      "Solstice-Heatmap-Complete-AI-Handoff.zip",
+      "PASTE-THIS-TO-NEXT-AI-Solstice.md",
+      "Solstice-Heatmap-Current-Code-Handoff.md",
+      "Floww-2-Solstice-Heatmap-Master-Plan.md",
+      "Solstice-Heatmap-Source-Manifest.csv"
+    ],
+    "sandbox_bytes_recovered": false,
+    "universal_absence_claim": false,
+    "prior_never_existed_claim_adopted": false
+  },
+  "narrow_changes_not_applied": [
+    {
+      "priority": 1,
+      "change": "Compose engine-selector -> record_snapshot -> writer exit -> distinct reader -> read_snapshots/build_history test",
+      "boundaries": "Synthetic isolated file only; no providers, lifespan workers or active-store writes; exact clock/scope/identity + foreign/late/old cases."
+    },
+    {
+      "priority": 2,
+      "change": "Bound write queue/pending bytes and surface committed/failed/refused receipts",
+      "boundaries": "Preserve transactional connection lock; failing/slow writer and shutdown-drain tests. No activation."
+    },
+    {
+      "priority": 3,
+      "change": "Report configured vs actual backing/fallback reason and refuse memory for durable-required writes",
+      "boundaries": "Do not globally remove tested permissive read startup; preserve default-off capture."
+    },
+    {
+      "priority": 4,
+      "change": "Inject opt-in DuckDB resource config and instrument latency/lock/queue/write outcomes offline",
+      "boundaries": "Production numbers require policy; no destructive retention/coverage reductions."
+    },
+    {
+      "priority": 5,
+      "change": "Build complete source-table/ID/digest/reopened-destination recovery receipt from trusted isolated source snapshot",
+      "boundaries": "Original DB+WAL/service intact; summary importer does not restore physical owning records; explicit chunking beyond caps."
+    }
+  ],
+  "still_blocked": [
+    "Authoritative original source service/store/export identity and complete expected population by ticker/table.",
+    "Full original physical quote/snapshot/review records beyond capped summary exports.",
+    "Approved actual capture/store/ticker/range/rights plus full production writer-exit/reopen receipts (NAV-CAPTURE).",
+    "Required stop authorization before touching original source/recovery services.",
+    "Missing named plan/private sandbox bytes; unseen criteria unreviewed.",
+    "Exact cause of earlier memory-backed worker; no causal startup/OOM log found in targeted logs."
+  ],
+  "source_blob_sha256": {
+    "backend/server.py": "e46a1d6d7e9be5fe5ed84cbd96711abffc91a55ecdc9866f6f0790b95a5d8efe",
+    "backend/services/duckdb_engine.py": "f7e43b18b336df92b62cd4333634bcac621a601abfc7639e62193f6f4ac55f37",
+    "backend/services/heatmap_history.py": "91060b3d2440d1da77396685f88ed943cfd687e9e6c37e15229196e624a34008",
+    "backend/services/price_node_history.py": "d6fe99ef8c81efd69b5861c10da75602ef14e4d4c5807a5b32ead699bca17d41",
+    "backend/routes/price_history.py": "5238bf71fb3ea2667f4cf3482e9c3cdbecb6ae05699dd2389b07805f489c045f",
+    "backend/services/legacy_decision_recovery.py": "aa4e272d22ab6be1420d80838905f319ae111b673a33bcc5df4033540707e887",
+    "backend/scripts/export_legacy_decisions.py": "eab4b6eb794b41b00241e717140708c99179a2c92e9c2d32e853ef073a22d291",
+    "backend/tests/services/test_duckdb_engine_durability.py": "284b74732fa1b65bc694d51ff84b985a2265d21fa0abee66812ac5058a805d62",
+    "backend/tests/services/test_server_storage_bootstrap.py": "f0888ddb91902173f676e1f88593c0ae388dbb70528427155d270e6b0bae931e",
+    "backend/tests/solstice/test_r8_04_restart_durability.py": "50a3016420621ea45ddf3809422b00affa1061b229dc724a3be5751d290ce0ee",
+    "backend/tests/solstice/test_r15_price_producer.py": "f163c6466c683c5132b79a23dda135bb2e44ab4448da909439e59652ca98a979",
+    "backend/tests/solstice/test_r18_range_replay_subprocess.py": "8e4754f87c75dc297419db27c750f46502b33789ac03028e97d17153c078afd3",
+    "backend/tests/unified/test_legacy_export_completeness.py": "bc15938a7898c3632408f6b996e14d5c39b16ddaddae0be93135bb860bf78e16",
+    "backend/tests/services/test_price_history_scope.py": "6110c04f5549c0f9d5246d331e0424cf3e6fbd1ebc9bd3cc03b40e14a67b0b4e",
+    "backend/tests/services/test_price_history_volume.py": "df7d5313b2d4ac90bc43c8e1742b8ce5989b33f4d7bd0712abd79ad6c37ae194",
+    "backend/tests/services/test_price_node_value_guards.py": "07de1b9c51e5079786f8eb83fa34fc8717907e872d67eb74c6b033f0ca3609a6"
+  },
+  "concurrent_worktree_status_at_report": [
+    " M .serena/project.yml",
+    " M kanban/BOTTLENECK_ALERTS.md",
+    ""
+  ],
+  "final_claim": "Audit findings complete for scoped committed-source, bounded-evidence and targeted recovery-source investigation. No whole-product/capture/production-recovery acceptance granted."
+}

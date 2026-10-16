@@ -104,6 +104,18 @@ test("handoff selects the wall and shows its two-sided scenario", async () => {
   expect(window.sessionStorage.getItem("solstice.triadHandoff")).toBeNull();
 });
 
+test("raw and adjusted maps scroll together without changing the snapshot", async () => {
+  await act(async()=>render(<TrinityView/>));
+  fireEvent.change(screen.getByLabelText("Adjusted context"),{target:{value:"delta"}});
+  const raw=screen.getByTestId("triad-pane-raw").querySelector(".skylit-heatmap-container");
+  const adjusted=screen.getByTestId("triad-pane-adjusted").querySelector(".skylit-heatmap-container");
+  raw.scrollTop=123; raw.scrollLeft=40;
+  fireEvent.scroll(raw);
+  expect(adjusted.scrollTop).toBe(123);
+  expect(adjusted.scrollLeft).toBe(40);
+  expect(screen.getByTestId("triad-source")).toHaveTextContent("snap-triad-1");
+});
+
 test("wall chips select; drawer lists recorded candidates before any exact-detail request", async () => {
   await act(async () => { render(<TrinityView />); });
   await waitFor(() => expect(screen.getByTestId("triad-walls")).toBeInTheDocument());
@@ -164,7 +176,19 @@ test("review saves through the journal with frozen context", async () => {
   expect(axios.post.mock.calls[0][1].state).toBe("reviewed");
 });
 
-test("selected wall shows an actual price path with the zone shaded and VWAP labeled unavailable", async () => {
+test("a current wall is not painted across old prices, and missing closes remain separated", async () => {
+ axios.get.mockImplementation(async url=>({data:String(url).includes('/api/heatmap/')?heatmapFixture():String(url).includes('price-history')?{ticker:'SPY',frames:[
+  {time:'2026-09-21T14:00:00Z',close:758},{time:'2026-09-22T14:00:00Z',close:null},{time:'2026-09-24T14:00:00Z',close:764}]}:{decisions:[],leaderboard:[]}}));
+ await act(async()=>render(<TrinityView/>));
+ fireEvent.click(screen.getByTestId('triad-wall-w1'));
+ await waitFor(()=>expect(screen.getByTestId('triad-price-path')).toBeInTheDocument());
+ expect(screen.queryByTestId('triad-price-zone')).toBeNull();
+ expect(screen.getByTestId('triad-price-path-svg').querySelectorAll('polyline')).toHaveLength(0);
+ expect(screen.getByTestId('triad-price-caption')).toHaveTextContent('not historical candle-time levels');
+ expect(screen.getByTestId('triad-price-path-svg')).toHaveAttribute('data-first-at','2026-09-21T14:00:00.000Z');
+});
+
+test("selected wall keeps actual price closes separate from current zone references and unavailable VWAP", async () => {
   axios.get.mockImplementation(async (url) => {
     const u = String(url);
     if (u.includes("/api/heatmap/")) return { data: heatmapFixture() };
@@ -190,8 +214,9 @@ test("selected wall shows an actual price path with the zone shaded and VWAP lab
   const pts = svg.querySelector("polyline").getAttribute("points").trim().split(" ");
   expect(pts).toHaveLength(4);
   expect(new Set(pts.map((p) => p.split(",")[1])).size).toBeGreaterThan(1);
-  // Wall zone 760-766 shaded; VWAP honestly unavailable.
-  expect(screen.getByTestId("triad-price-zone")).toBeInTheDocument();
+  // A current wall is never painted onto past prices without temporal evidence.
+  expect(screen.queryByTestId("triad-price-zone")).toBeNull();
+  expect(screen.getByTestId("triad-price-path")).toHaveTextContent("Current map reference: wall 760–766");
   expect(screen.getByTestId("triad-price-caption").textContent).toMatch(/VWAP unavailable/i);
 });
 
@@ -209,6 +234,23 @@ test("no price candles renders an honest empty, not an empty chart", async () =>
   }));
   await act(async () => { render(<TrinityView />); });
   await waitFor(() => expect(screen.getByTestId("triad-price-empty")).toBeInTheDocument());
+});
+
+test("market review uses the same four-step inspector without automatic research or contract reads", async () => {
+  await act(async () => render(<TrinityView />));
+  await act(async () => fireEvent.click(screen.getByTestId("triad-wall-w1")));
+  await act(async () => fireEvent.click(screen.getByTestId("triad-contracts-btn")));
+  expect(screen.getByRole("tab", {name:"Contract"})).toHaveAttribute("aria-selected", "true");
+  const before = axios.get.mock.calls.length;
+  fireEvent.click(screen.getByRole("tab", {name:"Flow"}));
+  expect(screen.getByRole("tabpanel", {name:"Flow"})).toHaveTextContent("SPY");
+  expect(screen.getByRole("tabpanel", {name:"Flow"})).toHaveTextContent("snap-triad-1");
+  fireEvent.click(screen.getByRole("tab", {name:"Public agent"}));
+  expect(screen.getByRole("tabpanel", {name:"Public agent"})).toHaveTextContent("not delivery or activation");
+  fireEvent.click(screen.getByRole("tab", {name:"Contract"}));
+  expect(screen.getByTestId("triad-contract-row")).toBeVisible();
+  expect(axios.get.mock.calls).toHaveLength(before);
+  expect(axios.post).not.toHaveBeenCalled();
 });
 
 test("contract drawer moves focus in and restores it on close", async () => {

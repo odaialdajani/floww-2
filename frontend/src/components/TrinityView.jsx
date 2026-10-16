@@ -9,6 +9,10 @@ import { ALL_BASES, surfaceStatus, wallValues, wallRead } from "../lib/solsticeM
 import StrikeExposureProfile from "./triad/StrikeExposureProfile";
 import ExactContractReview from "./heatseeker/ExactContractReview";
 import AskLodestar from "./heatseeker/AskLodestar";
+import ReviewInspector, {ReviewSelectionContext} from "./heatseeker/ReviewInspector";
+import HeatmapLandmarks from "./heatseeker/HeatmapLandmarks";
+import WallInspector from "./heatseeker/WallInspector";
+import {chartTime} from "./heatseeker/recordedPriceChartData";
 import { usePublishScreenContext } from "../agent/useScreenContext";
 import { replayToDisplay } from "../lib/solsticeReplay";
 import ReplayStrip from "./heatseeker/ReplayStrip";
@@ -91,6 +95,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
   const [mobilePane, setMobilePane] = useState("raw");
   const [cell, setCell] = useState(null);
   const [contractSelection, setContractSelection] = useState(null);
+  const [reviewSelectionRevision, setReviewSelectionRevision] = useState(0);
   const onContractSelection = useCallback(selection => {
     setContractSelection(selection);
     if (selection?.status === "resolved") setCell({strike: Number(selection.identity.strike), colKey: selection.identity.expiry});
@@ -126,6 +131,15 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
       try { drawerPrevFocusRef.current?.focus?.(); } catch { /* noop */ }
     };
   }, [drawerOpen]);
+  const rawMapRef = useRef(null);
+  const adjustedMapRef = useRef(null);
+  const syncMaps = event => {
+    const source = event.currentTarget;
+    const target = source === rawMapRef.current ? adjustedMapRef.current : rawMapRef.current;
+    if (!target) return;
+    if (target.scrollTop !== source.scrollTop) target.scrollTop = source.scrollTop;
+    if (target.scrollLeft !== source.scrollLeft) target.scrollLeft = source.scrollLeft;
+  };
   const genRef = useRef(0);
   const mountedRef = useRef(true);
 
@@ -243,6 +257,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
   }, [symbolInput, ticker, onFocusTicker]);
 
   const selectWall = useCallback((id) => {
+    setReviewSelectionRevision(value => value + 1);
     setWallId(id);
     setCell(null);
     setDrawerOpen(false);
@@ -328,6 +343,9 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
           {" "}Usable inputs: {surfaceStatus(payload, basis).usable ?? "unknown"} · {surfaceStatus(payload, basis).status}.
           {" "}{surfaceStatus(payload, basis).reason || "No volume or Greeks are inferred from OI."}</p>
       </details>}
+      <HeatmapLandmarks data={payload} />
+      <div className={drawerOpen ? "triad-review-workspace" : ""}>
+      <div className="triad-review-analysis">
       <StrikeExposureProfile data={payload} basis={basis} wall={selectedWall} onSelect={onGridCell} />
       <div className="triad-pair" data-testid="triad-raw-adjusted" data-mobile-pane={mobilePane}>
         <div className="triad-pane" data-testid="triad-pane-raw">
@@ -335,7 +353,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
             Raw GEX · USD/1% move · {payload?.formula_version || "gex.v2"}
           </div>
           <SkylitHeatmapGrid data={payload} spot={spot} ticker={ticker}
-            viewMode="gex" metric="raw" axes={pairAxes} scale={pairScale} onCellClick={(s, e) => onGridCell(s, e, "raw")} selected={cell ? { strike: cell.strike, expiry: cell.colKey } : null} wallBand={selectedWall} />
+            viewMode="gex" metric="raw" showLandmarks={false} scrollRef={rawMapRef} onScroll={syncMaps} axes={pairAxes} scale={pairScale} onCellClick={(s, e) => onGridCell(s, e, "raw")} selected={cell ? { strike: cell.strike, expiry: cell.colKey } : null} wallBand={selectedWall} />
         </div>
         <div className="triad-pane" data-testid="triad-pane-adjusted">
           <div className="triad-pane-header" title={adjDef?.units || "No per-strike surface for this basis in the snapshot"}>
@@ -343,7 +361,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
           </div>
           {adjAvailable ? (
             <SkylitHeatmapGrid data={payload} spot={spot} ticker={ticker}
-              viewMode="gex" metric={basis} axes={pairAxes} scale={pairScale} onCellClick={(s, e) => onGridCell(s, e, "adjusted")} selected={cell ? { strike: cell.strike, expiry: cell.colKey } : null} wallBand={selectedWall} />
+              viewMode="gex" metric={basis} showLandmarks={false} scrollRef={adjustedMapRef} onScroll={syncMaps} axes={pairAxes} scale={pairScale} onCellClick={(s, e) => onGridCell(s, e, "adjusted")} selected={cell ? { strike: cell.strike, expiry: cell.colKey } : null} wallBand={selectedWall} />
           ) : (
             <div className="triad-unavailable" data-testid="triad-adjusted-unavailable"
               title={basis === "window" ? "window_dadgex has no per-strike surface in the snapshot contract" : "adjusted surface missing from this snapshot"}>
@@ -370,11 +388,13 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
           corresponding GEX wall will say so here rather than inheriting another wall's story.
         </div>
       )}
+      </div>
       {drawerOpen && (
-        <ContractDrawer data={payload} cell={cell} replay={isReplay}
-          wall={selectedWall} onClose={() => setDrawerOpen(false)} ticker={ticker}
+        <ContractDrawer selectionRevision={reviewSelectionRevision} data={payload} cell={cell} replay={isReplay} metric={activeMetric}
+          wall={selectedWall} scenario={scenarios[0] || null} onClose={() => setDrawerOpen(false)} ticker={ticker}
           closeRef={drawerCloseRef} selectionScope={contractScope} onSelection={onContractSelection} />
       )}
+      </div>
       <ReviewSection journal={journal} ticker={ticker} snapshotId={payload?.snapshotId} />
       <div className="triad-source" data-testid="triad-source">
         {isReplay ? "REPLAY · " : "LIVE · "}{payload?.snapshotId ? `snapshot ${payload.snapshotId}` : "no snapshot"}
@@ -555,49 +575,46 @@ function WallPricePath({ ticker, wall, spot }) {
       .catch(() => { if (!cancelled) setFailed(true); });
     return () => { cancelled = true; ctrl.abort(); };
   }, [ticker, wall?.wall_id]);
-  const closes = useMemo(
-    () => (frames || []).map((f) => f.close).filter((c) => typeof c === "number" && Number.isFinite(c)),
-    [frames]
-  );
-  if (frames === null && !failed) {
-    return <div className="triad-price-loading">loading price path…</div>;
-  }
-  if (failed) {
-    return <div className="triad-price-empty" data-testid="triad-price-empty">Price history unavailable for this symbol.</div>;
-  }
-  if (!closes.length) {
-    return <div className="triad-price-empty" data-testid="triad-price-empty">No price candles for this period.</div>;
-  }
+  const rows = useMemo(() => (Array.isArray(frames) ? frames : []).map(frame => {
+    const at = typeof frame?.time === "string" && /(?:Z|[+-]\d{2}:\d{2})$/.test(frame.time) ? Date.parse(frame.time) : NaN;
+    return {at, close: typeof frame?.close === "number" && Number.isFinite(frame.close) && frame.close > 0 ? frame.close : null};
+  }), [frames]);
+  const counts = new Map();
+  for (const row of rows) if (Number.isFinite(row.at)) counts.set(row.at, (counts.get(row.at) || 0) + 1);
+  const observed = rows.filter(row => Number.isFinite(row.at) && counts.get(row.at) === 1 && row.close != null);
+  if (frames === null && !failed) return <div className="triad-price-loading">loading price path…</div>;
+  if (failed) return <div className="triad-price-empty" data-testid="triad-price-empty">Price history unavailable for this symbol.</div>;
+  if (!observed.length) return <div className="triad-price-empty" data-testid="triad-price-empty">No price candles for this period.</div>;
   const W = 300, H = 120, PAD = 6;
-  const lo = Math.min(...closes, Number(wall.low));
-  const hi = Math.max(...closes, Number(wall.high));
+  const first = Math.min(...observed.map(row => row.at)), last = Math.max(...observed.map(row => row.at));
+  const lo = Math.min(...observed.map(row => row.close)), hi = Math.max(...observed.map(row => row.close));
   const span = hi - lo || 1;
-  const X = (i) => PAD + (closes.length < 2 ? W / 2 : (i / (closes.length - 1)) * (W - 2 * PAD));
-  const Y = (v) => H - PAD - ((Number(v) - lo) / span) * (H - 2 * PAD);
-  const pts = closes.map((c, i) => `${X(i).toFixed(1)},${Y(c).toFixed(1)}`).join(" ");
-  const zy1 = Y(Math.min(Number(wall.high), hi));
-  const zy2 = Y(Math.max(Number(wall.low), lo));
-  const spotY = spot != null && Number.isFinite(Number(spot)) ? Y(Number(spot)) : null;
-  return (
-    <div className="triad-price" data-testid="triad-price-path">
-      <svg data-testid="triad-price-path-svg" viewBox={`0 0 ${W} ${H}`} width="100%" height="120"
-        role="img" aria-label={`Recent closes with wall zone ${wall.low} to ${wall.high}`}>
-        <rect data-testid="triad-price-zone" x={PAD} y={Math.min(zy1, zy2)}
-          width={W - 2 * PAD} height={Math.abs(zy2 - zy1)}
-          fill="rgba(251,191,36,0.12)" />
-        <polyline points={pts} fill="none" stroke="#7dd3fc" strokeWidth="1.5" />
-        {spotY != null && spotY >= 0 && spotY <= H && (
-          <line x1={PAD} x2={W - PAD} y1={spotY} y2={spotY} stroke="#f472b6" strokeWidth="1" strokeDasharray="4 3" />
-        )}
-      </svg>
-      <div className="triad-price-caption" data-testid="triad-price-caption">
-        {closes.length} closes · zone shaded · VWAP unavailable (no verified source)
-      </div>
+  const X = at => first === last ? W / 2 : PAD + (at - first) / (last - first) * (W - 2 * PAD);
+  const Y = value => H - PAD - (value - lo) / span * (H - 2 * PAD);
+  const segments = [];
+  let segment = [], previous = null;
+  for (const row of rows) {
+    if (!Number.isFinite(row.at) || row.close == null || counts.get(row.at) !== 1 || (previous != null && row.at <= previous)) {
+      if (segment.length) segments.push(segment);
+      segment = []; previous = null; continue;
+    }
+    segment.push(row); previous = row.at;
+  }
+  if (segment.length) segments.push(segment);
+  return <div className="triad-price" data-testid="triad-price-path">
+    <p className="triad-price-caption">Current map reference: wall {wall.low}–{wall.high}{typeof spot === "number" && Number.isFinite(spot) ? ` · price ${spot}` : ""} — not historical candle-time levels.</p>
+    <svg data-testid="triad-price-path-svg" data-first-at={new Date(first).toISOString()} data-last-at={new Date(last).toISOString()}
+      viewBox={`0 0 ${W} ${H}`} width="100%" height="120" role="img" aria-label="Historical closes by recorded time; no historical wall inferred">
+      {segments.filter(part => part.length > 1).map((part, i) => <polyline key={i} points={part.map(row => `${X(row.at).toFixed(1)},${Y(row.close).toFixed(1)}`).join(" ")} fill="none" stroke="#7dd3fc" strokeWidth="1.5" />)}
+      {observed.map(row => <circle key={row.at} cx={X(row.at)} cy={Y(row.close)} r="1.5" fill="#7dd3fc"><title>{new Date(row.at).toISOString()} · {row.close}</title></circle>)}
+    </svg>
+    <div className="triad-price-caption" data-testid="triad-price-caption">
+      {observed.length} closes · {chartTime(first, true)} → {chartTime(last, true)} · missing/ambiguous readings break the line. Current map references are not historical candle-time levels. VWAP unavailable (no verified source).
     </div>
-  );
+  </div>;
 }
 
-function ContractDrawer({ data, cell, replay, wall, onClose, ticker, closeRef, selectionScope, onSelection }) {
+function ContractDrawer({ data, cell, replay, wall, scenario, metric, onClose, ticker, closeRef, selectionScope, onSelection, selectionRevision }) {
   useEffect(() => {
     const close = e => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", close);
@@ -608,9 +625,24 @@ function ContractDrawer({ data, cell, replay, wall, onClose, ticker, closeRef, s
       <span>Contracts · {ticker} {wall ? `${wall.low}–${wall.high}` : ""}</span>
       <button ref={closeRef} onClick={onClose} data-testid="triad-drawer-close" aria-label="Close contract review">✕</button>
     </div>
-    <ExactContractReview key={`${ticker}|${wall?.wall_id || ""}|${data?.snapshotId || ""}`} ticker={ticker} data={data} wall={wall} cell={cell} replay={replay} selectionScope={selectionScope} onSelection={onSelection} />
-    <AskLodestar subject={`${ticker} · exact contract review`} compact />
-    <GroundedPublicReview />
+    <ReviewInspector context={<ReviewSelectionContext ticker={ticker} data={data} wall={wall} cell={cell} metric={metric} replay={replay}/>} initialTab="contract" selectionKey={`${ticker}|${wall?.wall_id || ""}|${selectionScope}|${replay}|${selectionRevision}`}
+      wall={<WallInspector wall={wall} interaction={data?.interactions?.find(i => i.wall_id === wall?.wall_id)}
+        metrics={data?.metrics} grids={data?.metrics?.grids} displayGrid={data?.grid} quality={data?.quality}
+        metric={metric} scenario={scenario} snapshotId={data?.snapshotId} replay={replay} />}
+      contract={<ExactContractReview key={`${ticker}|${wall?.wall_id || ""}|${data?.snapshotId || ""}`} ticker={ticker} data={data} wall={wall} cell={cell} replay={replay} selectionScope={selectionScope} onSelection={onSelection} />}
+      flow={<>
+        <h3>Flow · selected reading</h3>
+        <dl className="review-inspector-context">
+          <dt>Stock / wall</dt><dd>{ticker} · {wall?.wall_id || "No classified wall"}</dd>
+          <dt>Snapshot</dt><dd>{data?.snapshotId || "Unknown"}</dd>
+          <dt>Market observation</dt><dd>{data?.event_time || data?.observed_at || "Unknown"}</dd>
+          <dt>Snapshot time</dt><dd>{data?.asof || "Unknown"} · {replay ? "Recorded" : "Live request"}</dd>
+        </dl>
+        <p>The same Ask Flow assistant explains this selection. Opening a step does not request research or prepare an order.</p>
+        <AskLodestar subject={`${ticker} · exact contract review`} overlayMetric={metric} displayMode={replay ? "replay" : "live"} compact />
+      </>}
+      publicAgent={<><h3>Public agent · reviewed draft</h3><p>A copied brief is not delivery or activation. Review the workflow in Public before any separately approved activation.</p><GroundedPublicReview /></>}
+    />
   </div>;
 }
 

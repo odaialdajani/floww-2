@@ -25,7 +25,7 @@ def cache_key(ticker, query):
     return key
 
 
-def attach_scope_echo(payload, cache_key):
+def attach_scope_echo(payload, cache_key, *, history_query_key=None, formula_version=None):
     """Echo the server's exact scope key onto a heatmap payload.
 
     Lets downstream readers (e.g. the price chart) request this exact
@@ -37,6 +37,19 @@ def attach_scope_echo(payload, cache_key):
     if not isinstance(cache_key, str) or not cache_key:
         return payload
     payload["scope_echo"] = cache_key
+    # The recorder uses a different, versioned identity from the request cache.
+    # This is a selector only, not an acknowledgement that a row was saved.
+    expiries = payload.get("expiries_used")
+    if (isinstance(history_query_key, str) and history_query_key
+            and isinstance(expiries, list) and expiries
+            and all(isinstance(expiry, str) and expiry for expiry in expiries)
+            and isinstance(formula_version, str) and formula_version
+            and isinstance(payload.get("exposure_basis"), str) and payload["exposure_basis"]):
+        from services.price_node_history import scope_id
+
+        payload["history_scope"] = scope_id({"query_key": history_query_key, "expiries": expiries,
+                                             "formula_version": formula_version,
+                                             "exposure_basis": payload["exposure_basis"]})
     return payload
 
 

@@ -71,6 +71,8 @@ test("mounted Solstice publishes the selected recorded contract, not quote numbe
     metrics:{walls:[props.wall],surface_coverage:{raw:{status:"ok"}}}};
   await act(async () => render(<ControlledCanvas scene={scene} />));
   fireEvent.click(screen.getByRole("gridcell",{name:/^100 by 2026-09-18,/}));
+  expect(screen.getByRole("tabpanel", {name:"Wall"})).toBeVisible();
+  fireEvent.click(screen.getByRole("tab", {name:"Contract"}));
   fireEvent.click(screen.getByRole("button",{name:/Review SPY/}));
   await waitFor(() => expect(JSON.parse(screen.getByTestId("context-probe").textContent).contractResolution).toBe("resolved"));
   const published = JSON.parse(screen.getByTestId("context-probe").textContent);

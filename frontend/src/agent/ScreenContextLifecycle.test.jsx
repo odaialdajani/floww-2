@@ -42,7 +42,7 @@ test('grid to chain switch must not submit the previous ticker and expiry contex
  await screen.findByText(/Options Chain/);
  fireEvent.change(screen.getByRole('option',{name:'All Expiries'}).parentElement,{target:{value:'2026-10-02'}});
  await act(async()=>{});
- fireEvent.click(screen.getByRole('button',{name:'Open Ask FLOWW'}));
+ fireEvent.click(screen.getByRole('button',{name:'Open Ask Flow'}));
  fireEvent.change(screen.getByRole('textbox'),{target:{value:'What changed?'}});
  fireEvent.click(screen.getByRole('button',{name:'Ask',exact:true}));
  await screen.findByText("Choose a ticker in Screener, Options map or Unusual flow before asking.");

@@ -180,11 +180,11 @@ export default function RangeAnalyticsWorkspace({ticker,onReplayModeChange}) {
        <p>Contract: RANGE_CONTRACT_UNAVAILABLE · no exact OSI, population or quote clocks. Risks explicit and unset: limit, budget, conditions, window, expiry, notifications.</p>
        <p>No execution path: this review cannot place, approve, or route any order. Backend entry unavailable; copied references do not activate Public.</p>
       </div>}
-      <h3>Lodestar context</h3>
-      <button type="button" disabled={!envelope} onClick={copyContext}>Copy Lodestar context</button>
+      <h3>Flow context</h3>
+      <button type="button" disabled={!envelope} onClick={copyContext}>Copy Flow context</button>
       {copyStatus && <p role="status">{copyStatus}</p>}
      <h3>Supported contract</h3><p>RANGE_CONTRACT_UNAVAILABLE · owning OSI, contract population and quote clocks are not supplied. No current-chain substitution.</p>
-     <h3>Lodestar</h3><p>{replayMode?'Select a stored cell for research-only interpretation. Full production integrity and raw population qualification remain pending; no contract or execution permission.':'Live range reads are not persisted research evidence. Select a stored replay record first; no current-chain or old answer substitute.'}</p>
+     <h3>Flow</h3><p>{replayMode?'Select a stored cell for research-only interpretation. Full production integrity and raw population qualification remain pending; no contract or execution permission.':'Live range reads are not persisted research evidence. Select a stored replay record first; no current-chain or old answer substitute.'}</p>
      <AskLodestar subject={`${ticker} recorded range`} overlayMetric={activeMetric} displayMode={replayMode?'range-replay':'range-live'} compact testId="range-ask-lodestar" starters={['Explain the recorded cells','What limits this observation?','What confirms or invalidates?']}/>
      <h3>Public route</h3><p>Backend entry unavailable. Native drafts need an exact supported contract; copied references do not activate Public.</p>
     </aside>

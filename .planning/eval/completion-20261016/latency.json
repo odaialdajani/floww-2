@@ -1,0 +1,124 @@
+{
+  "passed": true,
+  "synthetic": false,
+  "runs": [
+    {
+      "index": 1,
+      "pageErrors": [],
+      "httpErrors": [],
+      "blockedWrites": [],
+      "reads": [
+        {
+          "path": "/api/data/SPY",
+          "startedMs": 753,
+          "responseMs": 4355,
+          "status": 200,
+          "strikes": 80,
+          "source": "public_api"
+        },
+        {
+          "path": "/api/heatseeker/price-history/SPY",
+          "startedMs": 5148,
+          "responseMs": 332,
+          "status": 200,
+          "priceStatus": "available",
+          "priceFailure": null,
+          "candles": 70,
+          "scope": "SPY:4:day:None:False:True:80|expiries=2026-10-19,2026-10-20,2026-10-21,2026-10-22|gex.v2|OI",
+          "lastCandle": "2026-10-16T20:00:00+00:00",
+          "receivedAt": "2026-10-16T21:30:55.269109+00:00"
+        }
+      ],
+      "mapMs": 5189,
+      "chartMs": 5514,
+      "candles": 70
+    },
+    {
+      "index": 2,
+      "pageErrors": [],
+      "httpErrors": [],
+      "blockedWrites": [],
+      "reads": [
+        {
+          "path": "/api/data/SPY",
+          "startedMs": 532,
+          "responseMs": 936,
+          "status": 200,
+          "strikes": 80,
+          "source": "public_api"
+        },
+        {
+          "path": "/api/heatseeker/price-history/SPY",
+          "startedMs": 530,
+          "responseMs": 940,
+          "status": 200,
+          "priceStatus": "available",
+          "priceFailure": null,
+          "candles": 70,
+          "scope": "SPY:4:day:None:False:True:80|expiries=2026-10-16,2026-10-19,2026-10-20,2026-10-21|gex.v2|OI",
+          "lastCandle": "2026-10-16T20:00:00+00:00",
+          "receivedAt": "2026-10-16T21:30:56.838516+00:00"
+        },
+        {
+          "path": "/api/heatseeker/price-history/SPY",
+          "startedMs": 1580,
+          "responseMs": 606,
+          "status": 200,
+          "priceStatus": "available",
+          "priceFailure": null,
+          "candles": 70,
+          "scope": "SPY:4:day:None:False:True:80|expiries=2026-10-19,2026-10-20,2026-10-21,2026-10-22|gex.v2|OI",
+          "lastCandle": "2026-10-16T20:00:00+00:00",
+          "receivedAt": "2026-10-16T21:30:57.737866+00:00"
+        }
+      ],
+      "mapMs": 1982,
+      "chartMs": 2211,
+      "candles": 70
+    },
+    {
+      "index": 3,
+      "pageErrors": [],
+      "httpErrors": [],
+      "blockedWrites": [],
+      "reads": [
+        {
+          "path": "/api/data/SPY",
+          "startedMs": 687,
+          "responseMs": 1392,
+          "status": 200,
+          "strikes": 80,
+          "source": "public_api"
+        },
+        {
+          "path": "/api/heatseeker/price-history/SPY",
+          "startedMs": 683,
+          "responseMs": 1472,
+          "status": 200,
+          "priceStatus": "available",
+          "priceFailure": null,
+          "candles": 70,
+          "scope": "SPY:4:day:None:False:True:80|expiries=2026-10-16,2026-10-19,2026-10-20,2026-10-21|gex.v2|OI",
+          "lastCandle": "2026-10-16T20:00:00+00:00",
+          "receivedAt": "2026-10-16T21:31:00.092661+00:00"
+        },
+        {
+          "path": "/api/heatseeker/price-history/SPY",
+          "startedMs": 2157,
+          "responseMs": 567,
+          "status": 200,
+          "priceStatus": "available",
+          "priceFailure": null,
+          "candles": 70,
+          "scope": "SPY:4:day:None:False:True:80|expiries=2026-10-19,2026-10-20,2026-10-21,2026-10-22|gex.v2|OI",
+          "lastCandle": "2026-10-16T20:00:00+00:00",
+          "receivedAt": "2026-10-16T21:31:00.918606+00:00"
+        }
+      ],
+      "mapMs": 2531,
+      "chartMs": 2753,
+      "candles": 70
+    }
+  ],
+  "limitations": "Three fresh isolated browser contexts, existing backend/cache, concurrent backend coverage run. Not isolated-host benchmarks or proof of the historical 37.7s cause."
+}

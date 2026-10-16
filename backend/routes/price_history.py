@@ -11,6 +11,58 @@ from services.price_node_history import build_history, epoch
 
 router = APIRouter(prefix="/api/heatseeker", tags=["price-node-history"])
 
+# Only overlapping, identical market-data reads share work. Completed results
+# are never cached or stale-served; each caller still joins its own node scope.
+_bar_reads: dict[tuple, asyncio.Task] = {}
+# One clock for admission, broker lock/init, pacing and bars, including orphaned
+# jobs. Leave headroom below the browser's 30s request timeout.
+_HISTORY_JOB_TIMEOUT_SECONDS = 20.0
+
+
+async def _history_bars(ticker, period, aggregation, sessions, instrument_type="EQUITY"):
+    from services.public_api_adapter import fetch_bars_by_interval
+    from services.public_budget import BudgetExhausted, budget, wait_for_read_admission
+
+    key = (asyncio.get_running_loop(), ticker, period, aggregation, sessions, instrument_type)
+    task = _bar_reads.get(key)
+    if task is None or task.done():
+        async def fetch():
+            try:
+                async with asyncio.timeout(_HISTORY_JOB_TIMEOUT_SECONDS):
+                    try:
+                        await wait_for_read_admission(lambda: budget.acquire("api.public.com"))
+                    except BudgetExhausted as exc:
+                        return [], {"reason": exc.reason, "retry_after_seconds": exc.retry_after}, None
+                    except Exception:
+                        return [], {"reason": "budget_unavailable", "retry_after_seconds": None}, None
+                    try:
+                        kwargs = {"period": period, "aggregation": aggregation, "sessions": sessions}
+                        if instrument_type != "EQUITY":
+                            kwargs["instrument_type"] = instrument_type
+                        bars = await fetch_bars_by_interval(ticker, **kwargs)
+                        if not bars:
+                            return [], {"reason": "provider_unavailable", "retry_after_seconds": None}, None
+                        return bars, None, datetime.now(UTC).isoformat()
+                    except Exception:
+                        return [], {"reason": "provider_unavailable", "retry_after_seconds": None}, None
+                    finally:
+                        budget.release()
+            except TimeoutError:
+                return [], {"reason": "history_job_timeout", "retry_after_seconds": None}, None
+
+        task = asyncio.create_task(fetch())
+        _bar_reads[key] = task
+
+        def finished(done):
+            if _bar_reads.get(key) is done:
+                _bar_reads.pop(key, None)
+            if not done.cancelled():
+                done.exception()  # retrieve even if every waiting browser closed
+
+        task.add_done_callback(finished)
+    # A cancelled waiter cannot cancel shared work or release its budget slot.
+    return await asyncio.shield(task)
+
 
 def read_snapshots(engine, ticker, first, last):
     base = ("SELECT snapshot_id, ticker, query_key, expiries, formula_version, exposure_basis, asof_ts, received_at, walls_json%s "
@@ -106,9 +158,6 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
         if not contract or len(contract) > 32 or any(ch not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789." for ch in contract):
             raise HTTPException(status_code=422, detail="Choose a valid option contract symbol (OSI)")
     from services.duckdb_engine import db
-    from services.public_api_adapter import fetch_bars_by_interval
-    from services.public_budget import BudgetExhausted, budget
-
     ticker = ticker.strip().upper()
     try:
         recording = await asyncio.to_thread(recording_summary, db, ticker)
@@ -125,16 +174,7 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
         bar_seconds = interval_minutes * 60
     # This path deliberately does not use market_bars' stale-on-error cache:
     # a failed historical fetch must be visible, not labelled as a new read.
-    try:
-        await budget.acquire("api.public.com")
-    except BudgetExhausted:
-        bars = []
-    else:
-        try:
-            bars = await fetch_bars_by_interval(ticker, period=period, aggregation=aggregation, sessions=sessions) or []
-        finally:
-            budget.release()
-    received_at = datetime.now(UTC).isoformat()
+    bars, price_failure, received_at = await _history_bars(ticker, period, aggregation, sessions)
     price_only = build_history(ticker, bars, [], query_key)
     session_dates = sorted({datetime.fromtimestamp(epoch(frame["time"]), UTC).astimezone(ZoneInfo("America/New_York")).date()
                             for frame in price_only["frames"]})
@@ -149,6 +189,8 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
     if not valid_times:
         return {**build_history(ticker, [], [], query_key), "price_status": "unavailable",
                 "node_status": "not_loaded", "days": days, "recording": recording,
+                "price_failure": price_failure or {"reason": "invalid_price_bars", "retry_after_seconds": None},
+                "prices_received_at": received_at,
                 "contract_symbol": contract,
                 "contract_status": "unavailable" if contract is not None else "not_requested",
                 "contract_bars": []}
@@ -164,6 +206,8 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
     if truncated:
         rows = rows[:50000]
     result = build_history(ticker, bars, rows, query_key)
+    if node_status == "unavailable":
+        result["node_coverage"] = {"scope_status": "unavailable", "gap_counts": None}
     if include_metric_lines:
         from services.recorded_price_levels import enrich_recorded_levels
         result = await asyncio.to_thread(enrich_recorded_levels, result, db)
@@ -176,19 +220,11 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
     contract_status = "not_requested"
     if contract is not None:
         contract_status = "unavailable"
-        try:
-            await budget.acquire("api.public.com")
-        except BudgetExhausted:
-            contract_bars = []
-        else:
-            try:
-                fetched = await fetch_bars_by_interval(contract, period=period, aggregation=aggregation, sessions=sessions, instrument_type="OPTION") or []
-            finally:
-                budget.release()
-            contract_bars = fetched if isinstance(fetched, list) else []
-            if contract_bars:
-                contract_status = "available"
-    return {**result, "price_status": "available", "node_status": node_status,
+        fetched, _, _ = await _history_bars(contract, period, aggregation, sessions, "OPTION")
+        contract_bars = fetched if isinstance(fetched, list) else []
+        if contract_bars:
+            contract_status = "available"
+    return {**result, "price_status": "available", "price_failure": None, "node_status": node_status,
             "records_truncated": truncated, "days": days, "prices_received_at": received_at,
             "last_candle_at": datetime.fromtimestamp(max(valid_times), UTC).isoformat(),
             "bar_seconds": bar_seconds, "price_sessions_returned": len(session_dates), "recording": recording,

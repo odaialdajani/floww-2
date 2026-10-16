@@ -137,6 +137,14 @@ async def _get_broker() -> PublicBroker | None:
         try:
             await broker.auth()
             await broker.get_accounts()
+        except asyncio.CancelledError:
+            # This client has not been published: no later caller can close it.
+            # A failed close must not replace the caller's cancellation.
+            try:
+                await broker.close()
+            except Exception as e:
+                log.warning("Discarded PublicBroker close failed after cancellation: %s", e)
+            raise
         except Exception as e:
             await broker.close()
             log.warning("PublicBroker auth failed: %s", e)
@@ -455,7 +463,9 @@ async def fetch_chain_from_public_api(
             # auth/accounts: refusal spends ZERO provider calls. Module-
             # attribute access keeps the budget singleton patchable.
             try:
-                await _public_budget.budget.acquire_n(2 + max_expiries, "api.public.com")
+                await _public_budget.wait_for_read_admission(
+                    lambda: _public_budget.budget.acquire_n(2 + max_expiries, "api.public.com")
+                )
                 _debit_held = True
             except _public_budget.BudgetExhausted as exc:
                 log.warning("Public budget refused %s chain fetch: %s", ticker, exc)

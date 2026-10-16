@@ -38,6 +38,7 @@ jest.mock("./SkylitControlBar",      () => (props) => (
 jest.mock("./SkylitHeatmapGrid",     () => ({ onCellClick, onStrikeClick, windowRows, density, spot }) => (
   <div data-testid="mock-heatmap" data-window={windowRows} data-density={density} data-spot={JSON.stringify(spot ?? null)}>
     <button data-testid="mock-strike" onClick={()=>onStrikeClick?.(650)}>Strike</button>
+    <button data-testid="mock-second-cell" onClick={()=>onCellClick?.(651,"2026-09-18",100)}>Second cell</button>
     <button
       data-testid="mock-heatmap-cell"
       onClick={() => onCellClick && onCellClick(650, "2026-09-18", 123.4)}
@@ -78,6 +79,51 @@ function SkylitDashboard(props) { return <SkylitDashboardView defaultStudy="opti
 import useScreenContext from "../../agent/useScreenContext";
 import coverageFixture from "../../fixtures/integration/coverage-read.v1.json";
 import {skylitViewScope,readSkylitView,writeSkylitView} from "./skylitViewPreferences";
+
+test('another cell in the same wall resets exact contract inputs, but a tab switch does not', async () => {
+  const data=selectionMap();
+  data.grid.strikes=[650,651]; data.grid.grid['2026-09-18']['651']=100;
+  data.metrics={walls:[{wall_id:'wide',low:649,high:652,members:[650,651]}]};
+  await act(async()=>render(<SkylitDashboard ticker="SPY" data={data} spot={650}/>));
+  fireEvent.click(screen.getByTestId('mock-heatmap-cell'));
+  fireEvent.click(screen.getByRole('tab',{name:'Contract'}));
+  fireEvent.change(screen.getByLabelText('Option type'),{target:{value:'call'}});
+  fireEvent.click(screen.getByRole('tab',{name:'Wall'}));
+  fireEvent.click(screen.getByRole('tab',{name:'Contract'}));
+  expect(screen.getByLabelText('Option type')).toHaveValue('call');
+  fireEvent.click(screen.getByTestId('mock-second-cell'));
+  fireEvent.click(screen.getByRole('tab',{name:'Contract'}));
+  expect(screen.getByLabelText('Exact strike')).toHaveValue('651');
+  expect(screen.getByLabelText('Option type')).toHaveValue('');
+});
+
+test('expanded view retains the same review form and exposes its inspection state',async()=>{
+ await act(async()=>render(<SkylitDashboard ticker="SPY" data={selectionMap()} spot={650}/>));
+ fireEvent.click(screen.getByTestId('mock-heatmap-cell'));
+ fireEvent.click(screen.getByRole('tab',{name:'Contract'}));
+ fireEvent.change(screen.getByLabelText('Option type'),{target:{value:'put'}});
+ fireEvent.click(screen.getByTestId('skylit-expand-btn'));
+ expect(document.querySelector('.skylit-full-dashboard')).toHaveAttribute('data-expanded','true');
+ expect(screen.getByLabelText('Option type')).toHaveValue('put');
+ expect(screen.getByRole('button',{name:'Review selected level'})).toBeEnabled();
+ fireEvent.click(screen.getByTestId('skylit-expand-close'));
+ expect(screen.getByLabelText('Option type')).toHaveValue('put');
+});
+
+test('an unclassified selected cell has a reviewable empty state, not a gone wall', async () => {
+  await act(async()=>render(<SkylitDashboard ticker="SPY" data={selectionMap()} spot={650}/>));
+  fireEvent.click(screen.getByTestId('mock-heatmap-cell'));
+  expect(screen.getByTestId('wall-inspector-unclassified')).toHaveTextContent('No classified structural wall');
+  expect(screen.queryByTestId('wall-inspector-gone')).toBeNull();
+});
+
+test('price chart offers separately labelled map levels without filling historical node gaps', async () => {
+  await act(async () => render(<SkylitDashboardView ticker="SPY" data={selectionMap()} spot={650}/>));
+  const current = screen.getByRole('region', {name:'Map levels separate from historical candles'});
+  expect(current).toHaveTextContent('not historical candle-time levels');
+  expect(current.querySelector('[aria-label="Raw OI landmarks"]')).toBeInTheDocument();
+  expect(current.closest('[data-testid="recorded-price-chart"]')).toBeNull();
+});
 
 test('listed expiry admission is an explicit read, not a new map or selection', async () => {
   axios.get.mockResolvedValue({ data: coverageFixture.expiries });

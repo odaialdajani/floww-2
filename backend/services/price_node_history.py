@@ -128,6 +128,7 @@ def build_history(ticker: str, bars: list[dict], snapshots: list[dict],
     scope = query_key if query_key is not None else (scope_id(latest[1]) if latest else None)
     known = [(at, r) for at, r in known if scope_id(r) == scope]
     frames = []
+    gap_counts = {"no_prior_observation": 0, "observation_too_old": 0, "recorded_without_nodes": 0}
     cursor = -1
     chosen = None
     for at, bar in sorted(clean.items()):
@@ -141,6 +142,13 @@ def build_history(ticker: str, bars: list[dict], snapshots: list[dict],
         # old snapshot must not become fresh merely because it arrived now.
         age = at - epoch(row["asof_ts"]) if row else None
         usable = row is not None and 0 <= age <= MAX_NODE_AGE_SECONDS
+        nodes = recorded_nodes(row) if usable else []
+        if row is None:
+            gap_counts["no_prior_observation"] += 1
+        elif not usable:
+            gap_counts["observation_too_old"] += 1
+        elif not nodes:
+            gap_counts["recorded_without_nodes"] += 1
         # Exposure centre shares the nodes' known-at discipline: only the
         # time-eligible snapshot's recorded strikes feed it, else null.
         centre = upper = lower = None
@@ -148,7 +156,7 @@ def build_history(ticker: str, bars: list[dict], snapshots: list[dict],
             from services.chart_exposure_centre import exposure_centre
             band = exposure_centre(recorded_strikes(row))
             centre, upper, lower = band["centre"], band["upper"], band["lower"]
-        frames.append({**bar, "nodes": recorded_nodes(row) if usable else [],
+        frames.append({**bar, "nodes": nodes,
                        "snapshot_id": row.get("snapshot_id") if usable else None,
                        "nodes_known_at": datetime.fromtimestamp(chosen[0], UTC).isoformat() if usable else None,
                        "node_age_seconds": age if usable else None,
@@ -170,6 +178,8 @@ def build_history(ticker: str, bars: list[dict], snapshots: list[dict],
             "scopes": scopes, "node_max_age_seconds": MAX_NODE_AGE_SECONDS,
             "candles": len(frames),
             "candles_with_recorded_nodes": sum(bool(f["nodes"]) for f in frames),
+            "node_coverage": {"scope_status": "available" if scope in scopes else "scope_not_available",
+                              "gap_counts": gap_counts},
             "exposure_line": [{"time": f["time"], "centre": f["exposure_centre"],
                                  "upper": f["exposure_upper"], "lower": f["exposure_lower"]}
                                 for f in frames],

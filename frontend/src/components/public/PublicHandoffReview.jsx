@@ -37,8 +37,21 @@ function datedBrief(draft, owner) {
   `Research correlation: ${draft.correlation_id}. Context: ${draft.context_hash}`,
   `Evidence: ${draft.evidence_ids.join(", ") || "none"}`,
   "These copied references are not remote trace ingestion. No continuous external-GEX feed is established.",
-  "Public's internal agent model is separate from Ask FLOWW. Review the full workflow in Public's builder; delivery and activation remain unverified.",
+  "Public's internal agent model is separate from Ask Flow. Review the full workflow in Public's builder; delivery and activation remain unverified.",
  ].join("\n");
+}
+
+function factOnlyDraft(selection) {
+ const c=selection?.selectedContract;
+ const strike=c?.strike;
+ const numericStrike=(typeof strike==="number" || (typeof strike==="string" && strike.trim())) ? Number(strike) : NaN;
+ if(selection?.contractResolution!=="resolved" || !selection.snapshotId || !selection.ticker
+  || typeof c?.osi!=="string" || !/^[A-Z0-9. ]{1,6}\d{6}[CP]\d{8}$/.test(c.osi)
+  || !Number.isFinite(numericStrike) || numericStrike<=0 || !["call","put"].includes(c.type)
+  || typeof c.expiry!=="string" || !/^\d{4}-\d{2}-\d{2}$/.test(c.expiry)
+  || selection.selectedStrike!==numericStrike || selection.selectedExpiry!==c.expiry) return null;
+ return {created_at:new Date().toISOString(),selection,contract:{...c,snapshot_id:selection.snapshotId},
+  correlation_id:"LOCAL_FACT_ONLY",context_hash:"local selection only — not a server evidence hash",evidence_ids:[]};
 }
 
 export default function PublicHandoffReview({selection,turn,grounded=false}) {
@@ -48,12 +61,15 @@ export default function PublicHandoffReview({selection,turn,grounded=false}) {
 
 function HandoffForm({selection,turn,grounded}) {
  const [owner,setOwner]=useState(""),[brief,setBrief]=useState(""),[reference,setReference]=useState("");
+ const [briefKind,setBriefKind]=useState("grounded");
  const [reported,setReported]=useState("prepared"),[notice,setNotice]=useState(""),[saving,setSaving]=useState(false),[revoked,setRevoked]=useState(false);
  const epoch=useRef(0),controller=useRef(null);
  const draft=turn?.answer?.plan_draft;
  const matches=grounded && !revoked && turn?.status==="completed" && draft?.version==="trade-plan-draft.v1"
   && draft.contract?.osi && contextIdentity(turn.answer.context)===contextIdentity(selection);
  const canPrepare=Boolean(matches && owner==="PUBLIC_NATIVE_AGENT");
+ const factDraft=!revoked ? factOnlyDraft(selection) : null;
+ const canPrepareFacts=Boolean(factDraft && owner==="PUBLIC_NATIVE_AGENT");
  useEffect(()=>{
   const clear=()=>{epoch.current++;controller.current?.abort();setRevoked(true);setBrief("");setReference("");setNotice("");setSaving(false);};
   const storage=e=>{if(e.key==="floww-research-session-ended" && e.newValue)clear();};
@@ -66,7 +82,7 @@ function HandoffForm({selection,turn,grounded}) {
   catch{if(epoch.current===current)setNotice("Clipboard unavailable. Select the dated brief to copy it manually.");}
  };
  const save=async()=>{
-  if(!canPrepare || !brief || saving)return;
+  if(!canPrepare || briefKind!=="grounded" || !brief || saving)return;
   const current=++epoch.current,ctrl=new AbortController();controller.current=ctrl;
   const timer=setTimeout(()=>ctrl.abort(),15000);setSaving(true);setNotice("");
   try{
@@ -87,19 +103,21 @@ function HandoffForm({selection,turn,grounded}) {
    <option value="">Choose one owner</option><option value="PUBLIC_NATIVE_AGENT">Public native agent · manual builder</option><option value="FLOWW_BACKEND">FLOWW backend · separately gated</option>
   </select></label>
   {owner==="FLOWW_BACKEND" && <p role="status">Backend entry unavailable: immutable preflight, account policy, authenticated intent approval and unresolved native ownership overlap must be validated on the server. This panel does not submit orders.</p>}
-  {!matches && <p role="status">Resolve an exact listed contract and use Ask FLOWW for this owning observation. Saved research from a different selection cannot prepare a current brief.</p>}
-  <button type="button" disabled={!canPrepare || saving} onClick={()=>{setBrief(datedBrief(draft,owner));setNotice("");}}>Prepare dated brief</button>
+  {!matches && <p role="status">Resolve an exact listed contract for a local fact-only brief. Ask Flow is optional for a grounded research plan. Saved research from a different selection cannot prepare a current brief.</p>}
+  <button type="button" disabled={!canPrepare || saving} onClick={()=>{setBriefKind("grounded");setBrief(datedBrief(draft,owner));setNotice("");}}>Prepare dated brief</button>
+  <button type="button" disabled={!canPrepareFacts || saving} onClick={()=>{setBriefKind("fact-only");setBrief("FACT-ONLY · local selected references, not a model plan or verified broker instructions.\n"+datedBrief(factDraft,owner));setNotice("Local editable draft only. Account, risk policy, execution permission and activation remain unverified.");}}>Prepare fact-only brief</button>
+  <a href="https://public.com/ai-agents/trading-strategies" target="_blank" rel="noopener noreferrer">Public builder guidance ↗</a>
   <details><summary>Commissioning policy · UNSET</summary><dl>{POLICY_FIELDS.map(field=><React.Fragment key={field}><dt>{field}</dt><dd>UNSET</dd></React.Fragment>)}</dl>
    <p>Policy text is not server permission. Local trading state is not proof of remote native-workflow ownership.</p></details>
   {brief && <div className="public-manual-brief">
    <label>Editable Public brief<textarea value={brief} disabled={saving} maxLength={10000} rows={12} onChange={e=>{setBrief(e.target.value);setNotice("");}}/></label>
-   <button type="button" disabled={saving || !matches} onClick={copy}>Copy brief</button>
-   <a href="https://public.com/ai-agents/trading-strategies" target="_blank" rel="noopener noreferrer">Public builder guidance ↗</a>
+   <button type="button" disabled={saving || (briefKind==="fact-only" ? !canPrepareFacts : !matches)} onClick={copy}>Copy brief</button>
    <label>Reviewed workflow reference<input value={reference} disabled={saving} maxLength={256} onChange={e=>setReference(e.target.value)} placeholder="Operator reference, not an API receipt"/></label>
    <label>Operator-reported workflow status<select value={reported} disabled={saving} onChange={e=>setReported(e.target.value)}>
     <option value="prepared">Prepared, not reviewed</option><option value="reviewed">Reviewed in builder</option><option value="reported_active">Operator reports active · unverified</option><option value="reported_paused">Operator reports paused · unverified</option>
    </select></label>
-   <button type="button" disabled={!matches || saving || !brief.trim()} onClick={save}>{saving?"Saving private report…":"Save manual handoff report"}</button>
+   <button type="button" disabled={briefKind!=="grounded" || !matches || saving || !brief.trim()} onClick={save}>{saving?"Saving private report…":"Save manual handoff report"}</button>
+   {briefKind==="fact-only" && <p>Fact-only drafts stay local. Saving a grounded research report still requires its owning completed turn; copy is not delivery.</p>}
    <small>Private research history only. Never enter broker credentials here.</small>
   </div>}
   {notice && <p role="status">{notice}</p>}

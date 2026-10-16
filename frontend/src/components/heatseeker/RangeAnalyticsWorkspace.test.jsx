@@ -178,12 +178,12 @@ test('copy lodestar context writes the frozen record scope and nothing else',asy
  Object.defineProperty(navigator,'clipboard',{value:{writeText:jest.fn(async text=>{written.push(text);})},configurable:true});
  global.fetch.mockImplementation(async url=>response(String(url).includes('/range-records/')?replay(complete):index()));
  render(<><RangeAnalyticsWorkspace ticker="SPY"/><Context/></>);
- expect(screen.queryByRole('button',{name:'Copy Lodestar context'})).not.toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'Copy Flow context'})).not.toBeInTheDocument();
  await loadStored();fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:complete.record_id}});
  await screen.findByRole('grid');
- expect(screen.getByRole('button',{name:'Copy Lodestar context'})).toBeEnabled();
+ expect(screen.getByRole('button',{name:'Copy Flow context'})).toBeEnabled();
  fireEvent.click(screen.getByRole('button',{name:/^590 · 2026-10-26/}));
- fireEvent.click(screen.getByRole('button',{name:'Copy Lodestar context'}));
+ fireEvent.click(screen.getByRole('button',{name:'Copy Flow context'}));
  await screen.findByText('Context copied.');
  expect(written).toHaveLength(1);
  const payload=JSON.parse(written[0]);
@@ -197,7 +197,7 @@ test('copy failure surfaces a status instead of throwing',async()=>{
  render(<><RangeAnalyticsWorkspace ticker="SPY"/><Context/></>);
  await loadStored();fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:complete.record_id}});
  await screen.findByRole('grid');
- fireEvent.click(screen.getByRole('button',{name:'Copy Lodestar context'}));
+ fireEvent.click(screen.getByRole('button',{name:'Copy Flow context'}));
  await screen.findByText('Copy failed: clipboard unavailable.');
 });
 test('review trade opens a read-only summary and never touches order surfaces',async()=>{
@@ -265,12 +265,12 @@ test('compare selections publish and copy their actual basis while preserving th
  fireEvent.change(screen.getByLabelText('Range metric'),{target:{value:'volume'}});fireEvent.click(screen.getByRole('button',{name:'Compare Raw vs Adjusted'}));
  fireEvent.click(screen.getAllByRole('button',{name:/^590 · 2026-10-26/})[1]);
  expect(JSON.parse(screen.getByTestId('range-context').textContent)).toMatchObject({rangeMetric:'delta_weighted',overlayMetric:'delta_weighted',rangeBasis:'OI_DELTA_WEIGHTED',selectedStrike:590});
- fireEvent.click(screen.getByRole('button',{name:'Copy Lodestar context'}));await screen.findByText('Context copied.');expect(writes[0].metric).toBe('delta_weighted');
+ fireEvent.click(screen.getByRole('button',{name:'Copy Flow context'}));await screen.findByText('Context copied.');expect(writes[0].metric).toBe('delta_weighted');
  fireEvent.change(screen.getByLabelText('Price approach'),{target:{value:'above'}});
  fireEvent.click(screen.getAllByRole('button',{name:/^590 · 2026-10-26/})[0]);
  expect(screen.getByLabelText('Price approach')).toHaveValue('awaiting');
  expect(JSON.parse(screen.getByTestId('range-context').textContent)).toMatchObject({rangeMetric:'raw_oi',overlayMetric:'raw_oi',rangeBasis:'OI'});
- fireEvent.click(screen.getByRole('button',{name:'Copy Lodestar context'}));await screen.findByText('Context copied.');expect(writes[1].metric).toBe('raw_oi');
+ fireEvent.click(screen.getByRole('button',{name:'Copy Flow context'}));await screen.findByText('Context copied.');expect(writes[1].metric).toBe('raw_oi');
  fireEvent.click(screen.getByRole('button',{name:'Exit compare'}));expect(screen.getByLabelText('Range metric')).toHaveValue('volume');
  expect(JSON.parse(screen.getByTestId('range-context').textContent)).toMatchObject({rangeMetric:'volume',overlayMetric:'volume'});
 });
@@ -287,7 +287,7 @@ test('another owning record clears old approach, copy confirmation and open trad
  global.fetch.mockImplementation(async url=>response(String(url).includes('/range-records/')?replay(String(url).endsWith(partial.record_id)?partial:complete):index()));
  render(<><RangeAnalyticsWorkspace ticker="SPY"/><Context/></>);await loadStored();fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:complete.record_id}});await screen.findByRole('grid');
  fireEvent.click(screen.getByRole('button',{name:/^590 · 2026-10-26/}));fireEvent.change(screen.getByLabelText('Price approach'),{target:{value:'above'}});
- fireEvent.click(screen.getByRole('button',{name:'Review trade'}));fireEvent.click(screen.getByRole('button',{name:'Copy Lodestar context'}));await screen.findByText('Context copied.');
+ fireEvent.click(screen.getByRole('button',{name:'Review trade'}));fireEvent.click(screen.getByRole('button',{name:'Copy Flow context'}));await screen.findByText('Context copied.');
  fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:partial.record_id}});await screen.findByRole('grid');
  expect(screen.getByLabelText('Price approach')).toHaveValue('awaiting');expect(screen.queryByText('Context copied.')).not.toBeInTheDocument();expect(screen.queryByRole('region',{name:'Trade review'})).not.toBeInTheDocument();
 });
@@ -311,7 +311,7 @@ test.each([false,true])('a late clipboard result cannot label another owning rec
  let release;Object.defineProperty(navigator,'clipboard',{value:{writeText:jest.fn(()=>new Promise((resolve,reject)=>{release=()=>rejected?reject(new Error('denied')):resolve();}))},configurable:true});
  global.fetch.mockImplementation(async url=>response(String(url).includes('/range-records/')?replay(String(url).endsWith(partial.record_id)?partial:complete):index()));
  render(<><RangeAnalyticsWorkspace ticker="SPY"/><Context/></>);await loadStored();fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:complete.record_id}});await screen.findByRole('grid');
- fireEvent.click(screen.getByRole('button',{name:'Copy Lodestar context'}));fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:partial.record_id}});await screen.findByRole('grid');
+ fireEvent.click(screen.getByRole('button',{name:'Copy Flow context'}));fireEvent.change(screen.getByLabelText('Stored range record'),{target:{value:partial.record_id}});await screen.findByRole('grid');
  await act(async()=>release());expect(screen.queryByText('Context copied.')).not.toBeInTheDocument();expect(screen.queryByText('Copy failed: clipboard unavailable.')).not.toBeInTheDocument();
 });
 
@@ -326,6 +326,6 @@ test.each([
  global.fetch.mockResolvedValue(response(fixture));render(<RangeAnalyticsWorkspace ticker="SPY"/>);
  fireEvent.click(screen.getByRole('button',{name:'Load analytical range'}));await screen.findByRole('grid');
  expect(screen.getByText(new RegExp('live read · '+label))).toBeInTheDocument();
- fireEvent.click(screen.getByRole('button',{name:'Copy Lodestar context'}));await screen.findByText('Context copied.');expect(copied[0].synthetic).toBe(copiedFlag);
+ fireEvent.click(screen.getByRole('button',{name:'Copy Flow context'}));await screen.findByText('Context copied.');expect(copied[0].synthetic).toBe(copiedFlag);
  expect(copied[0].content_digest).toBe(fixture.content_digest);expect(copied[0].record_id).toBe(fixture.record_id);
 });

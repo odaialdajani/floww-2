@@ -95,7 +95,7 @@ cherry-pick; no history removed. User decides DEFER rows explicitly.
 | `a40b295` ADJ history | Live path computes `delta_grid` with population counters (`server.py:1516`); history persists all grids generically (`heatmap_history.py:435-451`); math pinned by adopted `155edea` tests |
 | `f39f839` Charm/VEX dead rows | VEX row present (`WallInspector.jsx:143-155`); `test_charm_grid_surface.py` passes |
 | `d70a7ee` signal channel + `9e65b05` parser/channel | `alerts.py:92-131` already carries sync broadcaster + normalized frames + logged-only fallback (successor `95a17b47`); 15 channel/OSI tests pass. Lane-tip `databento_provider.py`/`test_osi_parse_regression.py`/`MultiTimeframeGEXPanel.jsx` byte-match candidate = already included |
-| `29a53e0` + `5e04201` OI/DUO/DVO surfaces | Ship via `heatmap_snapshot.py`; 51 pass across snapshot/charm/OI-DUO-DVO/oracle/registry suites |
+| `29a53e0` + `5e04201` OI/DUO/DVO surfaces | CORRECTION (16 October source review): not shipped as display surfaces. Canonical helpers/registry/oracles survive, but no owning grid producer/digest/replay/UI path exists. The current metric contract explicitly keeps DUO/DVO helper-only; old oracle/snapshot suite passes do not prove surface delivery. |
 | `de3a320` tab-set doctrine | Implemented as TriadDesk + Raw+Δ compare (`SkylitDashboard.jsx`) + admitted exposure endpoint (live 200, 11/11 C17 tests) |
 | `1a7ff03` C17 slice | Candidate carries the newer reviewed C17; lane version must not regress it |
 | `de9b136`/`f95aeb7` Workspace.jsx | 7-line diff: lane uses local `cellPalette` normalization; candidate uses reviewed shared `signedCellPalette` + hatching. Adopting the lane file would REGRESS PR117 grids — do not. 103 `RangeAnalytics*` tests pass |
@@ -117,9 +117,17 @@ cherry-pick; no history removed. User decides DEFER rows explicitly.
 | `88b98fc` import sort | Trivial; ruff clean on touched files |
 | Composition docs (`de9b136`/`f95aeb7` CLINE-VERDICT/WIP + unified docs) | Preserved in lane checkouts as history; not adopted as live docs |
 
-### Still open after this slice
+### Historical closeout claim after this slice — not current acceptance
 
-Nothing engineering-actionable remains open. Prior gaps closed by owner
+**16 October correction:** the “nothing engineering-actionable” statement below
+was too broad. The source review found a per-provider Prometheus age update
+outside its loop and missing/malformed scorer readings labelled available.
+OI/DUO/DVO display delivery was also overstated above. Their helper-only
+metric contract remains in force; deferred curve/naked-level work is not
+silently activated or accepted. Current review evidence lives in
+`.planning/unknowns/integration-reset-20261014.md`.
+
+Historical statement (retained for audit): Nothing engineering-actionable remains open. Prior gaps closed by owner
 decision (2026-10-09): R11 wall modules DECLINED with safety rationale (not
 deferred); camera split-decided (price-chart export present, grid snapshot
 blocked on dependency-install safety); recorded curve SPECIFIED with

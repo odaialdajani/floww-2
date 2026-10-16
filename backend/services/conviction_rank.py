@@ -9,7 +9,9 @@ inputs degrade the tier, never fabricate confidence.
 
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime
+from numbers import Real
 
 SCHEMA_VERSION = "conviction_rank.v1"
 VERSION = "conviction_rank.v1"
@@ -27,6 +29,17 @@ def _clamp01(x):
     return max(0.0, min(1.0, f))
 
 
+def _scorer_number(raw):
+    """Accept finite scalar readings, never boolean/array stand-ins."""
+    if isinstance(raw, bool) or not isinstance(raw, (Real, str)):
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return value if math.isfinite(value) else None
+
+
 def _norm_flow(flow):
     if flow is None:
         return 0.0, "missing"
@@ -39,9 +52,8 @@ def _norm_flow(flow):
     # yields None, which is the same absence a producer reports.
     if raw is None:
         return 0.0, "missing"
-    try:
-        v = float(raw)
-    except (TypeError, ValueError):
+    v = _scorer_number(raw)
+    if v is None:
         return 0.0, "invalid"
     return _clamp01(v / 100.0), "ok"
 
@@ -49,9 +61,11 @@ def _norm_flow(flow):
 def _norm_opp(opp):
     if opp is None:
         return 0.0, "missing"
-    try:
-        v = float(opp.get("opportunity_score", 0) if isinstance(opp, dict) else opp)
-    except (TypeError, ValueError):
+    raw = opp.get("opportunity_score") if isinstance(opp, dict) else opp
+    if raw is None:
+        return 0.0, "missing"
+    v = _scorer_number(raw)
+    if v is None:
         return 0.0, "invalid"
     return _clamp01(v / 10.0), "ok"
 
@@ -65,7 +79,7 @@ def _norm_conf(conf):
     if conf is None:
         return 0.0, "missing"
     try:
-        raw = conf.get("total", 0) if isinstance(conf, dict) else conf
+        raw = conf.get("total") if isinstance(conf, dict) else conf
     except AttributeError:
         return 0.0, "invalid"
     # A producer that ran and found nothing reports total=None (see
@@ -73,13 +87,11 @@ def _norm_conf(conf):
     # direction="insufficient_evidence"). That is an absence, not malformed
     # data -- relabelling it "invalid" told consumers the producer emitted
     # garbage. An empty dict likewise carries no reading.
-    # NOTE: the default here is 0, NOT None, so `{}` yields 0.0 and would
-    # report "ok". The empty-dict clause is load-bearing for confluence.
-    if raw is None or (isinstance(conf, dict) and not conf):
+    # A dict with no total carries no reading, regardless of other metadata.
+    if raw is None:
         return 0.0, "missing"
-    try:
-        v = float(raw)
-    except (TypeError, ValueError):
+    v = _scorer_number(raw)
+    if v is None:
         return 0.0, "invalid"
     # `total` is signed, so 0 is genuinely "no confluence signal". Rescale
     # around 0 rather than 0->0.5, so a neutral reading contributes nothing
@@ -116,7 +128,10 @@ def _norm_ml(ml):
     try:
         if isinstance(ml, dict):
             lab = str(ml.get("prediction", ml.get("label", ml.get("direction", "")))).upper()
-            conf = float(ml.get("confidence", 0.5) or 0.5)
+            raw_conf = ml.get("confidence", 0.5)
+            conf = _scorer_number(0.5 if raw_conf is None else raw_conf)
+            if conf is None:
+                return 0.0, "invalid"
         else:
             lab = str(ml).upper()
             conf = 0.75

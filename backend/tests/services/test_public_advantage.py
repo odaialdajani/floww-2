@@ -592,6 +592,12 @@ async def test_public_chain_route_degrades():
         async def acquire(self, host="public"):
             raise DeadBudget.BudgetExhausted(retry_after=7)
 
+        # The adapter owns fan-out admission (acquire_n); a budget stub that
+        # lacks it must still surface as a typed refusal, never a zero-call
+        # success or an AttributeError swallowing the 503 contract.
+        async def acquire_n(self, n, host="public"):
+            raise DeadBudget.BudgetExhausted(retry_after=7)
+
         def release(self):
             return None
 

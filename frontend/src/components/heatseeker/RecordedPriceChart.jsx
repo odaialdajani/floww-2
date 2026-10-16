@@ -1,5 +1,5 @@
 import React,{useEffect,useId,useMemo,useRef,useState} from 'react';
-import {chartTime,checkedCandles,clampWindow,NODE_COLORS,NODE_LABELS,pinchFactors,priceRange,savedLevels,zoomPrice,zoomTime} from './recordedPriceChartData';
+import {chartTime,checkedCandles,clampWindow,contractClosesForFrames,NODE_COLORS,NODE_LABELS,pinchFactors,priceRange,savedLevels,zoomPrice,zoomTime} from './recordedPriceChartData';
 import {openingEnvelope,sessionEnvelope,sessionVwapBands,sessionVwapValues} from './chart/indicators/priceStudies';
 import {volumeProfile} from './chart/indicators/profile';
 import './RecordedPriceChart.css';
@@ -8,6 +8,7 @@ const bound=(value,low,high)=>Math.max(low,Math.min(high,value));
 
 export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null,cvdLine=null,contractBars=null,contractSymbol=null,contractStatus=null}) {
  const data=useMemo(()=>checkedCandles(frames),[frames]);
+ const premiumCloses=useMemo(()=>contractClosesForFrames(data,contractBars),[data,contractBars]);
  const surface=useRef(null),pointers=useRef(new Map()),gesture=useRef(null),previousLength=useRef(0);
  const [size,setSize]=useState({width:800,height:480});
  const [view,setView]=useState(()=>({start:Math.max(0,data.length-80),count:80}));
@@ -196,12 +197,13 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
     const peak=Math.max(1,...win.flatMap(b=>[Math.abs(b?.call||0),Math.abs(b?.put||0)]));
     return <div className="recorded-flow-pane" data-testid="flow-pane" aria-label="Options flow per candle">{win.map((b,bi)=><div key={bi} className="recorded-flow-bar"><div className="recorded-flow-call" style={{height:(Math.abs(b?.call||0)/peak*20)+'px'}}/><div className="recorded-flow-put" style={{height:(Math.abs(b?.put||0)/peak*20)+'px'}}/></div>)}</div>;})()}
    {!!data.length&&(()=>{ // Volume pane: real provider volume only — never fabricated.
-    const win=visible,hasVol=win.some(frame=>Number.isFinite(frame.volume));
+    const win=visible,hasVol=win.some(frame=>Number.isFinite(frame.volume)),missing=win.filter(frame=>!Number.isFinite(frame.volume)).length;
     if(!hasVol)return <div className="recorded-chart-empty recorded-volume-empty"><small>Volume unavailable for these candles.</small></div>;
     const peak=Math.max(1,...win.map(frame=>Number(frame.volume)||0));
     const h=Math.max(24,Math.min(72,Math.round(plotHeight*0.15)));
     return <svg className="recorded-volume-pane" data-testid="volume-pane" role="img" aria-label="Traded volume per candle" viewBox={'0 0 '+size.width+' '+h} preserveAspectRatio="none" style={{width:'100%',height:h}}>
-      {win.map((frame,index)=>{const v=Number(frame.volume)||0,bh=Math.max(1,v/peak*(h-4));
+      {missing>0&&<text x={left} y="11" fill="#a8b3be" fontSize="10">Volume unavailable for {missing} of {win.length} visible candles</text>}
+      {win.map((frame,index)=>{const v=frame.volume;if(!Number.isFinite(v))return null;const bh=v===0?0:Math.max(1,v/peak*(h-(missing?18:4)));
        return <rect data-testid="volume-bar" key={frame.time} x={left+index*spacing+Math.max(1,spacing*0.15)} y={h-bh} width={Math.max(1,Math.min(spacing*0.7,14))} height={bh} fill={frame.close>=frame.open?'#3f8f7d':'#8f4a52'} opacity="0.85"><title>{chartTime(frame.time,true)+' — '+(Number.isFinite(v)?v.toLocaleString('en-US'):'0')+' shares'}</title></rect>;})}
     </svg>;})()}
     {!!data.length&&cvdOn&&(()=>{ // CVD pane: BVC-estimated cumulative flow — honest gaps, never zero-filled.
@@ -226,20 +228,20 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
     {Array.isArray(alertLines)&&alertLines.some(a=>a?.state==='stale')&&<small role="note">Stale alert refused — no evaluation on stale prices.</small>}
     {!!data.length&&(()=>{ // Contract premium path: selected option's own closes on their own $ scale.
      if(contractStatus==='unavailable'||(contractSymbol&&(!Array.isArray(contractBars)||!contractBars.length)))
-       return <div className="recorded-contract-empty" data-testid="contract-premium-unavailable"><small>Contract premium unavailable{contractSymbol?' for '+contractSymbol:''}.</small></div>;
+       return <div className="recorded-contract-empty" data-testid="contract-premium-unavailable"><small>Contract premium unavailable{contractSymbol?' for '+contractSymbol:''} in the visible candle window.</small></div>;
      if(!contractSymbol||!Array.isArray(contractBars)||!contractBars.length)return null;
-     const closes=contractBars.map(b=>{const v=b?.c??b?.close;return typeof v==='number'&&Number.isFinite(v)?v:null;});
-     if(!closes.some(v=>v!==null))return <div className="recorded-contract-empty" data-testid="contract-premium-unavailable"><small>Contract premium unavailable{contractSymbol?' for '+contractSymbol:''}.</small></div>;
+     const closes=premiumCloses.slice(windowView.start,windowView.start+windowView.count);
+     if(!closes.some(v=>v!==null))return <div className="recorded-contract-empty" data-testid="contract-premium-unavailable"><small>Contract premium unavailable{contractSymbol?' for '+contractSymbol:''} in the visible candle window.</small></div>;
      const vals=closes.filter(v=>v!==null),lo=Math.min(...vals),hi=Math.max(...vals),span=(hi-lo)||1;
      const h=56,pad=8,py=v=>h-pad-((v-lo)/span)*(h-pad*2);
-     const pts=[];closes.forEach((v,i)=>{if(v!==null)pts.push({x:left+(closes.length===1?0.5*plotWidth:i/(closes.length-1)*plotWidth),y:py(v)});});
-     if(pts.length<1)return null;
+     const segments=[];let current=[];
+     closes.forEach((v,i)=>{if(v===null){if(current.length)segments.push(current);current=[];return;}current.push({x:left+(i+0.5)*spacing,y:py(v)});});
+     if(current.length)segments.push(current);
      return <div className="recorded-contract-pane" data-testid="contract-premium-pane" aria-label="Selected contract premium">
        <svg viewBox={'0 0 '+size.width+' '+h} preserveAspectRatio="none" style={{width:'100%',height:h}} role="img" aria-label={contractSymbol+' premium closes'}>
-        {pts.length>1&&<polyline data-testid="contract-premium" points={pts.map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ')} fill="none" stroke="#e8bd65" strokeWidth="1.5"><title>{contractSymbol+' premium closes'}</title></polyline>}
-        {pts.length===1&&<circle data-testid="contract-premium" cx={pts[0].x} cy={pts[0].y} r="2.5" fill="#e8bd65"><title>{contractSymbol+' premium close'}</title></circle>}
+        {segments.map((pts,i)=>pts.length>1?<polyline data-testid="contract-premium" key={i} points={pts.map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ')} fill="none" stroke="#e8bd65" strokeWidth="1.5"><title>{contractSymbol+' premium closes'}</title></polyline>:<circle data-testid="contract-premium" key={i} cx={pts[0].x} cy={pts[0].y} r="2.5" fill="#e8bd65"><title>{contractSymbol+' premium close'}</title></circle>)}
        </svg>
-       <small>{contractSymbol} premium ($) — own scale, not underlying $. Range ${lo.toFixed(2)}–${hi.toFixed(2)}.</small>
+       <small>{contractSymbol} premium ($) — own scale, not underlying $. Range ${lo.toFixed(2)}–${hi.toFixed(2)}. {vals.length}/{visible.length} visible candles matched. Missing prices stay gaps.</small>
      </div>;})()}
    {!!data.length&&<div className="recorded-chart-footer"><small>{windowView.start+1}-{windowView.start+visible.length} of {data.length} loaded candles</small></div>}
   {selected&&<div className="recorded-chart-nodes" aria-label="Selected candle saved nodes">{selectedLevels.length?selectedLevels.map((node,index)=><span key={node.metric+':'+node.id+':'+index} style={{color:NODE_COLORS[node.metric]}}>{NODE_LABELS[node.metric]} <b>{price(node.level)}</b></span>):<span>No supported saved node lines at this candle.{Object.entries(selected?.metric_status||{}).filter(([,status])=>status==="zero").map(([metric])=>" "+NODE_LABELS[metric]+" was zero; no largest level stood out.").join("")}</span>}</div>}

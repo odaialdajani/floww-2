@@ -10,7 +10,7 @@ test("Assistant stays in the workspace without blocking charts or page scrolling
  const opener=document.createElement("button");opener.textContent="Chart control";document.body.appendChild(opener);opener.focus();
  document.body.style.overflow="auto";
  const view=render(<AgentPanel/>,{container:root});
- const panel=screen.getByRole("region",{name:"Ask FLOWW chat"});
+ const panel=screen.getByRole("region",{name:"Ask Flow chat"});
  expect(root.contains(panel)).toBe(true);
  expect(panel).toHaveClass("assistant-docked");
  expect(panel).not.toHaveAttribute("aria-modal");

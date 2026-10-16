@@ -11,7 +11,33 @@ export function checkedCandles(frames = []) {
     if (!Number.isFinite(at) || seen.has(at) || !['open','high','low','close'].every(key=>positive(frame[key])) ||
         frame.high < Math.max(frame.open,frame.close,frame.low) || frame.low > Math.min(frame.open,frame.close,frame.high)) return false;
     seen.add(at);return true;
+  }).map(frame => {
+    if (typeof frame.volume === 'number' && Number.isFinite(frame.volume) && frame.volume >= 0) return frame;
+    const {volume, ...withoutVolume} = frame;
+    return withoutVolume;
   }).slice().sort((a,b)=>Date.parse(a.time)-Date.parse(b.time));
+}
+
+// Match only observed contract closes at the same instant as each candle.
+// Duplicate instants are ambiguous; missing/invalid readings stay gaps.
+export function contractClosesForFrames(frames, bars) {
+  const instant = value => {
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+      const ms = value < 100_000_000_000 ? value * 1000 : value;
+      return Number.isFinite(new Date(ms).valueOf()) ? ms : null;
+    }
+    if (typeof value !== 'string' || !/(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return null;
+    const ms = Date.parse(value);
+    return Number.isFinite(ms) ? ms : null;
+  };
+  const byTime = new Map();
+  for (const bar of Array.isArray(bars) ? bars : []) {
+    const at = instant(bar?.t ?? bar?.time);
+    if (at === null) continue;
+    const close = bar?.c ?? bar?.close;
+    byTime.set(at, byTime.has(at) ? null : typeof close === 'number' && Number.isFinite(close) && close >= 0 ? close : null);
+  }
+  return frames.map(frame => byTime.get(instant(frame.time)) ?? null);
 }
 
 export function savedLevels(frame, metrics = ['gex','vex','charm'], all = false) {

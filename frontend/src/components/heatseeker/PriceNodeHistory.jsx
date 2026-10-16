@@ -25,7 +25,12 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   const [days, setDays] = useState(5);
   const [minutes, setMinutes] = useState(30);
   const [sessions, setSessions] = useState("regular");
-  const [scope, setScope] = useState("");
+  const [savedView, setSavedView] = useState({ticker,scope:"",followMap:true});
+  const scope = savedView.ticker === ticker ? savedView.scope : "";
+  const followMap = savedView.ticker === ticker ? savedView.followMap : true;
+  const usingMapScope = forcedScope != null && followMap;
+  const setScope = value => setSavedView(current => ({ticker,scope:value,followMap:current.ticker===ticker?current.followMap:true}));
+  const setFollowMap = value => setSavedView(current => ({ticker,scope:current.ticker===ticker?current.scope:"",followMap:value}));
   const [payload, setPayload] = useState(null);
   const [status, setStatus] = useState("idle");
   const [reload, setReload] = useState(0);
@@ -71,7 +76,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     const controller = new AbortController();
     let active = true;
     setPayload(null); setStatus("loading"); setPlaying(false);
-    const activeScope = forcedScope ?? scope;
+    const activeScope = usingMapScope ? forcedScope : scope;
     axios.get(`${API}/heatseeker/price-history/${encodeURIComponent(ticker)}`, {
       params: { days, interval_minutes: minutes, include_metric_lines: true, sessions, ...(activeScope ? { query_key: activeScope } : {}), ...(contract ? { contract_symbol: contract } : {}) },
       timeout: 30000, signal: controller.signal,
@@ -81,7 +86,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
       setPayload(data); setPosition(Math.max(0, (data.frames?.length || 0) - 1)); setStatus("ready");
     }).catch(() => { if (active) setStatus("error"); });
     return () => { active = false; controller.abort(); };
-  }, [ticker, days, minutes, sessions, scope, forcedScope, open, reload, contract]);
+  }, [ticker, days, minutes, sessions, scope, forcedScope, usingMapScope, open, reload, contract]);
   useEffect(() => {
     if (!open) return undefined;
     const controller = new AbortController();
@@ -111,8 +116,9 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     <select aria-label="History sessions" title="History period" value={days} onChange={e=>setDays(Number(e.target.value))}><option value={1}>1 session</option><option value={5}>1 week</option><option value={20}>1 month</option><option value={60}>3 months</option><option value={260}>1 year</option><option value={2600}>5 years</option></select>
     <select aria-label="Session coverage" title="Which trading sessions to load" value={sessions} onChange={e=>setSessions(e.target.value)}><option value="regular">Regular hours</option><option value="all">All sessions</option></select></>;
   const historyControls = <>
-    {forcedScope==null&&payload?.scopes?.length>1&&<label className="price-history-view">Saved view<select aria-label="Saved node view" value={scope||payload.query_key||""} onChange={e=>setScope(e.target.value)}>{payload.scopes.map((saved,i)=><option key={saved} value={saved}>{savedViewLabel(saved,i)}</option>)}</select></label>}
-    {forcedScope!=null&&<span className="price-history-view price-history-external-scope">Screener scope active</span>}
+    {!usingMapScope&&payload?.scopes?.length>1&&<label className="price-history-view">Saved view<select aria-label="Saved node view" value={scope||payload.query_key||""} onChange={e=>setScope(e.target.value)}>{payload.scopes.map((saved,i)=><option key={saved} value={saved}>{savedViewLabel(saved,i)}</option>)}</select></label>}
+    {forcedScope!=null&&<label className="price-history-view"><input type="checkbox" aria-label="Follow map scope" checked={followMap} onChange={event=>setFollowMap(event.target.checked)}/>Follow map scope</label>}
+    {usingMapScope&&<span className="price-history-view price-history-external-scope">Map scope active</span>}
     <button type="button" onClick={()=>setReload(n=>n+1)}>Reload history</button>
     {onRecordNodes&&<button type="button" disabled={recording||status==="loading"} onClick={recordNodes}>{recording?"Recording…":"Record nodes"}</button>}
     {recordNote&&<span role="status">{recordNote}</span>}
@@ -124,14 +130,21 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   const details = <div className="price-history-details">
     {payload?.recording&&<p>{payload.recording.status==="unavailable"?"Saved recording details are unavailable.":payload.recording.durable?"New node readings are saved across restarts.":"Warning: node readings are temporary and may be lost on restart."}{payload.recording.first_at?" First saved reading for "+ticker+": "+chartTime(payload.recording.first_at,true)+" New York.":payload.recording.status==="available"?" No node readings have been saved for "+ticker+" yet.":""} Readings are captured when this symbol's heatmap refreshes.</p>}
     {!!frames.length&&<p>{payload?.price_sessions_returned!=null?payload.price_sessions_returned+" sessions returned. ":""}{payload.candles_with_recorded_nodes} of {frames.length} candles have saved nodes. {payload.bar_seconds?payload.bar_seconds/60+"-minute candles. ":""}Gaps mean no recent saved reading. Chart times use New York.{payload.node_status==="unavailable"?" Saved node history is currently unavailable.":""}{payload.records_truncated?" This period contains more saved readings than can be loaded; use a shorter period.":""}{payload.node_status==="available"&&!payload.candles_with_recorded_nodes?" No recorded nodes match these candles. Earlier missing readings cannot be recreated from today's data.":""}</p>}
+    {payload?.node_status!=="unavailable"&&payload?.node_coverage?.gap_counts&&<p>Saved-node gaps: {payload.node_coverage.gap_counts.no_prior_observation} with no earlier observation; {payload.node_coverage.gap_counts.observation_too_old} older than the saved-reading limit; {payload.node_coverage.gap_counts.recorded_without_nodes} recorded without node levels. Other scopes are not substituted.</p>}
     {Object.entries(payload?.metric_line_coverage||{}).map(([metric,coverage])=><p key={metric}>{metric==="vex"?"VEX / Vanna":"Charm"}: {coverage.checked_candles} of {frames.length} candles have qualified saved readings.</p>)}
     {payload?.metric_details_truncated&&<p>Use a shorter period to load older saved lines; this request reached its history limit.</p>}
   </div>;
-  const empty = status==="loading"?<p role="status">Loading recorded history...</p>:status==="error"?<p role="alert">History could not be loaded. Try reloading.</p>:<p role="alert">{payload?.price_status==="unavailable"?"Price history is unavailable right now. Reload history to try again.":"No valid price candles were returned for this period."}</p>;
+  const failureMessages = {inflight_cap:"Price history is waiting for a free provider slot.",host_cooldown:"Public is cooling down after a request limit.",token_bucket:"The price-history request allowance is temporarily used up.",budget_unavailable:"Price-history allowance could not be checked. No provider request was made.",provider_unavailable:"Price history could not be read from Public. No old prices were substituted.",invalid_price_bars:"Returned price bars failed validation; no candles were invented."};
+  const failure = failureMessages[payload?.price_failure?.reason];
+  const retry = payload?.price_failure?.retry_after_seconds;
+  const retryNote = typeof retry==="number"&&Number.isFinite(retry)&&retry>0&&retry<=3600?` Try Reload history after ${Math.ceil(retry)} seconds.`:" Reload history to try again.";
+  const empty = status==="loading"?<p role="status">Loading recorded history...</p>:status==="error"?<p role="alert">History could not be loaded. Try reloading.</p>:<p role="alert">{payload?.price_status==="unavailable"?(failure?failure+retryNote:"Price history is unavailable right now. Reload history to try again."):"No valid price candles were returned for this period."}</p>;
   const readingStatus = !frames.length?"Data details":payload?.node_status==="unavailable"?"Saved lines unavailable":(payload.candles_with_recorded_nodes??"Unknown")+"/"+frames.length+" saved";
   return <section className="panel price-node-history" data-open={open} style={{margin:"12px 0",padding:12}} data-testid="price-node-history">
     {!primary&&<button type="button" className="skylit-trade-mode-btn" aria-expanded={open} onClick={()=>{setOpen(!open);setPlaying(false);}}>Price chart + historical nodes</button>}
     {open&&<RecordedPriceChart ticker={ticker} frames={frames.slice(0,position+1)} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={toolbarActions} historyControls={historyControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars}/>}
+    {open&&usingMapScope&&payload?.node_status!=="unavailable"&&Array.isArray(payload?.scopes)&&!payload.scopes.includes(forcedScope)&&<p role="status">No saved readings match the map scope at these candle times. Open Chart tools and turn off Follow map scope to choose an older saved view. No other scope was substituted.</p>}
+    {open&&forcedScope!=null&&!followMap&&<p role="note">Saved-view review — these recorded expiry dates are not the current map scope.</p>}
     {open&&<DrawingRail drawings={drawings} selectedId={selectedDrawing}
       onSelect={setSelectedDrawing}
       onDelete={id => { if (selectedDrawing === id) setSelectedDrawing(null); persistDrawings(reduceDrawings(drawings, { type: "delete", id })); }}

@@ -1,0 +1,62 @@
+[
+  {
+    "route": "/api/health",
+    "http_status": 200,
+    "elapsed_ms": 7,
+    "budget": {
+      "status": "ok",
+      "capacity": 60.0,
+      "available": 58.57,
+      "inflight": 0,
+      "max_inflight": 4,
+      "cooldowns": {},
+      "totals": {
+        "ok": 7,
+        "limited": 34,
+        "rate_limited_429": 0,
+        "errors": 0
+      }
+    },
+    "provider": {
+      "status": "healthy",
+      "key_configured": true
+    }
+  },
+  {
+    "route": "/api/heatseeker/price-history/SPY?days=1&interval_minutes=30",
+    "http_status": 200,
+    "elapsed_ms": 7245,
+    "price_status": "available",
+    "price_failure": null,
+    "last_candle_at": "2026-10-16T20:00:00+00:00",
+    "prices_received_at": "2026-10-16T21:29:13.558276+00:00",
+    "node_coverage": {
+      "scope_status": "available",
+      "gap_counts": {
+        "no_prior_observation": 11,
+        "observation_too_old": 2,
+        "recorded_without_nodes": 0
+      }
+    },
+    "recording": {
+      "durable": true,
+      "status": "available",
+      "first_at": "2026-10-07T09:40:48.829418-04:00",
+      "last_at": "2026-10-16T17:28:30.845288-04:00",
+      "count": 2950
+    },
+    "candles": 14
+  },
+  {
+    "route": "/api/data/SPY?expiries=4&mode=day",
+    "http_status": 200,
+    "elapsed_ms": 576,
+    "data_source": "public_api",
+    "spot": 763.095,
+    "asof": "2026-10-16T21:29:13.786195+00:00",
+    "history_scope": "SPY:4:day:None:False:True:80|expiries=2026-10-19,2026-10-20,2026-10-21,2026-10-22|gex.v2|OI",
+    "stale": false,
+    "error": null,
+    "strikes": 80
+  }
+]

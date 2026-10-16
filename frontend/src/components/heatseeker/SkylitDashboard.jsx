@@ -20,6 +20,8 @@ import { ALL_BASES, surfaceStatus, sumProfile } from "../../lib/solsticeMetrics"
 import AskLodestar from "./AskLodestar";
 
 import ExactContractReview from "./ExactContractReview";
+import ReviewInspector, {ReviewSelectionContext} from "./ReviewInspector";
+import HeatmapLandmarks from "./HeatmapLandmarks";
 import { GroundedPublicReview } from "../public/PublicHandoffReview";
 
 import SolsticeSymbolMaps from "./SolsticeSymbolMaps";
@@ -70,6 +72,10 @@ function SelectedCellReadout({ selectedCell, displayData, metric, viewMode }) {
 function SelectedWallBlock({ data, spot, selectedCell, metric = "raw", replay = false }) {
   const res = resolveSelectedWall(data, selectedCell);
   if (res.status === "empty" || res.status === "cleared") return null;
+  if (res.status === "unclassified") return <div role="status" data-testid="wall-inspector-unclassified">
+    <h3>Selected cell · {selectedCell.strike}{selectedCell.colKey ? ` · ${selectedCell.colKey}` : ""}</h3>
+    <p>No classified structural wall at this cell in the displayed snapshot. The cell is still reviewable; no nearby wall or directional setup is substituted.</p>
+  </div>;
   if (res.status === "gone") {
     return (
       <>
@@ -132,10 +138,10 @@ function CompareWorkspace({ data, spot, ticker, metric,
   const paneRefs = useRef({});
   const guard = useRef(false);
   const syncFrom = (from) => (e) => {
-    if (guard.current) return;
+    if (guard.current || e.target !== e.currentTarget) return;
     guard.current = true;
     try {
-      onManualScroll?.();
+      onManualScroll?.(e);
       const refs = { ...paneRefs.current, gex: gexRef.current || paneRefs.current.gex, vex: vexRef.current || paneRefs.current.vex, ...extraRefs.current };
       const self = e.currentTarget;
       for (const [key, other] of Object.entries(refs)) {
@@ -264,6 +270,7 @@ function SkylitDashboard({
   const [tradeMode, setTradeMode] = useState(false);
   const [selectedCell, setSelectedCell] = useState(null);
   const [contractSelection, setContractSelection] = useState(null);
+  const [reviewSelectionRevision, setReviewSelectionRevision] = useState(0);
   const onContractSelection = useCallback(selection => {
     setContractSelection(selection);
     if (selection?.status === "resolved") setSelectedCell(c => !c || c.ticker !== selection.ticker || c.wall_id !== selection.wallId
@@ -513,7 +520,8 @@ function SkylitDashboard({
     adj: metric === "raw" ? null : sumProfile(visibleData, metric, loadedExpiries),
     adjLabel: gexBasisLabel(metric), scopeLabel: `All loaded · ${loadedExpiries.length} expiries`, shared: true,
   } : null, [layout, visibleData, metric, viewMode, loadedExpiries]);
-  const pauseFollow = useCallback(() => {
+  const pauseFollow = useCallback(event => {
+    if (event?.mapProgrammaticScroll) return;
     if (followSpot) { setAnchorStrike(displaySpot); setFollowSpot(false); }
   }, [followSpot, displaySpot]);
   useEffect(() => { setFollowSpot(true); setAnchorStrike(null); }, [ticker]);
@@ -566,6 +574,7 @@ function SkylitDashboard({
     }
   }, [selectedCell]);
   const selectForReview = useCallback((selection) => {
+    setReviewSelectionRevision(value => value + 1);
     restoreIdentity.current=null;
     const key = `${selection.ticker}|${selection.wall_id || ""}|${selection.strike ?? ""}|${selection.colKey ?? ""}`;
     setSelectedCell(selection);
@@ -813,7 +822,7 @@ function SkylitDashboard({
 
   </>;
   return (
-    <div className="skylit-full-dashboard" data-study={rangeOpen ? "range" : priceHistoryOpen ? "price" : "options"}>
+    <div className="skylit-full-dashboard" data-expanded={expanded} data-study={rangeOpen ? "range" : priceHistoryOpen ? "price" : "options"}>
       {(rangeOpen || !showPriceHistory) && <div className="skylit-study-toolbar" role="toolbar" aria-label="Stock study">{studyActions}</div>}
       {rangeOpen && <RangeAnalyticsWorkspace ticker={ticker} onReplayModeChange={setRangeIsReplay} />}
       <>
@@ -831,6 +840,10 @@ function SkylitDashboard({
               { tries: 4, gapMs: 5000 });
           } catch { return { recorded: false, tries: 4 }; }
         }} />
+        <section role="region" aria-label="Map levels separate from historical candles">
+          <p className="chart-map-level-note">Displayed map levels — not historical candle-time levels. Missing saved chart nodes remain gaps.</p>
+          <HeatmapLandmarks data={visibleData} />
+        </section>
       </div>
       <div className="skylit-options-study" ref={optionsStudyRef} role="region" aria-label={ticker + " options desk"} tabIndex={-1} hidden={rangeOpen}
         onPointerDownCapture={() => focusStudy("options")} onClickCapture={() => focusStudy("options")} onChangeCapture={() => focusStudy("options")} onFocusCapture={() => focusStudy("options")} >
@@ -1020,7 +1033,7 @@ function SkylitDashboard({
         <AskLodestar subject={`${ticker}${selectedCell ? ` · wall ${selectedCell.wall_id || "none"} · strike ${selectedCell.strike}` : ""}`} overlayMetric={activeMetric} displayMode={priceHistoryOpen ? "price-history" : isReplay ? "replay" : "live"} compact />
       </div>
       {/* 3. Main Content Area */}
-      <div className="skylit-main-area">
+      <div className="skylit-main-area" data-inspector-open={drawerOpen}>
         {/* Heatmap Grid — fills available height (fitRows) with zoom */}
         <div
           className="skylit-heatmap-area"
@@ -1124,19 +1137,33 @@ function SkylitDashboard({
             </button>
           </div>
           <div className="skylit-drawer-body">
-          {/* T07/T23: selected-wall inspector + two-sided scenarios (deterministic) */}
-          <SelectedWallBlock
-            data={displayData} spot={displaySpot}
-            selectedCell={followWall && effectiveWallId
-              ? { ...selectedCell, wall_id: effectiveWallId }
-              : selectedCell}
-            metric={metric} replay={isReplay}
+          <ReviewInspector
+            context={<ReviewSelectionContext ticker={ticker} data={visibleData} wall={resolvedWall} cell={selectedCell} metric={activeMetric} replay={isReplay}/>}
+            selectionKey={`${ticker}|${selectedCell?.wall_id || ""}|${contractScope}|${isReplay}|${reviewSelectionRevision}`}
+            wall={<SelectedWallBlock
+              data={displayData} spot={displaySpot}
+              selectedCell={followWall && effectiveWallId
+                ? { ...selectedCell, wall_id: effectiveWallId }
+                : selectedCell}
+              metric={metric} replay={isReplay}
+            />}
+            contract={<>
+              <h3>Exact contract review · read-only</h3>
+              <ExactContractReview key={`${ticker}|${selectedCell?.wall_id || ""}|${visibleData?.snapshotId || ""}`} ticker={ticker} data={visibleData} wall={resolvedWall} cell={selectedCell} replay={isReplay} selectionScope={contractScope} onSelection={onContractSelection} />
+            </>}
+            flow={<>
+              <h3>Flow · selected reading</h3>
+              <dl className="review-inspector-context">
+                <dt>Stock / wall</dt><dd>{ticker} · {selectedCell?.wall_id || "No classified wall"}</dd>
+                <dt>Market observation</dt><dd>{visibleData?.event_time || visibleData?.observed_at || "Unknown"}</dd>
+                <dt>Snapshot time</dt><dd>{visibleData?.asof || "Unknown"} · {isReplay ? "Recorded" : "Live request"}</dd>
+                <dt>Source</dt><dd>{visibleData?.data_source || "Unknown"}</dd>
+              </dl>
+              <p>Use the existing Ask Flow workspace to explain this reading. Opening this step does not run the assistant or prepare an order.</p>
+              <AskLodestar subject={`${ticker} · exact contract review`} overlayMetric={activeMetric} displayMode={isReplay ? "replay" : "live"} compact />
+            </>}
+            publicAgent={<><h3>Public agent · reviewed draft</h3><p>A copied brief is not delivery or activation. Review the workflow in Public before any separately approved activation.</p><GroundedPublicReview /></>}
           />
-          <details className="skylit-contract-details"><summary>Exact contract review · read-only</summary>
-            <ExactContractReview key={`${ticker}|${selectedCell?.wall_id || ""}|${visibleData?.snapshotId || ""}`} ticker={ticker} data={visibleData} wall={resolvedWall} cell={selectedCell} replay={isReplay} selectionScope={contractScope} onSelection={onContractSelection} />
-          </details>
-          <AskLodestar subject={`${ticker} · exact contract review`} overlayMetric={activeMetric} displayMode={isReplay ? "replay" : "live"} compact />
-          <GroundedPublicReview />
           {/* R8-04: review journal state for the current snapshot's decision */}
           <div className="skylit-review-pill" data-testid="skylit-review-pill">
             {reviewLoading && (
@@ -1219,6 +1246,7 @@ function SkylitDashboard({
           aria-label="Expanded heatmap grid"
         >
           <div className="skylit-expanded-header">
+            <button type="button" className="skylit-trade-mode-btn" disabled={!selectedCell} title={!selectedCell ? "Select a cell to review" : "Continue the same Wall / Contract / Flow / Public review"} onClick={() => setDrawerOpen(true)}>Review selected level</button>
             <div className="skylit-expanded-title">
               <span className="skylit-expanded-ticker">{ticker}</span>
               <span className="skylit-expanded-label">Full grid</span>

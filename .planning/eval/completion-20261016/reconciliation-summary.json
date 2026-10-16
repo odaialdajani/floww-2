@@ -1,0 +1,33 @@
+{
+  "reviewed_candidate": "0bbdd711859e9a2fea043c8b79bf25e9728319bc",
+  "reviewed_rows": 133,
+  "unique_shas": 133,
+  "counts": {
+    "superseded": 43,
+    "retained": 56,
+    "missing-actionable": 13,
+    "conflicting-owner-protected": 4,
+    "unverifiable": 17
+  },
+  "verified_git_blob_citations": 149,
+  "original_obligations": 62,
+  "historical_status_counts": {
+    "ACCEPTED_AT_SHA": 54,
+    "EXTERNAL_HOLD": 7,
+    "PENDING": 1
+  },
+  "current_acceptances_registered": 0,
+  "parent_actions": {
+    "provider_age_metrics": "Reproduced and repaired; multi-provider and empty-monitor regressions.",
+    "missing_opportunity_and_sibling_numbers": "Reproduced and repaired without changing weights/tiers or model artifacts.",
+    "false_surface_and_audit_claims": "Three documentation corrections; helper-only metric contract retained, not silently promoted to display features.",
+    "snapshot_process_durability": "Actual engine/snapshot/physical-contract/node-consumer proof across three sequential processes, with no network/lifespan/activation.",
+    "curves_and_naked_lifetimes": "Preserved as unbuilt/deferred or unadmitted features. No wholesale old branch restoration or automatic commissioning.",
+    "capture_backpressure_and_build_ack": "Audit risk retained explicitly; not closed by the restart proof or disabled scheduled worker.",
+    "unverifiable_history": "Historical runtime/signature claims are not current acceptances."
+  },
+  "limitations": [
+    "Semantic reports are pinned to their reviewed candidate, not retroactively rewritten.",
+    "Passing all product tests or exact file identities cannot forge owner signatures or retrieve missing private data."
+  ]
+}

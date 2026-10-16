@@ -6,7 +6,7 @@ jest.mock("./AgentProvider",()=>({useAgent:()=>({setOpen:mockSetOpen,settingsOpe
 beforeEach(()=>{mockSettingsOpen=false;mockSetOpen.mockReset();});
 test("the compact Assistant entry opens chat and the shortcut toggles it",()=>{
  render(<AgentCommandBar/>);
- fireEvent.click(screen.getByRole('button',{name:'Open Ask FLOWW'}));expect(mockSetOpen).toHaveBeenCalledWith(true);
+ fireEvent.click(screen.getByRole('button',{name:'Open Ask Flow'}));expect(mockSetOpen).toHaveBeenCalledWith(true);
  fireEvent.keyDown(window,{key:'k',ctrlKey:true});
  const toggle=mockSetOpen.mock.calls[1][0];expect(toggle(false)).toBe(true);expect(toggle(true)).toBe(false);
  expect(screen.queryByText(/Lodestar/)).toBeNull();
