@@ -1,0 +1,25 @@
+{
+  "old_pid": 39759,
+  "new_pid": 53457,
+  "old_process_exited": true,
+  "product_environment_preserved": true,
+  "credential_preserved": true,
+  "environment_count": 122,
+  "launcher_environment_changed": [
+    "__PYVENV_LAUNCHER__"
+  ],
+  "trading_capture_worker_off": true,
+  "neighbor_listeners_preserved": true,
+  "source_head": "f7108e7870894cee37a2f8b959d2ee02094bcf5d",
+  "backup_files": {
+    "review-data.duckdb": {
+      "bytes": 1762930688,
+      "sha256": "02724902f2364195ad7e890ea75a81f7d6057537e59dd97ca4c12314ceee1648"
+    },
+    "review-data.duckdb.wal": {
+      "bytes": 16442831,
+      "sha256": "ddb297eb221ad2ae90c1e011e2cfc7556e4b71b4122261f6a107805ee1a8e4cb"
+    }
+  },
+  "note": "First verification assertion rejected macOS venv launcher-path update; no product environment changed. Read back and verified credential/gates/path equality; no second restart."
+}

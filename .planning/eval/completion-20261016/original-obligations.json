@@ -1,0 +1,1570 @@
+[
+  {
+    "id": "S01",
+    "owner": "OpenCode",
+    "priority": "P0",
+    "title": "Authoritative approval atomicity",
+    "acceptance": "Concurrent revoke versus restore/update cannot resurrect; full immutable binding including author, times, policy, payload and identity; required store failures purge permission.",
+    "observed": "Implementation 945c3ce9 (unchanged through 1f3b4258): approval lock, immutable same-ID conflict, revoked-never-resurrect; store-failure purge pinned by a7609446 audits.",
+    "status": "ACCEPTED_AT_SHA",
+    "accepted_sha": "1f3b4258a092405edc9843fb219192cc40331db1",
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1f3b4258a092405edc9843fb219192cc40331db1",
+      "verdict": "ACCEPT"
+    },
+    "evidence": [
+      {
+        "source_sha": "1f3b4258a092405edc9843fb219192cc40331db1",
+        "command": ".venv/bin/python -m pytest <17-file s18+route neighbor sweep incl. test_s18_approval_atomic.py>",
+        "exit_code": 0,
+        "at": "2026-10-05T09:30:00-04:00",
+        "log_path": "references/evidence/s01-1f3b4258.log",
+        "log_sha256": "1b2b5b6f8e97d1994cbe52ca9ab5e3417d21d0cfef1d76e3d818052a61bd9a95"
+      }
+    ]
+  },
+  {
+    "id": "S02",
+    "owner": "OpenCode",
+    "priority": "P0",
+    "title": "Authenticated principal and account authority",
+    "acceptance": "Server principal owns actor/account privileges at every write and entry; request operator/approved_by cannot impersonate another actor; cross-account, removed actor and shared-key-only identity refuse.",
+    "observed": "Registry-bound order-entry principal; presenter must equal bound approver; cross-account mint refused OPERATOR_UNAUTHORIZED, removed-operator replay refused OPERATOR_UNKNOWN, zero placements. Per-operator real credentials remain NAV-ACCOUNT.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "d24fedceda2b68dd61e69e474e579c351755b10d",
+        "command": "see references/evidence log (head-bound runs)",
+        "exit_code": 0,
+        "at": "2026-10-05T13:10:00-04:00",
+        "log_path": "references/evidence/s02-d24fedce.log",
+        "log_sha256": "70ad99d7f7f58c94452cf2412e15383bcc67ab6bde62527dc167daf700c6cd89"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "d24fedceda2b68dd61e69e474e579c351755b10d",
+      "verdict": "ACCEPT"
+    },
+    "accepted_sha": "d24fedceda2b68dd61e69e474e579c351755b10d"
+  },
+  {
+    "id": "S03",
+    "owner": "OpenCode",
+    "priority": "P0",
+    "title": "Mandatory full admission on every entry path",
+    "acceptance": "Enumerate mounted routes, replacement/retry jobs and service callers to broker placement; policy, approval, preflight, risk, lease, census, protection and recovery are mandatory; denied cases have zero placements.",
+    "observed": "Money-path entry enumerated and admission enforced (mount-chain kill-switch + store+policy+approval fingerprint); denied cases zero placements, mounted matrix + fingerprint tamper refuse 403. Disclosed residual: alpaca PAPER entry predates lane, paper-safe by construction, now tracked under NAV-PAPER-EXEMPT (Nav decision).",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "d24fedceda2b68dd61e69e474e579c351755b10d",
+        "command": "see references/evidence log (head-bound runs)",
+        "exit_code": 0,
+        "at": "2026-10-05T13:10:00-04:00",
+        "log_path": "references/evidence/s03-d24fedce.log",
+        "log_sha256": "6ab50ba2757b596d1ea4e2be83c975e53b45fe5fbfcc9ecfad5364b5cc03673f"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "d24fedceda2b68dd61e69e474e579c351755b10d",
+      "verdict": "ACCEPT"
+    },
+    "accepted_sha": "d24fedceda2b68dd61e69e474e579c351755b10d"
+  },
+  {
+    "id": "S04",
+    "owner": "OpenCode",
+    "priority": "P0",
+    "title": "Lease protects external effect",
+    "acceptance": "Prevent stale owner from invoking broker effect, rather than detect it afterward; independent-process takeover/crash/cancellation/async-wait tests; actual fence checked by owning effect boundary.",
+    "observed": "Lease fence: 1f3b4258 lease-effect accepted; a7609446 cancellation-during-effect UNKNOWN preservation accepted by Cline probe (memory+durable UNKNOWN annotated; retry reconciles original identity, zero new placements).",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "a76094466fd6e1f56368e2c83717d8a2475308ef",
+        "command": "see references/evidence log (head-bound runs)",
+        "exit_code": 0,
+        "at": "2026-10-05T13:10:00-04:00",
+        "log_path": "references/evidence/s04-a7609446.log",
+        "log_sha256": "aed0ae41294e0f7fd3cb9fea172297eae6e7a69d21e39a4b551b91c79d9aece7"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "a76094466fd6e1f56368e2c83717d8a2475308ef",
+      "verdict": "ACCEPT"
+    },
+    "accepted_sha": "a76094466fd6e1f56368e2c83717d8a2475308ef"
+  },
+  {
+    "id": "S05",
+    "owner": "OpenCode",
+    "priority": "P0",
+    "title": "Durable single-use reservation and retry",
+    "acceptance": "Atomic intent/approval reservation before effect; concurrent duplicates place once; ambiguous ACK/restart reconciles original broker identity; retry cannot issue another economic order.",
+    "observed": "1f3b4258: _persist first-write INSERT is the atomic claim; foreign-order_id writes refuse (pre-fix INSERT OR REPLACE clobber reproduced RED); cross-PID restart duplicate bound to original identity; approval single-use via intent-hash binding + one-claim-per-intent row.",
+    "status": "ACCEPTED_AT_SHA",
+    "accepted_sha": "1f3b4258a092405edc9843fb219192cc40331db1",
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1f3b4258a092405edc9843fb219192cc40331db1",
+      "verdict": "ACCEPT"
+    },
+    "evidence": [
+      {
+        "source_sha": "1f3b4258a092405edc9843fb219192cc40331db1",
+        "command": ".venv/bin/python -m pytest tests/solstice/test_s18_cross_process_single_use.py -q",
+        "exit_code": 0,
+        "at": "2026-10-05T09:15:00-04:00",
+        "log_path": "references/evidence/s05-1f3b4258.log",
+        "log_sha256": "c5877e1c008f258579ca47b63ea188c693bf039e7f8c20fa7e6968eee007d52d"
+      }
+    ]
+  },
+  {
+    "id": "S06",
+    "owner": "OpenCode",
+    "priority": "P0",
+    "title": "Server-owned preflight validity",
+    "acceptance": "Fresh successful exact account/contract/quantity/price/fees/cash-margin receipt; malformed/future/nonfinite/foreign/stale/negative evidence refuses; no caller clock or primed cache grants authority.",
+    "observed": "Server-owned preflight accepted at the combined head (r19 evidence in entry). OpenCode re-verified at main 1fc5582c: s18 seam suites 108/108 green (incl. preflight/executor coverage per lane record MUSE_STATE section 54: preflight_gate STALE_PREFLIGHT/PREFLIGHT_UNAFFORDABLE, buying_power refusal); no caller-clock authority (ctx-now server-stamping stays a mounted-pipeline item per queue).",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "pytest tests/solstice/test_s18_*.py -q -> 108 passed, 0 failed at 1fc5582c (Cline independent run, detached worktree) [S06 acceptance pins read at source]",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "S07",
+    "owner": "OpenCode",
+    "priority": "P0",
+    "title": "Mandatory versioned complete policy",
+    "acceptance": "Require validity, account/scope, products, quantity/premium/fee/slippage/loss/exposure/position/liquidity/clock/cutoff/protection fields; missing values UNSET; no invented production numbers.",
+    "observed": "Complete-policy admission accepted at the combined head. Re-verified at main 1fc5582c: test_s18_policy_shape green in the 108-run; set_account_policy_required durable-first semantics read in source (memory purged on durable failure); _KNOWN_POLICY_FIELDS admit-list (read); ceilings enforced at creation+verify (probed: qty=2 over max_quantity=1 refuses RISK_QUANTITY_EXCEEDED). Real values UNSET (NAV-ACCOUNT).",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "pytest tests/solstice/test_s18_*.py -q -> 108 passed, 0 failed at 1fc5582c (Cline independent run, detached worktree) [S07 acceptance pins read at source]",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "S08",
+    "owner": "OpenCode",
+    "priority": "P0",
+    "title": "Raw row and executable payload binder",
+    "acceptance": "Factory, raw ingestion, stored columns/JSON and verification agree; every executable field exact including symbol/OSI, instrument/session/TIF/type/side/quantity/limit/stop/open-close/account/policy.",
+    "observed": "Raw-row/executable binder accepted at the combined head. Re-verified at main 1fc5582c by OpenCode adversarial probes 10/10 green: MARKET OPTION / LIMIT-without-limit / malformed symbol refuse BAD_CONTRACT; ceiling/expired-OSI guards refuse (EXPIRY_INVALID when configured, GUARD_UNCONFIGURED when not); SPY-vs-OSI and tampered-qty refuse APPROVAL_INVALID; valid approves verify. s18 suites 108/108 green.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "pytest tests/solstice/test_s18_*.py -q -> 108 passed, 0 failed at 1fc5582c (Cline independent run, detached worktree) [S08 acceptance pins read at source]",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "S09",
+    "owner": "OpenCode",
+    "priority": "P0",
+    "title": "Risk ledger and proposed reservations",
+    "acceptance": "Dedup fills once, carry prior-day lot basis, fee-inclusive loss, exact multiplier/tick Decimal cost, open/unknown/native/proposed/reserved exposure and buying power; incomplete facts refuse.",
+    "observed": "Risk ledger accepted at the combined head (FIFO lots, fee-inclusive loss, exact Decimal per lane record MUSE_STATE section 47/54). Re-verified at main 1fc5582c: s18 seam suites 108/108 green. Mechanism detail per lane record + Cline S-lane review (PR107 body S01-S14); incomplete-facts refusal covered by suite.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "pytest tests/solstice/test_s18_*.py -q -> 108 passed, 0 failed at 1fc5582c (Cline independent run, detached worktree) [S09 acceptance pins read at source]",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "S10",
+    "owner": "OpenCode",
+    "priority": "P0",
+    "title": "Native census and verified protection",
+    "acceptance": "Fresh server account/order/position/native census with strict source/state/clock scope; no unknown state or local reported workflow counts as authority; protection covers actual eligible filled quantity or refuses.",
+    "observed": "Native census/protection accepted at the combined head (lane record: missing/unknown census refuses; protection covers eligible filled quantity or refuses; short positions refuse). Re-verified at main 1fc5582c: s18 suites 108/108 green. No commissioned vendor proof exists (stays NAV-adjacent external reality).",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "pytest tests/solstice/test_s18_*.py -q -> 108 passed, 0 failed at 1fc5582c (Cline independent run, detached worktree) [S10 acceptance pins read at source]",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "S11",
+    "owner": "OpenCode",
+    "priority": "P0",
+    "title": "One authoritative store and dependency graph",
+    "acceptance": "Actual mounted entry shares required durable policy/approval/reservation/recovery store and server preflight dependencies; no global-memory fallback; injected query/DDL/write/recovery faults deny.",
+    "observed": "Authoritative store accepted at the combined head. Re-verified at main 1fc5582c: mounted entry shares the durable admission store (verified by read: _admission_store_conn + verify/consume/journal all honor STORE_UNAVAILABLE fail-closed); s18 suites 108/108 green incl. store-fault injection coverage.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "pytest tests/solstice/test_s18_*.py -q -> 108 passed, 0 failed at 1fc5582c (Cline independent run, detached worktree) [S11 acceptance pins read at source]",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "S12",
+    "owner": "OpenCode",
+    "priority": "P1",
+    "title": "Lifecycle truth and exit availability",
+    "acceptance": "ACK/open/partial/fill/reject/cancel/replace/unknown remain distinct; reconcile persistence failure/partial recovery; exits and authenticated cancel available during entry pause/disarm.",
+    "observed": "Cancelled effect await now annotates UNKNOWN+persisted; retry reconciles original identity; exits stay authenticated when entries disarmed (mounted `POST /api/public/order/.../cancel` proceeds with kill-switch off).",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "a76094466fd6e1f56368e2c83717d8a2475308ef",
+        "command": "see references/evidence log (head-bound runs)",
+        "exit_code": 0,
+        "at": "2026-10-05T13:10:00-04:00",
+        "log_path": "references/evidence/s12-a7609446.log",
+        "log_sha256": "f8a998bd78d2f83cbc6c19f32e94cde63d91e3c4476eb89d2c6b60bc582757c3"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "a76094466fd6e1f56368e2c83717d8a2475308ef",
+      "verdict": "ACCEPT"
+    },
+    "accepted_sha": "a76094466fd6e1f56368e2c83717d8a2475308ef"
+  },
+  {
+    "id": "S13",
+    "owner": "OpenCode",
+    "priority": "P1",
+    "title": "Calendar expiry and equity protection",
+    "acceptance": "11:30\u201314:00 NY entry pause, DST/holidays/early closes and near-expiry/assignment rules; equity/order product protection tightens or refuses under unsupported policy.",
+    "observed": "Calendar/expiry/equity protection accepted at the combined head (lane record: ET calendar days, 11:30-14:00 pause, DST/holiday handling). Re-verified at main 1fc5582c: expired-OSI refuses EXPIRY_INVALID under configured guards / GUARD_UNCONFIGURED without (probed); s18 suites 108/108 green.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "pytest tests/solstice/test_s18_*.py -q -> 108 passed, 0 failed at 1fc5582c (Cline independent run, detached worktree) [S13 acceptance pins read at source]",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "S14",
+    "owner": "OpenCode",
+    "priority": "P1",
+    "title": "Spawn and deployment scope",
+    "acceptance": "Independent-process contention and restart proof on actual supported volume; Python3.12 Linux clean child teardown/queues/events/joins; unsupported distributed deployment refuses.",
+    "observed": "Spawn/deployment scope accepted at the combined head (single-host-volume lease scope acknowledged). Re-verified at main 1fc5582c: s18 suites 108/108 green incl. deployment-scope audit + spawn-isolated tests. Distributed deployment remains refused by scope (documented boundary).",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "pytest tests/solstice/test_s18_*.py -q -> 108 passed, 0 failed at 1fc5582c (Cline independent run, detached worktree) [S14 acceptance pins read at source]",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "S15",
+    "owner": "OpenCode",
+    "priority": "P1",
+    "title": "Spark lane published acceptance",
+    "acceptance": "Coherent committed diff plus paired fixtures, honest PR103 body and exact focused/adversarial receipts; no exhaustion claim while S01\u2013S14 pending. Update stale route positive fixture with authoritative approved fake inputs without restoring POLICY_UNSET bypass.",
+    "observed": "Cline independent review VERIFIED+ACCEPT at a7609446 (S04/S12) and d24fedce (I04) (references/cline-review-spark-a7609446-d24fedce.md); S01-S05/S12/I04 accepted at 1f3b4258/a7609446/d24fedce; lane content is an ancestor of main via PR107 lineage; PR103 MERGED; PR103 body refreshed append-only this session with final acceptance state.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "d24fedceda2b68dd61e69e474e579c351755b10d",
+        "command": "independent Cline review (VERIFIED, ACCEPT at both heads)",
+        "exit_code": 0,
+        "at": "2026-10-06T19:45:00-04:00",
+        "log_path": "references/cline-review-spark-a7609446-d24fedce.md",
+        "log_sha256": "72d7a7a94d9bcd5290584478f2d561c53fc36e07ad1def1d24f6150fd4e3058c"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "d24fedceda2b68dd61e69e474e579c351755b10d",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "OpenCode publishes spark-r17 (14 local commits; admission matrix + their suites green at d24fedce); my published review of S01..S14 at 1f3b4258/a7609446/d24fedce recorded and not superseded",
+    "accepted_sha": "d24fedceda2b68dd61e69e474e579c351755b10d"
+  },
+  {
+    "id": "C01",
+    "owner": "Cline",
+    "priority": "P0",
+    "title": "Repair contradictory source fixtures",
+    "acceptance": "Regenerate from authoritative producer; admitted = returned + skipped under explicit versioned semantics; axes/finite cells/coverage agree; every synthetic fixture and wrapper remains synthetic.",
+    "observed": "Fixture truth at this head: synthetic=True on both partial+complete; n_admitted 3 == returned 2 + skipped 1; idempotence proves producer-digest byte-stability on CI 3.12 (backend-tests PASS at c39752bc).",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+        "command": "see c-lane-6342afdf.log (focused suites + independent probes)",
+        "exit_code": 0,
+        "at": "2026-10-05T13:10:00-04:00",
+        "log_path": "references/evidence/c-lane-6342afdf.log",
+        "log_sha256": "28e54ab2c707545751f9b077071bf62cc5ffd996984803c8f3f8619692a21b45"
+      }
+    ],
+    "reviewer": {
+      "owner": "OpenCode",
+      "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+      "verdict": "ACCEPT"
+    },
+    "accepted_sha": "6342afdf7241fae935002461fc2d002adf2e41ac"
+  },
+  {
+    "id": "C02",
+    "owner": "Cline",
+    "priority": "P0",
+    "title": "Coalesced budget and cache admission",
+    "acceptance": "One paid envelope per concurrent identical miss; shared warm identity hit debit-free; denied debit before auth/accounts; different ticker/window/provider identities never coalesce wrongly.",
+    "observed": "test_public_budget_debit.py 7/7 at this head (warm debit zero, concurrent single fan-out, all seams' cancellation-slot release). RE-VERIFIED 2026-10-07 at bdb6a8d8 after the budget-mechanics delta (extra per-skip debit_additional + raise_budget_exhausted flag + daily-bar-evidence warm path in public_api_adapter): budget debit + adapter-regression + chain-route suites 25/25 green; pinned warm/concurrent behavior holds; main CI green (23m18s). Bind stands.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+        "command": "see c-lane-6342afdf.log (focused suites + independent probes)",
+        "exit_code": 0,
+        "at": "2026-10-05T13:10:00-04:00",
+        "log_path": "references/evidence/c-lane-6342afdf.log",
+        "log_sha256": "28e54ab2c707545751f9b077071bf62cc5ffd996984803c8f3f8619692a21b45"
+      }
+    ],
+    "reviewer": {
+      "owner": "OpenCode",
+      "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+      "verdict": "ACCEPT"
+    },
+    "accepted_sha": "6342afdf7241fae935002461fc2d002adf2e41ac"
+  },
+  {
+    "id": "C03",
+    "owner": "Cline",
+    "priority": "P0",
+    "title": "Cancellation-safe slot ownership",
+    "acceptance": "Outer finally covers debit, cold broker init, account lookup, lock wait, assembly and cache publication; release exactly once on exceptions/cancellation; all three seams recover zero leaked slots.",
+    "observed": "Cancellation-safe slot ownership verified at all three seams (set in same suite), re-verified at this head after 1f31cda0's cancellation repairs.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+        "command": "see c-lane-6342afdf.log (focused suites + independent probes)",
+        "exit_code": 0,
+        "at": "2026-10-05T13:10:00-04:00",
+        "log_path": "references/evidence/c-lane-6342afdf.log",
+        "log_sha256": "28e54ab2c707545751f9b077071bf62cc5ffd996984803c8f3f8619692a21b45"
+      }
+    ],
+    "reviewer": {
+      "owner": "OpenCode",
+      "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+      "verdict": "ACCEPT"
+    },
+    "accepted_sha": "6342afdf7241fae935002461fc2d002adf2e41ac"
+  },
+  {
+    "id": "C04",
+    "owner": "Cline",
+    "priority": "P0",
+    "title": "One canonical row binder everywhere",
+    "acceptance": "Write/new/duplicate/index/retrieve validates full stored columns and payload/header/identity/status/received/schema/metrics/content; corrupt duplicate cannot return duplicate success.",
+    "observed": "Header-tamper duplicate REFUSES stored_record_corrupt/ROW_HEADER_MISMATCH; replay REFUSES too (one canonical binder verdict across all paths).",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+        "command": "see c-lane-6342afdf.log (focused suites + independent probes)",
+        "exit_code": 0,
+        "at": "2026-10-05T13:10:00-04:00",
+        "log_path": "references/evidence/c-lane-6342afdf.log",
+        "log_sha256": "28e54ab2c707545751f9b077071bf62cc5ffd996984803c8f3f8619692a21b45"
+      }
+    ],
+    "reviewer": {
+      "owner": "OpenCode",
+      "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+      "verdict": "ACCEPT"
+    },
+    "accepted_sha": "6342afdf7241fae935002461fc2d002adf2e41ac"
+  },
+  {
+    "id": "C05",
+    "owner": "Cline",
+    "priority": "P0",
+    "title": "Exception-safe hostile envelope handling",
+    "acceptance": "clocks-list/null/wrong shapes, malformed query/windows, wrong wrapper/id/status, nonfinite values, spoofed digests and valid-JSON tamper return typed refusal at all entry seams.",
+    "observed": "clocks-list write and binder shapes produce typed refusals; no AttributeError; list/str query/clocks all caught before use.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+        "command": "see c-lane-6342afdf.log (focused suites + independent probes)",
+        "exit_code": 0,
+        "at": "2026-10-05T13:10:00-04:00",
+        "log_path": "references/evidence/c-lane-6342afdf.log",
+        "log_sha256": "28e54ab2c707545751f9b077071bf62cc5ffd996984803c8f3f8619692a21b45"
+      }
+    ],
+    "reviewer": {
+      "owner": "OpenCode",
+      "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+      "verdict": "ACCEPT"
+    },
+    "accepted_sha": "6342afdf7241fae935002461fc2d002adf2e41ac"
+  },
+  {
+    "id": "C06",
+    "owner": "Cline",
+    "priority": "P0",
+    "title": "Metric-specific raw population eligibility",
+    "acceptance": "Raw BS IV/time/strike eligibility differs from vendor-gamma kernels; delta/volume gamma/OI/strike/type/volume exclusions preserve truthful selected-metric admission despite finite siblings.",
+    "observed": "Probe: delta population keeps OI/gamma/delta/zero-volume/quarantine exclusions visible despite finite siblings (first-failing-reason mirror of kernel order).",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+        "command": "see c-lane-6342afdf.log (focused suites + independent probes)",
+        "exit_code": 0,
+        "at": "2026-10-05T13:10:00-04:00",
+        "log_path": "references/evidence/c-lane-6342afdf.log",
+        "log_sha256": "28e54ab2c707545751f9b077071bf62cc5ffd996984803c8f3f8619692a21b45"
+      }
+    ],
+    "reviewer": {
+      "owner": "OpenCode",
+      "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+      "verdict": "ACCEPT"
+    },
+    "accepted_sha": "6342afdf7241fae935002461fc2d002adf2e41ac"
+  },
+  {
+    "id": "C07",
+    "owner": "Cline",
+    "priority": "P0",
+    "title": "Qualified production classification",
+    "acceptance": "Integrity AND trusted provenance AND actual capture family required; syntheticfalse alone never produces production; unknown/fixture/paper/censored sources stay separately excluded.",
+    "observed": "Four-way classification verified: synthetic/paper/unknown/production; syntheticfalse never claims production.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+        "command": "see c-lane-6342afdf.log (focused suites + independent probes)",
+        "exit_code": 0,
+        "at": "2026-10-05T13:10:00-04:00",
+        "log_path": "references/evidence/c-lane-6342afdf.log",
+        "log_sha256": "28e54ab2c707545751f9b077071bf62cc5ffd996984803c8f3f8619692a21b45"
+      }
+    ],
+    "reviewer": {
+      "owner": "OpenCode",
+      "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+      "verdict": "ACCEPT"
+    },
+    "accepted_sha": "6342afdf7241fae935002461fc2d002adf2e41ac"
+  },
+  {
+    "id": "C08",
+    "owner": "Cline",
+    "priority": "P0",
+    "title": "Session and sample qualification",
+    "acceptance": "Exchange calendar/session dates plus actual owning snapshot/decision/path lineage; 30 Saturday labels without observation cannot meet target; timezone aware/naive, holidays, cap and ticker tests.",
+    "observed": "30 Saturdays even with owning snapshots STILL fail to qualify; exchange holidays refuse; foreign-ticker snapshots refuse; open days with owning snapshots qualify (insufficient-evidence verdicts, never profit claims).",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+        "command": "see c-lane-6342afdf.log (focused suites + independent probes)",
+        "exit_code": 0,
+        "at": "2026-10-05T13:10:00-04:00",
+        "log_path": "references/evidence/c-lane-6342afdf.log",
+        "log_sha256": "28e54ab2c707545751f9b077071bf62cc5ffd996984803c8f3f8619692a21b45"
+      }
+    ],
+    "reviewer": {
+      "owner": "OpenCode",
+      "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+      "verdict": "ACCEPT"
+    },
+    "accepted_sha": "6342afdf7241fae935002461fc2d002adf2e41ac"
+  },
+  {
+    "id": "C09",
+    "owner": "Cline",
+    "priority": "P0",
+    "title": "Versioned stored-only replay compatibility",
+    "acceptance": "Explicit v2/v3 migration/version policy; complete bound list/retrieve ok/partial/refused wrappers with stored digest/schema/query/metric identity; consumer can refuse bad versions.",
+    "observed": "Explicit version policy: v3 only, v2 typed refusal INCOMPATIBLE_CONTENT_SCHEMA on consumer write; refusal before digest evaluation.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+        "command": "see c-lane-6342afdf.log (focused suites + independent probes)",
+        "exit_code": 0,
+        "at": "2026-10-05T13:10:00-04:00",
+        "log_path": "references/evidence/c-lane-6342afdf.log",
+        "log_sha256": "28e54ab2c707545751f9b077071bf62cc5ffd996984803c8f3f8619692a21b45"
+      }
+    ],
+    "reviewer": {
+      "owner": "OpenCode",
+      "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+      "verdict": "ACCEPT"
+    },
+    "accepted_sha": "6342afdf7241fae935002461fc2d002adf2e41ac"
+  },
+  {
+    "id": "C10",
+    "owner": "Cline",
+    "priority": "P1",
+    "title": "Owning stored exact-contract resolver",
+    "acceptance": "Recover exact OSI/series/expiry/strike/right/multiplier/quote-side clocks from owning persisted population; typed unsupported/stale/incomplete refusal; never current-chain reconstruction.",
+    "observed": "PR110 closes the PARTIAL gap: synthetic per-contract grounding rows (12, FAKE- OSIs, EXPLICIT/ MULTIPLIER_INVALID provenance) seeded through record_range_envelope; replay restitutes byte-identically (10/10 independent probe); strike/multiplier tamper -> DIGEST_MISMATCH never served; tampered rows cannot duplicate back; C16 clocks preserved (13:59:30/35, new digests in manifest); new suite 7/7 failed-first; 93-slice, 837 full slice (=830+7), budget 7/7, ruff clean. Body '844' mixes scopes (noted, non-blocking).",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "58d93ad2570962087870102cf8dff0742465fd01",
+        "command": "OpenCode independent raw-patch review at PR110 head 58d93ad2: 10/10 probes (rows restituted byte-identical, exact identity fields, strike/multiplier tamper -> DIGEST_MISMATCH never served, tampered rows cannot duplicate back, C16 clocks preserved, unknown record -> None); prescription satisfied; receipt note on PR body arithmetic is non-blocking.",
+        "exit_code": 0,
+        "at": "2026-10-07T00:05:00-04:00",
+        "log_path": "references/evidence/c10-PR110-58d93ad2.log",
+        "log_sha256": "5c8cb2deb383a1cbf85a5c451f3a79d3e8aa7dca6f3aac72f95dede21f06e724"
+      },
+      {
+        "source_sha": "58d93ad2570962087870102cf8dff0742465fd01",
+        "command": "PR110 hosted 4/4 gates green at 58d93ad2; Cline failed-first 7/7 suite, r18+agent slice 195/0, full solstice+budget slice green; merged to main via a74cab7a and re-verified in the edaa1cc8 battery (93 r18+grounding incl. the 7 C10 pins; 858 full slice).",
+        "exit_code": 0,
+        "at": "2026-10-07T00:35:00-04:00",
+        "log_path": "references/evidence/c10-per-contract-62f29808.log",
+        "log_sha256": "bf9c0876a58f67fee02ff7bd4a31490d2a0c91355e4cdc3e60fc98a731fd8ca4"
+      }
+    ],
+    "reviewer": {
+      "owner": "OpenCode",
+      "source_sha": "58d93ad2570962087870102cf8dff0742465fd01",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "ACCEPTED_AT_SHA 58d93ad2 (reviewed source; merged to main via a74cab7a). Per-contract identity population now persisted and restituted; consumer drafting stays RANGE_RECORD_REFERENCE_ONLY; real captures remain NAV-CAPTURE.",
+    "accepted_sha": "58d93ad2570962087870102cf8dff0742465fd01"
+  },
+  {
+    "id": "C11",
+    "owner": "Cline",
+    "priority": "P1",
+    "title": "Authenticated explicit capture boundary",
+    "acceptance": "Display/index/replay GET reads never write; persist/capture requires server authorization and default-off feature; denied captures have zero writes; no worker activation.",
+    "observed": "Capture boundary at market_data.py (325-372): FLOWW_RANGE_CAPTURE_ENABLED check \u2192 API-key admission \u2192 conn \u2192 attestation object; default-off at HTTP; persisted only in attestation (verified earlier and unchanged per diff range).",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+        "command": "see c-lane-6342afdf.log (focused suites + independent probes)",
+        "exit_code": 0,
+        "at": "2026-10-05T13:10:00-04:00",
+        "log_path": "references/evidence/c-lane-6342afdf.log",
+        "log_sha256": "28e54ab2c707545751f9b077071bf62cc5ffd996984803c8f3f8619692a21b45"
+      }
+    ],
+    "reviewer": {
+      "owner": "OpenCode",
+      "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+      "verdict": "ACCEPT"
+    },
+    "accepted_sha": "6342afdf7241fae935002461fc2d002adf2e41ac"
+  },
+  {
+    "id": "C12",
+    "owner": "Cline",
+    "priority": "P1",
+    "title": "Independent writer exit reader durability",
+    "acceptance": "Temporary file DB, distinct PIDs/clean exits, exact axes/cells/clocks/metrics/digests/resolver data restored; corrupt/schema/missing/gap refusals; no production restart.",
+    "observed": "test_r18_range_replay_subprocess (6 tests) rerun at this head \u2014 storage writer active-changed post-proof; all pass.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+        "command": "see c-lane-6342afdf.log (focused suites + independent probes)",
+        "exit_code": 0,
+        "at": "2026-10-05T13:10:00-04:00",
+        "log_path": "references/evidence/c-lane-6342afdf.log",
+        "log_sha256": "28e54ab2c707545751f9b077071bf62cc5ffd996984803c8f3f8619692a21b45"
+      }
+    ],
+    "reviewer": {
+      "owner": "OpenCode",
+      "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+      "verdict": "ACCEPT"
+    },
+    "accepted_sha": "6342afdf7241fae935002461fc2d002adf2e41ac"
+  },
+  {
+    "id": "C13",
+    "owner": "Cline",
+    "priority": "P1",
+    "title": "Inspector scope and outcome lineage",
+    "acceptance": "Explicit read-only store/ticker/time scope, total versus listed truncation, source clocks/cadence/gaps, censored/simultaneous unknown; underlying labels separate from real option fills/fees/PnL. Preserve prospective chronological holdout, sample/missing counts, cost/slippage/liquidity, uncertainty/drawdown/tail risk and benchmark protocol; no automatic retraining or risk escalation.",
+    "observed": "Inspector adversarial probe: 35 open-day synthetic-stamped evidence rows produce verdict INSUFFICIENT EVIDENCE, n_qualified_sessions=0 (Labor Day automatically recognized closed).",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+        "command": "see c-lane-6342afdf.log (focused suites + independent probes)",
+        "exit_code": 0,
+        "at": "2026-10-05T13:10:00-04:00",
+        "log_path": "references/evidence/c-lane-6342afdf.log",
+        "log_sha256": "28e54ab2c707545751f9b077071bf62cc5ffd996984803c8f3f8619692a21b45"
+      }
+    ],
+    "reviewer": {
+      "owner": "OpenCode",
+      "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+      "verdict": "ACCEPT"
+    },
+    "accepted_sha": "6342afdf7241fae935002461fc2d002adf2e41ac"
+  },
+  {
+    "id": "C14",
+    "owner": "Cline",
+    "priority": "P1",
+    "title": "Budget original and adjacent regressions",
+    "acceptance": "Run existing required-debit, cache, concurrency/chain/spot suites alongside new tests; faithful mock singleton, cancellation injection during init/wait and error release; no fixture weakening.",
+    "observed": "Budget original+adjacent suites rerun at this head (7/7, in 728-run mix) plus earlier warm/concurrent regression deltas pinned. RE-VERIFIED 2026-10-07 at bdb6a8d8 (same delta): original + adjacent suites green in the 25-run; main CI green. Bind stands.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+        "command": "see c-lane-6342afdf.log (focused suites + independent probes)",
+        "exit_code": 0,
+        "at": "2026-10-05T13:10:00-04:00",
+        "log_path": "references/evidence/c-lane-6342afdf.log",
+        "log_sha256": "28e54ab2c707545751f9b077071bf62cc5ffd996984803c8f3f8619692a21b45"
+      }
+    ],
+    "reviewer": {
+      "owner": "OpenCode",
+      "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+      "verdict": "ACCEPT"
+    },
+    "accepted_sha": "6342afdf7241fae935002461fc2d002adf2e41ac"
+  },
+  {
+    "id": "C15",
+    "owner": "Cline",
+    "priority": "P1",
+    "title": "Bounded data cadence and recovery design",
+    "acceptance": "Reuse shared pacer/worker/calendar/Retry-After/401 invalidation/cache; capture defaults off; five-minute price path is swing data, finer cadence only bounded tested disarmed design.",
+    "observed": "Diff a0c7fbc6..6342afdf does not touch producer/recorder_health/price_paths at all \u2014 no duplicate worker, no subscription drift; capture stays default-off.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+        "command": "see c-lane-6342afdf.log (focused suites + independent probes)",
+        "exit_code": 0,
+        "at": "2026-10-05T13:10:00-04:00",
+        "log_path": "references/evidence/c-lane-6342afdf.log",
+        "log_sha256": "28e54ab2c707545751f9b077071bf62cc5ffd996984803c8f3f8619692a21b45"
+      }
+    ],
+    "reviewer": {
+      "owner": "OpenCode",
+      "source_sha": "6342afdf7241fae935002461fc2d002adf2e41ac",
+      "verdict": "ACCEPT"
+    },
+    "accepted_sha": "6342afdf7241fae935002461fc2d002adf2e41ac"
+  },
+  {
+    "id": "C16",
+    "owner": "Cline",
+    "priority": "P1",
+    "title": "Cline lane published acceptance",
+    "acceptance": "Coherent PR106 repair SHA, updated schema/hash contract and paired source fixtures, focused/wider tests, exact known CI failures; never declare migration admitted yourself.",
+    "observed": "PR106 merged all-green; regen with DISTINCT producer clocks landed producer-side (3f3f5abb in main: partial received_at 13:59:35 vs complete 13:59:30, digest resealed 33843c65..., record_index manifest matches); my previously-broken consumer replay/ordering suites now 182/182 green at main 1fc5582c; backend r18+grounding 86/86. Residual transport-copy source_commit staleness repaired via PR108 (cherry-pick of stranded 336a69a9), review-only.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "see references/evidence/main-1fc5582c-reverify.log (record_index fixture inspect + 86 backend + 182 frontend replay suites + resync PR108 verification)",
+        "exit_code": 0,
+        "at": "2026-10-06T19:45:00-04:00",
+        "log_path": "references/evidence/main-1fc5582c-reverify.log",
+        "log_sha256": "de23f058a852e2f6eb5ae96fd013fb729e0865c6eaa9777f856d73d9af083e43"
+      }
+    ],
+    "reviewer": {
+      "owner": "OpenCode",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "I01",
+    "owner": "OpenCode",
+    "priority": "P0",
+    "title": "Admit producer deltas independently",
+    "acceptance": "Inspect exact committed base/head/diff and paired refusal fixtures; reproduce relevant prior review failures; Cline reviews Spark and OpenCode reviews Cline; no dirty peer source.",
+    "observed": "Producer deltas admitted independently: C01-C15 accepted at 6342afdf on OpenCode review (evidence log c-lane-6342afdf); C16 accepted at main 1fc5582c (distinct producer clocks, 182/182 consumer suites); composition merged as main with hosted gates green. No dirty peer source consumed.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "admission discipline verified: C01-C15 at 6342afdf (c-lane evidence read in full) + composition merged as main; battery 108/86/69/182 + API 383 + protected 68+3disclosed",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "I02",
+    "owner": "OpenCode",
+    "priority": "P0",
+    "title": "Keep one successor and merge provenance",
+    "acceptance": "New local integration branch starts at PR104; transfer integration ownership; compose only admitted owned paths with conflict analysis; PR104 remains single published successor.",
+    "observed": "Successor chain (supersedes packet-creation PR104 text): PR104 MERGED -> PR107 combined candidate MERGED as main 1fc5582c (lineage 9977d15e/6342afdf/d24fedce + I03/I05/clock-key seal, hosted 4/4 green) -> PR108 + PR109 open review-only, disjoint file sets, no force-push, ancestry preserved.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "successor discipline verified: PR104 merged -> PR107 merged -> main 1fc5582c; PR108/109/110 open review-only, disjoint file sets, ancestry preserved (diffs inspected raw)",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "I03",
+    "owner": "OpenCode",
+    "priority": "P0",
+    "title": "Strict v3 consumer migration",
+    "acceptance": "Only accepted canonical source fixtures; shared selection/digest/schema/metric query, partial null coverage and clocks; late-response guards; no consumer relaxation for invalid source.",
+    "observed": "Strict v3 consumer migration complete: CONTENT_SCHEMA=rga-content.v3 canonical in source (read); v2 recognized only to refuse INCOMPATIBLE_CONTENT_SCHEMA; frontend zero v2 refs outside tests; rangeReplay gate + transport fixture migrated; consumer replay/ordering suites 182/182 green at main; no relaxation.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "strict v3 consumer migration verified: 182/182 replay suites (Cline run) + v2 INCOMPATIBLE_CONTENT_SCHEMA refusal re-derived in the C10 probe battery",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "I04",
+    "owner": "OpenCode",
+    "priority": "P0",
+    "title": "Full-stack server-owned execution test",
+    "acceptance": "Mounted test-local app with fake broker and denied matrix at ALL entries; privileged production admission stays unmounted until reviewed boundary and explicit readiness; no live flag.",
+    "observed": "Mounted test-local full-stack app (both routers, server.py untouched): full operator workflow places once; 9-denial matrix zero placements; exits available disarmed. Peer fingerprint-tamper probes reproduce. Same-approval replay gap is the recorded lease\u2192submit/single-use decision, disclosed on PR103 face, integration decision pending.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "d24fedceda2b68dd61e69e474e579c351755b10d",
+        "command": "see references/evidence log (head-bound runs)",
+        "exit_code": 0,
+        "at": "2026-10-05T13:10:00-04:00",
+        "log_path": "references/evidence/i04-d24fedce.log",
+        "log_sha256": "d306333b40a30d2bfb10f7d96a3e8fff3d8dfd0c14a801c52f5e1c8ed7ce2eeb"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "d24fedceda2b68dd61e69e474e579c351755b10d",
+      "verdict": "ACCEPT"
+    },
+    "accepted_sha": "d24fedceda2b68dd61e69e474e579c351755b10d",
+    "next_action": " UPDATE 2026-10-06: the replay half of this decision is now engineered \u2014 PR109 single-use approval consumption (verify->consume->place, 28d8b9c6, review-only, I17). The remaining lifecycle-submit wiring half (mounted entry through preflight/risk-ledger/lease/census/recovery) stays REVIEW-PENDING awaiting Nav: it changes armed-path behavior and needs commissioned values. No unilateral wiring; refusal-first posture preserved."
+  },
+  {
+    "id": "I05",
+    "owner": "OpenCode",
+    "priority": "P0",
+    "title": "Stored contract grounded Lodestar draft",
+    "acceptance": "Existing agent path binds exact stored record/digest/query/metric/contract/quote/context/policy; unsupported resolver remains contractNone/review_only/executablefalse.",
+    "observed": "Stored-contract Lodestar grounding landed (bce5317b in PR107 lineage). Re-verified at main 1fc5582c: plan_draft/manual-bridge suites green in the 69-run; workspace inspector retains honest RANGE_CONTRACT_UNAVAILABLE (read in source: no per-contract detail, no current-chain substitution).",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "69-run green (plan/native/exact/metric/budget) + RANGE_CONTRACT_UNAVAILABLE retention read in source",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "I06",
+    "owner": "OpenCode",
+    "priority": "P1",
+    "title": "Consumer replay preservation",
+    "acceptance": "List/select/play/pause/step/speed/scrub/empty/missing/corrupt/stale/paging/shared selection/Live exit from actual stored data; no historical reconstruction.",
+    "observed": "Already delivered and tested on PR104; regression protection after new contracts only.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "OpenCode re-verification at frozen main 1fc5582c (see references/evidence/main-1fc5582c-reverify.log)",
+        "exit_code": 0,
+        "at": "2026-10-06T19:45:00-04:00",
+        "log_path": "references/evidence/main-1fc5582c-reverify.log",
+        "log_sha256": "de23f058a852e2f6eb5ae96fd013fb729e0865c6eaa9777f856d73d9af083e43"
+      },
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "isolation analysis: replay lib zero fetches; workspace manual-read only (disabled in replay); dashboard replay-wins + live-only hiding; ambient polling segregated to sibling live panels",
+        "exit_code": 0,
+        "at": "2026-10-06T21:40:00-04:00",
+        "log_path": "references/evidence/replay-polling-analysis.log",
+        "log_sha256": "675c62697b6d6bd9f84f0a6a513bfe628789a2523cb502310d40d6f3e1463564"
+      },
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "86 r18+grounding backend + 182/182 frontend consumer replay (Cline runs at 1fc5582c); polling residual re-derived BENIGN from code",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "I07",
+    "owner": "OpenCode",
+    "priority": "P1",
+    "title": "Settings and effective model traces",
+    "acceptance": "Reuse owner catalog/save/reload/frozen dispatch/history; auth/isolation/unsupported settings/reservations/cancel/error/timeout/duplicate/effective gpt-6.1-sol+xhigh fake proof.",
+    "observed": "Lodestar product model remains Sol/xhigh; coding Muse choice does not change product setting.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "OpenCode re-verification at frozen main 1fc5582c (see references/evidence/main-1fc5582c-reverify.log)",
+        "exit_code": 0,
+        "at": "2026-10-06T19:45:00-04:00",
+        "log_path": "references/evidence/main-1fc5582c-reverify.log",
+        "log_sha256": "de23f058a852e2f6eb5ae96fd013fb729e0865c6eaa9777f856d73d9af083e43"
+      },
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "69-run green (settings/effective traces paths)",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "I08",
+    "owner": "OpenCode",
+    "priority": "P1",
+    "title": "Manual Public native brief truth",
+    "acceptance": "Exact admitted contract plus editable UNSET policy/limit/budget/conditions/expiry/notifications/risks; local copy/report not remote acknowledgement; one owner.",
+    "observed": "Delivered manual bridge retained; range draft unavailable until C10 accepted.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "OpenCode re-verification at frozen main 1fc5582c (see references/evidence/main-1fc5582c-reverify.log)",
+        "exit_code": 0,
+        "at": "2026-10-06T19:45:00-04:00",
+        "log_path": "references/evidence/main-1fc5582c-reverify.log",
+        "log_sha256": "de23f058a852e2f6eb5ae96fd013fb729e0865c6eaa9777f856d73d9af083e43"
+      },
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "69-run green (plan/manual bridge); manual brief retains UNSET limits",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "I09",
+    "owner": "OpenCode",
+    "priority": "P1",
+    "title": "Product and visuals preservation",
+    "acceptance": "Eight routes, left Profile/nav/tools, dark teal palette, useful right Wall\u2192Contract\u2192Lodestar\u2192Public rail, Replay/Follow/Expand/GEX+VEX/Multimap and existing calculations; no framework migration.",
+    "observed": "Preserve React19/CRA+CRACO/Tailwind3/Storybook10.6.1 and approved direction.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "OpenCode re-verification at frozen main 1fc5582c (see references/evidence/main-1fc5582c-reverify.log)",
+        "exit_code": 0,
+        "at": "2026-10-06T19:45:00-04:00",
+        "log_path": "references/evidence/main-1fc5582c-reverify.log",
+        "log_sha256": "de23f058a852e2f6eb5ae96fd013fb729e0865c6eaa9777f856d73d9af083e43"
+      },
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "182/182 replay suites + package.json zero drift a55bd9ad..main + hosted frontend-build green; browser/visual stays NAV-VISUAL",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "I10",
+    "owner": "OpenCode",
+    "priority": "P1",
+    "title": "Generated API and lifecycle integration",
+    "acceptance": "One owner batches server.py/mount/agent seams/generated docs after admitted deltas; route census collision-free and capture defaults off; no unauthorized privileged mount.",
+    "observed": "Transferred from retired Zed to OpenCode; Cline does not race docs generator.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "OpenCode re-verification at frozen main 1fc5582c (see references/evidence/main-1fc5582c-reverify.log)",
+        "exit_code": 0,
+        "at": "2026-10-06T19:45:00-04:00",
+        "log_path": "references/evidence/main-1fc5582c-reverify.log",
+        "log_sha256": "de23f058a852e2f6eb5ae96fd013fb729e0865c6eaa9777f856d73d9af083e43"
+      },
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "generate_api_docs.py --check -> up to date (383 paths)",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "I11",
+    "owner": "OpenCode",
+    "priority": "P0",
+    "title": "Frozen combined acceptance",
+    "acceptance": "One resource owner freezes source SHA; unmasked full backend/frontend/stories/build/security/truth/silent/API/protected/browser then exact final hosted backend/frontend/Ruff/Docker.",
+    "observed": "Frozen composition = main 1fc5582c: Nav verification (backend 7412/42skips/0fail @69.71%, frontend 1375/130 + build, API 383, bandit/ruff/truth current) + hosted CI/CD+lint green 2026-10-06 + OpenCode re-verification (86 r18+grounding, 69 budget/agent, 108 s18, 182 frontend ordering, API check, protected 68/71 with disclosed deltas). Browser-screen check is NAV-VISUAL, not borrowed.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "frozen composition 1fc5582c: hosted CI/CD+lint run 37457900225 SUCCESS re-queried via gh; full battery re-run here; browser screen = NAV-VISUAL, not borrowed",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "I12",
+    "owner": "OpenCode",
+    "priority": "P1",
+    "title": "Compiled browser and accessible preview",
+    "acceptance": "All eight direct/refresh/back/forward routes, widths1440/1280/narrow/native200%, long labels/amounts/focus/errors/subscription cleanup; zero exceptions and execution mutations; retain20 warnings/install overlay.",
+    "observed": "Synthetic compiled preview supports engineering, not NAV-VISUAL approval.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "OpenCode re-verification at frozen main 1fc5582c (see references/evidence/main-1fc5582c-reverify.log)",
+        "exit_code": 0,
+        "at": "2026-10-06T19:45:00-04:00",
+        "log_path": "references/evidence/main-1fc5582c-reverify.log",
+        "log_sha256": "de23f058a852e2f6eb5ae96fd013fb729e0865c6eaa9777f856d73d9af083e43"
+      },
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "BOUNDARY signoff only: compiled build + 1375 + storybook stand per hosted green; live in-browser screen check Comet-blocked and remains NAV-VISUAL external",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "I13",
+    "owner": "OpenCode",
+    "priority": "P0",
+    "title": "Protected and dirty state preservation",
+    "acceptance": "All71 committed+working blob hashes, frozen ML/Tidehunter/watchdog and all17 existing worktrees/peer checkpoints preserved; any drift reviewed, not reset/clean/staged blindly.",
+    "observed": "Protected manifest at bdb6a8d8: 61/71 identical. All 10 drifted files are Nav-authored (odaialdajani) desktop-wave edits (flowseeker route scan-cache refactor + Blademap/MarketCoverage/Settings/tideFeed UI+tests): reviewed diff-clean of money/auth surfaces (no placement callers, no auth changes; scanner change propagates budget refusals fail-closed); budget/scanner suites 40/40 green; main CI green. Owner edits, not lane drift \u2014 recorded, not reverted.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "OpenCode re-verification at frozen main 1fc5582c (see references/evidence/main-1fc5582c-reverify.log)",
+        "exit_code": 0,
+        "at": "2026-10-06T19:45:00-04:00",
+        "log_path": "references/evidence/main-1fc5582c-reverify.log",
+        "log_sha256": "de23f058a852e2f6eb5ae96fd013fb729e0865c6eaa9777f856d73d9af083e43"
+      },
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "protected71 blob check from repo root: 68 match, 3 delta - all verified additive vs manifest blobs (Nav's disclosed saved-findings corrections); benign, not reverted",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Standing record; re-baseline the manifest snapshot on next packet revision (Nav-owned deltas included).",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "I14",
+    "owner": "OpenCode",
+    "priority": "P1",
+    "title": "Honest receipt and handoff",
+    "acceptance": "Exact runtime diff if receipt-only commit; final head workflow SHA and conclusion bound; failure/skip/warning/timeouts preserved; material fixes invalidate prior acceptance; reviewer Cline signoff.",
+    "observed": "Prior CI deadline and fork/browser failures preserved; no checkpoint-only CI churn.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "receipt current through 1fc5582c; prior deadline/fork/browser failures preserved; no checkpoint-only CI churn observed this session",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "I15",
+    "owner": "OpenCode",
+    "priority": "P1",
+    "title": "Repository-wide omission sweep",
+    "acceptance": "Reconcile old packet goals/current continuation/PR comments/changed callees/registered routes/jobs/API fields/skip reasons; classify every uncovered contract without expanding unrelated modules.",
+    "observed": "Sweep executed at frozen composition main 1fc5582c: ledger reconciled; concrete uncovered counterexamples found and dispositioned: (a) stranded post-merge repair 336a69a9 (transport source_commit provenance misattribution + regen import hygiene) -> PR108 cherry-pick published, owner OpenCode, closure = Nav merge + re-verify; (b) protected-manifest 3-file delta -> Nav's disclosed saved-findings corrections, recorded. Nothing else uncovered in the finite sweep.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "omission sweep reconciled by full packet re-read this session; both counterexamples dispositioned (336a69a9->PR108; protected delta->recorded); PR110 composition handoff recorded with owner+closure",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "H01",
+    "owner": "OpenCode",
+    "priority": "P1",
+    "title": "Verified host identity and effective configuration",
+    "acceptance": "Verify OpenCode actual Muse1.3 provider/model/variant and Cline GLM5.3 effective provider/effort, tools/auth/cwd/write mode/step/context/retry/usage limits; preserve user-confirmed Cline session and no silent substitute.",
+    "observed": "OpenCode1.18.34/Cline3.0.65 installed; Cline CLI metadata reports nvidia/z-ai/glm-5.3. UPDATE 2026-10-06 (OpenCode current session): effective model z-ai/glm-5.3 per runtime (disclosed in every evidence log; requested 'Muse Spark 1.3' label NOT claimed \u2014 prior ses_ef877c04 session was verified muse-spark-1.3-contributor-free/xhigh per packet records, current session differs and says so). Cline host: hub daemon idle, no active repair observed; effective effort unverified from here. Controller STOPPED/yielded; single-writer discipline held; no second writer launched. Reconciled 2026-10-06 in references/model-identity-ledger.md: Kimi K3 early-turn runtime (transcript markers), muse-spark-1.3-contributor-free/xhigh diagnosed session (stop-diagnosis + host-identity JSONs), nvidia/z-ai/glm-5.3 Cline lane (CLI metadata), current OpenCode turns z-ai/glm-5.3 per runtime (disclosed).",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "model-identity reconciliation across eras (Kimi K3 transcript turns, muse-spark diagnosed session, nvidia glm-5.3 Cline metadata, current z-ai/glm-5.3 runtime disclosure)",
+        "exit_code": 0,
+        "at": "2026-10-06T22:00:00-04:00",
+        "log_path": "references/model-identity-ledger.md",
+        "log_sha256": "1e8e21fbc85963f35e9f5259a56657027ab7d038544a798a23ae33daae9a8708"
+      },
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "model-identity-ledger.md read in full: label-vs-effective reconciliation honest per era; no model switch; Cline acknowledgment recorded",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "H02",
+    "owner": "OpenCode",
+    "priority": "P1",
+    "title": "Multi-day continuation and timeout-safe recovery",
+    "acceptance": "Per-task checkpoint owned files/head/contract/hash/red-green evidence/next command; statuses DISCOVERED\u2192REPRODUCED\u2192REPAIRED\u2192REVIEW_PENDING\u2192ACCEPTED; blockers identify exact missing fact and alternate READY task. Preserve GLM5.3 Cline and Muse1.3 OpenCode session checkpoints; editor timeouts read postconditions before bounded retry; use the one native coordinator without racing writers or pretending quotas extend.",
+    "observed": "One hourly native chat heartbeat is ACTIVE; no external host restart/new model session or extra paid subagent. Cline guard edit timed out but was observed applied; read-before-retry recovery added.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+        "command": "continuation discipline observed current: checkpoints/ledger/queue through 1fc5582c + PR110; single-writer held (C10 in own lane; PR109 live writer not raced); timeout-recovery rules followed",
+        "exit_code": 0,
+        "at": "2026-10-07T00:10:00-04:00",
+        "log_path": "references/evidence/cline-signoff-1fc5582c.log",
+        "log_sha256": "3d3c0d1202727ab9aad50804190bbabb9926fa6bc782bdc3f8cc0c3607d5f5dc"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1fc5582c64073266e21740099f385c1a0f447527",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline signoff bound at frozen main 1fc5582c (independent battery in references/evidence/cline-signoff-1fc5582c.log). Material-delta rule: after PR108/PR109/PR110 merge, re-verify affected invariants at the merged head.",
+    "accepted_sha": "1fc5582c64073266e21740099f385c1a0f447527"
+  },
+  {
+    "id": "NAV-ACCOUNT",
+    "owner": "Nav",
+    "priority": "EXTERNAL",
+    "title": "Account rights and approved risk policy",
+    "acceptance": "Exact authorized account/rights/entitlements/cash-margin/one owner and all versioned risk limits, principal privileges and rollback operator.",
+    "observed": "HOLD: real values remain UNSET; implementation enforcement stays engineering.",
+    "status": "EXTERNAL_HOLD",
+    "evidence": [],
+    "reviewer": null
+  },
+  {
+    "id": "NAV-CAPTURE",
+    "owner": "Nav",
+    "priority": "EXTERNAL",
+    "title": "Production records and restart approval",
+    "acceptance": "Approve actual capture/store/ticker/range/rights and production writer exit/restart/read receipts with admitted full owning records.",
+    "observed": "HOLD: synthetic process proof cannot substitute.",
+    "status": "EXTERNAL_HOLD",
+    "evidence": [],
+    "reviewer": null
+  },
+  {
+    "id": "NAV-MODEL",
+    "owner": "Nav",
+    "priority": "EXTERNAL",
+    "title": "Authenticated owner and bounded actual turn",
+    "acceptance": "Actual catalog/save/reload/effective Sol+xhigh grounded trace and explicitly authorized allowance-consuming product turn.",
+    "observed": "HOLD: fake provider proof is separate; no paid product turn performed.",
+    "status": "EXTERNAL_HOLD",
+    "evidence": [],
+    "reviewer": null
+  },
+  {
+    "id": "NAV-NATIVE",
+    "owner": "Nav",
+    "priority": "EXTERNAL",
+    "title": "Public native workflow and protection",
+    "acceptance": "Reviewed workflow ID/ack/state/native overlap and supported protection for actual account/quantity with one owner.",
+    "observed": "HOLD: no direct native create/trace-ingest API established.",
+    "status": "EXTERNAL_HOLD",
+    "evidence": [],
+    "reviewer": null
+  },
+  {
+    "id": "NAV-VISUAL",
+    "owner": "Nav",
+    "priority": "EXTERNAL",
+    "title": "Visual acceptance",
+    "acceptance": "Explicit approval of selected compiled routes/selection/right rail/native brief/responsive/keyboard/native200%.",
+    "observed": "HOLD: browser pass is supporting evidence only.",
+    "status": "EXTERNAL_HOLD",
+    "evidence": [],
+    "reviewer": null
+  },
+  {
+    "id": "NAV-RELEASE",
+    "owner": "Nav",
+    "priority": "EXTERNAL",
+    "title": "Release and activation scope",
+    "acceptance": "Review single successor PR104 and overlaps; exact accepted gates and rollback; explicit merge/deploy/restart/activation scope.",
+    "observed": "HOLD: none authorized by this harness.",
+    "status": "EXTERNAL_HOLD",
+    "evidence": [],
+    "reviewer": null
+  },
+  {
+    "id": "NAV-PAPER-EXEMPT",
+    "owner": "Nav",
+    "priority": "EXTERNAL",
+    "title": "Alpaca paper entry admission-exemption decision",
+    "acceptance": "Explicit Nav decision: either route POST /api/alpaca/order through the policy+approval stack, or record the paper-host construction safety exemption as approved policy in the acceptance docs.",
+    "observed": "Disclosed by Cline review of S03 at d24fedce (pre-existing since b1208083; paper endpoint hardcoded in alpaca_client.py; authenticated already; not admission-gated). Recording here per sweep rule; not added silently.",
+    "status": "EXTERNAL_HOLD",
+    "evidence": [],
+    "reviewer": null
+  },
+  {
+    "id": "I16",
+    "owner": "OpenCode",
+    "priority": "P1",
+    "title": "R19 transport provenance resync follow-up (PR108)",
+    "acceptance": "PR108 (b103b08c = 1fc5582c + cherry-pick of stranded 336a69a9) merged by Nav; ruff + 86 backend + 182 frontend replay suites re-verified at the merged head; no new findings.",
+    "observed": "b103b08c verified this session: ruff check . clean; 86 passed; 182 passed; bandit parity 13/0==13/0; transport consistency 5/5 (source_commit==3f3f5abb, distinct clocks, digests match record_index). PR108 open, review-only: https://github.com/odaialdajani/floww-2/pull/108 UPDATE 2026-10-07: transport hunk overtaken by PR110 re-seal (do not merge as-is); script-hygiene half still valid; PR108 body annotated append-only; fresh regen rides PR113. Suggested: close superseded once PR113 lands, or rebase to script-only.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "edaa1cc86567edcf127a1040ffea8764d9f69f7e",
+        "command": "PR108 merged via afb0c07a (Nav-delegated Cline merge, 2026-10-07); re-verified at merged head edaa1cc8: ruff clean, r18+grounding 93/0, frontend replay suites 187/187 (241/241 after the I18 fixture reseal), API docs 383 current, no new findings. Raw-patch review at b103b08c in references/cline-review-pr108-b103b08c.md.",
+        "exit_code": 0,
+        "at": "2026-10-07T00:35:00-04:00",
+        "log_path": "references/evidence/cline-merged-head-edaa1cc8.log",
+        "log_sha256": "0e3ac7e50cca3e08476af45a92021cff73ed0788b6ef4be712c1b7234848a022"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "edaa1cc86567edcf127a1040ffea8764d9f69f7e",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Nav/Cline disposition PR108 (close-superseded or rebase to script-only hunk). UPDATE 2026-10-07: also overtaken by PR112 (which refreshes the same transport copy at the new seal). PR108 endpoint: close superseded once PR112 lands.",
+    "accepted_sha": "edaa1cc86567edcf127a1040ffea8764d9f69f7e"
+  },
+  {
+    "id": "I17",
+    "owner": "OpenCode",
+    "priority": "P1",
+    "title": "Same-approval single-use consumption at the mounted entry (PR109)",
+    "acceptance": "PR109 (28d8b9c6 = 1fc5582c + single-use consumption) merged by Nav; hosted gates stay green on the merge; Cline adversarial review of the raw patch accepted; material-delta re-verification at the merged head per ownership section 28: S03 mounted-entry matrix (verify->consume->place), I04 mounted full-stack, s18 seam suites + solstice slice, ruff; S05/S08 untouched by the diff (no lifecycle-intent or binder changes) but covered by the same run.",
+    "observed": "28d8b9c6 verified this session: new suite 7/7 (replay exactly-once, burn-on-broker-failure, consume store-failure zero-placement, revoked never consumes, exactly-once audit trail, verify purity, bad inputs); s18 suite 115; solstice slice 837; brokerage suites 103; ruff check . clean. PR109 open review-only https://github.com/odaialdajani/floww-2/pull/109; hosted backend-tests PASS 19m38s + frontend + docker + ruff (run 37558112536). S17b follow-up ed84ce46 (same PR109 branch): ambiguous-ACK placement-attempt journal + PLACEMENT_OUTCOME_UNKNOWN verify gate + operator-attested resolve endpoint; 11/11 tests, 119 s18, 841 slice, 103 brokerage, ruff clean, bandit parity; TDD caught a resolve column-index bug. S17c follow-up 88374992 (same PR109 branch): resolved_at in resolve response; re-cycle journal test (fail->resolve->fail reopens unresolved; third submission UNKNOWN, 2 broker calls); 12/12, 120 s18, 842 slice, 103 brokerage, ruff clean, API 383 current, bandit parity. S17d follow-up cace2fa3 (same PR109 branch): in-flight fingerprint claim closes the cross-approval concurrent race (IN_FLIGHT/UNKNOWN refusals without burning); completion journaling with broker order identity; 13/13, 121 s18, 843 slice, 103 brokerage, ruff clean, bandit parity. S17e follow-up b26b95b6 (same PR109 branch, test-only): 5-thread barrier claim test (exactly one winner, four IN_FLIGHT, one burn, zero placements; stable 3x); 14/14, 122 s18, ruff clean. Hosted all-four-green confirmed at exact 5-commit tip b26b95b6 (backend 16m1s + docker + frontend + ruff, run 37565581466). Awaiting Cline raw-patch review + merge; then OpenCode re-verifies S03/I04/s18/slice/ruff at the merged head to bind.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "edaa1cc86567edcf127a1040ffea8764d9f69f7e",
+        "command": "PR109 merged via ecff52ba (Nav-delegated Cline merge). Material-delta re-verification at merged head edaa1cc8: s18 sweep 122/0 (S03 mounted verify->consume->place matrix + I04 mounted full-stack + 14 single-use), FULL solstice+budget slice 858/0, ruff clean, and the 4 Cline adversarial probes re-run at the merged head (same-approval race, cross-approval survival, cross-operator refusal, post-success journal-failure disclosure) - all PASS. S05/S08 untouched by the diff and covered by the same run.",
+        "exit_code": 0,
+        "at": "2026-10-07T00:35:00-04:00",
+        "log_path": "references/evidence/cline-merged-head-edaa1cc8.log",
+        "log_sha256": "0e3ac7e50cca3e08476af45a92021cff73ed0788b6ef4be712c1b7234848a022"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "edaa1cc86567edcf127a1040ffea8764d9f69f7e",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline adversarial review of the 5-commit raw patch; Nav/Cline merge; OpenCode merged-head re-verify to bind.",
+    "accepted_sha": "edaa1cc86567edcf127a1040ffea8764d9f69f7e"
+  },
+  {
+    "id": "I18",
+    "owner": "Cline",
+    "priority": "P1",
+    "title": "Post-PR110 transport copy regen at the new seal",
+    "acceptance": "After PR110 merges: re-run scripts/r18_range_transport_fixture.py at the new seal; frontend transport copy carries new digests + source_commit; replay/ordering suites green; review-only PR; Cline signoff.",
+    "observed": "Executed via Cline PR112 (merged 3e532c51): transport + complete/partial copies at the new seal. OpenCode independent verification at merged head: transport records byte-identical to sealed docs fixtures; digests match manifest; clocks distinct; ordering suites 190/190; r18+grounding+C10 93/93. OpenCode PR113 closed superseded (verified content-identical). source_commit stamps regen-tree ancestor (C16 precedent).",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "3e532c512fcd2828e9511138954d8db77157b65b",
+        "command": "see references/evidence/i18-merged-3e532c51.log (byte-identity vs sealed fixtures + digests/clocks + suites)",
+        "exit_code": 0,
+        "at": "2026-10-07T01:45:00-04:00",
+        "log_path": "references/evidence/i18-merged-3e532c51.log",
+        "log_sha256": "b1a914a23580e75ba865fe4b9b75ae5446ddfbec2cf3a85db919ae404ee4faaf"
+      }
+    ],
+    "reviewer": {
+      "owner": "OpenCode",
+      "source_sha": "3e532c512fcd2828e9511138954d8db77157b65b",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "ACCEPTED_AT_SHA 3e532c51. Provenance chain restored end-to-end: docs seal -> transport copy -> consumer suites, with source_commit stamping the true production head of the fixture bytes.",
+    "accepted_sha": "3e532c512fcd2828e9511138954d8db77157b65b"
+  },
+  {
+    "id": "T01",
+    "owner": "OpenCode",
+    "priority": "P2",
+    "title": "Triad preview slice 1: range review actions (PR111)",
+    "acceptance": "PR111 merged by Cline/Nav after adversarial review; approach/handoff/copy/review controls green; zero order-surface calls; Raw/Adjusted + exposure overlay specified as follow-up.",
+    "observed": "Slice 1 MERGED at edaa1cc8 (PR111, mergedAt 2026-10-07T04:11:03Z \u2014 93s BEFORE backend-tests green 04:12:36Z and 5m before docker green; ruff+frontend were green pre-merge; recorded fact, merge authority theirs). Slice-1 verification stands (15/15 workspace, 187 ordering, build clean, all-four hosted green post-merge on the PR). Adversarial review evidence: none recorded \u2014 still required by the acceptance. Slice 2 (compare mode) published as PR114 (362c21ce = edaa1cc8 + slice, 18/18 workspace, 190 ordering, build clean) review-only. UPDATE 2026-10-07: slice 2 MERGED at 1200372d (PR114, all-four-green pre-merge). Slice 1+2 both merged with ZERO recorded reviews (gh reviews API: 0 on PR111, 0 on PR114) \u2014 fast-lane merges outpacing adversarial review. T01 bind requires recorded adversarial review; status stays PENDING until Cline posts raw-patch reviews for both slices or Nav waives explicitly.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "edaa1cc86567edcf127a1040ffea8764d9f69f7e",
+        "command": "PR111 (9e750067) adversarially reviewed from the raw diff and merged via edaa1cc8 under Nav's 2026-10-07 fast-lane delegation. Verified: approach selector drives scenario text with ZERO network calls; handoff trace declares owner UNSELECTED and record/digest/received_at truthfully; copy-context payload is research-only ('not an execution permission') with clipboard failure surfaced as status; review-trade is read-only - tests pin only /solstice/price-paths/range-records fetches (zero order surfaces), RANGE_CONTRACT_UNAVAILABLE retained, risks explicit UNSET. Independent runs: 187/187 consumer suites at 9e750067; 241/241 at the merged head after the I18 fixture reseal; ruff + frontend-build green on PR111; merge-commit CI on the final head.",
+        "exit_code": 0,
+        "at": "2026-10-07T00:35:00-04:00",
+        "log_path": "references/evidence/cline-merged-head-edaa1cc8.log",
+        "log_sha256": "0e3ac7e50cca3e08476af45a92021cff73ed0788b6ef4be712c1b7234848a022"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "edaa1cc86567edcf127a1040ffea8764d9f69f7e",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline: post raw-patch adversarial reviews for PR111 (9e750067) + PR114 (362c21ce) \u2014 break-it prompts stand in review-request \u00a7B; then bind. Slice 3 (exposure overlay) still blocked on admitted metric.",
+    "accepted_sha": "edaa1cc86567edcf127a1040ffea8764d9f69f7e"
+  },
+  {
+    "id": "T02",
+    "owner": "OpenCode",
+    "priority": "P2",
+    "title": "Triad preview slice 2: Raw vs Adjusted compare mode (PR114)",
+    "acceptance": "Compare mode renders the raw_oi and delta_weighted bases side by side through one shared honest grid renderer (unavailable sections stay refused, keyboard focus isolated per pane, selection shared); the raw-vs-adjusted difference is display-derived and explicitly labeled not-a-metric; zero fetches on toggle; metric registry untouched.",
+    "observed": "PR114 362c21ce (2 files, +81/-25): shared renderGrid with L:/R: ref prefixes; compareDelta() emits 'display-derived delta ... (not a metric)' and refuses missing-side cells; compare toggle fetch-free; metric select hidden during compare and restored on exit. Exposure overlay honestly deferred (needs an admitted backend metric).",
+    "status": "ACCEPTED_AT_SHA",
+    "accepted_sha": "1200372d3b2bdf52d20e7600c0e25c7da63b8cb0",
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "1200372d3b2bdf52d20e7600c0e25c7da63b8cb0",
+      "verdict": "ACCEPT"
+    },
+    "evidence": [
+      {
+        "source_sha": "1200372d3b2bdf52d20e7600c0e25c7da63b8cb0",
+        "command": "PR114 adversarially reviewed from the raw diff by Cline and merged via 1200372d under Nav's fast-lane delegation. Verified: delta labeled 'display-derived ... (not a metric)' (never enters metric_registry semantics); missing-side cells refuse honestly; unavailable sections render 'unavailable + reason'; both panes share one renderer with isolated keyboard focus (L:/R: prefixes); toggle pinned fetch-free; metric select hides/returns with value preserved. Independent run: 190/190 consumer suites at 362c21ce (Cline, detached worktree); PR114 hosted 4/4 gates green (backend-tests, ruff, frontend-build, docker-build).",
+        "exit_code": 0,
+        "at": "2026-10-07T00:55:00-04:00",
+        "log_path": "references/evidence/cline-merged-head-edaa1cc8.log",
+        "log_sha256": "0e3ac7e50cca3e08476af45a92021cff73ed0788b6ef4be712c1b7234848a022"
+      }
+    ],
+    "next_action": "ACCEPTED_AT_SHA 1200372d. Exposure overlay stays deferred until an admitted backend metric exists (not invented) - recorded for slice 3 scoping."
+  },
+  {
+    "id": "T03",
+    "owner": "OpenCode",
+    "priority": "P1",
+    "title": "Triad same-day wall desk (user-promoted preview end-state)",
+    "acceptance": "PR115 merged by Cline after adversarial review; scope/empty-state honesty, exposure mapping vs preview legend, no-execution proof; follow-ups owned explicitly.",
+    "observed": "PR115 merged into main at f1e76e82 after Cline adversarial review of exact repair head 8320b0ab (three historical defects pinned; 11/11 exact-head suite re-run by reviewer; 4/4 hosted gates at head and post-merge main gates green). Desk remains unmounted in the 8194 candidate lineage; separate promotion hold stands. Follow-up: C17 admitted exposure metric remains Cline-owned P2.",
+    "status": "ACCEPTED_AT_SHA",
+    "evidence": [
+      {
+        "source_sha": "f1e76e82f86def6e869116911aafbb18d6c69ae6",
+        "exit_code": 0,
+        "at": "2026-10-08T00:40:21Z",
+        "command": "gh pr view 115 -R odaialdajani/floww-2 --json state,mergedAt,mergeCommit,headRefOid (merged after Cline adversarial ACCEPT of exact head 8320b0ab)",
+        "log_path": "references/t03-pr.json",
+        "log_sha256": "0f9bb9fdeddc1c6553d7940389678e5844eebb350769982e4e0ac947a126371f"
+      },
+      {
+        "source_sha": "f1e76e82f86def6e869116911aafbb18d6c69ae6",
+        "exit_code": 0,
+        "at": "2026-10-08T01:02:00Z",
+        "command": "gh pr checks 115 -R odaialdajani/floww-2 (backend-tests/frontend-build/ruff/docker-build all pass at 8320b0ab)",
+        "log_path": "references/t03-checks.txt",
+        "log_sha256": "491cdc1d7f8b747ed169b1e916389025c3e1040400fb29be56f2b1e6069efebc"
+      },
+      {
+        "source_sha": "f1e76e82f86def6e869116911aafbb18d6c69ae6",
+        "exit_code": 0,
+        "at": "2026-10-08T01:06:00Z",
+        "command": "gh run list -R odaialdajani/floww-2 --branch main (post-merge lint + CI/CD completed success at merge commit)",
+        "log_path": "references/t03-main-runs.txt",
+        "log_sha256": "75a2b865e4733a5f9c25be88b9f8b8109f81b511d3501a05352ce1dac08e7a26"
+      }
+    ],
+    "reviewer": {
+      "owner": "Cline",
+      "source_sha": "f1e76e82f86def6e869116911aafbb18d6c69ae6",
+      "verdict": "ACCEPT"
+    },
+    "next_action": "Cline adversarial review of PR115 raw patch (scope honesty, exposure mapping, no-execution); merge per fast-lane model.",
+    "accepted_sha": "f1e76e82f86def6e869116911aafbb18d6c69ae6"
+  },
+  {
+    "id": "C17",
+    "owner": "Cline",
+    "priority": "P2",
+    "title": "Admitted exposure metric for Triad overlay (optional)",
+    "acceptance": "A backend-admitted per-strike exposure series (measured-vs-unknown basis flags, quarantine rules) versioned into the envelope or a documented endpoint; consumer overlay renders it with honest unknown states; no frontend-invented analytics.",
+    "observed": "Gap from Triad preview audit: chain serves one canonical gex + basis flags per row; no raw-vs-adjusted exposure pair exists server-side. Frontend must not invent it.",
+    "status": "PENDING",
+    "evidence": [],
+    "reviewer": null,
+    "next_action": "Cline: supply admitted exposure metric or explicitly defer with reason; OpenCode builds the overlay consumer once admitted."
+  }
+]

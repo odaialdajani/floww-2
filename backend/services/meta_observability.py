@@ -483,13 +483,10 @@ class DataProviderMonitor:
                 provider_success_rate.labels(provider=name).set(round(stats.success_rate, 4))
                 # Set seconds since last success
                 since = _round_or_none(stats.seconds_since_last_success)
-            # A Gauge cannot hold None. For a provider that has never
-            # succeeded there is no elapsed time to report, and 0 would read
-            # as "just succeeded" -- the exact opposite of the truth. Fall back
-            # to +inf, which a gauge CAN hold, so a scrape distinguishes
-            # "never succeeded" from "succeeded moments ago". The
-            # provider_down alert carries the honest None.
-            provider_last_success_seconds_ago.labels(provider=name).set(
+                # A Gauge cannot hold None. A never-succeeded provider must
+                # remain distinct from one that just succeeded. Update each
+                # provider inside the loop, not only its final entry.
+                provider_last_success_seconds_ago.labels(provider=name).set(
                     since if since is not None else float("inf")
                 )
         except Exception as e:

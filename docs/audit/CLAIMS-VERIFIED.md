@@ -209,10 +209,14 @@ does not have:
    (`TriadDesk.jsx:23-41`, `TriadExposure.jsx`), pinned by 18
    `TriadDesk.test.jsx` tests.
 2. Three of eight tabs (OI, DUO, DVO) had no producer on the serving path.
-   **Successor: SUPERSEDED** — OI/DUO/DVO surfaces ship via
-   `services/heatmap_snapshot.py` with the correct product-rule DUO form
-   (`domain/second_order_exposure.py`), pinned by
-   `test_second_order_exposure_oracle.py` + `test_metric_registry_distinction.py`.
+   **Successor: NOT SHIPPED AS DISPLAY SURFACES** — the versioned metric
+   registry and `domain/second_order_exposure.py` retain the product-rule
+   math/oracles. They do not produce, digest, persist or render OI/DUO/DVO
+   grids. The current metric display contract explicitly keeps DUO/DVO as
+   helpers only (`docs/solstice/r11/METRIC_CONTRACT.md`). The earlier
+   “surfaces ship” statement was incorrect; oracle tests are not end-to-end
+   surface evidence. No eight-tab restoration or surface activation follows
+   from this documentation correction.
 3. The `/api/data` fallback was unreachable (`AbortSignal.timeout` undefined
    under jsdom threw before fetch). **Successor: SUPERSEDED** — TriadDesk uses
    `fetch` + `AbortController` with an honest unavailable panel, no axios

@@ -1,6 +1,7 @@
 # FLOWW integration reset — 14 October 2026
 
 Status: **useful UI fixes implemented and checked; whole-product acceptance remains open.**
+Latest continuation: [16 October completion evidence and executable gate](../eval/completion-20261016/STATUS.md), published review [PR #131](https://github.com/odaialdajani/floww-2/pull/131). This continuation supersedes old runtime/backing, unpublished-branch and blanket “no engineering remains” statements below; dated receipts remain historical. Engineering checks are not owner acceptance or complete historical-data recovery.
 This supersedes the earlier chart-only “everything done/no gaps” claims, not the original packets or their evidence. The latest user priorities are the approved right inspector, Solstice/Triad usability, readable heatmap landmarks, chart context, Flow identity, historical-work recovery and performance. Deployment and trading are not implied.
 
 ## Current baseline and recovery

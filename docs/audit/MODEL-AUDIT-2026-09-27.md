@@ -1,7 +1,15 @@
-# Live model audit — 27 Sep 2026
+# Historical model audit — 27 Sep 2026
 
-Produced by `qc/audit/truth_audit.sh`, which runs as step 4 of every CI
-`backend-tests` job. It is the repo's only automated overfit check.
+**16 October source correction:** the numerical findings and loader observations
+below are historical, not a current model inventory or inference-path census.
+The current `qc/audit/truth_audit.sh` scans both `models/` and
+`backend/models/`, including `*_manifest.json`. The old wrong-directory
+conclusion is superseded. No artifacts, inference code, model settings or
+approval decisions are changed by this correction.
+
+Produced historically by `qc/audit/truth_audit.sh`. Its current placement is
+the first backend CI check after checkout; it is not a comprehensive model
+validation or proof against overfitting.
 
 ## Why this needed a separate run
 
@@ -41,7 +49,7 @@ direction. Its `sharpe`, `n_train`, `trained_at` and `ticker` fields are
 `null` — the values above come from the walk-forward schema
 (`avg_test_sharpe` / `fold_details[].n_train`).
 
-## Reachability: these models are NOT on the live inference path
+## Historical reachability observations — not a current inference census
 
 An earlier draft called these models "live". That was wrong, and wrong in the
 direction that overstates the risk. Checked:
@@ -69,9 +77,10 @@ direction that overstates the risk. Checked:
 The directory the loader actually reads is repo-root `models/`, holding a
 different generation (`DIA_direction_v1.0`, `IWM_gbm_production`,
 `QQQ_logistic_offline_20260524_022311`, plus quarantined SPY/TLT/IWM
-`*_direction_v1.0`). Those are the artifacts that can reach a decision — and
-`truth_audit.sh` audits `backend/models/`, so **the gate audits a directory the
-live path does not read.** That mismatch is the more actionable finding here.
+`*_direction_v1.0`). The original audit concluded that only `backend/models/`
+was scanned. **That coverage conclusion is superseded:** the current audit
+scans both directories and the manifest convention. These historical loader
+observations are not a current reachability proof for every inference path.
 
 ## What this is and is not
 
@@ -94,8 +103,8 @@ explained.
 
 ## Status
 
-Open question, deliberately not actioned. Retraining or quarantining a model is
-a judgment about which artifacts to trust, and that is not a call to make
-silently inside a docs commit. The directory mismatch between the audit and
-the live loader is a real defect in the gate's coverage and is the more
-tractable of the two to fix.
+Open model-quality questions are deliberately not actioned here. Retraining
+or quarantining a model is a separate judgment about which artifacts to
+trust. The old directory-mismatch finding is corrected in the current gate;
+that does not validate model quality, historical metrics or current account
+and model commissioning decisions.

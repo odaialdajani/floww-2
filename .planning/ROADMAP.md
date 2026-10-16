@@ -13,7 +13,8 @@ The user's current task takes priority over the historical deployment queue belo
 - [x] Restore the missing compiled application and exercise the actual read surfaces.
 - [x] Add and check shared review tabs and readable, uncertainty-aware heatmap landmarks.
 - [x] Coalesce identical concurrent history reads, expose distinct failure/gap reasons, reload only the review backend, and isolate the Screener test's unintended HTTP request.
-- [ ] Reconcile non-equivalent historical branch payloads and rebind each original obligation at a reviewed candidate.
+- [x] Complete scoped semantic review of all 133 assigned historical commit records (131 nonmerge plus two merges), preserve all original obligations, repair reproduced availability/monitoring defects and correct false shipped-feature claims; see [completion evidence](eval/completion-20261016/STATUS.md). This is not wholesale branch integration or owner acceptance.
+- [ ] Rebind each original obligation at a reviewed candidate with its actual required evidence/signature; retained/deferred/declined features and unretrieved private data remain explicit.
 - [ ] Complete older-decision/time-aligned node recovery proof; preserve original stores/services until separately authorized.
 - [ ] Obtain owner visual acceptance and separate model/account/native/release decisions.
 

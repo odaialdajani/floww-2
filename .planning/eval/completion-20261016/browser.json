@@ -1,0 +1,122 @@
+{
+  "passed": true,
+  "synthetic": false,
+  "checks": [
+    {
+      "desk": "heatseeker",
+      "viewport": 1440,
+      "mapMs": 613,
+      "initialSpotVisible": true,
+      "sharedAxesAndScroll": false,
+      "tabs": [
+        {
+          "name": "Wall",
+          "ms": 42
+        },
+        {
+          "name": "Contract",
+          "ms": 33
+        },
+        {
+          "name": "Flow",
+          "ms": 24
+        },
+        {
+          "name": "Public agent",
+          "ms": 34
+        }
+      ],
+      "geometry": {
+        "inspectorLeft": 1088.75,
+        "mapRight": 1088.75,
+        "bodyWidth": 1440,
+        "viewport": 1440
+      }
+    },
+    {
+      "desk": "heatseeker",
+      "viewport": 1280,
+      "contractInputsReachable": true
+    },
+    {
+      "desk": "heatseeker",
+      "viewport": 768,
+      "contractInputsReachable": true
+    },
+    {
+      "desk": "heatseeker",
+      "viewport": 390,
+      "contractInputsReachable": true
+    },
+    {
+      "desk": "trinity",
+      "viewport": 1440,
+      "mapMs": 2408,
+      "initialSpotVisible": true,
+      "sharedAxesAndScroll": true,
+      "tabs": [
+        {
+          "name": "Wall",
+          "ms": 34
+        },
+        {
+          "name": "Contract",
+          "ms": 33
+        },
+        {
+          "name": "Flow",
+          "ms": 44
+        },
+        {
+          "name": "Public agent",
+          "ms": 30
+        }
+      ],
+      "geometry": {
+        "inspectorLeft": 1065,
+        "mapRight": 1053,
+        "bodyWidth": 1440,
+        "viewport": 1440
+      }
+    },
+    {
+      "desk": "trinity",
+      "viewport": 1280,
+      "contractInputsReachable": true
+    },
+    {
+      "desk": "trinity",
+      "viewport": 768,
+      "contractInputsReachable": true
+    },
+    {
+      "desk": "trinity",
+      "viewport": 390,
+      "contractInputsReachable": true
+    }
+  ],
+  "pageErrors": [],
+  "httpErrors": [],
+  "blockedWrites": [],
+  "historyRequests": [
+    {
+      "path": "/api/heatseeker/price-history/SPY",
+      "scope": "SPY:4:day:None:False:True:80|expiries=2026-10-19,2026-10-20,2026-10-21,2026-10-22|gex.v2|OI",
+      "status": 200,
+      "ms": 240
+    },
+    {
+      "path": "/api/heatseeker/price-history/SPY",
+      "scope": null,
+      "status": 200,
+      "ms": 335
+    }
+  ],
+  "limitations": "Read-only review, not account/research/trading activation, native zoom, hosted acceptance or complete node capture.",
+  "bundle": "main.87743c9e.js",
+  "chartMs": 871,
+  "priceCandles": "70",
+  "triadInitialScope": "0dte",
+  "triadInitialAdmission": "Same-day admission unavailable — the loaded observation is not verified 0DTE. Exact loaded dates remain visible; no same-session expiry or entitlement is invented.",
+  "triadReviewedScope": "next"
+}

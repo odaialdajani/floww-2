@@ -1,0 +1,44 @@
+{
+  "pid": 66297,
+  "previous_pid": 53457,
+  "old_process_exited": true,
+  "backend_source_fingerprint": "1612306d74b95ceade9294899c9c5e72dcf840f2de04622e6ec94c9e38ab0b28",
+  "production_python_files": 492,
+  "loaded_tested_working_source_before_commit": true,
+  "provider_mode": "public",
+  "credential_configured": true,
+  "trading_and_capture_off": true,
+  "file_backed": true,
+  "neighbor_pids_preserved": {
+    "3000": 39763,
+    "8000": 31746
+  },
+  "environment_verification": "Initial immediate post-spawn all-environment assertion failed; stable read-back verifies required product flags, store path, provider credential presence and real provider control. Exact whole-environment equality is not certified for this second reload.",
+  "control": {
+    "candles": 14,
+    "last_candle_at": "2026-10-16T20:00:00+00:00",
+    "prices_received_at": "2026-10-16T21:48:00.398233+00:00",
+    "node_coverage": {
+      "scope_status": "available",
+      "gap_counts": {
+        "no_prior_observation": 11,
+        "observation_too_old": 2,
+        "recorded_without_nodes": 0
+      }
+    },
+    "recording": {
+      "durable": true,
+      "status": "available",
+      "first_at": "2026-10-07T09:40:48.829418-04:00",
+      "last_at": "2026-10-16T17:47:56.563002-04:00",
+      "count": 2972
+    }
+  },
+  "backup_manifest": {
+    "review-data.duckdb": {
+      "bytes": 1761882112,
+      "sha256": "f2a1a431b8e3d16160231763e19891784ed228e0d41e2d34e3a9fb8cc20993b4"
+    }
+  },
+  "fingerprint_note": "All tracked backend production .py files (full listing, not a truncated shell read)."
+}
