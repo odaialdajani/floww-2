@@ -2,10 +2,24 @@
 
 Derived from: deploy runbook (`deploy/free/README.md`), `docs/ROUND10_PLAN.md`
 (CLOSED / HISTORICAL — kept for rationale, not a live queue), `BACKLOG.md`.
-Immediate phase = Oracle go-live; later phases promote actionable backlog items.
-This file is the live phase tracker.
+Historical sequencing started with Oracle go-live. The current user priority is recorded first below; deployment is not active authorization.
+This file retains the live priority and historical phase tracker.
 
-## Phase 1 — Oracle Go-Live [IMMEDIATE]
+## Current priority — 14 October integration reset [ACTIVE]
+
+The user's current task takes priority over the historical deployment queue below. [Integration reset and remaining work](unknowns/integration-reset-20261014.md) records the real source/runtime state, approved-preview gaps, shared Wall/Contract/Flow/Public inspector, qualified heatmap landmarks, separate chart-level context, all 82 branches/41 worktrees and the intact original 62 obligations. This pass does not authorize deployment, paid feeds, trading activation or deletion of old work.
+
+- [x] Stop the requested repeating verification loop and read back cleared state.
+- [x] Restore the missing compiled application and exercise the actual read surfaces.
+- [x] Add and check shared review tabs and readable, uncertainty-aware heatmap landmarks.
+- [x] Coalesce identical concurrent history reads, expose distinct failure/gap reasons, reload only the review backend, and isolate the Screener test's unintended HTTP request.
+- [ ] Reconcile non-equivalent historical branch payloads and rebind each original obligation at a reviewed candidate.
+- [ ] Complete older-decision/time-aligned node recovery proof; preserve original stores/services until separately authorized.
+- [ ] Obtain owner visual acceptance and separate model/account/native/release decisions.
+
+The earlier phase statuses below remain historical; their old test totals and source-policy text are not current acceptance or permission.
+
+## Phase 1 — Oracle Go-Live [HISTORICAL / NOT THE CURRENT PRIORITY]
 
 **Goal:** Public URL serving the full Decoder at $0/month, smoke test green.
 **Source:** `deploy/free/README.md`; state: deploy package hardened, awaiting VM.

@@ -4,6 +4,8 @@
 // latest-scope default and manual picker). Never reconstruct or guess.
 export function chartScopeFor(visibleData, isReplay) {
   if (isReplay) return null;
+  const saved = visibleData?.history_scope;
+  if (typeof saved === 'string' && saved) return saved;
   const echo = visibleData?.scope_echo;
   return typeof echo === 'string' && echo ? echo : null;
 }

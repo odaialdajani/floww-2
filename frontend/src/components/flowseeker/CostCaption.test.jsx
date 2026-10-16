@@ -2,6 +2,8 @@
 import React from "react";
 import {render,screen,fireEvent,waitFor} from "@testing-library/react";
 import FlowseekerProBlademap from "./FlowseekerProBlademap";
+jest.mock("./MarketCoverage",()=>()=>null);
+jest.mock("../heatseeker/useTickerDirectory",()=>()=>({tickers:null,status:"incomplete",retry:jest.fn()}));
 beforeEach(()=>{localStorage.clear();global.fetch=jest.fn(async()=>({ok:true,json:async()=>({})}));});
 test("missing quote history displays no invented cost",async()=>{
  render(<FlowseekerProBlademap active/>);

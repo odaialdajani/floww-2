@@ -1,0 +1,26 @@
+.review-inspector { min-width: 0; color: #e2e8f0; font-size: 13px; line-height: 1.55; }
+.review-inspector-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(94px, 1.35fr); gap: 3px; padding: 0 0 12px; border-bottom: 1px solid #29454d; }
+.review-inspector-tabs [role="tab"] { min-height: 36px; padding: 6px 3px; background: #10232b; color: #b9cbd3; border: 1px solid transparent; border-radius: 4px; font-size: 12px; white-space: nowrap; }
+.review-inspector-tabs [aria-selected="true"] { color: #f2d795; background: #302b20; border-color: #9b824b; }
+.review-inspector :focus-visible { outline: 2px solid #e5bc62; outline-offset: 2px; }
+.review-inspector-panel { padding: 14px 0; overflow-wrap: anywhere; }
+.review-inspector-panel[hidden] { display: none; }
+.review-inspector-panel .skylit-metric-label { font-size: 11px; text-transform: none; }
+.review-inspector-panel .skylit-metric-value { font-size: 12px; line-height: 1.5; }
+.review-inspector-panel p { margin: 0 0 12px; }
+.review-inspector-panel h3 { font-size: 14px; margin: 0 0 8px; }
+.review-inspector-context { display: grid; gap: 6px; margin: 0 0 14px; padding-bottom: 12px; border-bottom: 1px solid #29454d; font-variant-numeric: tabular-nums; }
+.review-inspector-context dt { color: #a4bac7; }
+.review-inspector-context dd { margin: 0 0 6px; }
+.review-inspector-panel .lodestar-ask { font-size: 13px; }
+.review-inspector-panel .lodestar-ask-btn { min-height: 34px; }
+.review-inspector-panel .lodestar-ask-menu { right: auto; left: 0; }
+/* Selected review replaces, rather than covers, the metrics rail on desktop.
+   The original drawer/close/selection ownership remains intact below it. */
+@media (min-width: 1280px) {
+  .skylit-full-dashboard .skylit-main-area[data-inspector-open="true"] > .skylit-sidebar-area { display: none; }
+  .skylit-full-dashboard .skylit-main-area > .skylit-drawer { position: relative; inset: auto; width: 340px; flex: 0 0 340px; box-shadow: none; }
+  .trinity-layout .triad-review-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 12px; align-items: start; }
+  .trinity-layout .triad-review-analysis { min-width: 0; }
+  .trinity-layout .triad-review-workspace > .triad-drawer { position: sticky; top: 0; bottom: auto; width: auto; max-height: 80dvh; box-shadow: none; border: 1px solid #29454d; border-radius: 6px; }
+}

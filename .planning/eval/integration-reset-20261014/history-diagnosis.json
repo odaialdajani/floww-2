@@ -1,0 +1,235 @@
+{
+  "passed": true,
+  "synthetic": false,
+  "evidence_sha256": "7573da9ae14e64070df419d7a7b7f3cc51439bc5cd63fd041224cfff0cc42682",
+  "copied_spy_rows": 2867,
+  "scopes_checked": 21,
+  "candles_checked": 70,
+  "default_scope": "SPY:day:None:False|expiries=2026-10-14,2026-10-15,2026-10-16,2026-10-19|gex.v2|OI",
+  "default_matching_nodes": 0,
+  "default_coverage": {
+    "scope_status": "available",
+    "gap_counts": {
+      "no_prior_observation": 42,
+      "observation_too_old": 28,
+      "recorded_without_nodes": 0
+    }
+  },
+  "any_scope_candles_with_nodes": 31,
+  "candles_without_eligible_nodes_in_any_scope": 39,
+  "independent_sql_matches": 31,
+  "invalid_clock_rows": 0,
+  "scopes": [
+    {
+      "scope": "SPY:4:day:None:False:True:80:next:2026-10-14|expiries=2026-10-15|gex.v2|OI",
+      "stored_rows": 5,
+      "matching_candles": 0,
+      "gap_counts": {
+        "no_prior_observation": 70,
+        "observation_too_old": 0,
+        "recorded_without_nodes": 0
+      }
+    },
+    {
+      "scope": "SPY:day:0:False|expiries=2026-10-07|gex.v2|OI",
+      "stored_rows": 13,
+      "matching_candles": 0,
+      "gap_counts": {
+        "no_prior_observation": 0,
+        "observation_too_old": 70,
+        "recorded_without_nodes": 0
+      }
+    },
+    {
+      "scope": "SPY:day:0:False|expiries=2026-10-08|gex.v2|OI",
+      "stored_rows": 2,
+      "matching_candles": 1,
+      "gap_counts": {
+        "no_prior_observation": 0,
+        "observation_too_old": 69,
+        "recorded_without_nodes": 0
+      }
+    },
+    {
+      "scope": "SPY:day:0:False|expiries=2026-10-09|gex.v2|OI",
+      "stored_rows": 6,
+      "matching_candles": 1,
+      "gap_counts": {
+        "no_prior_observation": 14,
+        "observation_too_old": 55,
+        "recorded_without_nodes": 0
+      }
+    },
+    {
+      "scope": "SPY:day:0:False|gex.v2|OI",
+      "stored_rows": 13,
+      "matching_candles": 0,
+      "gap_counts": {
+        "no_prior_observation": 0,
+        "observation_too_old": 70,
+        "recorded_without_nodes": 0
+      }
+    },
+    {
+      "scope": "SPY:day:None:False|expiries=2026-10-07,2026-10-08,2026-10-09,2026-10-12,2026-10-13,2026-10-14|gex.v2|OI",
+      "stored_rows": 210,
+      "matching_candles": 0,
+      "gap_counts": {
+        "no_prior_observation": 0,
+        "observation_too_old": 70,
+        "recorded_without_nodes": 0
+      }
+    },
+    {
+      "scope": "SPY:day:None:False|expiries=2026-10-07,2026-10-08,2026-10-09,2026-10-12|gex.v2|OI",
+      "stored_rows": 428,
+      "matching_candles": 0,
+      "gap_counts": {
+        "no_prior_observation": 0,
+        "observation_too_old": 70,
+        "recorded_without_nodes": 0
+      }
+    },
+    {
+      "scope": "SPY:day:None:False|expiries=2026-10-08,2026-10-09,2026-10-12,2026-10-13,2026-10-14,2026-10-15|gex.v2|OI",
+      "stored_rows": 176,
+      "matching_candles": 7,
+      "gap_counts": {
+        "no_prior_observation": 0,
+        "observation_too_old": 63,
+        "recorded_without_nodes": 0
+      }
+    },
+    {
+      "scope": "SPY:day:None:False|expiries=2026-10-08,2026-10-09,2026-10-12,2026-10-13|gex.v2|OI",
+      "stored_rows": 604,
+      "matching_candles": 13,
+      "gap_counts": {
+        "no_prior_observation": 0,
+        "observation_too_old": 57,
+        "recorded_without_nodes": 0
+      }
+    },
+    {
+      "scope": "SPY:day:None:False|expiries=2026-10-09,2026-10-12,2026-10-13,2026-10-14,2026-10-15,2026-10-16|gex.v2|OI",
+      "stored_rows": 229,
+      "matching_candles": 8,
+      "gap_counts": {
+        "no_prior_observation": 14,
+        "observation_too_old": 48,
+        "recorded_without_nodes": 0
+      }
+    },
+    {
+      "scope": "SPY:day:None:False|expiries=2026-10-09,2026-10-12,2026-10-13,2026-10-14|gex.v2|OI",
+      "stored_rows": 401,
+      "matching_candles": 12,
+      "gap_counts": {
+        "no_prior_observation": 14,
+        "observation_too_old": 44,
+        "recorded_without_nodes": 0
+      }
+    },
+    {
+      "scope": "SPY:day:None:False|expiries=2026-10-12,2026-10-13,2026-10-14,2026-10-15,2026-10-16,2026-10-19|gex.v2|OI",
+      "stored_rows": 12,
+      "matching_candles": 0,
+      "gap_counts": {
+        "no_prior_observation": 28,
+        "observation_too_old": 42,
+        "recorded_without_nodes": 0
+      }
+    },
+    {
+      "scope": "SPY:day:None:False|expiries=2026-10-12,2026-10-13,2026-10-14,2026-10-15|gex.v2|OI",
+      "stored_rows": 140,
+      "matching_candles": 0,
+      "gap_counts": {
+        "no_prior_observation": 28,
+        "observation_too_old": 42,
+        "recorded_without_nodes": 0
+      }
+    },
+    {
+      "scope": "SPY:day:None:False|expiries=2026-10-12|gex.v2|OI",
+      "stored_rows": 1,
+      "matching_candles": 0,
+      "gap_counts": {
+        "no_prior_observation": 28,
+        "observation_too_old": 42,
+        "recorded_without_nodes": 0
+      }
+    },
+    {
+      "scope": "SPY:day:None:False|expiries=2026-10-13,2026-10-14,2026-10-15,2026-10-16,2026-10-19,2026-10-20|gex.v2|OI",
+      "stored_rows": 9,
+      "matching_candles": 3,
+      "gap_counts": {
+        "no_prior_observation": 42,
+        "observation_too_old": 25,
+        "recorded_without_nodes": 0
+      }
+    },
+    {
+      "scope": "SPY:day:None:False|expiries=2026-10-13,2026-10-14,2026-10-15,2026-10-16|gex.v2|OI",
+      "stored_rows": 124,
+      "matching_candles": 6,
+      "gap_counts": {
+        "no_prior_observation": 42,
+        "observation_too_old": 22,
+        "recorded_without_nodes": 0
+      }
+    },
+    {
+      "scope": "SPY:day:None:False|expiries=2026-10-13,2026-10-15,2026-10-16,2026-10-19,2026-10-20,2026-10-21|gex.v2|OI",
+      "stored_rows": 4,
+      "matching_candles": 1,
+      "gap_counts": {
+        "no_prior_observation": 50,
+        "observation_too_old": 19,
+        "recorded_without_nodes": 0
+      }
+    },
+    {
+      "scope": "SPY:day:None:False|expiries=2026-10-14,2026-10-15,2026-10-16,2026-10-19,2026-10-20,2026-10-21|gex.v2|OI",
+      "stored_rows": 4,
+      "matching_candles": 0,
+      "gap_counts": {
+        "no_prior_observation": 56,
+        "observation_too_old": 14,
+        "recorded_without_nodes": 0
+      }
+    },
+    {
+      "scope": "SPY:day:None:False|expiries=2026-10-14,2026-10-15,2026-10-16,2026-10-19|gex.v2|OI",
+      "stored_rows": 249,
+      "matching_candles": 0,
+      "gap_counts": {
+        "no_prior_observation": 42,
+        "observation_too_old": 28,
+        "recorded_without_nodes": 0
+      }
+    },
+    {
+      "scope": "SPY:day:None:False|expiries=2026-10-15,2026-10-16,2026-10-19,2026-10-20,2026-10-21,2026-10-22|gex.v2|OI",
+      "stored_rows": 166,
+      "matching_candles": 0,
+      "gap_counts": {
+        "no_prior_observation": 56,
+        "observation_too_old": 14,
+        "recorded_without_nodes": 0
+      }
+    },
+    {
+      "scope": "SPY:day:None:False|expiries=2026-10-15,2026-10-16,2026-10-19,2026-10-20|gex.v2|OI",
+      "stored_rows": 71,
+      "matching_candles": 0,
+      "gap_counts": {
+        "no_prior_observation": 70,
+        "observation_too_old": 0,
+        "recorded_without_nodes": 0
+      }
+    }
+  ],
+  "limitations": "Bounded store-copy diagnosis, not whole-source recovery, default-scope substitution, capture activation or deployed backend certification."
+}

@@ -211,6 +211,23 @@ test("no price candles renders an honest empty, not an empty chart", async () =>
   await waitFor(() => expect(screen.getByTestId("triad-price-empty")).toBeInTheDocument());
 });
 
+test("market review uses the same four-step inspector without automatic research or contract reads", async () => {
+  await act(async () => render(<TrinityView />));
+  await act(async () => fireEvent.click(screen.getByTestId("triad-wall-w1")));
+  await act(async () => fireEvent.click(screen.getByTestId("triad-contracts-btn")));
+  expect(screen.getByRole("tab", {name:"Contract"})).toHaveAttribute("aria-selected", "true");
+  const before = axios.get.mock.calls.length;
+  fireEvent.click(screen.getByRole("tab", {name:"Flow"}));
+  expect(screen.getByRole("tabpanel", {name:"Flow"})).toHaveTextContent("SPY");
+  expect(screen.getByRole("tabpanel", {name:"Flow"})).toHaveTextContent("snap-triad-1");
+  fireEvent.click(screen.getByRole("tab", {name:"Public agent"}));
+  expect(screen.getByRole("tabpanel", {name:"Public agent"})).toHaveTextContent("not delivery or activation");
+  fireEvent.click(screen.getByRole("tab", {name:"Contract"}));
+  expect(screen.getByTestId("triad-contract-row")).toBeVisible();
+  expect(axios.get.mock.calls).toHaveLength(before);
+  expect(axios.post).not.toHaveBeenCalled();
+});
+
 test("contract drawer moves focus in and restores it on close", async () => {
   window.sessionStorage.setItem("solstice.triadHandoff", JSON.stringify({
     ticker: "SPY", wall_id: "w1", strike: 760, expiry: "2026-10-02", ts: Date.now(),

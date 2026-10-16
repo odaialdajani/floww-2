@@ -198,7 +198,7 @@ export default function TriadDesk({ ticker }) {
         </p> : <p>No contract selected — or the selected strike carries no listed row.</p>}
         <h3>Entry and protection</h3>
         <p>Entry only after your price confirmation, in whole contracts at broker increments. Exact supported contract plus commissioned policy required; this desk grants neither.</p>
-        <h3>Lodestar context</h3>
+        <h3>Flow context</h3>
         <button type="button" onClick={copyTriadContext}>Copy Triad context</button>
         {copyStatus && <p role="status">{copyStatus}</p>}
         <h3>Handoff trace</h3>

@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "synthetic": false,
+  "backendReloadAuthorized": true,
+  "errors": [],
+  "blocked": [],
+  "bundle": "main.38b367c3.js",
+  "availableSavedViews": 1,
+  "selectedSavedView": {
+    "value": "SPY:day:None:False|expiries=2026-10-15,2026-10-16,2026-10-19,2026-10-20|gex.v2|OI",
+    "mode": "latest recorded scope in selected period"
+  },
+  "candles": 70,
+  "candlesWithRecordedNodes": 2,
+  "drawnSavedLines": 7,
+  "backendDiagnosticsLoaded": true,
+  "noScopeSubstitution": true
+}

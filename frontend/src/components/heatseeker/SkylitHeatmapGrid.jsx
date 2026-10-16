@@ -1,5 +1,6 @@
 import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import { shownMapStrikes } from "./shownMapStrikes";
+import HeatmapLandmarks, {readLandmarks, landmarkLabel} from "./HeatmapLandmarks";
 import "./SolsticeWorkspace.css";
 import { signedCellPalette } from "../../lib/signedGridPalette";
 export { cellPalette } from "../../lib/signedGridPalette";
@@ -142,7 +143,7 @@ export function ProfileBars({ raw, adj, rawMax, adjMax, adjLabel, partial, inval
 
 const GridRow = memo(function GridRow({
   strike, r, cells, colorExtent, kingExp, rowBadges, isSpot, spot, conc, concPct,
-  selExp, selStrike, inWall, rowMiss, rowInv, prof, onCell, onStrike,
+  selExp, selStrike, inWall, rowMiss, rowInv, prof, onCell, onStrike, landmark,
 }) {
   const sk = strikeKey(strike);
   const spotOffset = isSpot && spot != null ? Number(spot) - strike : null;
@@ -150,7 +151,7 @@ const GridRow = memo(function GridRow({
     ? `Spot ${Number(spot).toFixed(2)} · nearest listed ${fmtStrike(strike)} (${spotOffset >= 0 ? "+" : ""}${spotOffset.toFixed(2)})`
     : null;
   return (
-    <tr className={`trin-row${selStrike ? " trin-row-selected" : ""}`}>
+    <tr className={`trin-row${selStrike ? " trin-row-selected" : ""}`} data-strike={strike}>
       <td
         className={`trin-strike-cell${inWall ? " trin-wall-member" : ""}${selStrike ? " trin-strike-selected" : ""}`}
         onClick={onStrike ? () => onStrike(strike) : undefined}
@@ -161,6 +162,7 @@ const GridRow = memo(function GridRow({
         ) : (
           <span className="trin-strike">{fmtStrike(strike)}</span>
         )}
+        {landmark && <span className="heatmap-row-landmark">{landmark}</span>}
         {conc > 0 && (
           <span className="trin-conc-bar" data-testid="skylit-conc-bar" style={{ width: `${Math.max(concPct, 4)}%` }} />
         )}
@@ -259,7 +261,9 @@ function SkylitHeatmapGrid({
   profile = null,
   onScroll,
   scrollRef,
+  showLandmarks = true,
 }) {
+  const landmarks = useMemo(() => readLandmarks(data), [data]);
   const gridKey = GRID_BY_VIEW[viewMode] || "grid";
 
   const useOverlay = metric !== "raw" && (viewMode === "gex" || viewMode === "skylit");
@@ -572,6 +576,7 @@ function SkylitHeatmapGrid({
         prof={profRows ? profRows[sk] : null}
         onCell={onCellClick}
         onStrike={onStrikeClick}
+        landmark={landmarkLabel(landmarks, strike)}
       />
     );
     if (spotLine && spotLine.where === "between" && spotLine.at === r) body.push(spotRow("spot-between", "between"));
@@ -581,6 +586,7 @@ function SkylitHeatmapGrid({
   const densityClass = density === "full" ? " density-full" : density === "calendar" ? " density-calendar" : "";
   return (
     <div className="skylit-heatmap-wrapper">
+      {showLandmarks && <HeatmapLandmarks data={data} reading={landmarks} />}
       <div className="skylit-heatmap-container" onScroll={onScroll} ref={scrollRef}>
         <table className={`trin-grid-table${densityClass}`} role="grid" aria-label={`${ticker} ${viewMode.toUpperCase()} ${metric} strike by expiry`}>
           <thead>

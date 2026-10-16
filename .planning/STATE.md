@@ -1,6 +1,13 @@
 # STATE.md — Confluence Decoder
 
-**Last updated:** 2026-09-04
+**Last updated:** 2026-10-15
+
+## Current user priority — integration reset
+
+The 14 October request supersedes the old deployment-first headline: stop the repeating chart checks, reconcile historical work, improve the approved Solstice/Triad inspector and make heatmap/chart levels readable. Current source baseline is `4d911d30`; the reviewed candidate is on `fix/floww-integration-reset-20261015`. The review backend on :8002 has loaded the tested history diagnostics, with capture and live Public trading off. See [current findings, checks and unfinished queue](unknowns/integration-reset-20261014.md) and its complete 62-row preserved ledger/inventory. Whole-product acceptance and trading commissioning remain open. No historical test count below is current proof.
+
+## Historical state — 4 September 2026
+
 **Branch:** `main` @ 343e2f9 (docs(backlog): mark K1 stranded perf fixes as landed (a2f0532))
 **Tests:** backend collects clean, 0 collection errors — `cd backend && ./.venv313/Scripts/python.exe -m pytest --collect-only -q`. Do not quote a fixed total: on 2026-09-04 the same command returned 4581 and then 4608 within one session as concurrent work landed a new test file and edited `pytest.ini`. Pass/skip counts need MongoDB on :27017 — `cd backend && ./.venv313/Scripts/python.exe -m pytest -q` · frontend 280 passed / 280 total across 44 suites — `cd frontend && CI=true npx craco test --watchAll=false` (green 2026-09-04)
 **Lint:** ruff per `backend/pyproject.toml` — select E, F, W, I, B, UP, SIM; ignore E501, SIM102, SIM108, SIM117; line-length 120; target py313; excludes `.venv`, `services/ml/inference.py`, `services/dash_ui.py`, `tests/conftest.py`. CI pins `ruff==0.15.22`; ruff is not installed locally.

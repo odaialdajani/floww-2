@@ -2061,6 +2061,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     # T09/R4-13/18: record fresh builds to immutable research history
     # (never stale-serves) with explicit coverage + capability observation.
     # The 2,000-contract cap is declared (truncated=True) — never silent.
+    history_query_key = cache_key if scope_selection else f"{ticker}:{mode}:{dte}:{scalp}"
     try:
         from services.duckdb_engine import db as _ddb
         from services.heatmap_history import RECORDED_STRUCTURE_FIELDS, record_capability, record_snapshot
@@ -2107,7 +2108,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                          "patterns_v1": payload.get("patterns_v1"),
                                          "vanna_v1": payload.get("vanna_v1"),
                                          "moneyness": payload.get("moneyness")},
-                cache_key if scope_selection else f"{ticker}:{mode}:{dte}:{scalp}",
+                history_query_key,
                 payload.get("snapshotId") or None))
             _background_tasks.add(_t2)
             _t2.add_done_callback(_background_tasks.discard)
@@ -2122,7 +2123,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         log.debug("heatmap_history record skipped: %s", rh)
     sanitized = _sanitize(payload)
     from services.solstice_scope import attach_scope_echo
-    attach_scope_echo(sanitized, cache_key)
+    attach_scope_echo(sanitized, cache_key, history_query_key=history_query_key, formula_version="gex.v2")
     _BUILD_HEATMAP_CACHE[cache_key] = {"ts": time.time(), "data": sanitized}
     if len(_BUILD_HEATMAP_CACHE) > 200:
         oldest = sorted(_BUILD_HEATMAP_CACHE.keys(), key=lambda k: _BUILD_HEATMAP_CACHE[k]["ts"])[:50]

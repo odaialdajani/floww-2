@@ -1,0 +1,13 @@
+.chart-map-level-note { margin: 12px 0 6px; color: #b2c3cc; font-size: 12px; line-height: 1.5; }
+.heatmap-landmarks { flex: 0 0 auto; padding: 9px 12px; background: #101c23; border-bottom: 1px solid #29454d; color: #dce8ed; font-size: 12px; line-height: 1.45; }
+.heatmap-landmarks-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 7px; }
+.heatmap-landmarks-heading > span { color: #a4bac7; }
+.heatmap-landmarks-levels { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 8px; margin: 0; font-variant-numeric: tabular-nums; }
+.heatmap-landmarks-levels dt { color: #a4bac7; font-size: 11px; }
+.heatmap-landmarks-levels dd { margin: 3px 0 0; color: #f2d795; font-size: 14px; font-weight: 600; }
+.heatmap-landmarks p { margin: 7px 0 0; color: #b2c3cc; }
+.heatmap-landmarks details { margin-top: 5px; }
+.heatmap-landmarks summary { cursor: pointer; color: #bfd1da; }
+.heatmap-landmarks :focus-visible { outline: 2px solid #e5bc62; outline-offset: 2px; }
+.trin-strike-cell .heatmap-row-landmark { display: block; white-space: nowrap; color: #edcf8b; font-size: 10px; line-height: 12px; padding: 1px 4px; }
+.trin-strike-cell:has(.heatmap-row-landmark) { min-width: 86px; }

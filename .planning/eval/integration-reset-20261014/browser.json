@@ -1,0 +1,98 @@
+{
+  "synthetic": false,
+  "checks": [
+    {
+      "desk": "Solstice",
+      "renderMs": 603,
+      "chartReadyMs": 926,
+      "tabTimes": [
+        {
+          "name": "Contract",
+          "ms": 33
+        },
+        {
+          "name": "Flow",
+          "ms": 32
+        },
+        {
+          "name": "Public agent",
+          "ms": 31
+        },
+        {
+          "name": "Wall",
+          "ms": 35
+        }
+      ],
+      "geometry": {
+        "gridRight": 1088.75,
+        "inspectorLeft": 1088.75,
+        "inspectorWidth": 340
+      },
+      "landmarks": "Raw OI landmarks\nMap reference · $771.78\n4 loaded expiries · usable\nSupport watch · below\n762.00–763.00 → 760.00\nCurrent zone\n765.00–780.00\nResistance watch · above\n785.00\nCall wall · concentration\n775.00\nPut wall · concentration\n772.00\n\nZones to watch, not a forecast or entry signal. Hold/reclaim or break/retest needs measured price confirmation. Raw levels stay separate from adjusted cells.\n\nLevel source and time",
+      "candleCount": "70"
+    },
+    {
+      "desk": "Solstice",
+      "viewport": 1280,
+      "inspector": true
+    },
+    {
+      "desk": "Triad",
+      "scope": "next",
+      "tabs": 4,
+      "geometry": {
+        "scrollX": 0,
+        "sidebarRight": 240,
+        "mainLeft": 240,
+        "bodyWidth": 1440,
+        "viewport": 1440
+      },
+      "landmarks": "Raw OI landmarks\nMap reference · $771.78\n1 loaded expiries · usable\nSupport watch · below\n765.00\nCurrent zone\n767.00–778.00\nResistance watch · above\n780.00\nCall wall · concentration\n775.00\nPut wall · concentration\n772.00\n\nZones to watch, not a forecast or entry signal. Hold/reclaim or break/retest needs measured price confirmation. Raw levels stay separate from adjusted cells.\n\nLevel source and time"
+    }
+  ],
+  "errors": [],
+  "blocked": [],
+  "networkErrors": [],
+  "transportErrors": [],
+  "historyRequests": [
+    {
+      "scope": "SPY:day:None:False|expiries=2026-10-16,2026-10-19,2026-10-20,2026-10-21|gex.v2|OI",
+      "ms": 315,
+      "status": 200
+    }
+  ],
+  "bundle": "main.38b367c3.js",
+  "requestCounts": {
+    "GET /": 2,
+    "GET /fonts/local-fonts.css": 2,
+    "GET /css2": 2,
+    "GET /static/css/main.dd7974c8.css": 2,
+    "GET /static/js/main.38b367c3.js": 2,
+    "GET /fonts/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7W0Q5nw.woff2": 2,
+    "GET /fonts/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPbF4C_k3HqU.woff2": 2,
+    "GET /fonts/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwgknk-4.woff2": 1,
+    "GET /s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwgknk-4.woff2": 2,
+    "GET /fonts/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1pL7W0Q5n-wU.woff2": 2,
+    "GET /fonts/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxPcwgknk-6nFg.woff2": 1,
+    "GET /s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxPcwgknk-6nFg.woff2": 2,
+    "GET /api/market/status": 2,
+    "GET /api/movers": 1,
+    "GET /api/solstice/scan/leaderboard": 2,
+    "GET /api/heatseeker/price-history/SPY": 3,
+    "GET /api/solstice/attribute/SPY": 1,
+    "GET /api/flowseeker/alerts/feed": 1,
+    "GET /api/alerts/SPY": 1,
+    "GET /api/tickers": 2,
+    "GET /api/data/SPY": 2,
+    "GET /api/advanced/SPY": 2,
+    "GET /api/ensemble/state": 1,
+    "GET /api/spot/SPY": 2,
+    "GET /icons/icon.svg": 2,
+    "GET /api/tickers/all": 6,
+    "GET /api/solstice/SPY/decisions": 3,
+    "POST /api/preferences/theme": 1,
+    "GET /api/heatmap/SPY": 2,
+    "GET /api/version": 1
+  },
+  "passed": true
+}

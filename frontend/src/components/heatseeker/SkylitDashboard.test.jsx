@@ -79,6 +79,14 @@ import useScreenContext from "../../agent/useScreenContext";
 import coverageFixture from "../../fixtures/integration/coverage-read.v1.json";
 import {skylitViewScope,readSkylitView,writeSkylitView} from "./skylitViewPreferences";
 
+test('price chart offers separately labelled map levels without filling historical node gaps', async () => {
+  await act(async () => render(<SkylitDashboardView ticker="SPY" data={selectionMap()} spot={650}/>));
+  const current = screen.getByRole('region', {name:'Map levels separate from historical candles'});
+  expect(current).toHaveTextContent('not historical candle-time levels');
+  expect(current.querySelector('[aria-label="Raw OI landmarks"]')).toBeInTheDocument();
+  expect(current.closest('[data-testid="recorded-price-chart"]')).toBeNull();
+});
+
 test('listed expiry admission is an explicit read, not a new map or selection', async () => {
   axios.get.mockResolvedValue({ data: coverageFixture.expiries });
   render(<SkylitDashboard ticker="SPY" data={selectionMap()} />);

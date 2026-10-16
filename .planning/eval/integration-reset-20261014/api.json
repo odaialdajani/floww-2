@@ -1,0 +1,76 @@
+[
+  {
+    "read": "health",
+    "status": 200,
+    "elapsed_s": 0.151,
+    "frames": null,
+    "price_status": null,
+    "expiry_dates": null,
+    "quality": null,
+    "scope": null
+  },
+  {
+    "read": "one_day_control",
+    "status": 200,
+    "elapsed_s": 5.567,
+    "frames": 14,
+    "price_status": "available",
+    "expiry_dates": null,
+    "quality": null,
+    "scope": null
+  },
+  {
+    "read": "same_day",
+    "status": 200,
+    "elapsed_s": 0.035,
+    "frames": null,
+    "price_status": null,
+    "expiry_dates": [],
+    "quality": {
+      "state": "unavailable",
+      "reasonCodes": [
+        "NO_USABLE_CONTRACTS"
+      ],
+      "setupEligible": false,
+      "executionEligible": false,
+      "tradeSideCapability": "none"
+    },
+    "scope": {
+      "expiries": 4,
+      "mode": "day",
+      "dte": 0,
+      "scalp": false,
+      "withTaps": true,
+      "maxStrikes": 80
+    }
+  },
+  {
+    "read": "next_listed",
+    "status": 200,
+    "elapsed_s": 0.426,
+    "frames": null,
+    "price_status": null,
+    "expiry_dates": [
+      "2026-10-15"
+    ],
+    "quality": {
+      "state": "usable",
+      "reasonCodes": [
+        "GREEK_TIME_UNKNOWN"
+      ],
+      "setupEligible": true,
+      "executionEligible": false,
+      "tradeSideCapability": "none"
+    },
+    "scope": {
+      "expiries": 4,
+      "mode": "day",
+      "dte": null,
+      "scalp": false,
+      "withTaps": true,
+      "maxStrikes": 80,
+      "expiryScope": "next",
+      "sessionDate": "2026-10-14"
+    }
+  }
+]

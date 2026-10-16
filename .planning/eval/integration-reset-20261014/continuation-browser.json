@@ -1,0 +1,137 @@
+{
+  "passed": true,
+  "routeSmoke": [
+    {
+      "route": "flowseeker-pro",
+      "label": "Screener",
+      "renderMs": 2190,
+      "rendered": true,
+      "httpFailures": [],
+      "limitations": [
+        "LOADING",
+        "Legacy records keep at most three original examples. Pruned history is unavailable.",
+        "No eligible trade with verified fresh data · highest reading conviction unavailable NFLX",
+        "Spot distance unavailable",
+        "Regime is a separate reading; response time unavailable. Its market observation time is not verified against this map.",
+        "SPY · GEX loading…",
+        "Loading",
+        "Unavailable",
+        "Loading dealer data for SPY",
+        "Order imbalance — unavailable",
+        "Spread-cost history unavailable · mid-quote estimates are not executable costs.",
+        "Price impact — unavailable",
+        "Journal results loading. Any retained figures are from an earlier refresh.",
+        "—journal results unavailable",
+        "Legacy alert history uses yfinance daily prices and is unavailable in Public-only mode. Where legacy sources are allowed, loading may recalculate a local statistical estimate; these are not live Public readings or proven future results."
+      ]
+    },
+    {
+      "route": "heatseeker",
+      "label": "Stock chart",
+      "renderMs": 2202,
+      "rendered": true,
+      "httpFailures": [],
+      "limitations": [
+        "Loading full stock search...",
+        "Loading recorded history...",
+        "Window Δvol × |Δ| · unavailable"
+      ]
+    },
+    {
+      "route": "trinity",
+      "label": "Market view",
+      "renderMs": 2240,
+      "rendered": true,
+      "httpFailures": [],
+      "limitations": [
+        "Loading full stock search...",
+        "Loading Triad…"
+      ]
+    },
+    {
+      "route": "skylit",
+      "label": "Options map",
+      "renderMs": 2144,
+      "rendered": true,
+      "httpFailures": [],
+      "limitations": [
+        "Loading full stock search...",
+        "Loading…",
+        "Loading dashboard…"
+      ]
+    },
+    {
+      "route": "steal-three",
+      "label": "Extra studies",
+      "renderMs": 1989,
+      "rendered": true,
+      "httpFailures": [],
+      "limitations": []
+    },
+    {
+      "route": "portfolio",
+      "label": "Portfolio",
+      "renderMs": 1894,
+      "rendered": true,
+      "httpFailures": [],
+      "limitations": []
+    },
+    {
+      "route": "journal",
+      "label": "Journal",
+      "renderMs": 1961,
+      "rendered": true,
+      "httpFailures": [],
+      "limitations": [
+        "Totals unavailable until saved records can be read.",
+        "Loading saved records...",
+        "Loading saved records"
+      ]
+    },
+    {
+      "route": "public",
+      "label": "Broker",
+      "renderMs": 1899,
+      "rendered": true,
+      "httpFailures": [],
+      "limitations": []
+    }
+  ],
+  "syntheticChart": {
+    "synthetic": true,
+    "passed": true,
+    "unknownVolumeKeptGap": true,
+    "sparsePremiumKeptGap": true,
+    "replayExcludedFuturePremium": true
+  },
+  "blockedMutations": [],
+  "suppressedPreferenceWrites": 8,
+  "pageErrors": [],
+  "bundle": "main.38b367c3.js",
+  "readChecks": {
+    "ticker": "SPY",
+    "candles": 70,
+    "candlesWithRecordedNodes": 2,
+    "nodeStatus": "available",
+    "recording": {
+      "durable": false,
+      "status": "available",
+      "first_at": "2026-10-15T14:55:19.965617-04:00",
+      "last_at": "2026-10-15T17:50:54.840618-04:00",
+      "count": 23
+    },
+    "queryKey": "SPY:day:None:False|expiries=2026-10-15,2026-10-16,2026-10-19,2026-10-20|gex.v2|OI",
+    "lastCandleAt": "2026-10-15T20:00:00+00:00",
+    "receivedAt": "2026-10-15T21:51:34.301105+00:00",
+    "backgroundCapture": {
+      "enabled": false,
+      "task_active": false,
+      "tickers": [],
+      "interval_s": null,
+      "market_hours_only": null,
+      "in_market_hours": false,
+      "state": "disabled"
+    },
+    "captureWorker": "absent"
+  }
+}

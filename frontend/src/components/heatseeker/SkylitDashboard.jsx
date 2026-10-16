@@ -20,6 +20,8 @@ import { ALL_BASES, surfaceStatus, sumProfile } from "../../lib/solsticeMetrics"
 import AskLodestar from "./AskLodestar";
 
 import ExactContractReview from "./ExactContractReview";
+import ReviewInspector from "./ReviewInspector";
+import HeatmapLandmarks from "./HeatmapLandmarks";
 import { GroundedPublicReview } from "../public/PublicHandoffReview";
 
 import SolsticeSymbolMaps from "./SolsticeSymbolMaps";
@@ -831,6 +833,10 @@ function SkylitDashboard({
               { tries: 4, gapMs: 5000 });
           } catch { return { recorded: false, tries: 4 }; }
         }} />
+        <section role="region" aria-label="Map levels separate from historical candles">
+          <p className="chart-map-level-note">Displayed map levels — not historical candle-time levels. Missing saved chart nodes remain gaps.</p>
+          <HeatmapLandmarks data={visibleData} />
+        </section>
       </div>
       <div className="skylit-options-study" ref={optionsStudyRef} role="region" aria-label={ticker + " options desk"} tabIndex={-1} hidden={rangeOpen}
         onPointerDownCapture={() => focusStudy("options")} onClickCapture={() => focusStudy("options")} onChangeCapture={() => focusStudy("options")} onFocusCapture={() => focusStudy("options")} >
@@ -1020,7 +1026,7 @@ function SkylitDashboard({
         <AskLodestar subject={`${ticker}${selectedCell ? ` · wall ${selectedCell.wall_id || "none"} · strike ${selectedCell.strike}` : ""}`} overlayMetric={activeMetric} displayMode={priceHistoryOpen ? "price-history" : isReplay ? "replay" : "live"} compact />
       </div>
       {/* 3. Main Content Area */}
-      <div className="skylit-main-area">
+      <div className="skylit-main-area" data-inspector-open={drawerOpen}>
         {/* Heatmap Grid — fills available height (fitRows) with zoom */}
         <div
           className="skylit-heatmap-area"
@@ -1124,19 +1130,32 @@ function SkylitDashboard({
             </button>
           </div>
           <div className="skylit-drawer-body">
-          {/* T07/T23: selected-wall inspector + two-sided scenarios (deterministic) */}
-          <SelectedWallBlock
-            data={displayData} spot={displaySpot}
-            selectedCell={followWall && effectiveWallId
-              ? { ...selectedCell, wall_id: effectiveWallId }
-              : selectedCell}
-            metric={metric} replay={isReplay}
+          <ReviewInspector
+            selectionKey={`${ticker}|${selectedCell?.wall_id || ""}|${contractScope}|${isReplay}`}
+            wall={<SelectedWallBlock
+              data={displayData} spot={displaySpot}
+              selectedCell={followWall && effectiveWallId
+                ? { ...selectedCell, wall_id: effectiveWallId }
+                : selectedCell}
+              metric={metric} replay={isReplay}
+            />}
+            contract={<>
+              <h3>Exact contract review · read-only</h3>
+              <ExactContractReview key={`${ticker}|${selectedCell?.wall_id || ""}|${visibleData?.snapshotId || ""}`} ticker={ticker} data={visibleData} wall={resolvedWall} cell={selectedCell} replay={isReplay} selectionScope={contractScope} onSelection={onContractSelection} />
+            </>}
+            flow={<>
+              <h3>Flow · selected reading</h3>
+              <dl className="review-inspector-context">
+                <dt>Stock / wall</dt><dd>{ticker} · {selectedCell?.wall_id || "No classified wall"}</dd>
+                <dt>Market observation</dt><dd>{visibleData?.event_time || visibleData?.observed_at || "Unknown"}</dd>
+                <dt>Snapshot time</dt><dd>{visibleData?.asof || "Unknown"} · {isReplay ? "Recorded" : "Live request"}</dd>
+                <dt>Source</dt><dd>{visibleData?.data_source || "Unknown"}</dd>
+              </dl>
+              <p>Use the existing Ask FLOWW workspace to explain this reading. Opening this step does not run the assistant or prepare an order.</p>
+              <AskLodestar subject={`${ticker} · exact contract review`} overlayMetric={activeMetric} displayMode={isReplay ? "replay" : "live"} compact />
+            </>}
+            publicAgent={<><h3>Public agent · reviewed draft</h3><p>A copied brief is not delivery or activation. Review the workflow in Public before any separately approved activation.</p><GroundedPublicReview /></>}
           />
-          <details className="skylit-contract-details"><summary>Exact contract review · read-only</summary>
-            <ExactContractReview key={`${ticker}|${selectedCell?.wall_id || ""}|${visibleData?.snapshotId || ""}`} ticker={ticker} data={visibleData} wall={resolvedWall} cell={selectedCell} replay={isReplay} selectionScope={contractScope} onSelection={onContractSelection} />
-          </details>
-          <AskLodestar subject={`${ticker} · exact contract review`} overlayMetric={activeMetric} displayMode={isReplay ? "replay" : "live"} compact />
-          <GroundedPublicReview />
           {/* R8-04: review journal state for the current snapshot's decision */}
           <div className="skylit-review-pill" data-testid="skylit-review-pill">
             {reviewLoading && (

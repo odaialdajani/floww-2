@@ -9,6 +9,9 @@ import { ALL_BASES, surfaceStatus, wallValues, wallRead } from "../lib/solsticeM
 import StrikeExposureProfile from "./triad/StrikeExposureProfile";
 import ExactContractReview from "./heatseeker/ExactContractReview";
 import AskLodestar from "./heatseeker/AskLodestar";
+import ReviewInspector from "./heatseeker/ReviewInspector";
+import HeatmapLandmarks from "./heatseeker/HeatmapLandmarks";
+import WallInspector from "./heatseeker/WallInspector";
 import { usePublishScreenContext } from "../agent/useScreenContext";
 import { replayToDisplay } from "../lib/solsticeReplay";
 import ReplayStrip from "./heatseeker/ReplayStrip";
@@ -328,6 +331,9 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
           {" "}Usable inputs: {surfaceStatus(payload, basis).usable ?? "unknown"} · {surfaceStatus(payload, basis).status}.
           {" "}{surfaceStatus(payload, basis).reason || "No volume or Greeks are inferred from OI."}</p>
       </details>}
+      <HeatmapLandmarks data={payload} />
+      <div className={drawerOpen ? "triad-review-workspace" : ""}>
+      <div className="triad-review-analysis">
       <StrikeExposureProfile data={payload} basis={basis} wall={selectedWall} onSelect={onGridCell} />
       <div className="triad-pair" data-testid="triad-raw-adjusted" data-mobile-pane={mobilePane}>
         <div className="triad-pane" data-testid="triad-pane-raw">
@@ -335,7 +341,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
             Raw GEX · USD/1% move · {payload?.formula_version || "gex.v2"}
           </div>
           <SkylitHeatmapGrid data={payload} spot={spot} ticker={ticker}
-            viewMode="gex" metric="raw" axes={pairAxes} scale={pairScale} onCellClick={(s, e) => onGridCell(s, e, "raw")} selected={cell ? { strike: cell.strike, expiry: cell.colKey } : null} wallBand={selectedWall} />
+            viewMode="gex" metric="raw" showLandmarks={false} axes={pairAxes} scale={pairScale} onCellClick={(s, e) => onGridCell(s, e, "raw")} selected={cell ? { strike: cell.strike, expiry: cell.colKey } : null} wallBand={selectedWall} />
         </div>
         <div className="triad-pane" data-testid="triad-pane-adjusted">
           <div className="triad-pane-header" title={adjDef?.units || "No per-strike surface for this basis in the snapshot"}>
@@ -343,7 +349,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
           </div>
           {adjAvailable ? (
             <SkylitHeatmapGrid data={payload} spot={spot} ticker={ticker}
-              viewMode="gex" metric={basis} axes={pairAxes} scale={pairScale} onCellClick={(s, e) => onGridCell(s, e, "adjusted")} selected={cell ? { strike: cell.strike, expiry: cell.colKey } : null} wallBand={selectedWall} />
+              viewMode="gex" metric={basis} showLandmarks={false} axes={pairAxes} scale={pairScale} onCellClick={(s, e) => onGridCell(s, e, "adjusted")} selected={cell ? { strike: cell.strike, expiry: cell.colKey } : null} wallBand={selectedWall} />
           ) : (
             <div className="triad-unavailable" data-testid="triad-adjusted-unavailable"
               title={basis === "window" ? "window_dadgex has no per-strike surface in the snapshot contract" : "adjusted surface missing from this snapshot"}>
@@ -370,11 +376,13 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
           corresponding GEX wall will say so here rather than inheriting another wall's story.
         </div>
       )}
+      </div>
       {drawerOpen && (
-        <ContractDrawer data={payload} cell={cell} replay={isReplay}
+        <ContractDrawer data={payload} cell={cell} replay={isReplay} metric={activeMetric}
           wall={selectedWall} onClose={() => setDrawerOpen(false)} ticker={ticker}
           closeRef={drawerCloseRef} selectionScope={contractScope} onSelection={onContractSelection} />
       )}
+      </div>
       <ReviewSection journal={journal} ticker={ticker} snapshotId={payload?.snapshotId} />
       <div className="triad-source" data-testid="triad-source">
         {isReplay ? "REPLAY · " : "LIVE · "}{payload?.snapshotId ? `snapshot ${payload.snapshotId}` : "no snapshot"}
@@ -597,7 +605,7 @@ function WallPricePath({ ticker, wall, spot }) {
   );
 }
 
-function ContractDrawer({ data, cell, replay, wall, onClose, ticker, closeRef, selectionScope, onSelection }) {
+function ContractDrawer({ data, cell, replay, wall, metric, onClose, ticker, closeRef, selectionScope, onSelection }) {
   useEffect(() => {
     const close = e => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", close);
@@ -608,9 +616,24 @@ function ContractDrawer({ data, cell, replay, wall, onClose, ticker, closeRef, s
       <span>Contracts · {ticker} {wall ? `${wall.low}–${wall.high}` : ""}</span>
       <button ref={closeRef} onClick={onClose} data-testid="triad-drawer-close" aria-label="Close contract review">✕</button>
     </div>
-    <ExactContractReview key={`${ticker}|${wall?.wall_id || ""}|${data?.snapshotId || ""}`} ticker={ticker} data={data} wall={wall} cell={cell} replay={replay} selectionScope={selectionScope} onSelection={onSelection} />
-    <AskLodestar subject={`${ticker} · exact contract review`} compact />
-    <GroundedPublicReview />
+    <ReviewInspector initialTab="contract" selectionKey={`${ticker}|${wall?.wall_id || ""}|${selectionScope}|${replay}`}
+      wall={<WallInspector wall={wall} interaction={data?.interactions?.find(i => i.wall_id === wall?.wall_id)}
+        metrics={data?.metrics} grids={data?.metrics?.grids} displayGrid={data?.grid} quality={data?.quality}
+        metric={metric} snapshotId={data?.snapshotId} replay={replay} />}
+      contract={<ExactContractReview key={`${ticker}|${wall?.wall_id || ""}|${data?.snapshotId || ""}`} ticker={ticker} data={data} wall={wall} cell={cell} replay={replay} selectionScope={selectionScope} onSelection={onSelection} />}
+      flow={<>
+        <h3>Flow · selected reading</h3>
+        <dl className="review-inspector-context">
+          <dt>Stock / wall</dt><dd>{ticker} · {wall?.wall_id || "No classified wall"}</dd>
+          <dt>Snapshot</dt><dd>{data?.snapshotId || "Unknown"}</dd>
+          <dt>Market observation</dt><dd>{data?.event_time || data?.observed_at || "Unknown"}</dd>
+          <dt>Snapshot time</dt><dd>{data?.asof || "Unknown"} · {replay ? "Recorded" : "Live request"}</dd>
+        </dl>
+        <p>The same Ask FLOWW assistant explains this selection. Opening a step does not request research or prepare an order.</p>
+        <AskLodestar subject={`${ticker} · exact contract review`} overlayMetric={metric} displayMode={replay ? "replay" : "live"} compact />
+      </>}
+      publicAgent={<><h3>Public agent · reviewed draft</h3><p>A copied brief is not delivery or activation. Review the workflow in Public before any separately approved activation.</p><GroundedPublicReview /></>}
+    />
   </div>;
 }
 
