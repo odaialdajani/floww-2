@@ -11,6 +11,10 @@ def isolated_server(monkeypatch):
     import server
     from services import public_api_adapter
 
+    # _public_heatmap_cache_allowed reads the provider at call time; a local
+    # .env (FLOWW_MARKET_DATA_PROVIDER=public) would reject this fixture's
+    # cache entry, drop into the never-returning build mock and hang. Pin it.
+    monkeypatch.delenv("FLOWW_MARKET_DATA_PROVIDER", raising=False)
     monkeypatch.setattr(server, "_background_tasks", set())
     monkeypatch.setattr(server, "_shutdown_event", asyncio.Event())
     monkeypatch.setattr(server, "_scheduler_task", None)

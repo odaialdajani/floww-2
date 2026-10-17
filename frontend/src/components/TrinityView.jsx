@@ -319,9 +319,12 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
         onSymbolInput={setSymbolInput} onSubmit={submitSymbol} showStockControl={!sharedStockChoice} />
       <div className="triad-board-status" role="status">Solstice research ranks · {boardStatus} · unvalidated, not probability</div>
             {payload?.scope_selection?.status === "unavailable" && <div role="status" data-testid="triad-empty-scope">No listed expiry in the server's 30-day bound — no substitution made.</div>}
-      {!isReplay && scope === "0dte" && !sameDayAdmitted && <p role="status" data-testid="triad-scope-admission">
-        Same-day admission unavailable — the loaded observation is not verified 0DTE. Exact loaded dates remain visible; no same-session expiry or entitlement is invented.
-      </p>}
+      {!isReplay && scope === "0dte" && !sameDayAdmitted && <div className="triad-scope-notice">
+        <p role="status" data-testid="triad-scope-admission">
+          Same-day admission unavailable — the loaded observation is not verified 0DTE. Exact loaded dates remain visible; no same-session expiry or entitlement is invented.
+        </p>
+        <button type="button" data-testid="triad-show-loaded" onClick={() => setScope("loaded")}>Show all loaded expiries</button>
+      </div>}
       <div className="triad-desk-toolbar">
         <span>Raw = where · adjusted = weighting, not observed direction</span>
         <select aria-label="Triad expiry scope" value={isReplay ? declaredScope : scope} disabled={isReplay} onChange={e => setScope(e.target.value)}>

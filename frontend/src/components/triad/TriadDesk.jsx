@@ -155,7 +155,7 @@ export default function TriadDesk({ ticker }) {
   return <section aria-label="Triad same-day wall desk">
     <div className="context-mini">
       <strong>{ticker}</strong>
-      <span className="mono">{spot != null ? `Spot ${spot}` : "Spot unknown"}</span>
+      <span className="mono">{spot != null ? `Spot ${Number(spot).toFixed(2)}` : "Spot unknown"}</span>
       <button type="button" aria-pressed={scope === "0dte"} onClick={() => switchScope("0dte")}>0DTE</button>
       <button type="button" aria-pressed={scope === "next"} onClick={() => switchScope("next")}>Next listed</button>
       <small>{expiry ? `${expiry} · same observation` : "no expiry selected"}</small>
@@ -166,7 +166,7 @@ export default function TriadDesk({ ticker }) {
       {scope === "0dte" && <button type="button" onClick={() => switchScope("next")}>Review next listed expiry</button>}
       <p>Next listed remains a dated, separate scope.</p>
     </div>}
-    {chainError && <p role="alert">Triad scope unavailable · {chainError}</p>}
+    {chainError && <p className="triad-desk-error" role="alert">Triad scope unavailable · {chainError}</p>}
     {expiry && !chainError && <>
       <div className="panel exposure"><div className="panelhead">
         <strong>Exposure by strike</strong>

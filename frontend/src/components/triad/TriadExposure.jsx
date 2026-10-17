@@ -105,7 +105,7 @@ export default function TriadExposure({ series, spot, selectedStrike, onSelect }
       const span = Math.max(1, last - first);
       const spotx = x0 + ((spot - first) / span) * (model.strikes.length - 1) * step;
       return <g><line x1={spotx} y1="20" x2={spotx} y2="165" stroke="#f2d44b" strokeDasharray="3 3" />
-        <text x={spotx} y="15" fill="#f2d44b" textAnchor="middle" fontSize="10">Spot {spot}</text></g>;
+        <text x={spotx} y="15" fill="#f2d44b" textAnchor="middle" fontSize="10">Spot {typeof spot === "number" && Number.isFinite(spot) ? spot.toFixed(2) : spot}</text></g>;
     })()}
   </svg>;
 }
