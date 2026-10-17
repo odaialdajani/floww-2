@@ -1,0 +1,766 @@
+{
+  "schema_version": 1,
+  "scope": "Read-only chart architecture research; no production implementation",
+  "test_runs": [
+    {
+      "argv": [
+        "/Users/nav/Documents/GitHub/floww-2/backend/.venv/bin/python",
+        "/Users/nav/Documents/GitHub/floww-2/tests/test_price_node_history.py"
+      ],
+      "cwd": "/Users/nav/Documents/GitHub/floww-2/backend",
+      "exit_code": 0,
+      "elapsed_seconds": 0.1,
+      "output": "........\n----------------------------------------------------------------------\nRan 8 tests in 0.001s\n\nOK\n"
+    },
+    {
+      "argv": [
+        "/Users/nav/Documents/GitHub/floww-2/backend/.venv/bin/python",
+        "-m",
+        "pytest",
+        "tests/services/test_market_bars.py",
+        "tests/services/test_public_api_bars.py",
+        "tests/routes/test_public_api_bars_routes.py",
+        "-q",
+        "--tb=short",
+        "-p",
+        "no:cacheprovider",
+        "--disable-warnings"
+      ],
+      "cwd": "/Users/nav/Documents/GitHub/floww-2/backend",
+      "exit_code": 0,
+      "elapsed_seconds": 8.17,
+      "output": ".....................................................                    [100%]\n53 passed, 27 warnings in 1.85s\n"
+    }
+  ],
+  "frontend_baseline": {
+    "status": "blocked_missing_local_craco",
+    "exit_code": 127,
+    "command": "CI=true ./node_modules/.bin/craco test --watchAll=false --runInBand --runTestsByPath src/components/heatseeker/PriceNodeHistory.test.jsx src/components/heatseeker/priceNodeTraces.test.js src/components/heatseeker/AskLodestar.test.jsx src/agent/ScreenContextLifecycle.test.jsx",
+    "cwd": "/Users/nav/Documents/GitHub/floww-2/frontend",
+    "actual_error": "./node_modules/.bin/craco: No such file or directory",
+    "installation_modified": false
+  },
+  "live_chart_probe": {
+    "url": "http://127.0.0.1:8000/api/heatseeker/price-history/SPY?days=1",
+    "http_status": 200,
+    "keys": [
+      "ticker",
+      "frames",
+      "query_key",
+      "scopes",
+      "node_max_age_seconds",
+      "candles",
+      "candles_with_recorded_nodes",
+      "note",
+      "price_status",
+      "node_status",
+      "records_truncated",
+      "days",
+      "prices_received_at",
+      "last_candle_at",
+      "bar_seconds"
+    ],
+    "ticker": "SPY",
+    "price_status": "available",
+    "node_status": "available",
+    "candles": 376,
+    "candles_with_recorded_nodes": 12,
+    "bar_seconds": 60,
+    "records_truncated": false,
+    "frame_keys": [
+      "time",
+      "open",
+      "high",
+      "low",
+      "close",
+      "nodes",
+      "snapshot_id",
+      "nodes_known_at",
+      "node_age_seconds",
+      "duration_seconds"
+    ],
+    "node_keys": [
+      "id",
+      "level",
+      "low",
+      "high"
+    ]
+  },
+  "nim_connectivity": {
+    "http_status": 200,
+    "requested_model": "z-ai/glm-5.3",
+    "returned_model": "z-ai/glm-5.3",
+    "reply": "NIM_GLM_53_OK",
+    "usage": {
+      "prompt_tokens": 21,
+      "completion_tokens": 78,
+      "total_tokens": 99,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 74
+      }
+    },
+    "elapsed_seconds": 3.45
+  },
+  "initial_fanout": [
+    {
+      "lane": "data-replay",
+      "requested_model": "nvidia/z-ai/glm-5.3",
+      "exit_code": 0,
+      "elapsed_seconds": 505.82,
+      "report_chars": 20732,
+      "sessions": [
+        "ses_eddcf68f3ffetTI6ZuP9karIMN"
+      ],
+      "status": "completed",
+      "limit_seconds": 750,
+      "persisted_model_identity": {
+        "providerID": "nvidia",
+        "modelID": "z-ai/glm-5.3",
+        "finish": "stop"
+      }
+    },
+    {
+      "lane": "workspace-ux",
+      "requested_model": null,
+      "exit_code": null,
+      "elapsed_seconds": null,
+      "report_chars": null,
+      "sessions": null,
+      "status": "timed_out",
+      "limit_seconds": 750,
+      "persisted_model_identity": {
+        "providerID": "nvidia",
+        "modelID": "z-ai/glm-5.3",
+        "finish": null
+      }
+    },
+    {
+      "lane": "chart-engine",
+      "requested_model": null,
+      "exit_code": null,
+      "elapsed_seconds": null,
+      "report_chars": null,
+      "sessions": null,
+      "status": "timed_out",
+      "limit_seconds": 750,
+      "persisted_model_identity": {
+        "providerID": "nvidia",
+        "modelID": "z-ai/glm-5.3",
+        "finish": null
+      }
+    },
+    {
+      "lane": "test-gates",
+      "requested_model": null,
+      "exit_code": null,
+      "elapsed_seconds": null,
+      "report_chars": null,
+      "sessions": null,
+      "status": "timed_out",
+      "limit_seconds": 750,
+      "persisted_model_identity": {
+        "providerID": "nvidia",
+        "modelID": "z-ai/glm-5.3",
+        "finish": null
+      }
+    }
+  ],
+  "research_reviews": [
+    {
+      "lane": "workspace-ux",
+      "mode": "bounded-source-packet-review",
+      "http_status": 200,
+      "requested_model": "z-ai/glm-5.3",
+      "returned_model": "z-ai/glm-5.3",
+      "elapsed_seconds": 199.01,
+      "usage": {
+        "prompt_tokens": 28031,
+        "completion_tokens": 6500,
+        "total_tokens": 34531,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 6500
+        }
+      },
+      "finish_reason": "length",
+      "report_chars": 0,
+      "source_files": [
+        "frontend/src/components/heatseeker/SkylitDashboard.jsx",
+        "frontend/src/components/heatseeker/AskLodestar.jsx",
+        "frontend/src/components/heatseeker/SkylitControlBar.jsx",
+        "frontend/src/components/TrinityView.jsx",
+        "frontend/src/agent/AgentProvider.jsx"
+      ],
+      "limits": "Only supplied source excerpts and plan; no direct browsing or tools",
+      "status": "incomplete",
+      "failure_type": "RuntimeError",
+      "failure": "Incomplete or failed bounded report workspace-ux"
+    },
+    {
+      "lane": "test-gates",
+      "mode": "bounded-source-packet-review",
+      "http_status": 200,
+      "requested_model": "z-ai/glm-5.3",
+      "returned_model": "z-ai/glm-5.3",
+      "elapsed_seconds": 204.91,
+      "usage": {
+        "prompt_tokens": 23348,
+        "completion_tokens": 6500,
+        "total_tokens": 29848,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 6500
+        }
+      },
+      "finish_reason": "length",
+      "report_chars": 0,
+      "source_files": [
+        "tests/test_price_node_history.py",
+        "backend/routes/price_history.py",
+        "backend/services/price_node_history.py",
+        "backend/tests/services/test_market_bars.py",
+        "backend/tests/services/test_public_api_bars.py",
+        "backend/tests/routes/test_public_api_bars_routes.py"
+      ],
+      "limits": "Only supplied source excerpts and plan; no direct browsing or tools",
+      "status": "incomplete",
+      "failure_type": "RuntimeError",
+      "failure": "Incomplete or failed bounded report test-gates"
+    },
+    {
+      "lane": "chart-engine",
+      "status": "incomplete",
+      "failure_type": "ReadTimeout",
+      "failure": "HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=210)"
+    },
+    {
+      "lane": "refuter",
+      "status": "incomplete",
+      "failure_type": "ReadTimeout",
+      "failure": "HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=210)"
+    }
+  ],
+  "low_effort_probe": {
+    "status": "read_timeout",
+    "timeout_seconds": 60,
+    "model_requested": "z-ai/glm-5.3",
+    "requested_reasoning_effort": "low",
+    "content_received": false,
+    "hosted_parameter_effectiveness": "not verified"
+  },
+  "parent_inline_audits": [
+    {
+      "scope": "chart-engine",
+      "status": "completed",
+      "evidence": [
+        "PriceNodeHistory/priceNodeTraces source and tests",
+        "declared dependencies + actual missing craco",
+        "LWC primary v5 docs/npm5.2.1/GitHub Apache SPDX/NOTICE"
+      ]
+    },
+    {
+      "scope": "workspace-ux",
+      "status": "completed",
+      "evidence": [
+        "SkylitDashboard current mount and context",
+        "Trinity WallPricePath legacy consumer",
+        "AskLodestar current admissionBlock",
+        "supplied guide and retrieved373segment English transcript"
+      ]
+    },
+    {
+      "scope": "test-gates",
+      "status": "completed",
+      "evidence": [
+        "root8test execution",
+        "backend53test execution",
+        "current route and parser source",
+        "explicit missing frontend runner"
+      ]
+    }
+  ],
+  "independent_review": {
+    "status": "reviewed_and_applied",
+    "role": "native-model fallback refuter; not GLM/NIM",
+    "delegation_id": "deleg_6f00a38d",
+    "duration_seconds": 97.71,
+    "review_verdict": "revise before handoff; plan corrected, proposed features remain unimplemented",
+    "dispositions": [
+      {
+        "id": "IR01",
+        "severity": "HIGH",
+        "finding": "Final OHLC visibility",
+        "status": "applied",
+        "resolution": "CONTRACT: review end_time<=cursor, faithful recorded revision arrival predicate, inferred end never sufficient; B01/B15 future intra-bar/correction fixtures"
+      },
+      {
+        "id": "IR02",
+        "severity": "HIGH",
+        "finding": "Incomplete metric board and supersession",
+        "status": "applied",
+        "resolution": "CONTRACT: requested/observed per-channel coverage, disable full-scope rankings on incomplete board, separate observed-subset identity, invalid newer observation supersedes old display; B02/B07 fixtures"
+      },
+      {
+        "id": "IR03",
+        "severity": "HIGH",
+        "finding": "Release DAG deadlock",
+        "status": "applied",
+        "resolution": "Task variants: B04 incumbent/candidate, B13 discovery/account, B17 local/account, B23 calendar/approximate/tape; B28 conditional enabled-capability closure and R1/R2/R3 profiles; shared router/capability ownership serialized"
+      },
+      {
+        "id": "IR04",
+        "severity": "HIGH",
+        "finding": "Private read identity and owner isolation",
+        "status": "applied",
+        "resolution": "Parent independently read backend/auth.py69-130: deployment key returns True, general GET skipped. CONTRACT and B13/B18 now require approved principal on all private reads/mutations; unavailable discovery is not account feature acceptance"
+      },
+      {
+        "id": "IR05",
+        "severity": "HIGH",
+        "finding": "Per-pane scope compatibility and stale context",
+        "status": "applied",
+        "resolution": "MASTER/CONTRACT/B11/B24: presentation allowlist, per-destination scope/calendar/capability resolution, atomic generation invalidation and late/removed-pane refusal"
+      },
+      {
+        "id": "IR06",
+        "severity": "MEDIUM",
+        "finding": "Incomplete adapter and export ownership",
+        "status": "applied",
+        "resolution": "MASTER adapter now has inverse/pane-series-qualified coordinates, crosshair set/clear, viewport invalidation, null semantics, interaction suppression and idempotent unsubscribe; engine capture separate from workspace DOM composition"
+      },
+      {
+        "id": "IR07",
+        "severity": "MEDIUM",
+        "finding": "VANNA metadata identity",
+        "status": "applied",
+        "resolution": "CONTRACT and B02/B07 require channel model+basis+unit; parent gex.v2/key VEX insufficient; contradictory archived identity unavailable"
+      },
+      {
+        "id": "IR08",
+        "severity": "MEDIUM",
+        "finding": "Replay alert writes and positions leakage",
+        "status": "applied",
+        "resolution": "CONTRACT/MASTER/B18/B25: default refusal of replay-origin live mutations, role revision/gap resets crossing continuity, hide current positions in faithful practice and segregate review-only nonhistorical values"
+      }
+    ],
+    "implementation_holds": [
+      "Historical bar start/end and recorded correction-arrival capture",
+      "Actual archived per-metric complete scope coverage",
+      "Approved package adoption / real measured renderer spike",
+      "Actual principal/owner model for private sync and alerts",
+      "Trade-tape/futures/derived provider rights and coverage",
+      "Full frontend/browser/performance acceptance"
+    ],
+    "parent_validation": [
+      "Read actual auth.py69-130",
+      "Prior direct reads of price_node_history.py, heatmap_history.py, gex_core.py/gex_aggregator.py, AskLodestar and SkylitDashboard",
+      "Applied exact contract/task/adapter edits; final packet gate checks revised semantics and DAG"
+    ]
+  },
+  "video": {
+    "status": "retrieved_english_transcript",
+    "video_id": "9Hn_OLBJRVY",
+    "segments": 373,
+    "method": "youtube-transcript-api English fetch",
+    "visual_frame_review": false
+  },
+  "library_probe": {
+    "lightweight_charts_npm_version": "5.2.1",
+    "npm_license": "Apache-2.0",
+    "github_license_spdx": "Apache-2.0",
+    "NOTICE_retrieved": true,
+    "installed_or_adopted": false,
+    "approval_gate": "frontend/package.json architect-frozen"
+  },
+  "opencode_model_catalog": [
+    "opencode/muse-spark-1.3-contributor-free",
+    "openrouter/meta/muse-spark-1.3",
+    "openrouter/meta/muse-spark-1.3-contributor",
+    "nvidia/z-ai/glm-5.3"
+  ],
+  "spark_inference_tested": false,
+  "limits": [
+    "No full frontend/backend suite",
+    "No browser feature/visual/performance acceptance",
+    "No historical DB grid coverage/entitlement audit from a live row",
+    "Existing runtime modules/build identity not proven by HTTP200",
+    "Time-faithful price replay unavailable until revision-arrival capture demonstrated",
+    "NIM fanout incomplete; failed attempts not findings"
+  ],
+  "preservation_scope": "All baseline tracked bytes and original porcelain status; pre-existing untracked contents were not hashed at initial capture",
+  "required_artifacts": [
+    "MASTER_PLAN.md",
+    "SPARK_HANDOFF.md",
+    "CONTRACT.md",
+    "SOURCES.md",
+    "VIDEO_TRANSCRIPT.md",
+    "RESEARCH_REPORTS.md",
+    "CAPABILITIES.json",
+    "IMPLEMENTATION_TASKS.json",
+    "EVIDENCE.json",
+    "PRESERVATION_BASELINE.json",
+    "MANIFEST.json",
+    "VERIFY.py",
+    "VERIFICATION_REPORT.json"
+  ],
+  "round2": {
+    "status": "reviewed_and_applied",
+    "delegation_id": "deleg_cd1434d1",
+    "model_identity_policy": "Only errors disclose OpenRouter/z-ai/glm-5.3 for failed lanes; other child model identities were not established. Do not label this batch successful NVIDIA NIM research. Active parent runtime is openai-codex/gpt-6.1-sol.",
+    "lanes": [
+      {
+        "lane": "guide-coverage",
+        "runtime_status": "failed",
+        "accepted_status": "failed",
+        "error": "HTTP401 User not found",
+        "output_exists": false,
+        "findings_accepted": false,
+        "replacement": "Parent inventory/primary subpage comparison, original111 IDs retained plus32 atomic criteria"
+      },
+      {
+        "lane": "code-audit",
+        "runtime_status": "completed",
+        "accepted_status": "rejected_unusable",
+        "output_exists": false,
+        "findings_accepted": false,
+        "reason": "Returned corrupted/nonresponsive text; required code-audit.txt absent; runtime completed is not usable completion",
+        "replacement": "Parent direct source reads and actual helper/calendar characterization"
+      },
+      {
+        "lane": "lwc-spike",
+        "runtime_status": "completed",
+        "accepted_status": "usable_report_source_verified",
+        "output_exists": true,
+        "findings_accepted": true,
+        "artifact_path": "/Users/nav/.hermes/cache/scratch/floww-r2/lwc-spike.txt",
+        "artifact_sha256": "809ff1ca5b54c359677cbe5e69ec589a0a571e6d6004df1c0e045717a0ccb57b",
+        "limitations": "API documentation inventory only; no install, browser measurements or runtime adapter acceptance. No-blockers summary rejected. Parent separately confirmed master NOTICE presence."
+      },
+      {
+        "lane": "interval-refuter",
+        "runtime_status": "failed",
+        "accepted_status": "failed",
+        "error": "HTTP402 insufficient credits/max_tokens budget",
+        "output_exists": false,
+        "findings_accepted": false,
+        "replacement": "Parent direct calendar/provider route reads and adversarial fixture requirements"
+      }
+    ],
+    "primary_sources": [
+      {
+        "source_id": "SRC-R2-GEX",
+        "url": "https://www.skylit.ai/docs/atlas/indicators/gex-vwap",
+        "title": "GEX VWAP",
+        "status": "retrieved",
+        "error": null,
+        "content_sha256": "c0f5cdd63b186cfb9a622c0af4ddfc379f1ac94e98992c82cc99fb8832a2ba86",
+        "returned_characters": 3517,
+        "scope": "vendor documentation claim, not floww installed feature or feed entitlement"
+      },
+      {
+        "source_id": "SRC-R2-VWAP",
+        "url": "https://www.skylit.ai/docs/atlas/indicators/vwap",
+        "title": "VWAP",
+        "status": "retrieved",
+        "error": null,
+        "content_sha256": "a11e11fe5ed59726998d0494fde7ad216ab6508ca905c403ac97ead00b12fb90",
+        "returned_characters": 2855,
+        "scope": "vendor documentation claim, not floww installed feature or feed entitlement"
+      },
+      {
+        "source_id": "SRC-R2-CVD",
+        "url": "https://www.skylit.ai/docs/atlas/indicators/cvd",
+        "title": "Cumulative Volume Delta",
+        "status": "retrieved",
+        "error": null,
+        "content_sha256": "71b272216e54a7977bfb93f46d27c3749ca4efa352ed7aaed0780116e29ed8be",
+        "returned_characters": 2781,
+        "scope": "vendor documentation claim, not floww installed feature or feed entitlement"
+      },
+      {
+        "source_id": "SRC-R2-VP",
+        "url": "https://www.skylit.ai/docs/atlas/indicators/volume-profile",
+        "title": "Volume Profile",
+        "status": "retrieved",
+        "error": null,
+        "content_sha256": "99f2736519d692703edf20be1494e130eac3b92774ea9ba84a9ce856c5e2bb18",
+        "returned_characters": 2811,
+        "scope": "vendor documentation claim, not floww installed feature or feed entitlement"
+      },
+      {
+        "source_id": "SRC-R2-TPO",
+        "url": "https://www.skylit.ai/docs/atlas/indicators/tpo",
+        "title": "TPO (Market Profile)",
+        "status": "retrieved",
+        "error": null,
+        "content_sha256": "c0a9ad077828445bc709805df8bf025a12acb8efdb6fd7bc5bcb96b2556124a0",
+        "returned_characters": 3868,
+        "scope": "vendor documentation claim, not floww installed feature or feed entitlement"
+      },
+      {
+        "source_id": "SRC-R2-PRESET",
+        "url": "https://www.skylit.ai/docs/atlas/drawing-presets",
+        "title": "Drawing Presets",
+        "status": "retrieved",
+        "error": null,
+        "content_sha256": "f659676b537317a1519bf9cb2db8ff7d4409c81586e03abf218c1e84b89c6ffc",
+        "returned_characters": 5118,
+        "scope": "vendor documentation claim, not floww installed feature or feed entitlement"
+      },
+      {
+        "source_id": "SRC-R2-FLOW",
+        "url": "https://www.skylit.ai/learn/reading-flow-on-atlas",
+        "title": "Reading Flow on Atlas: How the Bars Work, Every Setting Explained, and Why There's No 'Best Configuration'",
+        "status": "retrieved",
+        "error": null,
+        "content_sha256": "5dbfc735910d7a7370e48435069e4561d391fd6d51cb3f6a3995effb6866e2d4",
+        "returned_characters": 18992,
+        "scope": "vendor documentation claim, not floww installed feature or feed entitlement"
+      },
+      {
+        "source_id": "SRC-R2-DP",
+        "url": "https://www.skylit.ai/learn/reading-dark-pool-prints",
+        "title": "Reading Dark Pool Prints: The Tape and the Levels",
+        "status": "retrieved",
+        "error": null,
+        "content_sha256": "3951873e0dcc04705134345207eee2d2d80622b6de08f5a176d56293e6a2f079",
+        "returned_characters": 10548,
+        "scope": "vendor documentation claim, not floww installed feature or feed entitlement"
+      },
+      {
+        "source_id": "SRC-R2-API",
+        "url": "https://www.skylit.ai/docs/api-reference/history/ohlcv-price-bars-for-a-symbol-and-resolution",
+        "title": "OHLCV price bars for a symbol and resolution",
+        "status": "retrieved",
+        "error": null,
+        "content_sha256": "631e31e7a7085a3a35e39c19c8ee2b5c8d69e71f96d398be7eaffdd35565f545",
+        "returned_characters": 3440,
+        "scope": "vendor documentation claim, not floww installed feature or feed entitlement"
+      },
+      {
+        "source_id": "SRC-R2-LWC",
+        "url": "https://tradingview.github.io/lightweight-charts/docs/api/interfaces/IChartApi",
+        "title": "Interface: IChartApi | Lightweight Charts",
+        "status": "retrieved",
+        "error": null,
+        "content_sha256": "8aeda05d4d0186d769c3bdd94a398600126066c42419a6670f58801011112734",
+        "returned_characters": 19666,
+        "scope": "vendor documentation claim, not floww installed feature or feed entitlement"
+      }
+    ],
+    "parent_characterization": {
+      "status": "observed",
+      "exit_code": 0,
+      "interpreter": "/Users/nav/Documents/GitHub/floww-2/backend/.venv/bin/python",
+      "network": "none in source-helper/calendar characterization",
+      "observations": {
+        "missing_volume_becomes_zero": true,
+        "boolean_volume_becomes_one": true,
+        "positive_infinite_volume_accepted": true,
+        "unparseable_session_timestamp_retains_all_input": true,
+        "2026-11-26": "XNYS closed EXCHANGE_HOLIDAY",
+        "2026-11-27": "XNYS09:30\u201313:00ET half-day",
+        "2026-03-06_open_utc": "14:30UTC",
+        "2026-03-09_open_utc": "13:30UTC"
+      },
+      "interpretation": "Existing helper semantics retained. New strict chart boundary needs stronger admission; XNYS tests do not prove ETH/futures calendars."
+    },
+    "parent_adversarial_dispositions": [
+      {
+        "id": "R2-A1",
+        "claim": "True measured buy/sell volume proves exact price-VAP",
+        "status": "applied",
+        "resolution": "Reject: vendor profile distributes per-bar volume across rows. Side classification and price allocation are separate quality axes; labelled bar variant versus exact trade-price variant."
+      },
+      {
+        "id": "R2-A2",
+        "claim": "Native library panes prove independent multi-ticker workspace support",
+        "status": "applied",
+        "resolution": "Reject: native study subpanes share timeline; separate independent chart instances plus compatible state synchronization remain required."
+      },
+      {
+        "id": "R2-A3",
+        "claim": "No blockers because library API methods are documented",
+        "status": "applied",
+        "resolution": "Reject: actual installed-version compatibility, frozen-package approval, performance, primitive export and plugin/release licensing remain holds."
+      },
+      {
+        "id": "R2-A4",
+        "claim": "Maintained expiration clock supplies complete ETH/futures sessions",
+        "status": "applied",
+        "resolution": "Reject: solstice_calendar supplies XNYS RTH and solstice_time expiry/last-trade rules; ETH/futures maintenance breaks independently commissioned."
+      },
+      {
+        "id": "R2-A5",
+        "claim": "Every bar/TPO/profile task must wait for an entitled tape",
+        "status": "applied",
+        "resolution": "Reject: B23 bar-TPO/calendar/approximation variants use validated eligible bars. Exact trade-price profiles and sided studies remain independently gated."
+      },
+      {
+        "id": "R2-A6",
+        "claim": "All source claims map to one authoritative vendor default",
+        "status": "explicit_hold",
+        "resolution": "Video dark-pool settings versus docs differ, HTTP status text conflicts, TPO VA/IB constants and exposure-centre formula absent. Explicitly version/characterize provider behavior and reviewed algorithm; do not infer parity."
+      }
+    ],
+    "independent_round2_refutation": {
+      "status": "unavailable",
+      "reason": "Dispatched independent interval lane failed; replacement is identified as parent inline adversarial review, not a successful independent GLM or native review."
+    },
+    "added_capability_ids": [
+      "C112",
+      "C113",
+      "C114",
+      "C115",
+      "C116",
+      "C117",
+      "C118",
+      "C119",
+      "C120",
+      "C121",
+      "C122",
+      "C123",
+      "C124",
+      "C125",
+      "C126",
+      "C127",
+      "C128",
+      "C129",
+      "C130",
+      "C131",
+      "C132",
+      "C133",
+      "C134",
+      "C135",
+      "C136",
+      "C137",
+      "C138",
+      "C139",
+      "C140",
+      "C141",
+      "C142",
+      "C143"
+    ],
+    "retained_original_capability_ids": [
+      "C001",
+      "C002",
+      "C003",
+      "C004",
+      "C005",
+      "C006",
+      "C007",
+      "C008",
+      "C009",
+      "C010",
+      "C011",
+      "C012",
+      "C013",
+      "C014",
+      "C015",
+      "C016",
+      "C017",
+      "C018",
+      "C019",
+      "C020",
+      "C021",
+      "C022",
+      "C023",
+      "C024",
+      "C025",
+      "C026",
+      "C027",
+      "C028",
+      "C029",
+      "C030",
+      "C031",
+      "C032",
+      "C033",
+      "C034",
+      "C035",
+      "C036",
+      "C037",
+      "C038",
+      "C039",
+      "C040",
+      "C041",
+      "C042",
+      "C043",
+      "C044",
+      "C045",
+      "C046",
+      "C047",
+      "C048",
+      "C049",
+      "C050",
+      "C051",
+      "C052",
+      "C053",
+      "C054",
+      "C055",
+      "C056",
+      "C057",
+      "C058",
+      "C059",
+      "C060",
+      "C061",
+      "C062",
+      "C063",
+      "C064",
+      "C065",
+      "C066",
+      "C067",
+      "C068",
+      "C069",
+      "C070",
+      "C071",
+      "C072",
+      "C073",
+      "C074",
+      "C075",
+      "C076",
+      "C077",
+      "C078",
+      "C079",
+      "C080",
+      "C081",
+      "C082",
+      "C083",
+      "C084",
+      "C085",
+      "C086",
+      "C087",
+      "C088",
+      "C089",
+      "C090",
+      "C091",
+      "C092",
+      "C093",
+      "C094",
+      "C095",
+      "C096",
+      "C097",
+      "C098",
+      "C099",
+      "C100",
+      "C101",
+      "C102",
+      "C103",
+      "C104",
+      "C105",
+      "C106",
+      "C107",
+      "C108",
+      "C109",
+      "C110",
+      "C111"
+    ],
+    "candidate_runtime_acceptance": "not executed"
+  }
+}

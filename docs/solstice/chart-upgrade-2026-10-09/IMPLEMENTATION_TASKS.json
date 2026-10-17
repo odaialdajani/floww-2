@@ -1,0 +1,2643 @@
+{
+  "schema_version": 1,
+  "blocks": [
+    {
+      "id": "B01",
+      "phase": "P0",
+      "title": "Canonical contract and backward-compatibility fixtures",
+      "depends_on": [],
+      "proposed_implementation_files": [
+        "backend/services/chart_history.py",
+        "frontend/src/components/heatseeker/chart/chartContract.js"
+      ],
+      "proposed_test_file": "backend/tests/chart/test_b01_contract.py",
+      "acceptance": "Reject false/blank/nonfinite numbers; preserve zero volume and unknown null; verify old route/Trinity contract; bind bar start/end and adjustment policy; review completed bars require end_time<=cursor; faithful completed revision requires recorded availability and end_time<=cursor; inferred bar end never proves recorded availability",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/chart/test_b01_contract.py -q --tb=short -p no:cacheprovider",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B01.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B01.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B01.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B01.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B01.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C137"
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      },
+      "round2_acceptance_invariants": [
+        {
+          "capability_id": "C137",
+          "criterion": "Do not inherit missing volume=>0, booleans=>numeric, infinite volume or naive/unparseable timestamp fallback; retain genuine zero/null distinctions; unchanged old consumers have characterization tests",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        }
+      ]
+    },
+    {
+      "id": "B02",
+      "phase": "P0",
+      "title": "Historical grids, recorder health and capability census",
+      "depends_on": [
+        "B01"
+      ],
+      "proposed_implementation_files": [
+        "backend/services/chart_exposure.py",
+        "backend/services/chart_capabilities.py"
+      ],
+      "proposed_test_file": "backend/tests/chart/test_b02_archive.py",
+      "acceptance": "Parse archived GEX and canonical VANNA VEX grids where present; missing schemas/expiries stay unknown; record coverage and recorder worker state; no new persistence until proven necessary; metric-level requested/observed coverage, VANNA model+basis+unit rejection, malformed newer same-scope snapshot supersedes old display without silent carry",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/chart/test_b02_archive.py -q --tb=short -p no:cacheprovider",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B02.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B02.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B02.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B02.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B02.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      }
+    },
+    {
+      "id": "B03",
+      "phase": "P1",
+      "title": "Calendar-aware bars, sessions, independent intervals",
+      "depends_on": [
+        "B01"
+      ],
+      "proposed_implementation_files": [
+        "backend/services/chart_resample.py",
+        "backend/routes/price_history.py"
+      ],
+      "proposed_test_file": "backend/tests/chart/test_b03_resample.py",
+      "acceptance": "Maintain old days behavior; new independent interval/range/session; holiday/DST/half-day and Monday week; custom 7m/90m only with complete eligible base bars",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/chart/test_b03_resample.py -q --tb=short -p no:cacheprovider",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B03.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B03.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B03.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B03.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B03.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C136",
+        "C138"
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      },
+      "round2_acceptance_invariants": [
+        {
+          "capability_id": "C136",
+          "criterion": "Equity weekly bars anchored Monday calendar weeks, holidays not padded; custom intraday bins anchored session open and stop at session end; half-day/ETH/overnight/DST fixtures; XNYS is not futures/ETH proof",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        },
+        {
+          "capability_id": "C138",
+          "criterion": "Sort/dedup immutable keys, reject stalled/repeated cursors and scope/source mismatch; gather complete bucket inputs including necessary prefix before emitting; never interpolate; mark partial/truncated; API tier limits are not UX interval support",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        }
+      ]
+    },
+    {
+      "id": "B04",
+      "phase": "P0",
+      "title": "Engine ADR and approved candidate spike",
+      "depends_on": [
+        "B01"
+      ],
+      "proposed_implementation_files": [
+        "frontend/src/components/heatseeker/chart/engines/plotlyAdapter.js",
+        "frontend/src/components/heatseeker/chart/engines/lightweightAdapter.js"
+      ],
+      "proposed_test_file": "frontend/src/components/heatseeker/chart/__tests__/b04_engines.test.jsx",
+      "acceptance": "Dependency approval before package change; compare same candle/volume/primitive fixtures, v5 API, export attribution and teardown; document measured go/no-go; discovery may accept a measured Plotly-only incumbent outcome, while the candidate variant remains approval-blocked; no uninstalled candidate import may break incumbent compilation",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/frontend && CI=true ./node_modules/.bin/craco test --watchAll=false --runInBand --runTestsByPath src/components/heatseeker/chart/__tests__/b04_engines.test.jsx",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B04.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B04.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B04.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B04.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B04.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C139",
+        "C141",
+        "C142"
+      ],
+      "variants": [
+        {
+          "id": "incumbent",
+          "depends_on": [
+            "B01"
+          ],
+          "prerequisites": [
+            "existing Plotly source and installed test environment"
+          ],
+          "acceptance": "Measured incumbent adapter contract/lifecycle export behavior; can select Plotly-only without candidate approval"
+        },
+        {
+          "id": "candidate",
+          "depends_on": [
+            "B01"
+          ],
+          "prerequisites": [
+            "explicit frozen-package and lockfile ownership approval",
+            "installed approved Lightweight Charts version"
+          ],
+          "acceptance": "v5 primitive/pane/inverse-coordinate/crosshair/viewport/unsubscribe contracts; licensing and engine image capture measured"
+        }
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      },
+      "round2_acceptance_invariants": [
+        {
+          "capability_id": "C139",
+          "criterion": "LWC native study panes share one chart timeline; independent multi-symbol/timeframe workspace panes remain separate chart instances coordinated by reducer; native panes do not prove workspace behavior",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        },
+        {
+          "capability_id": "C141",
+          "criterion": "Upstream master NOTICE exists and reads Copyright2025 TradingView; verify exact installed release license/NOTICE and attribution obligations, plugin licenses and visible link before adoption; public docs are not runtime/performance proof",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        },
+        {
+          "capability_id": "C142",
+          "criterion": "LWC update historicalUpdate=true is documented for existing older bars but slower; inserts require characterized safe setData path; moving a series requires reacquiring priceScale API; preserve logical drawings/viewport and reject stale revisions",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        }
+      ]
+    },
+    {
+      "id": "B05",
+      "phase": "P1",
+      "title": "Generation-safe shared chart data hook",
+      "depends_on": [
+        "B01",
+        "B03"
+      ],
+      "proposed_implementation_files": [
+        "frontend/src/components/heatseeker/chart/useChartData.js"
+      ],
+      "proposed_test_file": "frontend/src/components/heatseeker/chart/__tests__/b05_data.test.jsx",
+      "acceptance": "Abort stale symbol/interval/session/scope generations; deduplicate pane queries; explicitly show stale/cache/budget/outage; reconnect backfill and correction replace",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/frontend && CI=true ./node_modules/.bin/craco test --watchAll=false --runInBand --runTestsByPath src/components/heatseeker/chart/__tests__/b05_data.test.jsx",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B05.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B05.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B05.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B05.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B05.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      }
+    },
+    {
+      "id": "B06",
+      "phase": "P1",
+      "title": "Reversible single-pane workspace integration",
+      "depends_on": [
+        "B04",
+        "B05"
+      ],
+      "proposed_implementation_files": [
+        "frontend/src/components/heatseeker/chart/ChartWorkspace.jsx",
+        "frontend/src/components/heatseeker/chart/ChartPane.jsx",
+        "frontend/src/components/heatseeker/PriceNodeHistory.jsx"
+      ],
+      "proposed_test_file": "frontend/src/components/heatseeker/chart/__tests__/b06_workspace.test.jsx",
+      "acceptance": "Keep controlled open and incumbent fallback; no missing existing controls; valid candles with source age, coverage, partial bars, capability reasons and retries",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/frontend && CI=true ./node_modules/.bin/craco test --watchAll=false --runInBand --runTestsByPath src/components/heatseeker/chart/__tests__/b06_workspace.test.jsx",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B06.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B06.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B06.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B06.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B06.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C001",
+        "C002",
+        "C003",
+        "C004",
+        "C005",
+        "C006",
+        "C007",
+        "C008"
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      }
+    },
+    {
+      "id": "B07",
+      "phase": "P2",
+      "title": "Signed orbs, expiry scope and exposure controls",
+      "depends_on": [
+        "B02",
+        "B06"
+      ],
+      "proposed_implementation_files": [
+        "frontend/src/components/heatseeker/chart/primitives/ExposureOrbs.js",
+        "frontend/src/components/heatseeker/chart/exposureSettings.js"
+      ],
+      "proposed_test_file": "frontend/src/components/heatseeker/chart/__tests__/b07_orbs.test.js",
+      "acceptance": "Positive/negative and ties; P25 inclusive; zero king versus unavailable; top-N; false settings; raw units; VANNA not VOMMA; no future normalization; covered actual expiries only; incomplete requested scope disables full-board king/top-N/P-ranking; explicit observed-subset has distinct identity; reject parent-formula-only VANNA identification",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/frontend && CI=true ./node_modules/.bin/craco test --watchAll=false --runInBand --runTestsByPath src/components/heatseeker/chart/__tests__/b07_orbs.test.js",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B07.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B07.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B07.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B07.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B07.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C028",
+        "C029",
+        "C030",
+        "C031",
+        "C032",
+        "C033",
+        "C034",
+        "C035",
+        "C036",
+        "C037",
+        "C038",
+        "C039"
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      }
+    },
+    {
+      "id": "B08",
+      "phase": "P2",
+      "title": "Price-study registry, moving averages and qualified VWAP",
+      "depends_on": [
+        "B03",
+        "B06"
+      ],
+      "proposed_implementation_files": [
+        "frontend/src/components/heatseeker/chart/indicators/registry.js",
+        "frontend/src/components/heatseeker/chart/indicators/priceStudies.js"
+      ],
+      "proposed_test_file": "frontend/src/components/heatseeker/chart/__tests__/b08_studies.test.js",
+      "acceptance": "Multiple instances; deterministic warmup/EMA/std fixtures; session anchoring; zero volume; band convention; labelled bar-VWAP approximation; no proxy volume without source",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/frontend && CI=true ./node_modules/.bin/craco test --watchAll=false --runInBand --runTestsByPath src/components/heatseeker/chart/__tests__/b08_studies.test.js",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B08.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B08.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B08.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B08.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B08.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C045",
+        "C046",
+        "C047",
+        "C048",
+        "C049",
+        "C050",
+        "C051",
+        "C112",
+        "C113",
+        "C114",
+        "C116"
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      },
+      "round2_acceptance_invariants": [
+        {
+          "capability_id": "C112",
+          "criterion": "Indicator scope Front/1W/1M/3M/6M/All and All/P50/P40/P30/P25/P20 resolve independently from orb settings; disclose mismatch; no near-zero signed divisor",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        },
+        {
+          "capability_id": "C113",
+          "criterion": "Centre only or centre+upper/lower; fresh per-minute eligible board, no smoothing/carry; absent board draws gap; do not claim undocumented vendor formula parity",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        },
+        {
+          "capability_id": "C114",
+          "criterion": "Off default; opening default15 minutes, configurable8\u201360, minimum8 measured minutes and freeze at window end; missing first minutes not treated as zero; session envelope widens only with eligible data",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        },
+        {
+          "capability_id": "C116",
+          "criterion": "HLC3 default or Close; up to3 band pairs, off default, volume-weighted deviation or percent, default multipliers1/2/3; zero weight unavailable; reset step distinct from missing-data gap",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        }
+      ]
+    },
+    {
+      "id": "B09",
+      "phase": "P7",
+      "title": "Known-ratio derived levels",
+      "depends_on": [
+        "B07",
+        "B15"
+      ],
+      "proposed_implementation_files": [
+        "backend/services/chart_mapping.py",
+        "frontend/src/components/heatseeker/chart/primitives/DerivedLevels.js"
+      ],
+      "proposed_test_file": "backend/tests/chart/test_b09_mapping.py",
+      "acceptance": "Source/target symbol calendar/units, ratio source and known-at; stale/unknown denominator unavailable; historical ratio only during practice; distinct source shapes",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/chart/test_b09_mapping.py -q --tb=short -p no:cacheprovider",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B09.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B09.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B09.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B09.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B09.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C040",
+        "C041",
+        "C042",
+        "C043",
+        "C115"
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      },
+      "round2_acceptance_invariants": [
+        {
+          "capability_id": "C115",
+          "criterion": "SPXW-only option, explicitly priced in SPX units; no direct summing foreign currencies/metric bases; unavailable until reviewed board combination spec",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        }
+      ]
+    },
+    {
+      "id": "B10",
+      "phase": "P7",
+      "title": "Scenario projection primitive",
+      "depends_on": [
+        "B07"
+      ],
+      "proposed_implementation_files": [
+        "frontend/src/components/heatseeker/chart/primitives/ProjectionZones.js"
+      ],
+      "proposed_test_file": "frontend/src/components/heatseeker/chart/__tests__/b10_projection.test.js",
+      "acceptance": "Future whitespace uses current eligible positioning only; interval-aware extent; scenario not forecast; no future candles or records",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/frontend && CI=true ./node_modules/.bin/craco test --watchAll=false --runInBand --runTestsByPath src/components/heatseeker/chart/__tests__/b10_projection.test.js",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B10.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B10.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B10.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B10.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B10.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C044"
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      }
+    },
+    {
+      "id": "B11",
+      "phase": "P3",
+      "title": "Pane reducer and feedback-safe synchronization",
+      "depends_on": [
+        "B06"
+      ],
+      "proposed_implementation_files": [
+        "frontend/src/components/heatseeker/chart/chartReducer.js",
+        "frontend/src/components/heatseeker/chart/PaneLayouts.jsx"
+      ],
+      "proposed_test_file": "frontend/src/components/heatseeker/chart/__tests__/b11_panes.test.jsx",
+      "acceptance": "Focus own symbol; five link dimensions; receiving origin transaction cannot echo; price links off for unlike symbols; three-pane preset and phone stacks; synchronize presentation allowlist only, resolve per-instrument scope/calendar/capability; invalidate evidence atomically and reject late old-focus or removed-pane generations",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/frontend && CI=true ./node_modules/.bin/craco test --watchAll=false --runInBand --runTestsByPath src/components/heatseeker/chart/__tests__/b11_panes.test.jsx",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B11.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B11.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B11.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B11.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B11.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C016",
+        "C017",
+        "C018",
+        "C019",
+        "C020",
+        "C021",
+        "C022"
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      }
+    },
+    {
+      "id": "B12",
+      "phase": "P3",
+      "title": "Versioned local layouts and bounded portable imports",
+      "depends_on": [
+        "B11"
+      ],
+      "proposed_implementation_files": [
+        "frontend/src/components/heatseeker/chart/persistence/layoutSchema.js",
+        "frontend/src/components/heatseeker/chart/persistence/layoutStore.js"
+      ],
+      "proposed_test_file": "frontend/src/components/heatseeker/chart/__tests__/b12_layouts.test.js",
+      "acceptance": "Roundtrip false/zero; corrupt migration recovery; debounced autosave; quota and size caps; reject scripts/prototype keys/unknown tools; no secrets or positions exported",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/frontend && CI=true ./node_modules/.bin/craco test --watchAll=false --runInBand --runTestsByPath src/components/heatseeker/chart/__tests__/b12_layouts.test.js",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B12.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B12.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B12.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B12.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B12.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C023",
+        "C024",
+        "C025",
+        "C026"
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      }
+    },
+    {
+      "id": "B13",
+      "phase": "P3",
+      "title": "Authenticated workspace portability",
+      "depends_on": [
+        "B12"
+      ],
+      "proposed_implementation_files": [
+        "backend/services/chart_workspaces.py",
+        "backend/routes/price_history.py"
+      ],
+      "proposed_test_file": "backend/tests/chart/test_b13_workspaces.py",
+      "acceptance": "Verify existing auth identity first; owner isolation, bounded schema, optimistic revisions and conflict handling; actual server roundtrip, not localStorage cross-device claims; every private GET/list/export protected by principal+owner resolution; explicitly unavailable account-sync verdict can complete discovery only, not implementation",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/chart/test_b13_workspaces.py -q --tb=short -p no:cacheprovider",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B13.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B13.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B13.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B13.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B13.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C027"
+      ],
+      "variants": [
+        {
+          "id": "identity-discovery",
+          "depends_on": [
+            "B12"
+          ],
+          "prerequisites": [
+            "read actual identity providers and route ownership"
+          ],
+          "acceptance": "Record available/degraded/unavailable principal verdict; deployment-key True is not a user; discovery does not claim account sync implemented"
+        },
+        {
+          "id": "account-store",
+          "depends_on": [
+            "B12"
+          ],
+          "prerequisites": [
+            "approved real principal/owner resolver for ALL private GET/list/export and mutation routes"
+          ],
+          "acceptance": "Actual owner-isolated authenticated reads and writes, cross-owner denial/revision tests; no supplied owner/broker ID shortcut"
+        }
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      }
+    },
+    {
+      "id": "B14",
+      "phase": "P3",
+      "title": "Focused-pane sidecars and watchlist semantics",
+      "depends_on": [
+        "B11",
+        "B12"
+      ],
+      "proposed_implementation_files": [
+        "frontend/src/components/heatseeker/chart/ChartDocks.jsx",
+        "frontend/src/components/heatseeker/SkylitDashboard.jsx",
+        "frontend/src/components/TrinityView.jsx"
+      ],
+      "proposed_test_file": "frontend/src/components/heatseeker/chart/__tests__/b14_docks.test.jsx",
+      "acceptance": "Reuse maps without duplicating full dashboards; focused symbol follows explicit policy; stale scopes badged; tombstones keep deleted symbols removed; cap fetch subscriptions",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/frontend && CI=true ./node_modules/.bin/craco test --watchAll=false --runInBand --runTestsByPath src/components/heatseeker/chart/__tests__/b14_docks.test.jsx",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B14.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B14.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B14.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B14.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B14.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C073",
+        "C074",
+        "C075",
+        "C076"
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      }
+    },
+    {
+      "id": "B15",
+      "phase": "P4",
+      "title": "Single-cursor replay, correction and availability algebra",
+      "depends_on": [
+        "B02",
+        "B03",
+        "B11"
+      ],
+      "proposed_implementation_files": [
+        "frontend/src/components/heatseeker/chart/replay/replayReducer.js",
+        "backend/services/chart_replay.py"
+      ],
+      "proposed_test_file": "backend/tests/chart/test_b15_replay.py",
+      "acceptance": "Late-asof/received snapshot absent before known-at; 900/901s; cross-symbol gaps; completed/partial higher bars; future extrema and later ratios hidden; no historical event fed into live caches",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/chart/test_b15_replay.py -q --tb=short -p no:cacheprovider",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B15.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B15.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B15.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B15.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B15.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C094",
+        "C095",
+        "C096",
+        "C097",
+        "C098",
+        "C099"
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      }
+    },
+    {
+      "id": "B16",
+      "phase": "P5",
+      "title": "Logical drawings, interaction arbitration, magnet and history",
+      "depends_on": [
+        "B06",
+        "B12"
+      ],
+      "proposed_implementation_files": [
+        "frontend/src/components/heatseeker/chart/drawings/drawingReducer.js",
+        "frontend/src/components/heatseeker/chart/drawings/DrawingRail.jsx"
+      ],
+      "proposed_test_file": "frontend/src/components/heatseeker/chart/__tests__/b16_drawings.test.jsx",
+      "acceptance": "Logical time/price anchors survive zoom/resize; selected drawing drag suppresses pan; OHLC-only magnet; cancel/undo/delete/lock/hide; horizontal/trend/vertical/rectangle/text/arrow",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/frontend && CI=true ./node_modules/.bin/craco test --watchAll=false --runInBand --runTestsByPath src/components/heatseeker/chart/__tests__/b16_drawings.test.jsx",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B16.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B16.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B16.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B16.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B16.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C081",
+        "C082",
+        "C083",
+        "C084",
+        "C085",
+        "C086",
+        "C087"
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      }
+    },
+    {
+      "id": "B17",
+      "phase": "P5",
+      "title": "Brush, Fibonacci, risk boxes and drawing presets",
+      "depends_on": [
+        "B16",
+        "B12"
+      ],
+      "proposed_implementation_files": [
+        "frontend/src/components/heatseeker/chart/drawings/advancedTools.js",
+        "frontend/src/components/heatseeker/chart/drawings/presetSchema.js"
+      ],
+      "proposed_test_file": "frontend/src/components/heatseeker/chart/__tests__/b17_presets.test.js",
+      "acceptance": "Fibonacci levels/style; analysis-only long/short risk geometry; preset cap50; false arrows remain off; recent opacity/color; hidden existing drawings never shown by tool switch",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/frontend && CI=true ./node_modules/.bin/craco test --watchAll=false --runInBand --runTestsByPath src/components/heatseeker/chart/__tests__/b17_presets.test.js",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B17.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B17.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B17.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B17.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B17.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C088",
+        "C089",
+        "C090",
+        "C091",
+        "C092",
+        "C093",
+        "C128",
+        "C129",
+        "C130",
+        "C131"
+      ],
+      "variants": [
+        {
+          "id": "local",
+          "depends_on": [
+            "B16",
+            "B12"
+          ],
+          "prerequisites": [
+            "local versioned schema"
+          ],
+          "acceptance": "Brush/Fibonacci/risk geometry/local presets, false/hidden settings and bounded quota independent of account model"
+        },
+        {
+          "id": "account-presets",
+          "depends_on": [
+            "B16",
+            "B12",
+            "B13"
+          ],
+          "prerequisites": [
+            "B13.account-store implemented and accepted"
+          ],
+          "acceptance": "Private owner-scoped preset GET/list/export/mutations and actual device roundtrip"
+        }
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      },
+      "round2_acceptance_invariants": [
+        {
+          "capability_id": "C128",
+          "criterion": "New drawings use starred > active > built-in within Fibonacci or line-style family; selecting built-in restyles selected drawing but does not override starred new-drawing default; deleting/un-starring resolves defaults safely",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        },
+        {
+          "capability_id": "C129",
+          "criterion": "Dirty dot and Update enabled only when selected drawing differs; edits affect selected drawing only; presets never autosave from style edits; explicit Update changes preset without silently restyling existing drawings",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        },
+        {
+          "capability_id": "C130",
+          "criterion": "Fib ratios/colors/visibility/fill opacity/width/style/extensions/trendline/labels/log/reverse roundtrip; no generic color swatch override for per-level Fib colors; line-style family covers line/ray/rectangle/arrow/vertical/brush; false options retained",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        },
+        {
+          "capability_id": "C131",
+          "criterion": "Save as/update/delete/built-in reset; bounded50 across both families with atomic store enforcement; local-only explicitly labelled; account most-recent-save policy requires server revision/order and cross-owner protected reads",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        }
+      ]
+    },
+    {
+      "id": "B18",
+      "phase": "P5",
+      "title": "Persisted fixed/follow-node alert lines",
+      "depends_on": [
+        "B07",
+        "B14",
+        "B15"
+      ],
+      "proposed_implementation_files": [
+        "backend/services/chart_alerts.py",
+        "frontend/src/components/heatseeker/chart/AlertLines.jsx"
+      ],
+      "proposed_test_file": "backend/tests/chart/test_b18_alerts.py",
+      "acceptance": "Audit existing evaluator; touch tick-size semantics, once/repeat cooldown, stale/no-role refusal, idempotent delivery, authenticated drag updates, server-owned timers, replay does not emit live alerts; real principal on every private read/write, no replay-origin live mutation, role movement alone is not a touch and resets crossing continuity; stale gaps reset continuity",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/chart/test_b18_alerts.py -q --tb=short -p no:cacheprovider",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B18.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B18.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B18.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B18.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B18.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C077",
+        "C078",
+        "C079",
+        "C080",
+        "C143"
+      ],
+      "variants": [
+        {
+          "id": "evaluator-discovery",
+          "depends_on": [
+            "B07",
+            "B14",
+            "B15"
+          ],
+          "prerequisites": [
+            "read existing persistence/evaluator and identity model"
+          ],
+          "acceptance": "Verdict for existing deployment versus real owner identities; touch/cross role revision semantics characterized, no new live mutations"
+        },
+        {
+          "id": "owner-alerts",
+          "depends_on": [
+            "B07",
+            "B14",
+            "B15"
+          ],
+          "prerequisites": [
+            "approved principal/owner resolver for every private read and mutation or explicitly approved single-owner deployment scope"
+          ],
+          "acceptance": "Tick-rounded fixed/follow alerts, cross-owner denial, replay-origin mutation refusal, gap/role revision continuity reset, idempotent notifications"
+        }
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      },
+      "round2_acceptance_invariants": [
+        {
+          "capability_id": "C143",
+          "criterion": "Preserve existing exposure threshold events and live-only AlertEngineStrip; canonical price-touch/role-follow rules need their own typed contract/mode/owner/evaluator, not relabelled exposure messages",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        }
+      ]
+    },
+    {
+      "id": "B19",
+      "phase": "P6",
+      "title": "Entitled tape contracts and immutable capture",
+      "depends_on": [
+        "B01",
+        "B15"
+      ],
+      "proposed_implementation_files": [
+        "backend/services/chart_tape.py",
+        "backend/services/chart_capabilities.py"
+      ],
+      "proposed_test_file": "backend/tests/chart/test_b19_tape.py",
+      "acceptance": "No inferred prints from chain volume; provider contract/rights and trade IDs, condition/correction/known-at/aggressor uncertainty; commissioning verdict separately for options/equity trades/dark prints",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/chart/test_b19_tape.py -q --tb=short -p no:cacheprovider",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B19.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B19.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B19.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B19.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B19.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      }
+    },
+    {
+      "id": "B20",
+      "phase": "P6",
+      "title": "Filtered premium flow, bucket drilldown and session companions",
+      "depends_on": [
+        "B19",
+        "B08"
+      ],
+      "proposed_implementation_files": [
+        "backend/services/chart_flow.py",
+        "frontend/src/components/heatseeker/chart/indicators/FlowPane.jsx"
+      ],
+      "proposed_test_file": "backend/tests/chart/test_b20_flow.py",
+      "acceptance": "Call premium up/put down; equal filter/cursor hash for drilldown and totals; counts/put-call/top contracts; unknown classifications explicit; economic multi-leg grouping; no ask=open assertion",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/chart/test_b20_flow.py -q --tb=short -p no:cacheprovider",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B20.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B20.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B20.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B20.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B20.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C057",
+        "C058",
+        "C059",
+        "C060",
+        "C061",
+        "C062",
+        "C063",
+        "C064",
+        "C065",
+        "C066",
+        "C067",
+        "C132",
+        "C133",
+        "C134"
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      },
+      "round2_acceptance_invariants": [
+        {
+          "capability_id": "C132",
+          "criterion": "Only nonempty flow bars open details; same selected bucket toggles closed; Escape/X/outside close; time range uses display TZ; late filter/cursor response cannot restore dismissed stale bucket",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        },
+        {
+          "capability_id": "C133",
+          "criterion": "Trade count/net/calls/puts, bucket/day put-call and top strike/type/expiry/DTE/premium/percentage all reconcile to filtered eligible prints; day totals bounded by replay cursor; zero denominators unavailable",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        },
+        {
+          "capability_id": "C134",
+          "criterion": "Single/multi/sweep/non-sweep/moneyness/side/DTE/score/premium filters remove prints, never rescale surviving premium; preserve false/zero settings across reopen; ask or sweep is not proven opening intent",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        }
+      ]
+    },
+    {
+      "id": "B21",
+      "phase": "P6",
+      "title": "Real dark-pool print levels",
+      "depends_on": [
+        "B19"
+      ],
+      "proposed_implementation_files": [
+        "backend/services/chart_darkpool.py",
+        "frontend/src/components/heatseeker/chart/indicators/DarkPoolLevels.js"
+      ],
+      "proposed_test_file": "backend/tests/chart/test_b21_darkpool.py",
+      "acceptance": "Exact print price/date/notional, top-N/lookback, delay and correction eligibility; equities only; no invented direction or aggregated price masquerading as single print",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/chart/test_b21_darkpool.py -q --tb=short -p no:cacheprovider",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B21.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B21.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B21.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B21.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B21.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C068",
+        "C069",
+        "C135"
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      },
+      "round2_acceptance_invariants": [
+        {
+          "capability_id": "C135",
+          "criterion": "Each dashed level is one exact price/date/notional print, never weighted average or directional buy/sell signal; equities only by reference policy; top-N/lookback contradictions with video resolved by validated capability config",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        }
+      ]
+    },
+    {
+      "id": "B22",
+      "phase": "P6",
+      "title": "CVD, candle delta and footprint",
+      "depends_on": [
+        "B19",
+        "B08"
+      ],
+      "proposed_implementation_files": [
+        "backend/services/chart_delta.py",
+        "frontend/src/components/heatseeker/chart/indicators/Footprint.js"
+      ],
+      "proposed_test_file": "backend/tests/chart/test_b22_delta.py",
+      "acceptance": "Use actual classified trade sizes; session resets; unclassified separate; corrections; no candle-direction pseudo-CVD; unsupported capability remains disabled",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/chart/test_b22_delta.py -q --tb=short -p no:cacheprovider",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B22.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B22.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B22.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B22.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B22.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C070",
+        "C071",
+        "C072",
+        "C118",
+        "C119",
+        "C120"
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      },
+      "round2_acceptance_invariants": [
+        {
+          "capability_id": "C118",
+          "criterion": "Session/week/month/quarter/year anchor resets at zero; MA on default SMA20 or EMA; each delta candle opens at prior eligible close; no-data emits no candle; unknown volume disclosed",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        },
+        {
+          "capability_id": "C119",
+          "criterion": "CVD and Volume use identical reconciled figures; buy+sell+unknown equals measured total within declared tolerance; unknown is not direction; a quote-side options flag is not underlying aggressor volume",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        },
+        {
+          "capability_id": "C120",
+          "criterion": "Wicks reflect only recorded eligible prefixes; minute-granular source cannot prove subsecond historical extrema; mark provisional/aggregate precision and correction handling",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        }
+      ]
+    },
+    {
+      "id": "B23",
+      "phase": "P6",
+      "title": "Profiles, TPO, session zones and event anchors",
+      "depends_on": [
+        "B03",
+        "B08"
+      ],
+      "proposed_implementation_files": [
+        "backend/services/chart_profiles.py",
+        "frontend/src/components/heatseeker/chart/indicators/ProfilePrimitives.js"
+      ],
+      "proposed_test_file": "backend/tests/chart/test_b23_profiles.py",
+      "acceptance": "Exact trades versus explicitly approximate bars; tick bins/POC ties/value-area expansion/70pct; TPO resolution and initial balance; no future sessions/levels/event dates",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/chart/test_b23_profiles.py -q --tb=short -p no:cacheprovider",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B23.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B23.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B23.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B23.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B23.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C052",
+        "C053",
+        "C054",
+        "C055",
+        "C056",
+        "C117",
+        "C121",
+        "C122",
+        "C123",
+        "C124",
+        "C125",
+        "C126",
+        "C127"
+      ],
+      "variants": [
+        {
+          "id": "calendar-session",
+          "depends_on": [
+            "B03",
+            "B08"
+          ],
+          "prerequisites": [
+            "characterized instrument calendars and eligible bars"
+          ],
+          "acceptance": "Session levels/zones and opens from eligible bars; no tape needed; previous/final-session extrema cutoff tested"
+        },
+        {
+          "id": "approximate-profiles",
+          "depends_on": [
+            "B03",
+            "B08"
+          ],
+          "prerequisites": [
+            "adequate complete eligible base-bar coverage and approved approximation method"
+          ],
+          "acceptance": "Explicitly labelled bar-VAP/time-at-price approximation with coverage, no true-tape claim"
+        },
+        {
+          "id": "tape-exact",
+          "depends_on": [
+            "B19",
+            "B03",
+            "B08"
+          ],
+          "prerequisites": [
+            "accepted entitled tape capture B19",
+            "verified event dates for corporate anchors"
+          ],
+          "acceptance": "Exact trade VAP/POC/value area with correction and known-at tests; event anchors only if event source verified"
+        },
+        {
+          "id": "bar-tpo",
+          "depends_on": [
+            "B03",
+            "B08"
+          ],
+          "prerequisites": [
+            "eligible bar-period coverage",
+            "approved letter/row/VA/IB policy",
+            "actual instrument tick/calendar metadata"
+          ],
+          "acceptance": "Documented bar-occupancy TPO, not tick-exact residence; naked-level no-lookahead, missing-coverage and fifth-period tests"
+        }
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      },
+      "round2_acceptance_invariants": [
+        {
+          "capability_id": "C117",
+          "criterion": "Forming value explicitly provisional; SPXW price and ES volume identities disclosed; any wide-bar full-futures-session weighting needs actual temporal join and provider proof, never an ETF substitute",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        },
+        {
+          "capability_id": "C121",
+          "criterion": "Fixed default200 bars or visible range; depth disabled under visible mode; configurable levels/width, total/buy/sell, default VA68%, POC/VA/VAH/VAL toggles; source method and coverage badges",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        },
+        {
+          "capability_id": "C122",
+          "criterion": "POC ties select lower-price row; equal adjacent VA expansion chooses upper row; stop at adjacent zero-volume gap and report attained area below target instead of jumping; reject negative/nonfinite weights",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        },
+        {
+          "capability_id": "C123",
+          "criterion": "Vendor article distributes bar volume across covered rows: price allocation remains approximate even with measured buy/sell totals; exact trade-price VAP is a separate gated variant; zero-range bars need a pinned one-row rule",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        },
+        {
+          "capability_id": "C124",
+          "criterion": "One active instance per workspace pane; Regular default1day, Fixed Range, recurring Fixed Interval default13:00\u201317:00 ET; blank start latest session; auto targets row count, custom rows tick-aligned; settings keep display and bucket clocks separate",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        },
+        {
+          "capability_id": "C125",
+          "criterion": "Letters one per bar/row touched; POC and single prints not before fifth eligible period; daily-or-higher blank-start composite uses last20 eligible bars, not fabricated intrabar letters; explicit source granularity",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        },
+        {
+          "capability_id": "C126",
+          "criterion": "Prior naked POC/VA/single-print levels first appear at next session open and retire only on an eligible revisit; unknown gaps cannot prove untouched; hiding beyond default5% distance is presentation, not deletion",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        },
+        {
+          "capability_id": "C127",
+          "criterion": "Initial Balance, prior-session/range switches, black-box defaultoff, SP lines/fixed-range marker/tick grid, text/font/colors; persist false; value-area target/IB period are reviewed settings, not guessed vendor constants",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        }
+      ]
+    },
+    {
+      "id": "B24",
+      "phase": "P7",
+      "title": "Server-resolved focused-chart AI context",
+      "depends_on": [
+        "B15",
+        "B14"
+      ],
+      "proposed_implementation_files": [
+        "frontend/src/agent/AgentProvider.jsx",
+        "frontend/src/components/heatseeker/AskLodestar.jsx",
+        "backend/services/agent/contracts.py"
+      ],
+      "proposed_test_file": "backend/tests/chart/test_b24_context.py",
+      "acceptance": "Existing price-history/replay refusal remains until snapshot/surface resolver passes; focused pane and capability/units/known-at binding; client numbers untrusted; no trade recommendations/orders or hidden data; bind focus/query/scope/cursor generation, resolve compatible destination instrument scopes; pane removal/focus races cannot re-admit stale context",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/chart/test_b24_context.py -q --tb=short -p no:cacheprovider",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B24.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B24.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B24.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B24.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B24.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C106",
+        "C107"
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      }
+    },
+    {
+      "id": "B25",
+      "phase": "P7",
+      "title": "Read-only paper position annotations",
+      "depends_on": [
+        "B06",
+        "B15"
+      ],
+      "proposed_implementation_files": [
+        "frontend/src/components/heatseeker/chart/PaperPositionOverlay.jsx"
+      ],
+      "proposed_test_file": "frontend/src/components/heatseeker/chart/__tests__/b25_positions.test.jsx",
+      "acceptance": "Read source/account/state stamped positions; options not underlying shares; returning tab refresh; no ticket submit; explicit replay state and denied entitlement; hide live current positions in practice, segregate and mark any review-only nonhistorical positions and exclude them from chart AI/evidence",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/frontend && CI=true ./node_modules/.bin/craco test --watchAll=false --runInBand --runTestsByPath src/components/heatseeker/chart/__tests__/b25_positions.test.jsx",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B25.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B25.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B25.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B25.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B25.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C103"
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      }
+    },
+    {
+      "id": "B26",
+      "phase": "P7",
+      "title": "Separately commissioned plugins and advanced analyses",
+      "depends_on": [
+        "B12",
+        "B16"
+      ],
+      "proposed_implementation_files": [
+        "frontend/src/components/heatseeker/chart/plugins/pluginRegistry.js"
+      ],
+      "proposed_test_file": "frontend/src/components/heatseeker/chart/__tests__/b26_plugins.test.js",
+      "acceptance": "Allowlisted declarative plugin types and plan capability; no remote code; external Nexus/traders/paid Quiet Calf deferred; XABCD/Elliott only after independent rules/fixtures",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/frontend && CI=true ./node_modules/.bin/craco test --watchAll=false --runInBand --runTestsByPath src/components/heatseeker/chart/__tests__/b26_plugins.test.js",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B26.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B26.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B26.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B26.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B26.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C100",
+        "C101",
+        "C102",
+        "C104",
+        "C105"
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      }
+    },
+    {
+      "id": "B27",
+      "phase": "P3",
+      "title": "Accessible settings, shortcuts, mobile and composite export",
+      "depends_on": [
+        "B06",
+        "B11",
+        "B12"
+      ],
+      "proposed_implementation_files": [
+        "frontend/src/components/heatseeker/chart/ChartWorkspace.css",
+        "frontend/src/components/heatseeker/chart/ChartShortcuts.js",
+        "frontend/src/components/heatseeker/chart/ChartExport.js"
+      ],
+      "proposed_test_file": "frontend/src/components/heatseeker/chart/__tests__/b27_usability.test.jsx",
+      "acceptance": "No shortcuts inside typing fields; focus/escape/rebind/long-press; touch Replay visible above chips; bottom-sheet clear of keyboard; two auto-fit modes; source/proxy/replay watermarks and clipboard denied states",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/frontend && CI=true ./node_modules/.bin/craco test --watchAll=false --runInBand --runTestsByPath src/components/heatseeker/chart/__tests__/b27_usability.test.jsx",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B27.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B27.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B27.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B27.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B27.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C009",
+        "C010",
+        "C011",
+        "C012",
+        "C013",
+        "C014",
+        "C015",
+        "C140"
+      ],
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      },
+      "round2_acceptance_invariants": [
+        {
+          "capability_id": "C140",
+          "criterion": "LWC takeScreenshot(true,includeCrosshair) includes top layer/primitives; default false omits them, crosshair flag only applies with top layer; workspace compositor separately includes DOM sidecars/drawings/watermarks and handles tainted canvas honestly",
+          "fixture_requirement": "One named failing fixture per atomic invariant; repeat RED/GREEN cycle. These tests are proposed, not executed product acceptance."
+        }
+      ]
+    },
+    {
+      "id": "B28",
+      "phase": "P8",
+      "title": "Measured browser performance and regression campaign",
+      "depends_on": [
+        "B06"
+      ],
+      "proposed_implementation_files": [
+        "frontend/src/components/heatseeker/chart/__tests__/performanceScenario.js"
+      ],
+      "proposed_test_file": "frontend/src/components/heatseeker/chart/__tests__/b28_performance.test.js",
+      "acceptance": "Measure 10k bars x20nodes, 1/3/5pane, DPR1/2, real Chrome/Safari; viewport culling, heap/longtasks, cadence budgets and 10 unmounts; gated features may remain off with explicit dispositions; evaluate selected release enabled-capability and accepted variant dependency closure, not every unentitled/deferred feature",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/frontend && CI=true ./node_modules/.bin/craco test --watchAll=false --runInBand --runTestsByPath src/components/heatseeker/chart/__tests__/b28_performance.test.js",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B28.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B28.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B28.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B28.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B28.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C108",
+        "C109",
+        "C110"
+      ],
+      "dynamic_dependencies": "Selected release enabled_capability_ids resolve to accepted implementation variants and their dependency closure; disabled/unavailable capabilities require explicit reason/hold but not fake implementation GREEN",
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      }
+    },
+    {
+      "id": "B29",
+      "phase": "P8",
+      "title": "Canary, fallback and independent acceptance",
+      "depends_on": [
+        "B28"
+      ],
+      "proposed_implementation_files": [
+        "frontend/src/components/heatseeker/chart/workspaceFlags.js",
+        "docs/solstice/chart-upgrade-2026-10-09/IMPLEMENTATION_ACCEPTANCE.md"
+      ],
+      "proposed_test_file": "frontend/src/components/heatseeker/chart/__tests__/b29_rollout.test.jsx",
+      "acceptance": "Defaults incumbent; reversible kill switch without data loss; spec+code review; source/build/live identity separately verified; full regression suite only where installed; no invented parity or pass count",
+      "test_command": "cd /Users/nav/Documents/GitHub/floww-2/frontend && CI=true ./node_modules/.bin/craco test --watchAll=false --runInBand --runTestsByPath src/components/heatseeker/chart/__tests__/b29_rollout.test.jsx",
+      "command_status": "future acceptance; proposed tests do not exist yet",
+      "steps": [
+        {
+          "id": "B29.1",
+          "action": "Read cited existing contracts and ownership; create one deterministic synthetic fixture for a named acceptance invariant.",
+          "expected": "Fixture explicitly synthetic; no production records mutated."
+        },
+        {
+          "id": "B29.2",
+          "action": "Write one failing test in the proposed test file. Run test_command and retain the real output.",
+          "expected": "RED for the missing behavior, not a setup/import failure; do not skip/xfail."
+        },
+        {
+          "id": "B29.3",
+          "action": "Implement the smallest owned module change satisfying that fixture; preserve legacy consumers.",
+          "expected": "Only explicit implementation/test paths change; no frozen files without approval."
+        },
+        {
+          "id": "B29.4",
+          "action": "Run the same command plus focused legacy regressions; add one edge fixture and repeat .2/.3/.4 until all named invariants pass.",
+          "expected": "GREEN with observed output. Block/report any absent feed, schema or installation honestly."
+        },
+        {
+          "id": "B29.5",
+          "action": "Inspect own diff, obtain spec and quality review, and hand off explicit paths with execution receipt. Commit only if implementation lane authorizes it.",
+          "expected": "No unrelated staging/commit; dependent blocks remain gated until acceptance."
+        }
+      ],
+      "capability_ids": [
+        "C111"
+      ],
+      "dynamic_dependencies": "Selected release enabled_capability_ids resolve to accepted implementation variants and their dependency closure; disabled/unavailable capabilities require explicit reason/hold but not fake implementation GREEN",
+      "prerequisite_disposition_contract": {
+        "allowed": [
+          "available",
+          "degraded",
+          "unavailable",
+          "approval_blocked",
+          "deferred"
+        ],
+        "receipt_fields": [
+          "prerequisite",
+          "disposition",
+          "reason",
+          "evidence",
+          "reviewer"
+        ],
+        "rule": "Discovery verdict can close a discovery step; unavailable/deferred/approval_blocked never accepts implementation or enabled capability. Other independent supported variants can proceed."
+      }
+    }
+  ],
+  "block_count": 29,
+  "microstep_count": 145,
+  "execution_status": "not implemented; RED/GREEN receipts required per invariant",
+  "release_profiles": [
+    {
+      "id": "R1",
+      "name": "Supported single-pane candles/exposure/studies",
+      "candidate_capability_ids": [
+        "C001",
+        "C002",
+        "C003",
+        "C004",
+        "C005",
+        "C006",
+        "C007",
+        "C008",
+        "C028",
+        "C029",
+        "C030",
+        "C031",
+        "C032",
+        "C033",
+        "C034",
+        "C035",
+        "C036",
+        "C037",
+        "C038",
+        "C039",
+        "C045",
+        "C046",
+        "C047",
+        "C048",
+        "C049",
+        "C050",
+        "C051",
+        "C112",
+        "C113",
+        "C114",
+        "C116",
+        "C136",
+        "C137",
+        "C138",
+        "C139",
+        "C141",
+        "C142"
+      ],
+      "foundation_blocks": [
+        "B01",
+        "B02",
+        "B03",
+        "B04",
+        "B05",
+        "B06"
+      ],
+      "engine_variant": "B04.incumbent unless approved candidate accepted",
+      "rule": "Enable only individually accepted and supported capabilities; incomplete archive channels remain disabled/degraded, not full-scope ranked"
+    },
+    {
+      "id": "R2",
+      "name": "Local multi-pane workspace/review/drawings",
+      "candidate_capability_ids": [
+        "C001",
+        "C002",
+        "C003",
+        "C004",
+        "C005",
+        "C006",
+        "C007",
+        "C008",
+        "C009",
+        "C010",
+        "C011",
+        "C012",
+        "C013",
+        "C014",
+        "C015",
+        "C016",
+        "C017",
+        "C018",
+        "C019",
+        "C020",
+        "C021",
+        "C022",
+        "C023",
+        "C024",
+        "C025",
+        "C026",
+        "C027",
+        "C028",
+        "C029",
+        "C030",
+        "C031",
+        "C032",
+        "C033",
+        "C034",
+        "C035",
+        "C036",
+        "C037",
+        "C038",
+        "C039",
+        "C045",
+        "C046",
+        "C047",
+        "C048",
+        "C049",
+        "C050",
+        "C051",
+        "C073",
+        "C074",
+        "C075",
+        "C076",
+        "C077",
+        "C078",
+        "C079",
+        "C080",
+        "C081",
+        "C082",
+        "C083",
+        "C084",
+        "C085",
+        "C086",
+        "C087",
+        "C088",
+        "C089",
+        "C090",
+        "C091",
+        "C092",
+        "C093",
+        "C094",
+        "C095",
+        "C096",
+        "C097",
+        "C098",
+        "C099",
+        "C112",
+        "C113",
+        "C114",
+        "C116",
+        "C128",
+        "C129",
+        "C130",
+        "C131",
+        "C136",
+        "C137",
+        "C138",
+        "C139",
+        "C141",
+        "C142",
+        "C143"
+      ],
+      "foundation_blocks": [
+        "B01",
+        "B02",
+        "B03",
+        "B04",
+        "B05",
+        "B06",
+        "B11",
+        "B12"
+      ],
+      "rule": "Local B17 variant does not depend on account store; faithful replay/private alerts/account sync enabled only when their independent evidence/identity gates pass"
+    },
+    {
+      "id": "R3",
+      "name": "Commissioned advanced data/integrations",
+      "candidate_capability_ids": [
+        "C001",
+        "C002",
+        "C003",
+        "C004",
+        "C005",
+        "C006",
+        "C007",
+        "C008",
+        "C009",
+        "C010",
+        "C011",
+        "C012",
+        "C013",
+        "C014",
+        "C015",
+        "C016",
+        "C017",
+        "C018",
+        "C019",
+        "C020",
+        "C021",
+        "C022",
+        "C023",
+        "C024",
+        "C025",
+        "C026",
+        "C027",
+        "C028",
+        "C029",
+        "C030",
+        "C031",
+        "C032",
+        "C033",
+        "C034",
+        "C035",
+        "C036",
+        "C037",
+        "C038",
+        "C039",
+        "C040",
+        "C041",
+        "C042",
+        "C043",
+        "C044",
+        "C045",
+        "C046",
+        "C047",
+        "C048",
+        "C049",
+        "C050",
+        "C051",
+        "C052",
+        "C053",
+        "C054",
+        "C055",
+        "C056",
+        "C057",
+        "C058",
+        "C059",
+        "C060",
+        "C061",
+        "C062",
+        "C063",
+        "C064",
+        "C065",
+        "C066",
+        "C067",
+        "C068",
+        "C069",
+        "C070",
+        "C071",
+        "C072",
+        "C073",
+        "C074",
+        "C075",
+        "C076",
+        "C077",
+        "C078",
+        "C079",
+        "C080",
+        "C081",
+        "C082",
+        "C083",
+        "C084",
+        "C085",
+        "C086",
+        "C087",
+        "C088",
+        "C089",
+        "C090",
+        "C091",
+        "C092",
+        "C093",
+        "C094",
+        "C095",
+        "C096",
+        "C097",
+        "C098",
+        "C099",
+        "C103",
+        "C106",
+        "C107",
+        "C112",
+        "C113",
+        "C114",
+        "C115",
+        "C116",
+        "C117",
+        "C118",
+        "C119",
+        "C120",
+        "C121",
+        "C122",
+        "C123",
+        "C124",
+        "C125",
+        "C126",
+        "C127",
+        "C128",
+        "C129",
+        "C130",
+        "C131",
+        "C132",
+        "C133",
+        "C134",
+        "C135",
+        "C136",
+        "C137",
+        "C138",
+        "C139",
+        "C140",
+        "C141",
+        "C142",
+        "C143"
+      ],
+      "foundation_blocks": [
+        "B01",
+        "B02",
+        "B03",
+        "B04",
+        "B05",
+        "B06"
+      ],
+      "rule": "Select only accepted entitled branches; tape/futures/mapping/identity branches may remain explicitly unavailable; separately deferred products are never counted as delivered"
+    }
+  ],
+  "release_acceptance_receipt_schema": {
+    "release_profile_id": "R1|R2|R3",
+    "enabled_capability_ids": "subset of profile candidates, each implementation accepted",
+    "accepted_variants": "explicit block.variant or accepted unsplit block with execution receipts",
+    "disabled_capabilities": "every other candidate maps to unavailable/approval_blocked/deferred disposition + reason/evidence",
+    "dependency_closure": "all enabled implementation variants and their actual prerequisite receipts; no blanket acceptance transfer",
+    "tests": "real source hashes, exact argv/exit/output and browser measurements for enabled scope only"
+  },
+  "serialized_ownership": [
+    {
+      "paths": [
+        "backend/routes/price_history.py"
+      ],
+      "blocks": [
+        "B03",
+        "B13"
+      ],
+      "rule": "One router owner serializes edits after service fixtures; no concurrent shared-file rewrite"
+    },
+    {
+      "paths": [
+        "backend/services/chart_capabilities.py"
+      ],
+      "blocks": [
+        "B02",
+        "B19"
+      ],
+      "rule": "One data owner serializes capability census and entitlement additions"
+    },
+    {
+      "paths": [
+        "frontend/src/components/heatseeker/PriceNodeHistory.jsx",
+        "frontend/src/components/heatseeker/SkylitDashboard.jsx"
+      ],
+      "rule": "One integration owner; other lanes pure modules/fixtures only"
+    }
+  ],
+  "round2_added_capability_count": 32
+}

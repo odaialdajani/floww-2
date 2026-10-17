@@ -24,16 +24,13 @@ function styleFor(hex, negative = false) {
 // Prepare seven styles once, rather than running color math for every cell.
 const NEUTRAL = styleFor(COLORS.neutral);
 const POSITIVE = COLORS.positive.map(hex => styleFor(hex));
-const NEGATIVE = COLORS.negative.map((hex, i) => styleFor(hex, i > 0));
+// Every negative level carries the hatch: sign must survive even when the
+// magnitude sits below the lowest palette step (sub-2% readings).
+const NEGATIVE = COLORS.negative.map(hex => styleFor(hex, true));
 
 export function signedCellPalette(value, extent) {
   if (!Number.isFinite(value) || value === 0 || !Number.isFinite(extent) || extent <= 0) return NEUTRAL;
   const strength = Math.abs(value) / extent;
   const level = strength > 0.66 ? 3 : strength > 0.33 ? 2 : strength > 0.02 ? 1 : 0;
   return (value < 0 ? NEGATIVE : POSITIVE)[level];
-}
-
-// Compatibility for the analytical range's symmetric, zero-anchored scale.
-export function cellPalette(t) {
-  return signedCellPalette(Number.isFinite(t) ? Math.max(0, Math.min(1, t)) * 2 - 1 : null, 1);
 }

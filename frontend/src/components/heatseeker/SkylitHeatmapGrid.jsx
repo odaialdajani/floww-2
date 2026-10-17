@@ -3,7 +3,6 @@ import { shownMapStrikes } from "./shownMapStrikes";
 import HeatmapLandmarks, {readLandmarks, landmarkLabel} from "./HeatmapLandmarks";
 import "./SolsticeWorkspace.css";
 import { signedCellPalette } from "../../lib/signedGridPalette";
-export { cellPalette } from "../../lib/signedGridPalette";
 
 /**
  * SkylitHeatmapGrid — Solstice strike × expiry matrix.

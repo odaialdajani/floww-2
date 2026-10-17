@@ -1,0 +1,300 @@
+{
+  "status": "FAIL",
+  "gate_scope": "research artifacts and preservation only; not feature readiness",
+  "checks": [
+    {
+      "check": "exact_artifact_set",
+      "passed": true,
+      "details": {
+        "missing": [],
+        "unexpected": []
+      }
+    },
+    {
+      "check": "exists_nonempty:CAPABILITIES.json",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "exists_nonempty:CONTRACT.md",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "exists_nonempty:EVIDENCE.json",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "exists_nonempty:IMPLEMENTATION_TASKS.json",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "exists_nonempty:MANIFEST.json",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "exists_nonempty:MASTER_PLAN.md",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "exists_nonempty:PRESERVATION_BASELINE.json",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "exists_nonempty:RESEARCH_REPORTS.md",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "exists_nonempty:SOURCES.md",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "exists_nonempty:SPARK_HANDOFF.md",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "exists_nonempty:VERIFY.py",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "exists_nonempty:VIDEO_TRANSCRIPT.md",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "capability_count_and_uniqueness",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "blocks_and_microsteps",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "required_categories",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "all_capabilities_disposed",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "one_task_assignment_per_capability",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "full_red_green_tasks",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "dependency_ids_exist",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "dependency_dag",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "master_required_architecture",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "all_delivery_phases_present",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "observed_backend_tests",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "frontend_blocker_not_fabricated",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "nim_model_verified",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "research_evidence_distinguishes_failures",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "parent_fallback_audits_grounded",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "independent_refutation_disposed",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "all_eight_review_findings_retained",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "review_temporal_coverage_identity_safety_contracts",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "adapter_inverse_context_export_contracts",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "supported_release_not_blocked_by_gated_branches",
+      "passed": true,
+      "details": [
+        "B01",
+        "B03",
+        "B04",
+        "B05",
+        "B06",
+        "B28",
+        "B29"
+      ]
+    },
+    {
+      "check": "release_profiles_and_variant_gates",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "round2_failure_and_corruption_disposed",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "round2_primary_pages_retrieved",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "round2_retains_original_ids_and_assigns_all_additions",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "round2_source_ids_and_per_block_invariants",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "round2_detail_coverage",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "round2_parent_characterization_and_honest_refutation",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "live_probe_actual",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "video_provenance",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "canonical_root",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "unchanged_head_branch",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "all_baseline_tracked_bytes_preserved",
+      "passed": false,
+      "details": [
+        "backend/server.py",
+        "backend/services/agent/research.py"
+      ]
+    },
+    {
+      "check": "tracked_path_set_preserved",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "preexisting_git_status_preserved",
+      "passed": false,
+      "details": {
+        "baseline_entries": 39,
+        "current_other_entries": 46
+      }
+    },
+    {
+      "check": "only_expected_outputs_added",
+      "passed": true,
+      "details": [
+        "docs/solstice/chart-upgrade-2026-10-09/CAPABILITIES.json",
+        "docs/solstice/chart-upgrade-2026-10-09/CONTRACT.md",
+        "docs/solstice/chart-upgrade-2026-10-09/EVIDENCE.json",
+        "docs/solstice/chart-upgrade-2026-10-09/IMPLEMENTATION_TASKS.json",
+        "docs/solstice/chart-upgrade-2026-10-09/MANIFEST.json",
+        "docs/solstice/chart-upgrade-2026-10-09/MASTER_PLAN.md",
+        "docs/solstice/chart-upgrade-2026-10-09/PRESERVATION_BASELINE.json",
+        "docs/solstice/chart-upgrade-2026-10-09/RESEARCH_REPORTS.md",
+        "docs/solstice/chart-upgrade-2026-10-09/SOURCES.md",
+        "docs/solstice/chart-upgrade-2026-10-09/SPARK_HANDOFF.md",
+        "docs/solstice/chart-upgrade-2026-10-09/VERIFICATION_REPORT.json",
+        "docs/solstice/chart-upgrade-2026-10-09/VERIFY.py",
+        "docs/solstice/chart-upgrade-2026-10-09/VIDEO_TRANSCRIPT.md"
+      ]
+    },
+    {
+      "check": "manifest_coverage",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "artifact_integrity",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "source_citations_exist",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "no_credential_values_in_packet",
+      "passed": true,
+      "details": null
+    }
+  ],
+  "artifact_count": 13,
+  "required_capabilities": 143,
+  "required_blocks": 29
+}
