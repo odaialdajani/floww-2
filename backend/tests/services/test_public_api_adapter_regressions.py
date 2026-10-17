@@ -122,7 +122,14 @@ async def test_extract_bars_rejects_nonfinite_values() -> None:
         {"t": "2026-09-01", "o": 1.0, "h": 2.0, "l": 0.5, "c": 1.5, "v": float("nan")},
         {"t": "2026-08-29", "o": 1.0, "h": 2.0, "l": 0.5},  # missing close
     ], sessions="all")
-    assert len(rows) == 1 and rows[0]["t"] == "2026-09-04"
+    # Non-finite OHLC still drops the candle. A non-finite *volume* is an
+    # unknown measurement: the candle survives with v=None, and no NaN ever
+    # ships (the response stays strictly JSON-serialisable).
+    assert [r["t"] for r in rows] == ["2026-09-04", "2026-09-01"]
+    assert rows[0]["v"] == 100
+    assert rows[1]["v"] is None
+    import json
+    json.dumps(rows, allow_nan=False)
 
 
 @pytest.mark.asyncio

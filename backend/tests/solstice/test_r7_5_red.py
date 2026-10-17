@@ -19,9 +19,14 @@ def _contract(**kw):
 
 
 def test_shortlist_rows_bounded_and_typed():
+    from datetime import UTC, datetime
+
     from services.contract_scout import scout_candidates, scout_shortlist_rows
     cons = [_contract(osi=f"C{i}", delta=0.40 + i * 0.02) for i in range(5)]
-    res = scout_candidates(cons, "CALLS", 500.0)
+    # Fixture clock: quote timestamps are 2030-01-02T14:00Z, so pin now_s to
+    # that instant -- a future source clock is rejected by design (R-12).
+    now_s = datetime(2030, 1, 2, 14, tzinfo=UTC).timestamp()
+    res = scout_candidates(cons, "CALLS", 500.0, now_s=now_s)
     assert res["n_eligible"] == 5
     rows = scout_shortlist_rows(res, "CALLS", n=3)
     assert len(rows) == 3

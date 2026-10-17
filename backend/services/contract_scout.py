@@ -31,7 +31,8 @@ def _age_s(ts: str | None, now_s: float | None = None) -> float | None:
             dt = dt.replace(tzinfo=UTC)
         import time
         now = now_s if now_s is not None else time.time()
-        return max(0.0, now - dt.timestamp())
+        # Signed age preserves future source clocks; zero would invent freshness.
+        return now - dt.timestamp()
     except (ValueError, TypeError):
         return None
 
@@ -128,6 +129,20 @@ def scout_candidates(contracts: list[dict[str, Any]], scenario_side: str,
         # fixture mode allows missing timestamps for synthetic tests.
         bid_age = _age_s(c.get("bid_timestamp"), now_s)
         ask_age = _age_s(c.get("ask_timestamp"), now_s)
+        clock_reason = None
+        for quote_side, age in (("BID", bid_age), ("ASK", ask_age)):
+            timestamp = c.get(f"{quote_side.lower()}_timestamp")
+            if timestamp and (age is None or not math.isfinite(age)):
+                clock_reason = f"INVALID_{quote_side}_TIMESTAMP"
+                break
+            if age is not None and age < 0:
+                # No future-clock allowance is defined for the scout. The
+                # bid/ask skew limit compares sides, not provider vs now.
+                clock_reason = f"FUTURE_{quote_side}_TIMESTAMP"
+                break
+        if clock_reason is not None:
+            reject(osi, clock_reason)
+            continue
         if strict and bid_age is None:
             reject(osi, "STALE_BID")
             continue
