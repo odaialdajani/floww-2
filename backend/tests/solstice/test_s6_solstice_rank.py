@@ -27,13 +27,17 @@ from services.solstice_rank import (  # noqa: E402
 def test_fused_row_preserved_not_refused():
     fused = rank_one("SPY", flow={"conviction": 90}, opportunity={"opportunity_score": 8})
     assert fused["conviction"] == 55.5
-    # Legacy rank_many re-fuses from scratch and drops the flow evidence:
-    legacy = rank_many([{
+    # rank_many now honors the same rule for a matching fused row: the
+    # universe leaderboard path preserves the fused score and evidence
+    # instead of re-fusing it down to 24.0 (see
+    # tests/services/test_universe_fused_flow_lineage.py).
+    kept_many = rank_many([{
         "ticker": "SPY",
         "opportunity": {"opportunity_score": 8},
         "conviction": fused,
     }])
-    assert legacy[0]["conviction"] == 24.0  # pinned legacy behavior, Tide-owned
+    assert kept_many[0]["conviction"] == 55.5
+    assert kept_many[0]["evidence"]["flow_status"] == "ok"
     # Solstice boundary preserves the fused score and evidence:
     kept = rank_rows([fused])
     assert kept[0]["conviction"] == 55.5

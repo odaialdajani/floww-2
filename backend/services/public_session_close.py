@@ -44,7 +44,9 @@ async def completed_public_close(broker, symbol, now=None):
                             matches.append(bar)
                     if len(matches) == 1:
                         bar = matches[0]
-                        if 0 < bar['l'] <= min(bar['o'], bar['c']) <= max(bar['o'], bar['c']) <= bar['h'] and bar['v'] >= 0:
+                        # Unknown volume (None) fails closed like a negative
+                        # one: the close guard requires a measured reading.
+                        if 0 < bar['l'] <= min(bar['o'], bar['c']) <= max(bar['o'], bar['c']) <= bar['h'] and bar['v'] is not None and bar['v'] >= 0:
                             result = dict(price=bar['c'], source='public-session-close', event_time=closing.isoformat(), fetched_at=datetime.now(UTC).isoformat())
             except Exception as exc:
                 log.warning('Public completed close unavailable for %s: %s', symbol, type(exc).__name__)

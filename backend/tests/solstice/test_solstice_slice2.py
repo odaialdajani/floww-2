@@ -87,10 +87,17 @@ def test_t09_record_replay_available_at():
 
 def test_ablation_ladder_gating():
     from services.solstice_ablation import run_ladder
+    from services.wall_structure import discover_walls
+    strikes = [{"strike": 500.0, "gex": 1e6, "call_gex": 6e5, "put_gex": 4e5},
+               {"strike": 510.0, "gex": 1e5, "call_gex": 1e5, "put_gex": 0.0}]
+    # L2 needs this wall's own measured share: a scope-wide ratio cannot
+    # substitute for the selected wall (abl.v1 local-evidence rule).
+    wid = next(w["wall_id"] for w in discover_walls(strikes, 500.0)
+               if w["low"] <= 500.0 <= w["high"])
     snap = {"spot": 500.0,
-            "strikes": [{"strike": 500.0, "gex": 1e6, "call_gex": 6e5, "put_gex": 4e5},
-                        {"strike": 510.0, "gex": 1e5, "call_gex": 1e5, "put_gex": 0.0}],
-            "metrics": {"magnitude_ratio_delta_over_raw": 0.45},
+            "strikes": strikes,
+            "metrics": {"magnitude_ratio_delta_over_raw": 0.45,
+                        "wall_delta_share": {wid: 0.45}},
             "volume_deltas": [{"strike": 500.0, "delta_volume": 300.0}]}
     r = run_ladder(snap)
     assert r["version"] == "abl.v1"

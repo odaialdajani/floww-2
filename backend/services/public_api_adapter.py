@@ -1219,6 +1219,29 @@ _INTERVAL_MAP: dict[str, tuple[str, str | None]] = {
 }
 
 
+def _bar_volume(row: dict[str, Any]) -> float | None:
+    """Measured volume for one provider bar, or None when none was measured.
+
+    Primary key ``v`` wins; when it is absent the secondary ``volume`` alias
+    is tried. An explicitly present-but-invalid ``v`` is an unknown
+    measurement — it is never replaced by the alias. Booleans, empty
+    strings, negatives, non-finite numbers and unparseable values are all
+    unknown. A measured zero (0, 0.0, "0") is a real reading and survives.
+    """
+    candidate = row["v"] if "v" in row else row.get("volume")
+    if candidate is None or isinstance(candidate, bool):
+        return None
+    if isinstance(candidate, str):
+        candidate = candidate.strip()
+        if not candidate:
+            return None
+    try:
+        value = float(candidate)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return value if math.isfinite(value) and value >= 0 else None
+
+
 def _extract_bars(raw: Any, sessions: str = "regular") -> list[dict[str, Any]]:
     """Normalize Public get_bars() payloads to OHLCV dicts with session labels.
 
@@ -1235,6 +1258,12 @@ def _extract_bars(raw: Any, sessions: str = "regular") -> list[dict[str, Any]]:
     hops downstream and read as a real print of zero). Non-finite floats
     (NaN/Infinity parse happily but make the whole response unserialisable
     → opaque HTTP 500) are rejected the same way.
+
+    Volume is treated as a measurement, never a default: a missing or
+    unparseable volume keeps the candle with ``v`` = None. An invalid
+    primary ``v`` is not replaced by the secondary ``volume`` alias, and
+    unknown volume never becomes a fabricated 0 that would read as
+    "no shares traded" on the chart.
     """
     buckets: list[tuple[str, list]] = []
     if isinstance(raw, dict):
@@ -1296,16 +1325,15 @@ def _extract_bars(raw: Any, sessions: str = "regular") -> list[dict[str, Any]]:
             if o is None or h is None or lo is None or c is None:
                 continue
             try:
-                vals = [float(o), float(h), float(lo), float(c),
-                        float(row.get("v", row.get("volume", 0)) or 0)]
-            except (TypeError, ValueError):
+                vals = [float(o), float(h), float(lo), float(c)]
+            except (TypeError, ValueError, OverflowError):
                 continue
             if not all(math.isfinite(v) for v in vals):
                 continue
             out.append({
                 "t": row.get("t", row.get("timestamp", row.get("time"))),
                 "o": vals[0], "h": vals[1], "l": vals[2], "c": vals[3],
-                "v": vals[4], "session": label,
+                "v": _bar_volume(row), "session": label,
             })
     return out
 

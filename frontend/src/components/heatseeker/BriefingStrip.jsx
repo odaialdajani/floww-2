@@ -6,7 +6,7 @@
  * Data: /api/briefing/{ticker} — now populated after the gamma-backfill fix
  * (cvserver rows arrive without gamma; route backfills via bs_gamma from IV).
  */
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { BACKEND_URL } from "../../config/api";
 
 function fmtB(v) {
@@ -39,9 +39,18 @@ function Metric({ label, value, tone = "neutral", title }) {
 }
 
 export default function BriefingStrip({ ticker = "SPY", spot = null }) {
-  const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // A new identity hides old data during render, before effect cleanup runs.
+  // Returning to the same ticker still creates a distinct request generation.
+  const request = useMemo(() => ({ ticker }), [ticker]);
+  const requestRef = useRef(request);
+  requestRef.current = request;
+  const [result, setResult] = useState(null);
+  // Only the current request's outcome is ever shown or exported. A stale
+  // request can never publish its brief into the new ticker's state.
+  const settled = result?.request === request;
+  const data = settled ? result.data : null;
+  const error = settled ? result.error : null;
+  const copyGeneration = useRef(0);
   // Agent-brief export (P0): a research DRAFT for Public's native Agents
   // UI — the user pastes it there and signs off there. FLOWW never places
   // orders and never connects anything; the brief says so explicitly.
@@ -54,11 +63,14 @@ export default function BriefingStrip({ ticker = "SPY", spot = null }) {
       note: "Research draft for Public Agents (user paste + sign-off). Not an order.",
       metrics: data?.metrics || null, regime: data?.regime || null };
     const text = JSON.stringify(brief, null, 2);
+    // Clipboard outcomes are asynchronous; a result from an earlier ticker
+    // must never publish status (copied or manual) onto the current brief.
+    const generation = ++copyGeneration.current;
     const clip = navigator?.clipboard?.writeText;
     if (typeof clip === "function") {
       clip.call(navigator.clipboard, text).then(
-        () => { setExportState("copied"); setExportText(""); },
-        () => { setExportState("manual"); setExportText(text); });
+        () => { if (copyGeneration.current === generation) { setExportState("copied"); setExportText(""); } },
+        () => { if (copyGeneration.current === generation) { setExportState("manual"); setExportText(text); } });
     } else {
       setExportState("manual"); setExportText(text);
     }
@@ -66,19 +78,30 @@ export default function BriefingStrip({ ticker = "SPY", spot = null }) {
 
   useEffect(() => {
     const ctrl = new AbortController();
-    setLoading(true);
+    const current = request;
     fetch(`${BACKEND_URL}/api/briefing/${encodeURIComponent(ticker)}`, { signal: ctrl.signal })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((d) => { setData(d); setLoading(false); })
+      .then((d) => {
+        if (requestRef.current !== current) return; // stale success of an old ticker
+        setResult({ request: current, data: d });
+      })
       .catch((e) => {
         if (e.name === "AbortError") return;
-        setError(e.message);
-        setLoading(false);
+        if (requestRef.current !== current) return; // stale failure of an old ticker
+        setResult({ request: current, error: e.message });
       });
     return () => ctrl.abort();
-  }, [ticker]);
+  }, [request, ticker]);
 
-  if (loading && !data) {
+  // A ticker switch starts a new export generation and clears any draft or
+  // status an earlier brief left behind.
+  useEffect(() => {
+    copyGeneration.current += 1;
+    setExportState(null);
+    setExportText("");
+  }, [request]);
+
+  if (!settled) {
     return (
       <div className="rounded-xl border p-3 mb-2" style={{ background: "rgba(15,23,42,0.5)", borderColor: "rgba(51,65,85,0.5)" }}>
         <div className="h-10 animate-pulse bg-slate-800/40 rounded" />
@@ -132,7 +155,7 @@ export default function BriefingStrip({ ticker = "SPY", spot = null }) {
           tone="neutral" title="25-delta put vs call IV" />
       </div>
       <div className="flex items-center gap-2 mt-2">
-        <button type="button" data-testid="export-brief" onClick={exportBrief}
+        <button type="button" data-testid="export-brief" onClick={exportBrief} disabled={!data}
           className="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider"
           style={{ background: "rgba(30,41,59,0.6)", color: "#94a3b8" }}
           title="Copy a research draft for Public's native Agents UI (paste + sign off there)">
