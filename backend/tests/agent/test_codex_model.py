@@ -278,3 +278,47 @@ async def test_genuinely_oversized_evidence_still_refuses_without_spending():
     assert result['reason'] == 'Evidence exceeds the bounded model input'
     model.validate_settings.assert_not_awaited()
     assert (await model.spend.state())['calls'] == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "info,expected_trace,expected_reason",
+    [
+        (
+            {"codexErrorInfo": "usageLimitExceeded"},
+            "usage_limited",
+            "ChatGPT usage limit reached; the plan quota resets later — no automatic retry",
+        ),
+        (
+            {"codexErrorInfo": "serverError"},
+            "unavailable",
+            "ChatGPT interpretation unavailable; no automatic retry",
+        ),
+        (
+            None,
+            "unavailable",
+            "ChatGPT interpretation unavailable; no automatic retry",
+        ),
+    ],
+)
+async def test_turn_failure_reason_distinguishes_quota_from_other_refusals(info, expected_trace, expected_reason):
+    from services.agent.codex_bridge import CodexTurnError
+
+    db = AsyncMongoMockClient().db
+    repo = AgentRepository(db)
+    await repo.initialize()
+
+    class RefusingBridge(FakeBridge):
+        async def answer(self, *_):
+            raise CodexTurnError(info)
+
+    model = CodexModel(repo, db.usage, bridge_factory=RefusingBridge)
+    facts = [dict(id="evidence-1", snapshot_id="observation-1", metric="Underlying price",
+                  value=500, unit="USD", ticker="SPY", source="recorded", status="ok")]
+    result = await model.once("Explain", facts, "refusal-turn", owner="alice",
+                              settings=DEFAULT_SETTINGS, context={"ticker": "SPY"})
+    assert result["status"] == "unavailable"
+    assert result["reason"] == expected_reason
+    assert result["trace"]["status"] == expected_trace
+    # The provider's own message may contain upgrade links; never surface them.
+    assert "http" not in result["reason"]

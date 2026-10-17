@@ -156,3 +156,10 @@ test('an incomplete legacy trace cannot hide or crash the saved answer',()=>{
  fireEvent.click(screen.getByText('Source and answer details'));
  expect(screen.getByText(/Requested: Unverified/)).toBeVisible();
 });
+
+test("a quota refusal names the ChatGPT usage limit, not a generic outage", () => {
+  render(<AgentPanelAnswer turn={{ticker:"SPY",status:"completed",answer:{summary:"Available readings are shown below.",
+    model_status:"ChatGPT usage limit reached; the plan quota resets later — no automatic retry"}}}/>);
+  expect(screen.getByText(/ChatGPT usage limit reached/)).toBeInTheDocument();
+  expect(screen.queryByText(/AI explanation withheld/)).not.toBeInTheDocument();
+});

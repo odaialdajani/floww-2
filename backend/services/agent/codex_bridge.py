@@ -131,6 +131,20 @@ def config_args():
     return [item for key, value in POLICY.items() for item in ("-c", f"{key}={toml(value)}")]
 
 
+class CodexTurnError(Exception):
+    """The provider ended the turn without a usable answer.
+
+    ``info`` carries the app-server ``error`` event (e.g. ``codexErrorInfo`` =
+    ``usageLimitExceeded``) so the model layer can classify quota refusals.
+    Provider message text is never surfaced to users or logs — it may contain
+    upgrade links — only the typed ``codexErrorInfo`` marker is trusted.
+    """
+
+    def __init__(self, info=None):
+        super().__init__("Codex answer did not complete")
+        self.info = info if isinstance(info, dict) else None
+
+
 class CodexBridge:
     def __init__(self):
         self.process = None
@@ -302,13 +316,15 @@ class CodexBridge:
             },
         )
         turn_id = started["turn"]["id"]
-        text, usage, count = None, None, 0
+        text, usage, count, turn_error = None, None, 0, None
         while True:
             message = self.events.pop(0) if self.events else await self.receive()
             count += 1
             if count > 2000:
                 raise ValueError("Codex event limit exceeded")
             method, params = message.get("method"), message.get("params", {})
+            if method == "error":
+                turn_error = params.get("error") if isinstance(params, dict) else None
             if method == "model/rerouted":
                 raise ValueError("Codex changed the selected model during the request")
             if method == "thread/tokenUsage/updated":
@@ -321,5 +337,5 @@ class CodexBridge:
                     text = item.get("text")
             if method == "turn/completed" and params.get("turn", {}).get("id") == turn_id:
                 if params["turn"].get("status") != "completed" or not isinstance(text, str) or len(text) > 16000:
-                    raise ValueError("Codex answer did not complete")
+                    raise CodexTurnError(turn_error)
                 return json.loads(text), usage, thread_id, turn_id

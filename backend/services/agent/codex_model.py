@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
-from services.agent.codex_bridge import CodexBridge
+from services.agent.codex_bridge import CodexBridge, CodexTurnError
 from services.agent.contracts import canonical, finite, relationship_text
 from services.agent.explanations import compact_explanation_menu, explanation_menu
 from services.agent.grounding import grounding_hash
@@ -355,6 +355,22 @@ class CodexModel:
             # Admission remains counted; cancellation does not prove unused quota.
             trace["status"] = "cancelled_dispatch_unknown"
             raise
+        except CodexTurnError as exc:
+            # The provider refused the turn itself. A spent plan quota is a
+            # quota state, not a transport failure — name it so the card can
+            # say "usage limit" instead of a generic outage. Only the typed
+            # marker is trusted; provider text (upgrade links) is discarded.
+            quota = (exc.info or {}).get("codexErrorInfo") == "usageLimitExceeded"
+            trace["status"] = "usage_limited" if quota else "unavailable"
+            return dict(
+                status="unavailable",
+                reason=(
+                    "ChatGPT usage limit reached; the plan quota resets later — no automatic retry"
+                    if quota
+                    else "ChatGPT interpretation unavailable; no automatic retry"
+                ),
+                **info,
+            )
         except Exception:
             trace["status"] = "unavailable"
             return dict(status="unavailable", reason="ChatGPT interpretation unavailable; no automatic retry", **info)
