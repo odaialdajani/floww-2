@@ -4,7 +4,7 @@ import { render, screen, fireEvent, act, waitFor } from "@testing-library/react"
 import "@testing-library/jest-dom";
 import axios from "axios";
 import ExactContractReview from "./ExactContractReview";
-import { admissionBlock } from "./AskLodestar";
+import { admissionBlock } from "./AskFlow";
 import OptionsDashboard from "./SkylitDashboard";
 import useScreenContext from "../../agent/useScreenContext";
 // These contracts exercise the options desk; the stock route now opens price first.

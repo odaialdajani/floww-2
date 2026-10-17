@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import React from 'react';
 import {act,fireEvent,render,screen,waitFor} from '@testing-library/react';
-import AskLodestar, {admissionBlock,STARTERS} from './AskLodestar';
+import AskFlow, {admissionBlock,STARTERS} from './AskFlow';
 import AgentProvider from '../../agent/AgentProvider';
 import {publishScreenContext} from '../../agent/useScreenContext';
 import {rangeSelectionContext} from '../../lib/rangeAnalytics';
@@ -13,7 +13,7 @@ beforeEach(()=>{global.fetch=jest.fn(async url=>({ok:true,json:async()=>String(u
 
 test('persistent range qualification disclosure is not a transient popup that can cover its menu',()=>{
  publishScreenContext(rangeSelectionContext(rangeComplete,'raw_oi',{strike:'590',expiry:'2026-10-26'},'replay'));
- render(<AgentProvider><AskLodestar overlayMetric="raw_oi" displayMode="range-replay"/></AgentProvider>);
+ render(<AgentProvider><AskFlow overlayMetric="raw_oi" displayMode="range-replay"/></AgentProvider>);
  const disclosure=screen.getByTestId('ask-lodestar-range-disclosure');
  expect(disclosure).not.toHaveClass('lodestar-ask-note');
  fireEvent.click(screen.getByTestId('ask-lodestar-btn'));
@@ -91,7 +91,7 @@ test.each(['raw_oi','delta_weighted','volume'])('range %s admission is checked b
 test('range recorded-cell starters remain explicit and use the same agent transport and canonical horizon',async()=>{
  const context=storedRangeContext();publishScreenContext(context);
  const starters=['What does this recorded cell show?','Which recorded inputs are unknown?'];
- render(<AgentProvider><AskLodestar overlayMetric="raw_oi" displayMode="range-replay" starters={starters}
+ render(<AgentProvider><AskFlow overlayMetric="raw_oi" displayMode="range-replay" starters={starters}
   subject="recorded SPY cell" testId="range-ask"/></AgentProvider>);
  expect(global.fetch).not.toHaveBeenCalled();
  expect(screen.getByTestId('range-ask-range-disclosure')).toHaveTextContent(/limited research view.*unfinished/i);
@@ -118,14 +118,14 @@ test.each([
  ['missing selection',c=>{c.selectedStrike=null;c.selectedExpiry=null;}],
 ])('range menu blocks %s before any session, fallback or model request',async(_,change)=>{
  const context=storedRangeContext();change(context);publishScreenContext(context);
- render(<AgentProvider><AskLodestar overlayMetric={context.overlayMetric} displayMode={context.displayMode}/></AgentProvider>);
+ render(<AgentProvider><AskFlow overlayMetric={context.overlayMetric} displayMode={context.displayMode}/></AgentProvider>);
  fireEvent.click(screen.getByTestId('ask-lodestar-btn'));fireEvent.click(screen.getByTestId('ask-lodestar-q-0'));
  expect(screen.getByTestId('ask-lodestar-note')).toHaveTextContent('RANGE_RESEARCH_UNAVAILABLE');
  expect(global.fetch).not.toHaveBeenCalled();
 });
 test('malformed range mode refuses before fetch without crashing under legacy props',()=>{
  const context=storedRangeContext();context.displayMode={invalid:true};publishScreenContext(context);
- render(<AgentProvider><AskLodestar/></AgentProvider>);
+ render(<AgentProvider><AskFlow/></AgentProvider>);
  fireEvent.click(screen.getByTestId('ask-lodestar-btn'));fireEvent.click(screen.getByTestId('ask-lodestar-q-0'));
  expect(screen.getByTestId('ask-lodestar-note')).toHaveTextContent('RANGE_RESEARCH_UNAVAILABLE');
  expect(global.fetch).not.toHaveBeenCalled();
@@ -138,7 +138,7 @@ test('resolved exact-contract legacy selectors still require and preserve their 
 });
 test('default wall starters and their test IDs are preserved for legacy screens',()=>{
  publishScreenContext({ticker:'SPY',page:'heatseeker',overlayMetric:'raw',displayMode:'live'});
- render(<AgentProvider><AskLodestar/></AgentProvider>);
+ render(<AgentProvider><AskFlow/></AgentProvider>);
  fireEvent.click(screen.getByTestId('ask-lodestar-btn'));
  STARTERS.forEach((question,index)=>expect(screen.getByTestId(`ask-lodestar-q-${index}`)).toHaveTextContent(question));
  expect(screen.queryByTestId('ask-lodestar-range-disclosure')).not.toBeInTheDocument();
@@ -147,7 +147,7 @@ test('default wall starters and their test IDs are preserved for legacy screens'
 
 test('question menu supports arrows and Escape without sending anything',()=>{
  const setOpen=jest.fn();
- const view=render(<AgentProvider><AskLodestar/></AgentProvider>);
+ const view=render(<AgentProvider><AskFlow/></AgentProvider>);
  const trigger=screen.getByTestId('ask-lodestar-btn');
  fireEvent.click(trigger);
  const items=screen.getAllByRole('menuitem');expect(items[0]).toHaveFocus();

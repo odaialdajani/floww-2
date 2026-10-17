@@ -3,10 +3,10 @@ import { useAgent } from "../../agent/AgentProvider";
 import {rangeResearchBlock} from '../../lib/rangeAnalytics';
 
 /**
- * AskLodestar — compact entry point next to a selected wall / active pane.
+ * AskFlow — compact entry point next to a selected wall / active pane.
  *
  * Uses the EXISTING assistant (AgentProvider → useAgentStream); this is not
- * a second chatbot. Lodestar stays closed until the user asks.
+ * a second chatbot. Flow stays closed until the user asks.
  *
  * Admission is honest about the current server guard
  * (backend services/agent/contracts.py request_spec): research answers are
@@ -58,7 +58,7 @@ export function admissionBlock({ context, overlayMetric, displayMode }) {
   return null;
 }
 
-function AskLodestar({ subject = "", overlayMetric = "raw", displayMode = "live", compact = false, testId = "ask-lodestar", starters = STARTERS }) {
+function AskFlow({ subject = "", overlayMetric = "raw", displayMode = "live", compact = false, testId = "ask-lodestar", starters = STARTERS }) {
   const agent = useAgent();
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState(null);
@@ -118,4 +118,4 @@ function AskLodestar({ subject = "", overlayMetric = "raw", displayMode = "live"
   );
 }
 
-export default memo(AskLodestar);
+export default memo(AskFlow);
