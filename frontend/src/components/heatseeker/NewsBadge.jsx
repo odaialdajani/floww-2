@@ -28,6 +28,8 @@
 
 import React, { memo, useEffect, useState } from "react";
 import { BACKEND_BASE } from "../../config/api";
+import { fetchStudyJSON } from "./studyFetch";
+import StudyErrorCard from "./StudyErrorCard";
 
 const SIDE_BASE =
     process.env.REACT_APP_STEAL_THREE_BASE || BACKEND_BASE;
@@ -70,18 +72,14 @@ function NewsBadge({ ticker = "SPY", days = 14 }) {
                 const url =
                     `${SIDE_BASE}/api/news/${encodeURIComponent(ticker)}` +
                     `/history?days=${days}`;
-                const r = await fetch(url);
-                if (!r.ok) {
-                    throw new Error(`HTTP ${r.status}`);
-                }
-                const j = await r.json();
+                const j = await fetchStudyJSON(url);
                 if (!cancelled) {
                     setData(j);
                     setErr(null);
                 }
             } catch (e) {
                 if (!cancelled) {
-                    setErr(e?.message || String(e));
+                    setErr(e);
                 }
             }
         };
@@ -98,20 +96,16 @@ function NewsBadge({ ticker = "SPY", days = 14 }) {
     // ── Defensive degrade: offline ─────────────────────────────────
     if (err) {
         return (
-            <div
+            <StudyErrorCard
+                title="Catalyst Pulse"
+                base={SIDE_BASE}
+                error={err}
+                testId="hs-news"
                 className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 h-full flex flex-col justify-center"
-                data-testid="hs-news"
-            >
-                <div className="text-[10px] uppercase tracking-widest text-amber-300 font-bold mb-1">
-                    Catalyst Pulse · offline
-                </div>
-                <div className="text-[10px] text-amber-200/80">
-                    backend unreachable → {err}
-                </div>
-                <div className="text-[9px] text-slate-500 mt-2">
+                footer={<div className="text-[9px] text-slate-500 mt-2">
                     {ticker} · {days}d window
-                </div>
-            </div>
+                </div>}
+            />
         );
     }
 

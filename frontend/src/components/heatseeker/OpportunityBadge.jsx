@@ -28,6 +28,8 @@
 
 import React, { memo, useEffect, useState } from "react";
 import { BACKEND_BASE } from "../../config/api";
+import { fetchStudyJSON } from "./studyFetch";
+import StudyErrorCard from "./StudyErrorCard";
 
 const SIDE_BASE =
   process.env.REACT_APP_STEAL_THREE_BASE || BACKEND_BASE;
@@ -96,15 +98,12 @@ function OpportunityBadge({ ticker = "SPY" }) {
     let cancelled = false;
     setData(null);
     setErr(null);
-    fetch(`${SIDE_BASE}/api/opportunity/${encodeURIComponent(ticker)}`)
-      .then((r) =>
-        r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))
-      )
+    fetchStudyJSON(`${SIDE_BASE}/api/opportunity/${encodeURIComponent(ticker)}`)
       .then((j) => {
         if (!cancelled) setData(j);
       })
       .catch((e) => {
-        if (!cancelled) setErr(e.message || String(e));
+        if (!cancelled) setErr(e);
       });
     return () => {
       cancelled = true;
@@ -113,14 +112,13 @@ function OpportunityBadge({ ticker = "SPY" }) {
 
   if (err) {
     return (
-      <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
-        <div className="text-[10px] uppercase tracking-widest text-amber-300 font-bold mb-1">
-          Opportunity · offline
-        </div>
-        <div className="text-[10px] text-amber-200/80">
-          backend @ {SIDE_BASE} unreachable → {err}
-        </div>
-      </div>
+      <StudyErrorCard
+        title="Opportunity"
+        base={SIDE_BASE}
+        error={err}
+        testId="hs-opportunity"
+        className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3"
+      />
     );
   }
 

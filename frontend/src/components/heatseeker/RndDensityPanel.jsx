@@ -29,6 +29,8 @@
 
 import React, { memo, useEffect, useState } from "react";
 import { BACKEND_BASE } from "../../config/api";
+import { fetchStudyJSON } from "./studyFetch";
+import StudyErrorCard from "./StudyErrorCard";
 
 const SIDE_BASE =
   process.env.REACT_APP_STEAL_THREE_BASE || BACKEND_BASE;
@@ -52,17 +54,14 @@ function RndDensityPanel({ ticker = "SPY", expiries = 1 }) {
     // default expiry_index param is sufficient for the dashboard
     // heatmap (no need to enumerate every listed expiry in the UI).
     const qs = new URLSearchParams({ expiry_index: String(expiries) });
-    fetch(
+    fetchStudyJSON(
       `${SIDE_BASE}/api/rnd/${encodeURIComponent(ticker)}?${qs.toString()}`
     )
-      .then((r) =>
-        r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))
-      )
       .then((j) => {
         if (!cancelled) setData(j);
       })
       .catch((e) => {
-        if (!cancelled) setErr(e.message || String(e));
+        if (!cancelled) setErr(e);
       });
     return () => {
       cancelled = true;
@@ -71,17 +70,13 @@ function RndDensityPanel({ ticker = "SPY", expiries = 1 }) {
 
   if (err) {
     return (
-      <div
+      <StudyErrorCard
+        title="Rnd Density"
+        base={SIDE_BASE}
+        error={err}
+        testId="hs-rnd-density"
         className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 py-8 text-center"
-        data-testid="hs-rnd-density"
-      >
-        <div className="text-[10px] uppercase tracking-widest text-amber-300 font-bold mb-1">
-          Rnd Density · offline
-        </div>
-        <div className="text-[10px] text-amber-200/80">
-          backend @ {SIDE_BASE} unreachable → {err}
-        </div>
-      </div>
+      />
     );
   }
 
