@@ -89,4 +89,40 @@ describe("WheelIncomeScreenerPanel", () => {
     expect(await screen.findByText("$480")).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/0\.0%/);
   });
+
+  test("a typed backend refusal names the reason instead of 'unreachable'", async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve({ ok: false, status: 503, json: () => Promise.resolve({
+        error: { status: "unavailable", reason: "PUBLIC_ONLY_STUDY_UNAVAILABLE", message: "This study has no Public-only producer; alternate sources are disabled" },
+      }) })
+    );
+    render(<WheelIncomeScreenerPanel ticker="SPY" />);
+    expect(await screen.findByText(/Wheel · study unavailable/i)).toBeInTheDocument();
+    expect(screen.getByText(/PUBLIC_ONLY_STUDY_UNAVAILABLE/)).toBeInTheDocument();
+    expect(screen.queryByText(/unreachable/i)).not.toBeInTheDocument();
+  });
+
+  test("a genuine network failure still reports unreachable", async () => {
+    global.fetch = jest.fn(() => Promise.reject(new Error("Failed to fetch")));
+    render(<WheelIncomeScreenerPanel ticker="SPY" />);
+    expect(await screen.findByText("Wheel · offline")).toBeInTheDocument();
+    expect(screen.getByText(/^backend @ .* unreachable/)).toBeInTheDocument();
+  });
+
+  test("the older stringified refusal remains recognizable during a backend reload", async () => {
+    global.fetch = jest.fn(() => Promise.resolve({ ok: false, status: 503, json: () => Promise.resolve({
+      error: "{'status': 'unavailable', 'reason': 'PUBLIC_ONLY_STUDY_UNAVAILABLE'}",
+    }) }));
+    render(<WheelIncomeScreenerPanel ticker="SPY" />);
+    expect(await screen.findByText("Wheel · study unavailable")).toBeInTheDocument();
+    expect(screen.queryByText(/unreachable/i)).not.toBeInTheDocument();
+  });
+
+  test("an untyped HTTP error is not called a connection failure", async () => {
+    global.fetch = jest.fn(() => Promise.resolve({ ok: false, status: 422, json: () => Promise.resolve({detail: "Invalid filter"}) }));
+    render(<WheelIncomeScreenerPanel ticker="SPY" />);
+    expect(await screen.findByText("Wheel · server error")).toBeInTheDocument();
+    expect(screen.getByText(/returned HTTP 422/)).toBeInTheDocument();
+    expect(screen.queryByText(/unreachable/i)).not.toBeInTheDocument();
+  });
 });

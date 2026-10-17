@@ -111,6 +111,7 @@
 .panelhead small { font-size: 11px; color: #94a3b8; }
 .panelhead .chart-legend { font-size: 10px; color: #94a3b8; }
 .chart-legend { display: flex; gap: 12px; flex-wrap: wrap; }
+.chart-caption { padding: 6px 10px 10px; font-size: 10px; color: #8fa0b3; font-style: italic; }
 .table-wrap { max-height: 340px; overflow: auto; border: 1px solid #223046; margin: 0 10px 10px; }
 .contract-table { width: 100%; border-collapse: collapse; font-size: 11px; font-variant-numeric: tabular-nums; }
 .contract-table th, .contract-table td { text-align: right; padding: 4px 8px; border-bottom: 1px solid rgba(255, 255, 255, .05); color: #cbd5e1; }
@@ -172,6 +173,15 @@
 .skylit-full-dashboard .skylit-control-sep { flex-shrink: 0; }
 .skylit-full-dashboard .skylit-control-left>button,
 .skylit-full-dashboard .skylit-control-right>button { min-height: 27px; }
+
+/* The chart can be narrower than the viewport because both study rails are
+   present. Let the three toolbar groups wrap at their actual content width. */
+.skylit-full-dashboard .skylit-control-bar { flex-wrap: wrap; gap: 6px 10px; }
+.skylit-full-dashboard .skylit-control-left { flex-wrap: wrap; min-width: 0; }
+.skylit-full-dashboard .skylit-control-center { flex: 1 1 340px; justify-content: flex-start; flex-wrap: wrap; }
+.skylit-full-dashboard .skylit-control-right { margin-left: auto; }
+.trinity-layout .triad-context { gap: 6px; }
+.trinity-layout .triad-board-status { margin-left: auto; color: #9bb0bd; font-size: 11px; white-space: nowrap; }
 
 @media(max-width:1050px){
  .skylit-full-dashboard .skylit-control-bar{flex-wrap:wrap;gap:6px;padding:6px 10px;}

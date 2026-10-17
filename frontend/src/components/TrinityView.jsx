@@ -316,8 +316,8 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
       {replayControls}
       {replayId && !replayDisplay && <button type="button" onClick={() => onReplayDisplay(null)}>Leave recorded observation · Live</button>}
       <ContextStrip board={board} ticker={ticker} symbolInput={symbolInput}
-        onSymbolInput={setSymbolInput} onSubmit={submitSymbol} showStockControl={!sharedStockChoice} />
-      <div className="triad-board-status" role="status">Solstice research ranks · {boardStatus} · unvalidated, not probability</div>
+        onSymbolInput={setSymbolInput} onSubmit={submitSymbol} showStockControl={!sharedStockChoice}
+        boardStatus={boardStatus} />
             {payload?.scope_selection?.status === "unavailable" && <div role="status" data-testid="triad-empty-scope">No listed expiry in the server's 30-day bound — no substitution made.</div>}
       {!isReplay && scope === "0dte" && !sameDayAdmitted && <div className="triad-scope-notice">
         <p role="status" data-testid="triad-scope-admission">
@@ -409,7 +409,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
   );
 }
 
-function ContextStrip({ board, ticker, symbolInput, onSymbolInput, onSubmit, showStockControl = true }) {
+function ContextStrip({ board, ticker, symbolInput, onSymbolInput, onSubmit, showStockControl = true, boardStatus }) {
   const byTicker = useMemo(() => {
     const m = {};
     for (const r of board || []) m[String(r.ticker || "").toUpperCase()] = r;
@@ -446,6 +446,9 @@ function ContextStrip({ board, ticker, symbolInput, onSymbolInput, onSubmit, sho
         title="Coverage description only — never a position size">
         {observed.length}/3 observed{dirs.length ? ` · ${dirs.join(" / ")}` : ""}
       </div>
+      <span className="triad-board-status" role="status" title="Research ranks are unvalidated and are not probabilities">
+        Ranks: {boardStatus} · unvalidated
+      </span>
       {ticker && !TRIAD.includes(ticker) && (
         <div className="triad-context-focusname" data-testid="triad-focus-name">Focused: {ticker}</div>
       )}
@@ -605,7 +608,7 @@ function WallPricePath({ ticker, wall, spot }) {
   }
   if (segment.length) segments.push(segment);
   return <div className="triad-price" data-testid="triad-price-path">
-    <p className="triad-price-caption">Current map reference: wall {wall.low}–{wall.high}{typeof spot === "number" && Number.isFinite(spot) ? ` · price ${spot}` : ""} — not historical candle-time levels.</p>
+    <p className="triad-price-caption">Current map reference: wall {wall.low}–{wall.high}{typeof spot === "number" && Number.isFinite(spot) ? ` · price ${spot.toFixed(2)}` : ""} — not historical candle-time levels.</p>
     <svg data-testid="triad-price-path-svg" data-first-at={new Date(first).toISOString()} data-last-at={new Date(last).toISOString()}
       viewBox={`0 0 ${W} ${H}`} width="100%" height="120" role="img" aria-label="Historical closes by recorded time; no historical wall inferred">
       {segments.filter(part => part.length > 1).map((part, i) => <polyline key={i} points={part.map(row => `${X(row.at).toFixed(1)},${Y(row.close).toFixed(1)}`).join(" ")} fill="none" stroke="#7dd3fc" strokeWidth="1.5" />)}

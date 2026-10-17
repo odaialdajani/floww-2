@@ -37,10 +37,14 @@ function WheelIncomeScreenerPanel({ ticker = "SPY" }) {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
+  const [errReason, setErrReason] = useState(null);
+  const [errStatus, setErrStatus] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
     setErr(null);
+    setErrReason(null);
+    setErrStatus(null);
     setData(null);
     const qs = new URLSearchParams({
       symbol: ticker,
@@ -52,9 +56,30 @@ function WheelIncomeScreenerPanel({ ticker = "SPY" }) {
       top: String(filters.top ?? 25),
     });
     fetch(`${SIDE_BASE}/api/screener/income?${qs.toString()}`)
-      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then(async (r) => {
+        if (r.ok) return r.json();
+        // A reachable backend can still send a typed refusal; keep its reason
+        // so the card says "unavailable on this backend", not "unreachable".
+        let reason = null;
+        let message = `HTTP ${r.status}`;
+        try {
+          const body = await r.json();
+          const inner = body && (body.error ?? body.detail);
+          if (inner && typeof inner === "object") {
+            reason = inner.reason || null;
+            message = inner.message || message;
+          } else if (typeof inner === "string") {
+            message = inner;
+            if (inner.includes("PUBLIC_ONLY_STUDY_UNAVAILABLE")) reason = "PUBLIC_ONLY_STUDY_UNAVAILABLE";
+          }
+        } catch (e) { /* body not JSON → keep the HTTP status */ }
+        const typed = new Error(message);
+        typed.reason = reason;
+        typed.httpStatus = r.status;
+        throw typed;
+      })
       .then((j) => { if (!cancelled) setData(j); })
-      .catch((e) => { if (!cancelled) setErr(e.message || String(e)); });
+      .catch((e) => { if (!cancelled) { setErr(e.message || String(e)); setErrReason(e.reason || null); setErrStatus(e.httpStatus || null); } });
     return () => { cancelled = true; };
   }, [ticker, filters.min_iv, filters.min_volume, filters.min_dte, filters.max_dte, filters.top]);
 
@@ -66,8 +91,14 @@ function WheelIncomeScreenerPanel({ ticker = "SPY" }) {
   if (err) {
     return (
       <div className="panel p-3 rounded-xl border border-amber-500/20 bg-amber-500/5">
-        <div className="text-[10px] uppercase tracking-widest text-amber-300 font-bold mb-1">Wheel · offline</div>
-        <div className="text-[10px] text-amber-200/80">backend @ {SIDE_BASE} unreachable → {err}</div>
+        <div className="text-[10px] uppercase tracking-widest text-amber-300 font-bold mb-1">{errReason ? "Wheel · study unavailable" : errStatus ? "Wheel · server error" : "Wheel · offline"}</div>
+        <div className="text-[10px] text-amber-200/80">
+          {errReason
+            ? <>This backend reported <span className="font-mono">{errReason}</span> — the study has no producer on this feed; no alternate source is substituted.</>
+            : errStatus
+              ? <>backend @ {SIDE_BASE} returned HTTP {errStatus} → {err}</>
+              : <>backend @ {SIDE_BASE} unreachable → {err}</>}
+        </div>
       </div>
     );
   }

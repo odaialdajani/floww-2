@@ -275,6 +275,7 @@ async def rate_limit_middleware(request: Request, call_next):
 
 # ----------------------------- Global Exception Handler ------------------------------
 
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -283,9 +284,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     log.error(f"HTTP {exc.status_code} {request.url.path}: {exc.detail}")
+    typed_reason = isinstance(exc.detail, dict) and isinstance(exc.detail.get("status"), str) \
+        and isinstance(exc.detail.get("reason"), str)
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error": str(exc.detail), "status_code": exc.status_code, "path": request.url.path},
+        content={"error": jsonable_encoder(exc.detail) if typed_reason else str(exc.detail),
+                 "status_code": exc.status_code, "path": request.url.path},
         headers={
             "Access-Control-Allow-Origin": _get_cors_origin_for_handlers(),
             "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
