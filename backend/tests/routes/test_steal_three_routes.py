@@ -218,6 +218,10 @@ def test_chain_consensus_route_integration(monkeypatch):
 # only the network boundary (routes.steal_three._load_chain).
 # ---------------------------------------------------------------------------
 def test_dual_gex_route_survives_bare_yfinance_rows(monkeypatch):
+    # Legacy yfinance-loader test: pin the provider env so a public-mode
+    # ambient pin (.env) can't divert the route to a refusal before the
+    # loader seam is reached.
+    monkeypatch.delenv("FLOWW_MARKET_DATA_PROVIDER", raising=False)
     calls = [{"strike": 100.0, "openInterest": 10, "volume": 5.0,
               "bid": 1.0, "ask": 1.2, "expiry": "2026-08-15"}]
     puts = [{"strike": 90.0, "openInterest": 20, "volume": 2.0,
@@ -268,6 +272,10 @@ def test_select_expiries_in_window_pure():
 def test_screener_income_returns_rows_from_windowed_chain(monkeypatch):
     # Future expiry — hard-coded dates expired and the min_dte filter
     # started dropping every row (time-bomb test, fixed 2026-08-23).
+    # This test exercises the LEGACY yfinance loader; pin the provider so
+    # a public-mode ambient env (.env pin) can't divert it to the
+    # Public-only producer path.
+    monkeypatch.delenv("FLOWW_MARKET_DATA_PROVIDER", raising=False)
     from datetime import date, timedelta
     future_exp = (date.today() + timedelta(days=21)).isoformat()
     put_row = {"strike": 95.0, "expiry": future_exp, "openInterest": 500,
@@ -340,6 +348,9 @@ def test_iv_row_returns_json_native_types():
 # can't silently regress to the 2026-07-15 broken state.
 # --------------------------------------------------------------------------
 def test_dual_gex_route_defensive_degrade_when_calculator_raises(monkeypatch):
+    # Legacy yfinance-loader test: pin the provider env (same reasoning as
+    # the bare-rows test above).
+    monkeypatch.delenv("FLOWW_MARKET_DATA_PROVIDER", raising=False)
     """If DualGexCalculator.compute() raises (truly malformed broker row,
     regression in GexAggregator._resolve, etc.), the route MUST swallow
     the exception and return the empty-shape dict — never a 500 that
@@ -398,6 +409,9 @@ def test_wheel_income_alias_calls_same_screener_logic(monkeypatch):
     callers that use either URL get the same ranked candidates — the
     alias is a pure URI-rewrite, not a divergent code path.
     """
+    # Legacy-loader test: pin the provider env (see the canonical-route
+    # test above for the reasoning).
+    monkeypatch.delenv("FLOWW_MARKET_DATA_PROVIDER", raising=False)
     # Future expiry — hard-coded dates expired and the min_dte filter
     # started dropping every row (time-bomb test, fixed 2026-08-23).
     from datetime import date, timedelta
@@ -534,3 +548,69 @@ def test_chain_consensus_endpoint_returns_documented_keys(monkeypatch):
         f"overall keys diverged: got {sorted(data['overall'].keys())} "
         f"expected {sorted(expected_overall)}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Public-only Wheel producer (2026-10-17).
+#
+# Live probe settled that Public.com option-chains DO populate per-strike
+# openInterest, vendor greeks (gamma/IV/delta), NBBO bid/ask (mids) and daily
+# volume on equity chains (SPY 2026-10-19: 151/151 calls and puts fully
+# populated, greeks_source vendor). The Wheel screener therefore HAS a
+# Public-only producer and must SERVE rows in public mode instead of the
+# PUBLIC_ONLY_STUDY_UNAVAILABLE refusal. INCOME-04 discipline carries over:
+# absent IV/volume stay unknown, never zero. Read-only market data only.
+# ---------------------------------------------------------------------------
+def test_screener_income_public_mode_serves_vendor_chain(monkeypatch):
+    from datetime import date, timedelta
+
+    import routes.steal_three as st
+
+    st._income_cache.clear()
+    future_exp = (date.today() + timedelta(days=21)).isoformat()
+    put_row = {"strike": 95.0, "expiry": future_exp, "oi": 500, "volume": 40,
+               "bid": 1.0, "ask": 1.2, "mid": 1.1, "iv": 0.25, "type": "put"}
+    put_row_unknown = {"strike": 96.0, "expiry": future_exp, "oi": 10, "volume": None,
+                       "bid": 1.0, "ask": 1.2, "iv": None, "type": "put"}
+    call_row = {"strike": 105.0, "expiry": future_exp, "oi": 300, "volume": 30,
+                "bid": 0.9, "ask": 1.1, "mid": 1.0, "iv": 0.22, "type": "call"}
+
+    async def fake_public_window(symbol, min_dte, max_dte, cap=8):
+        return 100.0, [call_row], [put_row, put_row_unknown]
+
+    monkeypatch.setenv("FLOWW_MARKET_DATA_PROVIDER", "public")
+    monkeypatch.setattr("routes.steal_three._load_chain_window_public", fake_public_window)
+
+    client = TestClient(_build_minimal_app())
+    resp = client.get("/api/screener/income?symbol=SPY&side=both&min_dte=7&max_dte=45")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["provider"] == "public-option-chain"
+    assert data["oi_basis"] == "daily"
+    strikes = [p["strike"] for p in data["puts"]]
+    assert 95.0 in strikes and 96.0 in strikes
+    unknown = next(p for p in data["puts"] if p["strike"] == 96.0)
+    assert unknown["iv_unknown"] is True and unknown["volume_unknown"] is True
+    st._income_cache.clear()
+
+
+def test_screener_income_public_mode_chain_unavailable_refuses_typed(monkeypatch):
+    """Upstream Public chain failure must refuse with a typed reason — never
+    fall back to a substitute source and never masquerade as 'no producer'."""
+    import routes.steal_three as st
+
+    st._income_cache.clear()
+    monkeypatch.setenv("FLOWW_MARKET_DATA_PROVIDER", "public")
+
+    async def broken_fetch(ticker, max_expiries=4, **kwargs):
+        return None
+
+    monkeypatch.setattr("services.public_api_adapter.fetch_chain_from_public_api", broken_fetch)
+
+    client = TestClient(_build_minimal_app())
+    resp = client.get("/api/screener/income?symbol=SPY&side=both&min_dte=7&max_dte=45")
+    assert resp.status_code == 503, resp.text
+    detail = resp.json()["detail"]
+    assert detail["reason"] == "PUBLIC_CHAIN_UNAVAILABLE"
+    assert "unreachable" not in detail["message"].lower()
+    st._income_cache.clear()
