@@ -38,6 +38,18 @@ def _clean_state(monkeypatch):
     cvmod._req_log.extend(req_log)
 
 
+@pytest.fixture(autouse=True)
+def _pin_scarce_failover_env(monkeypatch):
+    """2026-09-08 owner directive contract: Public primary unlimited with
+    cvserver as the scarce (20/hr) failover, exercised here by patching the
+    merged fetch and cvserver client directly. ADR-0002 disables alternate
+    sources only when ``FLOWW_MARKET_DATA_PROVIDER == "public"``; host
+    checkouts set that through ``.env``. Pin the directive-documented mode so
+    these strategy contracts stay hermetic regardless of host ``.env`` state.
+    The Public-only refusal behavior is covered by dedicated policy tests."""
+    monkeypatch.delenv("FLOWW_MARKET_DATA_PROVIDER", raising=False)
+
+
 def _contract(strike, exp="2026-09-18", typ="call"):
     return {"strike": float(strike), "expiry": exp, "T": 30 / 365.0,
             "type": typ, "oi": 100.0, "iv": 0.25, "volume": 10.0,

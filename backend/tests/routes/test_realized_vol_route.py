@@ -30,6 +30,20 @@ from fastapi.testclient import TestClient
 
 from routes.steal_three import router as steal_three_router
 
+
+@pytest.fixture(autouse=True)
+def _pin_legacy_provider_env(monkeypatch):
+    """These three cases document the legacy market-data contract: yfinance
+    OHLC + chain loading, the DuckDB accumulate path and the defensive-degrade
+    warning. ADR-0002 keeps that path code-active only when
+    ``FLOWW_MARKET_DATA_PROVIDER != "public"``; host checkouts may set the
+    variable to ``public`` (then the shared guard refuses legacy studies with
+    503 before any of this logic runs). Pin the documented mode so the
+    contract stays hermetic regardless of host ``.env`` state. Public-only
+    refusal for this route is covered by policy tests, not re-hidden here."""
+    monkeypatch.delenv("FLOWW_MARKET_DATA_PROVIDER", raising=False)
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Test app + FakeYFTicker (60d of stable OHLC; enough bars for 60d cone
 # + 21d typical-range-band lookbacks).
