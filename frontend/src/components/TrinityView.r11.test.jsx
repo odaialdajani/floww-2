@@ -36,7 +36,7 @@ test("Triad follows the shared symbol and clears a wall on a header symbol chang
 
 test("Triad starts with same-session scope and session Volume × absolute delta, not copied OI", async () => {
  await mount();
- expect(screen.getByLabelText("Triad expiry scope")).toHaveValue("0dte");
+ expect(screen.getByLabelText("Market view expiry scope")).toHaveValue("0dte");
  expect(screen.getByLabelText("Adjusted context")).toHaveValue("session_delta_volume");
  expect(screen.getByTestId("triad-activity-coverage")).toHaveTextContent("Volume window: unavailable");
  expect(axios.get.mock.calls.some(([url])=>String(url).includes("dte=0"))).toBe(true);
@@ -58,7 +58,7 @@ test("the 0DTE refusal offers the loaded expiries in one explicit step",async()=
  const button=screen.getByTestId("triad-show-loaded");
  axios.get.mockClear();
  await act(async()=>{fireEvent.click(button);});
- expect(screen.getByLabelText("Triad expiry scope")).toHaveValue("loaded");
+ expect(screen.getByLabelText("Market view expiry scope")).toHaveValue("loaded");
  const urls=axios.get.mock.calls.map(([url])=>String(url));
  expect(urls.some(url=>url.includes("dte=0"))).toBe(false);
  expect(urls.some(url=>url.includes("/heatmap/"))).toBe(true);
@@ -100,7 +100,7 @@ test("Triad timeline restores the stored pair without fetching live Greeks and r
 test("Next listed requests server-owned scope and never sends a guessed date or zero DTE", async () => {
   await mount();
   expect(screen.getByRole("option", { name: /Next listed/ })).not.toBeDisabled();
-  await act(async () => { fireEvent.change(screen.getByLabelText("Triad expiry scope"), { target: { value: "next" } }); });
+  await act(async () => { fireEvent.change(screen.getByLabelText("Market view expiry scope"), { target: { value: "next" } }); });
   const urls = axios.get.mock.calls.map(([url]) => String(url));
   const next = urls.find(url => url.includes("expiry_scope=next"));
   expect(next).toBeDefined();
@@ -117,8 +117,8 @@ test("recorded Next listed scope restores without a second fetch or a live subst
     context: { display: { map_query: query } }, strikes: p.strikes,
   } } : { data: { rows: [], decisions: [] } });
   await mount();
-  expect(screen.getByLabelText("Triad expiry scope")).toHaveValue("next");
-  expect(screen.getByLabelText("Triad expiry scope")).toBeDisabled();
+  expect(screen.getByLabelText("Market view expiry scope")).toHaveValue("next");
+  expect(screen.getByLabelText("Market view expiry scope")).toBeDisabled();
   expect(axios.get.mock.calls.filter(([url]) => String(url).includes("/replay/")).length).toBe(1);
   expect(axios.get.mock.calls.some(([url]) => String(url).includes("/heatmap/"))).toBe(false);
   expect(JSON.parse(screen.getByTestId("r11-context").textContent).mapQuery).toEqual(query);

@@ -385,3 +385,46 @@ async def test_critical_crash_unknown_dispatch(record_property):
                 await service.close()
     finally:
         client.close()
+
+
+@pytest.mark.asyncio
+async def test_expired_admission_budget_cannot_finish_as_completed():
+    repo = await repository()
+    calls = []
+    service = ResearchService(repo, ResearchReads(lambda *a: calls.append("context") or {"spot": 100},
+                                                 lambda *a: None, lambda *a: []), timeout=3)
+    spec = request_spec(CASES["critical_cancel_late_worker"]["body"])
+    try:
+        turn = await service.ask("deadline-owner", identity(), spec)
+        key = turn["turn_id"]
+        # Simulate scheduling delay after admission without a timing-sensitive sleep.
+        service._read_budgets[key].deadline = time.monotonic() - 1
+        await asyncio.gather(*list(service.tasks.values()), return_exceptions=True)
+        saved = await repo.read("deadline-owner", key)
+        assert saved["status"] == "failed"
+        assert saved["answer"] is None
+        assert calls == []
+    finally:
+        await service.close()
+
+
+@pytest.mark.asyncio
+async def test_deadline_crossed_during_answer_assembly_cannot_publish(monkeypatch):
+    repo = await repository()
+    service = ResearchService(repo, ResearchReads(lambda *a: {"spot": 100},
+                                                 lambda *a: None, lambda *a: []), timeout=3)
+    spec = request_spec(CASES["critical_cancel_late_worker"]["body"])
+    key = None
+    def expire_during_assembly(*args):
+        service._read_budgets[key].deadline = time.monotonic() - 1
+        return {}
+    monkeypatch.setattr("services.agent.research.build_plan_draft", expire_during_assembly)
+    try:
+        turn = await service.ask("deadline-owner", identity(), spec)
+        key = turn["turn_id"]
+        await asyncio.gather(*list(service.tasks.values()), return_exceptions=True)
+        saved = await repo.read("deadline-owner", key)
+        assert saved["status"] == "failed"
+        assert saved["answer"] is None
+    finally:
+        await service.close()

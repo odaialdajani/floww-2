@@ -1,5 +1,6 @@
 import React, { memo } from "react";
 import { explainWall } from "../../lib/solsticeExplain";
+import "./ReviewInspector.css";
 
 /**
  * WallInspector — selected-wall inspector (T07 §28.3): Now / Changed /
@@ -39,6 +40,60 @@ function windowReason(metrics) {
   // Canonical spelling wins, including null on a valid current window.
   return Object.hasOwn(metrics || {}, "window_dadgex_reason")
     ? metrics.window_dadgex_reason : metrics?.window_daddex_reason;
+}
+
+// ── Shared same-wall breakdown semantics (2026-10-17) ─────────────────
+// One source for the compact FocusSummary and the deeper CompareTable so
+// the two cannot drift. Missing is "—", never zero (R8-06: a zero with
+// no usable inputs is missing data, not a measured zero); usable counts
+// only recognize safe non-negative integers.
+function fmtCell(v) {
+  return v == null ? "—" : fmtUsd(v);
+}
+
+function wallDeltaWeighted(wb) {
+  const usable = usableCount(wb?.daddex_usable);
+  const missing = usableCount(wb?.daddex_missing);
+  const invalid = usableCount(wb?.daddex_invalid);
+  const absentNote = [missing > 0 ? `${missing} δ-missing` : null,
+    invalid > 0 ? `${invalid} δ-invalid (unusable reading)` : null].filter(Boolean).join(", ");
+  const value = !wb ? "—"
+    : usable > 0 ? `${fmtCell(wb.daddex_gross)} / ${fmtCell(wb.daddex_net)}`
+    : absentNote ? `— (${absentNote})` : "—";
+  return { value, usable, missing, invalid, absentNote };
+}
+
+function wallSessionVolume(wb) {
+  const usable = usableCount(Object.hasOwn(wb || {}, "volume_usable") ? wb.volume_usable : wb?.volume_n);
+  const missing = usableCount(wb?.volume_missing);
+  const invalid = usableCount(wb?.volume_invalid);
+  const value = !wb ? "—"
+    : usable > 0 ? `${fmtCell(wb.volume_gross)} / ${fmtCell(wb.volume_net)}` : "—";
+  return { value, usable, missing, invalid };
+}
+
+function wallSessionDeltaVolume(wb) {
+  const usable = usableCount(wb?.session_delta_volume_usable);
+  const missing = usableCount(wb?.session_delta_volume_missing);
+  const invalid = usableCount(wb?.session_delta_volume_invalid);
+  const value = usable > 0
+    ? `${fmtCell(wb.session_delta_volume_gross)} / ${fmtCell(wb.session_delta_volume_net)}` : "—";
+  return { value, usable, missing, invalid };
+}
+
+function wallRecentWindow(wallWin, metrics) {
+  // R6-2: wall-local window Δ-activity over member strikes with member/active
+  // coverage; the whole-scope window scalar is never shown as wall-local.
+  // Absence reports its reason — a missing window is never zero. Shared by
+  // the compact FocusSummary and CompareTable so the wording cannot drift.
+  const cov = (wallWin && wallWin.coverage) || {};
+  const reason = windowReason(metrics);
+  const value = wallWin
+    ? `${fmtUsd(wallWin.window_daddex)} · ${cov.active_strikes ?? "—"}/${cov.member_strikes ?? "—"} strikes`
+    : (reason === "VOLUME_REBASE"
+      ? "unavailable — volume rebase"
+      : `unavailable — ${reason || "no comparable window"}`);
+  return { value, reason, present: Boolean(wallWin) };
 }
 
 function WallInspector({ wall = null, interaction = null, metrics = null, grids = null, displayGrid = null, quality = null, scenario = null, goneReason = null, lastWallId = null,
@@ -98,7 +153,8 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
   // R6-2 wall-local window activity: aggregate over THIS wall's member
   // strikes only (with member/active coverage). The whole-scope sum is never
   // shown as wall-local; without a comparable baseline the row reports why.
-  // (Rendered inside CompareTable below; no separate row — one window value.)
+  // (Shared helper with the compact FocusSummary and the CompareTable row —
+  // one wall-local window value, never the scope scalar.)
   const wallWin = (metrics?.wall_window || {})[wall.wall_id || ""];
   const winReason = windowReason(metrics);
   // R6-2 same-wall comparison: raw (wall record), delta-weighted and session
@@ -108,6 +164,7 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
   return (
     <div className="skylit-metrics-section" data-testid="wall-inspector">
       <div className="skylit-section-title">Selected wall · {wall.wall_id || `${wall.low}–${wall.high}`}</div>
+      <FocusSummary wall={wall} wb={wb} wallWin={wallWin} metrics={metrics} />
       <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 6 }}>Now / Changed / Confirm / Invalidates</div>
       <Row k="Now" v={`${wall.low}–${wall.high} · gross ${fmtUsd(wall.gross)} · net ${fmtUsd(wall.net)} (USD/1% move, ${wall.exposure_basis || "OI"})`} />
       <Row k="Call / Put" v={`${fmtUsd(wall.call)} / ${fmtUsd(wall.put)}`} tip="Call-plus vs put-minus components; high gross + near-zero net is two-sided concentration" />
@@ -135,6 +192,65 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
         wallWindow={wallWin || null} windowReason={winReason || null}
       />
       <ContextSections scout={scout} patterns={patterns} regime={regime} vanna={vanna} moneyness={moneyness} members={members} />
+    </div>
+  );
+}
+
+
+/**
+ * FocusSummary — compact always-visible same-wall summary (2026-10-17
+ * focused-context slice): raw OI, OI × |Δ| and session volume × |Δ|
+ * gross/net with declared bases and usable/missing/invalid coverage.
+ * Wall-local only — scope totals and other walls stay out (the deeper
+ * CompareTable keeps the full breakdown). Sign convention is the declared
+ * call-positive/put-negative weighting, never a measured dealer reaction;
+ * the volume family is not trade-signed flow and nothing here is an entry.
+ */
+function FocusSummary({ wall, wb, wallWin, metrics }) {
+  const d = wallDeltaWeighted(wb);
+  const dv = wallSessionDeltaVolume(wb);
+  const win = wallRecentWindow(wallWin, metrics);
+  const bases = (wb && typeof wb.bases === "object" && wb.bases) || {};
+  const contracts = usableCount(wb?.n_contracts);
+  const dCov = [
+    `usable ${d.usable ?? "unknown"}`,
+    d.missing > 0 ? `${d.missing} δ-missing` : null,
+    d.invalid > 0 ? `${d.invalid} δ-invalid` : null,
+  ].filter(Boolean).join(" · ");
+  const dvCov = [
+    `usable ${dv.usable ?? "unknown"}`,
+    dv.missing > 0 ? `${dv.missing} missing` : null,
+    dv.invalid > 0 ? `${dv.invalid} invalid` : null,
+  ].filter(Boolean).join(" · ");
+  return (
+    <div data-testid="wall-focused-context" className="wall-focused-context">
+      <div className="wall-focused-heading">Same wall · gross / net · USD/1% move</div>
+      <div className="wall-focused-chip" data-testid="wall-focused-raw">
+        <span className="wall-focused-label">Raw OI</span>
+        <span className="wall-focused-value">{fmtCell(wall.gross)} / {fmtCell(wall.net)}</span>
+        <span className="wall-focused-meta">
+          USD/1% move · OI · gex.v2{contracts != null ? ` · ${contracts} contracts` : ""}
+        </span>
+      </div>
+      <div className="wall-focused-chip" data-testid="wall-focused-delta">
+        <span className="wall-focused-label">OI × |Δ|</span>
+        <span className="wall-focused-value">{d.value}</span>
+        <span className="wall-focused-meta">
+          {wb ? `${bases.daddex || "OI_DELTA_WEIGHTED"} · ${dCov}` : "no wall breakdown"}
+        </span>
+      </div>
+      <div className="wall-focused-chip" data-testid="wall-focused-voldelta">
+        <span className="wall-focused-label">Vol × |Δ|</span>
+        <span className="wall-focused-value">{dv.value}</span>
+        <span className="wall-focused-meta">
+          {wb ? `${bases.session_delta_volume || "VOLUME_DELTA_WEIGHTED"} · ${dvCov} · not trade-signed flow` : "no wall breakdown"}
+        </span>
+      </div>
+      <div className="wall-focused-chip" data-testid="wall-focused-window">
+        <span className="wall-focused-label">Window activity</span>
+        <span className="wall-focused-value">{win.value}</span>
+        <span className="wall-focused-meta">window Δ-weighted · member coverage · wall-local</span>
+      </div>
     </div>
   );
 }
@@ -192,36 +308,29 @@ function CompareTable({ wall, metrics, displayGrid }) {
       vexGross=[...vexMembers].reduce((sum,s)=>sum+grossByStrike.get(s),0);
     }
   }
-  const winCov = (wallWin && wallWin.coverage) || {};
-  // The canonical spelling wins even when explicitly null. Old recorded
-  // packets used daddex; support them without reviving a stale refusal.
-  const winReason = windowReason(metrics);
-  const winNote = wallWin
-    ? `${fmtUsd(wallWin.window_daddex)} · ${winCov.active_strikes ?? "—"}/${winCov.member_strikes ?? "—"} strikes`
-    : ((winReason === "VOLUME_REBASE")
-      ? "unavailable — volume rebase"
-      : `unavailable — ${winReason || "no comparable window"}`);
+  const win = wallRecentWindow(wallWin, metrics);
+  const winNote = win.value;
   const cell = (v) => (v == null ? "—" : fmtUsd(v));
-  // R8-06: a zero with no usable inputs is missing data, not a measured
-  // zero — show "—" with the reason instead of $0.
-  const dUsable = usableCount(wb?.daddex_usable);
-  const dMissing = usableCount(wb?.daddex_missing);
-  const dInvalidDelta = usableCount(wb?.daddex_invalid);
-  const dAbsentNote = [dMissing > 0 ? `${dMissing} δ-missing` : null,
-    dInvalidDelta > 0 ? `${dInvalidDelta} δ-invalid (unusable reading)` : null].filter(Boolean).join(", ");
-  const dVal = !wb ? "—"
-    : dUsable > 0 ? `${cell(wb.daddex_gross)} / ${cell(wb.daddex_net)}`
-    : dAbsentNote ? `— (${dAbsentNote})` : "—";
-  const vN = usableCount(Object.hasOwn(wb || {},"volume_usable") ? wb.volume_usable : wb?.volume_n);
-  const vMissing=usableCount(wb?.volume_missing);
-  const vInvalid=usableCount(wb?.volume_invalid);
-  const vVal = !wb ? "—"
-    : vN > 0 ? `${cell(wb.volume_gross)} / ${cell(wb.volume_net)}` : "—";
-  const dvN = usableCount(wb?.session_delta_volume_usable);
-  const dvMissing = usableCount(wb?.session_delta_volume_missing);
-  const dvInvalid = usableCount(wb?.session_delta_volume_invalid);
-  const dvVal = dvN > 0
-    ? `${cell(wb.session_delta_volume_gross)} / ${cell(wb.session_delta_volume_net)}` : "—";
+  // Shared semantics (2026-10-17): this table and the compact FocusSummary
+  // use the same wallDeltaWeighted / wallSessionVolume /
+  // wallSessionDeltaVolume helpers, so the missing/zero/coverage language
+  // can never drift between the two surfaces.
+  const d = wallDeltaWeighted(wb);
+  const dUsable = d.usable;
+  const dMissing = d.missing;
+  const dInvalidDelta = d.invalid;
+  const dAbsentNote = d.absentNote;
+  const dVal = d.value;
+  const sv = wallSessionVolume(wb);
+  const vN = sv.usable;
+  const vMissing = sv.missing;
+  const vInvalid = sv.invalid;
+  const vVal = sv.value;
+  const dv = wallSessionDeltaVolume(wb);
+  const dvN = dv.usable;
+  const dvMissing = dv.missing;
+  const dvInvalid = dv.invalid;
+  const dvVal = dv.value;
   const vexScope = displayGrid?.vex_meta;
   const scopeNotes = [
     ["missing_vanna_inputs", "missing inputs"],

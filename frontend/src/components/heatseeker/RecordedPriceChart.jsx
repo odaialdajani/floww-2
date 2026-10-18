@@ -151,17 +151,21 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
      {visible.flatMap((frame,index)=>savedLevels(frame,metrics,allNodes).map((node,n)=>{const seconds=typeof frame.duration_seconds==='number'&&frame.duration_seconds>0?frame.duration_seconds:60,fraction=Math.min(seconds,Math.max(0,900-(node.age_seconds??frame.node_age_seconds)))/seconds;
       const xx=left+index*spacing,yy=y(node.level);return <line data-testid="saved-node-line" key={frame.time+':'+node.metric+':'+node.id+':'+n} x1={xx} x2={xx+spacing*fraction} y1={yy} y2={yy} stroke={NODE_COLORS[node.metric]} strokeWidth="2" opacity="0.88"><title>{NODE_LABELS[node.metric]+' saved level '+price(node.level)+'. Known '+chartTime(Object.hasOwn(node,'known_at')?node.known_at:frame.nodes_known_at,true)+' New York. '+(node.label||'Recorded level')}</title></line>;}))}
       {showAtlas&&visible.flatMap((frame,index)=>{
-       const nodes=(Array.isArray(frame.nodes)?frame.nodes:[]).filter(n=>n&&Number.isFinite(n.level)&&Object.hasOwn(NODE_COLORS,n.metric||'gex'));
+       // Orbs share saved lines' available-at and freshness gates. Legacy
+       // levels without measured exposure remain markers, never ranked kings.
+       const nodes=savedLevels(frame,metrics,true).filter(n=>n.status!=='unavailable');
        if(!nodes.length)return [];
-       const weights=nodes.map(n=>{const w=n.signed_value??n.strength;return typeof w==='number'&&Number.isFinite(w)?Math.abs(w):1;});
-       const king=Math.max(...weights),center=left+(index+0.5)*spacing;
+       const weights=nodes.map(n=>Number.isFinite(n.signed_value)?Math.abs(n.signed_value):null);
+       const kings={};
+       nodes.forEach((node,ni)=>{if(weights[ni]!==null)kings[node.metric]=Math.max(kings[node.metric]||0,weights[ni]);});
+       const center=left+(index+0.5)*spacing;
        return nodes.flatMap((node,ni)=>{const yy=y(node.level);
         // A strike outside the visible price range is never drawn clamped
         // to the plot edge — that would fabricate a price. Drop it and mark
         // the candle as having out-of-range nodes instead.
         if(yy<top||yy>bottom)return <title key={frame.time+':orb:'+ni+':oor'} data-testid="orb-out-of-range">Orb {price(node.level)} out of visible price range</title>;
-        const ratio=king>0?weights[ni]/king:0,r=Math.min(12,Math.max(3,4*Math.sqrt(Math.max(0,ratio)))),isKing=weights[ni]===king;
-        return <circle data-testid="chart-orb" key={frame.time+':orb:'+ni} cx={center} cy={yy} r={r} fill={isKing?'#e8bd65':'none'} stroke={NODE_COLORS[node.metric||'gex']||'#e8bd65'} strokeWidth={isKing?2:1} opacity="0.75"><title>{'Orb '+price(node.level)+(isKing?' (King Node)':'')}</title></circle>;});})}
+        const king=kings[node.metric],ratio=king>0&&weights[ni]!==null?weights[ni]/king:0,r=Math.min(12,Math.max(3,4*Math.sqrt(ratio))),isKing=king>0&&weights[ni]===king;
+        return <circle data-testid="chart-orb" key={frame.time+':orb:'+ni} cx={center} cy={yy} r={r} fill={isKing?'#e8bd65':'none'} stroke={NODE_COLORS[node.metric]} strokeWidth={isKing?2:1} opacity="0.75"><title>{'Orb '+price(node.level)+(isKing?' (King Node · '+NODE_LABELS[node.metric]+' · observed saved subset)':weights[ni]===null?' (exposure unavailable)':'')}</title></circle>;});})}
       {exposurePolys()}
       {envelopeLevels().map((lv,li)=><line data-testid="exposure-envelope" key={'envelope:'+li} x1={left} x2={right} y1={y(lv)} y2={y(lv)} stroke="#72d7df" strokeWidth="1" strokeDasharray="2 3" opacity="0.7"><title>Exposure envelope level</title></line>)}
       {showAtlas&&Array.isArray(darkLevels)&&darkLevels.filter(l=>l&&typeof l.price==='number'&&Number.isFinite(l.price)&&l.price>=range.low&&l.price<=range.high).map((l,li)=><line data-testid="dark-pool-level" key={'dark:'+li} x1={left} x2={right} y1={y(l.price)} y2={y(l.price)} stroke="#c9a86a" strokeWidth="1.5" strokeDasharray="6 3"><title>{'Dark pool level '+price(l.price)+(l.venue?' '+l.venue:'')}</title></line>)}
@@ -223,7 +227,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
         {lines.map((seg,si)=><polyline data-testid="cvd-line" key={'cvd:'+si} points={seg.map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ')} fill="none" stroke="#9d7bea" strokeWidth="1.5"><title>CVD estimate</title></polyline>)}
         {dots.map((p,di)=><circle data-testid="cvd-point" key={'cvddot:'+di} cx={p.x} cy={p.y} r="2" fill="#9d7bea" opacity="0.9"><title>CVD estimate (single known candle)</title></circle>)}
        </svg>
-       <small>CVD estimated via bulk volume classification (Easley, López de Prado &amp; O&apos;Hara 2012); ≈80% bar accuracy on equities — directional, not exact. Unknown ≠ zero; gaps are honest. Range {lo.toLocaleString('en-US')}–{hi.toLocaleString('en-US')} shares (own scale).</small>
+       <small>CVD estimated via bulk volume classification (Easley, López de Prado &amp; O&apos;Hara 2012); a bar-volume estimate, not classified trade-by-trade CVD. Unknown ≠ zero; gaps are honest. Range {lo.toLocaleString('en-US')}–{hi.toLocaleString('en-US')} shares (own scale).</small>
      </div>;})()}
     {Array.isArray(alertLines)&&alertLines.some(a=>a?.state==='stale')&&<small role="note">Stale alert refused — no evaluation on stale prices.</small>}
     {!!data.length&&(()=>{ // Contract premium path: selected option's own closes on their own $ scale.

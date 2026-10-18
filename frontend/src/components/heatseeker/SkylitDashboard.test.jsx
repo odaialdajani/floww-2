@@ -556,6 +556,9 @@ describe("SkylitDashboard", () => {
       scenarios: [],
       quality: { state: "usable", reasonCodes: [], setupEligible: true },
     };
+    // Parity applies to the same admitted snapshot. An actual empty
+    // expansion now correctly clears the previous map instead of reusing it.
+    axios.get.mockImplementation(async url => ({ data: String(url).includes("/heatmap/") ? data : { strikes: [] } }));
     await act(async () => {
       render(<SkylitDashboard ticker="SPY" data={data} spot={650} />);
     });
@@ -1185,7 +1188,7 @@ describe("SkylitDashboard O2 inspector drawer", () => {
     window.sessionStorage.clear();
   });
 
-  test("selection opens the drawer with inspector + Open in Triad; close and Esc shut it", async () => {
+  test("selection opens the drawer with inspector + Open in Market view; close and Esc shut it", async () => {
     await act(async () => {
       render(<SkylitDashboard ticker="SPY" data={drawerData} spot={650} />);
     });
@@ -1196,7 +1199,7 @@ describe("SkylitDashboard O2 inspector drawer", () => {
     await waitFor(() => {
       expect(screen.getByTestId("skylit-inspector-drawer")).toBeInTheDocument();
     });
-    expect(screen.getByTestId("skylit-open-triad")).toBeInTheDocument();
+    expect(screen.getByRole("button", {name:"Open in Market view"})).toBeInTheDocument();
     await act(async () => {
       fireEvent.click(screen.getByTestId("skylit-drawer-close"));
     });
@@ -1224,7 +1227,7 @@ describe("SkylitDashboard O2 inspector drawer", () => {
     expect(screen.queryByTestId("skylit-inspector-drawer")).not.toBeInTheDocument();
   });
 
-  test("Open in Triad writes a sessionStorage handoff for Triad to consume", async () => {
+  test("Open in Market view preserves the existing sessionStorage handoff", async () => {
     await act(async () => {
       render(<SkylitDashboard ticker="SPY" data={drawerData} spot={650} />);
     });
@@ -1232,7 +1235,7 @@ describe("SkylitDashboard O2 inspector drawer", () => {
       fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
     });
     await waitFor(() => {
-      expect(screen.getByTestId("skylit-open-triad")).toBeInTheDocument();
+      expect(screen.getByRole("button", {name:"Open in Market view"})).toBeInTheDocument();
     });
     await act(async () => {
       fireEvent.click(screen.getByTestId("skylit-open-triad"));

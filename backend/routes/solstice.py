@@ -245,7 +245,9 @@ async def manifest(ticker: str, day: str = Query(""),
 
 
 @router.get("/attribute/{ticker}")
-async def attribute(ticker: str, day: str = Query("")) -> dict[str, Any]:
+async def attribute(ticker: str, day: str = Query(""),
+                    query_key: str | None = Query(None),
+                    as_of: str | None = Query(None)) -> dict[str, Any]:
     """Coarse wall-level change between the last two snapshots (T09).
 
     Descriptive comparison only — not the spot/IV/time/OI counterfactual.
@@ -255,11 +257,13 @@ async def attribute(ticker: str, day: str = Query("")) -> dict[str, Any]:
     from services.duckdb_engine import db as eng
     from services.heatmap_history import compare_snapshots
     conn = eng.conn if hasattr(eng, "conn") else None
-    day = day or datetime.now(UTC).date().isoformat()
+    # A supplied cutoff is validated by the service, never replaced by today.
+    if not day and as_of is None and query_key is None:
+        day = datetime.now(UTC).date().isoformat()
     if conn is None:
         return {"ticker": ticker.upper(), "day": day, "status": "error",
                 "error": "recorder_unavailable"}
-    return compare_snapshots(conn, ticker, day)
+    return compare_snapshots(conn, ticker, day, query_key=query_key, as_of=as_of)
 
 
 @router.get("/recorder_health")
