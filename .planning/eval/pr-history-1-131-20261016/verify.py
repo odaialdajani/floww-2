@@ -87,6 +87,9 @@ def main() -> None:
     baseline = json.loads((HERE / "baseline.json").read_text())
     for path, entry in baseline["dirty_hashes"].items():
         accepted = {entry} if isinstance(entry, str) else set(entry.get("any_of", []))
+        if not accepted:
+            assert (ROOT / path).is_file(), f"live concurrent record missing: {path}"
+            continue
         assert sha(ROOT / path) in accepted, f"concurrent dirty file changed beyond recorded bytes: {path}"
 
     if args.remote:

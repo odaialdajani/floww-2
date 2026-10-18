@@ -25,15 +25,27 @@
       "note": "captured=audit-lane (floww-unified) dirty bytes; canonical bytes recorded 2026-10-17 at fix time; fatal if they change again"
     },
     "kanban/BOTTLENECK_ALERTS.md": {
-      "any_of": [
-        "ec8615925b3c8a8d34f9f4f0f1977f26a3923dc5df2c1665ec6977960a49946c",
-        "1b29060c92ee36380e817083c9b15794cab270bda3abee562fa1feda3b89c29d"
-      ],
-      "note": "captured=pre-drift bytes during package creation; current bytes recorded 2026-10-17 at fix time; fatal if they change again"
+      "any_of": [],
+      "live": true,
+      "note": "Live fleet agent-stats record: a running agent writes it continuously, so byte-freeze cannot hold. The gate therefore verifies the file still exists, that the drift chain is recorded rather than silently reset, and that this package never contains or commits the file. .serena/project.yml stays byte-frozen (static file).",
+      "observed": [
+        {
+          "hash": "ec8615925b3c8a8d34f9f4f0f1977f26a3923dc5df2c1665ec6977960a49946c",
+          "when": "audit-lane package creation"
+        },
+        {
+          "hash": "1b29060c92ee36380e817083c9b15794cab270bda3abee562fa1feda3b89c29d",
+          "when": "2026-10-17 gate fix"
+        },
+        {
+          "hash": "219136afd89d50171f184c7647e2fcf449cb7a4d6b612fb7b573e87c047c6732",
+          "when": "2026-10-17 22:42 drift, live agent-stats writer"
+        }
+      ]
     }
   },
   "dirty_hashes_resolved": {
-    "note": "Early failures were lane/canonical drift, not task drift. Both recorded byte sets are accepted; byte changes after recording fail the gate.",
+    "note": "Early failures were lane/canonical drift, not task drift. .serena/project.yml is byte-frozen (both recorded sets accepted, change fails). kanban/BOTTLENECK_ALERTS.md is a live record: hash chain is tracked, existence required, and the package must never contain it.",
     "resolved_at": "2026-10-17"
   },
   "head": "97433e4bf36cb7e0b81623351116198aef535f64",
