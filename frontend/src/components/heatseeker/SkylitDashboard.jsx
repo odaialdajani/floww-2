@@ -30,6 +30,7 @@ import { resolveSelectedWall, wallPositionOf } from "../../lib/solsticeSelection
 import {skylitViewScope,readSkylitView,writeSkylitView,captureSkylitSelection,restoreSkylitSelection} from "./skylitViewPreferences";
 import {chartScopeFor} from "./chart/scopeEcho";
 import { awaitRecording } from "./chart/pollRecording";
+import {useScopedReading} from "../../hooks/useScopedReading";
 
 function stockStudyOpen(preferences, defaultStudy) {
   if (preferences.studyChoice === "price") return true;
@@ -433,22 +434,25 @@ function SkylitDashboard({
 
   // Expanded view preserves analytical scope (F18): same mode/expiries as the
   // in-frame grid by default; widening analysis is an explicit user action.
-  // expData is cleared on ticker/mode/expiries change with query-keyed guards
-  // so no stale/cross-symbol response is ever shown under a new heading.
-  const [expData, setExpData] = useState(null);
-  const [expLoading, setExpLoading] = useState(false);
+  // Each expansion owns one request generation, including close/reopen of
+  // the same scope. An empty response is data, not a reason to reuse rows.
   const [expWidened, setExpWidened] = useState(false);
-  const expQueryKey = `${ticker}|${timeframe}|${expiries}|${dte ?? ""}|${expiryScope}|${expWidened ? "wide" : "same"}`;
+  const [expRetry, setExpRetry] = useState(0);
+  const expQueryKey = `${ticker}|${timeframe}|${expiries}|${dte ?? ""}|${expiryScope}|${expWidened ? "wide" : "same"}|${expRetry}`;
+  const [expReading, setExpReading] = useScopedReading(expanded && !isReplay ? expQueryKey : null);
+  const expData = expReading?.status === "ready" ? expReading.data : null;
+  const expLoading = expanded && !isReplay && (!expReading || expReading.status === "loading");
+  const expUnavailable = expReading?.status === "unavailable";
   useEffect(() => {
-    setExpData(null);
+    setExpReading(null);
     setExpWidened(false);
   }, [ticker, timeframe, expiries, dte, expiryScope, replaySnap]);
   // R5-B resweep: closing the overlay drops expanded data so stale
   // expanded scope can never drive inline clicks after close. Reopening
   // refetches under the current scope (loading state, never old pixels).
   useEffect(() => {
-    if (!expanded) setExpData(null);
-  }, [expanded]);
+    if (!expanded) setExpReading(null);
+  }, [expanded, setExpReading]);
   // Locked comparison scale never survives a scope change.
   useEffect(() => {
     setScaleLock(null);
@@ -458,27 +462,27 @@ function SkylitDashboard({
     if (!expanded || isReplay) return undefined;
     let cancelled = false;
     const ctrl = new AbortController();
-    const myKey = expQueryKey;
-    setExpData(null);
-    setExpLoading(true);
-    const widen = expWidened ? "&expiries=8" : "";
+    setExpReading({status:"loading"});
     // Preserve full analytical scope (R4-15): mode + dte + scalp travel with
     // the expand fetch; widening expiries is the only explicit scope change.
     const modeParam = ["scalp", "1m"].includes(timeframe) ? "scalp" : ["swing", "1h"].includes(timeframe) ? "swing" : "day";
     const dteParam = expiryScope === "next" ? "&expiry_scope=next" : dte != null ? `&dte=${encodeURIComponent(dte)}` : "";
     const scalpParam = modeParam === "scalp" ? "&scalp=true" : "";
     axios
-      .get(`${BACKEND_API}/heatmap/${encodeURIComponent(ticker)}?mode=${modeParam}&expiries=${expWidened ? 8 : expiries}${dteParam}${scalpParam}${widen && expWidened ? "" : ""}`, {
+      .get(`${BACKEND_API}/heatmap/${encodeURIComponent(ticker)}?mode=${modeParam}&expiries=${expWidened ? 8 : expiries}${dteParam}${scalpParam}`, {
         timeout: 45000,
         signal: ctrl.signal,
       })
       .then((r) => {
-        if (!cancelled && myKey === expQueryKey && r?.data?.strikes?.length && (!r.data.ticker || r.data.ticker === ticker)) setExpData({...r.data,ticker});
+        if (cancelled) return;
+        const body=r?.data;
+        const valid=body && Array.isArray(body.strikes) && (!body.ticker || body.ticker===ticker)
+          && !["unavailable","error"].includes(body.status);
+        setExpReading(valid?{status:"ready",data:{...body,ticker}}:{status:"unavailable"});
       })
-      .catch(() => { /* fallback to in-frame data below */ })
-      .finally(() => { if (!cancelled && myKey === expQueryKey) setExpLoading(false); });
+      .catch(() => { if (!cancelled) setExpReading({status:"unavailable"}); });
     return () => { cancelled = true; ctrl.abort(); };
-  }, [expanded, ticker, timeframe, expiries, dte, expiryScope, expWidened, expQueryKey, isReplay]);
+  }, [expanded, ticker, timeframe, expiries, dte, expiryScope, expWidened, expQueryKey, isReplay, setExpReading]);
   const overlayData = isReplay ? displayData : (expData?.ticker === ticker ? expData : baseData);
   const visibleData = expanded ? overlayData : displayData;
   const [studyChoice, setStudyChoice] = useState(initialView.studyChoice);
@@ -588,13 +592,13 @@ function SkylitDashboard({
   const overlayNote = (() => {
     const n = overlayData?.strikes?.length || 0;
     if (isReplay) return `Saved scope · ${overlayData?.grid?.expiries?.length || 0} expiries · ${n} strikes`;
-    const scope = `${timeframe} · ${expWidened ? 8 : expiries} expiries`;
+    const loaded=Array.isArray(overlayData?.grid?.expiries)?`${overlayData.grid.expiries.length} expiries` : "expiry dates unavailable";
+    const actual=`${loaded} · ${n} strikes`;
     // Loading is explicit even with no rows yet: reopening after close must
     // show a loading state, never stale pixels and never a blank header.
-    if (expLoading && !expData) return "loading scope…";
-    if (!n) return "";
-    if (expData) return `${scope} · ${n} strikes`;
-    return `${scope} · ${n} strikes`;
+    if (expLoading) return `loading scope… · ${baseData?"showing original "+actual:"no expanded data yet"}`;
+    if (expUnavailable) return `Expanded scope unavailable · ${baseData?"showing original "+actual:"no original map available"}`;
+    return expData?`Loaded · ${actual}`:"";
   })();
 
   const handleCellClick = useCallback(
@@ -679,7 +683,7 @@ function SkylitDashboard({
       openingRows.current=null;
       setSelectedCell(null);setContractSelection(null);setTradeMode(false);
       setScaleLock(null);setCompareLock(null);setReplaySnap(null);setReplayOpenRequest(null);
-      setReplayPanelOpen(false);setExpanded(false);setExpData(null);setExpWidened(false);
+      setReplayPanelOpen(false);setExpanded(false);setExpReading(null);setExpWidened(false);
       setFollowWall(false);setFollowWallId(null);setDrawerOpen(false);
       setFollowSpot(true);setAnchorStrike(null);
     }
@@ -1128,8 +1132,8 @@ function SkylitDashboard({
           <div className="skylit-drawer-header">
             <span className="skylit-drawer-title">Selected level</span>
             <button className="skylit-trade-mode-btn" onClick={openInTriad}
-              data-testid="skylit-open-triad" title="Open this wall/snapshot in Triad (raw + adjusted review desk)">
-              Open in Triad
+              data-testid="skylit-open-triad" title="Open this wall/snapshot in Market view (raw + adjusted review desk)">
+              Open in Market view
             </button>
             <button className="skylit-drawer-close" ref={drawerCloseRef} onClick={() => setDrawerOpen(false)}
               data-testid="skylit-drawer-close" title="Close inspector (Esc)" aria-label="Close inspector">
@@ -1257,7 +1261,7 @@ function SkylitDashboard({
                 title="Widen analysis to 8 expiries (explicit scope change)"
                 data-testid="skylit-expand-widen"
               >
-                {expWidened ? "Scope: wide (8)" : "Widen to 8"}
+                {expWidened ? "Request: 8 expiries" : "Widen to 8"}
               </button>}
               <span className="skylit-expanded-hint">Esc to close</span>
             </div>
@@ -1269,6 +1273,10 @@ function SkylitDashboard({
               ✕ Close
             </button>
           </div>
+          {!isReplay && expUnavailable && <div role="alert">
+            {overlayNote}. The requested expansion was not loaded.
+            <button type="button" onClick={()=>setExpRetry(value=>value+1)}>Retry expanded scope</button>
+          </div>}
           <div className="skylit-expanded-body">
             <div className="skylit-expanded-grid">
               {panes ? (

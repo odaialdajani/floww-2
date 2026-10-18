@@ -294,7 +294,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
     return (
       <div className="trinity-layout">{replayControls}<div className="trinity-loading">
         <div className="trinity-loading-spinner" />
-        <span>Loading Triad…</span>
+        <span>Loading Market view…</span>
       </div></div>
     );
   }
@@ -327,7 +327,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
       </div>}
       <div className="triad-desk-toolbar">
         <span>Raw = where · adjusted = weighting, not observed direction</span>
-        <select aria-label="Triad expiry scope" value={isReplay ? declaredScope : scope} disabled={isReplay} onChange={e => setScope(e.target.value)}>
+        <select aria-label="Market view expiry scope" value={isReplay ? declaredScope : scope} disabled={isReplay} onChange={e => setScope(e.target.value)}>
           <option value="loaded">All loaded · max 4 expiries</option><option value="0dte">0DTE · request same session</option><option value="week">Week · ≤7 calendar DTE</option>
           <option value="next">Next listed · one expiry, ≤30 calendar DTE</option>
           {isReplay && declaredScope === "recorded" && <option value="recorded">Recorded scope · exact dates below</option>}
