@@ -194,3 +194,33 @@ Still unchanged: all owner and recovery holds above (NAV-VISUAL, host-model/acco
 The standing full-suite React `act`-warning item was swept with a measured catalog first: eight suites produced 117 `not wrapped in act` console errors (`BlademapActiveMount` 34, `visual` 33, `SkylitDashboard` 24, `BlademapFlowView` 12, `OptionsChainTable` 8, `AlertsPanel.mlFailure` 3, `TriadDesk` 2, `FlowseekerProBlademap.X4` 1), all from fetch/prediction continuations resolving after each test's own awaits. The fix settles those chains inside `act()` at the emitting flows — per-test drains in six suites, act-wrapped collapse clicks replacing raw `el.click()` calls that fed remote loaders, and an afterEach drain in `SkylitDashboard` — with no assertion weakened, skipped, or reordered. Full suite at the fixed tree: **210 suites / 2,335 tests passing, warnings 117 → 5** (the residual five sit under two sessionStorage remount flows in `SkylitDashboard`; anchor drain attempts between the flows' own act windows did not reduce them further and the probes were reverted), and run time improved 61.3 s → 47.4 s. Tests-only commit `a562a55a`, open as PR #135; product code untouched. The fake-timer warning class showed no occurrences in the catalog (no fake timers in the suites at all).
 
 PR #135 (`5813dcf6`, four hosted checks green) and PR #134 both merged; origin `main` and local `main` sit on one line with no divergence (`865a9114` after PR #136). The remaining engineering-executable item from the PR 1–131 branch review's six `missing-actionable` rows — `8300af16`'s `update_prometheus` age-gauge loop defect — was verified already repaired in the canonical tree (per-provider set inside the loop, `None` → `+Inf`); its demanded regression coverage was absent and is now added on PR #136 (three tests: both providers' age gauges emitted, never-succeeded provider emits `+Inf`, empty-monitor update is a no-op; file 29 passed, neighbor suite 44 passed, merged as `865a9114`). The false successor docs about shipped OI/DUO/DVO surfaces were already corrected by the 16 October completion lane; the OI/DUO/DVO surface implementation itself and the eight-surface registry tabs stay routed through their owner lane (explicitly not a wholesale old-branch restoration per the review).
+
+
+## 18 October final UI integration and independent C17 acceptance
+
+The bounded chart/Market-view UI slice is committed as `4596230b`, based on
+`36190e8a`. The final source identity is
+`6f038077e150eb946058d067ebc3cd2d1f34562b15937bad8306b8e99f433e4c`.
+A fresh full frontend check passed 210 suites / 2342 tests; the production
+build passed with the review backend pinned to :8002. Real compiled-browser
+checks at 1470/1024/390 covered wrapped chart details, Saved, loaded-expiry
+walls and the inspector; independent visual review passed. The default empty
+0DTE state and loaded-expiry state remain distinct, with no invented walls.
+Only the thirteen reviewed frontend paths belong to that UI commit.
+
+C17's exact original criterion is independently accepted at `36190e8a`: see
+[the named review](../../docs/unified/C17/INDEPENDENT-REVIEW-20261018.md) and
+[the current machine record](../../docs/unified/C17/acceptance-20261018.json).
+The isolated producer/route module passed 11 tests; the existing same-response
+consumer and unknown/partial/zero distinctions were verified. The frozen
+original obligation snapshot and its reconciliation artifacts remain intact.
+This closes C17 engineering review, not any separate owner commissioning hold.
+
+OpenCode stopped with an unchanged provider quota refusal; Codex root took
+sole integration ownership rather than retrying or switching providers.
+Screener, App.js, backend logic, active processes, stores and unrelated dirty
+files are preserved. Trading and capture remain off. This record does not
+claim a profitability result, complete historical capture, owner visual
+acceptance, or recovery of missing original attachment bytes. The 29-block
+chart roadmap, capture backpressure evidence and the seven external owner
+holds remain governed by their original acceptance requirements.

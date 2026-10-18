@@ -164,27 +164,50 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
   return (
     <div className="skylit-metrics-section" data-testid="wall-inspector">
       <div className="skylit-section-title">Selected wall · {wall.wall_id || `${wall.low}–${wall.high}`}</div>
+      {/* Identity line (2026-10-18 reconciliation): the wall's zone, basis
+          and OI effective date stay visible while the Now row moves, so
+          identity never depends on the disclosure. Walls span expiries; the
+          selected expiry remains visible in ReviewSelectionContext. Nothing
+          here is invented: an absent wall formula states it is unavailable,
+          and this date is named as the OI effective date, never as expiry. */}
+      <div className="wall-identity-line" data-testid="wall-identity-line">
+        {wall.low}–{wall.high} · basis {wall.exposure_basis || "OI"}
+        {" · "}Formula {wall.formula_version || "unavailable"}
+        {" · "}OI date {(Array.isArray(wall.oi_effective_dates) && wall.oi_effective_dates.length) ? wall.oi_effective_dates.join(", ") : "unavailable"}
+      </div>
       <FocusSummary wall={wall} wb={wb} wallWin={wallWin} metrics={metrics} />
-      <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 6 }}>Now / Changed / Confirm / Invalidates</div>
-      <Row k="Now" v={`${wall.low}–${wall.high} · gross ${fmtUsd(wall.gross)} · net ${fmtUsd(wall.net)} (USD/1% move, ${wall.exposure_basis || "OI"})`} />
-      <Row k="Call / Put" v={`${fmtUsd(wall.call)} / ${fmtUsd(wall.put)}`} tip="Call-plus vs put-minus components; high gross + near-zero net is two-sided concentration" />
-      <Row k="Distance" v={wall.distance != null ? `${Number(wall.distance).toFixed(2)} (${(Number(wall.distance_pct) * 100).toFixed(2)}%)` : "—"} />
-      <Row k="Changed" v={interaction ? `${interaction.state}${interaction.event ? ` · ${interaction.event}` : ""}${interaction.first_seen === false ? " · persistent" : " (first sighting — see replay compare)"}${interaction.durable === true ? " · durable" : interaction.durable === false ? " · memory-only" : ""}` : "see replay compare"} tip="Wall-level change needs 2+ recorded snapshots; persistent states carry continuity, first sightings do not; durable = restored from DuckDB after restart, memory-only = in-process" />
-      <InteractionTimeline interaction={interaction} />
+      {/* Always visible: readiness, confirmation, invalidation and explicit
+          data quality. Repeated supporting facts and interaction history live
+          in the Exposure details disclosure below — accessible, never dropped. */}
       <Readiness interaction={interaction} quality={quality} scenario={scenario} />
-      <Row k="Interaction" v={interaction ? interaction.state : "unobserved"} tip="Time-debounced state machine; session/feed gaps break continuity" />
-      <Row k="Touches" v={interaction && interaction.taps != null ? String(interaction.taps) : "unknown — no history"} tip="Observed touches only; never a calibrated probability" />
       <Row k="Confirm" v={scenario?.confirmation || "Confirmation not supplied — observe, not an entry signal"} />
       <Row k="Invalidates" v={scenario?.invalidation || "Invalidation not supplied — no trade plan inferred"} />
       <Row k="Data" v={quality ? `${quality.state || "unknown"} · ${(quality.reasonCodes || []).join(", ") || "ok"}` : "unknown"} />
-      <details className="wall-exposure-details"><summary>Exposure details and coverage</summary>
-      {perExpiry.length > 0 && (
-        <Row k="Per-expiry" v={perExpiryGroups} tip="Same-snapshot per-expiry contributions for member strikes" />
-      )}
-      <Row k="Δ/Raw (scope)" v={ratio != null ? Number(ratio).toFixed(3) : "—"} tip="Scope-wide delta gross / raw gross over the same snapshot set — not the selected wall. Wall-local ratio needs same-wall delta + raw grids." />
-      <CompareTable wall={wall} metrics={metrics} displayGrid={displayGrid} />
-      <Row k="Δ provenance" v={pairNote} tip="Vendor/vendor, local/local eligible; mixed pairs blocked without policy" />
-      <Row k="OI eff. date" v={(wall.oi_effective_dates && wall.oi_effective_dates.length ? wall.oi_effective_dates.join(", ") : null) ?? "unavailable in snapshot"} tip="Per-wall OI effective dates from member-strike provenance; unavailable when no member carries OI metadata" />
+      <details className="wall-exposure-details" data-testid="wall-exposure-details">
+      <summary>Exposure details and coverage</summary>
+      <div className="wall-details-section" data-testid="wall-details-facts">
+        <div className="wall-details-heading">Wall facts</div>
+        <Row k="Now" v={`${wall.low}–${wall.high} · gross ${fmtUsd(wall.gross)} · net ${fmtUsd(wall.net)} (USD/1% move, ${wall.exposure_basis || "OI"})`} />
+        <Row k="Call / Put" v={`${fmtUsd(wall.call)} / ${fmtUsd(wall.put)}`} tip="Call-plus vs put-minus components; high gross + near-zero net is two-sided concentration" />
+        <Row k="Distance" v={wall.distance != null ? `${Number(wall.distance).toFixed(2)} (${(Number(wall.distance_pct) * 100).toFixed(2)}%)` : "—"} />
+      </div>
+      <div className="wall-details-section" data-testid="wall-details-interaction">
+        <div className="wall-details-heading">Interaction history</div>
+        <Row k="Changed" v={interaction ? `${interaction.state}${interaction.event ? ` · ${interaction.event}` : ""}${interaction.first_seen === false ? " · persistent" : " (first sighting — see replay compare)"}${interaction.durable === true ? " · durable" : interaction.durable === false ? " · memory-only" : ""}` : "see replay compare"} tip="Wall-level change needs 2+ recorded snapshots; persistent states carry continuity, first sightings do not; durable = restored from DuckDB after restart, memory-only = in-process" />
+        <InteractionTimeline interaction={interaction} />
+        <Row k="Interaction" v={interaction ? interaction.state : "unobserved"} tip="Time-debounced state machine; session/feed gaps break continuity" />
+        <Row k="Touches" v={interaction && interaction.taps != null ? String(interaction.taps) : "unknown — no history"} tip="Observed touches only; never a calibrated probability" />
+      </div>
+      <div className="wall-details-section" data-testid="wall-details-coverage">
+        <div className="wall-details-heading">Coverage and provenance</div>
+        {perExpiry.length > 0 && (
+          <Row k="Per-expiry" v={perExpiryGroups} tip="Same-snapshot per-expiry contributions for member strikes" />
+        )}
+        <Row k="Δ/Raw (scope)" v={ratio != null ? Number(ratio).toFixed(3) : "—"} tip="Scope-wide delta gross / raw gross over the same snapshot set — not the selected wall. Wall-local ratio needs same-wall delta + raw grids." />
+        <CompareTable wall={wall} metrics={metrics} displayGrid={displayGrid} />
+        <Row k="Δ provenance" v={pairNote} tip="Vendor/vendor, local/local eligible; mixed pairs blocked without policy" />
+        <Row k="OI eff. date" v={(wall.oi_effective_dates && wall.oi_effective_dates.length ? wall.oi_effective_dates.join(", ") : null) ?? "unavailable in snapshot"} tip="Per-wall OI effective dates from member-strike provenance; unavailable when no member carries OI metadata" />
+      </div>
       </details>
       <ExplainThisWall
         snapshotId={snapshotId} wall={wall} metric={metric} replay={replay}
@@ -222,14 +245,21 @@ function FocusSummary({ wall, wb, wallWin, metrics }) {
     dv.missing > 0 ? `${dv.missing} missing` : null,
     dv.invalid > 0 ? `${dv.invalid} invalid` : null,
   ].filter(Boolean).join(" · ");
+  // 2026-10-18 author-review residual: the raw chip must never hardcode a
+  // basis the wall record didn't declare. The raw wall input contract defaults
+  // to OI only when the record predates the basis field — the same rule the
+  // header identity line uses. (The legacy "gex.v2" in the meta below stays:
+  // it ships with the accepted 4-chip slice and can only be retired with the
+  // formula contract owner, not by relabeling here.)
+  const rawBasis = wall.exposure_basis || "OI";
   return (
     <div data-testid="wall-focused-context" className="wall-focused-context">
       <div className="wall-focused-heading">Same wall · gross / net · USD/1% move</div>
       <div className="wall-focused-chip" data-testid="wall-focused-raw">
-        <span className="wall-focused-label">Raw OI</span>
+        <span className="wall-focused-label">Raw {rawBasis}</span>
         <span className="wall-focused-value">{fmtCell(wall.gross)} / {fmtCell(wall.net)}</span>
         <span className="wall-focused-meta">
-          USD/1% move · OI · gex.v2{contracts != null ? ` · ${contracts} contracts` : ""}
+          USD/1% move · {rawBasis} · gex.v2{contracts != null ? ` · ${contracts} contracts` : ""}
         </span>
       </div>
       <div className="wall-focused-chip" data-testid="wall-focused-delta">

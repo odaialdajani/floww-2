@@ -183,6 +183,24 @@
 .trinity-layout .triad-context { gap: 6px; }
 .trinity-layout .triad-board-status { margin-left: auto; color: #9bb0bd; font-size: 11px; white-space: nowrap; }
 
+/* Market context disclosure (2026-10-18): secondary rank/research context
+   and the activity explanation fold into one native disclosure; restrained
+   dark treatment, no new navigation. The loaded expiry dates stay visible
+   on the desk so the actual displayed axis never depends on the
+   disclosure. */
+.trinity-layout .triad-context-disclosure { margin: 6px 10px; border: 1px solid #263044; border-radius: 5px; background: #0b1117; }
+.trinity-layout .triad-context-disclosure > summary { cursor: pointer; list-style: none; padding: 6px 10px; font-size: 12px; color: #c6d7df; white-space: nowrap; }
+.trinity-layout .triad-context-disclosure > summary::-webkit-details-marker { display: none; }
+.trinity-layout .triad-context-disclosure[open] > summary::before { content: "▾ "; color: #8ba3b0; }
+.trinity-layout .triad-context-disclosure:not([open]) > summary::before { content: "▸ "; color: #8ba3b0; }
+.trinity-layout .triad-context-body { padding: 4px 10px 8px; min-width: 0; }
+/* Review folding pin 2026-10-18: while the disclosure is closed its content is
+   genuinely hidden, not just collapsed by UA default (keeps upper section
+   uncrowded and testable). */
+.trinity-layout .triad-context-disclosure:not([open]) .triad-context-body { display: none; }
+.trinity-layout .triad-context-disclosure summary:focus-visible { outline: 2px solid #e3c16a; outline-offset: 2px; }
+.trinity-layout .triad-loaded-dates { display: block; margin: 8px 10px 0; font-size: 11px; color: #a4bac7; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
 @media(max-width:1050px){
  .skylit-full-dashboard .skylit-control-bar{flex-wrap:wrap;gap:6px;padding:6px 10px;}
  .skylit-full-dashboard .skylit-control-left{flex:1 1 340px;min-width:0;flex-wrap:wrap;}

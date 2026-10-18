@@ -211,6 +211,29 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
     return max > min ? {min, max, locked: true} : null;
   }, [rawSurface, adjSurface]);
   const adjDef = ADJUSTED_BASES.find((b) => b.id === basis);
+  // Loaded expiry dates (2026-10-18): derived from the ACTUAL displayed raw
+  // axis (payload.grid.expiries via mapSurface) — never the request scope,
+  // session date or adjusted surface, which can list different or fewer
+  // dates. Replay keeps the stored snapshot dates; there is no live
+  // fallback. Display validation only (YYYY-MM-DD, UTC parse + roundtrip so
+  // Feb 30 rejects): a valid subset is filtered out of an invalid value and
+  // then declared incomplete — never claimed complete.
+  const loadedExpiries = useMemo(() => {
+    const list = Array.isArray(rawSurface?.expiries) ? rawSurface.expiries : [];
+    const valid = [];
+    let invalid = 0;
+    for (const value of list) {
+      if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
+        && Number.isFinite(Date.parse(`${value}T00:00:00Z`))
+        && new Date(value + "T00:00:00Z").toISOString().slice(0, 10) === value) {
+        valid.push(value);
+      } else {
+        invalid += 1;
+      }
+    }
+    valid.sort();
+    return { valid, invalid, total: list.length };
+  }, [rawSurface]);
   const adjAvailable = adjSurface.available && surfaceStatus(payload, basis).status !== "unavailable";
   const scenarios = useMemo(
     () => scenariosForWall(payload?.scenarios, selectedWall, spot),
@@ -315,9 +338,25 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
     <div className="trinity-layout" data-testid="trinity-view">
       {replayControls}
       {replayId && !replayDisplay && <button type="button" onClick={() => onReplayDisplay(null)}>Leave recorded observation · Live</button>}
-      <ContextStrip board={board} ticker={ticker} symbolInput={symbolInput}
-        onSymbolInput={setSymbolInput} onSubmit={submitSymbol} showStockControl={!sharedStockChoice}
-        boardStatus={boardStatus} />
+      {/* Market context (2026-10-18): secondary rank/research context and the
+          activity explanation live in a native disclosure — no state, no
+          effect, so opening it can never add requests or become a fetch
+          dependency. The focused-symbol input stays keyboard-first inside. */}
+      <details className="triad-context-disclosure" data-testid="triad-context-disclosure">
+        <summary role="button" aria-label="Market context">Market context</summary>
+        <div className="triad-context-body">
+          <ContextStrip board={board} ticker={ticker} symbolInput={symbolInput}
+            onSymbolInput={setSymbolInput} onSubmit={submitSymbol} showStockControl={!sharedStockChoice}
+            boardStatus={boardStatus} />
+          {["session_delta_volume", "activity", "window"].includes(basis) && <details data-testid="triad-activity-coverage">
+            <summary>Activity window and coverage</summary>
+            <p>Volume window: {payload?.metrics?.grids?.[basis]?.interval?.start && payload?.metrics?.grids?.[basis]?.interval?.end
+              ? `${payload.metrics.grids[basis].interval.start} → ${payload.metrics.grids[basis].interval.end}` : "unavailable — no declared bounds"}.
+              {" "}Usable inputs: {surfaceStatus(payload, basis).usable ?? "unknown"} · {surfaceStatus(payload, basis).status}.
+              {" "}{surfaceStatus(payload, basis).reason || "No volume or Greeks are inferred from OI."}</p>
+          </details>}
+        </div>
+      </details>
             {payload?.scope_selection?.status === "unavailable" && <div role="status" data-testid="triad-empty-scope">No listed expiry in the server's 30-day bound — no substitution made.</div>}
       {!isReplay && scope === "0dte" && !sameDayAdmitted && <div className="triad-scope-notice">
         <p role="status" data-testid="triad-scope-admission">
@@ -339,13 +378,17 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
         <AskFlow subject={`${ticker} · raw wall ${wallId || "none"}`} overlayMetric={activeMetric} displayMode={isReplay ? "replay" : "live"} compact />
         <div className="triad-mobile-switch"><button onClick={() => setMobilePane("raw")}>Raw</button><button onClick={() => setMobilePane("adjusted")}>Adjusted</button></div>
       </div>
-      {["session_delta_volume", "activity", "window"].includes(basis) && <details data-testid="triad-activity-coverage">
-        <summary>Activity window and coverage</summary>
-        <p>Volume window: {payload?.metrics?.grids?.[basis]?.interval?.start && payload?.metrics?.grids?.[basis]?.interval?.end
-          ? `${payload.metrics.grids[basis].interval.start} → ${payload.metrics.grids[basis].interval.end}` : "unavailable — no declared bounds"}.
-          {" "}Usable inputs: {surfaceStatus(payload, basis).usable ?? "unknown"} · {surfaceStatus(payload, basis).status}.
-          {" "}{surfaceStatus(payload, basis).reason || "No volume or Greeks are inferred from OI."}</p>
-      </details>}
+      {/* Actual loaded expiry dates (2026-10-18): the displayed raw axis,
+          validated display-only. Missing or unreadable dates stay honest;
+          an excluded invalid value is declared, never claimed complete. */}
+      <span className="triad-loaded-dates" data-testid="triad-loaded-dates">
+        Loaded expiries: {loadedExpiries.total === 0
+          ? "unavailable — no expiry dates in this snapshot"
+          : loadedExpiries.valid.length
+            ? loadedExpiries.valid.join(", ")
+            : "none valid — expiry dates unreadable in this snapshot"}
+        {loadedExpiries.invalid > 0 && ` · ${loadedExpiries.invalid} invalid expiry value${loadedExpiries.invalid === 1 ? "" : "s"} excluded — not complete`}
+      </span>
       <HeatmapLandmarks data={payload} />
       <div className={drawerOpen ? "triad-review-workspace" : ""}>
       <div className="triad-review-analysis">

@@ -1,5 +1,13 @@
 # C17 — addressed via admitted per-strike exposure series (OpenCode takeover, 2026-10-08)
 
+**18 October independent engineering acceptance:** the exact original C17
+criterion has now been countersigned at `36190e8a`; the fresh isolated module
+has 11 passing tests and the same-response consumer has executed paired-fixture
+coverage. See [the independent review](INDEPENDENT-REVIEW-20261018.md) and
+[the current acceptance record](acceptance-20261018.json). These supersede the
+missing `FROZEN-SNAPSHOT.md` gate pointer below. The original ledger remains an
+unchanged historical snapshot; all separate owner/commissioning holds remain.
+
 C17 (optional P2) asked for a backend-admitted per-strike exposure series
 or an explicit deferral. Earlier deferral reasoning (no qualified
 per-session share-volume store; no raw-vs-adjusted exposure pair server-

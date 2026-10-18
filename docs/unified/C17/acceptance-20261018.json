@@ -1,0 +1,33 @@
+{
+  "id": "C17",
+  "title": "Admitted exposure metric for Triad overlay (optional)",
+  "current_engineering_status": "ACCEPTED_AT_SHA",
+  "reviewed_sha": "36190e8a2828a4bbdafa9dc45c056162f2faec18",
+  "reviewed_by": "Codex independent chart_roadmap_reconcile; not an author of the producer/consumer",
+  "registered_by": "Codex root, integration owner after OpenCode provider-quota stop",
+  "review_receipt": "docs/unified/C17/INDEPENDENT-REVIEW-20261018.md",
+  "review_receipt_sha256": "72b397f0fa68749ef2afc2408ecf7e35a7121209ca7ce0fdbe3735ce3dafcee4",
+  "original_snapshot": ".planning/eval/completion-20261016/original-obligations.json",
+  "original_snapshot_sha256": "69c1b056ef4bea287f50a7bd74d9f346406e6f9a59df17e6e0336f4a40f0572e",
+  "original_snapshot_status_preserved": "PENDING",
+  "criteria": "A backend-admitted per-strike exposure series (measured-vs-unknown basis flags, quarantine rules) versioned into the envelope or a documented endpoint; consumer overlay renders it with honest unknown states; no frontend-invented analytics.",
+  "checks": {
+    "isolated_producer_route_tests": {
+      "passed": 11,
+      "exit_code": 0
+    },
+    "paired_consumer": "Exact seven file hashes and executed TriadDesk tests verified in independent receipt",
+    "final_frontend": {
+      "suites": 210,
+      "tests": 2342,
+      "exit_code": 0,
+      "source_sha256": "6f038077e150eb946058d067ebc3cd2d1f34562b15937bad8306b8e99f433e4c"
+    }
+  },
+  "limits": [
+    "Engineering acceptance only; no owner commissioning or visual acceptance is forged.",
+    "All seven original NAV holds remain separate.",
+    "No new adjusted formula, share-volume store, capture, broker orders or profitability claim.",
+    "The immutable original ledger and prior reconciliation summary are not rewritten."
+  ]
+}

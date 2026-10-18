@@ -63,6 +63,9 @@ beforeEach(() => {
 
 test("shared stock choice removes only the duplicate input, retaining comparison and source limits", async () => {
   await act(async()=>render(<TrinityView ticker="SPY" onFocusTicker={jest.fn()}/>));
+  // Market context folds the strip into a disclosure (2026-10-18): open it,
+  // then the same content asserts as visible.
+  fireEvent.click(screen.getByRole("button", { name: "Market context" }));
   expect(screen.queryByLabelText("Focused symbol")).toBeNull();
   for (const ticker of ["SPX","SPY","QQQ"]) expect(screen.getByTestId(`triad-context-${ticker}`)).toBeVisible();
   expect(screen.getByTestId("triad-coverage-note")).toHaveTextContent("2/3 observed");
@@ -72,6 +75,7 @@ test("shared stock choice removes only the duplicate input, retaining comparison
 
 test("standalone market view retains its stock control", async () => {
   await act(async()=>render(<TrinityView/>));
+  fireEvent.click(screen.getByRole("button", { name: "Market context" }));
   expect(screen.getByLabelText("Focused symbol")).toBeVisible();
 });
 
@@ -150,12 +154,112 @@ test("missing adjusted surface renders unavailable, raw untouched", async () => 
 test("context strip describes coverage, never prescribes size; SPX missing is labeled", async () => {
   await act(async () => { render(<TrinityView />); });
   await waitFor(() => expect(screen.getByTestId("triad-context")).toBeInTheDocument());
+  fireEvent.click(screen.getByRole("button", { name: "Market context" }));
   const note = screen.getByTestId("triad-coverage-note");
   expect(note.textContent).toContain("2/3 observed");
   expect(note.textContent).not.toMatch(/conviction|position|size/i);
   expect(screen.getByTestId("triad-context-SPX")) // ^SPX cell key strips the caret
     .toBeInTheDocument();
   expect(screen.getByTestId("triad-context-SPX").textContent).toContain("unscanned");
+});
+
+// 2026-10-18 Market context contract: the disclosure is presentation only —
+// opening it must not become a fetch dependency or add requests; the
+// leaderboard read stays a one-time mount effect.
+test("opening Market context adds no requests and does not fetch ranks again", async () => {
+  await act(async () => { render(<TrinityView />); });
+  await waitFor(() => expect(screen.getByTestId("triad-context")).toBeInTheDocument());
+  // Closed pin (review F3): while folded, the strip content is genuinely hidden.
+  expect(screen.getByTestId("triad-context")).not.toBeVisible();
+  const before = axios.get.mock.calls.length;
+  const leaderboardBefore = axios.get.mock.calls.filter(([url]) => String(url).includes("solstice/scan/leaderboard")).length;
+  fireEvent.click(screen.getByRole("button", { name: "Market context" }));
+  await new Promise(res => setTimeout(res, 80));
+  expect(screen.getByTestId("triad-context")).toBeInTheDocument();
+  expect(axios.get.mock.calls.length).toBe(before);
+  expect(axios.get.mock.calls.filter(([url]) => String(url).includes("solstice/scan/leaderboard")).length).toBe(leaderboardBefore);
+});
+
+// Replay honesty (review F2, 2026-10-18): while a recorded snapshot is
+// displayed, the loaded-dates line mirrors the RECORD's grid axis — today's
+// live expiry dates are never substituted, and replaying adds no live
+// heatmap reads.
+test("loaded dates follow the recorded snapshot during replay, never live", async () => {
+  await act(async () => { render(<TrinityView />); });
+  await waitFor(() => expect(screen.getByTestId("triad-loaded-dates")).toBeInTheDocument());
+  // The live fixture loads 2026-10-02 first — establishes the contrast.
+  expect(screen.getByTestId("triad-loaded-dates").textContent).toContain("2026-10-02");
+  const base = axios.get.getMockImplementation();
+  axios.get.mockImplementation(async (url) => {
+    if (String(url).includes("/manifest/")) {
+      return { data: { day: "2026-10-02", snapshots: [{ id: "stored-1", asof: "2026-10-02T15:00:00Z" }], gaps: [] } };
+    }
+    if (String(url).includes("/replay/stored-1")) {
+      // Real record envelope (solsticeReplay.replayToDisplay): snapshot +
+      // grids.grid + metrics_full/walls/strikes/context, never a live payload.
+      const f = heatmapFixture();
+      return { data: {
+        snapshot: { snapshot_id: "stored-1", ticker: "SPY", asof_ts: "2026-10-02T15:00:00Z", spot: f.spot },
+        grids: { grid: { ...f.grid, expiries: ["2026-09-11"] }, ...f.metrics.grids },
+        metrics_full: f.metrics,
+        walls: f.metrics.walls,
+        strikes: [],
+        context: { display: { map_query: { dte: 0, mode: "day", expiries: 4 } } },
+      } };
+    }
+    return base(url);
+  });
+  await act(async () => { fireEvent.click(screen.getByTestId("solstice-replay-load")); });
+  await act(async () => { fireEvent.click(screen.getByTestId("solstice-replay-play")); });
+  await waitFor(() => expect(screen.getByTestId("triad-loaded-dates").textContent).toContain("2026-09-11"));
+  const line = screen.getByTestId("triad-loaded-dates").textContent;
+  expect(line).toContain("2026-09-11"); // the recorded axis
+  expect(line).not.toContain("2026-10-02"); // the live axis is never substituted
+  // Replaying a stored snapshot must not read live providers.
+  expect(axios.get.mock.calls.filter(([url]) => String(url).includes("/heatmap/")).length).toBe(1);
+});
+
+// Loaded-expiry honesty (2026-10-18): the line mirrors the displayed raw
+// axis; a malformed value is excluded and declared, never claimed complete,
+// and an empty axis reads unavailable.
+test("loaded expiry dates mirror the displayed raw axis and declare excluded values", async () => {
+  await act(async () => { render(<TrinityView />); });
+  await waitFor(() => expect(screen.getByTestId("triad-loaded-dates")).toBeInTheDocument());
+  expect(screen.getByTestId("triad-loaded-dates").textContent).toContain("2026-10-02");
+  const base = axios.get.getMockImplementation();
+  axios.get.mockImplementation(async (url) => {
+    if (String(url).includes("/api/heatmap/")) {
+      const f = heatmapFixture();
+      return { data: { ...f, ticker: "QQQ", grid: { ...f.grid, expiries: ["2026-10-02", "2026-02-30"] } } };
+    }
+    return base(url);
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Market context" }));
+  // Match the real flow: the focused-symbol input lives inside Market
+  // context — the disclosure is opened before driving it.
+  fireEvent.change(screen.getByTestId("triad-symbol-input"), { target: { value: "QQQ" } });
+  await act(async () => { fireEvent.click(screen.getByTestId("triad-symbol-go")); });
+  // The loaded-dates line sits outside the disclosure; the fetch warning
+  // covers the loading gap between symbol change and payload.
+  await waitFor(() => {
+    const line = screen.getByTestId("triad-loaded-dates").textContent;
+    expect(line).toContain("2026-10-02");
+    expect(line).toContain("1 invalid expiry value excluded — not complete");
+  });
+});
+
+test("an empty displayed raw axis reads loaded expiries unavailable", async () => {
+  const base = axios.get.getMockImplementation();
+  axios.get.mockImplementation(async (url) => {
+    if (String(url).includes("/api/heatmap/")) {
+      const f = heatmapFixture();
+      return { data: { ...f, grid: { ...f.grid, expiries: [] } } };
+    }
+    return base(url);
+  });
+  await act(async () => { render(<TrinityView />); });
+  await waitFor(() => expect(screen.getByTestId("triad-loaded-dates")).toBeInTheDocument());
+  expect(screen.getByTestId("triad-loaded-dates").textContent).toContain("unavailable — no expiry dates in this snapshot");
 });
 
 test("review saves through the journal with frozen context", async () => {
