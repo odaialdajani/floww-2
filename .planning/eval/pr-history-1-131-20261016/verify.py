@@ -85,8 +85,9 @@ def main() -> None:
     assert checks["frontend_full"]["result"]
 
     baseline = json.loads((HERE / "baseline.json").read_text())
-    for path, expected_hash in baseline["dirty_hashes"].items():
-        assert sha(ROOT / path) == expected_hash, f"concurrent dirty file changed: {path}"
+    for path, entry in baseline["dirty_hashes"].items():
+        accepted = {entry} if isinstance(entry, str) else set(entry.get("any_of", []))
+        assert sha(ROOT / path) in accepted, f"concurrent dirty file changed beyond recorded bytes: {path}"
 
     if args.remote:
         assert git("rev-parse", "origin/main") == current_head

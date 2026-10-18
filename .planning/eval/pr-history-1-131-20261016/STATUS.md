@@ -12,3 +12,5 @@
 The inventory is an evidence-backed engineering disposition, not owner acceptance. `owner-hold`, `owner-hold-or-unverified`, and `unverified` remain open. No visual acceptance, provider/account acceptance, capture commissioning, trading activation, model/policy approval, or historical-data recovery is manufactured by this package.
 
 Capture and trading remain disabled. Existing concurrent dirty files remain outside this package and must not be swept into its commit.
+
+Concurrent dirty baselines (`.serena/project.yml`, `kanban/BOTTLENECK_ALERTS.md`) were captured from the audit-lane checkout; the committed package was later opened in the canonical checkout, where those bytes differ and kanban had drifted again mid-creation. 2026-10-17: both recorded byte sets for each path are in `baseline.json`; a byte change after that recording fails `verify.py`. No protected or concurrent file was edited to make the gate pass.
