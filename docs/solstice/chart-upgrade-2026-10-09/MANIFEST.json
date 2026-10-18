@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "gate_scope": "research packet, not implementation",
+  "artifact_sha256": {
+    "CAPABILITIES.json": "c9876dc0fefd89e37a17510cc0471311ce0daf454a0df733efdac1a94c40040d",
+    "CONTRACT.md": "8e8436562a0020379e598ce88fb162817997db089d7253d4fecfd6518ce89840",
+    "EVIDENCE.json": "ad66e40a84d4179f5110e20165a532adc8abc4141b2cbe59c845c6ed59c15cdf",
+    "IMPLEMENTATION_TASKS.json": "a5639d27f696dacfeb377ecaff6b328846d80177cf8ecb9d7308a778e8511347",
+    "MASTER_PLAN.md": "b0a6f25a5f9a867bae197cad929cbd2d71c5dd912e3c5d8e17730d024791d629",
+    "PRESERVATION_BASELINE.json": "256607e39b66007abdc39e6018718fae3189df8783c8bc5e88eb752cfbffe6e7",
+    "RESEARCH_REPORTS.md": "cdc39597bea7bbae2528baf3e6baa49cedf4154f9210a51abecb62d5cca44d73",
+    "SOURCES.md": "79b55b36bbab6f08cb989bc60288cf123d228e60db7a50174bd0accd5cadd244",
+    "SPARK_HANDOFF.md": "7a03621745f6265e26b3ca85c32ab1f693bd57c2fd8ed4fd5115ec866fba2fd6",
+    "VERIFY.py": "46049e58a2f046eb75c52821bc013a1ecd408a1b4903fc8ba6440c495c6b3055",
+    "VIDEO_TRANSCRIPT.md": "d30d5cea521a197ace72fa0454892a845e6146dd6bf46668c94678d69bc1a202"
+  }
+}

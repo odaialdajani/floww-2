@@ -8,6 +8,8 @@
 
 import React, { memo, useEffect, useMemo, useState } from "react";
 import { BACKEND_BASE } from "../../config/api";
+import { fetchStudyJSON } from "./studyFetch";
+import StudyErrorCard from "./StudyErrorCard";
 
 const SIDE_BASE = process.env.REACT_APP_STEAL_THREE_BASE || BACKEND_BASE;
 const DEFAULT_FILTERS = { min_iv: 0.0, min_volume: 10, min_dte: 7, max_dte: 45, top: 25 };
@@ -51,10 +53,9 @@ function WheelIncomeScreenerPanel({ ticker = "SPY" }) {
       max_dte: String(filters.max_dte ?? 45),
       top: String(filters.top ?? 25),
     });
-    fetch(`${SIDE_BASE}/api/screener/income?${qs.toString()}`)
-      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+    fetchStudyJSON(`${SIDE_BASE}/api/screener/income?${qs.toString()}`)
       .then((j) => { if (!cancelled) setData(j); })
-      .catch((e) => { if (!cancelled) setErr(e.message || String(e)); });
+      .catch((e) => { if (!cancelled) setErr(e); });
     return () => { cancelled = true; };
   }, [ticker, filters.min_iv, filters.min_volume, filters.min_dte, filters.max_dte, filters.top]);
 
@@ -65,10 +66,12 @@ function WheelIncomeScreenerPanel({ ticker = "SPY" }) {
 
   if (err) {
     return (
-      <div className="panel p-3 rounded-xl border border-amber-500/20 bg-amber-500/5">
-        <div className="text-[10px] uppercase tracking-widest text-amber-300 font-bold mb-1">Wheel · offline</div>
-        <div className="text-[10px] text-amber-200/80">backend @ {SIDE_BASE} unreachable → {err}</div>
-      </div>
+      <StudyErrorCard
+        title="Wheel"
+        base={SIDE_BASE}
+        error={err}
+        className="panel p-3 rounded-xl border border-amber-500/20 bg-amber-500/5"
+      />
     );
   }
 

@@ -3,7 +3,7 @@ import axios from "axios";
 import {API} from "../../config/api";
 import useScreenContext,{usePublishScreenContext} from "../../agent/useScreenContext";
 import {contextIdentity} from "../../agent/contextIdentity";
-import AskLodestar from "../heatseeker/AskLodestar";
+import AskFlow from "../heatseeker/AskFlow";
 import {GroundedPublicReview} from "./PublicHandoffReview";
 import "./PublicReview.css";
 
@@ -71,7 +71,7 @@ export default function TidehunterPublicBridge({onReviewActive=()=>{}}) {
    <strong>{review.body.matched_identity.osi}</strong>
    <p>Recorded bid / ask: {review.body.quote?.bid ?? "unknown"} / {review.body.quote?.ask ?? "unknown"} USD · ages: {review.body.quote?.ages_s?.bid ?? "unknown"} / {review.body.quote?.ages_s?.ask ?? "unknown"} s</p>
    <p>Contract size: {review.body.multiplier?.value ?? "unknown"} shares each · {review.body.multiplier?.source || "provenance unavailable"}. This checks data only. No order is sent.</p>
-   <AskLodestar subject={`${review.context.ticker} · separate exact contract review`} compact/>
+   <AskFlow subject={`${review.context.ticker} · separate exact contract review`} compact/>
    <GroundedPublicReview/>
   </div>}
  </section>;

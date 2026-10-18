@@ -1,0 +1,247 @@
+{
+ "confirmed_repair_needed": 5,
+ "fix_commit": "4e33a3384cc66349af3ab76fb53eb628613b7cec",
+ "merge_commit": "7d573c9d",
+ "findings": [
+  {
+   "id": "SCOUT-BOUNDARY",
+   "status": "fixed-on-current-local-main",
+   "fix_commit": "4e33a3384cc66349af3ab76fb53eb628613b7cec",
+   "merge_commit": "7d573c9d",
+   "source_finding": {
+    "id": "SCOUT-BOUNDARY",
+    "primary_pr": 23,
+    "related_prs": [
+     34,
+     39
+    ],
+    "classification": "confirmed repair needed",
+    "severity": "medium: read-only candidate/data-quality integrity, not order execution",
+    "summary": "Future quote event times are coerced to fresh age zero by _age_s; strict 0DTE scout admits them. Other helper-only malformed fields also pass.",
+    "source": [
+     {
+      "path": "backend/services/contract_scout.py",
+      "line": 34,
+      "url": "https://github.com/odaialdajani/floww-2/blob/6716946b109e43ced81bec6f2fec9c0c46332f14/backend/services/contract_scout.py#L34"
+     },
+     {
+      "path": "backend/services/contract_scout.py",
+      "line": 167,
+      "url": "https://github.com/odaialdajani/floww-2/blob/6716946b109e43ced81bec6f2fec9c0c46332f14/backend/services/contract_scout.py#L167"
+     },
+     {
+      "path": "backend/services/contract_scout.py",
+      "line": 175,
+      "url": "https://github.com/odaialdajani/floww-2/blob/6716946b109e43ced81bec6f2fec9c0c46332f14/backend/services/contract_scout.py#L175"
+     },
+     {
+      "path": "backend/routes/solstice.py",
+      "line": 173,
+      "url": "https://github.com/odaialdajani/floww-2/blob/6716946b109e43ced81bec6f2fec9c0c46332f14/backend/routes/solstice.py#L173"
+     },
+     {
+      "path": "backend/server.py",
+      "line": 1998,
+      "url": "https://github.com/odaialdajani/floww-2/blob/6716946b109e43ced81bec6f2fec9c0c46332f14/backend/server.py#L1998"
+     }
+    ],
+    "call_path": "GET /api/solstice/scout/{ticker} -> fetch_spot_and_chains_merged -> scout_candidates; _build_heatmap_impl -> scout_candidates -> payload.scout/shortlist -> WallInspector/ContextSections.",
+    "reproduction": "scout_boundary_probe in this JSON: strict now_s=2030-01-02T14:00Z, session_date=2030-01-02, otherwise valid same-day PUT. Bid/ask both 2030-01-03T14:00Z return n_eligible=1,rejected={}; control current quote also returns 1.",
+    "safe_failing_test_proposal": "In test_r5_d_red.py (proposal only, not written), parametrize future_bid, future_ask and unequal_future_timestamps. Freeze now_s and use same-day expiry; assert n_eligible==0 with explicit invalid/future-clock reason. Positive control with measured current quote remains eligible. Calculate raw event-time skew before clamping or reject future times outside an explicit documented clock tolerance; do not invent now for missing time.",
+    "additional_probes": "NaN volume, NaN T, infinite T and unknown contract type each also return n_eligible=1 in helper. Propose finite positive volume/T and explicit call/put-type tests. Public adapter currently sanitizes volume and creates T/type, so these cases are boundary hardening, not proof malformed Public payloads reach the live UI.",
+    "limits": "No vendor payload, account, live service, trade route or order invoked; no claim actual observed future quotes. Safe repair must preserve original owner control and adapter sanitation. Tests not added in repository."
+   },
+   "test_file": "backend/tests/services/test_contract_scout_clock_boundary.py",
+   "fix_summary": "contract_scout rejects future source-clock quote events as FUTURE_*_TIMESTAMP instead of clamping them to fresh age zero"
+  },
+  {
+   "id": "ABLATION-LOCAL",
+   "status": "fixed-on-current-local-main",
+   "fix_commit": "4e33a3384cc66349af3ab76fb53eb628613b7cec",
+   "merge_commit": "7d573c9d",
+   "source_finding": {
+    "id": "ABLATION-LOCAL",
+    "primary_pr": 27,
+    "related_prs": [
+     17
+    ],
+    "classification": "confirmed repair needed",
+    "severity": "medium for research validity; no current production caller found",
+    "summary": "L2 promotes missing wall-local delta support from scope ratio; L3 calls zero-volume-change row positive local activity.",
+    "source": [
+     {
+      "path": "backend/services/solstice_ablation.py",
+      "line": 70,
+      "url": "https://github.com/odaialdajani/floww-2/blob/6716946b109e43ced81bec6f2fec9c0c46332f14/backend/services/solstice_ablation.py#L70"
+     },
+     {
+      "path": "backend/services/solstice_ablation.py",
+      "line": 92,
+      "url": "https://github.com/odaialdajani/floww-2/blob/6716946b109e43ced81bec6f2fec9c0c46332f14/backend/services/solstice_ablation.py#L92"
+     },
+     {
+      "path": "backend/tests/solstice/test_r4_p10_red.py",
+      "line": 43,
+      "url": "https://github.com/odaialdajani/floww-2/blob/6716946b109e43ced81bec6f2fec9c0c46332f14/backend/tests/solstice/test_r4_p10_red.py#L43"
+     }
+    ],
+    "call_path": "run_ladder(snapshot) engineering/offline research helper. Pinned git grep across backend/services, backend/routes, backend/server.py finds only its definition (no product caller). Existing slice2 and P10 tests call it; frozen protocol names it.",
+    "reproduction": "ablation_boundary_probe in this JSON: one near-spot wall, scope ratio 0.9, wall_delta_share={}, matching strike delta_volume=0. Returns L2 signal wall_local=false and L3 signal with abstentions=0.",
+    "safe_failing_test_proposal": "Extend test_r4_p10_red.py (proposal only) with missing_selected_wall_share + high_scope_ratio expecting L2 abstention/DELTA_UNKNOWN, and separately valid local share + zero/negative/nonfinite delta_volume expecting L3 abstention/NO_WINDOW_ACTIVITY. Positive finite local delta-volume control must still promote. Keep frozen thresholds, cost assumptions and outcome labels unchanged; do not retune research parameters.",
+    "limits": "A research smoke helper, not a mounted trading signal or evidence of loss/profit; existing tests cover low explicit local share and wrong strike but omit absent local share and zero delta. No collected outcomes, historical user records or capture touched."
+   },
+   "test_file": "backend/tests/solstice/test_ablation_local_evidence_boundary.py",
+   "fix_summary": "solstice_ablation requires the selected wall own measured share for L2 and a measured finite positive member-strike delta for L3"
+  },
+  {
+   "id": "FLOW-FUSION-LOSS",
+   "status": "fixed-on-current-local-main",
+   "fix_commit": "4e33a3384cc66349af3ab76fb53eb628613b7cec",
+   "merge_commit": "7d573c9d",
+   "source_finding": {
+    "id": "FLOW-FUSION-LOSS",
+    "reproduction": {
+     "method": "Exact candidate _universe_scan_conviction AST executed with in-memory fake alert feed and pure rank_one module, then exact candidate universe_scan fused-assignment AST executed. No server, broker, store or real feed imported.",
+     "producer_conviction": 35.0,
+     "producer_flow_status": "ok",
+     "producer_flow_key": "fixture-flow",
+     "consumer_flow_status": "missing",
+     "consumer_flow_key": null,
+     "preservation_assertion": false,
+     "consumer_before_persistence_conviction": 0.0
+    },
+    "summary": "Universe-scan fused rows lose their own flow evidence through persistence and re-ranking; conviction drops to 0.0 and flow_status becomes missing."
+   },
+   "test_file": "backend/tests/services/test_universe_fused_flow_lineage.py",
+   "fix_summary": "conviction_rank preserves an already-fused row with matching identity by deep copy and rejects stale or foreign fused blobs as scorer payloads"
+  },
+  {
+   "id": "VOLUME-UNKNOWN-TO-ZERO",
+   "status": "fixed-on-current-local-main",
+   "fix_commit": "4e33a3384cc66349af3ab76fb53eb628613b7cec",
+   "merge_commit": "7d573c9d",
+   "source_finding": {
+    "id": "VOLUME-UNKNOWN-TO-ZERO",
+    "severity": "P2 data integrity",
+    "pr_number": 128,
+    "related_prs": [
+     120,
+     129,
+     131
+    ],
+    "title": "Missing/null/boolean provider volume becomes measured zero",
+    "status": "confirmed repair needed",
+    "source": {
+     "path": "backend/services/public_api_adapter.py",
+     "lines": [
+      1300
+     ],
+     "url": "https://github.com/odaialdajani/floww-2/blob/6716946b109e43ced81bec6f2fec9c0c46332f14/backend/services/public_api_adapter.py#L1300",
+     "observation": "_extract_bars numeric coercion at 1299\u20131308"
+    },
+    "call_path": [
+     "routes.price_history._history_bars",
+     "services.public_api_adapter.fetch_bars_by_interval",
+     "services.public_api_adapter._extract_bars",
+     "services.price_node_history.build_history",
+     "recordedPriceChartData.checkedCandles",
+     "RecordedPriceChart volume/VWAP panes"
+    ],
+    "reproduction": {
+     "method": "Exact-HEAD _extract_bars AST executed in memory; no app import or I/O",
+     "input": {
+      "regularMarket": {
+       "bars": [
+        {
+         "t": "2026-10-16T14:00:00Z",
+         "o": 100,
+         "h": 101,
+         "l": 99,
+         "c": 100
+        }
+       ]
+      }
+     },
+     "observed": "v=0.0 for missing volume, v=None and v=False alike; control explicit v=0 stays0; positive12 stays12",
+     "downstream": "build_history accepts numeric0 as measured, checkedCandles keeps0; absent status irrecoverably lost before chart guard",
+     "raw_receipt": "executed_checks: exact-HEAD adapter missing-volume reproduction"
+    },
+    "safe_failing_test_proposal": {
+     "path": "backend/tests/services/test_public_api_adapter_regressions.py",
+     "name": "test_extract_bars_preserves_unknown_volume_without_dropping_valid_prices",
+     "arrange": "Use regularMarket vendor-shaped OHLC bars; parametrize absent v/volume, None, False, True, blank, negative, NaN; include genuine0 and positive controls. No broker or network.",
+     "assert": "Unknown cases preserve valid OHLC/time/session but volume remains absent/None; real0 andpositive remain measured. Feed results through isolated build_history and assert unknown frame lacks volume, real0 frame has0. Existing code fails at least absent/None/False expectations.",
+     "repair_scope": "Canonical bar normalization only; do not fabricate replacement volume, alter provider state, frozen scale constants or trading gates."
+    },
+    "limits": "Synthetic vendor-shaped bars prove code behavior and downstream contract break, not that a specific live market bar lacked volume."
+   },
+   "test_file": "backend/tests/services/test_public_bar_volume_missingness.py",
+   "fix_summary": "public_api_adapter preserves unknown volume as None, never substitutes an invalid primary with an alias, keeps valid candles, and fails closed on unknown session-close volume"
+  },
+  {
+   "id": "BRIEF-CROSS-TICKER-EXPORT",
+   "status": "fixed-on-current-local-main",
+   "fix_commit": "4e33a3384cc66349af3ab76fb53eb628613b7cec",
+   "merge_commit": "7d573c9d",
+   "source_finding": {
+    "id": "BRIEF-CROSS-TICKER-EXPORT",
+    "severity": "P2 research provenance",
+    "pr_number": 130,
+    "title": "New ticker can export previous ticker briefing",
+    "status": "confirmed repair needed",
+    "source": {
+     "path": "frontend/src/components/heatseeker/BriefingStrip.jsx",
+     "lines": [
+      50
+     ],
+     "url": "https://github.com/odaialdajani/floww-2/blob/6716946b109e43ced81bec6f2fec9c0c46332f14/frontend/src/components/heatseeker/BriefingStrip.jsx#L50",
+     "observation": "New prop ticker/spot combined with old retained data; effect does not clear or bind source identity."
+    },
+    "call_path": [
+     "App Zenith/skylit view HeatseekerDashboard (no ticker key)",
+     "StudyFamily keeps visited study mounted",
+     "BriefingStrip effect on ticker",
+     "exportBrief uses current props + retained data"
+    ],
+    "reproduction": {
+     "method": "Exact-HEAD component Babel-transformed in memory; actual React/ReactDOM/jsdom, deferred synthetic fetch, synthetic clipboard",
+     "observed": {
+      "requests": [
+       "http://inert.invalid/api/briefing/SPY",
+       "http://inert.invalid/api/briefing/QQQ"
+      ],
+      "second_response_pending": true,
+      "export_button_present": true,
+      "copied": {
+       "brief": "floww-agent-brief.v1",
+       "ticker": "QQQ",
+       "asof": "2026-10-16T14:00:00Z",
+       "spot": 600,
+       "executes_nothing": true,
+       "note": "Research draft for Public Agents (user paste + sign-off). Not an order.",
+       "metrics": {
+        "net_gex": 123456789
+       },
+       "regime": "SPY_OLD"
+      }
+     },
+     "raw_receipt": "executed_checks: exact-HEAD React component with deferred synthetic fetch"
+    },
+    "safe_failing_test_proposal": {
+     "path": "frontend/src/components/heatseeker/chart/__tests__/b41_brief_export.test.jsx",
+     "name": "test_ticker_change_cannot_export_previous_brief_or_late_clipboard_status",
+     "arrange": "Render SPY, resolve its briefing; rerender QQQ and leave new request pending (then separately reject it). Spy clipboard; do not invoke real HTTP or broker.",
+     "assert": "Old export unavailable or explicitly bound to SPY, never QQQ with SPY metrics. After matching QQQ response, export must carry QQQ-owned values. Include ignored-abort late SPY response and deferred old clipboard completion after ticker change; those cannot restore stale data/status.",
+     "repair_scope": "Bind briefing data/export state to owning ticker/request generation and reset or gate on ticker/loading/error. Preserve executes_nothing, manual fallback and no-order contract."
+    },
+    "limits": "Current mounted component and static caller path proved; not a production browser or remote Public delivery test."
+   },
+   "test_file": "frontend/src/components/heatseeker/BriefingStrip.provenance-race.test.jsx",
+   "fix_summary": "BriefingStrip guards late responses and clipboard generations and resets draft/status when the ticker changes"
+  }
+ ],
+ "limits": [
+  "The five findings are code/test verified on current local main; owner visual, account, policy, capture commissioning and trading acceptance remain separate.",
+  "Static semantic coverage is not a whole-line or whole-acceptance certificate."
+ ]
+}

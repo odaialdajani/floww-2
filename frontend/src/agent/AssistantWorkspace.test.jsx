@@ -4,14 +4,14 @@ import AgentProvider,{useAgent} from './AgentProvider';
 import AgentPanel from './AgentPanel';
 import AgentCommandBar from './AgentCommandBar';
 import {publishScreenContext} from './useScreenContext';
-import AskLodestar from '../components/heatseeker/AskLodestar';
+import AskFlow from '../components/heatseeker/AskFlow';
 
 const models=[{id:'first',label:'First model',efforts:['low','medium','high'],default_effort:'medium',speeds:['default','priority']}];
 const selected={model:'first',effort:'medium',speed:'default'};
 const catalog=()=>({ok:true,json:async()=>({models,selected,usage:{calls:2,daily_limit:40}})});
 function Workspace(){
  const a=useAgent();const [chartClicks,setChartClicks]=React.useState(0);
- return <><button onClick={()=>setChartClicks(n=>n+1)}>Chart control</button><output data-testid="chart-clicks">{chartClicks}</output><button onClick={()=>a.askQuestion('From another entry')}>Ask from chart</button><button onClick={()=>{for(let i=0;i<20;i++)a.pushTurn({turn_id:'thread-'+i,ticker:'SPY',question:'Actual stored question '+i,status:'completed',text:'Answer '+i+' '+'.'.repeat(500)},a.context);}}>Seed saved thread</button><AskLodestar/><AgentCommandBar/><AgentPanel/></>;
+ return <><button onClick={()=>setChartClicks(n=>n+1)}>Chart control</button><output data-testid="chart-clicks">{chartClicks}</output><button onClick={()=>a.askQuestion('From another entry')}>Ask from chart</button><button onClick={()=>{for(let i=0;i<20;i++)a.pushTurn({turn_id:'thread-'+i,ticker:'SPY',question:'Actual stored question '+i,status:'completed',text:'Answer '+i+' '+'.'.repeat(500)},a.context);}}>Seed saved thread</button><AskFlow/><AgentCommandBar/><AgentPanel/></>;
 }
 beforeAll(()=>Object.defineProperty(globalThis,'crypto',{value:require('crypto').webcrypto,configurable:true}));
 beforeEach(()=>{

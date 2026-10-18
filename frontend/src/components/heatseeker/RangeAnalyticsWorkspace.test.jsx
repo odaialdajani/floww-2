@@ -56,7 +56,7 @@ test('query changes abort an in-flight stored frame and reject its late envelope
  expect(screen.queryByRole('grid')).not.toBeInTheDocument();expect(JSON.parse(screen.getByTestId('range-context').textContent).snapshotId).toBeNull();
 });
 
-test('stored selected cell asks the existing Lodestar route with its canonical record scope, never a native contract',async()=>{
+test('stored selected cell asks the existing Flow research route with its canonical record scope, never a native contract',async()=>{
  let asked;
  global.fetch.mockImplementation(async (url,options)=>{
   if(String(url).endsWith('/session'))return response({});

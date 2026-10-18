@@ -9,6 +9,7 @@ inputs degrade the tier, never fabricate confidence.
 
 from __future__ import annotations
 
+import copy
 import math
 from datetime import UTC, datetime
 from numbers import Real
@@ -250,31 +251,66 @@ def rank_one(
     }
 
 
+_FUSED_MARKERS = {"components", "total", "tier", "flow_status", "ml_status", "confluence_status"}
+
+
+def _fused_passthrough_ok(blob, row):
+    """True when `blob` is an already-fused row that still describes `row`.
+
+    Passing a fused row through untouched is only safe while every identity
+    field agrees. A fused blob that names another ticker, snapshot, clock or
+    an unsupported schema is foreign evidence: it must never be re-read as a
+    current scorer payload, and it must never rank this row.
+    """
+    if blob.get("schema_version") != SCHEMA_VERSION:
+        return False
+    if str(blob.get("ticker") or "").upper() != str(row.get("ticker") or "").upper():
+        return False
+    if blob.get("snapshot_id") != row.get("snapshot_id"):
+        return False
+    if blob.get("asof") != row.get("asof"):
+        return False
+    conviction = blob.get("conviction")
+    return isinstance(conviction, Real) and not isinstance(conviction, bool)
+
+
 def rank_many(rows, **kw):
-    """Rank scan-batch rows by fused conviction DESC. Pure."""
+    """Rank scan-batch rows by fused conviction DESC. Pure.
+
+    A row whose `conviction` is an already-fused rank_one output with a
+    matching identity passes through unchanged (deep-copied) and is ranked
+    as-is: re-fusing it would drop the flow evidence it already carries.
+    Any other dict is only unpacked when it is unambiguously a raw scorer
+    payload (scorer-shaped value, none of the fused-output markers).
+    """
     out = []
     for r in rows or []:
         if not isinstance(r, dict):
             continue
-        opp = r.get("opportunity") if isinstance(r.get("opportunity"), dict) else None
         conv = r.get("conviction")
+        if isinstance(conv, dict) and (_FUSED_MARKERS & set(conv)):
+            # Already-fused output of an earlier rank_one. Pass it through
+            # untouched while every identity field still matches; a foreign
+            # or stale blob falls through to a fresh fusion below, which
+            # honestly reports missing flow evidence instead of ranking it.
+            if _fused_passthrough_ok(conv, r):
+                out.append(copy.deepcopy(conv))
+                continue
+        opp = r.get("opportunity") if isinstance(r.get("opportunity"), dict) else None
         flow = confl = ml_in = None
-        # A row's `conviction` is the ALREADY-FUSED output of an earlier
-        # rank_one. It is not a scorer payload. Re-reading it here re-fused a
-        # fused score: a blob carrying `label` matched the ML branch and
-        # `total` matched the confluence branch, so the row silently gained
-        # components it never had. Only unpack a blob that is unambiguously a
-        # raw scorer payload -- one that carries a scorer-shaped value and none
-        # of the fused-output markers (components / total / *_status / tier).
-        if isinstance(conv, dict):
-            fused_markers = {"components", "total", "tier", "flow_status", "ml_status", "confluence_status"}
-            if not (fused_markers & set(conv)):
-                if "conviction" in conv or "score" in conv:
-                    flow = conv
-                elif "prediction" in conv or "label" in conv:
-                    ml_in = conv
-                elif "opportunity_score" in conv:
-                    flow = conv
+        # A row's `conviction` may also be a RAW scorer payload. Only unpack a
+        # blob that is unambiguously one -- it carries a scorer-shaped value
+        # and none of the fused-output markers (components / total / *_status
+        # / tier). Re-reading a fused blob here once re-fused a fused score: a
+        # `label` matched the ML branch and a `total` matched the confluence
+        # branch, so the row silently gained components it never had.
+        if isinstance(conv, dict) and not (_FUSED_MARKERS & set(conv)):
+            if "conviction" in conv or "score" in conv:
+                flow = conv
+            elif "prediction" in conv or "label" in conv:
+                ml_in = conv
+            elif "opportunity_score" in conv:
+                flow = conv
         out.append(
             rank_one(
                 r.get("ticker"),

@@ -23,6 +23,17 @@ from tests.offline_network import deny_external_network  # noqa: F401
 client = TestClient(app)
 
 
+def test_public_only_income_refusal_keeps_typed_reason_on_the_wire(monkeypatch):
+    monkeypatch.setenv("FLOWW_MARKET_DATA_PROVIDER", "public")
+    response = client.get("/api/screener/income", params={"symbol": "SPY"})
+    assert response.status_code == 503
+    assert response.json()["error"] == {
+        "status": "unavailable",
+        "reason": "PUBLIC_ONLY_STUDY_UNAVAILABLE",
+        "message": "This study has no Public-only producer; alternate sources are disabled",
+    }
+
+
 def _future_weekday_expiries(count: int) -> list[str]:
     """`count` upcoming weekdays, as ISO dates.
 

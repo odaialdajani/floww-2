@@ -15,6 +15,8 @@ export default function StrikeExposureProfile({ data, basis, wall, onSelect }) {
     if (!spotValid || data?.replay) return;
     const list = listRef.current;
     if (!list || list.dataset.centered === "1") return;
+    const scroller = list.closest(".triad-profile") || list;
+    if (scroller.scrollHeight <= scroller.clientHeight + 1) return; // not scrollable yet — retry when rows arrive
     list.dataset.centered = "1";
     centerOnPrice();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -23,6 +25,9 @@ export default function StrikeExposureProfile({ data, basis, wall, onSelect }) {
     const list = listRef.current;
     const spot = Number(data?.spot);
     if (!list || !(typeof spot === "number" && Number.isFinite(spot) && spot > 0)) return;
+    // The scroll container is the section (.triad-profile has max-height + overflow),
+    // not the tbody — scrolling the tbody silently did nothing.
+    const scroller = list.closest(".triad-profile") || list;
     let best = null, bestDist = Infinity;
     for (const row of [...list.querySelectorAll("tr")]) {
       const strike = Number(row.dataset.strike);
@@ -31,11 +36,11 @@ export default function StrikeExposureProfile({ data, basis, wall, onSelect }) {
       if (dist < bestDist) { bestDist = dist; best = row; }
     }
     if (!best) return;
-    const bounds = list.getBoundingClientRect(), target = best.getBoundingClientRect();
-    list.scrollTop += target.top - bounds.top - (list.clientHeight - target.height) / 2;
+    const bounds = scroller.getBoundingClientRect(), target = best.getBoundingClientRect();
+    scroller.scrollTop += target.top - bounds.top - (scroller.clientHeight - target.height) / 2;
   };
   return <section className="triad-profile" data-testid="triad-signed-profile" aria-label="Signed exposure by strike">
-    <div>Signed exposure by strike · All loaded · {expiries.length} expiries · USD/1% move <button type="button" onClick={centerOnPrice} disabled={!(typeof data?.spot === "number" && Number.isFinite(data.spot) && data.spot > 0)} title={typeof data?.spot === "number" && data.spot > 0 ? `Center the profile on the price region (${data.spot})` : "Price unavailable"}>Center exposure profile on price</button></div>
+    <div>Signed exposure by strike · {expiries.length} loaded {expiries.length === 1 ? "expiry" : "expiries"} · USD/1% move <button type="button" onClick={centerOnPrice} disabled={!(typeof data?.spot === "number" && Number.isFinite(data.spot) && data.spot > 0)} title={typeof data?.spot === "number" && data.spot > 0 ? `Center the profile on the price region (${data.spot})` : "Price unavailable"}>Center exposure profile on price</button></div>
     <small>Raw under · {baseDef(basis)?.label || basis} over · shared range · zero axis centered · gaps ≠ zero</small>
     <table><tbody ref={listRef}>{strikes.map(s => {
       const key = String(s), r = raw.values[key] ?? null, a = adj.values[key] ?? null;

@@ -6,7 +6,7 @@ import {admitRangeEnvelope,rangeSelectionContext,RANGE_METRICS} from '../../lib/
 import {fmtK} from './SkylitHeatmapGrid';
 import {signedCellPalette} from '../../lib/signedGridPalette';
 import RangeReplayControls from './RangeReplayControls';
-import AskLodestar from './AskLodestar';
+import AskFlow from './AskFlow';
 import './RangeAnalyticsWorkspace.css';
 
 /** An explicit non-writing analytical read; no browser Greeks, contract or permission. */
@@ -185,7 +185,7 @@ export default function RangeAnalyticsWorkspace({ticker,onReplayModeChange}) {
       {copyStatus && <p role="status">{copyStatus}</p>}
      <h3>Supported contract</h3><p>RANGE_CONTRACT_UNAVAILABLE · owning OSI, contract population and quote clocks are not supplied. No current-chain substitution.</p>
      <h3>Flow</h3><p>{replayMode?'Select a stored cell for research-only interpretation. Full production integrity and raw population qualification remain pending; no contract or execution permission.':'Live range reads are not persisted research evidence. Select a stored replay record first; no current-chain or old answer substitute.'}</p>
-     <AskLodestar subject={`${ticker} recorded range`} overlayMetric={activeMetric} displayMode={replayMode?'range-replay':'range-live'} compact testId="range-ask-lodestar" starters={['Explain the recorded cells','What limits this observation?','What confirms or invalidates?']}/>
+     <AskFlow subject={`${ticker} recorded range`} overlayMetric={activeMetric} displayMode={replayMode?'range-replay':'range-live'} compact testId="range-ask-lodestar" starters={['Explain the recorded cells','What limits this observation?','What confirms or invalidates?']}/>
      <h3>Public route</h3><p>Backend entry unavailable. Native drafts need an exact supported contract; copied references do not activate Public.</p>
     </aside>
    </div>

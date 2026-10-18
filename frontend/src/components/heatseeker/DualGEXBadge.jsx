@@ -12,6 +12,8 @@
 
 import React, { memo, useEffect, useState } from "react";
 import { BACKEND_BASE } from "../../config/api";
+import { fetchStudyJSON } from "./studyFetch";
+import StudyErrorCard from "./StudyErrorCard";
 
 const SIDE_BASE = process.env.REACT_APP_STEAL_THREE_BASE || BACKEND_BASE;
 
@@ -32,20 +34,22 @@ function DualGEXBadge({ ticker = "SPY" }) {
     let cancelled = false;
     setData(null);
     setErr(null);
-    fetch(`${SIDE_BASE}/api/dual_gex/${encodeURIComponent(ticker)}`)
-      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+    fetchStudyJSON(`${SIDE_BASE}/api/dual_gex/${encodeURIComponent(ticker)}`)
       .then((j) => { if (!cancelled) setData(j); })
-      .catch((e) => { if (!cancelled) setErr(e.message || String(e)); });
+      .catch((e) => { if (!cancelled) setErr(e); });
     return () => { cancelled = true; };
   }, [ticker]);
 
   if (err) {
     return (
-      <div className="panel p-3 rounded-xl border border-amber-500/20 bg-amber-500/5">
-        <div className="text-[10px] uppercase tracking-widest text-amber-300 font-bold mb-1">Dual-GEX · offline</div>
-        <div className="text-[10px] text-amber-200/80">backend @ {SIDE_BASE} unreachable → {err}</div>
-        <div className="text-[9px] text-amber-200/60 mt-1">start :8000, or sidecar: <code>cd backend && python -m services.steal_three_server</code></div>
-      </div>
+      <StudyErrorCard
+        title="Dual-GEX"
+        base={SIDE_BASE}
+        error={err}
+        testId="hs-dual-gex"
+        className="panel p-3 rounded-xl border border-amber-500/20 bg-amber-500/5"
+        hint={<>start :8000, or sidecar: <code>cd backend && python -m services.steal_three_server</code></>}
+      />
     );
   }
 

@@ -1,0 +1,2159 @@
+{
+  "schema_version": 1,
+  "scope": "All supplied Atlas feature families plus safety requirements; target not current support",
+  "count": 143,
+  "capabilities": [
+    {
+      "id": "C001",
+      "category": "chart-basics",
+      "feature": "Ticker search and instrument identity",
+      "current_status": "partial",
+      "target_phase": "P1",
+      "implementation_block": "B06",
+      "prerequisite": "B01/B03 provider contract",
+      "acceptance": "Canonical symbol/provider alias match; equity/ETF/index/futures capability per symbol; no price substitution",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C002",
+      "category": "chart-basics",
+      "feature": "Independent interval selector",
+      "current_status": "new",
+      "target_phase": "P1",
+      "implementation_block": "B06",
+      "prerequisite": "B01/B03 provider contract",
+      "acceptance": "1m,3m,5m,10m,15m,30m,1H,2H,4H,1D,1W when supported; unavailable choices explained",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C003",
+      "category": "chart-basics",
+      "feature": "Custom and pinned intervals",
+      "current_status": "new",
+      "target_phase": "P1",
+      "implementation_block": "B06",
+      "prerequisite": "B01/B03 provider contract",
+      "acceptance": "7m/90m complete base-bar aggregation; add/pin/remove/reorder persistence",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C004",
+      "category": "chart-basics",
+      "feature": "RTH and ETH",
+      "current_status": "new",
+      "target_phase": "P1",
+      "implementation_block": "B06",
+      "prerequisite": "B01/B03 provider contract",
+      "acceptance": "Calendar-aware regular/all provider sessions wired and tested; unknown buckets not RTH",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C005",
+      "category": "chart-basics",
+      "feature": "Display timezone",
+      "current_status": "new",
+      "target_phase": "P1",
+      "implementation_block": "B06",
+      "prerequisite": "B01/B03 provider contract",
+      "acceptance": "UTC storage; IANA TZ display; DST labels and unchanged bucket membership",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C006",
+      "category": "chart-basics",
+      "feature": "Candle styling",
+      "current_status": "new",
+      "target_phase": "P1",
+      "implementation_block": "B06",
+      "prerequisite": "B01/B03 provider contract",
+      "acceptance": "Classic/Mono/Neon/Ocean/White skin presets, no hidden data changes",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C007",
+      "category": "chart-basics",
+      "feature": "Source freshness and partial candles",
+      "current_status": "partial",
+      "target_phase": "P1",
+      "implementation_block": "B06",
+      "prerequisite": "B01/B03 provider contract",
+      "acceptance": "Available/degraded/unavailable plus last market time, coverage and corrections",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C008",
+      "category": "chart-basics",
+      "feature": "Safe pan/zoom/range retention",
+      "current_status": "partial",
+      "target_phase": "P1",
+      "implementation_block": "B06",
+      "prerequisite": "B01/B03 provider contract",
+      "acceptance": "Stable uirevision/adapter range; new bar follows only if user near right edge",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C009",
+      "category": "usability",
+      "feature": "Fullscreen",
+      "current_status": "new",
+      "target_phase": "P3",
+      "implementation_block": "B27",
+      "prerequisite": "B06/B11",
+      "acceptance": "Header and Shift+F; focus/escape and responsive layout",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C010",
+      "category": "usability",
+      "feature": "Copy/save image",
+      "current_status": "new",
+      "target_phase": "P3",
+      "implementation_block": "B27",
+      "prerequisite": "B06/B11",
+      "acceptance": "Composite engine primitives/drawings with watermark; denied clipboard handled",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C011",
+      "category": "usability",
+      "feature": "Auto-fit modes",
+      "current_status": "new",
+      "target_phase": "P3",
+      "implementation_block": "B27",
+      "prerequisite": "B06/B11",
+      "acceptance": "Price-only and price+overlays bounds; button active state",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C012",
+      "category": "usability",
+      "feature": "Keyboard shortcut help",
+      "current_status": "new",
+      "target_phase": "P3",
+      "implementation_block": "B27",
+      "prerequisite": "B06/B11",
+      "acceptance": "All supplied shortcuts discoverable/rebindable, scoped to active chart; ignore editable fields",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C013",
+      "category": "usability",
+      "feature": "Mobile controls",
+      "current_status": "new",
+      "target_phase": "P3",
+      "implementation_block": "B27",
+      "prerequisite": "B06/B11",
+      "acceptance": "Scrollable header, stacked panes, persistent dropdown/bottom sheet above keyboard; replay controls unobscured",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C014",
+      "category": "usability",
+      "feature": "Inline settings-card editors",
+      "current_status": "new",
+      "target_phase": "P3",
+      "implementation_block": "B27",
+      "prerequisite": "B06/B11",
+      "acceptance": "Row cog/right-click/favourite/subpane opens correct local card; full settings fallback",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C015",
+      "category": "usability",
+      "feature": "Canvas accessibility",
+      "current_status": "new",
+      "target_phase": "P3",
+      "implementation_block": "B27",
+      "prerequisite": "B06/B11",
+      "acceptance": "OHLC and signed levels available as text, focus order, contrast and color-independent semantics",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C016",
+      "category": "panes",
+      "feature": "Pane arrangements and focus",
+      "current_status": "new",
+      "target_phase": "P3",
+      "implementation_block": "B11",
+      "prerequisite": "B06 adapter and reducer",
+      "acceptance": "Single; 2-Up/Stack; 3-Up/Stack; 1+2/1|2; 4-Grid/Up/Stack; up to5 tested; focused symbol only",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C017",
+      "category": "panes",
+      "feature": "Settings synchronization",
+      "current_status": "new",
+      "target_phase": "P3",
+      "implementation_block": "B11",
+      "prerequisite": "B06 adapter and reducer",
+      "acceptance": "On applies all compatible panes, off focused only; false roundtrip",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C018",
+      "category": "panes",
+      "feature": "Interval synchronization",
+      "current_status": "new",
+      "target_phase": "P3",
+      "implementation_block": "B11",
+      "prerequisite": "B06 adapter and reducer",
+      "acceptance": "Explicit interval links and per-symbol supported alternatives",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C019",
+      "category": "panes",
+      "feature": "Crosshair synchronization",
+      "current_status": "new",
+      "target_phase": "P3",
+      "implementation_block": "B11",
+      "prerequisite": "B06 adapter and reducer",
+      "acceptance": "UTC time links; gaps do not invent candles",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C020",
+      "category": "panes",
+      "feature": "Visible-time synchronization",
+      "current_status": "new",
+      "target_phase": "P3",
+      "implementation_block": "B11",
+      "prerequisite": "B06 adapter and reducer",
+      "acceptance": "Origin IDs suppress feedback loops across unequal calendars",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C021",
+      "category": "panes",
+      "feature": "Price-scale synchronization",
+      "current_status": "new",
+      "target_phase": "P3",
+      "implementation_block": "B11",
+      "prerequisite": "B06 adapter and reducer",
+      "acceptance": "Independent by default; linking unlike units opt-in and disclosed",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C022",
+      "category": "panes",
+      "feature": "Index desk preset",
+      "current_status": "new",
+      "target_phase": "P3",
+      "implementation_block": "B11",
+      "prerequisite": "B06 adapter and reducer",
+      "acceptance": "SPX-family/SPY/QQQ three panes, Front/P25/Mono, eligible VWAP/EMA9 and optional Trinity; no implied edge",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C023",
+      "category": "layouts",
+      "feature": "Named layouts and autosave",
+      "current_status": "new",
+      "target_phase": "P3",
+      "implementation_block": "B12",
+      "prerequisite": "B11 versioned state",
+      "acceptance": "Workspace arrangement/panes/symbols/settings/sidecars saved after debounce, no fake Save control",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C024",
+      "category": "layouts",
+      "feature": "Cycle layouts",
+      "current_status": "new",
+      "target_phase": "P3",
+      "implementation_block": "B12",
+      "prerequisite": "B11 versioned state",
+      "acceptance": "Header switch and [/] unless editing",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C025",
+      "category": "layouts",
+      "feature": "Layout JSON import/export",
+      "current_status": "new",
+      "target_phase": "P3",
+      "implementation_block": "B12",
+      "prerequisite": "B11 versioned state",
+      "acceptance": "Size/schema/migration/prototype checks; portable logical state, no executable code/tokens/account positions",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C026",
+      "category": "layouts",
+      "feature": "Corrupt-state recovery",
+      "current_status": "new",
+      "target_phase": "P3",
+      "implementation_block": "B12",
+      "prerequisite": "B11 versioned state",
+      "acceptance": "Unknown version/quota/partial-write fallback with restore/export path",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C027",
+      "category": "layouts",
+      "feature": "Account sync across devices",
+      "current_status": "new",
+      "target_phase": "P3",
+      "implementation_block": "B13",
+      "prerequisite": "Authenticated user identity and separate backend store",
+      "acceptance": "Real authenticated server storage, owner isolation/revisions; localStorage alone insufficient",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C028",
+      "category": "exposure",
+      "feature": "GEX view",
+      "current_status": "partial",
+      "target_phase": "P2",
+      "implementation_block": "B07",
+      "prerequisite": "Recorded signed grids and exact scope coverage",
+      "acceptance": "Display S2 convention; signed strike orbs, no ML scale change",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C029",
+      "category": "exposure",
+      "feature": "VEX view",
+      "current_status": "partial",
+      "target_phase": "P2",
+      "implementation_block": "B07",
+      "prerequisite": "Recorded signed grids and exact scope coverage",
+      "acceptance": "Canonical VANNA VEX_1VOLPT only; not legacy VOMMA vex_surface",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C030",
+      "category": "exposure",
+      "feature": "GEX+VEX view",
+      "current_status": "partial",
+      "target_phase": "P2",
+      "implementation_block": "B07",
+      "prerequisite": "Recorded signed grids and exact scope coverage",
+      "acceptance": "Separate normalized channels/legend; no addition of unlike units",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C031",
+      "category": "exposure",
+      "feature": "Expiration presets",
+      "current_status": "partial",
+      "target_phase": "P2",
+      "implementation_block": "B07",
+      "prerequisite": "Recorded signed grids and exact scope coverage",
+      "acceptance": "Front,To Friday,Next Friday,OPEX,Next OPEX,Q-OPEX,Next Q-OPEX,All; exact counts2/3/5/7/10/15/20/30/50; hover real dates",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C032",
+      "category": "exposure",
+      "feature": "Top-N nodes",
+      "current_status": "partial",
+      "target_phase": "P2",
+      "implementation_block": "B07",
+      "prerequisite": "Recorded signed grids and exact scope coverage",
+      "acceptance": "Counts1/3/5/10/15/20 by abs exposure, deterministic ties",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C033",
+      "category": "exposure",
+      "feature": "P-value nodes",
+      "current_status": "partial",
+      "target_phase": "P2",
+      "implementation_block": "B07",
+      "prerequisite": "Recorded signed grids and exact scope coverage",
+      "acceptance": "P15 through P60 inclusive threshold against eligible king; P25 not percentile rank",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C034",
+      "category": "exposure",
+      "feature": "King and nearest levels",
+      "current_status": "partial",
+      "target_phase": "P2",
+      "implementation_block": "B07",
+      "prerequisite": "Recorded signed grids and exact scope coverage",
+      "acceptance": "Abs-magnitude king; identify nearest above/below with exact scope and missing/zero distinctions",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C035",
+      "category": "exposure",
+      "feature": "Orb palettes",
+      "current_status": "partial",
+      "target_phase": "P2",
+      "implementation_block": "B07",
+      "prerequisite": "Recorded signed grids and exact scope coverage",
+      "acceptance": "Default/Warm/Cool/Mono and board palette match; color is not proof of sign",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C036",
+      "category": "exposure",
+      "feature": "Size/clamps/opacity",
+      "current_status": "partial",
+      "target_phase": "P2",
+      "implementation_block": "B07",
+      "prerequisite": "Recorded signed grids and exact scope coverage",
+      "acceptance": "Area-scaled relative strength, min/max bounds and separate King opacity; no data clipping",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C037",
+      "category": "exposure",
+      "feature": "Node labels",
+      "current_status": "partial",
+      "target_phase": "P2",
+      "implementation_block": "B07",
+      "prerequisite": "Recorded signed grids and exact scope coverage",
+      "acceptance": "Left/right/after-newest pins, strike and king ratio or single-metric dollar value; no overlap",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C038",
+      "category": "exposure",
+      "feature": "Realtime values",
+      "current_status": "partial",
+      "target_phase": "P2",
+      "implementation_block": "B07",
+      "prerequisite": "Recorded signed grids and exact scope coverage",
+      "acceptance": "Only actual commissioned scope cadence, Front-only reference restrictions; no fake tick stream",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C039",
+      "category": "exposure",
+      "feature": "Scroll as replay",
+      "current_status": "partial",
+      "target_phase": "P2",
+      "implementation_block": "B07",
+      "prerequisite": "Recorded signed grids and exact scope coverage",
+      "acceptance": "Default no future normalization/reading; retrospective mode explicitly labelled",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C040",
+      "category": "derived",
+      "feature": "Derived families",
+      "current_status": "data-gated",
+      "target_phase": "P7",
+      "implementation_block": "B09",
+      "prerequisite": "Entitled paired time-aligned instruments and audited mapping",
+      "acceptance": "SPY/SPXW/SPX-ES;QQQ/NDXP/NDX-NQ;GLD/SLV/DIA/IWM related futures only with validated mapping",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C041",
+      "category": "derived",
+      "feature": "Distinct derived shapes",
+      "current_status": "data-gated",
+      "target_phase": "P7",
+      "implementation_block": "B09",
+      "prerequisite": "Entitled paired time-aligned instruments and audited mapping",
+      "acceptance": "Diamonds/triangles plus source legend and provenance",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C042",
+      "category": "derived",
+      "feature": "Latest-ratio lock",
+      "current_status": "data-gated",
+      "target_phase": "P7",
+      "implementation_block": "B09",
+      "prerequisite": "Entitled paired time-aligned instruments and audited mapping",
+      "acceptance": "Explicit horizontal ratio lock in review mode; historical practice uses eligible past ratios",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C043",
+      "category": "derived",
+      "feature": "Trinity Spot mapping",
+      "current_status": "data-gated",
+      "target_phase": "P7",
+      "implementation_block": "B09",
+      "prerequisite": "Entitled paired time-aligned instruments and audited mapping",
+      "acceptance": "Mapped panel prices require exact supported source/target ratio; unsupported state visible",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C044",
+      "category": "projection",
+      "feature": "Projection switch and adaptive horizon",
+      "current_status": "new",
+      "target_phase": "P7",
+      "implementation_block": "B10",
+      "prerequisite": "Eligible signed exposure readings",
+      "acceptance": "Future whitespace scenario extends with interval, no probabilities/pseudo candles; source age visible",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C045",
+      "category": "indicators",
+      "feature": "Add/cog/multiple instances",
+      "current_status": "new",
+      "target_phase": "P2",
+      "implementation_block": "B08",
+      "prerequisite": "Strict candles/volume and deterministic study registry",
+      "acceptance": "Unique instance IDs/settings schemas; compatible pane/source requirements",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C046",
+      "category": "indicators",
+      "feature": "EMA",
+      "current_status": "new",
+      "target_phase": "P2",
+      "implementation_block": "B08",
+      "prerequisite": "Strict candles/volume and deterministic study registry",
+      "acceptance": "Seed/warmup/period pinned, EMA9 preset",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C047",
+      "category": "indicators",
+      "feature": "SMA",
+      "current_status": "new",
+      "target_phase": "P2",
+      "implementation_block": "B08",
+      "prerequisite": "Strict candles/volume and deterministic study registry",
+      "acceptance": "Window missing-data semantics and complete samples",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C048",
+      "category": "indicators",
+      "feature": "Bollinger bands",
+      "current_status": "new",
+      "target_phase": "P2",
+      "implementation_block": "B08",
+      "prerequisite": "Strict candles/volume and deterministic study registry",
+      "acceptance": "Mean/std convention and warmup; configurable validated period/multiple",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C049",
+      "category": "indicators",
+      "feature": "Volume",
+      "current_status": "new",
+      "target_phase": "P2",
+      "implementation_block": "B08",
+      "prerequisite": "Strict candles/volume and deterministic study registry",
+      "acceptance": "Measured underlying volume; unknown null not zero",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C050",
+      "category": "indicators",
+      "feature": "Session/week/month/quarter/year VWAP",
+      "current_status": "new",
+      "target_phase": "P2",
+      "implementation_block": "B08",
+      "prerequisite": "Strict candles/volume and deterministic study registry",
+      "acceptance": "Trade exact or explicitly labelled HLC3 bar approximation; anchors and up to3 bands",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C051",
+      "category": "indicators",
+      "feature": "GEX/VEX VWAP",
+      "current_status": "new",
+      "target_phase": "P2",
+      "implementation_block": "B08",
+      "prerequisite": "Strict candles/volume and deterministic study registry",
+      "acceptance": "Exposure centre with reviewed weighting/bands/units, not volume VWAP",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C052",
+      "category": "indicators",
+      "feature": "Earnings/dividend/split anchors",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B23",
+      "prerequisite": "Confirmed corporate events/calendar/proxy/trade provenance",
+      "acceptance": "Verified event timestamps and corporate adjustment mode",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C053",
+      "category": "indicators",
+      "feature": "SPX-family proxy volume",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B23",
+      "prerequisite": "Confirmed corporate events/calendar/proxy/trade provenance",
+      "acceptance": "ES entitlement/session alignment + explicit volume_symbol and proxy badge; no fabricated index volume",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C054",
+      "category": "indicators",
+      "feature": "Session Levels/Zones",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B23",
+      "prerequisite": "Confirmed corporate events/calendar/proxy/trade provenance",
+      "acceptance": "Prior-day,pre-market,Asia,London,IB,week/month highs/lows and opens, shading; no final-session leakage",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C055",
+      "category": "indicators",
+      "feature": "Volume Profile",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B23",
+      "prerequisite": "Confirmed corporate events/calendar/proxy/trade provenance",
+      "acceptance": "Real trade VAP, tick bins/POC/value-area; approximate bar distribution distinctly labelled",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C056",
+      "category": "indicators",
+      "feature": "TPO Market Profile",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B23",
+      "prerequisite": "Confirmed corporate events/calendar/proxy/trade provenance",
+      "acceptance": "Time-at-price resolution/splits/IB and POC/value-area tie rules; approximate coverage disclosed",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C057",
+      "category": "flow",
+      "feature": "Per-candle flow histogram",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B20",
+      "prerequisite": "Immutable real options trade tape B19, not chain snapshots",
+      "acceptance": "Call premium dollars up, put down, aligned candles; not contract/share volume",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C058",
+      "category": "flow",
+      "feature": "Leg-count filter",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B20",
+      "prerequisite": "Immutable real options trade tape B19, not chain snapshots",
+      "acceptance": "Single/Multi/unknown with economic strategy dedup",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C059",
+      "category": "flow",
+      "feature": "Trade-type filter",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B20",
+      "prerequisite": "Immutable real options trade tape B19, not chain snapshots",
+      "acceptance": "Sweep/Non-Sweep/unknown from provider evidence, not guessed timestamps",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C060",
+      "category": "flow",
+      "feature": "Moneyness filter",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B20",
+      "prerequisite": "Immutable real options trade tape B19, not chain snapshots",
+      "acceptance": "ITM/ATM/OTM calculated from eligible trade-time underlying; explicit ATM tolerance",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C061",
+      "category": "flow",
+      "feature": "Trade-side filter",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B20",
+      "prerequisite": "Immutable real options trade tape B19, not chain snapshots",
+      "acceptance": "Bid/Mid/Ask and unknown; no assumption ask means opening",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C062",
+      "category": "flow",
+      "feature": "DTE filter",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B20",
+      "prerequisite": "Immutable real options trade tape B19, not chain snapshots",
+      "acceptance": "Min/max using tradable expiration clock; include 0DTE only when eligible",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C063",
+      "category": "flow",
+      "feature": "Flow-score filter",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B20",
+      "prerequisite": "Immutable real options trade tape B19, not chain snapshots",
+      "acceptance": "Verified scoring source/convention else unavailable",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C064",
+      "category": "flow",
+      "feature": "Premium bounds",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B20",
+      "prerequisite": "Immutable real options trade tape B19, not chain snapshots",
+      "acceptance": "Notional using actual contract multiplier; min/max validated",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C065",
+      "category": "flow",
+      "feature": "Flow Bucket click/drilldown",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B20",
+      "prerequisite": "Immutable real options trade tape B19, not chain snapshots",
+      "acceptance": "Same filter hash/cursor window as histogram; count,calls,puts,net,bucket/day put-call,top contracts; escape/same-click close",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C066",
+      "category": "flow",
+      "feature": "Net Premium",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B20",
+      "prerequisite": "Immutable real options trade tape B19, not chain snapshots",
+      "acceptance": "Defined session call/put signed cashflow convention; corrections/session resets/no future",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C067",
+      "category": "flow",
+      "feature": "Flow VWAP",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B20",
+      "prerequisite": "Immutable real options trade tape B19, not chain snapshots",
+      "acceptance": "Explicit economic weighting/units and eligible tape only",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C068",
+      "category": "darkpool",
+      "feature": "Dark Pool levels",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B21",
+      "prerequisite": "Real entitled off-exchange equity print archive B19",
+      "acceptance": "Exact largest real print price, not average; equities-only; no direction inference",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C069",
+      "category": "darkpool",
+      "feature": "Top N/lookback/labels",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B21",
+      "prerequisite": "Real entitled off-exchange equity print archive B19",
+      "acceptance": "Validated options; reference video10/30 vs article1,2,3,5/30,45,90,180 acknowledged; date/notional always or hover; known report cutoff",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C070",
+      "category": "delta",
+      "feature": "CVD",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B22",
+      "prerequisite": "Trade size/aggressor classification/condition/correction evidence B19",
+      "acceptance": "Session cumulative buy-sell with unclassified separate; no candle-direction proxy",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C071",
+      "category": "delta",
+      "feature": "Candle Delta",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B22",
+      "prerequisite": "Trade size/aggressor classification/condition/correction evidence B19",
+      "acceptance": "Per-candle classified buys/sells matched to chart cursor",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C072",
+      "category": "delta",
+      "feature": "Footprint",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B22",
+      "prerequisite": "Trade size/aggressor classification/condition/correction evidence B19",
+      "acceptance": "Price xclassified tape volume; condition/correction handling; no OHLC fabrication",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C073",
+      "category": "sidecars",
+      "feature": "Heatmap dock",
+      "current_status": "partial",
+      "target_phase": "P3",
+      "implementation_block": "B14",
+      "prerequisite": "Existing maps/components and one focused-pane state",
+      "acceptance": "Focused symbol, left/right/header/velocity options; same exposure scope; no heatmap redesign",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C074",
+      "category": "sidecars",
+      "feature": "Trinity dock",
+      "current_status": "partial",
+      "target_phase": "P3",
+      "implementation_block": "B14",
+      "prerequisite": "Existing maps/components and one focused-pane state",
+      "acceptance": "Reuse boards default SPX-family/SPY/QQQ; up to10 only after budget test; compare like expiries",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C075",
+      "category": "sidecars",
+      "feature": "Watchlist/Favorites",
+      "current_status": "new",
+      "target_phase": "P3",
+      "implementation_block": "B14",
+      "prerequisite": "Existing maps/components and one focused-pane state",
+      "acceptance": "Live quote capability, selectable columns and arrow traversal; deleted tickers stay removed",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C076",
+      "category": "sidecars",
+      "feature": "Alerts dock",
+      "current_status": "partial",
+      "target_phase": "P3",
+      "implementation_block": "B14",
+      "prerequisite": "Existing maps/components and one focused-pane state",
+      "acceptance": "All user alerts with state dot/symbol navigation; authenticated actual evaluator",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C077",
+      "category": "alerts",
+      "feature": "Exact-price alert",
+      "current_status": "partial",
+      "target_phase": "P5",
+      "implementation_block": "B18",
+      "prerequisite": "Existing alert store/evaluator reviewed and safe price inputs",
+      "acceptance": "Chart right-click/long-press at rounded tick price; source-touch semantics",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C078",
+      "category": "alerts",
+      "feature": "Nearest/follow-node alert",
+      "current_status": "partial",
+      "target_phase": "P5",
+      "implementation_block": "B18",
+      "prerequisite": "Existing alert store/evaluator reviewed and safe price inputs",
+      "acceptance": "Role+scope identity versus fixed captured level distinct; stale/missing role never fires",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C079",
+      "category": "alerts",
+      "feature": "Once/repeat triggers",
+      "current_status": "partial",
+      "target_phase": "P5",
+      "implementation_block": "B18",
+      "prerequisite": "Existing alert store/evaluator reviewed and safe price inputs",
+      "acceptance": "Persistent once deactivation; repeat cooldown and idempotent delivery",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C080",
+      "category": "alerts",
+      "feature": "Alert lines/drag/style",
+      "current_status": "partial",
+      "target_phase": "P5",
+      "implementation_block": "B18",
+      "prerequisite": "Existing alert store/evaluator reviewed and safe price inputs",
+      "acceptance": "Symbol-owned lines, authenticated tick-rounded updates with revision/readback; styling persisted",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C081",
+      "category": "drawings",
+      "feature": "Trendline",
+      "current_status": "new",
+      "target_phase": "P5",
+      "implementation_block": "B16",
+      "prerequisite": "Logical anchor model and hit testing",
+      "acceptance": "Alt+T logical anchors/selection/drag, no pan collision",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C082",
+      "category": "drawings",
+      "feature": "Horizontal line/ray",
+      "current_status": "new",
+      "target_phase": "P5",
+      "implementation_block": "B16",
+      "prerequisite": "Logical anchor model and hit testing",
+      "acceptance": "Alt+H/J exact logical price with ray direction",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C083",
+      "category": "drawings",
+      "feature": "Vertical line",
+      "current_status": "new",
+      "target_phase": "P5",
+      "implementation_block": "B16",
+      "prerequisite": "Logical anchor model and hit testing",
+      "acceptance": "Alt+V UTC timestamp anchor",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C084",
+      "category": "drawings",
+      "feature": "Rectangle",
+      "current_status": "new",
+      "target_phase": "P5",
+      "implementation_block": "B16",
+      "prerequisite": "Logical anchor model and hit testing",
+      "acceptance": "Alt+Shift+R bounds and handles persist under resize",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C085",
+      "category": "drawings",
+      "feature": "Arrow/text",
+      "current_status": "new",
+      "target_phase": "P5",
+      "implementation_block": "B16",
+      "prerequisite": "Logical anchor model and hit testing",
+      "acceptance": "Alt+A/X escaped text/style; logical anchor",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C086",
+      "category": "drawings",
+      "feature": "Select/lock/delete/undo",
+      "current_status": "new",
+      "target_phase": "P5",
+      "implementation_block": "B16",
+      "prerequisite": "Logical anchor model and hit testing",
+      "acceptance": "Alt+P, focus/escape, lock visibility and undo/redo history",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C087",
+      "category": "drawings",
+      "feature": "Magnet",
+      "current_status": "new",
+      "target_phase": "P5",
+      "implementation_block": "B16",
+      "prerequisite": "Logical anchor model and hit testing",
+      "acceptance": "Alt+M snap visible OHLC without future candles",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C088",
+      "category": "drawings",
+      "feature": "Brush",
+      "current_status": "new",
+      "target_phase": "P5",
+      "implementation_block": "B17",
+      "prerequisite": "B16 and versioned authenticated presets",
+      "acceptance": "Alt+B bounded point paths and logical-coordinate simplify",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C089",
+      "category": "drawings",
+      "feature": "Fibonacci",
+      "current_status": "new",
+      "target_phase": "P5",
+      "implementation_block": "B17",
+      "prerequisite": "B16 and versioned authenticated presets",
+      "acceptance": "Alt+F documented levels/anchors/style with double-click editor",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C090",
+      "category": "drawings",
+      "feature": "Long/short position drawing",
+      "current_status": "new",
+      "target_phase": "P5",
+      "implementation_block": "B17",
+      "prerequisite": "B16 and versioned authenticated presets",
+      "acceptance": "Alt+L/S analysis entry/stop/target risk box, never broker intent",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C091",
+      "category": "drawings",
+      "feature": "Drawing presets",
+      "current_status": "new",
+      "target_phase": "P5",
+      "implementation_block": "B17",
+      "prerequisite": "B16 and versioned authenticated presets",
+      "acceptance": "Named/starred default, account sync and cap50; preserve false options",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C092",
+      "category": "drawings",
+      "feature": "Recent drawing colors",
+      "current_status": "new",
+      "target_phase": "P5",
+      "implementation_block": "B17",
+      "prerequisite": "B16 and versioned authenticated presets",
+      "acceptance": "Custom colors+opacities retained safely",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C093",
+      "category": "drawings",
+      "feature": "Hidden drawings remain hidden",
+      "current_status": "new",
+      "target_phase": "P5",
+      "implementation_block": "B17",
+      "prerequisite": "B16 and versioned authenticated presets",
+      "acceptance": "Tool selection never reveals hidden old shapes; N-hidden Show chip, new shapes visible",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-VIDEO"
+      ]
+    },
+    {
+      "id": "C094",
+      "category": "replay",
+      "feature": "Start-here/seeded random",
+      "current_status": "partial",
+      "target_phase": "P4",
+      "implementation_block": "B15",
+      "prerequisite": "Recorded temporal provenance and archive coverage",
+      "acceptance": "Eligible focused timeline and declared archive limits; deterministic seed",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C095",
+      "category": "replay",
+      "feature": "Play/pause/step/speed/end",
+      "current_status": "partial",
+      "target_phase": "P4",
+      "implementation_block": "B15",
+      "prerequisite": "Recorded temporal provenance and archive coverage",
+      "acceptance": "Single cursor and clean timer teardown; no stale replay effect after close",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C096",
+      "category": "replay",
+      "feature": "Multi-pane replay alignment",
+      "current_status": "partial",
+      "target_phase": "P4",
+      "implementation_block": "B15",
+      "prerequisite": "Recorded temporal provenance and archive coverage",
+      "acceptance": "All panes by UTC cursor, not ordinal index; gaps and different calendars explicit",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C097",
+      "category": "replay",
+      "feature": "All-layer no-lookahead",
+      "current_status": "partial",
+      "target_phase": "P4",
+      "implementation_block": "B15",
+      "prerequisite": "Recorded temporal provenance and archive coverage",
+      "acceptance": "Exposures/flow/ratios/profiles/session extrema/revisions filtered by known-at; distinguish review from faithful playback",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C098",
+      "category": "replay",
+      "feature": "Completed versus partial candle mode",
+      "current_status": "partial",
+      "target_phase": "P4",
+      "implementation_block": "B15",
+      "prerequisite": "Recorded temporal provenance and archive coverage",
+      "acceptance": "No eventual final high/low at intra-bar cursor; partial only from eligible base events",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C099",
+      "category": "replay",
+      "feature": "Replay/live isolation",
+      "current_status": "partial",
+      "target_phase": "P4",
+      "implementation_block": "B15",
+      "prerequisite": "Recorded temporal provenance and archive coverage",
+      "acceptance": "Never write replay state into live price/exposure cache or live alert triggers",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C100",
+      "category": "plugins",
+      "feature": "Quiet Calf and paid plugins",
+      "current_status": "out-of-scope",
+      "target_phase": "P7",
+      "implementation_block": "B26",
+      "prerequisite": "Separate entitlement/rule-spec commissioning",
+      "acceptance": "Reference parity backlog; gap-fill/TDO/opening-range/range-expansion/prior levels/Std Legs only with independent spec, no vendor purchase assumed",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C101",
+      "category": "plugins",
+      "feature": "XABCD/Deep Gartley",
+      "current_status": "out-of-scope",
+      "target_phase": "P7",
+      "implementation_block": "B26",
+      "prerequisite": "Separate entitlement/rule-spec commissioning",
+      "acceptance": "Explicit independent harmonic zone/grade/nonconvergence spec before shipping",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C102",
+      "category": "plugins",
+      "feature": "Elliott triangle/diagonal rule checks",
+      "current_status": "out-of-scope",
+      "target_phase": "P7",
+      "implementation_block": "B26",
+      "prerequisite": "Separate entitlement/rule-spec commissioning",
+      "acceptance": "Independent rules/fixtures; no automatic trading thesis",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C103",
+      "category": "positions",
+      "feature": "Own paper position overlay",
+      "current_status": "new",
+      "target_phase": "P7",
+      "implementation_block": "B25",
+      "prerequisite": "Authorized paper brokerage read surface only",
+      "acceptance": "Accurate instrument/account/status with immediate refresh on visibility return; read-only",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C104",
+      "category": "positions",
+      "feature": "Nexus Trade Deck/Traders",
+      "current_status": "out-of-scope",
+      "target_phase": "P7",
+      "implementation_block": "B26",
+      "prerequisite": "Separate Nexus/social/account integration and execution approval",
+      "acceptance": "External product integrations not present by implication; followed-trader overlay deferred",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C105",
+      "category": "positions",
+      "feature": "One-tap paper trading",
+      "current_status": "out-of-scope",
+      "target_phase": "P7",
+      "implementation_block": "B26",
+      "prerequisite": "Separate Nexus/social/account integration and execution approval",
+      "acceptance": "Not part of read-only chart upgrade; if commissioned, paper-only account and confirmations; replay new orders refused server-side while approved cancel/close remains",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C106",
+      "category": "ai",
+      "feature": "Focused-chart AI context",
+      "current_status": "partial",
+      "target_phase": "P7",
+      "implementation_block": "B24",
+      "prerequisite": "Server exact-surface/snapshot resolver and current refusal tests",
+      "acceptance": "Reuse AgentProvider/Lodestar; bind symbol/interval/mode/cursor/scopes/sidecars and units to server evidence",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C107",
+      "category": "ai",
+      "feature": "Chart AI request safety",
+      "current_status": "partial",
+      "target_phase": "P7",
+      "implementation_block": "B24",
+      "prerequisite": "Server exact-surface/snapshot resolver and current refusal tests",
+      "acceptance": "Historical/adjusted modes stay refused until commissioned; no client numeric evidence, hidden future data or orders; no automatic mark-chart claim",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C108",
+      "category": "hardening",
+      "feature": "Large layouts and phone performance",
+      "current_status": "new",
+      "target_phase": "P8",
+      "implementation_block": "B28",
+      "prerequisite": "Real browser/fixture measurements, not mocked performance",
+      "acceptance": "1/3/5panes, viewport culling and capped nodes; resource adaptation before enabling heavy panes",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C109",
+      "category": "hardening",
+      "feature": "Lifecycle correctness",
+      "current_status": "new",
+      "target_phase": "P8",
+      "implementation_block": "B28",
+      "prerequisite": "Real browser/fixture measurements, not mocked performance",
+      "acceptance": "10 mount/unmounts with no leaked listeners/polls/observers",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C110",
+      "category": "hardening",
+      "feature": "Data outages and licensing",
+      "current_status": "new",
+      "target_phase": "P8",
+      "implementation_block": "B28",
+      "prerequisite": "Real browser/fixture measurements, not mocked performance",
+      "acceptance": "Visible 429/denied entitlement/stale/null; upstream source/NOTICE/attribution respected",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C111",
+      "category": "rollout",
+      "feature": "Feature flag and rollback",
+      "current_status": "new",
+      "target_phase": "P8",
+      "implementation_block": "B29",
+      "prerequisite": "Independent acceptance and source/build/runtime identity",
+      "acceptance": "Incumbent default and reversible state-compatible rollback; no heatmap/ML/broker changes",
+      "sources": [
+        "SRC-GUIDE",
+        "SRC-CODE"
+      ]
+    },
+    {
+      "id": "C112",
+      "category": "indicators",
+      "feature": "Exposure-VWAP independent scope and P filter",
+      "current_status": "data-gated",
+      "target_phase": "P2",
+      "implementation_block": "B08",
+      "prerequisite": "Complete per-channel eligible exposure and reviewed weighting spec",
+      "acceptance": "Indicator scope Front/1W/1M/3M/6M/All and All/P50/P40/P30/P25/P20 resolve independently from orb settings; disclose mismatch; no near-zero signed divisor",
+      "sources": [
+        "SRC-R2-GEX"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C113",
+      "category": "indicators",
+      "feature": "Exposure-VWAP centre/bands and gap rendering",
+      "current_status": "data-gated",
+      "target_phase": "P2",
+      "implementation_block": "B08",
+      "prerequisite": "Approved exposure weighting/band definition",
+      "acceptance": "Centre only or centre+upper/lower; fresh per-minute eligible board, no smoothing/carry; absent board draws gap; do not claim undocumented vendor formula parity",
+      "sources": [
+        "SRC-R2-GEX"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C114",
+      "category": "indicators",
+      "feature": "Exposure-VWAP opening and session envelopes",
+      "current_status": "data-gated",
+      "target_phase": "P2",
+      "implementation_block": "B08",
+      "prerequisite": "Eligible board timestamps and instrument calendar",
+      "acceptance": "Off default; opening default15 minutes, configurable8\u201360, minimum8 measured minutes and freeze at window end; missing first minutes not treated as zero; session envelope widens only with eligible data",
+      "sources": [
+        "SRC-R2-GEX"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C115",
+      "category": "derived",
+      "feature": "SPXW exposure-VWAP Trinity-combine gate",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B09",
+      "prerequisite": "Approved known-at product mapping and compatible exposure units",
+      "acceptance": "SPXW-only option, explicitly priced in SPX units; no direct summing foreign currencies/metric bases; unavailable until reviewed board combination spec",
+      "sources": [
+        "SRC-R2-GEX"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C116",
+      "category": "indicators",
+      "feature": "VWAP source, band basis and reset rendering",
+      "current_status": "new",
+      "target_phase": "P2",
+      "implementation_block": "B08",
+      "prerequisite": "Measured eligible volume and approved bar/tape method",
+      "acceptance": "HLC3 default or Close; up to3 band pairs, off default, volume-weighted deviation or percent, default multipliers1/2/3; zero weight unavailable; reset step distinct from missing-data gap",
+      "sources": [
+        "SRC-R2-VWAP"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C117",
+      "category": "indicators",
+      "feature": "Provisional VWAP and proxy-session disclosure",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B23",
+      "prerequisite": "Recorded forming bar inputs and verified ES volume rights/calendar",
+      "acceptance": "Forming value explicitly provisional; SPXW price and ES volume identities disclosed; any wide-bar full-futures-session weighting needs actual temporal join and provider proof, never an ETF substitute",
+      "sources": [
+        "SRC-R2-VWAP"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C118",
+      "category": "delta",
+      "feature": "CVD anchors, average, zero line and axis badge",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B22",
+      "prerequisite": "Reconciled eligible underlying sided volume",
+      "acceptance": "Session/week/month/quarter/year anchor resets at zero; MA on default SMA20 or EMA; each delta candle opens at prior eligible close; no-data emits no candle; unknown volume disclosed",
+      "sources": [
+        "SRC-R2-CVD"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C119",
+      "category": "delta",
+      "feature": "CVD and Volume shared reconciliation",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B22",
+      "prerequisite": "Underlying buy/sell/unclassified capture and versioned classification",
+      "acceptance": "CVD and Volume use identical reconciled figures; buy+sell+unknown equals measured total within declared tolerance; unknown is not direction; a quote-side options flag is not underlying aggressor volume",
+      "sources": [
+        "SRC-R2-CVD"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C120",
+      "category": "delta",
+      "feature": "CVD wick precision and correction provenance",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B22",
+      "prerequisite": "Actually recorded intrabar prefixes/revisions",
+      "acceptance": "Wicks reflect only recorded eligible prefixes; minute-granular source cannot prove subsecond historical extrema; mark provisional/aggregate precision and correction handling",
+      "sources": [
+        "SRC-R2-CVD"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C121",
+      "category": "indicators",
+      "feature": "Volume Profile fixed or visible range controls",
+      "current_status": "new",
+      "target_phase": "P6",
+      "implementation_block": "B23",
+      "prerequisite": "Complete eligible bars and approved approximation variant",
+      "acceptance": "Fixed default200 bars or visible range; depth disabled under visible mode; configurable levels/width, total/buy/sell, default VA68%, POC/VA/VAH/VAL toggles; source method and coverage badges",
+      "sources": [
+        "SRC-R2-VP"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C122",
+      "category": "indicators",
+      "feature": "Volume Profile tie and sparse-area policy",
+      "current_status": "new",
+      "target_phase": "P6",
+      "implementation_block": "B23",
+      "prerequisite": "Approved deterministic row allocation and value-area algorithm",
+      "acceptance": "POC ties select lower-price row; equal adjacent VA expansion chooses upper row; stop at adjacent zero-volume gap and report attained area below target instead of jumping; reject negative/nonfinite weights",
+      "sources": [
+        "SRC-R2-VP"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C123",
+      "category": "indicators",
+      "feature": "Volume Profile bar allocation versus exact tape",
+      "current_status": "new",
+      "target_phase": "P6",
+      "implementation_block": "B23",
+      "prerequisite": "Versioned allocation method with bar range/volume or actual trade-price capture",
+      "acceptance": "Vendor article distributes bar volume across covered rows: price allocation remains approximate even with measured buy/sell totals; exact trade-price VAP is a separate gated variant; zero-range bars need a pinned one-row rule",
+      "sources": [
+        "SRC-R2-VP"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C124",
+      "category": "indicators",
+      "feature": "TPO modes, interval and row sizing",
+      "current_status": "new",
+      "target_phase": "P6",
+      "implementation_block": "B23",
+      "prerequisite": "Eligible bar occupancy and validated calendar/tick metadata",
+      "acceptance": "One active instance per workspace pane; Regular default1day, Fixed Range, recurring Fixed Interval default13:00\u201317:00 ET; blank start latest session; auto targets row count, custom rows tick-aligned; settings keep display and bucket clocks separate",
+      "sources": [
+        "SRC-R2-TPO"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C125",
+      "category": "indicators",
+      "feature": "TPO mature profile and daily composite",
+      "current_status": "new",
+      "target_phase": "P6",
+      "implementation_block": "B23",
+      "prerequisite": "Complete eligible bar-period occupancy",
+      "acceptance": "Letters one per bar/row touched; POC and single prints not before fifth eligible period; daily-or-higher blank-start composite uses last20 eligible bars, not fabricated intrabar letters; explicit source granularity",
+      "sources": [
+        "SRC-R2-TPO"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C126",
+      "category": "indicators",
+      "feature": "TPO naked levels and historical revisit",
+      "current_status": "new",
+      "target_phase": "P6",
+      "implementation_block": "B23",
+      "prerequisite": "Eligible completed prior sessions and subsequent price coverage",
+      "acceptance": "Prior naked POC/VA/single-print levels first appear at next session open and retire only on an eligible revisit; unknown gaps cannot prove untouched; hiding beyond default5% distance is presentation, not deletion",
+      "sources": [
+        "SRC-R2-TPO"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C127",
+      "category": "indicators",
+      "feature": "TPO balance, annotations and styling",
+      "current_status": "new",
+      "target_phase": "P6",
+      "implementation_block": "B23",
+      "prerequisite": "Versioned documented TPO conventions",
+      "acceptance": "Initial Balance, prior-session/range switches, black-box defaultoff, SP lines/fixed-range marker/tick grid, text/font/colors; persist false; value-area target/IB period are reviewed settings, not guessed vendor constants",
+      "sources": [
+        "SRC-R2-TPO"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C128",
+      "category": "drawings",
+      "feature": "Preset default precedence by tool family",
+      "current_status": "new",
+      "target_phase": "P5",
+      "implementation_block": "B17",
+      "prerequisite": "Versioned local preset schema; real owner only for account variant",
+      "acceptance": "New drawings use starred > active > built-in within Fibonacci or line-style family; selecting built-in restyles selected drawing but does not override starred new-drawing default; deleting/un-starring resolves defaults safely",
+      "sources": [
+        "SRC-R2-PRESET"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C129",
+      "category": "drawings",
+      "feature": "Preset dirty dot, explicit update and isolation",
+      "current_status": "new",
+      "target_phase": "P5",
+      "implementation_block": "B17",
+      "prerequisite": "Drawing/preset identities and immutable applied config",
+      "acceptance": "Dirty dot and Update enabled only when selected drawing differs; edits affect selected drawing only; presets never autosave from style edits; explicit Update changes preset without silently restyling existing drawings",
+      "sources": [
+        "SRC-R2-PRESET"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C130",
+      "category": "drawings",
+      "feature": "Full Fibonacci and line-style preset schema",
+      "current_status": "new",
+      "target_phase": "P5",
+      "implementation_block": "B17",
+      "prerequisite": "Strict per-tool validated schema",
+      "acceptance": "Fib ratios/colors/visibility/fill opacity/width/style/extensions/trendline/labels/log/reverse roundtrip; no generic color swatch override for per-level Fib colors; line-style family covers line/ray/rectangle/arrow/vertical/brush; false options retained",
+      "sources": [
+        "SRC-R2-PRESET"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C131",
+      "category": "drawings",
+      "feature": "Preset quota, reset, delete and sync conflict",
+      "current_status": "new",
+      "target_phase": "P5",
+      "implementation_block": "B17",
+      "prerequisite": "Local schema or separately approved authenticated store",
+      "acceptance": "Save as/update/delete/built-in reset; bounded50 across both families with atomic store enforcement; local-only explicitly labelled; account most-recent-save policy requires server revision/order and cross-owner protected reads",
+      "sources": [
+        "SRC-R2-PRESET"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C132",
+      "category": "flow",
+      "feature": "Flow Bucket dismissal and exact interaction target",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B20",
+      "prerequisite": "Eligible filtered option-print buckets and pane-qualified hit testing",
+      "acceptance": "Only nonempty flow bars open details; same selected bucket toggles closed; Escape/X/outside close; time range uses display TZ; late filter/cursor response cannot restore dismissed stale bucket",
+      "sources": [
+        "SRC-R2-FLOW"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C133",
+      "category": "flow",
+      "feature": "Flow Bucket totals, top contracts and concentration",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B20",
+      "prerequisite": "Bucket and drilldown share canonical filter hash/cutoff",
+      "acceptance": "Trade count/net/calls/puts, bucket/day put-call and top strike/type/expiry/DTE/premium/percentage all reconcile to filtered eligible prints; day totals bounded by replay cursor; zero denominators unavailable",
+      "sources": [
+        "SRC-R2-FLOW"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C134",
+      "category": "flow",
+      "feature": "Flow filters subtractive semantics and persistence",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B20",
+      "prerequisite": "Versioned filter schema with explicit unknown categories",
+      "acceptance": "Single/multi/sweep/non-sweep/moneyness/side/DTE/score/premium filters remove prints, never rescale surviving premium; preserve false/zero settings across reopen; ask or sweep is not proven opening intent",
+      "sources": [
+        "SRC-R2-FLOW"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C135",
+      "category": "darkpool",
+      "feature": "Dark-pool exact-print identity and restrictions",
+      "current_status": "data-gated",
+      "target_phase": "P6",
+      "implementation_block": "B21",
+      "prerequisite": "Entitled actual off-exchange prints with report/arrival identity",
+      "acceptance": "Each dashed level is one exact price/date/notional print, never weighted average or directional buy/sell signal; equities only by reference policy; top-N/lookback contradictions with video resolved by validated capability config",
+      "sources": [
+        "SRC-R2-DP"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C136",
+      "category": "chart-basics",
+      "feature": "Monday-week, partial session and DST boundaries",
+      "current_status": "new",
+      "target_phase": "P1",
+      "implementation_block": "B03",
+      "prerequisite": "Maintained instrument session calendar and eligible base bars",
+      "acceptance": "Equity weekly bars anchored Monday calendar weeks, holidays not padded; custom intraday bins anchored session open and stop at session end; half-day/ETH/overnight/DST fixtures; XNYS is not futures/ETH proof",
+      "sources": [
+        "SRC-R2-CODE"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C137",
+      "category": "chart-basics",
+      "feature": "Strict normalized volume and timestamp admission",
+      "current_status": "new",
+      "target_phase": "P0",
+      "implementation_block": "B01",
+      "prerequisite": "Canonical boundary validates raw provider values before legacy coercion",
+      "acceptance": "Do not inherit missing volume=>0, booleans=>numeric, infinite volume or naive/unparseable timestamp fallback; retain genuine zero/null distinctions; unchanged old consumers have characterization tests",
+      "sources": [
+        "SRC-R2-CODE"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C138",
+      "category": "chart-basics",
+      "feature": "Paged resampling integrity and provider-tier limits",
+      "current_status": "new",
+      "target_phase": "P1",
+      "implementation_block": "B03",
+      "prerequisite": "Bounded normalized base-bar pages and provider caps",
+      "acceptance": "Sort/dedup immutable keys, reject stalled/repeated cursors and scope/source mismatch; gather complete bucket inputs including necessary prefix before emitting; never interpolate; mark partial/truncated; API tier limits are not UX interval support",
+      "sources": [
+        "SRC-R2-API"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C139",
+      "category": "hardening",
+      "feature": "Native study subpanes versus independent workspace charts",
+      "current_status": "new",
+      "target_phase": "P0",
+      "implementation_block": "B04",
+      "prerequisite": "Installed-version API and measured adapter spike",
+      "acceptance": "LWC native study panes share one chart timeline; independent multi-symbol/timeframe workspace panes remain separate chart instances coordinated by reducer; native panes do not prove workspace behavior",
+      "sources": [
+        "SRC-R2-LWC"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C140",
+      "category": "usability",
+      "feature": "Primitive-inclusive engine capture and DOM composition",
+      "current_status": "new",
+      "target_phase": "P7",
+      "implementation_block": "B27",
+      "prerequisite": "Measured capture in chosen pinned installed renderer",
+      "acceptance": "LWC takeScreenshot(true,includeCrosshair) includes top layer/primitives; default false omits them, crosshair flag only applies with top layer; workspace compositor separately includes DOM sidecars/drawings/watermarks and handles tainted canvas honestly",
+      "sources": [
+        "SRC-R2-LWC"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C141",
+      "category": "hardening",
+      "feature": "Pinned release NOTICE and attribution audit",
+      "current_status": "new",
+      "target_phase": "P0",
+      "implementation_block": "B04",
+      "prerequisite": "Explicit dependency approval and approved release/package inventory",
+      "acceptance": "Upstream master NOTICE exists and reads Copyright2025 TradingView; verify exact installed release license/NOTICE and attribution obligations, plugin licenses and visible link before adoption; public docs are not runtime/performance proof",
+      "sources": [
+        "SRC-R2-LWC"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C142",
+      "category": "hardening",
+      "feature": "Late historical bar correction and series-scale rebinding",
+      "current_status": "new",
+      "target_phase": "P0",
+      "implementation_block": "B04",
+      "prerequisite": "Pinned installed renderer and query/revision identities",
+      "acceptance": "LWC update historicalUpdate=true is documented for existing older bars but slower; inserts require characterized safe setData path; moving a series requires reacquiring priceScale API; preserve logical drawings/viewport and reject stale revisions",
+      "sources": [
+        "SRC-R2-LWC"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    },
+    {
+      "id": "C143",
+      "category": "alerts",
+      "feature": "Existing exposure alerts are not price-touch alerts",
+      "current_status": "new",
+      "target_phase": "P4",
+      "implementation_block": "B18",
+      "prerequisite": "Audit AlertRule Mongo persistence and evaluator semantics",
+      "acceptance": "Preserve existing exposure threshold events and live-only AlertEngineStrip; canonical price-touch/role-follow rules need their own typed contract/mode/owner/evaluator, not relabelled exposure messages",
+      "sources": [
+        "SRC-R2-CODE"
+      ],
+      "added_by": "round2_source_backed_settings_audit"
+    }
+  ],
+  "round2": {
+    "retained_baseline_capability_ids": [
+      "C001",
+      "C002",
+      "C003",
+      "C004",
+      "C005",
+      "C006",
+      "C007",
+      "C008",
+      "C009",
+      "C010",
+      "C011",
+      "C012",
+      "C013",
+      "C014",
+      "C015",
+      "C016",
+      "C017",
+      "C018",
+      "C019",
+      "C020",
+      "C021",
+      "C022",
+      "C023",
+      "C024",
+      "C025",
+      "C026",
+      "C027",
+      "C028",
+      "C029",
+      "C030",
+      "C031",
+      "C032",
+      "C033",
+      "C034",
+      "C035",
+      "C036",
+      "C037",
+      "C038",
+      "C039",
+      "C040",
+      "C041",
+      "C042",
+      "C043",
+      "C044",
+      "C045",
+      "C046",
+      "C047",
+      "C048",
+      "C049",
+      "C050",
+      "C051",
+      "C052",
+      "C053",
+      "C054",
+      "C055",
+      "C056",
+      "C057",
+      "C058",
+      "C059",
+      "C060",
+      "C061",
+      "C062",
+      "C063",
+      "C064",
+      "C065",
+      "C066",
+      "C067",
+      "C068",
+      "C069",
+      "C070",
+      "C071",
+      "C072",
+      "C073",
+      "C074",
+      "C075",
+      "C076",
+      "C077",
+      "C078",
+      "C079",
+      "C080",
+      "C081",
+      "C082",
+      "C083",
+      "C084",
+      "C085",
+      "C086",
+      "C087",
+      "C088",
+      "C089",
+      "C090",
+      "C091",
+      "C092",
+      "C093",
+      "C094",
+      "C095",
+      "C096",
+      "C097",
+      "C098",
+      "C099",
+      "C100",
+      "C101",
+      "C102",
+      "C103",
+      "C104",
+      "C105",
+      "C106",
+      "C107",
+      "C108",
+      "C109",
+      "C110",
+      "C111"
+    ],
+    "added_capability_ids": [
+      "C112",
+      "C113",
+      "C114",
+      "C115",
+      "C116",
+      "C117",
+      "C118",
+      "C119",
+      "C120",
+      "C121",
+      "C122",
+      "C123",
+      "C124",
+      "C125",
+      "C126",
+      "C127",
+      "C128",
+      "C129",
+      "C130",
+      "C131",
+      "C132",
+      "C133",
+      "C134",
+      "C135",
+      "C136",
+      "C137",
+      "C138",
+      "C139",
+      "C140",
+      "C141",
+      "C142",
+      "C143"
+    ],
+    "method": "Retrieved primary subpages plus direct inline source/characterization; no corrupted output accepted"
+  }
+}

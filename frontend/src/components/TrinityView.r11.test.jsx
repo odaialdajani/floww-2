@@ -51,6 +51,19 @@ test("a requested 0DTE scope cannot relabel an explicitly loaded multi-expiry ob
  expect(JSON.parse(screen.getByTestId("r11-context").textContent).dte).toBe("all");
 });
 
+test("the 0DTE refusal offers the loaded expiries in one explicit step",async()=>{
+ const ordinary=axios.get.getMockImplementation();
+ axios.get.mockImplementation(async(url,opts)=>String(url).includes("/heatmap/")?{data:{...packet(),map_query:{mode:"day",expiries:4,dte:null}}}:ordinary(url,opts));
+ await mount();
+ const button=screen.getByTestId("triad-show-loaded");
+ axios.get.mockClear();
+ await act(async()=>{fireEvent.click(button);});
+ expect(screen.getByLabelText("Triad expiry scope")).toHaveValue("loaded");
+ const urls=axios.get.mock.calls.map(([url])=>String(url));
+ expect(urls.some(url=>url.includes("dte=0"))).toBe(false);
+ expect(urls.some(url=>url.includes("/heatmap/"))).toBe(true);
+});
+
 test("Raw and adjusted share expiry/strike rails and a zero-anchored range without borrowing missing activity",async()=>{
  await mount();
  const raw=screen.getByTestId("triad-pane-raw"),adjusted=screen.getByTestId("triad-pane-adjusted");

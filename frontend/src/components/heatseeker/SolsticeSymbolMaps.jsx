@@ -5,7 +5,7 @@ import { usePublishScreenContext } from "../../agent/useScreenContext";
 import SkylitHeatmapGrid from "./SkylitHeatmapGrid";
 import WallInspector from "./WallInspector";
 import ExactContractReview from "./ExactContractReview";
-import AskLodestar from "./AskLodestar";
+import AskFlow from "./AskFlow";
 import { mapSurface } from "./shownMapStrikes";
 
 /** Independent canonical panes; never projects another symbol onto SPY's strike rail. */
@@ -103,7 +103,7 @@ export default function SolsticeSymbolMaps({ ticker = "SPY", data, metric = "raw
           quality={packet?.quality} interaction={(packet?.interactions || []).find(i => i.wall_id === wall?.wall_id)}
           metric={metric} snapshotId={packet?.snapshotId} replay={replay} />
         <button disabled={!cell || !packet} onClick={() => setReview(true)}>Review exact contract</button>
-        <AskLodestar subject={`${active} · ${cell?.wall_id || "no selected wall"}`} overlayMetric={metric} displayMode={replay ? "replay" : "live"} compact />
+        <AskFlow subject={`${active} · ${cell?.wall_id || "no selected wall"}`} overlayMetric={metric} displayMode={replay ? "replay" : "live"} compact />
       </aside>
     </div>
     {review && <div className="skylit-drawer" role="dialog" aria-label={`${active} contract review`}>

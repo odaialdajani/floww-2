@@ -17,6 +17,20 @@ test('signed Triad bars use the same restrained palette and support keyboard str
  expect(select).toHaveBeenCalledWith(450);
 });
 
+test('sub-2% negative bars keep the negative hatch cue so sign stays visible',()=>{
+ render(<TriadExposure series={{strikes:[
+  {strike:449,gex:-1,n_measured:1,n_total:1,partial:false},
+  {strike:450,gex:1,n_measured:1,n_total:1,partial:false},
+  {strike:451,gex:100,n_measured:1,n_total:1,partial:false}]}}
+  selectedStrike={null} onSelect={()=>{}} />);
+ const negative=screen.getByRole('button',{name:/Strike 449/});
+ const positive=screen.getByRole('button',{name:/Strike 450/});
+ // Negative bar + hatch overlay rect; positive same-magnitude stays plain.
+ expect(negative.querySelectorAll('rect').length).toBe(2);
+ expect(negative.querySelectorAll('rect')[1].getAttribute('fill')).toMatch(/^url\(#triad-negative-/);
+ expect(positive.querySelectorAll('rect').length).toBe(1);
+});
+
 const EXPIRIES = {
  version: 'coverage.v1', ticker: 'SPY',
  window: {min_dte: 0, max_dte: 7},

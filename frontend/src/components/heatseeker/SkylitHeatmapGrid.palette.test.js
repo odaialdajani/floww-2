@@ -1,15 +1,26 @@
-import {cellPalette} from './SkylitHeatmapGrid';
+import {signedCellPalette} from '../../lib/signedGridPalette';
 import React from 'react';
 import {render, fireEvent} from '@testing-library/react';
 import SkylitHeatmapGrid from './SkylitHeatmapGrid';
 
 test('signed palette keeps readable text at every sampled level',()=>{
- for(let i=0;i<=100;i++){
-  const palette=cellPalette(i/100);
+ for(let i=-100;i<=100;i++){
+  const palette=signedCellPalette(i/100,1);
   expect(palette.contrast).toBeGreaterThanOrEqual(4.5);
   expect(palette.background).toMatch(/^rgb\(/);
   expect(['#000','#fff']).toContain(palette.foreground);
  }
+});
+
+test('negative readings keep the hatch cue below the 2% level; positives stay plain',()=>{
+ const tinyNegative=signedCellPalette(-0.5,100);   // 0.5% of extent -> lowest level
+ const tinyNegativeEdge=signedCellPalette(-2,100); // 2.0% of extent -> still lowest level
+ const tinyPositive=signedCellPalette(0.5,100);
+ const zero=signedCellPalette(0,100);
+ expect(tinyNegative.backgroundImage).not.toBe('none');
+ expect(tinyNegativeEdge.backgroundImage).not.toBe('none');
+ expect(tinyPositive.backgroundImage).toBe('none');
+ expect(zero.backgroundImage).toBe('none');
 });
 
 test('asymmetric signed grid uses the Screener levels without changing values or selection',()=>{

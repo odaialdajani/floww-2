@@ -110,6 +110,7 @@ log = logging.getLogger("heatseeker")
 _shutdown_event = asyncio.Event()
 _background_tasks: set[asyncio.Task] = set()
 _BACKGROUND_SHUTDOWN_TIMEOUT_S = 5.0
+_SNAPSHOT_ACK_TIMEOUT_S = 5.0
 
 
 async def _stop_tracked_background_tasks():
@@ -274,6 +275,7 @@ async def rate_limit_middleware(request: Request, call_next):
 
 # ----------------------------- Global Exception Handler ------------------------------
 
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -282,9 +284,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     log.error(f"HTTP {exc.status_code} {request.url.path}: {exc.detail}")
+    typed_reason = isinstance(exc.detail, dict) and isinstance(exc.detail.get("status"), str) \
+        and isinstance(exc.detail.get("reason"), str)
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error": str(exc.detail), "status_code": exc.status_code, "path": request.url.path},
+        content={"error": jsonable_encoder(exc.detail) if typed_reason else str(exc.detail),
+                 "status_code": exc.status_code, "path": request.url.path},
         headers={
             "Access-Control-Allow-Origin": _get_cors_origin_for_handlers(),
             "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -1218,7 +1223,7 @@ def _display_quality(exposure_basis: str, model_basis: str, strikes: list) -> di
     }
 
 
-async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: bool = True, mode: str = "day", dte: int | None = None, scalp: bool = False, max_strikes: int = 200, expiry_scope: str = "loaded", scope_session: str | None = None) -> dict[str, Any]:
+async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: bool = True, mode: str = "day", dte: int | None = None, scalp: bool = False, max_strikes: int = 200, expiry_scope: str = "loaded", scope_session: str | None = None, *, await_recording: bool = False) -> dict[str, Any]:
     log.info(f"build_heatmap: {ticker} expiries={max_expiries} mode={mode} max_strikes={max_strikes}")
     public_only = os.getenv("FLOWW_MARKET_DATA_PROVIDER") == "public"
     # Check cache first
@@ -1228,7 +1233,8 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         scope_session = datetime.now(EXCHANGE_TZ).date().isoformat()
     requested_map_query = request_query(max_expiries, mode, dte, scalp, with_taps, max_strikes, expiry_scope, scope_session)
     cache_key = scope_cache_key(ticker, requested_map_query)
-    cached = _BUILD_HEATMAP_CACHE.get(cache_key)
+    # Capture explicitly requests a new observation, not an old queued receipt.
+    cached = None if await_recording else _BUILD_HEATMAP_CACHE.get(cache_key)
     if cached and not _public_heatmap_cache_allowed(cached):
         cached = None
     if cached and (time.time() - cached["ts"]) < _BUILD_HEATMAP_CACHE_TTL:
@@ -2097,15 +2103,18 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     history_query_key = cache_key
     try:
         from services.duckdb_engine import db as _ddb
-        from services.heatmap_history import RECORDED_STRUCTURE_FIELDS, record_capability, record_snapshot
+        from services.heatmap_history import RECORDED_STRUCTURE_FIELDS
+        from services.snapshot_writes import snapshot_writes
         _conn = getattr(_ddb, "conn", None)
+        payload["recording_receipt"] = {"status": "unavailable", "reason": "no_connection",
+                                         "snapshot_id": payload.get("snapshotId")}
         if _conn is not None:
             _all = raw.get("contracts", []) or []
             _kept = _all[:2000]
             _cov = {"requested": len(_all), "returned": len(_kept),
                     "truncated": len(_all) > len(_kept)}
-            _t2 = asyncio.create_task(asyncio.to_thread(
-                record_snapshot, _conn, {"ticker": ticker,
+            _write = snapshot_writes.submit(
+                _conn, {"ticker": ticker,
                                          "expiries_used": payload.get("expiries_used"),
                                          "spot": spot,
                                          "mode": mode, "dte": dte, "scalp": scalp,
@@ -2142,18 +2151,33 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                          "vanna_v1": payload.get("vanna_v1"),
                                          "moneyness": payload.get("moneyness")},
                 history_query_key,
-                payload.get("snapshotId") or None))
-            _background_tasks.add(_t2)
-            _t2.add_done_callback(_background_tasks.discard)
-            import contextlib as _ctxlib2
-            with _ctxlib2.suppress(Exception):
-                record_capability(_conn, ticker, "heatmap_build",
-                                  requested=len(_all), returned=len(_kept),
-                                  usable=len(_kept), truncated=_cov["truncated"],
-                                  detail={"mode": mode, "dte": dte, "scalp": scalp,
-                                          "exposure_basis": exposure_basis})
+                payload.get("snapshotId") or None,
+                capability={"requested": len(_all), "returned": len(_kept),
+                            "usable": len(_kept), "truncated": _cov["truncated"],
+                            "detail": {"mode": mode, "dte": dte, "scalp": scalp,
+                                       "exposure_basis": exposure_basis}})
+            if _write is None:
+                payload["recording_receipt"] = {"status": "refused", "reason": "backpressure",
+                                                 "snapshot_id": payload.get("snapshotId")}
+            else:
+                # Queue acceptance is not a COMMIT acknowledgement. The waiter
+                # is tracked, but its cancellation never frees a physical slot.
+                payload["recording_receipt"] = _write.receipt()
+                _t2 = asyncio.create_task(_write.wait())
+                _background_tasks.add(_t2)
+                _t2.add_done_callback(_background_tasks.discard)
+                if await_recording:
+                    try:
+                        payload["recording_receipt"] = await asyncio.wait_for(
+                            asyncio.shield(_t2), timeout=_SNAPSHOT_ACK_TIMEOUT_S)
+                    except TimeoutError:
+                        # The physical transaction can still finish later.
+                        payload["recording_receipt"] = {**_write.receipt(),
+                                                         "reason": "acknowledgement_timeout"}
     except Exception as rh:
-        log.debug("heatmap_history record skipped: %s", rh)
+        payload["recording_receipt"] = {"status": "failed", "reason": "queue_failed",
+                                         "snapshot_id": payload.get("snapshotId")}
+        log.debug("heatmap_history record skipped: %s", type(rh).__name__)
     sanitized = _sanitize(payload)
     from services.solstice_scope import attach_scope_echo
     attach_scope_echo(sanitized, cache_key, history_query_key=history_query_key, formula_version="gex.v2")
@@ -3692,6 +3716,14 @@ async def on_stop():
         log.error("on_stop: %d background task(s) did not stop; storage remains open", len(unfinished))
         raise RuntimeError("Background work did not stop; storage remains open")
 
+    # Wait separately for actual thread-backed writes: cancelling their asyncio
+    # waiters cannot interrupt DuckDB or make it safe to close storage early.
+    from services.snapshot_writes import snapshot_writes
+    await _shutdown_join(snapshot_writes.drain(), "snapshot-writes")
+    if snapshot_writes.status()["pending"]:
+        log.error("on_stop: snapshot writes did not stop; storage remains open")
+        raise RuntimeError("Snapshot writes did not stop; storage remains open")
+
     # Release the file-backed journal lock deterministically instead of
     # relying on process death: close_engine peeks and never opens, so this
     # is a no-op when no journal route ran in this process.
@@ -4208,7 +4240,10 @@ async def _solstice_capture_loop(tickers: list[str], interval: int, hours_only: 
                     try:
                         # Fresh impl (not the cache wrapper): guarantees a new
                         # observation for the recorder; stale-serves never record.
-                        await _build_heatmap_impl(t, max_expiries=4)
+                        captured = await _build_heatmap_impl(t, max_expiries=4, await_recording=True)
+                        receipt = captured.get("recording_receipt") or {}
+                        if receipt.get("status") != "committed":
+                            log.warning("solstice capture %s unacknowledged: %s", t, receipt.get("status", "unavailable"))
                     except Exception as e:
                         log.debug("solstice capture %s failed (non-fatal): %s", t, e)
                     await asyncio.sleep(5)  # pace tickers, share budget

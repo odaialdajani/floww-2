@@ -91,6 +91,31 @@
 .trinity-layout { min-width: 0; min-height: 0; font-variant-numeric: tabular-nums; }
 .triad-desk-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 6px 10px; background: #0d1117; border-bottom: 1px solid #263044; font-size: 11px; }
 .triad-desk-toolbar select { background: #101625; border: 1px solid #34405b; padding: 5px; color: #cbd5e1; }
+.triad-scope-notice { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 10px; background: #0d1117; border-bottom: 1px solid #263044; font-size: 11px; }
+.triad-scope-notice p { margin: 0; color: #94a3b8; }
+.triad-scope-notice button { background: #101625; border: 1px solid #34405b; color: #d7e6e8; padding: 4px 10px; font-size: 11px; cursor: pointer; }
+.triad-scope-notice button:hover { background: #222b42; }
+/* Wall desk (TriadDesk) context strip + notice states */
+.context-mini { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; padding: 7px 10px; background: #0d1117; border-bottom: 1px solid #263044; font-size: 12px; color: #cbd5e1; }
+.context-mini strong { color: #e9f1f5; letter-spacing: .4px; }
+.context-mini .mono { color: #d7e6e8; font-variant-numeric: tabular-nums; }
+.context-mini button { background: #101625; border: 1px solid #34405b; color: #cbd5e1; padding: 4px 11px; font-size: 11px; cursor: pointer; border-radius: 3px; font-family: inherit; }
+.context-mini button:hover { background: #222b42; }
+.context-mini button[aria-pressed="true"] { border-color: rgba(201, 168, 76, .55); color: #e8c96a; }
+.context-mini small { color: #94a3b8; font-size: 11px; }
+.triad-desk-error { padding: 7px 10px; margin: 0; background: #2a1212; border-bottom: 1px solid #4a2626; color: #e8b4a4; font-size: 12px; }
+/* Desk/review shared panel chrome — classes used by TriadDesk / TriadChainTable,
+   which previously had no stylesheet (legend, headings and tables rendered unspaced). */
+.panelhead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 10px; }
+.panelhead strong { color: #e9f1f5; font-size: 12px; }
+.panelhead small { font-size: 11px; color: #94a3b8; }
+.panelhead .chart-legend { font-size: 10px; color: #94a3b8; }
+.chart-legend { display: flex; gap: 12px; flex-wrap: wrap; }
+.chart-caption { padding: 6px 10px 10px; font-size: 10px; color: #8fa0b3; font-style: italic; }
+.table-wrap { max-height: 340px; overflow: auto; border: 1px solid #223046; margin: 0 10px 10px; }
+.contract-table { width: 100%; border-collapse: collapse; font-size: 11px; font-variant-numeric: tabular-nums; }
+.contract-table th, .contract-table td { text-align: right; padding: 4px 8px; border-bottom: 1px solid rgba(255, 255, 255, .05); color: #cbd5e1; }
+.contract-table th { color: #64748b; font-weight: 600; position: sticky; top: 0; background: #101625; }
 .triad-readiness { display: flex; gap: 10px; flex-wrap: wrap; padding: 8px 0; font-size: 12px; }
 .triad-readiness small { color: #94a3b8; line-height: 1.5; }
 .triad-profile { max-height: 190px; overflow: auto; background: #101625; padding: 8px 12px; }
@@ -148,6 +173,15 @@
 .skylit-full-dashboard .skylit-control-sep { flex-shrink: 0; }
 .skylit-full-dashboard .skylit-control-left>button,
 .skylit-full-dashboard .skylit-control-right>button { min-height: 27px; }
+
+/* The chart can be narrower than the viewport because both study rails are
+   present. Let the three toolbar groups wrap at their actual content width. */
+.skylit-full-dashboard .skylit-control-bar { flex-wrap: wrap; gap: 6px 10px; }
+.skylit-full-dashboard .skylit-control-left { flex-wrap: wrap; min-width: 0; }
+.skylit-full-dashboard .skylit-control-center { flex: 1 1 340px; justify-content: flex-start; flex-wrap: wrap; }
+.skylit-full-dashboard .skylit-control-right { margin-left: auto; }
+.trinity-layout .triad-context { gap: 6px; }
+.trinity-layout .triad-board-status { margin-left: auto; color: #9bb0bd; font-size: 11px; white-space: nowrap; }
 
 @media(max-width:1050px){
  .skylit-full-dashboard .skylit-control-bar{flex-wrap:wrap;gap:6px;padding:6px 10px;}

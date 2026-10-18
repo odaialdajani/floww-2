@@ -26,6 +26,8 @@
 
 import React, { memo, useEffect, useState } from "react";
 import { BACKEND_BASE } from "../../config/api";
+import { fetchStudyJSON } from "./studyFetch";
+import StudyErrorCard from "./StudyErrorCard";
 
 const SIDE_BASE =
   process.env.REACT_APP_STEAL_THREE_BASE || BACKEND_BASE;
@@ -73,17 +75,14 @@ function StrikeConeBadge({ ticker = "SPY", expiries = 1 }) {
       target_deltas: "0.16,0.30",
       expiries: String(expiries),
     });
-    fetch(
+    fetchStudyJSON(
       `${SIDE_BASE}/api/strike_cone/${encodeURIComponent(ticker)}?${qs.toString()}`
     )
-      .then((r) =>
-        r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))
-      )
       .then((j) => {
         if (!cancelled) setData(j);
       })
       .catch((e) => {
-        if (!cancelled) setErr(e.message || String(e));
+        if (!cancelled) setErr(e);
       });
     return () => {
       cancelled = true;
@@ -92,17 +91,13 @@ function StrikeConeBadge({ ticker = "SPY", expiries = 1 }) {
 
   if (err) {
     return (
-      <div
+      <StudyErrorCard
+        title="Strike Cone"
+        base={SIDE_BASE}
+        error={err}
+        testId="hs-strike-cone"
         className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3"
-        data-testid="hs-strike-cone"
-      >
-        <div className="text-[10px] uppercase tracking-widest text-amber-300 font-bold mb-1">
-          Strike Cone · offline
-        </div>
-        <div className="text-[10px] text-amber-200/80">
-          backend @ {SIDE_BASE} unreachable → {err}
-        </div>
-      </div>
+      />
     );
   }
 

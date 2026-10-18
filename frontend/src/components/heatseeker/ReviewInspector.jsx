@@ -40,10 +40,10 @@ function InspectorSections({wall, contract, flow, publicAgent, context = null, i
 export function ReviewSelectionContext({ticker, data, wall, cell, metric, replay}) {
   return <>
     <strong>{ticker}{cell?.strike != null ? ` · ${cell.strike}` : wall ? ` · ${wall.low}–${wall.high}` : " · Selected level"}</strong>
-    <span>{wall ? `Structural zone ${wall.low}–${wall.high}` : "No classified wall"} · {cell?.colKey || "No expiry selected"}</span>
-    <span>{replay ? "Recorded observation" : "Displayed map"} · {data?.data_source || "Source unknown"} · {metric || "raw"}</span>
-    <span>Market time {data?.event_time || data?.observed_at || "unknown"}</span>
-    <details><summary>Snapshot and scope</summary><p>{data?.snapshotId || "Snapshot identity unknown"} · generated {data?.asof || "time unknown"}</p>
+    <span>{wall ? `Wall ${wall.low}–${wall.high}` : "No classified wall"} · {cell?.colKey || "No expiry"} · {metric || "raw"}</span>
+    <details><summary>Source, time and scope</summary>
+      <p>{replay ? "Recorded observation" : "Displayed map"} · {data?.data_source || "Source unknown"} · market time {data?.event_time || data?.observed_at || "unknown"}</p>
+      <p>{data?.snapshotId || "Snapshot identity unknown"} · generated {data?.asof || "time unknown"}</p>
       <p>{data?.grid?.expiries?.join(", ") || "Expiry scope unknown"} · {data?.exposure_basis || "Basis unknown"} · {data?.formula_version || "Formula unknown"}</p>
     </details>
   </>;

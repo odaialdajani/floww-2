@@ -1,0 +1,29 @@
+{
+ "targeted_regression": {
+  "command": "pytest 7 key files",
+  "exit_code": 0,
+  "result": "133 passed",
+  "log": "controller tool output"
+ },
+ "backend_full": {
+  "command": "MONGO_URL=... FLOWW_ENABLE_LIVE_PUBLIC=0 python -m pytest tests/ -q --tb=short -p no:cacheprovider -m 'not flaky_env'",
+  "exit_code": 0,
+  "result": "8437 passed, 38 skipped, 3425 warnings in 571.97s (0:09:31)",
+  "log": "/Users/nav/.hermes/cache/scratch/floww-pr-audit-1-131-20261016/backend-full-f623771a.log"
+ },
+ "frontend_full": {
+  "command": "CI=true npm test -- --watchAll=false",
+  "exit_code": 0,
+  "result": [
+   "Test Suites: 208 passed, 208 total",
+   "Tests:       2304 passed, 2304 total",
+   "Time:        33.51 s"
+  ],
+  "log": "/Users/nav/.hermes/cache/scratch/floww-pr-audit-1-131-20261016/frontend-full-f623771a.log"
+ },
+ "pr_131_merge": {
+  "exit_code": 0,
+  "merge_commit": "6716946b109e43ced81bec6f2fec9c0c46332f14",
+  "head": "97433e4bf36cb7e0b81623351116198aef535f64"
+ }
+}

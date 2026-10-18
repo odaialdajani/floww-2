@@ -1,0 +1,31 @@
+{
+ "root": "/Users/nav/Documents/Codex/2026-10-07/so-we-have-a-really-big-3/work/floww-unified",
+ "branch": "fix/floww-integration-reset-20261015",
+ "head": "97433e4bf36cb7e0b81623351116198aef535f64",
+ "origin_main": "6716946b109e43ced81bec6f2fec9c0c46332f14",
+ "dirty_hashes": {
+  ".serena/project.yml": "da23ab1db61582c2590a8bc1a46ff55723afd5214e83e00a5edf91824603a07b",
+  "kanban/BOTTLENECK_ALERTS.md": "ec8615925b3c8a8d34f9f4f0f1977f26a3923dc5df2c1665ec6977960a49946c"
+ },
+ "initial_dirty_hashes": {
+  ".serena/project.yml": "da23ab1db61582c2590a8bc1a46ff55723afd5214e83e00a5edf91824603a07b",
+  "kanban/BOTTLENECK_ALERTS.md": "f73940fec57002d0c4a0b5c2957f4aeabf4e80fc52672310c084d1bda7810555"
+ },
+ "current_dirty_hashes": {
+  ".serena/project.yml": "da23ab1db61582c2590a8bc1a46ff55723afd5214e83e00a5edf91824603a07b",
+  "kanban/BOTTLENECK_ALERTS.md": "ec8615925b3c8a8d34f9f4f0f1977f26a3923dc5df2c1665ec6977960a49946c"
+ },
+ "concurrent_drift": {
+  ".serena/project.yml": {
+   "initial": "da23ab1db61582c2590a8bc1a46ff55723afd5214e83e00a5edf91824603a07b",
+   "current": "da23ab1db61582c2590a8bc1a46ff55723afd5214e83e00a5edf91824603a07b",
+   "changed": false
+  },
+  "kanban/BOTTLENECK_ALERTS.md": {
+   "initial": "f73940fec57002d0c4a0b5c2957f4aeabf4e80fc52672310c084d1bda7810555",
+   "current": "ec8615925b3c8a8d34f9f4f0f1977f26a3923dc5df2c1665ec6977960a49946c",
+   "changed": true
+  }
+ },
+ "note": "The kanban file changed concurrently after the first baseline; current bytes are preserved and excluded from this audit commit."
+}

@@ -17,12 +17,32 @@ walk-forward splits (solstice_labels) is the validation gate.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 VERSION = "abl.v1"
 TOUCH_PCT = 0.001
 NEAR_PCT = 0.003
 MIN_DELTA_SHARE = 0.20
+
+
+def _measured_positive(value: Any) -> bool:
+    """True only for a measured, finite, positive reading.
+
+    Zero, negatives, non-finite numbers, booleans, empty strings and
+    unparseable values are not activity; missing is unknown, not zero.
+    """
+    if value is None or isinstance(value, bool):
+        return False
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return False
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return math.isfinite(number) and number > 0
 
 
 def _walls(strikes: list[dict], spot: float) -> list[dict]:
@@ -61,43 +81,49 @@ def run_ladder(snapshot: dict[str, Any], cost_bps: float = 20.0) -> dict[str, An
         "reason": None if l1_sig else "NO_WALL_NEAR",
         "confirmation": "WEAK_single_snapshot_no_path"}
 
-    ratio = metrics.get("magnitude_ratio_delta_over_raw")
     wall_share = metrics.get("wall_delta_share") or {}
     l2_sig = []
+    local_support_known = False
     for w in l1_sig:
-        # Wall-local join first; scope-wide ratio is not wall evidence.
+        # Scope-wide ratios cannot substitute for this wall's measurement.
         s = wall_share.get(w["wall_id"]) if isinstance(wall_share, dict) else None
-        if s is None:
-            s = ratio
-        if s is not None and s >= MIN_DELTA_SHARE:
-            l2_sig.append(w)
-    _l2_unknown = ratio is None and not wall_share
+        if s is not None:
+            local_support_known = True
+            if s >= MIN_DELTA_SHARE:
+                l2_sig.append(w)
     out["levels"]["L2_plus_delta"] = {
         "signals": [{"wall_id": w["wall_id"],
-                     "delta_share": (wall_share.get(w["wall_id"])
-                                     if isinstance(wall_share, dict) and w["wall_id"] in wall_share
-                                     else ratio),
-                     "wall_local": (w["wall_id"] in wall_share) if isinstance(wall_share, dict) else False}
+                     "delta_share": wall_share[w["wall_id"]],
+                     "wall_local": True}
                     for w in l2_sig],
         "abstentions": 0 if l2_sig else 1,
         "reason": None if l2_sig else ("DELTA_SHARE_BELOW_SUPPORT"
-                                       if (ratio is not None or wall_share) else "DELTA_UNKNOWN")}
+                                       if local_support_known else "DELTA_UNKNOWN")}
 
     vol = snapshot.get("volume_deltas") or (metrics.get("volume_proxy") or [])
-    vol_strikes = set()
+    # A strike is active only when the window measured a positive, finite
+    # volume delta there. Zero, negative, non-finite or missing readings are
+    # not activity — and activity at another strike never substitutes for
+    # the wall's own measurement.
+    active_strikes: set[float] = set()
     for v in vol or []:
-        if isinstance(v, dict) and v.get("strike") is not None:
-            import contextlib as _cl1
-            with _cl1.suppress(TypeError, ValueError):
-                vol_strikes.add(float(v.get("strike")))
+        if not isinstance(v, dict) or v.get("strike") is None:
+            continue
+        try:
+            strike = float(v.get("strike"))
+        except (TypeError, ValueError, OverflowError):
+            continue
+        if _measured_positive(v.get("delta_volume")):
+            active_strikes.add(strike)
     l3_sig = []
     for w in l2_sig:
         members = set()
         for m in w.get("members", []) or []:
-            import contextlib as _cl2
-            with _cl2.suppress(TypeError, ValueError):
+            try:
                 members.add(float(m))
-        if members & vol_strikes:
+            except (TypeError, ValueError, OverflowError):
+                continue
+        if members & active_strikes:
             l3_sig.append(w)
     out["levels"]["L3_plus_activity"] = {
         "signals": [{"wall_id": w["wall_id"]} for w in l3_sig],

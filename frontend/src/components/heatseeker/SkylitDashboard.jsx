@@ -17,7 +17,7 @@ import ExpiryCoverage from "./ExpiryCoverage";
 import AlertEngineStrip from "../flowseeker/AlertEngineStrip";
 import { shownMapStrikes, mapSurface } from "./shownMapStrikes";
 import { ALL_BASES, surfaceStatus, sumProfile } from "../../lib/solsticeMetrics";
-import AskLodestar from "./AskLodestar";
+import AskFlow from "./AskFlow";
 
 import ExactContractReview from "./ExactContractReview";
 import ReviewInspector, {ReviewSelectionContext} from "./ReviewInspector";
@@ -818,7 +818,7 @@ function SkylitDashboard({
           setReplayPanelOpen(true);
           setReplayOpenRequest({id, nonce: Date.now()});
         }} />
-        {priceHistoryOpen && !rangeOpen && <AskLodestar subject={ticker} overlayMetric={activeMetric} displayMode="price-history" compact />}
+        {priceHistoryOpen && !rangeOpen && <AskFlow subject={ticker} overlayMetric={activeMetric} displayMode="price-history" compact />}
 
   </>;
   return (
@@ -1030,7 +1030,7 @@ function SkylitDashboard({
         </span>
         <ExpiryCoverage ticker={ticker} replay={isReplay} />
         {selectedReading && !tradeMode && <SelectedCellReadout selectedCell={selectedReading} displayData={visibleData} metric={activeMetric} viewMode={activeView} />}
-        <AskLodestar subject={`${ticker}${selectedCell ? ` · wall ${selectedCell.wall_id || "none"} · strike ${selectedCell.strike}` : ""}`} overlayMetric={activeMetric} displayMode={priceHistoryOpen ? "price-history" : isReplay ? "replay" : "live"} compact />
+        <AskFlow subject={`${ticker}${selectedCell ? ` · wall ${selectedCell.wall_id || "none"} · strike ${selectedCell.strike}` : ""}`} overlayMetric={activeMetric} displayMode={priceHistoryOpen ? "price-history" : isReplay ? "replay" : "live"} compact />
       </div>
       {/* 3. Main Content Area */}
       <div className="skylit-main-area" data-inspector-open={drawerOpen}>
@@ -1160,7 +1160,7 @@ function SkylitDashboard({
                 <dt>Source</dt><dd>{visibleData?.data_source || "Unknown"}</dd>
               </dl>
               <p>Use the existing Ask Flow workspace to explain this reading. Opening this step does not run the assistant or prepare an order.</p>
-              <AskLodestar subject={`${ticker} · exact contract review`} overlayMetric={activeMetric} displayMode={isReplay ? "replay" : "live"} compact />
+              <AskFlow subject={`${ticker} · exact contract review`} overlayMetric={activeMetric} displayMode={isReplay ? "replay" : "live"} compact />
             </>}
             publicAgent={<><h3>Public agent · reviewed draft</h3><p>A copied brief is not delivery or activation. Review the workflow in Public before any separately approved activation.</p><GroundedPublicReview /></>}
           />

@@ -8,7 +8,7 @@ import { useReviewJournal } from "./triad/useReviewJournal";
 import { ALL_BASES, surfaceStatus, wallValues, wallRead } from "../lib/solsticeMetrics";
 import StrikeExposureProfile from "./triad/StrikeExposureProfile";
 import ExactContractReview from "./heatseeker/ExactContractReview";
-import AskLodestar from "./heatseeker/AskLodestar";
+import AskFlow from "./heatseeker/AskFlow";
 import ReviewInspector, {ReviewSelectionContext} from "./heatseeker/ReviewInspector";
 import HeatmapLandmarks from "./heatseeker/HeatmapLandmarks";
 import WallInspector from "./heatseeker/WallInspector";
@@ -316,12 +316,15 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
       {replayControls}
       {replayId && !replayDisplay && <button type="button" onClick={() => onReplayDisplay(null)}>Leave recorded observation · Live</button>}
       <ContextStrip board={board} ticker={ticker} symbolInput={symbolInput}
-        onSymbolInput={setSymbolInput} onSubmit={submitSymbol} showStockControl={!sharedStockChoice} />
-      <div className="triad-board-status" role="status">Solstice research ranks · {boardStatus} · unvalidated, not probability</div>
+        onSymbolInput={setSymbolInput} onSubmit={submitSymbol} showStockControl={!sharedStockChoice}
+        boardStatus={boardStatus} />
             {payload?.scope_selection?.status === "unavailable" && <div role="status" data-testid="triad-empty-scope">No listed expiry in the server's 30-day bound — no substitution made.</div>}
-      {!isReplay && scope === "0dte" && !sameDayAdmitted && <p role="status" data-testid="triad-scope-admission">
-        Same-day admission unavailable — the loaded observation is not verified 0DTE. Exact loaded dates remain visible; no same-session expiry or entitlement is invented.
-      </p>}
+      {!isReplay && scope === "0dte" && !sameDayAdmitted && <div className="triad-scope-notice">
+        <p role="status" data-testid="triad-scope-admission">
+          Same-day admission unavailable — the loaded observation is not verified 0DTE. Exact loaded dates remain visible; no same-session expiry or entitlement is invented.
+        </p>
+        <button type="button" data-testid="triad-show-loaded" onClick={() => setScope("loaded")}>Show all loaded expiries</button>
+      </div>}
       <div className="triad-desk-toolbar">
         <span>Raw = where · adjusted = weighting, not observed direction</span>
         <select aria-label="Triad expiry scope" value={isReplay ? declaredScope : scope} disabled={isReplay} onChange={e => setScope(e.target.value)}>
@@ -333,7 +336,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
           {ADJUSTED_BASES.map(b => <option key={b.id} value={b.id} data-testid={`triad-basis-${b.id}`}
             disabled={surfaceStatus(payload, b.id).status === "unavailable" && basis !== b.id} title={surfaceStatus(payload, b.id).reason || b.units}>{b.label}</option>)}
         </select></label>
-        <AskLodestar subject={`${ticker} · raw wall ${wallId || "none"}`} overlayMetric={activeMetric} displayMode={isReplay ? "replay" : "live"} compact />
+        <AskFlow subject={`${ticker} · raw wall ${wallId || "none"}`} overlayMetric={activeMetric} displayMode={isReplay ? "replay" : "live"} compact />
         <div className="triad-mobile-switch"><button onClick={() => setMobilePane("raw")}>Raw</button><button onClick={() => setMobilePane("adjusted")}>Adjusted</button></div>
       </div>
       {["session_delta_volume", "activity", "window"].includes(basis) && <details data-testid="triad-activity-coverage">
@@ -406,7 +409,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
   );
 }
 
-function ContextStrip({ board, ticker, symbolInput, onSymbolInput, onSubmit, showStockControl = true }) {
+function ContextStrip({ board, ticker, symbolInput, onSymbolInput, onSubmit, showStockControl = true, boardStatus }) {
   const byTicker = useMemo(() => {
     const m = {};
     for (const r of board || []) m[String(r.ticker || "").toUpperCase()] = r;
@@ -443,6 +446,9 @@ function ContextStrip({ board, ticker, symbolInput, onSymbolInput, onSubmit, sho
         title="Coverage description only — never a position size">
         {observed.length}/3 observed{dirs.length ? ` · ${dirs.join(" / ")}` : ""}
       </div>
+      <span className="triad-board-status" role="status" title="Research ranks are unvalidated and are not probabilities">
+        Ranks: {boardStatus} · unvalidated
+      </span>
       {ticker && !TRIAD.includes(ticker) && (
         <div className="triad-context-focusname" data-testid="triad-focus-name">Focused: {ticker}</div>
       )}
@@ -602,7 +608,7 @@ function WallPricePath({ ticker, wall, spot }) {
   }
   if (segment.length) segments.push(segment);
   return <div className="triad-price" data-testid="triad-price-path">
-    <p className="triad-price-caption">Current map reference: wall {wall.low}–{wall.high}{typeof spot === "number" && Number.isFinite(spot) ? ` · price ${spot}` : ""} — not historical candle-time levels.</p>
+    <p className="triad-price-caption">Current map reference: wall {wall.low}–{wall.high}{typeof spot === "number" && Number.isFinite(spot) ? ` · price ${spot.toFixed(2)}` : ""} — not historical candle-time levels.</p>
     <svg data-testid="triad-price-path-svg" data-first-at={new Date(first).toISOString()} data-last-at={new Date(last).toISOString()}
       viewBox={`0 0 ${W} ${H}`} width="100%" height="120" role="img" aria-label="Historical closes by recorded time; no historical wall inferred">
       {segments.filter(part => part.length > 1).map((part, i) => <polyline key={i} points={part.map(row => `${X(row.at).toFixed(1)},${Y(row.close).toFixed(1)}`).join(" ")} fill="none" stroke="#7dd3fc" strokeWidth="1.5" />)}
@@ -639,7 +645,7 @@ function ContractDrawer({ data, cell, replay, wall, scenario, metric, onClose, t
           <dt>Snapshot time</dt><dd>{data?.asof || "Unknown"} · {replay ? "Recorded" : "Live request"}</dd>
         </dl>
         <p>The same Ask Flow assistant explains this selection. Opening a step does not request research or prepare an order.</p>
-        <AskLodestar subject={`${ticker} · exact contract review`} overlayMetric={metric} displayMode={replay ? "replay" : "live"} compact />
+        <AskFlow subject={`${ticker} · exact contract review`} overlayMetric={metric} displayMode={replay ? "replay" : "live"} compact />
       </>}
       publicAgent={<><h3>Public agent · reviewed draft</h3><p>A copied brief is not delivery or activation. Review the workflow in Public before any separately approved activation.</p><GroundedPublicReview /></>}
     />
