@@ -38,6 +38,14 @@ test("Triad starts with same-session scope and session Volume × absolute delta,
  await mount();
  expect(screen.getByLabelText("Market view expiry scope")).toHaveValue("0dte");
  expect(screen.getByLabelText("Adjusted context")).toHaveValue("session_delta_volume");
+ // Activity coverage lives inside the Market context disclosure now: open
+ // the outer, then the nested disclosure, and assert real visibility
+ // (jsdom: a closed nested details element is itself hidden).
+ fireEvent.click(screen.getByRole("button", { name: "Market context" }));
+ expect(screen.getByTestId("triad-context")).toBeVisible();
+ expect(screen.getByTestId("triad-activity-coverage")).not.toBeVisible();
+ fireEvent.click(screen.getByText("Activity window and coverage"));
+ expect(screen.getByTestId("triad-activity-coverage")).toBeVisible();
  expect(screen.getByTestId("triad-activity-coverage")).toHaveTextContent("Volume window: unavailable");
  expect(axios.get.mock.calls.some(([url])=>String(url).includes("dte=0"))).toBe(true);
  expect(screen.getByTestId("triad-pane-adjusted")).toHaveTextContent("$5.0K");
@@ -171,6 +179,8 @@ test("changing symbol releases wall and exact-contract response ownership, inclu
   await act(async () => { fireEvent.click(screen.getByTestId("triad-wall-wall")); });
   fireEvent.click(screen.getByTestId("triad-contracts-btn"));
   fireEvent.click(screen.getByRole("button", { name: `Review ${contract.osi}` }));
+  // The focused-symbol input is keyboard-reachable inside Market context.
+  fireEvent.click(screen.getByRole("button", { name: "Market context" }));
   fireEvent.change(screen.getByTestId("triad-symbol-input"), { target: { value: "QQQ" } });
   await act(async () => { fireEvent.click(screen.getByTestId("triad-symbol-go")); });
   await act(async () => { rejectOld(new Error("old SPY detail failure")); });

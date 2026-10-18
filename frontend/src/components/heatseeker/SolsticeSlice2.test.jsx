@@ -249,6 +249,59 @@ test("wall inspector shows interaction state and touches", () => {
   expect(s2.getByText("Touches")).toBeInTheDocument();
 });
 
+// 2026-10-18 reconciliation contract: identity (zone, basis, OI date) stays
+// visible while supporting facts fold into the details disclosure; a wall
+// without a formula_version never gets one invented; and opening the
+// disclosure sends no request (the inspector is presentation-only).
+test("R8 identity line is visible, formulas are never fabricated, details open request-free", () => {
+  const React = require("react");
+  const axios = require("axios");
+  const { render: r9, screen: s9, cleanup: c9, fireEvent: fe9 } = require("@testing-library/react");
+  const WI = require("./WallInspector").default;
+  r9(React.createElement(WI, {
+    wall: { ...data.metrics.walls[0], formula_version: "gex.v2", oi_effective_dates: ["2030-01-01"] },
+    interaction: { wall_id: "w_abc", state: "holding", event: "holding_confirmed", first_seen: false },
+    quality: data.quality,
+  }));
+  const identity = s9.getByTestId("wall-identity-line");
+  expect(identity).toBeVisible();
+  expect(identity.textContent).toContain("basis OI");
+  expect(identity.textContent).toContain("Formula gex.v2");
+  expect(identity.textContent).toContain("OI date 2030-01-01");
+  // The line names the OI effective date; it never claims expiry.
+  expect(identity.textContent).not.toMatch(/expiry/i);
+  c9();
+  r9(React.createElement(WI, {
+    wall: { wall_id: "w_nof", low: 660, high: 664, mid: 662, gross: 3e6, net: 1e6, call: 2e6, put: -1e6, members: [660, 662], distance: 1, distance_pct: 0.01 },
+    quality: data.quality,
+  }));
+  const missing = s9.getByTestId("wall-identity-line").textContent;
+  expect(missing).toContain("Formula unavailable");
+  expect(missing).toContain("OI date unavailable");
+  c9();
+  r9(React.createElement(WI, {
+    wall: data.metrics.walls[0],
+    interaction: { wall_id: "w_abc", state: "testing", event: "first_touch", taps: null },
+    quality: data.quality,
+  }));
+  const before = axios.get.mock.calls.length;
+  fe9.click(s9.getByText("Exposure details and coverage"));
+  expect(s9.getByTestId("wall-details-interaction")).toBeVisible();
+  expect(s9.getByText("Touches")).toBeInTheDocument();
+  expect(axios.get.mock.calls.length).toBe(before); // disclosure open sends nothing
+  c9();
+  // (d) A wall that declares a non-OI exposure basis is labeled by what it is;
+  // the raw chip and the identity line agree, nothing relabels the record.
+  r9(React.createElement(WI, {
+    wall: { wall_id: "w_vol", low: 660, high: 664, mid: 662, gross: 3e6, net: 1e6, call: 2e6, put: -1e6, members: [660, 662], distance: 1, distance_pct: 0.01, exposure_basis: "session_delta_volume" },
+    quality: data.quality,
+  }));
+  expect(s9.getByTestId("wall-identity-line").textContent).toContain("basis session_delta_volume");
+  expect(s9.getByTestId("wall-focused-raw").textContent).toContain("Raw session_delta_volume");
+  expect(s9.getByTestId("wall-focused-raw").textContent).toContain("USD/1% move · session_delta_volume · gex.v2");
+  c9();
+});
+
 test("replay strip loads manifest", async () => {
   const axios = require("axios");
   axios.get.mockImplementation(async (url) => {

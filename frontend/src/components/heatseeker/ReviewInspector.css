@@ -58,3 +58,11 @@
 @media (max-width: 420px) { .wall-focused-context { gap: 6px 8px; } .wall-focused-chip { flex-basis: 100%; } }
 
 .wall-focused-heading { flex-basis: 100%; font-size: 11px; color: #b9cbd3; }
+/* Exposure details and coverage — named sections (2026-10-18): repeated
+   supporting facts and interaction history stay one disclosure-open away,
+   visually grouped instead of one unstructured list. */
+.wall-exposure-details > summary { cursor: pointer; font-size: 11px; color: #b9cbd3; padding: 4px 0; }
+.wall-details-section { margin: 8px 0 4px; padding-top: 8px; border-top: 1px solid #233a44; }
+.wall-details-section:first-of-type { border-top: 0; margin-top: 4px; }
+.wall-details-heading { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #f2d795; margin: 0 0 4px; }
+.wall-identity-line { font-size: 11px; color: #b9cbd3; font-variant-numeric: tabular-nums; margin: 2px 0 6px; overflow-wrap: anywhere; }

@@ -55,3 +55,57 @@ test("an old malformed expiry date does not crash stored-view selection",async()
 test("the primary stock chart opens directly with thirty-minute candles and no redundant toggle",async()=>{
  axios.get.mockResolvedValue({data:{ticker:"SPY",frames,candles_with_recorded_nodes:0,bar_seconds:1800}});render(<PriceNodeHistory ticker="SPY" primary/>);await screen.findByTestId("recorded-price-chart");expect(screen.queryByRole("button",{name:"Price chart + historical nodes"})).not.toBeInTheDocument();expect(screen.getByRole("combobox",{name:"Candle interval"})).toHaveValue("30");expect(axios.get.mock.calls[0][1].params.interval_minutes).toBe(30);fireEvent.change(screen.getByRole("combobox",{name:"Candle interval"}),{target:{value:"15"}});await waitFor(()=>expect(axios.get.mock.calls.at(-1)[1].params.interval_minutes).toBe(15));
 });
+
+// 2026-10-18 compact toolbar contract — meaningful behaviour, not CSS
+// mirroring. jsdom hides closed details content, so the visibility
+// assertions below are real: pickers hide while Chart tools is closed, the
+// replay affordances stay visible on their own row, disclosure opening and
+// closing never sends a request, and chosen values persist through a close
+// and reopen.
+test("Chart tools stays request-free while pickers hide closed and choices persist", async () => {
+  axios.get.mockResolvedValue({ data: { ticker: "SPY", frames, candles_with_recorded_nodes: 0 } });
+  render(<PriceNodeHistory ticker="SPY" open />);
+  await waitFor(() => expect(screen.getByTestId("recorded-price-chart")).toHaveAttribute("data-candles", "3"));
+  const totalCalls = () => axios.get.mock.calls.length;
+  await waitFor(() => expect(totalCalls()).toBeGreaterThan(0));
+  const baseline = totalCalls();
+  const horizon = screen.getByLabelText("History sessions");
+  const coverage = screen.getByLabelText("Session coverage");
+  // Closed tools: pickers hidden, replay visible with Tools shut.
+  expect(horizon).not.toBeVisible();
+  expect(coverage).not.toBeVisible();
+  expect(screen.getByRole("button", { name: "Play replay" })).toBeVisible();
+  expect(screen.getByTestId("price-history-summary")).toHaveTextContent("1 week · regular hours");
+  // Opening the disclosure sends nothing.
+  fireEvent.click(screen.getByRole("button", { name: "Chart tools" }));
+  await waitFor(() => expect(horizon).toBeVisible());
+  expect(baseline).toBe(totalCalls());
+  // Driving the pickers sends the exact chosen parameters.
+  fireEvent.change(horizon, { target: { value: "60" } });
+  await waitFor(() => expect(axios.get.mock.calls.at(-1)?.[1]?.params.days).toBe(60));
+  fireEvent.change(screen.getByLabelText("Session coverage"), { target: { value: "all" } });
+  await waitFor(() => expect(axios.get.mock.calls.at(-1)?.[1]?.params.sessions).toBe("all"));
+  // Closing and reopening keeps the choices and the compact summary.
+  fireEvent.click(screen.getByRole("button", { name: "Chart tools" }));
+  fireEvent.click(screen.getByRole("button", { name: "Chart tools" }));
+  expect(screen.getByLabelText("History sessions")).toHaveValue("60");
+  expect(screen.getByLabelText("Session coverage")).toHaveValue("all");
+  expect(screen.getByTestId("price-history-summary")).toHaveTextContent("3 months · all sessions");
+});
+
+test("replay with Tools closed changes nothing on the wire", async () => {
+  axios.get.mockResolvedValue({ data: { ticker: "SPY", frames, candles_with_recorded_nodes: 0 } });
+  render(<PriceNodeHistory ticker="SPY" open />);
+  await waitFor(() => expect(screen.getByTestId("recorded-price-chart")).toHaveAttribute("data-candles", "3"));
+  const totalCalls = () => axios.get.mock.calls.length;
+  await waitFor(() => expect(totalCalls()).toBeGreaterThan(0));
+  const baseline = totalCalls();
+  // Play and pause on the always-visible replay row while Tools stays shut.
+  fireEvent.click(screen.getByRole("button", { name: "Play replay" }));
+  await new Promise(res => setTimeout(res, 60));
+  expect(screen.getByRole("button", { name: "Pause replay" })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Pause replay" }));
+  await new Promise(res => setTimeout(res, 60));
+  expect(screen.getByRole("button", { name: "Play replay" })).toBeVisible();
+  expect(baseline).toBe(totalCalls());
+});

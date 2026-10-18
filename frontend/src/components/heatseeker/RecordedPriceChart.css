@@ -1,4 +1,4 @@
-.recorded-price-chart{width:100%;min-width:0;color:#dce5ee;--chart-border:#35404b;}
+.recorded-price-chart{width:100%;min-width:0;color:#dce5ee;--chart-border:#35404b;container-type:inline-size;}
 .recorded-chart-tools{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 0;}
 .recorded-chart-history,.recorded-chart-layers{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
 .recorded-price-chart button,.price-history-toolbar button,.price-history-toolbar select{font:inherit;font-size:12px;line-height:1.3;border:1px solid #435260;border-radius:4px;background:#16212b;color:#dce8f2;padding:6px 9px;min-height:30px;}
@@ -20,24 +20,42 @@
 @media(max-width:600px){.recorded-chart-surface{height:360px;}.price-history-toolbar{align-items:flex-start;}.price-history-toolbar label{flex-wrap:wrap;}.recorded-chart-readout b{margin-right:4px;}.recorded-chart-history button{min-width:30px;}.recorded-chart-layers{gap:8px;}}
 
 /* One control row and one reading row; menus keep optional tools out of the canvas. */
-.recorded-chart-tools{justify-content:flex-start;flex-wrap:nowrap;gap:7px;padding:6px 0;min-width:0;min-height:36px;}
+.recorded-chart-tools{justify-content:flex-start;flex-wrap:wrap;gap:7px;padding:6px 0;min-width:0;min-height:36px;}
 .recorded-chart-tools>select{font:inherit;font-size:12px;line-height:1.3;background:#16212b;color:#e4edf4;border:1px solid #435260;border-radius:4px;padding:5px 7px;min-height:29px;max-width:110px;}
 .price-chart-symbol{font-size:14px;margin-right:2px;white-space:nowrap;}
-.recorded-chart-scale,.recorded-chart-actions{display:flex;gap:5px;align-items:center;flex:0 0 auto;}
-.recorded-chart-actions{margin-left:auto;min-width:0;}
+.recorded-chart-scale{display:flex;gap:5px;align-items:center;flex:0 0 auto;}
+/* Review blocker 2026-10-18 (390/346): AskFlow (x327–395 vs pane 30–376) sat
+   outside the pane because the action group refused to shrink. The group is
+   now shrinkable and row-wraps inside the pane; every action stays reachable. */
+.recorded-chart-actions{display:flex;gap:5px;align-items:center;flex:0 1 auto;max-width:100%;}
+.recorded-chart-actions{margin-left:auto;min-width:0;flex-wrap:wrap;}
 .recorded-chart-actions>.lodestar-ask{margin:0;}
 .recorded-chart-actions>[data-testid="saved-chart-readings"]{position:relative;flex:0 0 auto;margin:0!important;padding:0!important;border:0;background:transparent;}
-.recorded-chart-actions>[data-testid="saved-chart-readings"]>div{position:absolute;top:100%;right:0;z-index:180;margin-top:8px!important;width:min(550px,70vw);max-height:65dvh;overflow:auto;padding:14px;border:1px solid #526473;border-radius:5px;background:#101722;box-shadow:0 10px 28px #0008;}
+.recorded-chart-actions>[data-testid="saved-chart-readings"]>div{position:absolute;top:100%;right:0;z-index:180;margin-top:8px!important;width:min(550px,100cqw);max-height:65dvh;overflow:auto;padding:14px;border:1px solid #526473;border-radius:5px;background:#101722;box-shadow:0 10px 28px #0008;}
 .recorded-chart-popover{position:relative;flex:0 0 auto;}
 .recorded-chart-popover>summary{display:flex;align-items:center;min-height:29px;padding:5px 9px;list-style:none;cursor:pointer;border:1px solid #435260;border-radius:4px;background:#16212b;color:#dce8f2;font-size:12px;white-space:nowrap;}
 .recorded-chart-popover>summary::-webkit-details-marker{display:none;}
-.recorded-chart-popover-content{position:absolute;top:calc(100% + 6px);left:0;z-index:170;width:min(400px,75vw);max-height:60dvh;overflow:auto;background:#121b25;border:1px solid #526473;border-radius:5px;padding:12px;box-shadow:0 8px 25px #0008;color:#cddae5;font-size:12px;line-height:1.6;}
+.recorded-chart-popover-content{position:absolute;top:calc(100% + 6px);left:0;z-index:170;width:min(400px,100cqw);max-height:60dvh;overflow:auto;background:#121b25;border:1px solid #526473;border-radius:5px;padding:12px;box-shadow:0 8px 25px #0008;color:#cddae5;font-size:12px;line-height:1.6;}
 .recorded-chart-popover-content small{display:block;margin-top:10px;color:#aebfcb;font-size:11px;line-height:1.6;}
 .recorded-chart-popover-content .recorded-chart-layers{display:grid;gap:8px;border:0;padding:8px 0;margin:8px 0;}
 .recorded-chart-popover-content .recorded-chart-layers legend{font-size:11px;color:#bbcad6;padding:0;}
 .recorded-chart-popover-content select{max-width:100%;font-size:12px;background:#16212b;border:1px solid #536676;color:#e3edf4;border-radius:4px;padding:6px;}
+/* Tools readability contract 2026-10-18 (compiled-review round): the toggle
+   rows (VWAP/Profile/Bands/Envelope/CVD), the history actions and the
+   option-contract controls are bare inline children of the popover, so they
+   previously packed onto shared lines — the toggles ran together and the
+   Option-contract field jammed against Record nodes. Each direct child now
+   takes its own spaced row; handlers and markup stay untouched. */
+.recorded-chart-popover-content > label{display:flex;align-items:center;gap:8px;margin:6px 0 2px;padding:0;}
+.recorded-chart-popover-content > button{display:block;}
+.recorded-chart-popover-content > span[role="status"]{display:block;margin:4px 0 0;color:#e6c35c;}
+.recorded-chart-popover-content > label.price-history-contract{margin-top:10px;}
 .recorded-chart-data{margin-left:auto;}
-.recorded-chart-data .recorded-chart-popover-content{left:auto;right:0;}
+/* Root acceptance fix 2026-10-18 (1024 data-open): the Data paragraphs
+   explain the saved history and its provenance; inheriting the toolbar
+   nowrap cut that prose off at the pane edge. Prose wraps here; the
+   layer labels above keep their own nowrap so controls stay one line. */
+.recorded-chart-data .recorded-chart-popover-content{left:auto;right:0;white-space:normal;overflow-wrap:anywhere;}
 .recorded-chart-readout{flex-wrap:nowrap;align-items:center;gap:8px 12px;padding:5px 0;font-size:12px;white-space:nowrap;min-height:34px;}
 .recorded-chart-readout strong{font-size:12px;}.recorded-chart-readout>span{min-width:0;overflow:hidden;text-overflow:ellipsis;}
 .price-history-details{margin:0;}.price-history-details p{margin:0 0 9px;}.price-history-view{display:grid;gap:5px;font-size:12px;margin:8px 0;}
@@ -45,3 +63,51 @@
 .recorded-chart-empty{min-height:180px;display:grid;place-items:center;color:#c7d6e2;font-size:13px;}
 .recorded-chart-footer{justify-content:flex-end;margin-top:5px;}
 @media(min-width:900px) and (max-width:1250px){.recorded-chart-actions .lodestar-ask button{padding-inline:6px;}.recorded-chart-tools{gap:5px;}.recorded-chart-tools button{padding-inline:6px;}}
+
+/* 2026-10-18 compact toolbar: the loaded history range and session coverage
+   stay visible as text (mirroring the two picker selects that live inside
+   Chart tools), and the replay affordances sit on their own always-visible
+   row so pause state and candle time remain readable with Tools closed. */
+.price-history-summary{font-size:12px;color:#9db3c4;white-space:nowrap;font-variant-numeric:tabular-nums;max-width:100%;}
+.recorded-chart-period{display:grid;gap:6px;padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid #293640;}
+.recorded-chart-replay-row{display:flex;align-items:center;justify-content:flex-start;gap:7px;flex-wrap:wrap;min-width:0;padding:4px 0;}
+.recorded-chart-replay-row .price-history-replay{display:flex;gap:7px;align-items:center;flex-wrap:wrap;min-width:0;margin:0;padding:0;border-top:0;font-size:12px;}
+/* Narrow screens: the fixed-width model (nowrap toolbar, pinned scale and
+   actions) overflows a 390px viewport, so allow the control row to wrap and
+   keep the open Tools panel inside the viewport. (2026-10-18 review fix) */
+@media (max-width:700px){
+ .recorded-chart-tools{flex-wrap:wrap;}
+ .recorded-chart-actions{flex-wrap:wrap;min-width:0;}
+ .recorded-chart-scale{flex:0 0 auto;}
+ .recorded-chart-readout{flex-wrap:wrap;}
+ /* The repeated review blocker: a width cap alone ignores the popover
+    anchor offset (Tools OPEN expanded the document to 553px; the
+    data-details popup clipped left at x=-2). An open popover therefore
+    lands on its own full-width static row — content follows the document,
+    never an absolute anchor. (2026-10-18 review fix) */
+ .recorded-chart-popover[open]{position:static;flex:0 0 auto;width:100%;min-width:0;box-sizing:border-box;}
+ .recorded-chart-popover[open] .recorded-chart-popover-content{position:static;width:100%;max-width:100%;box-sizing:border-box;}
+}
+/* Review blocker 2026-10-18 (1024px viewport, ~490px chart pane): a
+   viewport-only breakpoint cannot see that its fixed single-line toolbar
+   (Options desk / Saved / Ask-Flow at x1010+) and floating popovers sit
+   OUTSIDE the chart pane — the pane's hidden overflow clips them while the
+   page scrollWidth stays 1024. The chart pane is its own container, so
+   wrap and popover placement are decided by the pane's real width
+   (independent review 2026-10-18; media block above remains as fallback). */
+@container (max-width:760px){
+ .recorded-chart-tools{flex-wrap:wrap;}
+ .recorded-chart-actions{flex-wrap:wrap;min-width:0;}
+ .recorded-chart-scale{flex:0 0 auto;}
+ .recorded-chart-readout{flex-wrap:wrap;}
+ .recorded-chart-popover[open]{position:static;flex:0 0 auto;width:100%;min-width:0;box-sizing:border-box;}
+ .recorded-chart-popover[open] .recorded-chart-popover-content{position:static;width:100%;max-width:100%;box-sizing:border-box;}
+ /* Saved readings popup (SavedChartReadings.jsx is outside the editable file
+    set, so no attribute is added there): `{open&&<div>…}` renders the panel
+    ONLY while open, so `:has(>div)` marks exactly the opened wrapper. The
+    wrapper becomes its own full-width row and the panel flows inside the
+    pane — the right-anchored floating panel let 100cqw width still run past
+    the anchor's left edge (x−24 at 390/346; x452 vs pane-left 520 at 1024/490). */
+ .recorded-chart-actions>[data-testid="saved-chart-readings"]:has(>div){position:static;flex:0 0 auto;width:100%;min-width:0;box-sizing:border-box;}
+ .recorded-chart-actions>[data-testid="saved-chart-readings"]:has(>div)>div{position:static;width:100%;max-width:100%;box-sizing:border-box;}
+}

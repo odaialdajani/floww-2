@@ -17,7 +17,11 @@ afterEach(() => jest.restoreAllMocks());
 test("session coverage toggle offers regular and all sessions", async () => {
   render(<PriceNodeHistory ticker="SPY" open />);
   await waitFor(() => expect(screen.getByTestId("recorded-price-chart")).toBeInTheDocument());
+  // 2026-10-18: picker hidden while Chart tools is closed; open first.
+  expect(screen.getByLabelText("Session coverage")).not.toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Chart tools" }));
   const picker = screen.getByLabelText("Session coverage");
+  expect(picker).toBeVisible();
   expect(picker).toHaveTextContent(/regular/i);
   expect(picker).toHaveTextContent(/all sessions/i);
 });
@@ -25,6 +29,7 @@ test("session coverage toggle offers regular and all sessions", async () => {
 test("selecting all sessions drives the sessions param", async () => {
   render(<PriceNodeHistory ticker="SPY" open />);
   await waitFor(() => expect(screen.getByTestId("recorded-price-chart")).toBeInTheDocument());
+  fireEvent.click(screen.getByRole("button", { name: "Chart tools" }));
   fireEvent.change(screen.getByLabelText("Session coverage"), { target: { value: "all" } });
   await waitFor(() => {
     const hit = axios.get.mock.calls.filter(call =>
