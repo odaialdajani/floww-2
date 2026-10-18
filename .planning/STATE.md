@@ -2,9 +2,9 @@
 
 **Last updated:** 2026-10-16
 
-## Current user priority — integration reset
+## Current user priority — integration reset and PR 1–131 audit
 
-The 14 October request supersedes the old deployment-first headline: stop the repeating chart checks, reconcile historical work, improve the approved Solstice/Triad inspector and make heatmap/chart levels readable. Current source baseline is `4d911d30`; the reviewed candidate is on `fix/floww-integration-reset-20261015`. The review backend on :8002 has loaded the tested history diagnostics, with capture and live Public trading off. See [current findings, checks and unfinished queue](unknowns/integration-reset-20261014.md) and its complete 62-row preserved ledger/inventory. Whole-product acceptance and trading commissioning remain open. No historical test count below is current proof.
+The 14 October request supersedes the old deployment-first headline: stop the repeating chart checks, reconcile historical work, improve the approved Solstice/Triad inspector and make heatmap/chart levels readable. The merged review candidate is `6716946b`; the current locally verified source head is `f623771a`. The review backend on :8002 has loaded the tested history diagnostics, with capture and live Public trading off. See [current findings, checks and unfinished queue](unknowns/integration-reset-20261014.md), the [completion evidence](eval/completion-20261016/STATUS.md), and the exact-once [PR 1–131 audit](eval/pr-history-1-131-20261016/STATUS.md). Whole-product acceptance and trading commissioning remain open. No historical test count below is current proof.
 
 ## Historical state — 4 September 2026
 

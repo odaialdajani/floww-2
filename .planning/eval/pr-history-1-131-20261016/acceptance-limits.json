@@ -1,0 +1,25 @@
+{
+ "not_claimed": [
+  "owner acceptance",
+  "visual acceptance",
+  "live provider/account acceptance",
+  "capture commissioning",
+  "trading activation",
+  "complete historical node recovery",
+  "whole-line semantic review",
+  "deployment activation"
+ ],
+ "preserved": [
+  "all 131 PR numbers exactly once",
+  "original PR #131 merge identity",
+  "source/current distinction",
+  "concurrent dirty files and saved stores"
+ ],
+ "confirmed_fixed_findings": [
+  "SCOUT-BOUNDARY",
+  "ABLATION-LOCAL",
+  "FLOW-FUSION-LOSS",
+  "VOLUME-UNKNOWN-TO-ZERO",
+  "BRIEF-CROSS-TICKER-EXPORT"
+ ]
+}
