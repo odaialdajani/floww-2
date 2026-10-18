@@ -72,7 +72,7 @@ def test_public_only_income_chain_failure_keeps_typed_reason_on_the_wire(monkeyp
     monkeypatch.setenv("FLOWW_MARKET_DATA_PROVIDER", "public")
     monkeypatch.setattr(
         adapter,
-        "fetch_chain_from_public_api",
+        "fetch_option_expiry_listing",
         AsyncMock(return_value=None),
     )
     response = client.get("/api/screener/income", params={"symbol": "SPY"})

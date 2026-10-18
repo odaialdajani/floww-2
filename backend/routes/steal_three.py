@@ -19,9 +19,9 @@ Endpoints:
 Sidecar-only ``/health`` lives in ``steal_three_server.py`` (server.py already
 has its own root-level probes; we don't double them up).
 
-Routes are intentionally synchronous (``def`` not ``async def``) so FastAPI
-runs the yfinance-bound handlers in its threadpool — ``yfinance.Ticker``
-synchronously scrapes HTTP and would otherwise block the event loop.
+Legacy-only routes run synchronous yfinance reads in FastAPI's threadpool.
+The income routes await the Public adapter; their legacy loader is offloaded
+to a thread so it cannot block the event loop.
 
 Audit: ``docs/reports/2026-07-11-steal-list-integration-roadmap.md`` #1, #3, #5
        ``backend/tests/routes/test_steal_three_routes.py`` (smoke)
@@ -488,43 +488,62 @@ def _is_public_provider() -> bool:
 
 async def _load_chain_window_public(
     symbol: str, min_dte: int, max_dte: int, cap: int = 8
-) -> tuple[float, list[dict], list[dict]]:
-    """Serve the income-screener chain window from the Public.com API.
+) -> tuple[float, list[dict], list[dict], dict]:
+    """Read the exact Public expiry window, then cap and disclose coverage.
 
-    Mirrors the ``_load_chain_window`` row contract (strike/expiry/oi/iv/
-    volume/bid/ask/mid per contract, calls and puts split). The adapter
-    returns the first ``cap`` listed expiries — a superset of the DTE
-    window; the shared ``_keep`` filter in the runner does the honest
-    windowing. OI is the daily (T+1) figure; vendor greeks carry
-    ``greeks_source`` per row.
+    The first N listed expiries are not a superset of a requested DTE window.
+    This path never substitutes a legacy provider or accepts a stale chain.
     """
-    from services.public_api_adapter import fetch_chain_from_public_api
+    from services.public_api_adapter import fetch_chain_for_expiries, fetch_option_expiry_listing
 
-    data = await fetch_chain_from_public_api(symbol.upper(), max_expiries=cap)
-    if not data or not data.get("contracts"):
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "status": "unavailable",
-                "reason": "PUBLIC_CHAIN_UNAVAILABLE",
-                "message": "The Public.com chain could not be read for this symbol; no alternate source is substituted",
-            },
-        )
+    def refuse(message, reason="PUBLIC_CHAIN_UNAVAILABLE"):
+        raise HTTPException(status_code=503, detail={
+            "status": "unavailable", "reason": reason,
+            "message": message + "; no alternate source is substituted",
+        })
+
+    listing = await fetch_option_expiry_listing(symbol.upper())
+    if not listing or listing.get("data_source") != "public_api":
+        refuse("The Public.com expiry listing could not be read for this symbol")
+    listed = listing.get("expiries") or []
+    requested = sorted(set(_select_expiries_in_window(
+        sorted(set(listed)), min_dte, max_dte, cap=len(listed) + 1)))
+    if not requested:
+        refuse("No listed Public.com expiry is inside the requested DTE window",
+               "PUBLIC_WINDOW_UNAVAILABLE")
+    selected = requested[:max(1, min(cap, 8))]
+    data = await fetch_chain_for_expiries(symbol.upper(), selected)
+    if not data:
+        refuse("The Public.com chain could not be read for this symbol")
+    if data.get("stale"):
+        refuse("The Public.com chain is stale", "PUBLIC_CHAIN_STALE")
+    if data.get("data_source") != "public_api":
+        refuse("The chain has no verified Public.com source")
     spot = data.get("spot")
-    if not isinstance(spot, (int, float)) or not spot > 0:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "status": "unavailable",
-                "reason": "PUBLIC_CHAIN_UNAVAILABLE",
-                "message": "The Public.com chain returned no usable spot reference; no alternate source is substituted",
-            },
-        )
+    if (isinstance(spot, bool) or not isinstance(spot, (int, float))
+            or not math.isfinite(spot) or spot <= 0):
+        refuse("The Public.com chain returned no usable spot reference")
     calls: list[dict] = []
     puts: list[dict] = []
-    for row in data["contracts"]:
-        (calls if row.get("type") == "call" else puts).append(row)
-    return float(spot), calls, puts
+    invalid = 0
+    for row in data.get("contracts") or []:
+        if (not isinstance(row, dict) or row.get("type") not in ("call", "put")
+                or row.get("expiry") not in selected):
+            invalid += 1
+            continue
+        (calls if row["type"] == "call" else puts).append(row)
+    returned = sorted({row["expiry"] for row in calls + puts})
+    skipped = data.get("skipped") or []
+    coverage = {
+        "requested_expiries": requested, "selected_expiries": selected,
+        "returned_expiries": returned, "skipped_expiries": skipped,
+        "cap_truncated": len(selected) < len(requested),
+        "invalid_contract_count": invalid,
+        "listing_capped": bool(listing.get("listing_capped")),
+    }
+    coverage["status"] = "partial" if (coverage["cap_truncated"] or skipped or invalid
+        or coverage["listing_capped"] or set(returned) != set(selected)) else "complete"
+    return float(spot), calls, puts, coverage
 
 
 # ----------------------------------------------------------------------
@@ -567,77 +586,91 @@ async def _run_income_screener(
         )
     import time as _time
 
-    _key = (symbol.upper(), side, min_iv, min_volume, min_dte, max_dte, top)
-    _now = _time.time()
-    _hit = _income_cache.get(_key)
-    if _hit is not None and _now - _hit[0] < _INCOME_CACHE_TTL:
-        _cached = dict(_hit[1])
-        _cached["cached"] = True
-        return _cached
     public_source = _is_public_provider()
-    if public_source:
-        spot, calls, puts = await _load_chain_window_public(symbol, min_dte, max_dte)
-    else:
-        _require_legacy_market_data()
-        spot, calls, puts = await asyncio.to_thread(
-            _load_chain_window, symbol, min_dte, max_dte
-        )
+    provider = "public" if public_source else "legacy"
+    _key = (provider, symbol.upper(), side, min_iv, min_volume, min_dte, max_dte, top)
+    flight_key = (asyncio.get_running_loop(), _key)
+    entry = _income_inflight.setdefault(flight_key, [asyncio.Lock(), 0])
+    entry[1] += 1
+    try:
+        async with entry[0]:
+            _now = _time.time()
+            _hit = _income_cache.get(_key)
+            if _hit is not None and _now - _hit[0] < _INCOME_CACHE_TTL:
+                _cached = dict(_hit[1])
+                _cached["cached"] = True
+                return _cached
+            if public_source:
+                window = await _load_chain_window_public(symbol, min_dte, max_dte)
+                spot, calls, puts = window[:3]
+                coverage = window[3] if len(window) > 3 else {"status": "unknown"}
+            else:
+                _require_legacy_market_data()
+                spot, calls, puts = await asyncio.to_thread(
+                    _load_chain_window, symbol, min_dte, max_dte
+                )
 
-    def _keep(c: dict) -> bool:
-        exp = c.get("expiry")
-        if not exp:
-            return True
-        try:
-            dte = (datetime.strptime(exp, "%Y-%m-%d").date() - datetime.now(UTC).date()).days
-        except ValueError:
-            return True
-        return min_dte <= dte <= max_dte
+            def _keep(c: dict) -> bool:
+                exp = c.get("expiry")
+                if not exp:
+                    return True
+                try:
+                    dte = (datetime.strptime(exp, "%Y-%m-%d").date() - datetime.now(UTC).date()).days
+                except ValueError:
+                    return True
+                return min_dte <= dte <= max_dte
 
-    filtered_calls = [c for c in calls if _keep(c)]
-    filtered_puts = [c for c in puts if _keep(c)]
+            filtered_calls = [c for c in calls if _keep(c)]
+            filtered_puts = [c for c in puts if _keep(c)]
 
-    res: dict[str, list[dict]] = {"puts": [], "calls": []}
-    if side in ("both", "put"):
-        res["puts"] = rank_puts_to_sell(
-            filtered_puts, spot,
-            min_iv=min_iv, min_volume=min_volume,
-            min_dte=min_dte, max_dte=max_dte, top=top,
-        )
-    if side in ("both", "call"):
-        res["calls"] = rank_calls_to_sell(
-            filtered_calls, spot,
-            min_iv=min_iv, min_volume=min_volume,
-            min_dte=min_dte, max_dte=max_dte, top=top,
-        )
+            res: dict[str, list[dict]] = {"puts": [], "calls": []}
+            if side in ("both", "put"):
+                res["puts"] = rank_puts_to_sell(
+                    filtered_puts, spot,
+                    min_iv=min_iv, min_volume=min_volume,
+                    min_dte=min_dte, max_dte=max_dte, top=top,
+                )
+            if side in ("both", "call"):
+                res["calls"] = rank_calls_to_sell(
+                    filtered_calls, spot,
+                    min_iv=min_iv, min_volume=min_volume,
+                    min_dte=min_dte, max_dte=max_dte, top=top,
+                )
 
-    result = {
-        "symbol": symbol.upper(),
-        "spot": round(spot, 4),
-        "filters": {
-            "min_iv": min_iv,
-            "min_volume": min_volume,
-            "min_dte": min_dte,
-            "max_dte": max_dte,
-            "top": top,
-        },
-        "puts": res["puts"],
-        "calls": res["calls"],
-        "source": "steal-three-router",
-        "cached": False,
-    }
-    if public_source:
-        # Honest provenance: vendor greeks, daily (T+1) OI, NBBO mids,
-        # snapshot-only — no history implied.
-        result["provider"] = "public-option-chain"
-        result["oi_basis"] = "daily"
-    if len(_income_cache) > 256:
-        _income_cache.clear()
-    _income_cache[_key] = (_now, result)
-    return result
+            result = {
+                "symbol": symbol.upper(),
+                "spot": round(spot, 4),
+                "filters": {
+                    "min_iv": min_iv,
+                    "min_volume": min_volume,
+                    "min_dte": min_dte,
+                    "max_dte": max_dte,
+                    "top": top,
+                },
+                "puts": res["puts"],
+                "calls": res["calls"],
+                "source": "steal-three-router",
+                "cached": False,
+            }
+            if public_source:
+                # Honest provenance: vendor greeks, daily (T+1) OI, NBBO mids,
+                # snapshot-only — no history implied.
+                result["provider"] = "public-option-chain"
+                result["oi_basis"] = "daily"
+                result["coverage"] = coverage
+            if len(_income_cache) > 256:
+                _income_cache.clear()
+            _income_cache[_key] = (_time.time(), result)
+            return result
+    finally:
+        entry[1] -= 1
+        if entry[1] == 0:
+            _income_inflight.pop(flight_key, None)
 
 
 # TTL cache for _run_income_screener (key -> (timestamp, result)).
 _income_cache: dict[tuple, tuple[float, dict[str, Any]]] = {}
+_income_inflight: dict[tuple, list] = {}
 _INCOME_CACHE_TTL: float = 30.0
 
 

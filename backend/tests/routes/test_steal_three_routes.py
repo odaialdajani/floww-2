@@ -605,7 +605,7 @@ def test_screener_income_public_mode_chain_unavailable_refuses_typed(monkeypatch
     async def broken_fetch(ticker, max_expiries=4, **kwargs):
         return None
 
-    monkeypatch.setattr("services.public_api_adapter.fetch_chain_from_public_api", broken_fetch)
+    monkeypatch.setattr("services.public_api_adapter.fetch_option_expiry_listing", broken_fetch)
 
     client = TestClient(_build_minimal_app())
     resp = client.get("/api/screener/income?symbol=SPY&side=both&min_dte=7&max_dte=45")
@@ -614,3 +614,158 @@ def test_screener_income_public_mode_chain_unavailable_refuses_typed(monkeypatch
     assert detail["reason"] == "PUBLIC_CHAIN_UNAVAILABLE"
     assert "unreachable" not in detail["message"].lower()
     st._income_cache.clear()
+
+
+# Public income boundary regressions: no provider/cache or expiry-scope crossover.
+def _income_row(strike=95, kind="put", expiry=None):
+    from datetime import UTC, datetime, timedelta
+    return {"strike": strike, "type": kind,
+            "expiry": expiry or (datetime.now(UTC).date() + timedelta(days=21)).isoformat(),
+            "oi": 500, "volume": 40, "bid": 1, "ask": 1.2, "iv": .25}
+
+
+def test_income_cache_is_provider_bound(monkeypatch):
+    import asyncio
+
+    import routes.steal_three as st
+    st._income_cache.clear()
+    args = ("CACHE", "put", 0., 0, 7, 45, 25)
+    monkeypatch.setenv("FLOWW_MARKET_DATA_PROVIDER", "legacy")
+    monkeypatch.setattr(st, "_load_chain_window", lambda *args: (100., [], [_income_row(95)]))
+    legacy = asyncio.run(st._run_income_screener(*args))
+    assert legacy["puts"][0]["strike"] == 95
+    monkeypatch.setenv("FLOWW_MARKET_DATA_PROVIDER", "public")
+
+    async def public(*args):
+        return 100., [], [_income_row(96)]
+    monkeypatch.setattr(st, "_load_chain_window_public", public)
+    current = asyncio.run(st._run_income_screener(*args))
+    assert current["puts"][0]["strike"] == 96
+    assert current["provider"] == "public-option-chain"
+    assert current["cached"] is False
+    st._income_cache.clear()
+
+
+def test_income_identical_concurrent_reads_share_only_success(monkeypatch):
+    import asyncio
+
+    from fastapi import HTTPException
+
+    import routes.steal_three as st
+    st._income_cache.clear()
+    monkeypatch.setenv("FLOWW_MARKET_DATA_PROVIDER", "public")
+    calls = []
+
+    async def public(*args):
+        calls.append(args)
+        await asyncio.sleep(.01)
+        if len(calls) == 1:
+            raise HTTPException(503, "upstream unavailable")
+        return 100., [], [_income_row()]
+    monkeypatch.setattr(st, "_load_chain_window_public", public)
+
+    async def run():
+        args = ("BURST", "put", 0., 0, 7, 45, 25)
+        failed = await asyncio.gather(st._run_income_screener(*args), return_exceptions=True)
+        assert isinstance(failed[0], HTTPException)
+        result = await asyncio.gather(*(st._run_income_screener(*args) for _ in range(8)))
+        assert all(item["puts"][0]["strike"] == 95 for item in result)
+        assert len(calls) == 2
+        # A different filter gets a separate provider read.
+        await st._run_income_screener("BURST", "put", 0., 1, 7, 45, 25)
+        assert len(calls) == 3
+    asyncio.run(run())
+    st._income_cache.clear()
+
+
+def test_public_income_selects_exact_dte_before_cap_and_reports_partial(monkeypatch):
+    import asyncio
+    from datetime import UTC, datetime, timedelta
+
+    import routes.steal_three as st
+    from services import public_api_adapter as adapter
+    today = datetime.now(UTC).date()
+    listed = [(today + timedelta(days=i)).isoformat() for i in range(25)]
+    captured = []
+
+    async def listing(symbol):
+        return {"expiries": listed[::-1], "data_source": "public_api"}
+
+    async def exact(symbol, dates):
+        captured.append(dates)
+        return {"spot": 100., "contracts": [_income_row(expiry=dates[0])],
+                "expiries": dates, "skipped": [], "stale": False, "data_source": "public_api"}
+    monkeypatch.setattr(adapter, "fetch_option_expiry_listing", listing)
+    monkeypatch.setattr(adapter, "fetch_chain_for_expiries", exact)
+    result = asyncio.run(st._load_chain_window_public("SPY", 10, 20, cap=3))
+    assert captured == [listed[10:13]]
+    assert result[3]["cap_truncated"] is True
+    assert result[3]["status"] == "partial"
+    assert result[3]["requested_expiries"] == listed[10:21]
+    assert result[3]["selected_expiries"] == listed[10:13]
+
+
+def test_public_income_rejects_bad_spot_and_never_invents_put_type(monkeypatch):
+    import asyncio
+
+    from fastapi import HTTPException
+
+    import routes.steal_three as st
+    from services import public_api_adapter as adapter
+    expiry = _income_row()["expiry"]
+    payload = {"spot": 100., "contracts": [_income_row(), _income_row(96, "unknown"),
+                                           _income_row(97, None), _income_row(105, "call")],
+               "expiries": [expiry], "skipped": [], "stale": False, "data_source": "public_api"}
+
+    async def listing(symbol):
+        return {"expiries": [expiry], "data_source": "public_api"}
+
+    async def exact(*args, **kwargs):
+        return payload
+    monkeypatch.setattr(adapter, "fetch_option_expiry_listing", listing)
+    monkeypatch.setattr(adapter, "fetch_chain_for_expiries", exact)
+    monkeypatch.setattr(adapter, "fetch_chain_from_public_api", exact)
+    result = asyncio.run(st._load_chain_window_public("SPY", 7, 45))
+    spot, calls, puts = result[:3]
+    assert spot == 100
+    assert [row["strike"] for row in calls] == [105]
+    assert [row["strike"] for row in puts] == [95]
+    assert result[3]["invalid_contract_count"] == 2
+    for bad in (True, False, float("inf"), float("nan"), -1, 0):
+        payload["spot"] = bad
+        try:
+            asyncio.run(st._load_chain_window_public("SPY", 7, 45))
+        except HTTPException as exc:
+            assert exc.status_code == 503
+            assert exc.detail["reason"] == "PUBLIC_CHAIN_UNAVAILABLE"
+        else:
+            raise AssertionError(f"Invalid spot accepted: {bad!r}")
+
+
+def test_public_income_stale_chain_never_enters_result_cache(monkeypatch):
+    import asyncio
+
+    from fastapi import HTTPException
+
+    import routes.steal_three as st
+    from services import public_api_adapter as adapter
+    st._income_cache.clear()
+    expiry = _income_row()["expiry"]
+
+    async def listing(symbol):
+        return {"expiries": [expiry], "data_source": "public_api"}
+
+    async def exact(*args, **kwargs):
+        return {"spot": 100., "contracts": [_income_row()], "expiries": [expiry], "stale": True}
+    monkeypatch.setattr(adapter, "fetch_option_expiry_listing", listing)
+    monkeypatch.setattr(adapter, "fetch_chain_for_expiries", exact)
+    monkeypatch.setattr(adapter, "fetch_chain_from_public_api", exact)
+    monkeypatch.setenv("FLOWW_MARKET_DATA_PROVIDER", "public")
+    try:
+        asyncio.run(st._run_income_screener("STALE", "put", 0., 0, 7, 45, 25))
+    except HTTPException as exc:
+        assert exc.status_code == 503
+        assert "STALE" in exc.detail["reason"]
+    else:
+        raise AssertionError("Stale chain accepted")
+    assert not st._income_cache

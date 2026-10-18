@@ -305,10 +305,10 @@ def test_legacy_drill_chain_keeps_cv_then_yahoo_fallback(monkeypatch):
 
 
 def steal():
-    env = {'os': os, 'datetime': datetime, 'UTC': UTC, 'Query': Query,
+    env = {'os': os, 'asyncio': asyncio, 'datetime': datetime, 'UTC': UTC, 'Query': Query,
            'HTTPException': HTTPException, 'yf': types.SimpleNamespace(Ticker=Mock(
                side_effect=RuntimeError('Yahoo must not be entered'))),
-           '_income_cache': {}, '_INCOME_CACHE_TTL': 30}
+           '_income_cache': {}, '_income_inflight': {}, '_INCOME_CACHE_TTL': 30}
     return functions_from('routes/steal_three.py', env)
 
 
@@ -336,10 +336,14 @@ def test_public_extra_studies_fail_closed_before_producer(monkeypatch, name, arg
 def test_public_income_rejects_warm_legacy_study(monkeypatch):
     env = steal()
     args = ('SPY', 'both', 0.0, 0, 7, 45, 25)
-    env['_income_cache'][args] = (time.time(), {'spot': 100, 'puts': [1]})
+    env['_income_cache'][('legacy', *args)] = (time.time(), {'spot': 100, 'puts': [1]})
     monkeypatch.setenv('FLOWW_MARKET_DATA_PROVIDER', 'public')
+    module_stub(monkeypatch, 'services.public_api_adapter',
+                fetch_chain_from_public_api=AsyncMock(return_value=None),
+                fetch_option_expiry_listing=AsyncMock(return_value=None),
+                fetch_chain_for_expiries=AsyncMock(side_effect=AssertionError('No listing, no chain read')))
     with pytest.raises(HTTPException) as exc:
-        env['_run_income_screener'](*args)
+        asyncio.run(env['_run_income_screener'](*args))
     assert exc.value.status_code == 503
     env['yf'].Ticker.assert_not_called()
 
@@ -350,8 +354,8 @@ def test_legacy_income_warm_cache_still_works(monkeypatch, mode):
     if mode is not None:
         monkeypatch.setenv('FLOWW_MARKET_DATA_PROVIDER', mode)
     args = ('SPY', 'both', 0.0, 0, 7, 45, 25)
-    env['_income_cache'][args] = (time.time(), {'spot': 100, 'puts': [1]})
-    assert env['_run_income_screener'](*args) == {'spot': 100, 'puts': [1], 'cached': True}
+    env['_income_cache'][('legacy', *args)] = (time.time(), {'spot': 100, 'puts': [1]})
+    assert asyncio.run(env['_run_income_screener'](*args)) == {'spot': 100, 'puts': [1], 'cached': True}
 
 
 def test_legacy_index_failure_keeps_cv_screen(monkeypatch):
