@@ -200,11 +200,17 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     {open&&<RecordedPriceChart ticker={ticker} frames={frames.slice(0,position+1)} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={toolbarActions} historyPeriodControls={historyPeriodControls} historyControls={historyControls} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars}/>}
     {open&&usingMapScope&&payload?.node_status!=="unavailable"&&Array.isArray(payload?.scopes)&&!payload.scopes.includes(forcedScope)&&<p role="status">No saved readings match the map scope at these candle times. Open Chart tools and turn off Follow map scope to choose an older saved view. No other scope was substituted.</p>}
     {open&&forcedScope!=null&&!followMap&&<p role="note">Saved-view review — these recorded expiry dates are not the current map scope.</p>}
-    {open&&<DrawingRail drawings={drawings} selectedId={selectedDrawing}
+    {/* P1-5 (UX review): secondary strips below the chart collapse into slim
+        lines — drawings behind a one-line disclosure, velocity as an inline
+        hairline row. Rail testids and interactions are unchanged. */}
+    {open&&<details className="price-history-drawings" data-testid="drawings-disclosure">
+      <summary role="button" aria-label="Drawings">Drawings{drawings.length ? ` · ${drawings.length}` : ""}</summary>
+      <DrawingRail drawings={drawings} selectedId={selectedDrawing}
       onSelect={setSelectedDrawing}
       onDelete={id => { if (selectedDrawing === id) setSelectedDrawing(null); persistDrawings(reduceDrawings(drawings, { type: "delete", id })); }}
       onToggleLock={id => persistDrawings(drawings.map(d => d.id === id ? { ...d, locked: !d.locked } : d))}
-      onToggleHide={id => persistDrawings(drawings.map(d => d.id === id ? { ...d, visible: d.visible === false } : d))} />}
+      onToggleHide={id => persistDrawings(drawings.map(d => d.id === id ? { ...d, visible: d.visible === false } : d))} />
+    </details>}
     {open&&velocityRows.length>0&&(
       <div className="price-history-velocity" data-testid="velocity-strip" aria-label="Fastest-moving nodes">
         <strong>Node velocity</strong><span> over {velocityDtText(comparison.velocity_dt_seconds)}</span>

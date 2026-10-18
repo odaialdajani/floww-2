@@ -258,3 +258,49 @@
 .range-matrix td { padding:0; border-width:1px; border-bottom-color:#282828; }
 .range-matrix td button { min-height:27px; padding:0 10px; text-align:left; font-weight:400; }
 .range-matrix td.range-selected { outline:1px solid #c9a84c; outline-offset:-1px; }
+
+/* ══ 2026-10-18 visible refresh: ONE Market view control band ══
+   Expiry scope, adjusted basis, loaded-date identity, Ask Flow and the
+   mobile pair switch share one banded row; conditional status notes are
+   compact chips inside the band instead of stacked full-width bars. */
+.trinity-layout .triad-control-band { margin: 0 10px 8px; display: flex; flex-direction: column; gap: 5px; padding: 7px 9px; background: #0b1117; border: 1px solid #263044; border-radius: 6px; }
+.triad-band-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; font-size: 11px; color: #94a3b8; }
+.triad-band-controls select { background: #101625; border: 1px solid #34405b; border-radius: 4px; padding: 4px 6px; min-height: 27px; color: #cbd5e1; font-size: 11px; max-width: 190px; }
+.triad-band-controls label { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.triad-band-controls .triad-loaded-dates { display: inline; margin: 0 0 0 auto; font-size: 10.5px; color: #8fa8b5; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; text-align: right; }
+.triad-band-note { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 11px; color: #d8c48a; background: #17140d; border: 1px solid #3a3420; border-radius: 4px; padding: 4px 8px; }
+.triad-band-note p { margin: 0; color: #c9b572; }
+.triad-band-note button { background: #101625; border: 1px solid #34405b; color: #d7e6e8; padding: 3px 10px; font-size: 11px; cursor: pointer; border-radius: 4px; }
+.triad-band-note button:hover { background: #222b42; }
+.trinity-layout .triad-context-method { margin: 0 0 6px; font-size: 11px; color: #9db3c4; }
+@media (max-width: 640px) { .triad-band-controls .triad-loaded-dates { margin-left: 0; text-align: left; flex-basis: 100%; } }
+
+/* P0-1 (UX review): designed empty/refused Market desk — centered honest
+   callout, primary action, exact loaded dates + LIVE identity; the panes
+   below keep their headers so the desk keeps structure while empty. */
+.trinity-layout .triad-empty-desk { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 14px 10px 6px; padding: 18px 16px; text-align: center; background: #0b1117; border: 1px solid #263044; border-radius: 6px; max-width: 560px; margin-left: auto; margin-right: auto; }
+.triad-empty-desk p { margin: 0; font-size: 12.5px; color: #d8c48a; line-height: 1.6; }
+.triad-empty-desk p strong { color: #f2d795; font-size: 13px; }
+.triad-empty-desk-identity { font-size: 11px; color: #8fa8b5; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.triad-empty-desk-action { background: #1a2c38; border: 1px solid #3b5a68; color: #e8f2f6; font-size: 13px; min-height: 34px; padding: 6px 18px; border-radius: 5px; cursor: pointer; font-weight: 600; }
+.triad-empty-desk-action:hover { background: #24404f; border-color: #4f7688; }
+
+/* P0-3 fix (UX review): 3px rect overlap at 390 between the band's Ask Flow
+   trigger and the empty-desk action below it — give the band bottom
+   clearance and the empty desk more separation. */
+.trinity-layout .triad-control-band { padding-bottom: 10px; }
+.trinity-layout .triad-empty-desk { margin-top: 18px; }
+
+/* ══ 2026-10-18 coherence polish (CSS-only, no logic/testid changes) ══
+   Right-rail drawer chrome compacted to match the refreshed inspector;
+   mobile touch targets on the Market view band raised to 32px. */
+.skylit-drawer-header { display: flex; align-items: center; gap: 8px; padding: 6px 4px 7px; border-bottom: 1px solid #1f3540; }
+.skylit-drawer-title { font-size: 12px; color: #f2d795; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.skylit-drawer-close { margin-left: auto; min-height: 26px; min-width: 26px; padding: 2px 8px; font-size: 12px; border-radius: 4px; }
+.tri-adrawer-note, .triad-band-note button { min-height: 28px; }
+@media (max-width: 640px) {
+  .triad-band-controls select { min-height: 32px; font-size: 12px; }
+  .triad-band-note button { min-height: 32px; padding: 5px 12px; }
+  .triad-mobile-switch button { min-height: 32px; min-width: 44px; }
+  .triad-empty-desk-action { min-height: 38px; }
+}

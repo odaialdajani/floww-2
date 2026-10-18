@@ -345,6 +345,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
       <details className="triad-context-disclosure" data-testid="triad-context-disclosure">
         <summary role="button" aria-label="Market context">Market context</summary>
         <div className="triad-context-body">
+          <p className="triad-context-method">Raw = where · adjusted = weighting, not observed direction.</p>
           <ContextStrip board={board} ticker={ticker} symbolInput={symbolInput}
             onSymbolInput={setSymbolInput} onSubmit={submitSymbol} showStockControl={!sharedStockChoice}
             boardStatus={boardStatus} />
@@ -357,38 +358,69 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
           </details>}
         </div>
       </details>
-            {payload?.scope_selection?.status === "unavailable" && <div role="status" data-testid="triad-empty-scope">No listed expiry in the server's 30-day bound — no substitution made.</div>}
-      {!isReplay && scope === "0dte" && !sameDayAdmitted && <div className="triad-scope-notice">
-        <p role="status" data-testid="triad-scope-admission">
-          Same-day admission unavailable — the loaded observation is not verified 0DTE. Exact loaded dates remain visible; no same-session expiry or entitlement is invented.
-        </p>
-        <button type="button" data-testid="triad-show-loaded" onClick={() => setScope("loaded")}>Show all loaded expiries</button>
-      </div>}
-      <div className="triad-desk-toolbar">
-        <span>Raw = where · adjusted = weighting, not observed direction</span>
-        <select aria-label="Market view expiry scope" value={isReplay ? declaredScope : scope} disabled={isReplay} onChange={e => setScope(e.target.value)}>
-          <option value="loaded">All loaded · max 4 expiries</option><option value="0dte">0DTE · request same session</option><option value="week">Week · ≤7 calendar DTE</option>
-          <option value="next">Next listed · one expiry, ≤30 calendar DTE</option>
-          {isReplay && declaredScope === "recorded" && <option value="recorded">Recorded scope · exact dates below</option>}
-        </select>
-        <label>Adjusted context <select aria-label="Adjusted context" value={basis} onChange={e => { setBasis(e.target.value); setActivePane("adjusted"); }}>
-          {ADJUSTED_BASES.map(b => <option key={b.id} value={b.id} data-testid={`triad-basis-${b.id}`}
-            disabled={surfaceStatus(payload, b.id).status === "unavailable" && basis !== b.id} title={surfaceStatus(payload, b.id).reason || b.units}>{b.label}</option>)}
-        </select></label>
-        <AskFlow subject={`${ticker} · raw wall ${wallId || "none"}`} overlayMetric={activeMetric} displayMode={isReplay ? "replay" : "live"} compact />
-        <div className="triad-mobile-switch"><button onClick={() => setMobilePane("raw")}>Raw</button><button onClick={() => setMobilePane("adjusted")}>Adjusted</button></div>
+      {/* 2026-10-18 visible refresh: ONE compact control band. Expiry scope,
+          adjusted basis, loaded-date identity, Ask Flow and the mobile pair
+          switch share a single banded row; conditional status notes sit
+          inside the band as compact chips instead of extra stacked
+          full-width bars. Every control, testid and honest string is kept. */}
+      <div className="triad-control-band" data-testid="triad-control-band">
+        <div className="triad-band-controls">
+          <select aria-label="Market view expiry scope" value={isReplay ? declaredScope : scope} disabled={isReplay} onChange={e => setScope(e.target.value)}>
+            <option value="loaded">All loaded · max 4 expiries</option><option value="0dte">0DTE · request same session</option><option value="week">Week · ≤7 calendar DTE</option>
+            <option value="next">Next listed · one expiry, ≤30 calendar DTE</option>
+            {isReplay && declaredScope === "recorded" && <option value="recorded">Recorded scope · exact dates below</option>}
+          </select>
+          <label>Adjusted context <select aria-label="Adjusted context" value={basis} onChange={e => { setBasis(e.target.value); setActivePane("adjusted"); }}>
+            {ADJUSTED_BASES.map(b => <option key={b.id} value={b.id} data-testid={`triad-basis-${b.id}`}
+              disabled={surfaceStatus(payload, b.id).status === "unavailable" && basis !== b.id} title={surfaceStatus(payload, b.id).reason || b.units}>{b.label}</option>)}
+          </select></label>
+          {/* Actual loaded expiry dates (2026-10-18): the displayed raw axis,
+              validated display-only. Missing or unreadable dates stay honest;
+              an excluded invalid value is declared, never claimed complete. */}
+          <span className="triad-loaded-dates" data-testid="triad-loaded-dates"
+            title="Actual loaded expiry dates from the displayed raw axis — never the request scope">
+            Loaded expiries: {loadedExpiries.total === 0
+              ? "unavailable — no expiry dates in this snapshot"
+              : loadedExpiries.valid.length
+                ? loadedExpiries.valid.join(", ")
+                : "none valid — expiry dates unreadable in this snapshot"}
+            {loadedExpiries.invalid > 0 && ` · ${loadedExpiries.invalid} invalid expiry value${loadedExpiries.invalid === 1 ? "" : "s"} excluded — not complete`}
+          </span>
+          <AskFlow subject={`${ticker} · raw wall ${wallId || "none"}`} overlayMetric={activeMetric} displayMode={isReplay ? "replay" : "live"} compact />
+          <div className="triad-mobile-switch"><button onClick={() => setMobilePane("raw")}>Raw</button><button onClick={() => setMobilePane("adjusted")}>Adjusted</button></div>
+        </div>
+        {payload?.scope_selection?.status === "unavailable" && <div role="status" data-testid="triad-empty-scope" className="triad-band-note">No listed expiry in the server's 30-day bound — no substitution made.</div>}
+        {/* P0-1 (UX review): when the default 0DTE request is honestly refused
+            AND no walls are classified, the desk renders its designed empty
+            state — a centered honest callout with the "Show all loaded
+            expiries" action visually primary, the exact loaded dates and the
+            LIVE/REPLAY identity. Panes below keep their headers, so the desk
+            keeps visible structure while empty. When walls DO exist, the same
+            admission renders as the compact in-band chip instead. */}
+        {!isReplay && scope === "0dte" && !sameDayAdmitted && (walls || []).length > 0 && <div className="triad-band-note triad-scope-notice">
+          <p role="status" data-testid="triad-scope-admission">
+            Same-day admission unavailable — the loaded observation is not verified 0DTE. Exact loaded dates remain visible; no same-session expiry or entitlement is invented.
+          </p>
+          <button type="button" data-testid="triad-show-loaded" onClick={() => setScope("loaded")}>Show all loaded expiries</button>
+        </div>}
       </div>
-      {/* Actual loaded expiry dates (2026-10-18): the displayed raw axis,
-          validated display-only. Missing or unreadable dates stay honest;
-          an excluded invalid value is declared, never claimed complete. */}
-      <span className="triad-loaded-dates" data-testid="triad-loaded-dates">
-        Loaded expiries: {loadedExpiries.total === 0
-          ? "unavailable — no expiry dates in this snapshot"
-          : loadedExpiries.valid.length
-            ? loadedExpiries.valid.join(", ")
-            : "none valid — expiry dates unreadable in this snapshot"}
-        {loadedExpiries.invalid > 0 && ` · ${loadedExpiries.invalid} invalid expiry value${loadedExpiries.invalid === 1 ? "" : "s"} excluded — not complete`}
-      </span>
+      {!isReplay && scope === "0dte" && !sameDayAdmitted && !(walls || []).length && (
+        <div className="triad-empty-desk" data-testid="triad-empty-desk">
+          <p role="status" data-testid="triad-scope-admission">
+            <strong>Same-day admission unavailable — the loaded observation is not verified 0DTE.</strong>
+            Exact loaded dates remain visible; no same-session expiry or entitlement is invented.
+          </p>
+          <span className="triad-empty-desk-identity">
+            {isReplay ? "REPLAY" : "LIVE"} · loaded expiries: {loadedExpiries.total === 0
+              ? "unavailable — no expiry dates in this snapshot"
+              : loadedExpiries.valid.length
+                ? loadedExpiries.valid.join(", ")
+                : "none valid — expiry dates unreadable in this snapshot"}
+            {loadedExpiries.invalid > 0 && ` · ${loadedExpiries.invalid} invalid excluded — not complete`}
+          </span>
+          <button type="button" data-testid="triad-show-loaded" className="triad-empty-desk-action" onClick={() => setScope("loaded")}>Show all loaded expiries</button>
+        </div>
+      )}
       <HeatmapLandmarks data={payload} />
       <div className={drawerOpen ? "triad-review-workspace" : ""}>
       <div className="triad-review-analysis">

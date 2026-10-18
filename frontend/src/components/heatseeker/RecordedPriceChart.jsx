@@ -125,25 +125,32 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
   const shift=amount=>{notify();setHover(null);setView(clampWindow({...windowView,start:windowView.start+amount},data.length));};
  const keyboard=event=>{const actions={ArrowLeft:()=>shift(-1),ArrowRight:()=>shift(1),PageUp:()=>shift(-Math.max(1,Math.floor(windowView.count/2))),PageDown:()=>shift(Math.max(1,Math.floor(windowView.count/2))),Home:()=>shift(-data.length),End:()=>shift(data.length),'+':()=>zoom('time',0.75),'-':()=>zoom('time',1.35)};if(actions[event.key]){event.preventDefault();event.stopPropagation();actions[event.key]();}};
  return <div className="recorded-price-chart" data-testid="recorded-price-chart" data-candles={data.length} data-visible-candles={visible.length} data-window-start={windowView.start} data-price-low={range.low} data-price-high={range.high}>
+  {/* 2026-10-18 visible refresh: ONE compact primary toolbar — symbol,
+      interval + history summary, live price/time readout, scale, Tools and
+      actions all in a single banded row. The readout keeps its testid,
+      data-details popover and aria-live semantics; it simply stops being a
+      separate stacked row. */}
   <div className="recorded-chart-tools" data-testid="chart-control-row">
    {toolbarControls}
+   <div className="recorded-chart-readout" aria-live="off" data-testid="chart-reading-row"><strong>{selected?chartTime(selected.time,true):'Waiting for a candle'} <span>New York</span></strong>{selected&&<span>Open <b>{price(selected.open)}</b> High <b>{price(selected.high)}</b> Low <b>{price(selected.low)}</b> Close <b>{price(selected.close)}</b></span>}<details className="recorded-chart-popover recorded-chart-data"><summary role="button" aria-label="Chart data details">{readingStatus}</summary><div className="recorded-chart-popover-content">{dataDetails||<p>Prices and lines use their own stored times. Missing readings remain unavailable.</p>}</div></details></div>
    <div className="recorded-chart-scale"><button type="button" aria-label="Zoom in time" disabled={!data.length} onClick={()=>zoom('time',0.75)}>+</button><button type="button" aria-label="Zoom out time" disabled={!data.length} onClick={()=>zoom('time',1.35)}>-</button><button type="button" aria-label="Auto scale" aria-pressed={!manualPrice} disabled={!data.length} title={manualPrice?"Price scale locked; click to fit visible prices":"Fits visible prices; click to lock"} onClick={()=>setManualPrice(held=>held?null:range)}>Auto scale {manualPrice?'locked':'on'}</button></div>
    <details className="recorded-chart-popover"><summary role="button" aria-label="Chart tools">Tools</summary><div className="recorded-chart-popover-content">
     {historyPeriodControls&&<div className="recorded-chart-period" data-testid="history-period-controls">{historyPeriodControls}</div>}
     <div className="recorded-chart-history"><button type="button" aria-label="Earlier candles" disabled={!windowView.start} onClick={()=>shift(-Math.max(1,Math.floor(windowView.count/2)))}>Earlier</button><button type="button" aria-label="Later candles" disabled={windowView.start+windowView.count>=data.length} onClick={()=>shift(Math.max(1,Math.floor(windowView.count/2)))}>Later</button><button type="button" disabled={!data.length} onClick={()=>{notify();setView({start:0,count:data.length});setManualPrice(null);}}>Fit history</button></div>
     <fieldset className="recorded-chart-layers" aria-label="Saved node lines"><legend>Saved lines</legend>{Object.entries(NODE_LABELS).map(([metric,label])=><label key={metric} style={{'--node-color':NODE_COLORS[metric]}}><input type="checkbox" checked={metrics.includes(metric)} disabled={!availableMetrics.includes(metric)} onChange={e=>{setMetrics(old=>e.target.checked?[...old,metric]:old.filter(value=>value!==metric));setManualPrice(null);}}/>{label}{!availableMetrics.includes(metric)&&<span> unavailable</span>}</label>)}<label><input type="checkbox" checked={allNodes} onChange={e=>{setAllNodes(e.target.checked);setManualPrice(null);}}/>All saved levels</label></fieldset>
+    <fieldset className="recorded-chart-layers recorded-chart-overlays" aria-label="Chart overlays"><legend>Overlays</legend>
      <label><input type="checkbox" aria-label="Toggle VWAP" checked={vwapOn} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>setVwapOn(e.target.checked)}/>VWAP{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
      <label><input type="checkbox" aria-label="Toggle profile" checked={profileOn} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>setProfileOn(e.target.checked)}/>Profile{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
      <label><input type="checkbox" aria-label="Toggle VWAP bands" checked={bandsOn} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>setBandsOn(e.target.checked)}/>Bands{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
       <label><input type="checkbox" aria-label="Toggle exposure envelope" checked={envelopeOn} disabled={!Array.isArray(exposureLine)||!exposureLine.some(p=>typeof p?.centre==='number'&&Number.isFinite(p.centre))} onChange={e=>setEnvelopeOn(e.target.checked)}/>Envelope{(!Array.isArray(exposureLine)||!exposureLine.some(p=>typeof p?.centre==='number'&&Number.isFinite(p.centre)))&&<span> unavailable</span>}</label>
       <label><input type="checkbox" aria-label="Toggle CVD" checked={cvdOn} disabled={!Array.isArray(cvdLine)||!cvdLine.some(p=>typeof p?.cvd==='number'&&Number.isFinite(p.cvd))} onChange={e=>setCvdOn(e.target.checked)}/>CVD{(!Array.isArray(cvdLine)||!cvdLine.some(p=>typeof p?.cvd==='number'&&Number.isFinite(p.cvd)))&&<span> unavailable</span>}</label>
+    </fieldset>
      <button type="button" disabled={!data.length||exporting} onClick={downloadChart}>{exporting?'Saving image...':'Download chart image'}</button>{exportError&&<p role="alert">{exportError}</p>}
     {historyControls}<small id={'chart-help-'+id}>Drag to scroll history. Pinch time and price. Drag an axis to stretch it. Ctrl + scroll zooms time; Shift + scroll zooms price. Normal scrolling moves the page.</small>
    </div></details>
    <div className="recorded-chart-actions">{toolbarActions}</div>
   </div>
   {replayControls&&<div className="recorded-chart-replay-row" data-testid="chart-replay-row">{replayControls}</div>}
-  <div className="recorded-chart-readout" aria-live="off" data-testid="chart-reading-row"><strong>{selected?chartTime(selected.time,true):'Waiting for a candle'} <span>New York</span></strong>{selected&&<span>Open <b>{price(selected.open)}</b> High <b>{price(selected.high)}</b> Low <b>{price(selected.low)}</b> Close <b>{price(selected.close)}</b></span>}<details className="recorded-chart-popover recorded-chart-data"><summary role="button" aria-label="Chart data details">{readingStatus}</summary><div className="recorded-chart-popover-content">{dataDetails||<p>Prices and lines use their own stored times. Missing readings remain unavailable.</p>}</div></details></div>
   {!!data.length?<div ref={surface} className="recorded-chart-surface" role="region" aria-label={ticker+' candle chart'} aria-describedby={'chart-help-'+id} tabIndex={0} onKeyDown={keyboard} onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onPointerLeave={()=>{if(!pointers.current.size)setHover(null);}}>
    <svg viewBox={'0 0 '+size.width+' '+size.height} aria-label={ticker+' recorded price candles'} role="img">
     <defs><clipPath id={'chart-clip-'+id}><rect x={left} y={top} width={plotWidth} height={plotHeight}/></clipPath></defs>
@@ -249,7 +256,12 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
        </svg>
        <small>{contractSymbol} premium ($) — own scale, not underlying $. Range ${lo.toFixed(2)}–${hi.toFixed(2)}. {vals.length}/{visible.length} visible candles matched. Missing prices stay gaps.</small>
      </div>;})()}
-   {!!data.length&&<div className="recorded-chart-footer"><small>{windowView.start+1}-{windowView.start+visible.length} of {data.length} loaded candles</small></div>}
-  {selected&&<div className="recorded-chart-nodes" aria-label="Selected candle saved nodes">{selectedLevels.length?selectedLevels.map((node,index)=><span key={node.metric+':'+node.id+':'+index} style={{color:NODE_COLORS[node.metric]}}>{NODE_LABELS[node.metric]} <b>{price(node.level)}</b></span>):<span>No supported saved node lines at this candle.{Object.entries(selected?.metric_status||{}).filter(([,status])=>status==="zero").map(([metric])=>" "+NODE_LABELS[metric]+" was zero; no largest level stood out.").join("")}</span>}</div>}
+   {/* P1-5 (UX review): the candle-count footer and the selected-candle node
+       legend share ONE slim line below the chart — no separate boxed strips.
+       Both honest strings are unchanged. */}
+   {!!data.length&&<div className="recorded-chart-below" aria-label="Chart footer and selected node legend">
+     <small>{windowView.start+1}-{windowView.start+visible.length} of {data.length} loaded candles</small>
+     {selected&&<span className="recorded-chart-nodes">{selectedLevels.length?selectedLevels.map((node,index)=><span key={node.metric+':'+node.id+':'+index} style={{color:NODE_COLORS[node.metric]}}>{NODE_LABELS[node.metric]} <b>{price(node.level)}</b></span>):<span>No supported saved node lines at this candle.{Object.entries(selected?.metric_status||{}).filter(([,status])=>status==="zero").map(([metric])=>" "+NODE_LABELS[metric]+" was zero; no largest level stood out.").join("")}</span>}</span>}
+   </div>}
  </div>;
 }
