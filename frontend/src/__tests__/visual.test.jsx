@@ -4,8 +4,12 @@
  *
  * Updated for Foundation lane: nav-tabs removed (rail owns navigation).
  */
-import { render } from "@testing-library/react";
+import { render, act } from "@testing-library/react";
 import axios from "axios";
+
+// Post-render axios continuations resolve on a microtask chain after mount;
+// draining inside act() lets those state updates settle where React expects
+// them. Assertions below are untouched.
 
 // ── Mock axios (must be configured before any component imports it) ──
 // NOTE: jest.fn() inside a jest.mock factory silently loses its
@@ -88,26 +92,33 @@ jest.mock("../utils/dataDecimator", () => ({ autoDecimate: (data) => data }));
 import App from "../App";
 
 // ── Tests ───────────────────────────────────────────────────────────
+const drain = async () => { for (let i = 0; i < 50; i += 1) { await Promise.resolve(); } };
+
 describe("Visual Smoke Test — Tab Render", () => {
-  test("renders App default (trinity tab) without crash", () => {
+  test("renders App default (trinity tab) without crash", async () => {
     const { container } = render(<App />);
     expect(container.firstChild).toBeTruthy();
+    await act(drain);
   });
 
-  test("App renders with AppShell wrapper (rail owns nav now)", () => {
+  test("App renders with AppShell wrapper (rail owns nav now)", async () => {
     const { container } = render(<App />);
     // AppShell is mocked above (renders children), so assert App's own
     // mounted content instead of shell chrome.
     expect(container.firstChild).toBeTruthy();
+    await act(drain);
   });
 
-  test("App renders root element", () => {
+  test("App renders root element", async () => {
     const { container } = render(<App />);
     expect(container.firstChild).toBeTruthy();
+    await act(drain);
   });
 
-  test("no duplicate mount errors", () => {
+  test("no duplicate mount errors", async () => {
     const { unmount } = render(<App />);
+    await act(drain);
     expect(() => unmount()).not.toThrow();
+    await act(drain);
   });
 });

@@ -2,8 +2,12 @@ jest.mock('../heatseeker/useTickerDirectory',()=>()=>({tickers:null,status:'inco
 jest.mock('./MarketCoverage',()=>()=>null);
 /** @jest-environment jsdom */
 import React from "react";
-import {render,screen,fireEvent,waitFor,within} from "@testing-library/react";
+import {render,screen,fireEvent,waitFor,within,act} from "@testing-library/react";
 import FlowseekerProBlademap from "./FlowseekerProBlademap";
+
+// Post-resolution fetch continuations set state after the test's own
+// awaits; drain inside act so those updates settle where React expects.
+const drain = async () => { for (let i = 0; i < 50; i += 1) { await Promise.resolve(); } await new Promise((r) => setTimeout(r, 30)); for (let i = 0; i < 50; i += 1) { await Promise.resolve(); } await new Promise((r) => setTimeout(r, 30)); };
 const expiry=new Date(Date.now()+14*86400000).toISOString().slice(0,10);
 const contracts=[{strike:450,type:"call",expiry,volume:500,oi:500,iv:.2,bid:4,ask:4.2},{strike:450,type:"put",expiry,volume:600,oi:600,iv:.25,bid:3.9,ask:4.1}];
 beforeEach(()=>{
@@ -25,6 +29,7 @@ test("free-text ticker scope filters Pulse and reset restores the scope",async()
  expect(JSON.parse(localStorage.getItem("th-prefs-v1")).knobQ).toBe("ZZZ");
  fireEvent.click(screen.getByRole("button",{name:/Reset/}));
  expect(input.value).toBe("");
+ await act(drain);
 });
 test("drill expiry bands are exclusive",async()=>{
  const drill=await openDrill();
@@ -32,11 +37,13 @@ test("drill expiry bands are exclusive",async()=>{
  expect(document.querySelectorAll(".th-dtab tbody tr")).toHaveLength(2);
  fireEvent.click(within(drill).getByRole("button",{name:"0DTE"}));
  expect(within(drill).getByText("No contracts match for SPY")).toBeInTheDocument();
+ await act(drain);
 });
 test("single page retains section navigation and removes retired tabs",async()=>{
  await openDrill();
  expect(screen.getByRole("complementary",{name:"Sections"})).toBeInTheDocument();
  for(const text of ["WTI Crude","Stat-Arb Pairs","Smart Order Flow"])expect(screen.queryByText(text)).not.toBeInTheDocument();
+ await act(drain);
 });
 test("selected signal stays below the tape and missing chart values stay unavailable",async()=>{
  await openDrill();
@@ -45,4 +52,5 @@ test("selected signal stays below the tape and missing chart values stay unavail
  expect(detail).toHaveTextContent("SPY");
  expect(table.compareDocumentPosition(detail)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
  expect(screen.getByTestId("dealer-drilldown")).toHaveTextContent("Dealer chart unavailable for SPY");
+ await act(drain);
 });

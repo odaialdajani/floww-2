@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
 import React from 'react';
-import { render, waitFor } from '@testing-library/react';
+import { render, waitFor, act } from '@testing-library/react';
 import OptionsChainTable from './OptionsChainTable';
+
+// Post-resolution chain continuations set state after the test's own
+// awaits; drain inside act so those updates settle where React expects.
+const drain = async () => { for (let i = 0; i < 50; i += 1) { await Promise.resolve(); } await new Promise((r) => setTimeout(r, 30)); for (let i = 0; i < 50; i += 1) { await Promise.resolve(); } await new Promise((r) => setTimeout(r, 30)); };
 
 // ── Mocks ──────────────────────────────────────────────────────────
 jest.mock('../config/api', () => ({
@@ -54,16 +58,18 @@ describe('OptionsChainTable', () => {
   // eslint-disable-next-line no-empty
   });
 
-  test('renders without crash on populated rows', () => {
+  test('renders without crash on populated rows', async () => {
     fetchPublicChain.mockResolvedValue(mockPublicChain);
     const { container } = render(<OptionsChainTable ticker="SPY" spot={450} />);
     expect(container).toBeTruthy();
+    await act(drain);
   });
 
   test('fetches from public API first', async () => {
     fetchPublicChain.mockResolvedValue(mockPublicChain);
     render(<OptionsChainTable ticker="SPY" spot={450} />);
     await waitFor(() => expect(fetchPublicChain).toHaveBeenCalledWith('SPY', expect.any(Object)));
+    await act(drain);
   });
 
   test('falls back to merged chain when public API fails', async () => {
@@ -73,24 +79,28 @@ describe('OptionsChainTable', () => {
     const { container } = render(<OptionsChainTable ticker="SPY" spot={450} />);
     await waitFor(() => expect(axios.get).toHaveBeenCalled());
     expect(container).toBeTruthy();
+    await act(drain);
   });
 
-  test('renders vanna column header', () => {
+  test('renders vanna column header', async () => {
     fetchPublicChain.mockResolvedValue(mockPublicChain);
     const { container } = render(<OptionsChainTable ticker="SPY" spot={450} />);
     expect(container).toBeTruthy();
+    await act(drain);
   });
 
   test('renders charm column header', async () => {
     fetchPublicChain.mockResolvedValue(mockPublicChain);
     const { container } = render(<OptionsChainTable ticker="SPY" spot={450} />);
     expect(container.textContent).toBeDefined();
+    await act(drain);
   });
 
-  test('renders dte column header', () => {
+  test('renders dte column header', async () => {
     fetchPublicChain.mockResolvedValue(mockPublicChain);
     const { container } = render(<OptionsChainTable ticker="SPY" spot={450} />);
     expect(container).toBeTruthy();
+    await act(drain);
   });
 
   test('handles null greeks gracefully - no crash', () => {

@@ -16,8 +16,13 @@
  * of swallowing it.
  */
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import AlertsPanel from "./AlertsPanel";
+
+// Post-resolution prediction/alert continuations set state after the
+// test's own awaits; drain inside act so those updates settle where
+// React expects. Assertions are untouched.
+const drain = async () => { for (let i = 0; i < 50; i += 1) { await Promise.resolve(); } await new Promise((r) => setTimeout(r, 30)); for (let i = 0; i < 50; i += 1) { await Promise.resolve(); } await new Promise((r) => setTimeout(r, 30)); };
 
 const API = "http://localhost:8000/api";
 
@@ -61,16 +66,18 @@ test("shows an explicit unavailable reason when the model artifact cannot load",
   render(<AlertsPanel ticker="SPY" />);
   // open the collapsible
   const toggle = screen.getByRole("button");
-  toggle.click();
+  await act(async () => { toggle.click(); });
 
   await waitFor(() => {
     expect(screen.getByTestId("ml-unavailable")).toBeInTheDocument();
   });
+  await act(drain);
   const el = screen.getByTestId("ml-unavailable");
   // the reason must be visible, not a bare "unavailable"
   expect(el.textContent).toMatch(/artifact|model/i);
   // and it must NOT be rendered as a prediction
   expect(screen.queryByTestId("ml-prediction")).not.toBeInTheDocument();
+  await act(drain);
 });
 
 test("a 404 says the model is missing rather than unavailable", async () => {
@@ -82,12 +89,13 @@ test("a 404 says the model is missing rather than unavailable", async () => {
   });
 
   render(<AlertsPanel ticker="QQQ" />);
-  screen.getByRole("button").click();
+  await act(async () => { screen.getByRole("button").click(); });
 
   await waitFor(() => {
     expect(screen.getByTestId("ml-unavailable")).toBeInTheDocument();
   });
   expect(screen.getByTestId("ml-unavailable").textContent).toMatch(/no model|not trained|missing/i);
+  await act(drain);
 });
 
 test("a successful prediction still renders and does not show the unavailable row", async () => {
@@ -101,11 +109,12 @@ test("a successful prediction still renders and does not show the unavailable ro
   });
 
   render(<AlertsPanel ticker="SPY" />);
-  screen.getByRole("button").click();
+  await act(async () => { screen.getByRole("button").click(); });
 
   await waitFor(() => {
     expect(screen.getByTestId("ml-prediction")).toBeInTheDocument();
   });
   expect(screen.getByTestId("ml-prediction").textContent).toMatch(/HOLD/);
   expect(screen.queryByTestId("ml-unavailable")).not.toBeInTheDocument();
+  await act(drain);
 });

@@ -2,7 +2,11 @@
    Synthetic inline fixtures (not producer output). No network (fetch
    mocked), no order surfaces (every fetch URL asserted). */
 import React from 'react';
-import {fireEvent,render,screen,waitFor,within} from '@testing-library/react';
+import {fireEvent,render,screen,waitFor,within,act} from '@testing-library/react';
+
+// Post-resolution desk continuations set state after the test's own
+// awaits; drain inside act so those updates settle where React expects.
+const drain = async () => { for (let i = 0; i < 50; i += 1) { await Promise.resolve(); } await new Promise((r) => setTimeout(r, 30)); for (let i = 0; i < 50; i += 1) { await Promise.resolve(); } await new Promise((r) => setTimeout(r, 30)); };
 import TriadDesk from './TriadDesk';
 import paired from '../../test-fixtures/triad-exposure.paired.json';
 import TriadExposure from './TriadExposure';
@@ -101,6 +105,7 @@ test('overlay draws the paired admitted series instead of recalculating chain ro
  expect(cell.getAttribute('data-total')).toBe('2');
  expect(screen.getByText(/Source coverage includes skipped expiries/)).toBeInTheDocument();
  orderSurfacesUntouched();
+ await act(drain);
 });
 
 test.each(['missing', 'version', 'ticker', 'receipt', 'expiry'])(
@@ -117,6 +122,7 @@ test.each(['missing', 'version', 'ticker', 'receipt', 'expiry'])(
   expect(screen.queryByRole('group', { name: /Signed exposure by strike/ })).not.toBeInTheDocument();
   expect(screen.getByRole('table')).toBeInTheDocument();
   orderSurfacesUntouched();
+  await act(drain);
  });
 
 test('0DTE desk renders exposure, chain and rail with zero order-surface calls', async () => {
@@ -148,6 +154,7 @@ test('SPX without same-day names the entitlement check explicitly', async () => 
  mockRoutes(no0dte);
  render(<TriadDesk ticker="^SPX" />);
  await screen.findByText(/Index-option entitlement/);
+ await act(drain);
 });
 
 test('chain failure is an honest error, never a crash or fabrication', async () => {
@@ -156,6 +163,7 @@ test('chain failure is an honest error, never a crash or fabrication', async () 
  await screen.findByText(/Triad scope unavailable/);
  expect(screen.queryByRole('group', { name: /Signed exposure/ })).not.toBeInTheDocument();
  orderSurfacesUntouched();
+ await act(drain);
 });
 
 test('chain Review selects the strike and the rail shows measured vs unknown truthfully', async () => {
@@ -168,6 +176,7 @@ test('chain Review selects the strike and the rail shows measured vs unknown tru
  expect(screen.getByText(/unknown \(not zero\)|200 \(OI\)/)).toBeInTheDocument();
  expect(screen.getByText(/Execution owner: unselected/)).toBeInTheDocument();
  orderSurfacesUntouched();
+ await act(drain);
 });
 
 test('copy triad context writes the frozen scope and failure surfaces status', async () => {
@@ -182,6 +191,7 @@ test('copy triad context writes the frozen scope and failure surfaces status', a
  expect(payload).toMatchObject({ kind: 'triad-context', ticker: 'SPY', scope: '0dte', expiry: '2026-10-07' });
  expect(payload.note).toMatch(/not an execution permission/);
  orderSurfacesUntouched();
+ await act(drain);
 });
 
 test('ticker change aborts and clears the desk', async () => {
@@ -197,6 +207,7 @@ test('ticker change aborts and clears the desk', async () => {
  ui.rerender(<TriadDesk ticker="QQQ" />);
  expect(signal.aborted).toBe(true);
  expect(screen.queryByRole('group', { name: /Signed exposure/ })).not.toBeInTheDocument();
+ await act(drain);
 });
 
 test('partial strike renders outlined partial subtotal, never silent zero', async () => {
@@ -215,6 +226,7 @@ test('partial strike renders outlined partial subtotal, never silent zero', asyn
  expect(cell775.getAttribute('data-partial')).toBe('false');
  expect(cell775.getAttribute('data-known')).toBe('2');
  orderSurfacesUntouched();
+ await act(drain);
 });
 
 test('axis ticks label raw dollars without M and millions with M', async () => {
@@ -229,6 +241,7 @@ test('axis ticks label raw dollars without M and millions with M', async () => {
  expect(screen.queryByText('+200M')).not.toBeInTheDocument();
  expect(screen.getByText('+200')).toBeInTheDocument();
  orderSurfacesUntouched();
+ await act(drain);
 });
 
 test('Next listed skips same-day expiry when a later series coexists', async () => {
@@ -242,6 +255,7 @@ test('Next listed skips same-day expiry when a later series coexists', async () 
  });
  expect(global.fetch.mock.calls.map(([u]) => String(u)).filter(u => u.includes('/api/public/chain') && u.includes('expiration=2026-10-07')).length).toBe(1);
  orderSurfacesUntouched();
+ await act(drain);
 });
 
 test('measured-zero renders a known marker, all-unknown renders the gray slot', async () => {

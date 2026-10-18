@@ -19,8 +19,13 @@ jest.mock('../heatseeker/useTickerDirectory',()=>()=>({tickers:null,status:'inco
  */
 
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 import FlowseekerProBlademap from "./FlowseekerProBlademap";
+
+// Post-render fetch continuations (journal/stats, scan follow-ups) resolve on
+// a microtask chain after mount. Draining them inside act() settles those
+// state updates where React expects them; assertions below are untouched.
+const drain = async () => { for (let i = 0; i < 50; i += 1) { await Promise.resolve(); } };
 
 // Every network call the active tab fires on mount resolves to an inert
 // payload — we are testing RENDER integrity, not data logic (the pure math
@@ -43,7 +48,7 @@ beforeEach(() => {
   window.localStorage.clear();
 });
 
-test("active mount renders the scanner without tripping the ErrorBoundary", () => {
+test("active mount renders the scanner without tripping the ErrorBoundary", async () => {
   render(<FlowseekerProBlademap active={true} />);
   // The boundary's failure text must NOT be present — if a TDZ-class bug
   // (or any render-time throw) exists in the active-render path, the app's
@@ -52,9 +57,10 @@ test("active mount renders the scanner without tripping the ErrorBoundary", () =
   // Positive control: the active shell actually mounted (header text exists
   // in the component's own chrome).
   expect(screen.getByTestId("cell-trade")).toBeInTheDocument();
+  await act(drain);
 });
 
-test("all Tidehunter sub-tabs mount active without a boundary trip", () => {
+test("all Tidehunter sub-tabs mount active without a boundary trip", async () => {
   // Mount each tab by simulating the internal tab state via re-render:
   // the component keys its views off its own state, so a fresh full mount
   // (scanner default) plus the other sub-panels' import graph are covered
@@ -62,6 +68,7 @@ test("all Tidehunter sub-tabs mount active without a boundary trip", () => {
   // the Wtipanel/RussellPanel crash lived.
   render(<FlowseekerProBlademap active={true} />);
   expect(screen.queryByText("Something went wrong")).not.toBeInTheDocument();
+  await act(drain);
 });
 
 test("scanner row opens the matching dealer drill without firing a trade", async () => {
@@ -101,4 +108,5 @@ test("scanner row opens the matching dealer drill without firing a trade", async
   fireEvent.click(row);
   expect(screen.getByTestId("drill").textContent).toContain("Drill · SPY");
   expect(onTrade).not.toHaveBeenCalled();
+  await act(drain);
 });

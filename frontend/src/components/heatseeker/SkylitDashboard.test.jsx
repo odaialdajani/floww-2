@@ -12,6 +12,15 @@ import { render, screen, act, fireEvent, waitFor, cleanup } from "@testing-libra
 import "@testing-library/jest-dom";
 import axios from "axios";
 
+// Post-render fetch continuations (review-journal reads, price-history
+// loads, coverage admissions) resolve on microtask chains after a test's
+// own awaits finish. A real macrotask break inside act() lets those
+// state updates settle where React expects them; existing per-test
+// assertions are untouched.
+// Shared act drain for flows whose fetch continuations resolve after the
+// test's own awaits; assertions are untouched.
+const drain = async () => { for (let i = 0; i < 50; i += 1) { await Promise.resolve(); } await new Promise((r) => setTimeout(r, 30)); for (let i = 0; i < 50; i += 1) { await Promise.resolve(); } await new Promise((r) => setTimeout(r, 30)); };
+
 // Mock IntersectionObserver — harmless for a smoke test, but defensive in
 // case any lazy subcomponent gets pulled in via transitive imports.
 global.IntersectionObserver = class IntersectionObserver {
@@ -283,7 +292,7 @@ function selectionMap(value = 123.4, asof = "2026-09-11T18:00:00Z") {
    grid:{strikes:[650],expiries:["2026-09-18"],grid:{"2026-09-18":{"650":value}}}};
 }
 
-test("window context carries server baseline/interval selectors and clears them with basis change", () => {
+test("window context carries server baseline/interval selectors and clears them with basis change", async () => {
  const section={strikes:[650],expiries:["2026-09-18"],grid:{"2026-09-18":{"650":0}},status:"ok",
    comparison:{previous_snapshot_id:"prior"},interval:{start:"2026-09-11T17:59:00Z",end:"2026-09-11T18:00:00Z"}};
  const data={...selectionMap(),snapshotId:"current",data_source:"fixture",formula_version:"gex.v2",metrics:{grids:{window:section}}};
@@ -298,6 +307,7 @@ test("window context carries server baseline/interval selectors and clears them 
  expect(current().selectedStrike).toBeNull();
  fireEvent.click(screen.getByTestId("mock-activity"));
  expect(current().windowInterval).toBeNull();
+ await act(drain);
 });
 
 test("same-scope polling retains the selected cell with the latest displayed value and map version",()=>{
@@ -970,6 +980,7 @@ test("R8-04: review pill clears on snapshot change and skips replay", async () =
     expect(screen.getByTestId("skylit-review-pending")).toBeInTheDocument();
     expect(screen.getByTestId("skylit-review-pending").textContent).toBe("No review yet");
   });
+  await act(drain);
 });
 
 // ---- R8-02/R8-04: Save review + Next to review ---------------------------
@@ -1245,6 +1256,7 @@ describe("SkylitDashboard O2 inspector drawer", () => {
     const handoff = JSON.parse(raw);
     expect(handoff).toMatchObject({ ticker: "SPY", strike: 650, snapshotId: "snap-o2-1" });
     expect(typeof handoff.ts).toBe("number");
+    await act(drain);
   });
 });
 
@@ -1294,6 +1306,7 @@ test("O5 drawer moves focus to its close control and restores prior focus on clo
   expect(screen.getByTestId("skylit-drawer-close")).toHaveFocus();
   await act(async () => { fireEvent.click(screen.getByTestId("skylit-drawer-close")); });
   expect(cell).toHaveFocus();
+  await act(drain);
 });
 
 test("O3 compare panes share one snapshot and identical geometry inputs", async () => {
@@ -1367,6 +1380,7 @@ describe('dashboard display preferences across main-tab remounts',()=>{
   expect(screen.getByTestId('skylit-heatmap-area').style.zoom).toBe('1.25');
   fireEvent.click(screen.getByTestId('skylit-study-switch'));
   expect(JSON.parse(screen.getByTestId('research-selection').textContent)).toMatchObject({contextVersion:1,navigationOnly:true,study:"Price chart"});
+  await act(drain);
  });
  test('a remounted selection uses the new current reading and never re-arms trade or locks',()=>{
   const onCellClick=jest.fn();const first=mountPreferences(selectionMap(),{onCellClick});
@@ -1524,7 +1538,7 @@ describe('pending chart preferences and in-place query isolation',()=>{
 
 describe("primary stock price study", () => {
  const chart = props => <><SkylitDashboardView ticker="SPY" spot={650} data={selectionMap()} {...props} /><ResearchSelection /></>;
- test("opens the price chart first with one switch and no duplicate stock search", () => {
+ test("opens the price chart first with one switch and no duplicate stock search", async () => {
   render(chart());
   expect(screen.getByTestId("price-node-history")).toBeVisible();
   expect(screen.getByTestId("mock-control-bar")).toBeVisible();
@@ -1534,8 +1548,9 @@ describe("primary stock price study", () => {
   expect(screen.queryByRole("button", {name:"Browse all stocks"})).toBeNull();
   expect(screen.getByRole("combobox", {name:"Candle interval"})).toHaveValue("30");
   expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({contextVersion:1,navigationOnly:true,study:"Price chart"});
+  await act(drain);
  });
- test("one switch keeps desk choices and candle interval while research follows the owning view", () => {
+ test("one switch keeps desk choices and candle interval while research follows the owning view", async () => {
   render(chart());
   fireEvent.change(screen.getByRole("combobox", {name:"Candle interval"}), {target:{value:"15"}});
   fireEvent.click(screen.getByRole("button", {name:"Options desk"}));
@@ -1548,10 +1563,12 @@ describe("primary stock price study", () => {
   fireEvent.click(screen.getByRole("button", {name:"Options desk"}));
   expect(screen.getByRole("combobox", {name:"Canvas layout"})).toHaveValue("calendar");
   expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("123.4");
+  await act(drain);
  });
- test("an explicit options desk choice survives a tab remount", () => {
+ test("an explicit options desk choice survives a tab remount", async () => {
   const first=render(chart());fireEvent.click(screen.getByRole("button", {name:"Options desk"}));first.unmount();
   render(chart());expect(screen.getByTestId("mock-control-bar")).toBeVisible();expect(screen.getByTestId("price-node-history")).toBeVisible();
+  await act(drain);
  });
  test("opening a saved reading reveals its exact recorded options desk", async () => {
   axios.get.mockImplementation(async url => ({data:String(url).includes("/decisions/page") ? {ticker:"SPY",status:"available",order:"newest",count:1,has_more:false,next_cursor:null,decisions:[{ticker:"SPY",decision_id:"saved-one",snapshot_id:"owning-chart",snapshot_available:true,at_ts:"2026-10-06T18:00:00Z",n_quotes:2,features_status:"available"}]} : String(url).includes("/replay/") ? {snapshot:{ticker:"SPY",snapshot_id:"owning-chart",asof_ts:"2026-10-06T18:00:00Z",spot:649},strikes:[{strike:650}],grids:{grid:selectionMap(-7).grid},metrics_full:{},context:{}} : {ticker:"SPY",frames:[]}}));
@@ -1569,7 +1586,7 @@ describe("primary stock price study", () => {
 describe("legacy stock study migration", () => {
  const scope=ticker=>skylitViewScope({ticker,timeframe:"5m",expiries:4,dte:null,expiryScope:"loaded",viewMode:"gex",localView:null});
  const stock=(ticker,data=selectionMap())=><><SkylitDashboardView ticker={ticker} data={{...data,ticker}} spot={650}/><ResearchSelection/></>;
- test("legacy automatic closed history opens the primary chart without losing desk choices or selection", () => {
+ test("legacy automatic closed history opens the primary chart without losing desk choices or selection", async () => {
   const old=render(<SkylitDashboard ticker="SPY" data={selectionMap()} spot={650}/>);
   fireEvent.change(screen.getByRole("combobox",{name:"Canvas layout"}),{target:{value:"calendar"}});
   fireEvent.click(screen.getByTestId("skylit-zoom-in"));fireEvent.click(screen.getByTestId("mock-heatmap-cell"));old.unmount();
@@ -1585,14 +1602,16 @@ describe("legacy stock study migration", () => {
   expect(screen.getByTestId("skylit-heatmap-area").style.zoom).toBe("1.25");
   expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("777.0");
   expect(screen.getByTestId("skylit-trade-btn")).not.toHaveClass("active");
+  await act(drain);
  });
- test("new explicit stock study choices persist separately from legacy automatic booleans", () => {
+ test("new explicit stock study choices persist separately from legacy automatic booleans", async () => {
   const first=render(stock("SPY"));fireEvent.click(screen.getByRole("button",{name:"Options desk"}));first.unmount();
   expect(readSkylitView(scope("SPY"))).toMatchObject({studyChoice:"options",priceHistoryOpen:false});
   const resumed=render(stock("SPY"));expect(screen.getByTestId("mock-control-bar")).toBeVisible();
   fireEvent.click(screen.getByRole("button",{name:"Price chart"}));resumed.unmount();
   expect(readSkylitView(scope("SPY"))).toMatchObject({studyChoice:"price",priceHistoryOpen:true});
   render(stock("SPY"));expect(screen.getByTestId("price-node-history")).toBeVisible();
+  await act(drain);
  });
  test("a newly explicit options choice survives return while another legacy stock starts at its price chart", async () => {
   writeSkylitView(scope("QQQ"),{layout:"multi",gridZoom:.75,priceHistoryOpen:false});
@@ -1617,7 +1636,7 @@ describe("legacy stock study migration", () => {
 
 describe("stock chart scroll-down study continuity",()=>{
  const stock=props=><><SkylitDashboardView ticker="SPY" data={selectionMap()} spot={650} {...props}/><ResearchSelection/></>;
- test("the default chart retains the accessible heatmap and study controls below it",()=>{
+ test("the default chart retains the accessible heatmap and study controls below it",async()=>{
   render(stock());
   expect(screen.queryByText("}",{exact:true})).not.toBeInTheDocument();
   const chart=screen.getByTestId("price-node-history"),map=screen.getByTestId("mock-heatmap");
@@ -1625,22 +1644,25 @@ describe("stock chart scroll-down study continuity",()=>{
   expect(screen.getByRole("combobox",{name:"Canvas layout"})).toBeVisible();
   expect(chart.compareDocumentPosition(map)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(screen.getByRole("combobox",{name:"Candle interval"})).toHaveValue("30");
+  await act(drain);
  });
- test("Options desk scrolls and focuses the existing heatmap while leaving the chart open",()=>{
+ test("Options desk scrolls and focuses the existing heatmap while leaving the chart open",async()=>{
   const prior=HTMLElement.prototype.scrollIntoView,scroll=jest.fn();HTMLElement.prototype.scrollIntoView=scroll;
   try{render(stock());const originalChart=screen.getByTestId("price-node-history"),originalMap=screen.getByTestId("mock-heatmap");
    fireEvent.click(screen.getByRole("button",{name:"Options desk"}));
    const region=screen.getByRole("region",{name:"SPY options desk"});expect(region).toHaveFocus();expect(scroll).toHaveBeenCalled();
    expect(screen.getByTestId("price-node-history")).toBe(originalChart);expect(originalChart).toBeVisible();expect(screen.getByTestId("mock-heatmap")).toBe(originalMap);expect(originalMap).toBeVisible();
   }finally{if(prior)HTMLElement.prototype.scrollIntoView=prior;else delete HTMLElement.prototype.scrollIntoView;}
+  await act(drain);
  });
- test("selecting a visible heatmap cell owns its map context without hiding the historical chart",()=>{
+ test("selecting a visible heatmap cell owns its map context without hiding the historical chart",async()=>{
   render(stock());fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
   expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({displayMode:"live",selectedStrike:650,mapVersion:selectionMap().asof});
   expect(screen.getByTestId("price-node-history")).toBeVisible();expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("123.4");
   fireEvent.change(screen.getByRole("combobox",{name:"Candle interval"}),{target:{value:"15"}});
   expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({contextVersion:1,navigationOnly:true,study:"Price chart"});
   expect(screen.getByTestId("mock-heatmap")).toBeVisible();
+  await act(drain);
  });
  test("range mode remains reachable and returning restores both studies with the chosen candle interval",async()=>{
   render(stock());fireEvent.change(screen.getByRole("combobox",{name:"Candle interval"}),{target:{value:"15"}});
@@ -1653,23 +1675,25 @@ describe("stock chart scroll-down study continuity",()=>{
 });
 
 
-test("stock navigation actions do not change their destination on pointer down",()=>{
+test("stock navigation actions do not change their destination on pointer down",async()=>{
  render(<><SkylitDashboardView ticker="SPY" data={selectionMap()} spot={650}/><ResearchSelection/></>);
  fireEvent.click(screen.getByRole("button",{name:"Options desk"}));
  const back=screen.getByRole("button",{name:"Price chart"});fireEvent.pointerDown(back,{pointerId:1,pointerType:"mouse"});fireEvent.click(back);
  expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({contextVersion:1,navigationOnly:true,study:"Price chart"});
  expect(document.activeElement).toHaveClass("skylit-price-study");expect(screen.getByTestId("mock-heatmap")).toBeVisible();
+ await act(drain);
 });
 
 
-test("default price-chart selection is navigation only, with no invented map or chart reading",()=>{
+test("default price-chart selection is navigation only, with no invented map or chart reading",async()=>{
  render(<><SkylitDashboardView ticker="SPY" data={null} spot={null}/><ResearchSelection/></>);
  const selected=JSON.parse(screen.getByTestId("research-selection").textContent);
  expect(selected).toMatchObject({contextVersion:1,page:"heatseeker",ticker:"SPY",study:"Price chart",navigationOnly:true,observedAt:null});
  for(const field of ["snapshotId","mapQuery","mapVersion","mapExpiries","selectedStrike","spot","provider","displayMode"])expect(selected).not.toHaveProperty(field);
+ await act(drain);
 });
 
-test("returning from the price chart preserves the complete valid selected map context",()=>{
+test("returning from the price chart preserves the complete valid selected map context",async()=>{
  const data={...selectionMap(),snapshotId:"fixture-stock-map",data_source:"public_api",formula_version:"gex.v2"};
  render(<><SkylitDashboard ticker="SPY" data={data} spot={650}/><ResearchSelection/></>);
  fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
@@ -1681,6 +1705,7 @@ test("returning from the price chart preserves the complete valid selected map c
  fireEvent.click(screen.getByRole("button",{name:"Options desk"}));
  expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toEqual(full);
  require("fs").writeFileSync(require("path").join(require("os").tmpdir(),"floww-stock-chat-contract-20261007.json"),JSON.stringify({navigation,full}));
+ await act(drain);
 });
 
 test('active exposure basis is badged: volume scalp vs OI vs absent', async () => {
